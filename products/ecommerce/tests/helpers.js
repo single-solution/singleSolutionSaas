@@ -301,6 +301,30 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		return response.json.value;
 	};
 
+	/**
+	 * Change the saved order flow (its options, triggers, starts …): `change` gets a copy of the flow as it reads and
+	 * returns the flow to save. @param {(flow: any) => any} change
+	 */
+	const flow = async (change) => {
+		const read = await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/lists/order_flow`);
+		return list('order_flow', change(structuredClone(read.json.value)));
+	};
+
+	/**
+	 * Set options of one move of the saved order flow (`{}` puts its options back to their defaults).
+	 * @param {string} from @param {string} to @param {Record<string, unknown>} options
+	 * @param {Record<string, unknown>} [rest] more fields of the move (who, needs, permission)
+	 */
+	const moveOptions = (from, to, options, rest = {}) =>
+		flow((value) => ({
+			...value,
+			moves: value.moves.map((/** @type {any} */ move) =>
+				move.from === from && move.to === to
+					? { from, to, ...(Object.keys(options).length > 0 ? { options: { ...move.options, ...options } } : {}), ...rest }
+					: move,
+			),
+		}));
+
 	/** Server-token call. @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, string>} [headers] */
 	const api = (method, path, body, headers) => call(method, path, { token: server, body, ...(headers ? { headers } : {}) });
 
@@ -455,6 +479,8 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 		connectDatabase: () => connect('database', merchantDatabase()),
 		setting,
 		list,
+		flow,
+		moveOptions,
 		ticket,
 		signIn,
 		db,

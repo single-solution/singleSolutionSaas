@@ -1,18 +1,31 @@
 /**
  * The order flow (PLAN 0.8.8: merchant-defined statuses and allowed moves, defaulting to this flow:
- * placed → confirmed → packed with serials → dispatched → delivered, with cancel and return-to-origin rules). The
- * merchant names the statuses, adds their own and chooses the moves; each status has a role (`core/model.js`
- * `STATUS_ROLES`) and the role rules below hold whatever the flow, so stock, offer uses, points and money stay right:
+ * placed → confirmed → packed with serials → dispatched → delivered, with cancel and return-to-origin rules; PLAN
+ * 0.8.10 "Ecommerce dynamic model" §3, phase 2: options per move, triggers and starts). The merchant names the
+ * statuses, adds their own and chooses the moves; each status has a role, its kind of step (`core/model.js`
+ * `STATUS_ROLES`), and the role rules below hold whatever the flow, so stock, offer uses, points and money stay right:
  *
- * - exactly one `awaiting_payment` and one `awaiting_confirmation` status: orders start there; an `open` or `packed`
- *   order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
- * - `cancelled` and `refunded` are final; `cancelled` from waiting, open, packed or shipped statuses (a shipped parcel
- *   is recalled, E27);
+ * - exactly one `awaiting_payment` status and at most one `awaiting_confirmation` status: orders start there (a flow
+ *   without a confirmation step starts cash-on-delivery, pickup and free orders in an open status, `starts`); an `open`
+ *   or `packed` order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
+ * - `cancelled` from waiting, open, packed or shipped statuses (a shipped parcel is recalled, E27); `refunded` from
+ *   waiting, open or packed statuses when something was paid (E27: it acts as a cancel), and after delivery;
  * - a `shipped` parcel is delivered, comes back (`returned_to_origin`), is recalled or moves to another `shipped`
  *   status;
  * - `delivered` may become `refunded` or `returned` (a customer return, E27); `returned_to_origin` and `returned` only
  *   `refunded`; `returned_to_origin` only from `shipped`;
- * - `refunded` also from waiting, open or packed statuses, when something was paid (E27: it acts as a cancel).
+ * - the extra moves of E40, only when the flow lists them: a cancel after delivery or of a closed order, a refund of a
+ *   shipped parcel (a recall, as its cancel) or of a cancelled order, and a move between two closed statuses
+ *   (cancelled ↔ refunded, a return → cancelled). What each does follows the facts the order has (`core/transitions.js`),
+ *   so nothing is given back or taken twice.
+ *
+ * A move says who may make it (`who`: staff; staff and the shopper — a cancel before dispatch —; or only the shop
+ * itself, `system`), the permission a staff ticket needs (into a refunded status always `orders.refund`), what staff
+ * give with it (`needs`: a staff note, a reason the shopper reads, every serial number) and its options where the
+ * stage contract leaves a choice ({@link moveOptionSpecs}). Each status has the name shoppers read, a line per payment
+ * method and whether entering it sends the shopper a message. `triggers` name the statuses the shop moves orders to by
+ * itself and `starts` where orders that need no payment first start. Anything missing reads as today's behavior
+ * ({@link checkOrderFlow} fills it), so a flow saved before phase 2 works as it did.
  *
  * Pure functions, no I/O.
  * @module
@@ -20,15 +33,200 @@
 import { STATUS_ROLES } from './model.js';
 
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
+/** @typedef {import('./model.js').OrderMove} OrderMove */
+/** @typedef {import('./model.js').MoveOptions} MoveOptions */
 /** @typedef {import('./model.js').StatusRole} StatusRole */
+/** @typedef {import('./model.js').OrderStatusDefinition} OrderStatusDefinition */
+/** @typedef {import('./model.js').ShopperTexts} ShopperTexts */
+/** @typedef {'staff' | 'shopper' | 'system'} Mover */
 
 /** At most this many statuses in a flow. */
 const MAX_STATUSES = 30;
 /** A status key. */
 const KEY = /^[a-z][a-z0-9_-]{1,39}$/;
+/** The longest name of a status, staff's or the shopper's. */
+const MAX_LABEL = 60;
+/** The longest line a shopper reads under a status for one payment method. */
+export const MAX_SHOPPER_TEXT = 300;
+/** The payment methods a status has a shopper line for, and that `paidOnConfirm` lists. */
+export const FLOW_METHODS = Object.freeze(
+	/** @type {import('./model.js').PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']),
+);
+/** Who may make a move: one of these sets. */
+const WHO_SETS = Object.freeze([['staff'], ['staff', 'shopper'], ['shopper'], ['system']]);
+/** What staff give with a move (`reason`: the shopper note, which the shopper reads in the order's timeline). */
+export const MOVE_NEEDS = Object.freeze(/** @type {Array<'note' | 'reason' | 'units'>} */ (['note', 'reason', 'units']));
+/** The permissions a move may need of a staff ticket. */
+export const MOVE_PERMISSIONS = Object.freeze(
+	/** @type {Array<'orders.manage' | 'orders.refund'>} */ (['orders.manage', 'orders.refund']),
+);
+/** The statuses whose entering sends the shopper a message unless the flow says otherwise (today's default list). */
+const NOTIFIED_KEYS = Object.freeze(['confirmed', 'dispatched', 'delivered', 'cancelled', 'refunded']);
 
-/** The default flow. @type {OrderFlow} */
-export const DEFAULT_FLOW = {
+/** Roles whose orders still wait (counted by the open-order cap; cancelled when their window ends). */
+export const WAITING_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
+/** Roles of an order before delivery (a refund then acts as a cancel). */
+export const BEFORE_DELIVERY_ROLES = Object.freeze(
+	/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped']),
+);
+/** Roles before dispatch: the shopper may cancel only from these (when a move lets them). */
+const BEFORE_DISPATCH_ROLES = Object.freeze(
+	/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation', 'open', 'packed']),
+);
+/** Roles of a closed order: nothing is left to pay on it and no payment is recorded on it any more. */
+export const CLOSED_ROLES = Object.freeze(
+	/** @type {StatusRole[]} */ (['cancelled', 'returned_to_origin', 'refunded', 'returned']),
+);
+
+/** Roles that may move into each role (the role rules). @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */
+const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */ ({
+	awaiting_payment: ['open', 'packed'],
+	awaiting_confirmation: [],
+	open: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
+	packed: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
+	shipped: ['open', 'packed', 'shipped'],
+	delivered: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'],
+	// E40: a cancel after delivery and between closed statuses, when listed
+	cancelled: [
+		'awaiting_payment',
+		'awaiting_confirmation',
+		'open',
+		'packed',
+		'shipped',
+		'delivered',
+		'cancelled',
+		'returned_to_origin',
+		'returned',
+		'refunded',
+	],
+	returned_to_origin: ['shipped'],
+	// E40: a refund of a shipped parcel (a recall) and of a cancelled order, when listed
+	refunded: [
+		'awaiting_payment',
+		'awaiting_confirmation',
+		'open',
+		'packed',
+		'shipped',
+		'delivered',
+		'cancelled',
+		'returned_to_origin',
+		'returned',
+		'refunded',
+	],
+	returned: ['delivered'],
+});
+Object.freeze(ALLOWED_FROM);
+
+/**
+ * @typedef {{ kind: 'one', values: ReadonlyArray<string>, default: string }
+ *   | { kind: 'methods', default: ReadonlyArray<string> }} OptionSpec
+ */
+
+/**
+ * The options a move takes (only where the stage contract leaves a choice, design §3.4) with their values and defaults,
+ * which are today's behavior:
+ *
+ * - out of waiting into an open, packed or shipped status: `paidOnConfirm`, the payment methods whose balance staff
+ *   moving it record as paid (OR-7; default none);
+ * - into awaiting payment again: `window`, the time to pay `restart`s (default) or there is `none` (OR-5);
+ * - into packed: `video`, the dispatch video `off` (default), `optional` or `required` (E28);
+ * - into shipped: `tracking`, the tracking number `required` (default) or `optional`;
+ * - into cancelled: `refund`, what Payments took is refunded `auto`matically when staff cancel (default) or by `staff`
+ *   from the order; with the shopper among `who`, `shopperPaid`: a paid order the shopper cancels is refused
+ *   (`refuse`, the default out of open or packed), cancelled with the refund left due (`flag`, the default out of
+ *   waiting) or cancelled and refunded (`refund`);
+ * - into refunded before delivery: `unpaid`, an order with nothing paid is refused (`refuse`, the default) or cancelled
+ *   with no money (`cancel`, E40);
+ * - into returned to origin or returned: `restock`, the parcel goes back in stock (`yes`, the default), stays out
+ *   (`no`) or staff say so with each move (`ask`);
+ * - into cancelled or refunded from delivered or a closed status (the items may still be with the customer): `restock`,
+ *   default `no` (owner, 2026-10-14);
+ * - into returned, and into cancelled or refunded from delivered or a closed status: `points`, earned points are taken
+ *   back (`take_back`, the default) or kept (`keep`, E39); redeemed points always come back.
+ * @param {StatusRole} from @param {StatusRole} to @param {ReadonlyArray<Mover>} [who]
+ * @returns {Record<keyof MoveOptions, OptionSpec>}
+ */
+export const moveOptionSpecs = (from, to, who = ['staff']) => {
+	/** @type {Partial<Record<keyof MoveOptions, OptionSpec>>} */
+	const specs = {};
+	/** @param {ReadonlyArray<string>} values @param {string} fallback @returns {OptionSpec} */
+	const one = (values, fallback) => ({ kind: 'one', values, default: fallback });
+	const afterDelivery = !BEFORE_DELIVERY_ROLES.includes(from);
+	if (WAITING_ROLES.includes(from) && ['open', 'packed', 'shipped'].includes(to))
+		specs.paidOnConfirm = { kind: 'methods', default: [] };
+	if (to === 'awaiting_payment') specs.window = one(['restart', 'none'], 'restart');
+	if (to === 'packed') specs.video = one(['off', 'optional', 'required'], 'off');
+	if (to === 'shipped') specs.tracking = one(['required', 'optional'], 'required');
+	if (to === 'cancelled') {
+		specs.refund = one(['auto', 'staff'], 'auto');
+		if (who.includes('shopper'))
+			specs.shopperPaid = one(['refuse', 'flag', 'refund'], WAITING_ROLES.includes(from) ? 'flag' : 'refuse');
+	}
+	if (to === 'refunded' && !afterDelivery) specs.unpaid = one(['refuse', 'cancel'], 'refuse');
+	if (to === 'returned_to_origin' || to === 'returned') specs.restock = one(['yes', 'no', 'ask'], 'yes');
+	if ((to === 'cancelled' || to === 'refunded') && afterDelivery) specs.restock = one(['no', 'yes', 'ask'], 'no');
+	if (to === 'returned' || ((to === 'cancelled' || to === 'refunded') && afterDelivery))
+		specs.points = one(['take_back', 'keep'], 'take_back');
+	return /** @type {Record<keyof MoveOptions, OptionSpec>} */ (specs);
+};
+
+/** Every option a move may take (each takes those of its stage). */
+const OPTION_NAMES = Object.freeze([
+	'paidOnConfirm',
+	'window',
+	'video',
+	'tracking',
+	'refund',
+	'shopperPaid',
+	'unpaid',
+	'restock',
+	'points',
+]);
+
+/**
+ * Who may make a move by default: staff, and the shopper too out of a waiting status into a cancelled one (today's
+ * `shopperCancel` default).
+ * @param {StatusRole} from @param {StatusRole} to
+ * @returns {Mover[]}
+ */
+const defaultWho = (from, to) => (WAITING_ROLES.includes(from) && to === 'cancelled' ? ['staff', 'shopper'] : ['staff']);
+
+/**
+ * What staff give with a move by default: every serial number before a parcel goes out (typed serials, E11).
+ * @param {StatusRole} to
+ * @returns {Array<'note' | 'reason' | 'units'>}
+ */
+const defaultNeeds = (to) => (to === 'shipped' ? ['units'] : []);
+
+/**
+ * A move with every field: as given, else its defaults (a move of a flow built in code, or saved before phase 2).
+ * @param {OrderFlow} flow @param {OrderMove} move
+ * @returns {Required<OrderMove> & { options: Required<MoveOptions> }} unknown statuses give an empty set of options
+ */
+export const moveRules = (flow, move) => {
+	const from = statusOf(flow, move.from)?.role;
+	const to = statusOf(flow, move.to)?.role;
+	/** @type {Mover[]} */
+	const who = Array.isArray(move.who) && move.who.length > 0 ? move.who : from && to ? defaultWho(from, to) : ['staff'];
+	const specs = from && to ? moveOptionSpecs(from, to, who) : /** @type {Record<keyof MoveOptions, OptionSpec>} */ ({});
+	/** @type {Record<string, unknown>} */
+	const options = {};
+	for (const [name, spec] of Object.entries(specs)) {
+		const given = /** @type {Record<string, unknown>} */ (move.options ?? {})[name];
+		options[name] = given === undefined ? spec.default : given;
+	}
+	return {
+		from: move.from,
+		to: move.to,
+		who,
+		permission: move.permission ?? (to === 'refunded' ? 'orders.refund' : 'orders.manage'),
+		needs: Array.isArray(move.needs) ? move.needs : to ? defaultNeeds(to) : [],
+		options: /** @type {Required<MoveOptions>} */ (options),
+	};
+};
+
+/** The default flow, as written (its options, triggers and starts are filled by {@link checkOrderFlow}). */
+const DEFAULT_DEFINITION = {
 	statuses: [
 		{ key: 'pending_payment', label: 'Awaiting payment', role: /** @type {StatusRole} */ ('awaiting_payment') },
 		{ key: 'awaiting_confirmation', label: 'Awaiting confirmation', role: /** @type {StatusRole} */ ('awaiting_confirmation') },
@@ -58,33 +256,15 @@ export const DEFAULT_FLOW = {
 	],
 };
 
-/** Roles that may move into each role (the role rules). @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */
-const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} */ ({
-	awaiting_payment: ['open', 'packed'],
-	awaiting_confirmation: [],
-	open: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
-	packed: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed'],
-	shipped: ['open', 'packed', 'shipped'],
-	delivered: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'],
-	cancelled: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'],
-	returned_to_origin: ['shipped'],
-	refunded: ['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'delivered', 'returned_to_origin', 'returned'],
-	returned: ['delivered'],
-});
-Object.freeze(ALLOWED_FROM);
-
-/** Roles whose orders still wait (counted by the open-order cap; cancelled when their window ends). */
-export const WAITING_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
-
-/** Roles of a closed order: nothing is left to pay on it and no payment is recorded on it any more. */
-export const CLOSED_ROLES = Object.freeze(
-	/** @type {StatusRole[]} */ (['cancelled', 'returned_to_origin', 'refunded', 'returned']),
-);
-
 /**
- * Check a flow the merchant saves.
+ * Check a flow the merchant saves, and fill what it leaves out with today's behavior: a status's shopper name ('' =
+ * its name), shopper lines ('' each) and message (the statuses `confirmed`, `dispatched`, `delivered`, `cancelled` and
+ * `refunded` send one, as the `notifyStatuses` default did); a move's `who`, permission, needs and options
+ * ({@link moveRules}); the triggers (Payments' confirmation: the first open status listed from the awaiting-payment
+ * status; an ended window: the first cancelled status listed from it, else the first; refunds covering the payments:
+ * none) and the starts (the awaiting-confirmation status, else the first open one).
  * @param {unknown} value
- * @returns {{ ok: true, value: OrderFlow } | { ok: false, errors: string[] }}
+ * @returns {{ ok: true, value: Required<OrderFlow> } | { ok: false, errors: string[] }}
  */
 export const checkOrderFlow = (value) => {
 	/** @type {string[]} */
@@ -96,10 +276,10 @@ export const checkOrderFlow = (value) => {
 	if (statuses.length > MAX_STATUSES) errors.push(`At most ${MAX_STATUSES} statuses.`);
 	/** @type {Map<string, StatusRole>} */
 	const roles = new Map();
-	/** @type {OrderFlow['statuses']} */
+	/** @type {Required<OrderStatusDefinition>[]} */
 	const cleanStatuses = [];
 	for (const raw of statuses) {
-		const status = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+		const status = objectOf(raw);
 		const key = typeof status.key === 'string' ? status.key : '';
 		const label = typeof status.label === 'string' ? status.label.trim() : '';
 		const role = /** @type {StatusRole} */ (status.role);
@@ -108,20 +288,46 @@ export const checkOrderFlow = (value) => {
 			continue;
 		}
 		if (roles.has(key)) errors.push(`Status '${key}' is listed twice.`);
-		if (!label || label.length > 60) errors.push(`Status '${key}' needs a name of at most 60 characters.`);
+		if (!label || label.length > MAX_LABEL) errors.push(`Status '${key}' needs a name of at most ${MAX_LABEL} characters.`);
 		if (!STATUS_ROLES.includes(role)) errors.push(`Status '${key}' has an unknown role.`);
+		const shopperLabel = status.shopperLabel === undefined || status.shopperLabel === null ? '' : status.shopperLabel;
+		if (typeof shopperLabel !== 'string' || shopperLabel.trim().length > MAX_LABEL)
+			errors.push(`The shopper's name of status '${key}' has at most ${MAX_LABEL} characters.`);
+		const texts = objectOf(status.shopperText);
+		/** @type {Record<string, string>} */
+		const shopperText = {};
+		for (const method of FLOW_METHODS) {
+			const text = texts[method] === undefined || texts[method] === null ? '' : texts[method];
+			if (typeof text !== 'string' || text.trim().length > MAX_SHOPPER_TEXT)
+				errors.push(`The shopper's line of status '${key}' for ${method} has at most ${MAX_SHOPPER_TEXT} characters.`);
+			shopperText[method] = typeof text === 'string' ? text.trim() : '';
+		}
+		for (const method of Object.keys(texts))
+			if (!FLOW_METHODS.includes(/** @type {any} */ (method)))
+				errors.push(`Status '${key}' has a shopper line for an unknown payment method '${method}'.`);
+		if (status.notify !== undefined && typeof status.notify !== 'boolean')
+			errors.push(`Whether status '${key}' sends a message is true or false.`);
 		roles.set(key, role);
-		cleanStatuses.push({ key, label, role });
+		cleanStatuses.push({
+			key,
+			label,
+			role,
+			shopperLabel: typeof shopperLabel === 'string' ? shopperLabel.trim() : '',
+			shopperText: /** @type {ShopperTexts} */ (shopperText),
+			notify: typeof status.notify === 'boolean' ? status.notify : NOTIFIED_KEYS.includes(key),
+		});
 	}
-	for (const role of /** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']))
-		if ([...roles.values()].filter((r) => r === role).length !== 1) errors.push(`Exactly one status has the role ${role}.`);
+	const counted = (/** @type {StatusRole} */ role) => [...roles.values()].filter((r) => r === role).length;
+	if (counted('awaiting_payment') !== 1) errors.push('Exactly one status has the role awaiting_payment.');
+	if (counted('awaiting_confirmation') > 1) errors.push('At most one status has the role awaiting_confirmation.');
 	for (const role of /** @type {StatusRole[]} */ (['open', 'delivered', 'cancelled']))
-		if (![...roles.values()].includes(role)) errors.push(`At least one status has the role ${role}.`);
-	/** @type {OrderFlow['moves']} */
+		if (counted(role) === 0) errors.push(`At least one status has the role ${role}.`);
+	const draft = /** @type {OrderFlow} */ ({ statuses: cleanStatuses, moves: [] });
+	/** @type {Array<Required<OrderMove>>} */
 	const cleanMoves = [];
 	const seen = new Set();
 	for (const raw of moves) {
-		const move = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+		const move = objectOf(raw);
 		const from = typeof move.from === 'string' ? move.from : '';
 		const to = typeof move.to === 'string' ? move.to : '';
 		const fromRole = roles.get(from);
@@ -130,15 +336,214 @@ export const checkOrderFlow = (value) => {
 			errors.push(`The move ${from} → ${to} names an unknown status.`);
 			continue;
 		}
+		const name = `The move ${from} → ${to}`;
 		if (from === to || !(ALLOWED_FROM[toRole] ?? []).includes(fromRole))
-			errors.push(`The move ${from} → ${to} is not allowed (${fromRole} cannot become ${toRole}).`);
+			errors.push(`${name} is not allowed (${fromRole} cannot become ${toRole}).`);
 		if (seen.has(`${from}|${to}`)) continue;
 		seen.add(`${from}|${to}`);
-		cleanMoves.push({ from, to });
+		const problems = moveProblems(name, move, fromRole, toRole);
+		errors.push(...problems);
+		if (problems.length === 0)
+			cleanMoves.push(
+				/** @type {Required<OrderMove>} */ (
+					moveRules(draft, {
+						from,
+						to,
+						...(move.who === undefined ? {} : { who: sortedWho(/** @type {Mover[]} */ (move.who)) }),
+						...(move.permission === undefined ? {} : { permission: /** @type {any} */ (move.permission) }),
+						...(move.needs === undefined
+							? {}
+							: { needs: MOVE_NEEDS.filter((need) => /** @type {unknown[]} */ (move.needs).includes(need)) }),
+						...(move.options === undefined ? {} : { options: /** @type {MoveOptions} */ (move.options) }),
+					})
+				),
+			);
 	}
 	if (errors.length > 0) return { ok: false, errors };
-	return { ok: true, value: { statuses: cleanStatuses, moves: cleanMoves } };
+	/** @type {OrderFlow} */
+	const checked = { statuses: cleanStatuses, moves: cleanMoves };
+	const triggers = triggersOf(checked, objectOf(input.triggers), errors);
+	const starts = startsOf(checked, objectOf(input.starts), errors);
+	if (errors.length > 0) return { ok: false, errors };
+	return { ok: true, value: { statuses: cleanStatuses, moves: cleanMoves, triggers, starts } };
 };
+
+/** @param {unknown} value @returns {Record<string, unknown>} */
+const objectOf = (value) =>
+	typeof value === 'object' && value !== null && !Array.isArray(value) ? /** @type {Record<string, unknown>} */ (value) : {};
+
+/** @param {Mover[]} who */
+const sortedWho = (who) =>
+	/** @type {Mover[]} */ (['staff', 'shopper', 'system'].filter((entry) => who.includes(/** @type {Mover} */ (entry))));
+
+/**
+ * What is wrong with a move's who, permission, needs and options (its statuses and their roles are known).
+ * @param {string} name @param {Record<string, unknown>} move @param {StatusRole} from @param {StatusRole} to
+ * @returns {string[]}
+ */
+const moveProblems = (name, move, from, to) => {
+	/** @type {string[]} */
+	const problems = [];
+	/** @type {Mover[]} */
+	let who = defaultWho(from, to);
+	if (move.who !== undefined) {
+		const given = Array.isArray(move.who) ? move.who : [];
+		const set = WHO_SETS.find(
+			(entry) =>
+				entry.length === new Set(given).size &&
+				entry.every((mover) => given.includes(mover)) &&
+				given.every((g) => entry.includes(g)),
+		);
+		if (!set) problems.push(`${name}: who is staff, shopper (with staff or alone) or system.`);
+		else who = /** @type {Mover[]} */ (set);
+	}
+	if (who.includes('shopper') && (to !== 'cancelled' || !BEFORE_DISPATCH_ROLES.includes(from)))
+		problems.push(`${name}: shoppers may only cancel, and only before dispatch.`);
+	if (move.permission !== undefined) {
+		if (!MOVE_PERMISSIONS.includes(/** @type {any} */ (move.permission)))
+			problems.push(`${name}: the permission is ${MOVE_PERMISSIONS.join(' or ')}.`);
+		else if (to === 'refunded' && move.permission !== 'orders.refund')
+			problems.push(`${name}: a move into a refunded status needs orders.refund.`);
+	}
+	if (move.needs !== undefined) {
+		const needs = Array.isArray(move.needs) ? move.needs : null;
+		if (!needs || needs.some((need) => !MOVE_NEEDS.includes(need)) || new Set(needs).size !== needs.length)
+			problems.push(`${name}: needs lists note, reason or units, each once.`);
+		else if (needs.includes('units') && to !== 'shipped' && to !== 'delivered')
+			problems.push(`${name}: serial numbers can be needed only to ship or deliver.`);
+	}
+	if (move.options !== undefined) {
+		const options = objectOf(move.options);
+		if (move.options !== null && typeof move.options !== 'object') problems.push(`${name}: options is an object.`);
+		const specs = moveOptionSpecs(from, to, who);
+		for (const [option, given] of Object.entries(options)) {
+			const spec = /** @type {Record<string, OptionSpec>} */ (specs)[option];
+			// an option of another kind of move is left out (a status given another kind of step keeps its moves); an
+			// unknown one is refused
+			if (!spec) {
+				if (!OPTION_NAMES.includes(option)) problems.push(`${name}: there is no option ${option}.`);
+				continue;
+			}
+			if (spec.kind === 'methods') {
+				if (
+					!Array.isArray(given) ||
+					given.some((method) => !FLOW_METHODS.includes(method)) ||
+					new Set(given).size !== given.length
+				)
+					problems.push(`${name}: ${option} lists payment methods (${FLOW_METHODS.join(', ')}), each once.`);
+			} else if (!spec.values.includes(/** @type {string} */ (given)))
+				problems.push(`${name}: ${option} is ${spec.values.join(', ')}.`);
+		}
+	}
+	return problems;
+};
+
+/**
+ * The flow's triggers, checked: `paid` an open status listed from the awaiting-payment status ('' = Payments'
+ * confirmation leaves the order where it is, paid), `windowEnd` a cancelled status, `refundsCover` a refunded status or
+ * ''. Missing ones are today's choices.
+ * @param {OrderFlow} flow checked @param {Record<string, unknown>} input @param {string[]} errors
+ * @returns {import('./model.js').FlowTriggers}
+ */
+const triggersOf = (flow, input, errors) => {
+	const waiting = statusWithRole(flow, 'awaiting_payment');
+	const fallback = defaultTriggers(flow);
+	/** @param {'paid' | 'windowEnd' | 'refundsCover'} name @param {StatusRole} role @param {boolean} empty */
+	const pick = (name, role, empty) => {
+		const given = input[name];
+		if (given === undefined || given === null) return fallback[name];
+		if (typeof given !== 'string' || (given === '' && !empty) || (given !== '' && statusOf(flow, given)?.role !== role)) {
+			errors.push(`The ${name} trigger names a status with the role ${role}${empty ? ', or none' : ''}.`);
+			return '';
+		}
+		return given;
+	};
+	const paid = pick('paid', 'open', true);
+	if (paid && !flow.moves.some((move) => move.from === waiting && move.to === paid))
+		errors.push(`The paid trigger needs the move ${waiting} → ${paid} in the flow.`);
+	return { paid, windowEnd: pick('windowEnd', 'cancelled', false), refundsCover: pick('refundsCover', 'refunded', true) };
+};
+
+/**
+ * Where orders that need no payment first start, checked: cash on delivery and pay at pickup in the
+ * awaiting-confirmation status or an open one, free orders also in the awaiting-payment status (they wait there for
+ * staff, with no time to pay).
+ * @param {OrderFlow} flow checked @param {Record<string, unknown>} input @param {string[]} errors
+ * @returns {import('./model.js').FlowStarts}
+ */
+const startsOf = (flow, input, errors) => {
+	const fallback = defaultStarts(flow);
+	/** @param {'cod' | 'pickup' | 'free'} name @param {StatusRole[]} roles */
+	const pick = (name, roles) => {
+		const given = input[name];
+		if (given === undefined || given === null) return fallback[name];
+		const role = typeof given === 'string' ? statusOf(flow, given)?.role : undefined;
+		if (!role || !roles.includes(role)) {
+			errors.push(`The ${name} start names a status with the role ${roles.join(' or ')}.`);
+			return fallback[name];
+		}
+		return /** @type {string} */ (given);
+	};
+	return {
+		cod: pick('cod', ['awaiting_confirmation', 'open']),
+		pickup: pick('pickup', ['awaiting_confirmation', 'open']),
+		free: pick('free', ['awaiting_confirmation', 'open', 'awaiting_payment']),
+	};
+};
+
+/**
+ * Today's triggers of a flow (see {@link checkOrderFlow}).
+ * @param {OrderFlow} flow
+ * @returns {import('./model.js').FlowTriggers}
+ */
+const defaultTriggers = (flow) => {
+	const waiting = statusWithRole(flow, 'awaiting_payment');
+	return {
+		paid: confirmedStatus(flow, waiting, 'system') ?? '',
+		windowEnd: cancelledStatus(flow, waiting),
+		refundsCover: '',
+	};
+};
+
+/**
+ * Today's starts of a flow: the awaiting-confirmation status, else the first open one.
+ * @param {OrderFlow} flow
+ * @returns {import('./model.js').FlowStarts}
+ */
+const defaultStarts = (flow) => {
+	const start = statusWithRole(flow, 'awaiting_confirmation') || statusWithRole(flow, 'open');
+	return { cod: start, pickup: start, free: start };
+};
+
+/**
+ * A flow with every field filled (see {@link checkOrderFlow}): a saved flow as it reads, or one built in code. A flow
+ * that does not pass the check (never saved so) is returned as it is, with its triggers and starts filled.
+ * @param {unknown} value
+ * @returns {Required<OrderFlow>}
+ */
+export const readOrderFlow = (value) => {
+	const checked = checkOrderFlow(value);
+	if (checked.ok) return checked.value;
+	const flow = /** @type {OrderFlow} */ (value);
+	return {
+		statuses: flow.statuses,
+		moves: flow.moves,
+		triggers: flow.triggers ?? defaultTriggers(flow),
+		starts: flow.starts ?? defaultStarts(flow),
+	};
+};
+
+/**
+ * The triggers of a flow (filled when missing).
+ * @param {OrderFlow} flow
+ */
+export const triggersOfFlow = (flow) => flow.triggers ?? defaultTriggers(flow);
+
+/**
+ * The starts of a flow (filled when missing).
+ * @param {OrderFlow} flow
+ */
+export const startsOfFlow = (flow) => flow.starts ?? defaultStarts(flow);
 
 /**
  * What saving a flow would do to orders already in a status (the flow-save guard, PLAN 0.8.10 dynamic model §3.3): a
@@ -222,41 +627,97 @@ export const statusOf = (flow, key) => flow.statuses.find((status) => status.key
 export const statusWithRole = (flow, role) => flow.statuses.find((status) => status.role === role)?.key ?? '';
 
 /**
- * Whether the flow allows moving an order from one status to another (the role rules are checked again, so an order
- * whose status was renamed or removed meanwhile cannot slip through).
- * @param {OrderFlow} flow @param {string} from @param {string} to
+ * The listed move from one status to another that `who` may make (`system`, the shop itself: any listed move), with
+ * every field ({@link moveRules}); null when the flow does not list it, `who` may not make it or the role rules refuse it
+ * (checked again, so an order whose status was renamed or removed meanwhile cannot slip through).
+ * @param {OrderFlow} flow @param {string} from @param {string} to @param {Mover} [who]
  */
-export const canMove = (flow, from, to) => {
+export const moveOf = (flow, from, to, who = 'system') => {
 	const fromRole = statusOf(flow, from)?.role;
 	const toRole = statusOf(flow, to)?.role;
-	if (!fromRole || !toRole || from === to) return false;
-	return (ALLOWED_FROM[toRole] ?? []).includes(fromRole) && flow.moves.some((move) => move.from === from && move.to === to);
+	if (!fromRole || !toRole || from === to || !rolesAllow(fromRole, toRole)) return null;
+	const move = flow.moves.find((entry) => entry.from === from && entry.to === to);
+	if (!move) return null;
+	const rules = moveRules(flow, move);
+	return who === 'system' || rules.who.includes(who) ? rules : null;
 };
 
 /**
+ * Whether the flow allows moving an order from one status to another (`who` may make it; by default any listed move).
+ * @param {OrderFlow} flow @param {string} from @param {string} to @param {Mover} [who]
+ */
+export const canMove = (flow, from, to, who = 'system') => moveOf(flow, from, to, who) !== null;
+
+/**
  * Whether the role rules let an order of one role become another (whatever moves the flow lists): the outer net of
- * every transition, also of those that need no listed move (a window that ends, a shopper's cancel).
+ * every transition, also of those that need no listed move (a window that ends).
  * @param {StatusRole} from @param {StatusRole} to
  */
 export const rolesAllow = (from, to) => (ALLOWED_FROM[to] ?? []).includes(from);
 
 /**
- * The statuses an order may move to next.
- * @param {OrderFlow} flow @param {string} from
+ * The statuses an order may move to next (by `who`; by default any listed move).
+ * @param {OrderFlow} flow @param {string} from @param {Mover} [who]
  */
-export const nextStatuses = (flow, from) => flow.statuses.filter((status) => canMove(flow, from, status.key));
+export const nextStatuses = (flow, from, who = 'system') =>
+	flow.statuses.filter((status) => canMove(flow, from, status.key, who));
 
 /**
  * Where a waiting order goes once it is paid or confirmed: the first allowed move into an `open` status.
- * @param {OrderFlow} flow @param {string} from
+ * @param {OrderFlow} flow @param {string} from @param {Mover} [who]
  * @returns {string | null}
  */
-export const confirmedStatus = (flow, from) => nextStatuses(flow, from).find((status) => status.role === 'open')?.key ?? null;
+export const confirmedStatus = (flow, from, who = 'system') =>
+	nextStatuses(flow, from, who).find((status) => status.role === 'open')?.key ?? null;
 
 /**
- * Where a waiting order goes when its window ends: the first allowed move into a `cancelled` status.
+ * The first cancelled status listed from a status, else the first cancelled status (an ended window's default).
  * @param {OrderFlow} flow @param {string} from
- * @returns {string | null}
+ * @returns {string}
  */
 export const cancelledStatus = (flow, from) =>
 	nextStatuses(flow, from).find((status) => status.role === 'cancelled')?.key ?? statusWithRole(flow, 'cancelled');
+
+/**
+ * The move a shopper cancels with from a status: the first listed move into a cancelled status the shopper may make, or
+ * null.
+ * @param {OrderFlow} flow @param {string} from
+ */
+export const shopperCancelOf = (flow, from) => {
+	for (const status of flow.statuses) {
+		if (status.role !== 'cancelled') continue;
+		const move = moveOf(flow, from, status.key, 'shopper');
+		if (move) return move;
+	}
+	return null;
+};
+
+/**
+ * The name a shopper reads for a status: its shopper name, else its name (an unknown status shows its key).
+ * @param {OrderFlow} flow @param {string} key
+ */
+export const shopperLabelOf = (flow, key) => {
+	const status = statusOf(flow, key);
+	return status ? status.shopperLabel || status.label : key;
+};
+
+/**
+ * The line a shopper reads under a status for a payment method ('' = none).
+ * @param {OrderFlow} flow @param {string} key @param {string} method
+ */
+export const shopperTextOf = (flow, key, method) =>
+	String(/** @type {Record<string, string> | undefined} */ (statusOf(flow, key)?.shopperText)?.[method] ?? '');
+
+/**
+ * Whether entering a status sends the shopper a message (today's default list when the flow does not say).
+ * @param {OrderFlow} flow @param {string} key
+ */
+export const notifiesOf = (flow, key) => {
+	const status = statusOf(flow, key);
+	return status ? (status.notify ?? NOTIFIED_KEYS.includes(key)) : false;
+};
+
+/** The default flow, every field filled. */
+export const DEFAULT_FLOW = /** @type {Required<OrderFlow>} */ (
+	/** @type {{ value: Required<OrderFlow> }} */ (checkOrderFlow(DEFAULT_DEFINITION)).value
+);

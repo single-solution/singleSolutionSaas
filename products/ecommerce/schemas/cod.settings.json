@@ -46,13 +46,6 @@
 			"description": "Flagged customers may use cash on delivery only with the advance; without an advance set they must pay another way.",
 			"default": true
 		},
-		"startStatus": {
-			"type": "string",
-			"title": "Cash-on-delivery orders start",
-			"description": "Awaiting confirmation: staff confirm each order. Open: confirmed as soon as it is placed.",
-			"default": "awaiting_confirmation",
-			"enum": ["awaiting_confirmation", "open"]
-		},
 		"atPickup": {
 			"type": "boolean",
 			"title": "Cash on delivery at pickup too",

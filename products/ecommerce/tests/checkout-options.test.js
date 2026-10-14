@@ -414,7 +414,7 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		await shop.setting('checkout', 'paymentOrder', ['bank_transfer', 'cod', 'online', 'pickup']);
 		await shop.setting('checkout', 'noteCod', 'Pay the rider');
 		await shop.setting('cod', 'feePercent', 5);
-		await shop.setting('cod', 'startStatus', 'open');
+		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, cod: 'confirmed' } }));
 		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
 		const shopper = await newShopper();
 		const priced = await quote(
@@ -428,7 +428,7 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		expect(placed.json.order).toMatchObject({ totals: { fee: 515 } });
 		expect((await orderRecord(placed.json.order.id)).role).toBe('open');
 		await shop.setting('cod', 'feePercent', 0);
-		await shop.setting('cod', 'startStatus', 'awaiting_confirmation');
+		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, cod: 'awaiting_confirmation' } }));
 		await shop.setting('checkout', 'paymentOrder', ['cod', 'online', 'bank_transfer', 'pickup']);
 		await shop.setting('checkout', 'noteCod', '');
 	});

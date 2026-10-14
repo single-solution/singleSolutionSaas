@@ -50,17 +50,17 @@ beforeAll(async () => {
 afterAll(async () => shop.product.close());
 
 describe('shipping and packing options (E28)', () => {
-	it('needs a tracking number to dispatch unless the website says otherwise', async () => {
+	it('needs a tracking number to dispatch unless the move says otherwise', async () => {
 		const { id } = await confirmedOrder();
 		await moveTo(id, 'packed');
 		expect(codeOf(await moveTo(id, 'dispatched', { shipment: { courier: 'post' } }))).toBe('validation_failed');
-		await shop.setting('checkout', 'trackingRequired', false);
+		await shop.moveOptions('packed', 'dispatched', { tracking: 'optional' });
 		const sent = await moveTo(id, 'dispatched', {
 			shipment: { courier: 'post', trackingNote: 'Rider calls first', estimatedDeliveryAt: '2026-10-08T00:00:00Z' },
 		});
 		expect(sent.status).toBe(200);
 		expect(sent.json.shipment).toMatchObject({ courier: 'Post', trackingNumber: '', trackingNote: 'Rider calls first' });
-		await shop.setting('checkout', 'trackingRequired', true);
+		await shop.moveOptions('packed', 'dispatched', {});
 	});
 
 	it('changes the shipment at any time and builds the link from today’s couriers', async () => {
@@ -89,8 +89,8 @@ describe('shipping and packing options (E28)', () => {
 		await shop.list('couriers', [{ key: 'post', name: 'Post', trackingUrl: 'https://track.example/{tracking}' }]);
 	});
 
-	it('takes the dispatch video when packing, as the website asks', async () => {
-		await shop.setting('checkout', 'packingVideo', 'required');
+	it('takes the dispatch video when packing, as the move asks', async () => {
+		await shop.moveOptions('confirmed', 'packed', { video: 'required' });
 		const { id, token } = await confirmedOrder();
 		expect(codeOf(await moveTo(id, 'packed'))).toBe('validation_failed');
 		expect(codeOf(await moveTo(id, 'packed', { video: 'javascript:alert(1)' }))).toBe('validation_failed');
@@ -102,7 +102,7 @@ describe('shipping and packing options (E28)', () => {
 			headers: { 'ss-sign-in': token, 'x-forwarded-for': '10.8.1.2' },
 		});
 		expect(mine.json.dispatchVideo).toEqual({ kind: 'youtube', url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' });
-		await shop.setting('checkout', 'packingVideo', 'off');
+		await shop.moveOptions('confirmed', 'packed', {});
 	});
 
 	it('dispatches several orders with their own shipments', async () => {

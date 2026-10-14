@@ -5,7 +5,7 @@
  * the website's Format (PLAN 0.8.10 K7). Pure functions, no I/O.
  * @module
  */
-import { statusOf } from './flow.js';
+import { shopperLabelOf } from './flow.js';
 import { orderMoney } from './orders.js';
 import { activeVariants, variantInStock } from './seo.js';
 
@@ -340,11 +340,12 @@ export const gradeLabels = (list) =>
 	);
 
 /**
- * The label of an order's status in the website's flow (the key when the flow no longer has it).
+ * The name of an order's status the shopper reads in the website's flow: its shopper name, else its name (the key when
+ * the flow no longer has it). Chat's lookups answer the shopper.
  * @param {OrderFlow} flow
  * @param {string} key
  */
-export const statusLabel = (flow, key) => statusOf(flow, key)?.label ?? key;
+export const statusLabel = (flow, key) => shopperLabelOf(flow, key);
 
 /**
  * What an order lookup adds from outside the record: the tracking page (built from today's couriers, E28) and the

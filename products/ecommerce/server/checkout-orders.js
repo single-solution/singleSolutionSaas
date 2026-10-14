@@ -9,9 +9,9 @@
  *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
  *   the business year and the yearly counter (E30). Online, bank-transfer and COD-advance orders start awaiting
  *   payment and get a Payments payment, unless transfers or advances are recorded by staff (`manual`: the order waits
- *   for the shopper's proof, E23, E24); free ones start awaiting confirmation, or awaiting payment without a time to pay
- *   (`freeOrderStart`, CK-41); COD orders start awaiting confirmation or confirmed (`startStatus`), pay-at-pickup orders
- *   awaiting confirmation. A guest gets the order's key once (`orderKey`).
+ *   for the shopper's proof, E23, E24); cash-on-delivery, pay-at-pickup and free orders start where the order flow's
+ *   `starts` say (awaiting confirmation by default; a free one may wait in awaiting payment without a time to pay,
+ *   CK-41). A guest gets the order's key once (`orderKey`).
  * - Paying: an order is paid only when Payments says, server to server, that its payment is paid for exactly the
  *   order's amount (or advance) and currency; the payment is a log entry of the order (E26). A waiting payment is asked
  *   again when the order is read (at most every 30 seconds), on use, and once more before a waiting order is cancelled
@@ -19,7 +19,9 @@
  *   use (`service.whenUsed`), giving back what they held. A cancelled order's Payments payment is cancelled there first
  *   (`server/order-payments.js`, K-13).
  * - The shopper's orders: list, detail (by id or number, with the sign-in or the order's key, E21) with downloads and
- *   licence keys, cancel in the roles `shopperCancel` lists (E27), pay again, and the transfer proof (E24).
+ *   licence keys, the statuses' shopper names and lines and the notes staff wrote for the shopper, cancel where the flow
+ *   lets the shopper (a move with `who` shopper, E27; a paid order as its `shopperPaid` says), pay again, and the
+ *   transfer proof (E24).
  * @module
  */
 import { created, paginate, problem } from '@ss/app-kit';
@@ -31,8 +33,17 @@ import { heldStockBefore, placeOrder, swapOrderStock } from '../adapters/ledger.
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
-import { PLACED_FACTS } from '../core/facts.js';
-import { WAITING_ROLES, cancelledStatus, statusOf, statusWithRole } from '../core/flow.js';
+import { PLACED_FACTS, factsGuard, isFacts } from '../core/facts.js';
+import {
+	WAITING_ROLES,
+	shopperCancelOf,
+	shopperLabelOf,
+	shopperTextOf,
+	startsOfFlow,
+	statusOf,
+	statusWithRole,
+	triggersOfFlow,
+} from '../core/flow.js';
 import { shopperInvoiceReady } from '../core/invoice.js';
 import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
@@ -103,6 +114,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 
 	/** @param {OrderFlow} flow @param {string} status */
 	const labelOf = (flow, status) => statusOf(flow, status)?.label ?? status;
+	/** The name the shopper reads. @param {OrderFlow} flow @param {string} status */
+	const shopperLabel = (flow, status) => shopperLabelOf(flow, status);
 
 	/**
 	 * Whether a return address belongs to the website (its exact https domain, or a local address while testing).
@@ -200,24 +213,28 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	// ------------------------------------------------------------------------------------------------- cancelling
 
 	/**
-	 * Cancel a waiting order, giving back its stock, slots, offer uses and points (exactly once), through the order
-	 * engine: to the flow's cancelled status, without a listed move (the role rules hold), refunding nothing (money paid
-	 * shows as due to refund). Its open Payments payment is cancelled first (K-13): when it was paid meanwhile the order
-	 * is paid instead and is returned as it is now (not cancelled).
+	 * Cancel an order for the shopper or because its window ended, giving back its stock, slots, offer uses and points
+	 * (exactly once), through the order engine: the shopper along their move (`to`, listed for them), an ended window to
+	 * the flow's `windowEnd` status (no listed move needed; the role rules hold). Money paid is refunded through Payments
+	 * only when the shopper's move says so (`shopperPaid: refund`, `refund`), else it shows as due to refund. Its open
+	 * Payments payment is cancelled first (K-13): when it was paid meanwhile the order is paid instead and is returned as
+	 * it is now (not cancelled).
 	 * @param {Site} s @param {OrderRecord} order as just read
 	 * @param {{ by: string, note: string, code: import('../core/orders.js').HistoryNote,
-	 *   reason: 'staff' | 'shopper' | 'expired' }} who `note` also tells Payments why its payment is cancelled
+	 *   reason: 'staff' | 'shopper' | 'expired', to?: string }} who `note` also tells Payments why its payment is cancelled;
+	 *   `to`: the shopper's move's status
 	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile, or the flow changed under it
 	 */
-	const cancel = async (s, order, { by, note, code, reason }) => {
+	const cancel = async (s, order, { by, note, code, reason, to: target }) => {
 		const flow = await flowOf(s);
-		const to = cancelledStatus(flow, order.status) ?? '';
-		if (!checkTransition({ order, flow, to, listed: false }).ok) return null;
+		const who = by === 'system' ? 'system' : 'shopper';
+		const listed = who === 'shopper';
+		const to = target ?? triggersOfFlow(flow).windowEnd;
+		if (!checkTransition({ order, flow, to, listed, who }).ok) return null;
 		const step = await payments.beforeCancel(s, order, note);
 		if (step.paid) return step.paid;
 		const data = await s.data();
 		const now = service.now();
-		const who = by === 'system' ? 'system' : 'shopper';
 		const actor =
 			who === 'system'
 				? SYSTEM_ACTOR
@@ -228,8 +245,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			order,
 			flow,
 			to,
-			input: { who, actor, by, note, code, cancelReason: reason, listed: false, payments: step.set },
-			rules: await rulesOf(s, who),
+			input: { who, actor, by, note, code, cancelReason: reason, listed, payments: step.set },
+			rules: await rulesOf(s),
 			now,
 		});
 		if (!planned.ok) return null;
@@ -238,13 +255,15 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		try {
 			await transitions.apply(s, order, planned.plan);
 		} catch (error) {
+			// lost to another change: a payment Payments cancelled for it is dropped, so the order stays payable
+			await payments.dropVoided(s, order, step);
 			if (/** @type {any} */ (error)?.code === 'conflict') return null;
 			throw error;
 		}
 		if (held) await service.emit('products.changed', s, held);
 		const store = createOrdersStore(data);
 		await payments.afterCancel(s, /** @type {OrderRecord} */ (await store.order(order.id)), step);
-		const after = /** @type {OrderRecord} */ (await store.order(order.id));
+		let after = /** @type {OrderRecord} */ (await store.order(order.id));
 		await product.activity.record(
 			{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.ctx.after },
 			{
@@ -255,6 +274,12 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				detail: `${labelOf(flow, order.status)} → ${labelOf(flow, to)}`,
 			},
 		);
+		// the refund the shopper's move asks of Payments, right after the transaction (kept pending when it fails)
+		if (planned.plan.external.length > 0) {
+			const ran = await transitions.runEffects(s, after, { ids: planned.plan.external.map((effect) => effect.id) });
+			after = ran.order;
+			await transitions.announce(s, after, ran.outcomes);
+		}
 		await service.emit('order.moved', s, { order: after, ...planned.plan.event });
 		return after;
 	};
@@ -301,13 +326,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	// --------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * Whether the shopper may cancel an order in its role (E27 `shopperCancel`).
-	 * @param {Site} s @param {OrderRecord} order
+	 * The move the shopper may cancel an order with (E27): a listed move from its status into a cancelled one that the
+	 * shopper may make, unless the order is paid and the move refuses paid orders (`shopperPaid: refuse`); else null.
+	 * @param {OrderFlow} flow @param {OrderRecord} order
 	 */
-	const shopperMayCancel = async (s, order) => {
-		const { shopperCancel } = await s.values('checkout');
-		const roles = Array.isArray(shopperCancel) ? shopperCancel : WAITING_ROLES;
-		return roles.includes(order.role);
+	const shopperCancelMove = (flow, order) => {
+		const move = shopperCancelOf(flow, order.status);
+		if (!move || (order.payment.paid > 0 && move.options.shopperPaid === 'refuse')) return null;
+		return move;
 	};
 
 	/**
@@ -348,7 +374,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			id: order.id,
 			number: order.number,
 			status: order.status,
-			statusLabel: labelOf(flow, order.status),
+			statusLabel: shopperLabel(flow, order.status),
+			// the line the merchant wrote under this status for the order's payment method ('' = none)
+			statusText: shopperTextOf(flow, order.status, order.payment.method),
 			role: order.role,
 			placedAt: iso(order.placedAt),
 			guest: !order.customer.userId,
@@ -436,7 +464,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 							hours: String(zones.pickupHours ?? ''),
 						}
 					: null,
-			history: order.history.map((entry) => ({ at: iso(entry.at), status: entry.to, label: labelOf(flow, entry.to) })),
+			// the timeline: each entry's status as the shopper reads it and the note staff wrote for the shopper (staff notes
+			// stay internal)
+			history: order.history.map((entry) => ({
+				at: iso(entry.at),
+				status: entry.to,
+				label: shopperLabel(flow, entry.to),
+				note: entry.shopperNote ?? '',
+			})),
 			shipment: order.shipment
 				? {
 						courier: order.shipment.courier,
@@ -448,7 +483,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				: null,
 			dispatchVideo: await media.dispatchVideo(s, order),
 			note: order.note,
-			canCancel: await shopperMayCancel(s, order),
+			canCancel: shopperCancelMove(flow, order) !== null,
 			// the same sign-in or order key opens the invoice (GET /v1/shop/orders/:id/invoice)
 			invoice: invoices !== null && shopperInvoiceReady(order, invoices),
 		};
@@ -587,7 +622,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/**
 	 * Edit an order while it waits for payment or confirmation (E29): its lines (variant, quantity, an optional unit
 	 * price), payment method and delivery. It is priced again with the offers it was placed with (kept even when they
-	 * ended since, by the same deal rules, OR-9), its stock holds are swapped in one transaction, and a payment started
+	 * ended since, by the same deal rules, OR-9) — or, with the checkout setting `editPricing: keep_placed`, it keeps the
+	 * offer discount, delivery fee and payment fee it was placed with —, its stock holds are swapped in one transaction, and a payment started
 	 * through Payments for the old total is cancelled there and dropped (the shopper pays the new one; K-13).
 	 * @param {Site} s
 	 * @param {any} ctx
@@ -685,6 +721,21 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 							}
 						: null,
 					points: { used: order.promotions.pointsRedeemed, value: order.promotions.pointsValue },
+					// the amounts it was placed with, when the website keeps them (`editPricing: keep_placed`)
+					...(checkout.editPricing === 'keep_placed'
+						? {
+								keep: {
+									promotions: Math.max(
+										0,
+										order.totals.discount - (order.totals.roleDiscount ?? 0) - order.promotions.pointsValue,
+									),
+									delivery: order.totals.delivery,
+									deliveryMethod: order.delivery.method,
+									fee: order.totals.fee ?? 0,
+									method: order.payment.method,
+								},
+							}
+						: {}),
 				},
 			},
 		);
@@ -722,10 +773,12 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				.filter((line) => line.kind === 'physical')
 				.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity, locationId: null })),
 			update: async (session) => {
+				// it holds its new lines' stock now, also an imported order that held none (its facts say so: a cancel gives
+				// it back), only while its facts are as read
 				const result = await data.collection(COLLECTIONS.orders).updateOne(
-					{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt },
+					{ websiteId: data.websiteId, id: order.id, updatedAt: order.updatedAt, ...factsGuard(order) },
 					{
-						$set: { ...set, stockHeld: true },
+						$set: { ...set, stockHeld: true, ...(isFacts(order.facts) ? { 'facts.stock': 'held' } : {}) },
 						$push: {
 							history: {
 								at: new Date(now),
@@ -838,18 +891,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const advanceManual = method === 'cod' && advance > 0 && cod.advanceVia === 'manual';
 		const manual = bankManual || advanceManual;
 		const viaPayments = total > 0 && !manual && (method === 'online' || method === 'bank_transfer' || advance > 0);
-		// a free online or bank-transfer order has nothing to pay: it starts as `freeOrderStart` says, and in awaiting
-		// payment it waits for staff without a time to pay (CK-41)
+		// cash on delivery, pay at pickup and a free online or bank-transfer order (nothing to pay) start where the flow's
+		// `starts` say; a free one in awaiting payment waits for staff without a time to pay (CK-41)
+		const starts = startsOfFlow(flow);
+		const startKey = method === 'cod' ? starts.cod : method === 'pickup' ? starts.pickup : starts.free;
 		const freeWaits =
-			total === 0 && (method === 'online' || method === 'bank_transfer') && checkout.freeOrderStart === 'awaiting_payment';
+			total === 0 &&
+			(method === 'online' || method === 'bank_transfer') &&
+			statusOf(flow, starts.free)?.role === 'awaiting_payment';
 		const waitsPayment = viaPayments || (total > 0 && manual) || freeWaits;
+		const status = waitsPayment ? statusWithRole(flow, 'awaiting_payment') : startKey;
 		/** @type {StatusRole} */
-		const role = waitsPayment
-			? 'awaiting_payment'
-			: method === 'cod' && cod.startStatus === 'open'
-				? 'open'
-				: 'awaiting_confirmation';
-		const status = statusWithRole(flow, role);
+		const role = statusOf(flow, status)?.role ?? 'awaiting_confirmation';
 		const holdMs =
 			role === 'awaiting_payment'
 				? freeWaits
@@ -970,7 +1023,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		let current = placed.order;
 		await store.countOrder(/** @type {string} */ (customer.id), { city: order.address?.city ?? '', at: new Date(now) });
 		if (viaPayments) current = (await startPayment(s, current, returnUrl, current.id)) ?? current;
-		await service.emit('order.placed', s, { order: current, statusLabel: labelOf(flow, status) });
+		await service.emit('order.placed', s, { order: current, statusLabel: shopperLabel(flow, status) });
 		if (placed.taken.length > 0) await service.emit('stock.taken', s, { lines: placed.taken });
 		// a free order is paid as it is placed (its digital items are given now)
 		if (current.payment.state === 'paid') {
@@ -1030,7 +1083,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				id: order.id,
 				number: order.number,
 				status: order.status,
-				statusLabel: labelOf(flow, order.status),
+				statusLabel: shopperLabel(flow, order.status),
 				total: order.totals.total,
 				currency: order.totals.currency,
 				placedAt: iso(order.placedAt),
@@ -1060,17 +1113,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const { s, shopper, order } = await shopperOrder(ctx);
 		const current = await refresh(s, order);
 		const flow = await flowOf(s);
-		if (!(await shopperMayCancel(s, current)) || !cancelledStatus(flow, current.status))
-			throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
-		// an open order (E27 `shopperCancel` may list `open`) is cancelled the same way while nothing was paid; money paid
-		// is given back by the shop's staff, who refund it
-		if (!WAITING_ROLES.includes(current.role) && current.payment.paid > 0)
+		const move = shopperCancelOf(flow, current.status);
+		if (!move) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
+		// a paid order as the move says (E27): refused (staff cancel and refund it), cancelled with the refund due, or
+		// cancelled and refunded through Payments
+		if (current.payment.paid > 0 && move.options.shopperPaid === 'refuse')
 			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');
 		const cancelled = await cancel(s, current, {
 			by: shopper ? 'shopper' : 'guest',
 			note: 'Cancelled by the shopper',
 			code: 'shopper',
 			reason: 'shopper',
+			to: move.to,
 		});
 		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
 		// paid at Payments just before (K-13): it is paid now, and staff cancel and refund paid orders

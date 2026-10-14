@@ -16,8 +16,8 @@
  */
 import { createId } from '@ss/contracts';
 import { createOrdersStore } from '../adapters/orders-store.js';
-import { confirmedStatus, statusOf } from '../core/flow.js';
-import { ID_PREFIX } from '../core/model.js';
+import { canMove, statusOf, triggersOfFlow } from '../core/flow.js';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { paymentStateOf, serverNote } from '../core/orders.js';
 import { planTransition } from '../core/transitions.js';
 import { createTransitions, rulesOf } from './transitions.js';
@@ -89,9 +89,9 @@ export const createOrderPayments = (product, service) => {
 	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 
 	/**
-	 * Mark an order paid (Payments confirmed it: an `online` entry of its payments log, E26) and move it to the flow's
-	 * confirmed status, through the order engine (a transition guarded by the payment still pending). The flow may have
-	 * no move from waiting to an open status: the order is then paid but stays where it is.
+	 * Mark an order paid (Payments confirmed it: an `online` entry of its payments log, E26) and move it to the status the
+	 * flow's `paid` trigger names, through the order engine (a transition guarded by the payment still pending). The flow
+	 * may name none (or not list the move): the order is then paid but stays where it is.
 	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<OrderRecord>}
 	 */
@@ -99,7 +99,8 @@ export const createOrderPayments = (product, service) => {
 		const store = createOrdersStore(await s.data());
 		const flow = await flowOf(s);
 		const now = service.now();
-		const to = confirmedStatus(flow, order.status);
+		const trigger = triggersOfFlow(flow).paid;
+		const to = trigger && canMove(flow, order.status, trigger) ? trigger : null;
 		const advance = order.payment.advance > 0;
 		const amount = expectedOf(order).amount;
 		/** @type {Record<string, unknown>} */
@@ -133,7 +134,7 @@ export const createOrderPayments = (product, service) => {
 						where: { 'payment.state': 'pending' },
 						checkUpdatedAt: false,
 					},
-					rules: await rulesOf(s, 'system'),
+					rules: await rulesOf(s),
 					now,
 				})
 			: null;
@@ -339,7 +340,26 @@ export const createOrderPayments = (product, service) => {
 		for (const order of await store.toWatch(now, LATE_EVERY_MS, WATCH_MS)) await recheck(s, order, { force: true });
 	};
 
-	return Object.freeze({ confirmPaid, recheck, beforeCancel, afterCancel, sweep });
+	/**
+	 * Drop the payment Payments cancelled for a cancel or a move that then did not happen (it lost its race to another
+	 * change, or failed after): only while the order still names that payment and nothing cancelled the order meanwhile
+	 * (that keeps it, watched for money that still comes), so the shopper's next pay starts one for the order as it is,
+	 * as after an edit. Nothing to do when the step cancelled nothing.
+	 * @param {Site} s @param {OrderRecord} order as read @param {CancelStep | null} step
+	 */
+	const dropVoided = async (s, order, step) => {
+		if (!step || !('payment.voidedAt' in step.set)) return;
+		await (
+			await s.data()
+		)
+			.collection(COLLECTIONS.orders)
+			.updateOne(
+				{ websiteId: s.websiteId, id: order.id, 'payment.paymentId': order.payment.paymentId, 'payment.voidedAt': null },
+				{ $set: { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null } },
+			);
+	};
+
+	return Object.freeze({ confirmPaid, recheck, beforeCancel, afterCancel, dropVoided, sweep });
 };
 
 /** @typedef {ReturnType<typeof createOrderPayments>} OrderPayments */

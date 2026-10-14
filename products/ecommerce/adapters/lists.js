@@ -11,21 +11,29 @@
 import { checkBookingHours } from '../core/bookings.js';
 import { checkCouriers } from '../core/couriers.js';
 import { checkZones } from '../core/delivery.js';
-import { DEFAULT_FLOW, checkOrderFlow } from '../core/flow.js';
+import { DEFAULT_FLOW, checkOrderFlow, readOrderFlow } from '../core/flow.js';
 import { checkGrades } from '../core/grades.js';
 import { checkRolePrices } from '../core/role-pricing.js';
 import { checkTaxRules } from '../core/taxes.js';
 
 /**
  * @typedef {{ ok: true, value: any } | { ok: false, errors: Array<string | { path: string, message: string, code?: string }> }} ListCheck
- * @typedef {{ feature: string, title: string, check: (value: unknown) => ListCheck, fallback: () => any }} ListDefinition
+ * @typedef {{ feature: string, title: string, check: (value: unknown) => ListCheck, fallback: () => any,
+ *   read?: (value: unknown) => any }} ListDefinition `read`: a saved value as the code reads it today (the order flow
+ *   fills what a flow saved before phase 2 leaves out with today's behavior)
  * @typedef {(websiteId: string, saved: any, next: any) => Promise<Array<{ path: string, message: string, code?: string }>>} ListGuard
  *   what saving a list would break in the merchant's data (the order flow: statuses that have orders)
  */
 
 /** Each list: the feature it belongs to, its name on screens, its check and its value before it is saved. */
 export const LISTS = Object.freeze({
-	order_flow: { feature: 'checkout', title: 'Order statuses and moves', check: checkOrderFlow, fallback: () => DEFAULT_FLOW },
+	order_flow: {
+		feature: 'checkout',
+		title: 'Order statuses and moves',
+		check: checkOrderFlow,
+		fallback: () => DEFAULT_FLOW,
+		read: readOrderFlow,
+	},
 	couriers: { feature: 'checkout', title: 'Couriers', check: checkCouriers, fallback: () => [] },
 	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: () => [] },
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },
@@ -60,7 +68,10 @@ export const createLists = ({ store, now, guards = {} }) => {
 		 */
 		get: async (websiteId, name) => {
 			const doc = await store.get('settings', idOf(websiteId, `list.${name}`));
-			return doc && doc.value !== undefined ? doc.value : LISTS[name].fallback();
+			const value = doc && doc.value !== undefined ? doc.value : LISTS[name].fallback();
+			/** @type {ListDefinition} */
+			const list = LISTS[name];
+			return list.read ? list.read(value) : value;
 		},
 		/**
 		 * Check and save a list.

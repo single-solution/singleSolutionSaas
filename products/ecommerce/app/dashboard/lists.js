@@ -1,8 +1,8 @@
 'use client';
 /**
- * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): the order flow (statuses with roles and the
- * allowed moves), couriers, delivery zones, tax rules and booking hours, and the pieces the condition grades editor
- * (`./grades.js`) shares. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
+ * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, delivery zones, tax rules and booking
+ * hours, and the pieces the order flow editor (`./flow-editor.js`) and the condition grades editor (`./grades.js`)
+ * share. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
  * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
  * @module
  */
@@ -20,8 +20,6 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
-import { DEFAULT_FLOW, canMove } from '../../core/flow.js';
-import { STATUS_ROLES } from '../../core/model.js';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { call, fill, useLoad } from './api.js';
 import { cleanLines, keyOf } from './drafts.js';
@@ -96,7 +94,7 @@ const decimalOf = (amount, currency) =>
  * Up, down and remove buttons of one entry.
  * @param {{ label: string, index: number, count: number, onMove: (step: number) => void, onRemove: () => void }} props
  */
-function EntryHead({ label, index, count, onMove, onRemove }) {
+export function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
 			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>
@@ -510,189 +508,5 @@ export function TaxRulesEditor({ websiteId, off }) {
 				</FieldGrid>
 			)}
 		/>
-	);
-}
-
-const F = L.orderFlow;
-
-/**
- * The moves of a flow the role rules allow, among statuses that exist.
- * @param {OrderFlow} flow
- */
-const allowedMoves = (flow) => flow.moves.filter((move) => canMove(flow, move.from, move.to));
-
-/**
- * The statuses an order in `from` could move to under the role rules (whether or not the move is ticked).
- * @param {OrderFlow} flow
- * @param {string} from
- */
-const possibleTargets = (flow, from) =>
-	flow.statuses.filter((status) => canMove({ statuses: flow.statuses, moves: [{ from, to: status.key }] }, from, status.key));
-
-/** @param {OrderFlow} flow @returns {OrderFlow} a copy safe to edit */
-const copyFlow = (flow) => ({
-	statuses: flow.statuses.map((status) => ({ ...status })),
-	moves: flow.moves.map((move) => ({ ...move })),
-});
-
-/**
- * The order flow: statuses (key, name, role) in order, and for each status the statuses it may move to. Moves the
- * role rules do not allow are not offered; the server checks the whole flow again (`core/flow.js` `checkOrderFlow`).
- * @param {EditorProps} props
- */
-export function OrderFlowEditor({ websiteId, off }) {
-	const state = useList(websiteId, 'order_flow');
-	const [resetShown, setResetShown] = useState(false);
-	return (
-		<Card title={F.title} subtitle={off ? TEXTS.settings.off : F.help}>
-			<Loaded answer={state.answer}>
-				{(data) => {
-					/** @type {OrderFlow} */
-					const saved =
-						data.value && Array.isArray(data.value.statuses) && Array.isArray(data.value.moves) ? data.value : DEFAULT_FLOW;
-					/** @type {OrderFlow} */
-					const flow = state.draft ?? saved;
-					/** @param {OrderFlow} next */
-					const setFlow = (next) => state.setDraft(next);
-					/** @param {number} index @param {Partial<OrderFlow['statuses'][number]>} patch */
-					const setStatus = (index, patch) => {
-						const old = flow.statuses[index]?.key ?? '';
-						const key = patch.key;
-						setFlow({
-							statuses: flow.statuses.map((status, at) => (at === index ? { ...status, ...patch } : status)),
-							// a renamed key keeps its moves
-							moves:
-								key === undefined
-									? flow.moves
-									: flow.moves.map((move) => ({
-											from: move.from === old ? key : move.from,
-											to: move.to === old ? key : move.to,
-										})),
-						});
-					};
-					/** @param {number} index */
-					const removeStatus = (index) => {
-						const key = flow.statuses[index]?.key;
-						setFlow({
-							statuses: flow.statuses.filter((_, at) => at !== index),
-							moves: flow.moves.filter((move) => move.from !== key && move.to !== key),
-						});
-					};
-					return (
-						<div className="space-y-4">
-							{flow.statuses.map((status, index) => {
-								const targets = possibleTargets(flow, status.key);
-								const ticked = flow.moves.filter((move) => move.from === status.key).map((move) => move.to);
-								return (
-									<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
-										<EntryHead
-											label={F.status}
-											index={index}
-											count={flow.statuses.length}
-											onMove={(step) => setFlow({ ...flow, statuses: moved(flow.statuses, index, step) })}
-											onRemove={() => removeStatus(index)}
-										/>
-										<FieldGrid>
-											<Input
-												label={F.label}
-												value={status.label}
-												maxLength={60}
-												onChange={(event) => setStatus(index, { label: event.target.value })}
-											/>
-											<Input
-												label={F.key}
-												value={status.key}
-												maxLength={40}
-												autoComplete="off"
-												onChange={(event) => setStatus(index, { key: event.target.value })}
-											/>
-											<Select
-												label={F.role}
-												value={status.role}
-												options={STATUS_ROLES.map((role) => ({
-													value: role,
-													label: F.roles[/** @type {keyof typeof F.roles} */ (role)],
-												}))}
-												onChange={(event) =>
-													setStatus(index, {
-														role: /** @type {import('../../core/model.js').StatusRole} */ (event.target.value),
-													})
-												}
-											/>
-										</FieldGrid>
-										{targets.length > 0 ? (
-											<CheckboxGroup
-												legend={F.moves}
-												options={targets.map((target) => ({ value: target.key, label: target.label || target.key }))}
-												value={ticked.filter((key) => targets.some((target) => target.key === key))}
-												onChange={(next) =>
-													setFlow({
-														...flow,
-														moves: [
-															...flow.moves.filter((move) => move.from !== status.key),
-															...next.map((to) => ({ from: status.key, to })),
-														],
-													})
-												}
-											/>
-										) : (
-											<p className="text-sm text-muted">{F.noMoves}</p>
-										)}
-									</div>
-								);
-							})}
-							{resetShown && state.draft !== null ? <Callout tone="info">{F.resetNote}</Callout> : null}
-							<SaveRow
-								dirty={state.draft !== null}
-								onCancel={() => {
-									state.setDraft(null);
-									setResetShown(false);
-								}}
-								onSave={async () => {
-									// statuses saved without a key get one from their name; their moves follow
-									const keys = new Map(flow.statuses.map((status) => [status.key, keyOf(status.key, status.label)]));
-									/** @type {OrderFlow} */
-									const next = {
-										statuses: flow.statuses.map((status) => ({
-											key: keyOf(status.key, status.label),
-											label: status.label.trim(),
-											role: status.role,
-										})),
-										moves: flow.moves.map((move) => ({
-											from: keys.get(move.from) ?? move.from,
-											to: keys.get(move.to) ?? move.to,
-										})),
-									};
-									await state.save({ statuses: next.statuses, moves: allowedMoves(next) });
-									setResetShown(false);
-								}}>
-								<Button
-									size="sm"
-									variant="secondary"
-									disabled={flow.statuses.length >= 30}
-									onClick={() =>
-										setFlow({
-											...flow,
-											statuses: [...flow.statuses, { key: '', label: '', role: /** @type {const} */ ('open') }],
-										})
-									}>
-									{L.add}
-								</Button>
-								<Button
-									size="sm"
-									variant="ghost"
-									onClick={() => {
-										setFlow(copyFlow(DEFAULT_FLOW));
-										setResetShown(true);
-									}}>
-									{F.resetFlow}
-								</Button>
-							</SaveRow>
-							<ListOutcome result={state.result} local={state.local} />
-						</div>
-					);
-				}}
-			</Loaded>
-		</Card>
 	);
 }

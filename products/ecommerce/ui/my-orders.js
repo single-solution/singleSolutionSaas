@@ -429,6 +429,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 						button(doc, t('orders.back'), () => void showList(), { class: 'secondary', 'data-focus': 'back' }),
 						h(doc, 'h2', {}, t('orders.number', { number: order.number })),
 						h(doc, 'p', {}, t('orders.placed', { date: dateText(order.placedAt), status: order.statusLabel })),
+						// the line the shop wrote under this status for the order's payment method
+						order.statusText ? h(doc, 'p', { class: 'meta' }, order.statusText) : null,
 						h(doc, 'ul', { 'aria-label': t('orders.lines') }, ...lines),
 						h(
 							doc,
@@ -462,8 +464,15 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 								doc,
 								'ul',
 								{},
-								...order.history.map((/** @type {{ at: string, label: string }} */ entry) =>
-									h(doc, 'li', {}, t('orders.historyLine', { status: entry.label, date: dateText(entry.at) })),
+								...order.history.map((/** @type {{ at: string, label: string, note?: string }} */ entry) =>
+									h(
+										doc,
+										'li',
+										{},
+										t('orders.historyLine', { status: entry.label, date: dateText(entry.at) }),
+										// what the shop wrote for the shopper with the move
+										entry.note ? h(doc, 'div', { class: 'meta' }, t('orders.historyNote', { note: entry.note })) : null,
+									),
 								),
 							),
 						),

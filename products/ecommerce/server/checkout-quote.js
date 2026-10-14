@@ -111,9 +111,12 @@ const BANK_FIELDS = Object.freeze(
 /**
  * Re-pricing an order staff edit (E29): the order keeps the offers it was placed with (its deals and its coupon, even
  * ended, switched off or used up, by the website's deal rules; OR-9), its role price and the points it spent; staff
- * may set unit prices.
+ * may set unit prices. `keep` (`checkout.editPricing: keep_placed`): it keeps the amounts it was placed with instead of
+ * pricing them again — its offer discount, its delivery fee while its delivery method stays, and its payment method's
+ * fee while its payment method stays.
  * @typedef {{ prices: Map<string, number>, deals: DealRecord[], coupon: import('../core/model.js').CouponRecord | null,
- *   role: { role: string, percent: number, label: string } | null, points: { used: number, value: number } }} QuoteEdit
+ *   role: { role: string, percent: number, label: string } | null, points: { used: number, value: number },
+ *   keep?: { promotions: number, delivery: number, deliveryMethod: string, fee: number, method: string } }} QuoteEdit
  */
 
 /**
@@ -388,7 +391,8 @@ export const createQuoting = (product, service) => {
 		 */
 		const pass = (method) => {
 			const promotions = promote(method);
-			const merchandise = merchandiseOf(priced, promotions);
+			const keep = edit?.keep ?? null;
+			const merchandise = merchandiseOf(priced, promotions, keep ? keep.promotions : null, unit);
 			const goods = merchandise - roleDiscountOf(merchandise, rolePercent, unit);
 
 			// delivery
@@ -442,11 +446,13 @@ export const createQuoting = (product, service) => {
 					(pickupOptions.length === 1 && (cart.delivery.locationId === null || pickupPoint) ? pickupOptions[0] : undefined))
 				: undefined;
 			/** @type {DeliveryChoice} */
-			const delivery = !physical
+			const chosen = !physical
 				? { method: 'none', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null }
 				: wantsPickup
 					? (pickup ?? { method: 'pickup', zone: '', name: '', fee: 0, locationId: null, minDays: null, maxDays: null })
 					: /** @type {DeliveryChoice} */ (deliveryOptions[0]);
+			// an edited order that keeps its placed amounts keeps its delivery fee while its delivery method stays
+			const delivery = keep && chosen.method === keep.deliveryMethod ? { ...chosen, fee: keep.delivery } : chosen;
 			const deliveryProblem =
 				physical && wantedMethod === 'pickup' && !pickup
 					? !pickupPossible
@@ -487,7 +493,8 @@ export const createQuoting = (product, service) => {
 				rolePercent,
 				unit,
 			};
-			const unpriced = priceLines(base);
+			const fixedPromotions = keep ? { promotions: keep.promotions } : null;
+			const unpriced = priceLines({ ...base, fixed: fixedPromotions });
 			const feeBase = codSettings.feeBase === 'goods_after_discounts' ? 'goods_after_discounts' : 'order_total';
 			const payments = paymentOptions({
 				offered,
@@ -511,7 +518,14 @@ export const createQuoting = (product, service) => {
 			);
 			const effective = method ?? payments.find((option) => option.available)?.method ?? null;
 			const feePercent = effective === 'cod' && codOn ? Number(codSettings.feePercent ?? 0) : 0;
-			const { lines: prices, totals } = feePercent > 0 ? priceLines({ ...base, feePercent, feeBase }) : unpriced;
+			// an edited order that keeps its placed amounts keeps its payment method's fee while the method stays
+			const keptFee = keep && effective === keep.method ? keep.fee : null;
+			const { lines: prices, totals } =
+				keptFee !== null
+					? priceLines({ ...base, fixed: { promotions: keep?.promotions ?? 0, fee: keptFee } })
+					: feePercent > 0
+						? priceLines({ ...base, feePercent, feeBase, fixed: fixedPromotions })
+						: unpriced;
 			return { promotions, delivery, deliveryOptions, deliveryProblem, points, prices, totals, payments, effective };
 		};
 

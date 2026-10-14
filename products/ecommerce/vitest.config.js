@@ -5,5 +5,7 @@ export default defineUnitConfig({
 	include: ['tests/**/*.test.js'],
 	// app/ is the Next.js wiring and the dashboard page (it calls the kit's dashboard API)
 	coverageInclude: ['{core,server,adapters,ui}/**'],
+	// the dashboard's React components (untranspiled JSX) and their tests
+	jsx: ['app', 'tests'],
 	mongo: true,
 });

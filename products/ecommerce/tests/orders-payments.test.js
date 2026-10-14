@@ -127,7 +127,7 @@ describe('the payments log (E26)', () => {
 	});
 
 	it('records refunds with their method, reference and claim, and moves to refunded when they cover the payments', async () => {
-		await shop.setting('checkout', 'autoRefundedStatus', true);
+		await shop.flow((flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover: 'refunded' } }));
 		const { order } = await placeOrder();
 		await pay(order.id, { method: 'cash', amount: 1000, confirm: true });
 		const part = await refund(order.id, { amount: 300, reason: 'Late', method: 'cash', reference: 'R-1' });
@@ -145,7 +145,7 @@ describe('the payments log (E26)', () => {
 			['bank_transfer', 700, '', 'ret_abc'],
 		]);
 		expect(codeOf(await refund(order.id, { amount: 1, reason: 'x', method: 'cheque' }))).toBe('validation_failed');
-		await shop.setting('checkout', 'autoRefundedStatus', false);
+		await shop.flow((flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover: '' } }));
 	});
 
 	it('never sends money staff recorded to Payments, even when the order has a Payments payment (PM-2)', async () => {
@@ -242,7 +242,7 @@ describe('paid when staff confirm (OR-7)', () => {
 		const plain = await placeOrder({ payment: 'bank_transfer' });
 		expect((await moveTo(plain.order.id, 'confirmed')).json.payment).toMatchObject({ paid: 0 });
 
-		await shop.setting('checkout', 'paidOnConfirm', ['bank_transfer']);
+		await shop.moveOptions('pending_payment', 'confirmed', { paidOnConfirm: ['bank_transfer'] });
 		await shop.setting('checkout', 'bankTransferVia', 'manual');
 		const manual = await placeOrder({ payment: 'bank_transfer' });
 		const confirmed = await moveTo(manual.order.id, 'confirmed');
@@ -265,7 +265,7 @@ describe('paid when staff confirm (OR-7)', () => {
 		shop.payPayment((await orderRecord(paidThere.order.id)).payment.paymentId);
 		expect(codeOf(await moveTo(paidThere.order.id, 'confirmed'))).toBe('move_not_allowed');
 		expect((await orderRecord(paidThere.order.id)).payments).toEqual([expect.objectContaining({ method: 'online' })]);
-		await shop.setting('checkout', 'paidOnConfirm', []);
+		await shop.moveOptions('pending_payment', 'confirmed', {});
 	});
 });
 
@@ -280,13 +280,13 @@ describe('more moves (E27)', () => {
 		expect(record.role).toBe('awaiting_payment');
 		expect(new Date(record.holdUntil).getTime()).toBe(shop.now() + 60 * 60_000);
 
-		// with rewaitWindow none it waits until staff move it again (OR-5)
-		await shop.setting('checkout', 'rewaitWindow', 'none');
+		// with the move's window none it waits until staff move it again (OR-5)
+		await shop.moveOptions('confirmed', 'pending_payment', { window: 'none' });
 		const held = await placeOrder();
 		await moveTo(held.order.id, 'confirmed');
 		await moveTo(held.order.id, 'pending_payment');
 		expect((await orderRecord(held.order.id)).holdUntil).toBeNull();
-		await shop.setting('checkout', 'rewaitWindow', 'restart');
+		await shop.moveOptions('confirmed', 'pending_payment', {});
 	});
 
 	it('recalls a shipped parcel and gives everything back', async () => {
@@ -334,9 +334,9 @@ describe('more moves (E27)', () => {
 		expect(customer?.rtoCount ?? 0).toBe(0);
 	});
 
-	it('takes a customer return after delivery, restocking as the setting says and taking back earned points', async () => {
+	it('takes a customer return after delivery, restocking as the move says and taking back earned points', async () => {
 		await shop.setting('loyalty', 'earnPercent', 10);
-		await shop.setting('checkout', 'returnRestock', 'no');
+		await shop.moveOptions('delivered', 'customer-returned', { restock: 'no' });
 		const { item, order, token } = await placeOrder({ price: 10_000, stock: 5 });
 		await moveTo(order.id, 'confirmed');
 		await moveTo(order.id, 'delivered');
@@ -356,7 +356,7 @@ describe('more moves (E27)', () => {
 		});
 		expect(after.json.balance).toBe(0);
 		expect((await moveTo(order.id, 'refunded')).json.status).toBe('refunded');
-		await shop.setting('checkout', 'returnRestock', 'yes');
+		await shop.moveOptions('delivered', 'customer-returned', {});
 	});
 
 	it('needs the refund permission to move into refunded through a ticket', async () => {

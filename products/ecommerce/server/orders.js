@@ -28,6 +28,7 @@ import {
 	customerOwnView,
 	orderDetail,
 	orderFilters,
+	orderMoney,
 	orderQuery,
 	orderSummary,
 	serverNote,
@@ -240,11 +241,32 @@ export const createOrders = (product, service, { ordering }) => {
 		const order = await orderOf(s, ctx);
 		const data = await s.data();
 		const orders = data.collection(COLLECTIONS.orders);
-		// what it holds goes back first, once; an order that changed meanwhile is not deleted
+		const { money } = await s.format();
+		// the shopper's money is never deleted with it: a refund still running at Payments, or money a not delivered or
+		// closed order still holds, is refunded first
+		if ((order.effects ?? []).some((effect) => effect.state === 'pending'))
+			throw problem(
+				'conflict',
+				'A refund through Payments is pending for this order; delete it once the refund is done (reload it to try the refund again).',
+			);
+		const held = order.role === 'delivered' ? 0 : orderMoney(order).net;
+		if (held > 0)
+			throw problem(
+				'conflict',
+				`Refund the ${money(held, order.totals.currency)} it still holds to the shopper before deleting this order.`,
+			);
+		// what it holds goes back first, once; an order that changed meanwhile is not deleted (nor one paid or refunded
+		// meanwhile)
 		if (!(await moves.giveBack(s, order, { payments: true })))
 			throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
-		await orders.deleteOne({ websiteId: s.websiteId, id: order.id });
-		const { money } = await s.format();
+		const deleted = await orders.deleteOne({
+			websiteId: s.websiteId,
+			id: order.id,
+			'payment.paid': order.payment.paid,
+			'payment.refunded': order.payment.refunded,
+			effects: { $not: { $elemMatch: { state: 'pending' } } },
+		});
+		if (deleted.deletedCount !== 1) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 		await service.log(ctx, 'order.deleted', order.id, {
 			label: order.number,
 			detail: `Total ${money(order.totals.total, order.totals.currency)}`,
@@ -404,16 +426,16 @@ export const createOrders = (product, service, { ordering }) => {
 		const input = checkEdit(ctx.body, order);
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		// serial numbers typed at packing or later (E11)
-		const { serials, shipment, waiting, ...rest } = input.value;
+		const { serials, shipment, waiting, video, ...rest } = input.value;
 		// lines, payment and delivery of a waiting order are priced again by checkout (E29)
 		if (waiting) {
 			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });
 			delete rest.address;
-			if (rest.staffNote === undefined && !shipment && !serials) return detailOf(s, order);
+			if (rest.staffNote === undefined && !shipment && !serials && !video) return detailOf(s, order);
 		}
 		if (serials) {
 			order = await moves.typeSerials(s, ctx, order, serials);
-			if (rest.staffNote === undefined && rest.address === undefined && !shipment) return detailOf(s, order);
+			if (rest.staffNote === undefined && rest.address === undefined && !shipment && !video) return detailOf(s, order);
 		}
 		/** @type {Record<string, unknown>} */
 		const set = { ...rest };
@@ -434,18 +456,41 @@ export const createOrders = (product, service, { ordering }) => {
 				estimatedDeliveryAt: shipment.estimatedDeliveryAt,
 			};
 		}
+		/** @type {Record<string, unknown>} */
+		const update = { $set: set };
+		// a new dispatch video replaces the one taken when packing (E28), with a history entry
+		if (video) {
+			set.media = [...(order.media ?? []).filter((item) => item.kind !== 'dispatch_video'), video];
+			update.$push = {
+				history: {
+					at: new Date(product.now()),
+					from: order.status,
+					to: order.status,
+					...byActor(service.actor(ctx)),
+					...serverNote('video_replaced', 'Dispatch video replaced'),
+					kind: 'video',
+				},
+			};
+		}
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
-		const result = await orders.updateOne({ websiteId: s.websiteId, id: order.id, updatedAt: order.updatedAt }, { $set: set });
+		const result = await orders.updateOne({ websiteId: s.websiteId, id: order.id, updatedAt: order.updatedAt }, update);
 		if (result.modifiedCount !== 1) throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
 		await service.log(
 			ctx,
-			rest.address ? 'order.address_changed' : shipment ? 'order.shipment_changed' : 'order.noted',
+			rest.address
+				? 'order.address_changed'
+				: shipment
+					? 'order.shipment_changed'
+					: video
+						? 'order.video_replaced'
+						: 'order.noted',
 			order.id,
 			{
 				label: order.number,
 				detail: [
 					...(rest.address ? ['Delivery address changed'] : []),
 					...(shipment ? ['Shipment changed'] : []),
+					...(video ? ['Dispatch video replaced'] : []),
 					...(rest.staffNote === undefined ? [] : ['Staff note changed']),
 				].join(', '),
 			},
@@ -518,6 +563,8 @@ export const createOrders = (product, service, { ordering }) => {
 					{
 						to: input.value.to,
 						note: input.value.note,
+						...(input.value.shopperNote ? { shopperNote: input.value.shopperNote } : {}),
+						...(input.value.restock === undefined ? {} : { restock: input.value.restock }),
 						serials: item?.serials ?? {},
 						shipment: item?.shipment ?? null,
 						updatedAt: null,

@@ -233,21 +233,24 @@ export const ID_PREFIX = Object.freeze({
 
 /**
  * What an order-status key does. Merchants name statuses and choose the moves between them (the `order_flow` list,
- * PLAN 0.8.8); the role of a status decides what entering it does, so the stock, offer-use and points rules hold
- * whatever the flow:
+ * PLAN 0.8.8; the options of each move, PLAN 0.8.10 dynamic model phase 2, `core/flow.js`); the role of a status decides
+ * what entering it does, so the stock, offer-use and points rules hold whatever the flow:
  * - `awaiting_payment`: start of online, bank-transfer and COD-with-advance orders; stock is held until it is paid or
  *   the payment window ends (then `cancelled`);
- * - `awaiting_confirmation`: start of plain COD orders; held until staff confirm or the confirmation window ends;
+ * - `awaiting_confirmation`: start of plain COD and pickup orders by default (a flow may have none, then they start
+ *   `open`); held until staff confirm or the confirmation window ends;
  * - `open`: confirmed and being prepared (custom statuses are `open` too);
  * - `packed`: serial numbers are captured for serialized lines;
  * - `shipped`: with the courier (tracking number);
  * - `delivered`: points are earned, reviews open, return windows start;
- * - `cancelled`: before shipping only; stock, offer use and points are given back; paid money is refunded;
- * - `returned_to_origin`: the parcel came back (RTO); stock comes back and the customer's RTO count rises;
- * - `refunded`: money returned (after `delivered`, `returned_to_origin` or `returned`; before dispatch only when
- *   something was paid and refunds cover it, E27);
- * - `returned`: a customer return after delivery (E27): earned points are taken back, redeemed ones given back, and
- *   stock comes back as the `returnRestock` setting says.
+ * - `cancelled`: stock, offer use and points are given back; paid money is refunded as the move says; after delivery
+ *   (E40, a listed move) the items go back in stock only as the move says;
+ * - `returned_to_origin`: the parcel came back (RTO); stock comes back as the move says and the customer's RTO count
+ *   rises;
+ * - `refunded`: money returned (after `delivered`, `returned_to_origin` or `returned`; before delivery only when
+ *   something was paid, E27, and it acts as a cancel);
+ * - `returned`: a customer return after delivery (E27): earned points are taken back unless the move keeps them (E39),
+ *   redeemed ones given back, and stock comes back as the move says.
  */
 export const STATUS_ROLES = Object.freeze([
 	'awaiting_payment',
@@ -263,8 +266,44 @@ export const STATUS_ROLES = Object.freeze([
 ]);
 
 /** @typedef {(typeof STATUS_ROLES)[number]} StatusRole */
-/** @typedef {{ key: string, label: string, role: StatusRole }} OrderStatusDefinition */
-/** @typedef {{ statuses: OrderStatusDefinition[], moves: Array<{ from: string, to: string }> }} OrderFlow */
+/**
+ * What the shopper reads under a status, per payment method ('' = nothing; PLAN 0.8.10 dynamic model phase 2).
+ * @typedef {{ cod: string, online: string, bank_transfer: string, pickup: string }} ShopperTexts
+ */
+/**
+ * A status of the order flow: its key, the name staff see (`label`), its kind of step (`role`), the name shoppers see
+ * (`shopperLabel`, '' = `label`), a line per payment method shoppers read under it and whether entering it sends the
+ * shopper a message (`notify`). Older saved flows read with the defaults (`core/flow.js` `checkOrderFlow`).
+ * @typedef {{ key: string, label: string, role: StatusRole, shopperLabel?: string, shopperText?: ShopperTexts,
+ *   notify?: boolean }} OrderStatusDefinition
+ */
+/**
+ * The choices a move makes where its stage contract leaves one (dynamic model §3.4; `core/flow.js` `moveOptionSpecs`
+ * says which a move takes and their defaults).
+ * @typedef {{ paidOnConfirm?: PaymentMethod[], window?: 'restart' | 'none', video?: 'off' | 'optional' | 'required',
+ *   tracking?: 'required' | 'optional', refund?: 'auto' | 'staff', shopperPaid?: 'refuse' | 'flag' | 'refund',
+ *   unpaid?: 'refuse' | 'cancel', restock?: 'yes' | 'no' | 'ask', points?: 'take_back' | 'keep' }} MoveOptions
+ */
+/**
+ * An allowed move: who may make it (`staff`, `shopper` — a cancel before dispatch —, or only the shop itself:
+ * `system`), the permission a staff ticket needs, what staff must give with it (`needs`) and its options.
+ * @typedef {{ from: string, to: string, who?: Array<'staff' | 'shopper' | 'system'>,
+ *   permission?: 'orders.manage' | 'orders.refund', needs?: Array<'note' | 'reason' | 'units'>,
+ *   options?: MoveOptions }} OrderMove
+ */
+/**
+ * Moves the shop makes by itself, by the status they go to ('' = none): `paid` (Payments confirmed the payment of the
+ * order waiting for it), `windowEnd` (a waiting order's time ran out) and `refundsCover` (refunds reached what was
+ * paid). `starts`: where orders that need no payment first start — cash on delivery, pay at pickup and free orders.
+ * @typedef {{ paid: string, windowEnd: string, refundsCover: string }} FlowTriggers
+ * @typedef {{ cod: string, pickup: string, free: string }} FlowStarts
+ */
+/**
+ * The merchant's order flow (the `order_flow` list). `triggers` and `starts` are filled from the statuses and moves
+ * when missing (older saved flows, flows built in code).
+ * @typedef {{ statuses: OrderStatusDefinition[], moves: OrderMove[], triggers?: FlowTriggers,
+ *   starts?: FlowStarts }} OrderFlow
+ */
 
 /** @typedef {'cod' | 'online' | 'bank_transfer' | 'pickup'} PaymentMethod */
 /** @typedef {'unpaid' | 'pending' | 'paid' | 'partially_refunded' | 'refunded'} PaymentState */
@@ -335,8 +374,9 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} status a status key of the website's order flow
  * @property {StatusRole} role the role of `status`
  * @property {Array<{ at: Date, from: string | null, to: string, by: string, note: string, reason?: string,
- *   kind?: 'edited' | 'payment' | 'refund', byKind?: string, code?: import('./orders.js').HistoryNote,
- *   values?: import('./orders.js').NoteValues }>} history `reason` of a move (E27: `rto` | `customer_return`, or a
+ *   kind?: 'edited' | 'payment' | 'refund' | 'video', byKind?: string, code?: import('./orders.js').HistoryNote,
+ *   values?: import('./orders.js').NoteValues, shopperNote?: string }>} history `shopperNote`: what staff wrote for
+ *   the shopper with a move (the shopper's timeline shows it; `note` stays internal); `reason` of a move (E27: `rto` | `customer_return`, or a
  *   cancel's `staff` | `shopper` | `expired`); `byKind`: the kind of the actor `by` names (`staff`, `user` or `server`;
  *   missing for `system`, `shopper` and `guest`, and on imported entries); `code` and `values`: a note the server
  *   wrote itself (`core/orders.js` `HISTORY_NOTES`; imported entries have only the note)

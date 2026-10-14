@@ -12,6 +12,13 @@
  * from the order. A try takes the effect first (`runningAt`, while the order's refunds are as read), and staff refunding
  * by hand settle it first (`dropPending`: a refund Payments did is recorded, else it is `skipped`), so the money never
  * goes back twice. Staff see each effect on the order.
+ *
+ * Staff refunds (`POST /v1/orders/:id/refunds`, a claim's refund) go through the same effects (phase 2, the refund
+ * lock): the refund through Payments is written on the order first — guarded by the order's refunds as read and no
+ * other refund pending — as an effect already taken (`runningAt`), then sent with its id as the Idempotency-Key and
+ * recorded together with the part recorded by hand and its history entry (`record`). Of two refunds at once one wins
+ * (the other 409 `conflict`), and a refund Payments made is always recorded: done now, or, when Payments' answer did
+ * not come, pending and sent again with the same key on use.
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -43,26 +50,60 @@ const RECORD_TRIES = 5;
  * What one external effect came to: `refunded` the money it gave back (with what Payments answered), and a warning
  * for staff.
  * @typedef {{ effect: OrderEffect, state: OrderEffect['state'], amount: number,
- *   done: { refundId: string, manual: boolean, gateway: string } | null, warning: Warning | null }} EffectOutcome
+ *   done: { refundId: string, manual: boolean, gateway: string } | null, warning: Warning | null,
+ *   error?: unknown }} EffectOutcome `error`: what Payments answered when it did not refund
  */
 
 /**
- * The rules today's settings imply for a transition (phase 1: read from the settings, as before the engine).
- * @param {Site} s @param {'staff' | 'shopper' | 'system'} who
+ * What the website's settings say for every transition (the options of each move are in the order flow).
+ * @param {Site} s
  * @returns {Promise<import('../core/transitions.js').TransitionRules>}
  */
-export const rulesOf = async (s, who) => {
+export const rulesOf = async (s) => {
 	const checkout = await s.values('checkout');
 	return {
-		restock: checkout.returnRestock !== 'no',
-		rewaitMinutes: checkout.rewaitWindow === 'none' ? 0 : Number(checkout.paymentWindowMinutes ?? 0),
-		// staff cancels refund what Payments took; a shopper's cancel and an ended window leave it due (E27, K-13)
-		refundOnCancel: who === 'staff',
+		paymentWindowMinutes: Number(checkout.paymentWindowMinutes ?? 0),
 		paidOnDelivery: !s.has('cod') || (await s.values('cod')).paidOnDelivery !== false,
 		loyalty: s.has('loyalty') ? await s.values('loyalty') : null,
 		timeZone: (await s.format()).timeZone || 'UTC',
 	};
 };
+
+/**
+ * The part of a transition's guard that keeps money right: a move into a cancelled or refunded status works out what
+ * is left to refund from the order as read, so it happens only while the order's refunds are as read and no refund runs
+ * at Payments for it (a staff refund taken meanwhile: the move gets 409 `conflict`).
+ * @param {OrderRecord} order @param {import('../core/transitions.js').TransitionPlan} plan
+ * @returns {Record<string, unknown>}
+ */
+export const moneyGuard = (order, plan) =>
+	plan.stage === 'cancelled' || plan.stage === 'refunded'
+		? {
+				'payment.refunded': order.payment.refunded,
+				effects: { $not: { $elemMatch: { state: 'pending', runningAt: { $ne: null } } } },
+			}
+		: {};
+
+/**
+ * A refund Payments made for an order's payment that the order does not record (its entries keep Payments' refund
+ * ids), of an amount: the refund an effect asked for whose answer was lost.
+ * @param {OrderRecord} order @param {import('./service.js').PaymentFacts} payment @param {number} amount
+ */
+export const unrecordedRefund = (order, payment, amount) => {
+	const recorded = new Set((order.refunds ?? []).map((entry) => entry.refundId).filter(Boolean));
+	return payment.refunds.find((refund) => refund.id && !recorded.has(refund.id) && refund.amount === amount) ?? null;
+};
+
+/**
+ * What staff are told when a refund through Payments is not sent: the order was refunded meanwhile.
+ * @param {OrderEffect} effect
+ * @returns {Warning}
+ */
+const refundSkipped = (effect) => ({
+	code: 'refund_skipped',
+	values: { amount: effect.amount },
+	text: 'A refund through Payments was not sent: the order was refunded meanwhile. Check its refunds.',
+});
 
 /**
  * @param {Product} product
@@ -88,6 +129,7 @@ export const createTransitions = (product, service) => {
 	 */
 	const apply = async (s, order, plan) => {
 		const data = await s.data();
+		const guard = { ...plan.guard, ...moneyGuard(order, plan) };
 		/** @type {Record<string, unknown>} */
 		const update = { $set: plan.set };
 		if (Object.keys(plan.push).length > 0) update.$push = plan.push;
@@ -96,7 +138,7 @@ export const createTransitions = (product, service) => {
 			try {
 				const done = await applyTransition(
 					data,
-					{ orderId: order.id, guard: plan.guard, update, effects: plan.ledger },
+					{ orderId: order.id, guard, update, effects: plan.ledger },
 					{ now: product.now() },
 				);
 				if (!done) throw changed();
@@ -156,7 +198,15 @@ export const createTransitions = (product, service) => {
 	 * @returns {Warning}
 	 */
 	const refundFailed = (effect, detail, retried) => {
-		const what = effect.id.endsWith(':cancel') ? 'canceled' : 'refunded';
+		if (effect.record)
+			return {
+				code: retried ? 'refund_pending' : 'refund_failed',
+				values: { amount: effect.amount },
+				text: retried
+					? `Payments did not answer (${detail}): the refund is kept on the order and sent again when the order is next used. Do not refund it again.`
+					: `Payments refused the refund (${detail}).`,
+			};
+		const what = /:cancel(:\d+)?$/.test(effect.id) ? 'canceled' : 'refunded';
 		return {
 			code: what === 'canceled' ? 'cancel_refund_failed' : 'refund_failed',
 			values: { amount: effect.amount },
@@ -179,7 +229,10 @@ export const createTransitions = (product, service) => {
 			const current = await read(s, orderId);
 			const found = current?.effects?.find((entry) => entry.id === effect.id);
 			if (!current || !found || found.state === 'done') return false;
-			const refunded = current.payment.refunded + effect.amount;
+			// a staff refund also records its part given back by hand and its history entry (the refund lock)
+			const record = effect.record ?? null;
+			const refunded = current.payment.refunded + effect.amount + (record?.manual ?? 0);
+			const recorded = (record?.manual ?? 0) > 0 || done.manual;
 			const result = await orders.updateOne(
 				{
 					websiteId: s.websiteId,
@@ -198,7 +251,21 @@ export const createTransitions = (product, service) => {
 						'effects.$.triedAt': new Date(now),
 						'effects.$.runningAt': null,
 					},
-					$push: { refunds: paymentsRefundEntry(effect.by, now, done, { amount: effect.amount, note: effect.note }) },
+					$push: {
+						refunds: {
+							$each: [
+								paymentsRefundEntry(effect.by, now, done, {
+									amount: effect.amount,
+									note: effect.note,
+									...(record ? { reference: record.reference, claimId: record.claimId } : {}),
+								}),
+								...(record?.entries ?? []),
+							],
+						},
+						...(record
+							? { history: { ...record.history, at: new Date(now), ...(recorded ? record.recordedNote : record.note) } }
+							: {}),
+					},
 				},
 			);
 			if (result.modifiedCount === 1) return true;
@@ -207,22 +274,51 @@ export const createTransitions = (product, service) => {
 	};
 
 	/**
-	 * Run one external effect of an order (a refund through Payments, once: its id is the Idempotency-Key).
+	 * Run one external effect of an order (a refund through Payments, once: its id is the Idempotency-Key). `claimed`: the
+	 * effect was written already taken (`runningAt`, a staff refund's lock), so it is sent at once. An effect asked of
+	 * Payments before is first looked for in what Payments shows (`payment`: read already): a refund Payments made that
+	 * the order does not record is recorded as this one's, not asked again; Payments that cannot be read leaves it
+	 * pending. Skipped when the order was refunded meanwhile (warning `refund_skipped`).
 	 * @param {Site} s @param {OrderRecord} order as read @param {OrderEffect} effect
+	 * @param {{ claimed?: boolean, payment?: import('./service.js').PaymentFacts }} [how]
 	 * @returns {Promise<EffectOutcome>}
 	 */
-	const runEffect = async (s, order, effect) => {
+	const runEffect = async (s, order, effect, { claimed = false, payment } = {}) => {
 		const now = new Date(product.now());
 		/** @type {EffectOutcome} */
 		const untouched = { effect, state: 'pending', amount: 0, done: null, warning: null };
-		// only while what Payments holds of the order still covers it: staff may have refunded it meanwhile
-		const { online } = refundSplit(order, refundable(order));
-		if (!order.payment.paymentId || online < effect.amount) {
-			await mark(s, order.id, effect, { state: 'skipped', triedAt: now, runningAt: null, detail: 'Refunded meanwhile' });
-			return { effect, state: 'skipped', amount: 0, done: null, warning: null };
+		// asked of Payments before (its answer may have been lost): a staff refund's lock is its first ask
+		const askedBefore = !claimed && ((effect.tries ?? 0) > 0 || Boolean(effect.runningAt));
+		if (!claimed) {
+			// only while what Payments holds of the order still covers it: staff may have refunded it meanwhile
+			const { online } = refundSplit(order, refundable(order));
+			if (!order.payment.paymentId || online < effect.amount) {
+				await mark(s, order.id, effect, { state: 'skipped', triedAt: now, runningAt: null, detail: 'Refunded meanwhile' });
+				return { effect, state: 'skipped', amount: 0, done: null, warning: refundSkipped(effect) };
+			}
+			// taken while the order's refunds are as read, so a refund staff record meanwhile stops it (or waits for it)
+			if (!(await claim(s, order, effect, now))) return untouched;
 		}
-		// taken while the order's refunds are as read, so a refund staff record meanwhile stops it (or waits for it)
-		if (!(await claim(s, order, effect, now))) return untouched;
+		const running = claimed && effect.runningAt ? new Date(effect.runningAt) : now;
+		if (askedBefore) {
+			// what Payments shows first: a refund it made that the order does not record yet is this one, recorded and never
+			// asked again (Payments forgets an Idempotency-Key after 24 hours: a second ask would refund twice, or be refused)
+			/** @type {import('./service.js').PaymentFacts} */
+			let facts;
+			try {
+				facts = payment ?? (await service.payments.read(s, /** @type {string} */ (order.payment.paymentId)));
+			} catch {
+				const detail = 'Payments cannot be reached right now.';
+				await mark(s, order.id, { ...effect, runningAt: running }, { triedAt: now, runningAt: null, detail });
+				return { ...untouched, warning: refundFailed(effect, detail, true) };
+			}
+			const made = unrecordedRefund(order, facts, effect.amount);
+			if (made) {
+				const done = { refundId: made.id, manual: made.manual, gateway: facts.gateway };
+				if (!(await recordRefund(s, order.id, effect, done))) return untouched;
+				return { effect, state: 'done', amount: effect.amount, done, warning: null };
+			}
+		}
 		/** @type {{ refundId: string, manual: boolean, gateway: string }} */
 		let done;
 		try {
@@ -240,7 +336,7 @@ export const createTransitions = (product, service) => {
 			await mark(
 				s,
 				order.id,
-				{ ...effect, runningAt: now },
+				{ ...effect, runningAt: running },
 				{
 					state,
 					tries: (effect.tries ?? 0) + 1,
@@ -249,11 +345,46 @@ export const createTransitions = (product, service) => {
 					detail,
 				},
 			);
-			return { effect, state, amount: 0, done: null, warning: refundFailed(effect, detail, state === 'pending') };
+			return {
+				effect,
+				state,
+				amount: 0,
+				done: null,
+				warning: refundFailed(effect, detail, state === 'pending'),
+				error: failed,
+			};
 		}
 		// recorded once; an order that kept changing leaves it running, and the next try (same key) records it
 		if (!(await recordRefund(s, order.id, effect, done))) return untouched;
 		return { effect, state: 'done', amount: effect.amount, done, warning: null };
+	};
+
+	/**
+	 * A staff refund through Payments under the order's refund lock: written on the order as an effect already taken
+	 * (with the part recorded by hand and the history entry it records with it), only while the order's refunds are as
+	 * read and no refund is pending, then sent at once. Throws 409 `conflict` when another refund took the order first.
+	 * @param {Site} s @param {OrderRecord} order as read
+	 * @param {Omit<OrderEffect, 'state' | 'tries' | 'triedAt' | 'runningAt'>} refund
+	 * @returns {Promise<{ order: OrderRecord, outcome: EffectOutcome }>}
+	 */
+	const lockedRefund = async (s, order, refund) => {
+		const now = new Date(product.now());
+		/** @type {OrderEffect} */
+		const effect = { ...refund, state: 'pending', tries: 0, triedAt: null, runningAt: now };
+		const taken = await (
+			await ordersOf(s)
+		).updateOne(
+			{
+				websiteId: s.websiteId,
+				id: order.id,
+				'payment.refunded': order.payment.refunded,
+				effects: { $not: { $elemMatch: { state: 'pending' } } },
+			},
+			{ $push: { effects: effect } },
+		);
+		if (taken.modifiedCount !== 1) throw changed();
+		const outcome = await runEffect(s, order, effect, { claimed: true });
+		return { order: /** @type {OrderRecord} */ (await read(s, order.id)), outcome };
 	};
 
 	/**
@@ -313,7 +444,7 @@ export const createTransitions = (product, service) => {
 			if (payment.refunded > recorded) {
 				/** @type {EffectOutcome[]} */
 				const outcomes = [];
-				for (const effect of sent) outcomes.push(await runEffect(s, order, effect));
+				for (const effect of sent) outcomes.push(await runEffect(s, order, effect, { payment }));
 				await announce(s, (await read(s, order.id)) ?? order, outcomes);
 				const waiting = outcomes.filter((outcome) => outcome.state === 'pending');
 				// not reached (a warning says why), or taken by another call meanwhile
@@ -413,7 +544,7 @@ export const createTransitions = (product, service) => {
 		for (const order of due) await settle(s, order);
 	};
 
-	return Object.freeze({ apply, runEffects, settle, sweep, dropPending });
+	return Object.freeze({ apply, runEffects, settle, sweep, dropPending, lockedRefund, announce });
 };
 
 /** @typedef {ReturnType<typeof createTransitions>} Transitions */

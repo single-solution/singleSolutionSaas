@@ -19,16 +19,6 @@
 				"enum": ["email", "sms", "whatsapp"]
 			}
 		},
-		"notifyStatuses": {
-			"type": "array",
-			"title": "Statuses that send a message",
-			"description": "Status keys of your order flow; moving an order into one of them sends the shopper a message.",
-			"default": ["confirmed", "dispatched", "delivered", "cancelled", "refunded"],
-			"items": {
-				"type": "string",
-				"maxLength": 40
-			}
-		},
 		"policyShipping": {
 			"type": "string",
 			"title": "Delivery policy",
@@ -486,62 +476,19 @@
 			"default": "payments",
 			"enum": ["payments", "manual"]
 		},
-		"autoRefundedStatus": {
-			"type": "boolean",
-			"title": "Refunded status when fully refunded",
-			"description": "Move an order to the refunded status once its refunds reach what was paid.",
-			"default": false
-		},
-		"returnRestock": {
+		"editPricing": {
 			"type": "string",
-			"title": "Returned orders go back to stock",
-			"default": "yes",
-			"enum": ["yes", "no"]
+			"title": "Staff edits of waiting orders",
+			"description": "Reprice: an edited order is priced again (its offers as placed, its delivery fee and cash handling fee worked out anew). Keep placed amounts: it keeps the offer discount, delivery fee and payment fee it was placed with (the discount at most what the items come to).",
+			"default": "reprice",
+			"enum": ["reprice", "keep_placed"]
 		},
-		"shopperCancel": {
-			"type": "array",
-			"title": "Shoppers may cancel in",
-			"description": "Roles of statuses in which shoppers may cancel their own order.",
-			"default": ["awaiting_payment", "awaiting_confirmation"],
-			"items": {
-				"type": "string",
-				"enum": ["awaiting_payment", "awaiting_confirmation", "open"]
-			}
-		},
-		"freeOrderStart": {
+		"deleteGivesBack": {
 			"type": "string",
-			"title": "Free orders paid online or by transfer start",
-			"description": "For online and bank-transfer orders whose total is 0 (nothing to pay). Awaiting confirmation: staff confirm them. Awaiting payment: in your awaiting-payment status, like the other online and bank-transfer orders, where they wait for staff without a time to pay.",
-			"default": "awaiting_confirmation",
-			"enum": ["awaiting_confirmation", "awaiting_payment"]
-		},
-		"rewaitWindow": {
-			"type": "string",
-			"title": "Moved back to awaiting payment",
-			"description": "Restart: an order staff move back to awaiting payment gets a new time to pay and is cancelled when it ends. None: it waits until staff move it again.",
-			"default": "restart",
-			"enum": ["restart", "none"]
-		},
-		"paidOnConfirm": {
-			"type": "array",
-			"title": "Paid when staff confirm",
-			"description": "Payment methods whose orders count as paid when staff move them out of waiting (for example a bank transfer checked by hand): the balance is recorded as a payment of that method, and an open Payments payment is cancelled. Empty = staff record payments themselves.",
-			"default": [],
-			"items": {
-				"type": "string",
-				"enum": ["cod", "online", "bank_transfer", "pickup"]
-			}
-		},
-		"trackingRequired": {
-			"type": "boolean",
-			"title": "Dispatch needs a tracking number",
-			"default": true
-		},
-		"packingVideo": {
-			"type": "string",
-			"title": "Dispatch video when packing",
-			"default": "off",
-			"enum": ["off", "optional", "required"]
+			"title": "Deleting an order gives back",
+			"description": "Held: what an order not delivered yet holds (stock, offer uses, redeemed points). All: also the items, offer uses and points of a delivered or closed order (its stock back, earned points taken back, redeemed points given back).",
+			"default": "held",
+			"enum": ["held", "all"]
 		},
 		"numberDigits": {
 			"type": "integer",

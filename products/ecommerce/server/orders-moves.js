@@ -1,7 +1,9 @@
 /**
- * Moving an order through the merchant's flow, and refunds (PLAN 0.8.8). A move is allowed only when the flow allows
- * it (`core/flow.js` `canMove`, with the role rules), the order's role is still the flow's role of its status
- * (`flow_changed`) and the order did not change since it was read (`updatedAt`). Every move is planned by the order
+ * Moving an order through the merchant's flow, and refunds (PLAN 0.8.8). A move is allowed only when the flow lists it
+ * for staff (`core/flow.js` `moveOf`, with the role rules), the staff ticket has the move's permission, staff give what
+ * it needs (a note, a note for the shopper, the answer to whether the items go back in stock), the order's role is
+ * still the flow's role of its status (`flow_changed`) and the order did not change since it was read (`updatedAt`).
+ * The move's options (PLAN 0.8.10 dynamic model phase 2) say what it records and asks. Every move is planned by the order
  * engine (`core/transitions.js`) and run in one transaction with everything it gives back or takes
  * (`server/transitions.js`); what entering a status does depends on its role:
  *
@@ -18,8 +20,10 @@
  * - `refunded`: what is left is refunded (through Payments for what Payments took, else recorded) and earned points
  *   are taken back.
  *
- * What a move needs is checked before anything is called: the shipment, the serial numbers and the dispatch video;
- * then the open Payments payment is cancelled (K-13), a shipment booked and a refund made, as the move needs.
+ * What a move needs is checked before anything is called: the shipment (its tracking number as the move's `tracking`
+ * says), the serial numbers (every one before the parcel goes out when the move `needs` units) and the dispatch video
+ * (the move's `video`); then the open Payments payment is cancelled (K-13), a shipment booked and a refund made, as the
+ * move needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
  *
  * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
  * one a server-token call names in its `SS-Actor-*` headers, else `Server`; PLAN 0.8.10 K2) and its kind, the activity
@@ -30,11 +34,12 @@
 import { problem } from '@ss/app-kit';
 import { heldStockBefore } from '../adapters/ledger.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
-import { WAITING_ROLES as WAITING, canMove, confirmedStatus } from '../core/flow.js';
+import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, triggersOfFlow } from '../core/flow.js';
 import { createId } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	checkTransition,
+	choicesOf,
 	nothingPaid,
 	paymentsRefundEntry,
 	planRelease,
@@ -135,9 +140,10 @@ export const createMoves = (product, service) => {
 	 * The shipment of an order entering a `shipped` status as staff give it, checked; a booking through the courier
 	 * API is only prepared here (`book`), and made after every other check.
 	 * @param {Site} s @param {OrderRecord} order @param {MoveInput['shipment']} input
+	 * @param {boolean} trackingRequired the move needs a tracking number (its `tracking` option)
 	 * @returns {Promise<{ shipment: NonNullable<OrderRecord['shipment']> } | { book: (() => Promise<NonNullable<OrderRecord['shipment']>>) }>}
 	 */
-	const shipmentOf = async (s, order, input) => {
+	const shipmentOf = async (s, order, input, trackingRequired) => {
 		if (!input) {
 			if (order.role === 'shipped' && order.shipment) return { shipment: order.shipment };
 			throw service.invalid('shipment', 'Give the courier and the tracking number, or book the shipment.');
@@ -148,6 +154,11 @@ export const createMoves = (product, service) => {
 			const key = input.courier ?? String((await s.values('courier_apis')).courier);
 			const courier = key ? courierOf(couriers, key) : null;
 			if (input.courier && !courier) throw service.invalid('shipment/courier', 'There is no such courier.');
+			// a parcel booked for it already (a move that failed after the booking) ships with that booking, never booked
+			// twice
+			const booked = order.shipment;
+			if (booked?.booked && booked.trackingNumber && (!input.courier || courier?.name === booked.courier))
+				return { shipment: booked };
 			const value = await product.connections.value(s.websiteId, 'courier');
 			if (!value) throw problem('courier_failed', 'Connect the courier API keys first.');
 			return {
@@ -166,10 +177,10 @@ export const createMoves = (product, service) => {
 			};
 		}
 		// the courier is kept by name and its link built on read from today's list (E28); a tracking number is needed
-		// unless the website says otherwise
+		// unless the move says otherwise
 		const courier = input.courier ? courierNamed(couriers, input.courier) : null;
 		if (input.courier && !courier) throw service.invalid('shipment/courier', 'There is no such courier.');
-		if (!input.trackingNumber && (await s.values('checkout')).trackingRequired !== false)
+		if (!input.trackingNumber && trackingRequired)
 			throw service.invalid('shipment/trackingNumber', 'Give the tracking number.');
 		return {
 			shipment: {
@@ -184,19 +195,6 @@ export const createMoves = (product, service) => {
 			},
 		};
 	};
-
-	/**
-	 * Refund through Payments, naming who asked; a refusal or failure becomes the problem Payments gave.
-	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {number} amount @param {string} reason
-	 * @param {string} key
-	 */
-	const refundOnline = (s, ctx, order, amount, reason, key) =>
-		service.payments.refund(s, /** @type {string} */ (order.payment.paymentId), {
-			amount,
-			reason,
-			idempotencyKey: key,
-			by: service.actor(ctx),
-		});
 
 	/**
 	 * What staff are told when Payments only recorded a refund: the shopper's money is not back yet (OR-8).
@@ -214,10 +212,9 @@ export const createMoves = (product, service) => {
 	 * the balance due, as a payment of the order's method (cash for cash on delivery and pay at pickup), after its open
 	 * Payments payment is cancelled (K-13); null when the move records none.
 	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {import('../core/model.js').StatusRole} to
-	 * @param {Record<string, any>} checkout
+	 * @param {ReadonlyArray<string>} methods the move's `paidOnConfirm`
 	 */
-	const paidOnConfirm = async (s, ctx, order, to, checkout) => {
-		const methods = Array.isArray(checkout.paidOnConfirm) ? checkout.paidOnConfirm : [];
+	const paidOnConfirm = async (s, ctx, order, to, methods) => {
 		const { due } = orderMoney(order);
 		if (!WAITING.includes(order.role) || !['open', 'packed', 'shipped'].includes(to) || !methods.includes(order.payment.method))
 			return null;
@@ -248,7 +245,7 @@ export const createMoves = (product, service) => {
 			refunded: order.payment.refunded,
 			state: order.payment.state,
 		});
-		return { entry, set: { ...step.set, 'payment.paid': paid, 'payment.state': state } };
+		return { entry, set: { ...step.set, 'payment.paid': paid, 'payment.state': state }, step };
 	};
 
 	/**
@@ -268,25 +265,48 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Move an order. Throws a problem when the move is not allowed, the input is wrong or the order changed meanwhile.
+	 * `trigger`: the shop makes the move by itself for staff (refunds that cover the payments): any listed move, without
+	 * what staff would give (a move that asks whether the items go back in stock takes no).
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order as read
 	 * @param {MoveInput} input
 	 * @param {OrderFlow} flow
+	 * @param {{ trigger?: boolean }} [how]
 	 * @returns {Promise<{ order: OrderRecord, warnings: Warning[] }>}
 	 */
-	const move = async (s, ctx, order, input, flow) => {
+	const move = async (s, ctx, order, input, flow, { trigger = false } = {}) => {
 		if (input.updatedAt !== null && input.updatedAt !== new Date(order.updatedAt).toISOString()) throw changed();
 		const from = order.status;
-		const checked = checkTransition({ order, flow, to: input.to });
+		const checked = checkTransition({ order, flow, to: input.to, who: trigger ? 'system' : 'staff' });
 		if (!checked.ok) throw problem(checked.code, checked.message);
 		const target = checked.target;
-		// refunds need the refund permission, also through a move (E27)
-		if (target.role === 'refunded' && ctx.ticket && !ctx.ticket.permissions.includes('orders.refund'))
-			throw problem('forbidden', 'Refunding an order needs the refund permission.');
+		const rules = /** @type {NonNullable<typeof checked.move>} */ (checked.move);
+		// the permission the move needs of a staff ticket (into a refunded status always the refund permission, E27)
+		if (ctx.ticket && !ctx.ticket.permissions.includes(rules.permission))
+			throw problem(
+				'forbidden',
+				rules.permission === 'orders.refund'
+					? 'Refunding an order needs the refund permission.'
+					: `This move needs the permission ${rules.permission}.`,
+			);
+		// what staff give with it
+		if (!trigger) {
+			if (rules.needs.includes('note') && !input.note) throw service.invalid('note', 'This move needs a note.');
+			if (rules.needs.includes('reason') && !input.shopperNote)
+				throw service.invalid('shopperNote', 'This move needs a note for the shopper.');
+			if (input.restock !== undefined && rules.options.restock !== 'ask')
+				throw service.invalid('restock', 'This move does not ask whether the items go back in stock.');
+		}
+		const chosen = choicesOf({
+			move: rules,
+			from: order.role,
+			to: target.role,
+			input: { who: 'staff', trigger, ...(input.restock === undefined ? {} : { restock: input.restock }) },
+		});
+		if (!chosen.ok) throw service.invalid(chosen.field ?? 'restock', chosen.message);
 		const data = await s.data();
 		const now = product.now();
-		const checkout = await s.values('checkout');
 		const actor = service.actor(ctx);
 
 		// what the move needs, checked before anything is called
@@ -295,8 +315,8 @@ export const createMoves = (product, service) => {
 		/** @type {import('../core/orders.js').OrderMedia | undefined} */
 		let video;
 		if (target.role === 'packed') {
-			// the dispatch video taken when packing, as the website asks (E28)
-			const videoRule = String(checkout.packingVideo ?? 'off');
+			// the dispatch video taken when packing, as the move asks (E28)
+			const videoRule = String(rules.options.video ?? 'off');
 			if (videoRule === 'required' && !input.video && !(order.media ?? []).some((m) => m.kind === 'dispatch_video'))
 				throw service.invalid('video', 'Add the dispatch video before packing.');
 			if (videoRule !== 'off' && input.video) video = input.video;
@@ -305,8 +325,8 @@ export const createMoves = (product, service) => {
 		/** @type {Awaited<ReturnType<typeof shipmentOf>> | null} */
 		let shipping = null;
 		if (target.role === 'shipped') {
-			// typed serial numbers are needed before dispatch (E11)
-			if (s.has('grades_serials') && (await serialRules(s)).mode === 'typed') {
+			// typed serial numbers are needed before dispatch when the move says so (E11)
+			if (rules.needs.includes('units') && s.has('grades_serials') && (await serialRules(s)).mode === 'typed') {
 				const missing = missingSerials(order, await serializedOf(s, order));
 				if (missing.length > 0)
 					throw service.invalid(
@@ -314,100 +334,153 @@ export const createMoves = (product, service) => {
 						`Type the serial numbers of ${missing.map((line) => line.name).join(', ')} before dispatch.`,
 					);
 			}
-			shipping = await shipmentOf(s, order, input.shipment);
+			shipping = await shipmentOf(s, order, input.shipment, rules.options.tracking !== 'optional');
 		}
-		const unpaid = nothingPaid(order, target.role);
+		if (target.role === 'delivered' && rules.needs.includes('units') && s.has('grades_serials')) {
+			const missing = (await serialRules(s)).mode === 'typed' ? missingSerials(order, await serializedOf(s, order)) : [];
+			if (missing.length > 0)
+				throw service.invalid(
+					`serials/${missing[0]?.id}`,
+					`Type the serial numbers of ${missing.map((line) => line.name).join(', ')} first.`,
+				);
+		}
+		const unpaid = nothingPaid(order, target.role, chosen.choices.unpaid);
 		if (unpaid) throw problem(unpaid.code, unpaid.message);
 
-		// then what it calls: a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`,
-		// OR-7), once its open Payments payment is cancelled (K-13)
-		const paid = await paidOnConfirm(s, ctx, order, target.role, checkout);
-		const shipment = shipping ? ('book' in shipping ? await shipping.book() : shipping.shipment) : undefined;
-		const cancelling =
-			target.role === 'cancelled' ||
-			(target.role === 'refunded' && !['delivered', 'returned_to_origin', 'returned'].includes(order.role));
-		// before shipping or a recalled parcel (E27), or a refund acting as a cancel: its open payment is cancelled at
-		// Payments first (K-13)
-		const step = cancelling
-			? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order cancelled' : 'Order refunded'))
-			: null;
-		// stock an order gives back tells the alerts (E34): what its products were before
-		const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
-			? await heldStockBefore(data, order)
-			: null;
-		const planned = planTransition({
-			order,
-			flow,
-			to: input.to,
-			input: {
-				who: 'staff',
-				actor,
-				...byActor(actor),
-				note: input.note,
-				...(input.code ? { code: input.code } : {}),
-				...(input.reason ? { reason: input.reason } : {}),
-				...(shipment ? { shipment } : {}),
-				...(video ? { video } : {}),
-				...(units ? { units } : {}),
-				...(paid ? { paid } : {}),
-				...(step ? { payments: step.set } : {}),
-			},
-			rules: await rulesOf(s, 'staff'),
-			now,
-		});
-		if (!planned.ok) throw problem(planned.code, planned.message);
-		const { plan } = planned;
-		let after = await transitions.apply(s, order, plan);
-		// money paid after an earlier cancel of its payment is recorded on the cancelled order (K-13)
-		if (step && target.role === 'cancelled') {
-			await payments.afterCancel(s, after, step);
-			after = /** @type {OrderRecord} */ (
-				await data
-					.collection(COLLECTIONS.orders)
-					.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
-			);
+		// then what it calls; a move that fails after that (it lost its race to another change: 409) leaves nothing the
+		// order does not know (`leftBehind`)
+		/** @type {{ steps: import('./order-payments.js').CancelStep[], booked: NonNullable<OrderRecord['shipment']> | null }} */
+		const called = { steps: [], booked: null };
+		try {
+			return await moveOn();
+		} catch (error) {
+			await leftBehind(s, order, called);
+			throw error;
 		}
 
-		/** @type {Warning[]} */
-		const warnings = [];
-		let refundedNow = plan.refunded;
-		// the refund through Payments a cancel or a refund asks for, right after the transaction
-		if (plan.external.length > 0) {
-			const ran = await transitions.runEffects(s, after, { ids: plan.external.map((effect) => effect.id) });
-			after = ran.order;
-			for (const outcome of ran.outcomes) {
-				refundedNow += outcome.amount;
-				if (outcome.done?.manual) warnings.push(await returnByHand(s, order, outcome.amount));
-				if (outcome.warning) warnings.push(outcome.warning);
+		async function moveOn() {
+			// a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`, OR-7), once its open
+			// Payments payment is cancelled (K-13)
+			const paid = await paidOnConfirm(s, ctx, order, target.role, rules.options.paidOnConfirm ?? []);
+			if (paid) called.steps.push(paid.step);
+			const shipment = shipping
+				? 'book' in shipping
+					? (called.booked = await shipping.book())
+					: shipping.shipment
+				: undefined;
+			const cancelling =
+				(target.role === 'cancelled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
+			// before shipping or a recalled parcel (E27), or a refund acting as a cancel: its open payment is cancelled at
+			// Payments first (K-13)
+			const step = cancelling
+				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order cancelled' : 'Order refunded'))
+				: null;
+			if (step) called.steps.push(step);
+			// stock an order gives back tells the alerts (E34): what its products were before
+			const held = ['cancelled', 'returned_to_origin', 'returned', 'refunded'].includes(target.role)
+				? await heldStockBefore(data, order)
+				: null;
+			const planned = planTransition({
+				order,
+				flow,
+				to: input.to,
+				input: {
+					who: 'staff',
+					...(trigger ? { trigger: true } : {}),
+					actor,
+					...byActor(actor),
+					note: input.note,
+					...(input.shopperNote ? { shopperNote: input.shopperNote } : {}),
+					...(input.restock === undefined ? {} : { restock: input.restock }),
+					...(input.code ? { code: input.code } : {}),
+					...(input.reason ? { reason: input.reason } : {}),
+					...(shipment ? { shipment } : {}),
+					...(video ? { video } : {}),
+					...(units ? { units } : {}),
+					...(paid ? { paid } : {}),
+					...(step ? { payments: step.set } : {}),
+				},
+				rules: await rulesOf(s),
+				now,
+			});
+			if (!planned.ok)
+				throw planned.code === 'input_needed'
+					? service.invalid(planned.field ?? 'restock', planned.message)
+					: problem(planned.code, planned.message);
+			const { plan } = planned;
+			let after = await transitions.apply(s, order, plan);
+			// money paid after an earlier cancel of its payment is recorded on the cancelled order (K-13)
+			if (step && target.role === 'cancelled') {
+				await payments.afterCancel(s, after, step);
+				after = /** @type {OrderRecord} */ (
+					await data
+						.collection(COLLECTIONS.orders)
+						.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
+				);
 			}
-		}
 
-		await service.log(ctx, 'order.moved', order.id, {
-			label: order.number,
-			detail: `${statusLabel(flow, from)} → ${target.label}`,
-		});
-		const { money } = await s.format();
-		const recorded = /** @type {{ method: string, amount: number } | null} */ (plan.recorded);
-		if (recorded) {
-			await service.log(ctx, 'order.payment_recorded', order.id, {
+			/** @type {Warning[]} */
+			const warnings = [];
+			let refundedNow = plan.refunded;
+			// the refund through Payments a cancel or a refund asks for, right after the transaction
+			if (plan.external.length > 0) {
+				const ran = await transitions.runEffects(s, after, { ids: plan.external.map((effect) => effect.id) });
+				after = ran.order;
+				for (const outcome of ran.outcomes) {
+					refundedNow += outcome.amount;
+					if (outcome.done?.manual) warnings.push(await returnByHand(s, order, outcome.amount));
+					if (outcome.warning) warnings.push(outcome.warning);
+				}
+			}
+
+			await service.log(ctx, 'order.moved', order.id, {
 				label: order.number,
-				detail: `${money(recorded.amount, order.totals.currency)} by ${recorded.method}`,
+				detail: `${statusLabel(flow, from)} → ${target.label}`,
 			});
-			await service.emit('order.payment_recorded', s, { order: after, entry: recorded });
-			if (after.payment.state === 'paid' && order.payment.state !== 'paid')
-				await service.emit('order.paid', s, { order: after, entry: recorded });
+			const { money } = await s.format();
+			const recorded = /** @type {{ method: string, amount: number } | null} */ (plan.recorded);
+			if (recorded) {
+				await service.log(ctx, 'order.payment_recorded', order.id, {
+					label: order.number,
+					detail: `${money(recorded.amount, order.totals.currency)} by ${recorded.method}`,
+				});
+				await service.emit('order.payment_recorded', s, { order: after, entry: recorded });
+				if (after.payment.state === 'paid' && order.payment.state !== 'paid')
+					await service.emit('order.paid', s, { order: after, entry: recorded });
+			}
+			if (refundedNow > 0) {
+				await service.log(ctx, 'order.refunded', order.id, {
+					label: order.number,
+					detail: `Refunded ${money(refundedNow, order.totals.currency)}`,
+				});
+				await service.emit('order.refunded', s, { order: after, amount: refundedNow, claimId: null });
+			}
+			if (held && order.stockHeld && !after.stockHeld) await service.emit('products.changed', s, held);
+			// the note staff typed with the move: a cancel's reason in messages and alerts (K-10)
+			await service.emit('order.moved', s, { order: after, ...plan.event });
+			return { order: after, warnings };
 		}
-		if (refundedNow > 0) {
-			await service.log(ctx, 'order.refunded', order.id, {
-				label: order.number,
-				detail: `Refunded ${money(refundedNow, order.totals.currency)}`,
-			});
-			await service.emit('order.refunded', s, { order: after, amount: refundedNow, claimId: null });
-		}
-		if (held && order.stockHeld && !after.stockHeld) await service.emit('products.changed', s, held);
-		// the note staff typed with the move: a cancel's reason in messages and alerts (K-10)
-		await service.emit('order.moved', s, { order: after, ...plan.event });
-		return { order: after, warnings };
+	};
+
+	/**
+	 * What a move that failed after calling out leaves on the order, so nothing is lost or done twice: a payment Payments
+	 * cancelled for it is dropped while the order still names it and nothing cancelled the order meanwhile (the
+	 * shopper's next pay starts one for the order as it is, as an edit does); a parcel the courier booked is kept as its
+	 * shipment (staff see the tracking number; the move made again ships with it, never booking twice).
+	 * @param {Site} s @param {OrderRecord} order as read
+	 * @param {{ steps: import('./order-payments.js').CancelStep[], booked: NonNullable<OrderRecord['shipment']> | null }} called
+	 */
+	const leftBehind = async (s, order, { steps, booked }) => {
+		for (const step of steps) await payments.dropVoided(s, order, step);
+		if (booked)
+			await (
+				await s.data()
+			)
+				.collection(COLLECTIONS.orders)
+				.updateOne(
+					{ websiteId: s.websiteId, id: order.id, 'shipment.booked': { $ne: true } },
+					{ $set: { shipment: booked } },
+				);
 	};
 
 	/**
@@ -452,8 +525,12 @@ export const createMoves = (product, service) => {
 	/**
 	 * Refund part of what was paid without a status change (E26): through Payments for what Payments took (or as asked),
 	 * the rest recorded as given back by `method`, with its reference and the claim it is for (a claim refunded without
-	 * a note gives `Claim <reference>` as the reason). With `autoRefundedStatus`, an order whose refunds reach what was
-	 * paid moves to its refunded status (a transition like any other).
+	 * a note gives `Claim <reference>` as the reason). The part through Payments goes through the order's refund lock
+	 * (`lockedRefund`): written on the order first, so of two refunds at once one wins (409 `conflict`) and a refund
+	 * Payments made is always recorded — done now, or pending and sent again with the same key when Payments did not
+	 * answer (warning `refund_pending`). A part only recorded is written while the order's refunds are as read and no
+	 * refund runs at Payments. With the flow's trigger `refundsCover`, an order whose refunds reach what was paid moves to
+	 * that refunded status when the flow lists the move (a transition like any other).
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order
@@ -481,27 +558,12 @@ export const createMoves = (product, service) => {
 		const manual = input.amount - online;
 		if (input.method === 'online' && manual > 0)
 			throw service.invalid('amount', `At most ${split.online} can be refunded through Payments.`);
-		const done =
-			online > 0 ? await refundOnline(s, ctx, order, online, reason, `${order.id}:refund:${order.payment.refunded}`) : null;
-		const refundId = done ? done.refundId : null;
-		const recorded = manual > 0 || done?.manual === true;
-		const refunded = order.payment.refunded + input.amount;
 		const money = (await s.format()).money(input.amount, order.totals.currency);
 		const recordedMethod = input.method === null || input.method === 'online' ? 'other' : input.method;
 		const actor = service.actor(ctx);
 		const now = product.now();
-		const entries = [
-			...(done
-				? [
-						paymentsRefundEntry(actor, now, done, {
-							amount: online,
-							reference: input.reference,
-							claimId: input.claimId,
-							note: reason,
-						}),
-					]
-				: []),
-			...(manual > 0
+		const manualEntries =
+			manual > 0
 				? [
 						refundEntry(actor, now, {
 							method: recordedMethod,
@@ -511,66 +573,140 @@ export const createMoves = (product, service) => {
 							note: reason,
 						}),
 					]
-				: []),
-		];
-		const said = `Refunded ${money}${recorded ? ' (recorded)' : ''}: ${reason}`;
+				: [];
+		/** The history note of the refund: recorded (by hand, or Payments only recorded it) or refunded through Payments. @param {boolean} recorded */
+		const noteOf = (recorded) => {
+			const said = `Refunded ${money}${recorded ? ' (recorded)' : ''}: ${reason}`;
+			return input.reason
+				? serverNote(recorded ? 'refunded_recorded' : 'refunded', said, { amount: input.amount, reason })
+				: serverNote(recorded ? 'claim_refunded_recorded' : 'claim_refunded', said, {
+						amount: input.amount,
+						reference: input.claimReference ?? '',
+					});
+		};
+		const history = { from: order.status, to: order.status, ...byActor(actor), kind: 'refund' };
 		const orders = (await s.data()).collection(COLLECTIONS.orders);
-		const result = await orders.updateOne(
-			{ websiteId: s.websiteId, id: order.id, 'payment.refunded': order.payment.refunded },
-			{
-				$set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) },
-				$push: {
-					refunds: { $each: entries },
-					history: {
-						at: new Date(now),
-						from: order.status,
-						to: order.status,
-						...byActor(actor),
-						...(input.reason
-							? serverNote(recorded ? 'refunded_recorded' : 'refunded', said, { amount: input.amount, reason })
-							: serverNote(recorded ? 'claim_refunded_recorded' : 'claim_refunded', said, {
-									amount: input.amount,
-									reference: input.claimReference ?? '',
-								})),
-						kind: 'refund',
+		/** @type {Warning[]} */
+		const warnings = [];
+		/** @type {OrderRecord} */
+		let after;
+		/** @type {Record<string, unknown>[]} */
+		let entries = manualEntries;
+		let refundId = null;
+		let recorded = true;
+		let pending = false;
+		if (online > 0) {
+			const locked = await transitions.lockedRefund(s, order, {
+				id: `${order.id}:staff-refund:${createId('rfk')}`,
+				kind: 'refund',
+				amount: online,
+				reason,
+				note: reason,
+				by: actor,
+				at: new Date(now),
+				record: {
+					manual,
+					entries: manualEntries,
+					reference: input.reference,
+					claimId: input.claimId,
+					history,
+					note: noteOf(false),
+					recordedNote: noteOf(true),
+				},
+			});
+			after = locked.order;
+			const { outcome } = locked;
+			// refused by Payments: nothing is recorded (the effect says it failed)
+			if (outcome.state === 'failed') throw outcome.error ?? problem('payments_refused', 'Payments refused the refund.');
+			if (outcome.state === 'done' && outcome.done) {
+				refundId = outcome.done.refundId || null;
+				recorded = manual > 0 || outcome.done.manual;
+				entries = [
+					paymentsRefundEntry(actor, now, outcome.done, {
+						amount: online,
+						reference: input.reference,
+						claimId: input.claimId,
+						note: reason,
+					}),
+					...manualEntries,
+				];
+				if (outcome.done.manual) warnings.push(await returnByHand(s, order, online));
+			} else {
+				// Payments did not answer: kept on the order and sent again with the same key on use (never twice)
+				pending = true;
+				recorded = false;
+				warnings.push(
+					outcome.warning ?? {
+						code: 'refund_pending',
+						values: { amount: online },
+						text: 'Payments did not answer: the refund is kept on the order and sent again when the order is next used.',
+					},
+				);
+			}
+		} else {
+			// only recorded: while the order's refunds are as read and no refund runs at Payments for it
+			const refunded = order.payment.refunded + input.amount;
+			const result = await orders.updateOne(
+				{
+					websiteId: s.websiteId,
+					id: order.id,
+					'payment.refunded': order.payment.refunded,
+					effects: { $not: { $elemMatch: { state: 'pending' } } },
+				},
+				{
+					$set: { 'payment.refunded': refunded, 'payment.state': stateAfterRefund(order.payment.paid, refunded) },
+					$push: {
+						refunds: { $each: manualEntries },
+						history: { at: new Date(now), ...history, ...noteOf(true) },
 					},
 				},
-			},
-		);
-		if (result.modifiedCount !== 1) throw changed();
-		await service.log(ctx, 'order.refunded', order.id, {
-			label: order.number,
-			detail: `Refunded ${money}${recorded ? ' (recorded)' : ''}`,
-		});
-		let after = /** @type {OrderRecord} */ (
-			await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
-		);
-		await service.emit('order.refunded', s, { order: after, amount: input.amount, claimId: input.claimId });
-		/** @type {Warning[]} */
-		const warnings = done?.manual ? [await returnByHand(s, order, online)] : [];
-		if ((await s.values('checkout')).autoRefundedStatus === true && after.payment.paid > 0 && refunded >= after.payment.paid) {
-			const flow = /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
-			const to = flow.statuses.find((status) => status.role === 'refunded' && canMove(flow, after.status, status.key));
-			if (to) {
-				const moved = await move(
-					s,
-					ctx,
-					after,
-					{
-						to: to.key,
-						note: 'Refunds cover the payments',
-						code: 'refunds_cover_payments',
-						serials: {},
-						shipment: null,
-						updatedAt: null,
-					},
-					flow,
-				);
-				after = moved.order;
-				warnings.push(...moved.warnings);
-			}
+			);
+			if (result.modifiedCount !== 1) throw changed();
+			after = /** @type {OrderRecord} */ (
+				await orders.findOne({ websiteId: s.websiteId, id: order.id }, { projection: { _id: 0 } })
+			);
 		}
-		return { order: after, refund: { amount: input.amount, online, manual, refundId, recorded }, warnings, entries };
+		if (!pending) {
+			await service.log(ctx, 'order.refunded', order.id, {
+				label: order.number,
+				detail: `Refunded ${money}${recorded ? ' (recorded)' : ''}`,
+			});
+			await service.emit('order.refunded', s, { order: after, amount: input.amount, claimId: input.claimId });
+		}
+		// refunds that reach what was paid move the order to the flow's refunded status, when the flow lists the move
+		const flow = /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
+		const to = triggersOfFlow(flow).refundsCover;
+		if (
+			!pending &&
+			to &&
+			after.payment.paid > 0 &&
+			after.payment.refunded >= after.payment.paid &&
+			canMove(flow, after.status, to)
+		) {
+			const moved = await move(
+				s,
+				ctx,
+				after,
+				{
+					to,
+					note: 'Refunds cover the payments',
+					code: 'refunds_cover_payments',
+					serials: {},
+					shipment: null,
+					updatedAt: null,
+				},
+				flow,
+				{ trigger: true },
+			);
+			after = moved.order;
+			warnings.push(...moved.warnings);
+		}
+		return {
+			order: after,
+			refund: { amount: input.amount, online, manual, refundId, recorded, ...(pending ? { pending: true } : {}) },
+			warnings,
+			entries,
+		};
 	};
 
 	/**
@@ -641,7 +777,7 @@ export const createMoves = (product, service) => {
 		/** @type {Warning[]} */
 		const warnings = [];
 		if (input.confirm && WAITING.includes(after.role)) {
-			const to = confirmedStatus(flow, after.status);
+			const to = confirmedStatus(flow, after.status, 'staff');
 			if (!to) throw problem('move_not_allowed', 'The order flow has no move from this status to a confirmed one.');
 			const moved = await move(
 				s,
@@ -658,15 +794,18 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Give back what an order holds before it is deleted (E31), as a cancel does, through the order engine (a release
-	 * without a status): its stock and slots, offer uses and redeemed points, and its serial numbers, each once. With
+	 * without a status): its stock and slots, offer uses and redeemed points, and its serial numbers, each once; with the
+	 * checkout setting `deleteGivesBack: all`, a delivered or closed order's items still with the customer, offer uses
+	 * and points too (stock back, earned points taken back, redeemed ones given back). With
 	 * `payments`, its open Payments payment is cancelled first; a payment made meanwhile refuses the delete (K-13), and
 	 * so does a Payments that cannot be reached (a deleted order cannot try the cancel again later).
 	 * @param {Site} s @param {OrderRecord} order @param {{ payments?: boolean }} [options]
 	 * @returns {Promise<boolean>} false when the order changed meanwhile (nothing was given back)
 	 */
 	const giveBack = async (s, order, { payments: cancelPayment = false } = {}) => {
-		// delivered, returned and settled orders hold nothing any more (what was sold stays sold)
-		const plan = planRelease({ order });
+		// delivered, returned and settled orders keep what was sold, unless the website's deletes give everything back
+		const all = (await s.values('checkout')).deleteGivesBack === 'all';
+		const plan = planRelease({ order, all });
 		if (!plan) return true;
 		const step = cancelPayment ? await payments.beforeCancel(s, order, 'Order deleted') : null;
 		if (step?.paid || step?.late) throw problem('conflict', 'This order was paid meanwhile; refund it before deleting it.');

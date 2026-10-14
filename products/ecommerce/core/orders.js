@@ -6,7 +6,7 @@
  * @module
  */
 import { factsOf } from './facts.js';
-import { CLOSED_ROLES, nextStatuses, statusOf } from './flow.js';
+import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
@@ -50,7 +50,8 @@ export const TRACK_EVERY_MS = 30 * 60_000;
  * recorded for the `_recorded` ones; `refunds_cover_payments`: the move to the refunded status that follows;
  * `payment_recorded` (`amount`) and `payment_recorded_reference` (`amount`, `reference`): staff recorded a payment;
  * `confirmed_on_payment`: the move to the confirmed status that follows; `restatus`: staff moved every order of a
- * status to another status of the same kind (`POST /v1/orders/restatus`).
+ * status to another status of the same kind (`POST /v1/orders/restatus`); `video_replaced`: staff replaced the
+ * dispatch video after packing.
  */
 export const HISTORY_NOTES = Object.freeze(
 	/** @type {const} */ ([
@@ -72,6 +73,7 @@ export const HISTORY_NOTES = Object.freeze(
 		'payment_recorded_reference',
 		'confirmed_on_payment',
 		'restatus',
+		'video_replaced',
 	]),
 );
 /** @typedef {typeof HISTORY_NOTES[number]} HistoryNote */
@@ -81,9 +83,13 @@ export const HISTORY_NOTES = Object.freeze(
  * `refund_by_hand` (`amount`): Payments only recorded a refund, so the shop gives the money back by hand (OR-8);
  * `cancel_refund_failed` (`amount`): the order was cancelled but its refund through Payments failed; `refund_failed`
  * (`amount`): the order moved to a refunded status but refunding through Payments failed (tried again while Payments
- * cannot be reached).
+ * cannot be reached); `refund_pending` (`amount`): a staff refund Payments did not answer is kept on the order and sent
+ * again when the order is next used (the refund lock: never twice, always recorded); `refund_skipped` (`amount`): a
+ * refund through Payments was not sent because the order was refunded meanwhile.
  */
-export const MOVE_WARNINGS = Object.freeze(/** @type {const} */ (['refund_by_hand', 'cancel_refund_failed', 'refund_failed']));
+export const MOVE_WARNINGS = Object.freeze(
+	/** @type {const} */ (['refund_by_hand', 'cancel_refund_failed', 'refund_failed', 'refund_pending', 'refund_skipped']),
+);
 
 /**
  * The values of a code the server writes: `amount` in minor units of the order's currency, the text of a `reason` and a
@@ -157,7 +163,8 @@ export const wire = (value) => {
  * of its payments log for its Payments payment, less the refunds made through Payments (`online`, or with a Payments
  * refund id when Payments only recorded them, OR-8) (PM-2). Money staff recorded (a transfer, cash, another way) is never
  * Payments' to refund, even on an order that has a Payments payment. Records from before the payments log (E26) have no
- * entries: what was paid counts as before (all of it, or the COD advance).
+ * entries: what was paid counts as before (all of it, or the COD advance), less the refunds logged through Payments
+ * (all it refunded when no refund was logged).
  * @param {OrderRecord} order
  */
 const leftAtPayments = (order) => {
@@ -173,8 +180,10 @@ const leftAtPayments = (order) => {
 					.filter((entry) => entry.method === 'online' && entry.reference === paymentId)
 					.reduce((sum, entry) => sum + entry.amount, 0);
 	const refunds = order.refunds ?? [];
+	// a refund staff gave by hand is not Payments' even on an order from before the payments log; only an order whose
+	// refunds were never logged either counts all it refunded (it cannot tell)
 	const gave =
-		entries.length === 0
+		entries.length === 0 && refunds.length === 0
 			? order.payment.refunded
 			: refunds
 					.filter((entry) => entry.method === 'online' || Boolean(entry.refundId))
@@ -403,9 +412,12 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
  *   { book: true, courier?: string }} ShipmentInput `trackingNumber` may be '' when the website does not require it (E28)
  * @typedef {{ kind: 'dispatch_video', key: string } | { kind: 'dispatch_video', url: string }} OrderMedia
  * @typedef {{ to: string, note: string, serials: Record<string, string[]>, shipment: ShipmentInput | null,
- *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia, code?: HistoryNote }} MoveInput
+ *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia, code?: HistoryNote,
+ *   shopperNote?: string, restock?: boolean }} MoveInput
  *   `reason`: why a parcel came back (E27); `video`: the dispatch video taken when packing (E28); `code`: the code of a
- *   note the server writes itself (a move that follows a refund or a recorded payment; never from what staff send)
+ *   note the server writes itself (a move that follows a refund or a recorded payment; never from what staff send);
+ *   `shopperNote`: a note the shopper reads in the order's timeline and message (the staff note stays internal);
+ *   `restock`: whether the items go back in stock, for a move that asks (`restock: ask`)
  */
 
 /**
@@ -419,6 +431,11 @@ export const checkMove = (body) => {
 	if (!/^[a-z][a-z0-9_-]{1,39}$/.test(to)) return refuse('to', 'Name the status to move to.');
 	const note = input.note === undefined || input.note === null ? '' : input.note;
 	if (typeof note !== 'string' || note.length > MAX_NOTE) return refuse('note', `A note has at most ${MAX_NOTE} characters.`);
+	const shopperNote = input.shopperNote === undefined || input.shopperNote === null ? '' : input.shopperNote;
+	if (typeof shopperNote !== 'string' || shopperNote.length > MAX_NOTE)
+		return refuse('shopperNote', `A note for the shopper has at most ${MAX_NOTE} characters.`);
+	if (input.restock !== undefined && input.restock !== null && typeof input.restock !== 'boolean')
+		return refuse('restock', 'restock is true or false.');
 	const parsed = serialsOf(input.serials);
 	if (!parsed.ok) return parsed;
 	const serials = parsed.value;
@@ -447,7 +464,17 @@ export const checkMove = (body) => {
 	const reason = /** @type {'rto' | 'customer_return' | undefined} */ (input.reason ?? undefined);
 	return {
 		ok: true,
-		value: { to, note: note.trim(), serials, shipment, updatedAt, ...(reason ? { reason } : {}), ...(video ? { video } : {}) },
+		value: {
+			to,
+			note: note.trim(),
+			serials,
+			shipment,
+			updatedAt,
+			...(reason ? { reason } : {}),
+			...(video ? { video } : {}),
+			...(shopperNote.trim() ? { shopperNote: shopperNote.trim() } : {}),
+			...(typeof input.restock === 'boolean' ? { restock: input.restock } : {}),
+		},
 	};
 };
 
@@ -730,17 +757,30 @@ export const checkEdit = (body, order) => {
 			if (!address[field]) return refuse(`address/${field}`, 'This field is required.');
 		value.address = /** @type {NonNullable<OrderRecord['address']>} */ (/** @type {unknown} */ (address));
 	}
+	if (input.video !== undefined && input.video !== null) {
+		// the dispatch video is replaced while the order is packed or shipped (E28; before that it comes with the move into
+		// packed)
+		if (!VIDEO_ROLES.includes(order.role))
+			return refuse('video', 'The dispatch video can be replaced while the order is packed or shipped.');
+		const video = videoOf(input.video);
+		if (!video) return refuse('video', 'video is an upload key, a YouTube id or address, or an https address.');
+		value.video = video;
+	}
 	if (Object.keys(value).length === 0)
-		return refuse('staffNote', 'Send a staff note, an address, a shipment or serial numbers.');
+		return refuse('staffNote', 'Send a staff note, an address, a shipment, serial numbers or a video.');
 	return { ok: true, value };
 };
 
+/** Roles of an order whose dispatch video staff may replace: packed, and shipped. */
+const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipped']));
+
 /**
  * What staff change on an order (`PATCH /v1/orders/:id`): the staff note, the address, the shipment's details at any
- * time (E28) and serial numbers.
+ * time (E28), serial numbers and the dispatch video once packed.
  * @typedef {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, string[]>,
  *   shipment?: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null },
- *   waiting?: WaitingEdit }} OrderEdit `waiting`: lines, payment and delivery changed while the order waits (E29)
+ *   waiting?: WaitingEdit, video?: OrderMedia }} OrderEdit `waiting`: lines, payment and delivery changed while the
+ *   order waits (E29); `video`: the dispatch video that replaces the one taken when packing
  */
 
 /**
@@ -846,7 +886,8 @@ export const checkCustomerEdit = (body) => {
 /**
  * Check a bulk move: `ids`, or `items` with each order's shipment, serial numbers and video (E28).
  * @param {unknown} body
- * @returns {{ ok: true, value: { ids: string[], to: string, note: string, items: Map<string, BulkItem> } } | Refusal}
+ * @returns {{ ok: true, value: { ids: string[], to: string, note: string, items: Map<string, BulkItem>,
+ *   shopperNote?: string, restock?: boolean } } | Refusal}
  */
 export const checkBulkMove = (body) => {
 	const input = objectOf(body);
@@ -856,7 +897,7 @@ export const checkBulkMove = (body) => {
 	if (!ids || ids.length === 0 || ids.length > MAX_BULK) return refuse(field, `List 1–${MAX_BULK} order ids.`);
 	if (!ids.every((id) => typeof id === 'string' && /^ord_[A-Za-z0-9_-]{1,64}$/.test(id)))
 		return refuse(field, 'Unknown order id.');
-	const move = checkMove({ to: input.to, note: input.note });
+	const move = checkMove({ to: input.to, note: input.note, shopperNote: input.shopperNote, restock: input.restock });
 	if (!move.ok) return move;
 	/** @type {Map<string, BulkItem>} */
 	const items = new Map();
@@ -874,7 +915,14 @@ export const checkBulkMove = (body) => {
 	}
 	return {
 		ok: true,
-		value: { ids: [.../** @type {Set<string>} */ (new Set(ids))], to: move.value.to, note: move.value.note, items },
+		value: {
+			ids: [.../** @type {Set<string>} */ (new Set(ids))],
+			to: move.value.to,
+			note: move.value.note,
+			items,
+			...(move.value.shopperNote ? { shopperNote: move.value.shopperNote } : {}),
+			...(move.value.restock === undefined ? {} : { restock: move.value.restock }),
+		},
 	};
 };
 
@@ -1032,7 +1080,11 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 			toLabel: statusLabel(flow, entry.to),
 		})),
 		customerFlags: customerFlags(customer),
-		nextStatuses: nextStatuses(flow, order.status).map(({ key, label, role }) => ({ key, label, role })),
+		// the statuses staff may move it to, with what each move needs and its options (the widgets ask for them)
+		nextStatuses: nextStatuses(flow, order.status, 'staff').map(({ key, label, role }) => {
+			const move = /** @type {NonNullable<ReturnType<typeof moveOf>>} */ (moveOf(flow, order.status, key, 'staff'));
+			return { key, label, role, permission: move.permission, needs: move.needs, options: move.options };
+		}),
 	};
 };
 

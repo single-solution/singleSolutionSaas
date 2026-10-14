@@ -113,7 +113,7 @@ const transition = async (order, to) => {
 		flow: DEFAULT_FLOW,
 		to,
 		input: { who: 'staff', actor: { kind: 'server', id: 'server', name: 'Server' }, by: 'Server', note: '' },
-		rules: { restock: true, rewaitMinutes: 0, refundOnCancel: false, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' },
+		rules: { paymentWindowMinutes: 0, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' },
 		now: shop.now(),
 	});
 	if (!planned.ok) throw new Error(planned.message);

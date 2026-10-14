@@ -443,6 +443,17 @@ export const promotionDiscounts = (lines, promotions) =>
 	});
 
 /**
+ * An offer discount an edited order keeps (`checkout.editPricing: keep_placed`) spread over its lines in proportion to
+ * what they come to, at most that.
+ * @param {ResolvedLine[]} lines @param {number} amount @param {number} [unit]
+ */
+export const fixedDiscounts = (lines, amount, unit = 1) => {
+	const gross = lines.map((line) => line.unitPrice * line.quantity);
+	const total = gross.reduce((sum, value) => sum + value, 0);
+	return allocateUnits(Math.max(0, Math.min(amount, total)), gross, unit);
+};
+
+/**
  * The role discount (E19): `percent` of the goods after offers, rounded half up to whole units.
  * @param {number} merchandise the goods after offers
  * @param {number} percent 0–90
@@ -468,6 +479,9 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
  * @param {number} [input.feePercent] the payment method's fee (E23)
  * @param {CodSettings['feeBase']} [input.feeBase] what the fee is a percent of (`cod.feeBase`, D4)
  * @param {number} [input.unit] whole units (E25)
+ * @param {{ promotions?: number, fee?: number } | null} [input.fixed] amounts an edited order keeps from placement
+ *   (`checkout.editPricing: keep_placed`): its offer discount (spread over the lines in proportion, at most what they
+ *   come to) and its payment method's fee
  * @returns {{ lines: PricedLine[], totals: PriceTotals }}
  */
 export const priceLines = ({
@@ -482,8 +496,12 @@ export const priceLines = ({
 	feePercent = 0,
 	feeBase = 'order_total',
 	unit = 1,
+	fixed = null,
 }) => {
-	const promo = promotionDiscounts(lines, promotions);
+	const promo =
+		fixed && typeof fixed.promotions === 'number'
+			? fixedDiscounts(lines, fixed.promotions, unit)
+			: promotionDiscounts(lines, promotions);
 	const after = lines.map((line, index) => line.unitPrice * line.quantity - (promo[index] ?? 0));
 	const merchandise = after.reduce((a, b) => a + b, 0);
 	const roleTotal = roleDiscountOf(merchandise, rolePercent, unit);
@@ -510,9 +528,11 @@ export const priceLines = ({
 	const sum = (/** @type {(line: PricedLine) => number} */ pick) => priced.reduce((n, line) => n + pick(line), 0);
 	const beforeFee = sum((line) => line.total) + delivery;
 	const fee =
-		feePercent > 0
-			? codFee(feeBase === 'goods_after_discounts' ? merchandise - roleTotal : beforeFee, { feePercent }, unit)
-			: 0;
+		fixed && typeof fixed.fee === 'number'
+			? fixed.fee
+			: feePercent > 0
+				? codFee(feeBase === 'goods_after_discounts' ? merchandise - roleTotal : beforeFee, { feePercent }, unit)
+				: 0;
 	return {
 		lines: priced,
 		totals: {
@@ -539,9 +559,14 @@ export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
 		? lines.reduce((sum, line) => sum + line.gross - line.promotions - line.role, 0)
 		: totals.total - totals.fee;
 
-/** What the items cost after promotions (delivery's free-over and points are measured on it). @param {ResolvedLine[]} lines @param {PromotionsResult | null} promotions */
-export const merchandiseOf = (lines, promotions) => {
-	const promo = promotionDiscounts(lines, promotions);
+/**
+ * What the items cost after promotions (delivery's free-over and points are measured on it).
+ * @param {ResolvedLine[]} lines @param {PromotionsResult | null} promotions
+ * @param {number | null} [kept] the offer discount an edited order keeps (`checkout.editPricing: keep_placed`)
+ * @param {number} [unit]
+ */
+export const merchandiseOf = (lines, promotions, kept = null, unit = 1) => {
+	const promo = kept === null ? promotionDiscounts(lines, promotions) : fixedDiscounts(lines, kept, unit);
 	return lines.reduce((n, line, index) => n + line.unitPrice * line.quantity - (promo[index] ?? 0), 0);
 };
 

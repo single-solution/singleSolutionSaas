@@ -227,3 +227,73 @@ export const gradeProblems = (draft, otherKeys) => {
 			: {};
 	return { ...(unnamed ? { label: /** @type {const} */ ('missing') } : {}), ...keyed };
 };
+
+// ------------------------------------------------------------------------------------------------- order flow
+
+/** @typedef {import('../../core/model.js').OrderFlow} OrderFlow */
+
+/**
+ * The flow with a status's key changed: its moves, triggers and starts follow it.
+ * @param {Required<OrderFlow>} flow @param {string} from the key before @param {string} to the key now
+ * @returns {Required<OrderFlow>}
+ */
+export const renameFlowStatus = (flow, from, to) => {
+	/** @param {string} key */
+	const swap = (key) => (key === from ? to : key);
+	return {
+		statuses: flow.statuses.map((status) => (status.key === from ? { ...status, key: to } : status)),
+		moves: flow.moves.map((move) => ({ ...move, from: swap(move.from), to: swap(move.to) })),
+		triggers: {
+			paid: swap(flow.triggers.paid),
+			windowEnd: swap(flow.triggers.windowEnd),
+			refundsCover: swap(flow.triggers.refundsCover),
+		},
+		starts: { cod: swap(flow.starts.cod), pickup: swap(flow.starts.pickup), free: swap(flow.starts.free) },
+	};
+};
+
+/**
+ * The flow without a status: its moves go, and a trigger or start that named it is left out (the server fills today's
+ * choice; `paid` and `refundsCover` become none).
+ * @param {Required<OrderFlow>} flow @param {string} key
+ * @returns {OrderFlow}
+ */
+export const removeFlowStatus = (flow, key) => ({
+	statuses: flow.statuses.filter((status) => status.key !== key),
+	moves: flow.moves.filter((move) => move.from !== key && move.to !== key),
+	triggers: /** @type {any} */ (
+		Object.fromEntries(
+			Object.entries(flow.triggers)
+				.filter(([name, value]) => value !== key || name !== 'windowEnd')
+				.map(([name, value]) => [name, value === key ? '' : value]),
+		)
+	),
+	starts: /** @type {any} */ (Object.fromEntries(Object.entries(flow.starts).filter(([, value]) => value !== key))),
+});
+
+/**
+ * The flow to save: statuses saved without a key get one from their name (`keyOf`) and everything naming them follows;
+ * names are trimmed; moves the role rules do not allow (`allowed`) are left out. Every other field is kept as it is, so
+ * saving never drops an option, a shopper text, a trigger or a start.
+ * @param {OrderFlow} flow @param {(flow: OrderFlow, move: OrderFlow['moves'][number]) => boolean} allowed
+ * @returns {OrderFlow}
+ */
+export const flowToSave = (flow, allowed) => {
+	const keys = new Map(flow.statuses.map((status) => [status.key, keyOf(status.key, status.label)]));
+	/** @param {string} key */
+	const swap = (key) => keys.get(key) ?? key;
+	const statuses = flow.statuses.map((status) => ({ ...status, key: swap(status.key), label: status.label.trim() }));
+	const moves = flow.moves.map((move) => ({ ...move, from: swap(move.from), to: swap(move.to) }));
+	/** @param {Record<string, string> | undefined} entries */
+	const remap = (entries) =>
+		entries
+			? Object.fromEntries(Object.entries(entries).map(([name, value]) => [name, value ? swap(value) : value]))
+			: undefined;
+	const next = { statuses, moves };
+	return {
+		...next,
+		moves: moves.filter((move) => allowed(next, move)),
+		.../** @type {any} */ (flow.triggers ? { triggers: remap(/** @type {any} */ (flow.triggers)) } : {}),
+		.../** @type {any} */ (flow.starts ? { starts: remap(/** @type {any} */ (flow.starts)) } : {}),
+	};
+};

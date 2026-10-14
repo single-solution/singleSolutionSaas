@@ -13,7 +13,7 @@ import { randomFlow, randomOf } from './transitions-helpers.js';
 const NOW = Date.parse('2026-10-14T10:00:00Z');
 const STAFF = { kind: 'staff', id: 'usr_staff', name: 'Sam' };
 /** @type {import('../core/transitions.js').TransitionRules} */
-const RULES = { restock: true, rewaitMinutes: 60, refundOnCancel: true, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' };
+const RULES = { paymentWindowMinutes: 60, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' };
 const LOYALTY = { earnPercent: 10, pointValue: 100 };
 
 /**
@@ -198,17 +198,23 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(shipped.set.shipment).toBe(shipment);
 		expect(shipped.ledger).toEqual([]);
 
-		// back to waiting from packed: serial numbers go back, a new window (or none)
+		// back to waiting from packed: serial numbers go back, a new window (or none, by the move or the settings)
 		const flow = { ...DEFAULT_FLOW, moves: [...DEFAULT_FLOW.moves, { from: 'packed', to: 'pending_payment' }] };
 		const lines = order().lines.map((/** @type {any} */ line) => ({ ...line, serials: ['S1'] }));
 		const rewait = planOf(plan(order({ status: 'packed', role: 'packed', lines }), 'pending_payment', {}, {}, flow));
 		expect(kinds(rewait)).toEqual(['release_units']);
 		expect(rewait.set.holdUntil).toEqual(new Date(NOW + 60 * 60_000));
 		expect(rewait.facts.after.units).toBe('none');
-		expect(
-			planOf(plan(order({ status: 'packed', role: 'packed' }), 'pending_payment', {}, { rewaitMinutes: 0 }, flow)).set
-				.holdUntil,
-		).toBeNull();
+		const inPacked = order({ status: 'packed', role: 'packed' });
+		expect(planOf(plan(inPacked, 'pending_payment', {}, { paymentWindowMinutes: 0 }, flow)).set.holdUntil).toBeNull();
+		const none = {
+			...DEFAULT_FLOW,
+			moves: [
+				...DEFAULT_FLOW.moves,
+				{ from: 'packed', to: 'pending_payment', options: { window: /** @type {const} */ ('none') } },
+			],
+		};
+		expect(planOf(plan(inPacked, 'pending_payment', {}, {}, none)).set.holdUntil).toBeNull();
 	});
 
 	it('delivers: units sold, cash on delivery paid, earned points credited once', () => {
@@ -250,7 +256,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 			kind: 'release_stock',
 			lines: [{ productId: 'prd_1', variantId: 'var_1', quantity: 2, locationId: null }],
 		});
-		expect(cancelled.ledger[3]).toMatchObject({ owner: 'usr_1', points: 50, reason: 'refund' });
+		expect(cancelled.ledger[3]).toMatchObject({ owner: { userId: 'usr_1' }, points: 50, reason: 'refund' });
 		expect(cancelled.set).toMatchObject({ stockHeld: false, 'promotions.released': true, 'payment.voidedAt': new Date(NOW) });
 		expect(cancelled.facts.after).toEqual({
 			stock: 'back',
@@ -271,18 +277,28 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		]);
 		expect(cancelled.push.effects).toEqual({ $each: cancelled.external });
 		expect(cancelled.event).toEqual({ from: 'confirmed', to: 'cancelled', by: 'Sam', note: 'Out of stock' });
-		// a shopper's cancel or an ended window refunds nothing (the money shows as due)
+		// a shopper's cancel (by default) or an ended window refunds nothing (the money shows as due)
+		const waiting = order({ status: 'pending_payment', role: 'awaiting_payment' });
 		const shopper = planOf(
-			plan(
-				order(),
-				'cancelled',
-				{ who: 'shopper', by: 'shopper', byKind: undefined, cancelReason: 'shopper', listed: false },
-				{ refundOnCancel: false },
-			),
+			plan(waiting, 'cancelled', { who: 'shopper', by: 'shopper', byKind: undefined, cancelReason: 'shopper' }),
 		);
 		expect(shopper.external).toEqual([]);
 		expect(shopper.history).toMatchObject({ by: 'shopper', reason: 'shopper' });
-		expect(shopper.event).toEqual({ from: 'confirmed', to: 'cancelled', by: 'shopper', reason: 'shopper' });
+		expect(shopper.event).toEqual({ from: 'pending_payment', to: 'cancelled', by: 'shopper', reason: 'shopper' });
+		const expired = planOf(
+			plan(waiting, 'cancelled', { who: 'system', by: 'system', byKind: undefined, cancelReason: 'expired', listed: false }),
+		);
+		expect(expired.external).toEqual([]);
+		// staff whose move says the refund is theirs: nothing is refunded now
+		const byHand = {
+			...DEFAULT_FLOW,
+			moves: DEFAULT_FLOW.moves.map((move) =>
+				move.from === 'confirmed' && move.to === 'cancelled'
+					? { ...move, options: { refund: /** @type {const} */ ('staff') } }
+					: move,
+			),
+		};
+		expect(planOf(plan(order(), 'cancelled', {}, {}, byHand)).external).toEqual([]);
 		// facts that say it was given back already: nothing is given back again
 		const back = order({ facts: { stock: 'back', offers: 'released', redeemed: 'given_back', earned: 'none', units: 'none' } });
 		expect(planOf(plan(back, 'cancelled')).ledger).toEqual([]);
@@ -294,7 +310,13 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(kinds(rto)).toEqual(['release_units', 'restock_return', 'count_rto']);
 		expect(rto.set).toMatchObject({ stockHeld: false, returnRestocked: true });
 		expect(rto.history).toMatchObject({ reason: 'rto' });
-		const kept = planOf(plan(shipped, 'returned', { reason: 'customer_return' }, { restock: false }));
+		const keptOut = {
+			...DEFAULT_FLOW,
+			moves: DEFAULT_FLOW.moves.map((move) =>
+				move.to === 'returned' ? { ...move, options: { restock: /** @type {const} */ ('no') } } : move,
+			),
+		};
+		const kept = planOf(plan(shipped, 'returned', { reason: 'customer_return' }, {}, keptOut));
 		expect(kinds(kept)).toEqual(['release_units']);
 		expect(kept.facts.after.stock).toBe('none');
 		expect(kept.set.returnRestocked).toBeUndefined();
@@ -501,14 +523,19 @@ const applied = (record, p) => {
 	for (const [path, value] of Object.entries(p.set)) at(path, () => structuredClone(value));
 	for (const [path, value] of Object.entries(p.inc)) at(path, (old) => (old ?? 0) + value);
 	if (p.history) next.history = [...(next.history ?? []), p.history];
+	// the refunds a plan asks of Payments wait (pending) until done; refunds recorded by hand are written
+	next.effects = [...(next.effects ?? []), ...structuredClone(p.external)];
+	const refunds = /** @type {any} */ (p.push.refunds);
+	if (refunds) next.refunds = [...(next.refunds ?? []), ...structuredClone(refunds.$each)];
 	return next;
 };
 
 describe('property: random flows × random transitions never give back or take twice', () => {
-	it('holds for 1,000 flows × 6 orders × 12 random steps, repeats included', () => {
+	it('holds for 1,000 flows with random move options (E40 moves included) × 6 orders × 12 random steps, repeats included', () => {
 		const SEED = 20261014;
 		const random = randomOf(SEED);
 		let transitions = 0;
+		const by = { staff: 0, shopper: 0, system: 0, trigger: 0, afterDelivery: 0, kept: 0, restocked: 0 };
 		for (let f = 0; f < 1000; f += 1) {
 			const flow = randomFlow(random);
 			for (let o = 0; o < 6; o += 1) {
@@ -526,23 +553,26 @@ describe('property: random flows × random transitions never give back or take t
 				});
 				/** @type {Record<string, number>} */
 				const counted = {};
-				const rules = {
-					...RULES,
-					restock: random() < 0.7,
-					loyalty: random() < 0.7 ? LOYALTY : null,
-					refundOnCancel: random() < 0.5,
-				};
+				const rules = { ...RULES, loyalty: random() < 0.7 ? LOYALTY : null };
 				for (let step = 0; step < 12; step += 1) {
 					const options = flow.statuses.filter((status) => random() < 0.4 || status.key === current.status);
 					const target = options[Math.floor(random() * options.length)] ?? flow.statuses[0];
-					const listed = random() < 0.85;
+					// staff along a listed move, the shopper along one of theirs, the shop itself (an ended window, without one;
+					// a trigger, along any listed move)
+					const pick = random();
+					/** @type {Partial<import('../core/transitions.js').TransitionInput>} */
+					const input =
+						pick < 0.65
+							? { who: 'staff' }
+							: pick < 0.8
+								? { who: 'shopper', cancelReason: 'shopper' }
+								: pick < 0.9
+									? { who: 'system', listed: false, cancelReason: 'expired' }
+									: { who: 'staff', trigger: true };
 					const result = plan(
 						current,
 						/** @type {any} */ (target).key,
-						{
-							listed,
-							reason: random() < 0.5 ? 'rto' : 'customer_return',
-						},
+						{ ...input, restock: random() < 0.5, reason: random() < 0.5 ? 'rto' : 'customer_return' },
 						rules,
 						flow,
 					);
@@ -551,7 +581,17 @@ describe('property: random flows × random transitions never give back or take t
 						continue;
 					}
 					transitions += 1;
+					by[input.trigger ? 'trigger' : /** @type {'staff' | 'shopper' | 'system'} */ (input.who)] += 1;
 					const p = result.plan;
+					if (!['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped'].includes(p.fromStage))
+						by.afterDelivery += 1;
+					if (
+						p.facts.before.earned === 'credited' &&
+						p.facts.after.earned === 'credited' &&
+						p.ledger.some((e) => e.kind === 'give_points' && e.reason === 'refund')
+					)
+						by.kept += 1;
+					if (p.facts.before.stock === 'sold' && p.facts.after.stock === 'back') by.restocked += 1;
 					for (const effect of p.ledger) {
 						const key =
 							effect.kind === 'give_points'
@@ -566,9 +606,13 @@ describe('property: random flows × random transitions never give back or take t
 						expect(p.ledger.some((e) => e.kind === 'release_stock' || e.kind === 'restock_return')).toBe(false);
 					if (p.facts.before.offers === 'released') expect(kinds(p)).not.toContain('release_offers');
 					if (p.facts.before.earned !== 'credited') expect(kinds(p)).not.toContain('take_points');
+					// a shopper or the shop itself only cancels, and a shopper only before dispatch
+					if (input.who !== 'staff') expect(p.stage).toBe('cancelled');
+					if (input.who === 'shopper')
+						expect(['awaiting_payment', 'awaiting_confirmation', 'open', 'packed']).toContain(p.fromStage);
 					// repeating the same transition on the order as it is now changes nothing
 					const after = applied(current, p);
-					const repeat = plan(after, /** @type {any} */ (target).key, { listed }, rules, flow);
+					const repeat = plan(after, /** @type {any} */ (target).key, { ...input }, rules, flow);
 					expect(repeat.ok).toBe(false);
 					current = after;
 				}
@@ -590,6 +634,8 @@ describe('property: random flows × random transitions never give back or take t
 				expect((counted.release_stock ?? 0) + (counted.restock_return ?? 0)).toBeLessThanOrEqual(1);
 			}
 		}
-		expect(transitions).toBeGreaterThan(7000);
+		expect(transitions, JSON.stringify(by)).toBeGreaterThan(7000);
+		// every kind of transition happened, also E40's after delivery, kept points and items back after delivery
+		for (const [kind, count] of Object.entries(by)) expect(count, `${kind}: ${JSON.stringify(by)}`).toBeGreaterThan(20);
 	});
 });

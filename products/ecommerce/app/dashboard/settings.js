@@ -14,7 +14,8 @@ import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
 import { GradesEditor } from './grades.js';
-import { BookingHoursEditor, CouriersEditor, OrderFlowEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
+import { OrderFlowEditor } from './flow-editor.js';
+import { BookingHoursEditor, CouriersEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -82,7 +83,7 @@ const FEATURE_SECTION = Object.freeze({
 });
 
 /** Checkout settings shown under Orders and messages (the rest of checkout's go to Checkout and payment or Policies). */
-const ORDER_SETTINGS = new Set(['numberPrefix', 'messageChannels', 'notifyStatuses']);
+const ORDER_SETTINGS = new Set(['numberPrefix', 'messageChannels', 'editPricing', 'deleteGivesBack']);
 
 /**
  * The section of one setting.

@@ -1,49 +1,55 @@
 /**
- * The order engine's plan (PLAN 0.8.10 "Ecommerce dynamic model", design §3.3, phase 1): one function for every way an
- * order changes its status — staff and bulk moves, the shopper's cancel, the end of a waiting window, Payments'
- * confirmation, a recorded payment that confirms, refunds that cover the payments — and one for a delete, which gives
- * back what the order holds without a status. `server/transitions.js` runs a plan in one database transaction.
+ * The order engine's plan (PLAN 0.8.10 "Ecommerce dynamic model", design §3.3; phase 1 the engine, phase 2 the options
+ * of the flow's moves): one function for every way an order changes its status — staff and bulk moves, the shopper's
+ * cancel, the end of a waiting window, Payments' confirmation, a recorded payment that confirms, refunds that cover the
+ * payments — and one for a delete, which gives back what the order holds without a status. `server/transitions.js`
+ * runs a plan in one database transaction.
  *
  * A plan is what the transition writes on the order (`set`, `push`, `inc`), guarded by the order as read (its status,
  * `updatedAt` and facts: compare-and-set), the **ledger** effects written in the same transaction (stock, slots, offer
  * uses, points, units sold, the RTO count, serial numbers) and the **external** effects that run after it (a refund
  * through Payments, kept on the order as `effects` until done). The effects are the difference between the order's
- * facts (`core/facts.js`) and those of the stage (role) it enters, never a status label, so a repeated or concurrent
- * move changes nothing twice:
+ * facts (`core/facts.js`) and those of the stage (role) it enters, with the choices of the move where the stage leaves
+ * one (`core/flow.js` `moveOptionSpecs`; {@link choicesOf}), never a status label, so a repeated or concurrent move
+ * changes nothing twice:
  *
  * - into `awaiting_payment` or `open` from `packed`: serial numbers captured go back (units → none); back to waiting,
- *   the time to pay starts again (`rules.rewaitMinutes`);
+ *   the time to pay starts again (the move's `window`: `restart`, or `none`);
  * - into `packed`: the serial numbers of the packing plan are captured (units → captured); the dispatch video is kept;
  * - into `shipped`: the shipment;
  * - into `delivered`: stock held → sold, units counted sold, cash on delivery paid (`rules.paidOnDelivery`), earned
  *   points credited once (`loyalty`, none → credited);
  * - into `cancelled`, or `refunded` before delivery (a cancel): stock and slots back, offer uses released, redeemed
  *   points given back, serial numbers back, each only while the facts say it was not; what Payments took is refunded
- *   after the transaction when `rules.refundOnCancel` (staff; a shopper's cancel and an ended window leave it due);
- * - into `returned_to_origin` or `returned`: stock back (`rules.restock`) or kept out, serial numbers back, an RTO
- *   counted (not a customer's return); after delivery earned points reversed and redeemed ones given back;
+ *   after the transaction when the move says so (staff: `refund: auto`; the shopper: `shopperPaid: refund`; an ended
+ *   window never);
+ * - into `cancelled` or `refunded` after delivery or from a closed status (E40): items still with the customer (stock
+ *   sold) go back in stock only when the move says so (`restock`; default no), offer uses are released by a cancel,
+ *   redeemed points come back and earned points are taken back unless the move keeps them (`points: keep`, E39);
+ * - into `returned_to_origin` or `returned`: stock back or kept out (the move's `restock`), serial numbers back, an RTO
+ *   counted (not a customer's return); a customer's return gives redeemed points back and takes earned ones back
+ *   unless the move keeps them;
  * - into `refunded`: what is left is refunded — the part Payments took through Payments after the transaction (an
- *   external effect, as a staff cancel's), the rest recorded as given back by hand; before delivery it acts as a cancel;
- *   after delivery earned points are reversed and redeemed ones given back.
+ *   external effect, as a staff cancel's), the rest recorded as given back by hand; before delivery it acts as a cancel
+ *   and needs something paid, unless the move cancels an unpaid order with no money (`unpaid: cancel`, E40).
  *
- * Refusals: `move_not_allowed` (the flow's moves and the role rules; a transition that needs no listed move — an ended
- * window, a shopper's cancel — still follows the role rules), `flow_changed` (the order's role is not the flow's role of
- * its status any more) and `nothing_paid` (a refund before delivery when nothing was paid). What the caller sends (the
- * shipment, the serial numbers, the dispatch video) it checks before. Pure functions, no I/O (ids are random).
- *
- * The ways in still differ as before the engine (phase 1 changes none of them; phase 2 makes them options of the flow):
- * only a staff cancel refunds what Payments took (`refundOnCancel`); staff need a listed move, while the shopper's cancel
- * and an ended window need only the role rules and go to the first listed cancelled status, else the first one;
- * Payments' confirmation moves to the first listed open status, or leaves the order paid where it is; the shopper
- * cancels only in the roles `checkout.shopperCancel` lists (an open order only while nothing was paid, a waiting one
- * also with a paid advance, which is then due to refund); only staff moves record a payment on confirmation
- * (`paidOnConfirm`) and check the dispatch video, the shipment, typed serial numbers and the refund permission; staff
- * history entries carry `byKind` and their `order.moved` event the note.
+ * Refusals: `move_not_allowed` (the flow's moves, who may make them and the role rules; an ended window needs no listed
+ * move, and nothing else does: only a waiting order becomes cancelled without one), `flow_changed` (the order's role is not the flow's role of its status any
+ * more), `nothing_paid` (a refund before delivery when nothing was paid) and `input_needed` (a move that asks staff
+ * whether the items go back in stock, without the answer). What the caller sends (the shipment, the serial numbers,
+ * the dispatch video) it checks before. Pure functions, no I/O (ids are random).
  * @module
  */
 import { createId } from '@ss/contracts';
 import { factsGuard, factsOf } from './facts.js';
-import { canMove, rolesAllow, statusOf } from './flow.js';
+import {
+	BEFORE_DELIVERY_ROLES as BEFORE_DELIVERY,
+	WAITING_ROLES,
+	moveOf,
+	moveOptionSpecs,
+	rolesAllow,
+	statusOf,
+} from './flow.js';
 import { expiryFor, loyaltyRules, pointsToEarn } from './loyalty.js';
 import { ID_PREFIX } from './model.js';
 import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAfterRefund } from './orders.js';
@@ -58,31 +64,39 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
 /** Whose loyalty account: a member's user id, or `{ userId }` / `{ customerId }` (E20, E21). @typedef {string | { userId?: string | null, customerId?: string | null }} PointsOwner */
 
 /**
- * The rules today's settings imply (phase 1: read from the settings, behavior unchanged).
+ * What the website's settings say for every transition.
  * @typedef {object} TransitionRules
- * @property {boolean} restock a parcel that comes back goes back in stock (`checkout.returnRestock` not `no`)
- * @property {number} rewaitMinutes an order moved back to waiting for payment waits this long (0 = until staff move it;
- *   `checkout.rewaitWindow: none` or no `paymentWindowMinutes`)
- * @property {boolean} refundOnCancel a cancel refunds what Payments took (staff: yes; a shopper's cancel and an ended
- *   window: no, the money shows as due to refund)
+ * @property {number} paymentWindowMinutes the time to pay (`checkout.paymentWindowMinutes`; 0 = until staff move it): an
+ *   order moved back to waiting for payment gets it again when its move restarts the window
  * @property {boolean} paidOnDelivery cash taken at the door counts as paid when delivered (`cod.paidOnDelivery`)
  * @property {Record<string, any> | null} loyalty the `loyalty` settings while Loyalty is on
  * @property {string} timeZone the business time zone (points' expiry)
  */
 
 /**
+ * What a transition chose where the stage contract leaves a choice ({@link choicesOf}).
+ * @typedef {{ restock: boolean, points: 'take_back' | 'keep', refund: boolean, window: 'restart' | 'none',
+ *   unpaid: 'refuse' | 'cancel' }} TransitionChoices
+ */
+
+/**
  * What the caller worked out before the plan (reads and calls that may refuse the move first).
  * @typedef {object} TransitionInput
- * @property {'staff' | 'shopper' | 'system'} who
+ * @property {'staff' | 'shopper' | 'system'} who staff, the shopper (a cancel) or the shop itself (Payments'
+ *   confirmation, an ended window, refunds that cover the payments)
  * @property {Actor} actor who it is for the payment and refund entries
  * @property {string} by the history's `by` (a staff member's name, `shopper`, `guest`, `system`)
  * @property {string} [byKind] the history's `byKind` (staff moves)
- * @property {string} note
+ * @property {string} note the staff note (staff read it; the shopper never does)
+ * @property {string} [shopperNote] a note for the shopper: shown in the shopper's timeline and in their message
+ * @property {boolean} [restock] staff's answer when the move asks whether the items go back in stock (`restock: ask`)
  * @property {HistoryNote} [code] a note the server writes itself
  * @property {NoteValues} [values]
  * @property {'rto' | 'customer_return'} [reason] why a parcel came back (staff)
  * @property {'staff' | 'shopper' | 'expired'} [cancelReason] why a checkout cancel happened (kept as the reason)
- * @property {boolean} [listed] false: no listed move is needed (an ended window, a shopper's cancel), only the role rules
+ * @property {boolean} [listed] false: no listed move is needed (an ended window), only the role rules
+ * @property {boolean} [trigger] the shop moves it by itself for staff (refunds that cover the payments): any listed
+ *   move, and a move that asks whether the items go back in stock takes no
  * @property {boolean} [checkUpdatedAt] false: the order's `updatedAt` is not part of the compare-and-set
  * @property {Record<string, unknown>} [where] more the order must match (Payments' confirmation: still pending)
  * @property {NonNullable<OrderRecord['shipment']>} [shipment] the shipment of a move into `shipped`
@@ -113,10 +127,19 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
 
 /**
  * Work outside the database, kept on the order (`effects`) until done: a refund through Payments, with its id as the
- * Idempotency-Key.
+ * Idempotency-Key. A staff refund (the refund lock, phase 2) carries what it records with Payments' refund: `record`,
+ * the part given back by hand (`manual`, its `entries`), the reference and claim of its entry and its history entry
+ * (`note` when Payments refunded it, `recordedNote` when the refund was only recorded).
  * @typedef {{ id: string, kind: 'refund', amount: number, state: 'pending' | 'done' | 'failed' | 'skipped',
  *   reason: string, note: string, by: Actor, at: Date, tries: number, triedAt: Date | null, runningAt?: Date | null,
- *   doneAt?: Date | null, refundId?: string | null, detail?: string }} OrderEffect
+ *   doneAt?: Date | null, refundId?: string | null, detail?: string, record?: StaffRefundRecord }} OrderEffect
+ */
+
+/**
+ * What a staff refund records with its refund through Payments (see {@link OrderEffect}).
+ * @typedef {{ manual: number, entries: Record<string, unknown>[], reference: string, claimId: string | null,
+ *   history: Record<string, unknown>, note: Record<string, unknown>, recordedNote: Record<string, unknown> }}
+ *   StaffRefundRecord
  */
 
 /**
@@ -140,16 +163,10 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
 
 /**
  * @typedef {{ ok: true, plan: TransitionPlan }
- *   | { ok: false, code: 'move_not_allowed' | 'flow_changed' | 'nothing_paid', message: string }}
- *   PlanResult
+ *   | { ok: false, code: 'move_not_allowed' | 'flow_changed' | 'nothing_paid' | 'input_needed', message: string,
+ *       field?: string }} PlanResult
  */
 
-/** Roles of an order before delivery (a refund then acts as a cancel). */
-const BEFORE_DELIVERY = Object.freeze(
-	/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation', 'open', 'packed', 'shipped']),
-);
-/** Roles a refund counts as "after delivery" from (the order had its parcel). */
-const AFTER_DELIVERY = Object.freeze(/** @type {StatusRole[]} */ (['delivered', 'returned_to_origin', 'returned']));
 /** Payment states after which cash is no longer taken at delivery. */
 const REFUNDED_STATES = Object.freeze(['refunded', 'partially_refunded']);
 
@@ -171,12 +188,15 @@ const stockLines = (order) =>
 const hasUnits = (order) => order.lines.some((line) => (line.serials ?? []).length > 0);
 
 /**
- * Whether a transition may happen, before anything is called or read for it: the flow's moves and the role rules,
- * the order's role still the flow's role of its status, and a refund before delivery only when something was paid.
- * @param {{ order: OrderRecord, flow: OrderFlow, to: string, listed?: boolean }} request
- * @returns {{ ok: true, target: import('./model.js').OrderStatusDefinition } | Extract<PlanResult, { ok: false }>}
+ * Whether a transition may happen, before anything is called or read for it: the flow's moves, who may make them and
+ * the role rules, and the order's role still the flow's role of its status. `move` is the listed move with every field
+ * (null for a transition that needs none: an ended window).
+ * @param {{ order: OrderRecord, flow: OrderFlow, to: string, listed?: boolean,
+ *   who?: 'staff' | 'shopper' | 'system' }} request
+ * @returns {{ ok: true, target: import('./model.js').OrderStatusDefinition, move: ReturnType<typeof import('./flow.js').moveRules> | null }
+ *   | Extract<PlanResult, { ok: false }>}
  */
-export const checkTransition = ({ order, flow, to, listed = true }) => {
+export const checkTransition = ({ order, flow, to, listed = true, who = 'staff' }) => {
 	const target = statusOf(flow, to);
 	const label = (/** @type {string} */ key) => statusOf(flow, key)?.label ?? key;
 	const refused = /** @type {const} */ ({
@@ -185,7 +205,9 @@ export const checkTransition = ({ order, flow, to, listed = true }) => {
 		message: `An order cannot move from ${label(order.status)} to ${target ? target.label : to}.`,
 	});
 	if (!target || order.status === to) return refused;
-	if (listed ? !canMove(flow, order.status, to) : !rolesAllow(order.role, target.role)) return refused;
+	const move = listed ? moveOf(flow, order.status, to, who) : null;
+	// a transition without a listed move is only a waiting order's cancel (an ended window)
+	if (listed ? !move : !WAITING_ROLES.includes(order.role) || target.role !== 'cancelled') return refused;
 	const current = statusOf(flow, order.status);
 	if (current && current.role !== order.role)
 		return {
@@ -194,18 +216,71 @@ export const checkTransition = ({ order, flow, to, listed = true }) => {
 			message: `The order flow changed: ${current.label} is no longer the kind of step this order is in. Reload it, or move its orders with restatus first.`,
 		};
 	if (!rolesAllow(order.role, target.role)) return refused;
-	return { ok: true, target };
+	return { ok: true, target, move };
 };
 
 /**
- * A refund before delivery acts as a cancel, and only when something was paid (E27).
- * @param {OrderRecord} order @param {StatusRole} stage the stage entered
+ * What a transition chooses where its stage leaves a choice: the move's options (`core/flow.js` `moveOptionSpecs`; a
+ * transition without a listed move takes their defaults), staff's answer where the move asks (`restock: ask`; the shop
+ * itself answers no, so nothing goes back in stock unasked) and who makes it: a cancel refunds what Payments took when
+ * staff make it and the move says `refund: auto`, when the shopper makes it and the move says `shopperPaid: refund`,
+ * never when the shop itself does (an ended window).
+ * @param {{ move: ReturnType<typeof import('./flow.js').moveRules> | null, from: StatusRole, to: StatusRole,
+ *   input: Pick<TransitionInput, 'who' | 'restock' | 'trigger'> }} request
+ * @returns {{ ok: true, choices: TransitionChoices } | Extract<PlanResult, { ok: false }>}
+ */
+export const choicesOf = ({ move, from, to, input }) => {
+	/** @type {Record<string, unknown>} */
+	const options = {
+		...Object.fromEntries(Object.entries(moveOptionSpecs(from, to, move?.who)).map(([name, spec]) => [name, spec.default])),
+	};
+	Object.assign(options, move?.options ?? {});
+	let restock = options.restock === 'yes';
+	if (options.restock === 'ask' && input.who === 'staff' && !input.trigger) {
+		if (typeof input.restock !== 'boolean')
+			return {
+				ok: false,
+				code: 'input_needed',
+				field: 'restock',
+				message: 'Say whether the items go back in stock (restock true or false).',
+			};
+		restock = input.restock;
+	}
+	const refund =
+		input.who === 'staff' ? options.refund === 'auto' : input.who === 'shopper' ? options.shopperPaid === 'refund' : false;
+	return {
+		ok: true,
+		choices: {
+			restock,
+			points: options.points === 'keep' ? 'keep' : 'take_back',
+			refund,
+			window: options.window === 'none' ? 'none' : 'restart',
+			unpaid: options.unpaid === 'cancel' ? 'cancel' : 'refuse',
+		},
+	};
+};
+
+/**
+ * A refund before delivery acts as a cancel, and only when something was paid (E27), unless the move cancels an unpaid
+ * order with no money (`unpaid: cancel`, E40).
+ * @param {OrderRecord} order @param {StatusRole} stage the stage entered @param {'refuse' | 'cancel'} [unpaid]
  * @returns {Extract<PlanResult, { ok: false }> | null}
  */
-export const nothingPaid = (order, stage) =>
-	stage === 'refunded' && BEFORE_DELIVERY.includes(order.role) && order.payment.paid <= 0
+export const nothingPaid = (order, stage, unpaid = 'refuse') =>
+	stage === 'refunded' && BEFORE_DELIVERY.includes(order.role) && order.payment.paid <= 0 && unpaid === 'refuse'
 		? { ok: false, code: 'nothing_paid', message: 'Nothing was paid on this order; cancel it instead.' }
 		: null;
+
+/**
+ * An id for a refund through Payments a transition asks for (its Idempotency-Key): `base`, or `base:<n>` when the order
+ * has an effect of that id already (a second cancel or refund of the same order, E40), so two refunds never share a key.
+ * @param {OrderRecord} order @param {string} base
+ */
+const effectId = (order, base) => {
+	const taken = new Set((order.effects ?? []).map((effect) => effect.id));
+	if (!taken.has(base)) return base;
+	for (let n = 2; ; n += 1) if (!taken.has(`${base}:${n}`)) return `${base}:${n}`;
+};
 
 /**
  * A refund entry of the order's log (E26).
@@ -246,18 +321,56 @@ export const paymentsRefundEntry = (by, now, done, refund) =>
 	});
 
 /**
+ * The part of a compare-and-set that keeps earned points right: a plan that takes them back (it counts them in
+ * `promotions.pointsReversed`) happens only while what the order took back is as read, so a claim's refund taking them
+ * back at the same time (it counts them there too) takes them once.
+ * @param {OrderRecord} order as read @param {Record<string, number>} inc
+ * @returns {Record<string, unknown>}
+ */
+const reversedGuard = (order, inc) =>
+	inc['promotions.pointsReversed'] === undefined ? {} : { 'promotions.pointsReversed': order.promotions.pointsReversed ?? null };
+
+/**
+ * The points an order redeemed, given back to whose they were: the member's, or the guest's customer record (E20, K-6);
+ * null when it redeemed none or has no owner.
+ * @param {OrderRecord} order
+ * @returns {LedgerEffect | null}
+ */
+const redeemedBack = (order) => {
+	const owner = pointsOwner(order);
+	if (!owner || order.promotions.pointsRedeemed <= 0) return null;
+	return {
+		kind: 'give_points',
+		owner,
+		points: order.promotions.pointsRedeemed,
+		reason: 'refund',
+		expiresAt: null,
+		note: order.number,
+	};
+};
+
+/**
  * Plan a transition of an order to the status `to`.
  * @param {{ order: OrderRecord, flow: OrderFlow, to: string, input: TransitionInput, rules: TransitionRules,
  *   now: number }} request
  * @returns {PlanResult}
  */
 export const planTransition = ({ order, flow, to, input, rules, now }) => {
-	const checked = checkTransition({ order, flow, to, listed: input.listed !== false });
+	const checked = checkTransition({
+		order,
+		flow,
+		to,
+		listed: input.listed !== false,
+		who: input.trigger ? 'system' : input.who,
+	});
 	if (!checked.ok) return checked;
 	const stage = checked.target.role;
-	const unpaid = nothingPaid(order, stage);
-	if (unpaid) return unpaid;
 	const fromStage = order.role;
+	const chosen = choicesOf({ move: checked.move, from: fromStage, to: stage, input });
+	if (!chosen.ok) return chosen;
+	const { choices } = chosen;
+	const unpaid = nothingPaid(order, stage, choices.unpaid);
+	if (unpaid) return unpaid;
 	const before = factsOf(order);
 	const after = { ...before };
 	/** @type {Record<string, unknown>} */
@@ -314,12 +427,33 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		recorded = input.paid.entry;
 	}
 
+	/**
+	 * What is left to refund: the part through Payments less the refunds already asked of it and still pending (a
+	 * cancel's refund Payments has not taken yet), and the part recorded by hand.
+	 */
+	const moneyLeft = () => {
+		const pending = (order.effects ?? [])
+			.filter((effect) => effect.state === 'pending')
+			.reduce((sum, effect) => sum + effect.amount, 0);
+		const { online, manual } = refundSplit(order, refundable(order));
+		return { online: Math.max(0, online - pending), manual };
+	};
+
 	/** Serial numbers captured go back (back to open or waiting from packed, E27). */
 	const unpack = () => {
 		if (fromStage !== 'packed' || !hasUnits(order)) return;
 		set.lines = order.lines.map((line) => ({ ...line, serials: [] }));
 		ledger.push({ kind: 'release_units' });
 		after.units = 'none';
+	};
+
+	/** Offer uses back, once. */
+	const releaseOffers = () => {
+		if (before.offers !== 'counted') return;
+		const { couponId, dealIds, bundleIds } = order.promotions;
+		ledger.push({ kind: 'release_offers', couponId, dealIds, bundleIds });
+		set['promotions.released'] = true;
+		after.offers = 'released';
 	};
 
 	/** Everything the order holds goes back, each once (a cancel, a refund before delivery). */
@@ -333,27 +467,28 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			ledger.push({ kind: 'release_stock', lines: stockLines(order) }, { kind: 'release_slots' });
 			after.stock = 'back';
 		}
-		if (before.offers === 'counted') {
-			const { couponId, dealIds, bundleIds } = order.promotions;
-			ledger.push({ kind: 'release_offers', couponId, dealIds, bundleIds });
-			after.offers = 'released';
-		}
+		releaseOffers();
 		if (before.redeemed === 'spent') {
-			if (order.promotions.pointsRedeemed > 0)
-				ledger.push({
-					kind: 'give_points',
-					owner: order.customer.userId,
-					points: order.promotions.pointsRedeemed,
-					reason: 'refund',
-					expiresAt: null,
-					note: order.number,
-				});
+			const back = redeemedBack(order);
+			if (back) ledger.push(back);
 			after.redeemed = 'given_back';
 		}
 	};
 
+	/** Units a return or a restock puts back in stock, less what claims put back (OR-10). */
+	const restockLines = () =>
+		order.lines
+			.filter((line) => line.kind === 'physical')
+			.map((line) => ({
+				lineId: line.id,
+				productId: line.productId,
+				variantId: line.variantId,
+				quantity: line.quantity,
+				locationId: line.locationId ?? null,
+			}));
+
 	/**
-	 * A parcel back: its stock back as `rules.restock` says (less what claims put back), else kept out; serial numbers back.
+	 * A parcel back: its stock back as the move says (less what claims put back), else kept out; serial numbers back.
 	 * @param {boolean} countRto
 	 */
 	const comeBack = (countRto) => {
@@ -361,31 +496,24 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		ledger.push({ kind: 'release_units' });
 		after.units = 'none';
 		if (before.stock === 'held' || before.stock === 'sold') {
-			if (rules.restock) {
+			if (choices.restock) {
 				set.returnRestocked = true;
-				ledger.push({
-					kind: 'restock_return',
-					lines: order.lines
-						.filter((line) => line.kind === 'physical')
-						.map((line) => ({
-							lineId: line.id,
-							productId: line.productId,
-							variantId: line.variantId,
-							quantity: line.quantity,
-							locationId: line.locationId ?? null,
-						})),
-				});
+				ledger.push({ kind: 'restock_return', lines: restockLines() });
 				after.stock = 'back';
 			} else after.stock = 'none';
 		}
 		if (countRto && order.customer.customerId) ledger.push({ kind: 'count_rto', customerId: order.customer.customerId });
 	};
 
-	/** Points of a return or a refund after delivery: what it earned and still has is reversed, what it redeemed given back. */
+	/**
+	 * Points of a return, a refund after delivery or a cancel after it: what it earned and still has is reversed (unless
+	 * the move keeps it, E39), what it redeemed given back.
+	 */
 	const pointsBack = () => {
 		const owner = pointsOwner(order);
 		if (!owner) return;
-		const earned = before.earned === 'credited' ? earnedLeft(order) : 0;
+		const keep = choices.points === 'keep';
+		const earned = !keep && before.earned === 'credited' ? earnedLeft(order) : 0;
 		const redeemed = before.redeemed === 'spent' ? order.promotions.pointsRedeemed : 0;
 		if (earned <= 0 && redeemed <= 0) return;
 		if (earned > 0) ledger.push({ kind: 'take_points', owner, points: earned, note: order.number });
@@ -394,13 +522,34 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		set['promotions.released'] = true;
 		inc['promotions.pointsReversed'] = earned;
 		after.redeemed = 'given_back';
-		if (before.earned === 'credited') after.earned = 'reversed';
+		if (!keep && before.earned === 'credited') after.earned = 'reversed';
+	};
+
+	/**
+	 * A cancel or a refund after delivery or from a closed status (E40): items still with the customer go back in stock
+	 * only when the move says so (their serial numbers with them), a cancel releases the offer uses, and the points come
+	 * back as the move says.
+	 * @param {{ cancel: boolean }} how
+	 */
+	const settleAfter = ({ cancel }) => {
+		if (before.stock === 'sold' && choices.restock) {
+			set.stockHeld = false;
+			set.returnRestocked = true;
+			ledger.push({ kind: 'release_units' }, { kind: 'restock_return', lines: restockLines() });
+			after.stock = 'back';
+			after.units = 'none';
+		}
+		if (cancel) releaseOffers();
+		pointsBack();
 	};
 
 	switch (stage) {
 		case 'awaiting_payment': {
 			// the order waits for its payment again: its window restarts (E27), or it waits until staff move it (OR-5)
-			set.holdUntil = rules.rewaitMinutes > 0 ? new Date(now + rules.rewaitMinutes * 60_000) : null;
+			set.holdUntil =
+				choices.window === 'restart' && rules.paymentWindowMinutes > 0
+					? new Date(now + rules.paymentWindowMinutes * 60_000)
+					: null;
 			unpack();
 			break;
 		}
@@ -481,11 +630,14 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			break;
 		}
 		case 'cancelled': {
-			release();
-			// what Payments took is refunded after the transaction, once (its id is the Idempotency-Key)
-			const { online } = refundSplit(order, refundable(order));
-			if (rules.refundOnCancel && online > 0)
-				external.push(refundEffect(`${order.id}:cancel`, online, input.note || 'Order cancelled', 'Order cancelled'));
+			if (BEFORE_DELIVERY.includes(fromStage)) release();
+			else settleAfter({ cancel: true });
+			// what Payments took is refunded after the transaction, once (its id is the Idempotency-Key), when the move says so
+			const { online } = moneyLeft();
+			if (choices.refund && online > 0)
+				external.push(
+					refundEffect(effectId(order, `${order.id}:cancel`), online, input.note || 'Order cancelled', 'Order cancelled'),
+				);
 			break;
 		}
 		case 'returned_to_origin':
@@ -499,17 +651,18 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			// what is left is refunded: the part Payments took through Payments right after the transaction (its id, the
 			// Idempotency-Key, names the refunds before it), the rest recorded as given back by hand
 			const note = input.note || 'Order refunded';
-			const { online, manual } = refundSplit(order, refundable(order));
+			const { online, manual } = moneyLeft();
 			if (manual > 0) {
 				refunded = manual;
 				set['payment.refunded'] = order.payment.refunded + manual;
 				set['payment.state'] = stateAfterRefund(order.payment.paid, order.payment.refunded + manual);
 				refunds.push(refundEntry(input.actor, now, { method: 'other', amount: manual, note }));
 			}
-			if (online > 0) external.push(refundEffect(`${order.id}:refund:${order.payment.refunded}`, online, note, note));
-			// before delivery a refund acts as a cancel (E27); after delivery its points come back (K-23)
-			if (AFTER_DELIVERY.includes(fromStage)) pointsBack();
-			else release();
+			if (online > 0)
+				external.push(refundEffect(effectId(order, `${order.id}:refund:${order.payment.refunded}`), online, note, note));
+			// before delivery a refund acts as a cancel (E27); after it the items and points as the move says (K-23, E39, E40)
+			if (BEFORE_DELIVERY.includes(fromStage)) release();
+			else settleAfter({ cancel: false });
 			break;
 		}
 		default:
@@ -524,6 +677,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		by: input.by,
 		...(input.byKind ? { byKind: input.byKind } : {}),
 		note: input.note,
+		...(input.shopperNote ? { shopperNote: input.shopperNote } : {}),
 		...(input.code ? { code: input.code } : {}),
 		...(input.values ? { values: input.values } : {}),
 		...(reason ? { reason } : {}),
@@ -547,6 +701,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 				...(input.checkUpdatedAt === false ? {} : { updatedAt: order.updatedAt }),
 				...(input.where ?? {}),
 				...factsGuard(order),
+				...reversedGuard(order, inc),
 			},
 			set,
 			push,
@@ -561,6 +716,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 				to,
 				by: input.by,
 				...(input.who === 'staff' ? { note: input.note } : {}),
+				...(input.shopperNote ? { shopperNote: input.shopperNote } : {}),
 				...(reason ? { reason } : {}),
 			},
 		},
@@ -602,47 +758,95 @@ export const planUnits = ({ order, units, history }) => {
 
 /**
  * Plan what an order holds going back without a status (a delete, E31): its stock and slots, offer uses, redeemed
- * points and serial numbers, as a cancel gives them, each once. Orders that hold nothing any more plan nothing.
- * @param {{ order: OrderRecord }} request
- * @returns {TransitionPlan | null} null when it holds nothing (delivered, returned and settled orders keep what was sold)
+ * points and serial numbers, as a cancel gives them, each once. A delivered or closed order keeps what was sold, unless
+ * the website's deletes give everything back (`all`, `checkout.deleteGivesBack: all`): then items still with the
+ * customer go back in stock, its offer uses are released and its points come back (earned taken back, redeemed given
+ * back). Orders that hold nothing any more plan nothing.
+ * @param {{ order: OrderRecord, all?: boolean }} request
+ * @returns {TransitionPlan | null} null when there is nothing to give back
  */
-export const planRelease = ({ order }) => {
-	if (!BEFORE_DELIVERY.includes(order.role)) return null;
+export const planRelease = ({ order, all = false }) => {
 	const before = factsOf(order);
-	const after = { ...before, units: /** @type {OrderFacts['units']} */ ('none') };
+	/** @type {OrderFacts} */
+	const after = { ...before };
 	/** @type {LedgerEffect[]} */
-	const ledger = [{ kind: 'release_units' }];
-	if (before.stock === 'held' || before.stock === 'sold') {
-		ledger.push({ kind: 'release_stock', lines: stockLines(order) }, { kind: 'release_slots' });
-		after.stock = 'back';
-	}
-	if (before.offers === 'counted') {
+	const ledger = [];
+	/** @type {Record<string, unknown>} */
+	const set = {};
+	/** @type {Record<string, number>} */
+	const inc = {};
+	/** Offer uses back, once. */
+	const releaseOffers = () => {
+		if (before.offers !== 'counted') return;
 		const { couponId, dealIds, bundleIds } = order.promotions;
 		ledger.push({ kind: 'release_offers', couponId, dealIds, bundleIds });
+		set['promotions.released'] = true;
 		after.offers = 'released';
+	};
+	if (BEFORE_DELIVERY.includes(order.role)) {
+		ledger.push({ kind: 'release_units' });
+		after.units = 'none';
+		set.stockHeld = false;
+		set['promotions.released'] = true;
+		if (before.stock === 'held' || before.stock === 'sold') {
+			ledger.push({ kind: 'release_stock', lines: stockLines(order) }, { kind: 'release_slots' });
+			after.stock = 'back';
+		}
+		releaseOffers();
+		if (before.redeemed === 'spent') {
+			const back = redeemedBack(order);
+			if (back) ledger.push(back);
+			after.redeemed = 'given_back';
+		}
+	} else {
+		if (!all) return null;
+		if (before.stock === 'sold') {
+			set.stockHeld = false;
+			set.returnRestocked = true;
+			ledger.push(
+				{ kind: 'release_units' },
+				{
+					kind: 'restock_return',
+					lines: order.lines
+						.filter((line) => line.kind === 'physical')
+						.map((line) => ({
+							lineId: line.id,
+							productId: line.productId,
+							variantId: line.variantId,
+							quantity: line.quantity,
+							locationId: line.locationId ?? null,
+						})),
+				},
+			);
+			after.stock = 'back';
+			after.units = 'none';
+		}
+		const owner = pointsOwner(order);
+		const earned = owner && before.earned === 'credited' ? earnedLeft(order) : 0;
+		const redeemed = owner && before.redeemed === 'spent' ? order.promotions.pointsRedeemed : 0;
+		if (owner && earned > 0) ledger.push({ kind: 'take_points', owner, points: earned, note: order.number });
+		if (owner && redeemed > 0)
+			ledger.push({ kind: 'give_points', owner, points: redeemed, reason: 'refund', expiresAt: null, note: order.number });
+		if (owner && (earned > 0 || redeemed > 0)) {
+			set['promotions.released'] = true;
+			inc['promotions.pointsReversed'] = earned;
+			after.redeemed = 'given_back';
+			if (before.earned === 'credited') after.earned = 'reversed';
+		}
+		releaseOffers();
 	}
-	if (before.redeemed === 'spent') {
-		if (order.promotions.pointsRedeemed > 0)
-			ledger.push({
-				kind: 'give_points',
-				owner: order.customer.userId,
-				points: order.promotions.pointsRedeemed,
-				reason: 'refund',
-				expiresAt: null,
-				note: order.number,
-			});
-		after.redeemed = 'given_back';
-	}
+	if (ledger.length === 0) return null;
+	set.facts = after;
 	return {
 		from: order.status,
 		to: '',
 		fromStage: order.role,
 		stage: order.role,
 		facts: { before, after },
-		guard: { status: order.status, updatedAt: order.updatedAt, ...factsGuard(order) },
-		set: { stockHeld: false, 'promotions.released': true, facts: after },
+		guard: { status: order.status, updatedAt: order.updatedAt, ...factsGuard(order), ...reversedGuard(order, inc) },
+		set,
 		push: {},
-		inc: {},
+		inc,
 		ledger,
 		external: [],
 		history: null,

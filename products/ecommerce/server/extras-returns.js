@@ -17,7 +17,7 @@
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
-import { restockClaimLines, takePoints } from '../adapters/ledger.js';
+import { applyTransition, isPointsChanged, restockClaimLines } from '../adapters/ledger.js';
 import { userIdsOf } from '../adapters/extras-store.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
@@ -56,6 +56,9 @@ import { SERVER_LIMITS, VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.j
 const SERVER = [...SERVER_LIMITS];
 const VISITOR = [...VISITOR_LIMITS];
 const VISITOR_WRITE = [...VISITOR_WRITE_LIMITS];
+
+/** Tries of taking a claim's points back while the order or its loyalty account changes meanwhile. */
+const POINTS_TRIES = 5;
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -712,31 +715,41 @@ export const createReturns = (product, service) => {
 				);
 		}
 		if (s.has('loyalty')) {
-			const after = /** @type {OrderRecord} */ (await findOrder(data, { id: order.id }));
 			const { pointsBack } = await s.values('returns');
-			// proportional: the claimed part's points on the claim's first refund; full_refund_only: every point the order
-			// earned, once, when this refund completes the order's refund; never more than is left (a move may have taken
-			// them already)
-			const wanted =
-				pointsBack === 'full_refund_only'
-					? after.payment.refunded >= after.payment.paid && order.payment.refunded < order.payment.paid
-						? order.promotions.pointsEarned
-						: 0
-					: first
-						? pointsToReverse(order, claim)
-						: 0;
-			const points = Math.min(wanted, earnedLeft(after));
 			// a guest's points are theirs by customer id (E20, K-6)
 			const owner = pointsOwner(order);
-			if (points > 0 && owner) {
-				await takePoints(
-					data,
-					{ userId: owner, points, orderId: order.id, kind: 'reverse', note: order.number },
-					{ now: service.now() },
-				);
-				await data
-					.collection(COLLECTIONS.orders)
-					.updateOne({ websiteId: data.websiteId, id: order.id }, { $inc: { 'promotions.pointsReversed': points } });
+			for (let attempt = 1; owner && attempt <= POINTS_TRIES; attempt += 1) {
+				const after = /** @type {OrderRecord} */ (await findOrder(data, { id: order.id }));
+				// proportional: the claimed part's points on the claim's first refund; full_refund_only: every point the order
+				// earned, once, when this refund completes the order's refund; never more than is left (a move may have taken
+				// them already)
+				const wanted =
+					pointsBack === 'full_refund_only'
+						? after.payment.refunded >= after.payment.paid && order.payment.refunded < order.payment.paid
+							? order.promotions.pointsEarned
+							: 0
+						: first
+							? pointsToReverse(order, claim)
+							: 0;
+				const points = Math.min(wanted, earnedLeft(after));
+				if (points <= 0) break;
+				// taken back with the order's count in one transaction, only while what it took back is as read: a return or
+				// a refund moving the order at the same time takes them once
+				try {
+					const done = await applyTransition(
+						data,
+						{
+							orderId: order.id,
+							guard: { 'promotions.pointsReversed': after.promotions.pointsReversed ?? null },
+							update: { $inc: { 'promotions.pointsReversed': points } },
+							effects: [{ kind: 'take_points', owner, points, note: order.number }],
+						},
+						{ now: service.now() },
+					);
+					if (done) break;
+				} catch (error) {
+					if (!isPointsChanged(error)) throw error;
+				}
 			}
 		}
 		await service.log(ctx, 'return.refunded', claim.id, { label: claimLabel(claim), detail: `Refunded ${money}` });

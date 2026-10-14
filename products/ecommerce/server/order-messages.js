@@ -1,14 +1,15 @@
 /**
  * Messages to the shopper about their order (PLAN 0.8.8: messages go through Notifications): the order placed, and a
- * move into a status listed in the `checkout` setting `notifyStatuses`, on the channels of `messageChannels`. Template
+ * move into a status of the order flow that sends one (its `notify`), on the channels of `messageChannels`. Template
  * keys (edited in Notifications): `ecommerce.order_placed` and `ecommerce.order_status` — or, with `statusTemplates:
  * per_status`, `ecommerce.order_status.<status key>` (PLAN 0.8.10 E32) — with the values `number`, `name`,
- * `firstName`, `status` (the status's name), `total` (by the website's Format, K7), `paymentMethod` and
+ * `firstName`, `status` (the status's name for the shopper), `total` (by the website's Format, K7), `paymentMethod` and
  * `deliveryMethod` (words, not codes: the website's texts `checkout.method.<method>` and
  * `messages.delivery.<method>`, '' without delivery; K-10), `courier`, `trackingNumber`, `trackingUrl`,
  * `trackingDetails`, `orderUrl` and `reviewUrl` (the `checkout` templates with `{number}`), `cancelReason` (why it was
- * cancelled: the note staff typed with the move, else the text `messages.cancelReason.<staff | shopper | unpaid |
- * unconfirmed>`; '' for other statuses) and `business`. The merchant edits those words in Texts. Order messages are
+ * cancelled: the note for the shopper staff wrote with the move, else the note staff typed, else the text
+ * `messages.cancelReason.<staff | shopper | unpaid | unconfirmed>`; '' for other statuses), `shopperNote` (the note for
+ * the shopper staff wrote with the move, '' without one) and `business`. The merchant edits those words in Texts. Order messages are
  * required (sent whatever the shopper opted out of) and saved before they are sent, so a call to Notifications that
  * fails is tried again on the website's next uses (K-17, owner decision D7). A failed or unconnected send never fails
  * the order.
@@ -42,6 +43,7 @@ export const ORDER_MESSAGE_VALUES = Object.freeze(
 		'orderUrl',
 		'reviewUrl',
 		'cancelReason',
+		'shopperNote',
 	]),
 );
 
@@ -81,9 +83,10 @@ const linkOf = (template, order) =>
 export const createOrderMessages = (service) => {
 	/**
 	 * @param {Site} s @param {string} template @param {OrderRecord} order @param {string} statusLabel
-	 * @param {{ cancelReason?: string }} [extra] `cancelReason`: the words, from {@link messageWords}
+	 * @param {{ cancelReason?: string, shopperNote?: string }} [extra] `cancelReason`: the words, from
+	 *   {@link messageWords}; `shopperNote`: the note staff wrote for the shopper with the move
 	 */
-	const send = async (s, template, order, statusLabel, { cancelReason = '' } = {}) => {
+	const send = async (s, template, order, statusLabel, { cancelReason = '', shopperNote = '' } = {}) => {
 		const { messageChannels, orderUrl, reviewUrl } = await s.values('checkout');
 		const words = await messageWords(s);
 		const shipment = order.shipment;
@@ -108,6 +111,7 @@ export const createOrderMessages = (service) => {
 			orderUrl: linkOf(orderUrl, order),
 			reviewUrl: linkOf(reviewUrl, order),
 			cancelReason,
+			shopperNote,
 		};
 		return service.notify(
 			s,
@@ -126,14 +130,14 @@ export const createOrderMessages = (service) => {
 		 */
 		placed: (s, order, statusLabel) => send(s, ORDER_TEMPLATES.placed, order, statusLabel),
 		/**
-		 * The order moved into a status; sent only when the status is listed in `notifyStatuses`, with one template per
+		 * The order moved into a status; sent only when the flow says the status sends one (`notify`), with one template per
 		 * status when `statusTemplates` says so (E32).
-		 * @param {Site} s @param {OrderRecord} order the order after the move @param {string} statusLabel
-		 * @param {{ cancelReason?: string }} [extra]
+		 * @param {Site} s @param {OrderRecord} order the order after the move @param {string} statusLabel the shopper's name
+		 * @param {{ cancelReason?: string, shopperNote?: string, notify: boolean }} extra `notify`: the flow's `notify`
 		 */
-		status: async (s, order, statusLabel, extra = {}) => {
-			const { notifyStatuses, statusTemplates } = await s.values('checkout');
-			if (!Array.isArray(notifyStatuses) || !notifyStatuses.includes(order.status)) return 'skipped';
+		status: async (s, order, statusLabel, extra) => {
+			const { statusTemplates } = await s.values('checkout');
+			if (!extra.notify) return 'skipped';
 			const template = statusTemplates === 'per_status' ? `${ORDER_TEMPLATES.status}.${order.status}` : ORDER_TEMPLATES.status;
 			return send(s, template, order, statusLabel, extra);
 		},

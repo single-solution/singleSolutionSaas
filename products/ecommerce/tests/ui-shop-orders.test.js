@@ -238,7 +238,16 @@ describe('my orders', () => {
 			features: ['checkout', 'invoices'],
 			routes: {
 				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
-				'GET /v1/shop/orders/ord_1': () => ok(detail()),
+				'GET /v1/shop/orders/ord_1': () =>
+					ok(
+						detail({
+							statusText: 'Have the cash ready at the door.',
+							history: [
+								{ at: '2026-10-01T10:00:00.000Z', status: 'placed', label: 'Placed', note: '' },
+								{ at: '2026-10-02T10:00:00.000Z', status: 'packed', label: 'Getting ready', note: 'Gift wrapped' },
+							],
+						}),
+					),
 				'POST /v1/shop/orders/ord_1/cancel': () => cancel,
 				'GET /v1/shop/orders/ord_1/downloads/oln_2/book.pdf': () => download,
 			},
@@ -263,6 +272,10 @@ describe('my orders', () => {
 			text('orders.note', { note: 'Ring twice' }),
 			text('orders.discount'),
 			text('cart.tax'),
+			// the shop's line for the status and payment method, and its notes for the shopper in the history
+			'Have the cash ready at the door.',
+			'Getting ready',
+			text('orders.historyNote', { note: 'Gift wrapped' }),
 		])
 			expect(page).toContain(part);
 		expect($(host, 'a[href="https://track.example.com/T1"]').textContent).toBe(text('orders.track'));

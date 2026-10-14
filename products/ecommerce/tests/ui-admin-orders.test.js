@@ -522,6 +522,100 @@ describe('orders admin: one order', () => {
 		expect(dialogStatus(root)).toBe(TEXTS['problem.conflict']);
 	});
 
+	it('asks what the move needs: notes for staff and the shopper, the dispatch video and whether items go back', async () => {
+		/** @type {any[]} */
+		const moves = [];
+		/** @type {any[]} */
+		const edits = [];
+		// a shipped order (each answer leaves it so, to try every move)
+		const shipped = () =>
+			answer(
+				200,
+				detail({
+					status: 'dispatched',
+					statusLabel: 'Dispatched',
+					role: 'shipped',
+					nextStatuses: [
+						{ key: 'delivered', label: 'Delivered', role: 'delivered', needs: ['note', 'reason'], options: {} },
+						{ key: 'returned', label: 'Returned', role: 'returned_to_origin', needs: [], options: { restock: 'ask' } },
+					],
+				}),
+			);
+		const { root } = await start({
+			'GET /v1/admin/orders/ord_1': shipped,
+			'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
+				moves.push(call.body);
+				return shipped();
+			},
+			'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) => {
+				edits.push(call.body);
+				return shipped();
+			},
+		});
+		const pane = detailOf(panelOf(root, 'orders'));
+		// both notes needed
+		await click(buttonIn(pane, 'Move to Delivered'));
+		let dialog = dialogOf(root);
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.needsNote']);
+		type(fieldIn(dialog, TEXTS['ordersAdmin.moveNoteRequired'] ?? ''), 'Left at the door');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.needsShopperNote']);
+		type(fieldIn(dialog, TEXTS['ordersAdmin.shopperNoteRequired'] ?? ''), ' Left with your neighbor ');
+		await submitDialog(root);
+		expect(moves[0]).toEqual({
+			to: 'delivered',
+			note: 'Left at the door',
+			shopperNote: 'Left with your neighbor',
+			serials: {},
+			shipment: null,
+			updatedAt: AT,
+		});
+		// a move that asks whether the items go back in stock sends the answer
+		await pickMenu(pane, 'Move to Returned');
+		dialog = dialogOf(root);
+		await tick(checkIn(dialog, TEXTS['ordersAdmin.restockAsk'] ?? ''), true);
+		await submitDialog(root);
+		expect(moves[1]).toMatchObject({ to: 'returned', restock: true });
+		expect(moves[1].shopperNote).toBeUndefined();
+		// the dispatch video of a shipped order is replaced
+		await pickMenu(pane, TEXTS['ordersAdmin.replaceVideo'] ?? '');
+		dialog = dialogOf(root);
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.videoAddress']);
+		type(fieldIn(dialog, TEXTS['ordersAdmin.videoAddress'] ?? ''), ' https://youtu.be/dQw4w9WgXcQ ');
+		await submitDialog(root);
+		expect(edits).toEqual([{ video: 'https://youtu.be/dQw4w9WgXcQ' }]);
+	});
+
+	it('asks for the dispatch video when packing as the move says', async () => {
+		/** @type {any[]} */
+		const moves = [];
+		const { root } = await start(
+			{
+				'GET /v1/admin/orders/ord_1': () =>
+					answer(
+						200,
+						detail({
+							nextStatuses: [
+								{ key: 'packed', label: 'Packed', role: 'packed', needs: [], options: { video: 'required' } },
+							],
+						}),
+					),
+				'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
+					moves.push(call.body);
+					return answer(200, detail({ status: 'packed', role: 'packed', nextStatuses: [] }));
+				},
+			},
+			FEATURES.filter((feature) => feature !== 'grades_serials'),
+		);
+		const pane = detailOf(panelOf(root, 'orders'));
+		await click(buttonIn(pane, 'Move to Packed'));
+		type(fieldIn(dialogOf(root), TEXTS['ordersAdmin.videoRequired'] ?? ''), 'https://youtu.be/dQw4w9WgXcQ');
+		await submitDialog(root);
+		expect(moves[0]).toMatchObject({ to: 'packed', video: 'https://youtu.be/dQw4w9WgXcQ' });
+	});
+
 	it('checks typed serial numbers as IMEIs and saves them later', async () => {
 		/** @type {any[]} */
 		const patches = [];

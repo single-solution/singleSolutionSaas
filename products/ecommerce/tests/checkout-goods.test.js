@@ -229,8 +229,8 @@ describe('free orders', () => {
 		});
 	});
 
-	it('start awaiting payment with freeOrderStart, waiting for staff without a time to pay (CK-41)', async () => {
-		await shop.setting('checkout', 'freeOrderStart', 'awaiting_payment');
+	it('start awaiting payment when the flow starts free orders there, waiting for staff without a time to pay (CK-41)', async () => {
+		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, free: 'pending_payment' } }));
 		const item = await shop.seedProduct({ price: 0, stock: 5 });
 		const shopper = await newShopper();
 		const sentToPayments = shop.callsTo(PAYMENTS).filter((call) => call.method === 'POST').length;
@@ -249,7 +249,7 @@ describe('free orders', () => {
 		// cash on delivery keeps its own start
 		const cod = await place(shopper, { lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS });
 		expect(cod.json.order.status).toBe('awaiting_confirmation');
-		await shop.setting('checkout', 'freeOrderStart', 'awaiting_confirmation');
+		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, free: 'awaiting_confirmation' } }));
 		for (const placed of [free, online, cod]) await shop.api('DELETE', `/v1/orders/${placed.json.order.id}`);
 	});
 });

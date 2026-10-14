@@ -2,8 +2,9 @@
  * Messages, events and staff alerts (PLAN 0.8.10 E32), driven by the shop's in-process hooks so every part that
  * places, moves, pays or refunds an order, takes a claim or changes the catalog is covered once:
  *
- * - the shopper's messages (`server/order-messages.js`): placed, and each status listed in `notifyStatuses` (one
- *   template, or one per status with `statusTemplates: per_status`); an order its window cancels says so (`expired`);
+ * - the shopper's messages (`server/order-messages.js`): placed, and each status of the flow that sends one (its
+ *   `notify`; one template, or one per status with `statusTemplates: per_status`); an order its window cancels says so
+ *   (`expired`);
  * - events (feature `events`, the kit's K5): `order.placed`, `order.status_changed`, `order.paid`,
  *   `order.payment_recorded`, `order.proof_uploaded`, `order.cancelled`, `order.refunded`, `return.requested`,
  *   `return.status_changed`, `review.submitted`, `catalog.changed`, `stock.low` and `stock.out` — ids and small facts
@@ -18,7 +19,7 @@
  */
 import { defineRoute } from '@ss/app-kit';
 import { countsForStock, stockEventOf } from '../core/catalog-query.js';
-import { statusOf } from '../core/flow.js';
+import { notifiesOf, shopperLabelOf, statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
 import { SERVER_LIMITS } from './service.js';
@@ -95,16 +96,16 @@ export const createOrderEvents = (product, service) => {
 	};
 
 	service.on('order.placed', async (s, { order, statusLabel: label }) => {
-		await messages.placed(s, order, label ?? statusLabel(await flowOf(s), order.status));
+		await messages.placed(s, order, label ?? shopperLabelOf(await flowOf(s), order.status));
 		await publish(s, 'order.placed', orderFacts(order));
 		await alert(s, 'placed', order);
 	});
 
-	service.on('order.moved', async (s, { order, from, to, by, reason, note }) => {
+	service.on('order.moved', async (s, { order, from, to, by, reason, note, shopperNote }) => {
 		const flow = await flowOf(s);
 		const role = statusOf(flow, to)?.role;
 		// a cancel says why: staff, the shopper, or the end of its window (events keep the code; messages and alerts get
-		// words: the note staff typed with the move, else the website's text for it, K-10)
+		// words: the note for the shopper, else the note staff typed with the move, else the website's text for it, K-10)
 		const cancelReason =
 			role === 'cancelled' ? (reason === 'expired' ? 'expired' : reason === 'shopper' ? 'shopper' : 'staff') : '';
 		/** @type {import('./order-messages.js').CancelCode} */
@@ -114,9 +115,16 @@ export const createOrderEvents = (product, service) => {
 					? 'unpaid'
 					: 'unconfirmed'
 				: /** @type {'staff' | 'shopper'} */ (cancelReason || 'staff');
+		const forShopper = typeof shopperNote === 'string' ? shopperNote : '';
 		const cancelWords =
-			role === 'cancelled' ? (await messageWords(s)).cancel(cancelCode, typeof note === 'string' ? note : '') : '';
-		await messages.status(s, order, statusLabel(flow, to), { cancelReason: cancelWords });
+			role === 'cancelled'
+				? (await messageWords(s)).cancel(cancelCode, forShopper || (typeof note === 'string' ? note : ''))
+				: '';
+		await messages.status(s, order, shopperLabelOf(flow, to), {
+			cancelReason: cancelWords,
+			shopperNote: forShopper,
+			notify: notifiesOf(flow, to),
+		});
 		await publish(s, 'order.status_changed', {
 			...orderFacts(order),
 			from,

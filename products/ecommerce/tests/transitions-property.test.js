@@ -12,7 +12,7 @@ import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { givePoints, loyaltyAccount, placeOrder } from '../adapters/ledger.js';
 import { PLACED_FACTS, factsOf } from '../core/facts.js';
-import { nextStatuses } from '../core/flow.js';
+import { moveOf, nextStatuses } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { checkPayment, checkRefund, refundable } from '../core/orders.js';
 import { balanceOf } from '../core/points.js';
@@ -154,7 +154,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 			attempts: 0,
 			made: 0,
 			concurrent: 0,
-			serialized: 0,
+			refundPairs: 0,
 			retries: 0,
 			shopper: 0,
 			paid: 0,
@@ -329,12 +329,13 @@ describe('property: random flows × every way an order moves, retries, two at on
 							const cash = random() < 0.5;
 							const confirm = random() < 0.5;
 							const reason = random() < 0.5 ? 'rto' : 'customer_return';
+							const restock = random() < 0.5;
 							// a waiting order is more often paid, canceled by the shopper or left until its window ends
 							const waits = read.role === 'awaiting_payment' || read.role === 'awaiting_confirmation';
 							const up = waits
 								? { move: 0.35, shopper: 0.47, pay: 0.65, refund: 0.7, record: 0.8, read: 0.85 }
 								: { move: 0.5, shopper: 0.55, pay: 0.57, refund: 0.75, record: 0.85, read: 0.93 };
-							if (pick < up.move) return { kind: 'move', to, reason };
+							if (pick < up.move) return { kind: 'move', to, reason, restock };
 							if (pick < up.shopper) return { kind: 'shopper' };
 							if (pick < up.pay) return { kind: 'pay' };
 							if (pick < up.refund) return { kind: 'refund', share, cash };
@@ -360,8 +361,15 @@ describe('property: random flows × every way an order moves, retries, two at on
 											note: '',
 											serials: {},
 											shipment: { courier: '', trackingNumber: `T-${step}` },
+											// a dispatch video for a move into packed that asks for one
+											video: { kind: 'dispatch_video', url: 'https://video.example/packing' },
 											updatedAt: null,
 											reason: /** @type {'rto' | 'customer_return'} */ (action.reason),
+											// staff answer a move that asks whether the items go back in stock
+											...(moveOf(flow, current.status, /** @type {string} */ (action.to), 'staff')?.options.restock ===
+											'ask'
+												? { restock: /** @type {boolean} */ (action.restock) }
+												: {}),
 										},
 										flow,
 									);
@@ -455,17 +463,10 @@ describe('property: random flows × every way an order moves, retries, two at on
 							// two at once, each with the order as read: what one gives back or takes, the other does not again
 							counts.concurrent += 1;
 							const pair = [choose(), choose()];
-							// not a refund by staff (the refund route) at once with another refund by staff or a move into a
-							// refunded status: the refund route calls Payments before its write, so if it loses, a refund Payments
-							// made stays unrecorded (an open point of the refund route, not of the order engine, whose refunds run
-							// after the transaction); those two run one after the other
-							const refundsMoney = (/** @type {ReturnType<typeof choose>} */ action) =>
-								action.kind === 'refund' ||
-								(action.kind === 'move' && flow.statuses.find((status) => status.key === action.to)?.role === 'refunded');
-							if (pair.some((action) => action.kind === 'refund') && pair.every(refundsMoney)) {
-								counts.serialized += 1;
-								for (const action of pair) await run(action, await recordOf(id));
-							} else await Promise.all(pair.map((action) => run(action)));
+							// refunds by staff go through the order's refund lock, so two at once (or one with a move into a refunded
+							// status) leave every refund Payments made recorded, never more than paid
+							if (pair.some((action) => action.kind === 'refund')) counts.refundPairs += 1;
+							await Promise.all(pair.map((action) => run(action)));
 						} else if (random() < 0.012) {
 							// a delete gives back what the order holds, once
 							const answer = await shop.api('DELETE', `/v1/orders/${id}`);
@@ -588,7 +589,16 @@ describe('property: random flows × every way an order moves, retries, two at on
 		expect(counts.made, said).toBeGreaterThan(400);
 		expect(counts.concurrent, said).toBeGreaterThan(300);
 		expect(counts.retries, said).toBeGreaterThan(80);
-		for (const key of /** @type {const} */ (['shopper', 'paid', 'refunds', 'recorded', 'deleted', 'expired', 'failing']))
+		for (const key of /** @type {const} */ ([
+			'shopper',
+			'paid',
+			'refunds',
+			'recorded',
+			'deleted',
+			'expired',
+			'failing',
+			'refundPairs',
+		]))
 			expect(counts[key], `${key}: ${said}`).toBeGreaterThan(0);
 	}, 300_000);
 });

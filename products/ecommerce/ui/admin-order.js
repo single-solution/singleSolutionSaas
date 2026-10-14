@@ -158,7 +158,7 @@ const renderOrder = (kit, order, detail, message) => {
 	const money = (minor) => kit.money(minor, currency);
 
 	// ---------------------------------------------------------------------------------------------- actions
-	/** @type {Array<{ key: string, label: string, role: string }>} */
+	/** @type {NextStatus[]} */
 	const next = order.nextStatuses ?? [];
 	const forward = next.filter((status) => status.role !== 'cancelled');
 	const cancels = next.filter((status) => status.role === 'cancelled');
@@ -166,7 +166,7 @@ const renderOrder = (kit, order, detail, message) => {
 	const lines = serialLines(order);
 	// typed serials still missing on lines the answer marks serialized make Type serial numbers a main action
 	const missing = typedSerials(kit) && lines.some((item) => item.serialized === true && item.serials.length !== item.quantity);
-	/** @param {{ key: string, label: string, role: string }} status */
+	/** @param {NextStatus} status */
 	const moveTo = (status) => () => moveDialog(kit, order, status, done);
 	const serials = () => serialsDialog(kit, order, done);
 	const refund = () => refundDialog(kit, order, done);
@@ -195,6 +195,10 @@ const renderOrder = (kit, order, detail, message) => {
 			refundable > 0 && second !== 'refund' ? { label: t('ordersAdmin.refund'), onSelect: refund } : null,
 			order.address && EDITABLE_ROLES.includes(order.role)
 				? { label: t('ordersAdmin.editAddress'), onSelect: () => addressDialog(kit, order, done) }
+				: null,
+			// the dispatch video is replaced once the order is packed
+			VIDEO_ROLES.includes(order.role)
+				? { label: t('ordersAdmin.replaceVideo'), onSelect: () => videoDialog(kit, order, done) }
 				: null,
 			{ label: t('ordersAdmin.editNote'), onSelect: () => noteDialog(kit, order, done) },
 			has('invoices') ? { label: t('ordersAdmin.invoice'), onSelect: document('invoice', t('ordersAdmin.invoice')) } : null,
@@ -382,23 +386,47 @@ const claimsCard = async (kit, order, cards, detail) => {
 };
 
 /**
- * Move the order to a status, with what its role needs; a cancelling status asks for the order number first.
- * @param {Kit} kit @param {any} order @param {{ key: string, label: string, role: string }} status
+ * A status staff may move the order to, with what the move needs and its options (the order's `nextStatuses`).
+ * @typedef {{ key: string, label: string, role: string, needs?: string[],
+ *   options?: { video?: string, restock?: string } }} NextStatus
+ */
+
+/** Roles of an order whose dispatch video staff may replace. */
+const VIDEO_ROLES = Object.freeze(['packed', 'shipped']);
+
+/**
+ * Move the order to a status, with what its role and the move need: the serial numbers and the dispatch video when
+ * packing, the shipment, a staff note and a note for the shopper (required when the move needs them), and whether the
+ * items go back in stock when the move asks; a cancelling status asks for the order number first.
+ * @param {Kit} kit @param {any} order @param {NextStatus} status
  * @param {(order: any, text: string) => void} done
  */
 const moveDialog = (kit, order, status, done) => {
 	const { t, has } = kit;
+	const needs = status.needs ?? [];
+	const options = status.options ?? {};
 	const reason = kit.input('', { maxlength: '1000' });
+	const forShopper = kit.input('', { maxlength: '1000' });
 	const packing = status.role === 'packed' && has('grades_serials') ? serialForm(kit, order, false) : null;
 	const shipping = status.role === 'shipped' ? shipForm(kit) : null;
+	const video =
+		status.role === 'packed' && options.video && options.video !== 'off'
+			? kit.input('', { maxlength: '2000', inputmode: 'url' })
+			: null;
+	const restock = options.restock === 'ask' ? kit.check(t('ordersAdmin.restockAsk')) : null;
 	const cancelling = status.role === 'cancelled';
 	kit.dialog({
 		title: t('ordersAdmin.moveToStatus', { status: status.label }),
 		body: [
 			cancelling ? kit.text('p', {}, t('ordersAdmin.cancelHint', { number: order.number })) : null,
 			packing?.node,
+			video
+				? kit.field(t(options.video === 'required' ? 'ordersAdmin.videoRequired' : 'ordersAdmin.videoOptional'), video)
+				: null,
 			shipping?.node,
-			kit.field(t('ordersAdmin.moveNote'), reason),
+			restock?.node,
+			kit.field(t(needs.includes('note') ? 'ordersAdmin.moveNoteRequired' : 'ordersAdmin.moveNote'), reason),
+			kit.field(t(needs.includes('reason') ? 'ordersAdmin.shopperNoteRequired' : 'ordersAdmin.shopperNoteField'), forShopper),
 		],
 		submitLabel: t('ordersAdmin.move'),
 		danger: cancelling,
@@ -407,9 +435,14 @@ const moveDialog = (kit, order, status, done) => {
 		onSubmit: async () => {
 			const serials = packing ? packing.values() : /** @type {SerialValues} */ ({ ok: true, value: {} });
 			if (!serials.ok) return serials.error;
+			if (needs.includes('note') && !reason.value.trim()) return t('ordersAdmin.needsNote');
+			if (needs.includes('reason') && !forShopper.value.trim()) return t('ordersAdmin.needsShopperNote');
 			const answer = await kit.call('POST', `/v1/admin/orders/${order.id}/move`, {
 				to: status.key,
 				note: reason.value,
+				...(forShopper.value.trim() ? { shopperNote: forShopper.value.trim() } : {}),
+				...(restock ? { restock: restock.box.checked } : {}),
+				...(video && video.value.trim() ? { video: video.value.trim() } : {}),
 				serials: serials.value,
 				shipment: shipping ? shipping.value() : null,
 				updatedAt: order.updatedAt,
@@ -421,6 +454,27 @@ const moveDialog = (kit, order, status, done) => {
 				answer.data,
 				[t('ordersAdmin.moved', { status: answer.data.statusLabel }), ...warningsText(kit, answer.data, money)].join(' '),
 			);
+			return null;
+		},
+	});
+};
+
+/**
+ * Replace the dispatch video once the order is packed (a YouTube or https address).
+ * @param {Kit} kit @param {any} order @param {(order: any, text: string) => void} done
+ */
+const videoDialog = (kit, order, done) => {
+	const { t } = kit;
+	const video = kit.input('', { maxlength: '2000', inputmode: 'url' });
+	kit.dialog({
+		title: t('ordersAdmin.replaceVideo'),
+		body: [kit.field(t('ordersAdmin.videoAddress'), video)],
+		submitLabel: t('admin.save'),
+		onSubmit: async () => {
+			if (!video.value.trim()) return t('ordersAdmin.videoAddress');
+			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { video: video.value.trim() });
+			if (!answer.ok) return kit.reason(answer);
+			done(answer.data, t('ordersAdmin.videoReplaced'));
 			return null;
 		},
 	});

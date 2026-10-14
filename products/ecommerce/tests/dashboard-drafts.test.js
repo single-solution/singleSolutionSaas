@@ -6,12 +6,16 @@ import {
 	cleanGrade,
 	cleanLines,
 	daysOf,
+	flowToSave,
+	removeFlowStatus,
+	renameFlowStatus,
 	gradeProblems,
 	keyOf,
 	loadGrade,
 	splitIds,
 	videoOf,
 } from '../app/dashboard/drafts.js';
+import { DEFAULT_FLOW, canMove, checkOrderFlow } from '../core/flow.js';
 import { MAX_GRADES, checkGrades } from '../core/grades.js';
 
 /** A grade with every field, as the server saves it. @type {import('../app/dashboard/drafts.js').SavedGrade} */
@@ -144,5 +148,54 @@ describe('grade drafts (E10)', () => {
 		expect(GRADE_LIMITS.grades).toBe(MAX_GRADES);
 		expect(GRADE_LIMITS.description).toBe(1200);
 		expect(GRADE_CONDITIONS).toEqual(['', 'new', 'refurbished', 'used']);
+	});
+});
+
+describe('order flow drafts (the flow editor)', () => {
+	it('renames a status in its moves, triggers and starts, and removes one with what names it', () => {
+		const flow = structuredClone(DEFAULT_FLOW);
+		const renamed = renameFlowStatus(flow, 'confirmed', 'accepted');
+		expect(renamed.statuses.map((status) => status.key)).toContain('accepted');
+		expect(renamed.moves.filter((move) => move.from === 'confirmed' || move.to === 'confirmed')).toEqual([]);
+		expect(renamed.triggers.paid).toBe('accepted');
+		expect(checkOrderFlow(renamed).ok).toBe(true);
+		const withRefund = {
+			...flow,
+			triggers: { ...flow.triggers, refundsCover: 'refunded' },
+			starts: { ...flow.starts, cod: 'confirmed' },
+		};
+		const removed = removeFlowStatus(withRefund, 'refunded');
+		expect(removed.moves.some((move) => move.to === 'refunded')).toBe(false);
+		expect(removed.triggers).toEqual({ paid: 'confirmed', windowEnd: 'cancelled', refundsCover: '' });
+		const noCod = removeFlowStatus(withRefund, 'confirmed');
+		expect(noCod.starts).toEqual({ pickup: 'awaiting_confirmation', free: 'awaiting_confirmation' });
+		expect(noCod.triggers).toMatchObject({ paid: '' });
+	});
+
+	it('saves every field: keys from names, options, shopper texts, triggers and starts kept, disallowed moves left out', () => {
+		const flow = structuredClone(DEFAULT_FLOW);
+		flow.statuses.push({
+			key: '',
+			label: ' On hold ',
+			role: 'open',
+			shopperLabel: 'Waiting',
+			shopperText: { cod: '', online: 'We hold it', bank_transfer: '', pickup: '' },
+			notify: false,
+		});
+		flow.moves.push({ from: '', to: 'cancelled' }, { from: 'delivered', to: 'confirmed' });
+		flow.moves[0] = {
+			.../** @type {import('../core/model.js').OrderMove} */ (flow.moves[0]),
+			options: { paidOnConfirm: ['bank_transfer'] },
+		};
+		const saved = flowToSave(flow, (next, move) => canMove(next, move.from, move.to));
+		const hold = saved.statuses.at(-1);
+		expect(hold).toMatchObject({ key: 'on_hold', label: 'On hold', shopperLabel: 'Waiting', notify: false });
+		expect(saved.moves).toContainEqual(expect.objectContaining({ from: 'on_hold', to: 'cancelled' }));
+		expect(saved.moves.some((move) => move.from === 'delivered' && move.to === 'confirmed')).toBe(false);
+		expect(saved.moves[0]).toMatchObject({ options: { paidOnConfirm: ['bank_transfer'] } });
+		expect(saved.triggers).toEqual(DEFAULT_FLOW.triggers);
+		expect(saved.starts).toEqual(DEFAULT_FLOW.starts);
+		const checked = checkOrderFlow(saved);
+		expect(checked.ok && checked.value.statuses.at(-1)?.shopperText?.online).toBe('We hold it');
 	});
 });

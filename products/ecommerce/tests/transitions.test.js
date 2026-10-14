@@ -5,7 +5,6 @@
  * both save routes, restatus, an activity line for every way an order moves, and a delete given back once (the
  * property test is `transitions-property.test.js`).
  */
-import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PLACED_FACTS } from '../core/facts.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
@@ -13,6 +12,7 @@ import { COLLECTIONS } from '../core/model.js';
 import { createMoves } from '../server/orders-moves.js';
 import { createService } from '../server/service.js';
 import { ALL_PERMISSIONS, DOMAIN, ORIGIN, PAYMENTS, readyShop, setup } from './helpers.js';
+import { orderRecords } from './order-records.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -22,12 +22,15 @@ let service;
 let moves;
 /** @type {string} */
 let ticket;
+/** @type {ReturnType<typeof orderRecords>} */
+let records;
 
 beforeAll(async () => {
 	shop = await readyShop();
 	service = createService(shop.product);
 	moves = createMoves(shop.product, service);
 	ticket = await shop.ticket(ALL_PERMISSIONS);
+	records = orderRecords(shop);
 });
 afterAll(async () => shop.product.close());
 
@@ -47,142 +50,19 @@ const codeOf = (response) =>
 		.split('/')
 		.pop();
 
-const orders = async () => (await shop.db()).collection(COLLECTIONS.orders);
-/** @param {string} id @returns {Promise<any>} */
-const recordOf = async (id) => (await orders()).findOne({ websiteId: shop.websiteId, id }, { projection: { _id: 0 } });
+const orders = () => records.orders();
 /** @param {string} id */
-const stockOf = async (id) =>
-	/** @type {any} */ (await (await shop.db()).collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id }))
-		.variants[0].stock;
-
-/**
- * An order record in the shape checkout writes: one physical line of a new product, paid online (with its Payments
- * entry) unless `cod`, written as it was before the engine (no facts) unless `facts` is given.
- * @param {{ status?: string, role?: string, cod?: boolean, quantity?: number, stock?: number, serialized?: boolean,
- *   patch?: Record<string, any> }} [options]
- */
-const seedOrder = async ({
-	status = 'confirmed',
-	role = 'open',
-	cod = false,
-	quantity = 1,
-	stock = 5,
-	serialized = false,
-	patch = {},
-} = {}) => {
-	const product = await shop.seedProduct({ price: 1000, stock, ...(serialized ? { serialized: true } : {}) });
-	const variant = /** @type {any} */ (product.variants[0]);
-	const id = createId('ord');
-	const paymentId = `pay_${id.slice(4, 16)}`;
-	const total = 1000 * quantity;
-	const record = {
-		id,
-		number: `T-${createId('num').slice(4, 14)}`,
-		customer: { userId: 'usr_engine000001', name: 'Eve', email: '', phone: '', customerId: 'cus_engine000001' },
-		address: null,
-		delivery: { method: 'none', zone: '', fee: 0, locationId: null },
-		lines: [
-			{
-				id: createId('oln'),
-				productId: product.id,
-				variantId: variant.id,
-				kind: 'physical',
-				name: 'Phone',
-				variantName: '',
-				sku: '',
-				grade: null,
-				gradeLabel: '',
-				image: null,
-				unitPrice: 1000,
-				quantity,
-				discount: 0,
-				tax: 0,
-				total,
-				cost: null,
-				categoryIds: [],
-				brandId: null,
-				locationId: null,
-				serials: [],
-				booking: null,
-				licences: [],
-				returnedQuantity: 0,
-			},
-		],
-		totals: { subtotal: total, discount: 0, delivery: 0, tax: 0, total, currency: 'USD', taxIncluded: true },
-		promotions: {
-			couponId: null,
-			couponCode: '',
-			dealIds: [],
-			bundleIds: [],
-			pointsRedeemed: 0,
-			pointsValue: 0,
-			pointsEarned: 0,
-			pointsFixed: false,
-			pointsCredited: false,
-			released: false,
-		},
-		payment: cod
-			? { method: 'cod', state: 'unpaid', paymentId: null, advance: 0, paid: 0, refunded: 0, checkedAt: null }
-			: { method: 'online', state: 'paid', paymentId, advance: 0, paid: total, refunded: 0, checkedAt: null },
-		payments: cod
-			? []
-			: [
-					{
-						id: createId('opy'),
-						method: 'online',
-						amount: total,
-						reference: paymentId,
-						proofKey: null,
-						note: '',
-						by: { kind: 'system', id: 'payments', name: 'Payments' },
-						at: new Date(shop.now()),
-					},
-				],
-		refunds: [],
-		status,
-		role,
-		history: [{ at: new Date(shop.now()), from: null, to: status, by: 'shopper', note: '' }],
-		shipment: null,
-		media: [],
-		// the stock it holds was taken from the product
-		stockHeld: true,
-		holdUntil: null,
-		idempotencyKey: createId('key'),
-		note: '',
-		staffNote: '',
-		placedAt: new Date(shop.now()),
-		deliveredAt: null,
-		...patch,
-	};
-	await (
-		await shop.db()
-	)
-		.collection(COLLECTIONS.products)
-		.updateOne(
-			{ websiteId: shop.websiteId, id: product.id, 'variants.id': variant.id },
-			{ $inc: { 'variants.$.stock': -quantity } },
-		);
-	await (await orders()).insertOne({ ...record });
-	return { order: await recordOf(id), product, paymentId };
-};
-
+const recordOf = (id) => records.recordOf(id);
+/** @param {string} id */
+const stockOf = (id) => records.stockOf(id);
+/** @param {Parameters<ReturnType<typeof orderRecords>['seedOrder']>[0]} [options] */
+const seedOrder = (options) => records.seedOrder(options);
 /** @param {string} id @param {string} to @param {Record<string, unknown>} [extra] */
-const moveTo = (id, to, extra = {}) => shop.api('POST', `/v1/orders/${id}/move`, { to, ...extra });
-
-/**
- * Answer Payments' refunds (of one payment, or all) with this until the returned function restores the normal answers.
- * @param {{ status: number, type?: string, body?: unknown }} answer @param {string} [paymentId]
- */
-const refundsAnswer = (answer, paymentId) => {
-	const normal = /** @type {any} */ (shop.responders.get(PAYMENTS));
-	shop.responders.set(PAYMENTS, (call) =>
-		call.path.endsWith('/refunds') && (!paymentId || call.path.includes(`/${paymentId}/`)) ? answer : normal(call),
-	);
-	return () => shop.responders.set(PAYMENTS, normal);
-};
-
-/** Payments' refund calls of a payment. @param {string} paymentId */
-const refundCalls = (paymentId) => shop.callsTo(`${PAYMENTS}/v1/payments/${paymentId}/refunds`);
+const moveTo = (id, to, extra) => records.moveTo(id, to, extra);
+/** @param {{ status: number, type?: string, body?: unknown }} answer @param {string} [paymentId] */
+const refundsAnswer = (answer, paymentId) => records.refundsAnswer(answer, paymentId);
+/** @param {string} paymentId */
+const refundCalls = (paymentId) => records.refundCalls(paymentId);
 
 /** The activity entries of a target, newest first. @param {string} target */
 const activityOf = async (target) => (await shop.api('GET', `/v1/activity?target=${encodeURIComponent(target)}`)).json.items;
@@ -365,8 +245,8 @@ describe('the refund a staff cancel asks of Payments', () => {
 		} finally {
 			shop.responders.set(PAYMENTS, normal);
 		}
-		// Payments answers again: it shows the refund, so the pending one is sent again with its key (Payments' first
-		// answer) and recorded; staff reload and see it refunded
+		// Payments answers again: it shows the refund the order does not record, so the pending one is recorded as done
+		// (not asked again); staff reload and see it refunded
 		shop.responders.set(PAYMENTS, (call) =>
 			call.method === 'GET' && call.path.endsWith(`/${paymentId}`)
 				? { status: 200, body: { ...normal(call).body, refunded: 1000, refunds: [{ id: 'rfd_x_1', amount: 1000 }] } }
@@ -386,10 +266,9 @@ describe('the refund a staff cancel asks of Payments', () => {
 		expect(after.effects[0]).toMatchObject({ state: 'done' });
 		expect(after.payment).toMatchObject({ refunded: 1000, state: 'refunded' });
 		expect(after.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 1000 })]);
-		expect(refundCalls(paymentId).map((call) => call.headers['idempotency-key'])).toEqual([
-			`${order.id}:cancel`,
-			`${order.id}:cancel`,
-		]);
+		// recorded from what Payments shows, not asked again
+		expect(after.effects[0].refundId).toBe('rfd_x_1');
+		expect(refundCalls(paymentId).map((call) => call.headers['idempotency-key'])).toEqual([`${order.id}:cancel`]);
 	});
 
 	it('is taken by one try at a time; staff wait while it runs', async () => {

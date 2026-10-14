@@ -623,8 +623,8 @@ describe('claim refunds', () => {
 		expect((await orderOf(placed.id)).promotions.pointsReversed).toBe(30);
 	});
 
-	it('move a fully refunded order to refunded with autoRefundedStatus, its points settled once (OR-3, OR-10, K-23)', async () => {
-		await shop.setting('checkout', 'autoRefundedStatus', true);
+	it('move a fully refunded order to refunded with the refundsCover trigger, its points settled once (OR-3, OR-10, K-23)', async () => {
+		await shop.flow((flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover: 'refunded' } }));
 		const desk = await shop.seedProduct({ name: 'Desk', price: 2000 });
 		const balance = async () => (await loyaltyAccount(data, SARA, { now: shop.now() })).balance;
 		const placed = await order({ lines: [{ product: desk }], pointsEarned: 20 });
@@ -654,7 +654,7 @@ describe('claim refunds', () => {
 				.slice(sent)
 				.map((m) => m.template),
 		).toEqual(expect.arrayContaining(['ecommerce.order_status', 'ecommerce.return_status']));
-		await shop.setting('checkout', 'autoRefundedStatus', false);
+		await shop.flow((flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover: '' } }));
 	});
 });
 

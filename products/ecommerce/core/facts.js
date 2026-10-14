@@ -4,7 +4,7 @@
  * the write that changes them is guarded by them, so nothing is given back or taken twice.
  *
  * - `stock`: `held` (its stock and booked slots are held), `sold` (delivered: its units are sold), `back` (given back),
- *   `none` (a parcel that came back kept out of stock, `returnRestock: no`);
+ *   `none` (a parcel that came back kept out of stock: its move's `restock` no);
  * - `offers`: its offer uses are `counted` or `released`;
  * - `redeemed`: the points it redeemed are `spent` or `given_back`;
  * - `earned`: the points it earns are `none` yet, `credited` or `reversed`;
