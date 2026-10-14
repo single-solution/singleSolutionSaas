@@ -279,6 +279,14 @@ describe('shared settings (several features use one setting)', () => {
 		await expect(setup({ sharedSettings: { other: { name: 'x', features: [], settings } } })).rejects.toThrow(
 			/shared settings/,
 		);
+		// a shape the settings contract refuses (here a text pattern) is refused for shared settings too
+		const patterned = {
+			type: 'object',
+			properties: { code: { type: 'string', title: 'Code', default: '', pattern: '^[0-9]+$' } },
+		};
+		await expect(setup({ sharedSettings: { other: { name: 'x', features: ['inbox'], settings: patterned } } })).rejects.toThrow(
+			/not a valid settings schema/,
+		);
 	});
 });
 

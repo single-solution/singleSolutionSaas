@@ -6,7 +6,14 @@
  * (fetch, clock, randomness, logger, store, outbound calls).
  * @module
  */
-import { PROBLEM_CODES, createProblemFactory, formatDate, formatMoney, validateManifest } from '@ss/contracts';
+import {
+	PROBLEM_CODES,
+	checkSettingsSchema,
+	createProblemFactory,
+	formatDate,
+	formatMoney,
+	validateManifest,
+} from '@ss/contracts';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { ACTIVITY_INDEXES, createActivity } from './activity.js';
@@ -171,7 +178,7 @@ export const createProduct = (options) => {
 	const status = createStatus({ store, client: () => connection.active().client, now, logger });
 	const reports = createReports({ store, manifest, connection, status, recent, now, logger });
 	const shared = options.sharedSettings ?? {};
-	for (const [key, group] of Object.entries(shared))
+	for (const [key, group] of Object.entries(shared)) {
 		if (
 			!/^[a-z][a-z0-9_]{0,40}$/.test(key) ||
 			manifest.features.some((/** @type {{ key: string }} */ f) => f.key === key) ||
@@ -180,6 +187,15 @@ export const createProduct = (options) => {
 			group.settings?.type !== 'object'
 		)
 			throw kitError('invalid_config', `shared settings ${key} must name features of the manifest and have a key of its own`);
+		// the same rules as a feature's own settings (the contract), so a shared setting can never be a shape the
+		// dashboards, the API or the Portal do not handle
+		const problems = checkSettingsSchema(group.settings);
+		if (problems.length > 0)
+			throw kitError(
+				'invalid_config',
+				`shared settings ${key} are not a valid settings schema: ${problems.map((p) => `${p.path || '/'} ${p.message}`).join('; ')}`,
+			);
+	}
 	const settings = createSettings({ store, manifest, strings, recent, now, shared });
 	/** @type {ReturnType<typeof createData> | null} */
 	let data = null;
