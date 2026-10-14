@@ -242,6 +242,7 @@ export const settingsPlan = (values) => {
 				'catalog.variantQuery': '{attributes}',
 				'catalog.retiredUrl': 'none',
 				...(media ? { 'catalog.mediaBaseUrl': media } : {}),
+				'catalog.mediaPath': '/media',
 				'catalog.pageSize': 24, // `apps/web/src/lib/core/queries.ts`:153
 				'catalog.lowStock': store.lowStockThreshold,
 				'catalog.imageMaxBytes': 12_582_912, // `apps/admin/src/lib/uploads/limits.ts`:9-10
