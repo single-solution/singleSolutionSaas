@@ -1915,6 +1915,18 @@ the owner presses Re-seal in the Portal and each product and the answers show no
 legacy and leftovers** ("I can't bear a single mistake, this is a professional platform"): the list is
 `audit/global-audit-2026-10-14.md`.
 
+**Owner direction, 2026-10-14 13:25 (binding, overrides any older wording).** "The saas is not related to current
+stores, and saas is universal and global; it should never use any store specific items, name, references, example;
+use US international English, global formats … but saas should have everything so that current stores that are already
+my merchants I can onboard them to my saas without having their user experience corrupted. That is the main thing."
+So: (1) no store, shop-type or country specifics anywhere in the repository — code, texts, docs, examples, defaults,
+tests, comments; store values live only in the importer's store mappings; (2) **US English** everywhere, user-visible
+and in identifiers (one coordinated rename across products for British-spelled API/data names), and **global
+formats** (en-US style by default, ISO in APIs, the website's own Format setting for its shoppers); (3) **parity**:
+every feature and behavior the existing stores' shoppers and staff rely on exists as a general feature or setting, so
+each store onboards as a normal merchant with no visible change; parity is checked per store
+(`audit/parity-<store>.md`) and gaps are closed with global features before its switch-over.
+
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
 physical / digital / service, plus the parts it uses: variants, grades, unit numbers, measurement table, measured
