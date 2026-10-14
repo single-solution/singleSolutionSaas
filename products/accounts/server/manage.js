@@ -3,7 +3,7 @@
  * requests) and roles with their permissions, through the merchant's server (server token) and the Users and Roles
  * admin widgets (tickets); the activity-log copies other products send (with their filters and counts); and the custom
  * fields set in the dashboard. Every change made through the server token or a ticket is written to the activity log
- * with the acting user (the ticket's member of staff, else the `SS-Actor-*` user of a server-token call, else the
+ * with the acting user (the ticket's staff member, else the `SS-Actor-*` user of a server-token call, else the
  * server; PLAN 0.8.10 K2), the target's label and a short detail (K9).
  * @module
  */
@@ -192,7 +192,7 @@ export const createManage = (product, service, flows) => {
 	});
 
 	/**
-	 * Accounts' self-protection (A4, always), for a change made by a member of staff: a ticket's user, or the acting user
+	 * Accounts' self-protection (A4, always), for a change made by a staff member: a ticket's user, or the acting user
 	 * of a server-token call (K2). Nobody changes their own role, blocks or deletes themselves; nobody edits, blocks or
 	 * deletes a user whose role ranks above theirs, or gives a role ranking above theirs; the last unblocked Owner is
 	 * never demoted, blocked or deleted. Without a ticket or acting user the server token stays all-powerful; an acting
@@ -218,7 +218,7 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * E-mail and phone of a user as staff enter them (A4): normalised, unique (checked when saved), marked verified.
+	 * Email and phone of a user as staff enter them (A4): normalized, unique (checked when saved), marked verified.
 	 * @param {import('./service.js').Site} s @param {Record<string, any>} body
 	 * @returns {Promise<Record<string, unknown>>}
 	 */
@@ -227,7 +227,7 @@ export const createManage = (product, service, flows) => {
 		const set = {};
 		if (body.email !== undefined) {
 			const email = body.email === null || body.email === '' ? null : normaliseEmail(body.email);
-			if (email === null && body.email !== null && body.email !== '') throw invalid('email', 'Enter a valid e-mail address.');
+			if (email === null && body.email !== null && body.email !== '') throw invalid('email', 'Enter a valid email address.');
 			Object.assign(set, { email, emailVerified: email !== null });
 		}
 		if (body.phone !== undefined) {
@@ -241,7 +241,7 @@ export const createManage = (product, service, flows) => {
 
 	/**
 	 * Create an active user (A4): `{ name, email?, phone?, role?, password?, addresses?, notes?, custom? }`; nothing is
-	 * sent. A user needs a name and an e-mail address or a phone number.
+	 * sent. A user needs a name and an email address or a phone number.
 	 * @param {any} ctx
 	 */
 	const createUser = async (ctx) => {
@@ -250,7 +250,7 @@ export const createManage = (product, service, flows) => {
 		const name = checkName(body.name);
 		if (!name) throw invalid('name', 'Write the name (at most 120 characters).');
 		const contacts = await contactsOf(s, body);
-		if (!contacts.email && !contacts.phone) throw invalid('email', 'Enter an e-mail address or a phone number.');
+		if (!contacts.email && !contacts.phone) throw invalid('email', 'Enter an email address or a phone number.');
 		const role = body.role === undefined ? DEFAULT_ROLE : body.role;
 		if (typeof role !== 'string' || !(await s.store.roles.get(role))) throw invalid('role', 'There is no such role.');
 		await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role });
@@ -280,7 +280,7 @@ export const createManage = (product, service, flows) => {
 			custom: custom.value,
 			addresses: body.addresses === undefined ? [] : await service.addressesOf(s, body.addresses, null),
 		});
-		if (!user) throw problem('already_exists', 'Someone with this e-mail address or phone number has an account.');
+		if (!user) throw problem('already_exists', 'Someone with this email address or phone number has an account.');
 		await log(ctx, 'user.created', user.id, {
 			label: labelOf(name),
 			detail: detailOf([`Role: ${role}`, passwordHash && 'with a password']),
@@ -290,7 +290,7 @@ export const createManage = (product, service, flows) => {
 
 	/**
 	 * Delete a user (A4): `{ reason }`. `?scope=all` (default) erases them at once, as an approved deletion request does
-	 * (every connected product deletes or anonymises their data); `?scope=accounts` removes them from Accounts only
+	 * (every connected product deletes or anonymizes their data); `?scope=accounts` removes them from Accounts only
 	 * (the user, their sessions and codes) and every other product keeps its data, so removing someone from the team
 	 * never erases their orders or conversations (ST-2).
 	 * @param {any} ctx
@@ -318,7 +318,7 @@ export const createManage = (product, service, flows) => {
 
 	/**
 	 * A one-time sign-in code for a user (A3): 6 digits, shown to staff only, never sent; typed into the phone-code,
-	 * e-mail-code or phone + password screen. A new one cancels the old.
+	 * email-code or phone + password screen. A new one cancels the old.
 	 * @param {any} ctx
 	 */
 	const signInCode = async (ctx) => {
@@ -347,7 +347,7 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * A setup link for a user (A3, also A5's invites): it sets a password, also for users with no e-mail address. A new
+	 * A setup link for a user (A3, also A5's invites): it sets a password, also for users with no email address. A new
 	 * one cancels the old. The setup page takes `{code}`; without one the link goes to the website with `?ss_setup=`.
 	 * @param {import('./service.js').Site} s @param {import('../core/profile.js').UserRecord} user
 	 */
@@ -389,7 +389,7 @@ export const createManage = (product, service, flows) => {
 	const getUser = async (ctx) => staffView(await userOr404(await service.site(ctx), ctx.params.id));
 
 	/**
-	 * Role, notes, blocked (with a reason), name, custom fields and (A4) e-mail, phone, password and addresses; behind
+	 * Role, notes, blocked (with a reason), name, custom fields and (A4) email, phone, password and addresses; behind
 	 * the guards.
 	 * @param {any} ctx
 	 */
@@ -439,7 +439,7 @@ export const createManage = (product, service, flows) => {
 		}
 		const contacts = await contactsOf(s, body);
 		if ('email' in contacts)
-			changes.push({ action: 'user.email_changed', detail: contacts.email ? 'New e-mail address' : 'E-mail address removed' });
+			changes.push({ action: 'user.email_changed', detail: contacts.email ? 'New email address' : 'Email address removed' });
 		if ('phone' in contacts)
 			changes.push({ action: 'user.phone_changed', detail: contacts.phone ? 'New phone number' : 'Phone number removed' });
 		Object.assign(set, contacts);
@@ -471,7 +471,7 @@ export const createManage = (product, service, flows) => {
 			changes.push({ action: 'user.password_changed' });
 		}
 		const updated = await s.store.users.update(user.id, set);
-		if (!updated) throw problem('already_exists', 'Someone else has this e-mail address or phone number.');
+		if (!updated) throw problem('already_exists', 'Someone else has this email address or phone number.');
 		// a blocked user, and a user whose password staff changed, is signed out everywhere at once (sign-ins already
 		// issued end within 15 minutes)
 		const signedOut = body.blocked === true || body.password !== undefined ? await s.store.sessions.revokeAll(user.id) : 0;
@@ -503,7 +503,7 @@ export const createManage = (product, service, flows) => {
 		return undefined;
 	};
 
-	/** Invite someone by e-mail or phone with a role (Approval / invite sign-up). @param {any} ctx */
+	/** Invite someone by email or phone with a role (Approval / invite sign-up). @param {any} ctx */
 	const invite = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
@@ -514,13 +514,13 @@ export const createManage = (product, service, flows) => {
 		const phone = body.phone === undefined ? null : await service.phoneOf(s, body.phone);
 		const deliver = body.deliver ?? 'send';
 		if (deliver !== 'send' && deliver !== 'return') throw invalid('deliver', 'deliver is send or return.');
-		if (!email && !phone) throw invalid('email', 'Enter an e-mail address or a phone number.');
+		if (!email && !phone) throw invalid('email', 'Enter an email address or a phone number.');
 		const name = checkName(body.name);
 		if (name === null) throw invalid('name', 'The name is too long.');
 		const role = typeof body.role === 'string' ? body.role : DEFAULT_ROLE;
 		if (!(await s.store.roles.get(role))) throw invalid('role', 'There is no such role.');
 		await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role });
-		// the invite goes to the e-mail address when there is one
+		// the invite goes to the email address when there is one
 		const user = await s.store.users.create({
 			...flows.blankUser(),
 			email,
@@ -530,7 +530,7 @@ export const createManage = (product, service, flows) => {
 			status: 'invited',
 			identity: email ? 'email' : 'phone',
 		});
-		if (!user) throw problem('already_exists', 'Someone with this e-mail address or phone number has an account.');
+		if (!user) throw problem('already_exists', 'Someone with this email address or phone number has an account.');
 		const secret = randomSecret(32);
 		const id = await s.store.codes.add({
 			kind: 'invite',
@@ -573,7 +573,7 @@ export const createManage = (product, service, flows) => {
 		}
 		await log(ctx, 'user.invited', user.id, {
 			label: labelOf(name),
-			detail: `Role: ${role}; sent by ${sentBy === 'email' ? 'e-mail' : sentBy === 'sms' ? 'SMS' : 'WhatsApp'}; valid for ${plural(inviteDays, 'day', 'days')}`,
+			detail: `Role: ${role}; sent by ${sentBy === 'email' ? 'email' : sentBy === 'sms' ? 'SMS' : 'WhatsApp'}; valid for ${plural(inviteDays, 'day', 'days')}`,
 		});
 		return new Response(JSON.stringify(staffView(user)), { status: 201, headers: { 'content-type': 'application/json' } });
 	};
@@ -652,9 +652,8 @@ export const createManage = (product, service, flows) => {
 		if (phone === null && body.phone !== undefined && body.phone !== '')
 			throw invalid('phone', 'Enter the phone number with its country code.');
 		const email = body.email === undefined || body.email === '' ? null : normaliseEmail(body.email);
-		if (email === null && body.email !== undefined && body.email !== '')
-			throw invalid('email', 'Enter a valid e-mail address.');
-		if (!phone && !email) throw invalid('phone', 'Enter a phone number or an e-mail address.');
+		if (email === null && body.email !== undefined && body.email !== '') throw invalid('email', 'Enter a valid email address.');
+		if (!phone && !email) throw invalid('phone', 'Enter a phone number or an email address.');
 		const note = typeof body.note === 'string' ? body.note.trim() : '';
 		if (note.length > 1000) throw invalid('note', 'The note is at most 1000 characters.');
 		if (requireNote && !note) throw invalid('note', 'Write a note.');
@@ -719,9 +718,9 @@ export const createManage = (product, service, flows) => {
 	const untouched = (user) => !user.passwordHash && !user.lastSignInAt && Object.keys(user.providers).length === 0;
 
 	/**
-	 * Invite the person of a pending request (A5): their user is created, or the user with that phone or e-mail gets
+	 * Invite the person of a pending request (A5): their user is created, or the user with that phone or email gets
 	 * the role; the answer holds a setup link (A3) unless the user already has a password (then the request is
-	 * completed at once). A user who never proved the request's phone or e-mail gets nothing (409
+	 * completed at once). A user who never proved the request's phone or email gets nothing (409
 	 * `contact_unverified`): someone may have signed up first with another person's number (SA-2); only an untouched
 	 * user is invited again.
 	 * @param {any} ctx
@@ -736,7 +735,7 @@ export const createManage = (product, service, flows) => {
 		if (existing && !(byPhone ? existing.phoneVerified : existing.emailVerified) && !untouched(existing))
 			throw problem(
 				'contact_unverified',
-				'Someone signed up with this phone number or e-mail address without proving it. Check with the person: ' +
+				'Someone signed up with this phone number or email address without proving it. Check with the person: ' +
 					'confirm it on their user if the account is theirs, or remove that account; then invite again.',
 			);
 		/** @type {import('../core/profile.js').UserRecord} */
@@ -755,7 +754,7 @@ export const createManage = (product, service, flows) => {
 				role: request.role,
 				identity: request.phone ? 'phone' : 'email',
 			});
-			if (!created) throw problem('conflict', 'Someone else has this phone number or e-mail address.');
+			if (!created) throw problem('conflict', 'Someone else has this phone number or email address.');
 			user = created;
 		}
 		const link = user.passwordHash ? null : await setupLinkFor(s, user);

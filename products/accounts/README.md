@@ -1,7 +1,7 @@
 # Accounts
 
-Sign-up and sign-in for a merchant's users on their own website and admin (PLAN.md 0.8.6): phone and e-mail codes,
-e-mail and password, Google, Apple and Facebook, roles and permissions, custom profile fields, two-step sign-in,
+Sign-up and sign-in for a merchant's users on their own website and admin (PLAN.md 0.8.6): phone and email codes,
+email and password, Google, Apple and Facebook, roles and permissions, custom profile fields, two-step sign-in,
 sessions, data rights and copies of every product's activity log. Messages go through Notifications (pasted token).
 Feature keys are in `manifest.json`, the public docs at `/docs`.
 
@@ -39,11 +39,11 @@ refused by name; text over a limit is refused, never cut); times are ISO-8601 wi
 
 - Roles first: a user's or request's role must exist (ready-made, or imported before), so a dry run of users needs the
   roles imported. A ready-made role key may be imported with the merchant's changes; it keeps its rank.
-- Users: `email` and `phone` are normalised (national numbers with the website's phone format), `phoneDigits` and
+- Users: `email` and `phone` are normalized (national numbers with the website's phone format), `phoneDigits` and
   `identity` are derived; `passwordHash` is kept as given in a format sign-in checks (bcrypt, `pbkdf2$…` with the
   `imported_password_pepper` connection, or `scrypt$…`), any other is refused; `twoStep: { secret, recoveryHashes }` (plain base32
-  secret and SHA-256 hex of `recovery:<code>`) is sealed at once. An e-mail address or phone number another user holds
-  is refused (one user per phone number: a member of staff and a shopper cannot share one). `roleSince` defaults to
+  secret and SHA-256 hex of `recovery:<code>`) is sealed at once. An email address or phone number another user holds
+  is refused (one user per phone number: a staff member and a shopper cannot share one). `roleSince` defaults to
   `createdAt`; a user or request without `createdAt` keeps the stored one, else gets the time of the import.
 - Requests keep their status (`expired` is read from `setupExpiresAt`); setup links are not imported (an older link
   cannot open here): staff give a new one from the user (`staff_links`).

@@ -1,9 +1,9 @@
 /**
- * E-mail addresses and phone numbers (pure):
+ * Email addresses and phone numbers (pure):
  *
- * - an e-mail address has one canonical form per mailbox: trimmed and lower-cased; provider tricks (dots, `+tags`) are
+ * - an email address has one canonical form per mailbox: trimmed and lower-cased; provider tricks (dots, `+tags`) are
  *   not rewritten, because they are not universal;
- * - a phone number is stored as E.164, normalised by the one normaliser every product shares (`normalisePhone` of
+ * - a phone number is stored as E.164, normalized by the one normalizer every product shares (`normalisePhone` of
  *   `@ss/contracts/phone`) with the website's default calling code (`phone.defaultCallingCode`, else the business.json
  *   country's) and trunk prefix (`phone.trunkPrefix`, else the country's usual one).
  * @module
@@ -16,7 +16,7 @@ const LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
 const LOCAL = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
 
 /**
- * Canonical e-mail address, or null when it is not a plausible mailbox address.
+ * Canonical email address, or null when it is not a plausible mailbox address.
  * @param {unknown} input
  * @returns {string | null}
  */

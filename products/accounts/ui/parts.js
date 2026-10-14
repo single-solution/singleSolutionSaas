@@ -139,7 +139,7 @@ export const card = (doc, title, rows) => {
 };
 
 /**
- * A status dot with its label (green, amber or red only for status; grey for neither).
+ * A status dot with its label (green, amber or red only for status; gray for neither).
  * @param {Document} doc
  * @param {'good' | 'wait' | 'bad' | 'none'} tone
  * @param {string} label

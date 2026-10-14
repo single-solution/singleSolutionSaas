@@ -223,7 +223,7 @@ export const createProviders = ({ send, now }) => {
 			if (me.status !== 200 || typeof profile.id !== 'string') return null;
 			return {
 				subject: profile.id,
-				// Facebook only returns confirmed e-mail addresses
+				// Facebook only returns confirmed email addresses
 				email: typeof profile.email === 'string' ? profile.email : null,
 				name: typeof profile.name === 'string' ? profile.name.slice(0, 120) : '',
 			};

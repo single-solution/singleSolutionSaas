@@ -211,7 +211,7 @@ describe('import routes', () => {
 		expect(pathsOf(answer, 6)).toEqual(['/email']);
 		expect(pathsOf(answer, 7)).toEqual(['/phone']);
 		// the same address as line 1, which this call took
-		expect(answer.failed[6].errors[0].message).toBe(`This e-mail address is already another user’s (${ids.staff}).`);
+		expect(answer.failed[6].errors[0].message).toBe(`This email address is already another user’s (${ids.staff}).`);
 		expect(pathsOf(answer, 9)).toEqual(['/twoStep/secret']);
 		expect(pathsOf(answer, 11)).toEqual(['/addresses/0/zip']);
 		expect(pathsOf(answer, 12)).toEqual(['/custom/shoe']);
@@ -291,10 +291,10 @@ describe('import routes', () => {
 		expect((await send('users', [member])).json).toMatchObject({ inserted: 0, updated: 1, failed: [] });
 		const stored = await (await env.store()).users.get(ids.member);
 		expect(stored).toMatchObject({ name: 'Mina M.', custom: {}, createdAt: new Date('2023-12-01T00:00:00Z') });
-		// another user's e-mail address or phone number is refused, also when stored
+		// another user's email address or phone number is refused, also when stored
 		const taken = (await send('users', [{ id: usr('0c01'), email: 'omar@example.com', phone: '+447700900567' }])).json;
 		expect(taken.failed[0].errors.map((/** @type {any} */ e) => e.message)).toEqual([
-			`This e-mail address is already another user’s (${ids.owner}).`,
+			`This email address is already another user’s (${ids.owner}).`,
 			`This phone number is already another user’s (${ids.member}).`,
 		]);
 		expect((await send('roles', [{ ...roles[0], name: 'Premium member' }])).json).toMatchObject({ updated: 1 });

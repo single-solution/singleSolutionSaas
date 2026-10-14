@@ -4,12 +4,12 @@
 	"properties": {
 		"blockDisposable": {
 			"type": "boolean",
-			"title": "Refuse disposable e-mail addresses",
+			"title": "Refuse disposable email addresses",
 			"default": true
 		},
 		"blockedDomains": {
 			"type": "array",
-			"title": "More refused e-mail domains",
+			"title": "More refused email domains",
 			"default": [],
 			"items": {
 				"type": "string",

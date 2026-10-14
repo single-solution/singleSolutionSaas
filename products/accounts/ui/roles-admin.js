@@ -1,6 +1,6 @@
 /**
  * The admin widget `roles_admin` (Roles; permission `roles.manage`): the merchant's staff edit the roles (name,
- * description, the permissions ticked per product, two-step, session lengths, and PLAN 0.8.10 A4, A6, A10: rank,
+ * description, the permissions checked per product, two-step, session lengths, and PLAN 0.8.10 A4, A6, A10: rank,
  * remember me, the sign-in methods, paused sign-in and the sign-in log), copy one into a new role, add and delete their
  * own roles, and name their own permissions (the `site` group).
  * @module
@@ -334,7 +334,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				return true;
 			};
 
-			/** The permissions ticked in the form now. */
+			/** The permissions checked in the form now. */
 			const selectedNow = () =>
 				all.input.checked ? [ALL] : [...boxes].filter(([, input]) => input.checked).map(([permission]) => permission);
 

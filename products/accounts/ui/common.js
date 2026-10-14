@@ -1,6 +1,6 @@
 /**
  * Helpers the Accounts widgets share: the widget texts, dates in the website's Format and business time zone, the
- * problem answers of the API turned into widget texts (never the server's English detail), and labelled fields (custom
+ * problem answers of the API turned into widget texts (never the server's English detail), and labeled fields (custom
  * fields and the terms checkbox included). Text is always set as text, never as HTML.
  * @module
  */
@@ -193,7 +193,7 @@ export const setHidden = (node, hidden) => {
 };
 
 /**
- * Builders of labelled fields with ids unique inside one widget.
+ * Builders of labeled fields with ids unique inside one widget.
  * @param {Document} doc
  * @param {string} prefix
  */

@@ -63,7 +63,7 @@ describe('A1: password hashes imported from another system', () => {
 	it('PBKDF2 with the pepper connection; without the pepper the check fails', async () => {
 		const up = await env.visitor('POST', '/v1/sign-up/password', { email: 'pbkdf2@example.com', password: 'first password 1' });
 		const id = up.json.user.id;
-		// no Unicode normalisation on this path: the composed é is not the decomposed one
+		// no Unicode normalization on this path: the composed é is not the decomposed one
 		const password = 'café secret 12';
 		const hash = pbkdf2Hash(password, 'source-pepper');
 		await importHash(id, hash);
@@ -262,13 +262,13 @@ describe('A2: phone + password', () => {
 	});
 });
 
-describe('Forgot password by e-mail: only a proven address or the one the account was made with', () => {
+describe('Forgot password by email: only a proven address or the one the account was made with', () => {
 	/** Messages sent to an address. @param {string} email */
 	const sentTo = (email) => env.messages().filter((m) => m.to.email === email);
 	/** @param {string} email */
 	const forgot = (email) => env.visitor('POST', '/v1/password/forgot', { email, returnTo: 'https://shop.example.com/reset' });
 
-	it('a phone + password member’s unproven e-mail address gets nothing, so its owner cannot take the account', async () => {
+	it('a phone + password member’s unproven email address gets nothing, so its owner cannot take the account', async () => {
 		const member = await env.visitor('POST', '/v1/sign-up/phone-password', {
 			phone: '+447700900233',
 			password: 'member pass 1',
@@ -285,7 +285,7 @@ describe('Forgot password by e-mail: only a proven address or the one the accoun
 		expect(sentTo('someone@example.com')).toHaveLength(1);
 	});
 
-	it('an e-mail + password account gets the link at the address it was made with, proven or not', async () => {
+	it('an email + password account gets the link at the address it was made with, proven or not', async () => {
 		const up = await env.visitor('POST', '/v1/sign-up/password', {
 			email: 'own@example.com',
 			phone: '+447700900244',
@@ -296,7 +296,7 @@ describe('Forgot password by e-mail: only a proven address or the one the accoun
 		expect(sentTo('own@example.com')).toHaveLength(1);
 	});
 
-	it('an account stored without an identity (an import whose source did not say): the e-mail address of one without a phone number', async () => {
+	it('an account stored without an identity (an import whose source did not say): the email address of one without a phone number', async () => {
 		const store = await env.store();
 		const alone = await env.visitor('POST', '/v1/sign-up/password', { email: 'old1@example.com', password: 'old password 1' });
 		const both = await env.visitor('POST', '/v1/sign-up/password', {
@@ -339,7 +339,7 @@ describe('A9: password and lock options', () => {
 		await env.setting('email_password', 'lockMode', 'fixed');
 	});
 
-	it('letter and digit and a maximum length, for e-mail + password and phone + password (ST-26)', async () => {
+	it('letter and digit and a maximum length, for email + password and phone + password (ST-26)', async () => {
 		/** @param {string} email @param {string} password */
 		const tryUp = (email, password) => env.visitor('POST', '/v1/sign-up/password', { email, password });
 		// by default: letters only and up to 256 characters, as before

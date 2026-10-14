@@ -52,8 +52,8 @@ describe('before setup', () => {
 		expect(docs.text).toContain('feature-email_password');
 		// the API reference: what each call takes and answers, from schemas/api.json
 		for (const part of [
-			'<a href="#op-post-v1-sign-up-password"><code>POST /v1/sign-up/password</code></a> Sign up with an e-mail address and a password',
-			'<section class="ss-api-op" id="op-post-v1-sign-up-password"><h3><code>POST /v1/sign-up/password</code> Sign up with an e-mail address and a password</h3>',
+			'<a href="#op-post-v1-sign-up-password"><code>POST /v1/sign-up/password</code></a> Sign up with an email address and a password',
+			'<section class="ss-api-op" id="op-post-v1-sign-up-password"><h3><code>POST /v1/sign-up/password</code> Sign up with an email address and a password</h3>',
 			'<td><code>email</code></td><td>string (email)</td><td>yes</td><td>Kept in lower case.</td>',
 			'<h4>Answer 200 (JSON)</h4><p><a href="#schema-SignInAnswer">SignInAnswer</a></p>',
 			'<a href="#schema-SignedIn">SignedIn</a> or <a href="#schema-TwoStep">TwoStep</a>',
@@ -358,7 +358,7 @@ describe('sessions', () => {
 	});
 });
 
-describe('phone code and e-mail code', () => {
+describe('phone code and email code', () => {
 	it('signs up and in with a code sent by SMS or WhatsApp through Notifications', async () => {
 		await env.switchOn(['email_password', 'phone_code', 'email_code']);
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '07700 900567' }))).toBe('validation_failed');
@@ -428,7 +428,7 @@ describe('phone code and e-mail code', () => {
 		expect((await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+15550002222' })).status).toBe(202);
 	});
 
-	it('signs in with an e-mail code or the magic link', async () => {
+	it('signs in with an email code or the magic link', async () => {
 		expect(code(await env.visitor('POST', '/v1/sign-in/email/code', { email: 'x' }))).toBe('validation_failed');
 		expect(code(await env.visitor('POST', '/v1/sign-in/email/code', { email: 'cy@example.com', returnTo: 'ftp://x' }))).toBe(
 			'validation_failed',
@@ -451,7 +451,7 @@ describe('phone code and e-mail code', () => {
 		expect(code(await env.visitor('POST', '/v1/sign-in/email', { email: 'bad', code: '1' }))).toBe('validation_failed');
 	});
 
-	it('an e-mail address typed but never proven is no way in: the e-mail code and the magic link treat it as unknown', async () => {
+	it('an email address typed but never proven is no way in: the email code and the magic link treat it as unknown', async () => {
 		env.advance(31_000);
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900001' });
 		const pam = await env.visitor('POST', '/v1/sign-in/phone', {
@@ -481,7 +481,7 @@ describe('phone code and e-mail code', () => {
 		expect(code(await env.visitor('POST', '/v1/sign-in/email', { link }))).toBe('already_exists');
 		const me = await env.visitor('GET', '/v1/me', undefined, pam.json.signIn);
 		expect(me.json).toMatchObject({ phone: '+447700900001', email: 'pam@example.com', emailVerified: false });
-		// an e-mail + password sign-up does not prove its address either: its owner signs in with the password
+		// an email + password sign-up does not prove its address either: its owner signs in with the password
 		await signUp('una@example.com');
 		env.advance(31_000);
 		await env.visitor('POST', '/v1/sign-in/email/code', { email: 'una@example.com' });
@@ -641,7 +641,7 @@ describe('Google, Apple and Facebook', () => {
 			code: String(back.headers.get('location')).split('#ss_accounts_code=')[1],
 		});
 		expect(done.json.user).toMatchObject({ name: 'Fay', email: 'fay@example.com', providers: ['facebook'] });
-		// an existing e-mail user gets linked
+		// an existing email user gets linked
 		const { url: u2 } = await start('facebook');
 		env.responders.set('https://graph.facebook.com/v21.0/me', () => ({
 			status: 200,
@@ -837,7 +837,7 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		expect((await env.visitor('POST', '/v1/me/terms', { accept: true }, accepted.json.signIn)).json.terms.version).toBe('3');
 	});
 
-	it('approval: sign-ups wait until a member of staff approves; invite-only refuses them; invites work', async () => {
+	it('approval: sign-ups wait until a staff member approves; invite-only refuses them; invites work', async () => {
 		const pending = await signUp('pen@example.com');
 		expect(pending.json).toEqual({ status: 'pending' });
 		expect(code(await signIn('pen@example.com'))).toBe('pending_approval');

@@ -216,7 +216,7 @@ describe('A10: sign-in events in the activity log', () => {
 		expect((await env.visitor('POST', '/v1/password/reset', { token: link, password: 'brand new password 9' })).status).toBe(
 			204,
 		);
-		expect((await activity('action=user.password_reset'))[0].detail).toBe('IP: 203.0.113.77; With an e-mail link');
+		expect((await activity('action=user.password_reset'))[0].detail).toBe('IP: 203.0.113.77; With an email link');
 		env.setNetwork(null);
 	});
 });

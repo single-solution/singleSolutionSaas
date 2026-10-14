@@ -213,7 +213,7 @@ const textOf = (record, name, max, errors, at = '') => {
 };
 
 /**
- * An e-mail address and a phone number as Accounts keeps them (canonical e-mail, E.164 phone with the website's
+ * An email address and a phone number as Accounts keeps them (canonical email, E.164 phone with the website's
  * phone format); errors name the field.
  * @param {Record<string, unknown>} record
  * @param {{ defaultCallingCode?: string, trunkPrefix?: string }} phoneFormat
@@ -221,12 +221,12 @@ const textOf = (record, name, max, errors, at = '') => {
  */
 const contactsOf = (record, phoneFormat, errors) => {
 	const email = absent(record.email) ? null : normaliseEmail(record.email);
-	if (email === null && !absent(record.email)) errors.push({ path: '/email', message: 'Not a valid e-mail address.' });
+	if (email === null && !absent(record.email)) errors.push({ path: '/email', message: 'Not a valid email address.' });
 	const phone = absent(record.phone) ? null : normalisePhone(record.phone, phoneFormat);
 	if (phone === null && !absent(record.phone))
 		errors.push({ path: '/phone', message: 'Not a phone number: give it with its country code.' });
 	if (absent(record.email) && absent(record.phone))
-		errors.push({ path: '/email', message: 'Give an e-mail address or a phone number.' });
+		errors.push({ path: '/email', message: 'Give an email address or a phone number.' });
 	return { email, phone };
 };
 
@@ -417,7 +417,7 @@ const identityOf = (input, { email, phone, providers }, errors) => {
 };
 
 /**
- * A user (`users`, id `usr_…`): a shopper or a member of staff with their history. The password hash is kept as
+ * A user (`users`, id `usr_…`): a shopper or a staff member with their history. The password hash is kept as
  * given in a format Accounts checks (A1); unknown hash formats are refused. Verified flags need the address.
  * @param {Record<string, unknown>} record
  * @param {UserRules} rules
@@ -432,7 +432,7 @@ export const checkImportedUser = (record, rules) => {
 	const { email, phone } = contactsOf(record, rules.phoneFormat, errors);
 	const emailVerified = flagOf(record, 'emailVerified', errors);
 	const phoneVerified = flagOf(record, 'phoneVerified', errors);
-	if (emailVerified && !email) errors.push({ path: '/emailVerified', message: 'Only an e-mail address can be verified.' });
+	if (emailVerified && !email) errors.push({ path: '/emailVerified', message: 'Only an email address can be verified.' });
 	if (phoneVerified && !phone) errors.push({ path: '/phoneVerified', message: 'Only a phone number can be verified.' });
 	const role = roleOf(record, rules.roles, errors, DEFAULT_ROLE);
 	const status = record.status ?? 'active';

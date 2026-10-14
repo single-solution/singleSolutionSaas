@@ -1,6 +1,6 @@
 /**
- * The visitor widget `sign_in` (PLAN 0.8.6): the switched-on sign-in methods (e-mail + password with sign-up and
- * Forgot password, phone code, phone + password with sign-up and Forgot password by code or the merchant's page, e-mail
+ * The visitor widget `sign_in` (PLAN 0.8.6): the switched-on sign-in methods (email + password with sign-up and
+ * Forgot password, phone code, phone + password with sign-up and Forgot password by code or the merchant's page, email
  * code, Google, Apple, Facebook), the two-step step (code, recovery code or the first setup), the pages Accounts links
  * to (password reset, invite, setup link, magic link, a social sign-in's hand-over) and, once signed in, "Signed in as
  * …" with Sign out. "Remember me" follows the role sign-ups get, and a paused sign-in shows its text instead of the
@@ -66,7 +66,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			const make = fieldMaker(doc, 'ss-sign-in');
 			const box = element(doc, 'section', { class: 'box' });
 			root.append(box);
-			/** One "Remember me" box: it keeps its choice from view to view; the role sign-ups get may tick or hide it (A6). */
+			/** One "Remember me" box: it keeps its choice from view to view; the role sign-ups get may check or hide it (A6). */
 			const remember = make.check(t('signIn.remember'));
 			remember.input.checked = settings.remember === 'ask_ticked' || settings.remember === 'always';
 			setHidden(remember.wrap, settings.remember === 'always');
@@ -458,7 +458,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			};
 
 			/**
-			 * Ask for a code by SMS/WhatsApp or e-mail.
+			 * Ask for a code by SMS/WhatsApp or email.
 			 * @param {'phone' | 'email'} kind @param {string} value
 			 */
 			const requestCode = (kind, value) =>

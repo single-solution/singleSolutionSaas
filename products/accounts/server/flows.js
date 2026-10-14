@@ -42,7 +42,7 @@ import { parseSecret } from './service.js';
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
 /** @typedef {import('../adapters/store.js').SessionRecord} SessionRecord */
 
-/** Fixed windows of the network limit (A9), of the reset e-mails per address (ST-12) and of the hourly code caps (A7). */
+/** Fixed windows of the network limit (A9), of the reset emails per address (ST-12) and of the hourly code caps (A7). */
 const NETWORK_WINDOW_MS = 15 * 60_000;
 const RESET_WINDOW_MS = 15 * 60_000;
 const HOUR_MS = 3_600_000;
@@ -125,8 +125,7 @@ export const createFlows = (product, service) => {
 		const name = checkName(body.name);
 		if (name === null) throw invalid('name', 'The name is too long.');
 		const email = known.email ?? (body.email === undefined || body.email === '' ? null : normaliseEmail(body.email));
-		if (email === null && body.email !== undefined && body.email !== '')
-			throw invalid('email', 'Enter a valid e-mail address.');
+		if (email === null && body.email !== undefined && body.email !== '') throw invalid('email', 'Enter a valid email address.');
 		const phone = known.phone ?? (body.phone === undefined || body.phone === '' ? null : await service.phoneOf(s, body.phone));
 		if (phone === null && body.phone !== undefined && body.phone !== '')
 			throw invalid('phone', 'Enter the phone number with its country code.');
@@ -135,7 +134,7 @@ export const createFlows = (product, service) => {
 				if ((field === 'name' && !name) || (field === 'email' && !email) || (field === 'phone' && !phone))
 					throw invalid(
 						field,
-						`The ${field === 'name' ? 'name' : field === 'email' ? 'e-mail address' : 'phone number'} is required.`,
+						`The ${field === 'name' ? 'name' : field === 'email' ? 'email address' : 'phone number'} is required.`,
 					);
 		/** @type {Record<string, string | number>} */
 		let custom = {};
@@ -156,7 +155,7 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * Risk checks of a sign-up (disposable e-mails, accounts per device and per network).
+	 * Risk checks of a sign-up (disposable emails, accounts per device and per network).
 	 * @param {Site} s @param {string | null} email @param {ReturnType<Service['howOf']>} how
 	 */
 	const riskCheck = async (s, email, how) => {
@@ -165,7 +164,7 @@ export const createFlows = (product, service) => {
 		if (s.on.includes('risk_checks')) {
 			const rules = await service.settings(s, 'risk_checks');
 			if (email && emailRefused(email, { blockDisposable: rules.blockDisposable, blockedDomains: rules.blockedDomains }))
-				throw problem('risk_refused', 'This e-mail address cannot be used here.');
+				throw problem('risk_refused', 'This email address cannot be used here.');
 			if (deviceHash && (await s.store.signups.byDevice(deviceHash)) >= rules.maxAccountsPerDevice)
 				throw problem('risk_refused', 'Too many accounts were made on this device.');
 			if ((await s.store.signups.byNetwork(networkHash, new Date(now() - 86_400_000))) >= rules.maxSignUpsPerNetworkPerDay)
@@ -177,7 +176,7 @@ export const createFlows = (product, service) => {
 	/**
 	 * Create a user from a sign-up; `pending` when approval is required. Refused while the default role's sign-in is
 	 * paused or does not allow the method (A6). The account keeps the address it was made with (its identity), which
-	 * Forgot password by e-mail goes by.
+	 * Forgot password by email goes by.
 	 * @param {Site} s @param {Awaited<ReturnType<typeof signUpProfile>>} profile @param {Partial<UserRecord>} extra
 	 * @param {ReturnType<Service['howOf']>} how @param {string} method
 	 */
@@ -196,7 +195,7 @@ export const createFlows = (product, service) => {
 			identity: identityOfMethod(method),
 			...extra,
 		});
-		if (!user) throw problem('already_exists', 'An account with this e-mail address or phone number exists. Sign in instead.');
+		if (!user) throw problem('already_exists', 'An account with this email address or phone number exists. Sign in instead.');
 		await s.store.signups.add(risk);
 		return user;
 	};
@@ -258,14 +257,14 @@ export const createFlows = (product, service) => {
 		if (rule === 'too_short') throw weak(`Use at least ${rules.minLength} characters.`, { rule, minLength: rules.minLength });
 		if (rule === 'too_long') throw weak(`Use at most ${rules.maxLength} characters.`, { rule, maxLength: rules.maxLength });
 		if (rule === 'letter_and_digit') throw weak('Use at least one letter and one digit.', { rule });
-		if (rule === 'personal') throw weak('Do not use your name, your e-mail address or runs like 1234 or qwer.', { rule });
+		if (rule === 'personal') throw weak('Do not use your name, your email address or runs like 1234 or qwer.', { rule });
 		if (rules.breachedCheck && (await providers.breached(/** @type {string} */ (password))))
 			throw weak('This password appeared in a data breach. Choose another one.', { rule: 'breached' });
 		return hashPassword(/** @type {string} */ (password));
 	};
 
 	/**
-	 * A password sign-in (e-mail or phone, A2, A9): the network limit, the lock, the password (or, with Phone +
+	 * A password sign-in (email or phone, A2, A9): the network limit, the lock, the password (or, with Phone +
 	 * password, a sign-in code from staff, A3), the lock after a failure and the sign-in log (A10). The right password
 	 * clears the network's tries for the address: the limit holds back guessing, not a person who signs in.
 	 * @param {Site} s @param {any} ctx
@@ -277,7 +276,7 @@ export const createFlows = (product, service) => {
 		const failed = () =>
 			problem(
 				'sign_in_failed',
-				method === 'phone_password' ? 'The phone number or password is wrong.' : 'The e-mail address or password is wrong.',
+				method === 'phone_password' ? 'The phone number or password is wrong.' : 'The email address or password is wrong.',
 			);
 		const tries = identifier && rules.networkLimit > 0 ? `tries|${sha256(`${s.ip}|${identifier}`)}` : null;
 		if (tries && !(await s.store.counters.take(tries, NETWORK_WINDOW_MS, rules.networkLimit)))
@@ -389,8 +388,8 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * The account an e-mail code, a magic link or a social sign-in (which prove the address) may open: only one whose
-	 * address was proven before. An address typed but never proven (at a phone sign-up, a role request, an e-mail +
+	 * The account an email code, a magic link or a social sign-in (which prove the address) may open: only one whose
+	 * address was proven before. An address typed but never proven (at a phone sign-up, a role request, an email +
 	 * password sign-up) is no way in: it counts as unknown, so the sign-up that follows finds it taken.
 	 * @param {Site} s @param {string} email
 	 */
@@ -401,7 +400,7 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * Sign in (or up) the owner of a proven address, then use up the code or link. A sign-in code staff made (A3) opens
-	 * the account it was made for, but proves no e-mail address.
+	 * the account it was made for, but proves no email address.
 	 * @param {Site} s @param {any} ctx @param {'phone' | 'email'} kind @param {string} target
 	 * @param {{ id: string, staff: boolean }} record the code or link used
 	 */
@@ -448,7 +447,7 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
 		const email = normaliseEmail(body.email);
-		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
+		if (!email) throw invalid('email', 'Enter a valid email address.');
 		const profile = await signUpProfile(s, body, { email });
 		const passwordHash = await newPassword(s, body.password, { who: { name: profile.name, email } });
 		const how = service.howOf(ctx);
@@ -544,7 +543,7 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * Forgot password (e-mail): the same answer, at once, whether or not the address has an account and whatever the
+	 * Forgot password (email): the same answer, at once, whether or not the address has an account and whatever the
 	 * send gives (ST-3). The reset link is made and sent right after the answer; a link Notifications cannot send now
 	 * is sent again on later requests while it is valid. It goes only to a proven address or to the address the account
 	 * was made with: an address typed but never proven on an account that signs in another way (a phone + password
@@ -557,7 +556,7 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
 		const email = normaliseEmail(body.email);
-		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
+		if (!email) throw invalid('email', 'Enter a valid email address.');
 		const { resetMinutes, resetLimit, resetHosts } = await service.settings(s, 'email_password');
 		// a page of the website, or of a host of the merchant's listed for reset links (an admin on its own host, K-27)
 		const returnTo = returnAddress(body.returnTo, s.domain, /** @type {unknown[]} */ (resetHosts));
@@ -605,7 +604,7 @@ export const createFlows = (product, service) => {
 			emailVerified: true,
 		});
 		await s.store.sessions.revokeAll(user.id);
-		await service.logSignIn(s, user, 'user.password_reset', 'With an e-mail link');
+		await service.logSignIn(s, user, 'user.password_reset', 'With an email link');
 		return undefined;
 	};
 
@@ -635,14 +634,14 @@ export const createFlows = (product, service) => {
 		return codeSignIn(s, ctx, 'phone', phone, await checkCode(s, 'phone', phone, body.code));
 	};
 
-	// --------------------------------------------------------------------------------- e-mail code and magic link
+	// --------------------------------------------------------------------------------- email code and magic link
 
 	/** @param {any} ctx */
 	const emailCodeRequest = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
 		const email = normaliseEmail(body.email);
-		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
+		if (!email) throw invalid('email', 'Enter a valid email address.');
 		const returnTo = body.returnTo === undefined ? null : returnAddress(body.returnTo, s.domain);
 		if (body.returnTo !== undefined && !returnTo)
 			throw invalid('returnTo', 'returnTo must be a page of your website (or a local page while testing).');
@@ -670,7 +669,7 @@ export const createFlows = (product, service) => {
 			return codeSignIn(s, ctx, 'email', record.target, { id: record.id, staff: false });
 		}
 		const email = normaliseEmail(body.email);
-		if (!email) throw invalid('email', 'Enter a valid e-mail address.');
+		if (!email) throw invalid('email', 'Enter a valid email address.');
 		return codeSignIn(s, ctx, 'email', email, await checkCode(s, 'email', email, body.code));
 	};
 

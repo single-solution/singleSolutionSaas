@@ -1546,7 +1546,7 @@
 		"/v1/admin/role-requests/{id}/invite": {
 			"post": {
 				"summary": "Invite the person of a pending request (Users admin widget)",
-				"description": "Creates their user, or gives the role to the user with that phone number (else e-mail address); answers a setup link for your staff to send, unless the user already has a password (the request is then completed). 409 contact_unverified when that user never proved the phone or e-mail and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "Creates their user, or gives the role to the user with that phone number (else email address); answers a setup link for your staff to send, unless the user already has a password (the request is then completed). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "role_requests",
 				"x-ss-permission": "users.manage",
@@ -1968,10 +1968,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Text in the name, e-mail address or phone number (any case).",
+						"description": "Text in the name, email address or phone number (any case).",
 						"schema": {
 							"type": "string",
-							"description": "Text in the name, e-mail address or phone number (any case)."
+							"description": "Text in the name, email address or phone number (any case)."
 						}
 					},
 					{
@@ -2102,7 +2102,7 @@
 			},
 			"post": {
 				"summary": "Add a user (Users admin widget)",
-				"description": "An active user with a name and an e-mail address or a phone number (both marked verified); nothing is sent. 422 validation_failed for the field, weak_password; 409 already_exists when another user has the address or number. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "An active user with a name and an email address or a phone number (both marked verified); nothing is sent. 422 validation_failed for the field, weak_password; 409 already_exists when another user has the address or number. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "roles",
 				"x-ss-permission": "users.manage",
@@ -2140,7 +2140,7 @@
 									},
 									"email": {
 										"type": "string",
-										"description": "An e-mail address or a phone number is needed."
+										"description": "An email address or a phone number is needed."
 									},
 									"phone": {
 										"type": "string",
@@ -2212,10 +2212,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Text in the name, e-mail address or phone number (any case).",
+						"description": "Text in the name, email address or phone number (any case).",
 						"schema": {
 							"type": "string",
-							"description": "Text in the name, e-mail address or phone number (any case)."
+							"description": "Text in the name, email address or phone number (any case)."
 						}
 					},
 					{
@@ -2374,10 +2374,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Text in the name, e-mail address or phone number (any case).",
+						"description": "Text in the name, email address or phone number (any case).",
 						"schema": {
 							"type": "string",
-							"description": "Text in the name, e-mail address or phone number (any case)."
+							"description": "Text in the name, email address or phone number (any case)."
 						}
 					},
 					{
@@ -2510,7 +2510,7 @@
 		"/v1/admin/users/invite": {
 			"post": {
 				"summary": "Invite someone with a role (Users admin widget)",
-				"description": "Makes an invited user and sends the invite link (inviteDays, default 7) by e-mail when there is an address, else by SMS or WhatsApp (template accounts.invite); with deliver: return nothing is sent and the link comes back. 422 validation_failed for the field, or when invitePageUrl is not a page of your website; 409 already_exists; 503 notifications_not_connected and 502 not_sent (the invited user is removed again). 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "Makes an invited user and sends the invite link (inviteDays, default 7) by email when there is an address, else by SMS or WhatsApp (template accounts.invite); with deliver: return nothing is sent and the link comes back. 422 validation_failed for the field, or when invitePageUrl is not a page of your website; 409 already_exists; 503 notifications_not_connected and 502 not_sent (the invited user is removed again). 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "approval",
 				"x-ss-permission": "users.manage",
@@ -2540,7 +2540,7 @@
 								"properties": {
 									"email": {
 										"type": "string",
-										"description": "An e-mail address or a phone number is needed; an address that is not valid is left out."
+										"description": "An email address or a phone number is needed; an address that is not valid is left out."
 									},
 									"phone": {
 										"type": "string",
@@ -2999,7 +2999,7 @@
 		"/v1/admin/users/{id}/setup-link": {
 			"post": {
 				"summary": "A setup link for a user (Users admin widget)",
-				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an e-mail address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an email address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "staff_links",
 				"x-ss-permission": "users.manage",
@@ -3045,7 +3045,7 @@
 		"/v1/admin/users/{id}/sign-in-code": {
 			"post": {
 				"summary": "A one-time sign-in code for a user (Users admin widget)",
-				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, e-mail code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "staff_links",
 				"x-ss-permission": "users.manage",
@@ -4018,7 +4018,7 @@
 		"/v1/import/{collection}": {
 			"post": {
 				"summary": "Import records (NDJSON)",
-				"description": "collection: roles and fields (found by key), users (usr_…), requests (rrq_…) or copies, in that order (a user’s role must exist); 404 not_found for another. Send application/x-ndjson, one record of Accounts’ own shape per line, at most 1,000 records or 4 MB (413 payload_too_large; 415 unsupported_media_type). Each record replaces the stored one with its key; an unknown field (websiteId too) refuses the record by name. A user's roleSince defaults to its createdAt; a user or request without createdAt keeps the one stored, else gets the time of the import. Users keep their password hashes (bcrypt, pbkdf2$… with the imported_password_pepper connection, scrypt$…) and two-step secrets (sealed at once); an e-mail address or phone number another user holds is refused. Nothing is sent.",
+				"description": "collection: roles and fields (found by key), users (usr_…), requests (rrq_…) or copies, in that order (a user’s role must exist); 404 not_found for another. Send application/x-ndjson, one record of Accounts’ own shape per line, at most 1,000 records or 4 MB (413 payload_too_large; 415 unsupported_media_type). Each record replaces the stored one with its key; an unknown field (websiteId too) refuses the record by name. A user's roleSince defaults to its createdAt; a user or request without createdAt keeps the one stored, else gets the time of the import. Users keep their password hashes (bcrypt, pbkdf2$… with the imported_password_pepper connection, scrypt$…) and two-step secrets (sealed at once); an email address or phone number another user holds is refused. Nothing is sent.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -4295,7 +4295,7 @@
 		"/v1/invites/accept": {
 			"post": {
 				"summary": "Accept an invite and sign in",
-				"description": "The invite’s token comes from the link (#ss_accounts_invite=<token>). The account becomes active, its e-mail address (else phone number) proven; a password is set when the method is on (Email + password for a user with an e-mail address, Phone + password for one with a phone number). 422 code_invalid (not valid, used or expired), weak_password, validation_failed (name). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+				"description": "The invite’s token comes from the link (#ss_accounts_invite=<token>). The account becomes active, its email address (else phone number) proven; a password is set when the method is on (Email + password for a user with an email address, Phone + password for one with a phone number). 422 code_invalid (not valid, used or expired), weak_password, validation_failed (name). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "approval",
 				"security": [
@@ -4593,7 +4593,7 @@
 			},
 			"patch": {
 				"summary": "Change the signed-in user’s name, custom fields or addresses",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). The e-mail address and phone number change only by signing in with them. 422 validation_failed for the field; 403 feature_off for custom while Custom fields is off.",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). The email address and phone number change only by signing in with them. 422 validation_failed for the field; 403 feature_off for custom while Custom fields is off.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
 					"phone_code",
@@ -4914,7 +4914,7 @@
 		"/v1/me/password": {
 			"put": {
 				"summary": "Set or change the signed-in user’s password",
-				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Users with an e-mail address while Email + password is on, else users with a phone number while Phone + password is on (422 validation_failed otherwise), with that method’s rules (422 weak_password). Every other device signs in again. 401 sign_in_failed when current is wrong.",
+				"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). Users with an email address while Email + password is on, else users with a phone number while Phone + password is on (422 validation_failed otherwise), with that method’s rules (422 weak_password). Every other device signs in again. 401 sign_in_failed when current is wrong.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": [
 					"email_password",
@@ -5584,7 +5584,7 @@
 		},
 		"/v1/password/forgot": {
 			"post": {
-				"summary": "Send a password reset link by e-mail",
+				"summary": "Send a password reset link by email",
 				"description": "Answers 202 at once, the same for every address. The link (resetMinutes, default 60) opens returnTo with #ss_accounts_reset=<token>, and goes only to an account with a password whose address was proven or is the one it was made with; a link Notifications cannot send now is sent again on later requests while it is valid. 422 validation_failed for email or returnTo; 429 rate_limited after resetLimit requests (default 3) for the address in 15 minutes.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_password",
@@ -5799,7 +5799,7 @@
 		"/v1/password/reset": {
 			"post": {
 				"summary": "Choose a new password with a reset link",
-				"description": "The new password follows Email + password’s rules (422 weak_password). Proves the e-mail address, ends the lock and signs every device out. 422 code_invalid when the link is not valid, used or expired.",
+				"description": "The new password follows Email + password’s rules (422 weak_password). Proves the email address, ends the lock and signs every device out. 422 code_invalid when the link is not valid, used or expired.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_password",
 				"security": [
@@ -6091,7 +6091,7 @@
 									},
 									"phone": {
 										"type": "string",
-										"description": "A phone number or an e-mail address is needed."
+										"description": "A phone number or an email address is needed."
 									},
 									"email": {
 										"type": "string"
@@ -6367,7 +6367,7 @@
 		"/v1/role-requests/{id}/invite": {
 			"post": {
 				"summary": "Invite the person of a pending request",
-				"description": "Creates their user, or gives the role to the user with that phone number (else e-mail address); answers a setup link for your staff to send, unless the user already has a password (the request is then completed). 409 contact_unverified when that user never proved the phone or e-mail and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "Creates their user, or gives the role to the user with that phone number (else email address); answers a setup link for your staff to send, unless the user already has a password (the request is then completed). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "role_requests",
 				"security": [
@@ -7436,7 +7436,7 @@
 		},
 		"/v1/sign-in/email": {
 			"post": {
-				"summary": "Sign in (or up) with the e-mail code or the magic link",
+				"summary": "Sign in (or up) with the email code or the magic link",
 				"description": "Send { email, code } or { link }. Proves the address; opens only an account whose address was proven before (an address only typed on another account counts as unknown, and its sign-up answers 409 already_exists). A sign-in code your staff made opens its user but proves nothing. 422 code_invalid. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_code",
@@ -7497,7 +7497,7 @@
 									},
 									"acceptTerms": {
 										"type": "boolean",
-										"description": "true when the visitor ticked the terms box (Terms acceptance; else 403 terms_required)."
+										"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
 									},
 									"remember": {
 										"type": "boolean",
@@ -7539,7 +7539,7 @@
 		},
 		"/v1/sign-in/email/code": {
 			"post": {
-				"summary": "Send a sign-in code (and magic link) by e-mail",
+				"summary": "Send a sign-in code (and magic link) by email",
 				"description": "Through Notifications (template accounts.email_code); with returnTo the message also holds a link to returnTo#ss_accounts_link=<link>. One code per 30 seconds and 6 per hour for an address (429 too_soon). 403 sign_in_paused or method_refused; 422 validation_failed; 503 notifications_not_connected; 502 not_sent.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_code",
@@ -7902,7 +7902,7 @@
 		},
 		"/v1/sign-in/password": {
 			"post": {
-				"summary": "Sign in with an e-mail address and a password",
+				"summary": "Sign in with an email address and a password",
 				"description": "401 sign_in_failed for a wrong address or password (the same answer for both); 423 locked (with lockedUntil) after too many wrong passwords; 429 rate_limited when networkLimit tries from this network ran out. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_password",
@@ -8053,7 +8053,7 @@
 									},
 									"acceptTerms": {
 										"type": "boolean",
-										"description": "true when the visitor ticked the terms box (Terms acceptance; else 403 terms_required)."
+										"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
 									},
 									"remember": {
 										"type": "boolean",
@@ -8353,7 +8353,7 @@
 		},
 		"/v1/sign-up/password": {
 			"post": {
-				"summary": "Sign up with an e-mail address and a password",
+				"summary": "Sign up with an email address and a password",
 				"description": "Makes the account (role customer) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "email_password",
@@ -8415,7 +8415,7 @@
 									},
 									"acceptTerms": {
 										"type": "boolean",
-										"description": "true when the visitor ticked the terms box (Terms acceptance; else 403 terms_required)."
+										"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
 									},
 									"remember": {
 										"type": "boolean",
@@ -8518,7 +8518,7 @@
 									},
 									"acceptTerms": {
 										"type": "boolean",
-										"description": "true when the visitor ticked the terms box (Terms acceptance; else 403 terms_required)."
+										"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
 									},
 									"remember": {
 										"type": "boolean",
@@ -9043,10 +9043,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Text in the name, e-mail address or phone number (any case).",
+						"description": "Text in the name, email address or phone number (any case).",
 						"schema": {
 							"type": "string",
-							"description": "Text in the name, e-mail address or phone number (any case)."
+							"description": "Text in the name, email address or phone number (any case)."
 						}
 					},
 					{
@@ -9189,7 +9189,7 @@
 			},
 			"post": {
 				"summary": "Add a user",
-				"description": "An active user with a name and an e-mail address or a phone number (both marked verified); nothing is sent. 422 validation_failed for the field, weak_password; 409 already_exists when another user has the address or number. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "An active user with a name and an email address or a phone number (both marked verified); nothing is sent. 422 validation_failed for the field, weak_password; 409 already_exists when another user has the address or number. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "roles",
 				"security": [
@@ -9238,7 +9238,7 @@
 									},
 									"email": {
 										"type": "string",
-										"description": "An e-mail address or a phone number is needed."
+										"description": "An email address or a phone number is needed."
 									},
 									"phone": {
 										"type": "string",
@@ -9309,10 +9309,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Text in the name, e-mail address or phone number (any case).",
+						"description": "Text in the name, email address or phone number (any case).",
 						"schema": {
 							"type": "string",
-							"description": "Text in the name, e-mail address or phone number (any case)."
+							"description": "Text in the name, email address or phone number (any case)."
 						}
 					},
 					{
@@ -9482,10 +9482,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Text in the name, e-mail address or phone number (any case).",
+						"description": "Text in the name, email address or phone number (any case).",
 						"schema": {
 							"type": "string",
-							"description": "Text in the name, e-mail address or phone number (any case)."
+							"description": "Text in the name, email address or phone number (any case)."
 						}
 					},
 					{
@@ -9630,7 +9630,7 @@
 		"/v1/users/invite": {
 			"post": {
 				"summary": "Invite someone with a role",
-				"description": "Makes an invited user and sends the invite link (inviteDays, default 7) by e-mail when there is an address, else by SMS or WhatsApp (template accounts.invite); with deliver: return nothing is sent and the link comes back. 422 validation_failed for the field, or when invitePageUrl is not a page of your website; 409 already_exists; 503 notifications_not_connected and 502 not_sent (the invited user is removed again). 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "Makes an invited user and sends the invite link (inviteDays, default 7) by email when there is an address, else by SMS or WhatsApp (template accounts.invite); with deliver: return nothing is sent and the link comes back. 422 validation_failed for the field, or when invitePageUrl is not a page of your website; 409 already_exists; 503 notifications_not_connected and 502 not_sent (the invited user is removed again). 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "approval",
 				"security": [
@@ -9671,7 +9671,7 @@
 								"properties": {
 									"email": {
 										"type": "string",
-										"description": "An e-mail address or a phone number is needed; an address that is not valid is left out."
+										"description": "An email address or a phone number is needed; an address that is not valid is left out."
 									},
 									"phone": {
 										"type": "string",
@@ -10207,7 +10207,7 @@
 		"/v1/users/{id}/setup-link": {
 			"post": {
 				"summary": "A setup link for a user",
-				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an e-mail address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "The user chooses a password with it (POST /v1/setup-links/accept), also without an email address; valid setupDays (default 7). The link is your setupPageUrl with {code} replaced, else that page (or your website’s home page) with ?ss_setup=<code>. A new one cancels the old. 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "staff_links",
 				"security": [
@@ -10264,7 +10264,7 @@
 		"/v1/users/{id}/sign-in-code": {
 			"post": {
 				"summary": "A one-time sign-in code for a user",
-				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, e-mail code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+				"description": "6 digits for your staff to give the user (never sent), valid codeMinutes (Staff sign-in codes and setup links, default 15), single use; typed into the phone code, email code or phone + password screen. A new one cancels the old. 403 blocked; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "staff_links",
 				"security": [
@@ -10445,7 +10445,7 @@
 				"name": "SS-Actor-Email",
 				"in": "header",
 				"required": false,
-				"description": "The acting member's e-mail address.",
+				"description": "The acting member's email address.",
 				"schema": {
 					"type": "string",
 					"maxLength": 320
@@ -10637,7 +10637,7 @@
 			},
 			"Address": {
 				"type": "object",
-				"description": "A saved address; parts not filled in are empty.",
+				"description": "A saved address; parts not given are empty.",
 				"required": [
 					"id",
 					"label",
@@ -10679,7 +10679,7 @@
 					"area": {
 						"type": "string",
 						"maxLength": 100,
-						"description": "The area or neighbourhood."
+						"description": "The area or neighborhood."
 					},
 					"city": {
 						"type": "string",
@@ -10738,7 +10738,7 @@
 					"area": {
 						"type": "string",
 						"maxLength": 100,
-						"description": "The area or neighbourhood."
+						"description": "The area or neighborhood."
 					},
 					"city": {
 						"type": "string",
@@ -11001,7 +11001,7 @@
 						"properties": {
 							"locale": {
 								"type": "string",
-								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
+								"description": "A language tag such as en-US or fr-FR, or '' for the viewer's (en-US in text the server makes)."
 							},
 							"currencyDisplay": {
 								"type": "string",
@@ -11103,7 +11103,7 @@
 					},
 					"emailVerified": {
 						"type": "boolean",
-						"description": "The address was proven: by an e-mail code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
+						"description": "The address was proven: by an email code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
 					},
 					"phone": {
 						"type": [
@@ -11350,7 +11350,7 @@
 					},
 					"emailVerified": {
 						"type": "boolean",
-						"description": "The address was proven: by an e-mail code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
+						"description": "The address was proven: by an email code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
 					},
 					"phone": {
 						"type": [
@@ -11684,7 +11684,7 @@
 							"ask_ticked",
 							"always"
 						],
-						"description": "The remember me box: shown, shown ticked, or no box and always remembered."
+						"description": "The remember me box: shown, shown checked, or no box and always remembered."
 					},
 					"methods": {
 						"type": "array",
@@ -11785,7 +11785,7 @@
 							"ask_ticked",
 							"always"
 						],
-						"description": "The remember me box: shown, shown ticked, or no box and always remembered.",
+						"description": "The remember me box: shown, shown checked, or no box and always remembered.",
 						"default": "ask"
 					},
 					"methods": {
@@ -12086,7 +12086,7 @@
 					},
 					"emailVerified": {
 						"type": "boolean",
-						"description": "The address was proven: by an e-mail code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
+						"description": "The address was proven: by an email code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
 					},
 					"phone": {
 						"type": [
@@ -12309,7 +12309,7 @@
 									"type": "string",
 									"pattern": "^#[0-9a-fA-F]{6}$"
 								},
-								"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+								"description": "Color name → #rrggbb (the product's CSS supplies the others)."
 							},
 							"fontFamily": {
 								"type": "string",
@@ -12463,7 +12463,7 @@
 					},
 					"emailVerified": {
 						"type": "boolean",
-						"description": "The address was proven: by an e-mail code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
+						"description": "The address was proven: by an email code or link, a password reset, an invite, a Google, Apple or Facebook sign-in, or staff entering it."
 					},
 					"phone": {
 						"type": [

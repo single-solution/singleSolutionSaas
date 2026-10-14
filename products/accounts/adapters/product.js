@@ -102,7 +102,7 @@ const PROBLEM_CODES = Object.freeze({
 	terms_required: Object.freeze({ status: 403, title: 'Terms not accepted' }),
 	risk_refused: Object.freeze({ status: 403, title: 'Refused by the risk checks' }),
 	already_exists: Object.freeze({ status: 409, title: 'Already exists' }),
-	contact_unverified: Object.freeze({ status: 409, title: 'Phone number or e-mail address not proven' }),
+	contact_unverified: Object.freeze({ status: 409, title: 'Phone number or email address not proven' }),
 	weak_password: Object.freeze({ status: 422, title: 'Password refused' }),
 	code_invalid: Object.freeze({ status: 422, title: 'Code not valid' }),
 	too_soon: Object.freeze({ status: 429, title: 'Too soon' }),
@@ -120,7 +120,7 @@ const PROBLEM_CODES = Object.freeze({
 });
 
 /**
- * Data rights of Accounts itself (PLAN 0.4.11): the user matched on id, e-mail or phone. Export gives the profile and
+ * Data rights of Accounts itself (PLAN 0.4.11): the user matched on id, email or phone. Export gives the profile and
  * the devices (never the password, two-step secrets or the merchant's notes); delete erases the user, their sessions,
  * their codes and the messages kept for them.
  * @param {() => number} now

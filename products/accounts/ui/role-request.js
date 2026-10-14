@@ -1,6 +1,6 @@
 /**
  * The visitor widget `role_request` (Role requests, PLAN 0.8.10 A5): a visitor without an account asks for a role the
- * merchant offers (for example membership) with their name, phone number or e-mail address and a note; staff answer
+ * merchant offers (for example membership) with their name, phone number or email address and a note; staff answer
  * in the Users admin widget.
  * @module
  */

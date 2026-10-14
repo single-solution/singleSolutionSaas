@@ -83,7 +83,7 @@ const MAX_PBKDF2_ITERATIONS = 2_000_000;
 
 /**
  * Check a password against a stored hash: Accounts' own `scrypt$…`, or a hash imported from another system (A1):
- * bcrypt, or PBKDF2-HMAC-SHA256 of `<pepper>:<password>` (no Unicode normalisation on that path; needs the
+ * bcrypt, or PBKDF2-HMAC-SHA256 of `<pepper>:<password>` (no Unicode normalization on that path; needs the
  * `imported_password_pepper` connection). A hash that cannot be checked takes as long as the dummy check and fails.
  * @param {string} password
  * @param {string} stored

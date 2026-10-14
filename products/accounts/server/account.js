@@ -50,7 +50,7 @@ export const createAccount = (product, service, flows) => {
 		return meView(s, user);
 	};
 
-	/** Name, custom fields and addresses (e-mail and phone are sign-in addresses and change only by signing in). @param {any} ctx */
+	/** Name, custom fields and addresses (email and phone are sign-in addresses and change only by signing in). @param {any} ctx */
 	const updateMe = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
 		const body = bodyOf(ctx.body);
@@ -101,7 +101,7 @@ export const createAccount = (product, service, flows) => {
 	};
 
 	/**
-	 * Set or change the password (the current one is asked when there is one): users with an e-mail address while Email
+	 * Set or change the password (the current one is asked when there is one): users with an email address while Email
 	 * + password is on, and users with a phone number while Phone + password is on (A2), each with that method's rules.
 	 * @param {any} ctx
 	 */
@@ -109,7 +109,7 @@ export const createAccount = (product, service, flows) => {
 		const { s, user, session } = await service.signedIn(ctx);
 		const body = bodyOf(ctx.body);
 		const method = service.passwordMethodOf(s, user);
-		if (!method) throw problem('validation_failed', 'Passwords go with an e-mail address or a phone number.');
+		if (!method) throw problem('validation_failed', 'Passwords go with an email address or a phone number.');
 		if (user.passwordHash && (typeof body.current !== 'string' || !(await service.checkPassword(s, user, body.current))))
 			throw problem('sign_in_failed', 'The current password is wrong.');
 		const passwordHash = await flows.newPassword(s, body.password, { method, who: user });

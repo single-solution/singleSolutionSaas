@@ -30,7 +30,7 @@
 		{
 			"key": "email_password",
 			"name": "Email + password",
-			"description": "Sign-up and sign-in with an e-mail address and a password, with password rules, login limits and Forgot password (reset links through Notifications).",
+			"description": "Sign-up and sign-in with an email address and a password, with password rules, login limits and Forgot password (reset links through Notifications).",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/email_password.settings.json"
@@ -39,7 +39,7 @@
 		{
 			"key": "email_code",
 			"name": "Email code / magic link",
-			"description": "Sign-in with a one-time code or a single-use link sent by e-mail through the merchant's Notifications.",
+			"description": "Sign-in with a one-time code or a single-use link sent by email through the merchant's Notifications.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/email_code.settings.json"
@@ -111,7 +111,7 @@
 		{
 			"key": "risk_checks",
 			"name": "Risk checks",
-			"description": "Refuses disposable e-mail addresses and too many accounts from one device or one network.",
+			"description": "Refuses disposable email addresses and too many accounts from one device or one network.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/risk_checks.settings.json"

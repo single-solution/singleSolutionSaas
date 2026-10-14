@@ -18,7 +18,7 @@
  * - A role has a `rank` (A4): a smaller number ranks higher. The ready-made roles rank Owner 100, Business manager 200,
  *   Product manager 300, Marketing manager 400, Support staff 500 and Customer 900; the merchant places their own roles
  *   between 101 and 899 (600 when not given). Staff never edit, block or delete a user whose role ranks above theirs.
- * - Roles only say what a user may do on the merchant's own site: an Accounts sign-in never authorises admin actions in
+ * - Roles only say what a user may do on the merchant's own site: an Accounts sign-in never authorizes admin actions in
  *   any product (those need the server token or a ticket).
  * @module
  */

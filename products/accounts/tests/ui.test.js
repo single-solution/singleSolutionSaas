@@ -333,7 +333,7 @@ describe('starting the widget', () => {
 	});
 });
 
-describe('e-mail and password', () => {
+describe('email and password', () => {
 	it('signs in, keeps the refresh token where Remember me says, renews and signs out', async () => {
 		const host = place('sign_in');
 		const { server, time, widget } = await start({
@@ -577,13 +577,13 @@ describe('codes', () => {
 		expect(events.in).toHaveLength(1);
 	});
 
-	it('e-mail code: sends the code with the page to return to; Back and the tabs switch the form', async () => {
+	it('email code: sends the code with the page to return to; Back and the tabs switch the form', async () => {
 		const host = place('sign_in');
 		const { server } = await start(
 			{
 				'POST /v1/sign-in/email/code': ({ body }) =>
 					body.email === 'bad'
-						? problem(422, 'validation_failed', { errors: [{ path: '/email', message: 'Enter a valid e-mail address.' }] })
+						? problem(422, 'validation_failed', { errors: [{ path: '/email', message: 'Enter a valid email address.' }] })
 						: answer(202, {}),
 				'POST /v1/sign-in/email': () => problem(400, 'code_invalid'),
 			},
@@ -596,7 +596,7 @@ describe('codes', () => {
 		await click(buttonIn(root, strings['method.email_code']));
 		fieldIn(root, strings['fields.email']).value = 'bad';
 		await submit(buttonIn(root, strings['code.send']));
-		expect(statusIn(root)).toBe('Enter a valid e-mail address.');
+		expect(statusIn(root)).toBe('Enter a valid email address.');
 		fieldIn(root, strings['fields.email']).value = 'ana@example.com';
 		await submit(buttonIn(root, strings['code.send']));
 		expect(server.last('POST /v1/sign-in/email/code')?.body).toEqual({
@@ -972,7 +972,7 @@ describe('My account', () => {
 		expect(heading(host)).toBe(strings['account.title']);
 		const profile = part(host, strings['account.profile']);
 		expect([...profile.querySelectorAll('.meta')].map((p) => p.textContent)).toEqual([
-			'E-mail: ana@example.com',
+			'Email: ana@example.com',
 			'Phone: +15550001111',
 		]);
 		expect(fieldIn(profile, 'Size').value).toBe('S');
@@ -1851,7 +1851,7 @@ describe('admin widgets', () => {
 		expect(fieldIn(form, strings['roles.key']).readOnly).toBe(true);
 		expect(fieldIn(form, strings['roles.twoStep']).value).toBe('required');
 
-		// edit a role: tick boxes per group; a permission of a product no longer listed stays visible
+		// edit a role: check boxes per group; a permission of a product no longer listed stays visible
 		await click(buttonIn(/** @type {HTMLElement} */ (rows[2]), strings['roles.edit']));
 		expect(form.querySelector('h3')?.textContent).toBe('Editing Helper');
 		const legends = [...form.querySelectorAll('.permissions legend')].map((l) => l.textContent);

@@ -39,14 +39,14 @@ import { appleKey, idToken } from './helpers.js';
 import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 
 describe('identifiers', () => {
-	it('normalises e-mail addresses and masks addresses', () => {
+	it('normalizes email addresses and masks addresses', () => {
 		expect(normaliseEmail(' Ana@Example.COM ')).toBe('ana@example.com');
 		for (const bad of [5, 'a@b', 'a@@b.com', '.a@b.com', 'a..b@b.com', 'a@b.123', 'a@-b.com', `${'a'.repeat(65)}@b.com`])
 			expect(normaliseEmail(bad)).toBeNull();
 		expect(emailDomain('a@shop.example.com')).toBe('shop.example.com');
 	});
 
-	it('the allowed phone countries are the shared normaliser’s countries', () => {
+	it('the allowed phone countries are the shared normalizer’s countries', () => {
 		expect(phoneCode.properties.countries.items.enum).toEqual([...PHONE_COUNTRIES]);
 	});
 });

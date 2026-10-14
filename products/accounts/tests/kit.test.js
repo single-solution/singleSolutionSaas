@@ -43,7 +43,7 @@ const signUp = (email, name) => env.visitor('POST', '/v1/sign-up/password', { em
 /** @param {string} email */
 const signIn = (email) => env.visitor('POST', '/v1/sign-in/password', { email, password: 'correct horse battery' });
 
-/** The user with an e-mail address, as the server sees it. @param {string} email */
+/** The user with an email address, as the server sees it. @param {string} email */
 const userOf = async (email) => (await fromServer('GET', `/v1/users?q=${encodeURIComponent(email)}`)).json.items[0];
 
 /** Accounts' own activity log (the kit's read), newest first. @param {string} query */
@@ -164,7 +164,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect((await activity('action=user.unblocked'))[0]).toMatchObject({ actor: ZOE_ACTOR, label: 'Quinn Q', detail: null });
 		expect(JSON.stringify(await activity(''))).not.toContain('secret note');
 
-		// sign out everywhere and a ticket's member of staff
+		// sign out everywhere and a ticket's staff member
 		await signIn('quinn@example.com');
 		const t = await env.ticket(['users.read', 'users.manage', 'roles.manage']);
 		expect((await env.admin(t, 'POST', `/v1/admin/users/${quinn.id}/sign-out`)).status).toBe(204);
@@ -199,7 +199,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect(own).toMatchObject({ actor: ZOE_ACTOR, label: 'Own permissions', detail: 'site:vip.view' });
 		expect(none).toMatchObject({ actor: SERVER_ACTOR, detail: 'No own permissions' });
 
-		// invites by e-mail and by phone (the address itself never goes into the log)
+		// invites by email and by phone (the address itself never goes into the log)
 		await env.setting('approval', 'invitePageUrl', `${ORIGIN}/join`);
 		await fromServer('POST', '/v1/users/invite', { body: { email: 'ivy@example.com', name: 'Ivy' }, headers: ZOE });
 		await fromServer('POST', '/v1/users/invite', { body: { phone: '+15550009999', name: 'Pat' } });
@@ -207,7 +207,7 @@ describe('the acting user and the labels of Accounts’ own activity log (K2, K9
 		expect(byEmail).toMatchObject({
 			actor: ZOE_ACTOR,
 			label: 'Ivy',
-			detail: 'Role: customer; sent by e-mail; valid for 7 days',
+			detail: 'Role: customer; sent by email; valid for 7 days',
 		});
 		expect(byPhone).toMatchObject({ label: 'Pat', detail: 'Role: customer; sent by SMS; valid for 7 days' });
 		expect(JSON.stringify([byPhone, byEmail])).not.toMatch(/ivy@example|5550009999/);

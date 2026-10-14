@@ -2,7 +2,7 @@
  * The `import` feature (PLAN 0.8.10 K10, Migration step 1): what the kit's import routes take into Accounts, in this
  * order: `roles` and `fields` (found by `key`), `users` (`usr_…`), `requests` (`rrq_…`, A5) and `copies` (the source
  * system's activity entries). Each record goes through `core/imports.js` with what the checks read once per call (the
- * role keys, the custom fields, the website's phone format); e-mail addresses and phone numbers another user holds are
+ * role keys, the custom fields, the website's phone format); email addresses and phone numbers another user holds are
  * refused in the dry run too; a two-step secret is sealed at once (A8) and the phone's last digits derived as the
  * store does. A user or role request without a `createdAt` from the source keeps the stored one, else gets the
  * import's time; a user's `roleSince` is the source's, else its `createdAt`. `finish` derives nothing (every derived
@@ -98,11 +98,11 @@ const keyedCollection = ({ keysOf, max, what, check }) => ({
 });
 
 /**
- * E-mail addresses and phone numbers of a user that another user already holds, stored or earlier in this call (the
+ * Email addresses and phone numbers of a user that another user already holds, stored or earlier in this call (the
  * unique indexes would refuse them only when written, so the dry run would not show them).
  * @param {CheckContext} ctx
  * @param {{ id: string, email: string | null, phone: string | null }} user
- * @param {Map<string, string>} taken e-mail or phone → the id of the record of this call that has it
+ * @param {Map<string, string>} taken email or phone → the id of the record of this call that has it
  * @returns {Promise<ImportError[]>}
  */
 const takenContacts = async (ctx, user, taken) => {
@@ -126,7 +126,7 @@ const takenContacts = async (ctx, user, taken) => {
 			? [
 					{
 						path: `/${field}`,
-						message: `${field === 'email' ? 'This e-mail address' : 'This phone number'} is already another user’s (${other}).`,
+						message: `${field === 'email' ? 'This email address' : 'This phone number'} is already another user’s (${other}).`,
 					},
 				]
 			: [];

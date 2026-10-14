@@ -182,7 +182,7 @@ export const createRoutes = (product) => {
 			handler: flows.phoneCodeSignIn,
 		}),
 
-		// --------------------------------------------------------------------------- e-mail code and magic link
+		// --------------------------------------------------------------------------- email code and magic link
 		defineRoute({
 			method: 'POST',
 			path: '/v1/sign-in/email/code',

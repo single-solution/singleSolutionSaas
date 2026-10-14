@@ -1,6 +1,6 @@
 /**
  * The visitor's session in the browser (PLAN 0.8.6). The sign-in token lives in memory only and is renewed 1 minute
- * before it expires with the refresh token, which is kept in localStorage when the user ticked "Remember me", else in
+ * before it expires with the refresh token, which is kept in localStorage when the user checked "Remember me", else in
  * sessionStorage. Every change is announced on `window` (`ss-accounts:signed-in` with `detail: { user }`,
  * `ss-accounts:signed-out`) and to the widgets.
  * @module

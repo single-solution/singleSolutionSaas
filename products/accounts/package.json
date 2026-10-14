@@ -1,7 +1,7 @@
 {
 	"name": "@ss/product-accounts",
 	"version": "0.1.0",
-	"description": "Accounts: sign-up and sign-in for the merchant's users (phone code, e-mail + password, e-mail code or magic link, Google, Apple, Facebook), one user list with roles and permissions, profiles, two-step sign-in, sessions, data rights and activity-log copies (PLAN 0.8.6).",
+	"description": "Accounts: sign-up and sign-in for the merchant's users (phone code, email + password, email code or magic link, Google, Apple, Facebook), one user list with roles and permissions, profiles, two-step sign-in, sessions, data rights and activity-log copies (PLAN 0.8.6).",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",

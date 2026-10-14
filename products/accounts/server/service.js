@@ -432,7 +432,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The password method of a user (A2): Email + password for a user with an e-mail address while it is on, else
+	 * The password method of a user (A2): Email + password for a user with an email address while it is on, else
 	 * Phone + password for a user with a phone number while it is on; null when neither fits.
 	 * @param {Site} s @param {Pick<UserRecord, 'email' | 'phone'>} user
 	 * @returns {'email_password' | 'phone_password' | null}

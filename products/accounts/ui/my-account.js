@@ -88,7 +88,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					trigger.removeAttribute('disabled');
 				}
 			};
-			/** A labelled password field. @param {string} label @param {string} autocomplete */
+			/** A labeled password field. @param {string} label @param {string} autocomplete */
 			const passwordField = (label, autocomplete) =>
 				make.field('input', label, {
 					type: 'password',
@@ -561,7 +561,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				const parts = [];
 				if (on('terms') && settings.terms && user.terms?.version !== settings.terms.version) parts.push(termsPart(user));
 				parts.push(profilePart(user), addressesPart(user));
-				// passwords go with an e-mail address (Email + password) or a phone number (Phone + password, A2)
+				// passwords go with an email address (Email + password) or a phone number (Phone + password, A2)
 				if ((on('email_password') && user.email) || (on('phone_password') && user.phone)) parts.push(passwordPart(user));
 				if (on('two_step')) parts.push(twoStepPart(user));
 				parts.push(devicesPart());

@@ -64,7 +64,7 @@ const hasStepRun = (password) => {
 };
 
 /**
- * The words of the user's name and of their e-mail address's local part (at least 4 characters each).
+ * The words of the user's name and of their email address's local part (at least 4 characters each).
  * @param {{ name?: string | null, email?: string | null }} who
  */
 const personalWords = ({ name, email }) =>
@@ -74,7 +74,7 @@ const personalWords = ({ name, email }) =>
 
 /**
  * Why a new password is refused, or null: `too_short`, `too_long` (beyond `maxLength`, at most 256), `letter_and_digit`
- * (A2, ST-26: a letter and a digit are required) or `personal` (A9: it holds the name, the e-mail's local part, or a
+ * (A2, ST-26: a letter and a digit are required) or `personal` (A9: it holds the name, the email's local part, or a
  * run of 4 keyboard or number steps). The breached-password check runs in adapters.
  * @param {unknown} password
  * @param {{ minLength: number, maxLength?: number, letterAndDigit?: boolean,
@@ -130,7 +130,7 @@ export const newUserNameOf = (template, phone) => template.replaceAll('{last4}',
 
 // -------------------------------------------------------------------------------------------------- risk checks
 
-/** Common disposable e-mail domains (the merchant adds their own in Settings). */
+/** Common disposable email domains (the merchant adds their own in Settings). */
 const DISPOSABLE_DOMAINS = Object.freeze([
 	'10minutemail.com',
 	'discard.email',

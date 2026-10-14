@@ -104,12 +104,12 @@ export const TEXTS = Object.freeze({
 		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
 		fontFamily: 'Font family (inherit, or a font your site loads)',
 		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent colour',
+		accent: 'Accent color',
 		customCss: 'Custom CSS',
 		format: 'Format',
 		formatHelp: 'How money and dates look in the widgets, messages, invoices and pages.',
 		locale: 'Language and region',
-		localeHelp: "A tag such as en-GB or fr-FR; empty uses each visitor's browser (en in messages).",
+		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US in messages).",
 		currencyDisplay: 'Currency shown as',
 		currencyDisplays: Object.freeze({
 			code: 'Code (USD 12,500.00)',
@@ -165,7 +165,7 @@ export const TEXTS = Object.freeze({
 	developers: Object.freeze({
 		verification: 'Sign-in verification',
 		verificationHelp:
-			"Your server checks a sign-in offline with the public keys below: sign-ins last 15 minutes, are signed with EdDSA and their aud is this website's id. A sign-in never authorises admin actions: admin widgets use tickets.",
+			"Your server checks a sign-in offline with the public keys below: sign-ins last 15 minutes, are signed with EdDSA and their aud is this website's id. A sign-in never authorizes admin actions: admin widgets use tickets.",
 		keysUrl: 'Public keys address',
 		widgets: 'Widget snippets',
 		widgetsHelp:

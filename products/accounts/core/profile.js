@@ -1,5 +1,5 @@
 /**
- * Profiles (PLAN 0.8.6), pure: the standard fields (name, e-mail, phone, addresses, merchant-only notes, blocked flag
+ * Profiles (PLAN 0.8.6), pure: the standard fields (name, email, phone, addresses, merchant-only notes, blocked flag
  * and reason), the merchant's custom fields (text, number, date, choice) and the views of a user: what the user
  * sees in My account, and what the merchant's server and staff see.
  * @module
@@ -33,7 +33,7 @@ const COUNTRY = /^[A-Z]{2}$/;
  * @property {string} name
  * @property {string} line1
  * @property {string} line2
- * @property {string} area the area or neighbourhood (A11)
+ * @property {string} area the area or neighborhood (A11)
  * @property {string} city
  * @property {string} region
  * @property {string} postalCode
@@ -166,7 +166,7 @@ export const checkAddresses = (
 		if (bad) return { ok: false, field: `addresses/${index}/${bad[0]}`, message: 'This value is too long.' };
 		const f = /** @type {Record<keyof typeof fields, string>} */ (fields);
 		const missing = required.find((name) => name in f && f[/** @type {keyof typeof f} */ (name)] === '');
-		if (missing) return { ok: false, field: `addresses/${index}/${missing}`, message: 'Fill in this part of the address.' };
+		if (missing) return { ok: false, field: `addresses/${index}/${missing}`, message: 'Fill out this part of the address.' };
 		const country = f.country.toUpperCase();
 		if (country !== '' && !COUNTRY.test(country))
 			return { ok: false, field: `addresses/${index}/country`, message: 'Use a two-letter country code.' };
@@ -178,7 +178,7 @@ export const checkAddresses = (
 };
 
 /**
- * The address an account was made with, which it signs in by: `email` (an e-mail sign-up or invite), `phone` (a phone
+ * The address an account was made with, which it signs in by: `email` (an email sign-up or invite), `phone` (a phone
  * sign-up or invite) or `provider` (Google, Apple or Facebook).
  * @typedef {'email' | 'phone' | 'provider'} Identity
  */
@@ -199,8 +199,8 @@ const IDENTITY_OF_METHOD = Object.freeze({
 export const identityOfMethod = (method) => IDENTITY_OF_METHOD[method] ?? 'provider';
 
 /**
- * An account's identity. An imported account may have none stored (its source did not say, and it had both an e-mail
- * address and a phone number, or neither): while it has an e-mail address and no phone number it signs in by the
+ * An account's identity. An imported account may have none stored (its source did not say, and it had both an email
+ * address and a phone number, or neither): while it has an email address and no phone number it signs in by the
  * address; otherwise which one is not known (null).
  * @param {Pick<UserRecord, 'identity' | 'email' | 'phone'>} user
  * @returns {Identity | null}
@@ -208,7 +208,7 @@ export const identityOfMethod = (method) => IDENTITY_OF_METHOD[method] ?? 'provi
 export const identityOf = (user) => user.identity ?? (user.email && !user.phone ? 'email' : null);
 
 /**
- * Whether a password reset link may go to the user's e-mail address: a proven address, or the address the account was
+ * Whether a password reset link may go to the user's email address: a proven address, or the address the account was
  * made with. An address typed but never proven on an account that signs in another way (for example at a phone +
  * password sign-up) is no way in: its owner would take over that account.
  * @param {Pick<UserRecord, 'identity' | 'email' | 'emailVerified' | 'phone'>} user

@@ -58,7 +58,7 @@ afterAll(async () => {
 });
 
 describe('A4: staff and customer management', () => {
-	it('creates active users by phone or e-mail, sends nothing, and refuses duplicates', async () => {
+	it('creates active users by phone or email, sends nothing, and refuses duplicates', async () => {
 		expect(people.customer).toMatchObject({
 			status: 'active',
 			role: 'customer',
@@ -85,7 +85,7 @@ describe('A4: staff and customer management', () => {
 		people.ada = withAddress.json;
 	});
 
-	it('edits contacts (normalised, unique, verified), the password (signing out) and addresses', async () => {
+	it('edits contacts (normalized, unique, verified), the password (signing out) and addresses', async () => {
 		const edited = await server('PATCH', `/v1/users/${people.ada.id}`, { email: 'ADA2@Example.com', phone: '07700 900003' });
 		expect(edited.json).toMatchObject({ email: 'ada2@example.com', emailVerified: true, phone: '+447700900003' });
 		expect(code(await server('PATCH', `/v1/users/${people.ada.id}`, { phone: '+447700900002' }))).toBe('already_exists');
@@ -248,7 +248,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		expect(viaEmailCode.json.status).toBe('signed_in');
 	});
 
-	it('a sign-in code from staff opens its user in the e-mail code screen, but proves no address', async () => {
+	it('a sign-in code from staff opens its user in the email code screen, but proves no address', async () => {
 		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
 			phone: '07700 900390',
 			password: 'own pass 12',
@@ -268,7 +268,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		).toBe('already_exists');
 	});
 
-	it('a setup link sets a password (also without an e-mail address) and signs in; a new link cancels the old', async () => {
+	it('a setup link sets a password (also without an email address) and signs in; a new link cancels the old', async () => {
 		const first = await server('POST', `/v1/users/${people.support.id}/setup-link`);
 		expect(first.json.url).toMatch(/^https:\/\/shop\.example\.com\/\?ss_setup=cod_/);
 		const second = await server('POST', `/v1/users/${people.support.id}/setup-link`);
