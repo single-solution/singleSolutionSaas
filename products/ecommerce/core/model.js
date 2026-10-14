@@ -165,13 +165,13 @@ export const ID_PREFIX = Object.freeze({
  * @property {import('./catalog-content.js').SeoRecord} seo
  * @property {MediaRecord | null} image
  * @property {number} sort
- * @property {'active' | 'coming_soon' | 'hidden'} [status] coming_soon: listed, its products hidden; hidden: neither (E1)
- * @property {string} [icon] a name the website maps to its icon (E1)
- * @property {import('./catalog-content.js').Content} [content] (E1)
- * @property {import('./catalog-content.js').Faq[]} [faqs] (E1)
- * @property {string | null} [sizeChartId] (E5)
- * @property {boolean | null} [requiresSerial] null = as its parent (E11)
- * @property {string[]} [previousSlugs] (E13)
+ * @property {'active' | 'coming_soon' | 'hidden'} status coming_soon: listed, its products hidden; hidden: neither (E1)
+ * @property {string} icon a name the website maps to its icon ('' = none; E1)
+ * @property {import('./catalog-content.js').Content} content (E1)
+ * @property {import('./catalog-content.js').Faq[]} faqs (E1)
+ * @property {string | null} sizeChartId (E5)
+ * @property {boolean | null} requiresSerial null = as its parent (E11)
+ * @property {string[]} previousSlugs (E13)
  */
 /**
  * @typedef {object} BrandRecord
@@ -180,10 +180,10 @@ export const ID_PREFIX = Object.freeze({
  * @property {string} name
  * @property {string} description
  * @property {MediaRecord | null} logo
- * @property {'active' | 'hidden'} [status] hidden: its products are hidden (E1)
- * @property {string[]} [categoryIds] the categories it belongs to ([] = all) (E1)
+ * @property {'active' | 'hidden'} status hidden: its products are hidden (E1)
+ * @property {string[]} categoryIds the categories it belongs to ([] = all) (E1)
  * @property {import('./catalog-content.js').SeoRecord} seo (E1, E16)
- * @property {string | null} [sizeChartId] (E5)
+ * @property {string | null} sizeChartId (E5)
  */
 /** @typedef {{ value: string, label: string }} AttributeChoice */
 /**
@@ -201,16 +201,16 @@ export const ID_PREFIX = Object.freeze({
  * @property {boolean} filterable
  * @property {boolean} comparable
  * @property {number} sort
- * @property {string} [slug] the filter name `attr.<slug>` (E7)
+ * @property {string} slug the filter name `attr.<slug>` (E7)
  * @property {string | null} categoryId the category this attribute is the definition for (E45: the same slug may exist
  *   once per category, with its own name, choices, unit, glossary and SEO); null = every category
- * @property {string[]} [categoryIds] [] = every category (E7)
- * @property {'product' | 'variant'} [on] where its values live (E7)
- * @property {boolean} [multiple] several values at once (E7)
- * @property {AttributeVisibility} [visibility] (E7)
- * @property {'none' | 'image' | 'chips'} [card] how product cards show it (E7)
- * @property {boolean} [active] (E7)
- * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} [seo]
+ * @property {string[]} categoryIds [] = every category (E7)
+ * @property {'product' | 'variant'} on where its values live (E7)
+ * @property {boolean} multiple several values at once (E7)
+ * @property {AttributeVisibility} visibility (E7)
+ * @property {'none' | 'image' | 'chips'} card how product cards show it (E7)
+ * @property {boolean} active (E7)
+ * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} seo
  *   its glossary page (E7, E15)
  */
 /**
@@ -426,10 +426,10 @@ export const STATUS_ROLES = Object.freeze([
 
 /**
  * Shop records about one shopper (PLAN 0.8.8: only shop records, linked to the Accounts user id; E21: guests too,
- * unique by normalised phone).
- * @typedef {{ id?: string, userId: string, guest?: boolean, name: string, email: string, phone: string,
- *   phoneDigits?: string, city?: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
- *   note: string, seenBy?: string[], lastOrderAt?: Date | null }} CustomerRecord
+ * unique by normalised phone): a guest has no user id (`userId: null`, `guest: true`).
+ * @typedef {{ id: string, userId: string | null, guest: boolean, name: string, email: string, phone: string,
+ *   phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
+ *   note: string, seenBy: string[], lastOrderAt?: Date | null }} CustomerRecord
  */
 
 // ---------------------------------------------------------------------------------------------------- promotions

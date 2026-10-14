@@ -41,12 +41,33 @@ import {
 	movedPaths,
 	placeCategory,
 } from '../core/catalog-taxonomy.js';
-import { EMPTY_SEO } from '../core/catalog-content.js';
+import { EMPTY_CONTENT, EMPTY_SEO } from '../core/catalog-content.js';
 import { cardOf, compareAtOf, pageOf, specsOf } from '../core/catalog-views.js';
 import { formatCell, parseCsv, recordsOf, toCsv, unescapeFormula } from '../core/csv.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
 
 /** @typedef {import('../core/catalog.js').CatalogRules} CatalogRules */
+
+/** What every attribute write stores besides its own fields (`checkAttribute`). */
+const STORED_ATTRIBUTE = Object.freeze({
+	categoryIds: [],
+	on: /** @type {const} */ ('product'),
+	multiple: false,
+	visibility: { when: /** @type {const} */ ('always'), ids: [], attributeId: null, value: null },
+	card: /** @type {const} */ ('none'),
+	active: true,
+	seo: { title: '', description: '', body: '', faqs: [] },
+});
+/** What every category write stores besides its own fields (`checkCategory`). */
+const STORED_CATEGORY = Object.freeze({
+	status: /** @type {const} */ ('active'),
+	icon: '',
+	content: { ...EMPTY_CONTENT },
+	faqs: [],
+	sizeChartId: null,
+	requiresSerial: null,
+	previousSlugs: [],
+});
 
 let counter = 0;
 /** @param {Partial<CatalogRules>} [over] @returns {CatalogRules} */
@@ -73,6 +94,8 @@ const rules = (over = {}) => ({
 				comparable: true,
 				sort: 0,
 				categoryId: null,
+				...STORED_ATTRIBUTE,
+				slug: 'n',
 			},
 		],
 		[
@@ -87,6 +110,8 @@ const rules = (over = {}) => ({
 				comparable: false,
 				sort: 1,
 				categoryId: null,
+				...STORED_ATTRIBUTE,
+				slug: 'b',
 			},
 		],
 		[
@@ -101,6 +126,8 @@ const rules = (over = {}) => ({
 				comparable: false,
 				sort: 2,
 				categoryId: null,
+				...STORED_ATTRIBUTE,
+				slug: 'c',
 			},
 		],
 		[
@@ -115,6 +142,8 @@ const rules = (over = {}) => ({
 				comparable: false,
 				sort: 3,
 				categoryId: null,
+				...STORED_ATTRIBUTE,
+				slug: 't',
 			},
 		],
 	]),
@@ -336,6 +365,7 @@ describe('categories, brands, attributes and locations', () => {
 					seo: { ...EMPTY_SEO },
 					image: null,
 					sort: 0,
+					...STORED_CATEGORY,
 				},
 			).ok,
 		).toBe(false);
@@ -358,6 +388,7 @@ describe('categories, brands, attributes and locations', () => {
 			seo: { ...EMPTY_SEO },
 			image: null,
 			sort: 0,
+			...STORED_CATEGORY,
 		});
 		const tree = categoryTree(
 			[category('a', null, []), category('b', 'a', ['a']), category('c', null, [])],
@@ -544,7 +575,7 @@ describe('listings', () => {
 			attributes: [
 				{
 					id: 'att_c',
-					slug: 'att_c',
+					slug: 'c',
 					name: 'C',
 					unit: '',
 					type: 'choice',

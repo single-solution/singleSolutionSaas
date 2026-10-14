@@ -9,7 +9,7 @@ import { MAX_CONTEXT, contextText, oneLine } from '../core/chat-context.js';
 import { chatFilters, filtersGiven, gradePrices, matchingVariant, variantFilter, warrantyOf } from '../core/lookup.js';
 import { shipmentLink } from '../core/couriers.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ACCOUNTS, readyShop } from './helpers.js';
+import { ACCOUNTS, readyShop, storedCategory } from './helpers.js';
 
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 
@@ -220,7 +220,7 @@ describe('Chat lookups (E37)', () => {
 		shop = await readyShop();
 		const data = await shop.db();
 		await data.collection(COLLECTIONS.categories).insertMany([
-			{
+			storedCategory({
 				id: 'cat_phones',
 				slug: 'phones',
 				name: 'Phones',
@@ -230,8 +230,8 @@ describe('Chat lookups (E37)', () => {
 				seo: {},
 				image: null,
 				sort: 0,
-			},
-			{
+			}),
+			storedCategory({
 				id: 'cat_used',
 				slug: 'used',
 				name: 'Used',
@@ -241,8 +241,8 @@ describe('Chat lookups (E37)', () => {
 				seo: {},
 				image: null,
 				sort: 0,
-			},
-			{
+			}),
+			storedCategory({
 				id: 'cat_acc',
 				slug: 'accessories',
 				name: 'Accessories',
@@ -252,7 +252,7 @@ describe('Chat lookups (E37)', () => {
 				seo: {},
 				image: null,
 				sort: 1,
-			},
+			}),
 		]);
 		await shop.list('grades', [
 			{ key: 'a', label: 'Grade A', description: '', returnDays: null, warrantyDays: 90 },

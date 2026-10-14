@@ -251,7 +251,7 @@ const oneValue = (attribute, value, extra = []) => {
 	const text = cleanText(value, LIMITS.specText);
 	if (!text) return null;
 	if (attribute.type === 'choice')
-		return (attribute.choices ?? []).some((choice) => choice.value === text) || extra.includes(text) ? text : null;
+		return attribute.choices.some((choice) => choice.value === text) || extra.includes(text) ? text : null;
 	return text;
 };
 
@@ -280,8 +280,7 @@ export const specValue = (attribute, value, extra = []) => {
  */
 export const valueLabel = (attribute, value) => {
 	if (Array.isArray(value)) return value.map((entry) => valueLabel(attribute, entry)).join(', ');
-	if (attribute.type === 'choice')
-		return (attribute.choices ?? []).find((choice) => choice.value === value)?.label ?? String(value);
+	if (attribute.type === 'choice') return attribute.choices.find((choice) => choice.value === value)?.label ?? String(value);
 	if (attribute.type === 'number') return attribute.unit ? `${String(value)} ${attribute.unit}` : String(value);
 	return String(value ?? '');
 };
@@ -894,7 +893,7 @@ export const checkProduct = (body, rules, existing) => {
 		'Track stock is true or false.',
 	);
 	/** @type {boolean | null} */
-	let serialized = existing ? (existing.serialized ?? null) : false;
+	let serialized = existing ? existing.serialized : false;
 	if (input.serialized !== undefined) {
 		if (input.serialized === null || typeof input.serialized === 'boolean') serialized = input.serialized;
 		else fail('/serialized', 'Serialized is true, false or null (as its categories say).');

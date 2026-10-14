@@ -140,7 +140,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	 * @param {Site} s @param {CategoryRecord} category
 	 */
 	const announce = async (s, category) => {
-		if ((category.status ?? 'active') === 'active') await common.indexNow(s, [await common.media.categoryUrl(s, category)]);
+		if (category.status === 'active') await common.indexNow(s, [await common.media.categoryUrl(s, category)]);
 	};
 
 	// ------------------------------------------------------------------------------------------------ categories
@@ -419,7 +419,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			await checkAttributeRefs(s, data, checked.value, existing.id);
 			const changesShape =
 				checked.value.type !== existing.type ||
-				checked.value.on !== (existing.on ?? 'product') ||
+				checked.value.on !== existing.on ||
 				(checked.value.multiple === false && existing.multiple === true);
 			if (changesShape && (await attributeUses(data, existing.id)) > 0)
 				throw problem(

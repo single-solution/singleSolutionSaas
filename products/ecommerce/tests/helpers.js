@@ -16,6 +16,7 @@ import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
 import { summarize } from '../core/catalog.js';
 import { EMPTY_SEO } from '../core/catalog-content.js';
+import { checkAttribute, checkBrand, checkCategory } from '../core/catalog-taxonomy.js';
 import { COLLECTIONS } from '../core/model.js';
 
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
@@ -55,6 +56,40 @@ const merchantDatabase = () => {
 	url.pathname = `/shop_${process.pid}_${Date.now()}_${databases}`;
 	return url.toString();
 };
+
+/**
+ * The fields a record's check stores, from its name, or the check's problems as an error.
+ * @param {{ ok: true, value: Record<string, any> } | { ok: false, errors: unknown[] }} checked
+ */
+const storedFields = (checked) => {
+	if (!checked.ok) throw new Error(JSON.stringify(checked.errors));
+	return checked.value;
+};
+
+/**
+ * A category as every write stores it (the fields of `checkCategory`, its place in the tree, image and earlier slugs),
+ * with the given fields on top, for tests that put records straight into the database.
+ * @param {{ id: string, name: string } & Record<string, unknown>} given
+ */
+export const storedCategory = (given) => ({
+	...storedFields(checkCategory({ name: given.name }, null)),
+	path: [],
+	image: null,
+	previousSlugs: [],
+	...given,
+});
+
+/**
+ * A brand as every write stores it (the fields of `checkBrand` and its logo), with the given fields on top.
+ * @param {{ id: string, name: string } & Record<string, unknown>} given
+ */
+export const storedBrand = (given) => ({ ...storedFields(checkBrand({ name: given.name }, null)), logo: null, ...given });
+
+/**
+ * An attribute as every write stores it (the fields of `checkAttribute`), with the given fields on top.
+ * @param {{ id: string, name: string, slug: string } & Record<string, unknown>} given
+ */
+export const storedAttribute = (given) => ({ ...storedFields(checkAttribute({ name: given.name }, null)), ...given });
 
 /**
  * A connected product with one website.

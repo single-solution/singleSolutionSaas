@@ -417,7 +417,7 @@ export const checkVideo = (value, path, errors) => {
 	if (kind === 'file' && isObject(value) && typeof value.key === 'string' && value.key.length <= CONTENT_LIMITS.sizeKey)
 		return { kind: 'file', key: value.key };
 	if (kind === 'youtube' && isObject(value)) {
-		const id = youtubeId(value.id ?? value.url);
+		const id = youtubeId(value.id);
 		if (id) return { kind: 'youtube', id };
 	}
 	if (kind === 'url' && isObject(value)) {

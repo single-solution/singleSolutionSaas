@@ -18,21 +18,17 @@ const cache = new WeakMap();
 /**
  * The categories whose products are hidden (not active, or below one that is not), the hidden brands, and the
  * categories not listed at all (hidden, or below a hidden one).
- * @param {ReadonlyArray<{ id: string, path?: string[], status?: string }>} categories
+ * @param {ReadonlyArray<{ id: string, path: string[], status: string }>} categories
  * @param {ReadonlyArray<{ id: string, status?: string }>} brands
  * @returns {Hidden}
  */
 const hiddenOf = (categories, brands) => {
-	const notActive = new Set(categories.filter((c) => (c.status ?? 'active') !== 'active').map((c) => c.id));
+	const notActive = new Set(categories.filter((c) => c.status !== 'active').map((c) => c.id));
 	const hidden = new Set(categories.filter((c) => c.status === 'hidden').map((c) => c.id));
 	return {
-		categoryIds: categories
-			.filter((c) => notActive.has(c.id) || (c.path ?? []).some((id) => notActive.has(id)))
-			.map((c) => c.id),
+		categoryIds: categories.filter((c) => notActive.has(c.id) || c.path.some((id) => notActive.has(id))).map((c) => c.id),
 		brandIds: brands.filter((b) => b.status === 'hidden').map((b) => b.id),
-		unlisted: new Set(
-			categories.filter((c) => hidden.has(c.id) || (c.path ?? []).some((id) => hidden.has(id))).map((c) => c.id),
-		),
+		unlisted: new Set(categories.filter((c) => hidden.has(c.id) || c.path.some((id) => hidden.has(id))).map((c) => c.id)),
 	};
 };
 
@@ -59,7 +55,7 @@ export const hiddenFor = (s) => {
 					.toArray(),
 			]);
 			return hiddenOf(
-				categories.map((c) => ({ id: String(c.id), path: c.path ?? [], status: c.status })),
+				categories.map((c) => ({ id: String(c.id), path: c.path, status: c.status })),
 				brands.map((b) => ({ id: String(b.id), status: b.status })),
 			);
 		})();

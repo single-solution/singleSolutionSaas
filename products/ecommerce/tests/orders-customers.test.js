@@ -217,6 +217,8 @@ describe('guests and members by customer id (K-6, CU-5)', () => {
 		const listed = await shop.api('GET', '/v1/customers?segment=guest');
 		const gail = listed.json.items.find((/** @type {any} */ c) => c.name === 'Gail Guest');
 		expect(gail).toMatchObject({ id: GUEST, userId: '', guest: true, totalSpent: 3000, ordersPlaced: 2 });
+		// the segment is the stored guest flag: no member in it
+		expect(listed.json.items.every((/** @type {any} */ c) => c.guest === true)).toBe(true);
 		const mia = (await shop.api('GET', '/v1/customers?q=Mia')).json.items[0];
 		expect(mia).toMatchObject({ id: MEMBER, userId: 'usr_mia00000001', guest: false, totalSpent: 700, ordersPlaced: 1 });
 	});

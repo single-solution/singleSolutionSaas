@@ -21,7 +21,7 @@ import {
 } from '../core/catalog-content.js';
 import { checkAttribute, checkBrand, checkCategory } from '../core/catalog-taxonomy.js';
 import { optionsFromAttributes, specValue, valueLabel } from '../core/catalog.js';
-import { gradeCondition, gradeView, gradesByKey } from '../core/grades.js';
+import { checkGrades, gradeCondition, gradeView, gradesByKey } from '../core/grades.js';
 import { checkLanding, isIndexable, landingFor, landingLink } from '../core/landings.js';
 import { absolute, categoryLink, nextPreviousSlugs, productLink, variantQueryOf, withQuery } from '../core/links.js';
 import { buildLlmsFull } from '../core/llms.js';
@@ -118,14 +118,17 @@ describe('content fields', () => {
 		const errors = [];
 		expect(checkVideo(null, '/video', errors)).toBeNull();
 		expect(checkVideo({ kind: 'file', key: 'k' }, '/video', errors)).toEqual({ kind: 'file', key: 'k' });
-		expect(checkVideo({ kind: 'youtube', url: 'https://youtu.be/dQw4w9WgXcQ' }, '/video', errors)).toEqual({
+		// the id may be given as an address too
+		expect(checkVideo({ kind: 'youtube', id: 'https://youtu.be/dQw4w9WgXcQ' }, '/video', errors)).toEqual({
 			kind: 'youtube',
 			id: 'dQw4w9WgXcQ',
 		});
 		expect(checkVideo({ kind: 'youtube', id: 'x' }, '/video', errors)).toBeUndefined();
+		// only the documented { kind: 'youtube', id }
+		expect(checkVideo({ kind: 'youtube', url: 'https://youtu.be/dQw4w9WgXcQ' }, '/video', errors)).toBeUndefined();
 		expect(checkVideo({ kind: 'url', url: '/local.mp4' }, '/video', errors)).toBeUndefined();
 		expect(checkVideo('x', '/video', errors)).toBeUndefined();
-		expect(errors).toHaveLength(3);
+		expect(errors).toHaveLength(4);
 		/** @type {Array<{ path: string, message: string }>} */
 		const extras = [];
 		expect(
@@ -414,9 +417,10 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 		expect(gradeCondition({ kind: 'physical' }, { grade: 'b' }, grades, 'used')).toBe('used');
 		expect(gradeCondition({ kind: 'physical' }, { grade: null }, grades, 'used')).toBe('new');
 		expect(gradeCondition({ kind: 'digital' }, { grade: 'a' }, grades, 'used')).toBe('');
-		expect(
-			gradeView(/** @type {any} */ ({ key: 'b', label: 'B', description: '', returnDays: null, warrantyDays: 5 })),
-		).toMatchObject({
+		// a grade as the list stores it (every field written by checkGrades)
+		const stored = checkGrades([{ key: 'b', label: 'B', warrantyDays: 5 }]);
+		if (!stored.ok) throw new Error(stored.errors.join(' '));
+		expect(gradeView(/** @type {import('../core/grades.js').Grade} */ (stored.value[0]))).toMatchObject({
 			color: '',
 			video: '',
 			condition: null,

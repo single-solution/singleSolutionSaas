@@ -9,7 +9,7 @@ import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SALES_BY } from '../core/reports.js';
 import { COLLECTIONS } from '../core/model.js';
-import { STORAGE, readyShop } from './helpers.js';
+import { STORAGE, readyShop, storedAttribute, storedBrand, storedCategory } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -199,8 +199,10 @@ describe('reports', () => {
 	beforeAll(async () => {
 		category = createId('cat');
 		brand = createId('brd');
-		await data.collection(COLLECTIONS.categories).insertOne({ id: category, slug: 'phones', name: 'Phones', parentId: null });
-		await data.collection(COLLECTIONS.brands).insertOne({ id: brand, slug: 'acme', name: 'Acme', description: '', logo: null });
+		await data
+			.collection(COLLECTIONS.categories)
+			.insertOne(storedCategory({ id: category, slug: 'phones', name: 'Phones', parentId: null }));
+		await data.collection(COLLECTIONS.brands).insertOne(storedBrand({ id: brand, slug: 'acme', name: 'Acme' }));
 		phone = await shop.seedProduct({
 			name: 'Report phone',
 			variants: [variant({ sku: 'RP-1', options: { Colour: 'Red', Size: 'XL' }, grade: 'used_a', stock: 2 })],
@@ -363,19 +365,18 @@ describe('wishlist and compare', () => {
 	it('answer product cards with photos, brand, grades and comparable values', async () => {
 		const photo = { key: 'ecommerce/products/a/front.jpg', type: 'image/jpeg', size: 1000, alt: '' };
 		const brand = createId('brd');
-		await data.collection(COLLECTIONS.brands).insertOne({ id: brand, slug: 'zeta', name: 'Zeta', description: '', logo: null });
+		await data.collection(COLLECTIONS.brands).insertOne(storedBrand({ id: brand, slug: 'zeta', name: 'Zeta' }));
 		await data.collection(COLLECTIONS.attributes).insertMany([
-			{
+			storedAttribute({
 				id: 'att_colours',
 				name: 'Colours',
+				slug: 'colours',
 				type: 'choice',
-				choices: [],
-				unit: '',
 				filterable: true,
 				comparable: true,
 				sort: 1,
-			},
-			{ id: 'att_5g', name: '5G', type: 'boolean', choices: [], unit: '', filterable: true, comparable: true, sort: 2 },
+			}),
+			storedAttribute({ id: 'att_5g', name: '5G', slug: '5g', type: 'boolean', filterable: true, comparable: true, sort: 2 }),
 		]);
 		await shop.list('grades', [{ key: 'used_b', label: 'Used B' }]);
 		const a = await shop.seedProduct({

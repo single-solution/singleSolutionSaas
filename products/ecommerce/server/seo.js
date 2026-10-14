@@ -324,7 +324,7 @@ export const createSeo = (product, service) => {
 		const description = metaDescription(
 			category.seo.description,
 			patternText(settings.categoryDescription, names),
-			category.content?.summary,
+			category.content.summary,
 			category.description,
 			settings.defaultDescription,
 			category.name,
@@ -352,7 +352,7 @@ export const createSeo = (product, service) => {
 			items: await Promise.all(
 				items.map(async (row) => ({ name: String(row.name), url: await media.productUrl(s, /** @type {any} */ (row)) })),
 			),
-			faqs: category.faqs ?? [],
+			faqs: category.faqs,
 		});
 		const ogImage = siteAddress(category.seo.ogImage);
 		return {
@@ -742,9 +742,9 @@ export const createSeo = (product, service) => {
 				grades: [...gradesFor(gradeList, lineageOf([category.id], byCategoryId)).values()]
 					.filter(
 						(grade) =>
-							grade.active !== false &&
-							((grade.categoryIds ?? []).length === 0 ||
-								(grade.categoryIds ?? []).some((id) => id === category.id || category.path.includes(id))),
+							grade.active &&
+							(grade.categoryIds.length === 0 ||
+								grade.categoryIds.some((id) => id === category.id || category.path.includes(id))),
 					)
 					.map((grade) => grade.label),
 				products: byCategory.get(category.id) ?? [],

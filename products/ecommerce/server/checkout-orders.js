@@ -566,17 +566,17 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const graded = q.priced.filter((line) => line.grade);
 		const paths =
 			grades.length > 0 && graded.length > 0
-				? await createOrdersStore(await s.data()).categoryPaths(graded.flatMap((line) => line.categoryIds ?? []))
+				? await createOrdersStore(await s.data()).categoryPaths(graded.flatMap((line) => line.categoryIds))
 				: new Map();
 		const tree = new Map([...paths].map(([id, path]) => [id, { path }]));
 		/**
 		 * The grade's days are the entry of its product's category or the nearest one above it first (E45).
-		 * @param {{ kind: string, grade: string | null, warrantyDays?: number | null, categoryIds?: string[] }} line
+		 * @param {{ kind: string, grade: string | null, warrantyDays?: number | null, categoryIds: string[] }} line
 		 */
 		const warrantyOf = (line) =>
 			line.kind === 'physical'
 				? (line.warrantyDays ??
-					(line.grade ? gradesFor(grades, lineageOf(line.categoryIds ?? [], tree)).get(line.grade)?.warrantyDays : null) ??
+					(line.grade ? gradesFor(grades, lineageOf(line.categoryIds, tree)).get(line.grade)?.warrantyDays : null) ??
 					warrantyDefault)
 				: null;
 		/** @type {Array<{ productId: string, start: Date, end: Date, lineId: string }>} */

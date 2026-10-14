@@ -89,7 +89,7 @@ export const cardVariantsOf = (product, { attributes, variantUrls, url }) =>
 			options: variant.options,
 			attributes: Object.entries(variant.attributes).flatMap(([id, value]) => {
 				const attribute = attributes.get(id);
-				return attribute ? [{ slug: attribute.slug ?? id, name: attribute.name, label: valueLabel(attribute, value) }] : [];
+				return attribute ? [{ slug: attribute.slug, name: attribute.name, label: valueLabel(attribute, value) }] : [];
 			}),
 			price: variant.price,
 			compareAtPrice:
@@ -168,7 +168,7 @@ export const specsOf = (product, attributes) =>
 		.sort((a, b) => a.attribute.sort - b.attribute.sort || a.attribute.name.localeCompare(b.attribute.name))
 		.map(({ attribute, value }) => ({
 			id: attribute.id,
-			slug: attribute.slug ?? attribute.id,
+			slug: attribute.slug,
 			name: attribute.name,
 			value,
 			label: valueLabel(attribute, value),
@@ -215,7 +215,7 @@ export const pageOf = (product, context) => {
 				attributes: Object.entries(variant.attributes).flatMap(([id, value]) => {
 					const attribute = attributes.get(id);
 					return attribute
-						? [{ id, slug: attribute.slug ?? id, name: attribute.name, value, label: valueLabel(attribute, value) }]
+						? [{ id, slug: attribute.slug, name: attribute.name, value, label: valueLabel(attribute, value) }]
 						: [];
 				}),
 				price: variant.price,

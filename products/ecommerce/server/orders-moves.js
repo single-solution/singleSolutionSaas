@@ -127,11 +127,11 @@ export const createMoves = (product, service) => {
 					.find({ websiteId: s.websiteId }, { projection: { _id: 0, id: 1, path: 1, requiresSerial: 1 } })
 					.limit(5000)
 					.toArray()
-			).map((row) => [String(row.id), { path: row.path ?? [], requiresSerial: row.requiresSerial ?? null }]),
+			).map((row) => [String(row.id), { path: row.path, requiresSerial: row.requiresSerial }]),
 		);
 		return new Set(
 			products
-				.filter((row) => isSerialized({ serialized: row.serialized ?? null, categoryIds: row.categoryIds ?? [] }, categories))
+				.filter((row) => isSerialized({ serialized: row.serialized, categoryIds: row.categoryIds }, categories))
 				.map((row) => String(row.id)),
 		);
 	};

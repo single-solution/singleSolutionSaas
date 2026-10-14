@@ -85,7 +85,7 @@ export const createMedia = (product) => {
 				]);
 				return {
 					domain: s.domain,
-					categories: new Map(categories.map((c) => [String(c.id), { slug: String(c.slug), path: c.path ?? [] }])),
+					categories: new Map(categories.map((c) => [String(c.id), { slug: String(c.slug), path: c.path }])),
 					brands: new Map(brands.map((b) => [String(b.id), { slug: String(b.slug) }])),
 				};
 			})();

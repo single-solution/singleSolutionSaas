@@ -35,14 +35,14 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {string} description
  * @property {number | null} returnDays
  * @property {number | null} warrantyDays
- * @property {string | null} [categoryId] the category this entry is the definition for (E45); null = every category
- * @property {string[]} [categoryIds] [] = every category
- * @property {string} [color] a CSS colour ('' = none)
- * @property {string} [video] a storage key or a YouTube id ('' = none)
- * @property {import('./catalog-content.js').Content} [content]
- * @property {boolean} [active] false: not offered for new variants, kept on old ones
- * @property {Condition | null} [condition] null = the SEO and feeds setting for graded items
- * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} [seo]
+ * @property {string | null} categoryId the category this entry is the definition for (E45); null = every category
+ * @property {string[]} categoryIds [] = every category
+ * @property {string} color a CSS color ('' = none)
+ * @property {string} video a storage key or a YouTube id ('' = none)
+ * @property {import('./catalog-content.js').Content} content
+ * @property {boolean} active false: not offered for new variants, kept on old ones
+ * @property {Condition | null} condition null = the SEO and feeds setting for graded items
+ * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} seo
  *   the glossary page (E15)
  * @property {string | null} [videoUrl] the condition video's address, filled in for shoppers (not stored)
  */
@@ -75,7 +75,7 @@ export const checkGrades = (value) => {
 		if (categoryId !== null && (typeof categoryId !== 'string' || categoryId.length > 64))
 			errors.push(`Grade ${n}: the category is a category id, or null for every category.`);
 		if (!KEY.test(key)) errors.push(`Grade ${n}: the key is lowercase letters, digits, _ and - (starting with a letter).`);
-		else if (out.some((grade) => grade.key === key && (grade.categoryId ?? null) === categoryId))
+		else if (out.some((grade) => grade.key === key && grade.categoryId === categoryId))
 			errors.push(
 				categoryId === null
 					? `Grade ${n}: the key ${key} is used twice.`
@@ -177,7 +177,7 @@ export const gradesFor = (list, categoryIds) => {
 	const wanted = categoryIds.filter((id) => typeof id === 'string' && id !== '');
 	/** @param {Grade} entry */
 	const rank = (entry) => {
-		const own = entry.categoryId ?? null;
+		const own = entry.categoryId;
 		if (own === null) return wanted.length;
 		const at = wanted.indexOf(own);
 		return at !== -1 ? at : wanted.length === 0 ? wanted.length + 1 : -1;
@@ -219,11 +219,11 @@ export const gradeView = (grade) => ({
 	key: grade.key,
 	label: grade.label,
 	description: grade.description,
-	color: grade.color ?? '',
-	video: grade.video ?? '',
+	color: grade.color,
+	video: grade.video,
 	videoUrl: grade.videoUrl ?? null,
-	content: grade.content ?? { ...EMPTY_CONTENT },
-	condition: grade.condition ?? null,
+	content: grade.content,
+	condition: grade.condition,
 	warrantyDays: grade.warrantyDays,
 	returnDays: grade.returnDays,
 });

@@ -177,7 +177,7 @@ export const returnableLines = ({ order, claims, products, grades, lineage, defa
 		.map((line) => {
 			const product = products.get(line.productId) ?? null;
 			// the grade as the line's category (or the nearest one above it) defines it, else the entry for every category (E45)
-			const grade = line.grade ? (gradesFor(grades, lineage(line.categoryIds ?? [])).get(line.grade) ?? null) : null;
+			const grade = line.grade ? (gradesFor(grades, lineage(line.categoryIds)).get(line.grade) ?? null) : null;
 			const taken = held.get(line.id);
 			const claimable = Math.max(0, line.quantity - (taken?.quantity ?? 0));
 			return {

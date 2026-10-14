@@ -66,8 +66,9 @@ afterAll(async () => shop?.product.close());
 
 describe('grades per category (E45)', () => {
 	it('keeps one key per category and picks a product category first, then the one for every category', () => {
+		// as the list is stored: every entry names its category, null for every category
 		const list = [
-			{ key: 'a', label: 'Grade A' },
+			{ key: 'a', label: 'Grade A', categoryId: null },
 			{ key: 'b', label: 'B for dresses', categoryId: 'cat_d' },
 			{ key: 'a', label: 'Like new', categoryId: 'cat_d' },
 			{ key: 'a', label: 'Mint', categoryId: 'cat_s' },
@@ -77,7 +78,7 @@ describe('grades per category (E45)', () => {
 		expect([...gradesFor(list, ['cat_x']).values()].map((grade) => grade.label)).toEqual(['Grade A']);
 		// no category known: the entry for every category, else the first for one
 		expect([...gradesByKey(list).values()].map((grade) => grade.label)).toEqual(['Grade A', 'B for dresses']);
-		expect(gradesByKey([{ key: 'x' }]).size).toBe(0);
+		expect(gradesByKey([{ key: 'x', categoryId: null }]).size).toBe(0);
 		const checked = checkGrades([
 			{ key: 'a', label: 'A' },
 			{ key: 'a', label: 'A2', categoryId: 'cat_d' },
@@ -110,7 +111,7 @@ describe('grades per category (E45)', () => {
 		expect(lineageOf(['cat_g', 'cat_s'], tree)).toEqual(['cat_g', 'cat_e', 'cat_d', 'cat_s']);
 		expect(lineageOf(['cat_e', 'cat_d', null, '', 'cat_unknown'], tree)).toEqual(['cat_e', 'cat_d', 'cat_unknown']);
 		const list = [
-			{ key: 'a', label: 'Grade A' },
+			{ key: 'a', label: 'Grade A', categoryId: null },
 			{ key: 'a', label: 'Like new', categoryId: 'cat_d' },
 			{ key: 'a', label: 'Evening mint', categoryId: 'cat_e' },
 			{ key: 'a', label: 'Sale A', categoryId: 'cat_s' },

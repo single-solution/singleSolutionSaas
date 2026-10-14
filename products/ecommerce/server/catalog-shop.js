@@ -72,7 +72,7 @@ const createCards = (common, service) => {
 		if (deals.length === 0) return out;
 		const clock = await service.pricing(s);
 		for (const item of products) {
-			const categoryIds = await categoryTrail(data, item.categoryIds ?? []);
+			const categoryIds = await categoryTrail(data, item.categoryIds);
 			out.set(
 				item.id,
 				productDeals(item, deals, {
@@ -236,7 +236,7 @@ export const createCatalogShop = (product, service, common) => {
 			match: searchMatch === 'phrase' ? /** @type {const} */ ('phrase') : /** @type {const} */ ('words'),
 		};
 		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);
-		const filterable = attributes.filter((attribute) => attribute.filterable && attribute.active !== false);
+		const filterable = attributes.filter((attribute) => attribute.filterable && attribute.active);
 		const names = {
 			categories: byCategory,
 			brands: new Map(brands.map((b) => [b.id, b])),
@@ -456,9 +456,9 @@ export const createCatalogShop = (product, service, common) => {
 				description: category.description,
 				seo: category.seo,
 				status: productsHidden.has(category.id) ? 'coming_soon' : 'active',
-				icon: category.icon ?? '',
-				content: category.content ?? { summary: '', bullets: [] },
-				faqs: category.faqs ?? [],
+				icon: category.icon,
+				content: category.content,
+				faqs: category.faqs,
 				image: category.image ? { url: await common.media.mediaUrl(s, category.image.key), alt: category.image.alt } : null,
 				url: await common.media.categoryUrl(s, category),
 			});
@@ -510,8 +510,8 @@ export const createCatalogShop = (product, service, common) => {
 			(brand) =>
 				brand.status !== 'hidden' &&
 				(!related ||
-					(brand.categoryIds ?? []).length === 0 ||
-					(brand.categoryIds ?? []).some((id) => /** @type {Set<string>} */ (related).has(id))),
+					brand.categoryIds.length === 0 ||
+					brand.categoryIds.some((id) => /** @type {Set<string>} */ (related).has(id))),
 		);
 		return {
 			items: await Promise.all(
@@ -520,7 +520,7 @@ export const createCatalogShop = (product, service, common) => {
 					slug: brand.slug,
 					name: brand.name,
 					description: brand.description,
-					categoryIds: brand.categoryIds ?? [],
+					categoryIds: brand.categoryIds,
 					seo: brand.seo,
 					logo: brand.logo ? { url: await common.media.mediaUrl(s, brand.logo.key), alt: brand.logo.alt } : null,
 					count: counts.get(brand.id) ?? 0,

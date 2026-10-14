@@ -96,9 +96,9 @@ export const createRoutes = (product) => {
 				const grades = [...gradesByKey(await s.list('grades')).values()].map((/** @type {any} */ grade) => ({
 					key: grade.key,
 					label: grade.label,
-					color: grade.color ?? '',
-					active: grade.active !== false,
-					categoryIds: grade.categoryIds ?? [],
+					color: grade.color,
+					active: grade.active,
+					categoryIds: grade.categoryIds,
 				}));
 				const { serialMode, serialCheck } = await s.values('grades_serials');
 				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades, serialMode, serialCheck };

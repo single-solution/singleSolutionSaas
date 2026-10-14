@@ -14643,9 +14643,6 @@
 								},
 								"id": {
 									"type": "string"
-								},
-								"url": {
-									"type": "string"
 								}
 							}
 						},
@@ -15111,9 +15108,6 @@
 									"const": "youtube"
 								},
 								"id": {
-									"type": "string"
-								},
-								"url": {
 									"type": "string"
 								}
 							}
@@ -15594,9 +15588,6 @@
 								},
 								"id": {
 									"type": "string"
-								},
-								"url": {
-									"type": "string"
 								}
 							}
 						},
@@ -16060,9 +16051,6 @@
 									"const": "youtube"
 								},
 								"id": {
-									"type": "string"
-								},
-								"url": {
 									"type": "string"
 								}
 							}

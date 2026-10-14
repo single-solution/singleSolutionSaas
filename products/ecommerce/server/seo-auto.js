@@ -159,8 +159,8 @@ export const createAutoSeo = (product, service, landings) => {
 	const attributeSaved = async (s, payload) => {
 		if (!s.has('landing_pages') || !(await onSave(s))) return;
 		const attribute = payload.attribute;
-		const seo = attribute.seo ?? { title: '', description: '', body: '', faqs: [] };
-		const empty = { title: !seo.title, description: !seo.description, faqs: (seo.faqs ?? []).length === 0 };
+		const { seo } = attribute;
+		const empty = { title: !seo.title, description: !seo.description, faqs: seo.faqs.length === 0 };
 		if (!empty.title && !empty.description && !empty.faqs) return;
 		const data = await s.data();
 		const [settings, seoSettings, business, category] = await Promise.all([
@@ -171,10 +171,10 @@ export const createAutoSeo = (product, service, landings) => {
 				? data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_ID)
 				: null,
 		]);
-		const labels = (attribute.choices ?? []).map((choice) => choice.label).slice(0, NAMED_VALUES);
+		const labels = attribute.choices.map((choice) => choice.label).slice(0, NAMED_VALUES);
 		const values = {
 			name: attribute.name,
-			unit: attribute.unit ?? '',
+			unit: attribute.unit,
 			category: category ? String(category.name) : '',
 			values: labels.join(', '),
 			storeName: storeNameOf(seoSettings, business),
@@ -204,9 +204,9 @@ export const createAutoSeo = (product, service, landings) => {
 			...seo,
 			title: seo.title || (typeof written.title === 'string' ? written.title : formula.title),
 			description: seo.description || (typeof written.description === 'string' ? written.description : formula.description),
-			faqs: empty.faqs && Array.isArray(written.faqs) ? written.faqs : (seo.faqs ?? []),
+			faqs: empty.faqs && Array.isArray(written.faqs) ? written.faqs : seo.faqs,
 		};
-		if (next.title === seo.title && next.description === seo.description && next.faqs === (seo.faqs ?? [])) return;
+		if (next.title === seo.title && next.description === seo.description && next.faqs === seo.faqs) return;
 		await data
 			.collection(COLLECTIONS.attributes)
 			.updateOne({ websiteId: data.websiteId, id: attribute.id }, { $set: { seo: next } });

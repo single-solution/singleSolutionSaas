@@ -549,13 +549,13 @@ export const createLandings = (product, service, media) => {
 			automatic?.copy.description,
 			category?.seo.description,
 			own ? patternText(settings.categoryDescription, patternNames) : '',
-			category?.content?.summary,
+			category?.content.summary,
 			category?.description,
 			brand?.seo.description,
 			brand?.description,
 			settings.defaultDescription,
 		);
-		const intro = landing?.intro || category?.content?.summary || category?.description || '';
+		const intro = landing?.intro || category?.content.summary || category?.description || '';
 		const faqs = landing ? landing.faqs : (category?.faqs ?? []);
 		const items = await data
 			.collection(COLLECTIONS.products)
@@ -637,11 +637,10 @@ export const createLandings = (product, service, media) => {
 	/**
 	 * Whether a definition for every category (an attribute's or a grade's, with its categories, [] = all) applies to a
 	 * category or one above it.
-	 * @param {{ categoryIds?: string[] }} record @param {CategoryRecord} category
+	 * @param {{ categoryIds: string[] }} record @param {CategoryRecord} category
 	 */
 	const appliesTo = (record, category) =>
-		(record.categoryIds ?? []).length === 0 ||
-		(record.categoryIds ?? []).some((id) => id === category.id || category.path.includes(id));
+		record.categoryIds.length === 0 || record.categoryIds.some((id) => id === category.id || category.path.includes(id));
 
 	/**
 	 * The head of a glossary page: its own SEO copy, else the merchant's patterns (`pattern`, attributes; SG-20).
@@ -692,9 +691,7 @@ export const createLandings = (product, service, media) => {
 		const { s, data } = await open(ctx);
 		const ref = String(ctx.params.slug);
 		const category = await glossaryCategory(s, data, ctx.params.category);
-		const named = (await attributesOf(data)).filter(
-			(row) => row.active !== false && (row.slug === ref.toLowerCase() || row.id === ref),
-		);
+		const named = (await attributesOf(data)).filter((row) => row.active && (row.slug === ref.toLowerCase() || row.id === ref));
 		const lineage = category ? lineageOf([category.id], new Map([[category.id, category]])) : [];
 		const attribute = category
 			? (lineage.map((id) => named.find((row) => row.categoryId === id)).find(Boolean) ??
@@ -711,13 +708,13 @@ export const createLandings = (product, service, media) => {
 							.findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_ID)) ?? null
 					)
 				: null);
-		const slug = attribute.slug ?? attribute.id;
-		const values = attribute.choices ?? [];
+		const slug = attribute.slug;
+		const values = attribute.choices;
 		const settings = await s.values('landing_pages');
 		return {
 			name: attribute.name,
 			slug,
-			unit: attribute.unit ?? '',
+			unit: attribute.unit,
 			values,
 			categoryId: attribute.categoryId,
 			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
@@ -730,7 +727,7 @@ export const createLandings = (product, service, media) => {
 					title: settings.attributeTitle,
 					description: settings.attributeDescription,
 					values: {
-						unit: attribute.unit ?? '',
+						unit: attribute.unit,
 						category: page?.name ?? '',
 						values: values
 							.slice(0, PATTERN_VALUES)
@@ -770,11 +767,11 @@ export const createLandings = (product, service, media) => {
 			key: grade.key,
 			label: grade.label,
 			gradeDescription: grade.description,
-			color: grade.color ?? '',
-			condition: grade.condition ?? null,
-			content: grade.content ?? { summary: '', bullets: [] },
-			categoryId: grade.categoryId ?? null,
-			categoryIds: grade.categoryIds ?? [],
+			color: grade.color,
+			condition: grade.condition,
+			content: grade.content,
+			categoryId: grade.categoryId,
+			categoryIds: grade.categoryIds,
 			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
 			...(await glossaryHead(s, {
 				name: grade.label,
@@ -800,7 +797,7 @@ export const createLandings = (product, service, media) => {
 		const urls = new Set();
 		/**
 		 * @param {'attributeUrl' | 'gradeUrl'} setting @param {Record<string, string>} values
-		 * @param {{ categoryId?: string | null, categoryIds?: string[] }} record
+		 * @param {{ categoryId: string | null, categoryIds: string[] }} record
 		 */
 		const add = async (setting, values, record) => {
 			const template = String(settings[setting] ?? '');
@@ -810,7 +807,7 @@ export const createLandings = (product, service, media) => {
 			const places = record.categoryId
 				? [own]
 				: template.includes('{category}')
-					? (record.categoryIds ?? []).map((id) => names.byCategory.get(id))
+					? record.categoryIds.map((id) => names.byCategory.get(id))
 					: [undefined];
 			for (const place of places) {
 				if (place === undefined && (record.categoryId || template.includes('{category}'))) continue;
@@ -820,10 +817,9 @@ export const createLandings = (product, service, media) => {
 			}
 		};
 		for (const attribute of await attributesOf(data))
-			if (attribute.active !== false) await add('attributeUrl', { slug: attribute.slug ?? attribute.id }, attribute);
+			if (attribute.active) await add('attributeUrl', { slug: attribute.slug }, attribute);
 		for (const grade of names.gradeList)
-			if (grade.active !== false && (grade.seo?.body || grade.seo?.description))
-				await add('gradeUrl', { key: grade.key }, grade);
+			if (grade.active && (grade.seo.body || grade.seo.description)) await add('gradeUrl', { key: grade.key }, grade);
 		return [...urls];
 	};
 

@@ -89,8 +89,9 @@ export const customerFilter = (
 	};
 	/** @type {Record<string, unknown>[]} */
 	const and = [];
-	// segments (E31): guests have no Accounts user; active customers ordered at least once; loyalty customers have points
-	if (segment === 'guest') and.push({ $or: [{ userId: null }, { userId: '' }, { userId: { $exists: false } }] });
+	// segments (E31): guests have no Accounts user (every write stores `guest`); active customers ordered at least once;
+	// loyalty customers have points
+	if (segment === 'guest') and.push({ guest: true });
 	if (segment === 'active') and.push({ orderCount: { $gte: 1 } });
 	if (segment === 'loyalty')
 		and.push({ $or: [{ userId: { $in: loyalty?.userIds ?? [] } }, { id: { $in: loyalty?.customerIds ?? [] } }] });

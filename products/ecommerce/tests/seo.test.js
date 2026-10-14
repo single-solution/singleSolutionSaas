@@ -20,7 +20,7 @@ import {
 	sitemapFiles,
 	sitemapIndex,
 } from '../core/seo.js';
-import { DOMAIN, ORIGIN, readyShop } from './helpers.js';
+import { DOMAIN, ORIGIN, readyShop, storedBrand, storedCategory } from './helpers.js';
 
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
@@ -319,7 +319,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		shop = await readyShop();
 		const data = await shop.db();
 		await data.collection(COLLECTIONS.categories).insertMany([
-			{
+			storedCategory({
 				id: 'cat_root',
 				slug: 'phones',
 				name: 'Phones',
@@ -329,8 +329,8 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 				seo: { title: '', description: '' },
 				image: null,
 				sort: 0,
-			},
-			{
+			}),
+			storedCategory({
 				id: 'cat_android',
 				slug: 'android',
 				name: 'Android',
@@ -340,11 +340,11 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 				seo: { title: 'Android phones', description: 'Android phones, new and used.' },
 				image: { key: 'ecommerce/categories/cat_android/a.jpg', type: 'image/jpeg', size: 10, alt: '' },
 				sort: 0,
-			},
+			}),
 		]);
 		await data
 			.collection(COLLECTIONS.brands)
-			.insertOne({ id: 'brd_1', slug: 'acme', name: 'Acme', description: '', logo: null });
+			.insertOne(storedBrand({ id: 'brd_1', slug: 'acme', name: 'Acme', description: '', logo: null }));
 		phone = await shop.seedProduct({
 			slug: 'acme-phone',
 			name: 'Acme </script> Phone',
@@ -543,17 +543,19 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 	it('splits a large sitemap into files behind an index', async () => {
 		const data = await shop.db();
 		await shop.setting('seo', 'sitemapSize', 1000);
-		const docs = Array.from({ length: 1001 }, (_, index) => ({
-			id: `cat_bulk${String(index).padStart(6, '0')}`,
-			slug: `bulk-${index}`,
-			name: `Bulk ${index}`,
-			parentId: null,
-			path: [],
-			description: '',
-			seo: { title: '', description: '' },
-			image: null,
-			sort: 1,
-		}));
+		const docs = Array.from({ length: 1001 }, (_, index) =>
+			storedCategory({
+				id: `cat_bulk${String(index).padStart(6, '0')}`,
+				slug: `bulk-${index}`,
+				name: `Bulk ${index}`,
+				parentId: null,
+				path: [],
+				description: '',
+				seo: { title: '', description: '' },
+				image: null,
+				sort: 1,
+			}),
+		);
 		await data.collection(COLLECTIONS.categories).insertMany(docs);
 		const index = await shop.api('GET', '/v1/seo/sitemap.xml');
 		expect(index.text).toContain('<sitemapindex');

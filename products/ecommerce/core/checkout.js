@@ -354,7 +354,7 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			variantName: Object.values(variant.options ?? {}).join(' / '),
 			sku: variant.sku ?? '',
 			grade: variant.grade ?? null,
-			gradeLabel: variant.grade ? gradeLabel(variant.grade, product.categoryIds ?? []) : '',
+			gradeLabel: variant.grade ? gradeLabel(variant.grade, product.categoryIds) : '',
 			warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? null,
 			unitPrice: variant.price,
 			cost: variant.cost ?? null,

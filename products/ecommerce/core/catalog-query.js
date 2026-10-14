@@ -410,7 +410,7 @@ export const facetsOf = (raw, names) => {
 			.sort((a, b) => a.attribute.sort - b.attribute.sort || a.attribute.name.localeCompare(b.attribute.name))
 			.map(({ attribute, list }) => ({
 				id: attribute.id,
-				slug: attribute.slug ?? attribute.id,
+				slug: attribute.slug,
 				name: attribute.name,
 				unit: attribute.unit,
 				type: attribute.type,
