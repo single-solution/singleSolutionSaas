@@ -1934,6 +1934,24 @@ UTC and local conversion as saas default and no need to make it complex" — the
 times to people in their own local time**; no extra per-store options; the store mappings set no business time zone
 (the stores used UTC), so their numbers stay the same.
 
+**Owner direction, 2026-10-14 ~21:40 — professional SaaS first (binding; refines 13:25 point 3).** Answering the
+CT/IM import questions (`audit/design/importer-ct-im.md` §8): "what is professional should be in saas, stores can be
+adapted to that"; "should be built as professional saas and stores can adapt it" (Q1, Q2, Q3, Q7, Q8); "I want best
+SEO" (Q3, Q6: "I want best SEO for all stores and then comes the SEO product so if merchant has any I want the best of
+it"). So: each feature is built the professional, best-practice way; a store's behavior that differs from it is **not
+copied** — the store adapts and its shoppers and staff see the professional way. The importer still keeps each store's
+data, links, order numbers and wording (continuity), and keeps a merchant's own hand-written SEO where it exists, with
+best-practice SEO as everyone's default. Answers: Q1 CT shopper messages and Q2 IM WhatsApp (which statuses send,
+provider, chat replies) = the SaaS defaults (official WhatsApp Business templates); Q3 brand × category pages = the
+professional SEO rule (only pages with enough products, no thin pages); Q4 **grades are a global, universal system**:
+any merchant in any niche defines its grades, each mapped to the standard condition (new, refurbished, used) for feeds
+and structured data — grade sets per item type come with phase 4; Q5 an unpaid order that is not dispatched may be
+moved to refunded (it acts as a cancel, no money: the E40 option `unpaid: cancel`, now the default), but **a dispatched
+order cannot be canceled or refunded as a cancel: the parcel must come back (returned to origin) first** — money can
+still be refunded while it is out (the refund action, no status change); Q6 best SEO for every store first, then the
+SEO features merchants use, keeping their own SEO where they wrote it; Q7 sign-in code limits and Q8 the data checks
+follow the SaaS's professional defaults (the importer normalizes store data to the SaaS rules).
+
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
 physical / digital / service, plus the parts it uses: variants, grades, unit numbers, measurement table, measured
