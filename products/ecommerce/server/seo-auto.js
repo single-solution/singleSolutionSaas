@@ -171,9 +171,7 @@ export const createAutoSeo = (product, service, landings) => {
 				? data.collection(COLLECTIONS.categories).findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_ID)
 				: null,
 		]);
-		const labels = (attribute.choices ?? [])
-			.map((choice) => (typeof choice === 'string' ? choice : choice.label))
-			.slice(0, NAMED_VALUES);
+		const labels = (attribute.choices ?? []).map((choice) => choice.label).slice(0, NAMED_VALUES);
 		const values = {
 			name: attribute.name,
 			unit: attribute.unit ?? '',

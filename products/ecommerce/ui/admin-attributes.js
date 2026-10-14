@@ -24,16 +24,15 @@ const CARDS = Object.freeze(['none', 'image', 'chips']);
 const MAX_CHOICES = 100;
 
 /**
- * The choices of an attribute as `{ value, label }` (older records hold plain strings).
+ * The choices of an attribute as `{ value, label }`.
  * @param {Named | null} attribute
  * @returns {Array<{ value: string, label: string }>}
  */
 export const choicesOf = (attribute) =>
-	(attribute?.choices ?? []).map((/** @type {any} */ choice) =>
-		typeof choice === 'string'
-			? { value: choice, label: choice }
-			: { value: String(choice.value), label: String(choice.label) },
-	);
+	(attribute?.choices ?? []).map((/** @type {any} */ choice) => ({
+		value: String(choice.value),
+		label: String(choice.label),
+	}));
 
 /**
  * Choices as rows of a value and a label, removable, with Add.

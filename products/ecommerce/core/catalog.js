@@ -240,18 +240,6 @@ export const heldKeys = (product) =>
  */
 
 /**
- * The choices of an attribute as `{ value, label }` (older records hold plain strings).
- * @param {Pick<AttributeRecord, 'choices'>} attribute
- * @returns {import('./model.js').AttributeChoice[]}
- */
-export const choicesOf = (attribute) =>
-	(attribute.choices ?? []).map((choice) =>
-		typeof choice === 'string'
-			? { value: choice, label: choice }
-			: /** @type {import('./model.js').AttributeChoice} */ (choice),
-	);
-
-/**
  * Check one value against its attribute's type (a choice must be one of its choices or of `extra`).
  * @param {AttributeRecord} attribute
  * @param {unknown} value
@@ -264,7 +252,7 @@ const oneValue = (attribute, value, extra = []) => {
 	const text = cleanText(value, LIMITS.specText);
 	if (!text) return null;
 	if (attribute.type === 'choice')
-		return choicesOf(attribute).some((choice) => choice.value === text) || extra.includes(text) ? text : null;
+		return (attribute.choices ?? []).some((choice) => choice.value === text) || extra.includes(text) ? text : null;
 	return text;
 };
 
@@ -293,7 +281,8 @@ export const specValue = (attribute, value, extra = []) => {
  */
 export const valueLabel = (attribute, value) => {
 	if (Array.isArray(value)) return value.map((entry) => valueLabel(attribute, entry)).join(', ');
-	if (attribute.type === 'choice') return choicesOf(attribute).find((choice) => choice.value === value)?.label ?? String(value);
+	if (attribute.type === 'choice')
+		return (attribute.choices ?? []).find((choice) => choice.value === value)?.label ?? String(value);
 	if (attribute.type === 'number') return attribute.unit ? `${String(value)} ${attribute.unit}` : String(value);
 	return String(value ?? '');
 };

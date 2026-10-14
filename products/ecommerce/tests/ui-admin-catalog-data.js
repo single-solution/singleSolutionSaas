@@ -104,7 +104,10 @@ export const ATTRIBUTES = [
 		name: 'Colour',
 		type: 'choice',
 		unit: '',
-		choices: ['Red', 'Blue'],
+		choices: [
+			{ value: 'Red', label: 'Red' },
+			{ value: 'Blue', label: 'Blue' },
+		],
 		filterable: false,
 		comparable: true,
 		sort: 1,

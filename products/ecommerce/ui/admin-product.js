@@ -227,8 +227,7 @@ export const productDetail = (kit, product, context, message = '') => {
 			.map((entry) =>
 				attribute?.type === 'boolean'
 					? yesNo(kit, entry === true)
-					: ((attribute?.choices ?? []).find((/** @type {any} */ choice) => (choice.value ?? choice) === entry)?.label ??
-						String(entry)),
+					: ((attribute?.choices ?? []).find((/** @type {any} */ choice) => choice.value === entry)?.label ?? String(entry)),
 			)
 			.join(', ');
 	const descriptionNodes = product.descriptionHtml

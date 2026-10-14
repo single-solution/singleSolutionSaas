@@ -18,7 +18,7 @@ import {
 	siteAddress,
 	youtubeId,
 } from '../core/catalog-content.js';
-import { checkAttribute, checkBrand, checkCategory, choicesOf } from '../core/catalog-taxonomy.js';
+import { checkAttribute, checkBrand, checkCategory } from '../core/catalog-taxonomy.js';
 import { optionsFromAttributes, specValue, valueLabel } from '../core/catalog.js';
 import { gradeCondition, gradeView, gradesByKey } from '../core/grades.js';
 import { checkLanding, isIndexable, landingFor, landingLink } from '../core/landings.js';
@@ -158,7 +158,10 @@ describe('attributes and variants', () => {
 		multiple: true,
 		sort: 1,
 		unit: '',
-		choices: [{ value: 'r', label: 'Red' }, 'Blue'],
+		choices: [
+			{ value: 'r', label: 'Red' },
+			{ value: 'Blue', label: 'Blue' },
+		],
 	});
 	const weight = /** @type {any} */ ({
 		id: 'att_w',
@@ -171,10 +174,6 @@ describe('attributes and variants', () => {
 	});
 
 	it('reads values and labels, several values, and derives options', () => {
-		expect(choicesOf(colour)).toEqual([
-			{ value: 'r', label: 'Red' },
-			{ value: 'Blue', label: 'Blue' },
-		]);
 		expect(specValue(colour, ['r', 'Blue'])).toEqual(['r', 'Blue']);
 		expect(specValue(colour, ['r', 'r'])).toBeNull();
 		expect(specValue(colour, [])).toBeNull();

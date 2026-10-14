@@ -529,7 +529,18 @@ describe('catalog admin: other product shapes', () => {
 			},
 			{ id: 'att_t', name: 'Material', type: 'text', unit: '', choices: [], sort: 2, on: 'variant' },
 			{ id: 'att_n', name: 'Notes', type: 'text', unit: '', choices: [], sort: 3, multiple: true },
-			{ id: 'att_s', name: 'Fit', type: 'choice', unit: '', choices: ['Slim', 'Loose'], sort: 4, multiple: true },
+			{
+				id: 'att_s',
+				name: 'Fit',
+				type: 'choice',
+				unit: '',
+				choices: [
+					{ value: 'Slim', label: 'Slim' },
+					{ value: 'Loose', label: 'Loose' },
+				],
+				sort: 4,
+				multiple: true,
+			},
 		];
 		const shaped = product({
 			attributeSetup: [{ attributeId: 'att_c', values: ['red'], customValues: ['green'], defaultValue: null }],

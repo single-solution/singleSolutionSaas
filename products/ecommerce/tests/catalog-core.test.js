@@ -64,7 +64,16 @@ const rules = (over = {}) => ({
 		['att_b', { id: 'att_b', name: 'B', type: 'boolean', choices: [], unit: '', filterable: true, comparable: false, sort: 1 }],
 		[
 			'att_c',
-			{ id: 'att_c', name: 'C', type: 'choice', choices: ['x'], unit: '', filterable: false, comparable: false, sort: 2 },
+			{
+				id: 'att_c',
+				name: 'C',
+				type: 'choice',
+				choices: [{ value: 'x', label: 'X' }],
+				unit: '',
+				filterable: false,
+				comparable: false,
+				sort: 2,
+			},
 		],
 		['att_t', { id: 'att_t', name: 'T', type: 'text', choices: [], unit: '', filterable: false, comparable: false, sort: 3 }],
 	]),
@@ -371,7 +380,14 @@ describe('listings', () => {
 			...attributes,
 			[
 				'att_v',
-				/** @type {any} */ ({ id: 'att_v', slug: 'colour', name: 'V', type: 'choice', on: 'variant', choices: ['red'] }),
+				/** @type {any} */ ({
+					id: 'att_v',
+					slug: 'colour',
+					name: 'V',
+					type: 'choice',
+					on: 'variant',
+					choices: [{ value: 'red', label: 'Red' }],
+				}),
 			],
 		]);
 		const filter = shopFilter(

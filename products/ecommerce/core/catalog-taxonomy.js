@@ -4,9 +4,7 @@
  * moved branch), and the tree with product counts shown to shoppers. No I/O.
  * @module
  */
-import { LIMITS, choicesOf, cleanText, isObject, isSlug } from './catalog.js';
-
-export { choicesOf };
+import { LIMITS, cleanText, isObject, isSlug } from './catalog.js';
 import { EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './catalog-content.js';
 
 /** @typedef {import('./model.js').CategoryRecord} CategoryRecord */
@@ -389,7 +387,7 @@ export const checkAttribute = (body, existing) => {
 	if (!isObject(body)) return { ok: false, errors: [{ path: '', message: 'Send the attribute as an object.' }] };
 	/** @type {FieldError[]} */
 	const errors = [];
-	const read = reader(body, existing ? { ...existing, choices: choicesOf(existing) } : null, errors);
+	const read = reader(body, existing, errors);
 	const name = read('name', nameOf, '', NAME_MESSAGE);
 	if (!existing && body.name === undefined) errors.push({ path: '/name', message: 'Give the attribute a name.' });
 	const slug = read('slug', slugOf, '', SLUG_MESSAGE);

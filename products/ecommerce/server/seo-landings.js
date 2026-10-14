@@ -709,9 +709,7 @@ export const createLandings = (product, service, media) => {
 					)
 				: null);
 		const slug = attribute.slug ?? attribute.id;
-		const values = (attribute.choices ?? []).map((choice) =>
-			typeof choice === 'string' ? { value: choice, label: choice } : choice,
-		);
+		const values = attribute.choices ?? [];
 		const settings = await s.values('landing_pages');
 		return {
 			name: attribute.name,

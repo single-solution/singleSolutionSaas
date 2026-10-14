@@ -192,7 +192,7 @@ export const ID_PREFIX = Object.freeze({
  * @property {string} id
  * @property {string} name
  * @property {'text' | 'number' | 'boolean' | 'choice'} type
- * @property {Array<AttributeChoice | string>} choices (E7; older records hold plain strings, read with `choicesOf`)
+ * @property {AttributeChoice[]} choices (E7)
  * @property {string} unit
  * @property {boolean} filterable
  * @property {boolean} comparable
