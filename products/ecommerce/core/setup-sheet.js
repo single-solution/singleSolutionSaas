@@ -18,7 +18,7 @@ import { SITE_ROUTES } from './snippets.js';
 /** @typedef {import('./role-pricing.js').RolePrice} RolePrice */
 
 /** Longest list summary on the Setup sheet (the kit's limit). */
-export const LIST_SUMMARY_MAX = 300;
+const LIST_SUMMARY_MAX = 300;
 /** Longest name a list summary shows. */
 const NAME_MAX = 60;
 
@@ -59,7 +59,7 @@ const WEEKDAYS = Object.freeze(
  * A booking time `HH:MM` as the Portal shows times (`9:00 AM`).
  * @param {string} time
  */
-export const clockText = (time) => {
+const clockText = (time) => {
 	const [hours = 0, minutes = 0] = time.split(':').map(Number);
 	return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${hours < 12 ? 'AM' : 'PM'}`;
 };

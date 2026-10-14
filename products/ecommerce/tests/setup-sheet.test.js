@@ -5,7 +5,7 @@ import nextConfig from '../next.config.js';
 import openapi from '../openapi.json' with { type: 'json' };
 import { manifest } from '../adapters/product.js';
 import { EVENT_TYPES } from '../core/events.js';
-import { LIST_SUMMARY_MAX, LIST_WORDS, clockText, setupSummaries } from '../core/setup-sheet.js';
+import { LIST_WORDS, setupSummaries } from '../core/setup-sheet.js';
 import { ALL, BASE, setup } from './helpers.js';
 
 /** @param {Awaited<ReturnType<typeof setup>>} env */
@@ -239,7 +239,7 @@ describe('Ecommerce’s Setup sheet words', () => {
 		expect(LIST_WORDS.booking_hours([])).toBe('No booking hours yet, so no slot can be booked.');
 		const zones = Array.from({ length: 40 }, (_, at) => ({ name: `Zone number ${at + 1}` }));
 		const text = LIST_WORDS.delivery_zones(zones);
-		expect(text.length).toBeLessThanOrEqual(LIST_SUMMARY_MAX);
+		expect(text.length).toBeLessThanOrEqual(300);
 		expect(text).toMatch(/^40 zones: Zone number 1, Zone number 2, .* and \d+ more\.$/);
 		// a name longer than a summary is cut
 		expect(LIST_WORDS.couriers([{ name: 'X'.repeat(500) }])).toBe(`1 courier: ${'X'.repeat(59)}….`);
@@ -251,13 +251,10 @@ describe('Ecommerce’s Setup sheet words', () => {
 	});
 
 	it('writes booking times the way the Portal shows them', () => {
-		expect(['00:00', '00:30', '09:05', '12:00', '23:59'].map(clockText)).toEqual([
-			'12:00 AM',
-			'12:30 AM',
-			'9:05 AM',
-			'12:00 PM',
-			'11:59 PM',
-		]);
+		const hours = ['00:00', '00:30', '09:05', '12:00', '23:59'].map((from, day) => ({ day, from, to: '23:59' }));
+		expect(LIST_WORDS.booking_hours(hours)).toBe(
+			'Bookable 5 days a week: Sun 12:00 AM–11:59 PM, Mon 12:30 AM–11:59 PM, Tue 9:05 AM–11:59 PM, Wed 12:00 PM–11:59 PM, Thu 11:59 PM–11:59 PM.',
+		);
 	});
 
 	it('has nothing to summarize while Catalog is off', () => {
