@@ -1,5 +1,5 @@
 /**
- * PLAN 0.8.10 build phase 4, Chat's "done when": Chat's store context, rich and fallback answers, handoff options,
+ * Chat's conversations end to end (PLAN 0.8.10 C1–C8): Chat's store context, rich and fallback answers, handoff options,
  * alerts, imported guest keys and paging pass against the REAL Portal, Accounts, Notifications and Ecommerce, all in
  * this process. Chat's AI replies add Ecommerce's live `GET /v1/chat/context` (E37) for the product the visitor is
  * viewing, with the verified sign-in forwarded and cached 60 s (C1, with the 32,000-character instructions); AI answers
@@ -38,7 +38,7 @@ import {
 import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
 import { DAY, startSystem } from './helpers.js';
 
-const CHAT = 'https://chat-phase4.test';
+const CHAT = 'https://chat-conversations.test';
 const ACCOUNTS = 'https://accounts.test';
 const NOTIFY = 'https://notifications.test';
 const SHOP = 'https://ecommerce.test';
@@ -197,7 +197,7 @@ const authors = (json) => json.messages.map((/** @type {any} */ m) => [m.author,
 /** @param {string} text */
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
-describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce', () => {
+describe('Chat conversations on the real Portal, Accounts, Notifications and Ecommerce', () => {
 	it('sets up the four products: features, databases, providers, templates, people, a product, a deal and the tokens', async () => {
 		for (const base of [CHAT, ACCOUNTS, NOTIFY, SHOP]) await sys.connect({ base });
 		const m = await sys.merchant('lamps@shop.test', [DOMAIN]);
