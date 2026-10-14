@@ -1,5 +1,5 @@
 /**
- * Units (serial numbers) in the catalog admin widget (feature `grades_serials`, PLAN 0.8.8 Grades and serials; E11;
+ * Units (serial numbers) in the catalog admin widget (feature `grades_serials`, PLAN 0.8.8 Condition grades and unit numbers; E11;
  * dynamic model §2) as a list-and-detail screen: search (by the start of the serial) and filter by status, Load more, a
  * detail per unit (its values by unit field, product and variant, location and order), Mark faulty / Back in stock,
  * Delete (not for sold units), and Add units for a product variant (of an item type that numbers its units): one unit

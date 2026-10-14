@@ -14,6 +14,7 @@ import { startTransition, useState } from 'react';
 import { Callout, Masonry, Section, Select, SwapTransition, cx } from '@ss/ui';
 import { call, fill, useLoad } from './api.js';
 import { GradesEditor } from './grades.js';
+import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
 import { BookingHoursEditor, CouriersEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
@@ -259,7 +260,12 @@ export function SettingsTab({ websiteId: id }) {
 							/>
 						)}
 						extras={{
-							catalog: seen('bookings') ? <BookingHoursEditor websiteId={websiteId} off={off('bookings')} /> : null,
+							catalog: (
+								<>
+									<ItemTypesEditor websiteId={websiteId} off={off('catalog')} />
+									{seen('bookings') ? <BookingHoursEditor websiteId={websiteId} off={off('bookings')} /> : null}
+								</>
+							),
 							grades: seen('grades_serials') ? <GradesEditor websiteId={websiteId} off={off('grades_serials')} /> : null,
 							delivery: seen('delivery_zones') ? (
 								<ZonesEditor websiteId={websiteId} off={off('delivery_zones')} currency={currency} />

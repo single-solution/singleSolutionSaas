@@ -38,7 +38,7 @@ import { checkSizeChart } from './size-charts.js';
  * @property {ReadonlySet<string>} categoryIds
  * @property {ReadonlySet<string>} brandIds
  * @property {ReadonlySet<string>} sizeChartIds
- * @property {ReadonlySet<string>} gradeKeys the `grades` list (empty while Grades and serials is off)
+ * @property {ReadonlySet<string>} gradeKeys the `grades` list (empty while Condition grades and unit numbers is off)
  * @property {ReadonlySet<string>} locationIds
  * @property {ReadonlyArray<import('./item-types.js').ItemType>} types the merchant's item types
  * @property {ReadonlyMap<string, { path: string[] }>} [categories] stored categories (a category's path)

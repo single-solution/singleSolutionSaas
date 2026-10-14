@@ -3,7 +3,7 @@
  * section at a time, each a list-and-detail screen (PLAN 0.6) — products (`./admin-products.js`), categories, brands
  * and locations (`./admin-taxonomy.js`, locations with Multi-location stock), attributes (`./admin-attributes.js`),
  * size charts (`./admin-charts.js`, with Size charts), landing pages (`./admin-landings.js`, with Landing pages) and
- * serial numbers (`./admin-serials.js`, with Grades and serials).
+ * serial numbers (`./admin-serials.js`, with Condition grades and unit numbers).
  * @module
  */
 import { attributesTab } from './admin-attributes.js';

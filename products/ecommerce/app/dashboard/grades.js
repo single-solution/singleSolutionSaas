@@ -1,17 +1,18 @@
 'use client';
 /**
- * Settings → Grades and serials: the condition grades editor (`grades` list of `grades_serials`, PLAN 0.8.10 E10). The
+ * Settings → Condition grades and unit numbers: the condition grades editor (`grades` list of `grades_serials`, PLAN 0.8.10 E10). The
  * list shows each grade's color, name, key, condition, return and warranty days and categories, with Edit and a More
  * menu (move, remove); a grade's every field is edited in a dialog (PLAN 0.6: secondary forms in dialogs): name and
  * key (hyphens allowed), condition (new, refurbished, used, or the SEO and feeds setting), days, color with a swatch,
  * whether it is offered, a description of up to 1,200 characters, a condition video (a file key or a YouTube id;
  * a pasted YouTube address keeps its id), the category it is the definition for (E45: the same key once per category,
- * with its own label, texts, days and glossary, and once for every other category), the categories it is for, its
+ * with its own label, texts, days and glossary, and once for every other category), the categories and item types it
+ * is for (a grade set per item type), its
  * content (summary and bullets with icon names) and its glossary page (title, description, text and questions). Done keeps the grade in the list; Save list
  * saves the whole list (up to 100 grades) with `PUT …/lists/grades`, and the server checks it again.
  *
  * Categories are typed as ids (`cat_…`): the dashboard shows no business data (PLAN 0.4.3) and has no route that reads
- * the website's categories, so they are entered as tags.
+ * the website's categories, so they are entered as tags; item types by their keys, as the item types editor shows them.
  * @module
  */
 import { useState } from 'react';
@@ -31,18 +32,8 @@ import {
 	cx,
 } from '@ss/ui';
 import { fill } from './api.js';
-import {
-	GRADE_CONDITIONS,
-	GRADE_LIMITS,
-	blankGrade,
-	cleanGrade,
-	gradeProblems,
-	keyOf,
-	loadGrade,
-	splitIds,
-	videoOf,
-} from './drafts.js';
-import { ListOutcome, SaveRow, moved, useList } from './lists.js';
+import { GRADE_CONDITIONS, GRADE_LIMITS, blankGrade, cleanGrade, gradeProblems, keyOf, loadGrade, videoOf } from './drafts.js';
+import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -89,61 +80,6 @@ function Swatch({ color, size = 'md', label }) {
 			style={color ? { background: color } : undefined}>
 			{color || size === 'sm' ? null : <Icon name="layers" size={14} />}
 		</span>
-	);
-}
-
-/**
- * Ids entered as tags: Enter, a comma or leaving the field adds what was typed; pasting several adds them all; each tag
- * has a remove button, and Backspace in the empty field removes the last one.
- * @param {{ label: string, help: string, values: string[], max: number, onChange: (next: string[]) => void }} props
- */
-function IdTags({ label, help, values, max, onChange }) {
-	const [text, setText] = useState('');
-	/** @param {string} typed */
-	const add = (typed) => {
-		const found = splitIds(typed).filter((id) => !values.includes(id) && id.length <= 64);
-		if (found.length > 0) onChange([...values, ...found].slice(0, max));
-		setText('');
-	};
-	return (
-		<div data-cell="" data-wide="" className="min-w-0 space-y-2">
-			<Input
-				label={label}
-				help={help}
-				aside={values.length > 0 ? fill(G.count, { count: values.length, max }) : G.categoriesAll}
-				value={text}
-				autoComplete="off"
-				disabled={values.length >= max}
-				onChange={(event) => {
-					const next = event.target.value;
-					if (/[\s,;]/.test(next)) add(next);
-					else setText(next);
-				}}
-				onKeyDown={(event) => {
-					if (event.key === 'Enter') {
-						event.preventDefault();
-						add(text);
-					} else if (event.key === 'Backspace' && text === '' && values.length > 0) onChange(values.slice(0, -1));
-				}}
-				onBlur={() => add(text)}
-			/>
-			{values.length > 0 ? (
-				<ul className="flex flex-wrap gap-2">
-					{values.map((id) => (
-						<li key={id} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 py-0.5 pl-2.5 pr-1 text-xs">
-							<code className="break-all">{id}</code>
-							<button
-								type="button"
-								aria-label={fill(G.removeCategory, { id })}
-								onClick={() => onChange(values.filter((value) => value !== id))}
-								className="ss-motion ss-press rounded-md p-1 text-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
-								<Icon name="close" size={12} />
-							</button>
-						</li>
-					))}
-				</ul>
-			) : null}
-		</div>
 	);
 }
 
@@ -365,7 +301,16 @@ function GradeFields({ draft, set, problems, tried }) {
 					help={G.categoriesHelp}
 					values={draft.categoryIds}
 					max={GRADE_LIMITS.categories}
+					none={G.categoriesAll}
 					onChange={(categoryIds) => set({ categoryIds })}
+				/>
+				<IdTags
+					label={G.types}
+					help={G.typesHelp}
+					values={draft.typeKeys}
+					max={GRADE_LIMITS.types}
+					none={G.typesAll}
+					onChange={(typeKeys) => set({ typeKeys })}
 				/>
 			</FieldGrid>
 			<fieldset className="min-w-0 space-y-4">
@@ -434,6 +379,7 @@ function GradeRow({ grade, index, count, onEdit, onMove, onRemove }) {
 		G.conditions[grade.condition],
 		fill(G.days, { returns: daysText(grade.returnDays), warranty: daysText(grade.warrantyDays) }),
 		grade.categoryIds.length === 0 ? G.categoriesAll : fill(G.categoriesSome, { count: grade.categoryIds.length }),
+		grade.typeKeys.length === 0 ? G.typesAll : grade.typeKeys.join(', '),
 	];
 	return (
 		<li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">

@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BUILT_IN_TYPES, checkItemTypes, elementsOf, typeChangeProblems, typeOf, typeTakes } from '../core/item-types.js';
+import { checkGrades, gradeForType, gradeTypes } from '../core/grades.js';
 import { readyShop } from './helpers.js';
 
 /** @param {unknown} value @returns {any[]} */
@@ -219,6 +220,35 @@ describe('saving the item types list', () => {
 		expect(typeChangeProblems([phone], stock, used)).toEqual([]);
 		// units switched on for a type without them, or off with none in stock
 		expect(typeChangeProblems(stock, types([{ ...PHONE, elements: {} }]), none)).toEqual([]);
+	});
+});
+
+describe('grades per item type (owner 2026-10-14 Q4)', () => {
+	it('keeps the types a grade is for, each grade key’s types together, and tells which grades a type takes', () => {
+		const checked = checkGrades([
+			{ key: 'mint', label: 'Mint', condition: 'used', typeKeys: ['used_phone', 'used_phone', 'laptop'] },
+			{ key: 'mint', label: 'Mint dress', categoryId: 'cat_dresses', typeKeys: ['dress'] },
+			{ key: 'new', label: 'New', condition: 'new' },
+			{ key: 'fair', label: 'Fair', categoryId: 'cat_a' },
+			{ key: 'fair', label: 'Fair B', categoryId: 'cat_b', typeKeys: ['dress'] },
+		]);
+		expect(checked.ok).toBe(true);
+		const list = checked.ok ? checked.value : [];
+		expect(list[0]?.typeKeys).toEqual(['used_phone', 'laptop']);
+		expect(list[2]?.typeKeys).toEqual([]);
+		const types = gradeTypes(list);
+		expect(types).toEqual(
+			new Map([
+				['mint', ['used_phone', 'laptop', 'dress']],
+				['new', []],
+				['fair', []],
+			]),
+		);
+		expect(gradeForType(types.get('mint') ?? [], 'laptop')).toBe(true);
+		expect(gradeForType(types.get('mint') ?? [], 'physical')).toBe(false);
+		expect(gradeForType(types.get('new') ?? [], 'physical')).toBe(true);
+		expect(checkGrades([{ key: 'a', label: 'A', typeKeys: ['Bad Key'] }])).toMatchObject({ ok: false });
+		expect(checkGrades([{ key: 'a', label: 'A', typeKeys: 'used_phone' }])).toMatchObject({ ok: false });
 	});
 });
 

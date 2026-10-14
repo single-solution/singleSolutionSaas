@@ -182,7 +182,7 @@ describe('changed meanwhile', () => {
 });
 
 describe('switched-off features', () => {
-	it('packs numbered items without serials while Grades and serials is off, and earns no points without a user', async () => {
+	it('packs numbered items without serials while Condition grades and unit numbers is off, and earns no points without a user', async () => {
 		await shop.switchOn(ALL.filter((feature) => feature !== 'grades_serials'));
 		const s = await service.site(ctx());
 		const order = await seed({}, true);

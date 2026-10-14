@@ -2,8 +2,9 @@
  * Condition grades (PLAN 0.8.8 Items: used or refurbished items carry a condition grade; PLAN 0.8.10 E10): the
  * `grades` list the merchant keeps in the dashboard — a stable key (letters, digits, `_` and `-`), a label shown to
  * shoppers, a description, the item's return and warranty days for that grade (null = the `returns` setting), and per
- * grade the categories it is for ([] = all), a color, a condition video, content, whether it is offered, the item
- * condition structured data and feeds use, and its glossary SEO. A grade entry may be the definition for one category
+ * grade the categories and the item types it is for ([] = all: a grade set per item type, owner 2026-10-14 Q4), a color,
+ * a condition video, content, whether it is offered, the standard condition structured data and feeds use, and its
+ * glossary SEO. A grade entry may be the definition for one category
  * (`categoryId`, E45): the same key then exists once per category with its own label, texts, days and SEO, and once
  * without a category for every other one. Variants name a grade by its key; a product's grade is the entry of its
  * category or the nearest one above it, then the one without a category ({@link gradesFor}). No I/O.
@@ -16,8 +17,10 @@ export const MAX_GRADES = 100;
 /** Longest grade description. */
 const MAX_DESCRIPTION = 1200;
 
-/** Grade keys. */
+/** Grade and item type keys. */
 const KEY = /^[a-z][a-z0-9_-]{0,39}$/;
+/** At most this many item types a grade names. */
+const MAX_TYPES = 50;
 /** A CSS color as the website writes it (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
 const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
 /** Grade conditions (schema.org item conditions), the standard condition every grade maps to (owner, 2026-10-14). */
@@ -37,6 +40,8 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {number | null} warrantyDays
  * @property {string | null} categoryId the category this entry is the definition for (E45); null = every category
  * @property {string[]} categoryIds [] = every category
+ * @property {string[]} typeKeys the item types whose items take it (`core/item-types.js` keys, built-in ones too); [] =
+ *   every type that has grades
  * @property {string} color a CSS color ('' = none)
  * @property {string} video a storage key or a YouTube id ('' = none)
  * @property {import('./catalog-content.js').Content} content
@@ -98,6 +103,13 @@ export const checkGrades = (value) => {
 			!categoryIds.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 64)
 		)
 			errors.push(`Grade ${n}: categories are a list of category ids.`);
+		const typeKeys = entry.typeKeys ?? [];
+		if (
+			!Array.isArray(typeKeys) ||
+			typeKeys.length > MAX_TYPES ||
+			!typeKeys.every((key) => typeof key === 'string' && KEY.test(key))
+		)
+			errors.push(`Grade ${n}: item types are a list of at most ${MAX_TYPES} item type keys.`);
 		const color = entry.color === undefined ? '' : entry.color;
 		if (typeof color !== 'string' || !COLOUR.test(color))
 			errors.push(`Grade ${n}: the color is a CSS color of up to 40 characters.`);
@@ -133,6 +145,7 @@ export const checkGrades = (value) => {
 			returnDays: /** @type {number | null} */ (returnDays),
 			warrantyDays: /** @type {number | null} */ (warrantyDays),
 			categoryIds: Array.isArray(categoryIds) ? [...new Set(/** @type {string[]} */ (categoryIds))] : [],
+			typeKeys: Array.isArray(typeKeys) ? [...new Set(/** @type {string[]} */ (typeKeys))] : [],
 			color: typeof color === 'string' ? color.trim() : '',
 			video: video ?? '',
 			content: content ?? { ...EMPTY_CONTENT },
@@ -195,6 +208,28 @@ export const gradesFor = (list, categoryIds) => {
 	for (const entry of entries) if (best.get(entry.key) === entry) out.set(entry.key, entry);
 	return out;
 };
+
+/**
+ * The item types each grade key is for: a key's entries together (E45), [] when one of them is for every type.
+ * @param {unknown} list
+ * @returns {Map<string, string[]>}
+ */
+export const gradeTypes = (list) => {
+	/** @type {Map<string, string[]>} */
+	const out = new Map();
+	for (const entry of entriesOf(list)) {
+		const own = Array.isArray(entry.typeKeys) ? entry.typeKeys : [];
+		const held = out.get(entry.key);
+		out.set(entry.key, held?.length === 0 || own.length === 0 ? [] : [...new Set([...(held ?? []), ...own])]);
+	}
+	return out;
+};
+
+/**
+ * Whether a grade is for an item type (its types, [] = every type).
+ * @param {ReadonlyArray<string>} typeKeys @param {string} typeKey
+ */
+export const gradeForType = (typeKeys, typeKey) => typeKeys.length === 0 || typeKeys.includes(typeKey);
 
 /**
  * The condition of a variant for structured data and feeds (E10): its grade's standard condition (a grade no longer

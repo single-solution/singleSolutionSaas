@@ -65,7 +65,7 @@ export const createOrderDocuments = (_product, service) => {
 	};
 
 	/**
-	 * The ids of the orders' products whose item type numbers their units (none without Grades and serials).
+	 * The ids of the orders' products whose item type numbers their units (none without Condition grades and unit numbers).
 	 * @param {Site} s @param {OrderRecord[]} orders
 	 * @returns {Promise<Set<string>>}
 	 */

@@ -15,6 +15,7 @@
 import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
+import { gradeForType } from './grades.js';
 import { categoryTypeKey, typeByKey, typeOf, typeTakes } from './item-types.js';
 import {
 	VIDEO_TYPES,
@@ -197,6 +198,8 @@ export const summarize = (variants, trackStock) => {
  * @property {boolean} bookings `bookings` is on
  * @property {boolean} parcels `delivery_zones` is on (variants keep their package)
  * @property {ReadonlySet<string>} gradeKeys keys of the `grades` list
+ * @property {ReadonlyMap<string, ReadonlyArray<string>>} gradeTypes the item types each grade key is for ([] = every
+ *   type; `core/grades.js` `gradeTypes`)
  * @property {ReadonlySet<string>} locationIds
  * @property {ReadonlySet<string>} categoryIds
  * @property {ReadonlyMap<string, ReadonlyArray<string>>} categoryPaths each category's ancestors (required fields apply by
@@ -496,7 +499,7 @@ const parcelOf = (value, path, errors) => {
  * A variant from input, merged over the existing one (whose stock is kept).
  * @param {Record<string, any>} input
  * @param {VariantRecord | null} existing
- * @param {CatalogRules} rules
+ * @param {CatalogRules & { typeKey?: string }} rules `typeKey`: the product's item type (its grades)
  * @param {string} path
  * @param {FieldError[]} errors
  * @param {Place} [place] where its photos may come from
@@ -529,6 +532,8 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 		if (input.grade === null || input.grade === '') grade = null;
 		else if (!rules.grades || typeof input.grade !== 'string' || !rules.gradeKeys.has(input.grade))
 			fail('grade', 'Pick a grade of your grades list.');
+		else if (rules.typeKey !== undefined && !gradeForType(rules.gradeTypes.get(input.grade) ?? [], rules.typeKey))
+			fail('grade', 'This grade is not for this item type: pick one of its grades.');
 		else grade = input.grade;
 	}
 	if (input.active !== undefined && typeof input.active !== 'boolean') fail('active', 'Active is true or false.');
@@ -618,7 +623,7 @@ export const optionsFromAttributes = (variants, attributes) => {
  * @param {Record<string, any>} input
  * @param {ProductRecord | null} existing
  * @param {Array<{ name: string, values: string[] }>} given the option axes as given or kept
- * @param {CatalogRules & { custom?: ReadonlyMap<string, string[]> }} rules
+ * @param {CatalogRules & { custom?: ReadonlyMap<string, string[]>, typeKey?: string }} rules
  * @param {FieldError[]} errors
  * @returns {{ variants: VariantRecord[], options: Array<{ name: string, values: string[] }> }}
  */
@@ -996,7 +1001,7 @@ export const checkProduct = (body, rules, existing) => {
 	if (kind === 'digital' && !rules.digital && (!existing || input.kind !== undefined))
 		fail('/kind', 'Switch on Digital goods to sell digital products.');
 	if (kind === 'service' && !rules.bookings && (!existing || input.kind !== undefined))
-		fail('/kind', 'Switch on Bookings to sell services.');
+		fail('/kind', 'Switch on Services and bookings to sell services.');
 	const type = typeOf({ kind, typeKey, categoryIds }, rules.types, tree);
 	typeGuards(input, type, errors);
 
@@ -1041,7 +1046,7 @@ export const checkProduct = (body, rules, existing) => {
 
 	const given = input.options === undefined ? (existing?.options ?? []) : optionsOf(input.options, errors);
 	if (given.length > 0 && !rules.variants) fail('/options', 'Switch on Variants to give options.');
-	const { variants, options } = variantsOf(input, existing, given, { ...rules, custom }, errors);
+	const { variants, options } = variantsOf(input, existing, given, { ...rules, custom, typeKey: type.key }, errors);
 	const skus = variants.map((variant) => variant.sku).filter(Boolean);
 	if (new Set(skus).size !== skus.length) fail('/variants', 'Each variant needs its own SKU.');
 	// a draft without variants (an imported shell, CA-2) goes on sale once it has one

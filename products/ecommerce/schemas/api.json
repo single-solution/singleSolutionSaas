@@ -5553,7 +5553,7 @@
 				"grade": {
 					"type": ["string", "null"],
 					"maxLength": 64,
-					"description": "A key of your grades list (Grades and serials)."
+					"description": "A key of your grades list (Condition grades and unit numbers)."
 				},
 				"h1": {
 					"type": "string",
@@ -7252,7 +7252,7 @@
 				"unitCapture": {
 					"type": "string",
 					"enum": ["stock", "packing"],
-					"description": "How the line's units are numbered, as its item type says: picked from units in stock when packing, or typed at packing or later (PATCH serials); missing when its type numbers none or Grades and serials is off."
+					"description": "How the line's units are numbered, as its item type says: picked from units in stock when packing, or typed at packing or later (PATCH serials); missing when its type numbers none or Condition grades and unit numbers is off."
 				},
 				"unitsRequiredBefore": {
 					"type": ["string", "null"],
@@ -12846,7 +12846,7 @@
 							}
 						}
 					],
-					"description": "A service booked in time slots (its item type's slots, while Bookings is on): how long one lasts; null otherwise."
+					"description": "A service booked in time slots (its item type's slots, while Services and bookings is on): how long one lasts; null otherwise."
 				},
 				"sizeChart": {
 					"oneOf": [
@@ -15090,7 +15090,7 @@
 				"kind": {
 					"type": "string",
 					"enum": ["physical", "digital", "service"],
-					"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+					"description": "digital needs Digital goods, service needs Services and bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
 				},
 				"typeKey": {
 					"type": ["string", "null"],
@@ -15238,7 +15238,7 @@
 							},
 							"grade": {
 								"type": ["string", "null"],
-								"description": "A key of your grades list (Grades and serials), or null."
+								"description": "A key of your grades list (Condition grades and unit numbers), or null."
 							},
 							"active": {
 								"type": "boolean"
@@ -15648,7 +15648,7 @@
 				"kind": {
 					"type": "string",
 					"enum": ["physical", "digital", "service"],
-					"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+					"description": "digital needs Digital goods, service needs Services and bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
 				},
 				"typeKey": {
 					"type": ["string", "null"],
@@ -15796,7 +15796,7 @@
 							},
 							"grade": {
 								"type": ["string", "null"],
-								"description": "A key of your grades list (Grades and serials), or null."
+								"description": "A key of your grades list (Condition grades and unit numbers), or null."
 							},
 							"active": {
 								"type": "boolean"
@@ -16219,7 +16219,7 @@
 				"kind": {
 					"type": "string",
 					"enum": ["physical", "digital", "service"],
-					"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+					"description": "digital needs Digital goods, service needs Services and bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
 				},
 				"typeKey": {
 					"type": ["string", "null"],
@@ -16367,7 +16367,7 @@
 							},
 							"grade": {
 								"type": ["string", "null"],
-								"description": "A key of your grades list (Grades and serials), or null."
+								"description": "A key of your grades list (Condition grades and unit numbers), or null."
 							},
 							"active": {
 								"type": "boolean"
@@ -16775,7 +16775,7 @@
 				"kind": {
 					"type": "string",
 					"enum": ["physical", "digital", "service"],
-					"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+					"description": "digital needs Digital goods, service needs Services and bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
 				},
 				"typeKey": {
 					"type": ["string", "null"],
@@ -16923,7 +16923,7 @@
 							},
 							"grade": {
 								"type": ["string", "null"],
-								"description": "A key of your grades list (Grades and serials), or null."
+								"description": "A key of your grades list (Condition grades and unit numbers), or null."
 							},
 							"active": {
 								"type": "boolean"
@@ -19558,7 +19558,7 @@
 	},
 	"GET /v1/serials": {
 		"summary": "The serial numbers, by serial number",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 400 bad_request for an invalid cursor or limit. A Link header names the next page.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 400 bad_request for an invalid cursor or limit. A Link header names the next page.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -19596,7 +19596,7 @@
 	},
 	"GET /v1/admin/serials": {
 		"summary": "The serial numbers, by serial number (Catalog admin widget)",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 400 bad_request for an invalid cursor or limit. A Link header names the next page.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 400 bad_request for an invalid cursor or limit. A Link header names the next page.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -19634,7 +19634,7 @@
 	},
 	"POST /v1/serials": {
 		"summary": "Record serial numbers of a variant in stock",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
 		"body": {
 			"type": "object",
 			"required": ["productId", "variantId", "serials"],
@@ -19711,7 +19711,7 @@
 	},
 	"POST /v1/admin/serials": {
 		"summary": "Record serial numbers of a variant in stock (Catalog admin widget)",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed: /serials (1 to 500 units, or a number given for two of them), /serials/<n> or /serials/<n>/values/<fieldId> (a unit its fields refuse, every one listed), /variantId (no such product variant), /locationId (no such location, or Multi-location stock is off); 409 conflict naming the units already holding one of the numbers. Send an Idempotency-Key so a retried request records them once.",
 		"body": {
 			"type": "object",
 			"required": ["productId", "variantId", "serials"],
@@ -19788,7 +19788,7 @@
 	},
 	"PATCH /v1/serials/:id": {
 		"summary": "Mark a unit faulty or back in stock",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
 		"body": {
 			"type": "object",
 			"required": ["status"],
@@ -19805,7 +19805,7 @@
 	},
 	"PATCH /v1/admin/serials/:id": {
 		"summary": "Mark a unit faulty or back in stock (Catalog admin widget)",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
 		"body": {
 			"type": "object",
 			"required": ["status"],
@@ -19822,12 +19822,12 @@
 	},
 	"DELETE /v1/serials/:id": {
 		"summary": "Delete a serial number",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 409 conflict for a sold unit; 404 not_found.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 409 conflict for a sold unit; 404 not_found.",
 		"status": 204
 	},
 	"DELETE /v1/admin/serials/:id": {
 		"summary": "Delete a serial number (Catalog admin widget)",
-		"description": "Needs Grades and serials (403 feature_off otherwise). 409 conflict for a sold unit; 404 not_found.",
+		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 409 conflict for a sold unit; 404 not_found.",
 		"status": 204
 	},
 	"GET /v1/size-charts": {
@@ -21743,7 +21743,7 @@
 	},
 	"PATCH /v1/orders/:id": {
 		"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines",
-		"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
+		"description": "The address changes only before shipping (422 at /address); serials need Condition grades and unit numbers and lines whose item type has its units typed (unitCapture packing; units picked from stock are refused at /serials/<lineId>). lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
 		"body": {
 			"type": "object",
 			"description": "Send at least one member.",
@@ -21867,7 +21867,7 @@
 						},
 						"maxItems": 1000
 					},
-					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number). Typed units of a packed, shipped or delivered order; 422 at /serials/<lineId>/<n>/values/<fieldId> names a value its field refuses."
+					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number). Typed units of a packed, shipped or delivered order; 422 at /serials/<lineId>/<n>/values/<fieldId> names a value its field refuses."
 				},
 				"lines": {
 					"type": "array",
@@ -21956,7 +21956,7 @@
 	},
 	"PATCH /v1/admin/orders/:id": {
 		"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines (Orders admin widget)",
-		"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
+		"description": "The address changes only before shipping (422 at /address); serials need Condition grades and unit numbers and lines whose item type has its units typed (unitCapture packing; units picked from stock are refused at /serials/<lineId>). lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
 		"body": {
 			"type": "object",
 			"description": "Send at least one member.",
@@ -22080,7 +22080,7 @@
 						},
 						"maxItems": 1000
 					},
-					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number). Typed units of a packed, shipped or delivered order; 422 at /serials/<lineId>/<n>/values/<fieldId> names a value its field refuses."
+					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number). Typed units of a packed, shipped or delivered order; 422 at /serials/<lineId>/<n>/values/<fieldId> names a value its field refuses."
 				},
 				"lines": {
 					"type": "array",
@@ -22169,7 +22169,7 @@
 	},
 	"POST /v1/orders/:id/move": {
 		"summary": "Move an order to another status of the flow",
-		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
+		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); packed takes the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 		"body": {
 			"type": "object",
 			"required": ["to"],
@@ -22229,7 +22229,7 @@
 						},
 						"maxItems": 1000
 					},
-					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
+					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number)."
 				},
 				"shipment": {
 					"anyOf": [
@@ -22304,7 +22304,7 @@
 	},
 	"POST /v1/admin/orders/:id/move": {
 		"summary": "Move an order to another status of the flow (Orders admin widget)",
-		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
+		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed, shipped and delivered take serial numbers (serials, grades_serials) for the lines whose item type numbers their units: picked from units in stock (unitCapture stock) when packing, or typed (unitCapture packing) with this move or later, and every unit of a line is needed by the step its type names (unitsRequiredBefore: packed, or shipped, which also covers delivered); packed takes the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once. A move into a packed, shipped or delivered status needs the order fields required by that stage (requiredAt) first: 422 validation_failed at /fields/<id>.",
 		"body": {
 			"type": "object",
 			"required": ["to"],
@@ -22364,7 +22364,7 @@
 						},
 						"maxItems": 1000
 					},
-					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
+					"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number)."
 				},
 				"shipment": {
 					"anyOf": [
@@ -22830,7 +22830,7 @@
 									},
 									"maxItems": 1000
 								},
-								"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
+								"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number)."
 							},
 							"video": {
 								"type": ["string", "null"],
@@ -22980,7 +22980,7 @@
 									},
 									"maxItems": 1000
 								},
-								"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (serialMode registered) are picked by their serial numbers; typed units (serialMode typed) are checked against the unit fields of the line's product (each value in its field's format, every required field given; without unit fields a plain serial number)."
+								"description": "Order line id → its units, one per unit, none sharing a number. Units in stock (a line whose item type picks them from stock, unitCapture stock) are picked by their serial numbers; typed units (unitCapture packing) are checked against the unit fields of the line's item type (each value in its field's format, every required field given; without unit fields a plain serial number)."
 							},
 							"video": {
 								"type": ["string", "null"],
@@ -26135,7 +26135,7 @@
 	},
 	"GET /v1/seo/grades/:key": {
 		"summary": "A grade's glossary page",
-		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it the page is noindex, follow. 404 not_found when Grades and serials is off, or for an unknown grade or one not offered (active false).",
+		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false).",
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}
@@ -26243,7 +26243,7 @@
 	},
 	"POST /v1/import/:collection": {
 		"summary": "Import records (NDJSON, ss-import)",
-		"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, columns, rows, fitAdvice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, requiresSerial, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
+		"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, columns, rows, fitAdvice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, typeKey, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -26345,7 +26345,7 @@
 	},
 	"GET /v1/seo/grades/:category/:key": {
 		"summary": "A grade's glossary page in a category",
-		"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Grades and serials is off, for an unknown or hidden category, or no offered grade with the key for it.",
+		"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Condition grades and unit numbers is off, for an unknown or hidden category, or no offered grade with the key for it.",
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}

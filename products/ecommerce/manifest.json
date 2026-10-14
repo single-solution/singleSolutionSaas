@@ -12,7 +12,7 @@
 		{
 			"key": "catalog",
 			"name": "Catalog",
-			"description": "Products, categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
+			"description": "Products, item types (what each item is and which parts it has), categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
 			"dependsOn": [],
 			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
@@ -49,8 +49,8 @@
 		},
 		{
 			"key": "grades_serials",
-			"name": "Grades and serials",
-			"description": "Condition grades (each with its standard condition) for any item, and units: numbered items whose numbers follow the shop's unit fields, added to stock or captured when an order is packed.",
+			"name": "Condition grades and unit numbers",
+			"description": "Condition grades (each with its standard condition, for the item types you choose), and unit numbers for the items whose item type numbers them: picked from units in stock or typed when an order is packed or later, in the formats of the type's unit fields.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/grades_serials.settings.json"
@@ -68,8 +68,8 @@
 		},
 		{
 			"key": "bookings",
-			"name": "Bookings",
-			"description": "Services booked in simple slots: a duration, weekly hours and no double booking.",
+			"name": "Services and bookings",
+			"description": "Services, sold without a time or booked in simple slots as their item type says: a duration, weekly hours and no double booking.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["sells.services"],
 			"settings": {

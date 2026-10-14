@@ -209,7 +209,7 @@ export const specsOf = (product, attributes) =>
  * @param {Record<string, unknown> | null} [context.video] (E4)
  * @param {Shown} context.shown each variant's shown price (G4)
  * @param {{ key: string, kind: string }} context.type its item type (dynamic model §1)
- * @param {boolean} context.slots it is booked in time slots (its type's `slots`, while Bookings is on)
+ * @param {boolean} context.slots it is booked in time slots (its type's `slots`, while Services and bookings is on)
  */
 export const pageOf = (product, context) => {
 	const { currency, url, media, brand, breadcrumb, attributes, grades, shown } = context;

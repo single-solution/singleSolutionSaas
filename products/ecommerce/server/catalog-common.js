@@ -7,7 +7,7 @@ import { problem } from '@ss/app-kit';
 import { loadRules } from '../adapters/catalog-store.js';
 import { COLLECTIONS } from '../core/model.js';
 import { isObject } from '../core/catalog.js';
-import { gradesByKey } from '../core/grades.js';
+import { gradeTypes, gradesByKey } from '../core/grades.js';
 import { createMedia } from './catalog-media.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 
@@ -58,14 +58,14 @@ export const createCatalogCommon = (product, service) => {
 	};
 
 	/**
-	 * The website's grades list as saved (empty while Grades and serials is off); {@link gradesFor} picks a product's.
+	 * The website's grades list as saved (empty while Condition grades and unit numbers is off); {@link gradesFor} picks a product's.
 	 * @param {Site} s
 	 * @returns {Promise<import('../core/grades.js').Grade[]>}
 	 */
 	const gradeListOf = async (s) => (s.has('grades_serials') ? await s.list('grades') : []);
 
 	/**
-	 * The website's grades by key where no category is known (empty while Grades and serials is off; E45).
+	 * The website's grades by key where no category is known (empty while Condition grades and unit numbers is off; E45).
 	 * @param {Site} s
 	 */
 	const gradesOf = async (s) => gradesByKey(await gradeListOf(s));
@@ -83,6 +83,7 @@ export const createCatalogCommon = (product, service) => {
 			bookings: s.has('bookings'),
 			parcels: s.has('delivery_zones'),
 			gradeKeys: [...(await gradesOf(s)).keys()],
+			gradeTypes: gradeTypes(await gradeListOf(s)),
 			types: await s.list('item_types'),
 		})),
 		sizeCharts: s.has('size_charts'),

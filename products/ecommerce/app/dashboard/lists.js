@@ -1,8 +1,8 @@
 'use client';
 /**
  * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, delivery zones, tax rules and booking
- * hours, and the pieces the order flow editor (`./flow-editor.js`) and the condition grades editor (`./grades.js`)
- * share. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
+ * hours, and the pieces the order flow editor (`./flow-editor.js`), the condition grades editor (`./grades.js`) and the
+ * item types editor (`./item-types.js`) share. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
  * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
  * @module
  */
@@ -22,7 +22,7 @@ import {
 } from '@ss/ui';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { call, fill, useLoad } from './api.js';
-import { cleanLines, keyOf } from './drafts.js';
+import { cleanLines, keyOf, splitIds } from './drafts.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -107,6 +107,62 @@ export function EntryHead({ label, index, count, onMove, onRemove }) {
 			<Button size="sm" variant="ghost" onClick={onRemove}>
 				{L.remove}
 			</Button>
+		</div>
+	);
+}
+
+/**
+ * Ids entered as tags: Enter, a comma or leaving the field adds what was typed; pasting several adds them all; each tag
+ * has a remove button, and Backspace in the empty field removes the last one.
+ * @param {{ label: string, help: string, values: string[], max: number, none: string,
+ *   onChange: (next: string[]) => void }} props `none`: what no id means
+ */
+export function IdTags({ label, help, values, max, none, onChange }) {
+	const [text, setText] = useState('');
+	/** @param {string} typed */
+	const add = (typed) => {
+		const found = splitIds(typed).filter((id) => !values.includes(id) && id.length <= 64);
+		if (found.length > 0) onChange([...values, ...found].slice(0, max));
+		setText('');
+	};
+	return (
+		<div data-cell="" data-wide="" className="min-w-0 space-y-2">
+			<Input
+				label={label}
+				help={help}
+				aside={values.length > 0 ? fill(L.count, { count: values.length, max }) : none}
+				value={text}
+				autoComplete="off"
+				disabled={values.length >= max}
+				onChange={(event) => {
+					const next = event.target.value;
+					if (/[\s,;]/.test(next)) add(next);
+					else setText(next);
+				}}
+				onKeyDown={(event) => {
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						add(text);
+					} else if (event.key === 'Backspace' && text === '' && values.length > 0) onChange(values.slice(0, -1));
+				}}
+				onBlur={() => add(text)}
+			/>
+			{values.length > 0 ? (
+				<ul className="flex flex-wrap gap-2">
+					{values.map((id) => (
+						<li key={id} className="inline-flex items-center gap-1 rounded-lg bg-surface-2 py-0.5 pl-2.5 pr-1 text-xs">
+							<code className="break-all">{id}</code>
+							<button
+								type="button"
+								aria-label={fill(L.removeId, { id })}
+								onClick={() => onChange(values.filter((value) => value !== id))}
+								className="ss-motion ss-press rounded-md p-1 text-muted hover:bg-surface-3 hover:text-fg focus-visible:outline-2 focus-visible:outline-focus">
+								<Icon name="close" size={12} />
+							</button>
+						</li>
+					))}
+				</ul>
+			) : null}
 		</div>
 	);
 }

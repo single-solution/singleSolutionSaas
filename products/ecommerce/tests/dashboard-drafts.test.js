@@ -27,6 +27,7 @@ const FULL = {
 	warrantyDays: 180,
 	categoryId: 'cat_phones',
 	categoryIds: ['cat_phones', 'cat_tablets'],
+	typeKeys: ['used_phone'],
 	color: '#16a34a',
 	video: 'dQw4w9WgXcQ',
 	content: { summary: 'Checked twice.', bullets: [{ text: 'No scratches', icon: 'sparkles' }] },

@@ -11,7 +11,7 @@
  * @module
  */
 import { summarize } from '../core/catalog.js';
-import { gradesByKey } from '../core/grades.js';
+import { gradeTypes, gradesByKey } from '../core/grades.js';
 import {
 	categoryPaths,
 	checkImportedAttribute,
@@ -79,7 +79,8 @@ export const catalogImports = (deps) => {
 		async (ctx) => {
 			const { data, websiteId } = ctx;
 			const features = new Set(await deps.featuresOn(websiteId));
-			const gradeKeys = features.has('grades_serials') ? [...gradesByKey(await deps.list(websiteId, 'grades')).keys()] : [];
+			const grades = features.has('grades_serials') ? await deps.list(websiteId, 'grades') : [];
+			const gradeKeys = [...gradesByKey(grades).keys()];
 			const types = /** @type {import('../core/item-types.js').ItemType[]} */ (await deps.list(websiteId, 'item_types'));
 			const [categoryIds, brandIds, sizeChartIds, locationIds] = await Promise.all([
 				idsIn(data, COLLECTIONS.categories),
@@ -108,6 +109,7 @@ export const catalogImports = (deps) => {
 							bookings: features.has('bookings'),
 							parcels: features.has('delivery_zones'),
 							gradeKeys,
+							gradeTypes: gradeTypes(grades),
 							types,
 						})),
 						sizeCharts: features.has('size_charts'),

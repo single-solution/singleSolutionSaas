@@ -99,6 +99,7 @@ export const createRoutes = (product) => {
 					color: grade.color,
 					active: grade.active,
 					categoryIds: grade.categoryIds,
+					typeKeys: grade.typeKeys,
 				}));
 				settings.catalog = { .../** @type {object} */ (settings.catalog ?? {}), grades };
 			}

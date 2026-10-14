@@ -1,11 +1,13 @@
 /**
  * Plain helpers of the dashboard's list editors (no React, so tests import them): keys made from names, lines and days
- * as saved, and a condition grade as edited (E10: every field of a `grades` item as text the editor shows) and as saved
- * (the shape `core/grades.js` `checkGrades` takes).
+ * as saved, a condition grade as edited (E10: every field of a `grades` item as text the editor shows) and as saved
+ * (the shape `core/grades.js` `checkGrades` takes), and an item type as edited and as saved (`core/item-types.js`
+ * `checkItemTypes`).
  * @module
  */
 import { CONTENT_LIMITS } from '../../core/catalog-content.js';
 import { CONDITIONS, MAX_GRADES } from '../../core/grades.js';
+import { ELEMENTS, elementFor, isBuiltInKey } from '../../core/item-types.js';
 
 /** What a grade may hold, for the editor's counters and Add buttons. */
 export const GRADE_LIMITS = Object.freeze({
@@ -16,6 +18,7 @@ export const GRADE_LIMITS = Object.freeze({
 	color: 40,
 	video: 500,
 	categories: 200,
+	types: 50,
 	summary: CONTENT_LIMITS.summary,
 	bullets: CONTENT_LIMITS.bullets,
 	bullet: CONTENT_LIMITS.bullet,
@@ -28,8 +31,8 @@ export const GRADE_LIMITS = Object.freeze({
 	answer: CONTENT_LIMITS.answer,
 });
 
-/** Grade keys as the server takes them. */
-export const GRADE_KEY = /^[a-z][a-z0-9_-]{0,39}$/;
+/** Grade and item type keys as the server takes them. */
+const LIST_KEY = /^[a-z][a-z0-9_-]{0,39}$/;
 
 /** The standard conditions a grade maps to (structured data and feeds). */
 export const GRADE_CONDITIONS = CONDITIONS;
@@ -43,6 +46,7 @@ export const GRADE_CONDITIONS = CONDITIONS;
  * @property {string} warrantyDays
  * @property {string} categoryId the category this entry is the definition for (E45); '' = every category
  * @property {string[]} categoryIds
+ * @property {string[]} typeKeys the item types it is for ([] = every type)
  * @property {string} color
  * @property {string} video
  * @property {{ summary: string, bullets: Array<{ text: string, icon: string }> }} content
@@ -131,6 +135,7 @@ export const blankGrade = () => ({
 	warrantyDays: '',
 	categoryId: '',
 	categoryIds: [],
+	typeKeys: [],
 	color: '',
 	video: '',
 	content: { summary: '', bullets: [] },
@@ -157,6 +162,7 @@ export const loadGrade = (grade) => ({
 	warrantyDays: daysText(grade.warrantyDays),
 	categoryId: grade.categoryId ?? '',
 	categoryIds: [...grade.categoryIds],
+	typeKeys: [...grade.typeKeys],
 	color: grade.color,
 	video: grade.video,
 	content: {
@@ -186,6 +192,7 @@ export const cleanGrade = (draft) => ({
 	warrantyDays: daysOf(draft.warrantyDays),
 	categoryId: draft.categoryId.trim() || null,
 	categoryIds: cleanLines(draft.categoryIds),
+	typeKeys: cleanLines(draft.typeKeys),
 	color: draft.color.trim(),
 	video: videoOf(draft.video),
 	content: {
@@ -217,7 +224,7 @@ export const gradeProblems = (draft, otherKeys) => {
 	const key = keyOf(draft.key, draft.label);
 	const unnamed = draft.label.trim() === '';
 	/** @type {{ key?: 'invalid' | 'taken' }} */
-	const keyed = !GRADE_KEY.test(key)
+	const keyed = !LIST_KEY.test(key)
 		? // nothing typed yet: the missing name says it
 			unnamed && key === ''
 			? {}
@@ -226,6 +233,110 @@ export const gradeProblems = (draft, otherKeys) => {
 			? { key: 'taken' }
 			: {};
 	return { ...(unnamed ? { label: /** @type {const} */ ('missing') } : {}), ...keyed };
+};
+
+// ------------------------------------------------------------------------------------------------- item types
+
+/** The parts of a type other than its numbered units, which are edited on their own. */
+const TYPE_PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units'>>} */ (
+	ELEMENTS.filter((element) => element !== 'units')
+);
+
+/**
+ * @typedef {object} TypeDraft an item type as edited
+ * @property {string} key
+ * @property {string} name
+ * @property {'physical' | 'digital' | 'service'} kind
+ * @property {boolean} active
+ * @property {Record<Exclude<import('../../core/item-types.js').Element, 'units'>, boolean>} elements
+ * @property {{ on: boolean, fieldIds: string[], capture: 'stock' | 'packing', requiredBefore: 'packed' | 'shipped' | '' }}
+ *   units its numbered units ('' = never needed)
+ * @property {boolean} fieldsNamed the type names the fields its items take (else every field)
+ * @property {string[]} fieldIds
+ */
+
+/** @returns {TypeDraft} a new type: physical, offered, no parts yet, every field */
+export const blankType = () => ({
+	key: '',
+	name: '',
+	kind: 'physical',
+	active: true,
+	elements: /** @type {TypeDraft['elements']} */ (Object.fromEntries(TYPE_PARTS.map((part) => [part, false]))),
+	units: { on: false, fieldIds: [], capture: 'stock', requiredBefore: 'packed' },
+	fieldsNamed: false,
+	fieldIds: [],
+});
+
+/**
+ * A saved type as the editor shows it.
+ * @param {import('../../core/item-types.js').ItemType} type
+ * @returns {TypeDraft}
+ */
+export const loadType = (type) => ({
+	key: type.key,
+	name: type.name,
+	kind: type.kind,
+	active: type.active,
+	elements: /** @type {TypeDraft['elements']} */ (
+		Object.fromEntries(TYPE_PARTS.map((part) => [part, type.elements[part] === true]))
+	),
+	units: type.elements.units
+		? {
+				on: true,
+				fieldIds: [...type.elements.units.fieldIds],
+				capture: type.elements.units.capture,
+				requiredBefore: type.elements.units.requiredBefore ?? '',
+			}
+		: { on: false, fieldIds: [], capture: 'stock', requiredBefore: 'packed' },
+	fieldsNamed: type.fieldIds !== null,
+	fieldIds: [...(type.fieldIds ?? [])],
+});
+
+/**
+ * A type as saved: the key made from the name when empty, only the parts of its kind, units picked from stock needed
+ * when packed, the fields it names (null: every field).
+ * @param {TypeDraft} draft
+ */
+export const cleanType = (draft) => ({
+	key: keyOf(draft.key, draft.name),
+	name: draft.name.trim(),
+	kind: draft.kind,
+	active: draft.active,
+	elements: {
+		...Object.fromEntries(TYPE_PARTS.map((part) => [part, draft.elements[part] && elementFor(part, draft.kind)])),
+		units:
+			draft.units.on && elementFor('units', draft.kind)
+				? {
+						fieldIds: cleanLines(draft.units.fieldIds),
+						capture: draft.units.capture,
+						requiredBefore: draft.units.capture === 'stock' ? 'packed' : draft.units.requiredBefore || null,
+					}
+				: null,
+	},
+	fieldIds: draft.fieldsNamed ? cleanLines(draft.fieldIds) : null,
+});
+
+/**
+ * What stops a type being applied to the list, by field: a name, and a key the server takes, not a built-in type's and
+ * not another type's.
+ * @param {TypeDraft} draft
+ * @param {string[]} otherKeys the keys of the other types
+ * @returns {{ name?: 'missing', key?: 'invalid' | 'taken' | 'built_in' }}
+ */
+export const typeProblems = (draft, otherKeys) => {
+	const key = keyOf(draft.key, draft.name);
+	const unnamed = draft.name.trim() === '';
+	/** @type {{ key?: 'invalid' | 'taken' | 'built_in' }} */
+	const keyed = !LIST_KEY.test(key)
+		? unnamed && key === ''
+			? {}
+			: { key: 'invalid' }
+		: isBuiltInKey(key)
+			? { key: 'built_in' }
+			: otherKeys.includes(key)
+				? { key: 'taken' }
+				: {};
+	return { ...(unnamed ? { name: /** @type {const} */ ('missing') } : {}), ...keyed };
 };
 
 // ------------------------------------------------------------------------------------------------- order flow

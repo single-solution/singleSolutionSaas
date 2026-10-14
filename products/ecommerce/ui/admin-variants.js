@@ -5,7 +5,8 @@
  * attribute values (several where the attribute takes several), SKU, price, was price, cost, stock (per location with
  * multi-location stock) for new variants, GTIN and MPN, grade, warranty days, the package (weight and size), on sale,
  * sold out and the variant's photos. The product's item type (dynamic model §1) decides the columns: variant fields
- * and more than one variant (`variants`), the grade (`grades`), warranty days (`warranty`) and the package (`parcel`).
+ * and more than one variant (`variants`), the grade (`grades`; only the grades for the type are offered), warranty days
+ * (`warranty`) and the package (`parcel`).
  * @module
  */
 import { gtinOf } from '../core/fields.js';
@@ -434,6 +435,13 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 
 	const draw = () => {
 		const names = axes().map((axis) => axis.name);
+		// the grades of the type (a grade set per item type): the others stay on the variants that have them
+		const typeKey = type().key;
+		for (const entry of rows)
+			for (const option of 'options' in entry.grade ? entry.grade.options : []) {
+				const grade = grades.find((candidate) => candidate.key === option.value);
+				option.disabled = Boolean(grade?.typeKeys?.length) && !grade?.typeKeys?.includes(typeKey) && !option.selected;
+			}
 		const attributes = attributesOf();
 		const removable = many() && rows.length > 1;
 		box.replaceChildren(

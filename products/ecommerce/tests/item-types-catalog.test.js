@@ -77,7 +77,11 @@ const saveTypes = (phoneUnits = {}) =>
 
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
-	await shop.list('grades', [{ key: 'a', label: 'A' }]);
+	// grade a is for every type; mint only for used phones (a grade set per item type)
+	await shop.list('grades', [
+		{ key: 'a', label: 'A' },
+		{ key: 'mint', label: 'Mint', typeKeys: ['used_phone'] },
+	]);
 	await shop.list(
 		'booking_hours',
 		[0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, from: '09:00', to: '17:00' })),
@@ -233,6 +237,11 @@ describe('the type of a product', () => {
 		]);
 		const cleared = await api('PATCH', `/v1/products/${phone.id}`, { parcel: null });
 		expect(cleared.variants[0]).not.toHaveProperty('parcel');
+		// the grades of its type: mint is a used phone's, not a plain item's
+		expect((await api('PATCH', `/v1/products/${phone.id}`, { grade: 'mint' })).variants[0].grade).toBe('mint');
+		const plain = await shop.api('POST', '/v1/products', { name: 'Lamp', price: 1, grade: 'mint' });
+		expect(pathsOf(plain)).toEqual(['/grade']);
+		expect(plain.json.errors[0].message).toBe('This grade is not for this item type: pick one of its grades.');
 	});
 });
 

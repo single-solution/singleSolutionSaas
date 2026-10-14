@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
 	ALL,
 	ROW,
+	USED_PHONE,
 	confirmDialog,
 	detailOf,
 	dialogOf,
@@ -504,7 +505,15 @@ describe('catalog admin: a product by its item type', () => {
 					return answer(200, product());
 				},
 			},
-			{ catalog: { grades: [{ key: 'a', label: 'Grade A' }], types: [plain] } },
+			{
+				catalog: {
+					grades: [
+						{ key: 'a', label: 'Grade A' },
+						{ key: 'mint', label: 'Mint', typeKeys: ['used_phone'] },
+					],
+					types: [plain, USED_PHONE],
+				},
+			},
 		);
 		const panel = panelOf(root, 'products');
 		expect(textOf(detailOf(panel))).toContain('Item typePlain box');
@@ -530,6 +539,11 @@ describe('catalog admin: a product by its item type', () => {
 		const again = detailOf(panel);
 		await change(fieldIn(again, 'Item type'), '');
 		expect(labelled(again, 'Grade of Red').value).toBe('a');
+		// only the grades of the type are offered
+		const mint = /** @type {HTMLOptionElement} */ (labelled(again, 'Grade of Red').querySelector('option[value="mint"]'));
+		expect(mint.disabled).toBe(false);
+		await change(fieldIn(again, 'Item type'), 'physical');
+		expect(mint.disabled).toBe(true);
 		expect(fieldIn(again, 'Model').value).toBe('');
 		expect(fieldIn(again, 'Size chart').value).toBe('szc_1');
 		// a digital kind offers the digital types only

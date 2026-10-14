@@ -7,7 +7,7 @@
  * engine (`core/transitions.js`) and run in one transaction with everything it gives back or takes
  * (`server/transitions.js`); what entering a status does depends on its role:
  *
- * - `packed`, `shipped`, `delivered`: with Grades and serials on, the units of lines whose item type numbers them get
+ * - `packed`, `shipped`, `delivered`: with Condition grades and unit numbers on, the units of lines whose item type numbers them get
  *   their numbers (dynamic model §1): units added to stock are picked when packing (marked sold with the order in the
  *   same transaction as the move); typed ones may be typed with any of these moves or later, and are needed before the
  *   stage the type says (`requiredBefore`);
@@ -266,7 +266,7 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * The serial numbers a move into a packed, shipped or delivered status captures (none while Grades and serials is
+	 * The serial numbers a move into a packed, shipped or delivered status captures (none while Condition grades and unit numbers is
 	 * off): those sent, checked against the item types of the lines; every unit the stage needs must have one by then.
 	 * @param {Site} s @param {OrderRecord} order @param {MoveInput} input @param {string} stage the role entered
 	 */
@@ -508,7 +508,7 @@ export const createMoves = (product, service) => {
 	 * @returns {Promise<OrderRecord>}
 	 */
 	const typeSerials = async (s, ctx, order, sent) => {
-		if (!s.has('grades_serials')) throw service.invalid('serials', 'Switch on Grades and serials first.');
+		if (!s.has('grades_serials')) throw service.invalid('serials', 'Switch on Condition grades and unit numbers first.');
 		if (!['packed', 'shipped', 'delivered'].includes(order.role))
 			throw service.invalid('serials', 'Serial numbers are typed once the order is packed.');
 		const rules = await unitRulesFor(s, order);

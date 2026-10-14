@@ -271,7 +271,7 @@ describe('lines', () => {
 		);
 		expect(lines).toHaveLength(1);
 		expect(lines[0]).toMatchObject({ kind: 'service', quantity: 3, booking: null, problems: [], priced: true });
-		// Bookings off: no service is sold
+		// Services and bookings off: no service is sold
 		const off = resolveLines(
 			[{ productId: 'prd_fix', variantId: null, quantity: 1, slot: null }],
 			context([service], { slots: () => false, features: { digital: true, bookings: false } }),

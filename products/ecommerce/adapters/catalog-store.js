@@ -347,7 +347,8 @@ export const typeUses = async (data, saved) => {
  * What a product check needs.
  * @param {WebsiteData} data
  * @param {{ variants: boolean, locations: boolean, grades: boolean, digital: boolean, bookings: boolean, parcels: boolean,
- *   gradeKeys: string[], types: ReadonlyArray<import('../core/item-types.js').ItemType> }} switches
+ *   gradeKeys: string[], gradeTypes: ReadonlyMap<string, ReadonlyArray<string>>,
+ *   types: ReadonlyArray<import('../core/item-types.js').ItemType> }} switches
  * @returns {Promise<CatalogRules>}
  */
 export const loadRules = async (data, switches) => {
@@ -368,6 +369,7 @@ export const loadRules = async (data, switches) => {
 		bookings: switches.bookings,
 		parcels: switches.parcels,
 		gradeKeys: new Set(switches.gradeKeys),
+		gradeTypes: switches.gradeTypes,
 		locationIds: new Set(locations.map(String)),
 		categoryIds: new Set(categories.map((category) => String(category.id))),
 		categoryPaths: new Map(categories.map((category) => [String(category.id), (category.path ?? []).map(String)])),
