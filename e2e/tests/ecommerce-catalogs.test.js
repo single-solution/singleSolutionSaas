@@ -130,7 +130,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			type: 'choice',
 			on: 'variant',
 			multiple: true,
-			filterable: true,
+			show: { filter: true },
 			choices: [
 				{ value: 'red', label: 'Red' },
 				{ value: 'gold', label: 'Gold' },
@@ -143,7 +143,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			type: 'choice',
 			on: 'variant',
 			choices: ['S', 'M'],
-			filterable: true,
+			show: { filter: true },
 		});
 		const chart = await write(APPAREL, 'POST', '/v1/size-charts', {
 			name: 'Dresses',
@@ -221,7 +221,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			type: 'choice',
 			on: 'variant',
 			choices: ['30 cm', '45 cm'],
-			filterable: true,
+			show: { filter: true },
 		});
 		const finish = await write(LIGHTING, 'POST', '/v1/attributes', {
 			name: 'Finish',
@@ -229,8 +229,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			type: 'choice',
 			on: 'variant',
 			choices: ['White', 'Bronze'],
-			card: 'image',
-			filterable: true,
+			show: { card: 'image', filter: true },
 		});
 		const light = await write(LIGHTING, 'POST', '/v1/products', {
 			name: 'Lumen 300',
