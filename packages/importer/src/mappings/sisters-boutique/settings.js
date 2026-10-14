@@ -421,7 +421,6 @@ export const settingsPlan = (values) => {
 						['packed', 'cancelled'],
 						['packed', 'refunded'],
 						['dispatched', 'delivered'],
-						['dispatched', 'cancelled'],
 						// a return puts the items back and keeps the points earned (orderTransitions.ts:13)
 						['delivered', 'returned', { options: { restock: 'yes', points: 'keep' } }],
 						// a refund after delivery puts the items back and takes the points back
