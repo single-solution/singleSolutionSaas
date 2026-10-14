@@ -1,9 +1,10 @@
 /**
- * Parity P1: default message templates against the REAL Portal, Notifications, Accounts and Chat, all in this process.
- * A merchant who writes no template at all still gets a password-reset email and a Chat staff alert: each product's
- * send carries its US-English default words and Notifications uses them; Notifications' dashboard lists every product's
- * messages through the Portal's directory; a message switched off on a channel is skipped. The email provider (Resend)
- * is a fake in this process; no real network call is made.
+ * Parity P1: default message templates against the REAL Portal, Notifications, Accounts, Chat and Ecommerce, all in
+ * this process. A merchant who writes no template at all still gets a password-reset email, a Chat staff alert, an
+ * order email and an Ecommerce staff alert: each product's send carries its US-English default words and Notifications
+ * uses them; a per-status order message uses the merchant's general status template, else the default words;
+ * Notifications' dashboard lists every product's messages through the Portal's directory; a message switched off on a
+ * channel is skipped. The email provider (Resend) is a fake in this process; no real network call is made.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -15,6 +16,12 @@ import { createRoutes as accountsRoutes } from '@ss/product-accounts/routes';
 import { createProductInstance, manifest, strings } from '@ss/product-chat/product';
 import { createRoutes } from '@ss/product-chat/routes';
 import {
+	createProductInstance as createEcommerce,
+	manifest as shopManifest,
+	strings as shopStrings,
+} from '@ss/product-ecommerce/product';
+import { createRoutes as shopRoutes } from '@ss/product-ecommerce/routes';
+import {
 	createProductInstance as createNotifications,
 	manifest as notifyManifest,
 	strings as notifyStrings,
@@ -25,6 +32,7 @@ import { startSystem } from './helpers.js';
 const CHAT = 'https://chat-defaults.test';
 const ACCOUNTS = 'https://accounts-defaults.test';
 const NOTIFY = 'https://notifications-defaults.test';
+const SHOP = 'https://ecommerce-defaults.test';
 const DOMAIN = 'defaults.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const PASSWORD = 'a long enough password';
@@ -41,10 +49,11 @@ const resend = async (request) => {
 /** @type {import('./helpers.js').System} */
 let sys;
 let websiteId = '';
+let merchantId = '';
 /** @type {Record<string, { browser: string, server: string }>} */
 const tokens = {};
 /** @type {Record<string, string>} */
-const BASES = { chat: CHAT, accounts: ACCOUNTS, notifications: NOTIFY };
+const BASES = { chat: CHAT, accounts: ACCOUNTS, notifications: NOTIFY, ecommerce: SHOP };
 
 beforeAll(async () => {
 	/** @param {any} create @param {any} routes @param {any} productManifest @param {any} productStrings @param {string} url */
@@ -63,6 +72,7 @@ beforeAll(async () => {
 		extras: [
 			unit(createAccounts, accountsRoutes, accountsManifest, accountsStrings, ACCOUNTS),
 			unit(createNotifications, notifyRoutes, notifyManifest, notifyStrings, NOTIFY),
+			unit(createEcommerce, shopRoutes, shopManifest, shopStrings, SHOP),
 		],
 	});
 });
@@ -85,9 +95,10 @@ const visitorSays = (text) =>
 
 describe('default templates: no template written, messages still go (parity P1)', () => {
 	it('sets up Notifications (email by Resend), Accounts and Chat without writing a single template', async () => {
-		for (const base of [CHAT, ACCOUNTS, NOTIFY]) await sys.connect({ base });
+		for (const base of [CHAT, ACCOUNTS, NOTIFY, SHOP]) await sys.connect({ base });
 		const m = await sys.merchant('defaults@shop.test', [DOMAIN]);
 		websiteId = m.websiteIds[0] ?? '';
+		merchantId = m.merchantId;
 		for (const id of ['chat', 'accounts', 'notifications']) {
 			await sys.addProduct(m.merchantId, websiteId, id);
 			tokens[id] = await sys.tokens(m.merchantId, websiteId, id);
@@ -159,6 +170,84 @@ describe('default templates: no template written, messages still go (parity P1)'
 		expect(alerts[0].text).toBe(`Guest wrote on ${DOMAIN}:\n\nIs the blue lamp in stock?`);
 	});
 
+	it('an order email and an Ecommerce staff alert go with Ecommerce’s default words; a per-status message falls back to the general one', async () => {
+		await sys.addProduct(merchantId, websiteId, 'ecommerce');
+		tokens.ecommerce = await sys.tokens(merchantId, websiteId, 'ecommerce');
+		expect((await dash('ecommerce', 'PUT', '/features', { on: ['catalog', 'checkout', 'cod', 'staff_alerts'] })).status).toBe(
+			200,
+		);
+		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'ecommerce'), websiteId, SHOP);
+		for (const id of ['accounts', 'notifications'])
+			expect((await dash('ecommerce', 'PUT', `/connections/${id}`, { value: tokens[id]?.server })).json).toMatchObject({
+				status: 'connected',
+			});
+		expect(
+			(await dash('ecommerce', 'PUT', '/settings/staff_alerts.recipients', { value: ['ops@defaults.example.com'] })).status,
+		).toBe(204);
+		/** @param {string} method @param {string} path @param {unknown} [body] */
+		const server = (method, path, body) =>
+			sys.call(method, path, { base: SHOP, token: tokens.ecommerce?.server, ...(body === undefined ? {} : { body }) });
+		const item = await server('POST', '/v1/products', { name: 'Desk lamp', status: 'active', price: 4500, stock: 5 });
+		expect(item.status, JSON.stringify(item.json)).toBe(201);
+		const up = await sys.call('POST', '/v1/sign-up/password', {
+			base: ACCOUNTS,
+			token: tokens.accounts?.browser,
+			origin: ORIGIN,
+			body: { email: 'sam@example.com', password: PASSWORD, name: 'Sam Lee' },
+		});
+		expect(up.json.status).toBe('signed_in');
+		/** @param {string} key */
+		const place = async (key) => {
+			const placed = await sys.call('POST', '/v1/shop/orders', {
+				base: SHOP,
+				token: tokens.ecommerce?.browser,
+				origin: ORIGIN,
+				body: {
+					lines: [{ productId: item.json.id }],
+					payment: 'cod',
+					address: { name: 'Sam Lee', phone: '+12025550143', line1: '1 Main Street', city: 'New York', country: 'US' },
+				},
+				headers: { 'ss-sign-in': String(up.json.signIn), 'idempotency-key': key },
+			});
+			expect(placed.status, JSON.stringify(placed.json)).toBe(201);
+			return placed.json.order;
+		};
+
+		const before = mails.length;
+		const order = await place('defaults-1');
+		const sent = mails.slice(before);
+		const placed = sent.find((each) => each.to[0] === 'sam@example.com');
+		expect(placed.subject).toBe(`We received your order ${order.number}`);
+		expect(placed.text).toMatch(/^Hello Sam,\n\nThank you for your order with /);
+		const alert = sent.find((each) => each.to[0] === 'ops@defaults.example.com');
+		expect(alert.subject).toMatch(new RegExp(`^New order ${order.number}: `));
+		expect(alert.text).toMatch(new RegExp(`^Sam Lee placed order ${order.number} on `));
+
+		// one template per status: the merchant's general status template first, else the default words
+		expect((await dash('ecommerce', 'PUT', '/settings/checkout.statusTemplates', { value: 'per_status' })).status).toBe(204);
+		const general = await dash('notifications', 'PUT', '/templates', {
+			key: 'ecommerce.order_status',
+			channel: 'email',
+			subject: 'Order {number}: {status}',
+			text: 'Hello {firstName}, order {number} is {status}.',
+		});
+		expect(general.status).toBe(200);
+		const moved = mails.length;
+		const confirmed = await server('POST', `/v1/orders/${order.id}/move`, { to: 'confirmed' });
+		expect(confirmed.status, JSON.stringify(confirmed.json)).toBe(200);
+		const told = mails.slice(moved).find((each) => each.to[0] === 'sam@example.com');
+		expect(told.subject).toMatch(new RegExp(`^Order ${order.number}: `));
+		expect(told.text).toMatch(new RegExp(`^Hello Sam, order ${order.number} is `));
+		const removed = await dash('notifications', 'DELETE', '/templates/ecommerce.order_status/email/default');
+		expect(removed.status).toBe(204);
+		const second = await place('defaults-2');
+		const cancelled = mails.length;
+		expect((await server('POST', `/v1/orders/${second.id}/move`, { to: 'cancelled' })).status).toBe(200);
+		const told2 = mails.slice(cancelled).find((each) => each.to[0] === 'sam@example.com');
+		expect(told2.subject).toMatch(new RegExp(`^Your order ${second.number} is now `));
+		expect((await dash('notifications', 'GET', '/templates')).json.items).toEqual([]);
+	});
+
 	it('Notifications’ dashboard lists both products’ messages through the Portal directory; a switched-off one is skipped', async () => {
 		const listed = await dash('notifications', 'GET', '/messages');
 		expect(listed.status).toBe(200);
@@ -173,8 +262,9 @@ describe('default templates: no template written, messages still go (parity P1)'
 		);
 		const reset = listed.json.items.find((/** @type {any} */ m) => m.key === 'accounts.password_reset');
 		expect(reset.channels.email.subject).toBe('Reset your password for {business}');
-		// Ecommerce, Payments and Growth are not in this system: named, never a failure of the list
-		expect(listed.json.unavailable).toEqual(['ecommerce', 'payments', 'growth']);
+		expect(keys).toEqual(expect.arrayContaining(['ecommerce:ecommerce.order_status', 'ecommerce:ecommerce.staff_placed']));
+		// Payments and Growth are not in this system: named, never a failure of the list
+		expect(listed.json.unavailable).toEqual(['payments', 'growth']);
 
 		expect((await dash('notifications', 'PUT', '/messages/chat.staff_new_message/email', { off: true })).status).toBe(200);
 		const before = mails.length;
