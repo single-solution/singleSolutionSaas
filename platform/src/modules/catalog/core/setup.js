@@ -4,6 +4,7 @@
  * @module
  */
 import { BLUEPRINT_SCHEMA } from '@ss/contracts';
+import { scriptTag } from './install.js';
 
 /** @typedef {import('@ss/contracts').Blueprint} Blueprint */
 /** @typedef {import('@ss/contracts').ProductBlueprint} ProductBlueprint */
@@ -15,20 +16,13 @@ import { BLUEPRINT_SCHEMA } from '@ss/contracts';
  */
 
 /** A share link lasts this many days unless its creator chooses 1 to 30. */
-export const SHARE_DAYS_DEFAULT = 7;
-export const SHARE_DAYS_MAX = 30;
+const SHARE_DAYS_DEFAULT = 7;
+const SHARE_DAYS_MAX = 30;
 /** Hosts a browser token also works from, on any port over http or https: for testing on one's own computer. */
-export const TESTING_HOSTS = Object.freeze(['localhost', '*.localhost', '127.0.0.1', '[::1]']);
+const TESTING_HOSTS = Object.freeze(['localhost', '*.localhost', '127.0.0.1', '[::1]']);
 /** What the sheet says about server tokens (never their values). */
-export const SERVER_TOKENS_NOTE =
+const SERVER_TOKENS_NOTE =
 	'A server token is issued for each product. It is never shown here: reveal it in the Portal (Install and tokens) and keep it on your server only.';
-
-/**
- * The widget script tag of a product with widgets (PLAN 0.4.10), with the browser token filled in.
- * @param {string} scriptUrl
- * @param {string} browserToken
- */
-export const scriptTag = (scriptUrl, browserToken) => `<script src="${scriptUrl}" data-token="${browserToken}" async></script>`;
 
 /**
  * A product's entry: its answer with the Portal's install facts, or why it is missing.

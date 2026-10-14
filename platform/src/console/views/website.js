@@ -35,6 +35,7 @@ import {
 	problemCode,
 	useToast,
 } from '@ss/ui';
+import { scriptTag } from '../../modules/catalog/core/install.js';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
 import { Link } from '../link.js';
 import { api } from '../paths.js';
@@ -75,14 +76,6 @@ export function MerchantUsageDialog({ merchantId, title, fetcher, onClose }) {
  * What the viewer may do on a website card.
  * @typedef {{ manage: boolean, removeWebsite: boolean, tokens: boolean, open: boolean }} WebsiteRights
  */
-
-/**
- * The widget script tag of a product with widgets (PLAN 0.4.10), with the browser token filled in.
- * @param {string} widgetScriptUrl
- * @param {string} browserToken
- */
-export const scriptTag = (widgetScriptUrl, browserToken) =>
-	`<script src="${widgetScriptUrl}" data-token="${browserToken}" async></script>`;
 
 /**
  * Daily cost of a website: the sum over its products.

@@ -16,7 +16,8 @@ import { LocalTime } from '@ss/ui';
 import { ConsoleShell, merchantSections } from '../../src/console/views/shell.js';
 import { contactLine, homeOf } from '../../src/console/views/sign-in.js';
 import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
-import { dailyCostOf, scriptTag, websiteDot } from '../../src/console/views/website.js';
+import { scriptTag } from '../../src/modules/catalog/core/install.js';
+import { dailyCostOf, websiteDot } from '../../src/console/views/website.js';
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
 

@@ -33,7 +33,7 @@ import { PRODUCTS, SETUP_LINKS } from './schema.js';
 /** How long a gathered sheet is kept per website (in this instance's memory). */
 export const SHEET_CACHE_MS = 60_000;
 /** How long each product has to answer. */
-export const PRODUCT_ANSWER_MS = 5_000;
+const PRODUCT_ANSWER_MS = 5_000;
 /** Sheets kept at most (the oldest goes first). */
 const SHEET_CACHE_LIMIT = 200;
 const ANSWER_MAX_BYTES = 512 * 1024;
