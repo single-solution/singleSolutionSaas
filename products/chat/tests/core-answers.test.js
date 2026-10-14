@@ -1,14 +1,20 @@
 /**
- * The pure parts of PLAN 0.8.10 Chat: markdown and bubbles (C2), fallback answers (C3), "never disclose" (C1), the
+ * The pure parts of PLAN 0.8.10 Chat: markdown and bubbles (C2), fallback answers (C3) and the comparison answer
+ * (C18), "never disclose" (C1), the
  * strict language check (C14), the website's own contact (C15), fuller shop requests and answers and the store
  * context (C13, C1), and the answer checks.
  */
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
 import {
+	COMPARE_WORDS,
 	FALLBACK_LIMITS,
 	budgetOf,
 	checkFallbackAnswers,
+	compareSearches,
+	comparedNames,
+	comparedProduct,
+	comparisonTable,
 	fallbackProblems,
 	fillFallback,
 	matchingFallbacks,
@@ -20,7 +26,8 @@ import { replyMatchesLanguage } from '../core/language.js';
 import { keepLinks, parseInline, parseMarkdown, plainOf, safeHref, splitBubbles } from '../core/markdown.js';
 import { applyLinkPolicy, redact } from '../core/moderation.js';
 import { buildSystemPrompt, disclosesBot } from '../core/prompt.js';
-import { cardsOf, contextPath, contextText, needsCurrency, shopAnswer, shopRequest } from '../core/shop.js';
+import { cardsOf, compareFactsOf, contextPath, contextText, needsCurrency, shopAnswer, shopRequest } from '../core/shop.js';
+import { aroundPhrase } from '../core/text.js';
 
 describe('markdown and bubbles (C2)', () => {
 	it('splits on --- lines into at most the bubbles', () => {
@@ -119,7 +126,7 @@ describe('fallback answers (C3)', () => {
 			ok: false,
 			errors: [
 				'Answer 1: not valid.',
-				'Answer 2: the intent is one of greeting, deals, products, budget, my_orders, other.',
+				'Answer 2: the intent is one of greeting, deals, products, budget, my_orders, compare, other.',
 				'Answer 2: the language is empty (any) or a code such as en.',
 				'Answer 2: the keywords are a list of up to 30 words or phrases of up to 100 characters.',
 				'Answer 2: write the answer (up to 2000 characters).',
@@ -174,6 +181,149 @@ describe('fallback answers (C3)', () => {
 				{ outOfStock: 'sold out', was: (price) => `avant ${price}` },
 			),
 		).toBe('- [F1](/f) — €1 (sold out)\n- G — €2 (avant €3)');
+	});
+});
+
+describe('the comparison answer (C18)', () => {
+	it('needs keywords: the words between the two products', () => {
+		const answer = { intent: 'compare', language: '', keywords: [], text: 'Here: {comparison}' };
+		expect(fallbackProblems(answer)).toEqual(['compareKeywords']);
+		expect(fallbackProblems({ ...answer, keywords: ['vs'] })).toEqual([]);
+		expect(checkFallbackAnswers([answer])).toEqual({
+			ok: false,
+			errors: ['Answer 1: {comparison} needs keywords: the words between the two products, such as vs.'],
+		});
+		expect(placeholdersOf('{comparison}')).toEqual(['comparison']);
+	});
+
+	it('finds the words around a keyword, within one sentence and as whole words', () => {
+		expect(aroundPhrase('Lamp Max vs. Lamp Mini?', 'vs')).toEqual({ before: ['Lamp', 'Max'], after: ['Lamp', 'Mini'] });
+		// case and accents aside; a phrase of several words
+		expect(aroundPhrase('Is the Café 2.5 BETTER THAN the Bistro?', 'better than')).toEqual({
+			before: ['Is', 'the', 'Café', '2.5'],
+			after: ['the', 'Bistro'],
+		});
+		// the sentence that holds it with words on both sides; whole words only
+		expect(aroundPhrase('Hi. Lamp Max or Lamp Mini! Thanks', 'or')).toEqual({
+			before: ['Lamp', 'Max'],
+			after: ['Lamp', 'Mini'],
+		});
+		expect(aroundPhrase('vs Lamp Mini', 'vs')).toBeNull();
+		expect(aroundPhrase('canvas bag', 'vs')).toBeNull();
+		expect(aroundPhrase('anything', '  ')).toBeNull();
+		// a script written without spaces: anywhere in the sentence
+		expect(aroundPhrase('台灯和落地灯', '和')).toEqual({ before: ['台灯'], after: ['落地灯'] });
+		expect(aroundPhrase('和落地灯', '和')).toBeNull();
+	});
+
+	it('names both sides, nearest words first, and searches with fewer words each time', () => {
+		expect(comparedNames('Which is better for reading: Lamp Max vs Lamp Mini today', ['versus', 'vs'])).toEqual({
+			left: ['for', 'reading', 'Lamp', 'Max'].slice(-COMPARE_WORDS),
+			right: ['Lamp', 'Mini', 'today'],
+		});
+		expect(comparedNames('no keyword here', ['vs'])).toBeNull();
+		expect(compareSearches(['is', 'Lamp', 'Max'], 'left')).toEqual(['is Lamp Max', 'Lamp Max', 'Max']);
+		expect(compareSearches(['Lamp', 'Mini', 'today'], 'right')).toEqual(['Lamp Mini today', 'Lamp Mini', 'Lamp']);
+	});
+
+	it('picks the product the name means, never the other side’s, never by a stray word', () => {
+		const max = { id: 'p1', name: 'Lamp Max Pro' };
+		const exact = { id: 'p2', name: 'Lamp Max' };
+		expect(comparedProduct([max, exact], 'lamp max', null)).toBe(exact);
+		expect(comparedProduct([max, exact], 'Lamp', null)).toBe(max);
+		expect(comparedProduct([max, exact], 'Lamp Max', 'p2')).toBe(max);
+		expect(comparedProduct([max], 'Max', 'p1')).toBeNull();
+		// "a" is no word of a name: nothing picked
+		expect(comparedProduct([max, exact], 'a', null)).toBeNull();
+	});
+
+	it('reads a product’s details and puts two side by side', () => {
+		const body = {
+			id: 'p1',
+			name: 'Lamp [Max]',
+			price: 4050,
+			priceText: '$40.50',
+			priceMax: 5000,
+			priceMaxText: '$50.00',
+			compareAtPrice: 4500,
+			compareAtPriceText: '$45.00',
+			currency: 'USD',
+			url: 'https://shop.example.com/lamp-max',
+			inStock: true,
+			grade: 'New',
+			brand: 'Northlight',
+			options: [{ name: 'Color', values: ['Black', 'Gray'] }, { name: 'Empty', values: [] }, 'x'],
+			specs: [
+				{ name: 'Height', value: 42, unit: 'cm' },
+				{ name: 'Dimmable', value: true },
+				{ name: 'Fits', value: ['E27', 'E14'] },
+				{ name: 'Blank', value: null },
+				'x',
+			],
+		};
+		const max = compareFactsOf(body);
+		expect(max).toEqual({
+			name: 'Lamp [Max]',
+			link: 'https://shop.example.com/lamp-max',
+			price: '$40.50 – $50.00',
+			wasPrice: '$45.00',
+			inStock: true,
+			brand: 'Northlight',
+			grade: 'New',
+			details: [
+				{ name: 'Color', value: 'Black, Gray' },
+				{ name: 'Height', value: '42 cm' },
+				{ name: 'Dimmable', value: true },
+				{ name: 'Fits', value: 'E27, E14' },
+			],
+		});
+		expect(compareFactsOf({ name: 'no id' })).toBeNull();
+		expect(compareFactsOf(null)).toBeNull();
+		const mini = /** @type {NonNullable<typeof max>} */ ({
+			...max,
+			name: 'Lamp Mini',
+			link: null,
+			price: '€25',
+			wasPrice: null,
+			inStock: false,
+			brand: null,
+			grade: null,
+			details: [
+				{ name: 'dimmable', value: false },
+				{ name: 'Weight', value: '1 kg' },
+			],
+		});
+		const words = {
+			price: 'Prix',
+			availability: 'Stock',
+			inStock: 'Oui',
+			outOfStock: 'Épuisé',
+			brand: 'Marque',
+			condition: 'État',
+			yes: 'oui',
+			no: 'non',
+			was: (/** @type {string} */ price) => `avant ${price}`,
+		};
+		expect(comparisonTable([/** @type {NonNullable<typeof max>} */ (max), mini], words)).toBe(
+			[
+				'|  | [Lamp Max](https://shop.example.com/lamp-max) | Lamp Mini |',
+				'| --- | --- | --- |',
+				'| Prix | $40.50 – $50.00 (avant $45.00) | €25 |',
+				'| Stock | Oui | Épuisé |',
+				'| Marque | Northlight | — |',
+				'| État | New | — |',
+				'| Color | Black, Gray | — |',
+				'| Height | 42 cm | — |',
+				'| Dimmable | oui | non |',
+				'| Fits | E27, E14 | — |',
+				'| Weight | — | 1 kg |',
+			].join('\n'),
+		);
+		// neither has a brand or a grade: no such rows; at most 20 options and specs
+		const many = { ...mini, details: Array.from({ length: 25 }, (_, i) => ({ name: `Spec ${i}`, value: String(i) })) };
+		const table = comparisonTable([many, mini], words);
+		expect(table).not.toContain('Marque');
+		expect(table.split('\n')).toHaveLength(2 + 2 + 20);
 	});
 });
 

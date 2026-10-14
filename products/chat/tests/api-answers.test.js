@@ -1,7 +1,8 @@
 /**
  * PLAN 0.8.10 Chat, the answers: longer instructions, "never disclose" and the store context (C1), rich answers in
- * bubbles (C2), fallback answers filled from the shop (C3), the AI reply in the same request (C10), fuller shop tools
- * (C13), the strict language check and the current page (C14), and the website's own contact kept by moderation (C15).
+ * bubbles (C2), fallback answers filled from the shop (C3) with the comparison answer (C18), the AI reply in the same
+ * request (C10), fuller shop tools (C13), the strict language check and the current page (C14), and the website's own
+ * contact kept by moderation (C15).
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI_KEY, ECOMMERCE, ready } from './helpers.js';
@@ -262,6 +263,103 @@ describe('fallback answers (C3)', () => {
 		expect(best.status, best.text).toBe(201);
 		expect((await v('GET', '/v1/chat')).json.messages.at(-1).text).toContain('Popular:\n- [Desk Lamp]');
 		expect(sys.aiCalls()).toHaveLength(calls);
+	});
+});
+
+describe('the comparison answer (C18)', () => {
+	it('puts the two products a message names side by side when the AI fails', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'fallback_answers', 'shop_search']);
+		await sys.paste('ecommerce');
+		await sys.setting('guest_chat', 'messageLimit', 0);
+		// {comparison} needs the words between the two products
+		const refused = await sys.dashboard(
+			await sys.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${sys.websiteId}/lists/fallback_answers`,
+			{ items: [{ intent: 'compare', language: '', keywords: [], text: '{comparison}' }] },
+		);
+		expect(refused.status).toBe(422);
+		expect(refused.text).toContain('{comparison} needs keywords');
+		await sys.list('fallback_answers', [
+			{ intent: 'compare', language: '', keywords: ['vs', 'versus'], text: 'Side by side:\n\n{comparison}' },
+		]);
+		const max = { ...PRODUCT, id: 'prd_max', name: 'Lamp Max', url: 'https://shop.example.com/lamps/lamp-max' };
+		const mini = {
+			...PRODUCT,
+			id: 'prd_mini',
+			name: 'Lamp Mini',
+			price: 2500,
+			priceText: '$25.00',
+			priceMax: 2500,
+			priceMaxText: '$25.00',
+			compareAtPrice: null,
+			compareAtPriceText: null,
+			deal: null,
+			url: 'https://shop.example.com/lamps/lamp-mini',
+			inStock: false,
+			grade: null,
+		};
+		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, (call) => {
+			const terms = String(new URL(call.url).searchParams.get('q')).toLowerCase().split(' ');
+			const items = [max, mini].filter((p) => terms.every((term) => p.name.toLowerCase().includes(term)));
+			return { status: 200, body: { items } };
+		});
+		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_max`, () => ({
+			status: 200,
+			body: {
+				...max,
+				brand: 'Northlight',
+				options: [{ name: 'Color', values: ['Black', 'Gray'] }],
+				specs: [
+					{ name: 'Height', value: 42, unit: 'cm' },
+					{ name: 'Dimmable', value: true, unit: null },
+					{ name: 'Power', value: 9, unit: 'W' },
+				],
+			},
+		}));
+		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_mini`, () => ({
+			status: 200,
+			body: {
+				...mini,
+				brand: 'Northlight',
+				options: [{ name: 'Color', values: ['White'] }],
+				specs: [
+					{ name: 'height', value: 30, unit: 'cm' },
+					{ name: 'Dimmable', value: false, unit: null },
+				],
+			},
+		}));
+		const v = sys.visitor();
+		sys.ai({ status: 500 });
+		await v('POST', '/v1/chat/messages', { text: 'Which is better: Lamp Max vs Lamp Mini?' });
+		const last = (await v('GET', '/v1/chat')).json.messages.at(-1);
+		expect(last).toMatchObject({ author: 'ai', format: 'markdown' });
+		expect(last.text).toBe(
+			[
+				'Side by side:',
+				'',
+				'|  | [Lamp Max](https://shop.example.com/lamps/lamp-max) | [Lamp Mini](https://shop.example.com/lamps/lamp-mini) |',
+				'| --- | --- | --- |',
+				'| Price | $40.50 (was $45.00) | $25.00 |',
+				'| Availability | In stock | Out of stock |',
+				'| Brand | Northlight | Northlight |',
+				'| Condition | New | — |',
+				'| Color | Black, Gray | White |',
+				'| Height | 42 cm | 30 cm |',
+				'| Dimmable | Yes | No |',
+				'| Power | 9 W | — |',
+			].join('\n'),
+		);
+		// each side searched with its words, then fewer: the words nearest the keyword kept
+		const queries = sys
+			.shopCalls()
+			.filter((c) => new URL(c.url).pathname === '/v1/chat/products')
+			.map((c) => new URL(c.url).searchParams.get('q'));
+		expect(queries).toEqual(['is better Lamp Max', 'better Lamp Max', 'Lamp Max', 'Lamp Mini']);
+		// a side the catalog does not have: the answer is skipped, the on-failure message replies
+		sys.ai({ status: 500 });
+		await v('POST', '/v1/chat/messages', { text: 'Lamp Max versus a candle' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
 	});
 });
 

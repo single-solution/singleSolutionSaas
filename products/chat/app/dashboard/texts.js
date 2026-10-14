@@ -214,6 +214,7 @@ export const TEXTS = Object.freeze({
 				products: 'Products',
 				budget: 'A budget',
 				my_orders: 'The visitor’s orders',
+				compare: 'Comparing two products',
 				other: 'Anything else',
 			}),
 			language: 'Language',
@@ -221,21 +222,23 @@ export const TEXTS = Object.freeze({
 			languageHelp: 'A language answers only visitors writing in it, and needs Language lock (its languages are listed here).',
 			keywords: 'Keywords (one per line)',
 			keywordsHelp:
-				'Sent when the message contains one of them; none = any message. Up to {max} of up to {length} characters.',
+				'Sent when the message contains one of them; none = any message. Up to {max} of up to {length} characters. For {comparison}, the words between the two products, such as vs or versus.',
 			text: 'Answer',
 			textHelp:
-				'Markdown, up to {max} characters. Placeholders, filled by the shop tools that are on: {deals_table} the active deals, {top_products} the top products, {products_under} products under the budget in the message, {my_orders} the visitor’s orders. An answer whose placeholder cannot be filled is skipped.',
+				'Markdown, up to {max} characters. Placeholders, filled by the shop tools that are on: {deals_table} the active deals, {top_products} the top products, {products_under} products under the budget in the message, {my_orders} the visitor’s orders, {comparison} the two products the message names before and after a keyword side by side (Lamp Max vs Lamp Mini). An answer whose placeholder cannot be filled is skipped.',
 			needsOff: 'Skipped while these are off: {features}.',
 			placeholderFeatures: Object.freeze({
 				deals_table: 'Shop tools: deals and savings quotes',
 				top_products: 'Shop tools: top and new products',
 				products_under: 'Shop tools: product search and details',
 				my_orders: 'Shop tools: my orders and account',
+				comparison: 'Shop tools: product search and details',
 			}),
 			problems: Object.freeze({
 				intent: 'Pick what the answer is for.',
 				language: 'Pick a language, or Any language.',
 				keywords: 'Up to {max} keywords of up to {length} characters each.',
+				compareKeywords: 'Add the words between the two products, such as vs, for {comparison}.',
 				text: 'Write the answer (up to {max} characters).',
 			}),
 		}),

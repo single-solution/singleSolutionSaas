@@ -635,6 +635,56 @@ const clockText = (value, look) => {
 };
 
 /**
+ * A product as a comparison shows it (C18).
+ * @typedef {object} CompareFacts
+ * @property {string} name
+ * @property {string | null} link the product page
+ * @property {string} price the shown price, as the product page shows it (lowest to highest when the variants differ)
+ * @property {string | null} wasPrice the price struck through beside it
+ * @property {boolean} inStock
+ * @property {string | null} brand
+ * @property {string | null} grade
+ * @property {Array<{ name: string, value: string | boolean }>} details its options (their values) and specs (value and
+ *   unit; true or false for a yes-or-no spec), in the shop's order
+ */
+
+/**
+ * A product's details as a comparison shows them (C18), from Ecommerce's product details (E37); null when the answer
+ * is not a product.
+ * @param {unknown} body
+ * @param {Look} [look] the website's Format and business time zone
+ * @returns {CompareFacts | null}
+ */
+export const compareFactsOf = (body, look = {}) => {
+	const b = isObject(body) ? body : {};
+	const product = productOf(b);
+	if (!product) return null;
+	const line = productLine(product, look);
+	const options = optionsOf(b.options)
+		.filter((option) => option.name !== null && option.values.length > 0)
+		.map((option) => ({ name: String(option.name), value: option.values.join(', ') }));
+	const specs = itemsOf(b.specs)
+		.filter(isObject)
+		.slice(0, 30)
+		.map((spec) => {
+			const unit = textOf(spec.unit, 20);
+			const value = typeof spec.value === 'boolean' ? spec.value : specValueText(spec.value);
+			return { name: textOf(spec.name, 80), value: typeof value === 'string' && unit ? `${value} ${unit}` : value };
+		})
+		.filter((spec) => spec.name !== null && spec.value !== null);
+	return {
+		name: product.name,
+		link: product.url,
+		price: line.price,
+		wasPrice: 'wasPrice' in line ? String(line.wasPrice) : null,
+		inStock: product.inStock,
+		brand: textOf(b.brand, 120),
+		grade: product.grade,
+		details: [...options, .../** @type {Array<{ name: string, value: string | boolean }>} */ (specs)],
+	};
+};
+
+/**
  * What the AI gets from an Ecommerce answer, and the products that become cards.
  * @param {string} name
  * @param {unknown} body

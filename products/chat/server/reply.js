@@ -22,6 +22,10 @@ import { advance, keywordFlow } from '../core/flows.js';
 import {
 	PLACEHOLDERS as PLACEHOLDER_FEATURES,
 	budgetOf,
+	compareSearches,
+	comparedNames,
+	comparedProduct,
+	comparisonTable,
 	fillFallback,
 	matchingFallbacks,
 	placeholdersOf,
@@ -59,6 +63,7 @@ import {
 	SHOP_LIMIT,
 	SHOP_UNAVAILABLE,
 	cardOf,
+	compareFactsOf,
 	contextPath,
 	contextText,
 	needsCurrency,
@@ -572,13 +577,13 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * A shop read for a fallback answer (Ecommerce, pasted token): the tool's answer as the AI would get it, or null.
+	 * A shop read for a fallback answer (Ecommerce, pasted token): Ecommerce's answer to the tool's request, or null.
 	 * @param {Site} s
 	 * @param {string} tool
 	 * @param {Record<string, unknown>} args
 	 * @param {string | null} signIn the verified sign-in for the visitor's own data
 	 */
-	const shopRead = async (s, tool, args, signIn) => {
+	const shopBody = async (s, tool, args, signIn) => {
 		const request = shopRequest(tool, args, {
 			limit: await shopLimit(s),
 			...(needsCurrency(tool, args) ? { minor: await minorUnits(s) } : {}),
@@ -592,16 +597,64 @@ export const createReply = (product, service) => {
 		);
 		if (!answer.ok) return null;
 		rememberCurrency(s, answer.body);
-		return shopAnswer(tool, answer.body, await s.format()).content;
+		return answer.body;
+	};
+
+	/**
+	 * A shop read for a fallback answer: the tool's answer as the AI would get it, or null.
+	 * @param {Site} s
+	 * @param {string} tool
+	 * @param {Record<string, unknown>} args
+	 * @param {string | null} signIn the verified sign-in for the visitor's own data
+	 */
+	const shopRead = async (s, tool, args, signIn) => {
+		const body = await shopBody(s, tool, args, signIn);
+		return body === null ? null : shopAnswer(tool, body, await s.format()).content;
+	};
+
+	/**
+	 * The two products a message names around one of the keywords, side by side (C18): each side is searched in the
+	 * catalog with its words, then with fewer (the word farthest from the keyword dropped each time) until a product is
+	 * found (the one named exactly so, else the first; never the other side's), and the table is made from both
+	 * products' details. Null when a side finds no product or Ecommerce cannot answer.
+	 * @param {Site} s
+	 * @param {{ message: string, keywords: string[], words: Parameters<typeof comparisonTable>[1] }} input
+	 */
+	const comparison = async (s, { message, keywords, words }) => {
+		const names = comparedNames(message, keywords);
+		if (!names) return null;
+		/** @type {string | null} */
+		let taken = null;
+		/** @type {import('../core/shop.js').CompareFacts[]} */
+		const facts = [];
+		for (const side of /** @type {const} */ (['left', 'right'])) {
+			/** @type {import('../core/shop.js').ShopProduct | null} */
+			let found = null;
+			for (const query of compareSearches(names[side], side)) {
+				const body = await shopBody(s, 'search_catalog', { query }, null);
+				if (body === null) return null;
+				found = comparedProduct(shopAnswer('search_catalog', body).products, query, taken);
+				if (found) break;
+			}
+			if (!found) return null;
+			taken = found.id;
+			const details = compareFactsOf(
+				await shopBody(s, 'get_product_details', { productId: found.id }, null),
+				await s.format(),
+			);
+			if (!details) return null;
+			facts.push(details);
+		}
+		return comparisonTable(facts, words);
 	};
 
 	/**
 	 * The text of a fallback placeholder from the shop tools that are on, or null.
 	 * @param {Site} s
 	 * @param {keyof typeof import('../core/fallback.js').PLACEHOLDERS} name
-	 * @param {{ message: string, signIn: string | null }} input
+	 * @param {{ message: string, signIn: string | null, keywords: string[] }} input `keywords`: the answer's
 	 */
-	const placeholderText = async (s, name, { message, signIn }) => {
+	const placeholderText = async (s, name, { message, signIn, keywords }) => {
 		const texts = await s.texts();
 		/** @param {string} key a widget text (Settings, Texts) */
 		const text = (key) => String(texts[key]);
@@ -609,6 +662,21 @@ export const createReply = (product, service) => {
 			outOfStock: text('chat.outOfStock'),
 			was: (/** @type {string} */ price) => formatText(text('chat.wasPrice'), { price }),
 		};
+		if (name === 'comparison')
+			return comparison(s, {
+				message,
+				keywords,
+				words: {
+					...words,
+					price: text('chat.comparePrice'),
+					availability: text('chat.compareAvailability'),
+					inStock: text('chat.inStock'),
+					brand: text('chat.compareBrand'),
+					condition: text('chat.compareCondition'),
+					yes: text('chat.compareYes'),
+					no: text('chat.compareNo'),
+				},
+			});
 		/** @param {any} content */
 		const products = (content) =>
 			Array.isArray(content?.products) && content.products.length > 0 ? productList(content.products, words) : null;
@@ -652,10 +720,13 @@ export const createReply = (product, service) => {
 			/** @type {Record<string, string | null>} */
 			const values = {};
 			for (const name of placeholdersOf(item.text)) {
+				// a comparison depends on the answer's keywords (the words between the two products)
+				const key = name === 'comparison' ? `${name}\n${item.keywords.join('\n')}` : name;
 				if (!s.on.includes(PLACEHOLDER_FEATURES[name])) values[name] = null;
 				else {
-					if (!filled.has(name)) filled.set(name, await placeholderText(s, name, { message, signIn }));
-					values[name] = filled.get(name) ?? null;
+					if (!filled.has(key))
+						filled.set(key, await placeholderText(s, name, { message, signIn, keywords: item.keywords }));
+					values[name] = filled.get(key) ?? null;
 				}
 			}
 			const text = fillFallback(item.text, values);

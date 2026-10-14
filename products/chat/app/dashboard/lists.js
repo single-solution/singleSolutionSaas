@@ -565,6 +565,7 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 }
 
 const A = L.fallbackAnswers;
+/** @typedef {import('../../core/fallback.js').FallbackProblem} FallbackProblem */
 
 /** English names of languages for the language list (the code alone where the browser has none). */
 const LANGUAGE_NAMES = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en-US'], { type: 'language' }) : null;
@@ -614,7 +615,7 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 			invalid={(answer) => fallbackProblems(answer).length > 0}
 			render={(answer, set) => {
 				const problems = fallbackProblems(cleanAnswer(answer));
-				/** @param {'intent' | 'language' | 'keywords' | 'text'} field @param {Record<string, number>} [values] */
+				/** @param {Exclude<FallbackProblem, 'item'>} field @param {Record<string, number>} [values] */
 				const problem = (field, values = {}) => (problems.includes(field) ? fill(A.problems[field], values) : undefined);
 				const choices = [...new Set([...languages, ...(answer.language ? [answer.language] : [])])];
 				const offTools = placeholdersOf(String(answer.text ?? ''))
@@ -647,7 +648,7 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 							rows={3}
 							value={(answer.keywords ?? []).join('\n')}
 							help={fill(A.keywordsHelp, limits)}
-							error={problem('keywords', limits)}
+							error={problem('keywords', limits) ?? problem('compareKeywords')}
 							onChange={(event) => set({ keywords: toLines(event.target.value) })}
 						/>
 						<TextArea

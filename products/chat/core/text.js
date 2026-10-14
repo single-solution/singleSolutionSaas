@@ -1,6 +1,6 @@
 /**
- * Text helpers (pure): Unicode-aware normalization and tokenization for retrieval and phrase matching,
- * truncation on code points and path globs (`*` = one segment, `**` = any).
+ * Text helpers (pure): Unicode-aware normalization and tokenization for retrieval and phrase matching, the words
+ * around a phrase, truncation on code points and path globs (`*` = one segment, `**` = any).
  * @module
  */
 
@@ -54,6 +54,63 @@ export const containsPhrase = (text, phrase) => {
 	const haystack = ` ${tokenize(text, { minLength: 1 }).join(' ')} `;
 	const needle = tokenize(phrase, { minLength: 1 }).join(' ');
 	return needle.length > 0 && haystack.includes(` ${needle} `);
+};
+
+/** A word that ends a sentence: `.`, `!` or `?` (or their full-width forms) last, before any closing quote or bracket. */
+const SENTENCE_END = /[.!?。！？]["'”’)\]]*$/u;
+/** Where a sentence ends inside text written without spaces. */
+const SENTENCE_MARK = /[.!?。！？]/u;
+
+/** Punctuation at either end of a word. */
+const WORD_EDGES = /^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu;
+
+/**
+ * The words before and after a phrase within its sentence (a line break, or a word ending in `.`, `!` or `?`, ends
+ * one), at its first place with words on both sides: matched as whole words, case and accents aside, like
+ * `containsPhrase`; a phrase in a script written without spaces anywhere. Words lose the punctuation at their ends.
+ * @param {string} text
+ * @param {string} phrase
+ * @returns {{ before: string[], after: string[] } | null}
+ */
+export const aroundPhrase = (text, phrase) => {
+	/** @param {string} part */
+	const wordsOf = (part) =>
+		part
+			.split(/\s+/)
+			.map((word) => word.replace(WORD_EDGES, ''))
+			.filter((word) => word !== '');
+	const needle = wordsOf(phrase).map(normalise);
+	if (needle.length === 0) return null;
+	for (const line of text.normalize('NFKC').split('\n')) {
+		if (UNSPACED.test(phrase)) {
+			const part = phrase.trim().normalize('NFKC');
+			const at = line.indexOf(part);
+			if (at < 0) continue;
+			const head = line.slice(0, at);
+			const tail = line.slice(at + part.length);
+			const ends = [...head].findLastIndex((char) => SENTENCE_MARK.test(char));
+			const stop = [...tail].findIndex((char) => SENTENCE_MARK.test(char));
+			const before = wordsOf([...head].slice(ends + 1).join(''));
+			const after = wordsOf(stop < 0 ? tail : [...tail].slice(0, stop).join(''));
+			if (before.length > 0 && after.length > 0) return { before, after };
+			continue;
+		}
+		const raw = line.split(/\s+/).filter((word) => word.replace(WORD_EDGES, '') !== '');
+		const words = raw.map((word) => word.replace(WORD_EDGES, ''));
+		const keys = words.map(normalise);
+		const ends = raw.map((word) => SENTENCE_END.test(word));
+		for (let i = 1; i + needle.length < words.length; i += 1) {
+			if (!needle.every((word, j) => keys[i + j] === word)) continue;
+			let first = i;
+			while (first > 0 && !ends[first - 1]) first -= 1;
+			let last = i + needle.length;
+			while (last < words.length && !ends[last]) last += 1;
+			const before = words.slice(first, i);
+			const after = words.slice(i + needle.length, last + 1);
+			if (before.length > 0 && after.length > 0) return { before, after };
+		}
+	}
+	return null;
 };
 
 /**

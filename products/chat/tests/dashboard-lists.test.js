@@ -2,8 +2,8 @@
 /**
  * The fallback answers editor in the browser (jsdom) on a faked dashboard API (PLAN 0.8.10 C3): Settings → Assistant
  * shows it with Language lock's languages; it adds, edits and saves answers with one PUT, refuses what the server's
- * check would (each field says why, nothing is sent) and names the shop tools an answer's placeholders need while they
- * are off.
+ * check would (each field says why, nothing is sent; a comparison answer needs its keywords, C18) and names the shop
+ * tools an answer's placeholders need while they are off.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -94,6 +94,7 @@ describe('the fallback answers editor (C3)', () => {
 			'Products',
 			'A budget',
 			'The visitor’s orders',
+			'Comparing two products',
 			'Anything else',
 		]);
 		expect(container.textContent).not.toContain('Skipped while these are off');
@@ -128,6 +129,24 @@ describe('the fallback answers editor (C3)', () => {
 		]);
 		expect(container.textContent).toContain('Saved');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
+	});
+
+	it('a comparison answer needs the words between the two products (C18)', async () => {
+		serve();
+		const { container } = render(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />);
+		await settle();
+		click(button(container, 'Add'));
+		type(field(container, 'For', 1), 'compare');
+		type(field(container, 'Answer', 1), 'Side by side:\n{comparison}');
+		expect(container.textContent).toContain('Add the words between the two products, such as vs, for {comparison}.');
+		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
+		type(field(container, 'Keywords (one per line)', 1), 'vs\nversus');
+		expect(container.textContent).not.toContain('Add the words between');
+		click(button(container, 'Save list'));
+		await settle();
+		expect(saved).toEqual([
+			[DEALS, { intent: 'compare', language: '', keywords: ['vs', 'versus'], text: 'Side by side:\n{comparison}' }],
+		]);
 	});
 
 	it('keeps a saved language Language lock no longer lists; moves and removes answers', async () => {
