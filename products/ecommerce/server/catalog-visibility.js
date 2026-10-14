@@ -22,7 +22,7 @@ const cache = new WeakMap();
  * @param {ReadonlyArray<{ id: string, status?: string }>} brands
  * @returns {Hidden}
  */
-export const hiddenOf = (categories, brands) => {
+const hiddenOf = (categories, brands) => {
 	const notActive = new Set(categories.filter((c) => (c.status ?? 'active') !== 'active').map((c) => c.id));
 	const hidden = new Set(categories.filter((c) => c.status === 'hidden').map((c) => c.id));
 	return {

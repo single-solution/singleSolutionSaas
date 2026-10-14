@@ -19,9 +19,9 @@ import { SERVER_LIMITS } from './service.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** Packing slips printed together, at most. */
-export const MAX_SLIPS = 50;
+const MAX_SLIPS = 50;
 /** Orders on one pick list, at most. */
-export const MAX_PICK = 100;
+const MAX_PICK = 100;
 
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
 const serverLimits = [...SERVER_LIMITS];

@@ -156,7 +156,7 @@ export const variantInStock = (variant, trackStock) => variant.active && !varian
  * @param {boolean} trackStock
  * @returns {'none' | 'out' | 'partial' | 'full'}
  */
-export const stockStateOf = (variants, trackStock) => {
+const stockStateOf = (variants, trackStock) => {
 	const active = variants.filter((variant) => variant.active);
 	if (!trackStock || active.length === 0) return 'none';
 	const selling = active.filter((variant) => variantInStock(variant, true)).length;

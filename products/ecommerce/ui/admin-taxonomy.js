@@ -193,7 +193,7 @@ const listTools = (kit, { label, onAdd, onSearch, extra = [] }) => {
  * @param {{ path: string, for: 'category' | 'brand', field: 'image' | 'logo', item: Named,
  *   changed: (file: any) => void }} spec `changed` keeps the new image on the listed record
  */
-export const imageCard = (kit, { path, for: owner, field, item, changed }) => {
+const imageCard = (kit, { path, for: owner, field, item, changed }) => {
 	const { t, h } = kit;
 	const note = kit.status();
 	const at = `${path}/${item.id}/${field}`;

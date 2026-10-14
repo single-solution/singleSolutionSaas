@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /* global window */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mountProductPage, variantFor } from '../ui/product-page.js';
+import { mountProductPage } from '../ui/product-page.js';
+import { axesOf, pickVariant } from '../ui/shop-page-parts.js';
 import { compareIds } from '../ui/shop-compare-store.js';
 import {
 	$,
@@ -455,8 +456,9 @@ describe('product page', () => {
 
 	it('finds the variant of chosen options', () => {
 		const item = /** @type {any} */ (product());
-		expect(variantFor(item, { Colour: 'Blue', Storage: '256 GB' })?.id).toBe('var_b2');
-		expect(variantFor(item, { Colour: 'Green', Storage: '256 GB' })).toBeNull();
+		const axes = axesOf(item);
+		expect(pickVariant(axes, item.variants, { Colour: 'Blue', Storage: '256 GB' })?.id).toBe('var_b2');
+		expect(pickVariant(axes, item.variants, { Colour: 'Green', Storage: '256 GB' })).toBeNull();
 	});
 });
 

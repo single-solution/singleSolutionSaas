@@ -23,7 +23,7 @@ import { checkAttribute, checkBrand, checkCategory } from '../core/catalog-taxon
 import { optionsFromAttributes, specValue, valueLabel } from '../core/catalog.js';
 import { gradeCondition, gradeView, gradesByKey } from '../core/grades.js';
 import { checkLanding, isIndexable, landingFor, landingLink } from '../core/landings.js';
-import { absolute, categoryLink, nextPreviousSlugs, normalRef, productLink, variantQueryOf, withQuery } from '../core/links.js';
+import { absolute, categoryLink, nextPreviousSlugs, productLink, variantQueryOf, withQuery } from '../core/links.js';
 import { buildLlmsFull } from '../core/llms.js';
 import { fillPolicies } from '../core/policies.js';
 import { SEARCH_INDEX_DEFINITION, namesMatching, searchStage } from '../core/search.js';
@@ -283,7 +283,7 @@ describe('links', () => {
 		expect(withQuery('https://x/p', '')).toBe('https://x/p');
 	});
 
-	it('keeps earlier slugs and reads references', () => {
+	it('keeps earlier slugs', () => {
 		expect(nextPreviousSlugs(undefined, 'a', 'a')).toEqual([]);
 		expect(nextPreviousSlugs(['b', 'c'], 'a', 'b')).toEqual(['a', 'c']);
 		expect(
@@ -293,8 +293,6 @@ describe('links', () => {
 				'x',
 			),
 		).toHaveLength(20);
-		expect(normalRef('prd_ABC', 'prd')).toBe('prd_ABC');
-		expect(normalRef('Pixel-9', 'prd')).toBe('pixel-9');
 	});
 });
 

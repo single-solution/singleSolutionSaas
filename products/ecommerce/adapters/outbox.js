@@ -25,7 +25,7 @@ import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 /** A message is tried for at most a day (Notifications keeps an idempotency key that long). */
 export const KEEP_MS = 24 * 3_600_000;
 /** A try holds its message this long, so two instances never send it at once. */
-export const LEASE_MS = 5 * 60_000;
+const LEASE_MS = 5 * 60_000;
 
 /** Merchant database indexes of the outbox. @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [

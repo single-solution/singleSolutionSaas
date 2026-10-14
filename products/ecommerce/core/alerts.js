@@ -34,7 +34,7 @@ export const alertRetryAt = (tries, now) => {
 };
 
 /** The stop page of an alert's link while the `alerts` setting `stopUrl` names none (E34). */
-export const STOP_PATH = '/alerts/unsubscribe/{token}';
+const STOP_PATH = '/alerts/unsubscribe/{token}';
 
 /**
  * An alert message's stop link (`{stopUrl}`, EN-1): the `alerts` setting `stopUrl` (a path or https address with

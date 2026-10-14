@@ -24,7 +24,7 @@ const MAX_TERMS = 6;
 /** The longest search text. */
 const MAX_QUERY = 120;
 /** Chat product searches answer at most this many products (E37). */
-export const MAX_CHAT_RESULTS = 12;
+const MAX_CHAT_RESULTS = 12;
 /** A Chat quote prices at most this many units (E37). */
 export const MAX_QUOTE_QUANTITY = 5;
 /** Most grades a `grade` filter takes. */

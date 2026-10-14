@@ -5,20 +5,23 @@
 import { describe, expect, it } from 'vitest';
 import { codAdvance, codFee } from '../core/cod.js';
 import { feeBaseOf, paymentOptions, priceLines, roleDiscountOf } from '../core/checkout.js';
-import {
-	conditionsHold,
-	DEAL_RULES,
-	dealLineDiscount,
-	dealRulesOf,
-	dealUnitDiscount,
-	inWindow,
-	NO_CONDITIONS,
-} from '../core/deals.js';
+import { conditionsHold, DEAL_RULES, dealLineDiscount, dealRulesOf, dealUnitDiscount, inWindow } from '../core/deals.js';
 import { keyOpens, newOrderKey, orderKeyHash, readLock, signLock } from '../adapters/crypto.js';
 import { checkGuest, ORDER_KEY_LENGTH, phoneAllowed, phoneDigitsOf, phoneRules } from '../core/guests.js';
 import { expiryFor, lotsByRule, pointsToEarn, pointsToRedeem, takesPart } from '../core/loyalty.js';
 import { allocateUnits, roundDown, roundHalfUp, unitOf } from '../core/money.js';
 import { checkRolePrices } from '../core/role-pricing.js';
+
+/** Deal conditions that hold for every line (each test adds the one it checks). @type {import('../core/model.js').DealConditions} */
+const NO_CONDITIONS = Object.freeze({
+	match: /** @type {'all'} */ ('all'),
+	rules: [],
+	groups: [],
+	priceRange: null,
+	minQuantity: 0,
+	cartTotal: 0,
+	paymentMethods: [],
+});
 
 const NOW = Date.parse('2026-10-05T10:00:00Z');
 const empty = () => ({ everything: false, productIds: [], categoryIds: [], brandIds: [] });

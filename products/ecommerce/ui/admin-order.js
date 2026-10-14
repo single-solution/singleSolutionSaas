@@ -72,7 +72,7 @@ export const historyBy = (kit, entry) => {
  * values, an `amount` (minor units) as money of the order's currency by the website's Format.
  * @param {Kit} kit @param {string} prefix @param {Coded} coded @param {(minor: number) => string} money
  */
-export const codedText = (kit, prefix, { code, values = {} }, money) =>
+const codedText = (kit, prefix, { code, values = {} }, money) =>
 	kit.t(
 		`${prefix}${code}`,
 		Object.fromEntries(

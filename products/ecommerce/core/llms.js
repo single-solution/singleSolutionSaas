@@ -122,7 +122,7 @@ export const treeOrder = (categories) => {
 };
 
 /** Longest llms-full.txt (it lists every product in stock). */
-export const MAX_LLMS_FULL_CHARS = 5_000_000;
+const MAX_LLMS_FULL_CHARS = 5_000_000;
 
 /**
  * llms-full.txt (E16): the shop, then each category with its grades and every product in stock with its price range;

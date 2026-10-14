@@ -184,7 +184,7 @@ export const landingPrompt = (facts, { fields, tone, language }) => {
 };
 
 /** What a glossary page's copy may hold (E43), with their longest lengths (FAQs: how many). */
-export const GLOSSARY_FIELDS = Object.freeze({ title: 70, description: 160, faqs: 8 });
+const GLOSSARY_FIELDS = Object.freeze({ title: 70, description: 160, faqs: 8 });
 
 /** @typedef {keyof typeof GLOSSARY_FIELDS} GlossaryField */
 

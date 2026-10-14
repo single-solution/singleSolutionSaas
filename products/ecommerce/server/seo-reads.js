@@ -58,7 +58,7 @@ export const activeProduct = async (data, ref) => {
  * @param {string[]} ids
  * @returns {Promise<CategoryRecord[]>}
  */
-export const categoriesById = async (data, ids) =>
+const categoriesById = async (data, ids) =>
 	ids.length === 0
 		? []
 		: /** @type {CategoryRecord[]} */ (

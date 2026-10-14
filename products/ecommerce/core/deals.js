@@ -118,17 +118,6 @@ export const dealRulesOf = (settings) =>
 /** The default rules. */
 export const DEAL_RULES = Object.freeze(dealRulesOf({}));
 
-/** No conditions. @type {DealConditions} */
-export const NO_CONDITIONS = Object.freeze({
-	match: /** @type {'all'} */ ('all'),
-	rules: [],
-	groups: [],
-	priceRange: null,
-	minQuantity: 0,
-	cartTotal: 0,
-	paymentMethods: [],
-});
-
 /**
  * Whether one rule holds for a line.
  * @param {DealConditions['rules'][number]} rule
@@ -245,7 +234,7 @@ export const dealCovers = (deal, line, cart) => inScope(line, deal.scope) && con
  * @param {DealCart} cart
  * @param {number} now epoch ms
  */
-export const dealLiveFor = (deal, line, cart, now) => dealLive(deal, now, cart) && dealCovers(deal, line, cart);
+const dealLiveFor = (deal, line, cart, now) => dealLive(deal, now, cart) && dealCovers(deal, line, cart);
 
 /**
  * A deal's conditions as a card judges them (E18): the minimum quantity, cart total and payment methods are left to
@@ -497,7 +486,7 @@ const checkRules = (value, field) => {
  * @param {unknown} value
  * @returns {Checked}
  */
-export const checkConditions = (value) => {
+const checkConditions = (value) => {
 	if (value === undefined || value === null) return { ok: true, value: null };
 	if (!isObject(value)) return fail('conditions', 'conditions is an object.');
 	const match = value.match ?? 'all';

@@ -495,7 +495,7 @@ const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * @param {{ prefix: string, year: number, session?: Session }} options
  * @returns {Promise<number>}
  */
-export const highestNumber = async (data, { prefix, year, session }) => {
+const highestNumber = async (data, { prefix, year, session }) => {
 	const [found] = await data
 		.collection(COLLECTIONS.orders)
 		.aggregate(

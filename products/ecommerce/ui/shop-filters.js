@@ -14,7 +14,7 @@ import { button, field, h, select } from './shop-common.js';
 /** @typedef {import('./shop-common.js').Texts} Texts */
 
 /** Values a list shows before Show all. */
-export const SHORT_LIST = 8;
+const SHORT_LIST = 8;
 
 /**
  * What the grid filters by.

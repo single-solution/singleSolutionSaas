@@ -16,7 +16,7 @@ import { MAX_FAQS } from './catalog-taxonomy.js';
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 
 /** Limits of a landing page's copy. */
-export const LANDING_LIMITS = Object.freeze({ h1: 200, title: 200, description: 500, intro: 5000 });
+const LANDING_LIMITS = Object.freeze({ h1: 200, title: 200, description: 500, intro: 5000 });
 
 /** @typedef {Omit<LandingRecord, 'id'>} LandingFields */
 
@@ -97,9 +97,6 @@ export const NO_STOCK = Object.freeze({ products: 0, variants: 0, minPrice: null
 export const isIndexable = (landing, stock, { minProducts, minVariants }) =>
 	landing.indexable === 'yes' ||
 	(landing.indexable === 'auto' && stock.products >= minProducts && stock.variants >= minVariants);
-
-/** The `landing_pages` setting `auto` (E43). */
-export const AUTO_MODES = Object.freeze(/** @type {const} */ (['off', 'category_brand', 'category_brand_grade']));
 
 /**
  * Whether a combination is one the `auto` setting makes automatic landing pages of (E43): a category and a brand, and

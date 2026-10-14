@@ -10,7 +10,7 @@ import { cleanText, isObject } from './catalog.js';
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 
 /** Limits of a chart. */
-export const CHART_LIMITS = Object.freeze({ name: 120, columns: 12, rows: 40, label: 60, value: 60, text: 2000 });
+const CHART_LIMITS = Object.freeze({ name: 120, columns: 12, rows: 40, label: 60, value: 60, text: 2000 });
 
 /** Column keys: lowercase letters, digits, `_` and `-` (keys made from labels with dashes, CA-16). */
 const COLUMN_KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;

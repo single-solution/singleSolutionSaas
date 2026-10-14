@@ -68,7 +68,7 @@ const VARIANT_FIELDS = Object.freeze([
 ]);
 
 /** The fields each collection's records may have (the stored shapes of `model.js`). */
-export const IMPORT_FIELDS = Object.freeze({
+const IMPORT_FIELDS = Object.freeze({
 	categories: Object.freeze([
 		'id',
 		'slug',

@@ -36,7 +36,7 @@ export const absolute = (path, domain) => {
  * @param {string} id
  * @param {LinkContext['categories']} categories
  */
-export const slugTrail = (id, categories) => {
+const slugTrail = (id, categories) => {
 	const category = categories.get(id);
 	if (!category) return [];
 	return /** @type {string[]} */ (
@@ -122,10 +122,3 @@ export const nextPreviousSlugs = (previous, before, after) =>
 	before === after
 		? (previous ?? [])
 		: [before, ...(previous ?? []).filter((slug) => slug !== before && slug !== after)].slice(0, MAX_PREVIOUS_SLUGS);
-
-/**
- * A reference from a path, as slug lookups take it: ids as given, slugs in lower case.
- * @param {string} ref
- * @param {string} prefix the id prefix of the records
- */
-export const normalRef = (ref, prefix) => (ref.startsWith(`${prefix}_`) ? ref : ref.toLowerCase());

@@ -68,14 +68,6 @@ import { renderSlots } from './shop-slots.js';
 const MAX_MOVES = 3;
 
 /**
- * The variant of the chosen values (option names, attribute axes and the condition; the only one without options).
- * @param {{ options: Array<{ name: string, values: string[] }>, variants: PageVariant[] }} item
- * @param {Record<string, string>} chosen
- * @returns {PageVariant | null}
- */
-export const variantFor = (item, chosen) => pickVariant(axesOf(item), item.variants, chosen);
-
-/**
  * @param {import('./widget.js').VisitorMount} input
  * @returns {Promise<void>}
  */

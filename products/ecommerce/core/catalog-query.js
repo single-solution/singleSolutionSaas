@@ -230,7 +230,7 @@ export const shopFilter = (query, resolved) => {
  * @param {{ categoryIds: string[], brandIds: string[] } | undefined} hidden
  * @returns {Record<string, unknown>[]}
  */
-export const visibleFilter = (hidden) => [
+const visibleFilter = (hidden) => [
 	...(hidden && hidden.categoryIds.length > 0 ? [{ categoryIds: { $nin: hidden.categoryIds } }] : []),
 	...(hidden && hidden.brandIds.length > 0 ? [{ brandId: { $nin: hidden.brandIds } }] : []),
 ];
@@ -438,20 +438,20 @@ const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
  * 0 and at most `level` units. Level 0: no variant is low.
  * @param {number} level the `catalog` setting `lowStock`
  */
-export const lowVariantMatch = (level) => ({ active: true, soldOut: { $ne: true }, stock: { $gt: 0, $lte: level } });
+const lowVariantMatch = (level) => ({ active: true, soldOut: { $ne: true }, stock: { $gt: 0, $lte: level } });
 
 /**
  * Products with a variant low on stock (E44): products that track stock and are not archived.
  * @param {number} level the `catalog` setting `lowStock`
  */
-export const lowStockFilter = (level) => ({
+const lowStockFilter = (level) => ({
 	trackStock: true,
 	status: { $ne: 'archived' },
 	variants: { $elemMatch: lowVariantMatch(level) },
 });
 
 /** The groups of a count of variants by stock (E44). */
-export const VARIANT_STOCK = Object.freeze(/** @type {const} */ (['out', 'low', 'in']));
+const VARIANT_STOCK = Object.freeze(/** @type {const} */ (['out', 'low', 'in']));
 
 /**
  * The stages that count variants by stock (E44), after a `$match` on the website: the offered variants of products

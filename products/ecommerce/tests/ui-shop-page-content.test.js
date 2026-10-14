@@ -6,7 +6,7 @@
  * pickers, and the shopper's own alerts.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mountProductPage, variantFor } from '../ui/product-page.js';
+import { mountProductPage } from '../ui/product-page.js';
 import { richText, safeHref } from '../ui/shop-common.js';
 import {
 	GRADE_AXIS,
@@ -16,6 +16,7 @@ import {
 	gradeVideoUrl,
 	nearestVariant,
 	photoOf,
+	pickVariant,
 	stockText,
 } from '../ui/shop-page-parts.js';
 import {
@@ -637,8 +638,8 @@ describe('product page parts', () => {
 		};
 		const axes = axesOf(item);
 		expect(axes.map((axis) => axis.key)).toEqual(['Colour', GRADE_AXIS]);
-		expect(variantFor(item, { Colour: 'Red', [GRADE_AXIS]: 'y' })?.id).toBe('b');
-		expect(variantFor(item, { Colour: 'Red' })).toBeNull();
+		expect(pickVariant(axes, item.variants, { Colour: 'Red', [GRADE_AXIS]: 'y' })?.id).toBe('b');
+		expect(pickVariant(axes, item.variants, { Colour: 'Red' })).toBeNull();
 		const colour = /** @type {any} */ (axes[0]);
 		expect(nearestVariant(axes, item.variants, { Colour: 'Red', [GRADE_AXIS]: 'x' }, colour, 'Blue')?.id).toBe('c');
 		expect(nearestVariant(axes, item.variants, {}, colour, 'Green')).toBeNull();

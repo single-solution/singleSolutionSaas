@@ -96,7 +96,7 @@ const decimalOf = (amount, currency) =>
  * Up, down and remove buttons of one entry.
  * @param {{ label: string, index: number, count: number, onMove: (step: number) => void, onRemove: () => void }} props
  */
-export function EntryHead({ label, index, count, onMove, onRemove }) {
+function EntryHead({ label, index, count, onMove, onRemove }) {
 	return (
 		<div className="flex flex-wrap items-center gap-1">
 			<span className="mr-auto text-sm font-bold">{`${label} ${index + 1}`}</span>

@@ -54,7 +54,7 @@ export const CONTENT_LIMITS = Object.freeze({
 export const VIDEO_TYPES = Object.freeze({ 'video/mp4': 'mp4', 'video/webm': 'webm' });
 
 /** The extra sizes an uploader may make of a photo (E6). */
-export const MEDIA_SIZES = Object.freeze(/** @type {const} */ (['thumb', 'card', 'detail']));
+const MEDIA_SIZES = Object.freeze(/** @type {const} */ (['thumb', 'card', 'detail']));
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;

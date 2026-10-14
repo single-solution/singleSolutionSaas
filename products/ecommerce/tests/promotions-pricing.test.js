@@ -25,8 +25,18 @@ import {
 	pointsValue,
 } from '../core/loyalty.js';
 import { applyPromotions, quoteProduct } from '../core/promotions.js';
-import { NO_CONDITIONS } from '../core/deals.js';
 import { checkDate, checkScope, checkText, checkWhole, gather, inScope, isLive, phaseOf } from '../core/promotions-rules.js';
+
+/** Deal conditions that hold for every line (each test adds the one it checks). @type {import('../core/model.js').DealConditions} */
+const NO_CONDITIONS = Object.freeze({
+	match: /** @type {'all'} */ ('all'),
+	rules: [],
+	groups: [],
+	priceRange: null,
+	minQuantity: 0,
+	cartTotal: 0,
+	paymentMethods: [],
+});
 
 const NOW = Date.parse('2026-10-05T10:00:00Z');
 const DAY = 86_400_000;
