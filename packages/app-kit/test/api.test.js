@@ -131,7 +131,7 @@ describe('the schema subset', () => {
 			{ path: '/x/$ref', message: '$ref is #/components/schemas/<Name>' },
 			{ path: '/x/description', message: 'description is a text' },
 			{ path: '/x/examples', message: 'examples is a list' },
-			{ path: '/x/deprecated', message: 'deprecated is true or false' },
+			{ path: '/x/deprecated', message: expect.stringMatching(/^'deprecated' is not a keyword/) },
 			{ path: '/x/discriminator', message: expect.stringMatching(/^'discriminator' is not a keyword/) },
 		]);
 		expect(schemaProblems({ required: 'a' })).toEqual([

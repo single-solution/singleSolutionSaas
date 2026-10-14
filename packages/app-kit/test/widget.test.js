@@ -94,8 +94,8 @@ describe('formatting in widgets (K7)', () => {
 		expect(typeof viewer.timeZone).toBe('string');
 		expect(viewerOf(undefined)).not.toHaveProperty('locale');
 		expect(viewerOf(/** @type {any} */ ({ navigator: { language: '' } }))).not.toHaveProperty('locale');
-		expect(formatMoney(1_250_000, 'PKR', DEFAULT_FORMAT, viewer)).toBe('PKR 12,500.00');
-		expect(formatDate('2026-03-12T19:30:00Z', { times: 'business' }, { timeZone: 'Asia/Karachi', viewer, style: 'date' })).toBe(
+		expect(formatMoney(1_250_000, 'GBP', DEFAULT_FORMAT, viewer)).toBe('GBP 12,500.00');
+		expect(formatDate('2026-03-12T19:30:00Z', { times: 'business' }, { timeZone: 'Asia/Tokyo', viewer, style: 'date' })).toBe(
 			'13 Mar 2026',
 		);
 		const zone = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(() => {

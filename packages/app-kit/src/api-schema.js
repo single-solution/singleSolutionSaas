@@ -7,8 +7,8 @@
  * Keywords: `type` (one or a list, e.g. `["string", "null"]`), `properties`, `required`, `additionalProperties`,
  * `items`, `minItems`, `maxItems`, `maxProperties`, `propertyNames`, `enum`, `const`, `minimum`, `maximum`,
  * `minLength`, `maxLength`, `pattern`, `format` (`date-time`, `date`, `uri` and `email` are checked; others are notes),
- * `oneOf`, `anyOf` and `$ref` to `#/components/schemas/<Name>`, plus the notes `title`, `description`, `default`,
- * `examples` and `deprecated`.
+ * `oneOf`, `anyOf` and `$ref` to `#/components/schemas/<Name>`, plus the notes `title`, `description`, `default` and
+ * `examples`.
  * @module
  */
 import { isDeepStrictEqual } from 'node:util';
@@ -27,7 +27,7 @@ const SCHEMA_KEYWORDS = Object.freeze(['items', 'propertyNames']);
 /** Keywords whose value is a whole number of at least 0. */
 const COUNT_KEYWORDS = Object.freeze(['minLength', 'maxLength', 'minItems', 'maxItems', 'maxProperties']);
 /** Keywords that only describe. */
-const NOTE_KEYWORDS = Object.freeze(['title', 'description', 'default', 'examples', 'deprecated', 'format']);
+const NOTE_KEYWORDS = Object.freeze(['title', 'description', 'default', 'examples', 'format']);
 /** Every keyword of the subset. */
 const SCHEMA_SUBSET = Object.freeze([
 	'type',
@@ -133,7 +133,6 @@ export const schemaProblems = (schema, { schemas = {}, at = '' } = {}) => {
 			} else if (['title', 'description', 'format'].includes(keyword) && typeof value !== 'string')
 				fail(`${keyword} is a text`, where);
 			else if (keyword === 'examples' && !Array.isArray(value)) fail('examples is a list', where);
-			else if (keyword === 'deprecated' && typeof value !== 'boolean') fail('deprecated is true or false', where);
 		}
 		return undefined;
 	};

@@ -53,20 +53,20 @@ describe('acting user headers (K2)', () => {
 		expect(
 			parseActor(
 				headers({
-					[ACTOR_HEADERS.id]: 'usr_01:ayesha@shop',
-					[ACTOR_HEADERS.name]: encodeURIComponent('Ayesha Khān'),
+					[ACTOR_HEADERS.id]: 'usr_01:chloe@shop',
+					[ACTOR_HEADERS.name]: encodeURIComponent('Chloé Martin'),
 					[ACTOR_HEADERS.role]: encodeURIComponent('Support staff'),
-					[ACTOR_HEADERS.email]: 'Ayesha@Shop.Example.com',
+					[ACTOR_HEADERS.email]: 'Chloe@Shop.Example.com',
 				}),
 			),
 		).toEqual({
 			ok: true,
 			actor: {
 				kind: 'user',
-				id: 'usr_01:ayesha@shop',
-				name: 'Ayesha Khān',
+				id: 'usr_01:chloe@shop',
+				name: 'Chloé Martin',
 				role: 'Support staff',
-				email: 'ayesha@shop.example.com',
+				email: 'chloe@shop.example.com',
 			},
 		});
 		expect(parseActor(headers({ [ACTOR_HEADERS.id]: 'u1', [ACTOR_HEADERS.name]: 'Sam' }))).toEqual({
@@ -107,18 +107,18 @@ describe('acting user headers (K2)', () => {
 			token: server.token,
 			headers: {
 				'ss-actor-id': 'usr_7',
-				'ss-actor-name': 'Bilal%20A.',
+				'ss-actor-name': 'Alex%20M.',
 				'ss-actor-role': 'Owner',
-				'ss-actor-email': 'b@shop.example.com',
+				'ss-actor-email': 'alex@shop.example.com',
 			},
 		});
 		expect(named.status).toBe(200);
 		expect((await named.json()).actor).toEqual({
 			kind: 'user',
 			id: 'usr_7',
-			name: 'Bilal A.',
+			name: 'Alex M.',
 			role: 'Owner',
-			email: 'b@shop.example.com',
+			email: 'alex@shop.example.com',
 		});
 		await settle();
 		const unnamed = await call('POST', '/v1/server/actions', { token: server.token });
@@ -133,13 +133,13 @@ describe('acting user headers (K2)', () => {
 		).toMatchObject({
 			websiteId,
 			id: 'usr_7',
-			name: 'Bilal A.',
+			name: 'Alex M.',
 			role: 'Owner',
-			email: 'b@shop.example.com',
+			email: 'alex@shop.example.com',
 		});
 		const entries = await db.collection('ss_notes_activity').find({}).sort({ at: 1 }).toArray();
 		expect(entries.map((entry) => entry.actor)).toEqual([
-			{ kind: 'user', id: 'usr_7', name: 'Bilal A.', role: 'Owner' },
+			{ kind: 'user', id: 'usr_7', name: 'Alex M.', role: 'Owner' },
 			SERVER,
 		]);
 		expect(entries[0]).toMatchObject({ label: 'Note 1', action: 'note.moved' });

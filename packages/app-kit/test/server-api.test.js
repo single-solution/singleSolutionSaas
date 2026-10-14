@@ -4,7 +4,7 @@ import { SETTINGS_WRITE_LIMIT } from '../src/server-api.js';
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
-const ACTOR = { 'ss-actor-id': 'usr_1', 'ss-actor-name': 'Ayesha%20K.', 'ss-actor-role': 'Owner' };
+const ACTOR = { 'ss-actor-id': 'usr_1', 'ss-actor-name': 'Alex%20M.', 'ss-actor-role': 'Owner' };
 
 /** A product list setting kept in memory (Chat's and Ecommerce's lists keep theirs in the product database). */
 const memoryLists = () => {
@@ -84,7 +84,7 @@ describe('settings API for the merchant’s server (K1)', () => {
 		const overview = await (await dash(cookie, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();
 		expect(overview.recentChanges.slice(0, 2).map((/** @type {any} */ c) => c.who)).toEqual([
 			{ kind: 'server', id: 'server', name: 'Server' },
-			{ kind: 'user', id: 'usr_1', name: 'Ayesha K.', role: 'Owner' },
+			{ kind: 'user', id: 'usr_1', name: 'Alex M.', role: 'Owner' },
 		]);
 	});
 
@@ -117,11 +117,11 @@ describe('settings API for the merchant’s server (K1)', () => {
 		const format = await body(
 			await call('PUT', '/v1/format', {
 				token: server.token,
-				body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+				body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Fr.', wholeUnits: true, times: 'business' },
 			}),
 		);
 		expect(format.json).toEqual({
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Fr.', wholeUnits: true, times: 'business' },
 			sources: {
 				locale: 'website',
 				currencyDisplay: 'website',
@@ -138,7 +138,7 @@ describe('settings API for the merchant’s server (K1)', () => {
 		const formatted = await product.format(websiteId);
 		expect(formatted.format.locale).toBe('');
 		expect(formatted.timeZone).toBe('UTC');
-		expect(formatted.money(1_250_050, 'PKR')).toBe('Rs 12,501');
+		expect(formatted.money(1_250_050, 'CHF')).toBe('Fr. 12,501');
 		expect(formatted.date('2026-03-12T19:30:00Z', 'date')).toBe('Mar 12, 2026');
 		expect(formatted.date('2026-03-12T19:30:00Z')).toBe('Mar 12, 2026, 7:30 PM');
 	});
@@ -166,7 +166,7 @@ describe('settings API for the merchant’s server (K1)', () => {
 		expect(overview.recentChanges[0]).toMatchObject({
 			what: 'settings',
 			detail: 'Labels: changed',
-			who: { kind: 'user', name: 'Ayesha K.' },
+			who: { kind: 'user', name: 'Alex M.' },
 		});
 	});
 
@@ -347,9 +347,9 @@ describe('activity reads (K9)', () => {
 		const sam = { kind: 'user', id: 'usr_1', name: 'Sam', role: 'Support staff' };
 		const tia = { kind: 'staff', id: 'stf_2', name: 'Tia' };
 		const entries = [
-			{ actor: sam, action: 'order.status_changed', target: 'ord_1', label: 'IM-2026-0001', detail: 'placed → confirmed' },
-			{ actor: tia, action: 'order.status_changed', target: 'ord_2', label: 'IM-2026-0002', detail: 'confirmed → packed' },
-			{ actor: sam, action: 'order.refunded', target: 'ord_1', label: 'IM-2026-0001', detail: 'x'.repeat(2100) },
+			{ actor: sam, action: 'order.status_changed', target: 'ord_1', label: 'SH-2026-0001', detail: 'placed → confirmed' },
+			{ actor: tia, action: 'order.status_changed', target: 'ord_2', label: 'SH-2026-0002', detail: 'confirmed → packed' },
+			{ actor: sam, action: 'order.refunded', target: 'ord_1', label: 'SH-2026-0001', detail: 'x'.repeat(2100) },
 			{
 				actor: { kind: 'server', id: 'server', name: 'Server' },
 				action: 'catalog.changed',
@@ -365,7 +365,7 @@ describe('activity reads (K9)', () => {
 		expect(accounts.copies[0]?.copy).toMatchObject({
 			actor: sam,
 			action: 'order.status_changed',
-			label: 'IM-2026-0001',
+			label: 'SH-2026-0001',
 			detail: 'placed → confirmed',
 		});
 		const all = await body(await call('GET', '/v1/activity', { token: server.token }));
@@ -383,20 +383,20 @@ describe('activity reads (K9)', () => {
 		const first = await page1.json();
 		expect(first.items).toHaveLength(3);
 		const page2 = await body(await call('GET', `/v1/activity?limit=3&cursor=${first.nextCursor}`, { token: server.token }));
-		expect(page2.json.items.map((/** @type {any} */ e) => e.label)).toEqual(['IM-2026-0001']);
+		expect(page2.json.items.map((/** @type {any} */ e) => e.label)).toEqual(['SH-2026-0001']);
 		expect(page2.json.hasMore).toBe(false);
 		const filtered = async (/** @type {string} */ query) =>
 			(await body(await call('GET', `/v1/activity?${query}`, { token: server.token }))).json;
 		expect((await filtered('actor=usr_1')).items).toHaveLength(2);
 		expect((await filtered('target=ord_1&action=order.refunded')).items).toHaveLength(1);
 		expect((await filtered('action=order.refunded,catalog.changed')).items).toHaveLength(2);
-		expect((await filtered('q=im-2026-0002')).items.map((/** @type {any} */ e) => e.target)).toEqual(['ord_2']);
+		expect((await filtered('q=sh-2026-0002')).items.map((/** @type {any} */ e) => e.target)).toEqual(['ord_2']);
 		expect((await filtered('q=Tia')).items).toHaveLength(1);
 		// the search holds on every page (the cursor's keyset does not replace it)
-		const searched = await filtered('q=im-2026-0001&limit=1');
+		const searched = await filtered('q=sh-2026-0001&limit=1');
 		expect(searched.items.map((/** @type {any} */ e) => e.action)).toEqual(['order.refunded']);
-		const searchedNext = await filtered(`q=im-2026-0001&limit=1&cursor=${searched.nextCursor}`);
-		expect(searchedNext.items.map((/** @type {any} */ e) => e.label)).toEqual(['IM-2026-0001']);
+		const searchedNext = await filtered(`q=sh-2026-0001&limit=1&cursor=${searched.nextCursor}`);
+		expect(searchedNext.items.map((/** @type {any} */ e) => e.label)).toEqual(['SH-2026-0001']);
 		expect(searchedNext.hasMore).toBe(false);
 		expect((await filtered('from=2026-10-01T11:30:00Z&to=2026-10-01T12:30:00Z')).items).toHaveLength(1);
 		expect((await filtered('from=2026-10-01&to=2026-10-01')).items).toHaveLength(4);

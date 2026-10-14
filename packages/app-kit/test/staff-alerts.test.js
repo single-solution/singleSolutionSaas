@@ -96,15 +96,15 @@ describe('staff alerts (K6)', () => {
 			key: 'e:ops@shop.example.com',
 			to: { email: 'ops@shop.example.com' },
 		});
-		expect(recipientOf('+92 300 1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
-		expect(recipientOf('0092 300 1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
+		expect(recipientOf('+44 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
+		expect(recipientOf('0044 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
 		// the shared normaliser: a trunk 0 after the calling code is dropped, so one number has one key
-		expect(recipientOf('+92 (0)300-1234567')).toEqual({ key: 'p:923001234567', to: { phone: '+923001234567' } });
+		expect(recipientOf('+44 (0)7700-900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
 		expect(recipientOf('+44 020 7946 0018')).toEqual({ key: 'p:442079460018', to: { phone: '+442079460018' } });
 		expect(recipientOf('+999 1234 5678')).toBeNull();
 		// Notifications sends to international numbers only: a local number is left out
-		expect(recipientOf('0300-1234567')).toBeNull();
-		expect(recipientOf('+0300 1234567')).toBeNull();
+		expect(recipientOf('07700-900123')).toBeNull();
+		expect(recipientOf('+07700 900123')).toBeNull();
 		expect(recipientOf('nope')).toBeNull();
 		expect(recipientOf('12-3')).toBeNull();
 		expect(recipientOf(7)).toBeNull();
@@ -113,24 +113,24 @@ describe('staff alerts (K6)', () => {
 	it('go to the recipients, the staff with the permission and the assignee, once per address', async () => {
 		const { set, alert, notifications, accounts, clock } = await start();
 		expect(await alert()).toBe(0);
-		await set('recipients', ['ops@shop.example.com', '+92 300 1234567', 'OPS@shop.example.com', 'not an address']);
+		await set('recipients', ['ops@shop.example.com', '+44 7700 900123', 'OPS@shop.example.com', 'not an address']);
 		await set('adminUrl', 'https://admin.shop.example.com/notes/{noteId}');
 		accounts.setUsers([
 			{ id: 'u1', email: 'sana@shop.example.com', permissions: ['notes:notes.read'] },
-			{ id: 'u2', phone: '+92 321 7654321', permissions: ['notes:notes.read'] },
+			{ id: 'u2', phone: '+1 415 555 0101', permissions: ['notes:notes.read'] },
 			{ id: 'u3', email: 'blocked@shop.example.com', blocked: true, permissions: ['notes:notes.read'] },
 			{ id: 'u4', email: 'owner@shop.example.com', permissions: ['*'] },
 			{ id: 'u5', email: 'other@shop.example.com', permissions: ['notes:other'] },
 		]);
 		await set('staffPermission', 'notes.read');
-		expect(await alert({ assignee: { email: 'sana@shop.example.com', phone: '+92 333 0000000' } })).toBe(6);
+		expect(await alert({ assignee: { email: 'sana@shop.example.com', phone: '+33 6 12 34 56 78' } })).toBe(6);
 		expect(notifications.messages.map((m) => [m.channel, m.body.to])).toEqual([
 			['email', { email: 'ops@shop.example.com' }],
-			['whatsapp', { phone: '+923001234567' }],
+			['whatsapp', { phone: '+447700900123' }],
 			['email', { email: 'sana@shop.example.com' }],
-			['whatsapp', { phone: '+923217654321' }],
+			['whatsapp', { phone: '+14155550101' }],
 			['email', { email: 'owner@shop.example.com' }],
-			['whatsapp', { phone: '+923330000000' }],
+			['whatsapp', { phone: '+33612345678' }],
 		]);
 		expect(notifications.messages[0]?.body).toEqual({
 			template: 'notes.staff_note_created',
@@ -158,7 +158,7 @@ describe('staff alerts (K6)', () => {
 	it('save what Notifications did not take and try it again with the same key on later uses, for a day (K-17)', async () => {
 		const { set, alert, notifications, handlers, connectDatabase, call, server, settle, clock, entries } = await start();
 		const dbName = await connectDatabase();
-		await set('recipients', ['ops@shop.example.com', '+92 300 1234567']);
+		await set('recipients', ['ops@shop.example.com', '+44 7700 900123']);
 		/** @type {Array<string | null>} */
 		const keys = [];
 		const original = /** @type {(request: Request) => Promise<Response>} */ (handlers[notifications.url]);
@@ -224,7 +224,7 @@ describe('staff alerts (K6)', () => {
 	it('a data-rights deletion removes the saved messages that hold the person’s details (as Ecommerce’s outbox, E63)', async () => {
 		const { set, alert, notifications, connectDatabase, call, server, settle, clock, websiteId } = await start();
 		const dbName = await connectDatabase();
-		await set('recipients', ['ops@shop.example.com', '+92 300 1234567']);
+		await set('recipients', ['ops@shop.example.com', '+44 7700 900123']);
 		const { client, db } = await openDb(dbName);
 		const saved = db.collection('ss_notes_staff_alerts');
 		/** @param {{ email?: string, phone?: string }} user */
@@ -238,14 +238,14 @@ describe('staff alerts (K6)', () => {
 		try {
 			notifications.setFailing(true);
 			await alert({ values: { noteId: 'not_1', visitor: 'Sara@Example.com', preview: 'Hi' } });
-			await alert({ values: { noteId: 'not_2', visitor: 'Omar', phone: '+92 321 7654321' } });
+			await alert({ values: { noteId: 'not_2', visitor: 'Omar', phone: '+1 415 555 0101' } });
 			await alert({ values: { noteId: 'not_3', visitor: 'Guest', preview: 'Hello' } });
 			expect(await saved.countDocuments({})).toBe(6);
 			// a value naming the person (an e-mail address without case, a phone in any form)
 			expect(await remove({ email: 'sara@example.com' })).toBe(2);
-			expect(await remove({ phone: '+923217654321' })).toBe(2);
+			expect(await remove({ phone: '+14155550101' })).toBe(2);
 			// messages to the person (a staff member who is a recipient)
-			expect(await remove({ phone: '0092 300 1234567' })).toBe(1);
+			expect(await remove({ phone: '0044 7700 900123' })).toBe(1);
 			expect(await left()).toEqual([['not_3', { email: 'ops@shop.example.com' }]]);
 			// the product names the others by a value
 			expect(await holder.product.staffAlerts.forget({ websiteId }, { values: { noteId: ['not_9'] } })).toBe(0);
