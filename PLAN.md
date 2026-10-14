@@ -1951,6 +1951,12 @@ order cannot be canceled or refunded as a cancel: the parcel must come back (ret
 still be refunded while it is out (the refund action, no status change); Q6 best SEO for every store first, then the
 SEO features merchants use, keeping their own SEO where they wrote it; Q7 sign-in code limits and Q8 the data checks
 follow the SaaS's professional defaults (the importer normalizes store data to the SaaS rules).
+Owner, ~21:50: "yes correct, these stores are legacy … they share the same code but for different clients, and that is
+why features are different, but saas should be universal and global standard, and professional to make sure that admin
+can provide merchants what their requirements are." So SB's earlier D5 ("SB sends shoppers no message") is replaced:
+SB gets the SaaS's standard shopper messages like CT and IM (its mapping writes the default channels and leaves every
+status's `notify` at the default). Merchants differ only by the features and settings the admin and the merchant switch
+on, never by code.
 
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
