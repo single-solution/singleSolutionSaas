@@ -44,7 +44,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 	].join('\n');
 	const events = [
 		'// Ecommerce’s widgets send these by themselves; your own code may send them too.',
-		'// Money is in minor units (cents, paisa …) with an ISO 4217 currency.',
+		'// Money is in minor units (cents, pence …) with an ISO 4217 currency.',
 		"window.dispatchEvent(new CustomEvent('ss:view_item', { detail: {",
 		"  currency: 'USD', value: 1250, items: [{ id: 'sku-1', name: 'Phone case', price: 1250, quantity: 1 }] } }));",
 		"window.dispatchEvent(new CustomEvent('ss:add_to_cart', { detail: {",
