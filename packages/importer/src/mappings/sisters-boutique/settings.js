@@ -97,11 +97,10 @@ export const FEATURES = Object.freeze({
 
 /**
  * Settings the plan writes before the product has them (each refused as "No such setting" until its PLAN item is
- * built): the owner's go of 2026-10-14 for SB.
+ * built): the owner's go of 2026-10-14 for SB. None now (E39, points kept on a return, is the order flow's move
+ * option `points`).
  */
-export const PENDING = Object.freeze({
-	'ecommerce loyalty.returnPoints': 'E39',
-});
+export const PENDING = Object.freeze(/** @type {Record<string, string>} */ ({}));
 
 /**
  * Settings whose value only SB's deployment holds when no row is saved: entered by hand in the per-store table
@@ -259,7 +258,6 @@ export const settingsPlan = (values) => {
 				'checkout.numberDigits': ORDER_DIGITS,
 				// SB sends shoppers no message (owner decision D5, "Store facts corrected after the re-audit")
 				'checkout.messageChannels': [],
-				'checkout.notifyStatuses': [],
 				'checkout.statusTemplates': 'one',
 				'checkout.policyShipping': '',
 				'checkout.policyReturns': store.returnPolicyHtml,
@@ -294,14 +292,10 @@ export const settingsPlan = (values) => {
 				'checkout.maxQuantity': 10, // orders/route.ts:105
 				'checkout.successUrl': '',
 				'checkout.cancelUrl': '',
-				'checkout.autoRefundedStatus': false,
-				'checkout.returnRestock': 'yes', // `packages/db/src/orderTransitions.ts`:13
-				'checkout.shopperCancel': ['awaiting_payment', 'awaiting_confirmation', 'open'], // `packages/shared/src/orderLifecycle.ts`:2
-				'checkout.freeOrderStart': 'awaiting_payment', // CK-41: free orders wait in pending-payment
-				'checkout.rewaitWindow': 'restart',
-				'checkout.paidOnConfirm': ['bank_transfer'], // staff confirm a transfer by hand (OR-7)
-				'checkout.trackingRequired': false,
-				'checkout.packingVideo': 'required', // `apps/admin/src/app/api/orders/[id]/route.ts`:106-110
+				// an edit keeps the delivery fee, discount and surcharge placed (`apps/admin/src/app/api/orders/[id]/route.ts`:215)
+				'checkout.editPricing': 'keep_placed',
+				// a deleted order gives its stock and points back, also once delivered
+				'checkout.deleteGivesBack': 'all',
 				'checkout.orderUrl': '',
 				'checkout.reviewUrl': '',
 				'cod.enabled': store.paymentCodEnabled,
@@ -310,7 +304,6 @@ export const settingsPlan = (values) => {
 				'cod.advancePercent': 0,
 				'cod.rtoThreshold': 0,
 				'cod.rtoRequireAdvance': false,
-				'cod.startStatus': 'open', // orders/route.ts:676
 				'cod.atPickup': true, // Checkout.tsx:73
 				'cod.feePercent': store.codSurchargePercent,
 				'cod.feeBase': 'goods_after_discounts', // orders/route.ts:586-587 (D4)
@@ -349,7 +342,6 @@ export const settingsPlan = (values) => {
 				'loyalty.redeemMode': 'maximum',
 				'loyalty.expiryUnit': 'days',
 				'loyalty.expiryRule': 'at_earn',
-				'loyalty.returnPoints': 'keep',
 				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342)
 				'staff_alerts.events': ['placed', 'status', 'cancelled'],
 				'staff_alerts.recipients': recipientsOf(values),
@@ -402,30 +394,43 @@ export const settingsPlan = (values) => {
 					'Shop {brand} {category}. From {price}. {products} designs, {variants} in-stock configurations at {storeName}.',
 			},
 			lists: {
-				// SB's moves (`apps/admin/src/app/api/orders/[id]/route.ts`:11-13, :77-123) that the role rules allow
+				// SB's moves (`apps/admin/src/app/api/orders/[id]/route.ts`:11-13, :77-123) that the role rules allow, with SB's
+				// rules as their options (`packages/db/src/orderTransitions.ts`); SB sends shoppers no message (D5)
 				order_flow: {
-					statuses: STATUSES.map((status) => ({ ...status })),
-					moves: [
-						['pending-payment', 'confirmed'],
-						['pending-payment', 'cancelled'],
+					statuses: STATUSES.map((status) => ({ ...status, notify: false })),
+					moves: /** @type {Array<[string, string, Record<string, unknown>?]>} */ ([
+						// staff confirm a transfer by hand: it counts as paid (OR-7)
+						['pending-payment', 'confirmed', { options: { paidOnConfirm: ['bank_transfer'] } }],
+						// shoppers cancel before dispatch (`packages/shared/src/orderLifecycle.ts`:2)
+						['pending-payment', 'cancelled', { who: ['staff', 'shopper'] }],
 						['pending-payment', 'refunded'],
-						['awaiting-confirmation', 'confirmed'],
-						['awaiting-confirmation', 'cancelled'],
+						['awaiting-confirmation', 'confirmed', { options: { paidOnConfirm: ['bank_transfer'] } }],
+						['awaiting-confirmation', 'cancelled', { who: ['staff', 'shopper'] }],
 						['confirmed', 'pending-payment'],
-						['confirmed', 'packed'],
-						['confirmed', 'cancelled'],
+						// the dispatch video is required when packing (route.ts:106-110)
+						['confirmed', 'packed', { options: { video: 'required' } }],
+						// a paid order too: cancelled, its refund left due
+						['confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } }],
 						['confirmed', 'refunded'],
 						['packed', 'pending-payment'],
 						['packed', 'confirmed'],
-						['packed', 'dispatched'],
+						// no tracking number needed
+						['packed', 'dispatched', { options: { tracking: 'optional' } }],
 						['packed', 'cancelled'],
 						['packed', 'refunded'],
 						['dispatched', 'delivered'],
 						['dispatched', 'cancelled'],
-						['delivered', 'returned'],
-						['delivered', 'refunded'],
+						// a return puts the items back and keeps the points earned (orderTransitions.ts:13)
+						['delivered', 'returned', { options: { restock: 'yes', points: 'keep' } }],
+						// a refund after delivery puts the items back and takes the points back
+						['delivered', 'refunded', { options: { restock: 'yes', points: 'take_back' } }],
 						['returned', 'refunded'],
-					].map(([from, to]) => ({ from, to })),
+					]).map(([from, to, rest = {}]) => ({ from, to, ...rest })),
+					// Payments' confirmation and an ended window as by default; refunds never move an order by themselves
+					triggers: { paid: 'confirmed', windowEnd: 'cancelled', refundsCover: '' },
+					// cash on delivery starts confirmed (orders/route.ts:676), pay at pickup awaiting confirmation, free orders
+					// wait in pending-payment (CK-41)
+					starts: { cod: 'confirmed', pickup: 'awaiting-confirmation', free: 'pending-payment' },
 				},
 				couriers: [],
 				delivery_zones: [],

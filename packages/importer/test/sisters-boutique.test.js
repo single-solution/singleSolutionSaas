@@ -471,12 +471,25 @@ describe('the Sisters Boutique mapping', () => {
 			'deals.cartThresholdBase': 'after_item_deals',
 			'deals.pointsBlockedBy': 'cart_offer',
 			'cod.feeBase': 'goods_after_discounts',
-			'loyalty.returnPoints': 'keep',
 			'staff_alerts.recipients': ['alerts@example.com', 'support@example.com', 'products@example.com'],
 			'staff_alerts.adminUrl': 'https://admin.example.com/orders?order={number}',
 			'seo.titleTemplate': '{name} — {business}',
 		});
 		expect(settings.ecommerce?.lists?.role_prices).toEqual([{ role: 'member', percent: 10, label: 'Member discount' }]);
+		// SB's order rules are its flow's: no messages, its starts, and the options of its moves
+		const flow = /** @type {any} */ (settings.ecommerce?.lists?.order_flow);
+		expect(flow.statuses.every((/** @type {any} */ status) => status.notify === false)).toBe(true);
+		expect(flow.starts).toEqual({ cod: 'confirmed', pickup: 'awaiting-confirmation', free: 'pending-payment' });
+		expect(flow.triggers).toMatchObject({ refundsCover: '' });
+		/** @param {string} from @param {string} to */
+		const move = (from, to) => flow.moves.find((/** @type {any} */ entry) => entry.from === from && entry.to === to);
+		expect(move('pending-payment', 'confirmed').options).toEqual({ paidOnConfirm: ['bank_transfer'] });
+		expect(move('confirmed', 'packed').options).toEqual({ video: 'required' });
+		expect(move('packed', 'dispatched').options).toEqual({ tracking: 'optional' });
+		expect(move('confirmed', 'cancelled')).toMatchObject({ who: ['staff', 'shopper'], options: { shopperPaid: 'flag' } });
+		expect(move('delivered', 'returned').options).toEqual({ restock: 'yes', points: 'keep' });
+		expect(move('delivered', 'refunded').options).toEqual({ restock: 'yes', points: 'take_back' });
+		expect(ecommerce).toMatchObject({ 'checkout.editPricing': 'keep_placed', 'checkout.deleteGivesBack': 'all' });
 		expect(settings.accounts?.settings).toMatchObject({
 			'phone_password.signUp': false,
 			'phone_password.maxAttempts': 20,
