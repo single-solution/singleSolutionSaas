@@ -4,13 +4,14 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { csvCell, feedItemId, feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { csvCell, feedMoney, feedRows, googleItem, metaLine } from '../core/feeds.js';
 import { buildLlmsTxt, markdownText, MAX_LLMS_CHARS, treeOrder } from '../core/llms.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
 	clip,
 	conditionOf,
 	escapeXml,
+	feedItemId,
 	fillTitle,
 	metaDescription,
 	scriptJson,

@@ -60,9 +60,15 @@
 		"pagedListings": {
 			"type": "string",
 			"title": "Listing pages after the first",
-			"description": "Pages 2, 3 … of a category or landing page: indexed, each with its own address as canonical; or not indexed (noindex, follow), with the first page as canonical.",
+			"description": "Pages 2, 3 … of a category or landing page: indexed or not indexed (noindex, follow). Each page keeps its own address as canonical either way, as search engines ask.",
 			"default": "index",
 			"enum": ["index", "noindex"]
+		},
+		"faqMarkup": {
+			"type": "boolean",
+			"title": "FAQ structured data",
+			"description": "Also describe the questions of products, categories, landing and glossary pages as FAQPage structured data. Google stopped showing FAQ results on May 7, 2026; other search engines may still read it. The questions are shown on your pages either way.",
+			"default": false
 		},
 		"sitemapUrl": {
 			"type": "string",

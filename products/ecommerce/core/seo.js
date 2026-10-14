@@ -197,6 +197,27 @@ const VARIES_BY = Object.freeze(
 );
 
 /**
+ * A feed item id (E17), also a variant's id in structured data when it has no SKU of its own (G5): the id the shop's
+ * earlier product feed listed the variant under, kept by an import (`feedId`), so shopping catalogs keep the items they
+ * already list and markup and feed name the same item; else the variant's own id.
+ * @param {Pick<VariantRecord, 'id' | 'feedId'>} variant
+ */
+export const feedItemId = (variant) => variant.feedId || variant.id;
+
+/**
+ * The item group of a product (SG-24), the same in feeds and structured data (G5): the group id the shop's earlier feed
+ * sent, kept by an import (`feedGroupId`); else the product id when it has several variants, else ''.
+ * @param {Pick<ProductRecord, 'id' | 'feedGroupId'>} product
+ * @param {boolean} many
+ */
+export const feedGroupId = (product, many) => product.feedGroupId || (many ? product.id : '');
+
+/**
+ * How long an order takes to arrive, in whole days: handling (packing) and transit (on the way).
+ * @typedef {{ handling: { min: number, max: number }, transit: { min: number, max: number } }} DeliveryTime
+ */
+
+/**
  * @typedef {object} ProductPage
  * @property {ProductRecord} product
  * @property {string} url the canonical product page
@@ -208,12 +229,17 @@ const VARIES_BY = Object.freeze(
  * @property {string} seller the business name
  * @property {Array<{ name: string, url: string }>} trail home and categories, without the product
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
- * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6)
- * @property {{ fee: number, freeOver?: number, country: string } | null} [shipping] the default delivery fee, free
- *   from `freeOver` (0 = never; E16, SG-2)
- * @property {{ days: number, country: string } | null} [returns] the return window (E16)
+ * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
+ *   variant shows the product's photos
+ * @property {{ fee: number, freeOver?: number, country: string, deliveryTime: DeliveryTime | null } | null} [shipping]
+ *   the default delivery fee, free from `freeOver` (0 = never; E16, SG-2), to the business's country, with the delivery
+ *   days; shipping details need all of them (Google's merchant listings require the destination and delivery time)
+ * @property {{ country: string, days: (variant: VariantRecord) => number | null } | null} [returns] the business's
+ *   country and each item's return window in days (0 = not returnable, null = not known: no policy)
  * @property {Array<{ name: string, rating: number, title: string, body: string, at: Date | string | null }>} [reviews]
  *   approved reviews shown as review nodes (E16)
+ * @property {boolean} [faqMarkup] whether the product's questions are also given as `FAQPage` markup (the `seo` setting
+ *   `faqMarkup`; Google shows no FAQ rich results since 2026-05-07, other engines may read it)
  */
 
 /**
@@ -225,27 +251,48 @@ const VARIES_BY = Object.freeze(
 export const shippingFee = ({ fee, freeOver = 0 }, price) => (freeOver > 0 && price >= freeOver ? 0 : fee);
 
 /**
- * The offer details of a product's offer: shipping at the offer's price and the return policy (E16, SG-2).
- * @param {Pick<ProductPage, 'currency' | 'shipping' | 'returns'>} page
- * @param {number} price
+ * A number of days as schema.org takes it.
+ * @param {{ min: number, max: number }} days
  */
-const offerExtras = ({ currency, shipping, returns }, price) => ({
-	shippingDetails: shipping
-		? {
-				'@type': 'OfferShippingDetails',
-				shippingRate: { '@type': 'MonetaryAmount', value: toDecimal(shippingFee(shipping, price), currency), currency },
-				...(shipping.country ? { shippingDestination: { '@type': 'DefinedRegion', addressCountry: shipping.country } } : {}),
-			}
-		: null,
-	hasMerchantReturnPolicy: returns
-		? compact({
-				'@type': 'MerchantReturnPolicy',
-				applicableCountry: returns.country,
-				returnPolicyCategory: `${SCHEMA}/${returns.days > 0 ? 'MerchantReturnFiniteReturnWindow' : 'MerchantReturnNotPermitted'}`,
-				merchantReturnDays: returns.days > 0 ? returns.days : null,
-			})
-		: null,
-});
+const daysValue = ({ min, max }) => ({ '@type': 'QuantitativeValue', minValue: min, maxValue: max, unitCode: 'DAY' });
+
+/**
+ * The offer details of one variant (E16, SG-2, G5): shipping at the offer's price, only for physical goods and only when
+ * complete (a destination country and the delivery days); the item's return policy, only with a country.
+ * @param {ProductPage} page
+ * @param {VariantRecord} variant
+ */
+const offerExtras = ({ product, currency, shipping, returns }, variant) => {
+	const days = returns?.country ? returns.days(variant) : null;
+	return {
+		shippingDetails:
+			product.kind === 'physical' && shipping?.country && shipping.deliveryTime
+				? {
+						'@type': 'OfferShippingDetails',
+						shippingRate: {
+							'@type': 'MonetaryAmount',
+							value: toDecimal(shippingFee(shipping, variant.price), currency),
+							currency,
+						},
+						shippingDestination: { '@type': 'DefinedRegion', addressCountry: shipping.country },
+						deliveryTime: {
+							'@type': 'ShippingDeliveryTime',
+							handlingTime: daysValue(shipping.deliveryTime.handling),
+							transitTime: daysValue(shipping.deliveryTime.transit),
+						},
+					}
+				: null,
+		hasMerchantReturnPolicy:
+			returns && days !== null
+				? compact({
+						'@type': 'MerchantReturnPolicy',
+						applicableCountry: returns.country,
+						returnPolicyCategory: `${SCHEMA}/${days > 0 ? 'MerchantReturnFiniteReturnWindow' : 'MerchantReturnNotPermitted'}`,
+						merchantReturnDays: days > 0 ? days : null,
+					})
+				: null,
+	};
+};
 
 /**
  * `FAQPage` of a page's questions, or null.
@@ -266,14 +313,22 @@ export const faqJsonLd = (faqs, url) =>
 		: null;
 
 /**
- * Product structured data as a JSON-LD graph (E16): a `ProductGroup` with each active variant as a `Product` (its own
- * condition by grade, offer, shipping and return policy) when there are several, else one `Product`; the rating and
- * review nodes; the `BreadcrumbList`; and a `FAQPage` of the product's questions.
+ * The variants offered for sale: active and priced above 0 (merchant listings need a price above 0, as feeds do).
+ * @param {Pick<ProductRecord, 'variants'>} product
+ */
+export const offeredVariants = (product) => activeVariants(product).filter((variant) => variant.price > 0);
+
+/**
+ * Product structured data as a JSON-LD graph (E16, G5): a `ProductGroup` with each variant offered as a `Product` (its
+ * own image, else the product's; its SKU, else its feed item id; its condition by grade, offer, shipping and return
+ * policy) when there are several, else one `Product`; the rating and review nodes; the `BreadcrumbList`; and, while the
+ * merchant asks for it, a `FAQPage` of the product's questions. A product with nothing offered (no active variant
+ * priced above 0) has no Product node: a Product without offers is not valid markup.
  * @param {ProductPage} page
  */
 export const productJsonLd = (page) => {
 	const { product, url, images, description, brand, currency, seller, trail } = page;
-	const variants = activeVariants(product);
+	const variants = offeredVariants(product);
 	/** @param {VariantRecord} variant */
 	const offerOf = (variant) =>
 		compact({
@@ -287,7 +342,7 @@ export const productJsonLd = (page) => {
 				return condition ? CONDITION_URL[condition] : '';
 			})(),
 			seller: seller ? { '@type': 'Organization', name: seller } : null,
-			...offerExtras(page, variant.price),
+			...offerExtras(page, variant),
 		});
 	const rating =
 		product.rating.count > 0
@@ -316,23 +371,23 @@ export const productJsonLd = (page) => {
 		aggregateRating: rating,
 		review: reviews,
 	};
-	/** @type {Record<string, unknown>} */
-	let node;
+	/** @type {Record<string, unknown> | null} */
+	let node = null;
 	if (variants.length > 1) {
 		node = compact({
 			'@type': 'ProductGroup',
 			'@id': `${url}#product`,
 			name: product.name,
 			url,
-			productGroupID: product.id,
+			productGroupID: feedGroupId(product, true),
 			variesBy: product.options.map((axis) => VARIES_BY[axis.name.toLowerCase()] ?? axis.name),
 			...shared,
 			hasVariant: variants.map((variant) =>
 				compact({
 					'@type': 'Product',
 					name: variantLabel(variant) ? `${product.name} - ${variantLabel(variant)}` : product.name,
-					sku: variant.sku,
-					image: page.variantImage?.(variant) ?? '',
+					sku: variant.sku || feedItemId(variant),
+					image: page.variantImage?.(variant) || images,
 					...Object.fromEntries(
 						Object.entries(variant.options ?? {}).flatMap(([axis, value]) => {
 							const property = VARIES_BY[axis.toLowerCase()];
@@ -343,23 +398,25 @@ export const productJsonLd = (page) => {
 				}),
 			),
 		});
-	} else {
-		const sole = variants[0];
+	} else if (variants.length === 1) {
+		const sole = /** @type {VariantRecord} */ (variants[0]);
 		node = compact({
 			'@type': 'Product',
 			'@id': `${url}#product`,
 			name: product.name,
 			url,
-			sku: sole?.sku ?? '',
+			sku: sole.sku || feedItemId(sole),
 			...shared,
-			offers: sole ? offerOf(sole) : null,
+			offers: offerOf(sole),
 		});
 	}
 	return {
 		'@context': SCHEMA,
-		'@graph': [node, breadcrumbJsonLd([...trail, { name: product.name, url }]), faqJsonLd(product.faqs, url)].filter(
-			(entry) => entry !== null,
-		),
+		'@graph': [
+			node,
+			breadcrumbJsonLd([...trail, { name: product.name, url }]),
+			page.faqMarkup ? faqJsonLd(product.faqs, url) : null,
+		].filter((entry) => entry !== null),
 	};
 };
 

@@ -93,9 +93,10 @@ export const storedAttribute = (given) => ({ ...storedFields(checkAttribute({ na
 
 /**
  * A connected product with one website.
- * @param {{ start?: number }} [options]
+ * @param {{ start?: number, business?: Record<string, unknown> }} [options] `business`: more fields of the website's
+ *   business.json (its country …)
  */
-export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {}) => {
+export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), business = {} } = {}) => {
 	let t = start;
 	const now = () => t;
 	const portal = await createFakePortal({ now });
@@ -207,7 +208,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	});
 	responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'UTC' },
+		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'UTC', ...business },
 	}));
 	const network = createNetwork(handlers);
 	const product = createProductInstance({
@@ -536,10 +537,10 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 /**
  * A ready shop: every feature on, the merchant database, storage, and the Accounts, Payments and Notifications
  * tokens connected.
- * @param {{ start?: number, features?: string[] }} [options]
+ * @param {{ start?: number, features?: string[], business?: Record<string, unknown> }} [options]
  */
-export const readyShop = async ({ start, features = ALL } = {}) => {
-	const shop = await setup(start === undefined ? {} : { start });
+export const readyShop = async ({ start, features = ALL, business } = {}) => {
+	const shop = await setup({ ...(start === undefined ? {} : { start }), ...(business ? { business } : {}) });
 	await shop.switchOn(features);
 	await shop.connectDatabase();
 	await shop.connectStorage();

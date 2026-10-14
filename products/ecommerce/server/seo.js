@@ -16,7 +16,9 @@ import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleIt
 import { gradeCondition, gradesFor } from '../core/grades.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
+import { SORTS, sortDocument } from '../core/catalog-query.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { windowDays } from '../core/returns.js';
 import { shownName } from '../core/reviews.js';
 import {
 	SITEMAP_FOOT,
@@ -67,8 +69,6 @@ const CHUNK = 16_384;
 const BATCH = 200;
 /** Reviews shown as review nodes of a product. */
 const REVIEW_NODES = 5;
-/** Products in a category's ItemList. */
-const LIST_ITEMS = 20;
 /** Most products llms-full.txt reads. */
 const MAX_FULL_PRODUCTS = 50_000;
 /** The llms.txt section names (the llms.txt convention's structure, not shop wording). */
@@ -154,14 +154,42 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * The delivery fee where no zone matches and the amount it is free from, for structured data and feeds (E16, E17,
-	 * SG-2); null without delivery zones.
+	 * The delivery fee where no zone matches and the amount it is free from, to the business's country, for structured
+	 * data and feeds (E16, E17, SG-2); null without delivery zones. No delivery days are kept yet, so structured data
+	 * gives no shipping details (they need them; SEO audit G5.4).
 	 * @param {Site} s
 	 */
 	const shippingOf = async (s) => {
 		if (!s.has('delivery_zones')) return null;
 		const [{ defaultFee, defaultFreeOver }, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
-		return { fee: Number(defaultFee ?? 0), freeOver: Number(defaultFreeOver ?? 0), country: String(business.country ?? '') };
+		return {
+			fee: Number(defaultFee ?? 0),
+			freeOver: Number(defaultFreeOver ?? 0),
+			country: String(business.country ?? ''),
+			deliveryTime: null,
+		};
+	};
+
+	/**
+	 * Each item's return window for structured data (G5.1), with the business's country (no country: no policy), or
+	 * null while Returns is off: physical goods as the cart decides it (the product's, else its grade's, else the
+	 * `returns` setting); digital goods and bookings only when the product names its own (they are not claimed through
+	 * returns).
+	 * @param {Site} s @param {ProductRecord} item
+	 * @param {{ gradeOf: (item: ProductRecord, variant: VariantRecord) => import('../core/grades.js').Grade | undefined }} conditions
+	 * @param {string} country
+	 */
+	const returnsOf = async (s, item, conditions, country) => {
+		if (!s.has('returns')) return null;
+		const defaults = { returnDays: Number((await s.values('returns')).returnDays ?? 0), warrantyDays: 0 };
+		return {
+			country,
+			/** @param {VariantRecord} variant */
+			days: (variant) =>
+				item.kind === 'physical'
+					? windowDays('return', item, conditions.gradeOf(item, variant) ?? null, defaults)
+					: item.returnDays,
+		};
 	};
 
 	/**
@@ -253,7 +281,6 @@ export const createSeo = (product, service) => {
 			variantUrls.set(variant.id, await media.variantUrl(s, item, variant, bySlug));
 			variantImages.set(variant.id, variant.media?.[0] ? await media.mediaUrl(s, variant.media[0].key) : null);
 		}
-		const returns = s.has('returns') ? Number((await s.values('returns')).returnDays ?? 0) : null;
 		// reviewers are named as the reviews widget shows them (`nameFormat`), never by more (EN-2)
 		const nameFormat = s.has('reviews') ? (await s.values('reviews')).nameFormat : 'full';
 		const reviews = s.has('reviews')
@@ -280,7 +307,7 @@ export const createSeo = (product, service) => {
 			variantUrl: (variant) => variantUrls.get(variant.id) ?? url,
 			variantImage: (variant) => variantImages.get(variant.id) ?? null,
 			shipping: await shippingOf(s),
-			returns: returns === null ? null : { days: returns, country: String(business.country ?? '') },
+			returns: await returnsOf(s, item, conditions, String(business.country ?? '')),
 			reviews: reviews.map((row) => ({
 				name: shownName(String(row.name ?? ''), nameFormat),
 				rating: Number(row.rating),
@@ -288,6 +315,7 @@ export const createSeo = (product, service) => {
 				body: String(row.body ?? ''),
 				at: row.createdAt ?? null,
 			})),
+			faqMarkup: settings.faqMarkup === true,
 		});
 		const ogImage = siteAddress(item.seo.ogImage);
 		return {
@@ -316,7 +344,12 @@ export const createSeo = (product, service) => {
 		const hidden = await hiddenFor(s);
 		if (!found || !category || hidden.unlisted.has(category.id)) throw problem('not_found', 'There is no such category.');
 		if (found.moved) return { moved: { kind: 'category', slug: category.slug, url: await media.categoryUrl(s, category) } };
-		const [settings, business, categories] = await Promise.all([s.values('seo'), s.business(), allCategories(data)]);
+		const [settings, business, categories, { pageSize }] = await Promise.all([
+			s.values('seo'),
+			s.business(),
+			allCategories(data),
+			s.values('catalog'),
+		]);
 		const url = await media.categoryUrl(s, category);
 		const image = category.image ? await media.mediaUrl(s, category.image.key) : null;
 		const parent = categories.find((c) => c.id === category.path.at(-1));
@@ -339,8 +372,9 @@ export const createSeo = (product, service) => {
 						{ websiteId: data.websiteId, status: 'active', categoryIds: { $in: below }, ...visibleMatch(hidden) },
 						{ projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 } },
 					)
-					.sort({ publishedAt: -1, id: -1 })
-					.limit(LIST_ITEMS)
+					// the products of the category page's first page, as the grid shows them (newest first)
+					.sort(sortDocument(/** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
+					.limit(Number(pageSize))
 					.toArray();
 		const canonical = category.seo.canonicalUrl ? absolute(category.seo.canonicalUrl, s.domain) : url;
 		const jsonLd = categoryJsonLd({
@@ -352,7 +386,7 @@ export const createSeo = (product, service) => {
 			items: await Promise.all(
 				items.map(async (row) => ({ name: String(row.name), url: await media.productUrl(s, /** @type {any} */ (row)) })),
 			),
-			faqs: category.faqs,
+			faqs: settings.faqMarkup === true ? category.faqs : [],
 		});
 		const ogImage = siteAddress(category.seo.ogImage);
 		return {
@@ -371,7 +405,9 @@ export const createSeo = (product, service) => {
 
 	/**
 	 * What a sitemap lists, for one website and request (E1, E16): categories shoppers see, indexable landing and
-	 * glossary pages, and active, visible products, leaving out pages marked noindex.
+	 * glossary pages, and active, visible products, leaving out pages marked noindex and pages whose canonical address
+	 * is another page (G8; those are left out while the parts are written, so the counts that split the files may
+	 * count them).
 	 * @param {Site} s
 	 */
 	const sitemapParts = async (s) => {
@@ -414,6 +450,11 @@ export const createSeo = (product, service) => {
 	 */
 	async function* entriesOf(s, parts, part, range = { skip: 0, limit: 0 }) {
 		const { data } = parts;
+		/**
+		 * Whether a page names itself as canonical (no canonical of its own, or its own address).
+		 * @param {{ seo?: { canonicalUrl?: string } }} record @param {string} loc
+		 */
+		const canonical = (record, loc) => !record.seo?.canonicalUrl || absolute(record.seo.canonicalUrl, s.domain) === loc;
 		if (part === 'landings') {
 			yield parts.pages.map((page) => sitemapEntry(page)).join('');
 			return;
@@ -422,7 +463,7 @@ export const createSeo = (product, service) => {
 			part === 'categories'
 				? data
 						.collection(COLLECTIONS.categories)
-						.find(parts.categoryFilter, { projection: { _id: 0, id: 1, slug: 1, updatedAt: 1 } })
+						.find(parts.categoryFilter, { projection: { _id: 0, id: 1, slug: 1, updatedAt: 1, 'seo.canonicalUrl': 1 } })
 						.sort({ id: 1 })
 						.batchSize(BATCH * 5)
 				: data
@@ -435,6 +476,7 @@ export const createSeo = (product, service) => {
 								categoryIds: 1,
 								brandId: 1,
 								updatedAt: 1,
+								'seo.canonicalUrl': 1,
 								media: { $slice: MAX_IMAGES },
 								'variants.media.key': 1,
 							},
@@ -446,8 +488,12 @@ export const createSeo = (product, service) => {
 		let chunk = '';
 		for await (const row of rows) {
 			const record = /** @type {any} */ (row);
-			if (part === 'categories') chunk += sitemapEntry({ loc: await media.categoryUrl(s, record), lastmod: record.updatedAt });
-			else {
+			if (part === 'categories') {
+				const loc = await media.categoryUrl(s, record);
+				if (canonical(record, loc)) chunk += sitemapEntry({ loc, lastmod: record.updatedAt });
+			} else {
+				const loc = await media.productUrl(s, record);
+				if (!canonical(record, loc)) continue;
 				// the product's photos, then its variants' (E6), each once
 				const keys = [
 					...new Set([
@@ -463,7 +509,7 @@ export const createSeo = (product, service) => {
 					const address = await media.mediaUrl(s, key);
 					if (address) images.push(address);
 				}
-				chunk += sitemapEntry({ loc: await media.productUrl(s, record), lastmod: record.updatedAt, images });
+				chunk += sitemapEntry({ loc, lastmod: record.updatedAt, images });
 			}
 			if (chunk.length > CHUNK) {
 				yield chunk;

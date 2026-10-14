@@ -6,8 +6,8 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
-import { feedGroupId, feedRows, googleItem, metaLine } from '../core/feeds.js';
-import { fillTemplate, fillTitle, pageName, patternText, shippingFee } from '../core/seo.js';
+import { feedRows, googleItem, metaLine } from '../core/feeds.js';
+import { feedGroupId, fillTemplate, fillTitle, pageName, patternText, shippingFee } from '../core/seo.js';
 import { createRoutes } from '../server/routes.js';
 import { ALL, ORIGIN, readyShop } from './helpers.js';
 
@@ -205,13 +205,13 @@ describe('SEO and feed settings through the API', () => {
 		);
 	});
 
-	it('indexes pages after the first, or not with the first page as canonical (SG-21)', async () => {
+	it('indexes pages after the first or not, each with its own address as canonical (SG-21, G7)', async () => {
 		const second = await api('GET', `/v1/seo/listing?category=${ids.lamps.slug}&page=2`);
 		expect(second).toMatchObject({ robots: 'index, follow', canonical: `${ORIGIN}/categories/lamps?page=2` });
 		await shop.setting('seo', 'pagedListings', 'noindex');
 		expect(await api('GET', `/v1/seo/listing?category=${ids.lamps.slug}&page=2`)).toMatchObject({
 			robots: 'noindex, follow',
-			canonical: `${ORIGIN}/categories/lamps`,
+			canonical: `${ORIGIN}/categories/lamps?page=2`,
 		});
 		expect((await api('GET', `/v1/seo/listing?category=${ids.lamps.slug}`)).robots).toBe('index, follow');
 	});
@@ -231,14 +231,11 @@ describe('SEO and feed settings through the API', () => {
 		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).toContain(`<loc>${ORIGIN}/glossary/height</loc>`);
 	});
 
-	it('ships free from the free-delivery amount in feeds and structured data (SG-2)', async () => {
+	it('ships free from the free-delivery amount in feeds (SG-2); structured data waits for delivery days (G5)', async () => {
 		await shop.setting('delivery_zones', 'defaultFee', 25_000);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 1_000_000);
 		const jsonLd = JSON.parse((await api('GET', `/v1/seo/products/${ids.lamp.slug}`)).jsonLd)['@graph'][0];
-		expect(jsonLd.hasVariant.map((/** @type {any} */ v) => v.offers.shippingDetails.shippingRate.value)).toEqual([
-			'250.00',
-			'0.00',
-		]);
+		expect(jsonLd.hasVariant.map((/** @type {any} */ v) => v.offers.shippingDetails)).toEqual([undefined, undefined]);
 		shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 			status: 200,
 			body: { version: 1, name: 'Shop', country: 'US', timeZone: 'UTC' },

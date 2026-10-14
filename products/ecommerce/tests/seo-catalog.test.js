@@ -22,7 +22,7 @@ const api = async (method, path, body) => {
 const node = (jsonLd, type) => JSON.parse(jsonLd)['@graph'].find((/** @type {any} */ entry) => entry['@type'] === type);
 
 beforeAll(async () => {
-	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
+	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location'), business: { country: 'US' } });
 	await shop.list('grades', [
 		{
 			key: 'mint',
@@ -63,9 +63,10 @@ beforeAll(async () => {
 afterAll(async () => shop.product.close());
 
 describe('E10 grades and E16 structured data', () => {
-	it('writes each variant with its grade condition, shipping, return policy, reviews and FAQs', async () => {
+	it('writes each variant with its grade condition, return policy, reviews and FAQs', async () => {
 		await shop.setting('delivery_zones', 'defaultFee', 25000);
 		await shop.setting('returns', 'returnDays', 14);
+		await shop.setting('seo', 'faqMarkup', true);
 		const data = await shop.db();
 		await data.collection('reviews').insertOne({
 			id: 'rev_1',
@@ -92,12 +93,14 @@ describe('E10 grades and E16 structured data', () => {
 			'https://schema.org/UsedCondition',
 		]);
 		expect(group.hasVariant[0].offers).toMatchObject({
-			shippingDetails: { shippingRate: { value: '250.00', currency: 'USD' } },
 			hasMerchantReturnPolicy: {
+				applicableCountry: 'US',
 				returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
 				merchantReturnDays: 14,
 			},
 		});
+		// shipping details need the delivery days (G5.4)
+		expect(group.hasVariant[0].offers.shippingDetails).toBeUndefined();
 		expect(group.review).toEqual([
 			{
 				'@type': 'Review',

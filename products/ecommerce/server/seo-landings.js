@@ -20,7 +20,7 @@ import { created, defineRoute, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
-import { listOf, shopFilter } from '../core/catalog-query.js';
+import { SORTS, listOf, shopFilter, sortDocument } from '../core/catalog-query.js';
 import { lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import {
 	NO_STOCK,
@@ -34,7 +34,7 @@ import {
 	stockOf,
 	stockStages,
 } from '../core/landings.js';
-import { absolute } from '../core/links.js';
+import { absolute, withQuery } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	categoryJsonLd,
@@ -74,14 +74,31 @@ const READ_RATE = [...SEO_LIMITS];
 const PATTERN_VALUES = 5;
 /** At most this many landing pages per website. */
 const MAX_LANDINGS = 2000;
-/** Products in a listing's ItemList. */
-const LIST_ITEMS = 20;
+/** Most products on one page of a listing (the grid's `limit`, E8). */
+const MAX_PAGE = 60;
 /** Most combinations of a saved product looked at for an AI-written automatic landing page (E43). */
 const MAX_AUTO_TRIES = 5;
 /** Most rows of the stock of every combination (E43): products in stock, by grade. */
 const MAX_STOCK_ROWS = 50_000;
 /** Listing parameters that are not filters (they keep a category or landing page indexable). */
 const NOT_FILTERS = new Set(['category', 'brand', 'grade', 'page', 'limit', 'cursor']);
+/** Listing parameters a page's own address never carries: the category is the address, the rest only reads (G12). */
+const NOT_IN_ADDRESS = new Set(['category', 'limit', 'cursor']);
+
+/**
+ * A filtered list's own address (G12: such a page is not indexed and names itself as canonical, never the category):
+ * the page's address with its filters in one order (by name, `&` between them), page 1 and empty values left out.
+ * @param {string} base the category's (or the home) page
+ * @param {Record<string, unknown>} query the listing's query
+ */
+const filteredUrl = (base, query) => {
+	const params = new URLSearchParams();
+	for (const key of Object.keys(query).sort()) {
+		const value = String(query[key] ?? '');
+		if (value !== '' && !NOT_IN_ADDRESS.has(key) && !(key === 'page' && value === '1')) params.append(key, value);
+	}
+	return withQuery(base, params.toString());
+};
 
 /**
  * @param {Product} product
@@ -464,12 +481,15 @@ export const createLandings = (product, service, media) => {
 		const grade =
 			gradeKeys.length === 1 ? (names.gradesIn(category?.id ?? null).get(/** @type {string} */ (gradeKeys[0])) ?? null) : null;
 		const page = /^\d{1,3}$/.test(String(ctx.query.page ?? '')) ? Math.max(1, Number(ctx.query.page)) : 1;
-		const otherFilters = Object.keys(ctx.query).some((key) => !NOT_FILTERS.has(key) && ctx.query[key] !== '');
-		const exact =
-			!otherFilters &&
-			brandRefs.length === (brand ? 1 : 0) &&
-			gradeKeys.length === (grade ? 1 : 0) &&
-			(brand === null || brand.status !== 'hidden');
+		const filters = Object.keys(ctx.query).filter((key) => !NOT_FILTERS.has(key) && ctx.query[key] !== '');
+		const named = brandRefs.length === (brand ? 1 : 0) && gradeKeys.length === (grade ? 1 : 0);
+		const exact = filters.length === 0 && named && (brand === null || brand.status !== 'hidden');
+		// the grid's order: newest first, or the sort asked for (a sorted list is not indexed, but its items are known)
+		const sortKey = String(ctx.query.sort ?? '');
+		const sorted = Object.hasOwn(SORTS, sortKey)
+			? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[/** @type {keyof typeof SORTS} */ (sortKey)])
+			: null;
+		const itemsKnown = named && filters.every((key) => key === 'sort' && sorted !== null);
 		const combination = { categoryId: category?.id ?? null, brandId: brand?.id ?? null, grade: grade?.key ?? null };
 		const landing =
 			exact && s.has('landing_pages') && (brand || grade)
@@ -522,10 +542,14 @@ export const createLandings = (product, service, media) => {
 					: `https://${s.domain}/`;
 		const canonicalBase =
 			category?.seo.canonicalUrl && !view && !automatic ? absolute(category.seo.canonicalUrl, s.domain) : pageUrl;
-		// pages after the first: indexed with their own address, or not indexed with the first page as canonical (SG-21)
+		// pages after the first keep their own address as canonical, indexed or not (pagedListings; SG-21, G7: Google asks
+		// never to name page 1 as the canonical of page 2); a filtered list names itself (G12)
 		const pagedOut = page > 1 && settings.pagedListings === 'noindex';
-		const canonical =
-			page > 1 && !pagedOut ? `${canonicalBase}${canonicalBase.includes('?') ? '&' : '?'}page=${page}` : canonicalBase;
+		const canonical = !exact
+			? filteredUrl(pageUrl, ctx.query)
+			: page > 1
+				? withQuery(canonicalBase, `page=${page}`)
+				: canonicalBase;
 		const h1 =
 			landing?.h1 ||
 			automatic?.copy.name ||
@@ -557,14 +581,22 @@ export const createLandings = (product, service, media) => {
 		);
 		const intro = landing?.intro || category?.content.summary || category?.description || '';
 		const faqs = landing ? landing.faqs : (category?.faqs ?? []);
-		const items = await data
-			.collection(COLLECTIONS.products)
-			.find(await filterOf(s, names, combination, false), {
-				projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 },
-			})
-			.sort({ publishedAt: -1, id: -1 })
-			.limit(LIST_ITEMS)
-			.toArray();
+		// the ItemList: the products this page of the grid shows, in its order (G7.8); a list with other filters gives none
+		// (it is not indexed, and its items are the grid's to find)
+		const limit = /^\d{1,2}$/.test(String(ctx.query.limit ?? ''))
+			? Math.min(MAX_PAGE, Math.max(1, Number(ctx.query.limit)))
+			: Number((await s.values('catalog')).pageSize);
+		const items = itemsKnown
+			? await data
+					.collection(COLLECTIONS.products)
+					.find(await filterOf(s, names, combination, false), {
+						projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 },
+					})
+					.sort(sortDocument(sorted ?? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
+					.skip((page - 1) * limit)
+					.limit(limit)
+					.toArray()
+			: [];
 		const image = category?.image ? await media.mediaUrl(s, category.image.key) : siteAddress(settings.defaultImage) || null;
 		const jsonLd = categoryJsonLd({
 			name: h1,
@@ -575,7 +607,7 @@ export const createLandings = (product, service, media) => {
 			items: await Promise.all(
 				items.map(async (row) => ({ name: String(row.name), url: await media.productUrl(s, /** @type {any} */ (row)) })),
 			),
-			faqs,
+			faqs: settings.faqMarkup === true ? faqs : [],
 		});
 		return {
 			h1,
@@ -675,7 +707,7 @@ export const createLandings = (product, service, media) => {
 				'@context': 'https://schema.org',
 				'@graph': [
 					{ '@type': 'DefinedTerm', '@id': `${at}#term`, name, description, ...(url ? { url } : {}) },
-					faqJsonLd(seo?.faqs, at),
+					settings.faqMarkup === true ? faqJsonLd(seo?.faqs, at) : null,
 				].filter((node) => node !== null),
 			}),
 		};

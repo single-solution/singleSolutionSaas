@@ -25893,7 +25893,7 @@
 		"/v1/seo/categories/{ref}": {
 			"get": {
 				"summary": "A category page's meta tags and structured data",
-				"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty. 404 not_found for an unknown or hidden category.",
+				"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty; else its ItemList holds the products of its first page (newest first, the catalog setting pageSize). A FAQPage only with the seo setting faqMarkup on. 404 not_found for an unknown or hidden category.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "seo",
 				"security": [
@@ -26079,7 +26079,7 @@
 		"/v1/seo/listing": {
 			"get": {
 				"summary": "The head of a listing page",
-				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a hidden brand or a category coming soon gives noindex, follow. With the seo setting pagedListings noindex, pages 2, 3 … are noindex, follow with the first page as canonical (index: each page its own canonical, ?page=n). Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
+				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand or a category coming soon gives noindex, follow. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "seo",
 				"security": [
@@ -26127,6 +26127,26 @@
 							"type": "string",
 							"pattern": "^[0-9]{1,3}$",
 							"description": "The page number (1 when left out)."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Products per page, as the grid shows them (1 to 60; the catalog setting pageSize when left out).",
+						"schema": {
+							"type": "string",
+							"description": "Products per page, as the grid shows them (1 to 60; the catalog setting pageSize when left out)."
+						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "The grid's order (newest when left out); a sorted list is not indexed.",
+						"schema": {
+							"type": "string",
+							"description": "The grid's order (newest when left out); a sorted list is not indexed."
 						}
 					},
 					{
@@ -26240,7 +26260,7 @@
 		"/v1/seo/sitemap.xml": {
 			"get": {
 				"summary": "The sitemap",
-				"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the categories shoppers see, the indexable landing pages (stored ones, and with the landing_pages setting auto the automatic ones) and glossary pages (Landing pages) and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex, with lastmod. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, whose files are the seo setting sitemapUrl with ?file=categories, ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file).",
+				"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the categories shoppers see, the indexable landing pages (stored ones, and with the landing_pages setting auto the automatic ones) and glossary pages (Landing pages) and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex and pages whose canonicalUrl is another page (a sitemap lists canonical addresses only), with lastmod. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, whose files are the seo setting sitemapUrl with ?file=categories, ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "seo",
 				"security": [
@@ -44108,7 +44128,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD (DefinedTerm, FAQPage) as text safe to put in a script tag."
+						"description": "The JSON-LD (DefinedTerm, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
 					}
 				}
 			},
@@ -44159,7 +44179,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD (CollectionPage with an ItemList of up to 20 products, BreadcrumbList, FAQPage) as text safe to put in a script tag."
+						"description": "The JSON-LD (CollectionPage with an ItemList of the products the page shows, BreadcrumbList, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
 					}
 				}
 			},
@@ -44319,7 +44339,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD (DefinedTerm, FAQPage) as text safe to put in a script tag."
+						"description": "The JSON-LD (DefinedTerm, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
 					}
 				}
 			},
@@ -44414,7 +44434,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD (CollectionPage with an ItemList of up to 20 products, BreadcrumbList, FAQPage) as text safe to put in a script tag."
+						"description": "The JSON-LD (CollectionPage with an ItemList of the products the page shows, BreadcrumbList, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
 					}
 				}
 			},
@@ -44499,7 +44519,7 @@
 					},
 					"jsonLd": {
 						"type": "string",
-						"description": "The JSON-LD (a ProductGroup with its variants, offers, conditions, shipping, return policy, reviews and FAQs, and a BreadcrumbList) as text safe to put in a script tag."
+						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer, condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only) and shipping details (physical goods, with a country and delivery days only), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
 					}
 				}
 			},

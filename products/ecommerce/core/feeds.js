@@ -5,7 +5,16 @@
  * variant priced 0 is never a row (the catalogs refuse free items). Pure functions, no I/O.
  * @module
  */
-import { activeVariants, escapeXml, fillTemplate, shippingFee, variantInStock, variantLabel } from './seo.js';
+import {
+	escapeXml,
+	feedGroupId,
+	feedItemId,
+	fillTemplate,
+	offeredVariants,
+	shippingFee,
+	variantInStock,
+	variantLabel,
+} from './seo.js';
 import { toDecimal } from './money.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -69,13 +78,6 @@ const DESCRIPTION_LENGTH = 5000;
  */
 
 /**
- * A feed item id (E17): the id the shop's earlier product feed listed the variant under, kept by an import
- * (`feedId`), so shopping catalogs keep the items they already list; else the variant's own id.
- * @param {import('./model.js').VariantRecord} variant
- */
-export const feedItemId = (variant) => variant.feedId || variant.id;
-
-/**
  * An amount as feeds take it: decimals and the currency code, or whole units (rounded half up) with `wholeUnits`.
  * @param {number} amount
  * @param {string} currency
@@ -94,21 +96,14 @@ export const feedMoney = (amount, currency, whole) => {
 const line = (value, max) => value.replace(/\s+/g, ' ').trim().slice(0, max);
 
 /**
- * The item group of a product's rows (SG-24): the group id the shop's earlier feed sent, kept by an import
- * (`feedGroupId`) and sent on every row; else the product id when it has several variants.
- * @param {ProductRecord} product
- * @param {boolean} many
- */
-export const feedGroupId = (product, many) => product.feedGroupId || (many ? product.id : '');
-
-/**
  * The rows of one product.
  * @param {ProductRecord} product
  * @param {FeedContext} context
  * @returns {FeedRow[]}
  */
 export const feedRows = (product, context) => {
-	const variants = activeVariants(product);
+	// the variants offered (active, priced above 0), as structured data has them, so both name the same items and group
+	const variants = offeredVariants(product);
 	const many = variants.length > 1;
 	const money = (/** @type {number} */ amount) => feedMoney(amount, context.currency, context.wholeUnits === true);
 	const body = product.description || product.summary || product.name;
@@ -116,7 +111,7 @@ export const feedRows = (product, context) => {
 		.trim()
 		.slice(0, DESCRIPTION_LENGTH);
 	return variants
-		.filter((variant) => variant.price > 0 && (context.includeOutOfStock || variantInStock(product, variant)))
+		.filter((variant) => context.includeOutOfStock || variantInStock(product, variant))
 		.map((variant) => {
 			const label = variantLabel(variant);
 			const onSale = typeof variant.compareAtPrice === 'number' && variant.compareAtPrice > variant.price;
