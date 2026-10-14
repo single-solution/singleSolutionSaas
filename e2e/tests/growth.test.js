@@ -3,7 +3,8 @@
  * then the real page script (`@ss/product-growth/page-script`) in a browser window (jsdom) on a local page of the
  * website with the Portal-issued browser token: the consent banner asks first and nothing is recorded, the visitor
  * accepts, the page view and Ecommerce's shop events (browser events) are recorded in the merchant database and the
- * daily totals go up; then the analytics dashboard's ticketed read, and the hourly charge.
+ * daily totals go up; then the analytics dashboard's ticketed read, an old path answered by its redirect rule (one
+ * address and the whole list with its ETag), and the hourly charge.
  */
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -200,6 +201,41 @@ describe('Growth on the real Portal', () => {
 			origin: 'https://evil.example',
 		});
 		expect(elsewhere.status).toBe(401);
+	});
+
+	it('an old path answers its redirect rule, to the website’s server and to its edge middleware', async () => {
+		const support = await sys.admin('support');
+		const cookie = await sys.adminSession(support.client, websiteId);
+		await sys.switchFeatures(cookie, websiteId, [
+			'consent_banner',
+			'conversion_funnel',
+			'redirects',
+			'searches_404s',
+			'visitor_analytics',
+		]);
+		const made = await sys.call('POST', '/v1/redirects', {
+			token: tokens.server,
+			body: { from: '/old-lamps', match: 'prefix', to: '/lamps', note: 'Category moved' },
+		});
+		expect(made.status).toBe(201);
+		const rule = await sys.call('GET', `/v1/redirects/match?path=${encodeURIComponent('/old-lamps/blue?utm_source=news')}`, {
+			token: tokens.server,
+		});
+		expect(rule.json).toEqual({
+			from: '/old-lamps',
+			match: 'prefix',
+			to: '/lamps',
+			code: 301,
+			location: '/lamps/blue?utm_source=news',
+		});
+		const none = await sys.call('GET', '/v1/redirects/match?path=/lamps/blue', { token: tokens.server });
+		expect(none.status).toBe(204);
+		const list = await sys.call('GET', '/v1/redirects/all', { token: tokens.server });
+		expect(list.json.rules).toEqual([{ from: '/old-lamps', match: 'prefix', to: '/lamps', code: 301 }]);
+		const etag = String(list.headers.get('etag'));
+		const again = await sys.call('GET', '/v1/redirects/all', { token: tokens.server, headers: { 'if-none-match': etag } });
+		expect(again.status).toBe(304);
+		expect(await merchantDb.collection('ss_growth_redirects').countDocuments({ websiteId })).toBe(1);
 	});
 
 	it('charges the switched-on features by the hour', async () => {
