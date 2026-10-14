@@ -64,7 +64,8 @@ export const INDEXES = [
 		partialFilterExpression: { slug: { $type: 'string' } },
 	},
 	{ collection: COLLECTIONS.attributes, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
-	// the same slug once per category and once for every category (E45; it replaces `by_slug`, see `upgradeDatabase`)
+	// the same slug once per category and once for every category (E45; `categoryId: null` also matches an attribute saved
+	// without one, so the kit's index rule replaces the older `by_slug` with no backfill)
 	{
 		collection: COLLECTIONS.attributes,
 		keys: { websiteId: 1, categoryId: 1, slug: 1 },
@@ -85,60 +86,6 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, serial: 1 }, name: 'by_serial', unique: true },
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, productId: 1, variantId: 1, status: 1 }, name: 'by_variant' },
 ];
-
-/**
- * Indexes of merchant databases made before E45 that an index above replaces: an attribute's slug was unique per
- * website (`by_slug`), so the same slug in two categories was refused; it is unique per category now
- * (`by_category_slug`).
- */
-const REPLACED_INDEXES = Object.freeze([
-	Object.freeze({ collection: COLLECTIONS.attributes, name: 'by_slug', keys: Object.freeze({ websiteId: 1, slug: 1 }) }),
-]);
-
-/** MongoDB's codes for a collection and an index that do not exist. */
-const NAMESPACE_NOT_FOUND = 26;
-const INDEX_NOT_FOUND = 27;
-
-/** @param {unknown} error @param {number} code */
-const isCode = (error, code) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === code;
-
-/**
- * Bring a merchant database made before E45 up to date, before the kit creates the indexes above (on each new
- * connection, `adapters/product.js`): drop each replaced index found with exactly its old keys, then mark the
- * attributes without a category as the ones for every category (`categoryId: null`). Idempotent: a new database, or
- * one already up to date, is left as it is; an index of that name with other keys is never dropped.
- * @param {import('mongodb').Db} db the merchant database (every website's records)
- * @param {string} prefix the product's collection prefix (`ss_ecommerce_`)
- * @returns {Promise<{ dropped: string[], attributes: number }>} the indexes dropped and the attributes marked
- */
-export const upgradeDatabase = async (db, prefix) => {
-	/** @type {string[]} */
-	const dropped = [];
-	for (const { collection, name, keys } of REPLACED_INDEXES) {
-		const target = db.collection(`${prefix}${collection}`);
-		const indexes = await target
-			.listIndexes()
-			.toArray()
-			.catch((error) => {
-				if (isCode(error, NAMESPACE_NOT_FOUND)) return [];
-				throw error;
-			});
-		const old = indexes.find((index) => index.name === name);
-		// the keys in their order: { websiteId: 1, slug: 1 } is another index than { slug: 1, websiteId: 1 }
-		if (!old || JSON.stringify(Object.entries(old.key)) !== JSON.stringify(Object.entries(keys))) continue;
-		try {
-			await target.dropIndex(name);
-		} catch (error) {
-			// another instance dropped it first
-			if (!isCode(error, INDEX_NOT_FOUND)) throw error;
-		}
-		dropped.push(`${prefix}${collection}.${name}`);
-	}
-	const marked = await db
-		.collection(`${prefix}${COLLECTIONS.attributes}`)
-		.updateMany({ categoryId: { $exists: false } }, { $set: { categoryId: null } });
-	return { dropped, attributes: marked.modifiedCount };
-};
 
 /** Without the database's own fields. */
 export const NO_ID = Object.freeze({ projection: { _id: 0, websiteId: 0, merchantId: 0 } });

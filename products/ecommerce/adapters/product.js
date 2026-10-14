@@ -10,7 +10,7 @@
  * clock, network). Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct, noopLogger } from '@ss/app-kit';
+import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import manifestFile from '../manifest.json' with { type: 'json' };
@@ -52,7 +52,7 @@ import importSettings from '../schemas/import.settings.json' with { type: 'json'
 import messages from '../schemas/messages.json' with { type: 'json' };
 import { flowChangeProblems } from '../core/flow.js';
 import { createAi } from './ai.js';
-import { INDEXES as CATALOG_INDEXES, upgradeDatabase } from './catalog-store.js';
+import { INDEXES as CATALOG_INDEXES } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
 import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
@@ -166,35 +166,6 @@ export const INDEXES = [
  * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>} InstanceOptions
  */
 
-/** The kit names the shop's collections `ss_<product id>_<name>` in the merchant database (PLAN 0.10). */
-const COLLECTION_PREFIX = `ss_${manifest.id.replace(/-/g, '_')}_`;
-
-/**
- * The merchant database client the kit opens: when it connects, it first brings a database made before E45 up to date
- * (`upgradeDatabase`: an index the shop's indexes replace is dropped), so the kit then creates the shop's indexes on
- * it. A failed upgrade is logged and tried again on the next connection; the shop keeps working meanwhile.
- * @param {import('@ss/app-kit').ProductOptions['logger']} logger
- * @returns {(uri: string, clientOptions: import('mongodb').MongoClientOptions) => MongoClient}
- */
-const merchantClient =
-	(logger = noopLogger) =>
-	(uri, clientOptions) => {
-		const client = new MongoClient(uri, clientOptions);
-		const connect = client.connect.bind(client);
-		return Object.assign(client, {
-			connect: async () => {
-				await connect();
-				try {
-					const done = await upgradeDatabase(client.db(), COLLECTION_PREFIX);
-					if (done.dropped.length > 0 || done.attributes > 0) logger.info('merchant database upgraded', done);
-				} catch (error) {
-					logger.warn('merchant database upgrade failed', { code: /** @type {any} */ (error)?.code ?? 'error' });
-				}
-				return client;
-			},
-		});
-	};
-
 /** Used only while the deployable is misconfigured (it then answers 503 everywhere). */
 const UNCONFIGURED = '';
 /** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
@@ -307,7 +278,7 @@ export const createProductInstance = (options) => {
 			// the Owner's Re-seal (RT-14): the deal-lock secrets in the product database
 			resealProduct: () => secrets.reseal(),
 		},
-		data: { indexes: INDEXES, createClient: merchantClient(options.logger) },
+		data: { indexes: INDEXES },
 		// records moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions({
 			list: (websiteId, name) => lists.get(websiteId, /** @type {any} */ (name)),
