@@ -2419,6 +2419,25 @@ decision); forgetting failed passwords after a quiet day.
 
 #### Notifications
 
+**N0. Default message templates (parity P1, built 2026-10-14: aed7faf3, 9529f321, 4499204e, 08f081f9, adc70151,
+59e1cafb, 0884d460, 54e02d38).** Before, Notifications refused a send with `template_not_found` until the merchant had
+written every template, so a new merchant got no staff alerts and no password-reset messages. Now each product lists
+the messages it sends in `schemas/messages.json` (key, values, flags, US-English words per channel; checked against the
+contract `@ss/contracts/templates` at start) and the kit adds those default words to every send (no extra round trip;
+also served at `GET /v1/message-defaults`). Notifications uses the website's own template first, then the product's
+default (same checks as a saved template); a waiting message keeps its defaults for the fallback channel and never
+shows them in the delivery log. Per key and channel the merchant can edit, reset to default (deletes its own) or switch
+off (recorded as skipped, reason `switched_off`; Accounts' sign-in messages cannot be switched off). WhatsApp has no
+default (Meta-approved templates only): without the merchant's template the attempt fails "Not set up: …" and goes to
+the fallback channel. Dashboard: Settings → Templates lists every product's messages by channel (Default words,
+Edited, Switched off, Not set up). Defaults: Accounts `email_code`, `password_reset`, `invite`, `phone_code`; Chat
+`staff_new_message`, `staff_needs_you`, `staff_cost_alert`, `staff_reply`, `transcript`; Payments and Growth send none.
+Chat staff alerts gain `all_staff` (every unblocked Accounts user whose role has `inbox.read`). Ecommerce (next step):
+add its `schemas/messages.json` (order_placed, order_status, return_status, back_in_stock, price_drop,
+staff_<event>); per-status keys `ecommerce.order_status.<status>` use a chain — the website's template for that status,
+else its general order-status template, else the default "Your order {number} is now {status}"; its staff alerts take
+`all_staff` and `includePhone` too.
+
 **N1. WhatsApp template buttons.** A WhatsApp template with a provider template name may list `buttons`
 (`[{ index, type: 'url' | 'copy_code', value }]`, values with placeholders such as `{code}`), which the Meta adapter
 sends as button components.
