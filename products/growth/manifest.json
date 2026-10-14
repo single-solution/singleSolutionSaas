@@ -118,6 +118,15 @@
 			}
 		},
 		{
+			"key": "redirects",
+			"name": "Redirects",
+			"description": "Rules that send old addresses of the website to their new page (301 or 308) or answer them as gone (410), read by the website's server; suggestions from the 404 log, and CSV import and export.",
+			"dependsOn": [],
+			"settings": {
+				"$ref": "schemas/redirects.settings.json"
+			}
+		},
+		{
 			"key": "notice_bar",
 			"name": "Notice bar",
 			"description": "An announcement bar on the website with the merchant's text, a link and the dates it shows.",
@@ -151,6 +160,11 @@
 			"key": "indexnow.submit",
 			"name": "Submit pages to IndexNow",
 			"feature": "indexnow"
+		},
+		{
+			"key": "redirects.edit",
+			"name": "See and edit redirects",
+			"feature": "redirects"
 		}
 	],
 	"widgets": [
@@ -172,6 +186,11 @@
 		{
 			"key": "seo_checklist",
 			"feature": ["seo_checklist", "indexnow"],
+			"kind": "admin"
+		},
+		{
+			"key": "redirects",
+			"feature": "redirects",
 			"kind": "admin"
 		}
 	]

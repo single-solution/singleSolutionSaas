@@ -19,6 +19,7 @@ import googleTags from '../schemas/google_tags.settings.json' with { type: 'json
 import indexnow from '../schemas/indexnow.settings.json' with { type: 'json' };
 import metaPixel from '../schemas/meta_pixel.settings.json' with { type: 'json' };
 import noticeBar from '../schemas/notice_bar.settings.json' with { type: 'json' };
+import redirects from '../schemas/redirects.settings.json' with { type: 'json' };
 import robotsVerification from '../schemas/robots_verification.settings.json' with { type: 'json' };
 import searches404s from '../schemas/searches_404s.settings.json' with { type: 'json' };
 import seoChecklist from '../schemas/seo_checklist.settings.json' with { type: 'json' };
@@ -30,6 +31,7 @@ import tagsShared from '../schemas/tags.shared.json' with { type: 'json' };
 import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { createImportOptions } from './imports.js';
+import { REDIRECT_INDEXES } from './redirects.js';
 import { INDEXES } from './store.js';
 import { createWeb } from './web.js';
 
@@ -47,6 +49,7 @@ const SETTINGS = {
 	robots_verification: robotsVerification,
 	indexnow,
 	seo_checklist: seoChecklist,
+	redirects,
 	notice_bar: noticeBar,
 	import: importSettings,
 };
@@ -78,6 +81,10 @@ export { strings };
 /** Growth's own problem codes. */
 const PROBLEM_CODES = Object.freeze({
 	indexnow_refused: Object.freeze({ status: 502, title: 'IndexNow refused the submission' }),
+	redirect_taken: Object.freeze({ status: 409, title: 'Another rule has this path' }),
+	redirect_loop: Object.freeze({ status: 409, title: 'The rules would make a redirect loop' }),
+	redirect_chain: Object.freeze({ status: 409, title: 'The rules would make a redirect chain' }),
+	redirects_full: Object.freeze({ status: 409, title: 'The website has the most rules it may have' }),
 });
 
 /**
@@ -132,7 +139,10 @@ export const createProductInstance = (options) => {
 				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin });
 			},
 		},
-		data: { indexes: INDEXES, ...(options.data?.createClient ? { createClient: options.data.createClient } : {}) },
+		data: {
+			indexes: [...INDEXES, ...REDIRECT_INDEXES],
+			...(options.data?.createClient ? { createClient: options.data.createClient } : {}),
+		},
 		// days of daily totals moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions(),
 		sharedSettings: SHARED_SETTINGS,

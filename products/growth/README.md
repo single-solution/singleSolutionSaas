@@ -2,13 +2,27 @@
 
 Tracking, consent, own analytics and site-wide SEO for a merchant's site (PLAN.md 0.8.9): pixels and tags loaded only
 after consent, a consent banner with Google Consent Mode v2, anonymous first-party analytics in the merchant's own
-database, the shop funnel, searches, 404s, Web Vitals, robots.txt and verification tags, IndexNow, an SEO checklist and
-a notice bar. Feature keys are in `manifest.json`, the public docs at `/docs`.
+database, the shop funnel, searches, 404s, Web Vitals, robots.txt and verification tags, IndexNow, an SEO checklist,
+redirects and a notice bar. Feature keys are in `manifest.json`, the public docs at `/docs`.
 
 The store-conversion options (PLAN.md 0.8.10 G1–G7) are settings with safe defaults: tags without a consent step and
 GA4 inside Tag Manager, search and contact pixel events with product or variant ids, detailed analytics with sessions,
 the AI crawler block and Yandex verification, the IndexNow key file path, the notice bar's close and hidden pages with
 `GET /v1/notice`, and Web Vitals to GA4.
+
+## Redirects
+
+The `redirects` feature keeps up to 5,000 rules per website in the merchant database (`ss_growth_redirects`, one per
+old path): `{ from, match: exact | prefix, to, code: 301 | 308 | 410, note }`. Paths are normalized the same way for rules
+and requests (one leading slash, no trailing slash except `/`, percent-encoded, letter case kept); rules match the path
+only and pass the visitor's query string on; a prefix rule keeps the rest of the path. Every change is checked against
+the whole set in one transaction: one rule per path, no loops, no chains (a request never passes two rules).
+
+- The website's server reads them with the server token: `GET /v1/redirects/match?path=` (the rule and its `location`,
+  or 204) or, for edge middleware, `GET /v1/redirects/all` with an ETag and `Cache-Control: private, max-age=300`; a 304
+  costs one read of `ss_growth_redirect_versions` (a new random version on every change), never of the rules.
+- Staff use the `redirects` admin widget (`redirects.edit`) or the server-token twins: list with counts, create, change,
+  delete, suggestions from the 404 log, CSV export and CSV import with a dry run. Every change goes to the activity log.
 
 ## Import
 

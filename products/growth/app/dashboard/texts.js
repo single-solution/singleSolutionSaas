@@ -130,9 +130,9 @@ export const TEXTS = Object.freeze({
 			'Browser events Ecommerce’s widgets send by themselves and your own code may send; also site searches, contacts and 404s.',
 		api: 'API',
 		apiHelp:
-			'Your server reads analytics, serves robots.txt and the verification tags, submits to IndexNow and runs the SEO checklist with the server token.',
+			'Your server reads analytics, serves robots.txt and the verification tags, submits to IndexNow, runs the SEO checklist and applies the redirects with the server token.',
 		widgets: 'Widget snippets',
-		widgetsHelp: 'The analytics dashboard and the SEO checklist in your own admin.',
+		widgetsHelp: 'The analytics dashboard, the SEO checklist and the redirects in your own admin.',
 		ticket: 'Ticket snippet',
 		ticketHelp: 'Your server asks for a ticket for the admin widgets after checking its user.',
 		intro: 'The docs show every feature, widget and route. Features that are off are marked.',

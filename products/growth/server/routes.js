@@ -3,8 +3,8 @@
  * dashboard API). Every browser-token, server-token and ticket route belongs to its feature (or features);
  * `openapi.json` is generated from these definitions (`ss app assets`), so `method`, `path`, `auth`, `feature` and
  * `permission` stay string literals. Nothing runs on a timer: events are written as they arrive, the SEO checklist and
- * IndexNow run when the merchant asks. Days (daily totals, analytics ranges) are days of the website's business time
- * zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
+ * IndexNow run when the merchant asks, redirect rules change when staff change them. Days (daily totals, analytics
+ * ranges) are days of the website's business time zone (business.json `timeZone`, UTC when missing; PLAN 0.8.10 K8).
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
@@ -29,6 +29,7 @@ import { zonedDayStart } from '@ss/contracts/format';
 import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
 import { importRoutes } from './imports.js';
+import { redirectRoutes } from './redirects.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -440,6 +441,9 @@ export const createRoutes = (product) => {
 					headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),
+
+		// redirect rules: read by the website's server, managed by staff (feature `redirects`, SEO audit G9)
+		...redirectRoutes(product, { log: logAction }),
 
 		// days of daily totals moved in from another system (ss-import, feature `import`, PLAN 0.8.10 K10)
 		...importRoutes(product),

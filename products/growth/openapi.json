@@ -712,6 +712,540 @@
 				}
 			}
 		},
+		"/v1/admin/redirects": {
+			"get": {
+				"summary": "The redirect rules, newest first (redirects widget)",
+				"description": "As GET /v1/redirects.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters)."
+						}
+					},
+					{
+						"name": "code",
+						"in": "query",
+						"required": false,
+						"description": "Only rules with this answer (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"301",
+								"308",
+								"410"
+							],
+							"description": "Only rules with this answer (another value filters nothing)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectPage"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"summary": "Add a redirect rule (redirects widget)",
+				"description": "As POST /v1/redirects.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RedirectInput"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Redirect"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/redirects/count": {
+			"get": {
+				"summary": "Count the redirect rules (redirects widget)",
+				"description": "As GET /v1/redirects/count.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters)."
+						}
+					},
+					{
+						"name": "code",
+						"in": "query",
+						"required": false,
+						"description": "Only rules with this answer (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"301",
+								"308",
+								"410"
+							],
+							"description": "Only rules with this answer (another value filters nothing)."
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/redirects/counts": {
+			"get": {
+				"summary": "Count the redirect rules by answer or match (redirects widget)",
+				"description": "As GET /v1/redirects/counts.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"code",
+								"match"
+							]
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters)."
+						}
+					},
+					{
+						"name": "code",
+						"in": "query",
+						"required": false,
+						"description": "Only rules with this answer (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"301",
+								"308",
+								"410"
+							],
+							"description": "Only rules with this answer (another value filters nothing)."
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/redirects/csv": {
+			"get": {
+				"summary": "Export the redirect rules as CSV (redirects widget)",
+				"description": "As GET /v1/redirects/csv. Answers text/csv, not JSON.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"summary": "Import redirect rules from CSV (redirects widget)",
+				"description": "As POST /v1/redirects/csv.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"csv"
+								],
+								"properties": {
+									"csv": {
+										"type": "string",
+										"minLength": 1,
+										"description": "The file's text."
+									},
+									"dryRun": {
+										"type": "boolean",
+										"default": true,
+										"description": "false imports it."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectImport"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/redirects/suggestions": {
+			"get": {
+				"summary": "Rules to add, from the 404 log (redirects widget)",
+				"description": "As GET /v1/redirects/suggestions.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "days",
+						"in": "query",
+						"required": false,
+						"description": "Days of the 404 log read, today included.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 365,
+							"default": 90,
+							"description": "Days of the 404 log read, today included."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 20
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectSuggestions"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/redirects/{id}": {
+			"delete": {
+				"summary": "Delete a redirect rule (redirects widget)",
+				"description": "As DELETE /v1/redirects/:id.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"summary": "Change a redirect rule (redirects widget)",
+				"description": "As PATCH /v1/redirects/:id.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "redirects",
+				"x-ss-permission": "redirects.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RedirectChanges"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Redirect"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/seo/checks": {
 			"post": {
 				"summary": "Run the SEO checklist now (SEO checklist widget)",
@@ -2707,6 +3241,756 @@
 				}
 			}
 		},
+		"/v1/redirects": {
+			"get": {
+				"summary": "The redirect rules, newest first",
+				"description": "400 bad_request for a limit outside 1–100 or a broken cursor. The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters)."
+						}
+					},
+					{
+						"name": "code",
+						"in": "query",
+						"required": false,
+						"description": "Only rules with this answer (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"301",
+								"308",
+								"410"
+							],
+							"description": "Only rules with this answer (another value filters nothing)."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectPage"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"summary": "Add a redirect rule",
+				"description": "422 validation_failed for a field that is not valid (errors name it); 409 redirect_taken when a rule has the same from (extension from), redirects_full at 5,000 rules, redirect_loop or redirect_chain when the rules would send a request through two rules or back (extensions steps, the addresses one request would pass, and gone, true when it ends at a page a 410 rule removes). Written to the activity log. The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RedirectInput"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Redirect"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/all": {
+			"get": {
+				"summary": "Every rule, for edge middleware (cacheable)",
+				"description": "Answers every rule with an ETag (the version in quotes) and Cache-Control: private, max-age=300. Keep the list and its ETag, ask again at most every 5 minutes with If-None-Match: 304 with no body while nothing changed (it costs one small read, never the rules). Match a request against the list as GET /v1/redirects/match does (see the docs). 60 calls a minute per website.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "If-None-Match",
+						"in": "header",
+						"required": false,
+						"description": "The ETag of the list you keep.",
+						"schema": {
+							"type": "string",
+							"description": "The ETag of the list you keep."
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectList"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/count": {
+			"get": {
+				"summary": "Count the redirect rules (the list's filters)",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters)."
+						}
+					},
+					{
+						"name": "code",
+						"in": "query",
+						"required": false,
+						"description": "Only rules with this answer (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"301",
+								"308",
+								"410"
+							],
+							"description": "Only rules with this answer (another value filters nothing)."
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/counts": {
+			"get": {
+				"summary": "Count the redirect rules by answer or match",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"code",
+								"match"
+							]
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters).",
+						"schema": {
+							"type": "string",
+							"description": "Text in from, to or the note (any letter case; trimmed, at most 100 characters)."
+						}
+					},
+					{
+						"name": "code",
+						"in": "query",
+						"required": false,
+						"description": "Only rules with this answer (another value filters nothing).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"301",
+								"308",
+								"410"
+							],
+							"description": "Only rules with this answer (another value filters nothing)."
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/csv": {
+			"get": {
+				"summary": "Export the redirect rules as CSV",
+				"description": "Answers text/csv (an attachment named redirects.csv), not JSON: comma-separated UTF-8 with a byte order mark, the columns from, match, to, code and note, one rule per line, A to Z by from (text that starts with =, +, -, @ gets a leading ' so spreadsheets never run it). The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"summary": "Import redirect rules from CSV",
+				"description": "One rule per line with the columns from, match, to, code and note in any order (any letter case; Redirect from and source are read as from, Redirect to and destination as to, status as code; other columns are ignored), separated by commas, semicolons or tabs (the header line's). A from that has a rule changes it; the others are created; nothing is deleted. Each line is checked as on create; a from twice in the file, more than 5,000 rules in all, and loops and chains are problems. A dry run (the default) changes nothing and lists every change and problem; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<column>) and imports nothing. At most 5,000 lines and 4 MB. Written to the activity log. The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"csv"
+								],
+								"properties": {
+									"csv": {
+										"type": "string",
+										"minLength": 1,
+										"description": "The file's text."
+									},
+									"dryRun": {
+										"type": "boolean",
+										"default": true,
+										"description": "false imports it."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectImport"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/match": {
+			"get": {
+				"summary": "The rule of one address (your website's server, before it answers)",
+				"description": "Answers the rule that answers the path (an exact rule, else the longest prefix rule) with location, where to send the visitor: answer code with that Location header (410: answer 410 Gone). 204 with no body when no rule answers it. Ask before answering a page your site does not have, or for every request; one read of your database each time (for edge middleware, GET /v1/redirects/all is cheaper). 422 validation_failed when path is not a path. 3,000 calls a minute per website.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "path",
+						"in": "query",
+						"required": true,
+						"description": "The address asked for: the path from /, with its query string if any (URL-encode it), for example /old/page?utm_source=news. It is normalized like a rule's from; the query string is passed on to location.",
+						"schema": {
+							"type": "string",
+							"description": "The address asked for: the path from /, with its query string if any (URL-encode it), for example /old/page?utm_source=news. It is normalized like a rule's from; the query string is passed on to location."
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectMatch"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/suggestions": {
+			"get": {
+				"summary": "Rules to add, from the 404 log",
+				"description": "The most-hit missing pages of the last days (Searches and 404s) that no rule answers, the most first, each with a suggested new page when a page visitors did open has the same last segment. 422 validation_failed for days or limit out of range. The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "days",
+						"in": "query",
+						"required": false,
+						"description": "Days of the 404 log read, today included.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 365,
+							"default": 90,
+							"description": "Days of the 404 log read, today included."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 20
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedirectSuggestions"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/redirects/{id}": {
+			"delete": {
+				"summary": "Delete a redirect rule",
+				"description": "404 not_found. 409 redirect_chain when the rules left would send a request through two rules (a path this rule answered would fall to a prefix rule whose target another rule redirects): change the other rules first. Written to the activity log. The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"patch": {
+				"summary": "Change a redirect rule",
+				"description": "Send only the members to change. The same 422 and 409 problems as on create; 404 not_found. A change that changes nothing writes nothing. Written to the activity log. The admin twin needs the redirects.edit permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "redirects",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RedirectChanges"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Redirect"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/robots.txt": {
 			"get": {
 				"summary": "The robots.txt your site serves",
@@ -4645,6 +5929,548 @@
 								},
 								"code": {
 									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"Redirect": {
+				"type": "object",
+				"description": "A redirect rule.",
+				"required": [
+					"id",
+					"from",
+					"match",
+					"to",
+					"code",
+					"note",
+					"createdAt",
+					"updatedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^rdr_[0-9a-z]+$"
+					},
+					"from": {
+						"type": "string",
+						"maxLength": 1000,
+						"description": "The old path, normalized: one leading slash, repeated slashes as one, . and .. resolved, characters outside URLs percent-encoded (upper-case hex), no trailing slash except for /, letter case kept."
+					},
+					"match": {
+						"type": "string",
+						"enum": [
+							"exact",
+							"prefix"
+						],
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+					},
+					"to": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 2048,
+						"description": "The new page: a path on your website (with its own query string and fragment if any) or an https address on another site; null for 410."
+					},
+					"code": {
+						"type": "integer",
+						"enum": [
+							301,
+							308,
+							410
+						],
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+					},
+					"note": {
+						"type": "string",
+						"maxLength": 200,
+						"description": "Your own words about the rule."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"RedirectChanges": {
+				"type": "object",
+				"description": "The members of a rule to change; they are merged into the stored rule and the whole is checked as on create. A code changed to 410 without to drops the stored to.",
+				"properties": {
+					"from": {
+						"type": "string",
+						"description": "The old path from /, or an address on your website's domain (or its www. twin), read as its path; without ? or # (rules match the path only); at most 1,000 characters once normalized."
+					},
+					"match": {
+						"type": "string",
+						"enum": [
+							"exact",
+							"prefix"
+						],
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix.",
+						"default": "exact"
+					},
+					"to": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The new page: a path from / (a query string and fragment are kept) or an https address (an https address on your own domain is kept as its path); leave it out or null for 410; at most 2,048 characters once normalized."
+					},
+					"code": {
+						"type": "integer",
+						"enum": [
+							301,
+							308,
+							410
+						],
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to).",
+						"default": 301
+					},
+					"note": {
+						"type": "string",
+						"maxLength": 200,
+						"default": ""
+					}
+				}
+			},
+			"RedirectImport": {
+				"type": "object",
+				"description": "What a CSV import did, or would do (a dry run).",
+				"required": [
+					"dryRun",
+					"rows",
+					"created",
+					"updated",
+					"unchanged",
+					"changes",
+					"errors"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"dryRun": {
+						"type": "boolean"
+					},
+					"rows": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Lines of the file without the header."
+					},
+					"created": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"updated": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"unchanged": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Lines already as the stored rule."
+					},
+					"changes": {
+						"type": "array",
+						"description": "Every rule made or changed (to be, in a dry run), in file order; lines with a problem are left out.",
+						"items": {
+							"type": "object",
+							"required": [
+								"line",
+								"action",
+								"from",
+								"match",
+								"to",
+								"code",
+								"note",
+								"before"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"line": {
+									"type": "integer",
+									"minimum": 2
+								},
+								"action": {
+									"type": "string",
+									"enum": [
+										"create",
+										"update"
+									]
+								},
+								"from": {
+									"type": "string"
+								},
+								"match": {
+									"type": "string",
+									"enum": [
+										"exact",
+										"prefix"
+									],
+									"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+								},
+								"to": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"code": {
+									"type": "integer",
+									"enum": [
+										301,
+										308,
+										410
+									],
+									"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+								},
+								"note": {
+									"type": "string"
+								},
+								"before": {
+									"type": [
+										"object",
+										"null"
+									],
+									"description": "update: the stored rule's match, to, code and note.",
+									"properties": {
+										"match": {
+											"type": "string",
+											"enum": [
+												"exact",
+												"prefix"
+											],
+											"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+										},
+										"to": {
+											"type": [
+												"string",
+												"null"
+											]
+										},
+										"code": {
+											"type": "integer",
+											"enum": [
+												301,
+												308,
+												410
+											],
+											"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+										},
+										"note": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RedirectRowProblem"
+						},
+						"description": "Every problem found (a real import with problems answers 422 and imports nothing)."
+					}
+				}
+			},
+			"RedirectInput": {
+				"type": "object",
+				"description": "A new redirect rule. Unknown members are refused by name.",
+				"required": [
+					"from"
+				],
+				"properties": {
+					"from": {
+						"type": "string",
+						"description": "The old path from /, or an address on your website's domain (or its www. twin), read as its path; without ? or # (rules match the path only); at most 1,000 characters once normalized."
+					},
+					"match": {
+						"type": "string",
+						"enum": [
+							"exact",
+							"prefix"
+						],
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix.",
+						"default": "exact"
+					},
+					"to": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The new page: a path from / (a query string and fragment are kept) or an https address (an https address on your own domain is kept as its path); leave it out or null for 410; at most 2,048 characters once normalized."
+					},
+					"code": {
+						"type": "integer",
+						"enum": [
+							301,
+							308,
+							410
+						],
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to).",
+						"default": 301
+					},
+					"note": {
+						"type": "string",
+						"maxLength": 200,
+						"default": ""
+					}
+				}
+			},
+			"RedirectList": {
+				"type": "object",
+				"description": "Every rule of the website, A to Z by from, for edge middleware.",
+				"required": [
+					"version",
+					"count",
+					"rules"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"version": {
+						"type": "string",
+						"description": "Changes whenever a rule changes; the ETag is it in quotes."
+					},
+					"count": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 5000
+					},
+					"rules": {
+						"type": "array",
+						"maxItems": 5000,
+						"items": {
+							"type": "object",
+							"required": [
+								"from",
+								"match",
+								"to",
+								"code"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"from": {
+									"type": "string"
+								},
+								"match": {
+									"type": "string",
+									"enum": [
+										"exact",
+										"prefix"
+									],
+									"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+								},
+								"to": {
+									"type": [
+										"string",
+										"null"
+									]
+								},
+								"code": {
+									"type": "integer",
+									"enum": [
+										301,
+										308,
+										410
+									],
+									"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+								}
+							}
+						}
+					}
+				}
+			},
+			"RedirectMatch": {
+				"type": "object",
+				"description": "The rule that answers an address, and where to send the visitor.",
+				"required": [
+					"from",
+					"match",
+					"to",
+					"code",
+					"location"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"from": {
+						"type": "string"
+					},
+					"match": {
+						"type": "string",
+						"enum": [
+							"exact",
+							"prefix"
+						],
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+					},
+					"to": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"code": {
+						"type": "integer",
+						"enum": [
+							301,
+							308,
+							410
+						],
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+					},
+					"location": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Send it as the Location header with code: the new page, with the rest of a prefix rule's path and the visitor's query string added after the target's own (/old?utm_source=x → /new?ref=a&utm_source=x); a path on your website or an https address. null for 410: answer 410 Gone."
+					}
+				}
+			},
+			"RedirectPage": {
+				"type": "object",
+				"description": "One page of redirect rules, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Redirect"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page (null: the last page)."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"RedirectRowProblem": {
+				"type": "object",
+				"description": "A problem of one line of a CSV file.",
+				"required": [
+					"line",
+					"path",
+					"code",
+					"message"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"line": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "The line of the file (1 is the header; also used for the whole file)."
+					},
+					"path": {
+						"type": "string",
+						"description": "The column as a JSON pointer (/from, /match, /to, /code, /note), '' for the whole file."
+					},
+					"code": {
+						"type": "string",
+						"enum": [
+							"required",
+							"not_path",
+							"other_host",
+							"query",
+							"too_long",
+							"twice",
+							"not_match",
+							"not_code",
+							"not_target",
+							"not_https",
+							"gone",
+							"not_text",
+							"loop",
+							"chain",
+							"removed",
+							"empty",
+							"unterminated_quote",
+							"too_many_rows",
+							"columns",
+							"too_many"
+						],
+						"description": "Why, for your own words: from or to required (empty), not_path, other_host, query (from has ? or #), too_long, twice (the from is on an earlier line), not_match, not_code, not_target, not_https, gone (a 410 rule with a to), not_text, loop, chain and removed (the rule's target is removed by a 410 rule); for the whole file empty, unterminated_quote, too_many_rows, columns (no from column) and too_many (more than 5,000 rules in all)."
+					},
+					"message": {
+						"type": "string",
+						"description": "In English."
+					},
+					"steps": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "loop, chain, removed: the addresses one request would pass (/… stands for any path under a prefix)."
+					}
+				}
+			},
+			"RedirectSuggestions": {
+				"type": "object",
+				"description": "Rules to add, from the 404 log.",
+				"required": [
+					"from",
+					"to",
+					"recording",
+					"items"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"from": {
+						"type": "string",
+						"format": "date",
+						"description": "The first day read (business time zone)."
+					},
+					"to": {
+						"type": "string",
+						"format": "date",
+						"description": "The last day read: today."
+					},
+					"recording": {
+						"type": "boolean",
+						"description": "Whether Searches and 404s records 404s now (with it off, only older days have any)."
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"path",
+								"hits",
+								"to"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"path": {
+									"type": "string",
+									"description": "A missing page no rule answers (normalized)."
+								},
+								"hits": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Times visitors reached it in those days."
+								},
+								"to": {
+									"type": [
+										"string",
+										"null"
+									],
+									"description": "A page visitors did open with the same last segment (the most viewed), else null."
 								}
 							}
 						}

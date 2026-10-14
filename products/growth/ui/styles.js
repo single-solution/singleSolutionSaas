@@ -120,6 +120,7 @@ ul.rank li.empty { opacity: 0.7; }
 button.icon { padding: 6px 12px; line-height: 1; }
 button.small { padding: 4px 10px; font-size: 0.9em; }
 button.danger { background: #dc2626; color: #ffffff; }
+button.link.remove { color: #dc2626; padding: 4px 0; margin-top: 8px; }
 .more { position: relative; display: inline-block; }
 .menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; min-width: 220px; padding: 4px;
   border-radius: var(--ss-radius, 8px); background: var(--ss-color-background, #ffffff);

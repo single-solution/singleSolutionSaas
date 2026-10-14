@@ -9,7 +9,7 @@
  * itself is a page too (its view, search and 404, and the notice bar's hidden pages; SG-4). It listens for these
  * events from the moment it runs and keeps them until the config is there. Without `data-token` (the merchant's admin
  * pages) it only offers `window.SSGrowth.admin({ getTicket })`, which mounts the admin widgets of switched-on
- * features: `analytics_dashboard` and `seo_checklist`. Nothing renders while the product is stopped, its features are
+ * features: `analytics_dashboard`, `seo_checklist` and `redirects`. Nothing renders while the product is stopped, its features are
  * off or the merchant database is not connected.
  * @module
  */
@@ -33,6 +33,7 @@ import {
 } from './collect.js';
 import { createConsent, mountConsentBanner, storageOf } from './consent.js';
 import { NOTICE_STORAGE_KEY, mountNoticeBar } from './notice-bar.js';
+import { mountRedirects } from './redirects.js';
 import { mountSeoChecklist } from './seo-checklist.js';
 import { createTags } from './tags.js';
 import { createTicketSource } from './tickets.js';
@@ -317,6 +318,23 @@ export const startWidget = ({ window: win, script }) => {
 		if (on(config, 'seo_checklist'))
 			for (const host of hosts('seo_checklist'))
 				mountSeoChecklist({ host, api, config, viewer, open: (url) => void win.open(url, '_blank', 'noopener') });
+		if (on(config, 'redirects'))
+			for (const host of hosts('redirects')) mountRedirects({ host, api, config, viewer, download: save });
+	};
+
+	/**
+	 * Save a file a widget made (the redirects' CSV export) through a download link.
+	 * @param {string} name @param {string} text
+	 */
+	const save = (name, text) => {
+		const url = win.URL.createObjectURL(new win.Blob([text], { type: 'text/csv;charset=utf-8' }));
+		const link = doc.createElement('a');
+		link.href = url;
+		link.download = name;
+		doc.body.append(link);
+		link.click();
+		link.remove();
+		win.URL.revokeObjectURL(url);
 	};
 
 	const api = Object.freeze({

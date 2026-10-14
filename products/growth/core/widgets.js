@@ -24,6 +24,7 @@ export const WIDGET_FEATURES = Object.freeze({
 	notice_bar: Object.freeze(['notice_bar']),
 	analytics_dashboard: Object.freeze(['visitor_analytics']),
 	seo_checklist: Object.freeze(['seo_checklist', 'indexnow']),
+	redirects: Object.freeze(['redirects']),
 });
 
 /**

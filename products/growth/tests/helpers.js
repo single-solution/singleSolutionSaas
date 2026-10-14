@@ -29,8 +29,10 @@ const API = apiChecker(apiJson);
 
 /**
  * Check an answer against `schemas/api.json` and the kit's own routes (throws when it does not fit). Only a JSON answer
- * has a body (robots.txt and the IndexNow key are text). A JSON `null` (`GET /v1/notice` while no notice shows) is
- * checked against the described answer here, as the checker reads null as no body.
+ * has a body (robots.txt, the IndexNow key and CSV files are text). A JSON `null` (`GET /v1/notice` while no notice
+ * shows) is checked against the described answer here, as the checker reads null as no body; so is a 204 with no body
+ * from a route that answers 200 with a body otherwise (`GET /v1/redirects/match` with no rule): its description must
+ * say so.
  * @param {string} method
  * @param {string} path
  * @param {Response} response
@@ -39,6 +41,16 @@ export const checkAnswer = async (method, path, response) => {
 	const text = /json/.test(response.headers.get('content-type') ?? '') ? await response.clone().text() : '';
 	/** @type {unknown} */
 	const body = text ? JSON.parse(text) : null;
+	if (response.status === 204) {
+		const key = API.described(method, path);
+		const entry =
+			key === null ? undefined : /** @type {Record<string, { status?: number, description?: string }>} */ (apiJson)[key];
+		if (entry && (entry.status ?? 200) !== 204) {
+			if (!/\b204\b/.test(entry.description ?? ''))
+				throw new Error(`the answer does not fit schemas/api.json:\n${method} ${path}: answered 204, not described`);
+			return;
+		}
+	}
 	if (text.trim() === 'null' && response.status >= 200 && response.status < 300) {
 		const key = API.described(method, path);
 		const entry = key === null ? undefined : /** @type {Record<string, { response?: object }>} */ (apiJson)[key];
@@ -232,7 +244,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	};
 
 	/** A ticket for the admin widgets. @param {string[]} [permissions] */
-	const ticket = async (permissions = ['analytics.read', 'seo.check', 'indexnow.submit']) => {
+	const ticket = async (permissions = ['analytics.read', 'seo.check', 'indexnow.submit', 'redirects.edit']) => {
 		const response = await call('POST', '/v1/tickets', {
 			token: server,
 			body: { user: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' }, permissions, origin: ADMIN_ORIGIN },

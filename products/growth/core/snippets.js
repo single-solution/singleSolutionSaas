@@ -1,8 +1,8 @@
 /**
  * The code snippets the public docs and the dashboard's Developers tab show: the page script, the consent and page
  * APIs, the shop events, the admin widgets with their ticket function, the ticket request, robots.txt and the
- * verification tags served from the merchant's site, IndexNow, the SEO checklist and the analytics API. Plain text; no
- * I/O.
+ * verification tags served from the merchant's site, IndexNow, the SEO checklist, the redirects (edge middleware) and
+ * the analytics API. Plain text; no I/O.
  * @module
  */
 import { PAGE_MARKER, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
@@ -131,5 +131,62 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`curl '${base}/v1/events/count?type=purchase' -H "Authorization: Bearer $SS_SERVER_TOKEN"`,
 		`curl '${base}/v1/events/counts?by=type' -H "Authorization: Bearer $SS_SERVER_TOKEN"`,
 	].join('\n');
-	return { pageScript, consent, page, events, admin, ticketNode, ticketCurl, robots, indexNow, seo, analytics, notice };
+	const redirects = [
+		'// Redirects in edge middleware or a server hook (any framework): the list is kept in memory and read again at',
+		'// most every 5 minutes with If-None-Match (304 while nothing changed, so it costs almost nothing).',
+		"let kept = { etag: '', rules: [], readAt: 0 };",
+		'async function redirectRules() {',
+		'  if (Date.now() - kept.readAt < 300_000) return kept.rules;',
+		'  kept.readAt = Date.now(); // on a failure the last list stays in use',
+		'  try {',
+		`    const response = await fetch('${base}/v1/redirects/all', {`,
+		"      headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}`, ...(kept.etag ? { 'if-none-match': kept.etag } : {}) },",
+		'    });',
+		"    if (response.status === 200) kept = { etag: response.headers.get('etag') ?? '', rules: (await response.json()).rules, readAt: Date.now() };",
+		'  } catch {}',
+		'  return kept.rules;',
+		'}',
+		'',
+		'// where a request goes: { status, location } (410: no location), or null when no rule answers it',
+		'export async function redirectFor(url) {',
+		'  // the path as rules keep it: one slash at a time, percent-escapes in upper case, no trailing slash except for /',
+		"  let path = url.pathname.replace(/\\/{2,}/g, '/').replace(/%[0-9a-f]{2}/gi, (escape) => escape.toUpperCase());",
+		"  if (path.length > 1) path = path.replace(/\\/$/, '');",
+		'  const rules = await redirectRules();',
+		"  const under = (from) => from === '/' || path === from || path.startsWith(`${from}/`);",
+		"  const rule = rules.find((r) => r.match === 'exact' && r.from === path) ??",
+		"    rules.filter((r) => r.match === 'prefix' && under(r.from)).sort((a, b) => b.from.length - a.from.length)[0];",
+		'  if (!rule) return null;',
+		'  if (rule.code === 410) return { status: 410 };',
+		"  // a prefix rule keeps the rest of the path; the visitor's query string follows the target's own",
+		"  const rest = rule.match === 'prefix' ? (rule.from === '/' ? (path === '/' ? '' : path) : path.slice(rule.from.length)) : '';",
+		'  const target = new URL(rule.to, url);',
+		"  if (rest) target.pathname = (target.pathname === '/' ? '' : target.pathname.replace(/\\/$/, '')) + rest;",
+		"  target.search = [target.search.slice(1), url.search.slice(1)].filter(Boolean).join('&');",
+		"  return { status: rule.code, location: rule.to.startsWith('/') ? `${target.pathname}${target.search}${target.hash}` : target.href };",
+		'}',
+		'',
+		'// in the middleware: const found = await redirectFor(new URL(request.url));',
+		'// if (found?.location) return Response.redirect(new URL(found.location, request.url), found.status);',
+		"// if (found) return new Response('Gone', { status: 410 });",
+		'',
+		'// or ask for one address (one read on our side each time), for example only before answering a 404:',
+		`// fetch('${base}/v1/redirects/match?path=' + encodeURIComponent(url.pathname + url.search), { headers })`,
+		'// → 200 { code, location } or 204 (no rule)',
+	].join('\n');
+	return {
+		pageScript,
+		consent,
+		page,
+		events,
+		admin,
+		ticketNode,
+		ticketCurl,
+		robots,
+		indexNow,
+		seo,
+		analytics,
+		notice,
+		redirects,
+	};
 };

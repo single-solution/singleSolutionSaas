@@ -1,7 +1,7 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.9): the page script, consent and Google Consent Mode, privacy and
  * storage, the shop events, searches, 404s and Web Vitals, robots.txt and verification, IndexNow, the SEO checklist,
- * the notice bar, per-feature routes and widgets, the widget and ticket snippets, the kit's routes for your server
+ * redirects, the notice bar, per-feature routes and widgets, the widget and ticket snippets, the kit's routes for your server
  * (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the
  * localhost note and the API reference from `openapi.json`: every call with its auth, feature, parameters, request
  * fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's own descriptions). Plain HTML;
@@ -119,6 +119,9 @@ ${block(snippets.indexNow)}
 <h2>SEO checklist</h2>
 ${para(guide.checklist)}
 ${block(snippets.seo)}
+<h2>Redirects</h2>
+${para(guide.redirects)}
+${block(snippets.redirects)}
 <h2>Notice bar</h2>
 ${para(guide.notice)}
 ${block(snippets.notice)}

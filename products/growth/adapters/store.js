@@ -116,6 +116,40 @@ export const createStore = (data, { merchantId }) => {
 	};
 
 	/**
+	 * The totals of the days a filter finds, per metric × key (most counted first, at most {@link MAX_ROWS}): of every
+	 * metric, or only of those named.
+	 * @param {Record<string, unknown>} range
+	 * @param {string[] | null} metrics
+	 * @returns {Promise<Array<{ metric: string, key: string, count: number, sum: number }>>}
+	 */
+	const groupedTotals = async (range, metrics) => {
+		const all = { $objectToArray: '$totals' };
+		const rows = await totals
+			.aggregate([
+				{ $match: range },
+				{
+					$project: {
+						_id: 0,
+						metrics: metrics === null ? all : { $filter: { input: all, cond: { $in: ['$$this.k', metrics] } } },
+					},
+				},
+				{ $unwind: '$metrics' },
+				{ $project: { metric: '$metrics.k', keys: { $objectToArray: '$metrics.v' } } },
+				{ $unwind: '$keys' },
+				{ $group: { _id: { metric: '$metric', key: '$keys.k' }, count: { $sum: '$keys.v.c' }, sum: { $sum: '$keys.v.s' } } },
+				{ $sort: { count: -1 } },
+				{ $limit: MAX_ROWS },
+			])
+			.toArray();
+		return rows.map((row) => ({
+			metric: String(row._id.metric),
+			key: keyOf(String(row._id.key)),
+			count: Number(row.count),
+			sum: Number(row.sum),
+		}));
+	};
+
+	/**
 	 * The raw events' filter of a list or count request.
 	 * @param {{ type?: string, session?: string }} query
 	 * @returns {Record<string, unknown>}
@@ -155,24 +189,7 @@ export const createStore = (data, { merchantId }) => {
 		totals: async (from, to) => {
 			const range = { websiteId, day: { $gte: from, $lte: to } };
 			const [grouped, documents] = await Promise.all([
-				totals
-					.aggregate([
-						{ $match: range },
-						{ $project: { _id: 0, metrics: { $objectToArray: '$totals' } } },
-						{ $unwind: '$metrics' },
-						{ $project: { metric: '$metrics.k', keys: { $objectToArray: '$metrics.v' } } },
-						{ $unwind: '$keys' },
-						{
-							$group: {
-								_id: { metric: '$metric', key: '$keys.k' },
-								count: { $sum: '$keys.v.c' },
-								sum: { $sum: '$keys.v.s' },
-							},
-						},
-						{ $sort: { count: -1 } },
-						{ $limit: MAX_ROWS },
-					])
-					.toArray(),
+				groupedTotals(range, null),
 				totals.find(range, { projection: { _id: 0, day: 1, 'totals.visits': 1, 'totals.page_views': 1 } }).toArray(),
 			]);
 			/** @type {Map<string, Record<string, number>>} visits and page views of each day */
@@ -187,12 +204,7 @@ export const createStore = (data, { merchantId }) => {
 				for (const metric of DAY_METRICS)
 					addDay(String(doc.day), metric, Number(doc.totals?.[metric]?.[fieldOf('')]?.c ?? 0));
 			return {
-				totals: grouped.map((row) => ({
-					metric: String(row._id.metric),
-					key: keyOf(String(row._id.key)),
-					count: Number(row.count),
-					sum: Number(row.sum),
-				})),
+				totals: grouped,
 				days: [...perDay].flatMap(([day, counts]) =>
 					Object.entries(counts)
 						.filter(([, count]) => count > 0)
@@ -200,6 +212,15 @@ export const createStore = (data, { merchantId }) => {
 				),
 			};
 		},
+
+		/**
+		 * The totals of some metrics over a range of days, per metric × key (most counted first, at most
+		 * {@link MAX_ROWS}; one read), for example the 404s and the pages of Redirects' suggestions.
+		 * @param {string} from
+		 * @param {string} to
+		 * @param {string[]} metrics
+		 */
+		metricTotals: (from, to, metrics) => groupedTotals({ websiteId, day: { $gte: from, $lte: to } }, metrics),
 
 		/**
 		 * The raw events' collection and filter of `GET /v1/events` and its counts (one filter for the list and the counts).

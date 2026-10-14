@@ -1,7 +1,7 @@
 {
 	"name": "@ss/product-growth",
 	"version": "0.1.0",
-	"description": "Growth: tracking pixels, cookie consent, conversion events, first-party analytics, notice bar and site-wide SEO (robots, verification, IndexNow, SEO checklist) for the merchant's website (PLAN 0.8.9).",
+	"description": "Growth: tracking pixels, cookie consent, conversion events, first-party analytics, notice bar and site-wide SEO (robots, verification, IndexNow, SEO checklist, redirects) for the merchant's website (PLAN 0.8.9).",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",
