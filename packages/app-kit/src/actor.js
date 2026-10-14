@@ -5,7 +5,7 @@
  * - `SS-Actor-Id`: 1–64 characters of `A–Z a–z 0–9 _ . : @ -` (the Accounts user id when the store uses Accounts);
  * - `SS-Actor-Name`: percent-encoded UTF-8, at most 120 characters once decoded;
  * - `SS-Actor-Role` (optional): percent-encoded UTF-8, at most 40 characters once decoded;
- * - `SS-Actor-Email` (optional): an e-mail address, at most 320 characters.
+ * - `SS-Actor-Email` (optional): an email address, at most 320 characters.
  *
  * Id and name come together; any other combination, or a value that does not fit, is malformed (400 `invalid_actor`).
  * Without the headers the actor stays the product's own fallback (`Server`; Chat: `Team`). The headers grant nothing:
@@ -73,7 +73,7 @@ export const parseActor = (headers) => {
 		return { ok: false, message: `SS-Actor-Role is percent-encoded UTF-8 text of 1–${MAX_ROLE} characters.` };
 	const email = raw.email === null ? null : raw.email.trim().toLowerCase();
 	if (email !== null && (email.length > MAX_EMAIL || !EMAIL.test(email)))
-		return { ok: false, message: 'SS-Actor-Email is an e-mail address.' };
+		return { ok: false, message: 'SS-Actor-Email is an email address.' };
 	return {
 		ok: true,
 		actor: { kind: 'user', id: raw.id, name, ...(role ? { role } : {}), ...(email ? { email } : {}) },

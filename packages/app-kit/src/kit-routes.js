@@ -156,7 +156,7 @@ export const createKitRoutes = (kit, hooks) => {
 		}
 		const result = hooks.deleteUser ? await hooks.deleteUser(ctx, user) : { deleted: 0, anonymised: 0 };
 		const removed = filter ? (await staff.deleteMany(filter)).deletedCount : 0;
-		// saved staff alerts to the person or naming their e-mail address or phone (the product's hook removes those it
+		// saved staff alerts to the person or naming their email address or phone (the product's hook removes those it
 		// names otherwise, for example by conversation)
 		const alerts = await kit.staffAlerts.forget(/** @type {{ websiteId: string, merchantId: string | null }} */ (ctx), {
 			addresses: [user.email, user.phone],

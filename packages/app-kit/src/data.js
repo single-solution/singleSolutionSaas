@@ -15,7 +15,7 @@
  *   product's indexes are created on a database's first use per instance, two collections at a time, and concurrent
  *   requests wait for the same creation.
  * - Every database call has deadlines ({@link DATABASE_DEADLINES}): a database that cannot be reached or does not answer
- *   in time fails fast with an error {@link isDatabaseUnavailable} recognises, which requests answer 503
+ *   in time fails fast with an error {@link isDatabaseUnavailable} recognizes, which requests answer 503
  *   `database_unavailable` (K-16).
  * @module
  */

@@ -6,7 +6,7 @@
  * A token is a compact JWS with `alg` EdDSA, ES256 or RS256 matching the key type (`none`, HMAC, header-borne keys and
  * `crit` refused), signed by a key of the issuer (by `kid`, or the only compatible key), with `iss` = issuer, `aud`
  * containing the audience when one is set, `exp` (required) in the future, `nbf` reached and `iat` (required) not in
- * the future and at most 24 hours old (60 s skew). A sign-in only says who the person is; it never authorises admin
+ * the future and at most 24 hours old (60 s skew). A sign-in only says who the person is; it never authorizes admin
  * actions.
  * @module
  */
@@ -225,7 +225,7 @@ const ACCOUNTS_REFETCH_MS = 60_000;
  * Accounts server token into the product's Connections. The website's public keys are fetched from Accounts with that
  * token (through `@ss/net`, cached 10 minutes; an unknown key id refetches them at most once a minute) and each sign-in
  * is verified offline: signed by Accounts, issued for this website (`aud`) and not expired (they last 15 minutes). A
- * sign-in only says who the person is; it never authorises admin actions.
+ * sign-in only says who the person is; it never authorizes admin actions.
  * @param {{ connections: import('./connections.js').Connections, now: () => number }} options
  */
 export const createAccountsSignIns = ({ connections, now }) => {

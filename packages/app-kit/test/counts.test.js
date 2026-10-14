@@ -66,7 +66,7 @@ describe('counts (K4)', () => {
 		expect((await json(await call('GET', '/v1/server/notes/counts?by=tag', { token: server.token }))).json.groups).toEqual({
 			none: 6,
 		});
-		const unknown = await json(await call('GET', '/v1/server/notes/counts?by=colour', { token: server.token }));
+		const unknown = await json(await call('GET', '/v1/server/notes/counts?by=color', { token: server.token }));
 		expect(unknown.status).toBe(422);
 		expect(unknown.json.detail).toBe('by is one of: status, long, tag.');
 	});

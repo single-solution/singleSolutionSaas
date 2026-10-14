@@ -21,7 +21,7 @@ The exact API is in [API.md](./API.md).
 - **Reports** — price reports (Prices screen, and once after a deploy that changed the feature list) and feature
   reports (Features screen); switches are saved only after the Portal accepts.
 - **Settings** — one value per website × setting with global defaults and schema defaults; widget texts with the same
-  placeholders as the English text; the theme (colours, font, radius, mode, custom CSS); the Format (locale, currency
+  placeholders as the English text; the theme (colors, font, radius, mode, custom CSS); the Format (locale, currency
   display, whole units, times). Every change goes to Recent changes.
 - **The merchant's server** (PLAN 0.8.10 K1–K4, K9) — the settings API (`/v1/features`, `/v1/settings`, `/v1/texts`,
   `/v1/theme`, `/v1/format`, `/v1/lists`, `/v1/connections`) with a merchant's rights; the acting user named by

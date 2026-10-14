@@ -173,7 +173,7 @@ const formatViolation = (format, text) => {
 		return DATE_TIME.test(text) && !Number.isNaN(Date.parse(text)) ? null : 'must be a date-time (ISO 8601 with a zone)';
 	if (format === 'date') return DATE.test(text) && !Number.isNaN(Date.parse(text)) ? null : 'must be a date (YYYY-MM-DD)';
 	if (format === 'uri') return URL.canParse(text) ? null : 'must be an absolute address (URI)';
-	if (format === 'email') return EMAIL.test(text) ? null : 'must be an e-mail address';
+	if (format === 'email') return EMAIL.test(text) ? null : 'must be an email address';
 	return null;
 };
 

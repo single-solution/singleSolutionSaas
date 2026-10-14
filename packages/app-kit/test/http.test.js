@@ -241,7 +241,7 @@ describe('handler results and the Next.js adapter', () => {
 });
 
 describe('logger and helpers', () => {
-	it('redacts credentials and serialises errors', () => {
+	it('redacts credentials and serializes errors', () => {
 		const out = redact({
 			uri: 'mongodb://u:p@h',
 			nested: { apiKey: 'k', ok: 1 },

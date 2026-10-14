@@ -269,7 +269,7 @@ describe('merchant database (MongoDB)', () => {
 		}
 	});
 
-	it('gives every database call deadlines and recognises a database that cannot be reached (K-16)', async () => {
+	it('gives every database call deadlines and recognizes a database that cannot be reached (K-16)', async () => {
 		expect(DATABASE_DEADLINES).toEqual({
 			serverSelectionTimeoutMS: 5_000,
 			connectTimeoutMS: 5_000,

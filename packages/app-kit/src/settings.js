@@ -3,7 +3,7 @@
  * against the feature's settings schema. Reading returns the website's saved value, else the global default (the same
  * store with `websiteId: null`, Owner only), else the schema default. Reset deletes the saved value. Widget texts
  * (English defaults from `strings/en.json`; a text is saved only with the same `{placeholders}`) and the theme
- * (colours, font family, radius, mode, custom CSS) are stored the same way, one value per field, and so is the Format
+ * (colors, font family, radius, mode, custom CSS) are stored the same way, one value per field, and so is the Format
  * (PLAN 0.8.10 K7: locale, currency display and symbol, whole units, times). Every change writes Recent changes.
  *
  * Settings come in sections: each feature's settings, plus the product's shared settings (PLAN 0.8.10 A2, A11): a
@@ -30,7 +30,7 @@ import { isObject } from './util.js';
  * @typedef {{ key: string, name: string, settings: ManifestFeature['settings'], features: string[] }} Section
  */
 
-/** The theme before anyone changes it: product CSS supplies the colours. */
+/** The theme before anyone changes it: product CSS supplies the colors. */
 const DEFAULT_THEME = Object.freeze({
 	colors: Object.freeze({}),
 	fontFamily: 'inherit',
@@ -62,7 +62,7 @@ const themeViolation = (field, value) => {
 					([name, color]) => COLOR_NAME.test(name) && typeof color === 'string' && COLOR.test(color),
 				)
 				? null
-				: 'colors maps up to 24 names to #rrggbb colours';
+				: 'colors maps up to 24 names to #rrggbb colors';
 		case 'fontFamily':
 			return value === 'inherit' || (typeof value === 'string' && FONT.test(value))
 				? null

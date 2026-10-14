@@ -2,11 +2,11 @@
  * Staff alerts (PLAN 0.8.10 K6): one kit helper for products that alert the merchant's staff through Notifications
  * (the pasted Notifications token).
  *
- * - Recipients: the feature's `recipients` setting (e-mail addresses and phone numbers, at most 20); plus, when its
+ * - Recipients: the feature's `recipients` setting (email addresses and phone numbers, at most 20); plus, when its
  *   `staffPermission` setting names a permission, every unblocked Accounts user whose role grants it (through the
  *   pasted Accounts token: `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes); plus the
  *   assignee where the product has one.
- * - An e-mail address gets e-mail; an international phone number gets WhatsApp, or SMS with the feature's
+ * - An email address gets email; an international phone number gets WhatsApp, or SMS with the feature's
  *   `phoneChannel` setting.
  * - Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
  *   request with `required: true` and its own `Idempotency-Key`; the link is built from the feature's `adminUrl`
@@ -94,7 +94,7 @@ const PERMISSION = /^[a-z][a-z0-9_.]{0,63}$/;
 
 /**
  * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null. Phones are E.164 through the
- * normaliser every product shares (`@ss/contracts/phone`), with their `+` or `00` and calling code, as Notifications
+ * normalizer every product shares (`@ss/contracts/phone`), with their `+` or `00` and calling code, as Notifications
  * sends to them; a local number is left out.
  * @param {unknown} value
  * @returns {{ key: string, to: { email: string } | { phone: string } } | null}
@@ -139,7 +139,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		(await data.forWebsite(websiteId, merchantId ? { merchantId } : {})).collection(COLLECTION);
 
 	/**
-	 * The e-mail addresses and phones of unblocked Accounts users whose role grants a permission (cached 5 minutes).
+	 * The email addresses and phones of unblocked Accounts users whose role grants a permission (cached 5 minutes).
 	 * @param {string} websiteId
 	 * @param {string} permission `<product>:<key>`
 	 * @returns {Promise<string[]>}
@@ -304,7 +304,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 
 	/**
 	 * Remove a person's saved messages (data rights): those to one of their `addresses`, those with a value that is one
-	 * of them (e-mail addresses compared without case, phones through the shared normaliser), and those whose value
+	 * of them (email addresses compared without case, phones through the shared normalizer), and those whose value
 	 * `name` is one of `values[name]` (for example `{ conversationId: [...] }`). A product that cannot send alerts keeps
 	 * none, so it never looks. The saved messages are few (only those Notifications did not take, for a day at most), so
 	 * they are read and matched here.

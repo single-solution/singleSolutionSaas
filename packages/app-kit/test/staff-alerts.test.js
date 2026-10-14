@@ -91,14 +91,14 @@ const start = async () => {
 };
 
 describe('staff alerts (K6)', () => {
-	it('reads addresses as e-mail or phone recipients', () => {
+	it('reads addresses as email or phone recipients', () => {
 		expect(recipientOf(' Ops@Shop.Example.com ')).toEqual({
 			key: 'e:ops@shop.example.com',
 			to: { email: 'ops@shop.example.com' },
 		});
 		expect(recipientOf('+44 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
 		expect(recipientOf('0044 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
-		// the shared normaliser: a trunk 0 after the calling code is dropped, so one number has one key
+		// the shared normalizer: a trunk 0 after the calling code is dropped, so one number has one key
 		expect(recipientOf('+44 (0)7700-900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
 		expect(recipientOf('+44 020 7946 0018')).toEqual({ key: 'p:442079460018', to: { phone: '+442079460018' } });
 		expect(recipientOf('+999 1234 5678')).toBeNull();
@@ -241,7 +241,7 @@ describe('staff alerts (K6)', () => {
 			await alert({ values: { noteId: 'not_2', visitor: 'Omar', phone: '+1 415 555 0101' } });
 			await alert({ values: { noteId: 'not_3', visitor: 'Guest', preview: 'Hello' } });
 			expect(await saved.countDocuments({})).toBe(6);
-			// a value naming the person (an e-mail address without case, a phone in any form)
+			// a value naming the person (an email address without case, a phone in any form)
 			expect(await remove({ email: 'sara@example.com' })).toBe(2);
 			expect(await remove({ phone: '+14155550101' })).toBe(2);
 			// messages to the person (a staff member who is a recipient)

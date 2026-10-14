@@ -242,7 +242,7 @@ export const createProduct = (options) => {
 	});
 	const business = createBusiness({ store, send, now, logger });
 	/**
-	 * The normalised business.json copy of a website (defaults: name = domain, time zone UTC).
+	 * The normalized business.json copy of a website (defaults: name = domain, time zone UTC).
 	 * @param {string} websiteId
 	 */
 	const businessOf = async (websiteId) => {
