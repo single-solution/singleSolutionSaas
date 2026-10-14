@@ -874,14 +874,15 @@ export const unitRefusalOf = (error) =>
 		: null;
 
 /**
- * Capture the units of a packing plan (E11): registered ones move from stock to the order; typed ones are recorded as
- * sold to it with their values (a registered unit typed by staff is taken from stock; a unit sharing any number with
- * another unit is refused). Units a line no longer lists go back in stock (typed ones are forgotten).
+ * Capture the units of a plan (E11, dynamic model §1): units of a line whose item type picks them from stock move from
+ * stock to the order; typed ones are recorded as sold to it with their values (a unit in stock typed by staff is taken
+ * from stock; a unit sharing any number with another unit is refused). Units a line no longer lists go back in stock
+ * (typed ones are forgotten).
  * @param {WebsiteData} data
- * @param {{ orderId: string, mode: 'registered' | 'typed', plan: import('../core/transitions.js').UnitsPlan }} capture
+ * @param {{ orderId: string, plan: import('../core/transitions.js').UnitsPlan }} capture
  * @param {Session} session
  */
-const captureUnits = async (data, { orderId, mode, plan }, session) => {
+const captureUnits = async (data, { orderId, plan }, session) => {
 	const serials = data.collection(COLLECTIONS.serials);
 	for (const line of plan) {
 		const typedUnits = new Map((line.units ?? []).map((unit) => [unit.serial, unit]));
@@ -899,7 +900,7 @@ const captureUnits = async (data, { orderId, mode, plan }, session) => {
 				{ session },
 			);
 			if (taken.modifiedCount === 1) continue;
-			if (mode === 'registered') throw unitRefused(line.lineId, `Serial number ${serial} is not in stock for this item.`);
+			if (line.capture === 'stock') throw unitRefused(line.lineId, `Serial number ${serial} is not in stock for this item.`);
 			const unit = typedUnits.get(serial) ?? { serial, values: {}, keys: [`serial:${serial}`] };
 			const known = await serials.findOne(
 				{ websiteId: data.websiteId, keys: { $in: unit.keys } },
@@ -1030,7 +1031,7 @@ const applyEffect = async (data, orderId, effect, { now, session }) => {
 			await releaseUnits(data, orderId, session);
 			return;
 		case 'capture_units':
-			await captureUnits(data, { orderId, mode: effect.mode, plan: effect.plan }, session);
+			await captureUnits(data, { orderId, plan: effect.plan }, session);
 			return;
 		default:
 			throw new Error(`unknown ledger effect ${/** @type {any} */ (effect).kind}`);

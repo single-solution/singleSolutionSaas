@@ -27,7 +27,7 @@ import {
 } from '../core/imports-catalog.js';
 import { COLLECTIONS } from '../core/model.js';
 import { checkUnit } from '../core/fields.js';
-import { loadRules, unitFieldsOf } from './catalog-store.js';
+import { loadRules, unitRulesOf } from './catalog-store.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('@ss/app-kit').ImportCollection} ImportCollection */
@@ -43,7 +43,9 @@ import { loadRules, unitFieldsOf } from './catalog-store.js';
  * @property {ImportContext} context
  * @property {Map<string, string>} taken unique values this call's records hold → the record holding each
  * @property {Map<string, Set<string> | null>} variants a product's variant ids (null: no such product), read once
- * @property {Map<string, import('../core/model.js').AttributeRecord[]>} unitFields a product's unit fields, read once
+ * @property {ReadonlyArray<import('../core/item-types.js').ItemType>} types the merchant's item types
+ * @property {Map<string, import('../core/item-types.js').UnitRules | null>} units how a product's units are numbered
+ *   (null: its item type numbers none), read once
  */
 
 /** The most categories a website has (the product reads at most this many anywhere). */
@@ -78,6 +80,7 @@ export const catalogImports = (deps) => {
 			const { data, websiteId } = ctx;
 			const features = new Set(await deps.featuresOn(websiteId));
 			const gradeKeys = features.has('grades_serials') ? [...gradesByKey(await deps.list(websiteId, 'grades')).keys()] : [];
+			const types = /** @type {import('../core/item-types.js').ItemType[]} */ (await deps.list(websiteId, 'item_types'));
 			const [categoryIds, brandIds, sizeChartIds, locationIds] = await Promise.all([
 				idsIn(data, COLLECTIONS.categories),
 				idsIn(data, COLLECTIONS.brands),
@@ -103,7 +106,9 @@ export const catalogImports = (deps) => {
 							grades: features.has('grades_serials'),
 							digital: features.has('digital_goods'),
 							bookings: features.has('bookings'),
+							parcels: features.has('delivery_zones'),
 							gradeKeys,
+							types,
 						})),
 						sizeCharts: features.has('size_charts'),
 						sizeChartIds,
@@ -119,12 +124,14 @@ export const catalogImports = (deps) => {
 					sizeChartIds,
 					gradeKeys: new Set(gradeKeys),
 					locationIds: /** @type {Set<string>} */ (locationIds),
+					types,
 					...(categories ? { categories } : {}),
 					...(rules ? { rules } : {}),
 				},
 				taken: new Map(),
 				variants: new Map(),
-				unitFields: new Map(),
+				types,
+				units: new Map(),
 			};
 		};
 
@@ -264,9 +271,9 @@ export const catalogImports = (deps) => {
 	};
 
 	/**
-	 * Check a unit against its product: the variant must be imported; the unit's values against the unit fields of the
-	 * product's categories (formats, required fields; without unit fields a plain serial number), as when units are
-	 * added to stock; a serial given beside the values must be the one they name; and none of its numbers may be another
+	 * Check a unit against its product: the variant must be imported and the product's item type must number its units;
+	 * the unit's values against the type's unit fields (formats, required fields; without unit fields a plain serial
+	 * number), as when units are added to stock; a serial given beside the values must be the one they name; and none of its numbers may be another
 	 * unit's (in this import or in the shop). The unit is then kept as the shop keeps it (its serial, values and keys).
 	 * @param {Record<string, any>} value @param {WebsiteData} data @param {Prepared} prepared
 	 * @returns {Promise<FieldError[]>}
@@ -288,10 +295,14 @@ export const catalogImports = (deps) => {
 		else if (!variantIds.has(value.variantId))
 			errors.push({ path: '/variantId', message: `The product has no variant ${value.variantId}.` });
 		if (errors.length > 0) return errors;
-		if (!prepared.unitFields.has(value.productId))
-			prepared.unitFields.set(value.productId, (await unitFieldsOf(data, [value.productId])).get(value.productId) ?? []);
-		const fields = prepared.unitFields.get(value.productId) ?? [];
-		const unit = checkUnit(value.values === undefined ? value.serial : { values: value.values }, fields);
+		if (!prepared.units.has(value.productId)) {
+			const has = (/** @type {string} */ feature) => prepared.context.features.has(feature);
+			const units = await unitRulesOf(data, [value.productId], { types: prepared.types, has });
+			prepared.units.set(value.productId, units.get(value.productId) ?? null);
+		}
+		const rules = prepared.units.get(value.productId);
+		if (!rules) return [{ path: '/productId', message: 'The item type of this product numbers no units.' }];
+		const unit = checkUnit(value.values === undefined ? value.serial : { values: value.values }, rules.fields);
 		if (!unit.ok) return [{ path: unit.path || '/serial', message: unit.message }];
 		if (value.serial !== undefined && value.serial !== unit.value.serial)
 			return [{ path: '/serial', message: `The unit's serial is ${unit.value.serial}, the first value of its unit fields.` }];

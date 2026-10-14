@@ -173,6 +173,7 @@ describe('grades per category (E45)', () => {
 				return gradesFor(list, categoryIds).get(key)?.label ?? key;
 			},
 			features: { digital: false, bookings: false },
+			slots: () => false,
 			licences: new Map(),
 			booked: new Set(),
 			slotOf: () => null,

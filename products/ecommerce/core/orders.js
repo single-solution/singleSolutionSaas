@@ -922,66 +922,74 @@ export const checkBulkMove = (body) => {
 
 // ------------------------------------------------------------------------------------------------------- serials
 
+/** The stages units may be needed by, in the order an order reaches them. @type {Readonly<Record<string, number>>} */
+const UNIT_STAGE_RANK = Object.freeze({ packed: 1, shipped: 2, delivered: 3 });
+
 /**
- * The serial numbers each serialized line gets: the ones sent, else the ones it already has; one per unit. With
- * `registered` serials (the default) every unit gets one when the order is packed; with `typed` serials (E11) they may
- * be typed at packing or later, so a line may still have none (a list sent for a line still holds one per unit), and
- * `only` limits the plan to the lines sent.
- * @param {OrderRecord} order
- * @param {Set<string>} serializedProducts ids of the order's products that are serialized
- * @param {Record<string, string[]>} sent
- * @param {{ mode?: 'registered' | 'typed', only?: boolean }} [options]
- * @returns {{ ok: true, value: Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[] }> } | Refusal}
+ * How a line's units are numbered, by product: when they get their numbers and the stage they are needed before
+ * (`core/item-types.js`, the `units` element of the product's item type).
+ * @typedef {ReadonlyMap<string, Pick<import('./item-types.js').UnitRules, 'capture' | 'requiredBefore'>>} LineUnitRules
  */
-export const serialPlan = (order, serializedProducts, sent, { mode = 'registered', only = false } = {}) => {
+
+/**
+ * The units of a line a move into `stage` needs: every one, when its item type needs them by then.
+ * @param {Pick<import('./item-types.js').UnitRules, 'requiredBefore'>} rules @param {string} stage
+ */
+const neededBy = (rules, stage) =>
+	rules.requiredBefore !== null && (UNIT_STAGE_RANK[rules.requiredBefore] ?? Infinity) <= (UNIT_STAGE_RANK[stage] ?? 0);
+
+/**
+ * The serial numbers each line whose item type numbers its units gets with a move into `stage` (packed, shipped or
+ * delivered) or typed later: the ones sent, else the ones it already has; one per unit. Units picked from stock are
+ * needed when the order is packed; typed ones (`capture: 'packing'`) may be typed at packing or later, so a line not
+ * needed by `stage` may still have none (a list sent for a line still holds one per unit). `only` limits the plan to the
+ * lines sent.
+ * @param {OrderRecord} order
+ * @param {LineUnitRules} rules the order's products whose units are numbered
+ * @param {Record<string, string[]>} sent
+ * @param {{ stage: string, only?: boolean }} options
+ * @returns {{ ok: true, value: Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[], capture: import('./item-types.js').UnitCapture }> } | Refusal}
+ */
+export const serialPlan = (order, rules, sent, { stage, only = false }) => {
 	const lines = new Map(order.lines.map((line) => [line.id, line]));
 	for (const lineId of Object.keys(sent)) {
 		const line = lines.get(lineId);
-		if (!line || line.kind !== 'physical' || !serializedProducts.has(line.productId))
+		if (!line || line.kind !== 'physical' || !rules.has(line.productId))
 			return refuse(`serials/${lineId}`, 'This line takes no serial numbers.');
 	}
-	/** @type {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[] }>} */
+	/** @type {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[], capture: import('./item-types.js').UnitCapture }>} */
 	const plan = [];
 	for (const line of order.lines) {
-		if (line.kind !== 'physical' || !serializedProducts.has(line.productId)) continue;
+		const units = line.kind === 'physical' ? rules.get(line.productId) : undefined;
+		if (!units) continue;
 		if (only && sent[line.id] === undefined) continue;
 		const serials = sent[line.id] ?? line.serials;
-		const typedLater = mode === 'typed' && serials.length === 0;
-		if (serials.length !== line.quantity && !typedLater)
+		const later = serials.length === 0 && !neededBy(units, stage);
+		if (serials.length !== line.quantity && !later)
 			return refuse(`serials/${line.id}`, `${line.name}: give ${line.quantity} serial number(s), one per unit.`);
-		plan.push({ lineId: line.id, productId: line.productId, variantId: line.variantId, serials, before: line.serials });
+		plan.push({
+			lineId: line.id,
+			productId: line.productId,
+			variantId: line.variantId,
+			serials,
+			before: line.serials,
+			capture: units.capture,
+		});
 	}
 	return { ok: true, value: plan };
 };
 
 /**
- * The serialized lines of an order still missing serial numbers (typed serials must be complete before dispatch, E11).
+ * The lines of an order still missing serial numbers a move into `stage` needs (their item type needs them by then).
  * @param {OrderRecord} order
- * @param {Set<string>} serializedProducts
+ * @param {LineUnitRules} rules
+ * @param {string} stage
  */
-export const missingSerials = (order, serializedProducts) =>
-	order.lines.filter(
-		(line) => line.kind === 'physical' && serializedProducts.has(line.productId) && line.serials.length !== line.quantity,
-	);
-
-/**
- * Whether a product is serialized (E11): its own switch, or with none (null) as its categories say — a category's
- * `requiresSerial`, else its nearest ancestor's; serialized when any of its categories says so.
- * @param {{ serialized: boolean | null, categoryIds: string[] }} product
- * @param {ReadonlyMap<string, { path: string[], requiresSerial?: boolean | null }>} categories
- */
-export const isSerialized = (product, categories) => {
-	if (typeof product.serialized === 'boolean') return product.serialized;
-	return product.categoryIds.some((id) => {
-		const category = categories.get(id);
-		if (!category) return false;
-		for (const step of [id, ...[...category.path].reverse()]) {
-			const rule = categories.get(step)?.requiresSerial;
-			if (typeof rule === 'boolean') return rule;
-		}
-		return false;
+export const missingSerials = (order, rules, stage) =>
+	order.lines.filter((line) => {
+		const units = line.kind === 'physical' ? rules.get(line.productId) : undefined;
+		return units !== undefined && neededBy(units, stage) && line.serials.length !== line.quantity;
 	});
-};
 
 // --------------------------------------------------------------------------------------------------------- views
 
@@ -1047,12 +1055,12 @@ const LEFT_OUT = Object.freeze(['accessKeyHash', 'idempotencyKey', 'phoneDigits'
  * @param {OrderRecord} order
  * @param {OrderFlow} flow
  * @param {{ customer: Partial<CustomerRecord> | null, images: Map<string, string | null>, money: Money,
- *   serialized?: Set<string> | null, units?: { fields: ReadonlyMap<string, ReadonlyArray<import('./model.js').AttributeRecord>>,
+ *   units?: { rules: ReadonlyMap<string, import('./item-types.js').UnitRules>,
  *   values: ReadonlyMap<string, Record<string, string[]>> }, orderFields?: ReadonlyArray<import('./model.js').AttributeRecord> }} extras
- *   `images`: line id → address; `serialized`: the order's serialized products; `units`: the unit fields of each
- *   product, and the values of the order's units by serial; `orderFields`: the shop's order fields
+ *   `images`: line id → address; `units`: how the units of the order's products are numbered (their item types), and
+ *   the values of the order's units by serial; `orderFields`: the shop's order fields
  */
-export const orderDetail = (order, flow, { customer, images, money, serialized = null, units, orderFields = [] }) => {
+export const orderDetail = (order, flow, { customer, images, money, units, orderFields = [] }) => {
 	const plain = Object.fromEntries(Object.entries(wire(order)).filter(([key]) => !LEFT_OUT.includes(key)));
 	// what is due, can be refunded and must be refunded, counted the one way
 	const sums = orderMoney(order);
@@ -1069,28 +1077,32 @@ export const orderDetail = (order, flow, { customer, images, money, serialized =
 			.map((field) => fieldDefinition(field)),
 		statusLabel: statusLabel(flow, order.status),
 		totalText: money(order.totals.total, order.totals.currency),
-		lines: plain.lines.map((/** @type {any} */ line) => ({
-			...line,
-			imageUrl: images.get(line.id) ?? null,
-			// which lines take serial numbers (E11), while Grades and serials is on; the unit fields their units take, and
-			// each unit's values (dynamic model §2)
-			...(serialized ? { serialized: line.kind === 'physical' && serialized.has(line.productId) } : {}),
-			...(serialized && line.kind === 'physical' && serialized.has(line.productId)
-				? {
-						unitFields: (units?.fields.get(line.productId) ?? []).map((field) => ({
-							id: field.id,
-							name: field.name,
-							required: field.required,
-							maxValues: field.maxValues,
-							format: field.format,
-						})),
-						units: (line.serials ?? []).map((/** @type {string} */ serial) => ({
-							serial,
-							values: units?.values.get(serial) ?? {},
-						})),
-					}
-				: {}),
-		})),
+		lines: plain.lines.map((/** @type {any} */ line) => {
+			// how the line's units are numbered (its item type, dynamic model §1): when, before which stage, the unit fields
+			// their numbers take, and each unit's values (§2)
+			const rules = line.kind === 'physical' ? units?.rules.get(line.productId) : undefined;
+			return {
+				...line,
+				imageUrl: images.get(line.id) ?? null,
+				...(rules
+					? {
+							unitCapture: rules.capture,
+							unitsRequiredBefore: rules.requiredBefore,
+							unitFields: rules.fields.map((field) => ({
+								id: field.id,
+								name: field.name,
+								required: field.required,
+								maxValues: field.maxValues,
+								format: field.format,
+							})),
+							units: (line.serials ?? []).map((/** @type {string} */ serial) => ({
+								serial,
+								values: units?.values.get(serial) ?? {},
+							})),
+						}
+					: {}),
+			};
+		}),
 		payment: { ...plain.payment, refundable: sums.refundable, balanceDue: sums.due, refundDue: sums.refundDue },
 		history: plain.history.map((/** @type {any} */ entry) => ({
 			...entry,

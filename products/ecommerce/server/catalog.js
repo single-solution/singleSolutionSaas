@@ -35,12 +35,14 @@ export const createCatalog = (product, service) => {
 		],
 		/**
 		 * What the product grid and page need: where product and category pages are, the page size and what shoppers
-		 * are told of stock (E9).
+		 * are told of stock (E9); and the merchant's item types, by which the catalog admin's editors show their type
+		 * pickers and sections (dynamic model §1).
 		 * @param {Site} s
 		 */
 		widgetSettings: async (s) => {
 			const { productUrl, categoryUrl, variantQuery, pageSize, showStock, lowStockShown } = await s.values('catalog');
-			return { catalog: { productUrl, categoryUrl, variantQuery, pageSize, showStock, lowStockShown } };
+			const types = await s.list('item_types');
+			return { catalog: { productUrl, categoryUrl, variantQuery, pageSize, showStock, lowStockShown, types } };
 		},
 	};
 };

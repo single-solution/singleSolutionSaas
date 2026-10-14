@@ -55,10 +55,11 @@ import llmsTxtSettings from '../schemas/llms_txt.settings.json' with { type: 'js
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
 import messages from '../schemas/messages.json' with { type: 'json' };
 import { flowChangeProblems } from '../core/flow.js';
+import { typeChangeProblems } from '../core/item-types.js';
 import { EVENT_TYPES } from '../core/events.js';
 import { LIST_WORDS, setupSummaries } from '../core/setup-sheet.js';
 import { createAi } from './ai.js';
-import { INDEXES as CATALOG_INDEXES } from './catalog-store.js';
+import { INDEXES as CATALOG_INDEXES, typeUses } from './catalog-store.js';
 import { createCouriers } from './couriers.js';
 import { INDEXES as EXTRAS_INDEXES } from './extras-store.js';
 import { INDEXES as FULFILMENT_INDEXES } from './fulfilment-store.js';
@@ -214,6 +215,12 @@ export const createProductInstance = (options) => {
 				if (!kitProduct || (await kitProduct.connections.value(websiteId, 'database')) === null) return [];
 				const counts = await createOrdersStore(await kitProduct.data.forWebsite(websiteId)).statusCounts();
 				return flowChangeProblems(saved, next, counts);
+			},
+			// item types name existing fields of the right kind, and keep what products, categories and units in stock
+			// rely on (a used type stays with its kind; a type with units in stock keeps its units' fields)
+			item_types: async (websiteId, saved, next) => {
+				if (!kitProduct || (await kitProduct.connections.value(websiteId, 'database')) === null) return [];
+				return typeChangeProblems(saved, next, await typeUses(await kitProduct.data.forWebsite(websiteId), saved));
 			},
 		},
 	});

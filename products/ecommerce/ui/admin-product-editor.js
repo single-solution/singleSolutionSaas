@@ -1,26 +1,21 @@
 /**
  * The product editor of the catalog admin widget (PLAN 0.8.8 Catalog, Items; PLAN 0.8.10 E2–E16), a full form in the
- * detail pane (it would still scroll a lot as a dialog): featured, status, kind, name, slug (earlier ones shown), summary,
- * the rich description, categories, brand, tags, specs (several values where the attribute takes several), the
- * attribute setup with Generate, option axes, the variants table, stock tracking, serials (yes / no / as its
- * categories say), digital and booking fields, the size chart and hiding the size guide, SEO fields, FAQs and the
- * return and warranty days. Prices are typed as decimals of the shop currency.
+ * detail pane (it would still scroll a lot as a dialog): featured, status, kind, item type (when the merchant has
+ * types), name, slug (earlier ones shown), summary, the rich description, categories, brand, tags, specs (several values
+ * where the field takes several), the attribute setup with Generate, option axes, the variants table, stock tracking,
+ * digital and booking fields, the size chart and hiding the size guide, SEO fields, FAQs and the return and warranty
+ * days. The item type as the form stands (its own, its first category's, else the built-in one of its kind; dynamic
+ * model §1) decides the sections shown: the fields it names, variants, grades, the size guide, packages, its own days,
+ * downloads, license keys and booked slots. Prices are typed as decimals of the shop currency.
  * @module
  */
+import { typeTakes } from '../core/item-types.js';
 import { entriesOf, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
-import {
-	chartChoices,
-	checkGroup,
-	earlierSlugs,
-	faqsEditor,
-	paragraphsOf,
-	richEditor,
-	seoEditor,
-	triSelect,
-} from './admin-fields.js';
+import { chartChoices, checkGroup, earlierSlugs, faqsEditor, paragraphsOf, richEditor, seoEditor } from './admin-fields.js';
 import { fieldsOf } from './admin-screen.js';
 import { categoryChoices } from './admin-taxonomy.js';
+import { productTypeOf, showsTypes, typeChoices } from './admin-types.js';
 import { blankVariant, generateDialog, optionsEditor, setupEditor, variantsEditor } from './admin-variants.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
@@ -36,6 +31,7 @@ const blank = () => ({
 	name: '',
 	slug: '',
 	kind: 'physical',
+	typeKey: null,
 	status: 'draft',
 	featured: false,
 	summary: '',
@@ -49,7 +45,6 @@ const blank = () => ({
 	options: [],
 	variants: [blankVariant()],
 	trackStock: true,
-	serialized: false,
 	digital: null,
 	booking: null,
 	seo: {},
@@ -152,11 +147,17 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 		const kinds = [
 			'physical',
 			...(has('digital_goods') || product.kind === 'digital' ? ['digital'] : []),
-			...(has('bookings') || product.kind === 'booking' ? ['booking'] : []),
+			...(has('bookings') || product.kind === 'service' ? ['service'] : []),
 		];
 		const kind = kit.select(
 			kinds.map((key) => ({ value: key, label: t(`catalogAdmin.kind.${key}`) })),
 			product.kind,
+		);
+		// its item type: its own, else its first category's (pickers of the types of its kind)
+		const typed = showsTypes(kit, product.typeKey);
+		const type = kit.select(
+			typeChoices(kit, kind.value, product.typeKey ?? null, t('catalogAdmin.typeAsCategory')),
+			product.typeKey ?? '',
 		);
 		const status = kit.select(
 			['draft', 'active', 'archived'].map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })),
@@ -188,6 +189,12 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 					)
 				: null;
 		const setup = setupEditor(kit, product.attributeSetup ?? [], attributes, [generate]);
+		const typeNow = () =>
+			productTypeOf(
+				kit,
+				{ kind: kind.value, typeKey: (typed && type.value) || null, categoryIds: categoryBoxes.value() },
+				categories,
+			);
 		const specAttributes = attributes.filter((attribute) => attribute.on === 'product');
 		const specs = specAttributes.map((attribute) => ({
 			attribute,
@@ -211,11 +218,11 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			uploaded: (media) => {
 				photos = media;
 			},
+			type: typeNow,
 		});
 
 		// ------------------------------------------------------------------------------------- stock and kinds
 		const trackStock = kit.check(t('catalogAdmin.trackStock'), product.trackStock);
-		const serialized = triSelect(kit, product.serialized ?? null, t('catalogAdmin.asCategories'));
 		const licenceKeys = kit.check(t('catalogAdmin.licenceKeys'), product.digital?.licenceKeys === true);
 		const downloadLimit = kit.input(String(product.digital?.downloadLimit ?? 0), { type: 'number', min: '0', step: '1' });
 		const duration = kit.input(String(product.booking?.durationMinutes ?? 60), {
@@ -224,19 +231,14 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			max: '1440',
 			step: '5',
 		});
-		const digitalGroup = kit.group(t('catalogAdmin.digital'), [
-			licenceKeys.node,
-			kit.field(t('catalogAdmin.downloadLimit'), downloadLimit),
-		]);
+		const downloadField = kit.field(t('catalogAdmin.downloadLimit'), downloadLimit);
+		const digitalGroup = kit.group(t('catalogAdmin.digital'), [licenceKeys.node, downloadField]);
 		const bookingGroup = kit.group(t('catalogAdmin.booking'), [kit.field(t('catalogAdmin.duration'), duration)]);
-		const showKind = () => {
-			digitalGroup.hidden = kind.value !== 'digital';
-			bookingGroup.hidden = kind.value !== 'booking';
-		};
-		kind.addEventListener('change', showKind);
-		showKind();
 		const chart = kit.select(chartChoices(kit, charts), product.sizeChartId ?? '');
 		const hideGuide = kit.check(t('catalogAdmin.hideSizeGuide'), product.hideSizeGuide === true);
+		const guideGroup = kit.group(t('catalogAdmin.sizeGuide'), [
+			fieldsOf(kit, [kit.field(t('catalogAdmin.sizeChart'), chart), hideGuide.node]),
+		]);
 		const seo = seoEditor(kit, product.seo);
 		const faqs = faqsEditor(kit, product.faqs ?? []);
 		/** @param {number | null | undefined} days */
@@ -244,13 +246,66 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			kit.input(days === null || days === undefined ? '' : String(days), { type: 'number', min: '0', step: '1' });
 		const returnDays = daysInput(product.returnDays);
 		const warrantyDays = daysInput(product.warrantyDays);
+		const daysGroup = fieldsOf(kit, [
+			kit.field(t('catalogAdmin.returnDays'), returnDays),
+			kit.field(t('catalogAdmin.warrantyDays'), warrantyDays),
+		]);
+		const specsGroup = kit.group(t('catalogAdmin.specs'), [
+			fieldsOf(
+				kit,
+				specs.map((spec) => spec.node),
+			),
+		]);
+
+		// --------------------------------------------------------------------------------- by its item type
+		/** What the type as the form stands has: each part shown or not (with today's features). */
+		const partsNow = () => {
+			const now = typeNow();
+			const on = now.elements;
+			return {
+				type: now,
+				variants: has('variants') && on.variants,
+				chart: has('size_charts') && on.chart,
+				days: has('returns') && on.warranty,
+				downloads: kind.value === 'digital' && on.downloads,
+				licenceKeys: kind.value === 'digital' && on.licenceKeys,
+				slots: kind.value === 'service' && on.slots,
+			};
+		};
+		const show = () => {
+			const parts = partsNow();
+			for (const spec of specs) spec.node.hidden = !typeTakes(parts.type, spec.attribute.id);
+			specsGroup.hidden = specs.every((spec) => spec.node.hidden);
+			setup.node.hidden = !parts.variants || attributes.length === 0;
+			options.node.hidden = !parts.variants;
+			digitalGroup.hidden = !parts.downloads && !parts.licenceKeys;
+			licenceKeys.node.hidden = !parts.licenceKeys;
+			downloadField.hidden = !parts.downloads;
+			bookingGroup.hidden = !parts.slots;
+			guideGroup.hidden = !parts.chart;
+			daysGroup.hidden = !parts.days;
+			variants.draw();
+		};
+		kind.addEventListener('change', () => {
+			// the types of the new kind
+			const choices = typeChoices(kit, kind.value, product.typeKey ?? null, t('catalogAdmin.typeAsCategory'));
+			const kept = choices.some((choice) => choice.value === type.value) ? type.value : '';
+			type.replaceChildren(...choices.map((choice) => kit.text('option', { value: choice.value }, choice.label)));
+			type.value = kept;
+			show();
+		});
+		type.addEventListener('change', show);
+		categoryBoxes.node.addEventListener('change', show);
+		show();
 
 		// --------------------------------------------------------------------------------------------------- save
 		const bodyOf = () => {
+			const parts = partsNow();
 			/** @type {Record<string, unknown>} */
 			const specValues = {};
 			for (const { attribute, read } of specs) {
 				const value = read();
+				if (!typeTakes(parts.type, attribute.id)) continue;
 				if (value !== null && !(typeof value === 'number' && Number.isNaN(value))) specValues[attribute.id] = value;
 			}
 			const variantList = variants.value();
@@ -260,6 +315,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				name: name.value,
 				slug: slug.value.trim(),
 				kind: kind.value,
+				...(typed ? { typeKey: type.value || null } : {}),
 				status: status.value,
 				featured: featured.box.checked,
 				summary: summary.value,
@@ -269,19 +325,23 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				brandId: brand.value || null,
 				tags: entriesOf(tags.value, true),
 				specs: specValues,
-				...(attributes.length > 0 ? { attributeSetup: setup.value() } : {}),
-				...(has('variants') ? { options: options.value() } : {}),
+				...(parts.variants && attributes.length > 0 ? { attributeSetup: setup.value() } : {}),
+				...(parts.variants ? { options: options.value() } : {}),
 				variants: variantList,
 				trackStock: trackStock.box.checked,
-				...(has('grades_serials') ? { serialized: serialized.value() } : {}),
 				...(kind.value === 'digital'
-					? { digital: { licenceKeys: licenceKeys.box.checked, downloadLimit: Number(downloadLimit.value) || 0 } }
+					? {
+							digital: {
+								...(parts.licenceKeys ? { licenceKeys: licenceKeys.box.checked } : {}),
+								...(parts.downloads ? { downloadLimit: Number(downloadLimit.value) || 0 } : {}),
+							},
+						}
 					: {}),
-				...(kind.value === 'booking' ? { booking: { durationMinutes: Number(duration.value) } } : {}),
-				...(has('size_charts') ? { sizeChartId: chart.value || null, hideSizeGuide: hideGuide.box.checked } : {}),
+				...(parts.slots ? { booking: { durationMinutes: Number(duration.value) } } : {}),
+				...(parts.chart ? { sizeChartId: chart.value || null, hideSizeGuide: hideGuide.box.checked } : {}),
 				seo: seo.value(),
 				faqs: faqs.value(),
-				...(has('returns') ? { returnDays: days[0], warrantyDays: days[1] } : {}),
+				...(parts.days ? { returnDays: days[0], warrantyDays: days[1] } : {}),
 			};
 		};
 		/** Save the form; the answer, or null when a number is wrong (the note says so). */
@@ -319,6 +379,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				kit.field(t('catalogAdmin.name'), name),
 				kit.field(t('catalogAdmin.slug'), slug),
 				kit.field(t('catalogAdmin.kind'), kind),
+				typed ? kit.field(t('catalogAdmin.itemType'), type) : null,
 				kit.field(t('admin.status'), status),
 				kit.field(t('catalogAdmin.brand'), brand),
 				kit.field(t('catalogAdmin.tags'), tags),
@@ -328,39 +389,20 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			kit.field(t('catalogAdmin.summary'), summary),
 			description.node,
 			categories.length > 0 ? categoryBoxes.node : null,
-			specs.length > 0
-				? kit.group(t('catalogAdmin.specs'), [
-						fieldsOf(
-							kit,
-							specs.map((spec) => spec.node),
-						),
-					])
-				: null,
+			specs.length > 0 ? specsGroup : null,
 			attributes.length > 0 ? setup.node : null,
 			has('variants') ? options.node : null,
 			kit.group(has('variants') ? t('catalogAdmin.variants') : t('catalogAdmin.priceAndStock'), [
 				isNew && has('variants') ? kit.text('p', { class: 'muted' }, t('catalogAdmin.photosAfterSave')) : null,
 				variants.node,
 			]),
-			fieldsOf(kit, [
-				trackStock.node,
-				has('grades_serials') ? kit.field(t('catalogAdmin.serialized'), serialized.node) : null,
-			]),
+			fieldsOf(kit, [trackStock.node]),
 			digitalGroup,
 			bookingGroup,
-			has('size_charts')
-				? kit.group(t('catalogAdmin.sizeGuide'), [
-						fieldsOf(kit, [kit.field(t('catalogAdmin.sizeChart'), chart), hideGuide.node]),
-					])
-				: null,
+			has('size_charts') ? guideGroup : null,
 			seo.node,
 			faqs.node,
-			has('returns')
-				? fieldsOf(kit, [
-						kit.field(t('catalogAdmin.returnDays'), returnDays),
-						kit.field(t('catalogAdmin.warrantyDays'), warrantyDays),
-					])
-				: null,
+			has('returns') ? daysGroup : null,
 		]);
 		kit.say(note, message);
 	};

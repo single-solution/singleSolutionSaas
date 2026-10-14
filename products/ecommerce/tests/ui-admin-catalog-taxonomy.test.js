@@ -85,7 +85,7 @@ describe('catalog admin: categories', () => {
 			'Products5',
 			'Subcategories1',
 			'Icon namephone',
-			'Serial number per unitYes',
+			'Item typeUsed phone',
 			'mobiles',
 			'Fast (bolt)',
 			'Unlocked?Yes.',
@@ -94,9 +94,9 @@ describe('catalog admin: categories', () => {
 		await click(buttonIn(detailOf(panel), 'Back'));
 		expect(panel.querySelector('.split')?.getAttribute('data-view')).toBe('list');
 		await pick(panel, 'Android');
-		expect(textOf(detailOf(panel))).toContain('Serial number per unitNo');
+		expect(textOf(detailOf(panel))).toContain('Item typePhysical goods');
 		await pick(panel, 'Lost');
-		expect(textOf(detailOf(panel))).toContain('Serial number per unitAs its parent category');
+		expect(textOf(detailOf(panel))).toContain('Item typeAs its parent category');
 		// a list that cannot be read
 		resetPage();
 		const uncounted = await start(['catalog'], { 'GET /v1/admin/products/counts': () => problem(403, 'forbidden') });
@@ -153,7 +153,7 @@ describe('catalog admin: categories', () => {
 				focusKeyword: '',
 				titleMode: 'template',
 			},
-			requiresSerial: null,
+			typeKey: null,
 			sizeChartId: null,
 		});
 		expect(hasDialog(root)).toBe(false);
@@ -163,10 +163,17 @@ describe('catalog admin: categories', () => {
 		const edit = dialogOf(root);
 		expect([...fieldIn(edit, 'Inside').options].map((/** @type {any} */ o) => o.value)).toEqual(['', 'cat_a', 'cat_x']);
 		expect(textOf(edit)).toContain('Earlier addresses still lead here: mobiles');
-		expect(fieldIn(edit, 'Serial number per unit').value).toBe('yes');
+		expect(fieldIn(edit, 'Item type').value).toBe('used_phone');
+		expect([...fieldIn(edit, 'Item type').options].map((/** @type {any} */ o) => o.value)).toEqual([
+			'',
+			'physical',
+			'digital',
+			'service',
+			'used_phone',
+		]);
 		await change(fieldIn(edit, 'Status'), 'coming_soon');
 		type(fieldIn(edit, 'Icon name'), 'mobile');
-		await change(fieldIn(edit, 'Serial number per unit'), 'no');
+		await change(fieldIn(edit, 'Item type'), 'physical');
 		await change(fieldIn(edit, 'Size chart'), 'szc_2');
 		type(fieldIn(edit, 'Summary'), 'Best phones');
 		await click(buttonIn(edit, 'Remove', 0));
@@ -181,7 +188,7 @@ describe('catalog admin: categories', () => {
 		expect(server.last('PATCH /v1/admin/categories/cat_b')?.body).toMatchObject({
 			status: 'coming_soon',
 			icon: 'mobile',
-			requiresSerial: false,
+			typeKey: 'physical',
 			sizeChartId: 'szc_2',
 			content: {
 				summary: 'Best phones',

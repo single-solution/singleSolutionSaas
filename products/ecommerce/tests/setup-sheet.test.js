@@ -159,6 +159,10 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			{ day: 6, from: '10:00', to: '14:00' },
 		]);
 		await env.list('role_prices', [{ role: 'wholesale', percent: 10, label: 'Trade price' }]);
+		await env.list('item_types', [
+			{ key: 'used_phone', name: 'Used phone', elements: { grades: true, units: {} } },
+			{ key: 'gift_card', name: 'Gift card', kind: 'digital', active: false },
+		]);
 		await env.setting('catalog', 'variantQuery', 'grade={grade}&{attributes}');
 		await env.setting('landing_pages', 'attributeUrl', '/glossary/{slug}');
 		await env.setting('alerts', 'stopUrl', '/alerts/stop/{token}');
@@ -184,6 +188,9 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			['booking_hours', 'Bookable 2 days a week: Mon 9:00 AM–12:00 PM and 1:00 PM–5:30 PM, Sat 10:00 AM–2:00 PM.'],
 		]);
 		expect(listsOf(on, 'role_pricing')).toEqual([['role_prices', '1 role price: wholesale 10% off.']]);
+		expect(listsOf(on, 'catalog')).toEqual([
+			['item_types', '2 item types: Used phone (physical, unit numbers), Gift card (digital, not offered).'],
+		]);
 		expect(on.summaries).toEqual([
 			{
 				title: 'Pages on your website',
@@ -236,6 +243,7 @@ describe('Ecommerce’s Setup sheet words', () => {
 	it('says when a list is empty, and fits a long list into a summary', () => {
 		expect(LIST_WORDS.couriers([])).toBe('No couriers yet.');
 		expect(LIST_WORDS.grades([])).toBe('No grades yet.');
+		expect(LIST_WORDS.item_types([])).toBe('No item types yet: every item has the built-in type of its kind.');
 		expect(LIST_WORDS.booking_hours([])).toBe('No booking hours yet, so no slot can be booked.');
 		const zones = Array.from({ length: 40 }, (_, at) => ({ name: `Zone number ${at + 1}` }));
 		const text = LIST_WORDS.delivery_zones(zones);

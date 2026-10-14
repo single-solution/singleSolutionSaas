@@ -29,6 +29,7 @@ import { youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
 import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
+import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { createShownPrices } from './shown-prices.js';
@@ -418,8 +419,13 @@ export const createCatalogShop = (product, service, common) => {
 		const url = await common.media.productUrl(s, item);
 		// the variants at their shown prices, as cards, structured data and the cart show them (G4)
 		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
+		// its item type and the parts it has (dynamic model §1)
+		const type = typeOf(item, await s.list('item_types'), typeTree(categories));
+		const elements = elementsOf(type, s.has);
 		return pageOf(item, {
 			shown,
+			type,
+			slots: elements.slots,
 			currency: s.currency,
 			url,
 			media: await Promise.all(item.media.map((file) => common.mediaView(s, file, item.name))),
@@ -450,7 +456,7 @@ export const createCatalogShop = (product, service, common) => {
 			),
 			stock: { showStock: String(settings.showStock ?? 'none'), lowStockShown: Number(settings.lowStockShown ?? 5) },
 			warrantyDays: Number((await s.values('returns')).warrantyDays ?? 0) || null,
-			sizeChart: await sizeChartOf(s, data, item, brand, categories),
+			sizeChart: elements.chart ? await sizeChartOf(s, data, item, brand, categories) : null,
 			video: await videoOf(s, item),
 		});
 	};

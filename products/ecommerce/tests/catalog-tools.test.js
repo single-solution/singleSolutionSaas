@@ -5,7 +5,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { AI, readyShop, setup } from './helpers.js';
+import { AI, UNIT_TYPES, readyShop, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -23,6 +23,7 @@ const ok = async (method, path, body) => {
 
 beforeAll(async () => {
 	shop = await readyShop();
+	await shop.list('item_types', UNIT_TYPES);
 	ids.shopFloor = await ok('POST', '/v1/locations', { name: 'Shop floor', pickup: true });
 	ids.store = await ok('POST', '/v1/locations', { name: 'Store room', sort: 2 });
 	ids.phones = await ok('POST', '/v1/categories', { name: 'Phones' });
@@ -51,6 +52,7 @@ describe('stock locations', () => {
 		const phone = await ok('POST', '/v1/products', {
 			name: 'Phone',
 			status: 'active',
+			typeKey: 'numbered',
 			sku: 'PH-1',
 			price: 100,
 			locations: { [ids.shopFloor.id]: 2, [ids.store.id]: 3 },
@@ -367,10 +369,10 @@ describe('feature switches and connections', () => {
 		await small.connectDatabase();
 		expect((await small.api('GET', '/v1/csv/products')).json.type).toContain('feature_off');
 		expect((await small.api('GET', '/v1/locations')).json.type).toContain('feature_off');
-		expect((await small.api('POST', '/v1/products', { name: 'A', price: 1, serialized: true })).status).toBe(422);
+		expect((await small.api('POST', '/v1/products', { name: 'A', price: 1, typeKey: 'used_phone' })).status).toBe(422);
 		expect((await small.api('POST', '/v1/products', { name: 'A', kind: 'digital', price: 1 })).status).toBe(422);
 		expect(
-			(await small.api('POST', '/v1/products', { name: 'A', kind: 'booking', price: 1, booking: { durationMinutes: 30 } }))
+			(await small.api('POST', '/v1/products', { name: 'A', kind: 'service', price: 1, booking: { durationMinutes: 30 } }))
 				.status,
 		).toBe(422);
 		expect(

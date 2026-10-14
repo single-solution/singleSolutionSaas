@@ -542,7 +542,7 @@ export const staffFilter = (query, resolved) => {
 	const search = searchFilter(query.q ?? '');
 	if (search) and.push(search);
 	if (['draft', 'active', 'archived'].includes(query.status ?? '')) and.push({ status: query.status });
-	if (['physical', 'digital', 'booking'].includes(query.kind ?? '')) and.push({ kind: query.kind });
+	if (['physical', 'digital', 'service'].includes(query.kind ?? '')) and.push({ kind: query.kind });
 	if (resolved.categoryIds) and.push({ categoryIds: { $in: resolved.categoryIds } });
 	if (resolved.brandIds) and.push({ brandId: { $in: resolved.brandIds } });
 	if (query.lowStock === 'true' || query.lowStock === '1') and.push(lowStockFilter(resolved.lowStock));

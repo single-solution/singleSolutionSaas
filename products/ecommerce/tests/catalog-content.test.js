@@ -215,11 +215,12 @@ describe('attributes and variants', () => {
 	});
 
 	it('checks categories, brands and attributes', () => {
-		expect(checkCategory({ name: 'C', requiresSerial: null, sizeChartId: '' }, null)).toMatchObject({
+		expect(checkCategory({ name: 'C', typeKey: '', sizeChartId: '' }, null)).toMatchObject({
 			ok: true,
-			value: { requiresSerial: null, sizeChartId: null, status: 'active' },
+			value: { typeKey: null, sizeChartId: null, status: 'active' },
 		});
-		expect(checkCategory({ name: 'C', requiresSerial: 'yes' }, null).ok).toBe(false);
+		expect(checkCategory({ name: 'C', typeKey: 'used_phone' }, null)).toMatchObject({ value: { typeKey: 'used_phone' } });
+		expect(checkCategory({ name: 'C', typeKey: true }, null).ok).toBe(false);
 		expect(checkCategory({ name: 'C', sizeChartId: 5 }, null).ok).toBe(false);
 		expect(checkBrand({ name: 'B', categoryIds: 'x' }, null).ok).toBe(false);
 		expect(checkBrand({ name: 'B', status: 'hidden', categoryIds: ['cat_a', 'cat_a'] }, null)).toMatchObject({

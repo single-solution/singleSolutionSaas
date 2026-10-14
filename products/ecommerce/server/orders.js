@@ -11,7 +11,7 @@
  * @module
  */
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
-import { documentFieldsOf, fieldsOn, unitFieldsOf, unitsOfOrders } from '../adapters/catalog-store.js';
+import { documentFieldsOf, fieldsOn, unitsOfOrders } from '../adapters/catalog-store.js';
 import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.js';
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
@@ -137,20 +137,18 @@ export const createOrders = (product, service, { ordering }) => {
 		/** @type {Map<string, string | null>} */
 		const images = new Map();
 		for (const line of order.lines) images.set(line.id, await media.mediaUrl(s, line.image));
-		const serialized = s.has('grades_serials') ? await moves.serializedOf(s, order) : null;
-		// the unit fields each serialized line's units take, and its units' values (staff see every value)
+		// how the lines' units are numbered (their item types), and the units' values (staff see every value)
 		const data = await s.data();
-		const [unitFields, unitValues, orderFields] = await Promise.all([
-			serialized ? unitFieldsOf(data, [...serialized]) : new Map(),
-			serialized ? unitsOfOrders(data, [order.id]) : new Map(),
+		const [rules, unitValues, orderFields] = await Promise.all([
+			moves.unitRulesFor(s, order),
+			unitsOfOrders(data, [order.id]),
 			fieldsOn(data, 'order'),
 		]);
 		return orderDetail(order, flow, {
 			customer,
 			images,
 			money,
-			serialized,
-			units: { fields: unitFields, values: unitValues.get(order.id) ?? new Map() },
+			units: { rules, values: unitValues.get(order.id) ?? new Map() },
 			orderFields,
 		});
 	};

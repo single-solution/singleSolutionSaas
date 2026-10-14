@@ -1727,7 +1727,7 @@
 			},
 			"post": {
 				"summary": "Create a category (Catalog admin widget)",
-				"description": "422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off); 409 conflict when another category has the slug. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on. Send an Idempotency-Key so a retried request makes one category.",
+				"description": "422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off; /typeKey: no such item type, or one no longer offered); 409 conflict when another category has the slug. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on. Send an Idempotency-Key so a retried request makes one category.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -1859,12 +1859,12 @@
 										"maxLength": 64,
 										"description": "An existing size chart's id (Size charts must be on), or null or '' for none."
 									},
-									"requiresSerial": {
+									"typeKey": {
 										"type": [
-											"boolean",
+											"string",
 											"null"
 										],
-										"description": "null: as its parent."
+										"description": "A key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service); null or '': its parent's. A change of its type or place that would give products with units in stock another item type is refused (409 conflict)."
 									}
 								},
 								"required": [
@@ -1982,7 +1982,7 @@
 			},
 			"patch": {
 				"summary": "Change a category (Catalog admin widget)",
-				"description": "Only the members sent change. Moving it (parentId) moves its subcategories along; a changed slug is kept in previousSlugs (its old address redirects). 404 not_found; 422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off); 409 conflict when another category has the slug. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on.",
+				"description": "Only the members sent change. Moving it (parentId) moves its subcategories along; a changed slug is kept in previousSlugs (its old address redirects). 404 not_found; 422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off; /typeKey: no such item type, or one no longer offered); 409 conflict when another category has the slug, or when the change would give products with units in stock another item type. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -6417,7 +6417,7 @@
 							"enum": [
 								"physical",
 								"digital",
-								"booking"
+								"service"
 							]
 						}
 					},
@@ -6545,7 +6545,7 @@
 			},
 			"post": {
 				"summary": "Create a product (Catalog admin widget)",
-				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnDays, /warrantyDays and /variants/<n>/warrantyDays (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -6592,9 +6592,16 @@
 										"enum": [
 											"physical",
 											"digital",
-											"booking"
+											"service"
 										],
-										"description": "digital needs Digital goods, booking needs Bookings."
+										"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+									},
+									"typeKey": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "Its item type: a key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service), of its kind; null or '': its first category's (or the nearest one above it), else the built-in type of its kind. While the product has units in stock its item type cannot change (409 conflict)."
 									},
 									"status": {
 										"type": "string",
@@ -6789,6 +6796,52 @@
 													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
+												"parcel": {
+													"type": [
+														"object",
+														"null"
+													],
+													"additionalProperties": false,
+													"properties": {
+														"weightG": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Grams."
+														},
+														"lengthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"widthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"heightMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														}
+													},
+													"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+												},
 												"attributes": {
 													"type": "object",
 													"additionalProperties": {
@@ -6947,16 +7000,55 @@
 										],
 										"description": "Single-variant shortcut."
 									},
+									"parcel": {
+										"type": [
+											"object",
+											"null"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"weightG": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Grams."
+											},
+											"lengthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"widthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"heightMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											}
+										},
+										"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+									},
 									"trackStock": {
 										"type": "boolean",
 										"description": "false: never runs out (default: true for physical products)."
-									},
-									"serialized": {
-										"type": [
-											"boolean",
-											"null"
-										],
-										"description": "Each unit gets a serial number when packed (needs Grades and serials); null: as its categories say."
 									},
 									"digital": {
 										"type": "object",
@@ -6985,7 +7077,7 @@
 												"maximum": 1440
 											}
 										},
-										"description": "Booking products: required."
+										"description": "A service booked in time slots (its item type's slots): required."
 									},
 									"seo": {
 										"type": "object",
@@ -7360,7 +7452,7 @@
 							"enum": [
 								"physical",
 								"digital",
-								"booking"
+								"service"
 							]
 						}
 					},
@@ -7549,7 +7641,7 @@
 							"enum": [
 								"physical",
 								"digital",
-								"booking"
+								"service"
 							]
 						}
 					},
@@ -7834,7 +7926,7 @@
 			},
 			"patch": {
 				"summary": "Change a product (by id or slug) (Catalog admin widget)",
-				"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed (as when creating one, also for values of a part its item type does not have); 404 not_found; 409 conflict when the slug or a SKU is used by another product, or when its item type would change while it has units in stock. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -7876,9 +7968,16 @@
 										"enum": [
 											"physical",
 											"digital",
-											"booking"
+											"service"
 										],
-										"description": "digital needs Digital goods, booking needs Bookings."
+										"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+									},
+									"typeKey": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "Its item type: a key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service), of its kind; null or '': its first category's (or the nearest one above it), else the built-in type of its kind. While the product has units in stock its item type cannot change (409 conflict)."
 									},
 									"status": {
 										"type": "string",
@@ -8073,6 +8172,52 @@
 													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
+												"parcel": {
+													"type": [
+														"object",
+														"null"
+													],
+													"additionalProperties": false,
+													"properties": {
+														"weightG": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Grams."
+														},
+														"lengthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"widthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"heightMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														}
+													},
+													"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+												},
 												"attributes": {
 													"type": "object",
 													"additionalProperties": {
@@ -8231,16 +8376,55 @@
 										],
 										"description": "Single-variant shortcut."
 									},
+									"parcel": {
+										"type": [
+											"object",
+											"null"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"weightG": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Grams."
+											},
+											"lengthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"widthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"heightMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											}
+										},
+										"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+									},
 									"trackStock": {
 										"type": "boolean",
 										"description": "false: never runs out (default: true for physical products)."
-									},
-									"serialized": {
-										"type": [
-											"boolean",
-											"null"
-										],
-										"description": "Each unit gets a serial number when packed (needs Grades and serials); null: as its categories say."
 									},
 									"digital": {
 										"type": "object",
@@ -8269,7 +8453,7 @@
 												"maximum": 1440
 											}
 										},
-										"description": "Booking products: required."
+										"description": "A service booked in time slots (its item type's slots): required."
 									},
 									"seo": {
 										"type": "object",
@@ -13397,7 +13581,7 @@
 			},
 			"post": {
 				"summary": "Create a category",
-				"description": "422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off); 409 conflict when another category has the slug. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on. Send an Idempotency-Key so a retried request makes one category.",
+				"description": "422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off; /typeKey: no such item type, or one no longer offered); 409 conflict when another category has the slug. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on. Send an Idempotency-Key so a retried request makes one category.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -13540,12 +13724,12 @@
 										"maxLength": 64,
 										"description": "An existing size chart's id (Size charts must be on), or null or '' for none."
 									},
-									"requiresSerial": {
+									"typeKey": {
 										"type": [
-											"boolean",
+											"string",
 											"null"
 										],
-										"description": "null: as its parent."
+										"description": "A key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service); null or '': its parent's. A change of its type or place that would give products with units in stock another item type is refused (409 conflict)."
 									}
 								},
 								"required": [
@@ -13685,7 +13869,7 @@
 			},
 			"patch": {
 				"summary": "Change a category",
-				"description": "Only the members sent change. Moving it (parentId) moves its subcategories along; a changed slug is kept in previousSlugs (its old address redirects). 404 not_found; 422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off); 409 conflict when another category has the slug. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on.",
+				"description": "Only the members sent change. Moving it (parentId) moves its subcategories along; a changed slug is kept in previousSlugs (its old address redirects). 404 not_found; 422 validation_failed lists every field problem (errors[].path, e.g. /name, /parentId: an unknown parent, the category itself or one below it, more than 10 levels; /sizeChartId: no such chart, or Size charts is off; /typeKey: no such item type, or one no longer offered); 409 conflict when another category has the slug, or when the change would give products with units in stock another item type. An active category's page is sent to IndexNow when the SEO setting indexNowOnSave is on.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -21456,7 +21640,7 @@
 							"enum": [
 								"physical",
 								"digital",
-								"booking"
+								"service"
 							]
 						}
 					},
@@ -21596,7 +21780,7 @@
 			},
 			"post": {
 				"summary": "Create a product",
-				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade, location or item type, several variants without Variants; values of a part its item type does not have, each at its path: /variants and /options (variants), /variants/<n>/grade (grades), /sizeChartId (chart), /variants/<n>/parcel (parcel), /returnDays, /warrantyDays and /variants/<n>/warrantyDays (warranty), /digital/downloadLimit (downloads), /digital/licenceKeys (licenceKeys), /booking (slots), /specs/<id> and /variants/<n>/attributes/<id> (a field the type does not name)); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -21654,9 +21838,16 @@
 										"enum": [
 											"physical",
 											"digital",
-											"booking"
+											"service"
 										],
-										"description": "digital needs Digital goods, booking needs Bookings."
+										"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+									},
+									"typeKey": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "Its item type: a key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service), of its kind; null or '': its first category's (or the nearest one above it), else the built-in type of its kind. While the product has units in stock its item type cannot change (409 conflict)."
 									},
 									"status": {
 										"type": "string",
@@ -21851,6 +22042,52 @@
 													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
+												"parcel": {
+													"type": [
+														"object",
+														"null"
+													],
+													"additionalProperties": false,
+													"properties": {
+														"weightG": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Grams."
+														},
+														"lengthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"widthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"heightMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														}
+													},
+													"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+												},
 												"attributes": {
 													"type": "object",
 													"additionalProperties": {
@@ -22009,16 +22246,55 @@
 										],
 										"description": "Single-variant shortcut."
 									},
+									"parcel": {
+										"type": [
+											"object",
+											"null"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"weightG": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Grams."
+											},
+											"lengthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"widthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"heightMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											}
+										},
+										"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+									},
 									"trackStock": {
 										"type": "boolean",
 										"description": "false: never runs out (default: true for physical products)."
-									},
-									"serialized": {
-										"type": [
-											"boolean",
-											"null"
-										],
-										"description": "Each unit gets a serial number when packed (needs Grades and serials); null: as its categories say."
 									},
 									"digital": {
 										"type": "object",
@@ -22047,7 +22323,7 @@
 												"maximum": 1440
 											}
 										},
-										"description": "Booking products: required."
+										"description": "A service booked in time slots (its item type's slots): required."
 									},
 									"seo": {
 										"type": "object",
@@ -22433,7 +22709,7 @@
 							"enum": [
 								"physical",
 								"digital",
-								"booking"
+								"service"
 							]
 						}
 					},
@@ -22633,7 +22909,7 @@
 							"enum": [
 								"physical",
 								"digital",
-								"booking"
+								"service"
 							]
 						}
 					},
@@ -22964,7 +23240,7 @@
 			},
 			"patch": {
 				"summary": "Change a product (by id or slug)",
-				"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+				"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed (as when creating one, also for values of a part its item type does not have); 404 not_found; 409 conflict when the slug or a SKU is used by another product, or when its item type would change while it has units in stock. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -23017,9 +23293,16 @@
 										"enum": [
 											"physical",
 											"digital",
-											"booking"
+											"service"
 										],
-										"description": "digital needs Digital goods, booking needs Bookings."
+										"description": "digital needs Digital goods, service needs Bookings. Not given: the kind of the item type typeKey names, else (a new product) its category's item type's, else physical."
+									},
+									"typeKey": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "Its item type: a key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service), of its kind; null or '': its first category's (or the nearest one above it), else the built-in type of its kind. While the product has units in stock its item type cannot change (409 conflict)."
 									},
 									"status": {
 										"type": "string",
@@ -23214,6 +23497,52 @@
 													"maximum": 3650,
 													"description": "null: the product’s, then the grade’s, then the returns setting."
 												},
+												"parcel": {
+													"type": [
+														"object",
+														"null"
+													],
+													"additionalProperties": false,
+													"properties": {
+														"weightG": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Grams."
+														},
+														"lengthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"widthMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														},
+														"heightMm": {
+															"type": [
+																"integer",
+																"null"
+															],
+															"minimum": 1,
+															"maximum": 10000000,
+															"description": "Millimeters."
+														}
+													},
+													"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+												},
 												"attributes": {
 													"type": "object",
 													"additionalProperties": {
@@ -23372,16 +23701,55 @@
 										],
 										"description": "Single-variant shortcut."
 									},
+									"parcel": {
+										"type": [
+											"object",
+											"null"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"weightG": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Grams."
+											},
+											"lengthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"widthMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											},
+											"heightMm": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"minimum": 1,
+												"maximum": 10000000,
+												"description": "Millimeters."
+											}
+										},
+										"description": "Its package (an item type with the parcel element, while Delivery zones is on): the weight in grams and the length, width and height in millimeters (all three or none); courier bookings and the feeds' shipping weight read it. null clears it."
+									},
 									"trackStock": {
 										"type": "boolean",
 										"description": "false: never runs out (default: true for physical products)."
-									},
-									"serialized": {
-										"type": [
-											"boolean",
-											"null"
-										],
-										"description": "Each unit gets a serial number when packed (needs Grades and serials); null: as its categories say."
 									},
 									"digital": {
 										"type": "object",
@@ -23410,7 +23778,7 @@
 												"maximum": 1440
 											}
 										},
-										"description": "Booking products: required."
+										"description": "A service booked in time slots (its item type's slots): required."
 									},
 									"seo": {
 										"type": "object",
@@ -34444,7 +34812,7 @@
 						"enum": [
 							"physical",
 							"digital",
-							"booking"
+							"service"
 						]
 					},
 					"name": {
@@ -34602,7 +34970,7 @@
 					"content",
 					"faqs",
 					"sizeChartId",
-					"requiresSerial",
+					"typeKey",
 					"image",
 					"previousSlugs"
 				],
@@ -34682,12 +35050,12 @@
 						],
 						"description": "Its size chart (Size charts), shown for its products without their own or their brand's."
 					},
-					"requiresSerial": {
+					"typeKey": {
 						"type": [
-							"boolean",
+							"string",
 							"null"
 						],
-						"description": "Its products have serial numbers captured when packed (Grades and serials); null: as its parent."
+						"description": "The item type its products have unless they name their own (a key of the item_types list, or a built-in type); null: its parent's."
 					},
 					"image": {
 						"oneOf": [
@@ -34856,12 +35224,12 @@
 						"maxLength": 64,
 						"description": "An existing size chart's id (Size charts must be on), or null or '' for none."
 					},
-					"requiresSerial": {
+					"typeKey": {
 						"type": [
-							"boolean",
+							"string",
 							"null"
 						],
-						"description": "null: as its parent."
+						"description": "A key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service); null or '': its parent's. A change of its type or place that would give products with units in stock another item type is refused (409 conflict)."
 					}
 				}
 			},
@@ -41740,7 +42108,7 @@
 						"enum": [
 							"physical",
 							"digital",
-							"booking"
+							"service"
 						]
 					},
 					"name": {
@@ -41893,9 +42261,25 @@
 						],
 						"description": "The line's deal at placement."
 					},
-					"serialized": {
-						"type": "boolean",
-						"description": "Whether the line takes serial numbers; only while Grades and serials is on."
+					"unitCapture": {
+						"type": "string",
+						"enum": [
+							"stock",
+							"packing"
+						],
+						"description": "How the line's units are numbered, as its item type says: picked from units in stock when packing, or typed at packing or later (PATCH serials); missing when its type numbers none or Grades and serials is off."
+					},
+					"unitsRequiredBefore": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"packed",
+							"shipped",
+							null
+						],
+						"description": "The step the line's units are needed before (shipped also covers delivered); null: never needed. With unitCapture."
 					},
 					"unitFields": {
 						"type": "array",
@@ -42369,11 +42753,10 @@
 							"type": "string",
 							"enum": [
 								"note",
-								"reason",
-								"units"
+								"reason"
 							]
 						},
-						"description": "What staff give with the move: note (a staff note), reason (a note for the shopper, shopperNote), units (every serial number, typed serials)."
+						"description": "What staff give with the move: note (a staff note), reason (a note for the shopper, shopperNote). The units' numbers a step needs follow the lines' item types (unitsRequiredBefore)."
 					},
 					"options": {
 						"$ref": "#/components/schemas/OrderMoveOptions"
@@ -43265,6 +43648,7 @@
 					"slug",
 					"name",
 					"kind",
+					"type",
 					"status",
 					"summary",
 					"description",
@@ -43277,7 +43661,7 @@
 					"options",
 					"variants",
 					"trackStock",
-					"serialized",
+					"typeKey",
 					"digital",
 					"booking",
 					"seo",
@@ -43318,8 +43702,31 @@
 						"enum": [
 							"physical",
 							"digital",
-							"booking"
+							"service"
 						]
+					},
+					"type": {
+						"type": "object",
+						"required": [
+							"key",
+							"kind"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string",
+								"description": "The item type's key (a built-in type's key is its kind)."
+							},
+							"kind": {
+								"type": "string",
+								"enum": [
+									"physical",
+									"digital",
+									"service"
+								]
+							}
+						},
+						"description": "Its item type: its own, else its first category's (or the nearest one above it), else the built-in type of its kind; its elements decide the parts the product has."
 					},
 					"status": {
 						"type": "string",
@@ -43420,12 +43827,12 @@
 					"trackStock": {
 						"type": "boolean"
 					},
-					"serialized": {
+					"typeKey": {
 						"type": [
-							"boolean",
+							"string",
 							"null"
 						],
-						"description": "null: as its categories say."
+						"description": "Its own item type (a key of the item_types list, or a built-in type: physical, digital, service); null: its first category's, else the built-in type of its kind."
 					},
 					"digital": {
 						"oneOf": [
@@ -43528,7 +43935,8 @@
 									}
 								}
 							}
-						]
+						],
+						"description": "A service booked in time slots (its item type's slots): how long one lasts; null otherwise."
 					},
 					"seo": {
 						"$ref": "#/components/schemas/ProductSeo"
@@ -44022,6 +44430,7 @@
 					"slug",
 					"name",
 					"kind",
+					"typeKey",
 					"status",
 					"price",
 					"inStock",
@@ -44055,8 +44464,15 @@
 						"enum": [
 							"physical",
 							"digital",
-							"booking"
+							"service"
 						]
+					},
+					"typeKey": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Its own item type (a key of the item_types list, or a built-in type: physical, digital, service); null: its first category's, else the built-in type of its kind."
 					},
 					"status": {
 						"type": "string",
@@ -48056,7 +48472,7 @@
 						"enum": [
 							"physical",
 							"digital",
-							"booking"
+							"service"
 						]
 					},
 					"name": {
@@ -48372,6 +48788,7 @@
 					"slug",
 					"name",
 					"kind",
+					"type",
 					"summary",
 					"description",
 					"descriptionHtml",
@@ -48413,8 +48830,31 @@
 						"enum": [
 							"physical",
 							"digital",
-							"booking"
+							"service"
 						]
+					},
+					"type": {
+						"type": "object",
+						"required": [
+							"key",
+							"kind"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string",
+								"description": "The item type's key (a built-in type's key is its kind)."
+							},
+							"kind": {
+								"type": "string",
+								"enum": [
+									"physical",
+									"digital",
+									"service"
+								]
+							}
+						},
+						"description": "Its item type: its own, else its first category's (or the nearest one above it), else the built-in type of its kind; its elements decide the parts the product has."
 					},
 					"summary": {
 						"type": "string"
@@ -48717,7 +49157,8 @@
 									}
 								}
 							}
-						]
+						],
+						"description": "A service booked in time slots (its item type's slots, while Bookings is on): how long one lasts; null otherwise."
 					},
 					"sizeChart": {
 						"oneOf": [
@@ -50437,6 +50878,49 @@
 						"minimum": 0,
 						"maximum": 3650,
 						"description": "null: the product’s, then the grade’s, then the returns setting."
+					},
+					"parcel": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"weightG": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 10000000,
+								"description": "Grams."
+							},
+							"lengthMm": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 10000000,
+								"description": "Millimeters."
+							},
+							"widthMm": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 10000000,
+								"description": "Millimeters."
+							},
+							"heightMm": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": 1,
+								"maximum": 10000000,
+								"description": "Millimeters."
+							}
+						},
+						"description": "Its package: the weight in grams and the length, width and height in millimeters (null when not known); missing when nothing is known."
 					},
 					"feedId": {
 						"type": "string",

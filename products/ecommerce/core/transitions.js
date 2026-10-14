@@ -15,7 +15,8 @@
  *
  * - into `awaiting_payment` or `open` from `packed`: serial numbers captured go back (units → none); back to waiting,
  *   the time to pay starts again (the move's `window`: `restart`, or `none`);
- * - into `packed`: the serial numbers of the packing plan are captured (units → captured); the dispatch video is kept;
+ * - into `packed`, `shipped` or `delivered`: the serial numbers of the move's plan are captured (units → captured;
+ *   the item types say which lines need them by which stage); into `packed` the dispatch video is kept;
  * - into `shipped`: the shipment;
  * - into `delivered`: stock held → sold, units counted sold, cash on delivery paid (`rules.paidOnDelivery`), earned
  *   points credited once (`loyalty`, none → credited);
@@ -102,17 +103,17 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  * @property {Record<string, unknown>} [where] more the order must match (Payments' confirmation: still pending)
  * @property {NonNullable<OrderRecord['shipment']>} [shipment] the shipment of a move into `shipped`
  * @property {NonNullable<OrderRecord['media']>[number]} [video] the dispatch video of a move into `packed`
- * @property {{ plan: UnitsPlan, mode: 'registered' | 'typed' }} [units] the serial numbers a move into `packed` captures
+ * @property {{ plan: UnitsPlan }} [units] the serial numbers a move into `packed`, `shipped` or `delivered` captures
  * @property {{ set: Record<string, unknown>, entry: Record<string, unknown> }} [paid] a payment the move records
  *   (paid when staff confirm, OR-7; Payments' confirmation)
  * @property {Record<string, unknown>} [payments] what canceling the open Payments payment writes (K-13)
  */
 
 /**
- * The units a capture gives each line: their serials, the ones it had, and (typed units) each unit's values and keys in
- * the serials' order.
+ * The units a capture gives each line: their serials, the ones it had, how its item type numbers them (picked from
+ * `stock`, or typed at `packing` or later) and (typed units) each unit's values and keys in the serials' order.
  * @typedef {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[],
- *   units?: import('./fields.js').UnitRecordValues[] }>} UnitsPlan
+ *   capture: import('./item-types.js').UnitCapture, units?: import('./fields.js').UnitRecordValues[] }>} UnitsPlan
  */
 
 /**
@@ -127,7 +128,7 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  *   | { kind: 'count_sold', lines: Array<{ productId: string, quantity: number }> }
  *   | { kind: 'count_rto', customerId: string }
  *   | { kind: 'release_units' }
- *   | { kind: 'capture_units', plan: UnitsPlan, mode: 'registered' | 'typed' }} LedgerEffect
+ *   | { kind: 'capture_units', plan: UnitsPlan }} LedgerEffect
  */
 /** @typedef {{ productId: string, variantId: string, quantity: number, locationId: string | null }} StockLine */
 
@@ -445,6 +446,17 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		return { online: Math.max(0, online - pending), manual };
 	};
 
+	/** The serial numbers of the move's plan are captured (moves into packed, shipped or delivered). */
+	const captureUnits = () => {
+		const plan = input.units?.plan ?? [];
+		if (plan.length === 0) return;
+		const byLine = new Map(plan.map((line) => [line.lineId, line.serials]));
+		const lines = order.lines.map((line) => (byLine.has(line.id) ? { ...line, serials: byLine.get(line.id) ?? [] } : line));
+		set.lines = lines;
+		ledger.push({ kind: 'capture_units', plan });
+		after.units = lines.some((line) => (line.serials ?? []).length > 0) ? 'captured' : 'none';
+	};
+
 	/** Serial numbers captured go back (back to open or waiting from packed, E27). */
 	const unpack = () => {
 		if (fromStage !== 'packed' || !hasUnits(order)) return;
@@ -564,22 +576,15 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			break;
 		case 'packed': {
 			if (input.video) media.media = input.video;
-			const plan = input.units?.plan ?? [];
-			if (plan.length > 0) {
-				const byLine = new Map(plan.map((line) => [line.lineId, line.serials]));
-				const lines = order.lines.map((line) =>
-					byLine.has(line.id) ? { ...line, serials: byLine.get(line.id) ?? [] } : line,
-				);
-				set.lines = lines;
-				ledger.push({ kind: 'capture_units', plan, mode: input.units?.mode ?? 'registered' });
-				after.units = lines.some((line) => (line.serials ?? []).length > 0) ? 'captured' : 'none';
-			}
+			captureUnits();
 			break;
 		}
 		case 'shipped':
 			if (input.shipment) set.shipment = input.shipment;
+			captureUnits();
 			break;
 		case 'delivered': {
+			captureUnits();
 			set.deliveredAt = new Date(now);
 			// cash taken at the door counts as paid on delivery, unless staff record it (E23 `paidOnDelivery: false`)
 			if (
@@ -733,8 +738,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
  * Plan serial numbers staff type for a packed, shipped or delivered order (typed serials, E11), without a status
  * change: they are captured in the transaction that writes the order's lines, its facts (units) and a history entry,
  * guarded like a transition.
- * @param {{ order: OrderRecord, units: { plan: UnitsPlan, mode: 'registered' | 'typed' },
- *   history: Record<string, unknown> }} request
+ * @param {{ order: OrderRecord, units: { plan: UnitsPlan }, history: Record<string, unknown> }} request
  * @returns {TransitionPlan}
  */
 export const planUnits = ({ order, units, history }) => {
@@ -753,7 +757,7 @@ export const planUnits = ({ order, units, history }) => {
 		set: { lines, facts: after },
 		push: { history },
 		inc: {},
-		ledger: [{ kind: 'capture_units', plan: units.plan, mode: units.mode }],
+		ledger: [{ kind: 'capture_units', plan: units.plan }],
 		external: [],
 		history,
 		recorded: null,

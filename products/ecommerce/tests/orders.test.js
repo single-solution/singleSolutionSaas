@@ -12,7 +12,7 @@ import { createCheckout } from '../server/checkout.js';
 import { createOrders } from '../server/orders.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, readyShop, storedUnit } from './helpers.js';
+import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, UNIT_TYPES, readyShop, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -23,6 +23,7 @@ let ticket;
 
 beforeAll(async () => {
 	shop = await readyShop();
+	await shop.list('item_types', UNIT_TYPES);
 	data = await shop.db();
 	await data.ensureIndexes((await import('../adapters/product.js')).INDEXES);
 	ticket = await shop.ticket();
@@ -48,7 +49,7 @@ const ADDRESS = {
 /**
  * Place an order with the ledger (stock is held as at checkout).
  * @param {{ price?: number, quantity?: number, stock?: number, method?: 'cod' | 'online' | 'bank_transfer' | 'pickup',
- *   paid?: boolean, status?: string, role?: import('../core/model.js').StatusRole, serialized?: boolean,
+ *   paid?: boolean, status?: string, role?: import('../core/model.js').StatusRole, numbered?: boolean,
  *   address?: typeof ADDRESS | null, userId?: string, name?: string, email?: string, phone?: string,
  *   promotions?: Partial<import('../core/model.js').OrderRecord['promotions']>, advance?: number }} [options]
  */
@@ -59,7 +60,7 @@ const place = async (options = {}) => {
 		stock = 10,
 		method = 'cod',
 		paid = false,
-		serialized = false,
+		numbered = false,
 		address = ADDRESS,
 		userId = 'usr_shopper0000001',
 		name = 'Sara Shopper',
@@ -67,7 +68,14 @@ const place = async (options = {}) => {
 		phone = '+15550001111',
 		advance = 0,
 	} = options;
-	const product = await shop.seedProduct({ stock, price, serialized, sku: 'SKU-1', media: [] });
+	// `numbered`: its item type picks its units from stock when packing
+	const product = await shop.seedProduct({
+		stock,
+		price,
+		...(numbered ? { typeKey: 'numbered' } : {}),
+		sku: 'SKU-1',
+		media: [],
+	});
 	const variant = /** @type {import('../core/model.js').VariantRecord} */ (product.variants[0]);
 	// the order's customer record, as checkout makes it (K-6)
 	const customer = await createOrdersStore(data).ensureCustomer({ userId, name, email, phone }, { at: new Date(shop.now()) });
@@ -275,8 +283,8 @@ describe('moving orders', () => {
 		).toBe(403);
 	});
 
-	it('captures serial numbers when packing serialized items', async () => {
-		const { order, product, variant } = await place({ serialized: true, quantity: 2, method: 'online', paid: true });
+	it('captures serial numbers when packing items whose type numbers their units', async () => {
+		const { order, product, variant } = await place({ numbered: true, quantity: 2, method: 'online', paid: true });
 		const serials = data.collection(COLLECTIONS.serials);
 		for (const serial of ['SN-1', 'SN-2', 'SN-3'])
 			await serials.insertOne(
@@ -329,7 +337,7 @@ describe('moving orders', () => {
 		expect(await serials.countDocuments({ websiteId: data.websiteId, orderId: order.id })).toBe(0);
 	});
 
-	it('packs without serials when the product is not serialized', async () => {
+	it('packs without serials when the product’s type numbers no units', async () => {
 		const { order } = await place({ method: 'online', paid: true });
 		const packed = await move(order.id, 'packed');
 		expect(packed.status).toBe(200);

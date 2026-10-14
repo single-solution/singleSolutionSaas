@@ -133,10 +133,7 @@ function MoveSettings({ flow, move, onChange }) {
 					))}
 				<CheckboxGroup
 					legend={F.needs}
-					options={MOVE_NEEDS.filter((need) => need !== 'units' || to === 'shipped' || to === 'delivered').map((need) => ({
-						value: need,
-						label: F.needChoices[need],
-					}))}
+					options={MOVE_NEEDS.map((need) => ({ value: need, label: F.needChoices[need] }))}
 					value={rules.needs}
 					onChange={(next) => set({ needs: /** @type {OrderMove['needs']} */ (next) })}
 				/>

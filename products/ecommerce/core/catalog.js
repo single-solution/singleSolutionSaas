@@ -1,18 +1,21 @@
 /**
  * The catalog's product rules (PLAN 0.8.8 Catalog, Items): what a product and its variants may hold, checked against
- * what is switched on (variants, multi-location stock, grades and serials, digital goods, bookings) and the website's
- * categories, brands, attributes, locations and grades. A check returns the product's next editable fields (a new
- * product, or an existing one with the changes applied); the adapter writes them. Stock of an existing variant is
- * never changed here (that is the stock routes' job, so a product edit cannot undo an order's stock hold). Storage keys
- * a product already holds stay valid whatever their folder; only new ones must be under its folder (CA-5). A draft may
- * have no variant yet (an imported shell, CA-2); it goes on sale once it has one. With `importing` (the `import`
- * feature, PLAN 0.8.10 Migration) the record's own variant ids, stock, photo keys and file facts are taken as given.
- * Also the text helpers (slugs, bounded text) and price changes of bulk actions. No I/O.
+ * what is switched on (variants, multi-location stock, grades and serials, digital goods, bookings), the product's item
+ * type (`core/item-types.js`: values of an element its type does not have are refused, with their path; a type that
+ * names fields takes only those) and the website's categories, brands, attributes, locations and grades. A check
+ * returns the product's next editable fields (a new product, or an existing one with the changes applied); the adapter
+ * writes them. Stock of an existing variant is never changed here (that is the stock routes' job, so a product edit
+ * cannot undo an order's stock hold). Storage keys a product already holds stay valid whatever their folder; only new
+ * ones must be under its folder (CA-5). A draft may have no variant yet (an imported shell, CA-2); it goes on sale once
+ * it has one. With `importing` (the `import` feature, PLAN 0.8.10 Migration) the record's own variant ids, stock, photo
+ * keys and file facts are taken as given. Also the text helpers (slugs, bounded text) and price changes of bulk
+ * actions. No I/O.
  * @module
  */
 import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
+import { categoryTypeKey, typeByKey, typeOf, typeTakes } from './item-types.js';
 import {
 	VIDEO_TYPES,
 	checkFaqs,
@@ -52,6 +55,7 @@ export const LIMITS = Object.freeze({
 	days: 3650,
 	stock: 1_000_000_000,
 	downloadLimit: 1000,
+	parcel: 10_000_000,
 	media: 20,
 	alt: 200,
 	variantMedia: 24,
@@ -65,7 +69,7 @@ export const LIMITS = Object.freeze({
 });
 
 /** Product kinds and statuses. */
-const KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'booking']));
+const KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'service']));
 const STATUSES = Object.freeze(/** @type {const} */ (['draft', 'active', 'archived']));
 
 /** Slugs: lowercase letters of any script, digits, single dashes. */
@@ -191,11 +195,14 @@ export const summarize = (variants, trackStock) => {
  * @property {boolean} grades `grades_serials` is on
  * @property {boolean} digital `digital_goods` is on
  * @property {boolean} bookings `bookings` is on
+ * @property {boolean} parcels `delivery_zones` is on (variants keep their package)
  * @property {ReadonlySet<string>} gradeKeys keys of the `grades` list
  * @property {ReadonlySet<string>} locationIds
  * @property {ReadonlySet<string>} categoryIds
  * @property {ReadonlyMap<string, ReadonlyArray<string>>} categoryPaths each category's ancestors (required fields apply by
  *   the categories a product is in and those above them)
+ * @property {ReadonlyMap<string, string | null>} categoryTypes each category's own item type key (null: its parent's)
+ * @property {ReadonlyArray<import('./item-types.js').ItemType>} types the merchant's item types
  * @property {ReadonlySet<string>} brandIds
  * @property {ReadonlyMap<string, AttributeRecord>} attributes
  * @property {(prefix: string) => string} newId
@@ -237,7 +244,7 @@ export const heldKeys = (product) =>
  * The editable fields of a product (everything the adapter writes; `price`, `inStock`, `sold`, `rating`, `publishedAt`
  * and the timestamps are kept by the adapter and the ledger).
  * @typedef {Pick<ProductRecord, 'slug' | 'name' | 'kind' | 'status' | 'summary' | 'description' | 'categoryIds' | 'brandId'
- *   | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'serialized' | 'digital' | 'booking' | 'seo' | 'returnDays'
+ *   | 'typeKey' | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'digital' | 'booking' | 'seo' | 'returnDays'
  *   | 'warrantyDays' | 'feedGroupId'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId'
  *   | 'hideSizeGuide' | 'attributeSetup' | 'faqs'>>} ProductFields `slug` '' = make one from the name
  */
@@ -452,6 +459,39 @@ const importedFeedId = (value, path, errors) => {
 	return '';
 };
 
+/** The parts of a package: its weight in grams, its size in millimeters. */
+const PARCEL_PARTS = Object.freeze(/** @type {const} */ (['weightG', 'lengthMm', 'widthMm', 'heightMm']));
+
+/**
+ * A variant's package (an item type with the `parcel` element): its weight in grams and its length, width and height in
+ * millimeters, each a whole number from 1 or null, the size given whole or not at all; null when nothing is known.
+ * @param {unknown} value @param {string} path @param {FieldError[]} errors
+ * @returns {import('./model.js').Parcel | null}
+ */
+const parcelOf = (value, path, errors) => {
+	if (value === null) return null;
+	if (!isObject(value) || Object.keys(value).some((part) => !PARCEL_PARTS.includes(/** @type {any} */ (part)))) {
+		errors.push({ path, message: 'Give the package as { weightG, lengthMm, widthMm, heightMm }, or null.' });
+		return null;
+	}
+	/** @type {Record<string, number | null>} */
+	const out = {};
+	for (const part of PARCEL_PARTS) {
+		const given = value[part] ?? null;
+		const ok = given === null || (Number.isSafeInteger(given) && given >= 1 && given <= LIMITS.parcel);
+		if (!ok)
+			errors.push({
+				path: `${path}/${part}`,
+				message: `Give whole grams or millimeters from 1 to ${LIMITS.parcel}, or null.`,
+			});
+		out[part] = ok ? given : null;
+	}
+	const sizes = [out.lengthMm, out.widthMm, out.heightMm].filter((size) => size !== null).length;
+	if (sizes !== 0 && sizes !== 3)
+		errors.push({ path: `${path}/lengthMm`, message: 'Give the length, the width and the height together.' });
+	return Object.values(out).every((part) => part === null) ? null : /** @type {import('./model.js').Parcel} */ (out);
+};
+
 /**
  * A variant from input, merged over the existing one (whose stock is kept).
  * @param {Record<string, any>} input
@@ -495,6 +535,8 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 	if (input.soldOut !== undefined && typeof input.soldOut !== 'boolean') fail('soldOut', 'Sold out is true or false.');
 	const warrantyDays = input.warrantyDays === undefined ? (existing?.warrantyDays ?? null) : input.warrantyDays;
 	if (!isDays(warrantyDays)) fail('warrantyDays', `Give whole days from 0 to ${LIMITS.days}, or null.`);
+	const parcel = input.parcel === undefined ? (existing?.parcel ?? null) : parcelOf(input.parcel, `${path}/parcel`, errors);
+	if (input.parcel !== undefined && input.parcel !== null && !rules.parcels) fail('parcel', 'Switch on Delivery zones first.');
 	const attributes = variantAttributesOf(input, existing, rules, path, errors);
 	const media = variantMediaOf(input, existing, place, path, errors);
 	const stock = existing ? { stock: existing.stock, locations: existing.locations } : stockOf(input, rules, path, errors);
@@ -523,12 +565,24 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 		warrantyDays: isDays(warrantyDays) ? warrantyDays : (existing?.warrantyDays ?? null),
 		...(gtin ? { gtin } : {}),
 		...(mpn ? { mpn } : {}),
+		...(parcel ? { parcel } : {}),
 		...(feedId ? { feedId } : {}),
 	};
 };
 
 /** The fields of a single-variant product that may be given at the top level. */
-const SHORTCUT = Object.freeze(['sku', 'gtin', 'mpn', 'price', 'compareAtPrice', 'cost', 'stock', 'locations', 'grade']);
+const SHORTCUT = Object.freeze([
+	'sku',
+	'gtin',
+	'mpn',
+	'price',
+	'compareAtPrice',
+	'cost',
+	'stock',
+	'locations',
+	'grade',
+	'parcel',
+]);
 
 /**
  * The option axes and each variant's option values derived from variant attributes (E7): one axis per attribute used
@@ -763,6 +817,91 @@ export const missingVariants = (product, attributes, { price, stock }) => {
 };
 
 /**
+ * The website's categories as item types read them (each one's path and own type key).
+ * @param {Pick<CatalogRules, 'categoryPaths' | 'categoryTypes'>} rules
+ */
+const treeOf = (rules) =>
+	new Map([...rules.categoryPaths].map(([id, path]) => [id, { path: [...path], typeKey: rules.categoryTypes.get(id) ?? null }]));
+
+/**
+ * The item type of a product (its own, its first category's, else the built-in one of its kind), as a check sees it.
+ * @param {{ kind: string, typeKey?: string | null, categoryIds: string[] }} product
+ * @param {Pick<CatalogRules, 'categoryPaths' | 'categoryTypes' | 'types'>} rules
+ */
+export const productType = (product, rules) => typeOf(product, rules.types, treeOf(rules));
+
+/** @param {unknown} value whether a value is given (not missing, null, empty or an empty list or object) */
+const isGiven = (value) =>
+	value !== undefined &&
+	value !== null &&
+	value !== '' &&
+	!(Array.isArray(value) && value.length === 0) &&
+	!(isObject(value) && Object.keys(value).length === 0);
+
+/**
+ * Refuse values given for elements the product's item type does not have (dynamic model §1; a built-in type has every
+ * one), each at its path: several variants, options, variant fields and their setup (`variants`), grades, a size chart
+ * (`chart`), packages (`parcel`), per-item return and warranty days (`warranty`), a download limit (`downloads`), license
+ * keys (`licenceKeys`) and a booking duration (`slots`); and values of fields a merchant's type does not name.
+ * @param {Record<string, any>} input
+ * @param {import('./item-types.js').ItemType} type
+ * @param {FieldError[]} errors
+ */
+const typeGuards = (input, type, errors) => {
+	const name = type.name || type.key;
+	const on = type.elements;
+	/** @param {string} path @param {string} what */
+	const refuse = (path, what) => errors.push({ path, message: `${name} items have no ${what}: their item type leaves it out.` });
+	/** @param {string} path */
+	const notTaken = (path) => errors.push({ path, message: `This field is not one of the fields of ${name} items.` });
+	/** @type {Array<[number, Record<string, any>]>} */
+	const variants = Array.isArray(input.variants)
+		? input.variants.flatMap((entry, index) =>
+				isObject(entry) ? [/** @type {[number, Record<string, any>]} */ ([index, entry])] : [],
+			)
+		: [];
+	if (!on.variants) {
+		if (Array.isArray(input.variants) && input.variants.length > 1) refuse('/variants', 'variants');
+		if (isGiven(input.options)) refuse('/options', 'options');
+		if (isGiven(input.attributeSetup)) refuse('/attributeSetup', 'variant fields');
+		for (const [index, variant] of variants)
+			if (isObject(variant.attributes) && Object.values(variant.attributes).some(isGiven))
+				refuse(`/variants/${index}/attributes`, 'variant fields');
+	}
+	if (!on.grades) {
+		if (isGiven(input.grade)) refuse('/grade', 'grades');
+		for (const [index, variant] of variants) if (isGiven(variant.grade)) refuse(`/variants/${index}/grade`, 'grades');
+	}
+	if (!on.chart) {
+		if (isGiven(input.sizeChartId)) refuse('/sizeChartId', 'size chart');
+		if (input.hideSizeGuide === true) refuse('/hideSizeGuide', 'size chart');
+	}
+	if (!on.parcel) {
+		if (isGiven(input.parcel)) refuse('/parcel', 'package');
+		for (const [index, variant] of variants) if (isGiven(variant.parcel)) refuse(`/variants/${index}/parcel`, 'package');
+	}
+	if (!on.warranty) {
+		for (const days of ['returnDays', 'warrantyDays'])
+			if (isGiven(input[days])) refuse(`/${days}`, 'own return and warranty days');
+		for (const [index, variant] of variants)
+			if (isGiven(variant.warrantyDays)) refuse(`/variants/${index}/warrantyDays`, 'own return and warranty days');
+	}
+	if (type.kind === 'digital' && isObject(input.digital)) {
+		if (!on.downloads && isGiven(input.digital.downloadLimit) && input.digital.downloadLimit !== 0)
+			refuse('/digital/downloadLimit', 'downloads');
+		if (!on.licenceKeys && input.digital.licenceKeys === true) refuse('/digital/licenceKeys', 'license keys');
+	}
+	if (type.kind === 'service' && !on.slots && isGiven(input.booking)) refuse('/booking', 'booked time slots');
+	if (type.fieldIds === null) return;
+	if (isObject(input.specs))
+		for (const [id, value] of Object.entries(input.specs)) if (isGiven(value) && !typeTakes(type, id)) notTaken(`/specs/${id}`);
+	for (const [index, variant] of variants)
+		if (isObject(variant.attributes))
+			for (const [id, value] of Object.entries(variant.attributes))
+				if (isGiven(value) && !typeTakes(type, id)) notTaken(`/variants/${index}/attributes/${id}`);
+};
+
+/**
  * Check a new product or changes to an existing one, and give the next editable fields.
  * @param {unknown} body
  * @param {CatalogRules} rules
@@ -800,16 +939,19 @@ export const checkProduct = (body, rules, existing) => {
 	const name = field('name', (v) => cleanText(v, LIMITS.name) || null, '', `Give a name of 1 to ${LIMITS.name} characters.`);
 	if (!existing && input.name === undefined) fail('/name', 'Give the product a name.');
 	const slug = field('slug', (v) => (v === '' ? '' : isSlug(v) ? v : null), '', 'Use lowercase letters, digits and dashes.');
-	const kind = field(
-		'kind',
-		(v) => (KINDS.includes(/** @type {any} */ (v)) ? /** @type {any} */ (v) : null),
-		'physical',
-		'Kind is physical, digital or booking.',
-	);
-	if (kind === 'digital' && !rules.digital && (!existing || input.kind !== undefined))
-		fail('/kind', 'Switch on Digital goods to sell digital products.');
-	if (kind === 'booking' && !rules.bookings && (!existing || input.kind !== undefined))
-		fail('/kind', 'Switch on Bookings to sell bookings.');
+	// the item type (dynamic model §1): one of the list (offered, or the one it has) or a built-in one; null = its first
+	// category's, else the built-in type of its kind
+	let typeKey = existing?.typeKey ?? null;
+	/** @type {import('./item-types.js').ItemType | null} the type the input names */
+	let named = null;
+	if (input.typeKey !== undefined) {
+		const found = typeof input.typeKey === 'string' ? typeByKey(input.typeKey, rules.types) : null;
+		if (input.typeKey === null || input.typeKey === '') typeKey = null;
+		else if (found && (found.active || found.key === existing?.typeKey)) {
+			typeKey = found.key;
+			named = found;
+		} else fail('/typeKey', 'Pick an item type of your list, or null for its category’s.');
+	}
 	const status = field(
 		'status',
 		(v) => (STATUSES.includes(/** @type {any} */ (v)) ? /** @type {any} */ (v) : null),
@@ -837,6 +979,27 @@ export const checkProduct = (body, rules, existing) => {
 		/** @type {string[]} */ ([]),
 		'Pick existing categories.',
 	);
+	// the kind: as given, else the kind of the type the input names, else (a new product) its category's type's, else
+	// physical; a product's own type is of its kind
+	const tree = treeOf(rules);
+	const givenKind = input.kind === undefined || KINDS.includes(input.kind) ? input.kind : null;
+	if (givenKind === null) fail('/kind', 'Kind is physical, digital or service.');
+	const categoryKind = () => {
+		const first = categoryIds[0];
+		return first ? typeByKey(categoryTypeKey(first, rules.types, tree), rules.types)?.kind : undefined;
+	};
+	/** @type {import('./model.js').ProductKind} */
+	const kind = givenKind ?? named?.kind ?? existing?.kind ?? categoryKind() ?? 'physical';
+	const own = typeByKey(typeKey, rules.types);
+	if (own && own.kind !== kind)
+		fail('/typeKey', `${own.name || own.key} is an item type of ${own.kind} items: pick one of ${kind} items, or null.`);
+	if (kind === 'digital' && !rules.digital && (!existing || input.kind !== undefined))
+		fail('/kind', 'Switch on Digital goods to sell digital products.');
+	if (kind === 'service' && !rules.bookings && (!existing || input.kind !== undefined))
+		fail('/kind', 'Switch on Bookings to sell services.');
+	const type = typeOf({ kind, typeKey, categoryIds }, rules.types, tree);
+	typeGuards(input, type, errors);
+
 	let brandId = existing?.brandId ?? null;
 	if (input.brandId !== undefined) {
 		if (input.brandId === null || input.brandId === '') brandId = null;
@@ -887,7 +1050,8 @@ export const checkProduct = (body, rules, existing) => {
 	if (status === 'active') {
 		const lineage = categoryIds.flatMap((id) => [id, ...(rules.categoryPaths.get(id) ?? [])]);
 		for (const required of rules.attributes.values()) {
-			if (!required.required || !required.active || !fieldApplies(required, lineage)) continue;
+			if (!required.required || !required.active || !fieldApplies(required, lineage) || !typeTakes(type, required.id))
+				continue;
 			const needed = `${required.name} is required on products on sale.`;
 			if (required.on === 'product' && specs[required.id] === undefined) fail(`/specs/${required.id}`, needed);
 			if (required.on === 'variant')
@@ -904,13 +1068,6 @@ export const checkProduct = (body, rules, existing) => {
 		kind === 'physical',
 		'Track stock is true or false.',
 	);
-	/** @type {boolean | null} */
-	let serialized = existing ? existing.serialized : false;
-	if (input.serialized !== undefined) {
-		if (input.serialized === null || typeof input.serialized === 'boolean') serialized = input.serialized;
-		else fail('/serialized', 'Serialized is true, false or null (as its categories say).');
-	}
-	if (!rules.grades && input.serialized === true) fail('/serialized', 'Switch on Grades and serials first.');
 
 	/** @type {ProductRecord['digital']} */
 	let digital = null;
@@ -929,9 +1086,10 @@ export const checkProduct = (body, rules, existing) => {
 			downloadLimit: isCount(raw.downloadLimit, LIMITS.downloadLimit) ? raw.downloadLimit : before.downloadLimit,
 		};
 	}
+	// a service booked in time slots (its type's `slots`): how long one lasts
 	/** @type {ProductRecord['booking']} */
 	let booking = null;
-	if (kind === 'booking') {
+	if (kind === 'service' && type.elements.slots) {
 		const minutes = isObject(input.booking) ? input.booking.durationMinutes : existing?.booking?.durationMinutes;
 		if (!Number.isSafeInteger(minutes) || Number(minutes) < 5 || Number(minutes) > 1440)
 			fail('/booking/durationMinutes', 'A booking lasts 5 to 1440 minutes.');
@@ -1014,6 +1172,7 @@ export const checkProduct = (body, rules, existing) => {
 			slug,
 			name,
 			kind,
+			typeKey,
 			status,
 			summary,
 			description: plain,
@@ -1024,7 +1183,6 @@ export const checkProduct = (body, rules, existing) => {
 			options,
 			variants,
 			trackStock,
-			serialized,
 			digital,
 			booking,
 			seo,

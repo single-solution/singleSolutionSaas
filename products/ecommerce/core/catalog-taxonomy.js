@@ -95,11 +95,8 @@ const SORT_MESSAGE = 'Sort is a whole number.';
  * The editable fields of a category.
  * @typedef {Pick<CategoryRecord, 'name' | 'slug' | 'description' | 'seo' | 'sort'> & { parentId: string | null,
  *   status: CategoryStatus, icon: string, content: import('./catalog-content.js').Content,
- *   faqs: import('./catalog-content.js').Faq[], sizeChartId: string | null, requiresSerial: boolean | null }} CategoryFields
+ *   faqs: import('./catalog-content.js').Faq[], sizeChartId: string | null, typeKey: string | null }} CategoryFields
  */
-
-/** Stands for an explicit null among values a reader may answer (its null means "invalid"). */
-const NULL_FLAG = Symbol('null');
 
 /** An id of another record, or null to clear it (the route checks it exists). @param {unknown} v */
 const refOrNull = (v) => (v === null || v === '' ? NULL_REF : typeof v === 'string' && v.length <= 64 ? v : null);
@@ -162,11 +159,12 @@ export const checkCategory = (body, existing) => {
 		/** @type {string | null} */ (null),
 		'Pick an existing size chart, or null.',
 	);
-	const requiresSerial = read(
-		'requiresSerial',
-		(v) => (v === null ? NULL_FLAG : typeof v === 'boolean' ? v : null),
-		/** @type {boolean | null | typeof NULL_FLAG} */ (null),
-		'Requires serial is true, false or null (as its parent).',
+	// the item type its products have unless they name their own (the route checks it exists)
+	const typeKey = read(
+		'typeKey',
+		refOrNull,
+		/** @type {string | null} */ (null),
+		'Pick an item type, or null for its parent’s.',
 	);
 	if (errors.length > 0) return { ok: false, errors };
 	return {
@@ -183,7 +181,7 @@ export const checkCategory = (body, existing) => {
 			content,
 			faqs,
 			sizeChartId: sizeChartId || null,
-			requiresSerial: requiresSerial === NULL_FLAG ? null : requiresSerial,
+			typeKey: typeKey || null,
 		},
 	};
 };
@@ -409,8 +407,8 @@ const NULL_NUMBER = Symbol('no number');
  * merchant field (PLAN 0.8.10 dynamic model §2) whose values live on products, variants, units, orders or customers; its
  * type (text, number, choice, yes/no or date) with what the type takes (choices, a unit, a range and decimals, which
  * dates, a format), whether it takes several values (up to `maxValues`), whether it is required (order fields: at
- * checkout or before a stage), where its values show, its category scope, visibility and glossary (product and
- * variant fields). An attribute may be the definition for one category (`categoryId`, E45: the same slug once per
+ * checkout or before a stage), where its values show, its category scope (product and variant fields; unit fields
+ * apply through the item types that name them), visibility and glossary (product and variant fields). An attribute may be the definition for one category (`categoryId`, E45: the same slug once per
  * category, with its own name, choices, unit, glossary and SEO); null is for every category.
  * @param {unknown} body
  * @param {AttributeRecord | null} existing
@@ -552,6 +550,8 @@ export const checkAttribute = (body, existing) => {
 	);
 	if ((on === 'order' || on === 'customer') && (categoryId || categoryIds.length > 0))
 		errors.push({ path: '/categoryIds', message: 'Order and customer fields are for every order and customer.' });
+	if (on === 'unit' && (categoryId || categoryIds.length > 0))
+		errors.push({ path: '/categoryIds', message: 'Unit fields apply to the units of the item types that name them.' });
 	const visibility = read(
 		'visibility',
 		checkVisibility,

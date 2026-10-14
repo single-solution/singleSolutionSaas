@@ -6,7 +6,7 @@
  * back (no write stamps).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { STORAGE, readyShop } from './helpers.js';
+import { STORAGE, UNIT_TYPES, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -16,6 +16,7 @@ let staff;
 beforeAll(async () => {
 	shop = await readyShop();
 	staff = await shop.ticket(['catalog.edit']);
+	await shop.list('item_types', UNIT_TYPES);
 	await shop.list('grades', [
 		{ key: 'new', label: 'New', description: 'Sealed' },
 		{ key: 'used_a', label: 'Used A' },
@@ -69,7 +70,7 @@ describe('size charts, categories and brands through the admin widget', () => {
 			content: { summary: 'Why buy here', bullets: ['Fast delivery', { text: 'Warranty', icon: 'shield' }] },
 			faqs: [{ question: 'Are they new?', answer: 'Some are used.' }],
 			sizeChartId: chart.json.id,
-			requiresSerial: true,
+			typeKey: 'numbered',
 		});
 		expect(phones.status).toBe(201);
 		expect(phones.json).toMatchObject({
@@ -87,7 +88,7 @@ describe('size charts, categories and brands through the admin widget', () => {
 				],
 			},
 			sizeChartId: chart.json.id,
-			requiresSerial: true,
+			typeKey: 'numbered',
 			image: null,
 			previousSlugs: [],
 		});
@@ -226,7 +227,7 @@ describe('attributes, locations and serials through the admin widget', () => {
 		expect(back.json).toEqual({ ...floor.json, sort: 2 });
 		expect((await admin('GET', '/v1/admin/locations')).json.items).toEqual([back.json]);
 
-		const item = await shop.seedProduct({ name: 'Used phone' });
+		const item = await shop.seedProduct({ name: 'Used phone', typeKey: 'numbered' });
 		const variantId = /** @type {string} */ (item.variants[0]?.id);
 		const added = await admin('POST', '/v1/admin/serials', {
 			productId: item.id,

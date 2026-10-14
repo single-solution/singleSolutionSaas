@@ -100,7 +100,7 @@ describe('E1 category and brand status, content and scope', () => {
 				],
 			},
 			faqs: [{ question: 'Sizes?', answer: 'S to XL.' }],
-			requiresSerial: null,
+			typeKey: null,
 		});
 		expect((await shop.api('PATCH', `/v1/categories/${ids.clothes.id}`, { status: 'gone' })).status).toBe(422);
 		expect((await shop.api('PATCH', `/v1/categories/${ids.clothes.id}`, { content: { bullets: 'x' } })).status).toBe(422);

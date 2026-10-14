@@ -1,12 +1,13 @@
 /**
- * Units (serial numbers, PLAN 0.8.10 E11 and dynamic model §2) and warranty (E12) through the API: categories that
- * require serials; typed units at packing or later, checked against the shop's unit fields (an IMEI as one merchant's
- * field: 15 digits, Luhn, up to two per unit), needed before dispatch, shown to shoppers and printed as the fields say;
- * units added to stock checked the same way (no number names two units); registered units picked at packing; the
- * warranty each line keeps from placement (variant, product, grade, setting), used by claims and printed on invoices.
+ * Units (serial numbers, PLAN 0.8.10 E11 and dynamic model §1–§2) and warranty (E12) through the API: the item type of a
+ * category numbers its products' units; typed units at packing or later, checked against the type's unit fields (an IMEI
+ * as one merchant's field: 15 digits, Luhn, up to two per unit), needed before dispatch, shown to shoppers and printed as
+ * the fields say; units added to stock checked the same way (no number names two units), only for items whose type
+ * numbers them; units in stock picked at packing; the warranty each line keeps from placement (variant, product, grade,
+ * setting), used by claims and printed on invoices.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isSerialized, missingSerials, serialPlan } from '../core/orders.js';
+import { missingSerials, serialPlan } from '../core/orders.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, ORIGIN, readyShop } from './helpers.js';
 
@@ -44,37 +45,50 @@ const place = async (lines) => {
 /** @param {string} id @param {string} to @param {Record<string, unknown>} [extra] */
 const move = (id, to, extra = {}) => shop.api('POST', `/v1/orders/${id}/move`, { to, ...extra });
 
+/**
+ * The shop's item types: phones number their units by the IMEI and bin tag fields, typed at packing or later (needed
+ * before dispatch) or picked from stock; chargers by a plain serial number from stock.
+ * @param {'packing' | 'stock'} capture
+ */
+const saveTypes = (capture) =>
+	shop.list('item_types', [
+		{
+			key: 'phone',
+			name: 'Phone',
+			kind: 'physical',
+			elements: { variants: true, grades: true, warranty: true, units: { fieldIds: [ids.imei.id, ids.tag.id], capture } },
+		},
+		{ key: 'charger', name: 'Charger', kind: 'physical', elements: { warranty: true, units: { capture: 'stock' } } },
+	]);
+
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 	await shop.list('grades', [{ key: 'used', label: 'Used', warrantyDays: 30 }]);
 	await shop.setting('returns', 'warrantyDays', 7);
-	ids.phones = await api('POST', '/v1/categories', { name: 'Phones', requiresSerial: true });
-	ids.android = await api('POST', '/v1/categories', { name: 'Android', parentId: ids.phones.id });
-	ids.cases = await api('POST', '/v1/categories', { name: 'Cases' });
 	// the IMEI is one merchant's unit field: digits, 15 long, Luhn, two per dual-SIM phone; shown to shoppers and on invoices
 	ids.imei = await api('POST', '/v1/attributes', {
 		name: 'IMEI',
 		on: 'unit',
 		multiple: true,
 		required: true,
-		categoryIds: [ids.phones.id],
 		format: { chars: 'digits', minLength: 15, maxLength: 15, checkDigit: 'luhn', ignoreSpaces: true },
 		show: { shopper: true, invoice: true },
 	});
-	// a staff-only unit field: never shown to shoppers nor printed
+	// a staff-only unit field: never shown to shoppers nor printed (after the IMEI in the type: a unit is named by its
+	// IMEI, and a number alone is an IMEI)
 	ids.tag = await api('POST', '/v1/attributes', {
 		name: 'Bin tag',
 		on: 'unit',
-		// after the IMEI: a unit is named by its IMEI, and a number alone is an IMEI
-		sort: 1,
-		categoryIds: [ids.phones.id],
 		format: { chars: 'letters_digits_dash', mask: 'AA-999', upperCase: true },
 	});
+	await saveTypes('packing');
+	ids.phones = await api('POST', '/v1/categories', { name: 'Phones', typeKey: 'phone' });
+	ids.android = await api('POST', '/v1/categories', { name: 'Android', parentId: ids.phones.id });
+	ids.cases = await api('POST', '/v1/categories', { name: 'Cases' });
 	ids.phone = await api('POST', '/v1/products', {
 		name: 'Phone',
 		status: 'active',
 		categoryIds: [ids.android.id],
-		serialized: null,
 		options: [{ name: 'Color', values: ['Black', 'Blue'] }],
 		variants: [
 			{ options: { Color: 'Black' }, price: 1000, stock: 9, warrantyDays: 365 },
@@ -89,40 +103,45 @@ beforeAll(async () => {
 		stock: 9,
 		warrantyDays: 14,
 	});
+	ids.charger = await api('POST', '/v1/products', {
+		name: 'Charger',
+		status: 'active',
+		typeKey: 'charger',
+		price: 50,
+		stock: 9,
+	});
 });
 afterAll(async () => shop.product.close());
 
 describe('E11 serial capture', () => {
-	it('plans typed serials and follows category rules', () => {
-		const categories = new Map([
-			['a', { path: [], requiresSerial: true }],
-			['b', { path: ['a'], requiresSerial: null }],
-			['c', { path: ['a'], requiresSerial: false }],
-		]);
-		expect(isSerialized({ serialized: null, categoryIds: ['b'] }, categories)).toBe(true);
-		expect(isSerialized({ serialized: null, categoryIds: ['c'] }, categories)).toBe(false);
-		expect(isSerialized({ serialized: null, categoryIds: ['x'] }, categories)).toBe(false);
-		expect(isSerialized({ serialized: false, categoryIds: ['a'] }, categories)).toBe(false);
+	it('plans units as each line’s item type says: picked from stock at packing, typed by the stage they are needed', () => {
 		const order = /** @type {any} */ ({
 			lines: [
 				{ id: 'l1', kind: 'physical', productId: 'p', variantId: 'v', name: 'P', quantity: 2, serials: [] },
 				{ id: 'l2', kind: 'physical', productId: 'q', variantId: 'w', name: 'Q', quantity: 1, serials: [] },
 			],
 		});
-		const serialized = new Set(['p']);
-		expect(serialPlan(order, serialized, {}, { mode: 'typed' })).toMatchObject({
+		const typed = new Map([['p', /** @type {const} */ ({ capture: 'packing', requiredBefore: 'shipped' })]]);
+		expect(serialPlan(order, typed, {}, { stage: 'packed' })).toMatchObject({
 			ok: true,
-			value: [{ lineId: 'l1', serials: [] }],
+			value: [{ lineId: 'l1', serials: [], capture: 'packing' }],
 		});
-		expect(serialPlan(order, serialized, {}, { mode: 'registered' }).ok).toBe(false);
-		expect(serialPlan(order, serialized, { l1: ['a'] }, { mode: 'typed' }).ok).toBe(false);
-		expect(serialPlan(order, serialized, { l2: ['a'] }, { mode: 'typed' }).ok).toBe(false);
-		expect(serialPlan(order, serialized, { l1: ['a', 'b'] }, { mode: 'typed', only: true }).ok).toBe(true);
-		expect(missingSerials(order, serialized).map((line) => line.id)).toEqual(['l1']);
+		const stocked = new Map([['p', /** @type {const} */ ({ capture: 'stock', requiredBefore: 'packed' })]]);
+		expect(serialPlan(order, stocked, {}, { stage: 'packed' }).ok).toBe(false);
+		expect(serialPlan(order, typed, {}, { stage: 'shipped' }).ok).toBe(false);
+		expect(serialPlan(order, typed, { l1: ['a'] }, { stage: 'packed' }).ok).toBe(false);
+		expect(serialPlan(order, typed, { l2: ['a'] }, { stage: 'packed' }).ok).toBe(false);
+		expect(serialPlan(order, typed, { l1: ['a', 'b'] }, { stage: 'packed', only: true }).ok).toBe(true);
+		expect(missingSerials(order, typed, 'packed')).toEqual([]);
+		expect(missingSerials(order, typed, 'shipped').map((line) => line.id)).toEqual(['l1']);
+		expect(missingSerials(order, typed, 'delivered').map((line) => line.id)).toEqual(['l1']);
+		// numbers never needed: a line may go out without them
+		const optional = new Map([['p', /** @type {const} */ ({ capture: 'packing', requiredBefore: null })]]);
+		expect(serialPlan(order, optional, {}, { stage: 'delivered' }).ok).toBe(true);
+		expect(missingSerials(order, optional, 'delivered')).toEqual([]);
 	});
 
 	it('takes typed units at packing or later in their fields’ formats, needs them before dispatch and shows what the fields say', async () => {
-		await shop.setting('grades_serials', 'serialMode', 'typed');
 		const { order, token } = await place([{ productId: ids.phone.id, variantId: ids.phone.variants[0].id }]);
 		const line = order.lines[0];
 		// not before packing
@@ -157,7 +176,8 @@ describe('E11 serial capture', () => {
 			},
 		});
 		expect(typed.lines[0]).toMatchObject({
-			serialized: true,
+			unitCapture: 'packing',
+			unitsRequiredBefore: 'shipped',
 			serials: ['490154203237518'],
 			unitFields: [
 				{ id: ids.imei.id, name: 'IMEI', maxValues: 2, required: true },
@@ -229,8 +249,8 @@ describe('E11 serial capture', () => {
 		).toBe(0);
 	});
 
-	it('checks units added to stock against their unit fields, and picks registered units at packing', async () => {
-		await shop.setting('grades_serials', 'serialMode', 'registered');
+	it('checks units added to stock against their unit fields, and picks units in stock at packing', async () => {
+		await saveTypes('stock');
 		const black = { productId: ids.phone.id, variantId: ids.phone.variants[1].id };
 		/** @param {unknown[]} serials */
 		const add = (serials) => shop.api('POST', '/v1/serials', { ...black, serials });
@@ -252,16 +272,23 @@ describe('E11 serial capture', () => {
 		const again = await add(['012345678901237']);
 		expect(again.status).toBe(409);
 		expect(again.json.detail).toContain('357805023984942');
-		// a case has no unit fields: a plain serial number
+		// a charger's type numbers its units without unit fields: a plain serial number; a case's type numbers none
 		expect(
 			(
 				await shop.api('POST', '/v1/serials', {
-					productId: ids.case.id,
-					variantId: ids.case.variants[0].id,
-					serials: ['CASE 1'],
+					productId: ids.charger.id,
+					variantId: ids.charger.variants[0].id,
+					serials: ['CHARGER 1'],
 				})
 			).status,
 		).toBe(201);
+		const unnumbered = await shop.api('POST', '/v1/serials', {
+			productId: ids.case.id,
+			variantId: ids.case.variants[0].id,
+			serials: ['CASE 1'],
+		});
+		expect(unnumbered.status).toBe(422);
+		expect(unnumbered.json.errors[0]).toMatchObject({ path: '/productId' });
 		const { order } = await place([black]);
 		await move(order.id, 'confirmed');
 		expect((await move(order.id, 'packed')).status).toBe(422);

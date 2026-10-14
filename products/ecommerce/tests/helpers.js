@@ -44,6 +44,33 @@ export const ALL = manifest.features.map((feature) => feature.key);
 /** Every ticket permission. */
 export const ALL_PERMISSIONS = (manifest.permissions ?? []).map((permission) => permission.key);
 
+/**
+ * Item types whose items number their units (dynamic model §1), for `shop.list('item_types', UNIT_TYPES)`: `numbered`
+ * picks them from units in stock when packing; `typed` takes them typed at packing or later, needed before dispatch.
+ * Neither names unit fields (plain serial numbers).
+ */
+export const UNIT_TYPES = Object.freeze([
+	{
+		key: 'numbered',
+		name: 'Numbered item',
+		kind: 'physical',
+		elements: { variants: true, grades: true, chart: true, parcel: true, warranty: true, units: { capture: 'stock' } },
+	},
+	{
+		key: 'typed',
+		name: 'Typed item',
+		kind: 'physical',
+		elements: {
+			variants: true,
+			grades: true,
+			chart: true,
+			parcel: true,
+			warranty: true,
+			units: { capture: 'packing', requiredBefore: 'shipped' },
+		},
+	},
+]);
+
 /** @typedef {{ method: string, url: string, path: string, headers: Record<string, string>, body: string }} Call */
 /** @typedef {(call: Call) => { status: number, body?: unknown, type?: string, headers?: Record<string, string> }} Responder */
 
@@ -475,7 +502,7 @@ export const setup = async ({
 			specs: {},
 			options: [],
 			trackStock: true,
-			serialized: false,
+			typeKey: null,
 			digital: null,
 			booking: null,
 			seo: { ...EMPTY_SEO },

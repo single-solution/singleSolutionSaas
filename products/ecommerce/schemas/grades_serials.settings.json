@@ -1,13 +1,5 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {
-		"serialMode": {
-			"type": "string",
-			"title": "Serial numbers",
-			"description": "Registered: units are added to stock first (with their unit fields' values) and picked when an order is packed. Typed: they are typed when an order is packed or later, and are needed before it is dispatched. Formats of unit numbers are the shop's unit fields (Catalog admin → Fields).",
-			"default": "registered",
-			"enum": ["registered", "typed"]
-		}
-	}
+	"properties": {}
 }

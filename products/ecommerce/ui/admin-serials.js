@@ -2,16 +2,18 @@
  * Units (serial numbers) in the catalog admin widget (feature `grades_serials`, PLAN 0.8.8 Grades and serials; E11;
  * dynamic model §2) as a list-and-detail screen: search (by the start of the serial) and filter by status, Load more, a
  * detail per unit (its values by unit field, product and variant, location and order), Mark faulty / Back in stock,
- * Delete (not for sold units), and Add units for a product variant: one unit per line — its serial number, or with unit
- * fields its values in the fields' order separated by commas or tabs (as pasted from a spreadsheet), each checked
+ * Delete (not for sold units), and Add units for a product variant (of an item type that numbers its units): one unit
+ * per line — its serial number, or with the type's unit fields its values in the fields' order separated by commas or
+ * tabs (as pasted from a spreadsheet), each checked
  * against its field's format before sending — at a location with multi-location stock. A product's detail opens the
  * section filtered to that product (a removable chip, and a variant select).
  * @module
  */
-import { checkFormat, unitFieldsFor } from '../core/fields.js';
+import { checkFormat } from '../core/fields.js';
 import { entriesOf, query } from './admin-kit.js';
 import { createScreen, deleteEntry, detailHead, fieldsOf } from './admin-screen.js';
 import { variantLabel } from './admin-taxonomy.js';
+import { typeNamed, unitFieldsOfType } from './admin-types.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
@@ -185,15 +187,13 @@ export const serialsTab = (kit, panel, lookups, links) => {
 	};
 
 	/**
-	 * The unit fields of a product's units (by its categories and those above them) and the slots a line fills: each
-	 * field once, or twice for a field that takes two values.
+	 * The unit fields of a product's units (its item type's) and the slots a line fills: each field once, or twice for a
+	 * field that takes two values.
 	 * @param {any} found the product
 	 */
 	const slotsOf = (found) => {
-		const paths = new Map(lookups.state.categories.map((category) => [category.id, category.path ?? []]));
-		const lineage = (found?.categoryIds ?? []).flatMap((/** @type {string} */ id) => [id, ...(paths.get(id) ?? [])]);
-		const fields = unitFieldsFor(/** @type {any[]} */ (lookups.state.attributes), lineage);
-		return fields.flatMap((field) =>
+		const type = typeNamed(kit, found?.type?.key, String(found?.kind ?? 'physical'));
+		return unitFieldsOfType(kit, type, lookups.state.attributes).flatMap((field) =>
 			Array.from({ length: field.maxValues > 1 ? field.maxValues : 1 }, (_, value) => ({ field, value })),
 		);
 	};

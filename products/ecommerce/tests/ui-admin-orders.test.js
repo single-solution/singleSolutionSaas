@@ -78,8 +78,11 @@ const detail = (over = {}) => ({
 			quantity: 2,
 			unitPrice: 100000,
 			total: 200000,
-			serials: ['S1'],
+			serials: ['S1', 'S2'],
 			warrantyDays: 365,
+			// its item type picks its units from stock when packing
+			unitCapture: 'stock',
+			unitsRequiredBefore: 'packed',
 		},
 		{
 			id: 'oln_2',
@@ -487,6 +490,7 @@ describe('orders admin: one order', () => {
 		await click(buttonIn(pane, 'Move to Packed'));
 		dialog = dialogOf(root);
 		type(dialog.querySelector('input[aria-label="Serial number 1 of Phone"]'), '');
+		type(dialog.querySelector('input[aria-label="Serial number 2 of Phone"]'), '');
 		await submitDialog(root);
 		expect(moves[1].serials).toEqual({});
 		// shipping: courier and tracking number, then booking
@@ -638,8 +642,24 @@ describe('orders admin: one order', () => {
 		};
 		const typed = detail({
 			lines: [
-				{ ...detail().lines[0], serials: [], serialized: true, warrantyDays: null, unitFields: [imei], units: [] },
-				{ ...detail().lines[0], id: 'oln_3', name: 'Case', quantity: 1, serials: ['C1'], serialized: false },
+				{
+					...detail().lines[0],
+					serials: [],
+					unitCapture: 'packing',
+					unitsRequiredBefore: 'shipped',
+					warrantyDays: null,
+					unitFields: [imei],
+					units: [],
+				},
+				{
+					...detail().lines[0],
+					id: 'oln_3',
+					name: 'Case',
+					quantity: 1,
+					serials: ['C1'],
+					unitCapture: undefined,
+					unitsRequiredBefore: undefined,
+				},
 			],
 			nextStatuses: [{ key: 'packed', label: 'Packed', role: 'packed' }],
 		});
@@ -664,7 +684,7 @@ describe('orders admin: one order', () => {
 				},
 			},
 			FEATURES,
-			{ ...SETTINGS, catalog: { serialMode: 'typed' } },
+			SETTINGS,
 		);
 		const pane = detailOf(panelOf(root, 'orders'));
 		expect(textOf(pane)).toContain('Missing');
@@ -672,7 +692,7 @@ describe('orders admin: one order', () => {
 		expect(menuEntries(pane)).toContain('Refund');
 		await click(buttonIn(pane, 'Type serial numbers'));
 		const dialog = dialogOf(root);
-		expect(textOf(dialog)).toContain('They can be typed at packing or later');
+		expect(textOf(dialog)).toContain('Typed numbers can be given now or later');
 		expect(dialog.querySelector('input[aria-label="Serial number 1 of Case"]')).toBeNull();
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Type or change the serial numbers of at least one item first.');

@@ -43,7 +43,7 @@ export const CATEGORIES = [
 		},
 		faqs: [{ question: 'Unlocked?', answer: 'Yes.' }],
 		sizeChartId: null,
-		requiresSerial: true,
+		typeKey: 'used_phone',
 		previousSlugs: ['mobiles'],
 	},
 	{
@@ -69,7 +69,7 @@ export const CATEGORIES = [
 		seo: { title: '', description: '' },
 		image: null,
 		status: 'hidden',
-		requiresSerial: false,
+		typeKey: 'physical',
 	},
 	{
 		id: 'cat_x',
@@ -280,7 +280,8 @@ export const product = (over = {}) => ({
 		},
 	],
 	trackStock: true,
-	serialized: null,
+	typeKey: null,
+	type: { key: 'used_phone', kind: 'physical' },
 	digital: null,
 	booking: null,
 	seo: {
@@ -350,7 +351,27 @@ export const lists = (routes = {}) => ({
 	...routes,
 });
 
-export const SETTINGS = { catalog: { grades: [{ key: 'a', label: 'Grade A' }] } };
+/** The merchant's item type of phones: units picked from stock, numbered by the IMEI field. */
+export const USED_PHONE = Object.freeze({
+	key: 'used_phone',
+	name: 'Used phone',
+	kind: 'physical',
+	active: true,
+	elements: {
+		variants: true,
+		grades: true,
+		units: { fieldIds: ['att_imei'], capture: 'stock', requiredBefore: 'packed' },
+		chart: true,
+		parcel: true,
+		warranty: true,
+		downloads: false,
+		licenceKeys: false,
+		slots: false,
+	},
+	fieldIds: null,
+});
+
+export const SETTINGS = { catalog: { grades: [{ key: 'a', label: 'Grade A' }], types: [USED_PHONE] } };
 
 /** @param {readonly string[]} [features] @param {Record<string, any>} [routes] @param {Record<string, any>} [settings] */
 export const start = (features = ALL, routes = {}, settings = SETTINGS) =>

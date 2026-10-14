@@ -123,7 +123,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 			/** @param {any} item */
 			const show = (item) => {
 				const currency = currencyOf(settings, item.currency);
-				const booking = item.kind === 'booking' && shop.has('bookings');
+				const booking = Boolean(item.booking) && shop.has('bookings');
 				/** @type {PageVariant[]} */
 				const variants = Array.isArray(item.variants) ? item.variants : [];
 				const axes = axesOf({ options: Array.isArray(item.options) ? item.options : [], variants });

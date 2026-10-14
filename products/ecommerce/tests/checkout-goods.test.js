@@ -62,7 +62,7 @@ afterAll(async () => shop.product.close());
 describe('bookings', () => {
 	it('lists free slots and books each slot once', async () => {
 		const service = await shop.seedProduct({
-			kind: 'booking',
+			kind: 'service',
 			trackStock: false,
 			booking: { durationMinutes: 60 },
 			price: 5000,

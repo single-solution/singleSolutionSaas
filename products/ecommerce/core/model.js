@@ -66,7 +66,7 @@ export const ID_PREFIX = Object.freeze({
 
 // ------------------------------------------------------------------------------------------------------- catalog
 
-/** @typedef {'physical' | 'digital' | 'booking'} ProductKind */
+/** @typedef {'physical' | 'digital' | 'service'} ProductKind */
 /** @typedef {'draft' | 'active' | 'archived'} ProductStatus */
 
 /**
@@ -81,6 +81,12 @@ export const ID_PREFIX = Object.freeze({
  * @property {number} [width] pixels
  * @property {number} [height] pixels
  * @property {string} [blur] a tiny placeholder image as a data URI (at most 2 kB)
+ */
+
+/**
+ * A variant's package: its weight in grams and its length, width and height in millimeters (whole numbers from 1; a
+ * size is given whole or not at all).
+ * @typedef {{ weightG: number | null, lengthMm: number | null, widthMm: number | null, heightMm: number | null }} Parcel
  */
 
 /**
@@ -103,6 +109,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {MediaRecord[]} media this variant's photos (E6)
  * @property {boolean} soldOut shown as sold out without changing stock (E9)
  * @property {number | null} warrantyDays null = the product's, then the grade's, then the setting (E12)
+ * @property {Parcel | null} [parcel] its package (an item type with the `parcel` element): courier bookings and the
+ *   feeds' shipping weight read it; none = not known
  * @property {string} [feedId] the item id the shop's earlier product feed listed it under, kept by an import so shopping
  *   catalogs keep the item (E17); none = its own id
  */
@@ -113,6 +121,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {string} slug unique per website
  * @property {string} name
  * @property {ProductKind} kind
+ * @property {string | null} typeKey its item type (`core/item-types.js`): a key of the `item_types` list or a built-in
+ *   type (its kind); null = its first category's, else the built-in type of its kind
  * @property {ProductStatus} status only `active` products are shown and sold
  * @property {string} summary short plain text
  * @property {string} description plain text (paragraphs separated by blank lines)
@@ -125,8 +135,6 @@ export const ID_PREFIX = Object.freeze({
  * @property {Array<{ name: string, values: string[] }>} options variant axes (variants)
  * @property {VariantRecord[]} variants at least one
  * @property {boolean} trackStock false = never runs out (services, made to order)
- * @property {boolean | null} serialized each unit has a serial number captured when packed (grades_serials); null =
- *   as its categories say (E11)
  * @property {{ files: MediaRecord[], licenceKeys: boolean, downloadLimit: number } | null} digital digital goods
  * @property {{ durationMinutes: number } | null} booking bookings
  * @property {import('./catalog-content.js').SeoRecord} seo '' = derived from name and summary (E16)
@@ -172,7 +180,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {import('./catalog-content.js').Content} content (E1)
  * @property {import('./catalog-content.js').Faq[]} faqs (E1)
  * @property {string | null} sizeChartId (E5)
- * @property {boolean | null} requiresSerial null = as its parent (E11)
+ * @property {string | null} typeKey the item type its products have unless they name their own (`core/item-types.js`);
+ *   null = its parent's
  * @property {string[]} previousSlugs (E13)
  */
 /**
@@ -260,7 +269,7 @@ export const ID_PREFIX = Object.freeze({
  * - `awaiting_confirmation`: start of plain COD and pickup orders by default (a flow may have none, then they start
  *   `open`); held until staff confirm or the confirmation window ends;
  * - `open`: confirmed and being prepared (custom statuses are `open` too);
- * - `packed`: serial numbers are captured for serialized lines;
+ * - `packed`: units of lines whose item type numbers them are captured (also with a later move, as the type says);
  * - `shipped`: with the courier (tracking number);
  * - `delivered`: points are earned, reviews open, return windows start;
  * - `cancelled`: stock, offer use and points are given back; paid money is refunded as the move says; after delivery
@@ -308,7 +317,7 @@ export const STATUS_ROLES = Object.freeze([
  * An allowed move: who may make it (`staff`, `shopper` — a cancel before dispatch —, or only the shop itself:
  * `system`), the permission a staff ticket needs, what staff must give with it (`needs`) and its options.
  * @typedef {{ from: string, to: string, who?: Array<'staff' | 'shopper' | 'system'>,
- *   permission?: 'orders.manage' | 'orders.refund', needs?: Array<'note' | 'reason' | 'units'>,
+ *   permission?: 'orders.manage' | 'orders.refund', needs?: Array<'note' | 'reason'>,
  *   options?: MoveOptions }} OrderMove
  */
 /**

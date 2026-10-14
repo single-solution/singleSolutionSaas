@@ -7,10 +7,9 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
-import { documentFieldsOf } from '../adapters/catalog-store.js';
+import { documentFieldsOf, unitRulesOf } from '../adapters/catalog-store.js';
 import { invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
-import { isSerialized } from '../core/orders.js';
 import { DOCUMENT_HEADERS } from './orders.js';
 import { SERVER_LIMITS } from './service.js';
 
@@ -66,36 +65,18 @@ export const createOrderDocuments = (_product, service) => {
 	};
 
 	/**
-	 * The ids of the orders' products that are serialized (E11): none without Grades and serials.
+	 * The ids of the orders' products whose item type numbers their units (none without Grades and serials).
 	 * @param {Site} s @param {OrderRecord[]} orders
 	 * @returns {Promise<Set<string>>}
 	 */
-	const serializedOf = async (s, orders) => {
-		if (!s.has('grades_serials')) return new Set();
-		const data = await s.data();
+	const numberedOf = async (s, orders) => {
 		const ids = [
 			...new Set(
 				orders.flatMap((order) => order.lines.filter((line) => line.kind === 'physical').map((line) => line.productId)),
 			),
 		];
-		const products = await data
-			.collection(COLLECTIONS.products)
-			.find({ websiteId: s.websiteId, id: { $in: ids } }, { projection: { _id: 0, id: 1, serialized: 1, categoryIds: 1 } })
-			.toArray();
-		const categories = new Map(
-			(
-				await data
-					.collection(COLLECTIONS.categories)
-					.find({ websiteId: s.websiteId }, { projection: { _id: 0, id: 1, path: 1, requiresSerial: 1 } })
-					.limit(5000)
-					.toArray()
-			).map((row) => [String(row.id), { path: row.path, requiresSerial: row.requiresSerial }]),
-		);
-		return new Set(
-			products
-				.filter((row) => isSerialized({ serialized: row.serialized, categoryIds: row.categoryIds }, categories))
-				.map((row) => String(row.id)),
-		);
+		const rules = await unitRulesOf(await s.data(), ids, { types: await s.list('item_types'), has: s.has });
+		return new Set(rules.keys());
 	};
 
 	/**
@@ -123,8 +104,8 @@ export const createOrderDocuments = (_product, service) => {
 	const packingSlips = async (ctx) => {
 		const s = await service.site(ctx);
 		const orders = await ordersOf(s, ctx, MAX_SLIPS);
-		const [context, serialized] = await Promise.all([contextOf(s, orders), serializedOf(s, orders)]);
-		return new Response(packingSlipsHtml(orders, context, serialized), { headers: DOCUMENT_HEADERS });
+		const [context, numbered] = await Promise.all([contextOf(s, orders), numberedOf(s, orders)]);
+		return new Response(packingSlipsHtml(orders, context, numbered), { headers: DOCUMENT_HEADERS });
 	};
 
 	/** @param {any} ctx */

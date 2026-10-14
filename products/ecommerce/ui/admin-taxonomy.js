@@ -1,23 +1,15 @@
 /**
  * The catalog's lists for the catalog admin widget (PLAN 0.8.8 Catalog; PLAN 0.8.10 E1, E5, E11, E13, E16), each a
- * list-and-detail screen (PLAN 0.6): the category tree (status, icon, content, FAQs, size chart, serials, SEO, image,
+ * list-and-detail screen (PLAN 0.6): the category tree (status, icon, content, FAQs, size chart, item type, SEO, image,
  * earlier addresses), brands (status, categories, size chart, SEO, logo) and stock locations. Also the lookups other
  * admin parts use (categories, brands, attributes, locations, size charts and grades) and the searches of products,
  * categories and brands for pickers.
  * @module
  */
 import { query } from './admin-kit.js';
-import {
-	chartChoices,
-	checkGroup,
-	contentEditor,
-	earlierSlugs,
-	faqsEditor,
-	seoEditor,
-	seoFacts,
-	triSelect,
-} from './admin-fields.js';
+import { chartChoices, checkGroup, contentEditor, earlierSlugs, faqsEditor, seoEditor, seoFacts } from './admin-fields.js';
 import { card, createScreen, deleteEntry, detailHead, fieldsOf, readFrom, saveDialog, yesNo } from './admin-screen.js';
+import { showsTypes, typeChoices, typeLabel } from './admin-types.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Choice} Choice */
@@ -326,7 +318,9 @@ export const categoriesTab = (kit, panel, lookups) => {
 		);
 		const icon = kit.input(item?.icon ?? '', { maxlength: '40' });
 		const sort = kit.input(String(item?.sort ?? 0), { type: 'number', step: '1' });
-		const serial = triSelect(kit, item?.requiresSerial ?? null, t('catalogAdmin.asParent'));
+		// the item type its products have unless they name their own (dynamic model §1)
+		const typed = showsTypes(kit, item?.typeKey);
+		const type = kit.select(typeChoices(kit, null, item?.typeKey ?? null, t('catalogAdmin.typeAsParent')), item?.typeKey ?? '');
 		const chart = kit.select(chartChoices(kit, lookups.state.charts), item?.sizeChartId ?? '');
 		const description = kit.area(item?.description ?? '', { rows: '4', maxlength: '5000' });
 		const content = contentEditor(kit, item?.content);
@@ -345,7 +339,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 					kit.field(t('admin.status'), state),
 					kit.field(t('catalogAdmin.icon'), icon),
 					kit.field(t('catalogAdmin.sort'), sort),
-					has('grades_serials') ? kit.field(t('catalogAdmin.requiresSerial'), serial.node) : null,
+					typed ? kit.field(t('catalogAdmin.itemType'), type) : null,
 					has('size_charts') ? kit.field(t('catalogAdmin.sizeChart'), chart) : null,
 				]),
 				earlierSlugs(kit, item?.previousSlugs),
@@ -365,7 +359,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 				content: content.value(),
 				faqs: faqs.value(),
 				seo: seo.value(),
-				...(has('grades_serials') ? { requiresSerial: serial.value() } : {}),
+				...(typed ? { typeKey: type.value || null } : {}),
 				...(has('size_charts') ? { sizeChartId: chart.value || null } : {}),
 			}),
 			saved: after,
@@ -394,12 +388,8 @@ export const categoriesTab = (kit, panel, lookups) => {
 				[t('catalogAdmin.icon'), item.icon ?? ''],
 				[t('catalogAdmin.sort'), String(item.sort ?? 0)],
 				[
-					t('catalogAdmin.requiresSerial'),
-					has('grades_serials')
-						? item.requiresSerial === null || item.requiresSerial === undefined
-							? t('catalogAdmin.asParent')
-							: yesNo(kit, item.requiresSerial)
-						: '',
+					t('catalogAdmin.itemType'),
+					showsTypes(kit, item.typeKey) ? typeLabel(kit, item.typeKey, t('catalogAdmin.typeAsParent')) : '',
 				],
 				[t('catalogAdmin.sizeChart'), has('size_charts') ? lookups.nameOf('charts', item.sizeChartId) : ''],
 			]),

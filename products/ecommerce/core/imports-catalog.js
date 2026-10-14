@@ -19,6 +19,7 @@ import { keyAllowed, mediaExtras } from './catalog-content.js';
 import { checkAttribute, checkBrand, checkCategory } from './catalog-taxonomy.js';
 import { checkBundleInput } from './bundles.js';
 import { checkDealInput } from './deals.js';
+import { typeByKey } from './item-types.js';
 import { checkLanding } from './landings.js';
 import { MAX_PREVIOUS_SLUGS } from './links.js';
 import { ID_PREFIX } from './model.js';
@@ -39,6 +40,7 @@ import { checkSizeChart } from './size-charts.js';
  * @property {ReadonlySet<string>} sizeChartIds
  * @property {ReadonlySet<string>} gradeKeys the `grades` list (empty while Grades and serials is off)
  * @property {ReadonlySet<string>} locationIds
+ * @property {ReadonlyArray<import('./item-types.js').ItemType>} types the merchant's item types
  * @property {ReadonlyMap<string, { path: string[] }>} [categories] stored categories (a category's path)
  * @property {CatalogRules} [rules] products: what a product check needs
  */
@@ -75,6 +77,7 @@ const VARIANT_FIELDS = Object.freeze([
 	'media',
 	'soldOut',
 	'warrantyDays',
+	'parcel',
 	'feedId',
 ]);
 
@@ -94,7 +97,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'content',
 		'faqs',
 		'sizeChartId',
-		'requiresSerial',
+		'typeKey',
 		'previousSlugs',
 		...STAMPS,
 	]),
@@ -155,7 +158,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'options',
 		'variants',
 		'trackStock',
-		'serialized',
+		'typeKey',
 		'digital',
 		'booking',
 		'seo',
@@ -525,6 +528,8 @@ export const checkImportedCategory = (record, context) => {
 	const parentId = refOf(record.parentId, ID_PREFIX.category, '/parentId', errors, 'The parent is a category id, or null.');
 	if (parentId !== null && parentId === id) errors.push({ path: '/parentId', message: 'A category is not its own parent.' });
 	if (checked) chartExists(checked.sizeChartId, context, errors);
+	if (checked?.typeKey && !typeByKey(checked.typeKey, context.types))
+		errors.push({ path: '/typeKey', message: `There is no item type ${checked.typeKey}: import the item_types list first.` });
 	const image = mediaOrNull(record.image, '/image', errors);
 	const previousSlugs = previousSlugsOf(record.previousSlugs, slug, errors);
 	const stamps = stampsOf(record, context.now, errors);
@@ -699,7 +704,7 @@ export const checkImportedProduct = (record, context) => {
 	const checked = valueOf(checkProduct({ ...ownChecked(record, fields), status, variants }, rules, null), errors);
 	for (const [name, kind] of /** @type {const} */ ([
 		['digital', 'digital'],
-		['booking', 'booking'],
+		['booking', 'service'],
 	]))
 		if (checked && checked.kind !== kind && record[name] !== undefined && record[name] !== null)
 			errors.push({ path: `/${name}`, message: `Only a ${kind} product has ${name} settings: give null.` });

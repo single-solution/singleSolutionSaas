@@ -7,8 +7,10 @@
  * engine (`core/transitions.js`) and run in one transaction with everything it gives back or takes
  * (`server/transitions.js`); what entering a status does depends on its role:
  *
- * - `packed`: with Grades and serials on, every unit of a serialized line gets an in-stock serial number of its
- *   variant, marked sold with the order in the same transaction as the move;
+ * - `packed`, `shipped`, `delivered`: with Grades and serials on, the units of lines whose item type numbers them get
+ *   their numbers (dynamic model §1): units added to stock are picked when packing (marked sold with the order in the
+ *   same transaction as the move); typed ones may be typed with any of these moves or later, and are needed before the
+ *   stage the type says (`requiredBefore`);
  * - `shipped`: a courier of the `couriers` list and a tracking number (the tracking link is filled from the courier's
  *   template), or a booking through the courier API (Courier APIs; a failed booking moves nothing);
  * - `delivered`: cash on delivery and pay at pickup become paid; products count the units sold; loyalty points are
@@ -21,7 +23,7 @@
  *   are taken back.
  *
  * What a move needs is checked before anything is called: the shipment (its tracking number as the move's `tracking`
- * says), the serial numbers (every one before the package goes out when the move `needs` units), the dispatch video
+ * says), the serial numbers (every one the item types need by the stage the order enters), the dispatch video
  * (the move's `video`) and the order fields required by the stage it moves into (`requiredAt`); then the open Payments payment is canceled (K-13), a shipment booked and a refund made, as the
  * move needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
  *
@@ -32,7 +34,7 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { fieldsOn, unitFieldsOf } from '../adapters/catalog-store.js';
+import { fieldsOn, unitRulesOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
 import { checkUnit, missingOrderFields, sharedKeys } from '../core/fields.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
@@ -54,7 +56,6 @@ import { createTransitions, rulesOf } from './transitions.js';
 import {
 	CASH_METHODS,
 	byActor,
-	isSerialized,
 	missingSerials,
 	orderMoney,
 	paymentStateOf,
@@ -99,46 +100,47 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * The website's unit capture (E11): `registered` (picked from stock when packing) or `typed`.
-	 * @param {Site} s
+	 * How the units of an order's products are numbered (their item types, dynamic model §1); none while Grades and
+	 * serials is off.
+	 * @param {Site} s @param {OrderRecord} order
 	 */
-	const serialRules = async (s) => {
-		const values = await s.values('grades_serials');
-		return { mode: /** @type {'registered' | 'typed'} */ (values.serialMode === 'typed' ? 'typed' : 'registered') };
-	};
+	const unitRulesFor = async (s, order) =>
+		unitRulesOf(
+			await s.data(),
+			[...new Set(order.lines.filter((line) => line.kind === 'physical').map((line) => line.productId))],
+			{ types: await s.list('item_types'), has: s.has },
+		);
 
 	/**
-	 * The units staff give per line, checked: registered units are picked by their serial numbers; typed ones are
-	 * checked against the unit fields of the line's product (each value in its field's format, the required ones given,
-	 * a text alone the first field's value; without unit fields a plain serial number), and no number may name two units
+	 * The units staff give per line, checked: units in stock are picked by their serial numbers; typed ones are checked
+	 * against the unit fields of the line's item type (each value in its field's format, the required ones given, a
+	 * text alone the first field's value; without unit fields a plain serial number), and no number may name two units
 	 * (in this request: its own keys; others are refused when they are captured).
-	 * @param {Site} s @param {OrderRecord} order
+	 * @param {OrderRecord} order
 	 * @param {Record<string, import('../core/orders.js').UnitInput[]>} sent
-	 * @param {'registered' | 'typed'} mode
-	 * @returns {Promise<{ serials: Record<string, string[]>, units: Map<string, import('../core/fields.js').UnitRecordValues[]> }>}
+	 * @param {Map<string, import('../core/item-types.js').UnitRules>} rules
+	 * @returns {{ serials: Record<string, string[]>, units: Map<string, import('../core/fields.js').UnitRecordValues[]> }}
 	 */
-	const unitsSent = async (s, order, sent, mode) => {
+	const unitsSent = (order, sent, rules) => {
 		/** @type {Record<string, string[]>} */
 		const serials = {};
 		/** @type {Map<string, import('../core/fields.js').UnitRecordValues[]>} */
 		const units = new Map();
 		const lines = new Map(order.lines.map((line) => [line.id, line]));
-		const fields =
-			mode === 'typed' && Object.keys(sent).length > 0
-				? await unitFieldsOf(await s.data(), [...new Set(order.lines.map((line) => line.productId))])
-				: new Map();
 		for (const [lineId, list] of Object.entries(sent)) {
-			const productId = lines.get(lineId)?.productId ?? '';
+			const line = lines.get(lineId);
+			const numbered = line?.kind === 'physical' ? rules.get(line.productId) : undefined;
+			if (!numbered) throw service.invalid(`serials/${lineId}`, 'This line takes no serial numbers.');
 			/** @type {import('../core/fields.js').UnitRecordValues[]} */
 			const checked = [];
 			for (const [index, entry] of list.entries()) {
-				if (mode === 'registered') {
+				if (numbered.capture === 'stock') {
 					if (typeof entry !== 'string')
 						throw service.invalid(`serials/${lineId}/${index}`, 'Units in stock are picked by their serial numbers.');
 					checked.push({ serial: entry, values: {}, keys: [`serial:${entry}`] });
 					continue;
 				}
-				const unit = checkUnit(entry, fields.get(productId) ?? []);
+				const unit = checkUnit(entry, numbered.fields);
 				if (!unit.ok) throw service.invalid(`serials/${lineId}/${index}${unit.path}`, unit.message);
 				checked.push(unit.value);
 			}
@@ -149,33 +151,6 @@ export const createMoves = (product, service) => {
 		if (twice.length > 0)
 			throw service.invalid('serials', `${String(twice[0]).replace(/^[^:]+:/, '')} is given for two units.`);
 		return { serials, units };
-	};
-
-	/**
-	 * The order's products that are serialized: their own switch, else as their categories say (E11).
-	 * @param {Site} s @param {OrderRecord} order
-	 */
-	const serializedOf = async (s, order) => {
-		const data = await s.data();
-		const ids = [...new Set(order.lines.filter((line) => line.kind === 'physical').map((line) => line.productId))];
-		const products = await data
-			.collection(COLLECTIONS.products)
-			.find({ websiteId: s.websiteId, id: { $in: ids } }, { projection: { _id: 0, id: 1, serialized: 1, categoryIds: 1 } })
-			.toArray();
-		const categories = new Map(
-			(
-				await data
-					.collection(COLLECTIONS.categories)
-					.find({ websiteId: s.websiteId }, { projection: { _id: 0, id: 1, path: 1, requiresSerial: 1 } })
-					.limit(5000)
-					.toArray()
-			).map((row) => [String(row.id), { path: row.path, requiresSerial: row.requiresSerial }]),
-		);
-		return new Set(
-			products
-				.filter((row) => isSerialized({ serialized: row.serialized, categoryIds: row.categoryIds }, categories))
-				.map((row) => String(row.id)),
-		);
 	};
 
 	/**
@@ -291,22 +266,26 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * The serial numbers to capture when packing (none while Grades and serials is off): with registered serials every
-	 * unit's, with typed ones those typed now (E11).
-	 * @param {Site} s @param {OrderRecord} order @param {MoveInput} input
+	 * The serial numbers a move into a packed, shipped or delivered status captures (none while Grades and serials is
+	 * off): those sent, checked against the item types of the lines; every unit the stage needs must have one by then.
+	 * @param {Site} s @param {OrderRecord} order @param {MoveInput} input @param {string} stage the role entered
 	 */
-	const packingPlan = async (s, order, input) => {
-		if (!s.has('grades_serials')) return { plan: [], mode: /** @type {'registered' | 'typed'} */ ('registered') };
-		const { mode } = await serialRules(s);
-		const { serials, units } = await unitsSent(s, order, input.serials, mode);
-		const plan = serialPlan(order, await serializedOf(s, order), serials, { mode });
+	const capturePlan = async (s, order, input, stage) => {
+		if (!s.has('grades_serials')) return [];
+		const rules = await unitRulesFor(s, order);
+		// numbers a later step needs, not given with it
+		const missing = stage === 'packed' ? [] : missingSerials(order, rules, stage).filter((line) => !input.serials[line.id]);
+		if (missing.length > 0)
+			throw service.invalid(
+				`serials/${missing[0]?.id}`,
+				`Type the serial numbers of ${missing.map((line) => line.name).join(', ')} ${stage === 'shipped' ? 'before dispatch' : 'first'}.`,
+			);
+		const { serials, units } = unitsSent(order, input.serials, rules);
+		const plan = serialPlan(order, rules, serials, { stage });
 		if (!plan.ok) throw service.invalid(plan.field, plan.message);
-		return {
-			plan: plan.value
-				.filter((line) => line.serials.length > 0 || line.before.length > 0)
-				.map((line) => ({ ...line, ...(units.has(line.lineId) ? { units: units.get(line.lineId) } : {}) })),
-			mode,
-		};
+		return plan.value
+			.filter((line) => JSON.stringify(line.serials) !== JSON.stringify(line.before))
+			.map((line) => ({ ...line, ...(units.has(line.lineId) ? { units: units.get(line.lineId) } : {}) }));
 	};
 
 	/**
@@ -365,7 +344,7 @@ export const createMoves = (product, service) => {
 		const actor = service.actor(ctx);
 
 		// what the move needs, checked before anything is called
-		/** @type {{ plan: Awaited<ReturnType<typeof packingPlan>>['plan'], mode: 'registered' | 'typed' } | undefined} */
+		/** @type {{ plan: Awaited<ReturnType<typeof capturePlan>> } | undefined} */
 		let units;
 		/** @type {import('../core/orders.js').OrderMedia | undefined} */
 		let video;
@@ -375,30 +354,13 @@ export const createMoves = (product, service) => {
 			if (videoRule === 'required' && !input.video && !(order.media ?? []).some((m) => m.kind === 'dispatch_video'))
 				throw service.invalid('video', 'Add the dispatch video before packing.');
 			if (videoRule !== 'off' && input.video) video = input.video;
-			units = await packingPlan(s, order, input);
 		}
+		// the units of the lines whose item type numbers them: those sent, and every one the stage needs by now
+		if (['packed', 'shipped', 'delivered'].includes(target.role))
+			units = { plan: await capturePlan(s, order, input, target.role) };
 		/** @type {Awaited<ReturnType<typeof shipmentOf>> | null} */
 		let shipping = null;
-		if (target.role === 'shipped') {
-			// typed serial numbers are needed before dispatch when the move says so (E11)
-			if (rules.needs.includes('units') && s.has('grades_serials') && (await serialRules(s)).mode === 'typed') {
-				const missing = missingSerials(order, await serializedOf(s, order));
-				if (missing.length > 0)
-					throw service.invalid(
-						`serials/${missing[0]?.id}`,
-						`Type the serial numbers of ${missing.map((line) => line.name).join(', ')} before dispatch.`,
-					);
-			}
-			shipping = await shipmentOf(s, order, input.shipment, rules.options.tracking !== 'optional');
-		}
-		if (target.role === 'delivered' && rules.needs.includes('units') && s.has('grades_serials')) {
-			const missing = (await serialRules(s)).mode === 'typed' ? missingSerials(order, await serializedOf(s, order)) : [];
-			if (missing.length > 0)
-				throw service.invalid(
-					`serials/${missing[0]?.id}`,
-					`Type the serial numbers of ${missing.map((line) => line.name).join(', ')} first.`,
-				);
-		}
+		if (target.role === 'shipped') shipping = await shipmentOf(s, order, input.shipment, rules.options.tracking !== 'optional');
 		const unpaid = nothingPaid(order, target.role, chosen.choices.unpaid);
 		if (unpaid) throw problem(unpaid.code, unpaid.message);
 
@@ -538,20 +500,24 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
-	 * Type the units of a packed, shipped or delivered order (typed serials, E11): one per unit of each line sent, with
-	 * the values of its product's unit fields.
+	 * Type the units of a packed, shipped or delivered order: one per unit of each line sent, with the values of its item
+	 * type's unit fields; only lines whose type has its units typed (`capture: 'packing'`), the others' are picked from
+	 * stock when packing.
 	 * @param {Site} s @param {any} ctx @param {OrderRecord} order
 	 * @param {Record<string, import('../core/orders.js').UnitInput[]>} sent
 	 * @returns {Promise<OrderRecord>}
 	 */
 	const typeSerials = async (s, ctx, order, sent) => {
 		if (!s.has('grades_serials')) throw service.invalid('serials', 'Switch on Grades and serials first.');
-		const { mode } = await serialRules(s);
-		if (mode !== 'typed') throw service.invalid('serials', 'Serial numbers are picked from stock when the order is packed.');
 		if (!['packed', 'shipped', 'delivered'].includes(order.role))
 			throw service.invalid('serials', 'Serial numbers are typed once the order is packed.');
-		const { serials, units } = await unitsSent(s, order, sent, mode);
-		const checked = serialPlan(order, await serializedOf(s, order), serials, { mode, only: true });
+		const rules = await unitRulesFor(s, order);
+		const lines = new Map(order.lines.map((line) => [line.id, line]));
+		for (const lineId of Object.keys(sent))
+			if (rules.get(lines.get(lineId)?.productId ?? '')?.capture === 'stock')
+				throw service.invalid(`serials/${lineId}`, 'Serial numbers are picked from stock when the order is packed.');
+		const { serials, units } = unitsSent(order, sent, rules);
+		const checked = serialPlan(order, rules, serials, { stage: order.role, only: true });
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const plan = checked.value.map((line) => ({ ...line, units: units.get(line.lineId) ?? [] }));
 		const byLine = new Map(plan.map((line) => [line.lineId, line.serials]));
@@ -561,7 +527,7 @@ export const createMoves = (product, service) => {
 			order,
 			planUnits({
 				order,
-				units: { plan, mode },
+				units: { plan },
 				history: {
 					at: new Date(product.now()),
 					from: order.status,
@@ -882,7 +848,7 @@ export const createMoves = (product, service) => {
 		recordPayment,
 		giveBack,
 		typeSerials,
-		serializedOf,
+		unitRulesFor,
 		recheck: payments.recheck,
 		settle: transitions.settle,
 	});

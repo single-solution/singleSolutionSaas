@@ -267,14 +267,32 @@ describe('products', () => {
 		});
 		const booking = await api('POST', '/v1/products', {
 			name: 'Repair',
-			kind: 'booking',
+			kind: 'service',
 			price: 2000,
 			booking: { durationMinutes: 45 },
 		});
-		expect(booking.json).toMatchObject({ booking: { durationMinutes: 45 }, digital: null });
-		expect((await api('POST', '/v1/products', { name: 'Repair', kind: 'booking', price: 2000 })).status).toBe(422);
-		const serial = await api('POST', '/v1/products', { name: 'Used phone', price: 2000, serialized: true, grade: 'used_a' });
-		expect(serial.json).toMatchObject({ serialized: true });
+		expect(booking.json).toMatchObject({
+			booking: { durationMinutes: 45 },
+			digital: null,
+			typeKey: null,
+			type: { key: 'service', kind: 'service' },
+		});
+		expect((await api('POST', '/v1/products', { name: 'Repair', kind: 'service', price: 2000 })).status).toBe(422);
+		// an item type whose items number their units: the product names it
+		await shop.list('item_types', [
+			{ key: 'used_phone', name: 'Used phone', kind: 'physical', elements: { grades: true, units: {} } },
+		]);
+		const serial = await api('POST', '/v1/products', {
+			name: 'Used phone',
+			price: 2000,
+			typeKey: 'used_phone',
+			grade: 'used_a',
+		});
+		expect(serial.json).toMatchObject({
+			kind: 'physical',
+			typeKey: 'used_phone',
+			type: { key: 'used_phone', kind: 'physical' },
+		});
 		expect(serial.json.variants[0].grade).toBe('used_a');
 		expect((await api('POST', '/v1/products', { name: 'Bad grade', price: 1, grade: 'mint' })).status).toBe(422);
 	});

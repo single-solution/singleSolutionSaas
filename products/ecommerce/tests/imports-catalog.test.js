@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FINISH_PAGE } from '../adapters/imports.js';
-import { ALL, GROWTH, NOTIFY, STORAGE, readyShop } from './helpers.js';
+import { ALL, GROWTH, NOTIFY, STORAGE, UNIT_TYPES, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -201,7 +201,8 @@ const RECORDS = {
 				},
 			],
 			trackStock: true,
-			serialized: false,
+			// its units are numbered (the serials below)
+			typeKey: 'numbered',
 			digital: null,
 			booking: null,
 			seo: { title: '', description: '' },
@@ -315,6 +316,7 @@ const bucket = () =>
 beforeAll(async () => {
 	shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 	await shop.list('grades', [{ key: 'a-plus', label: 'A+', description: 'Like new' }]);
+	await shop.list('item_types', UNIT_TYPES);
 	await shop.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com');
 	// IndexNow on save would call Growth: an import never does
 	await shop.paste('growth');
@@ -820,6 +822,8 @@ describe('the README examples', () => {
 		};
 		expect(records.map((record) => byPrefix[record.id.split('_')[0]])).toEqual(Object.keys(RECORDS));
 		const fresh = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
+		// the item type the README's product names (its units are numbered)
+		await fresh.list('item_types', [{ key: 'numbered', name: 'Numbered item', elements: { variants: true, units: {} } }]);
 		for (const record of records) {
 			const answer = await fresh.api('POST', `/v1/import/${byPrefix[record.id.split('_')[0]]}`, ndjson([record]), {
 				'content-type': 'application/x-ndjson',

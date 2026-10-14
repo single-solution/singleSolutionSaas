@@ -8,7 +8,7 @@
  * by `status`, `brand`, `stockState`, `featured`, `grade` and `category`; PLAN 0.8.10 K4; and by `variantStock`, the
  * variants out of stock, low on stock by the `catalog` setting `lowStock` and in stock, E44). Low stock (`lowStock=1`)
  * is a sellable variant with 1 to `lowStock` units on a product that tracks stock and is not archived (E44). A changed
- * slug keeps the old one (E13).
+ * slug keeps the old one (E13). A product with units in stock keeps its item type (409).
  * Every write is in the activity log (with the product's name), tells the other parts (alerts) what changed, and sends
  * the page to IndexNow when the website asks (E16).
  * @module
@@ -22,11 +22,22 @@ import {
 	findProduct,
 	freeSlugIn,
 	isDuplicate,
+	productTypes,
 	rewriteProduct,
 	skusTaken,
 	slugTaken,
+	stockedUnits,
 } from '../adapters/catalog-store.js';
-import { LIMITS, checkProduct, checkStockChanges, changedStock, heldKeys, missingVariants, summarize } from '../core/catalog.js';
+import {
+	LIMITS,
+	checkProduct,
+	checkStockChanges,
+	changedStock,
+	heldKeys,
+	missingVariants,
+	productType,
+	summarize,
+} from '../core/catalog.js';
 import { VIDEO_TYPES } from '../core/catalog-content.js';
 import { afterFilter, cursorKey, listOf, staffFilter, variantStockCounts, variantStockPipeline } from '../core/catalog-query.js';
 import { nextPreviousSlugs } from '../core/links.js';
@@ -93,6 +104,9 @@ export const createCatalogProducts = (product, service, common) => {
 			media: await common.mediaUrls(s, item),
 			variantMedia: await common.variantMediaUrls(s, item),
 			video: item.video?.kind === 'file' ? await common.media.mediaUrl(s, item.video.key) : null,
+			type: /** @type {import('../core/item-types.js').ItemType} */ (
+				(await productTypes(await s.data(), [item], await s.list('item_types'))).get(item.id)
+			),
 		});
 
 	/**
@@ -329,6 +343,15 @@ export const createCatalogProducts = (product, service, common) => {
 		// new files are checked in the bucket before the transaction (E4, E6)
 		const first = checkProduct(body, rules, existing);
 		if (!first.ok) throw refuse(first.errors);
+		// units in stock were numbered by the product's item type: it keeps its type while it has some
+		if (
+			productType(existing, rules).key !== productType(first.value, rules).key &&
+			(await stockedUnits(data, [existing.id])).size > 0
+		)
+			throw problem(
+				'conflict',
+				'This product has units in stock: its item type cannot change until they are sold or removed.',
+			);
 		const files = await checkFiles(s, existing, first.value);
 		const done = await rewriteProduct(
 			data,

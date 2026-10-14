@@ -11,7 +11,7 @@ import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMoves } from '../server/orders-moves.js';
 import { createService } from '../server/service.js';
-import { ALL_PERMISSIONS, DOMAIN, ORIGIN, PAYMENTS, readyShop, setup } from './helpers.js';
+import { ALL_PERMISSIONS, DOMAIN, ORIGIN, PAYMENTS, UNIT_TYPES, readyShop, setup } from './helpers.js';
 import { orderRecords } from './order-records.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
@@ -457,27 +457,23 @@ describe('every way an order moves goes through the engine', () => {
 	});
 
 	it('captures typed serial numbers through the engine: the lines, their facts and the numbers together', async () => {
-		await shop.setting('grades_serials', 'serialMode', 'typed');
-		try {
-			const { order } = await seedOrder({ status: 'packed', role: 'packed', serialized: true });
-			const line = order.lines[0];
-			const typed = await shop.api('PATCH', `/v1/orders/${order.id}`, { serials: { [line.id]: ['SN-0001'] } });
-			expect(typed.status).toBe(200);
-			expect(typed.json.facts.units).toBe('captured');
-			expect((await recordOf(order.id)).facts).toEqual({ ...PLACED_FACTS, units: 'captured' });
-			// typed again with the order as read before: refused, nothing written
-			const s = await service.site(ctx());
-			await expect(moves.typeSerials(s, ctx(), order, { [line.id]: ['SN-0002'] })).rejects.toMatchObject({
-				code: 'conflict',
-			});
-			const serials = (await shop.db()).collection(COLLECTIONS.serials);
-			expect(await serials.countDocuments({ websiteId: shop.websiteId, serial: 'SN-0002' })).toBe(0);
-			// canceled: the typed number goes (it never was in stock)
-			expect((await moveTo(order.id, 'cancelled')).json.facts.units).toBe('none');
-			expect(await serials.countDocuments({ websiteId: shop.websiteId, serial: 'SN-0001' })).toBe(0);
-		} finally {
-			await shop.setting('grades_serials', 'serialMode', 'registered');
-		}
+		await shop.list('item_types', UNIT_TYPES);
+		const { order } = await seedOrder({ status: 'packed', role: 'packed', typeKey: 'typed' });
+		const line = order.lines[0];
+		const typed = await shop.api('PATCH', `/v1/orders/${order.id}`, { serials: { [line.id]: ['SN-0001'] } });
+		expect(typed.status).toBe(200);
+		expect(typed.json.facts.units).toBe('captured');
+		expect((await recordOf(order.id)).facts).toEqual({ ...PLACED_FACTS, units: 'captured' });
+		// typed again with the order as read before: refused, nothing written
+		const s = await service.site(ctx());
+		await expect(moves.typeSerials(s, ctx(), order, { [line.id]: ['SN-0002'] })).rejects.toMatchObject({
+			code: 'conflict',
+		});
+		const serials = (await shop.db()).collection(COLLECTIONS.serials);
+		expect(await serials.countDocuments({ websiteId: shop.websiteId, serial: 'SN-0002' })).toBe(0);
+		// canceled: the typed number goes (it never was in stock)
+		expect((await moveTo(order.id, 'cancelled')).json.facts.units).toBe('none');
+		expect(await serials.countDocuments({ websiteId: shop.websiteId, serial: 'SN-0001' })).toBe(0);
 	});
 
 	it('gives back what a deleted order holds once, and refuses to delete an order that changed meanwhile', async () => {

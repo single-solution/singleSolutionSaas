@@ -574,7 +574,7 @@ const bookingOf = (c, value, path, now) => {
  */
 const lineOf = (c, value, path, taxIncluded, now) => {
 	const input = c.fields(value, path, LINE_FIELDS, 'an order line') ?? {};
-	const kind = c.oneOf(input.kind, /** @type {const} */ (['physical', 'digital', 'booking']), `${path}/kind`, 'physical');
+	const kind = c.oneOf(input.kind, /** @type {const} */ (['physical', 'digital', 'service']), `${path}/kind`, 'physical');
 	const unitPrice = c.whole(input.unitPrice, `${path}/unitPrice`);
 	const quantity = c.whole(input.quantity, `${path}/quantity`, { min: 1, max: MAX_QUANTITY });
 	const gross = unitPrice * quantity;

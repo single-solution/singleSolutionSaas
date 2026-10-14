@@ -1,8 +1,9 @@
 /**
  * The parts of the orders admin widget's move dialog that depend on the status's role (PLAN 0.8.8 Orders): the units of
- * the lines that take them, with each line's warranty (packing, and typed later with typed serials, E11): a serial
- * number per unit picked from stock, or typed — with unit fields (dynamic model §2) one input per value of each field
- * (two for a field that takes two), each checked live against its field's format as the server checks it; and the
+ * the lines whose item type numbers them (dynamic model §1), with each line's warranty (packing, a later move that needs
+ * them, and typed later): a serial number per unit picked from stock, or typed — with unit fields (§2) one input per
+ * value of each field (two for a field that takes two), each checked live against its field's format as the server
+ * checks it; and the
  * shipment (a courier of the website's list, or a typed courier key, and a tracking number; or a booking through the
  * courier API).
  * @module
@@ -17,18 +18,25 @@ import { checkFormat } from '../core/fields.js';
  */
 
 /**
- * Whether serial numbers are typed at packing or later (E11).
- * @param {Kit} kit
- */
-export const typedSerials = (kit) => kit.has('grades_serials') && kit.settings.catalog?.serialMode === 'typed';
-
-/**
- * The lines that take serial numbers: physical lines, unless the answer says a line is not serialized.
+ * The lines whose units are numbered: the answer says how (`unitCapture`: picked from `stock`, or typed at `packing` or
+ * later, as each line's item type says).
  * @param {any} order
  * @returns {any[]}
  */
 export const serialLines = (order) =>
-	order.lines.filter((/** @type {any} */ line) => line.kind === 'physical' && line.serialized !== false);
+	order.lines.filter((/** @type {any} */ line) => line.unitCapture === 'stock' || line.unitCapture === 'packing');
+
+/**
+ * Whether a line's units are typed (at packing or later) rather than picked from stock.
+ * @param {any} line
+ */
+export const typedLine = (line) => line.unitCapture === 'packing';
+
+/**
+ * Whether a line still lacks some of its units' numbers.
+ * @param {any} line
+ */
+export const unitsMissing = (line) => (line.serials ?? []).length !== line.quantity;
 
 /**
  * A line's warranty for people.
@@ -56,12 +64,12 @@ const couriersOf = (kit) => {
 /**
  * One unit's inputs: a serial number, or, typed with unit fields, an input per value of each field (two for a field
  * that takes two), filled with what the unit has.
- * @param {Kit} kit @param {any} line @param {number} index @param {boolean} typed
+ * @param {Kit} kit @param {any} line @param {number} index
  * @returns {UnitInputs}
  */
-const unitInputs = (kit, line, index, typed) => {
+const unitInputs = (kit, line, index) => {
 	const { t } = kit;
-	const fields = typed ? (line.unitFields ?? []) : [];
+	const fields = typedLine(line) ? (line.unitFields ?? []) : [];
 	const unit = line.units?.[index] ?? { serial: line.serials[index] ?? '', values: {} };
 	const label = (/** @type {string} */ name, /** @type {number} */ value) =>
 		t('ordersAdmin.unitValueOf', { item: line.name, unit: index + 1, field: name, value: value + 1 });
@@ -104,21 +112,19 @@ const formatProblem = (kit, field, value) => {
 };
 
 /**
- * Unit inputs, one unit per unit of each line that takes them (none: null). `values()` gives the complete lines (all of
- * a line's inputs empty leaves it out; some units empty is a mistake); with `changedOnly`, only lines whose units
- * changed. Typed values are checked as they are typed, and again before sending.
- * @param {Kit} kit @param {any} order @param {boolean} changedOnly
+ * Unit inputs, one unit per unit of each line given (none: null). `values()` gives the complete lines (all of a line's
+ * inputs empty leaves it out; some units empty is a mistake); with `changedOnly`, only lines whose units changed. Typed
+ * values are checked as they are typed, and again before sending.
+ * @param {Kit} kit @param {any[]} lines the lines whose units are asked @param {boolean} changedOnly
  * @returns {{ node: HTMLElement, values: () => SerialValues } | null}
  */
-export const serialForm = (kit, order, changedOnly) => {
+export const serialForm = (kit, lines, changedOnly) => {
 	const { t, h } = kit;
-	const lines = serialLines(order);
 	if (lines.length === 0) return null;
-	const typed = typedSerials(kit);
 	/** @type {Array<{ line: any, units: UnitInputs[] }>} */
 	const rows = lines.map((/** @type {any} */ line) => ({
 		line,
-		units: Array.from({ length: line.quantity }, (_, index) => unitInputs(kit, line, index, typed)),
+		units: Array.from({ length: line.quantity }, (_, index) => unitInputs(kit, line, index)),
 	}));
 	// a live hint (the dialog keeps its own status line for what saving says)
 	const status = kit.text('p', { class: 'error', 'aria-live': 'polite' }, '');
@@ -136,7 +142,7 @@ export const serialForm = (kit, order, changedOnly) => {
 	for (const { units } of rows) for (const unit of units) for (const { input } of unit) input.addEventListener('input', check);
 	return {
 		node: kit.group(t('ordersAdmin.serialsTitle'), [
-			kit.text('p', { class: 'muted' }, t(typed ? 'ordersAdmin.serialsTypedHint' : 'ordersAdmin.serialsHint')),
+			kit.text('p', { class: 'muted' }, t('ordersAdmin.serialsHint')),
 			...rows.map(({ line, units }) =>
 				h('div', {}, [
 					kit.text('strong', {}, [line.name, line.variantName].filter(Boolean).join(' · ')),

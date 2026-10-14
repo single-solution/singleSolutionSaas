@@ -217,7 +217,6 @@ export const TEXTS = Object.freeze({
 			needChoices: Object.freeze({
 				note: 'A note for the staff',
 				reason: 'A note for the shopper',
-				units: 'Every serial number (typed serials)',
 			}),
 			options: Object.freeze({
 				paidOnConfirm: 'Record the balance as paid for',

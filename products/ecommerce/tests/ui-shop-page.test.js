@@ -295,7 +295,7 @@ describe('product page', () => {
 				'GET /v1/shop/products/phone': () =>
 					ok(
 						product({
-							kind: 'booking',
+							kind: 'service',
 							options: [],
 							variants: [
 								{ id: 'var_1', name: '', options: {}, price: 5000, compareAtPrice: null, inStock: true, grade: null },
@@ -363,7 +363,7 @@ describe('product page', () => {
 				'GET /v1/shop/products/phone': () =>
 					ok(
 						product({
-							kind: 'booking',
+							kind: 'service',
 							options: [],
 							variants: [
 								{ id: 'var_1', name: '', options: {}, price: 5000, compareAtPrice: null, inStock: true, grade: null },

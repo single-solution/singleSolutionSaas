@@ -62,7 +62,7 @@ describe('catalog admin: a product', () => {
 			'2 (1 on sale)',
 			'old-phone',
 			'Shirts',
-			'As its categories say',
+			'Item typeUsed phone',
 			'YouTube video dQw4w9WgXcQ',
 			'Storage64, 256',
 			'Box?Charger included.',
@@ -128,7 +128,7 @@ describe('catalog admin: a product', () => {
 		await tick(checkIn(editor, 'Y'), true);
 		await change(fieldIn(editor, 'Kind'), 'digital');
 		expect(fieldIn(editor, 'Downloads allowed (0 = no limit)').value).toBe('0');
-		await change(fieldIn(editor, 'Kind'), 'booking');
+		await change(fieldIn(editor, 'Kind'), 'service');
 		type(fieldIn(editor, 'Duration in minutes'), '30');
 		// the attribute setup: another attribute, its values and its default
 		await change(fieldIn(editor, 'Attribute'), 'att_1');
@@ -169,7 +169,8 @@ describe('catalog admin: a product', () => {
 		type(fieldIn(editor, 'Question 2'), 'Warranty?');
 		type(fieldIn(editor, 'Answer 2'), 'One year.');
 		await click(buttonIn(editor, 'Add a question'));
-		await change(fieldIn(editor, 'Serial number per unit (captured when packed)'), 'yes');
+		// a service of the built-in type (the category's type is for physical items)
+		await change(fieldIn(editor, 'Item type'), 'service');
 		await change(fieldIn(editor, 'Size chart'), '');
 		await tick(checkIn(editor, 'Hide the size guide'), true);
 		await tick(checkIn(editor, 'Featured product'), false);
@@ -178,11 +179,11 @@ describe('catalog admin: a product', () => {
 		expect(statuses(editor)).toContain(TEXTS['problem.field.slug']);
 		const body = patches[0];
 		expect(body.specs).toEqual({ att_1: 6.1, att_3: false, att_4: 'X1', att_7: ['x', 'y'] });
-		expect(body.kind).toBe('booking');
+		expect(body.kind).toBe('service');
 		expect(body.booking).toEqual({ durationMinutes: 30 });
 		expect(body.returnDays).toBeNull();
 		expect(body.featured).toBe(false);
-		expect(body.serialized).toBe(true);
+		expect(body.typeKey).toBe('service');
 		expect(body.sizeChartId).toBeNull();
 		expect(body.hideSizeGuide).toBe(true);
 		expect(body.descriptionHtml).toBe('<p>One</p>\n<p>Two &amp; &lt;three&gt;</p>');
@@ -291,7 +292,7 @@ describe('catalog admin: a product', () => {
 			variants: [{ sku: '', options: {}, price: 0, compareAtPrice: null, cost: null, active: true, soldOut: false, stock: 7 }],
 		});
 		expect(posts[0].options).toBeUndefined();
-		expect(posts[0].serialized).toBeUndefined();
+		expect(posts[0].typeKey).toBe(null);
 		expect(posts[0].variants[0].media).toBeUndefined();
 		// the new product opens in the list
 		expect(panel.querySelector('li.item[aria-current="true"] .name')?.textContent).toBe('Mug');
@@ -471,11 +472,78 @@ describe('catalog admin: a product', () => {
 	});
 });
 
+describe('catalog admin: a product by its item type', () => {
+	it('shows the sections its type has, and follows the type and kind picked', async () => {
+		/** @type {any[]} */
+		const patches = [];
+		const plain = {
+			key: 'plain_box',
+			name: 'Plain box',
+			kind: 'physical',
+			active: true,
+			elements: {
+				variants: false,
+				grades: false,
+				units: null,
+				chart: false,
+				parcel: true,
+				warranty: false,
+				downloads: false,
+				licenceKeys: false,
+				slots: false,
+			},
+			fieldIds: ['att_1'],
+		};
+		const { root } = await start(
+			ALL.filter((feature) => feature !== 'multi_location').concat(['delivery_zones']),
+			{
+				'GET /v1/admin/products/prd_1': () =>
+					answer(200, product({ typeKey: 'plain_box', type: { key: 'plain_box', kind: 'physical' } })),
+				'PATCH /v1/admin/products/prd_1': (/** @type {any} */ call) => {
+					patches.push(call.body);
+					return answer(200, product());
+				},
+			},
+			{ catalog: { grades: [{ key: 'a', label: 'Grade A' }], types: [plain] } },
+		);
+		const panel = panelOf(root, 'products');
+		expect(textOf(detailOf(panel))).toContain('Item typePlain box');
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		const editor = detailOf(panel);
+		expect(fieldIn(editor, 'Item type').value).toBe('plain_box');
+		// the plain box: one variant with its package, the one field it names, no grade, size guide or own days
+		expect(() => labelled(editor, 'Grade of Red')).toThrow();
+		expect(() => labelled(editor, 'Warranty days of Red')).toThrow();
+		expect(fieldIn(editor, 'Screen (in)').value).toBe('6.1');
+		expect(() => fieldIn(editor, 'Model')).toThrow();
+		expect(() => fieldIn(editor, 'Size chart')).toThrow();
+		type(labelled(editor, 'Package weight in grams of Red'), '250');
+		await click(buttonIn(editor, 'Save'));
+		expect(patches[0]).toMatchObject({ typeKey: 'plain_box', specs: { att_1: 6.1 } });
+		expect(patches[0]).not.toHaveProperty('options');
+		expect(patches[0]).not.toHaveProperty('sizeChartId');
+		expect(patches[0]).not.toHaveProperty('returnDays');
+		expect(patches[0].variants[0]).toMatchObject({ parcel: { weightG: 250, lengthMm: null, widthMm: null, heightMm: null } });
+		expect(patches[0].variants[0]).not.toHaveProperty('grade');
+		// as its category says (Phones: the used phone type, with grades and its own days)
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		const again = detailOf(panel);
+		await change(fieldIn(again, 'Item type'), '');
+		expect(labelled(again, 'Grade of Red').value).toBe('a');
+		expect(fieldIn(again, 'Model').value).toBe('');
+		expect(fieldIn(again, 'Size chart').value).toBe('szc_1');
+		// a digital kind offers the digital types only
+		await change(fieldIn(again, 'Kind'), 'digital');
+		expect([...fieldIn(again, 'Item type').options].map((/** @type {any} */ o) => o.value)).toEqual(['', 'digital']);
+	});
+});
+
 describe('catalog admin: other product shapes', () => {
-	it('shows a bare booking product', async () => {
+	it('shows a bare service booked in slots', async () => {
 		const bare = {
 			...product(),
-			kind: 'booking',
+			kind: 'service',
+			type: { key: 'service', kind: 'service' },
 			status: 'archived',
 			featured: false,
 			summary: '',
@@ -490,7 +558,6 @@ describe('catalog admin: other product shapes', () => {
 			video: null,
 			returnDays: null,
 			warrantyDays: 30,
-			serialized: true,
 			hideSizeGuide: true,
 			booking: { durationMinutes: 45 },
 			priceMax: 125000,
@@ -503,7 +570,8 @@ describe('catalog admin: other product shapes', () => {
 		const text = textOf(detail);
 		for (const part of [
 			'Archived',
-			'Booking',
+			'Service',
+			'Item typeService',
 			'Stock not tracked',
 			'Warranty days30',
 			'Size guide hidden',
@@ -521,12 +589,21 @@ describe('catalog admin: other product shapes', () => {
 		resetPage();
 		const plain = await start(ALL, {
 			'GET /v1/admin/products/prd_1': () =>
-				answer(200, product({ descriptionHtml: '', description: 'Plain words', sizeChartId: null, serialized: false })),
+				answer(
+					200,
+					product({
+						descriptionHtml: '',
+						description: 'Plain words',
+						sizeChartId: null,
+						typeKey: 'physical',
+						type: { key: 'physical', kind: 'physical' },
+					}),
+				),
 		});
 		const next = textOf(detailOf(panelOf(plain.root, 'products')));
 		expect(next).toContain('Plain words');
 		expect(next).toContain('From its brand or category');
-		expect(next).toContain('Serial number per unit (captured when packed)No');
+		expect(next).toContain('Item typePhysical goods');
 	});
 
 	it('edits variant attributes of each kind, without multi-location stock or a grades list', async () => {

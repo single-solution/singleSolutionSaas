@@ -3,11 +3,13 @@
  * with Make variants from the options), the attribute setup (values, own values and the default per attribute) with
  * Generate (every missing combination, `POST …/variants/generate { price, stock }`), and the variants table: variant
  * attribute values (several where the attribute takes several), SKU, price, was price, cost, stock (per location with
- * multi-location stock) for new variants, GTIN and MPN, grade, warranty days, on sale, sold out and the variant's
- * photos.
+ * multi-location stock) for new variants, GTIN and MPN, grade, warranty days, the package (weight and size), on sale,
+ * sold out and the variant's photos. The product's item type (dynamic model §1) decides the columns: variant fields
+ * and more than one variant (`variants`), the grade (`grades`), warranty days (`warranty`) and the package (`parcel`).
  * @module
  */
 import { gtinOf } from '../core/fields.js';
+import { typeTakes } from '../core/item-types.js';
 import { entriesOf, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import { checkGroup } from './admin-fields.js';
@@ -224,31 +226,43 @@ export const generateDialog = (kit, { productId, before, done }) => {
  * @property {Map<string, HTMLInputElement>} locations
  * @property {HTMLInputElement | HTMLSelectElement} grade
  * @property {HTMLInputElement} warranty
+ * @property {Record<'weightG' | 'lengthMm' | 'widthMm' | 'heightMm', HTMLInputElement>} parcel
  * @property {HTMLInputElement} active
  * @property {HTMLInputElement} soldOut
  * @property {Map<string, { control: HTMLElement, read: () => unknown }>} attributes
  * @property {Photo[]} media
  */
 
+/** The parts of a package, in the order they are typed. */
+const PARCEL_PARTS = Object.freeze(/** @type {const} */ (['weightG', 'lengthMm', 'widthMm', 'heightMm']));
+
 /**
- * The variants table of the product editor.
+ * The variants table of the product editor. `type()`: the product's item type as the form stands (its elements decide
+ * the columns).
  * @param {Kit} kit
  * @param {{ product: any, lookups: Lookups, customOf: (id: string) => string[], axes: () => Axis[],
- *   photos: () => Photo[], uploaded: (media: Photo[]) => void }} options
+ *   photos: () => Photo[], uploaded: (media: Photo[]) => void, type: () => import('../core/item-types.js').ItemType }} options
  */
-export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, uploaded }) => {
+export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, uploaded, type }) => {
 	const { t, h, has } = kit;
 	const { locations } = lookups.state;
 	const grades = lookups.grades();
 	/** @type {any[]} */
 	const start = product.variants;
-	const attributes = has('variants')
+	const every = has('variants')
 		? lookups.state.attributes.filter(
 				(attribute) =>
 					attribute.on === 'variant' &&
 					(attribute.active !== false || start.some((variant) => variant.attributes?.[attribute.id] !== undefined)),
 			)
 		: [];
+	// what the type has (with today's features: a built-in type has every part)
+	const many = () => has('variants') && type().elements.variants;
+	const gradesOn = () => has('grades_serials') && type().elements.grades;
+	const warrantyOn = () => type().elements.warranty;
+	const parcelOn = () => has('delivery_zones') && type().elements.parcel;
+	/** The variant fields shown: those of the type. */
+	const attributesOf = () => (many() ? every.filter((attribute) => typeTakes(type(), attribute.id)) : []);
 	const box = h('div');
 
 	/**
@@ -366,10 +380,24 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 				step: '1',
 				'aria-label': aria('catalogAdmin.warrantyOf'),
 			}),
+			parcel: /** @type {VariantRow['parcel']} */ (
+				Object.fromEntries(
+					PARCEL_PARTS.map((part) => [
+						part,
+						kit.input(variant.parcel?.[part] ?? '', {
+							type: 'number',
+							min: '1',
+							step: '1',
+							placeholder: t(`catalogAdmin.parcel.${part}`),
+							'aria-label': t(`catalogAdmin.parcelOf.${part}`, { variant: label }),
+						}),
+					]),
+				)
+			),
 			active: toggle(variant.active !== false, 'catalogAdmin.activeOf'),
 			soldOut: toggle(variant.soldOut === true, 'catalogAdmin.soldOutOf'),
 			attributes: new Map(
-				attributes.map((attribute) => [
+				every.map((attribute) => [
 					attribute.id,
 					attributeControl(
 						attribute,
@@ -406,11 +434,12 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 
 	const draw = () => {
 		const names = axes().map((axis) => axis.name);
-		const many = has('variants') && rows.length > 1;
+		const attributes = attributesOf();
+		const removable = many() && rows.length > 1;
 		box.replaceChildren(
 			kit.table(
 				[
-					...(has('variants') ? [t('catalogAdmin.variant')] : []),
+					...(many() ? [t('catalogAdmin.variant')] : []),
 					...attributes.map((attribute) => attribute.name),
 					t('catalogAdmin.sku'),
 					t('catalogAdmin.gtin'),
@@ -419,15 +448,16 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 					t('catalogAdmin.wasPrice'),
 					t('catalogAdmin.cost'),
 					t('catalogAdmin.stock'),
-					...(has('grades_serials') ? [t('catalogAdmin.grade')] : []),
-					t('catalogAdmin.warrantyShort'),
+					...(gradesOn() ? [t('catalogAdmin.grade')] : []),
+					...(warrantyOn() ? [t('catalogAdmin.warrantyShort')] : []),
+					...(parcelOn() ? [t('catalogAdmin.parcel')] : []),
 					t('catalogAdmin.active'),
 					t('catalogAdmin.soldOut'),
 					...(product.id && has('variants') ? [t('catalogAdmin.photos')] : []),
-					...(many ? [''] : []),
+					...(removable ? [''] : []),
 				],
 				rows.map((entry) => [
-					...(has('variants')
+					...(many()
 						? [
 								names.map((axis) => entry.variant.options[axis] ?? '').join(' / ') ||
 									Object.values(entry.variant.options).join(' / ') ||
@@ -445,12 +475,21 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 						(entry.locations.size > 0
 							? h('div', {}, [...entry.locations.values()])
 							: kit.text('span', {}, stockText(kit, entry.variant, locations))),
-					...(has('grades_serials') ? [entry.grade] : []),
-					entry.warranty,
+					...(gradesOn() ? [entry.grade] : []),
+					...(warrantyOn() ? [entry.warranty] : []),
+					...(parcelOn()
+						? [
+								h(
+									'div',
+									{ class: 'row' },
+									PARCEL_PARTS.map((part) => entry.parcel[part]),
+								),
+							]
+						: []),
 					entry.active,
 					entry.soldOut,
 					...(product.id && has('variants') ? [photosButton(entry)] : []),
-					...(many
+					...(removable
 						? [
 								kit.button(t('admin.remove'), () => {
 									rows = rows.filter((other) => other !== entry);
@@ -460,7 +499,7 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 						: []),
 				]),
 			),
-			...(has('variants')
+			...(many()
 				? [
 						kit.button(t('catalogAdmin.addVariant'), () => {
 							rows.push(rowFor(blankVariant()));
@@ -494,12 +533,17 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 				if (Number.isNaN(value) || (required && value === null)) bad = true;
 				return Number.isNaN(value) ? null : value;
 			};
+			const attributes = attributesOf();
 			const variants = rows.map((entry) => {
 				const values = Object.fromEntries(
-					[...entry.attributes].map(([id, item]) => [id, item.read()]).filter(([, value]) => value !== null),
+					attributes
+						.map((attribute) => [attribute.id, entry.attributes.get(attribute.id)?.read() ?? null])
+						.filter(([, value]) => value !== null),
 				);
 				const warranty = wholeOf(entry.warranty.value);
 				if (Number.isNaN(warranty)) bad = true;
+				const parcel = Object.fromEntries(PARCEL_PARTS.map((part) => [part, wholeOf(entry.parcel[part].value)]));
+				if (Object.values(parcel).some((part) => Number.isNaN(part))) bad = true;
 				// a GTIN ends in its check digit: a mistyped barcode number is caught before saving
 				const gtin = entry.gtin.value.trim() ? gtinOf(entry.gtin.value) : '';
 				entry.gtin.toggleAttribute('aria-invalid', gtin === null);
@@ -516,8 +560,9 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 					cost: priceOf(entry.cost, false),
 					active: entry.active.checked,
 					soldOut: entry.soldOut.checked,
-					warrantyDays: Number.isNaN(warranty) ? null : warranty,
-					...(has('grades_serials') ? { grade: entry.grade.value.trim() || null } : {}),
+					...(warrantyOn() ? { warrantyDays: Number.isNaN(warranty) ? null : warranty } : {}),
+					...(gradesOn() ? { grade: entry.grade.value.trim() || null } : {}),
+					...(parcelOn() ? { parcel: Object.values(parcel).every((part) => part === null) ? null : parcel } : {}),
 					...(product.id
 						? {
 								media: entry.media.map((photo) => ({

@@ -219,7 +219,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					const source = cartLineOf(line, index);
 					const name = line.name || t('cart.unknownItem');
 					const controls = [];
-					if (source && line.kind !== 'booking') {
+					if (source && !line.slot) {
 						const input = /** @type {HTMLInputElement} */ (
 							h(doc, 'input', {
 								type: 'number',

@@ -221,7 +221,7 @@ describe('renderDocs', () => {
 				);
 			}
 		}
-		expect(SECTIONS).toHaveLength(17);
+		expect(SECTIONS).toHaveLength(18);
 	});
 
 	it('gives the exact Atlas Search index and where to create it (E14)', () => {

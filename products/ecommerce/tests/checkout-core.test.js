@@ -58,6 +58,8 @@ const context = (products, over = {}) => ({
 	ancestors: (/** @type {string[]} */ ids) => [...ids, 'cat_root'],
 	gradeLabel: (/** @type {string} */ key) => `Grade ${key}`,
 	features: { digital: true, bookings: true },
+	// services are booked in time slots unless a test says otherwise (their item type's `slots`)
+	slots: (/** @type {any} */ product) => product.kind === 'service',
 	licences: new Map(),
 	slotOf: () => null,
 	booked: new Set(),
@@ -207,7 +209,7 @@ describe('lines', () => {
 					productOf({ id: 'prd_draft', status: 'draft' }),
 					productOf({ id: 'prd_many', variants: [variant(), variant({ id: 'var_2' })] }),
 					productOf({ id: 'prd_dig', kind: 'digital' }),
-					productOf({ id: 'prd_book', kind: 'booking', booking: { durationMinutes: 30 } }),
+					productOf({ id: 'prd_book', kind: 'service', booking: { durationMinutes: 30 } }),
 				],
 				{ features: { digital: false, bookings: false } },
 			),
@@ -224,7 +226,7 @@ describe('lines', () => {
 	});
 
 	it('checks booking slots and license keys', () => {
-		const booking = productOf({ id: 'prd_book', kind: 'booking', trackStock: false, booking: { durationMinutes: 60 } });
+		const booking = productOf({ id: 'prd_book', kind: 'service', trackStock: false, booking: { durationMinutes: 60 } });
 		const digital = productOf({
 			id: 'prd_dig',
 			kind: 'digital',
@@ -256,6 +258,25 @@ describe('lines', () => {
 		expect(lines[2]?.booking).toEqual({ start, end: start + 3_600_000 });
 		const none = resolveLines([{ productId: 'prd_dig', variantId: null, quantity: 1, slot: null }], context([digital]));
 		expect(none[0]?.problems[0]?.code).toBe('out_of_stock');
+	});
+
+	it('sells a service whose item type books no slots without a time, several at once', () => {
+		const service = productOf({ id: 'prd_fix', kind: 'service', trackStock: false, booking: null });
+		const lines = resolveLines(
+			[
+				{ productId: 'prd_fix', variantId: null, quantity: 2, slot: null },
+				{ productId: 'prd_fix', variantId: null, quantity: 1, slot: Date.parse('2026-10-06T10:00:00Z') },
+			],
+			context([service], { slots: () => false }),
+		);
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toMatchObject({ kind: 'service', quantity: 3, booking: null, problems: [], priced: true });
+		// Bookings off: no service is sold
+		const off = resolveLines(
+			[{ productId: 'prd_fix', variantId: null, quantity: 1, slot: null }],
+			context([service], { slots: () => false, features: { digital: true, bookings: false } }),
+		);
+		expect(off[0]?.problems[0]?.code).toBe('unavailable');
 	});
 });
 

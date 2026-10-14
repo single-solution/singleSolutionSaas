@@ -196,7 +196,7 @@ describe('cart', () => {
 							line({
 								productId: 'prd_2',
 								variantId: 'var_2',
-								kind: 'booking',
+								kind: 'service',
 								name: 'Haircut',
 								variantName: '',
 								gradeLabel: '',

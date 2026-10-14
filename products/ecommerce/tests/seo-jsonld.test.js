@@ -182,7 +182,7 @@ describe('offers', () => {
 		// free from the free-delivery amount, as the cart charges it (SG-2)
 		expect(offers(product(), { shipping: { ...complete, freeOver: 1000 } }).shippingDetails.shippingRate.value).toBe('0.00');
 		expect(offers(product({ kind: 'digital' }), { shipping: complete }).shippingDetails).toBeUndefined();
-		expect(offers(product({ kind: 'booking' }), { shipping: complete }).shippingDetails).toBeUndefined();
+		expect(offers(product({ kind: 'service' }), { shipping: complete }).shippingDetails).toBeUndefined();
 		expect(offers(product(), { shipping: { ...complete, country: '' } }).shippingDetails).toBeUndefined();
 		expect(offers(product(), { shipping: { ...complete, deliveryTime: null } }).shippingDetails).toBeUndefined();
 	});

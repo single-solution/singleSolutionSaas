@@ -47,6 +47,7 @@ import { listShown } from '../core/promotions.js';
 import { formatCell, parseCsv, recordsOf, toCsv, unescapeFormula } from '../core/csv.js';
 import { showDefaults } from '../core/fields.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
+import { BUILT_IN_TYPES } from '../core/item-types.js';
 
 /** @typedef {import('../core/catalog.js').CatalogRules} CatalogRules */
 
@@ -79,7 +80,7 @@ const STORED_CATEGORY = Object.freeze({
 	content: { ...EMPTY_CONTENT },
 	faqs: [],
 	sizeChartId: null,
-	requiresSerial: null,
+	typeKey: null,
 	previousSlugs: [],
 });
 
@@ -91,10 +92,13 @@ const rules = (over = {}) => ({
 	grades: true,
 	digital: true,
 	bookings: true,
+	parcels: true,
 	gradeKeys: new Set(['a']),
 	locationIds: new Set(['loc_1']),
 	categoryIds: new Set(['cat_1']),
 	categoryPaths: new Map([['cat_1', []]]),
+	categoryTypes: new Map([['cat_1', null]]),
+	types: [],
 	brandIds: new Set(['brd_1']),
 	attributes: new Map([
 		[
@@ -314,14 +318,14 @@ describe('product checks', () => {
 			'/digital/licenceKeys',
 			'/digital/downloadLimit',
 		]);
-		const booking = record({ kind: 'booking', booking: { durationMinutes: 30 } });
+		const booking = record({ kind: 'service', booking: { durationMinutes: 30 } });
 		const longer = checkProduct({ booking: { durationMinutes: 60 } }, rules(), booking);
 		expect(longer.ok && longer.value.booking).toEqual({ durationMinutes: 60 });
 		expect(paths({ seo: { description: 'x'.repeat(600) } }, {}, single)).toEqual(['/seo/description']);
 		expect(paths({ seo: { title: 'T' } }, {}, single)).toEqual([]);
-		expect(paths({ serialized: 'yes', slug: 'Bad Slug', warrantyDays: -1 }, {}, single)).toEqual([
+		expect(paths({ typeKey: 'nope', slug: 'Bad Slug', warrantyDays: -1 }, {}, single)).toEqual([
 			'/slug',
-			'/serialized',
+			'/typeKey',
 			'/warrantyDays',
 		]);
 	});
@@ -628,7 +632,10 @@ describe('views', () => {
 			attributes: rules().attributes,
 			grades,
 			shown: listShown,
+			type: BUILT_IN_TYPES.physical,
+			slots: false,
 		});
+		expect(page.type).toEqual({ key: 'physical', kind: 'physical' });
 		expect(page.seo).toEqual({ title: 'T', description: 'D' });
 		expect(page.rating).toEqual(product.rating);
 		expect(page.variants[0]).not.toHaveProperty('stock');

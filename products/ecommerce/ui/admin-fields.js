@@ -337,26 +337,6 @@ export const checkGroup = (kit, legend, choices, chosen, counts) => {
 };
 
 /**
- * Yes, no, or as something else says (null).
- * @param {Kit} kit @param {boolean | null | undefined} value @param {string} inheritLabel
- */
-export const triSelect = (kit, value, inheritLabel) => {
-	const node = kit.select(
-		[
-			{ value: 'inherit', label: inheritLabel },
-			{ value: 'yes', label: kit.t('admin.yes') },
-			{ value: 'no', label: kit.t('admin.no') },
-		],
-		value === true ? 'yes' : value === false ? 'no' : 'inherit',
-	);
-	return {
-		node,
-		/** @returns {boolean | null} */
-		value: () => (node.value === 'yes' ? true : node.value === 'no' ? false : null),
-	};
-};
-
-/**
  * Choices of a size chart select (E5): none, then the charts by name.
  * @param {Kit} kit @param {Array<{ id: string, name: string }>} charts
  * @returns {Choice[]}

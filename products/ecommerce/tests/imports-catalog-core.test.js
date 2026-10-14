@@ -43,6 +43,7 @@ const contextOf = ({ features = ['variants', 'grades_serials', 'digital_goods', 
 	sizeChartIds: new Set([SZC]),
 	gradeKeys: new Set(['a-plus']),
 	locationIds: new Set([LOC]),
+	types: [],
 	categories: new Map([[CAT, { path: [] }]]),
 	rules: {
 		variants: features.includes('variants'),
@@ -50,10 +51,13 @@ const contextOf = ({ features = ['variants', 'grades_serials', 'digital_goods', 
 		grades: true,
 		digital: true,
 		bookings: true,
+		parcels: true,
 		gradeKeys: new Set(['a-plus']),
 		locationIds: new Set([LOC]),
 		categoryIds: new Set([CAT]),
 		categoryPaths: new Map([[CAT, []]]),
+		categoryTypes: new Map([[CAT, null]]),
+		types: [],
 		brandIds: new Set([BRD]),
 		attributes: new Map([
 			[
@@ -186,6 +190,14 @@ describe('taxonomy', () => {
 				checkImportedCategory({ id: self, slug: 'c', name: 'C', sizeChartId: SZC }, contextOf({ features: ['variants'] })),
 			),
 		).toEqual(['/sizeChartId']);
+		// its item type: one of the imported list, or a built-in one
+		expect(paths(checkImportedCategory({ id: self, slug: 'c', name: 'C', typeKey: 'used_phone' }, context))).toEqual([
+			'/typeKey',
+		]);
+		expect(checkImportedCategory({ id: self, slug: 'c', name: 'C', typeKey: 'physical' }, context)).toMatchObject({
+			ok: true,
+			value: { typeKey: 'physical' },
+		});
 	});
 
 	it('checks brands, attributes, size charts and landing pages against what is imported', () => {

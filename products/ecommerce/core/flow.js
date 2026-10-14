@@ -21,7 +21,8 @@
  *
  * A move says who may make it (`who`: staff; staff and the shopper — a cancel before dispatch —; or only the shop
  * itself, `system`), the permission a staff ticket needs (into a refunded status always `orders.refund`), what staff
- * give with it (`needs`: a staff note, a reason the shopper reads, every serial number) and its options where the
+ * give with it (`needs`: a staff note, a reason the shopper reads; the serial numbers a stage needs follow the item
+ * types, `core/item-types.js`) and its options where the
  * stage contract leaves a choice ({@link moveOptionSpecs}). Each status has the name shoppers read, a line per payment
  * method and whether entering it sends the shopper a message. `triggers` name the statuses the shop moves orders to by
  * itself and `starts` where orders that need no payment first start. Anything missing reads as today's behavior
@@ -55,7 +56,7 @@ export const FLOW_METHODS = Object.freeze(
 /** Who may make a move: one of these sets. */
 const WHO_SETS = Object.freeze([['staff'], ['staff', 'shopper'], ['shopper'], ['system']]);
 /** What staff give with a move (`reason`: the shopper note, which the shopper reads in the order's timeline). */
-export const MOVE_NEEDS = Object.freeze(/** @type {Array<'note' | 'reason' | 'units'>} */ (['note', 'reason', 'units']));
+export const MOVE_NEEDS = Object.freeze(/** @type {Array<'note' | 'reason'>} */ (['note', 'reason']));
 /** The permissions a move may need of a staff ticket. */
 export const MOVE_PERMISSIONS = Object.freeze(
 	/** @type {Array<'orders.manage' | 'orders.refund'>} */ (['orders.manage', 'orders.refund']),
@@ -190,13 +191,6 @@ const OPTION_NAMES = Object.freeze([
 const defaultWho = (from, to) => (WAITING_ROLES.includes(from) && to === 'cancelled' ? ['staff', 'shopper'] : ['staff']);
 
 /**
- * What staff give with a move by default: every serial number before a package goes out (typed serials, E11).
- * @param {StatusRole} to
- * @returns {Array<'note' | 'reason' | 'units'>}
- */
-const defaultNeeds = (to) => (to === 'shipped' ? ['units'] : []);
-
-/**
  * A move with every field: as given, else its defaults (a move of a flow built in code, or saved before phase 2).
  * @param {OrderFlow} flow @param {OrderMove} move
  * @returns {Required<OrderMove> & { options: Required<MoveOptions> }} unknown statuses give an empty set of options
@@ -218,7 +212,7 @@ export const moveRules = (flow, move) => {
 		to: move.to,
 		who,
 		permission: move.permission ?? (to === 'refunded' ? 'orders.refund' : 'orders.manage'),
-		needs: Array.isArray(move.needs) ? move.needs : to ? defaultNeeds(to) : [],
+		needs: Array.isArray(move.needs) ? move.needs : [],
 		options: /** @type {Required<MoveOptions>} */ (options),
 	};
 };
@@ -406,9 +400,7 @@ const moveProblems = (name, move, from, to) => {
 	if (move.needs !== undefined) {
 		const needs = Array.isArray(move.needs) ? move.needs : null;
 		if (!needs || needs.some((need) => !MOVE_NEEDS.includes(need)) || new Set(needs).size !== needs.length)
-			problems.push(`${name}: needs lists note, reason or units, each once.`);
-		else if (needs.includes('units') && to !== 'shipped' && to !== 'delivered')
-			problems.push(`${name}: serial numbers can be needed only to ship or deliver.`);
+			problems.push(`${name}: needs lists note or reason, each once.`);
 	}
 	if (move.options !== undefined) {
 		const options = objectOf(move.options);

@@ -208,6 +208,8 @@ export const specsOf = (product, attributes) =>
  * @param {ReturnType<typeof import('./size-charts.js').chartView> | null} [context.sizeChart] (E5)
  * @param {Record<string, unknown> | null} [context.video] (E4)
  * @param {Shown} context.shown each variant's shown price (G4)
+ * @param {{ key: string, kind: string }} context.type its item type (dynamic model §1)
+ * @param {boolean} context.slots it is booked in time slots (its type's `slots`, while Bookings is on)
  */
 export const pageOf = (product, context) => {
 	const { currency, url, media, brand, breadcrumb, attributes, grades, shown } = context;
@@ -247,6 +249,7 @@ export const pageOf = (product, context) => {
 		slug: product.slug,
 		name: product.name,
 		kind: product.kind,
+		type: { key: context.type.key, kind: context.type.kind },
 		summary: product.summary,
 		description: product.description,
 		descriptionHtml: product.descriptionHtml,
@@ -264,7 +267,7 @@ export const pageOf = (product, context) => {
 		breadcrumb,
 		tags: product.tags,
 		rating: product.rating,
-		booking: product.kind === 'booking' && product.booking ? { durationMinutes: product.booking.durationMinutes } : null,
+		booking: context.slots && product.booking ? { durationMinutes: product.booking.durationMinutes } : null,
 		sizeChart: context.sizeChart ?? null,
 		faqs: product.faqs,
 		seo: {
@@ -286,6 +289,7 @@ export const staffRowOf = (product, { image }) => {
 		slug: product.slug,
 		name: product.name,
 		kind: product.kind,
+		typeKey: product.typeKey ?? null,
 		status: product.status,
 		price: product.price,
 		inStock: product.inStock,
@@ -306,12 +310,15 @@ export const staffRowOf = (product, { image }) => {
 
 /**
  * The whole product for staff (read without the database's own fields), with the addresses of its images, its
- * variants' photos and its video file.
+ * variants' photos and its video file, and its item type (its own, its category's or the built-in one).
  * @param {ProductRecord} product
- * @param {{ media: Array<string | null>, variantMedia?: ReadonlyMap<string, Array<string | null>>, video?: string | null }} context
+ * @param {{ media: Array<string | null>, variantMedia?: ReadonlyMap<string, Array<string | null>>, video?: string | null,
+ *   type: { key: string, kind: string } }} context
  */
-export const staffProductOf = (product, { media, variantMedia = new Map(), video = null }) => ({
+export const staffProductOf = (product, { media, variantMedia = new Map(), video = null, type }) => ({
 	...product,
+	typeKey: product.typeKey ?? null,
+	type: { key: type.key, kind: type.kind },
 	...summarize(product.variants, product.trackStock),
 	media: product.media.map((item, index) => ({ ...item, url: media[index] ?? null })),
 	variants: product.variants.map((variant) => ({

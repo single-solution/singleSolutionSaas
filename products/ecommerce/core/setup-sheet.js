@@ -1,6 +1,6 @@
 /**
  * Ecommerce's own part of the website Setup sheet (owner request 2026-10-14, `ss.blueprint/1`): its lists in its own
- * words — the order flow, couriers, delivery zones, tax rules, grades, booking hours and role prices, by name and
+ * words — the order flow, couriers, delivery zones, tax rules, grades, item types, booking hours and role prices, by name and
  * number, never an address or a key — and short summaries of what the merchant's website builds around the shop: the
  * pages and their addresses, what the website serves from its own domain, and the SEO tags of its page heads. The
  * adapter (`adapters/product.js`) reads the lists and settings and adds the event types (`core/events.js`). No I/O.
@@ -14,6 +14,7 @@ import { SITE_ROUTES } from './snippets.js';
 /** @typedef {import('./delivery.js').Zone} Zone */
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
 /** @typedef {import('./grades.js').Grade} Grade */
+/** @typedef {import('./item-types.js').ItemType} ItemType */
 /** @typedef {import('./bookings.js').OpeningHours} OpeningHours */
 /** @typedef {import('./role-pricing.js').RolePrice} RolePrice */
 
@@ -90,6 +91,19 @@ const gradeWords = (grades) => {
 	return names.length === 0 ? 'No grades yet.' : listed(counted(names.length, 'grade', 'grades'), names);
 };
 
+/**
+ * Item types by name with their kind and whether their items have numbered units, and those no longer offered.
+ * @param {ItemType[]} types
+ */
+const typeWords = (types) => {
+	if (types.length === 0) return 'No item types yet: every item has the built-in type of its kind.';
+	const names = types.map((type) => {
+		const notes = [type.kind, type.elements.units ? 'unit numbers' : '', type.active ? '' : 'not offered'].filter(Boolean);
+		return `${nameOf(type.name)} (${notes.join(', ')})`;
+	});
+	return listed(counted(types.length, 'item type', 'item types'), names);
+};
+
 /** The booking hours by day (`Mon 9:00 AM–5:00 PM`), Sunday first. @param {OpeningHours[]} hours */
 const hoursWords = (hours) => {
 	if (hours.length === 0) return 'No booking hours yet, so no slot can be booked.';
@@ -120,6 +134,7 @@ export const LIST_WORDS = Object.freeze({
 	delivery_zones: named('zone', 'zones', (/** @type {Zone} */ zone) => nameOf(zone.name)),
 	tax_rules: named('tax rule', 'tax rules', (/** @type {TaxRule} */ rule) => `${nameOf(rule.name)} ${rule.percent}%`),
 	grades: gradeWords,
+	item_types: typeWords,
 	booking_hours: hoursWords,
 	role_prices: named(
 		'role price',

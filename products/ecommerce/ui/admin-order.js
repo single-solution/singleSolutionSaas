@@ -14,7 +14,7 @@ import { EDITABLE_ROLES } from '../core/orders.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, detailHead } from './admin-lists.js';
-import { serialForm, serialLines, shipForm, typedSerials, warrantyOf } from './admin-order-forms.js';
+import { serialForm, serialLines, shipForm, typedLine, unitsMissing, warrantyOf } from './admin-order-forms.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
@@ -164,9 +164,9 @@ const renderOrder = (kit, order, detail, message) => {
 	const forward = next.filter((status) => status.role !== 'cancelled');
 	const cancels = next.filter((status) => status.role === 'cancelled');
 	const refundable = Number(order.payment.refundable ?? 0);
-	const lines = serialLines(order);
-	// typed serials still missing on lines the answer marks serialized make Type serial numbers a main action
-	const missing = typedSerials(kit) && lines.some((item) => item.serialized === true && item.serials.length !== item.quantity);
+	// lines whose units are typed (their item type), and typed numbers still missing make Type serial numbers a main action
+	const typed = serialLines(order).filter(typedLine);
+	const missing = typed.some(unitsMissing);
 	/** @param {NextStatus} status */
 	const moveTo = (status) => () => moveDialog(kit, order, status, done);
 	const serials = () => serialsDialog(kit, order, done);
@@ -190,9 +190,7 @@ const renderOrder = (kit, order, detail, message) => {
 			...forward
 				.slice(1)
 				.map((status) => ({ label: t('ordersAdmin.moveToStatus', { status: status.label }), onSelect: moveTo(status) })),
-			typedSerials(kit) && lines.length > 0 && second !== 'serials'
-				? { label: t('ordersAdmin.typeSerials'), onSelect: serials }
-				: null,
+			typed.length > 0 && second !== 'serials' ? { label: t('ordersAdmin.typeSerials'), onSelect: serials } : null,
 			refundable > 0 && second !== 'refund' ? { label: t('ordersAdmin.refund'), onSelect: refund } : null,
 			order.address && EDITABLE_ROLES.includes(order.role)
 				? { label: t('ordersAdmin.editAddress'), onSelect: () => addressDialog(kit, order, done) }
@@ -272,11 +270,7 @@ const renderOrder = (kit, order, detail, message) => {
 			money(item.unitPrice),
 			money(item.total),
 			warrantyOf(kit, item),
-			item.serials.length > 0
-				? unitsText(item)
-				: typedSerials(kit) && item.serialized === true
-					? kit.badge(t('ordersAdmin.serialsMissing'), 'warning')
-					: '',
+			item.serials.length > 0 ? unitsText(item) : typedLine(item) ? kit.badge(t('ordersAdmin.serialsMissing'), 'warning') : '',
 		]),
 	);
 
@@ -414,9 +408,10 @@ const claimsCard = async (kit, order, cards, detail) => {
 const VIDEO_ROLES = Object.freeze(['packed', 'shipped']);
 
 /**
- * Move the order to a status, with what its role and the move need: the serial numbers and the dispatch video when
- * packing, the shipment, a staff note and a note for the shopper (required when the move needs them), and whether the
- * items go back in stock when the move asks; a canceling status asks for the order number first.
+ * Move the order to a status, with what its role and the move need: the units' numbers (packing: every line whose item
+ * type numbers its units; shipping or delivering: those still missing some) and the dispatch video when packing, the
+ * shipment, a staff note and a note for the shopper (required when the move needs them), and whether the items go back
+ * in stock when the move asks; a canceling status asks for the order number first.
  * @param {Kit} kit @param {any} order @param {NextStatus} status
  * @param {(order: any, text: string) => void} done
  */
@@ -426,7 +421,13 @@ const moveDialog = (kit, order, status, done) => {
 	const options = status.options ?? {};
 	const reason = kit.input('', { maxlength: '1000' });
 	const forShopper = kit.input('', { maxlength: '1000' });
-	const packing = status.role === 'packed' && has('grades_serials') ? serialForm(kit, order, false) : null;
+	const numbered = has('grades_serials') ? serialLines(order) : [];
+	const packing =
+		status.role === 'packed'
+			? serialForm(kit, numbered, false)
+			: status.role === 'shipped' || status.role === 'delivered'
+				? serialForm(kit, numbered.filter(unitsMissing), false)
+				: null;
 	const shipping = status.role === 'shipped' ? shipForm(kit) : null;
 	const video =
 		status.role === 'packed' && options.video && options.video !== 'off'
@@ -514,12 +515,14 @@ const unitsText = (item) =>
 		.join('; ');
 
 /**
- * Type the serial numbers of serialized lines at packing or later (typed serials, E11).
+ * Type the numbers of the units of lines whose item type has them typed, at packing or later.
  * @param {Kit} kit @param {any} order @param {(order: any, text: string) => void} done
  */
 const serialsDialog = (kit, order, done) => {
 	const { t } = kit;
-	const form = /** @type {NonNullable<ReturnType<typeof serialForm>>} */ (serialForm(kit, order, true));
+	const form = /** @type {NonNullable<ReturnType<typeof serialForm>>} */ (
+		serialForm(kit, serialLines(order).filter(typedLine), true)
+	);
 	kit.dialog({
 		title: t('ordersAdmin.serialsTitle'),
 		body: [form.node],

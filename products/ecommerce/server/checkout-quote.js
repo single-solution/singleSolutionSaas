@@ -11,7 +11,7 @@
  * (`bookings`).
  * @module
  */
-import { attributesOf } from '../adapters/catalog-store.js';
+import { attributesOf, productTypes } from '../adapters/catalog-store.js';
 import { readLock, signLock } from '../adapters/crypto.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
@@ -23,6 +23,7 @@ import { dealRulesOf } from '../core/deals.js';
 import { checkoutFields } from '../core/fields.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
+import { elementsOf } from '../core/item-types.js';
 import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
 import { roundDown } from '../core/money.js';
 import { applyPromotions, attributeValues } from '../core/promotions.js';
@@ -219,7 +220,17 @@ export const createQuoting = (product, service) => {
 		const licences = await store.availableLicences(
 			[...products.values()].filter((item) => item.kind === 'digital' && item.digital?.licenceKeys).map((item) => item.id),
 		);
-		const bookingLines = cart.lines.filter((line) => products.get(line.productId)?.kind === 'booking' && line.slot !== null);
+		// services booked in time slots: their item type's `slots` (dynamic model §1)
+		const typed = await productTypes(data, [...products.values()], await s.list('item_types'));
+		/** @param {import('../core/model.js').ProductRecord} item */
+		const slots = (item) => {
+			const type = typed.get(item.id);
+			return type !== undefined && elementsOf(type, s.has).slots;
+		};
+		const bookingLines = cart.lines.filter((line) => {
+			const item = products.get(line.productId);
+			return item?.kind === 'service' && slots(item) && line.slot !== null;
+		});
 		const rules = s.has('bookings') && bookingLines.length > 0 ? await bookingRules(s) : null;
 		const starts = bookingLines.map((line) => /** @type {number} */ (line.slot));
 		const booked = rules
@@ -234,6 +245,7 @@ export const createQuoting = (product, service) => {
 			ancestors,
 			gradeLabel,
 			features: { digital: s.has('digital_goods'), bookings: s.has('bookings') },
+			slots,
 			licences,
 			booked,
 			// called only for booking lines with a slot, so the rules were read

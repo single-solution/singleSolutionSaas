@@ -288,13 +288,15 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  * @param {(grade: string, categoryIds: string[]) => string} context.gradeLabel a grade's label for a product of these
  *   categories (its category's entry first, E45)
  * @param {{ digital: boolean, bookings: boolean }} context.features
+ * @param {(product: ProductRecord) => boolean} context.slots whether a service is booked in time slots (its item type's
+ *   `slots`, dynamic model §1): one per slot, a slot needed
  * @param {Map<string, number>} context.licences available license keys by product id
  * @param {(product: ProductRecord, start: number) => { start: number, end: number } | null} context.slotOf the slot
  *   starting then (inside the hours, the lead time and the days ahead), or null
  * @param {Set<string>} context.booked `<productId>|<start ms>` of booked slots
  * @returns {ResolvedLine[]}
  */
-export const resolveLines = (inputs, { products, ancestors, gradeLabel, features, licences, slotOf, booked }) => {
+export const resolveLines = (inputs, { products, ancestors, gradeLabel, features, slots, licences, slotOf, booked }) => {
 	/** @type {ResolvedLine[]} */
 	const out = [];
 	for (const input of inputs) {
@@ -322,11 +324,12 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			priced: false,
 			problems: [],
 		};
+		const slotted = product?.kind === 'service' && slots(product);
 		const sold =
 			product &&
 			product.status === 'active' &&
 			(product.kind !== 'digital' || features.digital) &&
-			(product.kind !== 'booking' || (features.bookings && (product.booking?.durationMinutes ?? 0) > 0));
+			(product.kind !== 'service' || (features.bookings && (!slotted || (product.booking?.durationMinutes ?? 0) > 0)));
 		if (!product || !sold) {
 			out.push({ ...line, problems: [problemOf('unavailable')] });
 			continue;
@@ -360,7 +363,7 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			cost: variant.cost ?? null,
 			priced: true,
 		};
-		if (product.kind === 'booking') {
+		if (slotted) {
 			if (input.slot === null) resolved.problems.push(problemOf('slot_required'));
 			else {
 				const slot = slotOf(product, input.slot);
@@ -383,8 +386,8 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 	for (const line of out) {
 		if (!line.priced) continue;
 		const product = /** @type {ProductRecord} */ (products.get(line.productId));
-		if (line.kind === 'booking') {
-			if (line.quantity > 1) line.problems.push(problemOf('one_per_slot'));
+		if (line.kind === 'service') {
+			if (slots(product) && line.quantity > 1) line.problems.push(problemOf('one_per_slot'));
 			continue;
 		}
 		/** @type {number | null} */

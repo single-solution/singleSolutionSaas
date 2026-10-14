@@ -7,7 +7,7 @@
  */
 import { createId } from '@ss/contracts';
 import { freeSlug, slugify } from '../core/catalog.js';
-import { unitFieldsFor } from '../core/fields.js';
+import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { refreshProducts } from './ledger.js';
 
@@ -123,39 +123,106 @@ export const attributesOf = (data) => allOf(data, COLLECTIONS.attributes);
 export const locationsOf = (data) => allOf(data, COLLECTIONS.locations);
 
 /**
- * The unit fields each product's units take ({@link unitFieldsFor}: the active unit fields of its categories and those
- * above them, in their order), for the products given; [] for a product without (its units are plain serial numbers).
- * @param {WebsiteData} data @param {string[]} productIds
- * @returns {Promise<Map<string, AttributeRecord[]>>}
+ * The categories given and every one above them, as item types read them (`core/item-types.js` `typeTree`).
+ * @param {WebsiteData} data @param {string[]} ids
  */
-export const unitFieldsOf = async (data, productIds) => {
-	/** @type {AttributeRecord[]} */
-	const fields = /** @type {any[]} */ (
-		await data.collection(COLLECTIONS.attributes).find({ websiteId: data.websiteId, on: 'unit', active: true }, NO_ID).toArray()
-	);
-	if (fields.length === 0) return new Map(productIds.map((id) => [id, []]));
-	const [products, categories] = await Promise.all([
+export const typeTreeOf = async (data, ids) => {
+	const categories = data.collection(COLLECTIONS.categories);
+	const projection = { _id: 0, id: 1, path: 1, typeKey: 1 };
+	/** @param {string[]} wanted */
+	const read = async (wanted) =>
+		wanted.length === 0
+			? []
+			: /** @type {Array<{ id: string, path?: string[], typeKey?: string | null }>} */ (
+					await categories.find({ websiteId: data.websiteId, id: { $in: wanted } }, { projection }).toArray()
+				);
+	const first = await read([...new Set(ids)]);
+	const known = new Set(first.map((category) => category.id));
+	const above = [...new Set(first.flatMap((category) => category.path ?? []))].filter((id) => !known.has(id));
+	return typeTree([...first, ...(await read(above))]);
+};
+
+/**
+ * The item type of each product given, by id (`core/item-types.js` `typeOf`); the categories are read only when the
+ * merchant has types (else every product has the built-in type of its kind).
+ * @param {WebsiteData} data
+ * @param {ReadonlyArray<{ id: string, kind: string, typeKey?: string | null, categoryIds: string[] }>} products
+ * @param {ReadonlyArray<import('../core/item-types.js').ItemType>} types the merchant's
+ * @returns {Promise<Map<string, import('../core/item-types.js').ItemType>>}
+ */
+export const productTypes = async (data, products, types) => {
+	const tree =
+		types.length > 0
+			? await typeTreeOf(
+					data,
+					products.flatMap((product) => product.categoryIds.slice(0, 1)),
+				)
+			: new Map();
+	return new Map(products.map((product) => [product.id, typeOf(product, types, tree)]));
+};
+
+/**
+ * The products given that have units in stock.
+ * @param {WebsiteData} data @param {string[]} productIds
+ * @returns {Promise<Set<string>>}
+ */
+export const stockedUnits = async (data, productIds) =>
+	productIds.length === 0
+		? new Set()
+		: new Set(
+				(
+					await data
+						.collection(COLLECTIONS.serials)
+						.distinct('productId', { websiteId: data.websiteId, productId: { $in: productIds }, status: 'in_stock' })
+				).map(String),
+			);
+
+/**
+ * The units of the products given whose item type numbers them (`core/item-types.js`, the `units` element while Grades
+ * and serials is on): when they get their numbers, the stage they are needed before and their unit fields (the active
+ * ones the type names, in its order; none: plain serial numbers). Products whose type numbers no units are left out.
+ * @param {WebsiteData} data @param {string[]} productIds
+ * @param {{ types: ReadonlyArray<import('../core/item-types.js').ItemType>, has: (feature: string) => boolean }} context
+ *   the merchant's item types and the switched-on features
+ * @returns {Promise<Map<string, import('../core/item-types.js').UnitRules>>}
+ */
+export const unitRulesOf = async (data, productIds, { types, has }) => {
+	/** @type {Map<string, import('../core/item-types.js').UnitRules>} */
+	const out = new Map();
+	if (productIds.length === 0 || !has('grades_serials') || !types.some((type) => type.elements.units)) return out;
+	const { websiteId } = data;
+	const [products, fields] = await Promise.all([
 		data
 			.collection(COLLECTIONS.products)
-			.find({ websiteId: data.websiteId, id: { $in: productIds } }, { projection: { _id: 0, id: 1, categoryIds: 1 } })
+			.find({ websiteId, id: { $in: productIds } }, { projection: { _id: 0, id: 1, kind: 1, typeKey: 1, categoryIds: 1 } })
 			.toArray(),
-		data
-			.collection(COLLECTIONS.categories)
-			.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1 } })
-			.limit(5000)
-			.toArray(),
+		/** @type {Promise<AttributeRecord[]>} */ (
+			/** @type {unknown} */ (
+				data.collection(COLLECTIONS.attributes).find({ websiteId, on: 'unit', active: true }, NO_ID).toArray()
+			)
+		),
 	]);
-	const paths = new Map(categories.map((category) => [String(category.id), (category.path ?? []).map(String)]));
-	const byProduct = new Map(products.map((row) => [String(row.id), /** @type {string[]} */ (row.categoryIds ?? [])]));
-	return new Map(
-		productIds.map((id) => [
-			id,
-			unitFieldsFor(
-				fields,
-				(byProduct.get(id) ?? []).flatMap((category) => [category, ...(paths.get(category) ?? [])]),
-			),
-		]),
+	const typed = await productTypes(
+		data,
+		products.map((row) => ({
+			id: String(row.id),
+			kind: String(row.kind),
+			typeKey: row.typeKey ?? null,
+			categoryIds: (row.categoryIds ?? []).map(String),
+		})),
+		types,
 	);
+	const byId = new Map(fields.map((field) => [field.id, field]));
+	for (const [id, type] of typed) {
+		const units = elementsOf(type, has).units;
+		if (units)
+			out.set(id, {
+				capture: units.capture,
+				requiredBefore: units.requiredBefore,
+				fields: units.fieldIds.flatMap((fieldId) => byId.get(fieldId) ?? []),
+			});
+	}
+	return out;
 };
 
 /**
@@ -227,16 +294,67 @@ export const documentFieldsOf = async (data, orders) => {
 };
 
 /**
+ * What saving the item types list must keep (`core/item-types.js` `typeChangeProblems`): the shop's fields by id (where
+ * their values live, whether they take two values), the type keys its products and categories name, and the keys of
+ * the types (as saved) whose items have units in stock.
+ * @param {WebsiteData} data
+ * @param {ReadonlyArray<import('../core/item-types.js').ItemType>} saved
+ */
+export const typeUses = async (data, saved) => {
+	const { websiteId } = data;
+	const named = { websiteId, typeKey: { $type: 'string' } };
+	const [fields, productKeys, categoryKeys, categories, stockedIds] = await Promise.all([
+		data
+			.collection(COLLECTIONS.attributes)
+			.find({ websiteId }, { projection: { _id: 0, id: 1, on: 1, multiple: 1 } })
+			.toArray(),
+		data.collection(COLLECTIONS.products).distinct('typeKey', named),
+		data.collection(COLLECTIONS.categories).distinct('typeKey', named),
+		data
+			.collection(COLLECTIONS.categories)
+			.find({ websiteId }, { projection: { _id: 0, id: 1, path: 1, typeKey: 1 } })
+			.limit(5000)
+			.toArray(),
+		data.collection(COLLECTIONS.serials).distinct('productId', { websiteId, status: 'in_stock' }),
+	]);
+	const stocked =
+		stockedIds.length > 0
+			? await data
+					.collection(COLLECTIONS.products)
+					.find({ websiteId, id: { $in: stockedIds } }, { projection: { _id: 0, kind: 1, typeKey: 1, categoryIds: 1 } })
+					.toArray()
+			: [];
+	const tree = typeTree(
+		categories.map((row) => ({ id: String(row.id), path: (row.path ?? []).map(String), typeKey: row.typeKey ?? null })),
+	);
+	return {
+		fields: new Map(fields.map((row) => [String(row.id), { on: String(row.on), multiple: row.multiple === true }])),
+		named: new Set([...productKeys, ...categoryKeys].map(String)),
+		stocked: new Set(
+			stocked.map(
+				(row) =>
+					typeOf(
+						{ kind: String(row.kind), typeKey: row.typeKey ?? null, categoryIds: (row.categoryIds ?? []).map(String) },
+						saved,
+						tree,
+					).key,
+			),
+		),
+	};
+};
+
+/**
  * What a product check needs.
  * @param {WebsiteData} data
- * @param {{ variants: boolean, locations: boolean, grades: boolean, digital: boolean, bookings: boolean, gradeKeys: string[] }} switches
+ * @param {{ variants: boolean, locations: boolean, grades: boolean, digital: boolean, bookings: boolean, parcels: boolean,
+ *   gradeKeys: string[], types: ReadonlyArray<import('../core/item-types.js').ItemType> }} switches
  * @returns {Promise<CatalogRules>}
  */
 export const loadRules = async (data, switches) => {
 	const [categories, brands, attributes, locations] = await Promise.all([
 		data
 			.collection(COLLECTIONS.categories)
-			.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1 } })
+			.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1, typeKey: 1 } })
 			.toArray(),
 		data.collection(COLLECTIONS.brands).distinct('id', { websiteId: data.websiteId }),
 		attributesOf(data),
@@ -248,10 +366,13 @@ export const loadRules = async (data, switches) => {
 		grades: switches.grades,
 		digital: switches.digital,
 		bookings: switches.bookings,
+		parcels: switches.parcels,
 		gradeKeys: new Set(switches.gradeKeys),
 		locationIds: new Set(locations.map(String)),
 		categoryIds: new Set(categories.map((category) => String(category.id))),
 		categoryPaths: new Map(categories.map((category) => [String(category.id), (category.path ?? []).map(String)])),
+		categoryTypes: new Map(categories.map((category) => [String(category.id), category.typeKey ?? null])),
+		types: switches.types,
 		brandIds: new Set(brands.map(String)),
 		attributes: new Map(attributes.map((attribute) => [attribute.id, attribute])),
 		newId: (prefix) => createId(prefix),

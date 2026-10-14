@@ -7,7 +7,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
-import { ACCOUNTS, GROWTH, NOTIFY, ORIGIN, PAYMENTS, readyShop, storedUnit } from './helpers.js';
+import { ACCOUNTS, GROWTH, NOTIFY, ORIGIN, PAYMENTS, UNIT_TYPES, readyShop, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -356,7 +356,8 @@ beforeAll(async () => {
 	await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
 	data = await shop.db();
 	await data.ensureIndexes((await import('../adapters/product.js')).INDEXES);
-	const product = await shop.seedProduct({ id: PRODUCT, slug: 'phone', price: 2500, stock: 5, serialized: true });
+	await shop.list('item_types', UNIT_TYPES);
+	const product = await shop.seedProduct({ id: PRODUCT, slug: 'phone', price: 2500, stock: 5, typeKey: 'numbered' });
 	const other = await shop.seedProduct({ id: OTHER, slug: 'case', price: 1000, stock: 5 });
 	await shop.seedProduct({ id: idOf('prd', 3), slug: 'spare', price: 500, stock: 1 });
 	variants.product = String(product.variants[0]?.id);

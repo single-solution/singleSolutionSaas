@@ -357,15 +357,15 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 
 /**
  * One packing slip (no prices). In a batch (E35) it also shows the cash to collect on delivery and an empty slot for
- * each serial number a serialized line still lacks.
+ * each serial number a line whose item type numbers its units still lacks.
  * @param {OrderRecord} order
  * @param {DocumentContext} context
- * @param {{ serialized: ReadonlySet<string> } | null} batch ids of the serialized products, in a batch
+ * @param {{ numbered: ReadonlySet<string> } | null} batch ids of the products whose units are numbered, in a batch
  */
 const slipBody = (order, context, batch) => {
 	const { business, texts: t, format } = context;
 	const slots = (/** @type {OrderRecord['lines'][number]} */ line) => {
-		const missing = batch && batch.serialized.has(line.productId) ? Math.max(0, line.quantity - line.serials.length) : 0;
+		const missing = batch && batch.numbered.has(line.productId) ? Math.max(0, line.quantity - line.serials.length) : 0;
 		return missing > 0 ? `<p class="small">${esc(t.labelSerials)}: ${'<span class="slot"></span>'.repeat(missing)}</p>` : '';
 	};
 	const rows = order.lines
@@ -400,12 +400,12 @@ export const packingSlipHtml = (order, context) =>
  * The packing slips of several orders as one document, one slip per printed page (E35).
  * @param {OrderRecord[]} orders
  * @param {DocumentContext} context
- * @param {ReadonlySet<string>} serialized ids of the orders' products that are serialized
+ * @param {ReadonlySet<string>} numbered ids of the orders' products whose item type numbers their units
  */
-export const packingSlipsHtml = (orders, context, serialized) =>
+export const packingSlipsHtml = (orders, context, numbered) =>
 	page(
 		context.texts.packingSlipTitle,
-		orders.map((order) => `<section class="sheet">${slipBody(order, context, { serialized })}</section>`).join(''),
+		orders.map((order) => `<section class="sheet">${slipBody(order, context, { numbered })}</section>`).join(''),
 	);
 
 /**

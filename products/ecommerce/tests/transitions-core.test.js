@@ -184,8 +184,16 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		});
 
 		const units = {
-			plan: [{ lineId: 'oln_1', productId: 'prd_1', variantId: 'var_1', serials: ['S1', 'S2'], before: [] }],
-			mode: /** @type {const} */ ('registered'),
+			plan: [
+				{
+					lineId: 'oln_1',
+					productId: 'prd_1',
+					variantId: 'var_1',
+					serials: ['S1', 'S2'],
+					before: [],
+					capture: /** @type {const} */ ('stock'),
+				},
+			],
 		};
 		const packed = planOf(plan(order(), 'packed', { units, video: { kind: 'dispatch_video', url: 'https://v.example/1' } }));
 		expect(kinds(packed)).toEqual(['capture_units']);

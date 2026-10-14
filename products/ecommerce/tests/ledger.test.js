@@ -42,7 +42,7 @@ const CUSTOMER_ID = createId('cus');
 
 /**
  * An order to place.
- * @param {{ productId: string, variantId: string, quantity: number, kind?: 'physical' | 'digital' | 'booking' }[]} lines
+ * @param {{ productId: string, variantId: string, quantity: number, kind?: 'physical' | 'digital' | 'service' }[]} lines
  * @param {Partial<import('../core/model.js').OrderRecord['promotions']>} [promotions]
  * @param {string} [key]
  * @returns {import('../adapters/ledger.js').Placement['order']}
@@ -323,14 +323,14 @@ describe('placing an order', () => {
 		expect(placed.ok && placed.order.lines[0]?.locationId).toBe('loc_b');
 		expect(await stockOf(locations.id)).toMatchObject({ stock: 3, locations: { loc_a: 1, loc_b: 2 } });
 
-		const service = await shop.seedProduct({ kind: 'booking', trackStock: false, stock: 0 });
+		const service = await shop.seedProduct({ kind: 'service', trackStock: false, stock: 0 });
 		const serviceVariant = /** @type {string} */ (service.variants[0]?.id);
 		const start = new Date('2026-10-06T09:00:00Z');
 		const slot = { productId: service.id, start, end: new Date('2026-10-06T10:00:00Z'), lineId: 'oln_1' };
 		const booked = await placeOrder(
 			data,
 			{
-				order: orderOf([{ productId: service.id, variantId: serviceVariant, quantity: 1, kind: 'booking' }]),
+				order: orderOf([{ productId: service.id, variantId: serviceVariant, quantity: 1, kind: 'service' }]),
 				numberPrefix: '',
 				slots: [slot],
 			},
@@ -340,7 +340,7 @@ describe('placing an order', () => {
 		const twice = await placeOrder(
 			data,
 			{
-				order: orderOf([{ productId: service.id, variantId: serviceVariant, quantity: 1, kind: 'booking' }]),
+				order: orderOf([{ productId: service.id, variantId: serviceVariant, quantity: 1, kind: 'service' }]),
 				numberPrefix: '',
 				slots: [slot],
 			},

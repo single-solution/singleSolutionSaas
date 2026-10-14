@@ -6,7 +6,9 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
+import { productTypes } from '../adapters/catalog-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
+import { elementsOf } from '../core/item-types.js';
 import { OPTIONAL_ADDRESS_FIELDS } from '../core/checkout.js';
 import { zoneCities } from '../core/delivery.js';
 import { createDigital } from './checkout-digital.js';
@@ -38,7 +40,10 @@ export const createCheckout = (product, service) => {
 	service.whenUsed(ordering.sweep);
 	service.on('order.paid', (s, { order }) => (s.has('digital_goods') ? digital.giveLicences(s, order) : undefined));
 
-	/** The free slots of a booking product (`productId`, optional `from` and `to`, ISO 8601). @param {any} ctx */
+	/**
+	 * The free slots of a service booked in time slots (its item type's `slots`; `productId`, optional `from` and `to`,
+	 * ISO 8601). @param {any} ctx
+	 */
 	const slots = async (ctx) => {
 		const s = await service.site(ctx);
 		const productId = typeof ctx.query.productId === 'string' ? ctx.query.productId : '';
@@ -48,8 +53,17 @@ export const createCheckout = (product, service) => {
 		const to = ctx.query.to ? Date.parse(String(ctx.query.to)) : from + 7 * DAY_MS;
 		if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from)
 			throw service.invalid('from', 'from and to are instants (ISO 8601), from before to.');
-		const item = await createOrdersStore(await s.data()).product(productId);
-		if (!item || item.status !== 'active' || item.kind !== 'booking' || !item.booking)
+		const data = await s.data();
+		const item = await createOrdersStore(data).product(productId);
+		const type = item ? (await productTypes(data, [item], await s.list('item_types'))).get(item.id) : undefined;
+		if (
+			!item ||
+			!type ||
+			item.status !== 'active' ||
+			item.kind !== 'service' ||
+			!item.booking ||
+			!elementsOf(type, s.has).slots
+		)
 			throw problem('not_found', 'There is no such booking product.');
 		return quoting.freeSlots(s, item, { from, to });
 	};

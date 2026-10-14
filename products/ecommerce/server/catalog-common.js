@@ -81,7 +81,9 @@ export const createCatalogCommon = (product, service) => {
 			grades: s.has('grades_serials'),
 			digital: s.has('digital_goods'),
 			bookings: s.has('bookings'),
+			parcels: s.has('delivery_zones'),
 			gradeKeys: [...(await gradesOf(s)).keys()],
+			types: await s.list('item_types'),
 		})),
 		sizeCharts: s.has('size_charts'),
 		sizeChartIds: new Set(

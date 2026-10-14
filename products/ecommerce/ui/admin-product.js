@@ -13,6 +13,7 @@ import { faqsEditor, paragraphsOf, richNodes, seoFacts } from './admin-fields.js
 import { digitalCard, photosDialog, videoDialog, videoText } from './admin-media.js';
 import { card, deleteEntry, detailHead, masonryOf, yesNo } from './admin-screen.js';
 import { variantLabel } from './admin-taxonomy.js';
+import { partsOf, showsTypes, typeLabel, typeNamed } from './admin-types.js';
 import { generateDialog, stockText } from './admin-variants.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
@@ -278,7 +279,7 @@ export const productDetail = (kit, product, context, message = '') => {
 								}),
 						}
 					: null,
-				has('grades_serials')
+				partsOf(kit, typeNamed(kit, product.type?.key, product.kind)).units
 					? { label: t('catalogAdmin.serialsOfProduct'), onSelect: () => context.serials(product) }
 					: null,
 				{ label: t('catalogAdmin.managePhotos'), onSelect: open('photos') },
@@ -314,12 +315,8 @@ export const productDetail = (kit, product, context, message = '') => {
 				product.warrantyDays === null || product.warrantyDays === undefined ? '' : String(product.warrantyDays),
 			],
 			[
-				t('catalogAdmin.serialized'),
-				has('grades_serials')
-					? product.serialized === null
-						? t('catalogAdmin.asCategories')
-						: yesNo(kit, product.serialized)
-					: '',
+				t('catalogAdmin.itemType'),
+				showsTypes(kit, product.typeKey) ? typeLabel(kit, product.type?.key ?? product.kind, '') : '',
 			],
 			[
 				t('catalogAdmin.sizeChart'),
@@ -331,7 +328,7 @@ export const productDetail = (kit, product, context, message = '') => {
 			],
 			[
 				t('catalogAdmin.duration'),
-				product.kind === 'booking' && product.booking ? String(product.booking.durationMinutes) : '',
+				product.kind === 'service' && product.booking ? String(product.booking.durationMinutes) : '',
 			],
 			[t('catalogAdmin.updated'), product.updatedAt ? kit.when(product.updatedAt) : ''],
 		]),

@@ -5,9 +5,10 @@
  * a number's range and decimals, a date's days, several values and how many, choices as a value and a label, a text's
  * format (characters, length, starts, a pattern, a Luhn check digit, spaces dropped, upper case) with a live "Try a
  * value" check, whether it is required (an order field: at checkout or before a stage), where its values show (only
- * the places that fit where they live), the category it is the definition for (E45), the categories it is for, when it
- * is shown (always, for some brands, some grades, or when another field has a value), active, sort, and its glossary
- * page (title, description, text and FAQs). Values of a field shown nowhere a shopper looks are the staff's alone.
+ * the places that fit where they live), the category it is the definition for (E45) and the categories it is for
+ * (product and variant fields; unit fields apply through the item types that name them), when it is shown (always, for
+ * some brands, some grades, or when another field has a value), active, sort, and its glossary page (title,
+ * description, text and FAQs). Values of a field shown nowhere a shopper looks are the staff's alone.
  * @module
  */
 import {
@@ -438,8 +439,8 @@ export const attributesTab = (kit, panel, lookups) => {
 			maxValuesField.hidden = multiple.node.hidden || !multiple.box.checked;
 			required.node.hidden = where === 'customer';
 			requiredAtField.hidden = where !== 'order' || !required.box.checked;
-			forField.hidden = !catalog && where !== 'unit';
-			categories.node.hidden = !catalog && where !== 'unit';
+			forField.hidden = !catalog;
+			categories.node.hidden = !catalog;
 			visibilityGroup.hidden = !catalog;
 			glossaryGroup.hidden = !catalog;
 			brands.node.hidden = when.value !== 'brands';
@@ -574,7 +575,7 @@ export const attributesTab = (kit, panel, lookups) => {
 					],
 					[t('catalogAdmin.showTitle'), showText(kit, item)],
 					[t('catalogAdmin.sort'), String(item.sort ?? 0)],
-					...(catalog || item.on === 'unit'
+					...(catalog
 						? [
 								[
 									t('catalogAdmin.attributeFor'),

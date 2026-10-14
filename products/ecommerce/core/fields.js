@@ -279,7 +279,7 @@ export const SHOW_PLACES = Object.freeze({
 	order: Object.freeze(['shopper', 'invoice', 'packingSlip']),
 	customer: Object.freeze(['invoice', 'packingSlip']),
 });
-/** The limits of fields: per shop, values of a field, unit fields that apply to one product, values of a unit field. */
+/** The limits of fields: per shop, values of a field, unit fields of one item type, values of a unit field. */
 export const FIELD_LIMITS = Object.freeze({ fields: 200, values: 20, unitFields: 3, unitValues: 2, number: 1e12 });
 
 /** @typedef {typeof FIELD_ON[number]} FieldOn */
@@ -508,37 +508,6 @@ export const fieldApplies = (field, lineage) => {
 	return scope.length === 0 || scope.some((id) => lineage.includes(id));
 };
 
-/**
- * The unit fields of a product's units: the active ones its categories (with those above them) take, in their order.
- * Without any, a unit is named by a plain serial number.
- * @template {{ id: string, name: string, sort: number, on: FieldOn, active: boolean, categoryId: string | null,
- *   categoryIds: string[] }} F
- * @param {ReadonlyArray<F>} fields
- * @param {ReadonlyArray<string>} lineage
- * @returns {F[]}
- */
-export const unitFieldsFor = (fields, lineage) =>
-	fields
-		.filter((field) => field.on === 'unit' && field.active && fieldApplies(field, lineage))
-		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-
-/**
- * Where active unit fields would ask too much of one product's units: more than {@link FIELD_LIMITS.unitFields} apply
- * to one category (with those above it), or more than one of them takes two values. The category's id ('' for products
- * without a category), or null when every category is within the limits.
- * @param {ReadonlyArray<{ id: string, name: string, sort: number, on: FieldOn, active: boolean, multiple: boolean,
- *   categoryId: string | null, categoryIds: string[] }>} fields
- * @param {ReadonlyArray<{ id: string, path: string[] }>} categories every category of the website
- * @returns {string | null}
- */
-export const crowdedUnits = (fields, categories) => {
-	for (const lineage of [[], ...categories.map((category) => [category.id, ...category.path])]) {
-		const units = unitFieldsFor(fields, lineage);
-		if (units.length > FIELD_LIMITS.unitFields || units.filter((field) => field.multiple).length > 1) return lineage[0] ?? '';
-	}
-	return null;
-};
-
 // ------------------------------------------------------------------------------------------------------- units
 
 /** A plain serial number (a unit of a product without unit fields): 1 to 64 letters, digits, spaces and . _ / : # - */
@@ -568,7 +537,7 @@ const unitKeys = (serial, values) => [
 ];
 
 /**
- * Check one unit against the unit fields of its product ({@link unitFieldsFor}). Without unit fields, a unit is a plain
+ * Check one unit against the unit fields of its item type (`core/item-types.js`). Without unit fields, a unit is a plain
  * serial number. With them, its values: a field's one value, or up to two with a field that takes two (two numbers of
  * one unit, such as a dual-SIM phone's), each in the field's format (kept as the format keeps it), every required field
  * given; a text alone is the first field's value. A unit is named by the first value of its first field that has one.

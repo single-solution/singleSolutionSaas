@@ -13,10 +13,8 @@ import {
 	sharedKeys,
 	unitsShown,
 	checkValue,
-	crowdedUnits,
 	fieldApplies,
 	showDefaults,
-	unitFieldsFor,
 	valueProblem,
 } from '../core/fields.js';
 import { ALL, readyShop } from './helpers.js';
@@ -216,53 +214,15 @@ describe('values', () => {
 	});
 });
 
-describe('unit fields per category', () => {
-	const unit = (/** @type {string} */ id, /** @type {Record<string, unknown>} */ more = {}) => ({
-		id,
-		name: id,
-		sort: 0,
-		on: /** @type {const} */ ('unit'),
-		active: true,
-		multiple: false,
-		categoryId: null,
-		categoryIds: /** @type {string[]} */ ([]),
-		...more,
-	});
-	const categories = [
-		{ id: 'cat_phones', path: [] },
-		{ id: 'cat_used', path: ['cat_phones'] },
-		{ id: 'cat_cases', path: [] },
-	];
-
-	it('applies by category with those above it, in their order', () => {
+describe('field scope', () => {
+	it('applies product and variant fields by category with those above it; unit fields through item types', () => {
 		expect(fieldApplies({ categoryId: null, categoryIds: [] }, [])).toBe(true);
 		expect(fieldApplies({ categoryId: null, categoryIds: ['cat_phones'] }, ['cat_used', 'cat_phones'])).toBe(true);
 		expect(fieldApplies({ categoryId: 'cat_cases', categoryIds: [] }, ['cat_used', 'cat_phones'])).toBe(false);
-		const fields = [
-			unit('b', { sort: 2 }),
-			unit('a', { sort: 1, categoryIds: ['cat_phones'] }),
-			unit('off', { active: false }),
-			{ ...unit('spec'), on: /** @type {any} */ ('product') },
-		];
-		expect(unitFieldsFor(fields, ['cat_used', 'cat_phones']).map((entry) => entry.id)).toEqual(['a', 'b']);
-		expect(unitFieldsFor(fields, ['cat_cases']).map((entry) => entry.id)).toEqual(['b']);
-	});
-
-	it('finds the category where more than 3 apply, or two take two values', () => {
-		const three = [unit('a'), unit('b'), unit('c', { categoryIds: ['cat_phones'] })];
-		expect(crowdedUnits(three, categories)).toBeNull();
-		expect(crowdedUnits([...three, unit('d', { categoryIds: ['cat_phones'] })], categories)).toBe('cat_phones');
-		expect(crowdedUnits([...three, unit('d', { categoryIds: ['cat_cases'] })], categories)).toBeNull();
-		expect(
-			crowdedUnits(
-				[...three, unit('d', { categoryIds: ['cat_cases'] }), unit('e', { categoryIds: ['cat_cases'] })],
-				categories,
-			),
-		).toBe('cat_cases');
-		expect(crowdedUnits([unit('a'), unit('b'), unit('c'), unit('d')], categories)).toBe('');
-		expect(
-			crowdedUnits([unit('a', { multiple: true }), unit('b', { multiple: true, categoryIds: ['cat_used'] })], categories),
-		).toBe('cat_used');
+		// a unit field applies to the units of the item types that name it (at most 3 per type), never by category
+		expect(paths({ name: 'IMEI', on: 'unit', categoryIds: ['cat_phones'] })).toEqual(['/categoryIds']);
+		expect(paths({ name: 'IMEI', on: 'unit', categoryId: 'cat_phones' })).toEqual(['/categoryIds']);
+		expect(paths({ name: 'IMEI', on: 'unit' })).toEqual([]);
 		expect(FIELD_LIMITS.unitFields).toBe(3);
 	});
 });
@@ -469,16 +429,27 @@ describe('fields through the API', () => {
 		expect(feed).not.toContain('B-12');
 	});
 
-	it('limits unit fields per category and refuses changes records cannot take', async () => {
-		for (const name of ['Serial', 'Service tag', 'Model code'])
-			await api('POST', '/v1/attributes', { name, on: 'unit', categoryIds: [ids.phones.id] });
-		const fourth = await shop.api('POST', '/v1/attributes', { name: 'Fourth', on: 'unit' });
-		expect(fourth.status).toBe(422);
-		expect(fourth.json.errors[0].path).toBe('/categoryIds');
-		// cases have room
-		expect(
-			(await shop.api('POST', '/v1/attributes', { name: 'Case code', on: 'unit', categoryIds: [ids.cases.id] })).status,
-		).toBe(201);
+	it('limits unit fields per item type and refuses changes records cannot take', async () => {
+		const units = [];
+		for (const name of ['Serial', 'Service tag', 'Model code', 'Fourth'])
+			units.push((await api('POST', '/v1/attributes', { name, on: 'unit' })).id);
+		// a unit field applies through the item types that name it, never by category
+		const scoped = await shop.api('POST', '/v1/attributes', { name: 'Case code', on: 'unit', categoryIds: [ids.cases.id] });
+		expect(scoped.status).toBe(422);
+		expect(scoped.json.errors[0].path).toBe('/categoryIds');
+		/** @param {string[]} fieldIds */
+		const typeWith = (fieldIds) => ({ key: 'tool', name: 'Tool', elements: { units: { fieldIds } } });
+		const four = await shop.dashboard(
+			await shop.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${shop.websiteId}/lists/item_types`,
+			{
+				value: [typeWith(units)],
+			},
+		);
+		expect(four.status).toBe(422);
+		expect(four.json.errors[0].path).toBe('/value/0/elements/units/fieldIds');
+		expect(await shop.list('item_types', [typeWith(units.slice(0, 3))])).toHaveLength(1);
 		// fewer values than a product holds
 		const tags = await api('POST', '/v1/attributes', { name: 'Labels', multiple: true, maxValues: 3 });
 		await api('PATCH', `/v1/products/${ids.phone.id}`, { specs: { ...ids.phone.specs, [tags.id]: ['a', 'b', 'c'] } });

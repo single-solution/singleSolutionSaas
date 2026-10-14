@@ -8,7 +8,7 @@ import { createMoves } from '../server/orders-moves.js';
 import { createService } from '../server/service.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, DOMAIN, readyShop, storedUnit } from './helpers.js';
+import { ALL, DOMAIN, UNIT_TYPES, readyShop, storedUnit } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -19,6 +19,7 @@ let moves;
 
 beforeAll(async () => {
 	shop = await readyShop();
+	await shop.list('item_types', UNIT_TYPES);
 	service = createService(shop.product);
 	moves = createMoves(shop.product, service);
 });
@@ -36,11 +37,11 @@ const ctx = () => ({
 /**
  * Seed an order record.
  * @param {Partial<import('../core/model.js').OrderRecord>} [patch]
- * @param {boolean} [serialized]
+ * @param {boolean} [numbered] its product's units are numbered (picked from stock when packing)
  * @returns {Promise<import('../core/model.js').OrderRecord>}
  */
-const seed = async (patch = {}, serialized = false) => {
-	const product = await shop.seedProduct({ stock: 5, serialized });
+const seed = async (patch = {}, numbered = false) => {
+	const product = await shop.seedProduct({ stock: 5, ...(numbered ? { typeKey: 'numbered' } : {}) });
 	const variant = /** @type {import('../core/model.js').VariantRecord} */ (product.variants[0]);
 	const data = await shop.db();
 	const order = {
@@ -110,10 +111,10 @@ const seed = async (patch = {}, serialized = false) => {
 /**
  * The order as read, then changed by someone else.
  * @param {Partial<import('../core/model.js').OrderRecord>} [patch]
- * @param {boolean} [serialized]
+ * @param {boolean} [numbered]
  */
-const stale = async (patch, serialized = false) => {
-	const order = await seed(patch, serialized);
+const stale = async (patch, numbered = false) => {
+	const order = await seed(patch, numbered);
 	shop.advance(1000);
 	await (
 		await shop.db()
@@ -181,7 +182,7 @@ describe('changed meanwhile', () => {
 });
 
 describe('switched-off features', () => {
-	it('packs serialized items without serials while Grades and serials is off, and earns no points without a user', async () => {
+	it('packs numbered items without serials while Grades and serials is off, and earns no points without a user', async () => {
 		await shop.switchOn(ALL.filter((feature) => feature !== 'grades_serials'));
 		const s = await service.site(ctx());
 		const order = await seed({}, true);

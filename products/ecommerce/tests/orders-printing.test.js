@@ -8,7 +8,7 @@ import { DEFAULT_FORMAT, createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cashToCollect, invoiceHtml, invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
-import { ALL, readyShop } from './helpers.js';
+import { ALL, UNIT_TYPES, readyShop } from './helpers.js';
 
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {OrderRecord['lines'][number]} OrderLine */
@@ -218,8 +218,9 @@ describe('the invoice (E35)', () => {
 
 describe('packing slips of several orders (E35)', () => {
 	it('prints one document with the cash to collect and empty slots for missing serials', async () => {
-		const phone = await shop.seedProduct({ serialized: true });
-		const cable = await shop.seedProduct({ name: 'Cable', serialized: false });
+		await shop.list('item_types', UNIT_TYPES);
+		const phone = await shop.seedProduct({ typeKey: 'numbered' });
+		const cable = await shop.seedProduct({ name: 'Cable' });
 		const cod = await seed(
 			orderOf({
 				lines: [
@@ -251,7 +252,7 @@ describe('packing slips of several orders (E35)', () => {
 		expect(html.match(/<section class="sheet">/g)).toHaveLength(2);
 		expect(html.indexOf(cod.number)).toBeLessThan(html.indexOf(paid.number));
 		expect(html.match(/Cash due on delivery: USD 807\.50/g)).toHaveLength(1);
-		// the phone has 3 units and 1 serial: 2 empty slots; the cable is not serialized
+		// the phone has 3 units and 1 serial: 2 empty slots; the cable's type numbers no units
 		expect(html.match(/<span class="slot"><\/span>/g)).toHaveLength(2);
 		expect(html).not.toContain('Club price');
 		const admin = await shop.admin(ticket, 'GET', `/v1/admin/orders/packing-slips?ids=${cod.id}`);

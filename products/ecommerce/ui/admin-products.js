@@ -224,7 +224,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 			[{ value: '', label: t('admin.all') }, ...categoryChoices(lookups.state.categories)],
 			filters.category,
 		);
-		const kinds = ['physical', ...(has('digital_goods') ? ['digital'] : []), ...(has('bookings') ? ['booking'] : [])];
+		const kinds = ['physical', ...(has('digital_goods') ? ['digital'] : []), ...(has('bookings') ? ['service'] : [])];
 		const kind = kit.select(
 			[{ value: '', label: t('admin.all') }, ...kinds.map((key) => ({ value: key, label: t(`catalogAdmin.kind.${key}`) }))],
 			filters.kind,

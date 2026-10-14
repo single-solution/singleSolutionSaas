@@ -31,7 +31,7 @@ Three variables, and one optional while the encryption key is changed (`.env.exa
 
 Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
 settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `couriers`,
-`delivery_zones`, `tax_rules`, `grades`, `booking_hours` and `role_prices` at `/v1/lists/:list`), the activity log
+`delivery_zones`, `tax_rules`, `grades`, `item_types`, `booking_hours` and `role_prices` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
 `/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Server-token calls may name
 the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`) also take the server token
@@ -71,7 +71,9 @@ in the dry run), `websiteId` and `merchantId`, values the shop derives (`path` o
 `inStock`, `stockState` and `grades` of a product), text over a limit (never cut), references to records not imported,
 times in the future, and slugs, SKUs, variant ids, serial numbers, deal slugs and landing combinations another record
 holds (in the database or earlier in the same call). With Multi-location stock a variant gives `locations` (its
-`stock` is their sum). A unit `in_stock` or `faulty` belongs to no order; a `sold` one names its `orderId`.
+`stock` is their sum). Units (`serials`) belong to products whose item type numbers them: save the `item_types` list
+first (`PUT /v1/lists/item_types`; a category or a product names its type by `typeKey`, as `numbered` below). A unit
+`in_stock` or `faulty` belongs to no order; a `sold` one names its `orderId`.
 
 A product may carry `feedGroupId` and a variant `feedId`: the item group and item ids the earlier shop's product feed
 used (1 to 50 letters, digits, `.`, `_` or `-`), which the feeds then send, so shopping catalogs keep listing the same
@@ -85,7 +87,7 @@ Smallest records (one per line in a file):
 {"id":"brd_000000000000000000000001","slug":"northwind","name":"Northwind","categoryIds":["cat_000000000000000000000001"]}
 {"id":"att_000000000000000000000001","slug":"color","name":"Color","type":"choice","on":"variant","choices":[{"value":"blue","label":"Blue"}]}
 {"id":"lnd_000000000000000000000001","categoryId":"cat_000000000000000000000001","brandId":"brd_000000000000000000000001","grade":null,"h1":"Northwind home and garden"}
-{"id":"prd_000000000000000000000001","slug":"ceramic-mug","name":"Ceramic mug","status":"active","categoryIds":["cat_000000000000000000000001"],"brandId":"brd_000000000000000000000001","media":[{"key":"uploads/mug.webp","type":"image/webp","size":5000,"alt":"Ceramic mug"}],"variants":[{"id":"var_000000000000000000000001","sku":"MUG-BLUE","price":1200,"stock":3,"attributes":{"att_000000000000000000000001":"blue"}}],"sold":12,"rating":{"average":4.5,"count":2},"createdAt":"2023-04-01T08:00:00.000Z"}
+{"id":"prd_000000000000000000000001","slug":"ceramic-mug","name":"Ceramic mug","status":"active","typeKey":"numbered","categoryIds":["cat_000000000000000000000001"],"brandId":"brd_000000000000000000000001","media":[{"key":"uploads/mug.webp","type":"image/webp","size":5000,"alt":"Ceramic mug"}],"variants":[{"id":"var_000000000000000000000001","sku":"MUG-BLUE","price":1200,"stock":3,"attributes":{"att_000000000000000000000001":"blue"}}],"sold":12,"rating":{"average":4.5,"count":2},"createdAt":"2023-04-01T08:00:00.000Z"}
 {"id":"ser_000000000000000000000001","productId":"prd_000000000000000000000001","variantId":"var_000000000000000000000001","serial":"SN 0001","status":"in_stock"}
 {"id":"deal_000000000000000000000001","name":"Summer","type":"percent","value":10,"scope":{"productIds":["prd_000000000000000000000001"]},"startsAt":"2024-06-01T00:00:00.000Z","limit":100,"used":37,"slug":"summer"}
 {"id":"bnd_000000000000000000000001","name":"Two mugs","type":"bundle","items":[{"productId":"prd_000000000000000000000001","quantity":2}],"price":2000,"used":4}

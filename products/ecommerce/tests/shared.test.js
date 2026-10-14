@@ -132,7 +132,7 @@ describe('shared routes', () => {
 		const config = await shop.visitor('GET', '/v1/widget/config');
 		expect(config.json.settings).toMatchObject({
 			currency: 'USD',
-			catalog: { grades: [] },
+			catalog: { grades: [], types: [] },
 			checkout: expect.any(Object),
 			orders: { couriers: [{ key: 'fast', name: 'Fast' }] },
 		});

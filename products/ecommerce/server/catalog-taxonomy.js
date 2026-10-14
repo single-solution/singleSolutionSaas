@@ -6,7 +6,9 @@
  * route exists for the merchant's server (`/v1/<things>`, server token) and the catalog admin widget
  * (`/v1/admin/<things>`, ticket with `catalog.edit`), sharing one handler. Deleting what products still use (a category
  * with products or subcategories, a brand or attribute in use, a location holding stock, a sold serial) is refused with
- * 409 `conflict`. A category's changed slug keeps the old one (E13).
+ * 409 `conflict`. A category's changed slug keeps the old one (E13). A category's item type (dynamic model §1) is one of
+ * the list (offered, or the one it has) or a built-in one; a change of its type or place that would give products with
+ * units in stock another type is refused (409), and units are added only to products whose type numbers them.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -20,10 +22,12 @@ import {
 	isDuplicate,
 	locationsOf,
 	slugTaken,
-	unitFieldsOf,
+	stockedUnits,
+	unitRulesOf,
 } from '../adapters/catalog-store.js';
 import { cleanText, isObject } from '../core/catalog.js';
-import { FIELD_LIMITS, checkUnit, crowdedUnits, sharedKeys } from '../core/fields.js';
+import { FIELD_LIMITS, checkUnit, sharedKeys } from '../core/fields.js';
+import { typeByKey, typeOf, typeTree } from '../core/item-types.js';
 import {
 	checkAttribute,
 	checkBrand,
@@ -31,6 +35,7 @@ import {
 	checkLocation,
 	movedPaths,
 	placeCategory,
+	withDescendants,
 	withoutStamps,
 } from '../core/catalog-taxonomy.js';
 import { nextPreviousSlugs } from '../core/links.js';
@@ -136,6 +141,50 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	};
 
 	/**
+	 * Refuse an item type a category names that is not one of the list (or no longer offered, unless it has it already).
+	 * @param {Site} s @param {string | null} key @param {string | null | undefined} current
+	 */
+	const checkTypeKey = async (s, key, current) => {
+		if (key === null || key === current) return;
+		const found = typeByKey(key, await s.list('item_types'));
+		if (!found || !found.active) throw refuse([{ path: '/typeKey', message: 'Pick an item type of your list, or null.' }]);
+	};
+
+	/**
+	 * Refuse a category change that would give products with units in stock another item type (a product without its
+	 * own type has its first category's, or the nearest one above it): their units are numbered by their type.
+	 * @param {Site} s @param {WebsiteData} data @param {CategoryRecord[]} all every category as it is
+	 * @param {CategoryRecord[]} next every category as the change leaves them
+	 * @param {string} id the category changed
+	 */
+	const keepStockedTypes = async (s, data, all, next, id) => {
+		const types = await s.list('item_types');
+		if (!types.some((type) => type.elements.units)) return;
+		const products = await data
+			.collection(COLLECTIONS.products)
+			.find(
+				{ websiteId: data.websiteId, typeKey: null, 'categoryIds.0': { $in: withDescendants(id, all) } },
+				{ projection: { _id: 0, id: 1, kind: 1, categoryIds: 1 } },
+			)
+			.toArray();
+		const stocked = await stockedUnits(
+			data,
+			products.map((row) => String(row.id)),
+		);
+		const [before, after] = [typeTree(all), typeTree(next)];
+		const moved = products.some((row) => {
+			if (!stocked.has(String(row.id))) return false;
+			const product = { kind: String(row.kind), typeKey: null, categoryIds: (row.categoryIds ?? []).map(String) };
+			return typeOf(product, types, before).key !== typeOf(product, types, after).key;
+		});
+		if (moved)
+			throw problem(
+				'conflict',
+				'Products of this category have units in stock: this change would give them another item type.',
+			);
+	};
+
+	/**
 	 * Send an active category's page to IndexNow (E16).
 	 * @param {Site} s @param {CategoryRecord} category
 	 */
@@ -162,6 +211,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const checked = checkCategory(ctx.body, null);
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkChart(s, data, checked.value.sizeChartId, null);
+			await checkTypeKey(s, checked.value.typeKey, null);
 			const all = await categoriesOf(data);
 			const placed = placeCategory(null, checked.value.parentId, new Map(all.map((c) => [c.id, c])));
 			if (!placed.ok) throw refuse([{ path: '/parentId', message: placed.message }]);
@@ -193,11 +243,21 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const checked = checkCategory(ctx.body, existing);
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkChart(s, data, checked.value.sizeChartId, existing.sizeChartId);
+			await checkTypeKey(s, checked.value.typeKey, existing.typeKey);
 			const all = await categoriesOf(data);
 			const moved = checked.value.parentId !== existing.parentId;
 			const placed = moved ? placeCategory(existing.id, checked.value.parentId, new Map(all.map((c) => [c.id, c]))) : null;
 			if (placed && !placed.ok) throw refuse([{ path: '/parentId', message: placed.message }]);
 			const path = placed?.ok ? placed.path : existing.path;
+			if (moved || checked.value.typeKey !== (existing.typeKey ?? null)) {
+				const paths = new Map(moved ? movedPaths(existing.id, path, all).map((next) => [next.id, next.path]) : []);
+				const next = all.map((category) =>
+					category.id === existing.id
+						? { ...category, path, typeKey: checked.value.typeKey }
+						: { ...category, path: paths.get(category.id) ?? category.path },
+				);
+				await keepStockedTypes(s, data, all, next, existing.id);
+			}
 			const slug = await slugFor(data, COLLECTIONS.categories, checked.value, existing.id, existing.id, existing.slug);
 			const collection = data.collection(COLLECTIONS.categories);
 			const previousSlugs = nextPreviousSlugs(existing.previousSlugs, existing.slug, slug);
@@ -383,22 +443,13 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	};
 
 	/**
-	 * Refuse a field the shop cannot take: more than {@link FIELD_LIMITS.fields} fields, or unit fields that would ask
-	 * too much of one product's units (more than 3 for one category, or two of them with two values).
+	 * Refuse a field more than a shop takes ({@link FIELD_LIMITS.fields}; an item type names at most 3 unit fields, one
+	 * of them with two values: `core/item-types.js`).
 	 * @param {WebsiteData} data @param {AttributeRecord} next the field as it would be saved
 	 */
 	const checkFieldLimits = async (data, next) => {
 		const fields = (await attributesOf(data)).filter((field) => field.id !== next.id);
 		if (fields.length >= FIELD_LIMITS.fields) throw problem('conflict', `A shop has at most ${FIELD_LIMITS.fields} fields.`);
-		if (next.on !== 'unit') return;
-		const crowded = crowdedUnits([...fields, next], await categoriesOf(data));
-		if (crowded !== null)
-			throw refuse([
-				{
-					path: '/categoryIds',
-					message: `At most ${FIELD_LIMITS.unitFields} unit fields apply to one category, one of them with two values.`,
-				},
-			]);
 	};
 
 	const attributes = {
@@ -567,9 +618,10 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			return ok(body, { headers: link ? { link } : {} });
 		},
 		/**
-		 * POST `{ productId, variantId, serials: [unit, …], locationId? }`: each unit its serial number, or, with unit
-		 * fields, `{ values: { <fieldId>: value or [values] } }` (a text alone is the first unit field's value), checked
-		 * against the unit fields of the product's categories (formats, required fields); no number may name two units.
+		 * POST `{ productId, variantId, serials: [unit, …], locationId? }` for a product whose item type numbers its units:
+		 * each unit its serial number, or, with unit fields, `{ values: { <fieldId>: value or [values] } }` (a text alone
+		 * is the first unit field's value), checked against the type's unit fields (formats, required fields); no number
+		 * may name two units.
 		 * @param {any} ctx
 		 */
 		add: async (ctx) => {
@@ -593,7 +645,11 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					!(await data.collection(COLLECTIONS.locations).findOne({ websiteId: data.websiteId, id: locationId })))
 			)
 				throw refuse([{ path: '/locationId', message: 'There is no such location.' }]);
-			const fields = (await unitFieldsOf(data, [String(found.id)])).get(String(found.id)) ?? [];
+			const rules = (await unitRulesOf(data, [String(found.id)], { types: await s.list('item_types'), has: s.has })).get(
+				String(found.id),
+			);
+			if (!rules) throw refuse([{ path: '/productId', message: 'The item type of this product numbers no units.' }]);
+			const fields = rules.fields;
 			/** @type {import('../core/catalog.js').FieldError[]} */
 			const errors = [];
 			const units = list.flatMap((entry, index) => {

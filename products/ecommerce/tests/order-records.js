@@ -22,8 +22,8 @@ export const orderRecords = (shop) => {
 	/**
 	 * An order record in the shape checkout writes: one physical line of a new product, paid online (with its Payments
 	 * entry) unless `cod`, written as it was before the engine (no facts) unless `patch` gives them.
-	 * @param {{ status?: string, role?: string, cod?: boolean, quantity?: number, stock?: number, serialized?: boolean,
-	 *   patch?: Record<string, any> }} [options]
+	 * @param {{ status?: string, role?: string, cod?: boolean, quantity?: number, stock?: number, typeKey?: string,
+	 *   patch?: Record<string, any> }} [options] `typeKey`: the product's item type (`UNIT_TYPES` of `./helpers.js`)
 	 */
 	const seedOrder = async ({
 		status = 'confirmed',
@@ -31,10 +31,10 @@ export const orderRecords = (shop) => {
 		cod = false,
 		quantity = 1,
 		stock = 5,
-		serialized = false,
+		typeKey,
 		patch = {},
 	} = {}) => {
-		const product = await shop.seedProduct({ price: 1000, stock, ...(serialized ? { serialized: true } : {}) });
+		const product = await shop.seedProduct({ price: 1000, stock, ...(typeKey ? { typeKey } : {}) });
 		const variant = /** @type {any} */ (product.variants[0]);
 		const id = createId('ord');
 		const paymentId = `pay_${id.slice(4, 16)}`;

@@ -31,7 +31,7 @@ const keysOf = (prefix, values) => [...values].map((value) => `${prefix}${value}
 describe('widget texts named after a code (PLAN 0.4.10)', () => {
 	it('every value of the codes the widgets show has its text, so no text key ever shows', () => {
 		// lists core keeps to itself, as the code names them
-		const productKinds = ['physical', 'digital', 'booking'];
+		const productKinds = ['physical', 'digital', 'service'];
 		const productStatuses = ['draft', 'active', 'archived'];
 		const serialStatuses = ['in_stock', 'sold', 'faulty'];
 		const couponTypes = ['percent', 'fixed', 'free_delivery'];
