@@ -252,8 +252,14 @@ const useOffers = async (
 		const uses = data.collection(COLLECTIONS.couponUses);
 		const count = await uses.countDocuments({ websiteId, couponId, userId }, { session });
 		if (perCustomer !== null && count >= perCustomer) return { ok: false, offerId: couponId };
+		// the next number after the highest kept (a use a cancel gave back leaves a gap, so the count could repeat one);
 		// a concurrent checkout of the same customer takes the same seq and fails on the unique index
-		await uses.insertOne({ couponId, userId, orderId, seq: count + 1 }, { session });
+		const [last] = await uses
+			.find({ websiteId, couponId, userId }, { session, projection: { _id: 0, seq: 1 } })
+			.sort({ seq: -1 })
+			.limit(1)
+			.toArray();
+		await uses.insertOne({ couponId, userId, orderId, seq: Number(last?.seq ?? 0) + 1 }, { session });
 	}
 	return { ok: true };
 };

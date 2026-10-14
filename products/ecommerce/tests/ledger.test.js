@@ -218,6 +218,55 @@ describe('placing an order', () => {
 		expect((await loyaltyAccount(data, 'usr_1', { now: shop.now() })).balance).toBe(50);
 	});
 
+	it('counts a customer’s coupon uses after a cancel gave one back (the next use is numbered after the highest)', async () => {
+		const product = await shop.seedProduct({ stock: 10 });
+		const variantId = /** @type {string} */ (product.variants[0]?.id);
+		const couponId = createId('cpn');
+		await data.collection(COLLECTIONS.coupons).insertOne({ id: couponId, code: 'AGAIN', active: true, limit: null, used: 0 });
+		/** @returns {Promise<any>} */
+		const place = async (perCustomer = /** @type {number | undefined} */ (undefined)) => {
+			const placed = await placeOrder(
+				data,
+				{
+					order: orderOf([{ productId: product.id, variantId, quantity: 1 }], { couponId }),
+					numberPrefix: 'C-',
+					...(perCustomer ? { couponPerCustomer: perCustomer } : {}),
+				},
+				{ now: shop.now() },
+			);
+			return placed;
+		};
+		const first = await place();
+		const second = await place();
+		expect(first.ok && second.ok).toBe(true);
+		// the first is canceled: its use goes back, the second's stays (uses 2 of the customer: numbers 1 and 2 → 2)
+		const stored = /** @type {any} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: first.order.id })
+		);
+		const cancel = async (/** @type {any} */ session) =>
+			(
+				await data
+					.collection(COLLECTIONS.orders)
+					.updateOne(
+						{ websiteId: data.websiteId, id: stored.id },
+						{ $set: { status: 'cancelled', role: 'cancelled' } },
+						{ session },
+					)
+			).modifiedCount === 1;
+		expect(await releaseOrder(data, stored, { now: shop.now(), update: cancel })).toBe(true);
+		// a third order with the same coupon is placed (it used to take number 2 again and be refused)
+		const third = await place();
+		expect(third).toMatchObject({ ok: true });
+		const uses = await data
+			.collection(COLLECTIONS.couponUses)
+			.find({ websiteId: data.websiteId, couponId }, { projection: { _id: 0, seq: 1 } })
+			.toArray();
+		expect(uses.map((use) => use.seq).sort()).toEqual([2, 3]);
+		// the per-customer limit still counts the uses kept
+		expect(await place(2)).toMatchObject({ ok: false, code: 'offer_unavailable' });
+		expect(await place(3)).toMatchObject({ ok: true });
+	});
+
 	it('takes stock from the first location that has it, books slots once and skips untracked items', async () => {
 		const locations = await shop.seedProduct({
 			variants: [
