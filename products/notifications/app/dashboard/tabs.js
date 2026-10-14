@@ -17,6 +17,7 @@ import {
 	ErrorState,
 	FieldGrid,
 	Input,
+	LocalTime,
 	Masonry,
 	SchemaForm,
 	Section,
@@ -31,6 +32,7 @@ import {
 	formatCreditsPerHour,
 	formatDateTime,
 	parseCredits,
+	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
@@ -126,7 +128,9 @@ function RecentChanges({ items, titled = true }) {
 					{items.map((item) => (
 						<li key={`${item.at}-${item.detail}`}>
 							<span className="font-semibold">{item.who.name}</span> · {item.detail}{' '}
-							<span className="text-muted">{formatDateTime(item.at)}</span>
+							<span className="text-muted">
+								<LocalTime value={item.at} />
+							</span>
 						</li>
 					))}
 				</ul>
@@ -137,8 +141,9 @@ function RecentChanges({ items, titled = true }) {
 
 /** @param {{ status: { status: string, graceEndsAt: string | null } }} props */
 function StatusBanner({ status }) {
+	const timeZone = useViewerTimeZone();
 	const text = fill(TEXTS.status[/** @type {keyof typeof TEXTS.status} */ (status.status)] ?? status.status, {
-		time: formatDateTime(status.graceEndsAt),
+		time: formatDateTime(status.graceEndsAt, { timeZone }),
 	});
 	const tone = status.status === 'active' ? 'success' : status.status === 'grace' ? 'warning' : 'danger';
 	return <Callout tone={tone}>{text}</Callout>;
@@ -146,6 +151,7 @@ function StatusBanner({ status }) {
 
 /** @param {TabProps} props */
 function OverviewTab({ websiteId }) {
+	const timeZone = useViewerTimeZone();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const templates = useLoad(`${base}/templates`);
@@ -220,7 +226,7 @@ function OverviewTab({ websiteId }) {
 											badge={
 												data.checklist.widget.installed
 													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt),
+															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
 														})
 													: TEXTS.overview.widgetMissing
 											}
