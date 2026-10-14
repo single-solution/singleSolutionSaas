@@ -98,23 +98,23 @@ describe('A7: phone-code options', () => {
 	it('reads a phone typed any usual way as one number, with the business.json country’s calling code (K-7, SA-3)', async () => {
 		env.advance(3_600_000);
 		// no calling code set and no country: a national number is refused
-		expect(code(await askCode('0300 1230008'))).toBe('validation_failed');
+		expect(code(await askCode('07700 900008'))).toBe('validation_failed');
 		env.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 			status: 200,
-			body: { name: 'shop.example.com', country: 'PK' },
+			body: { name: 'shop.example.com', country: 'GB' },
 		}));
 		await env.refreshBusiness();
-		expect((await askCode('0300 1230008')).status).toBe(202);
+		expect((await askCode('07700 900008')).status).toBe(202);
 		const sent = env.messages().at(-1);
-		expect(sent.to).toMatchObject({ phone: '+923001230008' });
+		expect(sent.to).toMatchObject({ phone: '+447700900008' });
 		// the same number typed other ways waits for the cooldown
-		for (const typed of ['923001230008', '+92 0300 1230008']) expect(code(await askCode(typed))).toBe('code_cooldown');
-		const signedIn = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+92 (0)300-1230008', code: sent.values.code });
-		expect(signedIn.json.user.phone).toBe('+923001230008');
-		// the website's own calling code comes first
-		await env.setting('phone', 'defaultCallingCode', '+44');
-		expect((await askCode('0300 1230008')).status).toBe(202);
-		expect(env.messages().at(-1).to).toMatchObject({ phone: '+443001230008' });
+		for (const typed of ['447700900008', '+44 07700 900008']) expect(code(await askCode(typed))).toBe('code_cooldown');
+		const signedIn = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+44 (0)7700-900008', code: sent.values.code });
+		expect(signedIn.json.user.phone).toBe('+447700900008');
+		// the website's own calling code comes first: the same digits read as a US number, not a UK one
+		await env.setting('phone', 'defaultCallingCode', '+1');
+		expect((await askCode('202 555 0143')).status).toBe(202);
+		expect(env.messages().at(-1).to).toMatchObject({ phone: '+12025550143' });
 		await env.setting('phone', 'defaultCallingCode', '');
 	});
 });
