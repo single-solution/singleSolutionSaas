@@ -5,7 +5,7 @@ import * as browserEntry from '../src/phone.js';
 /** @param {string} defaultCallingCode @param {string} [trunkPrefix] */
 const site = (defaultCallingCode, trunkPrefix = '') => ({ defaultCallingCode, trunkPrefix });
 
-describe('phone numbers (one normaliser for every product)', () => {
+describe('phone numbers (one normalizer for every product)', () => {
 	it('is the browser-safe entry too', () => {
 		expect(browserEntry.normalisePhone).toBe(normalisePhone);
 		expect(browserEntry.websiteCallingCode).toBe(websiteCallingCode);

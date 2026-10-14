@@ -30,6 +30,7 @@ describe('Format values (K7)', () => {
 
 	it('checks each field', () => {
 		expect(formatViolation('locale', '')).toBeNull();
+		expect(formatViolation('locale', 'en-US')).toBeNull();
 		expect(formatViolation('locale', 'en-GB')).toBeNull();
 		expect(formatViolation('locale', 'fr-CA')).toBeNull();
 		expect(formatViolation('locale', 'not a locale')).toMatch(/language tag/);
@@ -43,10 +44,10 @@ describe('Format values (K7)', () => {
 		expect(formatViolation('wholeUnits', 'yes')).toMatch(/true or false/);
 		expect(formatViolation('times', 'business')).toBeNull();
 		expect(formatViolation('times', 'utc')).toMatch(/viewer or business/);
-		expect(formatViolation('colour', 'red')).toMatch(/unknown format field/);
+		expect(formatViolation('color', 'red')).toMatch(/unknown format field/);
 	});
 
-	it('normalises stored and partial values', () => {
+	it('normalizes stored and partial values', () => {
 		expect(normaliseFormat(undefined)).toEqual(DEFAULT_FORMAT);
 		expect(normaliseFormat([])).toEqual(DEFAULT_FORMAT);
 		expect(normaliseFormat({ wholeUnits: true, times: 'nope', extra: 1 })).toEqual({ ...DEFAULT_FORMAT, wholeUnits: true });
@@ -74,8 +75,9 @@ describe('formatMoney (K7)', () => {
 		expect(formatMoney(-150, 'USD')).toBe('-USD 1.50');
 	});
 
-	it("writes in the Format's locale, else the viewer's, else en", () => {
+	it("writes in the Format's locale, else the viewer's, else en-US", () => {
 		expect(formatMoney(1_250_000, 'EUR', { locale: 'de' })).toBe('12.500,00 EUR');
+		expect(formatMoney(1_250_000, 'EUR', { locale: 'fr-FR' })).toBe('12 500,00 EUR');
 		expect(formatMoney(1_250_000, 'EUR', {}, { locale: 'de' })).toBe('12.500,00 EUR');
 		expect(formatMoney(1_250_000, 'EUR', { locale: 'en' }, { locale: 'de' })).toBe('EUR 12,500.00');
 		expect(formatMoney(1_250_000, 'EUR', {}, { locale: 'xx-invalid-' })).toBe('EUR 12,500.00');
@@ -92,27 +94,35 @@ describe('formatDate (K7, K8)', () => {
 	const at = '2026-03-12T19:30:00Z';
 
 	it("uses the business time zone for text the server makes, whatever the Format's times", () => {
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Tokyo', style: 'date' })).toBe('13 Mar 2026');
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Tokyo' })).toBe('13 Mar 2026, 04:30');
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Asia/Tokyo', style: 'time' })).toBe('04:30');
-		expect(formatDate(at, { locale: 'en-GB' })).toBe('12 Mar 2026, 19:30');
-		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Not/AZone' })).toBe('12 Mar 2026, 19:30');
+		expect(formatDate(at, {}, { timeZone: 'Asia/Tokyo', style: 'date' })).toBe('Mar 13, 2026');
+		expect(formatDate(at, {}, { timeZone: 'Asia/Tokyo' })).toBe('Mar 13, 2026, 4:30 AM');
+		expect(formatDate(at, {}, { timeZone: 'Asia/Tokyo', style: 'time' })).toBe('4:30 AM');
+		expect(formatDate(at)).toBe('Mar 12, 2026, 7:30 PM');
+		expect(formatDate(at, {}, { timeZone: 'Not/AZone' })).toBe('Mar 12, 2026, 7:30 PM');
+	});
+
+	it("writes server text in US English unless the Format sets a language (en-US, not the runtime's en)", () => {
+		expect(formatDate(at, { locale: 'en-US' })).toBe('Mar 12, 2026, 7:30 PM');
+		expect(formatDate(at, { locale: 'fr-FR' }, { timeZone: 'Europe/Paris' })).toBe('12 mars 2026, 20:30');
+		expect(formatDate(at, { locale: 'en-GB' }, { timeZone: 'Europe/London' })).toBe('12 Mar 2026, 19:30');
+		expect(formatDate(at, {}, { viewer: { locale: 'xx-invalid-', timeZone: 'UTC' }, style: 'date' })).toBe('Mar 12, 2026');
 	});
 
 	it('follows the viewer in widgets unless the Format says business times', () => {
-		const viewer = { locale: 'en-GB', timeZone: 'America/New_York' };
+		const viewer = { locale: 'fr-FR', timeZone: 'America/New_York' };
 		expect(formatDate(at, {}, { timeZone: 'Asia/Tokyo', viewer, style: 'time' })).toBe('15:30');
 		expect(formatDate(at, { times: 'business' }, { timeZone: 'Asia/Tokyo', viewer, style: 'time' })).toBe('04:30');
+		expect(formatDate(at, { locale: 'en-US' }, { timeZone: 'Asia/Tokyo', viewer, style: 'time' })).toBe('3:30 PM');
 		expect(typeof formatDate(Date.parse(at), {}, { viewer: { locale: 'en' } })).toBe('string');
 	});
 
 	it('takes dates, epoch ms and ISO text, and refuses anything else', () => {
-		expect(formatDate(new Date(at), { locale: 'en-GB' }, { style: 'date' })).toBe('12 Mar 2026');
-		expect(formatDate(Date.parse(at), { locale: 'en-GB' }, { style: 'date' })).toBe('12 Mar 2026');
+		expect(formatDate(new Date(at), {}, { style: 'date' })).toBe('Mar 12, 2026');
+		expect(formatDate(Date.parse(at), {}, { style: 'date' })).toBe('Mar 12, 2026');
 		expect(formatDate('not a date')).toBe('');
 		expect(formatDate(null)).toBe('');
 		expect(formatDate(undefined)).toBe('');
-		expect(formatDate(at, { locale: 'en-GB' }, { style: /** @type {any} */ ('other') })).toBe('12 Mar 2026, 19:30');
+		expect(formatDate(at, {}, { style: /** @type {any} */ ('other') })).toBe('Mar 12, 2026, 7:30 PM');
 	});
 });
 

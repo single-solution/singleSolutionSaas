@@ -10,7 +10,7 @@ import { WEBSITE, businessJson } from '../src/testing.js';
 import { expectProblem } from './helpers.js';
 
 describe('validateBusinessJson', () => {
-	it('normalises a full file', () => {
+	it('normalizes a full file', () => {
 		expect(validateBusinessJson(businessJson())).toEqual({
 			ok: true,
 			value: {

@@ -5,7 +5,7 @@
  * when missing). Pure and browser-safe (no Node.js imports): products' `core/` and widgets use it through
  * `@ss/contracts/format` and `@ss/app-kit/widget`.
  *
- * - `locale`: BCP 47; '' = the viewer's browser in widgets and `en` in text the server makes.
+ * - `locale`: BCP 47; '' = the viewer's browser in widgets and `en-US` in text the server makes.
  * - `currencyDisplay`: `code` ("USD 12,500.00"), `symbol` (the locale's narrow symbol, "$12,500.00") or `custom`
  *   (`currencySymbol` in the place of the code, "US$ 12,500.00").
  * - `wholeUnits`: true shows no minor units ("USD 12,500").
@@ -19,7 +19,7 @@
 
 /**
  * @typedef {object} Format
- * @property {string} locale BCP 47 language tag, or '' (the viewer's, `en` on the server)
+ * @property {string} locale BCP 47 language tag, or '' (the viewer's, `en-US` on the server)
  * @property {'code' | 'symbol' | 'custom'} currencyDisplay
  * @property {string} currencySymbol at most 8 characters, used with `custom`
  * @property {boolean} wholeUnits
@@ -30,6 +30,9 @@
  * Who looks at the text: the browser's language and time zone in widgets; null for text the server makes.
  * @typedef {{ locale?: string, timeZone?: string } | null} Viewer
  */
+
+/** The language of text when neither the Format nor a viewer gives one: US English. */
+const DEFAULT_LOCALE = 'en-US';
 
 /** The fields of a Format value, in screen order. */
 export const FORMAT_FIELDS = Object.freeze(
@@ -78,7 +81,7 @@ export const formatViolation = (field, value) => {
 		case 'locale':
 			return value === '' || (typeof value === 'string' && LOCALE.test(value) && knownLocale(value))
 				? null
-				: "locale is a language tag such as en, en-GB or fr-FR, or '' for the viewer's";
+				: "locale is a language tag such as en-US or fr-FR, or '' for the viewer's";
 		case 'currencyDisplay':
 			return value === 'code' || value === 'symbol' || value === 'custom' ? null : 'currencyDisplay is code, symbol or custom';
 		case 'currencySymbol':
@@ -146,13 +149,13 @@ const NO_BREAK_SPACES = new RegExp('[\u00a0\u202f]', 'g');
 const plainSpaces = (/** @type {string} */ text) => text.replace(NO_BREAK_SPACES, ' ');
 
 /**
- * The locale a text is written in: the Format's, else the viewer's, else `en`.
+ * The locale a text is written in: the Format's, else the viewer's, else `en-US` (US English, the default).
  * @param {Format} format
  * @param {Viewer} viewer
  */
 const localeOf = (format, viewer) => {
-	const wanted = format.locale || viewer?.locale || 'en';
-	return knownLocale(wanted) ? wanted : 'en';
+	const wanted = format.locale || viewer?.locale || DEFAULT_LOCALE;
+	return knownLocale(wanted) ? wanted : DEFAULT_LOCALE;
 };
 
 /**
@@ -191,7 +194,7 @@ export const formatMoney = (amount, currency, format = DEFAULT_FORMAT, viewer = 
 
 /** @typedef {'date' | 'datetime' | 'time'} DateStyle */
 
-/** Intl options of each date style ("12 Mar 2026", "12 Mar 2026, 14:30", "14:30" in en-GB). */
+/** Intl options of each date style ("Mar 12, 2026", "Mar 12, 2026, 2:30 PM", "2:30 PM" in en-US). */
 const DATE_STYLES = Object.freeze({
 	date: Object.freeze({ dateStyle: 'medium' }),
 	datetime: Object.freeze({ dateStyle: 'medium', timeStyle: 'short' }),

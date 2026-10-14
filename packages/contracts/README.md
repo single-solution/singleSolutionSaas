@@ -68,7 +68,7 @@ Vocabularies: `PRODUCT_STATUSES` (`active`, `grace`, `stopped`, `suspended`, `re
 
 ## business.json (0.4.9)
 
-`validateBusinessJson(value)` returns the normalised `{ name, logo, email, phone, address, country, timeZone }`. Only
+`validateBusinessJson(value)` returns the normalized `{ name, logo, email, phone, address, country, timeZone }`. Only
 `name` is required (a missing or invalid name fails the whole file); any other invalid field becomes `null`. `logo`
 must be an https URL, `country` an ISO 3166-1 alpha-2 code (returned upper-case), `timeZone` an IANA name the runtime
 knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship.
@@ -89,15 +89,16 @@ Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/wi
   `FORMAT_FIELDS`, `formatViolation(field, value)`, `normaliseFormat(value)`.
 - `formatMoney(amount, currency, format?, viewer?)`: integer minor units (ISO 4217 exponents, `currencyDigits`) as
   `USD 12,500.00` (code), `$12,500.00` (symbol), a custom symbol, or without minor units (`wholeUnits`). The locale is
-  the Format's, else the viewer's (widgets), else `en`.
-- `formatDate(value, format?, { timeZone, style: 'date' | 'datetime' | 'time', viewer })`: text the server makes
-  (`viewer` null) uses the business time zone; widgets use the viewer's unless `times` is `business`.
+  the Format's, else the viewer's (widgets), else `en-US` (US English).
+- `formatDate(value, format?, { timeZone, style: 'date' | 'datetime' | 'time', viewer })`: `Mar 12, 2026`,
+  `Mar 12, 2026, 7:30 PM` or `7:30 PM` in `en-US`; text the server makes (`viewer` null) uses the business time zone;
+  widgets use the viewer's unless `times` is `business`.
 - `zonedParts(at, timeZone)`, `zonedDay(at, timeZone)` (`YYYY-MM-DD`) and `zonedDayStart(day, timeZone)` (epoch ms):
   every calendar rule in the business.json time zone, UTC when missing.
 
 ## Phone numbers (`@ss/contracts/phone`)
 
-Pure and browser-safe; every product normalises phones with it, so one person has one number everywhere.
+Pure and browser-safe; every product normalizes phones with it, so one person has one number everywhere.
 
 - `normalisePhone(input, defaultCallingCode | { defaultCallingCode, trunkPrefix })` → E.164 or null. Spaces, dashes,
   dots, slashes and brackets are dropped; `+` or `00` name the calling code (any assigned code, +800 and +882 too);

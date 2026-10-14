@@ -48,7 +48,7 @@ describe('createValidator', () => {
 
 	it('strict mode refuses unknown keywords in extra schemas', () => {
 		expect(() =>
-			createValidator({ schemas: [{ $id: 'urn:x', type: 'object', colour: 'red' }] }).validate('urn:x', {}),
+			createValidator({ schemas: [{ $id: 'urn:x', type: 'object', color: 'red' }] }).validate('urn:x', {}),
 		).toThrow();
 	});
 });

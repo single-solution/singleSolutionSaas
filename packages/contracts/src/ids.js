@@ -1,5 +1,5 @@
 /**
- * Identifier formats and domain normalisation.
+ * Identifier formats and domain normalization.
  *
  * Ids are `<prefix>_<random>` where `<random>` is 128 random bits in lowercase Crockford base32 (26 chars).
  * They are opaque: consumers must never parse meaning out of the random part.
@@ -150,7 +150,7 @@ export const normaliseDomain = (input, options = {}) => {
 };
 
 /**
- * True when `host` and `domain` normalise to the same domain (exact match only: a website is one exact domain).
+ * True when `host` and `domain` normalize to the same domain (exact match only: a website is one exact domain).
  * @param {string} host
  * @param {string} domain
  * @param {{ allowLocal?: boolean }} [options]

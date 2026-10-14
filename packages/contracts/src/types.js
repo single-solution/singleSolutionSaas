@@ -117,7 +117,7 @@
 /** @typedef {{ type: import('./constants.js').NoticeType, websiteId?: string, subject?: string }} Notice */
 
 /**
- * business.json, normalised: missing or invalid optional fields are `null`.
+ * business.json, normalized: missing or invalid optional fields are `null`.
  * @typedef {object} BusinessInfo
  * @property {string} name
  * @property {string | null} logo https URL

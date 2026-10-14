@@ -1,5 +1,5 @@
 /**
- * Phone numbers (PLAN 0.8.10, always): one normaliser for every product, so a person typing their number in any usual
+ * Phone numbers (PLAN 0.8.10, always): one normalizer for every product, so a person typing their number in any usual
  * way gets one E.164 number (`+`, the calling code and the national significant number) and one record. Pure and
  * browser-safe: products' `core/` and widgets use it through `@ss/contracts/phone`.
  *

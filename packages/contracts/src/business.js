@@ -100,7 +100,7 @@ const httpsUrl = (value) => {
 const matching = (value, pattern) => (value !== null && pattern.test(value) ? value : null);
 
 /**
- * Validate and normalise a business.json document. Fails only when it is not an object or `name` is missing or
+ * Validate and normalize a business.json document. Fails only when it is not an object or `name` is missing or
  * invalid; any other invalid field is dropped (`null`). Normalises: trimmed text, `logo` an https URL, `country`
  * upper-case ISO 3166-1 alpha-2, `timeZone` the canonical IANA name. Unknown members are ignored.
  * @param {unknown} value

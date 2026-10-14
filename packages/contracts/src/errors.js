@@ -108,7 +108,7 @@ export const problem = ({ type, title, status, detail, instance, requestId, reas
 
 /**
  * @typedef {object} ProblemFactory
- * @property {string} baseUri the normalised base (always ends with `/`)
+ * @property {string} baseUri the normalized base (always ends with `/`)
  * @property {Readonly<Record<string, ProblemCodeDefinition>>} codes the registry in use
  * @property {(code: string) => string} typeFor type URI of a registered code (throws for unknown codes)
  * @property {(uri: string) => string | null} codeOf registered code of a type URI, or `null`

@@ -44,7 +44,7 @@ describe('problem builder', () => {
 		expect(Object.isFrozen(p)).toBe(true);
 	});
 
-	it('keeps optional members and normalises errors', () => {
+	it('keeps optional members and normalizes errors', () => {
 		const p = problem({
 			type: 'https://errors.example.dev/x',
 			title: 'X',
@@ -72,7 +72,7 @@ describe('problem builder', () => {
 describe('problem factory', () => {
 	const factory = createProblemFactory({ baseUri: 'https://errors.example.dev' });
 
-	it('normalises the base URI and resolves codes', () => {
+	it('normalizes the base URI and resolves codes', () => {
 		expect(factory.baseUri).toBe('https://errors.example.dev/');
 		expect(factory.typeFor('not_found')).toBe('https://errors.example.dev/not_found');
 		expect(factory.codeOf('https://errors.example.dev/rate_limited')).toBe('rate_limited');
