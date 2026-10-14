@@ -21,6 +21,7 @@ What `@ss/protocol` exports, by module:
 | `launch.js`       | `issueLaunch`, `verifyLaunch`, `launchViolation`                                                                                                                                                                                                 |
 | `assertion.js`    | `signAssertion`, `verifyAssertion` (and the `ReplayStore` type)                                                                                                                                                                                  |
 | `notices.js`      | `signNotice`, `verifyNotice`, `NOTICE_PATH`, `NOTICE_TYPES`                                                                                                                                                                                      |
+| `calls.js`        | `signPortalCall`, `verifyPortalCall`                                                                                                                                                                                                             |
 | `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`                                                      |
 | `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                          |
 | `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                  |
@@ -39,6 +40,7 @@ as another (a ticket as a token, a launch as an assertion, …).
 | Launch           | Portal            | `ss-launch+jwt`          | 60 s default, ≤ 300 s       | `consume(jti)`: single use           |
 | Client assertion | product (its key) | `ss-assertion+jwt`       | ≤ 300 s                     | replay store on `iss\|jti`           |
 | Notice           | Portal            | detached, `ss-notice.v1` | `SS-Timestamp` ± 300 s      | replay store on `timestamp\|sha256`  |
+| Portal call      | Portal            | detached, `ss-call.v1`   | `SS-Timestamp` ± 300 s      | replay store on `SS-Nonce`           |
 | Connect request  | HMAC              | `ss-connect.v1`          | timestamp ± 5 min           | nonce record (product)               |
 | Connect answer   | HMAC              | `ss-connected.v1`        | timestamp ± 5 min           | echoes the Portal's request nonce    |
 
@@ -91,6 +93,18 @@ Portal → product at `POST <base>/.well-known/ss-events`, with `SS-Timestamp`, 
 `ss-notice.v1.<timestamp>.<hex sha256(raw body)>`. `verifyNotice` checks the timestamp (± 300 s), the signature, the
 replay store, then the body: `status.changed`, `token.revoked` and `website.deleted` need `websiteId`;
 `sessions.revoked` needs `subject`; nothing else is allowed. It returns the checked body.
+
+## Portal calls
+
+Requests the Portal itself makes to a product for one website (the Setup sheet reads each product's
+`GET /v1/blueprint?websiteId=`). `signPortalCall({ signer | signers, audience, method, target, body?, timestamp })`
+returns `SS-Timestamp`, `SS-Nonce` (16 random bytes, base64url), `SS-Signature` (as notices, up to four entries) and the
+hint `SS-Key-Id`. The signed message is the lines `ss-call.v1`, the timestamp, the nonce, the product id (`audience`),
+the method, the target (path and query exactly as sent) and the hex SHA-256 of the raw body, joined by `\n`.
+`verifyPortalCall({ headers, audience, method, target, rawBody?, keyResolver, replayStore })` checks the timestamp
+(± 300 s), the signature over the request's own method, target and body against the pinned Portal keys, then the
+nonce against the replay store, and returns `{ kid, timestamp }`. A call for one product is refused by every other
+product, and a notice signature never verifies as a call.
 
 ## Connect handshake
 
