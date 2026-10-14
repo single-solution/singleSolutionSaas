@@ -35,6 +35,8 @@ import { LEASE_MS } from '../core/timing.js';
  * @typedef {object} MessageRecord
  * @property {string} id
  * @property {string | null} template the template key (null for a one-off message from the merchant's staff)
+ * @property {string | null} [fallbackTemplate] the key whose website template is used when the website has none of its
+ *   own for `template`, before the defaults (a product's message per status falls back to its general message)
  * @property {'api' | 'staff'} source
  * @property {Channel} channel the channel now (after a fallback, the fallback channel)
  * @property {Recipient} to

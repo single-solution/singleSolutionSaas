@@ -270,6 +270,97 @@ describe('default templates of products (parity P1)', () => {
 		await env.setting('fallback', 'email', 'none');
 	});
 
+	it('a send with a fallbackTemplate uses the website’s template for that key before the defaults', async () => {
+		const STATUS_DEFAULTS = {
+			email: {
+				subject: 'Your order {number} is now {status}',
+				text: 'Your order {number} is now {status}.',
+				required: true,
+				urgent: false,
+				sensitive: false,
+			},
+			sms: { text: 'Your order {number} is now {status}.', required: true, urgent: false, sensitive: false },
+		};
+		/** @param {string} channel @param {Record<string, unknown>} [more] */
+		const send = (channel, more = {}) =>
+			env.send(channel, {
+				template: 'ecommerce.order_status.shipped',
+				fallbackTemplate: 'ecommerce.order_status',
+				to: { email: 'sam@example.com', phone: '+15550003333' },
+				values: { number: 'A-1001', status: 'Shipped' },
+				required: true,
+				defaults: STATUS_DEFAULTS,
+				...more,
+			});
+		// no template of the website's: the defaults
+		expect((await send('email')).json).toMatchObject({ status: 'sent', subject: 'Your order A-1001 is now Shipped' });
+		// the website's general template comes before the defaults
+		await env.template({
+			key: 'ecommerce.order_status',
+			channel: 'email',
+			subject: 'Order {number}: {status}',
+			text: 'Hello, order {number} is {status}.',
+			required: true,
+		});
+		expect((await send('email')).json).toMatchObject({ status: 'sent', subject: 'Order A-1001: Shipped' });
+		expect(lastResend()).toMatchObject({ subject: 'Order A-1001: Shipped', text: 'Hello, order A-1001 is Shipped.' });
+		// and its template for the status itself before both
+		await env.template({
+			key: 'ecommerce.order_status.shipped',
+			channel: 'email',
+			subject: 'On its way: {number}',
+			text: 'Order {number} has shipped.',
+			required: true,
+		});
+		expect((await send('email')).json).toMatchObject({ status: 'sent', subject: 'On its way: A-1001' });
+		const removed = await env.dashboard(
+			await env.adminSession(),
+			'DELETE',
+			`/v1/dashboard/websites/${env.websiteId}/templates/ecommerce.order_status.shipped/email/default`,
+		);
+		expect(removed.status).toBe(204);
+		expect((await send('email')).json).toMatchObject({ status: 'sent', subject: 'Order A-1001: Shipped' });
+		// without a fallbackTemplate, the per-status key alone has only the defaults
+		expect((await send('email', { fallbackTemplate: undefined })).json).toMatchObject({
+			subject: 'Your order A-1001 is now Shipped',
+		});
+
+		// switching the general message off skips the per-status one too, on that channel only
+		expect((await switchMessage('ecommerce.order_status', 'email', { off: true })).status).toBe(200);
+		expect((await send('email')).json).toMatchObject({ status: 'skipped', reason: SWITCHED_OFF });
+		expect((await send('sms')).json).toMatchObject({ status: 'sent', text: 'Your order A-1001 is now Shipped.' });
+		expect((await switchMessage('ecommerce.order_status', 'email', { off: false })).status).toBe(200);
+
+		// WhatsApp names both keys when neither is set up
+		expect((await send('whatsapp')).json).toMatchObject({
+			status: 'failed',
+			reason:
+				'Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ecommerce.order_status.shipped (or ecommerce.order_status) with its Meta template name in Notifications.',
+		});
+
+		// a message moved to its fallback channel keeps the chain: the website's general SMS template
+		await env.template({ key: 'ecommerce.order_status', channel: 'sms', text: 'Order {number}: {status}', required: true });
+		await env.setting('fallback', 'email', 'sms');
+		env.providers.respond('https://api.resend.com', () => ({ status: 503 }));
+		const waiting = await send('email');
+		expect(waiting.json.status).toBe('retrying');
+		env.advance(61_000);
+		await env.call('GET', '/v1/messages?limit=1', { token: env.server });
+		env.advance(5 * 60_000 + 1000);
+		await env.call('GET', '/v1/messages?limit=1', { token: env.server });
+		const done = await (await env.merchantCollection('messages')).findOne({ websiteId: env.websiteId, id: waiting.json.id });
+		expect(done).toMatchObject({ status: 'sent', channel: 'sms', text: 'Order A-1001: Shipped' });
+		env.providers.reset('https://api.resend.com');
+		await env.setting('fallback', 'email', 'none');
+
+		// fallbackTemplate is another template key
+		for (const fallbackTemplate of ['ecommerce.order_status.shipped', 'Order status', 42]) {
+			const refused = await send('email', { fallbackTemplate });
+			expect(refused.status).toBe(422);
+			expect(refused.json.errors[0]).toMatchObject({ path: '/fallbackTemplate' });
+		}
+	});
+
 	it('refuses defaults that break the template rules, and WhatsApp defaults', async () => {
 		/** @param {string} channel @param {Record<string, unknown>} body */
 		const refused = async (channel, body) => {

@@ -14,7 +14,9 @@
  * fallback channel. WhatsApp never has a default (it sends only templates approved at Meta): a product's message
  * without the merchant's WhatsApp template is recorded as failed, "not set up", and goes to the fallback channel when
  * one is set — never dropped without a trace. A product's message the merchant switched off on a channel is skipped
- * (reason `switched_off`).
+ * (reason `switched_off`). A send may name a `fallbackTemplate`: the website's template for that key is used when it has
+ * none of its own for the send's key, before the defaults (a product's message per status falls back to its general
+ * message); the message is skipped when either key is switched off on the channel.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -72,6 +74,8 @@ import { createStore } from '../adapters/store.js';
  * @property {'api' | 'staff'} source
  * @property {Partial<Record<Channel, Template>>} defaults a product's message: the default words its send carries per
  *   channel (parity P1), `{}` for none
+ * @property {string | null} fallbackTemplate the template key whose website template is used when the website has none
+ *   of its own for `template`, before the defaults (null: none)
  */
 /** @typedef {import('../core/templates.js').Template} Template */
 
@@ -82,9 +86,12 @@ import { createStore } from '../adapters/store.js';
  * @typedef {{ words: Words, shown: Words, hidden: string[] }} Made
  */
 
-/** Why a product's message on WhatsApp is not sent: the merchant has no WhatsApp template for it (parity P1). */
-export const notSetUpReason = (/** @type {string} */ key) =>
-	`Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ${key} with its Meta template name in Notifications.`;
+/**
+ * Why a product's message on WhatsApp is not sent: the merchant has no WhatsApp template for it (parity P1).
+ * @param {string} key @param {string | null} [fallbackKey] the send's `fallbackTemplate`
+ */
+export const notSetUpReason = (key, fallbackKey = null) =>
+	`Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ${key}${fallbackKey ? ` (or ${fallbackKey})` : ''} with its Meta template name in Notifications.`;
 
 /** The skip reason of a product's message the merchant switched off on its channel (parity P1). */
 export const SWITCHED_OFF = 'switched_off';
@@ -146,18 +153,19 @@ export const createSending = (product) => {
 	/**
 	 * The words of a template on a channel for a recipient, with the unsubscribe link of optional templates: as sent, and
 	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
-	 * The website's own template comes first (the recipient's language, else its default version), else the product's
-	 * default words on that channel (parity P1). Accounts' templates are always required and urgent.
+	 * The website's own template comes first (the recipient's language, else its default version), then its template
+	 * for the send's fallback key, else the product's default words on that channel (parity P1). Accounts' templates are
+	 * always required and urgent.
 	 * @param {Site} s
-	 * @param {{ key: string, channel: Channel, address: string, values: Record<string, string>, language: string | null,
-	 *   secretValues: string[], defaults: Partial<Record<Channel, Template>> }} input
+	 * @param {{ key: string, fallbackKey: string | null, channel: Channel, address: string, values: Record<string, string>,
+	 *   language: string | null, secretValues: string[], defaults: Partial<Record<Channel, Template>> }} input
 	 * @returns {Promise<({ required: boolean, urgent: boolean } & Made) | null>} null when there is no template
 	 */
-	const fromTemplate = async (s, { key, channel, address, values, language, secretValues, defaults }) => {
-		const version =
-			pickVersion(await s.store.templates.versions(key, channel), language, s.on.includes('multi_language')) ??
-			defaults[channel] ??
-			null;
+	const fromTemplate = async (s, { key, fallbackKey, channel, address, values, language, secretValues, defaults }) => {
+		/** @param {string} templateKey */
+		const ownOf = async (templateKey) =>
+			pickVersion(await s.store.templates.versions(templateKey, channel), language, s.on.includes('multi_language'));
+		const version = (await ownOf(key)) ?? (fallbackKey ? await ownOf(fallbackKey) : null) ?? defaults[channel] ?? null;
 		if (!version) return null;
 		/** @type {Record<string, string>} */
 		const builtIn = version.required
@@ -365,6 +373,16 @@ export const createSending = (product) => {
 	};
 
 	/**
+	 * Whether the merchant switched a product's message off on a channel: its key, or the key it falls back to.
+	 * @param {Site} s @param {string} key @param {string | null} fallbackKey @param {Channel} channel
+	 */
+	const switchedOff = async (s, key, fallbackKey, channel) => {
+		for (const each of fallbackKey ? [key, fallbackKey] : [key])
+			if (canSwitchOff(each) && (await s.store.off.has(each, channel))) return true;
+		return false;
+	};
+
+	/**
 	 * Where a failed message goes next: the fallback channel of its channel (settings), when that feature is on, the
 	 * recipient has an address there, a template exists for it and they did not unsubscribe there. The answer is what
 	 * the message keeps there (its values still hidden).
@@ -380,7 +398,7 @@ export const createSending = (product) => {
 		const address = addressFor(target, message.to);
 		if (!address) return null;
 		if (!message.required && (await s.store.optouts.has(address))) return null;
-		if (message.template !== null && canSwitchOff(message.template) && (await s.store.off.has(message.template, target)))
+		if (message.template !== null && (await switchedOff(s, message.template, message.fallbackTemplate ?? null, target)))
 			return null;
 		if (message.template === null) {
 			if (target === 'email' && message.subject === '') return null;
@@ -401,6 +419,7 @@ export const createSending = (product) => {
 		}
 		const made = await fromTemplate(s, {
 			key: message.template,
+			fallbackKey: message.fallbackTemplate ?? null,
 			channel: target,
 			address,
 			values: message.values,
@@ -527,11 +546,12 @@ export const createSending = (product) => {
 		let notSetUp = false;
 		const declared = Object.values(input.defaults);
 		if (input.template !== null) {
-			if (canSwitchOff(input.template) && (await s.store.off.has(input.template, input.channel)))
+			if (await switchedOff(s, input.template, input.fallbackTemplate, input.channel))
 				return {
 					ok: true,
 					message: await s.store.messages.add({
 						template: input.template,
+						fallbackTemplate: input.fallbackTemplate,
 						source: input.source,
 						channel: input.channel,
 						to: input.to,
@@ -557,6 +577,7 @@ export const createSending = (product) => {
 				};
 			const found = await fromTemplate(s, {
 				key: input.template,
+				fallbackKey: input.fallbackTemplate,
 				channel: input.channel,
 				address,
 				values: input.values,
@@ -602,6 +623,7 @@ export const createSending = (product) => {
 		/** @type {Omit<MessageRecord, 'id' | 'createdAt'>} */
 		const base = {
 			template: input.template,
+			fallbackTemplate: input.fallbackTemplate,
 			source: input.source,
 			channel: input.channel,
 			to: input.to,
@@ -658,7 +680,7 @@ export const createSending = (product) => {
 				message: await attempt(s, message, {
 					ok: false,
 					provider: 'none',
-					error: notSetUpReason(/** @type {string} */ (input.template)),
+					error: notSetUpReason(/** @type {string} */ (input.template), input.fallbackTemplate),
 				}),
 			};
 		}

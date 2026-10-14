@@ -119,6 +119,14 @@ export const createRoutes = (product) => {
 			return invalid('required', 'required is true or false.');
 		if (body.language !== undefined && languageOfSegment(body.language) === null)
 			return invalid('language', 'Use a language code such as en, fr or pt-BR.');
+		// a template key whose website template is used when the website has none of its own for the send's key
+		if (
+			body.fallbackTemplate !== undefined &&
+			(typeof body.fallbackTemplate !== 'string' ||
+				!/^[a-z][a-z0-9_.-]{0,63}$/.test(body.fallbackTemplate) ||
+				body.fallbackTemplate === body.template)
+		)
+			return invalid('fallbackTemplate', 'fallbackTemplate is another template key.');
 		// a product's message carries its default words (parity P1), checked as a template the merchant saves
 		const defaults = checkDefaults(body.defaults, body.template);
 		if (!defaults.ok) return invalid(defaults.field, defaults.message);
@@ -146,6 +154,7 @@ export const createRoutes = (product) => {
 			sendAt,
 			source: 'api',
 			defaults: defaults.value,
+			fallbackTemplate: body.fallbackTemplate ?? null,
 		});
 		if (!result.ok) return result.problem;
 		return created(messageView(result.message));
@@ -594,6 +603,7 @@ export const createRoutes = (product) => {
 						sendAt: null,
 						source: 'staff',
 						defaults: {},
+						fallbackTemplate: null,
 					});
 				} else {
 					const text = typeof body.text === 'string' ? body.text.trim() : '';
@@ -614,6 +624,7 @@ export const createRoutes = (product) => {
 						sendAt: null,
 						source: 'staff',
 						defaults: {},
+						fallbackTemplate: null,
 					});
 				}
 				if (!result.ok) return result.problem;

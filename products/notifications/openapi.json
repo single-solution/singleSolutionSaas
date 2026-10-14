@@ -2160,6 +2160,11 @@
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
+									},
+									"fallbackTemplate": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "Another template key: while your website has no template of its own for template, its template for this key is used, before the defaults (for example a per-status order message falls back to the general one). Switching either key off on the channel skips the message."
 									}
 								}
 							}
@@ -2272,6 +2277,11 @@
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
+									},
+									"fallbackTemplate": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "Another template key: while your website has no template of its own for template, its template for this key is used, before the defaults (for example a per-status order message falls back to the general one). Switching either key off on the channel skips the message."
 									}
 								}
 							}
@@ -2384,6 +2394,11 @@
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
+									},
+									"fallbackTemplate": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "Another template key: while your website has no template of its own for template, its template for this key is used, before the defaults (for example a per-status order message falls back to the general one). Switching either key off on the channel skips the message."
 									}
 								}
 							}
@@ -2496,6 +2511,11 @@
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
+									},
+									"fallbackTemplate": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "Another template key: while your website has no template of its own for template, its template for this key is used, before the defaults (for example a per-status order message falls back to the general one). Switching either key off on the channel skips the message."
 									}
 								}
 							}
@@ -2608,6 +2628,11 @@
 									},
 									"defaults": {
 										"$ref": "#/components/schemas/Defaults"
+									},
+									"fallbackTemplate": {
+										"type": "string",
+										"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+										"description": "Another template key: while your website has no template of its own for template, its template for this key is used, before the defaults (for example a per-status order message falls back to the general one). Switching either key off on the channel skips the message."
 									}
 								}
 							}
