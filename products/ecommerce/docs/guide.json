@@ -671,10 +671,12 @@
 				"title": "Reports and CSV",
 				"paragraphs": [
 					"Reports take from and to (YYYY-MM-DD in your business time zone, or ISO times; the last 30 days by default, at most 366) and count the orders placed then, not cancelled, in your currency. GET /v1/reports/summary?statuses=&series=day answers { orders, total, goods, delivery, fees, discount, refunded, units, days: [{ day, orders, total }] } (statuses: the status keys that count, instead of every status but cancelled). /v1/reports/sales?by= takes product, category, brand, city, grade or payment_method; /v1/reports/sell-through gives per product the units sold over sold plus stock left; /v1/reports/oldest-stock each active variant with stock, by its last sale. Every report takes format=csv (a file download).",
+					"GET /v1/reports/health answers shop health, judged on each read: { checks: [{ key, status, count, link }], attention } with the checks products_without_photos (active), archived_featured, variants_out_of_stock and variants_low_stock (the catalog setting lowStock), business_name (business.json), website_address, payment_methods (none shoppers can use) and pixel_ids (tag ids in Growth not in their form; skipped until the Growth token is pasted in Connections). status is ok, attention or skipped; link is the list that shows them, such as /v1/products?lowStock=1. The customers admin widget shows it as a card above the reports.",
 					"GET /v1/csv/orders?per=order gives one row per order instead of per line, with the order list's filters (at most 10,000 orders); GET /v1/csv/customers lists customers (at most 20,000). The product export ends with sold_out and updated_at: POST /v1/csv/products?mode=update { csv, dryRun } with such a file changes only price, stock and sold_out (empty cells keep the value) and refuses rows whose updated_at is older than the product's (export it again). Every CSV import is a dry run unless dryRun is false; the csv setting delimiter sets the separator."
 				],
 				"routes": [
 					["GET /v1/reports/summary", "reports"],
+					["GET /v1/reports/health", "reports"],
 					["GET /v1/reports/sales?by=grade", "reports"],
 					["GET /v1/reports/sell-through", "reports"],
 					["GET /v1/reports/oldest-stock", "reports"],

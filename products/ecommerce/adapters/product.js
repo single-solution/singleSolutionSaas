@@ -230,7 +230,7 @@ export const createProductInstance = (options) => {
 				neededBy: ['alerts', 'staff_alerts'],
 			},
 			growth: {
-				label: 'Growth token (send changed addresses to IndexNow)',
+				label: 'Growth token (send changed addresses to IndexNow; check tag ids in Shop health)',
 				kind: 'token',
 				productId: 'growth',
 				neededBy: [],

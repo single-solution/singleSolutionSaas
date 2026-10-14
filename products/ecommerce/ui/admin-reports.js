@@ -1,7 +1,8 @@
 /**
  * Reports and CSV in the customers admin widget (PLAN 0.8.8 Admin tools, 0.6: plain pages of cards and tables): reports
- * (feature `reports`, `reports.read`) — sales by product, category, brand or city, stock age, return rate and margin
- * over a date range, with their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature
+ * (feature `reports`, `reports.read`) — the shop health card (E41: each check with its count and state, read when the
+ * section opens and again on request), then sales by product, category, brand or city, stock age, return rate and
+ * margin over a date range, with their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature
  * `csv`, `csv.run`) as cards — export products, import products (a dry run lists every problem per row, in the
  * website's words, before anything is written), export orders by date range and status.
  * @module
@@ -76,6 +77,43 @@ const columnsOf = (kit, key) => {
 		{ label: t('customersAdmin.revenue'), value: (row) => row.revenue, money: true },
 		{ label: t('customersAdmin.discount'), value: (row) => row.discount, money: true },
 	];
+};
+
+/** The tone of a shop health check's state (E41). */
+const HEALTH_TONES = Object.freeze(/** @type {const} */ ({ ok: 'success', attention: 'warning', skipped: 'neutral' }));
+
+/**
+ * The shop health card (E41): every check with its count and state, read now and on Check again.
+ * @param {Kit} kit
+ */
+const healthCard = (kit) => {
+	const { t, h } = kit;
+	const line = kit.status();
+	const result = h('div');
+	const read = async () => {
+		const answer = await kit.call('GET', '/v1/admin/reports/health');
+		if (!answer.ok) {
+			result.replaceChildren();
+			kit.fail(line, answer);
+			return answer;
+		}
+		/** @type {Array<{ key: string, status: 'ok' | 'attention' | 'skipped', count: number }>} */
+		const checks = answer.data.checks ?? [];
+		kit.say(line, answer.data.attention === 0 ? t('customersAdmin.healthClear') : '');
+		kit.put(result, [
+			kit.table(
+				[t('customersAdmin.healthCheck'), t('customersAdmin.healthCount'), t('customersAdmin.healthState')],
+				checks.map((check) => [
+					t(`customersAdmin.health.${check.key}`),
+					check.status === 'skipped' ? '' : String(check.count),
+					kit.badge(t(`customersAdmin.healthStatus.${check.status}`), HEALTH_TONES[check.status] ?? 'neutral'),
+				]),
+			),
+		]);
+		return answer;
+	};
+	void read();
+	return card(kit, t('customersAdmin.healthTitle'), [line, result, kit.button(t('customersAdmin.healthAgain'), read)]);
 };
 
 /**
@@ -171,6 +209,7 @@ export const reportsTab = (kit, panel) => {
 		{ primary: true },
 	);
 	panel.append(
+		healthCard(kit),
 		h('div', { class: 'row inline' }, [kit.field(t('customersAdmin.reportLabel'), report), dates, run, download]),
 		line,
 		result,

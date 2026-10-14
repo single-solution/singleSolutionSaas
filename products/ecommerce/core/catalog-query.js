@@ -442,14 +442,13 @@ export const lowStockFilter = (level) => ({
 export const VARIANT_STOCK = Object.freeze(/** @type {const} */ (['out', 'low', 'in']));
 
 /**
- * Counts of variants by stock (E44), as a pipeline: the offered variants of products that track stock and are not
- * archived, `out` (no units, or marked sold out), `low` (1 to `level` units) or `in` (more).
- * @param {string} websiteId
- * @param {Record<string, unknown>} match the products to look at (a list's filter, without `websiteId`)
+ * The stages that count variants by stock (E44), after a `$match` on the website: the offered variants of products
+ * that track stock and are not archived, `out` (no units, or marked sold out), `low` (1 to `level` units) or `in`
+ * (more).
  * @param {number} level the `catalog` setting `lowStock`
  */
-export const variantStockPipeline = (websiteId, match, level) => [
-	{ $match: { websiteId, $and: [match, { trackStock: true, status: { $ne: 'archived' } }] } },
+export const variantStockStages = (level) => [
+	{ $match: { trackStock: true, status: { $ne: 'archived' } } },
 	{ $unwind: '$variants' },
 	{ $match: { 'variants.active': true } },
 	{
@@ -472,7 +471,18 @@ export const variantStockPipeline = (websiteId, match, level) => [
 ];
 
 /**
- * The counts of {@link variantStockPipeline}'s rows, every group present.
+ * Counts of variants by stock (E44), as a pipeline over the products a list's filter keeps.
+ * @param {string} websiteId
+ * @param {Record<string, unknown>} match the products to look at (a list's filter, without `websiteId`)
+ * @param {number} level the `catalog` setting `lowStock`
+ */
+export const variantStockPipeline = (websiteId, match, level) => [
+	{ $match: { websiteId, $and: [match] } },
+	...variantStockStages(level),
+];
+
+/**
+ * The counts of {@link variantStockStages}' rows, every group present.
  * @param {ReadonlyArray<{ _id: unknown, n: unknown }>} rows
  * @returns {{ out: number, low: number, in: number }}
  */

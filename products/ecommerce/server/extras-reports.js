@@ -1,8 +1,8 @@
 /**
  * Reports (feature `reports`, PLAN 0.8.8): sales by product, category, brand, city, grade and payment method, stock
- * age, return rate and margin, and (E36) the summary with its daily series, sell-through and oldest stock, for the
- * merchant's server and the admin widget (permission `reports.read`). Every report answers JSON, or with `format=csv`
- * its rows as a CSV file (the `csv` setting's separator). Each report reads the merchant database with aggregation
+ * age, return rate and margin, (E36) the summary with its daily series, sell-through and oldest stock, and (E41) shop
+ * health, for the merchant's server and the admin widget (permission `reports.read`). Every report answers JSON, or
+ * with `format=csv` its rows as a CSV file (the `csv` setting's separator); shop health answers JSON only. Each report reads the merchant database with aggregation
  * pipelines that start with a `$match` on the website (`core/reports.js`); names of categories and brands are read
  * separately (no `$lookup`). Money is minor units of the shop's currency; a day in `from` and `to`, and a day of the
  * summary's series, is a day in the business time zone (PLAN 0.8.10 K8).
@@ -30,6 +30,7 @@ import {
 	summaryPipeline,
 	totalsPipeline,
 } from '../core/reports.js';
+import { badTagIds, healthOf, healthPipeline, paymentMethodsOn } from '../core/health.js';
 import { csvFile } from './catalog-tools.js';
 import { SERVER_LIMITS } from './service.js';
 
@@ -48,10 +49,10 @@ const SERVER = [...SERVER_LIMITS];
  */
 
 /**
- * @param {Product} _product
+ * @param {Product} product
  * @param {Service} service
  */
-export const createReports = (_product, service) => {
+export const createReports = (product, service) => {
 	/**
 	 * The website, its database and the range of the request.
 	 * @param {any} ctx
@@ -300,7 +301,74 @@ export const createReports = (_product, service) => {
 		return { s, body: { rows }, rows };
 	};
 
+	/**
+	 * The payment methods shoppers can use now (E41): cash on delivery, online and bank transfer, pay at pickup.
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const paymentMethods = async (s, data) => {
+		const checkout = await s.values('checkout');
+		/** @type {string[]} */
+		const offered = Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : [];
+		const cod = s.has('cod') && (await s.values('cod')).enabled !== false;
+		const pickup =
+			offered.includes('pickup') &&
+			s.has('delivery_zones') &&
+			(await data
+				.collection(COLLECTIONS.locations)
+				.countDocuments({ websiteId: data.websiteId, pickup: true }, { limit: 1 })) > 0;
+		return paymentMethodsOn({
+			cod,
+			offered,
+			paymentsConnected: (await product.connections.value(s.websiteId, 'payments')) !== null,
+			bankManual: checkout.bankTransferVia === 'manual',
+			pickup,
+		});
+	};
+
+	/**
+	 * Growth's badly formed tag ids, or null while its token is not pasted or it does not answer (E41).
+	 * @param {Site} s
+	 */
+	const badTags = async (s) => {
+		const answer = await product.callProduct(s.websiteId, 'growth', '/v1/settings');
+		return answer.ok ? badTagIds(answer.body) : null;
+	};
+
+	/** GET …/reports/health (E41): what needs fixing, with counts and links. @param {any} ctx */
+	const health = async (ctx) => {
+		const s = await service.site(ctx);
+		const data = await s.data();
+		const { lowStock } = await s.values('catalog');
+		const [[facets], business, methods, tags] = await Promise.all([
+			data
+				.collection(COLLECTIONS.products)
+				.aggregate(healthPipeline(data.websiteId, Number(lowStock)))
+				.toArray(),
+			s.business(),
+			paymentMethods(s, data),
+			badTags(s),
+		]);
+		return healthOf({ facets, business, domain: s.domain, paymentMethods: methods, badTags: tags });
+	};
+
 	const routes = [
+		defineRoute({
+			method: 'GET',
+			path: '/v1/reports/health',
+			auth: 'server',
+			feature: 'reports',
+			rateLimit: SERVER,
+			handler: health,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/reports/health',
+			auth: 'ticket',
+			feature: 'reports',
+			permission: 'reports.read',
+			rateLimit: SERVER,
+			handler: health,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/reports/sales',

@@ -458,6 +458,50 @@ describe('customers admin: reports and CSV', () => {
 		expect(saved[0]?.text).toContain('Phone,1,10.00,6.00,4.00');
 	});
 
+	it('shows shop health and checks again (E41)', async () => {
+		let attention = 2;
+		const { root, server } = await start(
+			{
+				'GET /v1/admin/reports/health': () =>
+					answer(200, {
+						attention,
+						checks: [
+							{
+								key: 'products_without_photos',
+								status: attention ? 'attention' : 'ok',
+								count: attention ? 3 : 0,
+								link: null,
+							},
+							{ key: 'variants_low_stock', status: attention ? 'attention' : 'ok', count: attention ? 2 : 0, link: null },
+							{ key: 'business_name', status: 'ok', count: 0, link: null },
+							{ key: 'pixel_ids', status: 'skipped', count: 0, link: null },
+						],
+					}),
+			},
+			['reports'],
+		);
+		const panel = panelOf(root, 'reports');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(textOf(panel)).toContain('Shop health');
+		expect(textOf(panel)).toContain('Active products without photos3Needs attention');
+		expect(textOf(panel)).toContain('Variants low on stock2Needs attention');
+		expect(textOf(panel)).toContain('Business name missing (business.json)0OK');
+		expect(textOf(panel)).toContain("Badly formed tag ids in Growth (paste Growth's token in Connections to check)Not checked");
+		expect(statuses(panel)).not.toContain('All clear: nothing needs fixing.');
+		attention = 0;
+		await click(buttonIn(panel, 'Check again'));
+		expect(server.all('GET /v1/admin/reports/health')).toHaveLength(2);
+		expect(statuses(panel)).toContain('All clear: nothing needs fixing.');
+		expect(textOf(panel)).toContain('Active products without photos0OK');
+	});
+
+	it('says why shop health cannot be read', async () => {
+		const { root } = await start({ 'GET /v1/admin/reports/health': () => problem(403, 'forbidden') }, ['reports']);
+		const panel = panelOf(root, 'reports');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(statuses(panel)).toContain('You are not allowed to do this.');
+	});
+
 	it('exports and imports CSV files', async () => {
 		/** @type {any[]} */
 		const imports = [];

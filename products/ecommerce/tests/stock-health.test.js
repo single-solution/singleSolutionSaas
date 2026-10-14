@@ -1,12 +1,14 @@
 /**
  * Low stock by the merchant's level (PLAN E44): a sellable variant with 1 to `lowStock` units on a product that tracks
  * stock and is not archived drives the staff list's `lowStock=1`, its counts, and the variant counts by stock
- * (`counts?by=variantStock`) a dashboard or a bell shows.
+ * (`counts?by=variantStock`) a dashboard or a bell shows. Shop health (E41): its checks with counts and links, the
+ * payment methods shoppers can use, and Growth's tag ids only while Growth's token is pasted.
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { staffFilter, variantStockCounts } from '../core/catalog-query.js';
-import { readyShop } from './helpers.js';
+import { HEALTH_CHECKS, badTagIds, healthOf, isPublicAddress, paymentMethodsOn } from '../core/health.js';
+import { GROWTH, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -89,5 +91,101 @@ describe('low stock (E44)', () => {
 			groups: { out: 2, in: 4 },
 		});
 		await shop.setting('catalog', 'lowStock', 3);
+	});
+});
+
+describe('shop health (E41)', () => {
+	it('judges the business name, the address, the payment methods and the tag ids', () => {
+		expect(isPublicAddress('shop.example.com')).toBe(true);
+		for (const domain of ['localhost', 'shop.localhost', 'shop.test', '127.0.0.1', '[::1]', 'intranet', 'shop.local:3000'])
+			expect(isPublicAddress(domain), domain).toBe(false);
+		expect(
+			badTagIds({
+				features: [
+					{ key: 'meta_pixel', on: true, values: { pixelId: 'abc' } },
+					{ key: 'google_tags', on: true, values: { ga4Id: ' G-ABCD1234 ', adsId: 'AW-1', gtmId: '' } },
+					{ key: 'tiktok_pixel', on: false, values: { pixelId: 'bad' } },
+				],
+			}),
+		).toEqual(['meta_pixel.pixelId', 'google_tags.adsId']);
+		expect(badTagIds(null)).toEqual([]);
+		const none = { cod: false, offered: ['online', 'bank_transfer', 'pickup'], paymentsConnected: false, bankManual: false };
+		expect(paymentMethodsOn({ ...none, pickup: false })).toEqual([]);
+		expect(paymentMethodsOn({ ...none, pickup: true, bankManual: true })).toEqual(['bank_transfer', 'pickup']);
+		expect(paymentMethodsOn({ ...none, cod: true, paymentsConnected: true, pickup: false })).toEqual([
+			'cod',
+			'online',
+			'bank_transfer',
+		]);
+		const health = healthOf({
+			facets: { noPhotos: [], archivedFeatured: [{ n: 1 }], variants: [{ _id: 'low', n: 4 }] },
+			business: { name: 'shop.example.com' },
+			domain: 'shop.example.com',
+			paymentMethods: [],
+			badTags: null,
+		});
+		expect(health.checks.map((check) => check.key)).toEqual([...HEALTH_CHECKS]);
+		expect(Object.fromEntries(health.checks.map((check) => [check.key, `${check.status} ${check.count}`]))).toEqual({
+			products_without_photos: 'ok 0',
+			archived_featured: 'attention 1',
+			variants_out_of_stock: 'ok 0',
+			variants_low_stock: 'attention 4',
+			business_name: 'attention 1',
+			website_address: 'ok 0',
+			payment_methods: 'attention 1',
+			pixel_ids: 'skipped 0',
+		});
+		expect(health.attention).toBe(4);
+	});
+
+	it('answers the checks with counts and links for the server and the reports widget', async () => {
+		await shop.seedProduct({ name: 'Stocky old favourite', status: 'archived', featured: true });
+		const health = await shop.api('GET', '/v1/reports/health');
+		expect(health.status).toBe(200);
+		/** @type {Record<string, any>} */
+		const byKey = Object.fromEntries(health.json.checks.map((/** @type {any} */ check) => [check.key, check]));
+		// four active products without photos; the dress and the forced variant out and low by level 3
+		expect(byKey.products_without_photos).toEqual({
+			key: 'products_without_photos',
+			status: 'attention',
+			count: 4,
+			link: '/v1/products?status=active&hasMedia=0',
+		});
+		expect(byKey.archived_featured).toMatchObject({ status: 'attention', count: 1 });
+		expect(byKey.variants_out_of_stock).toMatchObject({ status: 'attention', count: 2 });
+		expect(byKey.variants_low_stock).toMatchObject({ status: 'attention', count: 2, link: '/v1/products?lowStock=1' });
+		expect(byKey.business_name).toMatchObject({ status: 'ok', link: 'https://shop.example.com/.well-known/business.json' });
+		expect(byKey.website_address.status).toBe('ok');
+		expect(byKey.payment_methods.status).toBe('ok');
+		// Growth's token is not pasted: its tag ids are not read
+		expect(byKey.pixel_ids).toEqual({ key: 'pixel_ids', status: 'skipped', count: 0, link: null });
+		expect(shop.callsTo(GROWTH)).toHaveLength(0);
+		expect(health.json.attention).toBe(4);
+		const reader = await shop.ticket(['reports.read']);
+		expect((await shop.admin(reader, 'GET', '/v1/admin/reports/health')).json).toEqual(health.json);
+		expect((await shop.admin(await shop.ticket(['catalog.edit']), 'GET', '/v1/admin/reports/health')).status).toBe(403);
+	});
+
+	it('finds no payment method shoppers can use, and reads badly formed tag ids with the Growth token', async () => {
+		await shop.setting('checkout', 'paymentMethods', ['pickup']);
+		await shop.setting('cod', 'enabled', false);
+		const byKey = async () =>
+			Object.fromEntries(
+				(await shop.api('GET', '/v1/reports/health')).json.checks.map((/** @type {any} */ check) => [check.key, check]),
+			);
+		expect((await byKey()).payment_methods).toMatchObject({ status: 'attention', count: 1 });
+		const data = await shop.db();
+		await data.collection('locations').insertOne({ id: 'loc_pickup', name: 'Shop', pickup: true, sort: 0 });
+		expect((await byKey()).payment_methods.status).toBe('ok');
+		await shop.paste('growth');
+		shop.responders.set(`${GROWTH}/v1/settings`, () => ({
+			status: 200,
+			body: { features: [{ key: 'meta_pixel', name: 'Meta pixel', on: true, schema: {}, values: { pixelId: 'not-digits' } }] },
+		}));
+		expect((await byKey()).pixel_ids).toEqual({ key: 'pixel_ids', status: 'attention', count: 1, link: null });
+		shop.responders.set(`${GROWTH}/v1/settings`, () => ({ status: 503, body: {} }));
+		expect((await byKey()).pixel_ids.status).toBe('skipped');
+		await shop.setting('checkout', 'paymentMethods', ['online', 'bank_transfer', 'pickup']);
+		await shop.setting('cod', 'enabled', true);
 	});
 });

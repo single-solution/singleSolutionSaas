@@ -10,6 +10,7 @@ import { CSV_PROBLEMS } from '../core/catalog-csv.js';
 import { BRAND_STATUSES, CATEGORY_STATUSES } from '../core/catalog-taxonomy.js';
 import { PAYMENT_METHODS as CHECKOUT_METHODS } from '../core/checkout.js';
 import { DEAL_TYPES } from '../core/deals.js';
+import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ADDRESS_FIELDS, HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_METHODS, PAYMENT_STATES } from '../core/orders.js';
 import { POLICY_SETTINGS } from '../core/policies.js';
@@ -69,6 +70,8 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			...keysOf('orders.points.kind.', pointKinds),
 			...keysOf('promotionsAdmin.state.', offerStates),
 			...keysOf('customersAdmin.review.', REVIEW_STATUSES),
+			...keysOf('customersAdmin.health.', HEALTH_CHECKS),
+			...keysOf('customersAdmin.healthStatus.', ['ok', 'attention', 'skipped']),
 			...keysOf('catalogAdmin.categoryStatus.', CATEGORY_STATUSES),
 			...keysOf('catalogAdmin.brandStatus.', BRAND_STATUSES),
 			...keysOf('catalogAdmin.kind.', productKinds),

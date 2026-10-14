@@ -4628,6 +4628,42 @@
 				}
 			}
 		},
+		"HealthCheck": {
+			"type": "object",
+			"description": "One check of shop health.",
+			"required": ["key", "status", "count", "link"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"enum": [
+						"products_without_photos",
+						"archived_featured",
+						"variants_out_of_stock",
+						"variants_low_stock",
+						"business_name",
+						"website_address",
+						"payment_methods",
+						"pixel_ids"
+					],
+					"description": "products_without_photos: active products with no photo; archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); payment_methods: shoppers have no payment method they can use (1 or 0); pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
+				},
+				"status": {
+					"type": "string",
+					"enum": ["ok", "attention", "skipped"],
+					"description": "attention when count is above 0; skipped for pixel_ids while Growth's token is not pasted in Connections or Growth does not answer."
+				},
+				"count": {
+					"type": "integer",
+					"minimum": 0,
+					"description": "How many products, variants or ids need attention (0 when skipped)."
+				},
+				"link": {
+					"type": ["string", "null"],
+					"description": "Where to fix it: a list of this API with the filter that shows them (for example /v1/products?lowStock=1), the website's business.json address, or null."
+				}
+			}
+		},
 		"ImportCollectionCounts": {
 			"type": "object",
 			"description": "Records per import collection.",
@@ -10835,6 +10871,28 @@
 				}
 			},
 			"description": "A condition grade as shoppers see it."
+		},
+		"ShopHealth": {
+			"type": "object",
+			"description": "Shop health (E41): what needs fixing, judged on read.",
+			"required": ["checks", "attention"],
+			"additionalProperties": false,
+			"properties": {
+				"checks": {
+					"type": "array",
+					"maxItems": 8,
+					"items": {
+						"$ref": "#/components/schemas/HealthCheck"
+					},
+					"description": "Every check, in this order: products_without_photos, archived_featured, variants_out_of_stock, variants_low_stock, business_name, website_address, payment_methods, pixel_ids."
+				},
+				"attention": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 8,
+					"description": "How many checks need attention."
+				}
+			}
 		},
 		"ShopLoyalty": {
 			"type": "object",
@@ -23965,6 +24023,20 @@
 		"description": "Records per collection, those an import wrote, and the sums ss-import verify compares.",
 		"response": {
 			"$ref": "#/components/schemas/ImportStatus"
+		}
+	},
+	"GET /v1/reports/health": {
+		"summary": "Shop health: what needs fixing",
+		"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the business.json copy, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+		"response": {
+			"$ref": "#/components/schemas/ShopHealth"
+		}
+	},
+	"GET /v1/admin/reports/health": {
+		"summary": "Shop health: what needs fixing (Customers admin widget)",
+		"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the business.json copy, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+		"response": {
+			"$ref": "#/components/schemas/ShopHealth"
 		}
 	}
 }
