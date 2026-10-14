@@ -560,7 +560,8 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		await configure({
 			'deals.lockMinutes': 30,
 			'cod.feePercent': 2,
-			'cod.startStatus': 'open',
+			// cash-on-delivery orders start confirmed (the flow's starts)
+			'list.order_flow': { ...FLOW, starts: { cod: 'confirmed' } },
 			'list.role_prices': [{ role: 'member', percent: 7, label: 'Member price' }],
 		});
 		const deal = await write('POST', '/v1/deals', {
@@ -652,7 +653,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		sys.clock.advance(31 * 60_000);
 		const late = await quote({ lines: [{ ...line, lock }], payment: 'cod' }, await signIn('03002223344'));
 		expect(late.json.totals.discount).toBe(roleOf(PHONE_PRICE));
-		await configure({ 'cod.feePercent': 0, 'cod.startStatus': 'awaiting_confirmation' });
+		await configure({ 'cod.feePercent': 0, 'list.order_flow': FLOW });
 	});
 
 	it('prints invoices with the fee, the role price, points and cash due, packing slips and a pick list (E35)', async () => {
@@ -783,7 +784,11 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	});
 
 	it('takes a manual bank transfer with the shopper’s proof, and the payments log records staff payments and refunds (E24, E26)', async () => {
-		await configure({ 'checkout.bankTransferVia': 'manual', 'checkout.autoRefundedStatus': true });
+		await configure({
+			'checkout.bankTransferVia': 'manual',
+			// refunds that cover the payments move the order to refunded (the flow's trigger)
+			'list.order_flow': { ...FLOW, triggers: { refundsCover: 'refunded' } },
+		});
 		let sara = await signIn('03001112233');
 		const placed = await place({ lines: [caseLine(2)], payment: 'bank_transfer' }, sara);
 		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
@@ -855,7 +860,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		);
 		expect(recorded.map((/** @type {any} */ e) => e.data.method).sort()).toEqual(['bank_transfer', 'cash']);
 
-		// refunds with a method and reference; once they cover the payments the order is refunded (autoRefundedStatus)
+		// refunds with a method and reference; once they cover the payments the order is refunded (the refundsCover trigger)
 		const part = await server(
 			'POST',
 			`/v1/orders/${order.id}/refunds`,
@@ -877,7 +882,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		]);
 		const refunded = (await eventsOf('ecommerce.order.refunded')).filter((/** @type {any} */ e) => e.data.orderId === order.id);
 		expect(refunded).toHaveLength(2);
-		await configure({ 'checkout.bankTransferVia': 'payments', 'checkout.autoRefundedStatus': false });
+		await configure({ 'checkout.bankTransferVia': 'payments', 'list.order_flow': FLOW });
 	});
 
 	it('moves to refunded before delivery only when something was paid, giving the stock back (E27)', async () => {
@@ -906,10 +911,17 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(await stockOf(ids.case.id)).toBe(stock - 1);
 	});
 
-	it('takes a customer return after delivery, restocking or not as returnRestock says (E27)', async () => {
+	it('takes a customer return after delivery, restocking or not as the move says (E27)', async () => {
 		/** @param {'yes' | 'no'} restock */
 		const returned = async (restock) => {
-			await configure({ 'checkout.returnRestock': restock });
+			await configure({
+				'list.order_flow': {
+					...FLOW,
+					moves: FLOW.moves.map((entry) =>
+						entry.from === 'delivered' && entry.to === 'customer-returned' ? { ...entry, options: { restock } } : entry,
+					),
+				},
+			});
 			const sara = await signIn('03001112233');
 			const stock = await stockOf(ids.case.id);
 			const order = (await place({ lines: [caseLine()], payment: 'cod' }, sara)).json.order;
@@ -926,7 +938,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(kept.after).toBe(kept.stock - 1);
 		// a returned order may then be refunded
 		expect((await move(kept.order.id, 'refunded')).json.status).toBe('refunded');
-		await configure({ 'checkout.returnRestock': 'yes' });
+		await configure({ 'list.order_flow': FLOW });
 	});
 
 	it('handles claims: exchange and fixed reasons, prefixed references, notes, restock per line, refunds by method (E33)', async () => {
