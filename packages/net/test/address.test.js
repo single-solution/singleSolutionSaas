@@ -172,7 +172,7 @@ describe('classifyAddress', () => {
 		expect(classifyAddress('0')).toMatchObject({ category: 'unspecified' });
 	});
 
-	it('accepts brackets and upper case, and canonicalises IPv6', () => {
+	it('accepts brackets and upper case, and canonicalizes IPv6', () => {
 		expect(classifyAddress('[::1]')).toMatchObject({ category: 'loopback', address: '::1', canonical: true });
 		expect(classifyAddress('FE80::1')).toMatchObject({ category: 'link_local', address: 'fe80::1' });
 		expect(classifyAddress('0:0:0:0:0:0:0:1')).toMatchObject({ category: 'loopback', address: '::1', canonical: false });

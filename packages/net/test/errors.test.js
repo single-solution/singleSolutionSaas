@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NET_ERROR_CODES, isNetError, netError } from '../src/index.js';
 
 describe('errors', () => {
-	it('creates and recognises typed errors', () => {
+	it('creates and recognizes typed errors', () => {
 		const error = netError('network', 'request_failed', 'the request failed', 'ECONNRESET');
 		expect(error).toBeInstanceOf(Error);
 		expect(error).toMatchObject({ name: 'NetError', code: 'network', reason: 'request_failed', detail: 'ECONNRESET' });
