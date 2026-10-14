@@ -5,8 +5,9 @@
  * menu (move, remove); a grade's every field is edited in a dialog (PLAN 0.6: secondary forms in dialogs): name and
  * key (hyphens allowed), condition (new, refurbished, used, or the SEO and feeds setting), days, colour with a swatch,
  * whether it is offered, a description of up to 1,200 characters, an inspection video (a file key or a YouTube id;
- * a pasted YouTube address keeps its id), the categories it is for, its content (summary and bullets with icon
- * names) and its glossary page (title, description, text and questions). Done keeps the grade in the list; Save list
+ * a pasted YouTube address keeps its id), the category it is the definition for (E45: the same key once per category,
+ * with its own label, texts, days and glossary, and once for every other category), the categories it is for, its
+ * content (summary and bullets with icon names) and its glossary page (title, description, text and questions). Done keeps the grade in the list; Save list
  * saves the whole list (up to 100 grades) with `PUT …/lists/grades`, and the server checks it again.
  *
  * Categories are typed as ids (`cat_…`): the dashboard shows no business data (PLAN 0.4.3) and has no route that reads
@@ -349,6 +350,16 @@ function GradeFields({ draft, set, problems, tried }) {
 					onChange={(event) => set({ video: event.target.value })}
 					onBlur={() => set({ video: videoOf(draft.video) })}
 				/>
+				<Input
+					wide
+					label={G.categoryId}
+					help={G.categoryIdHelp}
+					value={draft.categoryId}
+					maxLength={64}
+					autoComplete="off"
+					spellCheck={false}
+					onChange={(event) => set({ categoryId: event.target.value.trim() })}
+				/>
 				<IdTags
 					label={G.categories}
 					help={G.categoriesHelp}
@@ -419,6 +430,7 @@ function GradeRow({ grade, index, count, onEdit, onMove, onRemove }) {
 	/** @param {string} days */
 	const daysText = (days) => (days.trim() === '' ? G.daysSetting : fill(G.daysCount, { days: days.trim() }));
 	const facts = [
+		...(grade.categoryId.trim() ? [fill(G.categoryIdFor, { id: grade.categoryId.trim() })] : []),
 		G.conditions[grade.condition],
 		fill(G.days, { returns: daysText(grade.returnDays), warranty: daysText(grade.warrantyDays) }),
 		grade.categoryIds.length === 0 ? G.categoriesAll : fill(G.categoriesSome, { count: grade.categoryIds.length }),
@@ -471,7 +483,10 @@ export function GradesEditor({ websiteId, off }) {
 					const items = state.draft ?? (Array.isArray(data.value) ? data.value : []).map(loadGrade);
 					/** @param {GradeDraft[]} next */
 					const setItems = (next) => state.setDraft(next);
-					const otherKeys = items.filter((_, at) => at !== editing.index).map((grade) => keyOf(grade.key, grade.label));
+					// a key is taken by another grade for the same category, or for every category (E45)
+					const otherKeys = items
+						.filter((grade, at) => at !== editing.index && grade.categoryId.trim() === editing.draft.categoryId.trim())
+						.map((grade) => keyOf(grade.key, grade.label));
 					const problems = gradeProblems(editing.draft, otherKeys);
 					/** @param {number | null} index @param {GradeDraft} draft */
 					const open = (index, draft) => setEditing({ open: true, index, draft, tried: false });

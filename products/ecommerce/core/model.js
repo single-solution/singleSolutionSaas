@@ -198,6 +198,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {boolean} comparable
  * @property {number} sort
  * @property {string} [slug] the filter name `attr.<slug>` (E7)
+ * @property {string | null} [categoryId] the category this attribute is the definition for (E45: the same slug may exist
+ *   once per category, with its own name, choices, unit, glossary and SEO); null or missing = every category
  * @property {string[]} [categoryIds] [] = every category (E7)
  * @property {'product' | 'variant'} [on] where its values live (E7)
  * @property {boolean} [multiple] several values at once (E7)

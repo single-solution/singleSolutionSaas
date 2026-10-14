@@ -199,7 +199,8 @@ describe('SEO and feed settings through the API', () => {
 		await shop.setting('landing_pages', 'attributeUrl', '/glossary/{slug}');
 		const plain = await api('GET', `/v1/seo/attributes/${ids.sweep.slug}`);
 		expect(plain).toMatchObject({ title: 'Sweep | Royal Store', description: '' });
-		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).not.toContain('/glossary/sweep');
+		// once the address is set, every active attribute's page is in the sitemap, with or without its own text
+		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).toContain(`<loc>${ORIGIN}/glossary/sweep</loc>`);
 		await shop.setting('landing_pages', 'attributeTitle', 'What is {name}?');
 		await shop.setting('landing_pages', 'attributeDescription', '{name} ({unit}): {values}. Browse at {storeName}.');
 		expect(await api('GET', `/v1/seo/attributes/${ids.sweep.slug}`)).toMatchObject({

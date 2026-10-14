@@ -407,7 +407,7 @@
 			},
 			"post": {
 				"summary": "Create an attribute (Catalog admin widget)",
-				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute has the slug. Send an Idempotency-Key so a retried request makes one attribute.",
+				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -508,6 +508,14 @@
 										"maximum": 1000000,
 										"description": "Lower first, then by name.",
 										"default": 0
+									},
+									"categoryId": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 64,
+										"description": "A category id: this attribute is that category's definition of its slug (E45); null or '': every category. 422 at /categoryId for a category that does not exist."
 									},
 									"categoryIds": {
 										"type": "array",
@@ -692,7 +700,7 @@
 			},
 			"patch": {
 				"summary": "Change an attribute (Catalog admin widget)",
-				"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute has the slug.",
+				"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -1715,7 +1723,7 @@
 		"/v1/admin/categories/{id}": {
 			"delete": {
 				"summary": "Delete a category (Catalog admin widget)",
-				"description": "409 conflict while it has subcategories, products or landing pages (move or change them first); 404 not_found. Its image is deleted from your storage when it is in the category's own folder.",
+				"description": "409 conflict while it has subcategories, products, landing pages or attributes defined for it (move or change them first); 404 not_found. Its image is deleted from your storage when it is in the category's own folder.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -11285,7 +11293,7 @@
 			},
 			"post": {
 				"summary": "Create an attribute",
-				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute has the slug. Send an Idempotency-Key so a retried request makes one attribute.",
+				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -11397,6 +11405,14 @@
 										"maximum": 1000000,
 										"description": "Lower first, then by name.",
 										"default": 0
+									},
+									"categoryId": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 64,
+										"description": "A category id: this attribute is that category's definition of its slug (E45); null or '': every category. 422 at /categoryId for a category that does not exist."
 									},
 									"categoryIds": {
 										"type": "array",
@@ -11592,7 +11608,7 @@
 			},
 			"patch": {
 				"summary": "Change an attribute",
-				"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute has the slug.",
+				"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -12794,7 +12810,7 @@
 		"/v1/categories/{id}": {
 			"delete": {
 				"summary": "Delete a category",
-				"description": "409 conflict while it has subcategories, products or landing pages (move or change them first); 404 not_found. Its image is deleted from your storage when it is in the category's own folder.",
+				"description": "409 conflict while it has subcategories, products, landing pages or attributes defined for it (move or change them first); 404 not_found. Its image is deleted from your storage when it is in the category's own folder.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -16905,7 +16921,7 @@
 		"/v1/import/{collection}": {
 			"post": {
 				"summary": "Import records (NDJSON, ss-import)",
-				"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, columns, rows, fitAdvice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, requiresSerial, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
+				"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, columns, rows, fitAdvice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, requiresSerial, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -25453,10 +25469,75 @@
 				}
 			}
 		},
+		"/v1/seo/attributes/{category}/{slug}": {
+			"get": {
+				"summary": "An attribute's glossary page in a category",
+				"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "landing_pages",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "category",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "slug",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SeoAttribute"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/seo/attributes/{slug}": {
 			"get": {
 				"summary": "An attribute's glossary page",
-				"description": ":slug is the attribute's slug (any case) or id. Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug}; without it the page is noindex, follow. 404 not_found for an unknown or inactive attribute.",
+				"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it the page is noindex, follow. 404 not_found for an unknown or inactive attribute.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"security": [
@@ -25574,10 +25655,75 @@
 				}
 			}
 		},
+		"/v1/seo/grades/{category}/{key}": {
+			"get": {
+				"summary": "A grade's glossary page in a category",
+				"description": ":category is a category's id or slug (an earlier slug too): the grade as that category defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Grades and serials is off, for an unknown or hidden category, or no offered grade with the key for it.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "landing_pages",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "category",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SeoGrade"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/seo/grades/{key}": {
 			"get": {
 				"summary": "A grade's glossary page",
-				"description": "canonical is the landing_pages setting gradeUrl with {key}; without it the page is noindex, follow. 404 not_found when Grades and serials is off, or for an unknown grade or one not offered (active false).",
+				"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it the page is noindex, follow. 404 not_found when Grades and serials is off, or for an unknown grade or one not offered (active false).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"security": [
@@ -31170,6 +31316,7 @@
 					"filterable",
 					"comparable",
 					"sort",
+					"categoryId",
 					"categoryIds",
 					"on",
 					"multiple",
@@ -31193,7 +31340,7 @@
 						"type": "string",
 						"maxLength": 120,
 						"pattern": "^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
-						"description": "Unique among the attributes; listings filter by attr.<slug>."
+						"description": "Unique among the attributes for the same category (and among those for every category); listings filter by attr.<slug>, taking the listing's category's attribute first, then the one for every category."
 					},
 					"type": {
 						"type": "string",
@@ -31230,6 +31377,14 @@
 						"minimum": -1000000,
 						"maximum": 1000000,
 						"description": "Lower first, then by name."
+					},
+					"categoryId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 64,
+						"description": "The category this attribute is the definition for (E45): the same slug may exist once per category, with its own name, choices, unit, glossary and SEO, and once for every category. null: every category. Products, listings and glossary pages take the product's or page's category's definition first, then the one for every category."
 					},
 					"categoryIds": {
 						"type": "array",
@@ -31402,6 +31557,14 @@
 						"maximum": 1000000,
 						"description": "Lower first, then by name.",
 						"default": 0
+					},
+					"categoryId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"maxLength": 64,
+						"description": "A category id: this attribute is that category's definition of its slug (E45); null or '': every category. 422 at /categoryId for a category that does not exist."
 					},
 					"categoryIds": {
 						"type": "array",
@@ -43221,6 +43384,8 @@
 					"slug",
 					"unit",
 					"values",
+					"categoryId",
+					"category",
 					"title",
 					"description",
 					"body",
@@ -43262,13 +43427,44 @@
 							}
 						}
 					},
+					"categoryId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The category this attribute is the definition for (null: every category)."
+					},
+					"category": {
+						"type": [
+							"object",
+							"null"
+						],
+						"required": [
+							"id",
+							"slug",
+							"name"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"slug": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							}
+						},
+						"description": "The page's category (E45): the one read, else the one the attribute or grade is defined for; null for a definition for every category read without one."
+					},
 					"title": {
 						"type": "string",
-						"description": "Its SEO title, else the landing_pages setting attributeTitle, inside the seo setting titleTemplate."
+						"description": "Its SEO title, else the landing_pages setting attributeTitle (the same placeholders), inside the seo setting titleTemplate."
 					},
 					"description": {
 						"type": "string",
-						"description": "Its SEO description, else its text, else attributeDescription ({name}, {unit}, {values}, {storeName}), else defaultDescription."
+						"description": "Its SEO description, else its text, else attributeDescription ({name}, {unit}, {values}, {category}, {storeName}), else defaultDescription."
 					},
 					"body": {
 						"type": "string",
@@ -43286,7 +43482,7 @@
 							"null"
 						],
 						"format": "uri",
-						"description": "The landing_pages setting attributeUrl with {slug} (null without it)."
+						"description": "The landing_pages setting attributeUrl with {slug} and {category} (the page's category's slug); null without it, or when it names {category} and the page has no category."
 					},
 					"robots": {
 						"type": "string",
@@ -43363,7 +43559,9 @@
 					"color",
 					"condition",
 					"content",
+					"categoryId",
 					"categoryIds",
+					"category",
 					"title",
 					"description",
 					"body",
@@ -43433,12 +43631,43 @@
 							}
 						}
 					},
+					"categoryId": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "The category this grade entry is the definition for (null: every category)."
+					},
 					"categoryIds": {
 						"type": "array",
 						"items": {
 							"type": "string"
 						},
 						"description": "The categories it is for (empty: all)."
+					},
+					"category": {
+						"type": [
+							"object",
+							"null"
+						],
+						"required": [
+							"id",
+							"slug",
+							"name"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"slug": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							}
+						},
+						"description": "The page's category (E45): the one read, else the one the attribute or grade is defined for; null for a definition for every category read without one."
 					},
 					"title": {
 						"type": "string",
@@ -43464,7 +43693,7 @@
 							"null"
 						],
 						"format": "uri",
-						"description": "The landing_pages setting gradeUrl with {key} (null without it)."
+						"description": "The landing_pages setting gradeUrl with {key} and {category} (the page's category's slug); null without it, or when it names {category} and the page has no category."
 					},
 					"robots": {
 						"type": "string",

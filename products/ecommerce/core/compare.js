@@ -3,6 +3,7 @@
  * product's value, in the attributes' order. No I/O.
  * @module
  */
+import { gradesFor } from './grades.js';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -53,10 +54,13 @@ export const compareRows = (products, attributes) =>
 
 /**
  * The grade labels of a product's active variants (in the grades list's order, once each).
- * @param {Pick<ProductRecord, 'variants'>} product
- * @param {Array<{ key: string, label?: string }>} grades
+ * @param {Pick<ProductRecord, 'variants'> & { categoryIds?: string[] }} product
+ * @param {Array<{ key: string, label?: string, categoryId?: string | null }>} grades
  */
 export const gradeLabels = (product, grades) => {
 	const keys = new Set(product.variants.filter((v) => v.active && v.grade).map((v) => v.grade));
-	return grades.filter((grade) => keys.has(grade.key)).map((grade) => grade.label || grade.key);
+	// the grades as the product's category defines them (E45)
+	return [...gradesFor(grades, product.categoryIds ?? []).values()]
+		.filter((grade) => keys.has(grade.key))
+		.map((grade) => grade.label || grade.key);
 };

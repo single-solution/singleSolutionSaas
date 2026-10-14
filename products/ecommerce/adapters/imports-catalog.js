@@ -150,17 +150,33 @@ export const catalogImports = (deps) => {
 	};
 
 	/**
-	 * Refuse a slug another record of the collection holds (E13: slugs are unique per website).
-	 * @param {string} collection @param {string} what
+	 * Refuse a slug another record of the collection holds (E13: slugs are unique per website; with `perCategory`, an
+	 * attribute's slug is unique among the attributes for the same category, E45).
+	 * @param {string} collection @param {string} what @param {boolean} [perCategory]
 	 * @returns {(value: Record<string, any>, data: WebsiteData, prepared: Prepared) => Promise<FieldError[]>}
 	 */
-	const uniqueSlug = (collection, what) => async (value, data, prepared) => {
-		if (!value.slug) return [];
-		const other =
-			heldInCall(prepared, `${collection}.slug:${value.slug}`, value.id) ??
-			(await heldInDatabase(data, collection, { slug: value.slug }, value.id));
-		return other ? [{ path: '/slug', message: `Another ${what} (${other}) already uses this slug.` }] : [];
-	};
+	const uniqueSlug =
+		(collection, what, perCategory = false) =>
+		async (value, data, prepared) => {
+			if (!value.slug) return [];
+			const scope = perCategory ? { categoryId: value.categoryId ?? null } : {};
+			const other =
+				heldInCall(
+					prepared,
+					`${collection}.slug:${perCategory ? `${scope.categoryId ?? ''}:` : ''}${value.slug}`,
+					value.id,
+				) ?? (await heldInDatabase(data, collection, { slug: value.slug, ...scope }, value.id));
+			return other
+				? [
+						{
+							path: '/slug',
+							message: perCategory
+								? `Another ${what} (${other}) for the same category already uses this slug.`
+								: `Another ${what} (${other}) already uses this slug.`,
+						},
+					]
+				: [];
+		};
 
 	/**
 	 * Refuse products an offer names that are not imported.
@@ -327,7 +343,7 @@ export const catalogImports = (deps) => {
 			collection: COLLECTIONS.attributes,
 			prepare: plain,
 			check: checkImportedAttribute,
-			unique: uniqueSlug(COLLECTIONS.attributes, 'attribute'),
+			unique: uniqueSlug(COLLECTIONS.attributes, 'attribute', true),
 		}),
 		landings: imported({
 			collection: COLLECTIONS.landings,

@@ -1,6 +1,7 @@
 /**
  * Categories (nested, with SEO text, status, icon, content and FAQs), brands (status, categories, SEO), attributes
- * (slugs, categories, product or variant values, several values, visibility, card display, glossary), stock locations
+ * (slugs, unique per the category an attribute is for, E45; categories, product or variant values, several values,
+ * visibility, card display, glossary), stock locations
  * and serial numbers for the merchant's staff (PLAN 0.8.8 Catalog, Items; PLAN 0.8.10 E1, E5, E7, E11, E13, E16). Each
  * route exists for the merchant's server (`/v1/<things>`, server token) and the catalog admin widget
  * (`/v1/admin/<things>`, ticket with `catalog.edit`), sharing one handler. Deleting what products still use (a category
@@ -82,19 +83,22 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	});
 
 	/**
-	 * A slug for a record: the one given (refused when taken) or a free one from the name.
+	 * A slug for a record: the one given (refused when taken) or a free one from the name; within `scope` (an
+	 * attribute's category, E45), checked again when the scope moved.
 	 * @param {WebsiteData} data @param {string} collection @param {{ slug: string, name: string }} fields
 	 * @param {string} id @param {string | null} exceptId @param {string} [current]
+	 * @param {{ scope?: Record<string, unknown>, moved?: boolean }} [where]
 	 */
-	const slugFor = async (data, collection, fields, id, exceptId, current) => {
+	const slugFor = async (data, collection, fields, id, exceptId, current, { scope = {}, moved = false } = {}) => {
 		if (!fields.slug)
 			return freeSlugIn(data, collection, {
 				slug: '',
 				name: fields.name,
 				exceptId,
 				fallback: id.slice(id.indexOf('_') + 1).toLowerCase(),
+				scope,
 			});
-		if (fields.slug !== current && (await slugTaken(data, collection, fields.slug, exceptId)))
+		if ((fields.slug !== current || moved) && (await slugTaken(data, collection, fields.slug, exceptId, undefined, scope)))
 			throw problem('conflict', 'This slug is already used.');
 		return fields.slug;
 	};
@@ -230,6 +234,12 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				0
 			)
 				throw problem('conflict', 'Landing pages use this category: change or delete them first.');
+			if (
+				(await data
+					.collection(COLLECTIONS.attributes)
+					.countDocuments({ websiteId: data.websiteId, categoryId: existing.id }, { limit: 1 })) > 0
+			)
+				throw problem('conflict', 'Attributes are defined for this category: change or delete them first.');
 			await data.collection(COLLECTIONS.categories).deleteOne({ websiteId: data.websiteId, id: existing.id });
 			// only a file under its folder: an imported key elsewhere may be shared (CA-5)
 			if (existing.image?.key.startsWith(`ecommerce/categories/${existing.id}/`)) {
@@ -328,6 +338,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	 */
 	const checkAttributeRefs = async (s, data, value, id) => {
 		await checkCategoryIds(data, value.categoryIds, '/categoryIds');
+		if (value.categoryId) await checkCategoryIds(data, [value.categoryId], '/categoryId');
 		const { visibility } = value;
 		if (visibility.when === 'brands') {
 			const found = new Set(
@@ -366,7 +377,8 @@ export const createCatalogTaxonomy = (product, service, common) => {
 		/** @param {any} ctx */
 		list: async (ctx) => {
 			const { data } = await common.open(ctx);
-			return { items: (await attributesOf(data)).map(withoutStamps) };
+			// one saved before E45 is for every category
+			return { items: (await attributesOf(data)).map((row) => ({ categoryId: null, ...withoutStamps(row) })) };
 		},
 		/** @param {any} ctx */
 		create: async (ctx) => {
@@ -375,8 +387,14 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkAttributeRefs(s, data, checked.value, null);
 			const id = createId(ID_PREFIX.attribute);
+			// a slug is unique among the attributes for the same category (E45)
+			const scope = { categoryId: checked.value.categoryId };
 			/** @type {AttributeRecord} */
-			const record = { id, ...checked.value, slug: await slugFor(data, COLLECTIONS.attributes, checked.value, id, null) };
+			const record = {
+				id,
+				...checked.value,
+				slug: await slugFor(data, COLLECTIONS.attributes, checked.value, id, null, undefined, { scope }),
+			};
 			await data
 				.collection(COLLECTIONS.attributes)
 				.insertOne({ ...record })
@@ -403,7 +421,10 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					'conflict',
 					'Products have values of this attribute: its type, place and several values cannot change.',
 				);
-			const slug = await slugFor(data, COLLECTIONS.attributes, checked.value, existing.id, existing.id, existing.slug);
+			const slug = await slugFor(data, COLLECTIONS.attributes, checked.value, existing.id, existing.id, existing.slug, {
+				scope: { categoryId: checked.value.categoryId },
+				moved: checked.value.categoryId !== (existing.categoryId ?? null),
+			});
 			await data
 				.collection(COLLECTIONS.attributes)
 				.updateOne({ websiteId: data.websiteId, id: existing.id }, { $set: { ...checked.value, slug } })

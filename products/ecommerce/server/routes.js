@@ -10,6 +10,7 @@
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { LISTS, isListName } from '../adapters/lists.js';
+import { gradesByKey } from '../core/grades.js';
 import { createCatalog } from './catalog.js';
 import { createCheckout } from './checkout.js';
 import { createDashboardSearch } from './dashboard-search.js';
@@ -91,7 +92,8 @@ export const createRoutes = (product) => {
 				};
 			}
 			if (s.has('grades_serials')) {
-				const grades = (await s.list('grades')).map((/** @type {any} */ grade) => ({
+				// one entry per key for the pickers: the one for every category first (E45)
+				const grades = [...gradesByKey(await s.list('grades')).values()].map((/** @type {any} */ grade) => ({
 					key: grade.key,
 					label: grade.label,
 					color: grade.color ?? '',

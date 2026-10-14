@@ -6,7 +6,10 @@
  * JSON-LD and robots of any listing the site renders: `index` only for a category (and its pages, unless the `seo`
  * setting `pagedListings` says otherwise) and for an indexable landing page, `noindex` for any other filter. Glossary
  * pages explain an attribute or a grade, with the merchant's title and description patterns when they have no copy of
- * their own (SG-20). Indexable landing pages and glossary pages are listed in the sitemaps.
+ * their own (SG-20), per category too (E45: `/v1/seo/attributes/:category/:slug` and `/v1/seo/grades/:category/:key`
+ * read the category's own definition first, then the one for every category, and `{category}` in the address
+ * templates is the category's slug). Indexable landing pages and glossary pages are listed in the sitemaps; once the
+ * attribute address is set, every active attribute's page is (SG-20).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -29,7 +32,7 @@ import {
 	robotsOf,
 	scriptJson,
 } from '../core/seo.js';
-import { gradesByKey } from '../core/grades.js';
+import { gradesByKey, gradesFor } from '../core/grades.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
 import { storeNameOf, trailOf } from './seo-reads.js';
@@ -72,16 +75,23 @@ export const createLandings = (product, service, media) => {
 	 * @param {Site} s @param {WebsiteData} data
 	 */
 	const namesOf = async (s, data) => {
-		const [categories, brands, grades] = await Promise.all([
+		const [categories, brands, gradeList] = await Promise.all([
 			categoriesOf(data),
 			brandsOf(data),
-			s.has('grades_serials') ? s.list('grades').then(gradesByKey) : Promise.resolve(new Map()),
+			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
 		]);
 		return {
 			categories,
 			byCategory: new Map(categories.map((c) => [c.id, c])),
 			byBrand: new Map(brands.map((b) => [b.id, b])),
-			grades: /** @type {Map<string, Grade>} */ (grades),
+			/** every grade key (a category's own entries only where no entry is for every category) */
+			grades: /** @type {Map<string, Grade>} */ (gradesByKey(gradeList)),
+			/**
+			 * The grades as a category defines them, then the ones for every category (E45).
+			 * @param {string | null} categoryId
+			 */
+			gradesIn: (categoryId) => /** @type {Map<string, Grade>} */ (gradesFor(gradeList, [categoryId])),
+			gradeList: /** @type {Grade[]} */ (gradeList),
 		};
 	};
 
@@ -299,7 +309,7 @@ export const createLandings = (product, service, media) => {
 				{
 					category: landing.categoryId ? (names.byCategory.get(landing.categoryId)?.name ?? null) : null,
 					brand: landing.brandId ? (names.byBrand.get(landing.brandId)?.name ?? null) : null,
-					grade: landing.grade ? (names.grades.get(landing.grade)?.label ?? landing.grade) : null,
+					grade: landing.grade ? (names.gradesIn(landing.categoryId).get(landing.grade)?.label ?? landing.grade) : null,
 					products: sample.map((row) => String(row.name)),
 				},
 				{
@@ -343,7 +353,9 @@ export const createLandings = (product, service, media) => {
 			brandRefs.length === 1
 				? ([...names.byBrand.values()].find((b) => b.id === brandRefs[0] || b.slug === brandRefs[0]) ?? null)
 				: null;
-		const grade = gradeKeys.length === 1 ? (names.grades.get(/** @type {string} */ (gradeKeys[0])) ?? null) : null;
+		// a grade as the category defines it, then the one for every category (E45)
+		const grade =
+			gradeKeys.length === 1 ? (names.gradesIn(category?.id ?? null).get(/** @type {string} */ (gradeKeys[0])) ?? null) : null;
 		const page = /^\d{1,3}$/.test(String(ctx.query.page ?? '')) ? Math.max(1, Number(ctx.query.page)) : 1;
 		const otherFilters = Object.keys(ctx.query).some((key) => !NOT_FILTERS.has(key) && ctx.query[key] !== '');
 		const exact =
@@ -440,13 +452,39 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * A glossary page's address (`attributeUrl` or `gradeUrl`), or null without one.
-	 * @param {Site} s @param {'attributeUrl' | 'gradeUrl'} setting @param {string} placeholder @param {string} value
+	 * A glossary page's address (`attributeUrl` or `gradeUrl`) with `{slug}` or `{key}` and `{category}` (the category's
+	 * slug, E45); null without a template, or when it names `{category}` and the page has none.
+	 * @param {Site} s @param {'attributeUrl' | 'gradeUrl'} setting @param {Record<string, string>} values
 	 */
-	const glossaryUrl = async (s, setting, placeholder, value) => {
+	const glossaryUrl = async (s, setting, values) => {
 		const template = String((await s.values('landing_pages'))[setting] ?? '');
-		return template ? absolute(template.replaceAll(placeholder, encodeURIComponent(value)), s.domain) : null;
+		if (!template || (template.includes('{category}') && !values.category)) return null;
+		let filled = template;
+		for (const [name, value] of Object.entries(values)) filled = filled.replaceAll(`{${name}}`, encodeURIComponent(value));
+		return absolute(filled, s.domain);
 	};
+
+	/**
+	 * The category of a glossary read's `:category` (id, slug or an earlier slug), or 404; null without one.
+	 * @param {Site} s @param {WebsiteData} data @param {unknown} ref
+	 * @returns {Promise<CategoryRecord | null>}
+	 */
+	const glossaryCategory = async (s, data, ref) => {
+		if (ref === undefined) return null;
+		const found = await findBySlugHistory(data, COLLECTIONS.categories, String(ref), ID_PREFIX.category);
+		const record = /** @type {CategoryRecord | undefined} */ (found?.record);
+		if (!record || (await hiddenFor(s)).unlisted.has(record.id)) throw problem('not_found', 'There is no such category.');
+		return record;
+	};
+
+	/**
+	 * Whether a definition for every category (an attribute's or a grade's, with its categories, [] = all) applies to a
+	 * category or one above it.
+	 * @param {{ categoryIds?: string[] }} record @param {CategoryRecord} category
+	 */
+	const appliesTo = (record, category) =>
+		(record.categoryIds ?? []).length === 0 ||
+		(record.categoryIds ?? []).some((id) => id === category.id || category.path.includes(id));
 
 	/**
 	 * The head of a glossary page: its own SEO copy, else the merchant's patterns (`pattern`, attributes; SG-20).
@@ -468,7 +506,8 @@ export const createLandings = (product, service, media) => {
 		const at = url ?? `https://${s.domain}/`;
 		return {
 			title: fillTitle(String(settings.titleTemplate), {
-				name: seo?.title || pageName(pattern?.title, { name, storeName }) || name,
+				// the title pattern takes the same placeholders as the description ({unit}, {values}, {category}; E45)
+				name: seo?.title || patternText(pattern?.title, values) || name,
 				business: storeName,
 			}),
 			description,
@@ -486,14 +525,33 @@ export const createLandings = (product, service, media) => {
 		};
 	};
 
-	/** GET /v1/seo/attributes/:slug. @param {any} ctx */
+	/**
+	 * GET /v1/seo/attributes/:slug and /v1/seo/attributes/:category/:slug (E45): with a category, the attribute defined
+	 * for it first, then the one for every category that applies to it; without, the one for every category first.
+	 * @param {any} ctx
+	 */
 	const attributeGlossary = async (ctx) => {
 		const { s, data } = await open(ctx);
 		const ref = String(ctx.params.slug);
-		const attribute = (await attributesOf(data)).find(
+		const category = await glossaryCategory(s, data, ctx.params.category);
+		const named = (await attributesOf(data)).filter(
 			(row) => row.active !== false && (row.slug === ref.toLowerCase() || row.id === ref),
 		);
+		const attribute = category
+			? (named.find((row) => row.categoryId === category.id) ??
+				named.find((row) => !row.categoryId && appliesTo(row, category)))
+			: (named.find((row) => !row.categoryId) ?? named[0]);
 		if (!attribute) throw problem('not_found', 'There is no such attribute.');
+		// the page's category: the one read, else the attribute's own
+		const page =
+			category ??
+			(attribute.categoryId
+				? /** @type {CategoryRecord | null} */ (
+						(await data
+							.collection(COLLECTIONS.categories)
+							.findOne({ websiteId: data.websiteId, id: attribute.categoryId }, NO_ID)) ?? null
+					)
+				: null);
 		const slug = attribute.slug ?? attribute.id;
 		const values = (attribute.choices ?? []).map((choice) =>
 			typeof choice === 'string' ? { value: choice, label: choice } : choice,
@@ -504,9 +562,11 @@ export const createLandings = (product, service, media) => {
 			slug,
 			unit: attribute.unit ?? '',
 			values,
+			categoryId: attribute.categoryId ?? null,
+			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
 			...(await glossaryHead(s, {
 				name: attribute.name,
-				url: await glossaryUrl(s, 'attributeUrl', '{slug}', slug),
+				url: await glossaryUrl(s, 'attributeUrl', { slug, category: page?.slug ?? '' }),
 				seo: attribute.seo,
 				fallback: '',
 				pattern: {
@@ -514,6 +574,7 @@ export const createLandings = (product, service, media) => {
 					description: settings.attributeDescription,
 					values: {
 						unit: attribute.unit ?? '',
+						category: page?.name ?? '',
 						values: values
 							.slice(0, PATTERN_VALUES)
 							.map((value) => value.label)
@@ -524,12 +585,28 @@ export const createLandings = (product, service, media) => {
 		};
 	};
 
-	/** GET /v1/seo/grades/:key. @param {any} ctx */
+	/**
+	 * GET /v1/seo/grades/:key and /v1/seo/grades/:category/:key (E45): with a category, the grade as it defines it
+	 * first, then the one for every category that applies to it.
+	 * @param {any} ctx
+	 */
 	const gradeGlossary = async (ctx) => {
-		const { s } = await open(ctx);
-		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
-		const grade = grades.get(String(ctx.params.key));
-		if (!grade || grade.active === false) throw problem('not_found', 'There is no such grade.');
+		const { s, data } = await open(ctx);
+		const list = s.has('grades_serials') ? await s.list('grades') : [];
+		const category = await glossaryCategory(s, data, ctx.params.category);
+		const key = String(ctx.params.key);
+		const grade = category ? gradesFor(list, [category.id]).get(key) : gradesByKey(list).get(key);
+		if (!grade || grade.active === false || (category && grade.categoryId !== category.id && !appliesTo(grade, category)))
+			throw problem('not_found', 'There is no such grade.');
+		const page =
+			category ??
+			(grade.categoryId
+				? /** @type {CategoryRecord | null} */ (
+						(await data
+							.collection(COLLECTIONS.categories)
+							.findOne({ websiteId: data.websiteId, id: grade.categoryId }, NO_ID)) ?? null
+					)
+				: null);
 		return {
 			key: grade.key,
 			label: grade.label,
@@ -537,14 +614,58 @@ export const createLandings = (product, service, media) => {
 			color: grade.color ?? '',
 			condition: grade.condition ?? null,
 			content: grade.content ?? { summary: '', bullets: [] },
+			categoryId: grade.categoryId ?? null,
 			categoryIds: grade.categoryIds ?? [],
+			category: page ? { id: page.id, slug: page.slug, name: page.name } : null,
 			...(await glossaryHead(s, {
 				name: grade.label,
-				url: await glossaryUrl(s, 'gradeUrl', '{key}', grade.key),
+				url: await glossaryUrl(s, 'gradeUrl', { key: grade.key, category: page?.slug ?? '' }),
 				seo: grade.seo,
 				fallback: grade.description,
 			})),
 		};
+	};
+
+	/**
+	 * The glossary pages of the sitemaps (E45, SG-20): every active attribute once the attribute address is set, and
+	 * grades with their own text once the grade address is set; with `{category}` in the address, a definition for one
+	 * category at its category, one for every category at each category it names (none named: no page), each address
+	 * once, categories hidden from shoppers left out.
+	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
+	 * @returns {Promise<string[]>}
+	 */
+	const glossaryPages = async (s, data, names) => {
+		const settings = await s.values('landing_pages');
+		const hidden = await hiddenFor(s);
+		/** @type {Set<string>} */
+		const urls = new Set();
+		/**
+		 * @param {'attributeUrl' | 'gradeUrl'} setting @param {Record<string, string>} values
+		 * @param {{ categoryId?: string | null, categoryIds?: string[] }} record
+		 */
+		const add = async (setting, values, record) => {
+			const template = String(settings[setting] ?? '');
+			if (!template) return;
+			const own = record.categoryId ? names.byCategory.get(record.categoryId) : undefined;
+			/** @type {Array<CategoryRecord | undefined>} */
+			const places = record.categoryId
+				? [own]
+				: template.includes('{category}')
+					? (record.categoryIds ?? []).map((id) => names.byCategory.get(id))
+					: [undefined];
+			for (const place of places) {
+				if (place === undefined && (record.categoryId || template.includes('{category}'))) continue;
+				if (place && hidden.unlisted.has(place.id)) continue;
+				const url = await glossaryUrl(s, setting, { ...values, category: place?.slug ?? '' });
+				if (url) urls.add(url);
+			}
+		};
+		for (const attribute of await attributesOf(data))
+			if (attribute.active !== false) await add('attributeUrl', { slug: attribute.slug ?? attribute.id }, attribute);
+		for (const grade of names.gradeList)
+			if (grade.active !== false && (grade.seo?.body || grade.seo?.description))
+				await add('gradeUrl', { key: grade.key }, grade);
+		return [...urls];
 	};
 
 	/**
@@ -570,20 +691,7 @@ export const createLandings = (product, service, media) => {
 			const view = await viewOf(s, data, names, row);
 			if (view.indexed) out.push({ loc: view.url, lastmod: row.updatedAt ?? null });
 		}
-		/** @param {{ seo?: { body?: string, description?: string } }} record */
-		const explained = (record) => Boolean(record.seo?.body || record.seo?.description);
-		// with a description pattern every attribute's page has a description (SG-20)
-		const described = Boolean((await s.values('landing_pages')).attributeDescription);
-		for (const attribute of await attributesOf(data)) {
-			if (attribute.active === false || !(described || explained(attribute))) continue;
-			const url = await glossaryUrl(s, 'attributeUrl', '{slug}', attribute.slug ?? attribute.id);
-			if (url) out.push({ loc: url, lastmod: null });
-		}
-		for (const grade of names.grades.values()) {
-			if (grade.active === false || !explained(grade)) continue;
-			const url = await glossaryUrl(s, 'gradeUrl', '{key}', grade.key);
-			if (url) out.push({ loc: url, lastmod: null });
-		}
+		for (const loc of await glossaryPages(s, data, names)) out.push({ loc, lastmod: null });
 		return out;
 	};
 
@@ -710,7 +818,23 @@ export const createLandings = (product, service, media) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: '/v1/seo/attributes/:category/:slug',
+			auth: 'server',
+			feature: 'landing_pages',
+			rateLimit: READ_RATE,
+			handler: attributeGlossary,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/seo/grades/:key',
+			auth: 'server',
+			feature: 'landing_pages',
+			rateLimit: READ_RATE,
+			handler: gradeGlossary,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/seo/grades/:category/:key',
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,

@@ -12,7 +12,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { findBySlugHistory } from '../adapters/catalog-store.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
-import { gradeCondition, gradesByKey } from '../core/grades.js';
+import { gradeCondition, gradesFor } from '../core/grades.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
@@ -122,15 +122,27 @@ export const createSeo = (product, service) => {
 	const landings = createLandings(product, service, media);
 
 	/**
-	 * The condition of a variant for structured data and feeds (E10).
+	 * The condition of a variant for structured data and feeds (E10), from the product's grades (its category's
+	 * entries first, E45).
 	 * @param {Site} s @param {'used' | 'refurbished' | 'new'} graded
 	 */
 	const conditionsOf = async (s, graded) => {
-		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
+		const list = s.has('grades_serials') ? await s.list('grades') : [];
+		/** @type {Map<string, Map<string, import('../core/grades.js').Grade>>} the grades of each category list, read once */
+		const known = new Map();
+		/** @param {Pick<ProductRecord, 'categoryIds'>} item */
+		const gradesOf = (item) => {
+			const categoryIds = item.categoryIds ?? [];
+			const key = categoryIds.join(',');
+			const found = known.get(key) ?? gradesFor(list, categoryIds);
+			known.set(key, found);
+			return found;
+		};
 		return {
-			grades,
-			/** @param {Pick<ProductRecord, 'kind'>} item @param {VariantRecord} variant */
-			of: (item, variant) => gradeCondition(item, variant, grades, graded),
+			/** @param {Pick<ProductRecord, 'categoryIds'>} item @param {VariantRecord} variant */
+			gradeOf: (item, variant) => (variant.grade ? gradesOf(item).get(variant.grade) : undefined),
+			/** @param {Pick<ProductRecord, 'kind' | 'categoryIds'>} item @param {VariantRecord} variant */
+			of: (item, variant) => gradeCondition(item, variant, gradesOf(item), graded),
 		};
 	};
 
@@ -564,8 +576,7 @@ export const createSeo = (product, service) => {
 				includeOutOfStock: settings.includeOutOfStock !== false,
 				itemId: settings.itemId === 'legacy' ? 'legacy' : 'variant',
 				googleCategory: String(settings.googleCategory ?? ''),
-				gradeLabel: (variant) =>
-					settings.gradeLabel === true && variant.grade ? (conditions.grades.get(variant.grade)?.label ?? '') : '',
+				gradeLabel: (variant) => (settings.gradeLabel === true ? (conditions.gradeOf(item, variant)?.label ?? '') : ''),
 				shipping,
 				title: String(settings.itemTitle ?? ''),
 				description: settings.itemDescription === 'seo' ? 'seo' : 'body',
@@ -690,7 +701,7 @@ export const createSeo = (product, service) => {
 			hiddenFor(s),
 			shownCategories(s, data),
 		]);
-		const grades = s.has('grades_serials') ? [...gradesByKey(await s.list('grades')).values()] : [];
+		const gradeList = s.has('grades_serials') ? await s.list('grades') : [];
 		/** @type {Map<string, Array<{ name: string, url: string, price: string }>>} */
 		const byCategory = new Map();
 		const rows = data
@@ -716,7 +727,8 @@ export const createSeo = (product, service) => {
 			ordered.map(async (category) => ({
 				name: category.name,
 				url: await media.categoryUrl(s, category),
-				grades: grades
+				// the grades as the category defines them (E45)
+				grades: [...gradesFor(gradeList, [category.id]).values()]
 					.filter(
 						(grade) =>
 							grade.active !== false &&

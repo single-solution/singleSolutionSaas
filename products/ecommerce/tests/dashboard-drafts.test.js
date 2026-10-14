@@ -21,6 +21,7 @@ const FULL = {
 	description: 'Like new.',
 	returnDays: 14,
 	warrantyDays: 180,
+	categoryId: 'cat_phones',
 	categoryIds: ['cat_phones', 'cat_tablets'],
 	color: '#16a34a',
 	video: 'dQw4w9WgXcQ',

@@ -35,7 +35,7 @@ import { WAITING_ROLES, cancelledStatus, statusOf, statusWithRole } from '../cor
 import { shopperInvoiceReady } from '../core/invoice.js';
 import { checkGuest, phoneDigitsOf } from '../core/guests.js';
 import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
-import { gradesByKey } from '../core/grades.js';
+import { gradesFor } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { byActor, orderMoney, serverNote } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
@@ -505,12 +505,17 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 */
 	const linesOf = async (s, q) => {
 		// each physical line keeps its warranty from placement (E12): the variant's, the product's, the grade's, the setting
-		const grades = s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map();
+		const grades = s.has('grades_serials') ? await s.list('grades') : [];
 		const warrantyDefault = Number((await s.values('returns')).warrantyDays ?? 0);
-		/** @param {{ kind: string, grade: string | null, warrantyDays?: number | null }} line */
+		/**
+		 * The grade's days are its product's category's entry first (E45).
+		 * @param {{ kind: string, grade: string | null, warrantyDays?: number | null, categoryIds?: string[] }} line
+		 */
 		const warrantyOf = (line) =>
 			line.kind === 'physical'
-				? (line.warrantyDays ?? (line.grade ? grades.get(line.grade)?.warrantyDays : null) ?? warrantyDefault)
+				? (line.warrantyDays ??
+					(line.grade ? gradesFor(grades, line.categoryIds ?? []).get(line.grade)?.warrantyDays : null) ??
+					warrantyDefault)
 				: null;
 		/** @type {Array<{ productId: string, start: Date, end: Date, lineId: string }>} */
 		const slots = [];

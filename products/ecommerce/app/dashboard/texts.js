@@ -273,6 +273,10 @@ export const TEXTS = Object.freeze({
 			description: 'Description',
 			video: 'Inspection video',
 			videoHelp: 'A file key from your storage, or a YouTube id or address (the id is kept).',
+			categoryId: 'Definition for one category',
+			categoryIdFor: 'For {id}',
+			categoryIdHelp:
+				'A category id (cat_…): this grade is how that category names, explains and prices the key; the same key may then be given once per category. Empty: for every other category.',
 			categories: 'Categories',
 			categoriesHelp:
 				'Category ids (cat_…) from the catalog admin widget: press Enter after each, or paste several. None: every category.',

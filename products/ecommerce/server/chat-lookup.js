@@ -18,7 +18,7 @@ import { stockLeftOf } from '../core/catalog-views.js';
 import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
 import { shipmentLink } from '../core/couriers.js';
 import { byShowOrder } from '../core/deals.js';
-import { gradesByKey } from '../core/grades.js';
+import { gradesFor } from '../core/grades.js';
 import {
 	MAX_QUOTE_QUANTITY,
 	chatDeal,
@@ -171,18 +171,27 @@ export const createChatLookup = (product, service, media) => {
 			s.values('returns'),
 			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
 		]);
-		const byKey = gradesByKey(grades);
+		/** @type {Map<string, Map<string, import('../core/grades.js').Grade>>} the grades of each category list, read once */
+		const known = new Map();
+		/** A product's grades: its category's entries first (E45). @param {ProductRecord} item */
+		const gradesOf = (item) => {
+			const categoryIds = item.categoryIds ?? [];
+			const found = known.get(categoryIds.join(',')) ?? gradesFor(grades, categoryIds);
+			known.set(categoryIds.join(','), found);
+			return found;
+		};
 		const stock = { showStock: String(catalog.showStock ?? 'none'), lowStockShown: Number(catalog.lowStockShown ?? 5) };
 		return {
 			money,
 			date,
-			labels: gradeLabels(grades),
+			/** @param {ProductRecord} item */
+			labels: (item) => gradeLabels([...gradesOf(item).values()]),
 			/** @param {ProductRecord} item */
 			stockLeft: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
 				stockLeftOf(variant, item.trackStock, stock),
 			/** @param {ProductRecord} item */
 			warranty: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
-				warrantyOf(item, variant, { grades: byKey, fallback: Number(returns.warrantyDays ?? 0) }),
+				warrantyOf(item, variant, { grades: gradesOf(item), fallback: Number(returns.warrantyDays ?? 0) }),
 		};
 	};
 
@@ -203,7 +212,7 @@ export const createChatLookup = (product, service, media) => {
 						image: await media.mediaUrl(s, item.media?.[0]?.key),
 						url: await media.productUrl(s, item),
 						money: rules.money,
-						grades: rules.labels,
+						grades: rules.labels(item),
 						stockLeft: rules.stockLeft(item),
 					},
 					filters ? matchingVariant(item, filters) : null,
@@ -385,7 +394,7 @@ export const createChatLookup = (product, service, media) => {
 			money: rules.money,
 			brand: item.brandId ? (brands.get(item.brandId) ?? null) : null,
 			attributes: new Map(attributes.map((row) => [String(row.id), { name: String(row.name), unit: String(row.unit) }])),
-			grades: rules.labels,
+			grades: rules.labels(item),
 			stockLeft: rules.stockLeft(item),
 			warrantyDays: rules.warranty(item),
 		});
@@ -639,7 +648,7 @@ export const createChatLookup = (product, service, media) => {
 				url: await media.productUrl(s, item),
 				inStock: item.inStock,
 				prices: gradePrices(item).map((entry) => ({
-					grade: entry.grade ? (rules.labels.get(entry.grade) ?? entry.grade) : null,
+					grade: entry.grade ? (rules.labels(item).get(entry.grade) ?? entry.grade) : null,
 					price: entry.price,
 					priceText: rules.money(entry.price, s.currency),
 					inStock: entry.inStock,

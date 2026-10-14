@@ -454,6 +454,7 @@ describe('catalog admin: attributes', () => {
 				{ value: '128', label: '128 GB' },
 				{ value: '256', label: '256' },
 			],
+			categoryId: null,
 			categoryIds: ['cat_b'],
 			visibility: { when: 'grades', ids: ['a'] },
 			seo: { title: 'Storage', description: 'How much fits', body: 'More bytes.', faqs: [{ question: 'Q?', answer: 'A.' }] },
@@ -468,12 +469,14 @@ describe('catalog admin: attributes', () => {
 		await change(fieldIn(dialog, 'Attribute'), 'att_2');
 		type(fieldIn(dialog, 'Has the value'), 'Red');
 		await tick(checkIn(dialog, 'Phones'), true);
+		await change(fieldIn(dialog, 'Definition for'), 'cat_b');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/attributes')?.body).toMatchObject({
 			name: 'Finish',
 			type: 'text',
 			on: 'product',
 			choices: [],
+			categoryId: 'cat_b',
 			categoryIds: ['cat_b'],
 			visibility: { when: 'attribute', attributeId: 'att_2', value: 'Red' },
 			active: true,
@@ -496,6 +499,47 @@ describe('catalog admin: attributes', () => {
 		type(fieldIn(dialogOf(root), 'Name'), 'Plain');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/attributes')?.body.visibility).toEqual({ when: 'always' });
+	});
+});
+
+describe('catalog admin: attributes per category (E45)', () => {
+	it('shows the category an attribute is the definition for, and names it with it in pickers', async () => {
+		const fabric = (/** @type {string} */ id, /** @type {string | null} */ categoryId) => ({
+			id,
+			name: 'Fabric',
+			slug: 'fabric',
+			type: 'text',
+			unit: '',
+			choices: [],
+			filterable: false,
+			comparable: false,
+			sort: 0,
+			categoryId,
+			categoryIds: [],
+			on: 'product',
+			multiple: false,
+			visibility: { when: 'always', ids: [], attributeId: null, value: null },
+			card: 'none',
+			active: true,
+			seo: { title: '', description: '', body: '', faqs: [] },
+		});
+		const { root } = await start(ALL, {
+			'GET /v1/admin/attributes': () => answer(200, { items: [fabric('att_f1', null), fabric('att_f2', 'cat_b')] }),
+		});
+		const panel = await openTab(root, 'attributes');
+		// two rows named Fabric: the one for every category, then the one for Phones (its category in the row)
+		const rows = /** @type {HTMLElement[]} */ ([...panel.querySelectorAll('li.item')]);
+		expect(textOf(/** @type {HTMLElement} */ (rows[1]))).toContain('fabric · Phones');
+		await click(/** @type {HTMLElement} */ (rows[1]));
+		expect(textOf(detailOf(panel))).toContain('Definition forPhones');
+		await click(/** @type {HTMLElement} */ (rows[0]));
+		expect(textOf(detailOf(panel))).toContain('Definition forEvery category');
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		const dialog = dialogOf(root);
+		expect(fieldIn(dialog, 'Definition for').value).toBe('');
+		await change(fieldIn(dialog, 'Show it'), 'attribute');
+		const options = [...fieldIn(dialog, 'Attribute').querySelectorAll('option')].map((option) => option.textContent);
+		expect(options).toContain('Fabric (Phones)');
 	});
 });
 

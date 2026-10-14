@@ -174,6 +174,8 @@ export const storedValues = (attribute, values) => {
  * @property {string[] | null} categoryIds the category with its descendants (an unknown category is [])
  * @property {string[] | null} brandIds the brands asked for (unknown ones are dropped; [] matches nothing)
  * @property {ReadonlyMap<string, AttributeRecord>} attributes every attribute by id
+ * @property {string | null} [categoryId] the listing's own category: an attribute named by slug is the one defined for
+ *   it first, then the one for every category (E45)
  * @property {{ categoryIds: string[], brandIds: string[] }} [hidden] categories and brands whose products shoppers do
  *   not see (E1)
  * @property {Record<string, unknown> | null} [deal] the products a deal applies to (E8)
@@ -206,7 +208,7 @@ export const shopFilter = (query, resolved) => {
 		};
 	if (query.grades.length > 0) variant.grade = { $in: query.grades };
 	for (const { id, values } of query.attributes) {
-		const attribute = attributeOf(resolved.attributes, id);
+		const attribute = attributeOf(resolved.attributes, id, resolved.categoryId ?? null);
 		const stored = storedValues(attribute, values);
 		if (attribute?.on === 'variant') variant[`attributes.${attribute.id}`] = { $in: stored };
 		else and.push({ [`specs.${attribute?.id ?? id}`]: { $in: stored } });
@@ -234,12 +236,22 @@ export const visibleFilter = (hidden) => [
 ];
 
 /**
- * An attribute by id or slug.
+ * An attribute by id or slug; by slug, the one defined for the category first, then the one for every category, else
+ * the first (E45).
  * @param {ReadonlyMap<string, AttributeRecord>} attributes
  * @param {string} ref
+ * @param {string | null} [categoryId]
  */
-export const attributeOf = (attributes, ref) =>
-	attributes.get(ref) ?? [...attributes.values()].find((attribute) => attribute.slug === ref);
+export const attributeOf = (attributes, ref, categoryId = null) => {
+	const found = attributes.get(ref);
+	if (found) return found;
+	const named = [...attributes.values()].filter((attribute) => attribute.slug === ref);
+	return (
+		named.find((attribute) => categoryId !== null && attribute.categoryId === categoryId) ??
+		named.find((attribute) => !attribute.categoryId) ??
+		named[0]
+	);
+};
 
 /**
  * The products an offer applies to, from its scope (empty lists = everything; else any of the lists).

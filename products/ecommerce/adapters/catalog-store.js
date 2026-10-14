@@ -1,6 +1,6 @@
 /**
- * The catalog part's queries in the merchant database (PLAN 0.8.8 Catalog): the indexes (unique slugs per website,
- * unique serial numbers, listing orders), loading what a product check needs, finding products by id or slug, free
+ * The catalog part's queries in the merchant database (PLAN 0.8.8 Catalog): the indexes (unique slugs per website;
+ * an attribute's slug is unique per category it is for, E45; unique serial numbers, listing orders), loading what a product check needs, finding products by id or slug, free
  * slugs, SKUs in use, and rewriting a product's fields in a transaction (a concurrent stock hold by an order makes it
  * retry, so a product edit never undoes one). `price` and `inStock` are recomputed by the ledger's `refreshProducts`.
  * @module
@@ -64,10 +64,11 @@ export const INDEXES = [
 		partialFilterExpression: { slug: { $type: 'string' } },
 	},
 	{ collection: COLLECTIONS.attributes, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
+	// the same slug once per category and once for every category (a missing categoryId counts as null; E45)
 	{
 		collection: COLLECTIONS.attributes,
-		keys: { websiteId: 1, slug: 1 },
-		name: 'by_slug',
+		keys: { websiteId: 1, categoryId: 1, slug: 1 },
+		name: 'by_category_slug',
 		unique: true,
 		partialFilterExpression: { slug: { $type: 'string' } },
 	},
@@ -194,16 +195,22 @@ export const findBySlugHistory = async (data, collection, ref, prefix) => {
  * The first free slug for a record of a collection, from the wanted slug or else the name.
  * @param {WebsiteData} data
  * @param {string} collection
- * @param {{ slug: string, name: string, exceptId?: string | null, fallback: string }} wanted
+ * @param {{ slug: string, name: string, exceptId?: string | null, fallback: string, scope?: Record<string, unknown> }} wanted
+ *   `scope`: where the slug must be free (an attribute's category, E45); the whole website by default
  * @returns {Promise<string>}
  */
-export const freeSlugIn = async (data, collection, { slug, name, exceptId = null, fallback }) => {
+export const freeSlugIn = async (data, collection, { slug, name, exceptId = null, fallback, scope = {} }) => {
 	const base = slug || slugify(name) || fallback;
 	const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	const taken = await data
 		.collection(collection)
 		.find(
-			{ websiteId: data.websiteId, slug: { $regex: `^${escaped}(-\\d+)?$` }, ...(exceptId ? { id: { $ne: exceptId } } : {}) },
+			{
+				websiteId: data.websiteId,
+				slug: { $regex: `^${escaped}(-\\d+)?$` },
+				...scope,
+				...(exceptId ? { id: { $ne: exceptId } } : {}),
+			},
 			{ projection: { _id: 0, slug: 1 } },
 		)
 		.toArray();
@@ -214,14 +221,17 @@ export const freeSlugIn = async (data, collection, { slug, name, exceptId = null
 };
 
 /**
- * Whether a slug is used by another record of the collection.
+ * Whether a slug is used by another record of the collection (within `scope`: an attribute's category, E45).
  * @param {WebsiteData} data @param {string} collection @param {string} slug @param {string | null} exceptId
- * @param {Session} [session]
+ * @param {Session} [session] @param {Record<string, unknown>} [scope]
  */
-export const slugTaken = async (data, collection, slug, exceptId, session) =>
+export const slugTaken = async (data, collection, slug, exceptId, session, scope = {}) =>
 	(await data
 		.collection(collection)
-		.countDocuments({ websiteId: data.websiteId, slug, ...(exceptId ? { id: { $ne: exceptId } } : {}) }, { session })) > 0;
+		.countDocuments(
+			{ websiteId: data.websiteId, slug, ...scope, ...(exceptId ? { id: { $ne: exceptId } } : {}) },
+			{ session },
+		)) > 0;
 
 /**
  * The SKUs among `skus` already used by another product of the website.

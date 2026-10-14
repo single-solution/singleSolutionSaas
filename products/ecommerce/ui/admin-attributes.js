@@ -1,7 +1,8 @@
 /**
  * The attributes section of the catalog admin widget (PLAN 0.8.10 E7) as a list-and-detail screen: every field of an
  * attribute — name, slug (the filter name `attr.<slug>`), type, unit, where its values live (product or variant),
- * several values, choices as a value and a label, the categories it belongs to, when it is shown (always, for some
+ * several values, choices as a value and a label, the category it is the definition for (E45: the same slug once per
+ * category, with its own name, choices, unit and glossary), the categories it belongs to, when it is shown (always, for some
  * brands, some grades, or when another attribute has a value), how product cards show it, active, filterable,
  * comparable, sort, and its glossary page (title, description, text and FAQs).
  * @module
@@ -161,6 +162,13 @@ export const attributesTab = (kit, panel, lookups) => {
 		const comparable = kit.check(t('catalogAdmin.comparable'), item?.comparable === true);
 		const active = kit.check(t('catalogAdmin.attributeActive'), item?.active !== false);
 		const choices = choicesEditor(kit, choicesOf(item));
+		const forCategory = kit.select(
+			[
+				{ value: '', label: t('catalogAdmin.everyCategory') },
+				...lookups.state.categories.map((category) => ({ value: category.id, label: category.name })),
+			],
+			item?.categoryId ?? '',
+		);
 		const categories = checkGroup(
 			kit,
 			t('catalogAdmin.attributeCategories'),
@@ -226,6 +234,7 @@ export const attributesTab = (kit, panel, lookups) => {
 					kit.field(t('catalogAdmin.unit'), unit),
 					kit.field(t('catalogAdmin.sort'), sort),
 					kit.field(t('catalogAdmin.cardDisplay'), cardMode),
+					kit.field(t('catalogAdmin.attributeFor'), forCategory),
 				]),
 				fieldsOf(kit, [multiple.node, filterable.node, comparable.node, active.node]),
 				choices.node,
@@ -256,6 +265,7 @@ export const attributesTab = (kit, panel, lookups) => {
 				comparable: comparable.box.checked,
 				active: active.box.checked,
 				choices: type.value === 'choice' ? choices.value() : [],
+				categoryId: forCategory.value || null,
 				categoryIds: categories.value(),
 				visibility:
 					when.value === 'brands'
@@ -303,6 +313,10 @@ export const attributesTab = (kit, panel, lookups) => {
 				[t('catalogAdmin.comparable'), yesNo(kit, item.comparable)],
 				[t('catalogAdmin.cardDisplay'), t(`catalogAdmin.card.${item.card ?? 'none'}`)],
 				[t('catalogAdmin.sort'), String(item.sort ?? 0)],
+				[
+					t('catalogAdmin.attributeFor'),
+					item.categoryId ? lookups.nameOf('categories', item.categoryId) : t('catalogAdmin.everyCategory'),
+				],
 				[
 					t('catalogAdmin.attributeCategories'),
 					scope.length === 0
@@ -358,6 +372,7 @@ export const attributesTab = (kit, panel, lookups) => {
 			figure: t(`catalogAdmin.type.${item.type}`),
 			meta: [
 				item.slug,
+				item.categoryId ? lookups.nameOf('categories', item.categoryId) : '',
 				t(`catalogAdmin.on.${item.on ?? 'product'}`),
 				item.unit,
 				item.filterable ? t('catalogAdmin.filterable') : '',

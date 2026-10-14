@@ -28,6 +28,7 @@ import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
 import { EMPTY_SEO, youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
 import { dealProductsFilter, productDeals } from '../core/deals.js';
+import { gradesFor } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
@@ -107,7 +108,7 @@ const createCards = (common, service) => {
 	return async (s, data, products, { variants = false } = {}) => {
 		if (products.length === 0) return [];
 		const brands = new Map((await brandsOf(data)).map((brand) => [brand.id, brand]));
-		const grades = await common.gradesOf(s);
+		const gradeList = await common.gradeListOf(s);
 		const deals = await dealsOf(s, data, products);
 		const attributes = variants ? new Map((await attributesOf(data)).map((attribute) => [attribute.id, attribute])) : null;
 		return Promise.all(
@@ -123,7 +124,8 @@ const createCards = (common, service) => {
 						image: await common.media.mediaUrl(s, main?.sizes?.card ?? main?.key),
 						url,
 						brand: brand ? { id: brand.id, name: brand.name, slug: brand.slug } : null,
-						grades,
+						// each product's grades: its category's entries first (E45)
+						grades: gradesFor(gradeList, item.categoryIds ?? []),
 						cardImages: await Promise.all(
 							cardPhotos(item).map(async (file) => ({
 								url: await common.media.mediaUrl(s, file.sizes?.card ?? file.key),
@@ -208,10 +210,13 @@ export const createCatalogShop = (product, service, common) => {
 		]);
 		/** @type {string[] | null} */
 		let categoryIds = null;
+		/** @type {string | null} */
+		let categoryId = null;
 		if (query.category) {
 			const wanted = query.category.toLowerCase();
 			const found = categories.find((c) => c.id === query.category || c.slug === wanted);
 			categoryIds = found ? withDescendants(found.id, categories) : [];
+			categoryId = found?.id ?? null;
 		}
 		const brandIds =
 			query.brands.length > 0
@@ -220,6 +225,7 @@ export const createCatalogShop = (product, service, common) => {
 		const byAttribute = new Map(attributes.map((attribute) => [attribute.id, attribute]));
 		const resolved = {
 			categoryIds,
+			categoryId,
 			brandIds,
 			attributes: byAttribute,
 			hidden,
@@ -232,7 +238,8 @@ export const createCatalogShop = (product, service, common) => {
 			categories: new Map(categories.map((c) => [c.id, c])),
 			brands: new Map(brands.map((b) => [b.id, b])),
 			attributes: new Map(filterable.map((a) => [a.id, a])),
-			grades: await common.gradesOf(s),
+			// a category's listing names grades as that category defines them (E45)
+			grades: gradesFor(await common.gradeListOf(s), [categoryId]),
 		};
 		const first = page.after === null && (query.page === null || query.page === 1);
 
@@ -337,14 +344,14 @@ export const createCatalogShop = (product, service, common) => {
 	};
 
 	/**
-	 * The website's grades with each inspection video's address (a YouTube id becomes its embed address, a file key its
-	 * storage address; E10).
-	 * @param {Site} s
+	 * A product's grades (its category's entries first, E45) with each inspection video's address (a YouTube id becomes
+	 * its embed address, a file key its storage address; E10).
+	 * @param {Site} s @param {ProductRecord} item
 	 */
-	const gradesWithVideos = async (s) =>
+	const gradesWithVideos = async (s, item) =>
 		new Map(
 			await Promise.all(
-				[...(await common.gradesOf(s)).entries()].map(
+				[...gradesFor(await common.gradeListOf(s), item.categoryIds ?? []).entries()].map(
 					async ([key, grade]) =>
 						/** @type {[string, import('../core/grades.js').Grade]} */ ([
 							key,
@@ -403,7 +410,7 @@ export const createCatalogShop = (product, service, common) => {
 				trail.map(async (c) => ({ id: c.id, slug: c.slug, name: c.name, url: await common.media.categoryUrl(s, c) })),
 			),
 			attributes: byAttribute,
-			grades: await gradesWithVideos(s),
+			grades: await gradesWithVideos(s, item),
 			variantMedia: new Map(
 				await Promise.all(
 					active.map(

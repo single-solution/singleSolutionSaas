@@ -98,6 +98,7 @@ export const IMPORT_FIELDS = Object.freeze({
 		'comparable',
 		'sort',
 		'slug',
+		'categoryId',
 		'categoryIds',
 		'on',
 		'multiple',
@@ -545,8 +546,9 @@ export const checkImportedBrand = (record, context) => {
 };
 
 /**
- * An attribute (E7): its categories, and the brands or grades its visibility names, must exist; an attribute it
- * depends on is an attribute id (attributes may come in any order).
+ * An attribute (E7): its categories (the one it is the definition for, E45, and those it applies to), and the brands or
+ * grades its visibility names, must exist; an attribute it depends on is an attribute id (attributes may come in any
+ * order). Attributes keep one record per category they are for: they are not merged by slug (CA-23).
  * @param {Record<string, unknown>} record
  * @param {ImportContext} context
  * @returns {ImportChecked}
@@ -559,6 +561,7 @@ export const checkImportedAttribute = (record, context) => {
 	const checked = valueOf(checkAttribute(ownChecked(record, fields), null), errors);
 	if (checked) {
 		mustExist(checked.categoryIds, context.categoryIds, '/categoryIds', 'category', errors);
+		if (checked.categoryId) mustExist([checked.categoryId], context.categoryIds, '/categoryId', 'category', errors);
 		const { visibility } = checked;
 		if (visibility.when === 'brands') mustExist(visibility.ids, context.brandIds, '/visibility/ids', 'brand', errors);
 		if (visibility.when === 'grades') mustExist(visibility.ids, context.gradeKeys, '/visibility/ids', 'grade', errors);

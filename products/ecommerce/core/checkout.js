@@ -285,7 +285,8 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  * @param {object} context
  * @param {Map<string, ProductRecord>} context.products by id
  * @param {(categoryIds: string[]) => string[]} context.ancestors the ids with their ancestors
- * @param {(grade: string) => string} context.gradeLabel
+ * @param {(grade: string, categoryIds: string[]) => string} context.gradeLabel a grade's label for a product of these
+ *   categories (its category's entry first, E45)
  * @param {{ digital: boolean, bookings: boolean }} context.features
  * @param {Map<string, number>} context.licences available licence keys by product id
  * @param {(product: ProductRecord, start: number) => { start: number, end: number } | null} context.slotOf the slot
@@ -353,7 +354,7 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			variantName: Object.values(variant.options ?? {}).join(' / '),
 			sku: variant.sku ?? '',
 			grade: variant.grade ?? null,
-			gradeLabel: variant.grade ? gradeLabel(variant.grade) : '',
+			gradeLabel: variant.grade ? gradeLabel(variant.grade, product.categoryIds ?? []) : '',
 			warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? null,
 			unitPrice: variant.price,
 			cost: variant.cost ?? null,

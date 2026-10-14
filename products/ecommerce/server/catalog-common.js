@@ -58,10 +58,17 @@ export const createCatalogCommon = (product, service) => {
 	};
 
 	/**
-	 * The website's grades (empty while Grades and serials is off).
+	 * The website's grades list as saved (empty while Grades and serials is off); {@link gradesFor} picks a product's.
+	 * @param {Site} s
+	 * @returns {Promise<import('../core/grades.js').Grade[]>}
+	 */
+	const gradeListOf = async (s) => (s.has('grades_serials') ? await s.list('grades') : []);
+
+	/**
+	 * The website's grades by key where no category is known (empty while Grades and serials is off; E45).
 	 * @param {Site} s
 	 */
-	const gradesOf = async (s) => (s.has('grades_serials') ? gradesByKey(await s.list('grades')) : new Map());
+	const gradesOf = async (s) => gradesByKey(await gradeListOf(s));
 
 	/**
 	 * What a product check needs for this website.
@@ -203,6 +210,7 @@ export const createCatalogCommon = (product, service) => {
 		media,
 		open,
 		gradesOf,
+		gradeListOf,
 		rulesOf,
 		changed,
 		storageOf,

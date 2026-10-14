@@ -41,6 +41,7 @@ export const GRADE_CONDITIONS = Object.freeze(/** @type {const} */ (['', 'new', 
  * @property {string} description
  * @property {string} returnDays
  * @property {string} warrantyDays
+ * @property {string} categoryId the category this entry is the definition for (E45); '' = every category
  * @property {string[]} categoryIds
  * @property {string} color
  * @property {string} video
@@ -131,6 +132,7 @@ export const blankGrade = () => ({
 	description: '',
 	returnDays: '',
 	warrantyDays: '',
+	categoryId: '',
 	categoryIds: [],
 	color: '',
 	video: '',
@@ -155,6 +157,7 @@ export const loadGrade = (grade) => {
 		description: textOf(grade.description),
 		returnDays: daysText(grade.returnDays),
 		warrantyDays: daysText(grade.warrantyDays),
+		categoryId: textOf(grade.categoryId),
 		categoryIds: Array.isArray(grade.categoryIds) ? grade.categoryIds.map(String) : [],
 		color: textOf(grade.color),
 		video: textOf(grade.video),
@@ -190,6 +193,7 @@ export const cleanGrade = (draft) => ({
 	description: draft.description.trim(),
 	returnDays: daysOf(draft.returnDays),
 	warrantyDays: daysOf(draft.warrantyDays),
+	categoryId: draft.categoryId.trim() || null,
 	categoryIds: cleanLines(draft.categoryIds),
 	color: draft.color.trim(),
 	video: videoOf(draft.video),
@@ -212,9 +216,10 @@ export const cleanGrade = (draft) => ({
 });
 
 /**
- * What stops a grade being applied to the list, by field: a name, a key the server takes and that no other grade has.
+ * What stops a grade being applied to the list, by field: a name, a key the server takes and that no other grade for
+ * the same category (or for every category) has (E45).
  * @param {GradeDraft} draft
- * @param {string[]} otherKeys the keys of the other grades (as saved)
+ * @param {string[]} otherKeys the keys of the other grades for the same category (as saved)
  * @returns {{ label?: 'missing', key?: 'invalid' | 'taken' }}
  */
 export const gradeProblems = (draft, otherKeys) => {

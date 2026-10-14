@@ -101,7 +101,19 @@ export const createLookups = (kit) => {
 			kit.has('multi_location') ? items('/v1/admin/locations') : Promise.resolve([]),
 			kit.has('size_charts') ? items('/v1/admin/size-charts') : Promise.resolve([]),
 		]);
-		Object.assign(state, { categories, brands, attributes, locations, charts });
+		// an attribute defined for one category is named with it in the editors' pickers (E45)
+		const named = attributes.map((attribute) =>
+			attribute.categoryId
+				? {
+						...attribute,
+						name: kit.t('catalogAdmin.attributeInCategory', {
+							name: attribute.name,
+							category: categories.find((category) => category.id === attribute.categoryId)?.name ?? attribute.categoryId,
+						}),
+					}
+				: attribute,
+		);
+		Object.assign(state, { categories, brands, attributes: named, locations, charts });
 	};
 	/** A name by id among a list (the id when unknown). @param {'categories' | 'brands' | 'locations' | 'charts' | 'attributes'} kind @param {string | null | undefined} id */
 	const nameOf = (kind, id) => (id ? (state[kind].find((item) => item.id === id)?.name ?? id) : '');

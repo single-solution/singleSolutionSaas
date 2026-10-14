@@ -3,7 +3,10 @@
  * `grades` list the merchant keeps in the dashboard — a stable key (letters, digits, `_` and `-`), a label shown to
  * shoppers, a description, the item's return and warranty days for that grade (null = the `returns` setting), and per
  * grade the categories it is for ([] = all), a colour, an inspection video, content, whether it is offered, the item
- * condition structured data and feeds use, and its glossary SEO. Variants name a grade by its key. No I/O.
+ * condition structured data and feeds use, and its glossary SEO. A grade entry may be the definition for one category
+ * (`categoryId`, E45): the same key then exists once per category with its own label, texts, days and SEO, and once
+ * without a category for every other one. Variants name a grade by its key; a product's grade is its category's entry
+ * first, then the one without a category ({@link gradesFor}). No I/O.
  * @module
  */
 import { EMPTY_CONTENT, checkContent, checkFaqs } from './catalog-content.js';
@@ -32,6 +35,7 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {string} description
  * @property {number | null} returnDays
  * @property {number | null} warrantyDays
+ * @property {string | null} [categoryId] the category this entry is the definition for (E45); null = every category
  * @property {string[]} [categoryIds] [] = every category
  * @property {string} [color] a CSS colour ('' = none)
  * @property {string} [video] a storage key or a YouTube id ('' = none)
@@ -67,8 +71,16 @@ export const checkGrades = (value) => {
 		if (entry === null || typeof entry !== 'object' || Array.isArray(entry))
 			return void errors.push(`Grade ${n}: an object is expected.`);
 		const key = typeof entry.key === 'string' ? entry.key.trim() : '';
+		const categoryId = entry.categoryId === undefined || entry.categoryId === '' ? null : entry.categoryId;
+		if (categoryId !== null && (typeof categoryId !== 'string' || categoryId.length > 64))
+			errors.push(`Grade ${n}: the category is a category id, or null for every category.`);
 		if (!KEY.test(key)) errors.push(`Grade ${n}: the key is lowercase letters, digits, _ and - (starting with a letter).`);
-		else if (out.some((grade) => grade.key === key)) errors.push(`Grade ${n}: the key ${key} is used twice.`);
+		else if (out.some((grade) => grade.key === key && (grade.categoryId ?? null) === categoryId))
+			errors.push(
+				categoryId === null
+					? `Grade ${n}: the key ${key} is used twice.`
+					: `Grade ${n}: the key ${key} is used twice for the same category.`,
+			);
 		const label = typeof entry.label === 'string' ? entry.label.trim() : '';
 		if (!label || label.length > 60 || CONTROL.test(label)) errors.push(`Grade ${n}: give a label of 1 to 60 characters.`);
 		const description = entry.description === undefined ? '' : entry.description;
@@ -115,6 +127,7 @@ export const checkGrades = (value) => {
 		for (const problem of found) errors.push(`Grade ${n}: ${problem.message}`);
 		out.push({
 			key,
+			categoryId: typeof categoryId === 'string' ? categoryId : null,
 			label,
 			description: typeof description === 'string' ? description.trim() : '',
 			returnDays: /** @type {number | null} */ (returnDays),
@@ -132,15 +145,52 @@ export const checkGrades = (value) => {
 };
 
 /**
- * The grades by key (anything malformed in a saved list is skipped).
+ * The entries of a list that have a key (anything else is skipped).
+ * @param {unknown} list
+ * @returns {Grade[]}
+ */
+const entriesOf = (list) => (Array.isArray(list) ? list : []).filter((entry) => entry && typeof entry.key === 'string');
+
+/**
+ * The grades by key, where no category is known: each key's entry without a category, else its first entry for a
+ * category (E45). In the order of the list; entries without a label are skipped.
  * @param {unknown} list
  * @returns {Map<string, Grade>}
  */
-export const gradesByKey = (list) => {
+export const gradesByKey = (list) =>
+	gradesFor(
+		entriesOf(list).filter((entry) => typeof entry.label === 'string'),
+		[],
+	);
+
+/**
+ * The grades by key for a product or a page of these categories (E45): each key's entry for the first of the categories
+ * that has one, else its entry without a category, else (no category given) its first entry. In the order of the list.
+ * @param {unknown} list
+ * @param {ReadonlyArray<string | null | undefined>} categoryIds the product's categories, in their order
+ * @returns {Map<string, Grade>}
+ */
+export const gradesFor = (list, categoryIds) => {
+	const entries = entriesOf(list);
+	const wanted = categoryIds.filter((id) => typeof id === 'string' && id !== '');
+	/** @param {Grade} entry */
+	const rank = (entry) => {
+		const own = entry.categoryId ?? null;
+		if (own === null) return wanted.length;
+		const at = wanted.indexOf(own);
+		return at !== -1 ? at : wanted.length === 0 ? wanted.length + 1 : -1;
+	};
+	/** @type {Map<string, Grade>} */
+	const best = new Map();
+	for (const entry of entries) {
+		const at = rank(entry);
+		if (at === -1) continue;
+		const held = best.get(entry.key);
+		if (!held || at < rank(held)) best.set(entry.key, entry);
+	}
 	/** @type {Map<string, Grade>} */
 	const out = new Map();
-	for (const entry of Array.isArray(list) ? list : [])
-		if (entry && typeof entry.key === 'string' && typeof entry.label === 'string') out.set(entry.key, entry);
+	for (const entry of entries) if (best.get(entry.key) === entry) out.set(entry.key, entry);
 	return out;
 };
 

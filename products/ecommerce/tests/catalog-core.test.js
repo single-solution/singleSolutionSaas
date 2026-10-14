@@ -673,6 +673,7 @@ describe('grades', () => {
 			value: [
 				{
 					key: 'new',
+					categoryId: null,
 					label: 'New',
 					description: 'Box',
 					returnDays: 7,

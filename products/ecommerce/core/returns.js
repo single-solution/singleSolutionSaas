@@ -7,6 +7,7 @@
  * the loyalty points taken back. No I/O.
  * @module
  */
+import { gradesFor } from './grades.js';
 
 /** @typedef {import('./model.js').ReturnRecord} ReturnRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
@@ -173,7 +174,8 @@ export const returnableLines = ({ order, claims, products, grades, defaults, now
 		.filter((line) => line.kind === 'physical')
 		.map((line) => {
 			const product = products.get(line.productId) ?? null;
-			const grade = line.grade ? (grades.find((entry) => entry.key === line.grade) ?? null) : null;
+			// the grade as the line's category defines it, else the entry for every category (E45)
+			const grade = line.grade ? (gradesFor(grades, line.categoryIds ?? []).get(line.grade) ?? null) : null;
 			const taken = held.get(line.id);
 			const claimable = Math.max(0, line.quantity - (taken?.quantity ?? 0));
 			return {

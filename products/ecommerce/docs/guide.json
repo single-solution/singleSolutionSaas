@@ -157,7 +157,7 @@
 				"id": "attributes",
 				"title": "Attributes per category, on variants",
 				"paragraphs": [
-					"An attribute has a slug (made from its name when empty; shop filters are attr.<slug>), the categories it belongs to (none = all), whether it is set on the product or on each variant (on: product or variant; variant attributes are text, number or choice), multiple (several values on one variant), choices { value, label }, visibility (always, or only for some brands, some grades, or when another attribute has a value), how cards show it (none, image or chips), active, and glossary SEO { title, description, body, faqs }.",
+					"An attribute has a slug (made from its name when empty; shop filters are attr.<slug>), may be the definition for one category (categoryId: the same slug once per category with its own name, choices, unit, glossary and SEO, and once for every category; a product, a listing and a glossary page take their category's definition first, then the one for every category), the categories it belongs to (none = all), whether it is set on the product or on each variant (on: product or variant; variant attributes are text, number or choice), multiple (several values on one variant), choices { value, label }, visibility (always, or only for some brands, some grades, or when another attribute has a value), how cards show it (none, image or chips), active, and glossary SEO { title, description, body, faqs }.",
 					"Variants hold attributes { <attributeId>: value or [values] }, and the product's options are made from them (up to 6 axes; two variants may share options when their grades differ). A product's attribute setup (at most 20 { attributeId, values, customValues, defaultValue }) lists the values it is sold in; Generate adds every missing combination as a variant (at most 250) with the price and stock you give, for one product or up to 100 at once (Variants)."
 				],
 				"routes": [
@@ -187,7 +187,7 @@
 				"id": "grades",
 				"title": "Grades per category",
 				"paragraphs": [
-					"Condition grades (Settings → Grades and serials, or PUT /v1/lists/grades) have a key (lower-case letters, digits, _ and -), a name, a description of up to 1,200 characters, return and warranty days, the categories they are for (none = all), a colour, an inspection video (a file key or a YouTube id), content (summary and bullets), whether they are offered, a condition (new, refurbished or used, used for structured data and feeds instead of the seo setting gradedCondition) and a glossary page's SEO; up to 100 grades. Shop answers give each variant's grade with these details."
+					"Condition grades (Settings → Grades and serials, or PUT /v1/lists/grades) have a key (lower-case letters, digits, _ and -), a name, a description of up to 1,200 characters, return and warranty days, the categories they are for (none = all), a colour, an inspection video (a file key or a YouTube id), content (summary and bullets), whether they are offered, a condition (new, refurbished or used, used for structured data and feeds instead of the seo setting gradedCondition) and a glossary page's SEO; up to 100 grades. A grade may be one category's definition of its key (categoryId): the same key then exists once per category, with its own name, texts, days and glossary, and once without a category for every other one; a product's variants take their category's entry first. Shop answers give each variant's grade with these details."
 				],
 				"routes": [
 					["PUT /v1/lists/grades", "grades_serials"],
@@ -245,7 +245,7 @@
 				"paragraphs": [
 					"With Landing pages on (it needs SEO), a landing page is a category, brand and grade combination with its own h1, title, description, introduction and FAQs, one per combination (409 for a second). indexable is auto, yes or no; auto is indexed while at least landingMinProducts (3) of its products are in stock, judged on every read, and answers add url, inStock and indexed. Its address comes from the setting landingUrl ({categoryUrl}?brand={brand}&grade={grade} by default). With AI copy on, POST /v1/landings/<id>/ai-copy suggests its texts.",
 					"GET /v1/seo/listing gives the head of any listing your site shows (see Your site serves): robots is index only for a category (and its pages) and an indexable landing page, noindex for any other filter. With the seo setting pagedListings noindex, pages 2, 3 … are noindex, follow with the first page as canonical (index by default: each page its own canonical).",
-					"Glossary pages explain an attribute or a grade from its glossary SEO, at the addresses of the settings attributeUrl ({slug}) and gradeUrl ({key}); with an address and a text they are listed in the sitemaps, as are indexable landing pages. An attribute without its own SEO title or text takes the patterns attributeTitle ({name} by default, for example What is {name}?) and attributeDescription (empty by default) with {name}, {unit}, {values} (its first five choices) and {storeName}; with attributeDescription set, every active attribute's page is listed in the sitemaps."
+					"Glossary pages explain an attribute or a grade from its glossary SEO, at the addresses of the settings attributeUrl ({slug}) and gradeUrl ({key}), both also taking {category} (a category's slug, for example /attributes/{category}/{slug}). Per category, GET /v1/seo/attributes/<category>/<slug> and /v1/seo/grades/<category>/<key> answer that category's own definition first, then the one for every category; a grade entry may also be one category's definition (categoryId in the grades list, the same key once per category). Once attributeUrl is set every active attribute's page is listed in the sitemaps (with {category}: a category's definition at its category, one for every category at each category it names), and grades with their own text once gradeUrl is set, as are indexable landing pages. An attribute without its own SEO title or text takes the patterns attributeTitle ({name} by default, for example What is {name}?) and attributeDescription (empty by default) with {name}, {unit}, {values} (its first five choices), {category} (the page's category) and {storeName}."
 				],
 				"routes": [
 					["GET /v1/landings", "landing_pages"],
@@ -254,7 +254,9 @@
 					["POST /v1/landings/:id/ai-copy", "ai_copy"],
 					["GET /v1/seo/listing", "seo"],
 					["GET /v1/seo/attributes/:slug", "landing_pages"],
-					["GET /v1/seo/grades/:key", "landing_pages"]
+					["GET /v1/seo/attributes/:category/:slug", "landing_pages"],
+					["GET /v1/seo/grades/:key", "landing_pages"],
+					["GET /v1/seo/grades/:category/:key", "landing_pages"]
 				]
 			},
 			{

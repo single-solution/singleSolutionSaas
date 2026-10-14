@@ -372,13 +372,15 @@ const glossaryOf = (v) => {
 
 /**
  * The editable fields of an attribute.
- * @typedef {Omit<AttributeRecord, 'id'> & { slug: string, categoryIds: string[], on: 'product' | 'variant',
+ * @typedef {Omit<AttributeRecord, 'id'> & { slug: string, categoryId: string | null, categoryIds: string[], on: 'product' | 'variant',
  *   multiple: boolean, visibility: AttributeVisibility, card: 'none' | 'image' | 'chips', active: boolean,
  *   seo: { title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] } }} AttributeFields
  */
 
 /**
- * Check a new attribute or changes to one (E7; its slug, categories and visibility ids are checked by the route).
+ * Check a new attribute or changes to one (E7; its slug, categories and visibility ids are checked by the route). An
+ * attribute may be the definition for one category (`categoryId`, E45: the same slug once per category, with its own
+ * name, choices, unit, glossary and SEO); null is for every category.
  * @param {unknown} body
  * @param {AttributeRecord | null} existing
  * @returns {{ ok: true, value: AttributeFields } | { ok: false, errors: FieldError[] }}
@@ -414,6 +416,12 @@ export const checkAttribute = (body, existing) => {
 	const comparable = read('comparable', boolOf, false, 'Comparable is true or false.');
 	const sort = read('sort', sortOf, 0, SORT_MESSAGE);
 	const categoryIds = read('categoryIds', idsOf, /** @type {string[]} */ ([]), 'Pick existing categories ([] = all).');
+	const categoryId = read(
+		'categoryId',
+		refOrNull,
+		/** @type {string | null} */ (null),
+		'Pick the category this attribute is for, or null for every category.',
+	);
 	const on = read(
 		'on',
 		(v) => (ATTRIBUTE_ON.includes(/** @type {any} */ (v)) ? /** @type {'product' | 'variant'} */ (v) : null),
@@ -456,6 +464,7 @@ export const checkAttribute = (body, existing) => {
 			filterable,
 			comparable,
 			sort,
+			categoryId: categoryId || null,
 			categoryIds,
 			on,
 			multiple,
