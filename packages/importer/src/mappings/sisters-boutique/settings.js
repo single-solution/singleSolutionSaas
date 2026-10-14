@@ -376,7 +376,6 @@ export const settingsPlan = (values) => {
 				'feeds.skuAs': 'none',
 				'feeds.identifierExists': 'no',
 				'feeds.gradedCondition': 'used',
-				'feeds.itemId': 'legacy',
 				'feeds.googleCategory': '',
 				'feeds.gradeLabel': false,
 				// category × brand pages `?brand=` and glossary pages (`packages/shared/src/seo/intentSurface.ts`:33-36,

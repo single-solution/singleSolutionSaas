@@ -408,6 +408,9 @@ export const productStep = {
 		const brandId =
 			ctx.lookup(TABLES.brandInCategory, `${category}/${brandSlug}`) ?? BRANDS.all(`slug:${brandSlug}`, ctx)[0] ?? null;
 		const rules = attributeRules(doc, ctx);
+		// SB's Google feed listed each variant as <product hex>_<variant hex> in the group <product hex>
+		// (`packages/shared/src/seo/merchantFeed.ts`): kept as the feed ids, so Merchant Center keeps its items (E17)
+		const productHex = hexKey(doc._id);
 		const variants = (Array.isArray(doc.variants) ? doc.variants : []).filter(isObject).map((variant) => {
 			/** @type {Record<string, string | string[]>} */
 			const attributes = {};
@@ -422,8 +425,10 @@ export const productStep = {
 				if (values.length > 0) attributes[attributeId] = Array.isArray(raw) ? values : /** @type {string} */ (values[0]);
 			}
 			const warrantyDays = Number(variant.warrantyDays);
+			const variantHex = hexKey(variant._id);
 			return {
 				id: ctx.id('var', variant._id),
+				...(productHex && variantHex ? { feedId: `${productHex}_${variantHex}` } : {}),
 				price: paisa(variant.priceRupees),
 				stock: Math.max(0, Math.round(Number(variant.quantity) || 0)),
 				soldOut: variant.forceOutOfStock === true,
@@ -442,6 +447,7 @@ export const productStep = {
 			slug: text(doc.slug),
 			name: text(doc.name),
 			status,
+			...(productHex ? { feedGroupId: productHex } : {}),
 			categoryIds: categoryId ? [categoryId] : [],
 			brandId,
 			featured: doc.isFeatured === true,

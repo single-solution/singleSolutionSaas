@@ -245,6 +245,12 @@ describe('the Sisters Boutique mapping', () => {
 			faqs: [{ question: 'Machine washable?', answer: 'Yes, cold.' }],
 		});
 		expect(Object.keys(suit.variants[0].attributes)).toHaveLength(2);
+		// SB's Google feed ids stay: <product hex>_<variant hex> in the group <product hex> (E17)
+		const hex = (/** @type {string} */ value) => value.slice(value.indexOf('_') + 1);
+		expect(suit.feedGroupId).toBe(hex(suit.id));
+		expect(suit.variants.map((/** @type {any} */ v) => v.feedId)).toEqual(
+			suit.variants.map((/** @type {any} */ v) => `${hex(suit.id)}_${hex(v.id)}`),
+		);
 		expect(shell).toMatchObject({ status: 'draft', variants: [], brandId: id('brd', SB_IDS.luxeLawn) });
 		expect(basic).toMatchObject({
 			brandId: id('brd', SB_IDS.luxeLawn),
