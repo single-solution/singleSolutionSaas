@@ -52,6 +52,7 @@ Four entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js 
 | `imports`                                 | `{ collections: { <name>: { check(record, ctx) → { ok, value } \| { ok: false, errors }, collection?, key?, prepare?(ctx) } }, finish?(ctx), totals?(ctx) }` (K10): `collection` the merchant database collection (default the name); `key` the 1–4 top-level fields a record is found by (default `['id']`; for example `['customerId']` or `['day', 'part']`), each a string or a whole number, which the check must keep; `prepare` runs once per call before the checks and its answer is `ctx.prepared`; a check's `ctx` is `{ websiteId, merchantId, now, dryRun, data, business(), prepared }` (`business()`: the business.json copy with defaults, read once per call); `finish(ctx)` answers its summary (a batched finish reads `ctx.query.after` and answers `more` and `next` while work is left); `totals(ctx)` the verification sums of `GET /v1/import/status` |
 | `messages`                                | the messages the product sends through Notifications with their US-English default words (`schemas/messages.json`, `{ messages: [{ key, name, description?, values, required?, urgent?, sensitive?, channels }] }`; checked with `@ss/contracts` `validateMessageDefaults`, every key `<product id>.…`; parity P1): attached as `defaults` to every send to Notifications (`callProduct`, staff alerts; a send of an undeclared key gets those of its declared `fallbackTemplate`) and served at `GET /v1/message-defaults`                                                                                                                                                                                                                                                                                                                                                   |
 | `openapi`                                 | the product's OpenAPI document (its generated `openapi.json`): served at `GET /openapi.json` (public, `Cache-Control: public, max-age=300`) and named in the Setup sheet (`docs.openapi`); without it `docs.openapi` is null                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `build`                                   | what the merchant's website builds for each feature (`{ <featureKey>: text }`, the product's `docs/guide.json` `build`; 1 to 1,000 characters each, features of the manifest only, else `invalid_config`): the Setup sheet's `build` lists them for the features that are on, with the guide's `#feature-<key>` section                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 The returned `product`:
 
@@ -133,35 +134,36 @@ backfill), and another product's or an undeclared collection is never touched.
 
 ### Routes the kit serves
 
-| Route                                                                                                                                                      | Auth                                             |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `POST /.well-known/ss-connect`                                                                                                                             | connect HMAC (none)                              |
-| `POST /.well-known/ss-events`                                                                                                                              | Portal signature (none)                          |
-| `POST /v1/tickets` `{ user: { id, name, email }, permissions, origin }` → `{ ticket, expiresAt }`                                                          | server                                           |
-| `GET /v1/permissions` → `{ permissions: [{ key, name, feature }] }` (for Accounts roles)                                                                   | server (no database)                             |
-| `GET /v1/message-defaults` → `{ productId, messages }` (the messages the product sends with their default words; `Cache-Control: public, max-age=300`)     | none                                             |
-| `GET /v1/blueprint?websiteId=` → the product's part of the website's Setup sheet (`@ss/contracts` `validateProductBlueprint`; 60 per minute per website)   | Portal call (portal)                             |
-| `GET /openapi.json` (only with the `openapi` option; `Cache-Control: public, max-age=300`)                                                                 | none                                             |
-| `POST /v1/data-rights/export` / `delete` `{ user: { id?, email?, phone? } }` (`delete` also removes the person's saved staff alerts)                       | server (database)                                |
-| `GET /v1/widget/config` → `{ texts, theme, customCss, format, timeZone, features, settings }` (`features`: switched on; `settings`: `hooks.widgetConfig`)  | browser (database, no feature)                   |
-| `GET /v1/features`, `GET /v1/settings`, `PUT\|DELETE /v1/settings/:feature.:setting` (`{ value }`)                                                         | server (no database; K1)                         |
-| `GET /v1/texts`, `PUT\|DELETE /v1/texts/:key`, `GET\|PUT /v1/theme`, `GET\|PUT /v1/format`, `GET\|PUT /v1/lists/:list` (`{ value }`)                       | server (no database; K1)                         |
-| `GET /v1/connections`, `PUT\|DELETE /v1/connections/:name`, `POST /v1/connections/:name/test` (writes: 60 per minute per website)                          | server (no database; K1)                         |
-| `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=&limit=`, `GET /v1/activity/count`, `GET /v1/activity/counts?by=`                             | server (database; K9)                            |
-| `GET /v1/widget/admin/config` → the same, for admin widgets                                                                                                | ticket (database, no feature)                    |
-| `GET /sso?launch=` → 303 to `<dashboard>?websiteId=<id>` or `?view=defaults`, `ss_session` cookie                                                          | none                                             |
-| `GET /v1/dashboard/session` → `{ who, portalUrl, branding, support, expiresAt, switcher }`                                                                 | dashboard                                        |
-| `GET /v1/dashboard/websites/:websiteId/overview`                                                                                                           | dashboard                                        |
-| `GET\|PUT …/features` (PUT `{ on }`: Owner, Support)                                                                                                       | dashboard                                        |
-| `GET …/settings`, `PUT\|DELETE …/settings/:feature.:setting` (`{ value }`)                                                                                 | dashboard (merchants: switched-on features only) |
-| `GET …/texts`, `PUT\|DELETE …/texts/:key`                                                                                                                  | dashboard                                        |
-| `GET\|PUT …/theme` (fields; `null` resets one)                                                                                                             | dashboard                                        |
-| `GET\|PUT …/format` (fields; `null` resets one)                                                                                                            | dashboard                                        |
-| `GET …/connections`, `PUT\|DELETE …/connections/:name`, `POST …/connections/:name/test`                                                                    | dashboard                                        |
-| `POST …/business/refresh`                                                                                                                                  | dashboard                                        |
-| `GET /v1/dashboard/defaults`, `PUT /v1/dashboard/defaults/:key` (`<feature>.<setting>`, `text.<key>`, `theme`, `format`; `{ value }`, `null` removes)      | dashboard, Owner                                 |
-| `GET\|PUT /v1/dashboard/prices` (`{ prices: { key: millicreditsPerHour } }`)                                                                               | dashboard, Owner                                 |
-| `POST /v1/dashboard/reseal` → `{ keyId, previousKeyId, resealed, current, unreadable, failedWebsites }` (stored secrets sealed again with the current key) | dashboard, Owner                                 |
+| Route                                                                                                                                                              | Auth                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `POST /.well-known/ss-connect`                                                                                                                                     | connect HMAC (none)                              |
+| `POST /.well-known/ss-events`                                                                                                                                      | Portal signature (none)                          |
+| `POST /v1/tickets` `{ user: { id, name, email }, permissions, origin }` → `{ ticket, expiresAt }`                                                                  | server                                           |
+| `GET /v1/permissions` → `{ permissions: [{ key, name, feature }] }` (for Accounts roles)                                                                           | server (no database)                             |
+| `GET /v1/message-defaults` → `{ productId, messages }` (the messages the product sends with their default words; `Cache-Control: public, max-age=300`)             | none                                             |
+| `GET /v1/blueprint?websiteId=` → the product's part of the website's Setup sheet (`@ss/contracts` `validateProductBlueprint`; 60 per minute per website)           | Portal call (portal)                             |
+| `POST /v1/blueprint/features?websiteId=` `{ features, admin: { id, name, role } }` → `{ version, on, added }`: the advisor's Switch on (30 per minute per website) | Portal call (portal)                             |
+| `GET /openapi.json` (only with the `openapi` option; `Cache-Control: public, max-age=300`)                                                                         | none                                             |
+| `POST /v1/data-rights/export` / `delete` `{ user: { id?, email?, phone? } }` (`delete` also removes the person's saved staff alerts)                               | server (database)                                |
+| `GET /v1/widget/config` → `{ texts, theme, customCss, format, timeZone, features, settings }` (`features`: switched on; `settings`: `hooks.widgetConfig`)          | browser (database, no feature)                   |
+| `GET /v1/features`, `GET /v1/settings`, `PUT\|DELETE /v1/settings/:feature.:setting` (`{ value }`)                                                                 | server (no database; K1)                         |
+| `GET /v1/texts`, `PUT\|DELETE /v1/texts/:key`, `GET\|PUT /v1/theme`, `GET\|PUT /v1/format`, `GET\|PUT /v1/lists/:list` (`{ value }`)                               | server (no database; K1)                         |
+| `GET /v1/connections`, `PUT\|DELETE /v1/connections/:name`, `POST /v1/connections/:name/test` (writes: 60 per minute per website)                                  | server (no database; K1)                         |
+| `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=&limit=`, `GET /v1/activity/count`, `GET /v1/activity/counts?by=`                                     | server (database; K9)                            |
+| `GET /v1/widget/admin/config` → the same, for admin widgets                                                                                                        | ticket (database, no feature)                    |
+| `GET /sso?launch=` → 303 to `<dashboard>?websiteId=<id>` or `?view=defaults`, `ss_session` cookie                                                                  | none                                             |
+| `GET /v1/dashboard/session` → `{ who, portalUrl, branding, support, expiresAt, switcher }`                                                                         | dashboard                                        |
+| `GET /v1/dashboard/websites/:websiteId/overview`                                                                                                                   | dashboard                                        |
+| `GET\|PUT …/features` (PUT `{ on }`: Owner, Support)                                                                                                               | dashboard                                        |
+| `GET …/settings`, `PUT\|DELETE …/settings/:feature.:setting` (`{ value }`)                                                                                         | dashboard (merchants: switched-on features only) |
+| `GET …/texts`, `PUT\|DELETE …/texts/:key`                                                                                                                          | dashboard                                        |
+| `GET\|PUT …/theme` (fields; `null` resets one)                                                                                                                     | dashboard                                        |
+| `GET\|PUT …/format` (fields; `null` resets one)                                                                                                                    | dashboard                                        |
+| `GET …/connections`, `PUT\|DELETE …/connections/:name`, `POST …/connections/:name/test`                                                                            | dashboard                                        |
+| `POST …/business/refresh`                                                                                                                                          | dashboard                                        |
+| `GET /v1/dashboard/defaults`, `PUT /v1/dashboard/defaults/:key` (`<feature>.<setting>`, `text.<key>`, `theme`, `format`; `{ value }`, `null` removes)              | dashboard, Owner                                 |
+| `GET\|PUT /v1/dashboard/prices` (`{ prices: { key: millicreditsPerHour } }`)                                                                                       | dashboard, Owner                                 |
+| `POST /v1/dashboard/reseal` → `{ keyId, previousKeyId, resealed, current, unreadable, failedWebsites }` (stored secrets sealed again with the current key)         | dashboard, Owner                                 |
 
 Dashboard writes are refused unless their Origin is the product's own address; dashboard and `/sso` answers carry
 `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`.
@@ -173,8 +175,11 @@ from what the kit already keeps, for any status but `removed` (404 `website_not_
 `portal_unreachable` when the status cannot be had): `{ productId, name, version, status (the effective one), docs:
 { guide, openapi }, business (the product's copy of business.json: found, fetchedAt, name, country, timeZone),
 install: { scriptUrl, installed (a visitor widget seen in the last 7 days; null without a visitor widget on),
-lastSeenAt }, features: [{ key, title, description, on, dependsOn, settings, lists }], shared, connections, widgets,
-staffPermissions, events, checklist, summaries }`.
+lastSeenAt }, features: [{ key, title, description, on, dependsOn, recommendFor, settings, lists }], shared, connections,
+widgets, staffPermissions, events, checklist, summaries, build }`.
+
+- A feature's `recommendFor` are its manifest's business profile rules (`@ss/contracts/profile`; empty without), so
+  the Portal's advisor can recommend it from the website's business profile.
 
 - A feature's `settings` (`{ key, title, value, default }`, `default: true` while the website has not saved its own
   value) and `lists` (`{ name, title, summary, count }`: an array counted, an object as `<member>: <size>` per list
@@ -190,9 +195,19 @@ staffPermissions, events, checklist, summaries }`.
 - `hooks.blueprint({ websiteId, merchantId, on })` may add `events`, `lists` (a summary in the product's own words by
   list name, at most 300 characters) and `summaries` (`[{ title, text }]`, at most 20); what does not fit is left out
   and logged, and a failing hook or list read never fails the answer.
+- `build`: `[{ feature, what, docs }]` for each feature that is on and has a `build` text (the option), `docs` its
+  section of the guide (`<docsUrl>#feature-<key>`).
 - No secret can leave: besides never reading connection values into the answer, every string of the finished answer
   that holds a value saved in the website's Connections (`SECRET_MIN_LENGTH`, 8 characters or more; every text member
   of an object value) becomes `[hidden]` (`HIDDEN`), so a setting or hook text that repeats a key shows nothing of it.
+
+**Switch on** (`POST /v1/blueprint/features?websiteId=`, also a signed Portal call): the Setup sheet's advisor switches
+`features` on for the Owner or Support admin the Portal names (`admin: { id, name, role }`), each with every feature
+it needs (`withDependencies`), through the same feature report as the dashboard's Features page: the Portal accepts it
+only for a current Owner or Support admin, and Recent changes names the admin. It answers `{ version, on, added }`
+(`added` empty, and nothing reported, when all were on already); 422 `validation_failed` with `errors` for another
+admin or unknown features, 404 for a website the product does not serve, and the Portal's refusal as on the Features
+page.
 
 ## `@ss/app-kit/widget`
 

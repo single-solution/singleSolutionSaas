@@ -1,6 +1,6 @@
 import { validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { describe, expect, it } from 'vitest';
-import { HIDDEN, SECRET_MIN_LENGTH, checkAdditions, hideSecrets, summarizeList } from '../src/blueprint.js';
+import { HIDDEN, SECRET_MIN_LENGTH, checkAdditions, hideSecrets, summarizeList, withDependencies } from '../src/blueprint.js';
 import { createSigner, generateSigningKey, signPortalCall } from '@ss/protocol';
 import { createProduct } from '../src/index.js';
 import { BASE, DOMAIN, ENCRYPTION_KEY, SECRET, manifest, setup } from './helpers.js';
@@ -84,6 +84,7 @@ describe('GET /v1/blueprint (Portal call)', () => {
 			description: 'Visitors leave short notes.',
 			on: true,
 			dependsOn: [],
+			recommendFor: ['chat.people', 'messages.email+signIn.*'],
 			settings: [
 				{ key: 'maxNotes', title: 'Notes per visitor per day', value: 12, default: false },
 				{ key: 'greeting', title: 'Greeting', value: 'Leave us a note', default: true },
@@ -91,7 +92,9 @@ describe('GET /v1/blueprint (Portal call)', () => {
 			// a list of several features shows under the first of them that is on; one off is left out
 			lists: [{ name: 'labels', title: 'Labels', summary: '3 entries', count: 3 }],
 		});
-		expect(inbox).toMatchObject({ key: 'inbox', on: false, settings: [], lists: [] });
+		expect(inbox).toMatchObject({ key: 'inbox', on: false, recommendFor: [], settings: [], lists: [] });
+		// no texts given: nothing to build is listed
+		expect(body.build).toEqual([]);
 		expect(body.connections).toEqual([
 			{
 				key: 'api_key',
@@ -220,6 +223,36 @@ describe('GET /v1/blueprint (Portal call)', () => {
 		expect((await without.call('GET', '/openapi.json')).status).toBe(404);
 	});
 
+	it('lists what the website builds for each feature that is on, linked to its section of the guide', async () => {
+		const build = {
+			notes: 'Place the note form widget on the pages where visitors leave notes.',
+			inbox: 'Give your admin page the inbox widget with a ticket from your server.',
+		};
+		const s = await setup({ build });
+		await s.switchOn(['notes']);
+		expect((await blueprintOf(s)).body.build).toEqual([
+			{ feature: 'notes', what: build.notes, docs: `${BASE}/docs#feature-notes` },
+		]);
+		await s.switchOn(['notes', 'inbox']);
+		expect((await blueprintOf(s)).body.build.map((/** @type {any} */ entry) => entry.feature)).toEqual(['notes', 'inbox']);
+	});
+
+	it.each([
+		['a feature the manifest does not have', { chat: 'Add the chat.' }],
+		['an empty text', { notes: '  ' }],
+		['a text that is too long', { notes: 'x'.repeat(1001) }],
+		['a text that is not a string', { notes: 7 }],
+		['a list', []],
+	])('refuses build texts with %s', (_name, build) => {
+		expect(() =>
+			createProduct({
+				manifest: manifest(),
+				config: { mongodbUri: '', connectSecret: SECRET, encryptionKey: ENCRYPTION_KEY },
+				build: /** @type {any} */ (build),
+			}),
+		).toThrow(/build must map features of the manifest/);
+	});
+
 	it('refuses an OpenAPI document that is not an object', () => {
 		expect(() =>
 			createProduct({
@@ -296,6 +329,90 @@ describe('GET /v1/blueprint (Portal call)', () => {
 		const s = await setup();
 		s.portal.setReachable(false);
 		expect((await s.portal.callAsPortal('notes', 'GET', `/v1/blueprint?websiteId=${s.websiteId}`)).status).toBe(503);
+	});
+});
+
+describe("POST /v1/blueprint/features (the advisor's Switch on, a Portal call)", () => {
+	const ADMIN = { id: 'adm_0123456789abcdefghjkmnpq', name: 'Ada Admin', role: /** @type {const} */ ('support') };
+	/** @param {Awaited<ReturnType<typeof setup>>} s @param {unknown} body @param {string} [site] */
+	const switchOn = async (s, body, site = s.websiteId) => {
+		const response = await s.portal.callAsPortal('notes', 'POST', `/v1/blueprint/features?websiteId=${site}`, body);
+		const json = await response.json();
+		await s.settle();
+		return { status: response.status, body: json };
+	};
+
+	it('switches a feature on with the features it needs, through the feature report, for the admin the Portal names', async () => {
+		const s = await setup();
+		s.portal.addAdmin(ADMIN);
+		const done = await switchOn(s, { features: ['inbox'], admin: ADMIN });
+		expect(done).toEqual({ status: 200, body: { version: 1, on: ['notes', 'inbox'], added: ['notes', 'inbox'] } });
+		expect(s.portal.features(s.websiteId, 'notes')).toEqual({ version: 1, on: ['notes', 'inbox'] });
+		expect(s.portal.featureReports.at(-1)?.body).toMatchObject({ adminId: ADMIN.id, adminName: 'Ada Admin' });
+		// the dashboard's Recent changes names the admin
+		const cookie = await s.session();
+		const overview = await (await s.dash(cookie, 'GET', `/v1/dashboard/websites/${s.websiteId}/overview`)).json();
+		expect(overview.recentChanges[0]).toMatchObject({
+			who: { kind: 'admin', id: ADMIN.id, name: 'Ada Admin', role: 'support' },
+			what: 'features',
+			detail: 'On: Notes, Notes inbox',
+		});
+		// already on: nothing is reported again
+		const reports = s.portal.featureReports.length;
+		expect(await switchOn(s, { features: ['notes'], admin: ADMIN })).toEqual({
+			status: 200,
+			body: { version: 1, on: ['notes', 'inbox'], added: [] },
+		});
+		expect(s.portal.featureReports.length).toBe(reports);
+	});
+
+	it.each([
+		['no admin', { features: ['notes'] }, '/admin'],
+		['a Finance admin', { features: ['notes'], admin: { ...ADMIN, role: 'finance' } }, '/admin'],
+		['an admin without a name', { features: ['notes'], admin: { ...ADMIN, name: ' ' } }, '/admin'],
+		['a malformed admin id', { features: ['notes'], admin: { ...ADMIN, id: 'adm 1' } }, '/admin'],
+		['no features', { features: [], admin: ADMIN }, '/features'],
+		['an unknown feature', { features: ['chat'], admin: ADMIN }, '/features'],
+		['features that are not a list', { features: 'notes', admin: ADMIN }, '/features'],
+	])('refuses %s', async (_name, body, path) => {
+		const s = await setup();
+		const answer = await switchOn(s, body);
+		expect(answer.status).toBe(422);
+		expect(answer.body.errors[0].path).toBe(path);
+		expect(s.portal.featureReports).toEqual([]);
+	});
+
+	it('answers what the Portal says when it refuses the report, and refuses calls the Portal did not sign', async () => {
+		const s = await setup();
+		// the Portal does not know this admin (any more)
+		const refused = await switchOn(s, { features: ['notes'], admin: ADMIN });
+		expect(refused.status).toBe(422);
+		expect(refused.body.detail).toMatch(/^The Portal refused the change/);
+		expect(s.portal.features(s.websiteId, 'notes')).toEqual({ version: 0, on: [] });
+		expect(
+			(
+				await s.call('POST', `/v1/blueprint/features?websiteId=${s.websiteId}`, {
+					token: s.server.token,
+					body: { features: ['notes'], admin: ADMIN },
+				})
+			).status,
+		).toBe(401);
+		expect((await switchOn(s, { features: ['notes'], admin: ADMIN }, 'web_unknown0123456789')).status).toBe(404);
+		expect((await s.portal.callAsPortal('notes', 'POST', '/v1/blueprint/features', { features: ['notes'] })).status).toBe(422);
+	});
+
+	it('adds every feature needed, in manifest order', () => {
+		const value = manifest();
+		value.features.push({
+			key: 'tags',
+			name: 'Tags',
+			description: 'Labels on notes.',
+			dependsOn: ['inbox'],
+			settings: { type: 'object', properties: {} },
+		});
+		expect(withDependencies(value, ['tags'])).toEqual({ ok: true, keys: ['notes', 'inbox', 'tags'] });
+		expect(withDependencies(value, ['notes', 'notes'])).toEqual({ ok: true, keys: ['notes'] });
+		expect(withDependencies(value, [7])).toEqual({ ok: false, message: '`features` must list features of this product.' });
 	});
 });
 

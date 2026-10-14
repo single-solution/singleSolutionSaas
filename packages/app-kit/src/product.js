@@ -3,11 +3,13 @@
  * price and feature reports, settings, widget texts, theme and Format, encrypted connections, the merchant database,
  * business.json, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
  * API for the merchant's server, events, staff alerts, imports (PLAN 0.8.10 K1–K10), the default templates of the
- * messages the product sends (parity P1) and the product's part of each website's Setup sheet (`GET /v1/blueprint`). Every side effect is injected (fetch, clock, randomness, logger, store,
- * outbound calls).
+ * messages the product sends (parity P1) and the product's part of each website's Setup sheet (`GET /v1/blueprint`,
+ * with what the website builds per feature, and the advisor's Switch on). Every side effect is injected (fetch, clock,
+ * randomness, logger, store, outbound calls).
  * @module
  */
 import {
+	BUILD_TEXT_MAX,
 	PROBLEM_CODES,
 	checkSettingsSchema,
 	createProblemFactory,
@@ -84,6 +86,9 @@ import { verifyToken } from '@ss/protocol';
  *   `GET /v1/message-defaults`
  * @property {unknown} [openapi] the product's OpenAPI document (its generated `openapi.json`): served publicly at
  *   `GET /openapi.json` and named in the Setup sheet (`docs.openapi`)
+ * @property {Record<string, string>} [build] what the merchant's website builds for each feature (its guide's "What your
+ *   website builds", `docs/guide.json` `build`): pages, routes, script tags and server calls, plain text of at most
+ *   1,000 characters per feature of the manifest; the Setup sheet lists them for the features that are on
  */
 
 /**
@@ -319,7 +324,29 @@ export const createProduct = (options) => {
 	if (options.openapi !== undefined && !isObject(options.openapi))
 		throw kitError('invalid_config', 'openapi must be the OpenAPI document (a JSON object)');
 	const openapi = options.openapi === undefined ? null : JSON.stringify(options.openapi);
-	const blueprint = createBlueprint({ kit, lists, hooks, events: options.events === true, openapi: openapi !== null });
+	const build = options.build ?? {};
+	if (
+		!isObject(build) ||
+		Object.entries(build).some(
+			([key, text]) =>
+				!manifest.features.some((/** @type {{ key: string }} */ f) => f.key === key) ||
+				typeof text !== 'string' ||
+				text.trim().length === 0 ||
+				text.length > BUILD_TEXT_MAX,
+		)
+	)
+		throw kitError(
+			'invalid_config',
+			`build must map features of the manifest to texts of 1 to ${BUILD_TEXT_MAX} characters (what the website builds)`,
+		);
+	const blueprint = createBlueprint({
+		kit,
+		lists,
+		hooks,
+		events: options.events === true,
+		openapi: openapi !== null,
+		build: Object.freeze({ ...build }),
+	});
 	const kitRoutes = [
 		...createKitRoutes(kit, hooks),
 		...kit.dashboard.routes,

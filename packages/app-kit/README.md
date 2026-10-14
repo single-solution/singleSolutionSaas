@@ -55,10 +55,13 @@ The exact API is in [API.md](./API.md).
 - **Product dashboard** — `GET /sso?launch=` sessions, the switcher, roles and the dashboard API every product's
   `app/` pages call.
 - **Setup sheet** — `GET /v1/blueprint?websiteId=`, a call the Portal signs (`auth: 'portal'`): the product's part of
-  the website's Setup sheet (`ss.blueprint/1`): features with their settings and lists while on, connections state
-  only, widgets with readiness, staff permissions, events, the Overview checklist, docs and the product's
-  `hooks.blueprint` summaries. No secret can leave (connection values are never read into it, and any string holding
-  one becomes `[hidden]`). With the `openapi` option the kit also serves the product's `GET /openapi.json`.
+  the website's Setup sheet (`ss.blueprint/1`): features with their business profile tags (`recommendFor`) and their
+  settings and lists while on, connections state only, widgets with readiness, staff permissions, events, the Overview
+  checklist, docs, the product's `hooks.blueprint` summaries and what the website builds per feature on (the `build`
+  option). No secret can leave (connection values are never read into it, and any string holding one becomes
+  `[hidden]`). With the `openapi` option the kit also serves the product's `GET /openapi.json`. The advisor's Switch on
+  (`POST /v1/blueprint/features`, also a Portal call) switches features on, with what they need, for an Owner or
+  Support admin through the usual feature report.
 - **Widgets** — the product serves one public `widget.js` (the same bytes for every website). With the page's
   `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
   `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's

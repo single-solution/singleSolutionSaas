@@ -3,7 +3,7 @@
  *
  * - `createFakePortal()`: the Portal side of the Product ↔ Portal contract (PLAN 0.4.12): connect, price and feature
  *   reports, status (settable), websites, revocations, directory and launch consume, plus helpers that sign tokens,
- *   launches, notices and Portal calls (`signCall`, `callAsPortal`: `GET /v1/blueprint`);
+ *   launches, notices and Portal calls (`signCall`, `callAsPortal`: `GET /v1/blueprint`, `POST /v1/blueprint/features`);
  * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and the
  *   users with a permission (staff alerts), and calls a product's data-rights routes with a pasted server token;
  * - `createNotificationsDouble()`: Notifications as products see it: it takes events (`POST /v1/events`) and messages
@@ -464,19 +464,28 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 		 * @param {string} productId
 		 * @param {string} method
 		 * @param {string} target the path and query
+		 * @param {unknown} [body] sent as JSON
 		 * @returns {Promise<Response>}
 		 */
-		callAsPortal: async (productId, method, target) => {
+		callAsPortal: async (productId, method, target, body) => {
 			const product = products.get(productId);
 			if (!product?.handler) throw new Error(`product ${productId} is not connected`);
+			const text = body === undefined ? '' : JSON.stringify(body);
 			const headers = await signPortalCall({
 				signer,
 				audience: productId,
 				method,
 				target,
+				body: text,
 				timestamp: Math.floor(now() / 1000),
 			});
-			return product.handler(new Request(`${product.baseUrl}${target}`, { method, headers }));
+			return product.handler(
+				new Request(`${product.baseUrl}${target}`, {
+					method,
+					headers: { ...headers, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+					...(body === undefined ? {} : { body: text }),
+				}),
+			);
 		},
 		/** What the products sent. */
 		priceReports,

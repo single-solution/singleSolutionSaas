@@ -3,17 +3,22 @@
  * `GET /v1/blueprint?websiteId=`, a call signed by the Portal (`auth: 'portal'`), answered from what the kit already
  * keeps; nothing is stored for it.
  *
- * - **Features** from the manifest with on/off; while a feature is on, its settings with their values (`default: true`
- *   while the website has not saved its own) and its lists summarized (entries counted; the product's `blueprint` hook
- *   may word a summary). Shared settings are listed while one of their features is on.
+ * - **Features** from the manifest with on/off and the business profile answers they suit (`recommendFor`, for the
+ *   Portal's advisor); while a feature is on, its settings with their values (`default: true` while the website has
+ *   not saved its own) and its lists summarized (entries counted; the product's `blueprint` hook may word a summary).
+ *   Shared settings are listed while one of their features is on.
  * - **Connections**: state only (`set`, `state`, when last tested), never a value, its last characters or a test
  *   message.
  * - **Widgets** with readiness (on, served for the website and the merchant database connected), the widget script
  *   address and whether a visitor widget was seen on the website in the last 7 days.
  * - **Staff permissions** (for roles in Accounts and tickets), **events** (`<product>.settings.changed` when the product
  *   publishes events, plus the types its hook names), **docs** (the guide, and `/openapi.json` when the product gives
- *   its OpenAPI document), the product's copy of **business.json**, the Overview **checklist** and the hook's
- *   **summaries**.
+ *   its OpenAPI document), the product's copy of **business.json**, the Overview **checklist**, the hook's
+ *   **summaries** and **build**: what the website builds for each feature that is on (the product's `build` texts,
+ *   its guide's "What your website builds"), linked to the feature's section of the guide.
+ * - **Switch on** (`POST /v1/blueprint/features?websiteId=`, also a Portal call): the Setup sheet's advisor switches
+ *   features on for an Owner or Support admin the Portal names, with the features they need, through the same feature
+ *   report as the dashboard's Features page (the Portal checks the admin again when it accepts the report).
  *
  * No secret can leave: besides never reading connection values into the answer, every string of the finished answer
  * that holds a value saved in the website's Connections (8 characters or more) is replaced by `[hidden]`, so even a
@@ -122,12 +127,54 @@ export const checkAdditions = (answer, productId) => {
 	};
 };
 
+/** Admin roles that may switch features on (the dashboard's Features page has the same). */
+const SWITCHING_ROLES = Object.freeze(['owner', 'support']);
+const ADMIN_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
+/**
+ * The features a request switches on, with every feature they need (in manifest order), or why it cannot.
+ * @param {import('@ss/contracts').Manifest} manifest
+ * @param {unknown} asked
+ * @returns {{ ok: true, keys: string[] } | { ok: false, message: string }}
+ */
+export const withDependencies = (manifest, asked) => {
+	const known = new Map(manifest.features.map((feature) => [feature.key, feature]));
+	if (!Array.isArray(asked) || asked.length === 0 || asked.some((key) => typeof key !== 'string' || !known.has(key)))
+		return { ok: false, message: '`features` must list features of this product.' };
+	/** @type {Set<string>} */
+	const wanted = new Set();
+	/** @param {string} key */
+	const add = (key) => {
+		if (wanted.has(key)) return;
+		wanted.add(key);
+		for (const dependency of known.get(key)?.dependsOn ?? []) add(dependency);
+	};
+	for (const key of asked) add(key);
+	return { ok: true, keys: manifest.features.map((feature) => feature.key).filter((key) => wanted.has(key)) };
+};
+
+/**
+ * The admin a Portal call names: `{ id, name, role }` of an Owner or Support admin.
+ * @param {unknown} value
+ * @returns {import('./recent.js').Who | null}
+ */
+const adminOf = (value) => {
+	if (!isObject(value)) return null;
+	const { id, name, role } = value;
+	if (typeof id !== 'string' || !ADMIN_ID.test(id)) return null;
+	if (typeof name !== 'string' || name.trim().length === 0 || name.length > 120) return null;
+	if (typeof role !== 'string' || !SWITCHING_ROLES.includes(role)) return null;
+	return { kind: 'admin', id, name: name.trim(), role };
+};
+
 /**
  * @param {{ kit: import('./product.js').Kit, lists: Record<string, import('./server-api.js').ListDefinition>,
- *   hooks: import('./kit-routes.js').ProductHooks, events: boolean, openapi: boolean }} options `events`: the product
- *   publishes events; `openapi`: it serves its OpenAPI document at `/openapi.json`
+ *   hooks: import('./kit-routes.js').ProductHooks, events: boolean, openapi: boolean,
+ *   build: Readonly<Record<string, string>> }} options `events`: the product publishes events; `openapi`: it serves
+ *   its OpenAPI document at `/openapi.json`; `build`: what the website builds for each feature (checked by
+ *   `createProduct`)
  */
-export const createBlueprint = ({ kit, lists, hooks, events, openapi }) => {
+export const createBlueprint = ({ kit, lists, hooks, events, openapi, build: buildTexts }) => {
 	const { manifest, store, now, logger } = kit;
 
 	/** An address of the manifest made absolute against the product's own address. @param {string} value */
@@ -232,6 +279,7 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi }) => {
 					description: feature.description,
 					on: isOn,
 					dependsOn: [...feature.dependsOn],
+					recommendFor: [...(feature.recommendFor ?? [])],
 					settings: isOn ? settingsOf(feature.settings, values[feature.key] ?? {}) : [],
 					lists: isOn ? listsOfFeature(feature.key) : [],
 				};
@@ -289,6 +337,13 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi }) => {
 				{ key: 'business', done: business.found, text: `Publish your business basics at ${businessUrl}.` },
 			],
 			summaries: additions.summaries,
+			build: manifest.features
+				.filter((feature) => on.includes(feature.key) && buildTexts[feature.key] !== undefined)
+				.map((feature) => ({
+					feature: feature.key,
+					what: /** @type {string} */ (buildTexts[feature.key]),
+					docs: `${absolute(manifest.docsUrl)}#feature-${feature.key}`,
+				})),
 		};
 		const secrets = (
 			await Promise.all(Object.keys(kit.connections.definitions).map((name) => kit.connections.value(websiteId, name)))
@@ -296,22 +351,67 @@ export const createBlueprint = ({ kit, lists, hooks, events, openapi }) => {
 		return /** @type {ProductBlueprint} */ (hideSecrets(blueprint, secrets));
 	};
 
-	const route = defineRoute({
-		method: 'GET',
-		path: '/v1/blueprint',
-		auth: 'portal',
-		rateLimit: { limit: 60, windowSeconds: 60, per: 'website' },
-		handler: async (ctx) => {
-			if (ctx.websiteId === null) return problem('validation_failed', 'Name the website: ?websiteId=<id>.');
-			const found = await kit.status.lookup(ctx.websiteId, { wait: true, after: ctx.after });
-			if (!found.ok)
-				return found.code === 'portal_unreachable'
-					? problem('portal_unreachable')
-					: problem('website_not_found', 'This product does not know the website.');
-			if (found.status.status === 'removed') return problem('website_not_found', 'This website does not have this product.');
-			return build(ctx, found.status);
-		},
-	});
+	/**
+	 * The status of the website a Portal call names, or the problem to answer.
+	 * @param {RequestContext} ctx
+	 * @returns {Promise<{ ok: true, status: import('@ss/contracts').StatusResponse } | { ok: false, problem: ReturnType<typeof problem> }>}
+	 */
+	const websiteOf = async (ctx) => {
+		if (ctx.websiteId === null)
+			return { ok: false, problem: problem('validation_failed', 'Name the website: ?websiteId=<id>.') };
+		const found = await kit.status.lookup(ctx.websiteId, { wait: true, after: ctx.after });
+		if (!found.ok)
+			return {
+				ok: false,
+				problem:
+					found.code === 'portal_unreachable'
+						? problem('portal_unreachable')
+						: problem('website_not_found', 'This product does not know the website.'),
+			};
+		if (found.status.status === 'removed')
+			return { ok: false, problem: problem('website_not_found', 'This website does not have this product.') };
+		return { ok: true, status: found.status };
+	};
 
-	return Object.freeze({ routes: [route], build });
+	const routes = [
+		defineRoute({
+			method: 'GET',
+			path: '/v1/blueprint',
+			auth: 'portal',
+			rateLimit: { limit: 60, windowSeconds: 60, per: 'website' },
+			handler: async (ctx) => {
+				const found = await websiteOf(ctx);
+				return found.ok ? build(ctx, found.status) : found.problem;
+			},
+		}),
+		// the advisor's Switch on: `{ features, admin: { id, name, role } }` → `{ version, on, added }`
+		defineRoute({
+			method: 'POST',
+			path: '/v1/blueprint/features',
+			auth: 'portal',
+			maxBodyBytes: 8 * 1024,
+			rateLimit: { limit: 30, windowSeconds: 60, per: 'website' },
+			handler: async (ctx) => {
+				const body = isObject(ctx.body) ? ctx.body : {};
+				const admin = adminOf(body.admin);
+				if (admin === null)
+					return problem('validation_failed', 'Name the Owner or Support admin: admin { id, name, role }.', {
+						errors: [{ path: '/admin', message: 'must be an Owner or Support admin { id, name, role }' }],
+					});
+				const asked = withDependencies(manifest, body.features);
+				if (!asked.ok)
+					return problem('validation_failed', asked.message, { errors: [{ path: '/features', message: asked.message }] });
+				const found = await websiteOf(ctx);
+				if (!found.ok) return found.problem;
+				const websiteId = found.status.websiteId;
+				const { on, featuresVersion } = await kit.reports.switches(websiteId);
+				const added = asked.keys.filter((key) => !on.includes(key));
+				if (added.length === 0) return { version: featuresVersion, on, added };
+				const result = await kit.reports.reportFeatures({ websiteId, on: [...on, ...added], actor: admin });
+				return result.ok ? { version: result.version, on: result.on, added } : result.problem;
+			},
+		}),
+	];
+
+	return Object.freeze({ routes, build });
 };
