@@ -23,7 +23,7 @@ import {
 	selfView,
 	staffView,
 } from '../core/profile.js';
-import { checkOwnPermissions, checkRole, permissionCatalog, sessionEnd } from '../core/roles.js';
+import { checkOwnPermissions, checkRole, permissionCatalog, remembered, sessionEnd } from '../core/roles.js';
 import {
 	deviceIdOf,
 	deviceOf,
@@ -144,6 +144,18 @@ describe('roles and rules', () => {
 		expect(checkRole('ok_role', { name: 'R', description: 'x'.repeat(400) }).ok).toBe(false);
 		expect(checkRole('ok_role', { name: 'R', permissions: 'x' })).toMatchObject({ ok: true, value: { permissions: [] } });
 		expect(sessionEnd({ now: 0, remember: true, role: { sessionHours: 2, rememberDays: 0 } })).toBe(2 * 3_600_000);
+		// A14: never remembered, and the server end is the longer of the two lengths
+		expect(sessionEnd({ now: 0, remember: false, role: { sessionHours: 2, rememberDays: 3, remember: 'never' } })).toBe(
+			72 * 3_600_000,
+		);
+		expect(sessionEnd({ now: 0, remember: false, role: { sessionHours: 100, rememberDays: 1, remember: 'never' } })).toBe(
+			100 * 3_600_000,
+		);
+		expect(remembered({ remember: 'never' }, true)).toBe(false);
+		expect(remembered({ remember: 'always' }, false)).toBe(true);
+		expect(remembered({ remember: 'ask' }, true)).toBe(true);
+		expect(checkRole('ok_role', { name: 'R', remember: 'never' })).toMatchObject({ ok: true, value: { remember: 'never' } });
+		expect(checkRole('ok_role', { name: 'R', remember: 'sometimes' })).toMatchObject({ ok: false, field: 'remember' });
 		expect(checkOwnPermissions('x').ok).toBe(false);
 		expect(checkOwnPermissions([{ key: 'a', name: '' }]).ok).toBe(false);
 		expect(checkOwnPermissions([null]).ok).toBe(false);

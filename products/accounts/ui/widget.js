@@ -45,7 +45,7 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {number} passwordMinLength
  * @property {{ version: string, url: string } | null} terms
  * @property {{ signUp?: boolean, minLength: number, letterAndDigit: boolean, selfReset: 'code' | 'off', forgotUrl: string } | null} [phonePassword]
- * @property {'ask' | 'ask_ticked' | 'always'} [remember] "Remember me" of the role sign-ups get (A6)
+ * @property {'ask' | 'ask_ticked' | 'always' | 'never'} [remember] "Remember me" of the role sign-ups get (A6, A14)
  * @property {boolean} [signInPaused] the role sign-ups get has its sign-in paused (A6)
  * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[] }} [profile] (A11)
  * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean } | null} [roleRequests] (A5)

@@ -221,9 +221,11 @@ export const createService = (product) => {
 	 * @param {Record<string, unknown>} [extra] more members of the answer (recovery codes)
 	 */
 	const issue = async (s, user, { method, remember: asked, device }, extra = {}) => {
-		const role = await roleOf(s, user);
-		// the role's "remember me" (A6): `always` remembers whatever the box said
-		const remember = s.on.includes('roles') ? remembered(role, asked) : asked;
+		const stored = await roleOf(s, user);
+		// the role's "remember me" applies while Roles and permissions is on (A6, A14): `always` remembers whatever the box
+		// said; `never` never remembers (the session ends with the browser, within the role's longer length)
+		const role = s.on.includes('roles') ? stored : { ...stored, remember: /** @type {const} */ ('ask') };
+		const remember = remembered(role, asked);
 		const secret = randomSecret(32);
 		const expiresAt = new Date(sessionEnd({ now: now(), remember, role }));
 		const session = await s.store.sessions.create({

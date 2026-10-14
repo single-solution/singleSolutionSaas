@@ -2004,7 +2004,9 @@ describe('admin widgets', () => {
 		await click(buttonIn(/** @type {HTMLElement} */ (root.querySelectorAll('ul > li')[2]), strings['roles.edit']));
 		expect(fieldIn(form, strings['roles.rank']).disabled).toBe(false);
 		fieldIn(form, strings['roles.rank']).value = '450';
-		fieldIn(form, strings['roles.remember']).value = 'always';
+		const rememberChoices = [...fieldIn(form, strings['roles.remember']).querySelectorAll('option')].map((o) => o.value);
+		expect(rememberChoices).toEqual(['ask', 'ask_ticked', 'always', 'never']);
+		fieldIn(form, strings['roles.remember']).value = 'never';
 		checkIn(form, strings['method.email_password']).checked = true;
 		checkIn(form, strings['roles.logSignIns']).checked = true;
 		expect(checkIn(form, strings['roles.sessionRolling']).checked).toBe(false);
@@ -2012,7 +2014,7 @@ describe('admin widgets', () => {
 		await submit(buttonIn(form, strings['roles.save']));
 		expect(saved[0]).toMatchObject({
 			rank: 450,
-			remember: 'always',
+			remember: 'never',
 			methods: ['email_password'],
 			logSignIns: true,
 			sessionRolling: true,
@@ -2173,6 +2175,25 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		expect(hasButton(root, strings['signIn.forgot'])).toBe(false);
 		expect(hasButton(root, strings['signIn.toSignUp'])).toBe(false);
 		expect(checkIn(root, strings['signIn.remember']).closest('label')?.hidden).toBe(true);
+	});
+
+	it('Remember me is hidden and unchecked when the role never remembers (A14): the sign-in sends remember: false', async () => {
+		const host = place('sign_in');
+		const { server } = await start(
+			{ 'POST /v1/sign-in/password': () => answer(200, signedIn({ remember: false })) },
+			{ features: ['email_password'], settings: { remember: 'never' } },
+		);
+		const root = shadow(host);
+		const box = checkIn(root, strings['signIn.remember']);
+		expect(box.closest('label')?.hidden).toBe(true);
+		expect(box.checked).toBe(false);
+		fieldIn(root, strings['fields.email']).value = 'ana@example.com';
+		fieldIn(root, strings['fields.password']).value = 'secret-pass';
+		await submit(buttonIn(root, strings['signIn.submit']));
+		expect(server.last('POST /v1/sign-in/password')?.body).toMatchObject({ remember: false });
+		// kept only until the browser closes
+		expect(window.sessionStorage.getItem(REFRESH_STORAGE_KEY)).toBe('ref-1');
+		expect(window.localStorage.getItem(REFRESH_STORAGE_KEY)).toBeNull();
 	});
 
 	it('a paused sign-in shows its text instead of the forms', async () => {

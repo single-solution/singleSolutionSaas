@@ -27,7 +27,7 @@ const OWN_SOURCE = 'site';
  * @property {number} rememberDays
  * @property {boolean} [sessionRolling]
  * @property {number} [rank]
- * @property {'ask' | 'ask_ticked' | 'always'} [remember]
+ * @property {'ask' | 'ask_ticked' | 'always' | 'never'} [remember]
  * @property {string[]} [methods]
  * @property {'on' | 'paused'} [signIn]
  * @property {boolean} [logSignIns]
@@ -116,6 +116,7 @@ export const mountRolesAdmin = ({ host, api, config }) => {
 				element(doc, 'option', { value: 'ask' }, t('roles.rememberAsk')),
 				element(doc, 'option', { value: 'ask_ticked' }, t('roles.rememberAskTicked')),
 				element(doc, 'option', { value: 'always' }, t('roles.rememberAlways')),
+				element(doc, 'option', { value: 'never' }, t('roles.rememberNever')),
 			);
 			const signIn = make.field('select', t('roles.signIn'));
 			signIn.input.append(

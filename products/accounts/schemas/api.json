@@ -810,11 +810,11 @@
 				"sessionExpiresAt": {
 					"type": "string",
 					"format": "date-time",
-					"description": "When the session ends: the role’s session length, or its remember-me days."
+					"description": "When the session ends: the role’s session length, or its remember-me days (with remember never: the longer of the two, unless the browser closes first)."
 				},
 				"remember": {
 					"type": "boolean",
-					"description": "The session is remembered."
+					"description": "The session is remembered: keep the refresh token across browser restarts. false: keep it only until the browser closes (sessionStorage, or a cookie without an expiry on your server)."
 				},
 				"user": {
 					"$ref": "#/components/schemas/User"
@@ -1025,8 +1025,8 @@
 				},
 				"remember": {
 					"type": "string",
-					"enum": ["ask", "ask_ticked", "always"],
-					"description": "The remember me box: shown, shown checked, or no box and always remembered."
+					"enum": ["ask", "ask_ticked", "always", "never"],
+					"description": "The remember me box: shown, shown checked, no box and always remembered, or no box and never remembered (the session ends when the browser closes, and on the server at the latest after the longer of sessionHours and rememberDays)."
 				},
 				"methods": {
 					"type": "array",
@@ -1106,8 +1106,8 @@
 				},
 				"remember": {
 					"type": "string",
-					"enum": ["ask", "ask_ticked", "always"],
-					"description": "The remember me box: shown, shown checked, or no box and always remembered.",
+					"enum": ["ask", "ask_ticked", "always", "never"],
+					"description": "The remember me box: shown, shown checked, no box and always remembered, or no box and never remembered (the session ends when the browser closes, and on the server at the latest after the longer of sessionHours and rememberDays).",
 					"default": "ask"
 				},
 				"methods": {

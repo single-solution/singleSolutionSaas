@@ -137,8 +137,49 @@ describe('A6: per-role sign-in options', () => {
 		});
 		await save({ remember: 'ask_ticked' });
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.remember).toBe('ask_ticked');
-		expect(code(await save({ remember: 'never' }))).toBe('validation_failed');
+		expect(code(await save({ remember: 'sometimes' }))).toBe('validation_failed');
 		await save({ remember: 'ask' });
+	});
+
+	it('A14 remember never: no box, never remembered, the server end is the role’s longer length; default unchanged', async () => {
+		const customer = (await env.serverCall('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
+		expect(customer).toMatchObject({ remember: 'ask', sessionHours: 24, rememberDays: 30, sessionRolling: false });
+		const save = (/** @type {Record<string, unknown>} */ fields) =>
+			env.serverCall('PUT', '/v1/roles/customer', { ...customer, ...fields });
+		await signUp('never@example.com');
+		// today's default: the box decides
+		expect((await signIn('never@example.com', undefined, { remember: true })).json).toMatchObject({ remember: true });
+		const saved = await save({ remember: 'never' });
+		expect(saved.json.remember).toBe('never');
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.remember).toBe('never');
+		// the box is ignored: the session is not remembered (the browser keeps it until it closes), and the server ends it
+		// at the latest after the longer of the session length and the remember-me days
+		for (const asked of [true, false]) {
+			const answer = await signIn('never@example.com', undefined, { remember: asked });
+			expect(answer.json.remember).toBe(false);
+			expect(Date.parse(answer.json.sessionExpiresAt) - env.now()).toBe(30 * 86_400_000);
+		}
+		await save({ remember: 'never', sessionHours: 720, rememberDays: 1 });
+		expect(Date.parse((await signIn('never@example.com')).json.sessionExpiresAt) - env.now()).toBe(720 * 3_600_000);
+		await save({ remember: 'never', sessionHours: 5, rememberDays: 0 });
+		const short = await signIn('never@example.com', undefined, { remember: true });
+		expect(Date.parse(short.json.sessionExpiresAt) - env.now()).toBe(5 * 3_600_000);
+		// a rolling session keeps the rule at each renewal
+		await save({ remember: 'never', sessionHours: 2, rememberDays: 3, sessionRolling: true });
+		const rolling = await signIn('never@example.com', undefined, { remember: true });
+		env.advance(3_600_000);
+		const renewed = await env.visitor('POST', '/v1/session/refresh', { refreshToken: rolling.json.refreshToken });
+		expect(renewed.json.remember).toBe(false);
+		expect(Date.parse(renewed.json.sessionExpiresAt) - env.now()).toBe(3 * 86_400_000);
+		// the role's remember applies only while Roles and permissions is on: off, the box decides again
+		await env.switchOn(
+			ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks', 'roles', 'role_requests'].includes(key)),
+		);
+		expect((await signIn('never@example.com', undefined, { remember: true })).json.remember).toBe(true);
+		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.remember).toBe('ask');
+		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+		await env.serverCall('PUT', '/v1/roles/customer', customer);
+		expect((await signIn('never@example.com', undefined, { remember: true })).json.remember).toBe(true);
 	});
 
 	it('methods: a role signs in only with its methods; the refusal comes before a code is sent', async () => {

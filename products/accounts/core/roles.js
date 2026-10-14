@@ -11,10 +11,11 @@
  *   me" in days (0: no remember me). Defaults: 1 day and 30 days. With `sessionRolling` (K-27) a session's end moves
  *   at each renewal to that length from then, so a session in use does not end; without it (the default) the end is
  *   fixed at sign-in.
- * - Per-role sign-in options (PLAN 0.8.10 A6, A10): `remember` (`ask`, `ask_ticked`, or `always`: no box, always
- *   remembered), `methods` (the sign-in methods its users may use; [] = all), `signIn` (`on`, or `paused`: its users,
- *   and new sign-ups while it is the default role, are refused) and `logSignIns` (sign-ins and failures go to the
- *   activity log).
+ * - Per-role sign-in options (PLAN 0.8.10 A6, A10, A14): `remember` (`ask`, `ask_ticked`, `always`: no box, always
+ *   remembered, or `never`: no box, never remembered, so the session ends when the browser closes, and on the server
+ *   at the latest after the role's longer length, its session length or its remember-me days), `methods` (the sign-in
+ *   methods its users may use; [] = all), `signIn` (`on`, or `paused`: its users, and new sign-ups while it is the
+ *   default role, are refused) and `logSignIns` (sign-ins and failures go to the activity log).
  * - A role has a `rank` (A4): a smaller number ranks higher. The ready-made roles rank Owner 100, Business manager 200,
  *   Product manager 300, Marketing manager 400, Support staff 500 and Customer 900; the merchant places their own roles
  *   between 101 and 899 (600 when not given). Staff never edit, block or delete a user whose role ranks above theirs.
@@ -38,8 +39,8 @@ const MAX_REMEMBER_DAYS = 365;
 const OWN_RANK = Object.freeze({ min: 101, max: 899, default: 600 });
 /** The key of the Owner role (A4: the last unblocked Owner stays). */
 export const OWNER_ROLE = 'owner';
-/** "Remember me" per role (A6). */
-const REMEMBER_OPTIONS = Object.freeze(/** @type {const} */ (['ask', 'ask_ticked', 'always']));
+/** "Remember me" per role (A6; `never`, A14). */
+const REMEMBER_OPTIONS = Object.freeze(/** @type {const} */ (['ask', 'ask_ticked', 'always', 'never']));
 /** The sign-in methods a role may be limited to (A6): the sign-in features. */
 export const ROLE_METHODS = Object.freeze(
 	/** @type {const} */ (['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook']),
@@ -58,7 +59,7 @@ export const DEFAULT_ROLE = 'customer';
  * @property {number} rememberDays
  * @property {boolean} sessionRolling each renewal moves the session's end to its length from then (K-27)
  * @property {number} rank a smaller number ranks higher (A4)
- * @property {'ask' | 'ask_ticked' | 'always'} remember (A6)
+ * @property {'ask' | 'ask_ticked' | 'always' | 'never'} remember (A6, A14)
  * @property {string[]} methods the sign-in methods its users may use; [] = all (A6)
  * @property {'on' | 'paused'} signIn (A6)
  * @property {boolean} logSignIns sign-ins, failures, resets and recovery codes in the activity log (A10)
@@ -198,7 +199,7 @@ export const checkRole = (key, input) => {
 		return { ok: false, field: 'rank', message: `Place your own roles at rank ${OWN_RANK.min} to ${OWN_RANK.max}.` };
 	const remember = body.remember ?? 'ask';
 	if (!REMEMBER_OPTIONS.includes(/** @type {any} */ (remember)))
-		return { ok: false, field: 'remember', message: 'Remember me is ask, ask_ticked or always.' };
+		return { ok: false, field: 'remember', message: 'Remember me is ask, ask_ticked, always or never.' };
 	const methods = Array.isArray(body.methods) ? [...new Set(body.methods)] : body.methods === undefined ? [] : null;
 	if (!methods || methods.some((m) => !ROLE_METHODS.includes(/** @type {any} */ (m))))
 		return { ok: false, field: 'methods', message: `Methods are a list of ${ROLE_METHODS.join(', ')} ([] = all).` };
@@ -245,19 +246,29 @@ export const signInRefusal = (role, method) => {
 };
 
 /**
- * Whether a session is remembered (A6): always for a role set to `always`, else as the user chose.
+ * Whether a session is remembered (A6, A14): always for a role set to `always`, never for a role set to `never`, else as
+ * the user chose.
  * @param {Pick<Role, 'remember'>} role
  * @param {boolean} asked
  */
-export const remembered = (role, asked) => role.remember === 'always' || asked;
+export const remembered = (role, asked) => role.remember !== 'never' && (role.remember === 'always' || asked);
 
 /**
- * When a session ends, from now: the role's session length, or its remember-me days when the user asked to be
- * remembered (at sign-in, and at each renewal while the role's sessions roll).
- * @param {{ now: number, remember: boolean, role: Pick<Role, 'sessionHours' | 'rememberDays'> }} input
+ * When a session ends, from now (at sign-in, and at each renewal while the role's sessions roll): the role's session
+ * length, or its remember-me days when the user asked to be remembered. A role set to `never` (A14) is never
+ * remembered: the browser forgets the session when it closes, and the server ends it at the latest after the role's
+ * longer length (its session length or its remember-me days).
+ * @param {{ now: number, remember: boolean, role: Pick<Role, 'sessionHours' | 'rememberDays'> & Partial<Pick<Role, 'remember'>> }} input
  */
-export const sessionEnd = ({ now, remember, role }) =>
-	now + (remember && role.rememberDays > 0 ? role.rememberDays * 24 : role.sessionHours) * 3_600_000;
+export const sessionEnd = ({ now, remember, role }) => {
+	const hours =
+		role.remember === 'never'
+			? Math.max(role.sessionHours, role.rememberDays * 24)
+			: remember && role.rememberDays > 0
+				? role.rememberDays * 24
+				: role.sessionHours;
+	return now + hours * 3_600_000;
+};
 
 /**
  * The permission catalog the Roles admin offers: Accounts' own, each pasted product's and the merchant's own names.

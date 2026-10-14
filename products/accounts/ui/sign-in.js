@@ -4,7 +4,7 @@
  * code, Google, Apple, Facebook), the two-step step (code, recovery code or the first setup), the pages Accounts links
  * to (password reset, invite, setup link, magic link, a social sign-in's hand-over) and, once signed in, "Signed in as
  * …" with Sign out. "Remember me" follows the role sign-ups get, and a paused sign-in shows its text instead of the
- * forms (PLAN 0.8.10 A2, A3, A6).
+ * forms (PLAN 0.8.10 A2, A3, A6, A14).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -66,10 +66,13 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			const make = fieldMaker(doc, 'ss-sign-in');
 			const box = element(doc, 'section', { class: 'box' });
 			root.append(box);
-			/** One "Remember me" box: it keeps its choice from view to view; the role sign-ups get may check or hide it (A6). */
+			/**
+			 * One "Remember me" box: it keeps its choice from view to view; the role sign-ups get may check or hide it (A6):
+			 * `always` hides it checked, `never` hides it unchecked (A14: the session ends when the browser closes).
+			 */
 			const remember = make.check(t('signIn.remember'));
 			remember.input.checked = settings.remember === 'ask_ticked' || settings.remember === 'always';
-			setHidden(remember.wrap, settings.remember === 'always');
+			setHidden(remember.wrap, settings.remember === 'always' || settings.remember === 'never');
 			/** @type {(typeof methods)[number] | undefined} */
 			let method = methods[0];
 			let signUp = false;

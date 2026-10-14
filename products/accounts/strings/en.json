@@ -348,6 +348,7 @@
 	"roles.rememberAsk": "Ask, not checked",
 	"roles.rememberAskTicked": "Ask, checked",
 	"roles.rememberAlways": "Always remember (no box)",
+	"roles.rememberNever": "Never remember: signed out when the browser closes (no box)",
 	"roles.methods": "Sign-in methods (none checked: all of them)",
 	"roles.signIn": "Sign-in",
 	"roles.signInOn": "On",
