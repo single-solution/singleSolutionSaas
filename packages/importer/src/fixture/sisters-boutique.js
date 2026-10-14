@@ -1,10 +1,10 @@
 /**
  * Sample records shaped as Sisters Boutique keeps them (`@ss/importer/fixture`; SB's Mongoose models at 8f809d8:
- * `packages/db/src/models`), with neutral fake values (no real names, phones or e-mail addresses), for the tests of
+ * `packages/db/src/models`), with neutral fake values (no real names, phones or email addresses), for the tests of
  * the `sisters-boutique` mapping and any run through the real products. It holds each kind SB has and the edge cases
  * the re-audit found: a guest saved twice and a guest who later became a member (merged), a staff phone a member has,
  * an inactive category, a size chart with a `-` column key and a stale value, the same attribute and brand slug in two
- * categories, a product-only colour, a stale attribute key, a draft without variants, an empty offer scenario, an
+ * categories, a product-only color, a stale attribute key, a draft without variants, an empty offer scenario, an
  * overnight offer, an offer SB never applies and two the products cannot hold, a paid order with no payment entry, a
  * refunded and a returned order, an order whose last timeline entry is not its status, and loyalty whose stored
  * balance differs from its transactions.
@@ -522,7 +522,7 @@ export const sbSource = () => ({
 			attributeCustomOptions: { colour: [{ value: 'dusty-pink', label: 'Dusty Pink' }] },
 			attributeDefaults: { size: 'm' },
 			variants: [
-				// two colours at once, and a stale key
+				// two colors at once, and a stale key
 				{
 					_id: oid(41),
 					priceRupees: 5000,
@@ -891,7 +891,7 @@ export const sbSource = () => ({
 			placedAt: at('2026-08-27T10:00:00Z'),
 		},
 		{
-			// delivered, then cancelled: points reversed, redeemed points given back, stock released
+			// delivered, then canceled: points reversed, redeemed points given back, stock released
 			_id: oid(63),
 			orderNumber: 'IM-2026-0004',
 			customerId: oid(10),

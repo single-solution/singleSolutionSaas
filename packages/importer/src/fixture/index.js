@@ -1,6 +1,6 @@
 /**
  * `@ss/importer/fixture` — the test mappings and their source documents: a small store-like `feedback` collection
- * (ObjectId ids, mixed-case e-mails, a duplicate, a hidden message and an empty one) mapped into the e2e test product
+ * (ObjectId ids, mixed-case emails, a duplicate, a hidden message and an empty one) mapped into the e2e test product
  * Notes (`notes` import collection), and the example shop (`shop.js`: people, catalog, orders, chats and analytics)
  * mapped into Accounts, Ecommerce, Chat and Growth; and sample records shaped as Sisters Boutique keeps them
  * (`sisters-boutique.js`) for the store mapping of the same name. Used by this unit's tests and by the e2e import tests.

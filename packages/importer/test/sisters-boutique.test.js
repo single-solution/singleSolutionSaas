@@ -228,13 +228,13 @@ describe('the Sisters Boutique mapping', () => {
 			],
 			video: { kind: 'youtube', url: 'https://youtu.be/abcdefghijk' },
 			variants: [
-				// the stale `fit` key is cleared; several colours stay a list
+				// the stale `fit` key is cleared; several colors stay a list
 				{
 					price: 500_000,
 					stock: 4,
 					attributes: { [id('att', SB_IDS.sizeLawn)]: 'm', [id('att', SB_IDS.colourLawn)]: ['red', 'blue'] },
 				},
-				// a product-only colour keeps its label
+				// a product-only color keeps its label
 				{ soldOut: true, attributes: { [id('att', SB_IDS.colourLawn)]: 'Dusty Pink' } },
 			],
 			attributeSetup: [

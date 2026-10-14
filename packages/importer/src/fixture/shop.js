@@ -414,7 +414,7 @@ const STAFF_ROLES = Object.freeze({ admin: 'owner', staff: 'support_staff' });
 
 /**
  * An order's payment entry by the status rule (IMP-13): a bank transfer is paid at its first `confirmed` entry, cash
- * on delivery at `delivered`; a cancelled order has none.
+ * on delivery at `delivered`; a canceled order has none.
  * @param {Record<string, any>} doc @param {number} total @param {import('../mapping.js').MapContext} ctx
  */
 const paymentsOf = (doc, total, ctx) => {

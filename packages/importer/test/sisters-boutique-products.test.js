@@ -139,7 +139,7 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 			isPasswordHash: (/** @type {string} */ hash) => /^\$2[aby]\$\d{2}\$/.test(hash),
 		};
 		expect(refusals(users, (user) => accounts.checkImportedUser(user, rules))).toEqual([]);
-		// Accounts keeps one user per e-mail address and per phone
+		// Accounts keeps one user per email address and per phone
 		const checked = users.map((user) => /** @type {any} */ (accounts.checkImportedUser(user, rules)).value);
 		expect(repeated(checked.map((user) => user.phone).filter(Boolean))).toEqual([]);
 		expect(repeated(checked.map((user) => user.email).filter(Boolean))).toEqual([]);
