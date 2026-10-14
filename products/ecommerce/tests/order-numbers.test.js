@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_NUMBER_PATTERN,
 	NUMBER_PATTERNS,
+	ORDER_NUMBER,
 	counterIdOf,
 	counterNumbers,
 	describeNumberForm,
@@ -30,6 +31,16 @@ describe('order numbers (E30)', () => {
 			digits: 8,
 		});
 		expect(numberFormOf({ numberDigits: 2 }).digits).toBe(4);
+		// a number goes in addresses and is looked up by them: a prefix keeps letters, digits, - and _ only
+		const spaced = numberFormOf({ numberPrefix: 'Order #1/' });
+		expect(spaced.prefix).toBe('Order1');
+		expect(orderNumberOf(spaced, { year: 2026, sequence: 7 })).toMatch(ORDER_NUMBER);
+		expect(
+			orderNumberOf(numberFormOf({ ...spaced, numberPrefix: 'x'.repeat(12), numberPattern: '{prefix}{year}-{number}' }), {
+				year: 2026,
+				sequence: 999_999_999_999,
+			}),
+		).toMatch(ORDER_NUMBER);
 		expect(numberFormOf({ numberDigits: 4.5 }).digits).toBe(6);
 		expect([isYearly(RUNNING), isYearly(YEARLY)]).toEqual([false, true]);
 	});

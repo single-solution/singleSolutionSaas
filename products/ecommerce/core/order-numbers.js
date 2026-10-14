@@ -8,6 +8,8 @@
  *   (for example `SH-2026-0043` with 4 digits).
  *
  * The sequence has at least `numberDigits` digits (4–8, default 6; zeros in front) and grows past them when it must.
+ * A number is letters, digits, `-` and `_` only (it goes in addresses and is looked up by them): other characters of
+ * the prefix are left out.
  * @module
  */
 import { escapeRegex } from './lookup.js';
@@ -20,9 +22,13 @@ export const NUMBER_PATTERNS = Object.freeze(/** @type {NumberPattern[]} */ (['{
 /** The form of a new website: one running counter. @type {NumberPattern} */
 export const DEFAULT_NUMBER_PATTERN = '{prefix}{number}';
 /** Digits of the sequence by default, and their range. */
-export const NUMBER_DIGITS = Object.freeze({ default: 6, min: 4, max: 8 });
+const NUMBER_DIGITS = Object.freeze({ default: 6, min: 4, max: 8 });
 /** The longest sequence a number may carry. */
 const MAX_SEQUENCE_DIGITS = 12;
+/** Every order number: what an order page looks a number up by (`GET /v1/shop/orders/by-number/:number`). */
+export const ORDER_NUMBER = /^[A-Za-z0-9_-]{1,40}$/;
+/** Characters a prefix may not carry. */
+const NOT_IN_NUMBERS = /[^A-Za-z0-9_-]/g;
 
 /**
  * A website's order number form from its `checkout` settings (unknown values fall back to the defaults).
@@ -33,7 +39,7 @@ export const numberFormOf = ({ numberPattern, numberPrefix, numberDigits }) => (
 	pattern: NUMBER_PATTERNS.includes(/** @type {NumberPattern} */ (numberPattern))
 		? /** @type {NumberPattern} */ (numberPattern)
 		: DEFAULT_NUMBER_PATTERN,
-	prefix: typeof numberPrefix === 'string' ? numberPrefix : '',
+	prefix: typeof numberPrefix === 'string' ? numberPrefix.replace(NOT_IN_NUMBERS, '') : '',
 	digits: Number.isSafeInteger(numberDigits)
 		? Math.min(NUMBER_DIGITS.max, Math.max(NUMBER_DIGITS.min, Number(numberDigits)))
 		: NUMBER_DIGITS.default,

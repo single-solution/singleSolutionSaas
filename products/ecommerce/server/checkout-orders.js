@@ -51,6 +51,7 @@ import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { byActor, orderMoney, serverNote } from '../core/orders.js';
+import { ORDER_NUMBER } from '../core/order-numbers.js';
 import { checkTransition, planTransition } from '../core/transitions.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests, phoneRulesOf } from './guests.js';
@@ -79,7 +80,6 @@ const PROOF_MAX_BYTES = 10 * 1_048_576;
 const PROOF_SECONDS = 900;
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-const ORDER_NUMBER = /^[A-Za-z0-9_-]{1,40}$/;
 
 /** @param {string} url @param {string} name @param {string} value */
 const withParam = (url, name, value) => {

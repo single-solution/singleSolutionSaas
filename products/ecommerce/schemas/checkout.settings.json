@@ -12,7 +12,7 @@
 		"numberPrefix": {
 			"type": "string",
 			"title": "Order number prefix",
-			"description": "Put before every order number (for example SH-); use letters, digits, - and _.",
+			"description": "Put before every order number (for example SH-): letters, digits, - and _ (other characters are left out, as order numbers go in addresses).",
 			"default": "",
 			"maxLength": 12
 		},

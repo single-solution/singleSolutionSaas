@@ -51,7 +51,7 @@ export const STAFF_ALERT_LINK = 'link';
 export const STAFF_ALERT_PHONE = 'phone';
 
 /** The `staffPermission` value that alerts every staff member who works with the alert's subject. */
-export const ALL_STAFF = 'all_staff';
+const ALL_STAFF = 'all_staff';
 /**
  * The permission `staffPermission: all_staff` stands for, per event: every staff member who may see orders, and for a
  * claim every one who handles claims.
