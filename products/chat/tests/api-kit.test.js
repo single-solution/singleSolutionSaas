@@ -84,6 +84,9 @@ describe('widgets and docs', () => {
 			'attachments',
 		]);
 		await sys.setting('visitor_chat', 'avatarUrl', 'http://not-https.example.com/a.png');
+		await sys.setting('proactive_idle', 'messageProduct', 'Still deciding on {product}?');
+		await sys.setting('proactive_idle', 'oncePer', 'product');
+		await sys.setting('proactive_idle', 'hideOnMobile', true);
 		await sys.list('page_rules', [{ path: '/products/**', delay: 10, message: 'Need help choosing?' }]);
 		await sys.list('flows', [
 			{ id: 'w', name: 'W', start: { kind: 'page', path: '/', delay: 0 }, steps: [{ kind: 'end' }] },
@@ -101,6 +104,10 @@ describe('widgets and docs', () => {
 				idleMinutes: 7,
 				dismissDays: 7,
 				pageRules: [{ path: '/products/**', delay: 10, message: 'Need help choosing?' }],
+				// the idle nudge's text per page kind, once per and phones (C14)
+				messages: { product: 'Still deciding on {product}?', category: '', deals: '', cart: '' },
+				oncePer: 'product',
+				hideOnMobile: true,
 			},
 			flows: [{ id: 'w', name: 'W', start: { kind: 'page', path: '/', delay: 0 } }],
 			attachments: { visitors: 'off', maxBytes: 5 * 1024 * 1024, storage: true },

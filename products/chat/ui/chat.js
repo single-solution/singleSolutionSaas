@@ -534,11 +534,15 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		paint();
 		if (!stopped) closedChecks.start(false);
 	};
-	/** @param {import('./proactive.js').Kind} kind @param {string} text */
-	const offer = (kind, text) => {
+	/**
+	 * Show a proactive message once per `once` (its kind, or the idle nudge of one product); false while the window is
+	 * open.
+	 * @param {import('./proactive.js').Kind} kind @param {string} text @param {string} [once]
+	 */
+	const offer = (kind, text, once = kind) => {
 		if (isOpen) return false;
-		if (stopped || !memory.allowed(kind)) return true;
-		memory.shown(kind);
+		if (stopped || !memory.allowed(once)) return true;
+		memory.shown(once);
 		nudgeText.textContent = text;
 		setHidden(nudge, false);
 		return true;
@@ -558,7 +562,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		settings: s,
 		t,
 		path: win.location.pathname,
-		productName: () => page()?.productName ?? null,
+		page,
 		offer,
 		startFlow: (flow) => void flowNudge(flow),
 	});

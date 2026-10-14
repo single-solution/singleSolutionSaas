@@ -14,31 +14,47 @@
 			"title": "Nudge on product pages",
 			"default": "",
 			"maxLength": 300,
-			"description": "{product} = the product’s name. Empty = the general nudge text."
+			"description": "{product} = the product’s name. Empty = the general nudge text (Texts). Your pages name the page kind with SSChat.setPage.",
+			"x-ui": {
+				"group": "Nudge text per page"
+			}
 		},
 		"messageCategory": {
 			"type": "string",
 			"title": "Nudge on category pages",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"description": "Empty = the general nudge text.",
+			"x-ui": {
+				"group": "Nudge text per page"
+			}
 		},
 		"messageDeals": {
 			"type": "string",
 			"title": "Nudge on deals pages",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"description": "Empty = the general nudge text.",
+			"x-ui": {
+				"group": "Nudge text per page"
+			}
 		},
 		"messageCart": {
 			"type": "string",
 			"title": "Nudge on the cart",
 			"default": "",
-			"maxLength": 300
+			"maxLength": 300,
+			"description": "Empty = the general nudge text.",
+			"x-ui": {
+				"group": "Nudge text per page"
+			}
 		},
 		"oncePer": {
 			"type": "string",
 			"title": "Show the nudge once per",
 			"default": "session",
-			"enum": ["session", "product"]
+			"enum": ["session", "product"],
+			"description": "Session: once per visit. Product: once for each product page the visitor looks at (once per visit on other pages)."
 		},
 		"hideOnMobile": {
 			"type": "boolean",

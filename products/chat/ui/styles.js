@@ -5,6 +5,8 @@
  * wrap long words and links, and their tables and code scroll inside the bubble.
  * @module
  */
+import { PHONE_MEDIA } from '../core/widgets.js';
+
 export const WIDGET_CSS = `
 :host { display: block; font-family: var(--ss-font-family, inherit); color: var(--ss-color-text, #1f2937);
   --bg: var(--ss-color-background, #ffffff); --line: var(--ss-color-border, #d1d5db); --accent: var(--ss-color-accent, #4f46e5);
@@ -86,7 +88,7 @@ p { overflow-wrap: anywhere; }
 .composer { display: flex; gap: 8px; align-items: end; padding: 8px 12px; border-top: 1px solid var(--line); }
 .composer textarea { flex: 1; resize: none; } .composer button { margin: 0; }
 .window > .status { padding: 0 12px 8px; }
-@media (max-width: 480px) {
+@media ${PHONE_MEDIA} {
   .chat[data-full] .window { position: fixed; inset: 0; width: 100%; height: 100%; border-radius: 0; }
 }
 .inbox { container-type: inline-size; }

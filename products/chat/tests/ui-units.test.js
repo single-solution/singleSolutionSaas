@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHECKS, GUEST_HEADER, GUEST_STORAGE_KEY, PROACTIVE_STORAGE_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
+import { CHECKS, GUEST_HEADER, GUEST_STORAGE_KEY, PHONE_MEDIA, PROACTIVE_STORAGE_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
 import {
 	attachmentNode,
 	fileProblem,
@@ -16,7 +16,7 @@ import {
 	whenOf,
 } from '../ui/common.js';
 import { deviceText } from '../ui/inbox-parts.js';
-import { createMemory, isDesktop, pageFlow, startProactive } from '../ui/proactive.js';
+import { createMemory, idleOnce, idleText, isDesktop, isPhone, pageFlow, startProactive } from '../ui/proactive.js';
 import { createTicketSource } from '../ui/tickets.js';
 import { createChecks, createUnreadChecks } from '../ui/transport.js';
 import { createVisitor } from '../ui/visitor.js';
@@ -323,10 +323,10 @@ describe('proactive', () => {
 	/** @param {string[]} features @param {Record<string, any>} [settings] @param {string} [path] */
 	const setup = (features, settings = {}, path = '/products/lamp') => {
 		const time = clock();
-		const offer = vi.fn(() => true);
+		const offer = vi.fn(/** @type {(kind: string, text: string, once?: string) => boolean} */ (() => true));
 		const startFlow = vi.fn();
-		/** @type {string | null} */
-		let product = null;
+		/** @type {import('../ui/chat.js').PageInfo | null} */
+		let page = null;
 		const stop = startProactive({
 			win: window,
 			...time,
@@ -334,11 +334,32 @@ describe('proactive', () => {
 			settings: settingsOf({ settings }),
 			t,
 			path,
-			productName: () => product,
+			page: () => page,
 			offer,
 			startFlow,
 		});
-		return { time, offer, startFlow, stop, setProduct: (/** @type {string} */ name) => (product = name) };
+		/** @param {import('../ui/chat.js').PageInfo | null} info */
+		const setPage = (info) => {
+			page = info;
+		};
+		return {
+			time,
+			offer,
+			startFlow,
+			stop,
+			setPage,
+			setProduct: (/** @type {string} */ name) => setPage({ kind: 'product', productName: name }),
+		};
+	};
+	/** The page's screen is a phone's (or not). @param {boolean} phone */
+	const phoneScreen = (phone) => {
+		window.matchMedia = /** @type {any} */ (vi.fn((query) => ({ matches: phone && query === PHONE_MEDIA })));
+	};
+	const MESSAGES = {
+		product: 'Still deciding on {product}? Ask us.',
+		category: 'Comparing a few? We can help.',
+		deals: '',
+		cart: 'Questions before you check out?',
 	};
 
 	it('nudges after the idle minutes, waiting again while the window is open', async () => {
@@ -349,11 +370,84 @@ describe('proactive', () => {
 		expect(offer).not.toHaveBeenCalled();
 		offer.mockReturnValueOnce(false);
 		await time.advance(60_000);
-		expect(offer).toHaveBeenCalledWith('idle', TEXTS['chat.idle']);
+		expect(offer).toHaveBeenCalledWith('idle', TEXTS['chat.idle'], 'idle');
 		setProduct('Canvas tote');
 		await time.advance(120_000);
-		expect(offer).toHaveBeenLastCalledWith('idle', 'Questions about Canvas tote? We are happy to help.');
+		expect(offer).toHaveBeenLastCalledWith('idle', 'Questions about Canvas tote? We are happy to help.', 'idle');
+		// shown once per session: no third offer
+		await time.advance(600_000);
+		expect(offer).toHaveBeenCalledTimes(2);
 		stop();
+	});
+
+	it('says the merchant’s nudge text for the kind of page, else the general text (C14)', () => {
+		expect(idleText(MESSAGES, { kind: 'product', productId: 'p1', productName: 'Desk lamp' }, t)).toBe(
+			'Still deciding on Desk lamp? Ask us.',
+		);
+		expect(idleText(MESSAGES, { kind: 'category' }, t)).toBe('Comparing a few? We can help.');
+		expect(idleText(MESSAGES, { kind: 'cart' }, t)).toBe('Questions before you check out?');
+		// no text of the merchant for deals pages, none for other pages, no page named: the general text
+		expect(idleText(MESSAGES, { kind: 'deals' }, t)).toBe(TEXTS['chat.idle']);
+		expect(idleText(MESSAGES, { kind: 'other', productName: 'Desk lamp' }, t)).toBe(
+			'Questions about Desk lamp? We are happy to help.',
+		);
+		expect(idleText(MESSAGES, null, t)).toBe(TEXTS['chat.idle']);
+		// a text naming the product needs its name; one that does not, does not
+		expect(idleText(MESSAGES, { kind: 'product' }, t)).toBe(TEXTS['chat.idle']);
+		expect(idleText({ ...MESSAGES, product: 'Need a hand?' }, { kind: 'product' }, t)).toBe('Need a hand?');
+	});
+
+	it('remembers the nudge once per session, or once per product page (C14)', () => {
+		const lamp = { kind: 'product', productId: 'p1', productName: 'Desk lamp' };
+		expect(idleOnce('session', lamp)).toBe('idle');
+		expect(idleOnce('product', lamp)).toBe('idle:p1');
+		expect(idleOnce('product', { kind: 'product', productName: 'Desk lamp' })).toBe('idle:Desk lamp');
+		expect(idleOnce('product', { kind: 'product' })).toBe('idle');
+		expect(idleOnce('product', { kind: 'category', productId: 'p1' })).toBe('idle');
+		expect(idleOnce('product', null)).toBe('idle');
+	});
+
+	it('once per product: each product the visitor looks at may nudge, with that page’s text (C14)', async () => {
+		const { time, offer, stop, setPage } = setup(['proactive_idle'], {
+			proactive: { idleMinutes: 1, messages: MESSAGES, oncePer: 'product' },
+		});
+		setPage({ kind: 'product', productId: 'p1', productName: 'Desk lamp' });
+		await time.advance(60_000);
+		expect(offer).toHaveBeenLastCalledWith('idle', 'Still deciding on Desk lamp? Ask us.', 'idle:p1');
+		// the widget remembers p1; the nudge keeps waiting for the next product
+		setPage({ kind: 'product', productId: 'p2', productName: 'Canvas tote' });
+		window.dispatchEvent(new window.Event('scroll'));
+		await time.advance(30_000);
+		expect(offer).toHaveBeenCalledTimes(1);
+		await time.advance(30_000);
+		expect(offer).toHaveBeenLastCalledWith('idle', 'Still deciding on Canvas tote? Ask us.', 'idle:p2');
+		setPage({ kind: 'cart' });
+		await time.advance(60_000);
+		expect(offer).toHaveBeenLastCalledWith('idle', 'Questions before you check out?', 'idle');
+		stop();
+		await time.advance(600_000);
+		expect(offer).toHaveBeenCalledTimes(3);
+	});
+
+	it('no nudge on phones when the merchant chose so; tablets and desktops still get it (C14)', async () => {
+		phoneScreen(true);
+		expect(isPhone(window)).toBe(true);
+		const hidden = setup(['proactive_idle'], { proactive: { idleMinutes: 1, hideOnMobile: true } });
+		await hidden.time.advance(600_000);
+		expect(hidden.offer).not.toHaveBeenCalled();
+		hidden.stop();
+		const shown = setup(['proactive_idle'], { proactive: { idleMinutes: 1 } });
+		await shown.time.advance(60_000);
+		expect(shown.offer).toHaveBeenCalledWith('idle', TEXTS['chat.idle'], 'idle');
+		shown.stop();
+		phoneScreen(false);
+		expect(isPhone(window)).toBe(false);
+		const wide = setup(['proactive_idle'], { proactive: { idleMinutes: 1, hideOnMobile: true } });
+		await wide.time.advance(60_000);
+		expect(wide.offer).toHaveBeenCalledTimes(1);
+		wide.stop();
+		delete (/** @type {any} */ (window).matchMedia);
+		expect(isPhone(window)).toBe(false);
 	});
 
 	it('shows the first matching page rule after its delay and starts page flows after theirs', async () => {

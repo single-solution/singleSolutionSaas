@@ -26,7 +26,10 @@ import { element } from './dom.js';
  * @property {{ messageLimit: number, rememberDays: number, contactCapture: string }} guests
  * @property {string} signInUrl
  * @property {{ showLabel: boolean }} ai
- * @property {{ idleMinutes: number, dismissDays: number, pageRules: Array<{ path: string, delay: number, message: string }> }} proactive
+ * @property {{ idleMinutes: number, dismissDays: number, pageRules: Array<{ path: string, delay: number, message: string }>,
+ *   messages: Record<'product' | 'category' | 'deals' | 'cart', string>, oncePer: 'session' | 'product',
+ *   hideOnMobile: boolean }} proactive the idle nudge's own text per page kind ('' = the general text), whether it
+ *   shows once per session or once per product, and whether phones get none (C14)
  * @property {Array<{ id: string, name: string, start: { kind: string, path: string, delay: number } }>} flows
  * @property {{ fields: string[], customFields: string[], consentText: string }} leads
  * @property {CustomField[]} customFields
@@ -63,7 +66,14 @@ const DEFAULTS = {
 	guests: { messageLimit: 0, rememberDays: 90, contactCapture: 'never' },
 	signInUrl: '',
 	ai: { showLabel: true },
-	proactive: { idleMinutes: 7, dismissDays: 7, pageRules: [] },
+	proactive: {
+		idleMinutes: 7,
+		dismissDays: 7,
+		pageRules: [],
+		messages: { product: '', category: '', deals: '', cart: '' },
+		oncePer: 'session',
+		hideOnMobile: false,
+	},
 	flows: [],
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],

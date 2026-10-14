@@ -773,6 +773,38 @@ describe('proactive', () => {
 		await time.advance(120_000);
 		expect($('.nudge').hidden).toBe(true);
 	});
+
+	it('says the merchant’s text for the page setPage names, once per product (C14)', async () => {
+		const { $, time, api } = await start({
+			features: ['visitor_chat', 'guest_chat', 'proactive_idle'],
+			settings: {
+				proactive: {
+					idleMinutes: 1,
+					messages: { product: 'Still deciding on {product}?', category: '', deals: '', cart: '' },
+					oncePer: 'product',
+				},
+			},
+		});
+		api.setPage({ kind: 'product', productId: 'p1', productName: 'Desk lamp' });
+		await time.advance(60_000);
+		expect($('.nudge').hidden).toBe(false);
+		expect($('.nudge').textContent).toContain('Still deciding on Desk lamp?');
+		await api.open();
+		await api.close();
+		expect($('.nudge').hidden).toBe(true);
+		// the next product the visitor looks at nudges too, with its own name
+		api.setPage({ kind: 'product', productId: 'p2', productName: 'Canvas tote' });
+		await time.advance(120_000);
+		expect($('.nudge').hidden).toBe(false);
+		expect($('.nudge').textContent).toContain('Still deciding on Canvas tote?');
+		expect(JSON.parse(String(window.sessionStorage.getItem(PROACTIVE_STORAGE_KEY))).shown).toEqual(['idle:p1', 'idle:p2']);
+		await api.open();
+		await api.close();
+		// back on the first product: it nudged already this visit
+		api.setPage({ kind: 'product', productId: 'p1', productName: 'Desk lamp' });
+		await time.advance(180_000);
+		expect($('.nudge').hidden).toBe(true);
+	});
 });
 
 describe('product cards', () => {
