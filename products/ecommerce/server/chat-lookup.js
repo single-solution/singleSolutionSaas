@@ -4,16 +4,17 @@
  * Chat's context panel use. All read-only with small answers. The `me` lookups take the visitor's Accounts sign-in
  * forwarded in `SS-Sign-In`, verify it here and answer only that user's data — never street addresses or phone
  * numbers; any query value naming another user is ignored. Every price and total comes with its text (`priceText`,
- * `totalText` …) by the website's Format (PLAN 0.8.10 K7). E37 adds search filters, warranties, quotes per variant and
- * payment method with fees and delivery, deal display fields, fuller orders and accounts, and the live store context
- * (`GET /v1/chat/context`) Chat's AI replies add (C1).
+ * `totalText` …) by the website's Format (PLAN 0.8.10 K7), and products are priced as shoppers see them: each variant at
+ * its shown price (`server/shown-prices.js`, SEO audit G4), with the price struck through above it and the deal in it.
+ * E37 adds search filters, warranties, quotes per variant and payment method with fees and delivery, deal display
+ * fields, fuller orders and accounts, and the live store context (`GET /v1/chat/context`) Chat's AI replies add (C1).
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
-import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
+import { categoryTrail, dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
@@ -23,6 +24,7 @@ import { byShowOrder } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import {
 	MAX_QUOTE_QUANTITY,
+	cardVariant,
 	chatDeal,
 	chatFilters,
 	filtersGiven,
@@ -41,12 +43,14 @@ import {
 } from '../core/lookup.js';
 import { COLLECTIONS } from '../core/model.js';
 import { PAYMENT_METHODS, customerOwner, isCustomerId } from '../core/orders.js';
+import { listShown } from '../core/promotions.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createQuoting } from './checkout-quote.js';
 import { policiesOf } from './policies.js';
 import { SERVER_LIMITS } from './service.js';
 import { activeProduct, brandNames } from './seo-reads.js';
+import { createShownPrices } from './shown-prices.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -109,7 +113,7 @@ const invalidQuery = (field, message) =>
  */
 const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 
-/** What a product card reads of a product. */
+/** What a product card reads of a product (its specs for the deal conditions of its shown price). */
 const CARD_FIELDS = Object.freeze({
 	_id: 0,
 	id: 1,
@@ -123,6 +127,7 @@ const CARD_FIELDS = Object.freeze({
 	inStock: 1,
 	categoryIds: 1,
 	brandId: 1,
+	specs: 1,
 	warrantyDays: 1,
 	publishedAt: 1,
 });
@@ -151,6 +156,17 @@ const ORDER_FIELDS = Object.freeze({
 export const createChatLookup = (product, service, media) => {
 	const atlas = createCatalogSearch(product);
 	const quoting = createQuoting(product, service);
+	const shownPrices = createShownPrices(service);
+
+	/**
+	 * Each product's shown prices (G4), the website's live deals read once: `(item) => (variant) => ShownPrice`.
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const pricesFor = async (s, data) => {
+		const prices = await shownPrices(s, data);
+		return async (/** @type {ProductRecord} */ item) =>
+			prices.of(item, prices.deals.length > 0 ? await categoryTrail(data, item.categoryIds) : item.categoryIds);
+	};
 
 	/**
 	 * An active product shoppers may see (E1), or 404.
@@ -200,28 +216,31 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * Product cards of products, each with the variant Chat's filters matched (when given).
+	 * Product cards of products at their shown prices, each with the variant Chat's filters matched (when given).
 	 * @param {Site} s
+	 * @param {WebsiteData} data
 	 * @param {ProductRecord[]} items
 	 * @param {import('../core/lookup.js').ChatFilters | null} [filters]
 	 */
-	const cards = async (s, items, filters = null) => {
-		const rules = await cardRules(s);
+	const cards = async (s, data, items, filters = null) => {
+		const [rules, shownOf] = await Promise.all([cardRules(s), pricesFor(s, data)]);
 		return Promise.all(
-			items.map(async (item) =>
-				productCard(
+			items.map(async (item) => {
+				const shown = await shownOf(item);
+				return productCard(
 					item,
 					{
 						currency: s.currency,
 						image: await media.mediaUrl(s, item.media?.[0]?.key),
 						url: await media.productUrl(s, item),
 						money: rules.money,
+						shown,
 						grades: rules.labels(item),
 						stockLeft: rules.stockLeft(item),
 					},
-					filters ? matchingVariant(item, filters) : null,
-				),
-			),
+					filters ? matchingVariant(item, filters, shown) : null,
+				);
+			}),
 		);
 	};
 
@@ -315,7 +334,7 @@ export const createChatLookup = (product, service, media) => {
 				limit: filters.limit,
 				project: CARD_FIELDS,
 			});
-			if (found.ok) return { items: await cards(s, /** @type {ProductRecord[]} */ (found.items), filters) };
+			if (found.ok) return { items: await cards(s, data, /** @type {ProductRecord[]} */ (found.items), filters) };
 		}
 		/** @type {Record<string, unknown>[]} */
 		const words = [];
@@ -351,7 +370,7 @@ export const createChatLookup = (product, service, media) => {
 				.limit(filters.limit)
 				.toArray()
 		);
-		return { items: await cards(s, found, filters) };
+		return { items: await cards(s, data, found, filters) };
 	};
 
 	/** @param {any} ctx */
@@ -372,14 +391,15 @@ export const createChatLookup = (product, service, media) => {
 				.limit(limitOf(ctx.query.limit, 5, 12))
 				.toArray()
 		);
-		return { items: await cards(s, found) };
+		return { items: await cards(s, data, found) };
 	};
 
 	/**
-	 * A product's details: variants with grade, price, stock left (E9) and warranty (E12).
+	 * A product's details: variants with grade, shown price, stock left (E9) and warranty (E12).
 	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord} item
+	 * @param {import('../core/lookup.js').Shown} shown its variants' shown prices
 	 */
-	const detailsOf = async (s, data, item) => {
+	const detailsOf = async (s, data, item, shown) => {
 		const specIds = Object.keys(item.specs ?? {});
 		const [brands, attributes, rules] = await Promise.all([
 			brandNames(data, [item.brandId]),
@@ -396,6 +416,7 @@ export const createChatLookup = (product, service, media) => {
 			image: await media.mediaUrl(s, item.media?.[0]?.key),
 			url: await media.productUrl(s, item),
 			money: rules.money,
+			shown,
 			brand: item.brandId ? (brands.get(item.brandId) ?? null) : null,
 			attributes: new Map(attributes.map((row) => [String(row.id), { name: String(row.name), unit: String(row.unit) }])),
 			grades: rules.labels(item),
@@ -408,13 +429,15 @@ export const createChatLookup = (product, service, media) => {
 	const details = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		return detailsOf(s, data, await shownProduct(s, data, ctx.params.id));
+		const item = await shownProduct(s, data, ctx.params.id);
+		return detailsOf(s, data, item, await (await pricesFor(s, data))(item));
 	};
 
 	/**
 	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (1–5), priced
 	 * exactly as the cart prices it for the payment method asked (deals, fees, delivery to `city` and its free-delivery
-	 * threshold; a forwarded sign-in adds role pricing) (E37).
+	 * threshold; a forwarded sign-in adds role pricing) (E37), with the variant's own "was" price struck through on the
+	 * product page.
 	 * @param {any} ctx
 	 */
 	const quote = async (ctx) => {
@@ -424,7 +447,7 @@ export const createChatLookup = (product, service, media) => {
 		const { variantId, quantity, paymentMethod, city } = quoteQuery(ctx.query);
 		const variant = variantId
 			? item.variants.find((candidate) => candidate.id === variantId && candidate.active)
-			: matchingVariant(item, { grades: [], minPrice: null, maxPrice: null, inStock: false });
+			: cardVariant(item, await (await pricesFor(s, data))(item));
 		if (!variant) throw problem('not_found', 'There is no such variant.');
 		const shopper = await service.shopper(s);
 		const q = await quoting.quote(
@@ -444,6 +467,7 @@ export const createChatLookup = (product, service, media) => {
 		const line = q.lines[0];
 		const priced = q.prices[0];
 		const unitPrice = variant.price;
+		const was = listShown(variant).was;
 		const dealOff = Math.min(unitPrice * quantity, priced?.promotions ?? 0);
 		const savings = Math.floor(dealOff / quantity);
 		const offers = q.promotions?.applied.filter((entry) => entry.kind === 'deal') ?? [];
@@ -458,6 +482,8 @@ export const createChatLookup = (product, service, media) => {
 			quantity,
 			price: unitPrice,
 			priceText: text(unitPrice),
+			compareAtPrice: was,
+			compareAtPriceText: was === null ? null : text(was),
 			priceAfterDeals: unitPrice - savings,
 			priceAfterDealsText: text(unitPrice - savings),
 			savings,
@@ -618,7 +644,7 @@ export const createChatLookup = (product, service, media) => {
 
 	/**
 	 * GET /v1/chat/context?productId=: the live store context of Chat's AI replies (E37, C1): the policies, the 10
-	 * newest products with their price per grade, the deals table, the product named (id or slug) and, with a forwarded
+	 * newest products with their shown price per grade, the deals table, the product named (id or slug) and, with a forwarded
 	 * sign-in, the visitor's first name, city and points; `text` (at most 6,000 characters) holds all of it for the AI's
 	 * instructions. Each part is there only while its feature is on.
 	 * @param {any} ctx
@@ -630,9 +656,10 @@ export const createChatLookup = (product, service, media) => {
 		const ref = typeof ctx.query.productId === 'string' && ctx.query.productId ? ctx.query.productId : null;
 		if (ref !== null && !/^[A-Za-z0-9_-]{1,120}$/.test(ref))
 			throw service.invalid('productId', 'productId is a product id or slug.');
-		const [business, rules, filled, newest, dealList, viewed, shopper] = await Promise.all([
+		const [business, rules, shownOf, filled, newest, dealList, viewed, shopper] = await Promise.all([
 			s.business(),
 			cardRules(s),
+			pricesFor(s, data),
 			s.has('checkout') ? policiesOf(s) : Promise.resolve(null),
 			data
 				.collection(COLLECTIONS.products)
@@ -644,17 +671,21 @@ export const createChatLookup = (product, service, media) => {
 			ref === null ? Promise.resolve(null) : shownProduct(s, data, ref).catch(() => null),
 			service.shopper(s),
 		]);
-		const product = viewed ? await detailsOf(s, data, viewed) : null;
+		const product = viewed ? await detailsOf(s, data, viewed, await shownOf(viewed)) : null;
+		/** @param {number} amount */
+		const text = (amount) => rules.money(amount, s.currency);
 		const products = await Promise.all(
 			/** @type {ProductRecord[]} */ (newest).map(async (item) => ({
 				id: item.id,
 				name: item.name,
 				url: await media.productUrl(s, item),
 				inStock: item.inStock,
-				prices: gradePrices(item).map((entry) => ({
+				prices: gradePrices(item, await shownOf(item)).map((entry) => ({
 					grade: entry.grade ? (rules.labels(item).get(entry.grade) ?? entry.grade) : null,
 					price: entry.price,
-					priceText: rules.money(entry.price, s.currency),
+					priceText: text(entry.price),
+					compareAtPrice: entry.compareAtPrice,
+					compareAtPriceText: entry.compareAtPrice === null ? null : text(entry.compareAtPrice),
 					inStock: entry.inStock,
 				})),
 			})),

@@ -13675,7 +13675,7 @@
 		"/v1/chat/products": {
 			"get": {
 				"summary": "Search products for Chat",
-				"description": "Words (name, summary, tags, SKU, brand) and filters; with filters the words may be left out, with neither the answer is empty. Each card shows the variant the filters matched (the cheapest in stock first). Atlas Search when the website uses it. Products hidden from shoppers are left out. 422 validation_failed at /category, /grade, /minPrice, /maxPrice or /inStock.",
+				"description": "Words (name, summary, tags, SKU, brand) and filters; with filters the words may be left out, with neither the answer is empty. Each card shows the variant the filters matched (the cheapest at its shown price, in stock first) at the price on the product page, with the price struck through and the deal in it; minPrice and maxPrice compare the variants’ own prices, as shop listings do. Atlas Search when the website uses it. Products hidden from shoppers are left out. 422 validation_failed at /category, /grade, /minPrice, /maxPrice or /inStock.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -33894,6 +33894,8 @@
 											"grade",
 											"price",
 											"priceText",
+											"compareAtPrice",
+											"compareAtPriceText",
 											"inStock"
 										],
 										"additionalProperties": false,
@@ -33906,17 +33908,30 @@
 											},
 											"price": {
 												"type": "integer",
-												"description": "Minor units."
+												"description": "The lowest shown price of the grade (minor units), in stock first."
 											},
 											"priceText": {
 												"type": "string"
+											},
+											"compareAtPrice": {
+												"type": [
+													"integer",
+													"null"
+												],
+												"description": "The price struck through above it, as the product page shows it: the variant’s own “was” price when higher, and with a deal at least its regular price; null when none."
+											},
+											"compareAtPriceText": {
+												"type": [
+													"string",
+													"null"
+												]
 											},
 											"inStock": {
 												"type": "boolean"
 											}
 										}
 									},
-									"description": "The lowest price per grade."
+									"description": "The lowest shown price per grade, as the product page shows it."
 								}
 							}
 						},
@@ -34305,6 +34320,9 @@
 					"name",
 					"price",
 					"priceText",
+					"compareAtPrice",
+					"compareAtPriceText",
+					"deal",
 					"priceMax",
 					"priceMaxText",
 					"currency",
@@ -34325,15 +34343,61 @@
 					},
 					"price": {
 						"type": "integer",
-						"description": "The card variant’s price (the cheapest active one in stock, or the one the filters matched)."
+						"description": "The card variant’s shown price, the price on the product page: after the best live item deal on one unit, as the cart prices it (the cheapest such variant in stock, or the one the filters matched)."
 					},
 					"priceText": {
 						"type": "string",
 						"description": "By the website’s Format."
 					},
+					"compareAtPrice": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "The price struck through above it, as the product page shows it: the variant’s own “was” price when higher, and with a deal at least its regular price; null when none."
+					},
+					"compareAtPriceText": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"deal": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "The deal in the price, with what it takes off one unit.",
+								"required": [
+									"id",
+									"name",
+									"savings",
+									"savingsText"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"savings": {
+										"type": "integer",
+										"description": "Minor units."
+									},
+									"savingsText": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"priceMax": {
 						"type": "integer",
-						"description": "The highest active variant price."
+						"description": "The highest shown price of the active variants."
 					},
 					"priceMaxText": {
 						"type": "string"
@@ -34385,6 +34449,9 @@
 					"name",
 					"price",
 					"priceText",
+					"compareAtPrice",
+					"compareAtPriceText",
+					"deal",
 					"priceMax",
 					"priceMaxText",
 					"currency",
@@ -34412,14 +34479,60 @@
 					},
 					"price": {
 						"type": "integer",
-						"description": "Minor units."
+						"description": "The card variant’s shown price (minor units), as in ChatProduct."
 					},
 					"priceText": {
 						"type": "string"
 					},
+					"compareAtPrice": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "The price struck through above it, as the product page shows it: the variant’s own “was” price when higher, and with a deal at least its regular price; null when none."
+					},
+					"compareAtPriceText": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"deal": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "The deal in the price, with what it takes off one unit.",
+								"required": [
+									"id",
+									"name",
+									"savings",
+									"savingsText"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"savings": {
+										"type": "integer",
+										"description": "Minor units."
+									},
+									"savingsText": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"priceMax": {
 						"type": "integer",
-						"description": "Minor units."
+						"description": "The highest shown price (minor units)."
 					},
 					"priceMaxText": {
 						"type": "string"
@@ -34516,7 +34629,8 @@
 							"maxText": {
 								"type": "string"
 							}
-						}
+						},
+						"description": "The lowest and highest shown prices of the active variants."
 					},
 					"specs": {
 						"type": "array",
@@ -34585,6 +34699,8 @@
 					"quantity",
 					"price",
 					"priceText",
+					"compareAtPrice",
+					"compareAtPriceText",
 					"priceAfterDeals",
 					"priceAfterDealsText",
 					"savings",
@@ -34627,14 +34743,27 @@
 					},
 					"price": {
 						"type": "integer",
-						"description": "The unit price."
+						"description": "The unit price before deals (the variant’s own price)."
 					},
 					"priceText": {
 						"type": "string"
 					},
+					"compareAtPrice": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "The variant’s own “was” price, struck through on the product page, when it is higher than price; else null."
+					},
+					"compareAtPriceText": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
 					"priceAfterDeals": {
 						"type": "integer",
-						"description": "The unit price after deals."
+						"description": "The unit price after the deals of this cart; for one unit and any payment method, the price on the product page."
 					},
 					"priceAfterDealsText": {
 						"type": "string"
@@ -34931,6 +35060,7 @@
 					"priceText",
 					"compareAtPrice",
 					"compareAtPriceText",
+					"deal",
 					"grade",
 					"gradeKey",
 					"inStock",
@@ -34951,7 +35081,7 @@
 					},
 					"price": {
 						"type": "integer",
-						"description": "Minor units."
+						"description": "The shown price (minor units): after the best live item deal on one unit."
 					},
 					"priceText": {
 						"type": "string"
@@ -34960,12 +35090,46 @@
 						"type": [
 							"integer",
 							"null"
-						]
+						],
+						"description": "The price struck through above it, as the product page shows it: the variant’s own “was” price when higher, and with a deal at least its regular price; null when none."
 					},
 					"compareAtPriceText": {
 						"type": [
 							"string",
 							"null"
+						]
+					},
+					"deal": {
+						"oneOf": [
+							{
+								"type": "object",
+								"description": "The deal in the price, with what it takes off one unit.",
+								"required": [
+									"id",
+									"name",
+									"savings",
+									"savingsText"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"id": {
+										"type": "string"
+									},
+									"name": {
+										"type": "string"
+									},
+									"savings": {
+										"type": "integer",
+										"description": "Minor units."
+									},
+									"savingsText": {
+										"type": "string"
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
 						]
 					},
 					"grade": {

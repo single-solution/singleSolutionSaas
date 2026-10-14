@@ -1,9 +1,9 @@
 /**
  * Promotions pricing (PLAN 0.8.8; PLAN 0.8.10 E18): which deals, bundles and coupon apply to a cart and how much each
  * takes off each line. Checkout calls `applyPromotions` when it prices a cart and again when it places the order (the
- * ledger then counts the uses in the order transaction); cards, the product page, structured data, feeds and the
- * quotes of one product (Chat, `/v1/shop/products/:id/quote`) all take one unit's shown price from `shownPrice` (SEO
- * audit G4). The order:
+ * ledger then counts the uses in the order transaction); cards, the product page, Chat's product answers, structured
+ * data, feeds and the product quote (`/v1/shop/products/:id/quote`) all take one unit's shown price from `shownPrice`
+ * (SEO audit G4). The order:
  * 1. deals: each line takes one deal — the best saving among the live deals covering it (scope, conditions, weekdays
  *    and hours in the business time zone) or, with `lineChoice: first`, the first of them in the shoppers' order that
  *    saves something; the deal the shopper picked among them (`shopperChoice`); or the deal its signed lock keeps
@@ -447,7 +447,7 @@ export const listShown = (variant) => ({
 
 /**
  * The price shoppers are shown for one unit of a variant (SEO audit G4): the one function cards, the product page,
- * structured data, feeds and the quotes take, so they all name the same price. The variant's price less the best live
+ * Chat's product answers, structured data, feeds and the product quote take, so they all name the same price. The variant's price less the best live
  * item deal on one unit as the cart prices it (`bestDeal` with the unit alone, at the business time: a deal that needs
  * more than one unit, a cart total above the price or a payment method is an offer of the cart, not the price; cart
  * deals and free delivery neither); the struck-through price; the deal and its dates.
@@ -490,7 +490,7 @@ export const shownPrice = ({ product, variant, deals, now, categoryIds, clock, u
 
 /**
  * What one product costs after deals: its lowest active variant (or the variant asked for), at its shown price
- * ({@link shownPrice}). Used by the product quote and the Chat lookups.
+ * ({@link shownPrice}). Used by the product quote (`/v1/shop/products/:id/quote`).
  * @param {object} input
  * @param {import('./model.js').ProductRecord} input.product
  * @param {string | null} [input.variantId] a variant of the product ('' or null: the lowest-priced active one)

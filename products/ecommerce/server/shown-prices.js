@@ -1,7 +1,7 @@
 /**
  * The shown price of a website's products (SEO audit G4), read once per request: its live deals, the business time,
- * whole units and the deal rules, so cards, the product page, structured data and feeds name the same price as the
- * cart (`core/promotions.js` `shownPrice`).
+ * whole units and the deal rules, so cards, the product page, Chat's product answers, structured data and feeds name
+ * the same price as the cart (`core/promotions.js` `shownPrice`).
  * @module
  */
 import { loadOffers } from '../adapters/promotions-store.js';

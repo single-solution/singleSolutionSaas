@@ -2,7 +2,9 @@
  * The Chat lookups' answers (PLAN 0.8.3 Shop tools; the endpoints in `products/chat/core/shop.js`): small, read-only
  * views of products, deals, and one signed-in shopper's orders, account and shipments. Answers never carry street
  * addresses or phone numbers. Every amount (integer minor units) comes with its text (`priceText`, `totalText` …) by
- * the website's Format (PLAN 0.8.10 K7). Pure functions, no I/O.
+ * the website's Format (PLAN 0.8.10 K7). Products are priced as shoppers see them: each variant at its shown price
+ * (`shownPrice`, SEO audit G4: after the best live item deal on one unit, as the product page and the cart), with the
+ * price struck through above it and the deal in it. Pure functions, no I/O.
  * @module
  */
 import { shopperLabelOf } from './flow.js';
@@ -13,7 +15,9 @@ import { activeVariants, variantInStock } from './seo.js';
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
+/** @typedef {import('./promotions.js').ShownPrice} ShownPrice */
 /** An amount as text, by the website's Format. @typedef {(amount: number, currency: string) => string} Money */
+/** A variant's shown price (`shownPrice`, SEO audit G4). @typedef {(variant: VariantRecord) => ShownPrice} Shown */
 
 /** A product description in a details answer is cut to this many characters. */
 const DETAILS_DESCRIPTION_LENGTH = 1500;
@@ -137,26 +141,44 @@ export const variantFilter = (filters) => {
 };
 
 /**
- * The cheapest active variant of a product that matches Chat's filters (in stock first), or null.
+ * The cheapest of some variants at their shown prices, in stock first; null when there are none.
  * @param {ProductRecord} product
- * @param {Pick<ChatFilters, 'grades' | 'minPrice' | 'maxPrice' | 'inStock'>} filters
+ * @param {VariantRecord[]} variants
+ * @param {Shown} shown
  * @returns {VariantRecord | null}
  */
-export const matchingVariant = (product, filters) => {
-	const matching = activeVariants(product).filter(
-		(variant) =>
-			(filters.minPrice === null || variant.price >= filters.minPrice) &&
-			(filters.maxPrice === null || variant.price <= filters.maxPrice) &&
-			(filters.grades.length === 0 || (variant.grade !== null && filters.grades.includes(variant.grade))) &&
-			(!filters.inStock || variantInStock(product, variant)),
-	);
+const cheapestShown = (product, variants, shown) => {
 	const cheapest = (/** @type {VariantRecord[]} */ list) =>
-		list.reduce(
-			(/** @type {VariantRecord | null} */ best, variant) => (!best || variant.price < best.price ? variant : best),
-			null,
-		);
-	return cheapest(matching.filter((variant) => variantInStock(product, variant))) ?? cheapest(matching);
+		list
+			.map((variant) => ({ variant, price: shown(variant).price }))
+			.reduce(
+				(/** @type {{ variant: VariantRecord, price: number } | null} */ best, next) =>
+					!best || next.price < best.price ? next : best,
+				null,
+			)?.variant ?? null;
+	return cheapest(variants.filter((variant) => variantInStock(product, variant))) ?? cheapest(variants);
 };
+
+/**
+ * The cheapest active variant of a product that matches Chat's filters, at its shown price (in stock first), or null.
+ * The price range compares the variants' own prices, as the search query and shop listings do (E8).
+ * @param {ProductRecord} product
+ * @param {Pick<ChatFilters, 'grades' | 'minPrice' | 'maxPrice' | 'inStock'>} filters
+ * @param {Shown} shown
+ * @returns {VariantRecord | null}
+ */
+export const matchingVariant = (product, filters, shown) =>
+	cheapestShown(
+		product,
+		activeVariants(product).filter(
+			(variant) =>
+				(filters.minPrice === null || variant.price >= filters.minPrice) &&
+				(filters.maxPrice === null || variant.price <= filters.maxPrice) &&
+				(filters.grades.length === 0 || (variant.grade !== null && filters.grades.includes(variant.grade))) &&
+				(!filters.inStock || variantInStock(product, variant)),
+		),
+		shown,
+	);
 
 /**
  * Escape a text for a regular expression.
@@ -180,28 +202,35 @@ export const searchTerms = (q) =>
 		.map(escapeRegex);
 
 /**
- * The variant a product card adds to the cart: the cheapest active one in stock, else the cheapest active one.
+ * The variant a product card adds to the cart: the cheapest active one at its shown price in stock, else the cheapest
+ * active one.
  * @param {ProductRecord} product
+ * @param {Shown} shown
  * @returns {VariantRecord | null}
  */
-export const cardVariant = (product) => {
-	const variants = activeVariants(product);
-	const cheapest = (/** @type {VariantRecord[]} */ list) =>
-		list.reduce(
-			(/** @type {VariantRecord | null} */ best, variant) => (!best || variant.price < best.price ? variant : best),
-			null,
-		);
-	return cheapest(variants.filter((variant) => variantInStock(product, variant))) ?? cheapest(variants);
+export const cardVariant = (product, shown) => cheapestShown(product, activeVariants(product), shown);
+
+/**
+ * Lowest and highest shown prices of the active variants.
+ * @param {ProductRecord} product
+ * @param {Shown} shown
+ */
+export const priceRange = (product, shown) => {
+	const prices = activeVariants(product).map((variant) => shown(variant).price);
+	return prices.length > 0 ? { min: Math.min(...prices), max: Math.max(...prices) } : { min: product.price, max: product.price };
 };
 
 /**
- * Lowest and highest active variant prices.
- * @param {ProductRecord} product
+ * What a shown price adds to its amount: the price struck through above it and the deal in it with what it takes off
+ * one unit, each amount with its text.
+ * @param {ShownPrice | null} price
+ * @param {(amount: number) => string} text
  */
-export const priceRange = (product) => {
-	const prices = activeVariants(product).map((variant) => variant.price);
-	return prices.length > 0 ? { min: Math.min(...prices), max: Math.max(...prices) } : { min: product.price, max: product.price };
-};
+const shownParts = (price, text) => ({
+	compareAtPrice: price?.was ?? null,
+	compareAtPriceText: price && price.was !== null ? text(price.was) : null,
+	deal: price?.deal ? { ...price.deal, savings: price.savings, savingsText: text(price.savings) } : null,
+});
 
 /**
  * What a Chat card or details answer needs besides the product.
@@ -210,29 +239,35 @@ export const priceRange = (product) => {
  * @property {string | null} image the main image's address
  * @property {string} url the product's page
  * @property {Money} money
+ * @property {Shown} shown each variant's shown price
  * @property {Map<string, string>} [grades] grade key → label
  * @property {(variant: VariantRecord) => number | null} [stockLeft] units shoppers are told are left (E9)
  */
 
 /**
- * A product as a Chat card: the price of its card variant (the cheapest active one in stock, or the one the filters
- * chose), the highest active price, and that variant's grade and stock left.
+ * A product as a Chat card: the shown price of its card variant (the cheapest active one in stock, or the one the
+ * filters chose) with the price struck through above it and the deal in it, the highest shown price, and that
+ * variant's grade and stock left.
  * @param {ProductRecord} product
  * @param {CardContext} context
  * @param {VariantRecord | null} [chosen] the variant Chat's filters matched
  */
 export const productCard = (product, context, chosen = null) => {
 	const { currency, image, url, money } = context;
-	const variant = chosen ?? cardVariant(product);
-	const price = variant ? variant.price : product.price;
-	const range = priceRange(product);
+	/** @param {number} amount */
+	const text = (amount) => money(amount, currency);
+	const variant = chosen ?? cardVariant(product, context.shown);
+	const shown = variant ? context.shown(variant) : null;
+	const price = shown ? shown.price : product.price;
+	const range = priceRange(product, context.shown);
 	return {
 		id: product.id,
 		name: product.name,
 		price,
-		priceText: money(price, currency),
+		priceText: text(price),
+		...shownParts(shown, text),
 		priceMax: range.max,
-		priceMaxText: money(range.max, currency),
+		priceMaxText: text(range.max),
 		currency,
 		image: image && /^https:\/\//.test(image) ? image : null,
 		url,
@@ -244,8 +279,8 @@ export const productCard = (product, context, chosen = null) => {
 };
 
 /**
- * A product's details for Chat (`get_product_details`): every active variant (at most 20) with its grade, price, stock
- * left and warranty (E37).
+ * A product's details for Chat (`get_product_details`): every active variant (at most 20) with its grade, shown price
+ * (with the price struck through above it and the deal in it), stock left and warranty (E37).
  * @param {ProductRecord} product
  * @param {CardContext & { brand: string | null, attributes: Map<string, { name: string, unit: string }>,
  *   grades: Map<string, string>, warrantyDays?: (variant: VariantRecord) => number | null }} context
@@ -254,7 +289,7 @@ export const productCard = (product, context, chosen = null) => {
  */
 export const productDetails = (product, context) => {
 	const description = String(product.description ?? '').trim();
-	const range = priceRange(product);
+	const range = priceRange(product, context.shown);
 	/** @param {number} amount */
 	const text = (amount) => context.money(amount, context.currency);
 	return {
@@ -273,20 +308,22 @@ export const productDetails = (product, context) => {
 		}),
 		variants: activeVariants(product)
 			.slice(0, DETAILS_VARIANTS)
-			.map((variant) => ({
-				id: variant.id,
-				options: { ...variant.options },
-				price: variant.price,
-				priceText: text(variant.price),
-				compareAtPrice: variant.compareAtPrice,
-				compareAtPriceText: variant.compareAtPrice === null ? null : text(variant.compareAtPrice),
-				grade: variant.grade ? (context.grades.get(variant.grade) ?? variant.grade) : null,
-				gradeKey: variant.grade ?? null,
-				inStock: variantInStock(product, variant),
-				soldOut: variant.soldOut,
-				stockLeft: context.stockLeft?.(variant) ?? null,
-				warrantyDays: context.warrantyDays?.(variant) ?? null,
-			})),
+			.map((variant) => {
+				const shown = context.shown(variant);
+				return {
+					id: variant.id,
+					options: { ...variant.options },
+					price: shown.price,
+					priceText: text(shown.price),
+					...shownParts(shown, text),
+					grade: variant.grade ? (context.grades.get(variant.grade) ?? variant.grade) : null,
+					gradeKey: variant.grade ?? null,
+					inStock: variantInStock(product, variant),
+					soldOut: variant.soldOut,
+					stockLeft: context.stockLeft?.(variant) ?? null,
+					warrantyDays: context.warrantyDays?.(variant) ?? null,
+				};
+			}),
 	};
 };
 
@@ -309,20 +346,23 @@ export const warrantyOf = (product, variant, { grades, fallback }) => {
 };
 
 /**
- * The lowest active price of a product per grade (in stock first), for the store context (E37): `[{ grade, price,
- * inStock }]` in the order the grades first appear; one entry with grade null for variants without a grade.
+ * The lowest shown price of a product per grade (in stock first), for the store context (E37): `[{ grade, price,
+ * compareAtPrice, inStock }]` in the order the grades first appear, with the price struck through above it; one entry
+ * with grade null for variants without a grade.
  * @param {ProductRecord} product
- * @returns {Array<{ grade: string | null, price: number, inStock: boolean }>}
+ * @param {Shown} shown
+ * @returns {Array<{ grade: string | null, price: number, compareAtPrice: number | null, inStock: boolean }>}
  */
-export const gradePrices = (product) => {
-	/** @type {Map<string, { grade: string | null, price: number, inStock: boolean }>} */
+export const gradePrices = (product, shown) => {
+	/** @type {Map<string, { grade: string | null, price: number, compareAtPrice: number | null, inStock: boolean }>} */
 	const out = new Map();
 	for (const variant of activeVariants(product)) {
 		const key = variant.grade ?? '';
 		const inStock = variantInStock(product, variant);
+		const { price, was } = shown(variant);
 		const found = out.get(key);
-		if (!found || (inStock && !found.inStock) || (inStock === found.inStock && variant.price < found.price))
-			out.set(key, { grade: variant.grade ?? null, price: variant.price, inStock });
+		if (!found || (inStock && !found.inStock) || (inStock === found.inStock && price < found.price))
+			out.set(key, { grade: variant.grade ?? null, price, compareAtPrice: was, inStock });
 	}
 	return [...out.values()];
 };

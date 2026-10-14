@@ -9,6 +9,7 @@ import { MAX_CONTEXT, contextText, oneLine } from '../core/chat-context.js';
 import { chatFilters, filtersGiven, gradePrices, matchingVariant, variantFilter, warrantyOf } from '../core/lookup.js';
 import { shipmentLink } from '../core/couriers.js';
 import { COLLECTIONS } from '../core/model.js';
+import { listShown } from '../core/promotions.js';
 import { ACCOUNTS, readyShop, storedCategory } from './helpers.js';
 
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
@@ -110,14 +111,27 @@ describe('core: Chat filters, warranties and the context text', () => {
 
 	it('matches variants, prices per grade and warranties', () => {
 		const any = { grades: [], minPrice: null, maxPrice: null, inStock: false };
-		expect(matchingVariant(product, any)?.id).toBe('b1');
-		expect(matchingVariant(product, { ...any, grades: ['a'] })?.id).toBe('a2');
-		expect(matchingVariant(product, { ...any, grades: ['a'], maxPrice: 950 })?.id).toBe('a1');
-		expect(matchingVariant(product, { ...any, grades: ['a'], maxPrice: 950, inStock: true })).toBeNull();
-		expect(gradePrices(product)).toEqual([
-			{ grade: 'a', price: 1000, inStock: true },
-			{ grade: 'b', price: 700, inStock: true },
-			{ grade: null, price: 1200, inStock: false },
+		expect(matchingVariant(product, any, listShown)?.id).toBe('b1');
+		expect(matchingVariant(product, { ...any, grades: ['a'] }, listShown)?.id).toBe('a2');
+		expect(matchingVariant(product, { ...any, grades: ['a'], maxPrice: 950 }, listShown)?.id).toBe('a1');
+		expect(matchingVariant(product, { ...any, grades: ['a'], maxPrice: 950, inStock: true }, listShown)).toBeNull();
+		expect(gradePrices(product, listShown)).toEqual([
+			{ grade: 'a', price: 1000, compareAtPrice: null, inStock: true },
+			{ grade: 'b', price: 700, compareAtPrice: null, inStock: true },
+			{ grade: null, price: 1200, compareAtPrice: null, inStock: false },
+		]);
+		// at their shown prices: a deal of 400 on b1 and a2's own "was" price; the price range filters the own prices
+		/** @param {VariantRecord} v */
+		const shown = (v) =>
+			v.id === 'a2'
+				? { price: 600, was: 1000, savings: 400, deal: { id: 'deal_1', name: 'Sale' }, sale: null }
+				: listShown(v.id === 'b1' ? { ...v, compareAtPrice: 900 } : v);
+		expect(matchingVariant(product, any, shown)?.id).toBe('a2');
+		expect(matchingVariant(product, { ...any, maxPrice: 950 }, shown)?.id).toBe('b1');
+		expect(gradePrices(product, shown)).toEqual([
+			{ grade: 'a', price: 600, compareAtPrice: 1000, inStock: true },
+			{ grade: 'b', price: 700, compareAtPrice: 900, inStock: true },
+			{ grade: null, price: 1200, compareAtPrice: null, inStock: false },
 		]);
 		const grades = new Map([['a', { warrantyDays: 90 }]]);
 		const [a1, , b1, n1] = product.variants;
@@ -155,7 +169,9 @@ describe('core: Chat filters, warranties and the context text', () => {
 				name: `Product ${index} ${'n'.repeat(200)}`,
 				url: `https://shop.example.com/p/${index}`,
 				inStock: true,
-				prices: [{ grade: 'A', priceText: '$1,000', inStock: index % 2 === 0 }],
+				prices: [
+					{ grade: 'A', priceText: '$1,000', compareAtPriceText: index === 0 ? '$1,200' : null, inStock: index % 2 === 0 },
+				],
 			})),
 			deals: Array.from({ length: 10 }, (_, index) => ({
 				name: `Deal ${index}`,
@@ -170,9 +186,33 @@ describe('core: Chat filters, warranties and the context text', () => {
 				summary: 'Nice',
 				priceRange: { minText: '$1', maxText: '$2' },
 				variants: [
-					{ options: {}, grade: null, priceText: '$1', inStock: true, stockLeft: 3, warrantyDays: 30 },
-					{ options: { Color: 'Red' }, grade: 'A', priceText: '$2', inStock: false, stockLeft: 0, warrantyDays: null },
-					{ options: {}, grade: null, priceText: '$2', inStock: true, stockLeft: null, warrantyDays: null },
+					{
+						options: {},
+						grade: null,
+						priceText: '$1',
+						compareAtPriceText: '$1.50',
+						inStock: true,
+						stockLeft: 3,
+						warrantyDays: 30,
+					},
+					{
+						options: { Color: 'Red' },
+						grade: 'A',
+						priceText: '$2',
+						compareAtPriceText: null,
+						inStock: false,
+						stockLeft: 0,
+						warrantyDays: null,
+					},
+					{
+						options: {},
+						grade: null,
+						priceText: '$2',
+						compareAtPriceText: null,
+						inStock: true,
+						stockLeft: null,
+						warrantyDays: null,
+					},
 				],
 			},
 			visitor: { firstName: 'Alex', city: 'London', points: 120 },
@@ -180,9 +220,10 @@ describe('core: Chat filters, warranties and the context text', () => {
 		expect(text.length).toBeLessThanOrEqual(MAX_CONTEXT);
 		expect(text).toContain('first name Alex; city London; 120 loyalty points');
 		expect(text).toContain('Viewed phone ($1 – $2)');
-		expect(text).toContain('- Standard, $1, 3 in stock, 30 days warranty');
+		expect(text).toContain('- Standard, $1 (was $1.50), 3 in stock, 30 days warranty');
 		expect(text).toContain('- Red, grade A, $2, out of stock');
 		expect(text).toContain('| Deal 0 (Hot) | 10% off | no end date |');
+		expect(text).toContain('A $1,000 (was $1,200) https://shop.example.com/p/0');
 		expect(text).toContain('A $1,000 (out of stock)');
 		expect(text).toContain('Delivery: Policy text.');
 		expect(text).toContain('custom: Custom.');
@@ -372,18 +413,26 @@ describe('Chat lookups (E37)', () => {
 		const used = await shop.api('GET', '/v1/chat/products?category=phones');
 		expect(used.status).toBe(200);
 		expect(used.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['iPhone 13']);
+		// at the price the product page shows: after Phone week's 10% on one unit, the own price struck through
 		const graded = await shop.api('GET', '/v1/chat/products?grade=b&inStock=1');
 		expect(graded.json.items).toEqual([
 			expect.objectContaining({
 				id: phone.id,
-				price: 110000,
+				price: 99000,
+				priceText: 'USD 990.00',
+				compareAtPrice: 110000,
+				compareAtPriceText: 'USD 1,100.00',
+				deal: { id: 'deal_phones', name: 'Phone week', savings: 11000, savingsText: 'USD 110.00' },
 				grade: 'Grade B',
 				stockLeft: 4,
 				variantId: phone.variants[2]?.id,
 			}),
 		]);
+		// the price range filters the variants' own prices, as shop listings do
 		const budget = await shop.api('GET', '/v1/chat/products?q=iphone&maxPrice=105000');
-		expect(budget.json.items).toEqual([expect.objectContaining({ price: 100000, stockLeft: 0, priceMax: 120000 })]);
+		expect(budget.json.items).toEqual([
+			expect.objectContaining({ price: 90000, compareAtPrice: 100000, stockLeft: 0, priceMax: 108000 }),
+		]);
 		expect((await shop.api('GET', '/v1/chat/products?maxPrice=1000')).json.items).toEqual([]);
 		expect((await shop.api('GET', '/v1/chat/products?category=nope')).json.items).toEqual([]);
 		expect((await shop.api('GET', '/v1/chat/products?minPrice=1&limit=12')).json.items).toHaveLength(2);
@@ -413,6 +462,8 @@ describe('Chat lookups (E37)', () => {
 			quantity: 2,
 			price: 110000,
 			priceText: 'USD 1,100.00',
+			compareAtPrice: null,
+			compareAtPriceText: null,
 			priceAfterDeals: 99000,
 			savings: 11000,
 			deals: ['Phone week'],
@@ -578,12 +629,25 @@ describe('Chat lookups (E37)', () => {
 				{ key: 'returns', text: 'Returns within 7 days.' },
 			],
 			products: [
-				{ id: cable.id, name: 'USB cable', prices: [{ grade: null, priceText: 'USD 15.00', inStock: true }] },
+				{
+					id: cable.id,
+					name: 'USB cable',
+					prices: [
+						{
+							grade: null,
+							price: 1000,
+							priceText: 'USD 10.00',
+							compareAtPrice: 1500,
+							compareAtPriceText: 'USD 15.00',
+							inStock: true,
+						},
+					],
+				},
 				{
 					id: phone.id,
 					prices: [
-						{ grade: 'Grade A', price: 120000, inStock: true },
-						{ grade: 'Grade B', price: 110000, inStock: true },
+						{ grade: 'Grade A', price: 108000, compareAtPrice: 120000, inStock: true },
+						{ grade: 'Grade B', price: 99000, compareAtPrice: 110000, inStock: true },
 					],
 				},
 			],
@@ -595,6 +659,8 @@ describe('Chat lookups (E37)', () => {
 		expect(guest.json.text).toContain('Delivery: We deliver in Shop style.');
 		expect(guest.json.text).toContain('| Phone week (Sale) | 10% off phones |');
 		expect(guest.json.text).toContain('## Product the visitor is viewing');
+		expect(guest.json.text).toContain('- USB cable: USD 10.00 (was USD 15.00) ');
+		expect(guest.json.text).toContain('256 GB, grade Grade B, USD 990.00 (was USD 1,100.00), 4 in stock');
 		const token = await shop.signIn({ id: sara, name: 'Sara Shopper' });
 		const signed = await shop.api('GET', '/v1/chat/context', undefined, { 'ss-sign-in': token });
 		expect(signed.json).toMatchObject({ product: null, visitor: { firstName: 'Sara', city: 'Boston', points: 0 } });

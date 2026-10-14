@@ -19,6 +19,7 @@ import {
 } from '../core/lookup.js';
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
+import { listShown } from '../core/promotions.js';
 import { readyShop } from './helpers.js';
 
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
@@ -96,6 +97,14 @@ describe('core/lookup', () => {
 			variant({ id: 'var_off', price: 100, active: false }),
 		],
 	});
+	/**
+	 * Shown prices with a deal of 200 on var_in2 (as `shownPrice` gives them).
+	 * @param {VariantRecord} v
+	 */
+	const onSale = (v) =>
+		v.id === 'var_in2'
+			? { price: 700, was: 1200, savings: 200, deal: { id: 'deal_1', name: 'Autumn sale' }, sale: null }
+			: listShown(v);
 
 	it('reads limits and search words safely', () => {
 		expect(limitOf('3', 5, 10)).toBe(3);
@@ -115,16 +124,19 @@ describe('core/lookup', () => {
 		expect(gradeLabels({ not: 'a list' }).size).toBe(0);
 	});
 
-	it('picks the card variant and the price range', () => {
-		expect(cardVariant(product)?.id).toBe('var_in');
+	it('picks the card variant and the price range at the shown prices', () => {
+		expect(cardVariant(product, listShown)?.id).toBe('var_in');
 		const soldOut = {
 			...product,
 			variants: [variant({ id: 'v1', price: 7, stock: 0 }), variant({ id: 'v2', price: 3, stock: 0 })],
 		};
-		expect(cardVariant(soldOut)?.id).toBe('v2');
-		expect(cardVariant({ ...product, variants: [] })).toBeNull();
-		expect(priceRange(product)).toEqual({ min: 500, max: 900 });
-		expect(priceRange({ ...product, variants: [] })).toEqual({ min: 500, max: 500 });
+		expect(cardVariant(soldOut, listShown)?.id).toBe('v2');
+		expect(cardVariant({ ...product, variants: [] }, listShown)).toBeNull();
+		expect(priceRange(product, listShown)).toEqual({ min: 500, max: 900 });
+		expect(priceRange({ ...product, variants: [] }, listShown)).toEqual({ min: 500, max: 500 });
+		// a deal makes var_in2 the cheapest in stock
+		expect(cardVariant(product, onSale)?.id).toBe('var_in2');
+		expect(priceRange(product, onSale)).toEqual({ min: 500, max: 800 });
 	});
 
 	it('shapes cards and details, every price with its text by the Format', () => {
@@ -136,12 +148,21 @@ describe('core/lookup', () => {
 		};
 		/** @param {number} amount @param {string} currency */
 		const money = (amount, currency) => formatMoney(amount, currency, symbol);
-		const context = { currency: 'USD', image: 'http://insecure.example/i.jpg', url: 'https://s.example/p', money };
+		const context = {
+			currency: 'USD',
+			image: 'http://insecure.example/i.jpg',
+			url: 'https://s.example/p',
+			money,
+			shown: listShown,
+		};
 		expect(productCard(product, context)).toEqual({
 			id: 'prd_1',
 			name: 'Phone',
 			price: 800,
 			priceText: 'US$ 8',
+			compareAtPrice: null,
+			compareAtPriceText: null,
+			deal: null,
 			priceMax: 900,
 			priceMaxText: 'US$ 9',
 			currency: 'USD',
@@ -152,7 +173,22 @@ describe('core/lookup', () => {
 			grade: 'a',
 			stockLeft: null,
 		});
-		expect(productCard({ ...product, variants: [] }, context)).toMatchObject({ price: 500, variantId: null });
+		expect(productCard({ ...product, variants: [] }, context)).toMatchObject({
+			price: 500,
+			compareAtPrice: null,
+			deal: null,
+			variantId: null,
+		});
+		// at the shown price: the deal's variant, its price after the deal, struck through above it, and the deal
+		expect(productCard(product, { ...context, shown: onSale })).toMatchObject({
+			price: 700,
+			priceText: 'US$ 7',
+			compareAtPrice: 1200,
+			compareAtPriceText: 'US$ 12',
+			deal: { id: 'deal_1', name: 'Autumn sale', savings: 200, savingsText: 'US$ 2' },
+			priceMax: 800,
+			variantId: 'var_in2',
+		});
 		const details = productDetails(product, {
 			...context,
 			image: 'https://cdn.example/i.jpg',
@@ -170,6 +206,15 @@ describe('core/lookup', () => {
 		expect(details.priceRange).toEqual({ min: 500, max: 900, minText: 'US$ 5', maxText: 'US$ 9' });
 		expect(details.variants[0]).toMatchObject({ priceText: expect.stringMatching(/^US\$ /) });
 		expect(details.variants.map((v) => v.compareAtPriceText)).toEqual([null, null, 'US$ 12']);
+		const sale = productDetails(product, { ...context, shown: onSale, brand: null, attributes: new Map(), grades: new Map() });
+		expect(sale.priceRange).toEqual({ min: 500, max: 800, minText: 'US$ 5', maxText: 'US$ 8' });
+		expect(sale.variants[2]).toMatchObject({
+			price: 700,
+			priceText: 'US$ 7',
+			compareAtPrice: 1200,
+			deal: { name: 'Autumn sale', savings: 200 },
+		});
+		expect(sale.variants[1]).toMatchObject({ price: 800, compareAtPrice: null, deal: null });
 		const short = productDetails(
 			{ ...product, description: 'Short', specs: /** @type {any} */ (undefined) },
 			{ ...context, brand: 'B', attributes: new Map(), grades: new Map() },
@@ -315,6 +360,9 @@ describe('Chat lookups', () => {
 			name: 'Galaxy S24',
 			price: 70000,
 			priceText: 'USD 700.00',
+			compareAtPrice: null,
+			compareAtPriceText: null,
+			deal: null,
 			priceMax: 80000,
 			priceMaxText: 'USD 800.00',
 			currency: 'USD',

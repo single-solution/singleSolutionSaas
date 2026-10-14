@@ -1,6 +1,6 @@
 /**
- * Chat's live store context (PLAN 0.8.10 E37, C1): the shop's policies, the newest products with their price per
- * grade, the deals table, the product the visitor is viewing and, with a verified sign-in, the visitor's first name,
+ * Chat's live store context (PLAN 0.8.10 E37, C1): the shop's policies, the newest products with their shown price per
+ * grade (with the price struck through above it), the deals table, the product the visitor is viewing and, with a verified sign-in, the visitor's first name,
  * city and points, written as one plain text of at most {@link MAX_CONTEXT} characters that Chat adds to the AI's
  * instructions. The visitor and the viewed product matter most, so each part has its own share and the policies take
  * what is left. Labels are English (text the server makes, K7). No I/O.
@@ -31,13 +31,22 @@ const POLICY_TITLES = Object.freeze({
  * @property {string} business the business name
  * @property {Array<{ key: string, text: string }>} policies plain text
  * @property {Array<{ name: string, url: string, inStock: boolean,
- *   prices: Array<{ grade: string | null, priceText: string, inStock: boolean }> }>} products newest first
+ *   prices: Array<{ grade: string | null, priceText: string, compareAtPriceText: string | null, inStock: boolean }> }>}
+ *   products newest first
  * @property {Array<{ name: string, discountLabel: string, badgeLabel: string, endsText: string, description: string }>} deals
  * @property {{ name: string, url: string, summary: string, priceRange: { minText: string, maxText: string },
- *   variants: Array<{ options: Record<string, string>, grade: string | null, priceText: string, inStock: boolean,
- *   stockLeft: number | null, warrantyDays: number | null }> } | null} product
+ *   variants: Array<{ options: Record<string, string>, grade: string | null, priceText: string,
+ *   compareAtPriceText: string | null, inStock: boolean, stockLeft: number | null, warrantyDays: number | null }> } | null}
+ *   product
  * @property {{ firstName: string, city: string, points: number | null } | null} visitor
  */
+
+/**
+ * A shown price with the price struck through above it (`$40.00 (was $50.00)`).
+ * @param {{ priceText: string, compareAtPriceText: string | null }} price
+ */
+const priceWords = (price) =>
+	price.compareAtPriceText ? `${price.priceText} (was ${price.compareAtPriceText})` : price.priceText;
 
 /**
  * One line without line breaks or table bars, cut to `max` characters.
@@ -116,7 +125,7 @@ const productLines = (product) => {
 			const parts = [
 				options || 'Standard',
 				variant.grade ? `grade ${variant.grade}` : '',
-				variant.priceText,
+				priceWords(variant),
 				stock,
 				variant.warrantyDays ? `${variant.warrantyDays} days warranty` : '',
 			].filter(Boolean);
@@ -158,7 +167,7 @@ const newestLines = (products) =>
 					const prices = item.prices
 						.map(
 							(price) =>
-								`${price.grade ? `${price.grade} ` : ''}${price.priceText}${price.inStock ? '' : ' (out of stock)'}`,
+								`${price.grade ? `${price.grade} ` : ''}${priceWords(price)}${price.inStock ? '' : ' (out of stock)'}`,
 						)
 						.join(', ');
 					return `- ${oneLine(item.name, 120)}: ${oneLine(prices, 240)} ${item.url}`;

@@ -277,4 +277,43 @@ describe('one price everywhere', () => {
 		const quote = (await shop.visitor('GET', `/v1/shop/products/${page.id}/quote`)).json;
 		expect(quote).toMatchObject({ price: 5000, priceAfterDeals: 4000, savings: 1000 });
 	});
+
+	it('gives Chat the price shoppers see, with the price struck through and the deal in it', async () => {
+		const id = (await shop.visitor('GET', '/v1/shop/products/kettle')).json.id;
+		const card = (await shop.api('GET', '/v1/chat/products?q=kettle')).json.items[0];
+		expect(card).toMatchObject({
+			price: 4000,
+			priceText: 'USD 40.00',
+			compareAtPrice: 6000,
+			compareAtPriceText: 'USD 60.00',
+			deal: { name: 'Kettle week', savings: 1000, savingsText: 'USD 10.00' },
+			priceMax: 4000,
+		});
+		expect((await shop.api('GET', '/v1/chat/products/top?kind=new')).json.items[0]).toMatchObject({ price: 4000 });
+		const details = (await shop.api('GET', `/v1/chat/products/${id}`)).json;
+		expect(details).toMatchObject({ price: 4000, compareAtPrice: 6000, priceRange: { min: 4000, max: 4000 } });
+		expect(details.variants[0]).toMatchObject({ price: 4000, compareAtPrice: 6000, deal: { name: 'Kettle week' } });
+		const context = (await shop.api('GET', '/v1/chat/context?productId=kettle')).json;
+		expect(context.products[0].prices).toEqual([
+			{
+				grade: null,
+				price: 4000,
+				priceText: 'USD 40.00',
+				compareAtPrice: 6000,
+				compareAtPriceText: 'USD 60.00',
+				inStock: true,
+			},
+		]);
+		expect(context.text).toContain('- Kettle: USD 40.00 (was USD 60.00) ');
+		expect(context.text).toContain('- Standard, USD 40.00 (was USD 60.00), in stock');
+		// the quote prices the cart, with the variant's own "was" price
+		const quote = (await shop.api('GET', `/v1/chat/products/${id}/quote`)).json;
+		expect(quote).toMatchObject({
+			price: 5000,
+			compareAtPrice: 6000,
+			compareAtPriceText: 'USD 60.00',
+			priceAfterDeals: 4000,
+			savings: 1000,
+		});
+	});
 });
