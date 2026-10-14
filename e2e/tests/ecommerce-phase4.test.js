@@ -386,6 +386,7 @@ beforeAll(async () => {
 	expect((await write('PUT', '/v1/format', { wholeUnits: true })).format).toMatchObject({ wholeUnits: true });
 	await configure({
 		'catalog.currency': 'PKR',
+		'checkout.numberPattern': '{prefix}{year}-{number}',
 		'checkout.numberPrefix': 'IM-',
 		'checkout.numberDigits': 4,
 		'checkout.paymentMethods': ['online', 'bank_transfer', 'pickup'],

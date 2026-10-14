@@ -330,12 +330,13 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		expect(dry).toMatchObject({ dryRun: true, ok: false, finished: [] });
 		// read from the old shop, written explicitly even where it equals the built-in default (RT-15)
 		expect(dry.settings.changes.map((change) => [change.key, change.from, change.to, change.source])).toEqual([
+			['checkout.numberPattern', '{prefix}{number}', '{prefix}{year}-{number}', 'built-in'],
 			['checkout.numberPrefix', '', 'EX-', 'built-in'],
 			['catalog.currency', 'USD', 'USD', 'built-in'],
 			['catalog.mediaBaseUrl', '', 'https://cdn.example.com', 'built-in'],
 		]);
 		// a first dry run into an empty website checks each record on its own: what names records of earlier files, or
-		// a setting the run would write first (the order number's prefix), is refused until the real run writes them
+		// a setting the run would write first (the order number's form and prefix), is refused until the real run writes them
 		const refused = dry.steps.flatMap((step) =>
 			step.failed.map((failed) => [step.file, failed.line, failed.errors.map((error) => error.path)]),
 		);
@@ -380,6 +381,7 @@ describe('importing an example shop into Accounts, Ecommerce, Chat and Growth (K
 		const settings = await server('ecommerce', 'GET', '/v1/settings');
 		const checkout = settings.json.features.find((/** @type {{ key: string }} */ feature) => feature.key === 'checkout');
 		expect(checkout.values.numberPrefix).toMatchObject({ value: '' });
+		expect(checkout.values.numberPattern).toMatchObject({ value: '{prefix}{number}' });
 	});
 
 	it('imports for real: the settings first, every collection in order, each product finished after its last file', async () => {
