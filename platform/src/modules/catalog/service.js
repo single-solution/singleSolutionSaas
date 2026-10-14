@@ -51,6 +51,8 @@ import { LAUNCHES, PRODUCTS } from './schema.js';
 /** @typedef {import('../../infra/auth.js').Session} Session */
 
 const ANSWER_MAX_BYTES = 512 * 1024;
+/** Most products a list answers (the consoles' product list and the products' directory). */
+const MOST_PRODUCTS = 200;
 
 /**
  * @typedef {object} CatalogOptions
@@ -517,7 +519,7 @@ export const createCatalogService = (ctx, options = {}) => {
 				await products
 					.find(status ? { status } : {})
 					.sort({ _id: 1 })
-					.limit(200)
+					.limit(MOST_PRODUCTS)
 					.toArray()
 			).map(view),
 		/**
@@ -545,6 +547,20 @@ export const createCatalogService = (ctx, options = {}) => {
 		 * @param {string} productId
 		 */
 		directory: async (productId) => ({ baseUrl: String((await load(productId)).baseUrl) }),
+		/**
+		 * `GET /v1/product/directory`: every connected product with its name and address, by id (one query; no keys or
+		 * secrets), so a product can serve the others without naming them in its code (Notifications lists their
+		 * messages).
+		 */
+		directoryList: async () => ({
+			items: (
+				await products
+					.find({}, { projection: { baseUrl: 1, manifestJson: 1 } })
+					.sort({ _id: 1 })
+					.limit(MOST_PRODUCTS)
+					.toArray()
+			).map((doc) => ({ productId: String(doc._id), name: manifestOf(doc).name, baseUrl: String(doc.baseUrl) })),
+		}),
 		/**
 		 * Is the product connected and active (offered in Add product)?
 		 * @param {string} productId

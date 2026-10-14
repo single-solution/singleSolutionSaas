@@ -9,7 +9,8 @@
  *           GET|POST …/setup/links · DELETE …/setup/links/:linkId (merchant: own; Owner, Support) ·
  *           POST …/setup/features { productId, feature } (Owner, Support) ·
  *           POST /v1/setup/shared { key } (public, rate-limited, noindex)
- * Product:  POST /v1/product/launch/consume · GET /v1/product/directory/:productId · GET /v1/product/websites
+ * Product:  POST /v1/product/launch/consume · GET /v1/product/directory · GET /v1/product/directory/:productId ·
+ *           GET /v1/product/websites
  * @module
  */
 import { defineRoute, ok, created, problem } from '../../infra/http.js';
@@ -272,6 +273,13 @@ export const catalogRoutes = (service, commerce) => [
 		maxBodyBytes: 4 * 1024,
 		rateLimit: { limit: 600, windowMs: 60_000 },
 		handler: async (c) => ok(await service.consumeLaunch({ productId: productOf(c), ...valid(parseConsume(c.body)) })),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/product/directory',
+		auth: 'product',
+		rateLimit: { limit: 600, windowMs: 60_000 },
+		handler: async () => ok(await service.directoryList()),
 	}),
 	defineRoute({
 		method: 'GET',

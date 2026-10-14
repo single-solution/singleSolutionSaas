@@ -132,6 +132,7 @@ system store's signing keys and mail password, and `identity.resealSecrets()` (s
 | `GET /v1/product/websites/:websiteId/status`   | commerce |
 | `GET /v1/product/websites?cursor=`             | catalog  |
 | `GET /v1/product/revocations?since=`           | identity |
+| `GET /v1/product/directory`                    | catalog  |
 | `GET /v1/product/directory/:productId`         | catalog  |
 | `POST /v1/product/launch/consume`              | catalog  |
 

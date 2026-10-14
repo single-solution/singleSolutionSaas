@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { validateDirectoryList } from '@ss/contracts';
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { closeMongoClients } from '../../../src/testing.js';
 import { launchUrl, parseAdminLaunch, parseConnect, parseConsume, parseStatus } from '../../../src/modules/catalog/core/input.js';
@@ -113,6 +114,26 @@ describe('Products (PLAN 0.8.2): Add product, Reconnect, active / inactive', () 
 		expect(directory.json).toEqual({ baseUrl: product.url });
 		expect(codeOf(await h.productCall(product, 'GET', '/v1/product/directory/other'))).toEqual([404, 'not_found']);
 		expect((await h.api.call('GET', '/v1/product/directory/notes')).status).toBe(401);
+		// every connected product, active or not, by id with its name and address (no keys), so products serve one
+		// another without naming them in code; a product connected later is listed too
+		expect((await h.productCall(product, 'GET', '/v1/product/directory')).json).toEqual({
+			items: [{ productId: 'notes', name: 'Notes', baseUrl: product.url }],
+		});
+		const bookings = await fake({
+			manifest: { ...notesManifest(), id: 'bookings', name: 'Bookings' },
+			portalUrl: 'https://portal.test',
+			now: h.clock.now,
+		});
+		expect((await owner.post('/v1/admin/products', { url: bookings.url, secret: bookings.secret })).status).toBe(201);
+		const listed = await h.productCall(product, 'GET', '/v1/product/directory');
+		expect(listed.json).toEqual({
+			items: [
+				{ productId: 'bookings', name: 'Bookings', baseUrl: bookings.url },
+				{ productId: 'notes', name: 'Notes', baseUrl: product.url },
+			],
+		});
+		expect(validateDirectoryList(listed.json).ok).toBe(true);
+		expect((await h.api.call('GET', '/v1/product/directory')).status).toBe(401);
 	});
 
 	it('refuses bad input, refused targets and answers that do not verify', async () => {
