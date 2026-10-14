@@ -14,11 +14,31 @@ import {
 	strings as notifyStrings,
 } from '@ss/product-notifications/product';
 import { createRoutes as notifyRoutes } from '@ss/product-notifications/routes';
+import * as accounts from '@ss/product-accounts/product';
+import { createRoutes as accountsRoutes } from '@ss/product-accounts/routes';
+import * as chat from '@ss/product-chat/product';
+import { createRoutes as chatRoutes } from '@ss/product-chat/routes';
+import * as ecommerce from '@ss/product-ecommerce/product';
+import { createRoutes as ecommerceRoutes } from '@ss/product-ecommerce/routes';
+import * as growth from '@ss/product-growth/product';
+import { createRoutes as growthRoutes } from '@ss/product-growth/routes';
+import * as payments from '@ss/product-payments/product';
+import { createRoutes as paymentsRoutes } from '@ss/product-payments/routes';
 import { createProductInstance, manifest, strings } from '../fixtures/notes/adapters/product.js';
 import { createRoutes } from '../fixtures/notes/server/routes.js';
 import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
 
 const NOTIFY = 'https://notifications-setup.test';
+/** The other real products, each at its own address. */
+const OTHERS = /** @type {const} */ ([
+	['accounts', accounts, accountsRoutes],
+	['chat', chat, chatRoutes],
+	['ecommerce', ecommerce, ecommerceRoutes],
+	['growth', growth, growthRoutes],
+	['payments', payments, paymentsRoutes],
+]);
+/** @param {string} id */
+const baseOf = (id) => `https://${id}-setup.test`;
 const DOMAIN = 'setup.example.com';
 const EMAIL_KEY = 're_live_setup_sheet_key_0123456789';
 
@@ -49,6 +69,13 @@ beforeAll(async () => {
 				strings: notifyStrings,
 				url: NOTIFY,
 			},
+			...OTHERS.map(([id, unit, routes]) => ({
+				createProductInstance: /** @type {any} */ (unit.createProductInstance),
+				createRoutes: /** @type {any} */ (routes),
+				manifest: /** @type {any} */ (unit.manifest),
+				strings: /** @type {any} */ (unit.strings),
+				url: baseOf(id),
+			})),
 		],
 	});
 });
@@ -160,5 +187,56 @@ describe('Setup sheet (end to end)', () => {
 		expect(codeOf(await sys.api.call('POST', '/v1/setup/shared', { body: { key } }))).toBe('not_found');
 		for (const action of ['website.setup_shared', 'website.setup_share_opened', 'website.setup_share_revoked'])
 			expect((await sys.activity(action)).length).toBe(1);
+	});
+
+	it('gets a valid part from every real product on the website, with features on and a merchant database', async () => {
+		for (const [id] of OTHERS) {
+			await sys.connect({ base: baseOf(id) });
+			await sys.addProduct(merchantId, websiteId, id);
+			const cookie = await sys.adminSession(await sys.owner(), websiteId, id);
+			const features = await sys.dashboard(
+				cookie,
+				'GET',
+				`/v1/dashboard/websites/${websiteId}/features`,
+				undefined,
+				baseOf(id),
+			);
+			// every feature whose dependencies are free to switch on together: all of them
+			const on = features.json.features.map((/** @type {{ key: string }} */ f) => f.key);
+			expect(
+				(await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/features`, { on }, baseOf(id))).status,
+			).toBe(200);
+			await sys.connectDatabase(cookie, websiteId, baseOf(id));
+		}
+		const res = await merchant.client.get(`${sheetPath()}?fresh=1`);
+		expect(res.status).toBe(200);
+		const checked = validateBlueprint(res.json);
+		expect(checked.ok, JSON.stringify(checked.ok ? [] : checked.problems.slice(0, 5))).toBe(true);
+		expect(res.json.products.map((/** @type {any} */ p) => [p.productId, p.reachable])).toEqual([
+			['accounts', true],
+			['chat', true],
+			['ecommerce', true],
+			['growth', true],
+			['notes', true],
+			['notifications', true],
+			['payments', true],
+		]);
+		for (const product of res.json.products) {
+			expect(
+				product.features.every(
+					(/** @type {any} */ f) =>
+						f.on ===
+						(product.productId === 'notes'
+							? f.key === 'notes'
+							: product.productId === 'notifications'
+								? f.key === 'email'
+								: true),
+				),
+			).toBe(true);
+			expect(product.checklist.length).toBeGreaterThan(0);
+		}
+		const text = JSON.stringify(res.json);
+		for (const secret of [EMAIL_KEY, tokens.notes?.server, tokens.notifications?.server])
+			expect(text.includes(String(secret))).toBe(false);
 	});
 });
