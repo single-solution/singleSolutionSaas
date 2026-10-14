@@ -88,6 +88,15 @@ describe('catalog admin: product files', () => {
 		expect(attached[0]).toEqual({ key: 'ecommerce/products/prd_1/n.png', alt: '', width: 1200, height: 900 });
 		expect(server.last('PUT /up')?.headers['content-type']).toBe('image/png');
 		expect(dialog.querySelectorAll('.thumbs figure')).toHaveLength(3);
+		// a photo under 500 × 500 is attached with a warning (G1)
+		window.createImageBitmap = /** @type {any} */ (async () => ({ width: 400, height: 900, close: () => {} }));
+		server.routes['POST /v1/admin/products/prd_1/media'] = (/** @type {any} */ call) =>
+			answer(200, { media: [...product().media, { key: call.body.key, url: null, alt: '', width: 400, height: 900 }] });
+		await choose(picker, [file('small.png', 'image/png')]);
+		expect(statuses(dialog)).toContain(
+			'small.png is 400 × 900 pixels: shopping catalogs refuse product photos under 500 × 500 from Jan 31, 2027 (about 1500 × 1500 is best).',
+		);
+		expect(textOf(dialog)).toContain('400 × 900: under 500 × 500');
 		await choose(picker, [file('c.gif', 'image/gif')]);
 		expect(statuses(dialog)).toContain(TEXTS['problem.field.type']);
 		server.routes['PUT /up'] = () => answer(403);

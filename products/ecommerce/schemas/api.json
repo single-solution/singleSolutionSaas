@@ -4678,6 +4678,7 @@
 					"type": "string",
 					"enum": [
 						"products_without_photos",
+						"images_short_lived",
 						"archived_featured",
 						"variants_out_of_stock",
 						"variants_low_stock",
@@ -4686,12 +4687,12 @@
 						"payment_methods",
 						"pixel_ids"
 					],
-					"description": "products_without_photos: active products with no photo; archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); payment_methods: shoppers have no payment method they can use (1 or 0); pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
+					"description": "products_without_photos: active products with no photo; images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); payment_methods: shoppers have no payment method they can use (1 or 0); pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
 				},
 				"status": {
 					"type": "string",
 					"enum": ["ok", "attention", "skipped"],
-					"description": "attention when count is above 0; skipped for pixel_ids while Growth's token is not pasted in Connections or Growth does not answer."
+					"description": "attention when count is above 0; skipped for images_short_lived while no storage is connected, and for pixel_ids while Growth's token is not pasted in Connections or Growth does not answer."
 				},
 				"count": {
 					"type": "integer",
@@ -11169,16 +11170,16 @@
 			"properties": {
 				"checks": {
 					"type": "array",
-					"maxItems": 8,
+					"maxItems": 9,
 					"items": {
 						"$ref": "#/components/schemas/HealthCheck"
 					},
-					"description": "Every check, in this order: products_without_photos, archived_featured, variants_out_of_stock, variants_low_stock, business_name, website_address, payment_methods, pixel_ids."
+					"description": "Every check, in this order: products_without_photos, images_short_lived, archived_featured, variants_out_of_stock, variants_low_stock, business_name, website_address, payment_methods, pixel_ids."
 				},
 				"attention": {
 					"type": "integer",
 					"minimum": 0,
-					"maximum": 8,
+					"maximum": 9,
 					"description": "How many checks need attention."
 				}
 			}
@@ -14306,7 +14307,7 @@
 	},
 	"POST /v1/products": {
 		"summary": "Create a product",
-		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"required": ["name"],
@@ -14782,7 +14783,7 @@
 	},
 	"POST /v1/admin/products": {
 		"summary": "Create a product (Catalog admin widget)",
-		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+		"description": "Give the variants, or the single variant's price (sku, stock …) at the top level. Photos are added afterwards (POST /v1/catalog/uploads, then POST /v1/products/:id/media). 422 validation_failed lists every field problem (for example a kind whose feature is off, an unknown category, brand, attribute, grade or location, several variants without Variants); 409 conflict when the slug or a SKU is used by another product. Send an Idempotency-Key so a retried request makes one product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"required": ["name"],
@@ -15272,7 +15273,7 @@
 	},
 	"PATCH /v1/products/:id": {
 		"summary": "Change a product (by id or slug)",
-		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"properties": {
@@ -15746,7 +15747,7 @@
 	},
 	"PATCH /v1/admin/products/:id": {
 		"summary": "Change a product (by id or slug) (Catalog admin widget)",
-		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, its empty SEO title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the productTitle and productDescription patterns (no FAQs); the answer has them. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
+		"description": "Only the members given change. variants replaces the list: existing variants by id keep their stock (change stock with POST /v1/products/:id/stock), variants left out are removed. New variant photos and a new video file are checked in your storage (422 when not uploaded or not of an allowed type and size; 503 storage_not_connected). A changed slug keeps finding the product. 422 validation_failed; 404 not_found; 409 conflict when the slug or a SKU is used by another product. With the seo setting autoSeo on_save, your AI provider writes its empty SEO title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections (seo.source ai); the answer has them. Without AI nothing is written: the patterns fill its pages on every read. With the landing_pages settings auto on and autoCopy ai, saving it also writes one of its automatic landing pages with AI copy, kept as a landing page set to auto.",
 		"body": {
 			"type": "object",
 			"properties": {
@@ -17693,7 +17694,7 @@
 	},
 	"POST /v1/attributes": {
 		"summary": "Create an attribute",
-		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
+		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 		"body": {
 			"type": "object",
 			"description": "Unknown members are ignored.",
@@ -17874,7 +17875,7 @@
 	},
 	"POST /v1/admin/attributes": {
 		"summary": "Create an attribute (Catalog admin widget)",
-		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
+		"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 		"body": {
 			"type": "object",
 			"description": "Unknown members are ignored.",
@@ -18055,7 +18056,7 @@
 	},
 	"PATCH /v1/attributes/:id": {
 		"summary": "Change an attribute",
-		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
+		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 		"body": {
 			"$ref": "#/components/schemas/AttributeInput"
 		},
@@ -18065,7 +18066,7 @@
 	},
 	"PATCH /v1/admin/attributes/:id": {
 		"summary": "Change an attribute (Catalog admin widget)",
-		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, its empty glossary title, description and FAQs are written when it is saved (E43): with your AI provider when AI copy is on and its key is in Connections, else the landing_pages patterns attributeTitle and attributeDescription (no FAQs); the answer has them.",
+		"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 		"body": {
 			"$ref": "#/components/schemas/AttributeInput"
 		},
@@ -24492,6 +24493,41 @@
 	"GET /v1/seo/sitemaps/:file": {
 		"summary": "One file of the sitemap index",
 		"description": ":file is categories, landings or products-<n> (.xml may follow). Answers application/xml, not JSON: a urlset of that part (products-<n>: the n-th sitemapSize products by id). 404 not_found for a file the index does not have (an empty part has none)."
+	},
+	"GET /v1/media": {
+		"summary": "A catalog file for the website's media route",
+		"description": "For your website's media route (the stable image addresses search engines, sitemaps and feeds get while the catalog setting mediaBaseUrl is empty: https://<your domain><mediaPath>/<signature>/<key>; see the docs): a link to the file in your storage, signed for 5 minutes, for a key whose signature Ecommerce gave. Fetch the file at once and serve it with a long cache: the address never changes for the same file. 404 not_found for any other key or signature (no other file of your bucket can be read through it); 503 storage_not_connected without storage.",
+		"query": {
+			"type": "object",
+			"required": ["key", "signature"],
+			"properties": {
+				"key": {
+					"type": "string",
+					"maxLength": 500,
+					"description": "The storage key: the address's path after the signature, its parts decoded and joined with /."
+				},
+				"signature": {
+					"type": "string",
+					"description": "The address's part after the media path."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["url", "expiresAt"],
+			"additionalProperties": false,
+			"properties": {
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "The file in your storage, signed for 5 minutes."
+				},
+				"expiresAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		}
 	},
 	"GET /v1/feeds/products.xml": {
 		"summary": "The Google Merchant Center feed",

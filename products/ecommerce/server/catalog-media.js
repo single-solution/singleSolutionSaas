@@ -2,10 +2,14 @@
  * Addresses of the shop's files in the merchant's own storage (PLAN 0.8.8: media in the merchant's own storage) and of
  * product pages on the merchant's website. Images are shown from the `catalog` setting `mediaBaseUrl` (the bucket's or
  * CDN's public address) when it is set, else through a signed link that lasts an hour. Used by every part that shows
- * a product (catalog, checkout, the Chat lookups, feeds, alerts). Links follow the URL templates (PLAN 0.8.10 E13).
+ * a product (catalog, checkout, the Chat lookups, alerts). What search engines and shopping catalogs keep (SEO
+ * answers, sitemaps, feeds) never carries a signed link (SEO audit G1): `stableUrl` is the public address, else the
+ * website's own media route (`mediaPath`) with a signature that never changes for the file. Links follow the URL
+ * templates (PLAN 0.8.10 E13).
  * @module
  */
 
+import { mediaSignature } from '../adapters/crypto.js';
 import { categoryLink, productLink, variantQueryOf, withQuery } from '../core/links.js';
 import { COLLECTIONS } from '../core/model.js';
 
@@ -18,6 +22,24 @@ const MAX_RECORDS = 5000;
 
 /** A signed image link lasts this long. */
 const SIGNED_MEDIA_SECONDS = 3600;
+/** Where the website serves its images when the `catalog` setting `mediaPath` names no path. */
+const MEDIA_PATH = '/media';
+
+/**
+ * A storage key in an address: each part encoded.
+ * @param {string} key
+ */
+const keyPath = (key) => key.split('/').map(encodeURIComponent).join('/');
+
+/**
+ * The `catalog` setting `mediaPath` as a path: a leading slash, no trailing one, only path characters; the default
+ * when it names none.
+ * @param {unknown} value
+ */
+export const mediaPathOf = (value) => {
+	const path = `/${String(value ?? '').trim()}`.replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+	return /^(\/[A-Za-z0-9._~-]+)+$/.test(path) ? path : MEDIA_PATH;
+};
 
 /**
  * @param {Product} product
@@ -33,10 +55,28 @@ export const createMedia = (product) => {
 		if (!key) return null;
 		const { mediaBaseUrl } = await s.values('catalog');
 		if (typeof mediaBaseUrl === 'string' && /^https:\/\//.test(mediaBaseUrl))
-			return `${mediaBaseUrl.replace(/\/+$/, '')}/${key.split('/').map(encodeURIComponent).join('/')}`;
+			return `${mediaBaseUrl.replace(/\/+$/, '')}/${keyPath(key)}`;
 		const storage = await product.connections.storage(s.websiteId);
 		if (!storage) return null;
 		return storage.presignGet({ key, expiresIn: SIGNED_MEDIA_SECONDS }).url;
+	};
+
+	/**
+	 * The address of a stored image that never changes, for what search engines and shopping catalogs keep (G1): the
+	 * public address (`mediaBaseUrl`) when it is set, else `https://<domain><mediaPath>/<signature>/<key>` on the
+	 * website, whose media route fetches the file through `GET /v1/media`; null without storage.
+	 * @param {Site} s
+	 * @param {string | null | undefined} key
+	 * @returns {Promise<string | null>}
+	 */
+	const stableUrl = async (s, key) => {
+		if (!key) return null;
+		const { mediaBaseUrl, mediaPath } = await s.values('catalog');
+		if (typeof mediaBaseUrl === 'string' && /^https:\/\//.test(mediaBaseUrl))
+			return `${mediaBaseUrl.replace(/\/+$/, '')}/${keyPath(key)}`;
+		if (!(await product.connections.storage(s.websiteId))) return null;
+		const signature = mediaSignature(await product.secrets.get(s.websiteId), key);
+		return `https://${s.domain}${mediaPathOf(mediaPath)}/${signature}/${keyPath(key)}`;
 	};
 
 	/**
@@ -126,7 +166,7 @@ export const createMedia = (product) => {
 		return categoryLink(String(template), category, await linkContext(s));
 	};
 
-	return Object.freeze({ mediaUrl, dispatchVideo, productUrl, variantUrl, categoryUrl, linkContext });
+	return Object.freeze({ mediaUrl, stableUrl, dispatchVideo, productUrl, variantUrl, categoryUrl, linkContext });
 };
 
 /** @typedef {ReturnType<typeof createMedia>} Media */

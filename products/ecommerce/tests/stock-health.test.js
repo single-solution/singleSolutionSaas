@@ -144,10 +144,12 @@ describe('shop health (E41)', () => {
 			domain: 'shop.example.com',
 			paymentMethods: [],
 			badTags: null,
+			shortLived: true,
 		});
 		expect(health.checks.map((check) => check.key)).toEqual([...HEALTH_CHECKS]);
 		expect(Object.fromEntries(health.checks.map((check) => [check.key, `${check.status} ${check.count}`]))).toEqual({
 			products_without_photos: 'ok 0',
+			images_short_lived: 'attention 1',
 			archived_featured: 'attention 1',
 			variants_out_of_stock: 'ok 0',
 			variants_low_stock: 'attention 4',
@@ -156,7 +158,22 @@ describe('shop health (E41)', () => {
 			payment_methods: 'attention 1',
 			pixel_ids: 'skipped 0',
 		});
-		expect(health.attention).toBe(4);
+		expect(health.attention).toBe(5);
+		// without storage the image check is skipped; with the public address it is ok
+		const skipped = {
+			facets: {},
+			business: { name: 'Shop' },
+			domain: 'shop.example.com',
+			paymentMethods: ['cod'],
+			badTags: [],
+		};
+		expect(healthOf({ ...skipped, shortLived: null }).checks[1]).toEqual({
+			key: 'images_short_lived',
+			status: 'skipped',
+			count: 0,
+			link: null,
+		});
+		expect(healthOf({ ...skipped, shortLived: false }).checks[1]).toMatchObject({ status: 'ok', count: 0 });
 	});
 
 	it('answers the checks with counts and links for the server and the reports widget', async () => {
@@ -181,7 +198,9 @@ describe('shop health (E41)', () => {
 		// Growth's token is not pasted: its tag ids are not read
 		expect(byKey.pixel_ids).toEqual({ key: 'pixel_ids', status: 'skipped', count: 0, link: null });
 		expect(shop.callsTo(GROWTH)).toHaveLength(0);
-		expect(health.json.attention).toBe(4);
+		// storage is connected without a public address of the images (G1)
+		expect(byKey.images_short_lived).toEqual({ key: 'images_short_lived', status: 'attention', count: 1, link: null });
+		expect(health.json.attention).toBe(5);
 		const reader = await shop.ticket(['reports.read']);
 		expect((await shop.admin(reader, 'GET', '/v1/admin/reports/health')).json).toEqual(health.json);
 		expect((await shop.admin(await shop.ticket(['catalog.edit']), 'GET', '/v1/admin/reports/health')).status).toBe(403);

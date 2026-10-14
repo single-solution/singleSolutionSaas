@@ -3,7 +3,8 @@
  * visitor widgets and their data attributes, the JS API (`identify`, `addToCart`, `cart.count`, `cart.onChange`) and
  * the add-to-cart event, the admin widgets with their ticket function, the ticket request (Node.js and cURL), what the
  * merchant's site serves from the API as Next.js route handlers and pages fetching with the server token
- * (`SS_SERVER_TOKEN`): the sitemap index and its files, feeds, llms.txt and llms-full.txt, the product page (meta,
+ * (`SS_SERVER_TOKEN`): the sitemap index and its files, the media route (stable image addresses, SEO audit G1),
+ * feeds, llms.txt and llms-full.txt, the product page (meta,
  * structured data and the 308 of a `moved` answer, PLAN 0.8.10 E13), a listing page with `/v1/seo/listing` (E15) and
  * the policy pages; the Accounts Orders lookup, the courier connection and the storage CORS rule. Plain text; no I/O.
  * @module
@@ -39,6 +40,8 @@ export const WIDGET_ATTRIBUTES = Object.freeze({
 export const SITE_ROUTES = Object.freeze([
 	// the sitemap has its own handler (the index's files come from /v1/seo/sitemaps/:file): `sitemapRoute`
 	{ name: 'sitemap', file: 'app/sitemap.xml/route.js', route: '/v1/seo/sitemap.xml', feature: 'seo', type: 'application/xml' },
+	// the media route has its own handler (it serves the file of each stable image address): `mediaRoute`
+	{ name: 'media', file: 'app/media/[...key]/route.js', route: '/v1/media', feature: 'catalog', type: 'image/*' },
 	{
 		name: 'feedXml',
 		file: 'app/feeds/products.xml/route.js',
@@ -102,6 +105,36 @@ export const sitemapRoute = (base) =>
 		'  return new Response(await response.text(), {',
 		'    status: response.status,',
 		"    headers: { 'content-type': response.headers.get('content-type') ?? 'application/xml; charset=utf-8' },",
+		'  });',
+		'}',
+	].join('\n');
+
+/**
+ * The media route on the merchant's site (G1): the stable image addresses search engines, sitemaps and feeds get while
+ * the `catalog` setting `mediaBaseUrl` is empty (`<mediaPath>/<signature>/<key>`, /media by default); it asks
+ * `GET /v1/media` for a short-lived link to the file and serves the file with a long cache (an address never changes
+ * for the same file).
+ * @param {string} base Ecommerce's address
+ */
+export const mediaRoute = (base) =>
+	[
+		'// app/media/[...key]/route.js (Next.js App Router): your images at addresses that never change, for search engines',
+		'// and shopping catalogs (the catalog setting mediaPath, /media by default)',
+		'export async function GET(request, { params }) {',
+		"  const [signature = '', ...parts] = (await params).key;",
+		"  const query = new URLSearchParams({ key: parts.join('/'), signature });",
+		`  const answer = await fetch(\`${base}/v1/media?\${query}\`, {`,
+		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
+		"    cache: 'no-store', // a fresh link each time",
+		'  });',
+		"  if (!answer.ok) return new Response('Not found', { status: 404 });",
+		'  const file = await fetch((await answer.json()).url);',
+		"  if (!file.ok) return new Response('Not found', { status: 404 });",
+		'  return new Response(file.body, {',
+		'    headers: {',
+		"      'content-type': file.headers.get('content-type') ?? 'application/octet-stream',",
+		"      'cache-control': 'public, max-age=31536000, immutable', // browsers and your CDN keep it",
+		'    },',
 		'  });',
 		'}',
 	].join('\n');
@@ -324,7 +357,10 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 	);
 	/** @type {Record<string, string>} */
 	const site = Object.fromEntries(
-		SITE_ROUTES.map((entry) => [entry.name, entry.name === 'sitemap' ? sitemapRoute(base) : proxyRoute(base, entry)]),
+		SITE_ROUTES.map((entry) => [
+			entry.name,
+			entry.name === 'sitemap' ? sitemapRoute(base) : entry.name === 'media' ? mediaRoute(base) : proxyRoute(base, entry),
+		]),
 	);
 	return Object.freeze({
 		visitor,

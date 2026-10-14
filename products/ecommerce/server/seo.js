@@ -10,6 +10,7 @@
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
+import { mediaSignatureOk } from '../adapters/crypto.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { specsOf } from '../core/catalog-views.js';
@@ -73,6 +74,10 @@ const MAX_IMAGES = 10;
 const CHUNK = 16_384;
 /** Products are read in batches of this size while writing sitemaps and feeds. */
 const BATCH = 200;
+/** The signed link the media route answers lasts this long (the website fetches the file at once). */
+const MEDIA_LINK_SECONDS = 300;
+/** The longest storage key the media route takes. */
+const MAX_KEY = 500;
 /** Reviews shown as review nodes of a product. */
 const REVIEW_NODES = 5;
 /** Most products llms-full.txt reads. */
@@ -207,7 +212,7 @@ export const createSeo = (product, service) => {
 		/** @type {string[]} */
 		const out = [];
 		for (const file of item.media.slice(0, MAX_IMAGES)) {
-			const address = await media.mediaUrl(s, file.key);
+			const address = await media.stableUrl(s, file.key);
 			if (address) out.push(address);
 		}
 		return out;
@@ -290,7 +295,7 @@ export const createSeo = (product, service) => {
 		const variantImages = new Map();
 		for (const variant of item.variants.filter((v) => v.active)) {
 			variantUrls.set(variant.id, await media.variantUrl(s, item, variant, bySlug));
-			variantImages.set(variant.id, variant.media?.[0] ? await media.mediaUrl(s, variant.media[0].key) : null);
+			variantImages.set(variant.id, variant.media?.[0] ? await media.stableUrl(s, variant.media[0].key) : null);
 		}
 		// reviewers are named as the reviews widget shows them (`nameFormat`), never by more (EN-2)
 		const nameFormat = s.has('reviews') ? (await s.values('reviews')).nameFormat : 'full';
@@ -371,7 +376,7 @@ export const createSeo = (product, service) => {
 			s.values('catalog'),
 		]);
 		const url = await media.categoryUrl(s, category);
-		const image = category.image ? await media.mediaUrl(s, category.image.key) : null;
+		const image = category.image ? await media.stableUrl(s, category.image.key) : null;
 		const parent = categories.find((c) => c.id === category.path.at(-1));
 		const names = { name: category.name, category: parent?.name ?? '', storeName: storeNameOf(settings, business) };
 		const description = metaDescription(
@@ -528,7 +533,7 @@ export const createSeo = (product, service) => {
 				/** @type {string[]} */
 				const images = [];
 				for (const key of keys) {
-					const address = await media.mediaUrl(s, key);
+					const address = await media.stableUrl(s, key);
 					if (address) images.push(address);
 				}
 				chunk += sitemapEntry({ loc, lastmod: record.updatedAt, images });
@@ -632,13 +637,13 @@ export const createSeo = (product, service) => {
 		for await (const row of rows) {
 			const item = /** @type {ProductRecord} */ (/** @type {unknown} */ (row));
 			const primary = byId.get(item.categoryIds[0] ?? '');
-			const image = (await media.mediaUrl(s, item.media[0]?.key)) ?? '';
+			const image = (await media.stableUrl(s, item.media[0]?.key)) ?? '';
 			/** @type {Map<string, { link: string, image: string }>} */
 			const perVariant = new Map();
 			for (const variant of item.variants.filter((v) => v.active))
 				perVariant.set(variant.id, {
 					link: await media.variantUrl(s, item, variant, bySlug),
-					image: variant.media?.[0] ? ((await media.mediaUrl(s, variant.media[0].key)) ?? '') : '',
+					image: variant.media?.[0] ? ((await media.stableUrl(s, variant.media[0].key)) ?? '') : '',
 				});
 			const made = feedRows(item, {
 				link: await media.productUrl(s, item),
@@ -831,6 +836,23 @@ export const createSeo = (product, service) => {
 		return new Response(text, { headers: { 'content-type': 'text/plain; charset=utf-8' } });
 	};
 
+	/**
+	 * GET /v1/media?key=&signature= (G1): a fresh signed link (5 minutes) to a catalog file whose stable address
+	 * Ecommerce gave (its signature matches the key), for the website's media route to fetch and serve; 404 for any other
+	 * key, so no other file of the bucket can be read through it.
+	 * @param {any} ctx
+	 */
+	const mediaFile = async (ctx) => {
+		const s = await service.site(ctx);
+		const key = typeof ctx.query.key === 'string' ? ctx.query.key : '';
+		if (!key || key.length > MAX_KEY || !mediaSignatureOk(await product.secrets.get(s.websiteId), key, ctx.query.signature))
+			throw problem('not_found', 'There is no such file.');
+		const storage = await product.connections.storage(s.websiteId);
+		if (!storage) throw problem('storage_not_connected', 'Connect your storage first (Connections).');
+		const signed = storage.presignGet({ key, expiresIn: MEDIA_LINK_SECONDS });
+		return { url: signed.url, expiresAt: signed.expiresAt };
+	};
+
 	/** GET /v1/policies and /v1/shop/policies: `{ format, <policy>… }`, empty ones left out (E3). @param {any} ctx */
 	const policies = async (ctx) => {
 		const { format, policies: filled } = await policiesOf(await service.site(ctx));
@@ -872,6 +894,14 @@ export const createSeo = (product, service) => {
 				feature: 'seo',
 				rateLimit: SERVER_RATE,
 				handler: sitemapFile,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/media',
+				auth: 'server',
+				feature: 'catalog',
+				rateLimit: SERVER_RATE,
+				handler: mediaFile,
 			}),
 			defineRoute({
 				method: 'GET',

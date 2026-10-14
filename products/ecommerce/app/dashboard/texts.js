@@ -69,6 +69,12 @@ export const TEXTS = Object.freeze({
 		searchMessage: 'Atlas Search: {message}',
 		searchUncheckedDetail: 'Atlas Search index {index}: checked by the first shop search. Create it first.',
 		searchDocs: 'How to create it',
+		mediaAddress: 'Public address of your images',
+		mediaSet: 'Set',
+		mediaMissing: 'Not set',
+		mediaMissingDetail:
+			'Set it in Settings → Catalog right after connecting storage: a public bucket, or a CDN in front of it. Images then keep one address, browsers keep them and pages load faster. Until then shoppers get links that last an hour, and search engines your website’s media route (see the docs).',
+		mediaSetIt: 'Set it',
 	}),
 	features: Object.freeze({
 		price: 'Price: {price}',

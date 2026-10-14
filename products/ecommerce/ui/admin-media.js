@@ -34,8 +34,18 @@ export const imageSize = async (win, file) => {
 	}
 };
 
+/** Product photos smaller than this on a side are refused by shopping catalogs from Jan 31, 2027 (SEO audit G1). */
+const SMALL_IMAGE = 500;
+
 /**
- * Upload one photo for a product and attach it (E6: with its width and height).
+ * Whether a photo's known size is under {@link SMALL_IMAGE} pixels on a side.
+ * @param {{ width?: number, height?: number } | null | undefined} size
+ */
+const isSmall = (size) => Boolean(size?.width && size.height && Math.min(size.width, size.height) < SMALL_IMAGE);
+
+/**
+ * Upload one photo for a product and attach it (E6: with its width and height). A photo under 500 × 500 pixels is
+ * attached with a warning in the note (G1).
  * @param {Kit} kit @param {string} productId @param {File} file @param {HTMLElement} note
  * @returns {Promise<Photo[] | null>} the product's photos, or null (the note says why)
  */
@@ -65,6 +75,7 @@ export const uploadPhoto = async (kit, productId, file, note) => {
 		kit.fail(note, added);
 		return null;
 	}
+	if (size && isSmall(size)) kit.say(note, kit.t('catalogAdmin.smallImage', { name: file.name, ...size }), true);
 	return added.data.media;
 };
 
@@ -94,7 +105,15 @@ export const photosDialog = (kit, product, changed) => {
 			...media.map((file, index) =>
 				h('figure', {}, [
 					file.url ? kit.h('img', { src: file.url, alt: file.alt.value }) : null,
-					file.width ? kit.text('figcaption', { class: 'muted' }, `${file.width} × ${file.height}`) : null,
+					file.width
+						? kit.text(
+								'figcaption',
+								{ class: isSmall(file) ? 'error' : 'muted' },
+								isSmall(file)
+									? t('catalogAdmin.smallSize', { width: file.width, height: file.height ?? 0 })
+									: `${file.width} × ${file.height}`,
+							)
+						: null,
 					kit.field(t('catalogAdmin.altText', { number: index + 1 }), file.alt),
 					h('div', { class: 'actions' }, [
 						index > 0
@@ -133,7 +152,8 @@ export const photosDialog = (kit, product, changed) => {
 			changed(next);
 		}
 		picker.value = '';
-		kit.say(note, t('admin.saved'));
+		// a photo under 500 × 500 keeps its warning (G1)
+		if (!note.classList.contains('error')) kit.say(note, t('admin.saved'));
 	});
 	kit.dialog({
 		title: t('catalogAdmin.photosOf', { name: product.name }),
@@ -265,7 +285,7 @@ export const variantPhotosDialog = (kit, { productId, name, photos, picked, uplo
 			draw();
 		}
 		picker.value = '';
-		kit.say(note, t('catalogAdmin.uploadedPick'));
+		if (!note.classList.contains('error')) kit.say(note, t('catalogAdmin.uploadedPick'));
 	});
 	kit.dialog({
 		title: t('catalogAdmin.variantPhotos', { variant: name }),

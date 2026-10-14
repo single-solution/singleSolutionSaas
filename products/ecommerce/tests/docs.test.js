@@ -16,7 +16,7 @@ import { STAFF_ALERT_EVENTS, STAFF_ALERT_LINK, STAFF_ALERT_PHONE, STAFF_ALERT_VA
 import { DEFAULT_FLOW } from '../core/flow.js';
 import { GROWTH_EVENTS } from '../core/growth-events.js';
 import { SEARCH_INDEX_DEFINITION } from '../core/search.js';
-import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, proxyRoute, sitemapRoute } from '../core/snippets.js';
+import { SITE_ROUTES, WIDGET_ATTRIBUTES, createSnippets, mediaRoute, proxyRoute, sitemapRoute } from '../core/snippets.js';
 import { ADD_TO_CART_EVENT, WIDGET_GLOBAL } from '../core/widgets.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ALL, ORIGIN, readyShop } from './helpers.js';
@@ -72,14 +72,14 @@ describe('createSnippets', () => {
 	});
 
 	it('proxies what the site serves with the server token', () => {
-		for (const entry of SITE_ROUTES.filter((route) => route.name !== 'sitemap')) {
+		for (const entry of SITE_ROUTES.filter((route) => route.name !== 'sitemap' && route.name !== 'media')) {
 			const code = /** @type {string} */ (snippets.site[entry.name]);
 			expect(code).toBe(proxyRoute(BASE, entry));
 			expect(code).toContain(`fetch('${BASE}${entry.route}'`);
 			expect(code).toContain(entry.file);
 			expect(code).toContain('SS_SERVER_TOKEN');
 		}
-		expect(SITE_ROUTES.map((entry) => entry.name)).toEqual(['sitemap', 'feedXml', 'feedCsv', 'llms', 'llmsFull']);
+		expect(SITE_ROUTES.map((entry) => entry.name)).toEqual(['sitemap', 'media', 'feedXml', 'feedCsv', 'llms', 'llmsFull']);
 		expect(snippets.site.llmsFull).toContain(`'${BASE}/v1/llms-full.txt'`);
 		expect(snippets.customerOrders).toContain(`${BASE}/v1/customers/`);
 	});
@@ -93,6 +93,15 @@ describe('createSnippets', () => {
 		expect(code).toContain("'/v1/seo/sitemap.xml'");
 		expect(code).toContain(`fetch(\`${BASE}\${path}\``);
 		expect(code).toContain('SS_SERVER_TOKEN');
+	});
+
+	it('serves images at addresses that never change through the media route (G1)', () => {
+		const code = /** @type {string} */ (snippets.site.media);
+		expect(code).toBe(mediaRoute(BASE));
+		expect(code).toContain('app/media/[...key]/route.js');
+		expect(code).toContain(`fetch(\`${BASE}/v1/media?\${query}\``);
+		expect(code).toContain('SS_SERVER_TOKEN');
+		expect(code).toContain("'cache-control': 'public, max-age=31536000, immutable'");
 	});
 
 	it('gives a product page that answers moved with a 308 (E13)', () => {

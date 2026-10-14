@@ -1,6 +1,6 @@
 /**
  * Shop health (PLAN 0.8.10 E41): what needs fixing, as checks with a count and a link — active products without
- * photos, archived products still featured, variants out of stock and low on stock (E44's level), the business name
+ * photos, images on short-lived links (no public address of the images, SEO audit G1), archived products still featured, variants out of stock and low on stock (E44's level), the business name
  * (business.json) and the website's address, a payment method shoppers can use, and badly formed tag ids in Growth
  * (only while Growth's token is pasted; else the check is skipped). The products' checks are one `$facet` pipeline that
  * starts with a `$match` on the website. Judged on read; nothing is stored. No I/O.
@@ -12,6 +12,7 @@ import { variantStockCounts, variantStockStages } from './catalog-query.js';
 export const HEALTH_CHECKS = Object.freeze(
 	/** @type {const} */ ([
 		'products_without_photos',
+		'images_short_lived',
 		'archived_featured',
 		'variants_out_of_stock',
 		'variants_low_stock',
@@ -115,9 +116,11 @@ export const paymentMethodsOn = ({ cod, offered, paymentsConnected, bankManual, 
  * @param {string[]} input.paymentMethods {@link paymentMethodsOn}
  * @param {string[] | null} input.badTags {@link badTagIds}, or null when Growth's token is not pasted or Growth did not
  *   answer (the check is skipped)
+ * @param {boolean | null} input.shortLived whether images go out on short-lived signed links (storage connected, no
+ *   public address of the images); null without storage (the check is skipped)
  * @returns {{ checks: HealthCheck[], attention: number }}
  */
-export const healthOf = ({ facets, business, domain, paymentMethods, badTags }) => {
+export const healthOf = ({ facets, business, domain, paymentMethods, badTags, shortLived }) => {
 	/** @param {string} name */
 	const counted = (name) => Number(facets?.[name]?.[0]?.n ?? 0);
 	const variants = variantStockCounts(Array.isArray(facets?.variants) ? facets.variants : []);
@@ -125,6 +128,7 @@ export const healthOf = ({ facets, business, domain, paymentMethods, badTags }) 
 	/** @type {Record<HealthKey, { count: number | null, link: string | null }>} */
 	const found = {
 		products_without_photos: { count: counted('noPhotos'), link: '/v1/products?status=active&hasMedia=0' },
+		images_short_lived: { count: shortLived === null ? null : shortLived ? 1 : 0, link: null },
 		archived_featured: { count: counted('archivedFeatured'), link: '/v1/products?status=archived&featured=1' },
 		variants_out_of_stock: { count: variants.out, link: '/v1/products?stockState=out,partial' },
 		variants_low_stock: { count: variants.low, link: '/v1/products?lowStock=1' },

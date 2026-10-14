@@ -597,7 +597,7 @@ export const createLandings = (product, service, media) => {
 					.limit(limit)
 					.toArray()
 			: [];
-		const image = category?.image ? await media.mediaUrl(s, category.image.key) : siteAddress(settings.defaultImage) || null;
+		const image = category?.image ? await media.stableUrl(s, category.image.key) : siteAddress(settings.defaultImage) || null;
 		const jsonLd = categoryJsonLd({
 			name: h1,
 			description,

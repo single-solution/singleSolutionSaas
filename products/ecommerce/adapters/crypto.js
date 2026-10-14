@@ -9,6 +9,9 @@
  *   the order placed before then keeps that price even when the deal has ended or changed meanwhile (not when it was
  *   deleted or its limit is used up). Locks are HMAC-SHA256 with a secret of the website kept in the product database
  *   (`adapters/site-secret.js`); the shopper's browser only carries them back.
+ * - **Media signatures** (SEO audit G1): the stable address of a catalog image on the merchant's website
+ *   (`<mediaPath>/<signature>/<key>`) carries an HMAC-SHA256 of its storage key with the same secret, so the website's
+ *   media route gets a file from storage only for keys Ecommerce named; it never changes for the same file.
  * @module
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -95,4 +98,26 @@ export const readLock = (text, { secret, websiteId, now }) => {
 	} catch {
 		return null;
 	}
+};
+
+/** A media signature's length (base64url characters: 96 bits). */
+const MEDIA_SIGNATURE_LENGTH = 16;
+
+/**
+ * The signature of a catalog file's stable address.
+ * @param {string} secret the website's secret
+ * @param {string} key the storage key
+ */
+export const mediaSignature = (secret, key) =>
+	createHmac('sha256', secret).update(`media.${key}`).digest('base64url').slice(0, MEDIA_SIGNATURE_LENGTH);
+
+/**
+ * Whether a signature sent with a storage key is the one Ecommerce gave it.
+ * @param {string} secret @param {string} key @param {unknown} signature
+ */
+export const mediaSignatureOk = (secret, key, signature) => {
+	if (typeof signature !== 'string') return false;
+	const expected = Buffer.from(mediaSignature(secret, key));
+	const given = Buffer.from(signature);
+	return expected.length === given.length && timingSafeEqual(expected, given);
 };

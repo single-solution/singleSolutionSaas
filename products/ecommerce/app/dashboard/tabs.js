@@ -147,6 +147,7 @@ function OverviewTab({ websiteId }) {
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const connections = useLoad(`${base}/connections`);
 	const search = useLoad(`${base}/search-index`);
+	const settings = useLoad(`${base}/settings`);
 	const [busy, setBusy] = useState(false);
 	return (
 		<Loaded answer={answer}>
@@ -165,6 +166,13 @@ function OverviewTab({ websiteId }) {
 						? (all.find((item) => item.name === 'notifications') ?? null)
 						: null;
 				const ready = needed.filter((item) => item.status === 'connected').length;
+				// the setup prompt for the public address of the images, once storage is connected (SEO audit G1)
+				const storage = [...needed, ...all].find((item) => item.name === 'storage');
+				/** @type {Array<{ key: string, values: Record<string, { value: unknown }> }>} */
+				const features = settings.answer?.ok ? settings.answer.data.features : [];
+				const mediaBase = features.find((feature) => feature.key === 'catalog')?.values.mediaBaseUrl?.value;
+				const media =
+					on.includes('catalog') && storage?.status === 'connected' && settings.answer?.ok ? String(mediaBase ?? '') : null;
 				/** @type {SearchIndex | null} the index, while the catalog searches with Atlas */
 				const atlas =
 					on.includes('catalog') && search.answer?.ok && search.answer.data?.search === 'atlas' ? search.answer.data : null;
@@ -223,6 +231,21 @@ function OverviewTab({ websiteId }) {
 										<ConnectionRow item={messages} why={TEXTS.overview.messagesWhy} extra={TEXTS.overview.optional} />
 									) : null}
 									{atlas ? <SearchIndexRow found={atlas} /> : null}
+									{media === null ? null : (
+										<CheckRow
+											tone={media ? 'success' : 'warning'}
+											badge={media ? TEXTS.overview.mediaSet : TEXTS.overview.mediaMissing}
+											label={TEXTS.overview.mediaAddress}
+											detail={media || TEXTS.overview.mediaMissingDetail}>
+											{media ? null : (
+												<a
+													className="text-sm font-semibold text-primary hover:underline"
+													href={`?${new URLSearchParams({ websiteId: String(websiteId), view: 'settings' })}`}>
+													{TEXTS.overview.mediaSetIt}
+												</a>
+											)}
+										</CheckRow>
+									)}
 									{data.checklist.widget ? (
 										<CheckRow
 											tone={data.checklist.widget.installed ? 'success' : 'warning'}

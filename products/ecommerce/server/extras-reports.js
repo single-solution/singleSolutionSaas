@@ -338,8 +338,8 @@ export const createReports = (product, service) => {
 	const health = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
-		const { lowStock } = await s.values('catalog');
-		const [[facets], business, methods, tags] = await Promise.all([
+		const { lowStock, mediaBaseUrl } = await s.values('catalog');
+		const [[facets], business, methods, tags, storage] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
 				.aggregate(healthPipeline(data.websiteId, Number(lowStock)))
@@ -347,8 +347,11 @@ export const createReports = (product, service) => {
 			s.business(),
 			paymentMethods(s, data),
 			badTags(s),
+			product.connections.storage(s.websiteId),
 		]);
-		return healthOf({ facets, business, domain: s.domain, paymentMethods: methods, badTags: tags });
+		// images go out on signed links that last an hour while the public address of the images is empty (G1)
+		const shortLived = storage ? !/^https:\/\//.test(String(mediaBaseUrl ?? '')) : null;
+		return healthOf({ facets, business, domain: s.domain, paymentMethods: methods, badTags: tags, shortLived });
 	};
 
 	const routes = [

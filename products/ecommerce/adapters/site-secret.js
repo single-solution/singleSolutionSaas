@@ -1,12 +1,14 @@
 /**
  * A random secret per website, kept in the product database next to the website's settings (so a removed website's
- * secret goes with them): deal locks are signed with it (PLAN 0.8.10 E18). Made on first use; when two instances make
- * one at once, the first written wins and both read it back.
+ * secret goes with them): deal locks (PLAN 0.8.10 E18) and the stable image addresses of the media route (SEO audit G1)
+ * are signed with it. Made on first use; when two instances make one at once, the first written wins and both read it
+ * back.
  *
  * It is kept sealed with `ENCRYPTION_KEY` (PLAN 0.4.8: the kit's sealer, label `ecommerce`, bound to the website); a
  * secret kept in clear before is sealed on first use. While the owner changes the key, `ENCRYPTION_KEY_PREVIOUS` still
  * opens it and the Owner's Re-seal (`reseal`, RT-14) moves it to the new key. Lost `ENCRYPTION_KEY`: the secret no
- * longer opens and a new one is made (deal locks still open in shoppers' carts end; their carts take today's prices).
+ * longer opens and a new one is made (deal locks still open in shoppers' carts end; their carts take today's prices; the
+ * media route's image addresses change once, and search engines read the new ones from the sitemap).
  * @module
  */
 import { createSealer as createKitSealer, resealEach } from '@ss/app-kit';
