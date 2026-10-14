@@ -409,7 +409,7 @@ describe('admin widgets', () => {
 				saved.push(body);
 				return body.text === '' ? refusal(422, 'validation_failed', 'text') : answer(200, body);
 			},
-			'DELETE /v1/admin/templates/welcome/sms/ur': () => {
+			'DELETE /v1/admin/templates/welcome/sms/de': () => {
 				items = [];
 				return answer(204);
 			},
@@ -430,11 +430,11 @@ describe('admin widgets', () => {
 			true,
 		]);
 		channel.value = 'sms';
-		language.value = 'ur';
+		language.value = 'de';
 		const form = /** @type {HTMLFormElement} */ (inside(host, 'form'));
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await flush();
-		expect(saved[0]).toMatchObject({ key: 'welcome', channel: 'sms', language: 'ur', urgent: true, sensitive: true });
+		expect(saved[0]).toMatchObject({ key: 'welcome', channel: 'sms', language: 'de', urgent: true, sensitive: true });
 		expect(statusOf(host)).toBe(strings['templates.saved']);
 		text.value = '';
 		form.dispatchEvent(new window.Event('submit', { cancelable: true }));
