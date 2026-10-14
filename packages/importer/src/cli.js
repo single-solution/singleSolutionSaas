@@ -21,6 +21,8 @@ import { verify } from './verify.js';
  * @property {Record<string, string | undefined>} env
  * @property {typeof globalThis.fetch} fetch
  * @property {(uri: string) => Promise<{ db: import('./read.js').SourceDb, close: () => Promise<void> }>} connect
+ * @property {Readonly<Record<string, import('./mapping.js').Mapping>>} [mappings] the mappings `--mapping` names
+ *   (default: the store mappings; tests pass the test mappings)
  */
 
 export const USAGE = `ss-import — moves a store's records into the products (PLAN 0.8.10 Migration)
@@ -80,7 +82,7 @@ const productsOf = (pairs, env) => {
  * @param {CliDeps} deps
  * @returns {Promise<number>}
  */
-export const main = async (argv, { io, env, fetch, connect }) => {
+export const main = async (argv, { io, env, fetch, connect, mappings = MAPPINGS }) => {
 	const [command, ...args] = argv;
 	if (command === undefined || command === '--help' || command === 'help') {
 		io.out(USAGE);
@@ -112,8 +114,8 @@ export const main = async (argv, { io, env, fetch, connect }) => {
 	const { values } = parsed;
 	try {
 		if (command === 'read') {
-			const mapping = values.mapping ? MAPPINGS[values.mapping] : undefined;
-			if (!mapping) return usageError(io, `--mapping is one of: ${Object.keys(MAPPINGS).join(', ')}`);
+			const mapping = values.mapping && Object.hasOwn(mappings, values.mapping) ? mappings[values.mapping] : undefined;
+			if (!mapping) return usageError(io, `--mapping is one of: ${Object.keys(mappings).join(', ')}`);
 			if (!values.out) return usageError(io, '--out <dir> is required');
 			const uri = values.source ?? env.SS_IMPORT_SOURCE_URI;
 			if (!uri) return usageError(io, 'set SS_IMPORT_SOURCE_URI (or --source) to the store database address');

@@ -45,7 +45,8 @@ describe('mappings', () => {
 	const step = { product: 'notes', collection: 'notes', source: 'feedback', prefix: 'note', map: () => null };
 
 	it('are checked', () => {
-		expect(MAPPINGS.fixture).toBe(FIXTURE_MAPPING);
+		// only store mappings ship with the command; the test mappings are passed in by tests
+		expect(Object.keys(MAPPINGS)).toEqual(['sisters-boutique']);
 		expect(Object.isFrozen(FIXTURE_MAPPING.steps[0])).toBe(true);
 		expect(() => defineMapping(/** @type {any} */ (null))).toThrow(/object/);
 		expect(() => defineMapping({ name: 'Bad Name', description: '', steps: [step] })).toThrow(/names/);
@@ -305,6 +306,7 @@ describe('the ss-import command', () => {
 			connect: async () => {
 				throw new Error('no database');
 			},
+			mappings: { fixture: FIXTURE_MAPPING },
 			...deps,
 		});
 		return { code, out, err };

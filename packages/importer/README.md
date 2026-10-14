@@ -66,12 +66,13 @@ document (merges followed). A mapping may also read the website's settings (`set
 settings: { '<feature>.<key>': value }, lists } }`).
 
 Store names appear only in mappings (PLAN 0.13). Each store's mapping comes with its cut-over, when the owner says so:
-**`sisters-boutique`** (below) is the first. The test mappings (`@ss/importer/fixture`) are both imported by the e2e
-suite through the real products (`e2e/tests/import.test.js`):
+**`sisters-boutique`** (below) is the first, and the only one `--mapping` offers. The test mappings
+(`@ss/importer/fixture`) are not on `--mapping`: the importer's tests pass them in, and the e2e suite imports both
+through the real products (`e2e/tests/import.test.js`):
 
 - **`fixture`**: a small store-like `feedback` collection (a duplicate that merges, a hidden document that is not read,
   an empty one that is left out) mapped into the e2e test product Notes.
-- **`example-shop`** (`src/fixture/shop.js`): a neutral example shop as an older shop system kept it (ObjectIds,
+- **`example-shop`** (`src/fixture/shop.js`): a neutral example shop as another shop system keeps it (ObjectIds,
   dollars, phones typed nationally, slugs instead of ids, a guest saved twice, loyalty transactions, chats with their
   messages inside, daily analytics) mapped into Accounts (a role, staff and a member with bcrypt hashes), Ecommerce (a
   size chart, categories, a brand, an attribute, products with variants, a deal, customers merged by phone, orders with

@@ -33,7 +33,7 @@ const readShop = async () => {
 
 describe('the example shop (fixture)', () => {
 	it('maps every collection into the four products in import order, merging the guest saved twice', async () => {
-		expect(MAPPINGS['example-shop']).toBe(SHOP_MAPPING);
+		expect(MAPPINGS['example-shop']).toBeUndefined();
 		const { manifest } = await readShop();
 		expect(manifest.targets.map((target) => [`${target.product}.${target.collection}`, target.records])).toEqual([
 			['accounts.roles', 1],
