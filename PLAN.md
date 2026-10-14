@@ -1999,6 +1999,17 @@ messages queued before 3ec0bfec and the Portal's repair of old history entries (
 region `bom1` (next to the Atlas cluster). The flaky e2e import run came from a helper changing a shared fixture
 mid-run (e2e must run on a clean worktree of HEAD while helpers edit).
 
+**Review of the new features (2026-10-15; `audit/review-new-features-2026-10-15.md`; fixes 26d2dbf4 Chat, 6cf9c47a
+app-kit, fcbb5b4f Growth, then f7c901c9 Chat, 75711a1c Portal):** nine confirmed problems fixed, each with a failing-first
+test: Growth's robots.txt matching and HTML/sitemap scanning could run for minutes on hostile input (now linear, one
+forward pass); the SEO run limit was counted per route; a Redirects CSV with a huge empty header was slow inside a
+transaction; the kit asked a down Portal for the product list on every send (now once a minute); Chat's comparison
+parsing was slow on punctuation-heavy messages; non-secret connection parts could hide ids in the Setup sheet; gzipped
+sitemaps were refused; the Redirects CSV download lost its byte order mark. Also: Chat delete-all checks its time
+between groups of ten (a slow batch is never redone); a shared Setup link survives a reload (the tab keeps its key).
+Kept as designed: a fresh Notifications instance without the product list treats `name.something` keys as a
+product's while the Portal is down; any Notifications server token may send other products' keys (as before).
+
 **Owner request, 2026-10-14 ~22:00 — website setup sheet and setup advisor (new SaaS feature, design
 `audit/design/website-blueprint.md`).** "Once it is complete I will add websites and products … there should be
 something you tell me what to enable and add for each website, and there should be an auto JSON which can also be
