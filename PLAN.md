@@ -1986,6 +1986,19 @@ product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
   `sale_price_effective_date`, Meta CSV). Bug fixed: feeds dropped the imported group id and the specs deal conditions
   use.
 
+**"Nothing extra" sweep of every unit but Ecommerce (2026-10-15; aff05747 Payments, 1877aaac Growth, 269c4b44
+Notifications, d28bf2c2 Chat, 64cf5587 Accounts, 38bc0eae Portal, cfd2b9e7 + 14724e5a contracts, 2cb79f27 net, e4821482
+ui, 9fe238f6 importer, 165ad2c0 protocol, 04e8884e app-kit, 51feb69f config, e45fc49c cli, 5d565b96 e2e, a3f6e769
+root):** unused texts, config fields, options, dead branches and exports removed; copied helpers merged; each package's
+public entry offers only its documented API; phase-named tests renamed by subject. Bugs fixed: Chat's "Talk to a
+person" switch, "times and day dividers" and the review-pause notice did nothing, and chats past 50 messages lost the
+older ones ("Show earlier messages" added); Accounts' users widget accepted address parts the API refuses (one shared
+limits table); Payments' docs named a generic-gateway status the code does not accept; the Portal Setup page did not
+show "What your website builds". Kept on purpose: the old secret readers (until Re-seal), Notifications' reading of
+messages queued before 3ec0bfec and the Portal's repair of old history entries (live data may hold them), `vercel.json`
+region `bom1` (next to the Atlas cluster). The flaky e2e import run came from a helper changing a shared fixture
+mid-run (e2e must run on a clean worktree of HEAD while helpers edit).
+
 **Owner request, 2026-10-14 ~22:00 — website setup sheet and setup advisor (new SaaS feature, design
 `audit/design/website-blueprint.md`).** "Once it is complete I will add websites and products … there should be
 something you tell me what to enable and add for each website, and there should be an auto JSON which can also be
