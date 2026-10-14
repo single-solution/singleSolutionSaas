@@ -2137,6 +2137,24 @@ tables and landing facets, measured quantities.
   types' `units`, the flow's `needs: ['units']`, unit fields scoped by type, `typeKeys` scope and per-type limits, kind
   booking → service.
 
+- **Phase 4 built (2026-10-15; cf5e00ea, a839d90b, cc55a02c; importer 42b74a1d test only; e2e 590164af):** item types
+  (`item_types` list of `catalog`, at most 50, kept with the settings): kind physical | digital | service, offered or
+  not, elements variants, grades, units { fieldIds ≤ 3, capture stock | packing, requiredBefore packed | shipped | null },
+  chart, parcel, warranty, downloads, licenceKeys, slots, and the fields a type names (≤ 40, none = every field; the
+  link lives on the type, not on fields). A product's type is its own, else its first category's (or the nearest above),
+  else the built-in type of its kind; built-in types have every element the features allow except numbered units (a
+  merchant turns those on through a type), so shops without types are otherwise unchanged. Saving refuses values of
+  elements the type lacks, with paths; a type change is refused (409) while units are in stock (product, category, list).
+  Answers carry `type { key, kind }`. Removed: `grades_serials.serialMode`, `product.serialized`,
+  `category.requiresSerial`, `isSerialized`/`serializedOf`, the flow's `needs: ['units']`, category-scoped unit fields;
+  each order line follows its type (`unitCapture`, `unitsRequiredBefore`), and numbers can be given with the packed,
+  shipped or delivered move (typed numbers needed before shipped are also needed before delivered). Grades per item type
+  (`typeKeys`). Kind booking → service (services without slots sell without a time). Variant packages feed
+  `g:shipping_weight`, the Meta CSV and courier `{weightG}`. Dashboard Item types editor, type pickers, the product
+  editor follows the type; features shown as "Condition grades and unit numbers" and "Services and bookings". Bugs
+  fixed: orders that skip packing could not take unit numbers; units could be stocked for products that never number
+  them. For US-2: `licenceKeys`.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
