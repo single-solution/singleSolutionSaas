@@ -8,7 +8,7 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | Entry              | What it is                                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `@ss/ui`           | every component, `cx`, and the schema, format and problem helpers                                                          |
-| `@ss/ui/schema`    | settings-schema helpers behind `SchemaForm` (no React): fields, groups, bounds, browser-side validation                    |
+| `@ss/ui/schema`    | settings-schema helpers behind `SchemaForm` (no React): fields, groups, widgets, choice labels                             |
 | `@ss/ui/format`    | credit (from millicredits) and date formatting, `humanize` for codes                                                       |
 | `@ss/ui/problems`  | RFC 9457 problem → user message and field-error helpers                                                                    |
 | `@ss/ui/theme.css` | the design tokens                                                                                                          |
@@ -79,16 +79,16 @@ move. With `prefers-reduced-motion` nothing moves.
 
 ## SchemaForm
 
-`<SchemaForm schema values onChange errors? overridden? onReset? disabled? />` renders each top-level property of a
-settings schema as a control chosen by its type and `x-ui.widget`, grouped by `x-ui.group`, ordered by `x-ui.order`, with
-`x-ui.advanced` settings behind a disclosure and `x-ui.hidden` ones left out. Fields sit in the field grid; long text (a
-`textarea` widget or a `format` of `textarea`, `multiline`, `markdown` or `html`), JSON, lists, fieldsets and fields with
+`<SchemaForm schema values onChange errors? overridden? onReset? disabled? />` renders each setting of a settings schema
+(what `@ss/contracts` allows: string, integer, number, boolean and list settings) as a control chosen by its type and
+`x-ui.widget`, grouped by `x-ui.group`, ordered by `x-ui.order`, with `x-ui.advanced` settings behind a disclosure and
+`x-ui.hidden` ones left out. Fields sit in the field grid; long text (a `textarea` widget), lists and fields with
 `x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
 (`ChoicePicker`: chosen ones as chips, a search box, a scrolling list); `x-ui.labels: 'country'` shows ISO country codes
-by their names. Bounds (`minimum`/`maximum`, `maxLength`, `maxItems`) are shown on the inputs (number limits, character
-and item counters); the fields of a fieldset are checked as they are typed. The product checks every value when it is
-saved, and its field errors are passed in `errors`. Settings marked in `overridden` get a Reset link that calls
-`onReset(name)`.
+by their names. A list without choices is typed one item per line (a list of on/off values as JSON). Bounds
+(`minimum`/`maximum`, `maxLength`) are shown on the inputs (number limits, the character counter of a text area). The
+product checks every value when it is saved, and its field errors are passed in `errors`. Settings marked in
+`overridden` get a Reset link that calls `onReset(name)`.
 
 ## StatusBadge
 

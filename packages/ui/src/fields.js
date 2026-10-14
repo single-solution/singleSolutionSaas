@@ -15,7 +15,7 @@ import { Icon } from './icons.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 
 /** A field's label: sentence case, medium weight (one look for labels and legends everywhere). */
-export const LABEL_CLASS = 'block text-[13px] font-medium leading-5 text-fg';
+const LABEL_CLASS = 'block text-[13px] font-medium leading-5 text-fg';
 
 /**
  * Classes of a responsive field grid: 1 / 2 / 3 columns by the width of the nearest `@container`, packed densely
@@ -475,10 +475,10 @@ export function RadioGroup({
 /**
  * Several checkboxes for a list value.
  * @param {{ legend: ReactNode, options: Option[], value: readonly string[], onChange: (value: string[]) => void,
- *   help?: ReactNode, error?: ReactNode, disabled?: boolean, max?: number, className?: string, wide?: boolean }} props
+ *   help?: ReactNode, error?: ReactNode, disabled?: boolean, className?: string, wide?: boolean }} props
  *   `wide` defaults to true (a list of options spans the row)
  */
-export function CheckboxGroup({ legend, options, value, onChange, help, error, disabled = false, max, className, wide = true }) {
+export function CheckboxGroup({ legend, options, value, onChange, help, error, disabled = false, className, wide = true }) {
 	const ids = useFieldIds(undefined);
 	const selected = new Set(value);
 	return (
@@ -497,7 +497,7 @@ export function CheckboxGroup({ legend, options, value, onChange, help, error, d
 							<CheckboxInput
 								id={optionId}
 								checked={on}
-								disabled={o.disabled || (!on && max !== undefined && selected.size >= max)}
+								disabled={o.disabled}
 								onChange={() =>
 									onChange(
 										on
@@ -523,7 +523,7 @@ export function CheckboxGroup({ legend, options, value, onChange, help, error, d
  * a search box, and a scrolling list of checkboxes filtered by it (by label or value; the value shows beside a label
  * that differs). A new choice is added at the end, so the list keeps the order it was picked in.
  * @param {{ legend: ReactNode, options: Option[], value: readonly string[], onChange: (value: string[]) => void,
- *   help?: ReactNode, error?: ReactNode, disabled?: boolean, max?: number, emptyText?: ReactNode,
+ *   help?: ReactNode, error?: ReactNode, disabled?: boolean, emptyText?: ReactNode,
  *   searchLabel?: string, noMatchText?: ReactNode, removeLabel?: string, className?: string, wide?: boolean }} props
  *   `wide` defaults to true
  */
@@ -535,7 +535,6 @@ export function ChoicePicker({
 	help,
 	error,
 	disabled = false,
-	max,
 	emptyText = 'None chosen',
 	searchLabel = 'Search',
 	noMatchText = 'No match.',
@@ -610,12 +609,7 @@ export function ChoicePicker({
 									key={o.value}
 									htmlFor={optionId}
 									className="ss-motion flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-fg hover:bg-surface-2">
-									<CheckboxInput
-										id={optionId}
-										checked={on}
-										disabled={o.disabled || (!on && max !== undefined && selected.size >= max)}
-										onChange={() => toggle(o.value)}
-									/>
+									<CheckboxInput id={optionId} checked={on} disabled={o.disabled} onChange={() => toggle(o.value)} />
 									<span className="min-w-0 flex-1 truncate">{o.label}</span>
 									{o.label !== o.value ? <span className="text-xs text-muted tabular-nums">{o.value}</span> : null}
 								</label>

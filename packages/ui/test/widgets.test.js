@@ -134,7 +134,6 @@ describe('buttons and fields', () => {
 					legend="Days"
 					value={['mon']}
 					onChange={onGroup}
-					max={1}
 					options={[
 						{ value: 'mon', label: 'Mon' },
 						{ value: 'tue', label: 'Tue' },
@@ -153,7 +152,8 @@ describe('buttons and fields', () => {
 		expect(container.querySelector('svg[aria-label="Set by admin"]')).not.toBeNull();
 		click(byLabel(container, 'Large'));
 		expect(onRadio).toHaveBeenCalledWith('l');
-		expect(byLabel(container, 'Tue').disabled).toBe(true);
+		click(byLabel(container, 'Tue'));
+		expect(onGroup).toHaveBeenCalledWith(['mon', 'tue']);
 		click(byLabel(container, 'Mon'));
 		expect(onGroup).toHaveBeenCalledWith([]);
 	});

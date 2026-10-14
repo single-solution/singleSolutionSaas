@@ -3,59 +3,33 @@
  * SchemaForm renders a feature's settings form from its settings schema with the `x-ui` hints: `widget`, `group`
  * (fieldsets), `order`, `help`, `placeholder` (for a list of choices: the text shown while none is chosen),
  * `advanced` (behind a disclosure), `hidden`, `wide` and `labels` (`country`: ISO country codes shown by name). A list
- * of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a shorter one a group of checkboxes. Each group lays
- * its fields out in the responsive field grid (PLAN 0.6): short controls side by side, long text, JSON, lists and
- * `wide` fields across the whole row.
+ * of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a shorter one a group of checkboxes; a list
+ * without choices is typed one item per line (a list of on/off values as JSON). Each group lays its fields out in the
+ * responsive field grid (PLAN 0.6): short controls side by side, long text, lists and `wide` fields across the whole
+ * row.
  *
  * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits. Bounds show on
- * the inputs; the fields of a fieldset are checked as they are typed; the product's field errors come in `errors`.
+ * the inputs; the product checks every value when it is saved, and its field errors come in `errors`.
  * @module
  */
 import { useId, useState } from 'react';
 import { Button } from './Button.js';
-import {
-	Checkbox,
-	CheckboxGroup,
-	ChoicePicker,
-	FieldGrid,
-	Input,
-	LABEL_CLASS,
-	RadioGroup,
-	Select,
-	Switch,
-	TextArea,
-} from './fields.js';
+import { Checkbox, CheckboxGroup, ChoicePicker, FieldGrid, Input, RadioGroup, Select, Switch, TextArea } from './fields.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
-import { fieldsOf, groupFields, optionLabel, validateValue, widgetOf } from './schema.js';
+import { fieldsOf, groupFields, optionLabel } from './schema.js';
 
 /** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */
 /** @typedef {import('./schema.js').SettingNode} SettingNode */
 /** @typedef {import('./schema.js').FieldDescriptor} FieldDescriptor */
 
 /**
- * Generic value control for a node (recursive for objects).
- * @param {{ id: string, label: string, node: SettingNode, value: unknown, onChange: (value: unknown) => void,
- *   error?: string | undefined, help?: import('react').ReactNode, disabled?: boolean, widget?: string,
- *   placeholder?: string | null, aside?: import('react').ReactNode, max?: number | undefined,
- *   maxLength?: number | undefined, maxItems?: number | undefined }} props
+ * The control of one setting, by its type and widget.
+ * @param {{ id: string, label: string, node: SettingNode, widget: string, value: unknown,
+ *   onChange: (value: unknown) => void, error: string | undefined, help: string | null, disabled: boolean,
+ *   placeholder: string | null, aside: import('react').ReactNode }} props
  */
-function NodeControl({
-	id,
-	label,
-	node,
-	value,
-	onChange,
-	error,
-	help,
-	disabled = false,
-	widget = widgetOf(node),
-	placeholder,
-	aside,
-	max,
-	maxLength,
-	maxItems,
-}) {
+function NodeControl({ id, label, node, widget, value, onChange, error, help, disabled, placeholder, aside }) {
 	const [jsonText, setJsonText] = useState(() => (value === undefined ? '' : JSON.stringify(value, null, 2)));
 	const [jsonError, setJsonError] = useState(/** @type {string | null} */ (null));
 	const common = { id, error, help, aside, disabled };
@@ -95,9 +69,9 @@ function NodeControl({
 				label={label}
 				type="number"
 				inputMode={node.type === 'integer' ? 'numeric' : 'decimal'}
-				step={node.multipleOf ?? (node.type === 'integer' ? 1 : 'any')}
+				step={node.type === 'integer' ? 1 : 'any'}
 				min={node.minimum}
-				max={max}
+				max={node.maximum}
 				value={typeof value === 'number' ? String(value) : ''}
 				placeholder={ph}
 				onChange={(e) => {
@@ -135,10 +109,10 @@ function NodeControl({
 					{...common}
 					label={label}
 					value={text}
-					maxLength={maxLength}
+					maxLength={node.maxLength}
 					placeholder={ph}
 					onChange={(e) => onChange(e.currentTarget.value)}
-					aside={aside ?? (maxLength ? `${text.length}/${maxLength}` : undefined)}
+					aside={aside ?? (node.maxLength ? `${text.length}/${node.maxLength}` : undefined)}
 				/>
 			);
 		const type =
@@ -157,7 +131,7 @@ function NodeControl({
 				label={label}
 				type={type}
 				value={type === 'color' && !text ? '#000000' : text}
-				maxLength={maxLength}
+				maxLength={node.maxLength}
 				placeholder={ph}
 				autoComplete="off"
 				onChange={(e) => onChange(e.currentTarget.value)}
@@ -179,7 +153,6 @@ function NodeControl({
 				help,
 				error,
 				disabled,
-				...(maxItems === undefined ? {} : { max: maxItems }),
 			};
 			// a long list is searchable; named choices (countries) are listed by name
 			return widget === 'tags' ? (
@@ -200,7 +173,7 @@ function NodeControl({
 					rows={3}
 					value={list.join('\n')}
 					placeholder={ph ?? 'One per line'}
-					aside={aside ?? (maxItems ? `${list.length}/${maxItems}` : undefined)}
+					aside={aside}
 					onChange={(e) => {
 						const lines = e.currentTarget.value.split('\n').map((l) => l.trim());
 						const kept = lines.filter((l, i) => l !== '' || i === lines.length - 1).filter((l) => l !== '');
@@ -211,47 +184,7 @@ function NodeControl({
 		}
 	}
 
-	if (node.type === 'object' && widget !== 'json' && node.properties) {
-		const record =
-			value && typeof value === 'object' && !Array.isArray(value) ? /** @type {Record<string, unknown>} */ (value) : {};
-		return (
-			<fieldset className="space-y-4 rounded-xl border border-line-soft p-4" disabled={disabled}>
-				<legend className={cx(LABEL_CLASS, 'px-1')}>
-					{label}
-					{aside ? <span className="ml-2 font-normal text-muted">{aside}</span> : null}
-				</legend>
-				{help ? <p className="text-xs text-muted">{help}</p> : null}
-				{Object.entries(node.properties).map(([key, child]) => (
-					<NodeControl
-						key={key}
-						id={`${id}-${key}`}
-						label={child.title ?? key}
-						node={child}
-						value={record[key]}
-						disabled={disabled}
-						max={child.maximum}
-						maxLength={child.maxLength}
-						maxItems={child.maxItems}
-						help={child['x-ui']?.help ?? child.description}
-						error={
-							record[key] === undefined ? undefined : (validateValue(child, record[key], { required: false }) ?? undefined)
-						}
-						onChange={(next) => {
-							const { [key]: _old, ...rest } = record;
-							onChange(next === undefined ? rest : { ...rest, [key]: next });
-						}}
-					/>
-				))}
-				{error ? (
-					<p role="alert" className="text-xs font-medium text-danger">
-						{error}
-					</p>
-				) : null}
-			</fieldset>
-		);
-	}
-
-	// JSON fallback (objects with widget json, arrays of objects)
+	// a list of on/off values: JSON
 	return (
 		<TextArea
 			{...common}
@@ -324,11 +257,8 @@ export function SchemaForm({
 					error={errors[field.name]}
 					help={field.help}
 					placeholder={field.placeholder}
-					disabled={disabled || field.node.readOnly === true}
+					disabled={disabled}
 					aside={aside}
-					max={field.bounds.max}
-					maxLength={field.bounds.maxLength}
-					maxItems={field.bounds.maxItems}
 				/>
 			</div>
 		);

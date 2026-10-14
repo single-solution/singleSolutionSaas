@@ -2,34 +2,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { SchemaForm } from '../src/SchemaForm.js';
-import { boundsOf, choiceLabel, fieldsOf, groupFields, isWide, validateValue, widgetOf } from '../src/schema.js';
+import { choiceLabel, fieldsOf, groupFields, isWide, widgetOf } from '../src/schema.js';
 import { allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(cleanup);
 
-/** A coupons feature's settings schema using every node type. */
+/** @typedef {import('../src/schema.js').SettingNode} SettingNode */
+
+/**
+ * A setting with a title and default, as every settings schema has them.
+ * @param {Omit<SettingNode, 'title' | 'default'>} rest
+ * @returns {SettingNode}
+ */
+const node = (rest) => ({ title: 'Setting', default: null, ...rest });
+
+/** A coupons feature's settings schema using every setting type. */
 const coupons = () =>
 	/** @type {any} */ ({
 		type: 'object',
 		properties: {
 			allowStacking: { type: 'boolean', title: 'Allow stacking', default: false },
 			maxActive: { type: 'integer', title: 'Maximum active codes', default: 20, minimum: 1, maximum: 100000 },
-			prefix: { type: 'string', title: 'Code prefix', default: 'SAVE', maxLength: 12, pattern: '^[A-Z0-9]+$' },
+			prefix: { type: 'string', title: 'Code prefix', default: 'SAVE', maxLength: 12 },
 			channels: {
 				type: 'array',
 				title: 'Channels',
 				default: ['web'],
 				items: { type: 'string', enum: ['web', 'pos', 'app'] },
-				maxItems: 3,
-				uniqueItems: true,
 			},
-			window: {
-				type: 'object',
-				title: 'Validity window',
-				default: { days: 30 },
-				required: ['days'],
-				properties: { days: { type: 'integer', title: 'Days', minimum: 1, maximum: 365 } },
-			},
+			share: { type: 'number', title: 'Share', default: 0.5, minimum: 0, maximum: 1 },
 		},
 	});
 
@@ -56,90 +57,49 @@ const hinted = () =>
 			color: { type: 'string', title: 'Colour', default: '#112233', 'x-ui': { widget: 'color', group: 'Look' } },
 			debug: { type: 'boolean', title: 'Debug', default: false, 'x-ui': { advanced: true, widget: 'checkbox' } },
 			secretFlag: { type: 'boolean', title: 'Hidden', default: false, 'x-ui': { hidden: true } },
-			tags: { type: 'array', title: 'Tags', default: [], items: { type: 'string' }, maxItems: 3, 'x-ui': { group: 'Look' } },
-			raw: { type: 'object', title: 'Raw', default: {}, properties: {}, 'x-ui': { widget: 'json', advanced: true } },
+			tags: { type: 'array', title: 'Tags', default: [], items: { type: 'string' }, 'x-ui': { group: 'Look' } },
+			flags: { type: 'array', title: 'Flags', default: [], items: { type: 'boolean' }, 'x-ui': { advanced: true } },
 		},
 	});
 
 describe('schema helpers', () => {
 	it('orders and groups fields by x-ui, dropping hidden ones', () => {
 		const fields = fieldsOf(hinted());
-		expect(fields.map((f) => f.name)).toEqual(['tone', 'message', 'theme', 'color', 'debug', 'tags', 'raw']);
+		expect(fields.map((f) => f.name)).toEqual(['tone', 'message', 'theme', 'color', 'debug', 'tags', 'flags']);
 		const { groups, advanced } = groupFields(fields);
 		expect(groups.map((g) => [g.name, g.fields.map((f) => f.name)])).toEqual([
 			['Content', ['tone', 'message']],
 			['Look', ['theme', 'color', 'tags']],
 		]);
-		expect(advanced.map((f) => f.name)).toEqual(['debug', 'raw']);
+		expect(advanced.map((f) => f.name)).toEqual(['debug', 'flags']);
 		expect(fields.find((f) => f.name === 'message')?.help).toBe('Shown in the bar');
 		expect(fieldsOf(null)).toEqual([]);
 	});
 
-	it('derives widgets, defaults and bounds', () => {
+	it('derives widgets and which fields span the row', () => {
 		const s = coupons();
 		expect(widgetOf(s.properties.allowStacking)).toBe('switch');
 		expect(widgetOf(s.properties.maxActive)).toBe('number');
 		expect(widgetOf(s.properties.channels)).toBe('checkboxes');
-		expect(widgetOf(s.properties.window)).toBe('fieldset');
-		expect(widgetOf({ type: 'string', enum: ['a', 'b'] })).toBe('radio');
-		expect(widgetOf({ type: 'string', format: 'email' })).toBe('email');
-		expect(widgetOf({ type: 'string', format: 'uri' })).toBe('url');
-		expect(widgetOf({ type: 'array', items: { type: 'string' } })).toBe('tags');
-		expect(widgetOf({ type: 'integer', 'x-ui': { widget: 'slider' } })).toBe('number');
-		expect(widgetOf({ type: 'boolean', 'x-ui': { widget: 'textarea' } })).toBe('switch');
-		expect(widgetOf({ type: 'string', format: 'markdown' })).toBe('textarea');
-		// grid layout: long text, JSON, lists and fieldsets span the row; `x-ui.wide` decides when given
-		expect(isWide({ type: 'string' }, 'text')).toBe(false);
-		expect(isWide({ type: 'string', format: 'multiline' }, widgetOf({ type: 'string', format: 'multiline' }))).toBe(true);
-		expect(isWide({ type: 'string', 'x-ui': { wide: true } }, 'text')).toBe(true);
-		expect(isWide({ type: 'array', items: { type: 'string' }, 'x-ui': { wide: false } }, 'tags')).toBe(false);
+		expect(widgetOf(node({ type: 'string', enum: ['a', 'b'] }))).toBe('radio');
+		expect(widgetOf(node({ type: 'string', format: 'email' }))).toBe('email');
+		expect(widgetOf(node({ type: 'string', format: 'uri' }))).toBe('url');
+		expect(widgetOf(node({ type: 'string', format: 'date' }))).toBe('text');
+		expect(widgetOf(node({ type: 'array', items: { type: 'string' } }))).toBe('tags');
+		expect(widgetOf(node({ type: 'integer', 'x-ui': { widget: 'slider' } }))).toBe('number');
+		expect(widgetOf(node({ type: 'boolean', 'x-ui': { widget: 'textarea' } }))).toBe('switch');
+		// grid layout: long text and lists span the row; `x-ui.wide` decides when given
+		expect(isWide(node({ type: 'string' }), 'text')).toBe(false);
+		expect(isWide(node({ type: 'string', 'x-ui': { widget: 'textarea' } }), 'textarea')).toBe(true);
+		expect(isWide(node({ type: 'string', 'x-ui': { wide: true } }), 'text')).toBe(true);
+		expect(isWide(node({ type: 'array', items: { type: 'string' }, 'x-ui': { wide: false } }), 'tags')).toBe(false);
 		expect(fieldsOf(s).map((f) => [f.name, f.wide])).toEqual([
 			['allowStacking', false],
 			['maxActive', false],
 			['prefix', false],
 			['channels', true],
-			['window', true],
+			['share', false],
 		]);
-		expect(boundsOf(s.properties.maxActive)).toEqual({ min: 1, max: 100000, maxLength: undefined, maxItems: undefined });
-		expect(boundsOf({ type: 'integer', exclusiveMinimum: 0, exclusiveMaximum: 10 })).toMatchObject({ min: 1, max: 9 });
-		expect(boundsOf({ type: 'number', exclusiveMinimum: 0 }).min).toBe(Number.EPSILON);
-		expect(fieldsOf(s).find((f) => f.name === 'maxActive')?.defaultValue).toBe(20);
-		expect(fieldsOf({ properties: { short_name: { type: 'string' } } })[0]?.title).toBe('Short name');
-	});
-
-	it('validates values against their bounds', () => {
-		const s = coupons();
-		const p = s.properties;
-		expect(validateValue(p.maxActive, 0)).toBe('Must be at least 1.');
-		expect(validateValue(p.maxActive, 100001)).toBe('Must be at most 100,000.');
-		expect(validateValue(p.maxActive, 2.5)).toBe('Enter a whole number.');
-		expect(validateValue(p.maxActive, 'x')).toBe('Enter a number.');
-		expect(validateValue(p.maxActive, undefined)).toBe('This field is required.');
-		expect(validateValue(p.maxActive, null)).toBe('A value is required.');
-		expect(validateValue(p.prefix, 'save')).toBe('Has an invalid format.');
-		expect(validateValue(p.prefix, 'SAVE20')).toBeNull();
-		expect(validateValue(p.prefix, 'A'.repeat(13))).toBe('Must be at most 12 characters.');
-		expect(validateValue(p.prefix, 3)).toBe('Enter text.');
-		expect(validateValue(p.channels, ['web', 'web'])).toBe('Items must not repeat.');
-		expect(validateValue(p.channels, ['web', 'tv'])).toMatch(/An item is invalid/);
-		expect(validateValue(p.channels, 'web')).toBe('Invalid list.');
-		expect(validateValue(p.channels, ['web', 'pos', 'app', 'web'])).toBe('At most 3 items.');
-		expect(validateValue({ type: 'array', minItems: 1 }, [])).toBe('Choose at least 1.');
-		expect(validateValue(p.window, { days: 0 })).toBe('Days: Must be at least 1.');
-		expect(validateValue(p.window, {})).toBe('Days is required.');
-		expect(validateValue(p.window, [])).toBe('Invalid value.');
-		expect(validateValue(p.allowStacking, 'yes')).toBe('Choose on or off.');
-		expect(validateValue({ type: 'string', enum: ['a'] }, 'b')).toBe('Choose one of the options.');
-		expect(validateValue({ type: 'string', minLength: 2 }, 'a')).toBe('Must be at least 2 characters.');
-		expect(validateValue({ type: 'string', format: 'email' }, 'nope')).toBe('Enter an e-mail address.');
-		expect(validateValue({ type: 'string', format: 'uri' }, 'ftp://x')).toBe('Enter a URL starting with https://.');
-		expect(validateValue({ type: 'string', pattern: '(' }, 'x')).toBeNull();
-		expect(validateValue({ type: 'number', multipleOf: 0.5 }, 0.75)).toBe('Must be a multiple of 0.5.');
-		expect(validateValue({ type: 'boolean' }, undefined)).toBeNull();
-		expect(validateValue({ type: 'string', enum: ['a'] }, 'a')).toBeNull();
-		expect(validateValue({ type: 'array' }, ['x'])).toBeNull();
-		expect(validateValue({ type: 'object' }, { x: 1 })).toBeNull();
-		expect(validateValue({}, 'anything')).toBeNull();
 	});
 });
 
@@ -186,7 +146,7 @@ describe('SchemaForm', () => {
 		click(toggle);
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(byLabel(container, 'Debug').getAttribute('type')).toBe('checkbox');
-		expect(byLabel(container, 'Raw').tagName).toBe('TEXTAREA');
+		expect(byLabel(container, 'Flags').tagName).toBe('TEXTAREA');
 		// fields sit in a grid: short ones are cells, long ones span the row
 		const cellOf = (/** @type {string} */ name) => container.querySelector(`[data-field="${name}"]`);
 		expect(cellOf('tone')?.hasAttribute('data-cell')).toBe(true);
@@ -196,12 +156,17 @@ describe('SchemaForm', () => {
 		expect(cellOf('tone')?.parentElement?.className).toContain('@md:grid-cols-2');
 	});
 
-	it('reports typed values: numbers, switches, enums, lists, tags, nested objects and JSON', () => {
+	it('reports typed values: numbers, switches, enums and lists, with the bounds on the inputs', () => {
 		const schema = coupons();
 		const onChange = vi.fn();
 		const { container } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
 		const max = byLabel(container, 'Maximum active codes');
-		expect(max.getAttribute('max')).toBe('100000');
+		expect([max.getAttribute('min'), max.getAttribute('max'), max.getAttribute('step')]).toEqual(['1', '100000', '1']);
+		const share = byLabel(container, 'Share');
+		expect([share.getAttribute('min'), share.getAttribute('max'), share.getAttribute('step')]).toEqual(['0', '1', 'any']);
+		type(share, '0.25');
+		expect(onChange).toHaveBeenLastCalledWith('share', 0.25);
+		expect(byLabel(container, 'Code prefix').getAttribute('maxlength')).toBe('12');
 		type(max, '42');
 		expect(onChange).toHaveBeenLastCalledWith('maxActive', 42);
 		type(max, '');
@@ -217,21 +182,43 @@ describe('SchemaForm', () => {
 		expect(onChange).toHaveBeenLastCalledWith('channels', ['pos']);
 		type(byLabel(container, 'Code prefix'), 'WIN');
 		expect(onChange).toHaveBeenLastCalledWith('prefix', 'WIN');
-		type(container.querySelector('[id$="-window-days"]') ?? document.body, '7');
-		expect(onChange).toHaveBeenLastCalledWith('window', { days: 7 });
 	});
 
-	it('edits tag lists and JSON values', () => {
+	it('picks from a long list of countries by name, with the placeholder while none is chosen', () => {
+		const schema = /** @type {import('../src/schema.js').SettingsSchema} */ ({
+			type: 'object',
+			properties: {
+				countries: {
+					type: 'array',
+					title: 'Countries',
+					default: ['GB'],
+					items: { type: 'string', enum: ['GB', 'FR', 'DE', 'US', 'PK', 'AE', 'SA', 'IN', 'CN', 'JP', 'BR', 'CA', 'AU'] },
+					'x-ui': { labels: 'country', placeholder: 'Any country' },
+				},
+			},
+		});
+		const onChange = vi.fn();
+		const { container } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
+		expect(container.querySelector('input[type="search"]')).not.toBeNull();
+		click(/** @type {HTMLElement} */ (container.querySelector('input[id$="-FR"]')));
+		expect(onChange).toHaveBeenLastCalledWith('countries', ['GB', 'FR']);
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Remove United Kingdom"]')));
+		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Remove France"]')));
+		expect(onChange).toHaveBeenLastCalledWith('countries', []);
+		expect(container.textContent).toContain('Any country');
+	});
+
+	it('edits tag lists and lists of on/off values (JSON)', () => {
 		const schema = hinted();
 		const onChange = vi.fn();
 		const { container } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
 		type(byLabel(container, 'Tags'), 'a\n\nb\n');
 		expect(onChange).toHaveBeenLastCalledWith('tags', ['a', 'b']);
 		click(byText(container, 'Advanced settings (2)', 'button'));
-		const raw = byLabel(container, 'Raw');
-		type(raw, '{"x": 1}');
-		expect(onChange).toHaveBeenLastCalledWith('raw', { x: 1 });
-		type(raw, '{oops');
+		const flags = byLabel(container, 'Flags');
+		type(flags, '[true, false]');
+		expect(onChange).toHaveBeenLastCalledWith('flags', [true, false]);
+		type(flags, '[oops');
 		expect(container.textContent).toContain('Enter valid JSON.');
 		click(byLabel(container, 'Debug'));
 		expect(onChange).toHaveBeenLastCalledWith('debug', true);
@@ -249,7 +236,7 @@ describe('SchemaForm', () => {
 				schema={schema}
 				values={defaults(schema)}
 				onChange={() => undefined}
-				errors={{ prefix: 'Has an invalid format.' }}
+				errors={{ prefix: 'Must be at most 12 characters.' }}
 				overridden={{ prefix: true }}
 				onReset={onReset}
 			/>,
@@ -257,7 +244,7 @@ describe('SchemaForm', () => {
 		const prefix = byLabel(container, 'Code prefix');
 		expect(prefix.getAttribute('aria-invalid')).toBe('true');
 		const message = document.getElementById(String(prefix.getAttribute('aria-describedby')).split(' ').pop() ?? '');
-		expect(message?.textContent).toContain('Has an invalid format.');
+		expect(message?.textContent).toContain('Must be at most 12 characters.');
 		expect(message?.getAttribute('role')).toBe('alert');
 		click(byText(container, 'Reset', 'button'));
 		expect(onReset).toHaveBeenCalledWith('prefix');
