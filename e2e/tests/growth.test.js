@@ -4,7 +4,9 @@
  * website with the Portal-issued browser token: the consent banner asks first and nothing is recorded, the visitor
  * accepts, the page view and Ecommerce's shop events (browser events) are recorded in the merchant database and the
  * daily totals go up; then the analytics dashboard's ticketed read, an old path answered by its redirect rule (one
- * address and the whole list with its ETag), and the hourly charge.
+ * address and the whole list with its ETag), the SEO checklist on a small fake website (sample pages of each kind from
+ * its sitemap, the rule applied on the live site, the kept report answered again without a read), and the hourly
+ * charge.
  */
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -28,8 +30,73 @@ let tokens;
 /** @type {import('mongodb').Db} */
 let merchantDb;
 
+/** @param {unknown} data */
+const ld = (data) => `<script type="application/ld+json">${JSON.stringify(data)}</script>`;
+
+/**
+ * A page of the merchant's fake website, with what search engines want in its head.
+ * @param {string} path @param {string} title @param {unknown} data @param {string} [body]
+ */
+const page = (path, title, data, body = '') => ({
+	status: 200,
+	headers: { 'content-type': 'text/html; charset=utf-8', etag: '"1"' },
+	body: `<!doctype html><html lang="en"><head><title>${title}</title>
+<meta name="description" content="${title}, with the details shoppers ask for before they buy, and delivery in two days.">
+<meta name="viewport" content="width=device-width, initial-scale=1"><link rel="canonical" href="https://${DOMAIN}${path}">
+${ld(data)}</head><body><h1>${title}</h1>${body}</body></html>`,
+});
+
+/** The merchant's website as Growth's SEO checklist reads it (path → answer; anything else 404). */
+const SITE = /** @type {Record<string, { status: number, headers?: Record<string, string>, body?: string }>} */ ({
+	'/robots.txt': { status: 200, body: `User-agent: *\nDisallow: /cart\nSitemap: https://${DOMAIN}/sitemap.xml\n` },
+	'/sitemap.xml': {
+		status: 200,
+		body: `<urlset>${['/lamps', '/glossary/linen', '/products/blue-lamp']
+			.map((path) => `<url><loc>https://${DOMAIN}${path}</loc></url>`)
+			.join('')}</urlset>`,
+	},
+	'/': page('/', 'Grow Example: lamps and shades', [
+		{ '@type': 'OnlineStore', name: 'Grow' },
+		{ '@type': 'WebSite', name: 'Grow' },
+	]),
+	'/lamps': page('/lamps', 'Lamps | Grow Example', [{ '@type': 'CollectionPage' }, { '@type': 'BreadcrumbList' }]),
+	'/glossary/linen': page('/glossary/linen', 'Linen | Grow Example', { '@type': 'DefinedTerm', name: 'Linen' }),
+	'/products/blue-lamp': page(
+		'/products/blue-lamp',
+		'Blue Lamp | Grow Example',
+		[
+			{
+				'@type': 'Product',
+				name: 'Blue Lamp',
+				image: `https://${DOMAIN}/media/blue.jpg`,
+				offers: { '@type': 'Offer', price: '12.50', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
+			},
+			{ '@type': 'BreadcrumbList' },
+		],
+		'<p>$12.50</p>',
+	),
+	// the website's server applies the redirect rule (GET /v1/redirects/match)
+	'/old-lamps': { status: 301, headers: { location: '/lamps' } },
+});
+
 beforeAll(async () => {
-	sys = await startSystem({ unit: { createProductInstance, createRoutes, manifest, strings, url: GROWTH } });
+	sys = await startSystem({
+		unit: {
+			createProductInstance,
+			createRoutes,
+			manifest,
+			strings,
+			url: GROWTH,
+			handlers: {
+				[`https://${DOMAIN}`]: async (/** @type {Request} */ request) => {
+					const answer = SITE[new URL(request.url).pathname];
+					return answer
+						? new Response(answer.body ?? null, { status: answer.status, headers: answer.headers ?? {} })
+						: new Response('Not found', { status: 404 });
+				},
+			},
+		},
+	});
 });
 afterAll(async () => {
 	await sys?.stop();
@@ -236,6 +303,64 @@ describe('Growth on the real Portal', () => {
 		const again = await sys.call('GET', '/v1/redirects/all', { token: tokens.server, headers: { 'if-none-match': etag } });
 		expect(again.status).toBe(304);
 		expect(await merchantDb.collection('ss_growth_redirects').countDocuments({ websiteId })).toBe(1);
+	});
+
+	it('the SEO checklist reads the live website: samples of each kind, the rule applied, the kept report', async () => {
+		const support = await sys.admin('support');
+		await sys.switchFeatures(await sys.adminSession(support.client, websiteId), websiteId, [
+			'consent_banner',
+			'conversion_funnel',
+			'redirects',
+			'searches_404s',
+			'seo_checklist',
+			'visitor_analytics',
+		]);
+		const run = await sys.call('POST', '/v1/seo/checks', { token: tokens.server, body: {} });
+		expect(run.status).toBe(200);
+		expect(run.json.cached).toBe(false);
+		expect(run.json.pages).toEqual([
+			{ url: `https://${DOMAIN}/`, kind: 'home', sampled: false },
+			{ url: `https://${DOMAIN}/products/blue-lamp`, kind: 'product', sampled: true },
+			{ url: `https://${DOMAIN}/lamps`, kind: 'category', sampled: true },
+			{ url: `https://${DOMAIN}/glossary/linen`, kind: 'glossary', sampled: true },
+		]);
+		/** @param {string} id @param {string | null} [at] */
+		const result = (id, at) => {
+			const item = run.json.checks.find(
+				(/** @type {any} */ c) => c.id === id && (at === undefined || c.page === `https://${DOMAIN}${at}`),
+			);
+			return item ? `${item.status} ${item.finding}` : undefined;
+		};
+		expect(result('robots_txt')).toBe('pass ok');
+		expect(result('robots_blocks')).toBe('pass ok');
+		expect(result('sitemap')).toBe('pass ok');
+		expect(result('sitemap_urls')).toBe('pass ok');
+		expect(result('soft_404')).toBe('pass ok');
+		expect(result('redirects_live')).toBe('pass ok');
+		// the 404 log: no address visitors could not find is without a rule
+		expect(result('redirect_suggestions')).toBe('pass none');
+		expect(result('site_data', '/')).toBe('pass ok');
+		for (const id of ['product_data', 'price_match', 'server_html', 'breadcrumbs', 'canonical'])
+			expect(result(id, '/products/blue-lamp'), id).toBe('pass ok');
+		const productCheck = run.json.checks.find((/** @type {any} */ c) => c.id === 'product_data');
+		expect(productCheck.test).toBe(
+			`https://search.google.com/test/rich-results?url=${encodeURIComponent(`https://${DOMAIN}/products/blue-lamp`)}`,
+		);
+		expect(productCheck.title).toBe(strings['seo.check.product_data.title']);
+		// kept: asked again at once, the report comes back without a read of the site
+		const again = await sys.call('POST', '/v1/seo/checks', { token: tokens.server, body: {} });
+		expect(again.json).toEqual({ ...run.json, cached: true });
+		const ticket = await sys.call('POST', '/v1/tickets', {
+			token: tokens.server,
+			body: {
+				user: { id: 'u_9', name: 'Ana Admin', email: 'ana@shop.test' },
+				permissions: ['seo.check'],
+				origin: ADMIN_ORIGIN,
+			},
+		});
+		const kept = await sys.call('GET', '/v1/admin/seo/report', { token: ticket.json.ticket, origin: ADMIN_ORIGIN });
+		expect(kept.json.checkedAt).toBe(run.json.checkedAt);
+		expect(await merchantDb.collection('ss_growth_seo_reports').countDocuments({ websiteId })).toBe(1);
 	});
 
 	it('charges the switched-on features by the hour', async () => {
