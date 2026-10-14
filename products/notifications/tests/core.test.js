@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import apiJson from '../schemas/api.json' with { type: 'json' };
 import {
 	addressFor,
 	checkRecipient,
@@ -34,7 +35,14 @@ import {
 	retryPlanOf,
 	withinLimits,
 } from '../core/timing.js';
-import { checkForwardedEvent, checkWebhookUrls, eventTime, urlsFor } from '../core/webhooks.js';
+import {
+	WEBHOOK_EVENTS,
+	checkForwardedEvent,
+	checkWebhookUrls,
+	eventTime,
+	urlsFor,
+	webhookUrlsSummary,
+} from '../core/webhooks.js';
 import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
@@ -416,6 +424,37 @@ describe('forwarded events', () => {
 		expect(field({ type: 'payments.paid', data: {}, at: 'now' })).toBe('at');
 		expect(field({ type: 'payments.paid', data: {}, at: null })).toBe('at');
 	});
+
+	it("take the events of any product, also one made later, but never Notifications' own names", () => {
+		const taken = ['notes.note.created', 'my-app.order.shipped', 'ab.x', `${'a'.repeat(31)}.x`, 'payments.payment.paid'];
+		const refused = [
+			'notifications.message.sent',
+			'message.sent',
+			'message.sendt',
+			'recipient.unsubscribed',
+			'a.x',
+			'Notes.x',
+			'notes',
+			'notes.',
+			'notes.Note',
+			'-notes.x',
+			'notes_app.x',
+			`${'a'.repeat(32)}.x`,
+		];
+		for (const type of taken) expect(checkForwardedEvent({ type, data: {} })).toMatchObject({ ok: true, value: { type } });
+		for (const type of refused) expect(checkForwardedEvent({ type, data: {} })).toMatchObject({ ok: false, field: 'type' });
+		// no other product's event can be named like one of Notifications' own
+		for (const own of WEBHOOK_EVENTS)
+			expect(checkForwardedEvent({ type: `${own.split('.')[0]}.other`, data: {} })).toMatchObject({ ok: false });
+		// a webhook URL may name them the same way
+		expect(checkWebhookUrls([{ url: 'https://notes.example/hook', events: taken }])).toMatchObject({ ok: true });
+		for (const type of refused.filter((name) => name !== 'message.sent' && name !== 'recipient.unsubscribed'))
+			expect(checkWebhookUrls([{ url: 'https://notes.example/hook', events: [type] }])).toMatchObject({ ok: false });
+		// the API description of POST /v1/events takes exactly the same types
+		const pattern = new RegExp(apiJson['POST /v1/events'].body.properties.type.pattern, 'u');
+		for (const type of taken) expect(pattern.test(type)).toBe(true);
+		for (const type of refused) expect(pattern.test(type)).toBe(false);
+	});
 });
 
 describe('provider answers, replies and webhook URLs', () => {
@@ -504,6 +543,50 @@ describe('provider answers, replies and webhook URLs', () => {
 		expect(urlsFor(checked.value, 'message.failed')).toEqual(['https://all.example/hook', 'https://fails.example/hook']);
 		expect(urlsFor(checked.value, 'chat.conversation.opened')).toEqual(['https://all.example/hook']);
 		expect(checkWebhookUrls([])).toEqual({ ok: true, value: [] });
+	});
+
+	it('sums the webhook URLs up for the Setup sheet by host only, in at most 300 characters', () => {
+		expect(webhookUrlsSummary([])).toBe('No URLs yet.');
+		expect(webhookUrlsSummary([{ url: 'https://hooks.example.com/ss?token=abc', events: [] }])).toBe(
+			'1 URL on hooks.example.com; it takes every event.',
+		);
+		expect(webhookUrlsSummary([{ url: 'https://hooks.example.com/ss', events: ['message.failed'] }])).toBe(
+			'1 URL on hooks.example.com; it takes only the events it names.',
+		);
+		expect(
+			webhookUrlsSummary([
+				{ url: 'https://a.example.com/1', events: [] },
+				{ url: 'https://b.example.com/2', events: [] },
+				{ url: 'https://c.example.com/3', events: [] },
+			]),
+		).toBe('3 URLs on a.example.com, b.example.com and c.example.com; all take every event.');
+		expect(
+			webhookUrlsSummary([
+				{ url: 'https://a.example.com/1', events: [] },
+				{ url: 'https://b.example.com:8443/2', events: [] },
+				{ url: 'https://a.example.com/3', events: ['message.sent'] },
+			]),
+		).toBe('3 URLs on a.example.com and b.example.com; 2 take every event.');
+		expect(
+			webhookUrlsSummary([
+				{ url: 'https://a.example.com/1', events: ['message.sent'] },
+				{ url: 'https://a.example.com/2', events: ['message.failed'] },
+			]),
+		).toBe('2 URLs on a.example.com; each takes only the events it names.');
+		// long hosts: as many as fit, then the others counted; when none fits, the hosts counted
+		const host = (/** @type {string} */ letter) => `${letter.repeat(63)}.${letter.repeat(63)}.${letter.repeat(63)}.example.com`;
+		const long = ['a', 'b', 'c'].map((letter) => ({ url: `https://${host(letter)}/hook`, events: [] }));
+		const cut = webhookUrlsSummary(long);
+		expect(cut).toBe(`3 URLs on ${host('a')} and 2 more; all take every event.`);
+		expect(cut.length).toBeLessThanOrEqual(300);
+		const longest = `${'d'.repeat(63)}.${'e'.repeat(63)}.${'f'.repeat(63)}.${'g'.repeat(61)}`;
+		const many = Array.from({ length: 5 }, (_, i) => ({ url: `https://${longest}/${i}`, events: ['message.sent'] }));
+		expect(webhookUrlsSummary(many)).toBe('5 URLs on 1 host; each takes only the events it names.');
+		const five = ['h', 'i', 'j', 'k', 'l'].map((letter) => ({
+			url: `https://${letter.repeat(63)}.${letter.repeat(63)}.${letter.repeat(63)}.${letter.repeat(61)}/x`,
+			events: ['message.sent'],
+		}));
+		expect(webhookUrlsSummary(five)).toBe('5 URLs on 5 hosts; each takes only the events it names.');
 	});
 
 	it('turns a base64url push key into bytes', () => {

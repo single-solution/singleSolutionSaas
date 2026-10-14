@@ -2,16 +2,21 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Notifications'
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (providers per
  * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the delivery log's
- * shared setting (how long it is kept, PLAN 0.8.10 D11), the merchant database indexes, the data-rights hooks, the widget settings and the list `webhook_urls` (in the product database,
- * whose store it owns), and adds the sealer of sensitive messages, the providers and web push on the same outbound
- * policy, and the products' message defaults its dashboard lists (parity P1). The Next.js route and the tests pass the rest (config, store, clock, network).
+ * shared setting (how long it is kept, PLAN 0.8.10 D11), the merchant database indexes, the data-rights hooks, the
+ * widget settings, the list `webhook_urls` (in the product database, whose store it owns) and its part of the website
+ * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, the channels that are on, and
+ * while Outgoing webhooks is on the events it sends and its webhook URLs by host only), and adds the sealer of sensitive
+ * messages, the providers and web push on the same outbound policy, and the products' message defaults its dashboard
+ * lists (parity P1). The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { MongoClient } from 'mongodb';
 import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import browserPush from '../schemas/browser_push.settings.json' with { type: 'json' };
 import delayedSend from '../schemas/delayed_send.settings.json' with { type: 'json' };
@@ -27,6 +32,7 @@ import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' 
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
 import { normaliseEmail, normalisePhone } from '../core/channels.js';
+import { WEBHOOK_EVENTS, webhookUrlsSummary } from '../core/webhooks.js';
 import { createSealer, resealWebsite } from './crypto.js';
 import { createDefaults } from './defaults.js';
 import { LISTS, createLists } from './lists.js';
@@ -72,6 +78,9 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 );
 
 export { strings };
+
+/** The features that send to the website's customers, named in its Setup sheet (staff push reaches its staff only). */
+const CUSTOMER_CHANNELS = Object.freeze(['whatsapp', 'email', 'sms', 'browser_push']);
 
 /** The fallback key a misconfigured product builds its sealer with (it answers 503 everywhere anyway). */
 const UNCONFIGURED_KEY = 'unconfigured-notifications-encryption-key-000';
@@ -131,7 +140,7 @@ const dataRights = (now) => ({
 });
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes' | 'openapi' | 'build'>
  *   & { createTransport?: import('./smtp.js').CreateSmtpTransport }} InstanceOptions
  */
 
@@ -166,6 +175,41 @@ export const createProductInstance = (options) => {
 	const provider = (name) => ({
 		test: (/** @type {unknown} */ value) => providers.test(name, value),
 	});
+
+	/**
+	 * Notifications' own part of the website Setup sheet: the customer channels that are on and, while Outgoing webhooks
+	 * is on, the events it sends (its own as the Events setting picks them, and other products') and its webhook URLs by
+	 * host only. Never a secret; it reads the webhooks settings and the one list only while that feature is on.
+	 * @param {{ websiteId: string, on: string[] }} website
+	 */
+	const setupPart = async ({ websiteId, on }) => {
+		const channels = manifest.features
+			.filter((feature) => CUSTOMER_CHANNELS.includes(feature.key) && on.includes(feature.key))
+			.map((feature) => feature.name);
+		const summaries = [
+			{
+				title: 'Channels',
+				text: channels.length > 0 ? `${channels.join(', ')}.` : 'None is on yet, so nothing can be sent to customers.',
+			},
+		];
+		if (!on.includes('webhooks')) return { summaries };
+		const [{ events }, urls] = await Promise.all([
+			product.settings.values(websiteId, 'webhooks'),
+			lists.webhookUrls(websiteId),
+		]);
+		const own = WEBHOOK_EVENTS.filter((type) => Array.isArray(events) && events.includes(type));
+		const others = 'the events other products forward (for example payments.payment.paid)';
+		return {
+			lists: { webhook_urls: webhookUrlsSummary(urls) },
+			summaries: [
+				...summaries,
+				{
+					title: 'Webhook events',
+					text: own.length > 0 ? `${own.join(', ')}, plus ${others}.` : `None of Notifications' own; only ${others}.`,
+				},
+			],
+		};
+	};
 
 	const product = createProduct({
 		...kitOptions,
@@ -215,9 +259,13 @@ export const createProductInstance = (options) => {
 					typeof keys === 'object' && keys !== null && typeof keys.publicKey === 'string' ? keys.publicKey : null;
 				return { pushPublicKey: publicKey };
 			},
+			blueprint: setupPart,
 		},
 		data: { indexes: INDEXES },
 		sharedSettings: SHARED_SETTINGS,
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 		// the settings API's `GET|PUT /v1/lists/webhook_urls` for the merchant's server (K1, N5), checked like the dashboard's
 		lists: {
 			webhook_urls: {

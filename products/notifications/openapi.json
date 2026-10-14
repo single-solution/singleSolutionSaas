@@ -1380,8 +1380,8 @@
 									},
 									"type": {
 										"type": "string",
-										"pattern": "^(accounts|ecommerce|chat|payments|growth)\\.[a-z][a-z0-9_.]{0,62}$",
-										"description": "<product id>.<event>, for example payments.payment.paid."
+										"pattern": "^(?!(?:notifications|message|recipient)\\.)[a-z][a-z0-9-]{1,30}\\.[a-z][a-z0-9_.]{0,62}$",
+										"description": "<product id>.<event> of any product but Notifications, for example payments.payment.paid."
 									},
 									"at": {
 										"type": "string",

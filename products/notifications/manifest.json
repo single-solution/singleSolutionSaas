@@ -14,6 +14,7 @@
 			"name": "WhatsApp",
 			"description": "Sends WhatsApp messages through the merchant's own provider: Meta WhatsApp Cloud API, Twilio, or any WhatsApp gateway with an HTTP API.",
 			"dependsOn": [],
+			"recommendFor": ["messages.whatsapp"],
 			"settings": {
 				"$ref": "schemas/whatsapp.settings.json"
 			}
@@ -23,6 +24,7 @@
 			"name": "Email",
 			"description": "Sends email through the merchant's own provider: SMTP, Resend, SendGrid, Mailgun or Amazon SES.",
 			"dependsOn": [],
+			"recommendFor": ["messages.email", "signIn.email"],
 			"settings": {
 				"$ref": "schemas/email.settings.json"
 			}
@@ -32,6 +34,7 @@
 			"name": "SMS",
 			"description": "Sends SMS through the merchant's own provider: Twilio, or any SMS gateway with an HTTP API.",
 			"dependsOn": [],
+			"recommendFor": ["messages.sms", "signIn.phone"],
 			"settings": {
 				"$ref": "schemas/sms.settings.json"
 			}
@@ -41,6 +44,7 @@
 			"name": "Browser push",
 			"description": "Visitors who allow it get push notifications in their browser, with the merchant's own push keys.",
 			"dependsOn": [],
+			"recommendFor": ["messages.push"],
 			"settings": {
 				"$ref": "schemas/browser_push.settings.json"
 			}
@@ -50,6 +54,7 @@
 			"name": "Staff push",
 			"description": "The merchant's staff get push notifications in their browsers, with the merchant's own push keys.",
 			"dependsOn": [],
+			"recommendFor": ["messages.push"],
 			"settings": {
 				"$ref": "schemas/staff_push.settings.json"
 			}
@@ -68,6 +73,7 @@
 			"name": "Fallback channel",
 			"description": "When a message fails on its channel after its retries, it is sent once on the fallback channel (for example WhatsApp, then SMS).",
 			"dependsOn": [],
+			"recommendFor": ["messages.whatsapp+messages.sms", "messages.whatsapp+messages.email", "messages.sms+messages.email"],
 			"settings": {
 				"$ref": "schemas/fallback.settings.json"
 			}
@@ -104,6 +110,7 @@
 			"name": "Multi-language templates",
 			"description": "Each template can have a version per language; recipients get their language, else the default version.",
 			"dependsOn": [],
+			"recommendFor": ["languages.many"],
 			"settings": {
 				"$ref": "schemas/multi_language.settings.json"
 			}

@@ -2,11 +2,11 @@
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.5): the send API and template keys, retries and fallback, timing,
  * languages, providers (with a worked example for a gateway with an HTTP API), unsubscribe keywords, browser and staff
  * push (with the service worker), the webhook signature check and other products' events, the delivery log and its
- * counts, per-feature routes and widgets, the widget snippets, the ticket server snippet (Node.js fetch and cURL), the
- * kit's routes for your server (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
- * business.json template, the localhost note and the API reference from `openapi.json`: every call with its auth,
- * feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's
- * own descriptions). Plain HTML; every value is escaped.
+ * counts, per-feature routes, widgets and what the website builds (the guide's `build`), the widget snippets, the ticket
+ * server snippet (Node.js fetch and cURL), the kit's routes for your server (settings, acting user, visitor calls,
+ * counts, activity, Format; PLAN 0.8.10), the business.json template, the localhost note and the API reference from
+ * `openapi.json`: every call with its auth, feature, parameters, request fields and answer fields
+ * (`renderApiReference`, from `schemas/api.json` and the kit's own descriptions). Plain HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
@@ -60,6 +60,7 @@ const routeTable = (rows) =>
  */
 export const renderDocs = ({ base }) => {
 	const features = /** @type {Record<string, string[]>} */ (/** @type {unknown} */ (guide.features));
+	const build = /** @type {Record<string, string>} */ (guide.build);
 	const {
 		visitor: visitorSnippet,
 		admin: adminSnippet,
@@ -82,6 +83,7 @@ export const renderDocs = ({ base }) => {
 			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
 			para(feature.description),
 			...(features[feature.key] ?? []).map(para),
+			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
 			`<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`,
 			routeTable(rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key))),
 			'</section>',

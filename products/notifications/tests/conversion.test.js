@@ -260,6 +260,25 @@ describe('webhook URLs per event (N5)', () => {
 		);
 	});
 
+	it('takes the events of any product, also one made later, but not Notifications’ own names as another product’s', async () => {
+		const value = [{ url: `${HOOKS}/notes`, events: ['notes.note.created', 'my-app.order.shipped'] }];
+		expect((await env.call('PUT', '/v1/lists/webhook_urls', { token: env.server, body: { value } })).status).toBe(200);
+		const from = env.providers.callsTo(HOOKS).length;
+		/** @param {string} type */
+		const relay = (type) => env.call('POST', '/v1/events', { token: env.server, body: { type, data: { id: 'note_1' } } });
+		const relayed = await relay('notes.note.created');
+		expect(relayed.status).toBe(202);
+		expect(await relayed.json()).toEqual({ queued: 1 });
+		expect(delivered(from)).toEqual(['/notes notes.note.created']);
+		for (const type of ['notifications.message.sent', 'message.sent', 'recipient.unsubscribed'])
+			expect((await relay(type)).status).toBe(422);
+		const own = await env.call('PUT', '/v1/lists/webhook_urls', {
+			token: env.server,
+			body: { value: [{ url: `${HOOKS}/notes`, events: ['notifications.message.sent'] }] },
+		});
+		expect(own.status).toBe(422);
+	});
+
 	it('checks the list and keeps it to the webhooks feature', async () => {
 		const bad = await env.call('PUT', '/v1/lists/webhook_urls', {
 			token: env.server,

@@ -1,7 +1,8 @@
 /**
  * Outgoing webhooks (PLAN 0.8.5): events sent to the merchant's own URLs, signed with the merchant's signing secret so
  * the receiver can check them (the signing is in `adapters/signatures.js`), the list of URLs with the events each one
- * takes (`webhook_urls`, PLAN 0.8.10 N5) and the check of the events other products forward (PLAN 0.8.10 K5). No I/O.
+ * takes (`webhook_urls`, PLAN 0.8.10 N5) with its summary for the website's Setup sheet (hosts only) and the check of
+ * the events other products forward (PLAN 0.8.10 K5). No I/O.
  * @module
  */
 import { isId } from '@ss/contracts';
@@ -18,9 +19,15 @@ const MAX_URL_EVENTS = 50;
 const MAX_URL_LENGTH = 2048;
 /** Largest `data` of a forwarded event, in bytes of JSON. */
 export const EVENT_DATA_MAX_BYTES = 16 * 1024;
+/** Longest summary of the list in the website's Setup sheet (the kit's limit for a list summary). */
+const SUMMARY_MAX = 300;
 
-/** Event types other products forward through `POST /v1/events`: `<product id>.<event>`. */
-const PRODUCT_EVENT = /^(?:accounts|ecommerce|chat|payments|growth)\.[a-z][a-z0-9_.]{0,62}$/;
+/**
+ * Event types other products forward through `POST /v1/events`: `<product id>.<event>` for any product id (the
+ * `@ss/contracts` pattern, so a product made later forwards its events too), but never `notifications.` nor the first
+ * part of Notifications' own events (`message.`, `recipient.`), which are named without a product prefix.
+ */
+const PRODUCT_EVENT = /^(?!(?:notifications|message|recipient)\.)[a-z][a-z0-9-]{1,30}\.[a-z][a-z0-9_.]{0,62}$/;
 /** An ISO-8601 time with its offset: date, hours and minutes, optional seconds and fraction. */
 const ISO_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
@@ -92,6 +99,40 @@ export const checkWebhookUrls = (input) => {
  */
 export const urlsFor = (list, type) =>
 	list.filter((entry) => entry.events.length === 0 || entry.events.includes(type)).map((entry) => entry.url);
+
+/** Names as people read them: `a`, `a and b`, `a, b and c`. @param {string[]} names */
+const listed = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
+
+/**
+ * The list `webhook_urls` in a few words for the website's Setup sheet: how many URLs, on which hosts, and which take
+ * every event (for example `2 URLs on hooks.example.com and api.example.com; 1 takes every event.`). Hosts only, never
+ * a path or a query, which may hold a token; at most 300 characters (hosts that do not fit are counted instead).
+ * @param {ReadonlyArray<WebhookUrl>} list
+ * @returns {string}
+ */
+export const webhookUrlsSummary = (list) => {
+	if (list.length === 0) return 'No URLs yet.';
+	const hosts = [...new Set(list.map((entry) => new URL(entry.url).hostname))];
+	const every = list.filter((entry) => entry.events.length === 0).length;
+	const one = list.length === 1;
+	const urls = `${list.length} ${one ? 'URL' : 'URLs'}`;
+	const takes =
+		every === list.length
+			? one
+				? 'it takes every event'
+				: 'all take every event'
+			: every === 0
+				? one
+					? 'it takes only the events it names'
+					: 'each takes only the events it names'
+				: `${every} ${every === 1 ? 'takes' : 'take'} every event`;
+	for (let shown = hosts.length; shown > 0; shown -= 1) {
+		const names = shown === hosts.length ? hosts : [...hosts.slice(0, shown), `${hosts.length - shown} more`];
+		const text = `${urls} on ${listed(names)}; ${takes}.`;
+		if (text.length <= SUMMARY_MAX) return text;
+	}
+	return `${urls} on ${hosts.length} ${hosts.length === 1 ? 'host' : 'hosts'}; ${takes}.`;
+};
 
 /**
  * The instant of a real ISO-8601 time (`2026-10-01T10:00:00.000Z`, `2026-10-01T15:00+05:00`), or null: the day must
