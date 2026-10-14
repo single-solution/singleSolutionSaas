@@ -7,8 +7,8 @@
  * its fields out in the responsive field grid (PLAN 0.6): short controls side by side, long text, JSON, lists and
  * `wide` fields across the whole row.
  *
- * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits.
- * Validation messages come from `errors` (client-side `validateValues` and/or server field errors).
+ * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits. Bounds show on
+ * the inputs; the fields of a fieldset are checked as they are typed; the product's field errors come in `errors`.
  * @module
  */
 import { useId, useState } from 'react';

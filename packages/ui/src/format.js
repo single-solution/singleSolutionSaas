@@ -6,7 +6,6 @@
  */
 
 const CREDITS = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-const INTEGER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const DATE_TIME = new Intl.DateTimeFormat('en-GB', {
 	year: 'numeric',
 	month: 'short',
@@ -86,12 +85,6 @@ export const formatDate = (value) => {
 	const d = toDate(value);
 	return d ? DATE.format(d) : '—';
 };
-
-/**
- * Integer with thousands separators.
- * @param {number | null | undefined} value
- */
-export const formatNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? INTEGER.format(value) : '—');
 
 /**
  * Human label of a snake/kebab code (`low_balance` → `Low balance`).

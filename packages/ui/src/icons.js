@@ -6,7 +6,6 @@
 
 const PATHS = Object.freeze({
 	lock: 'M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z',
-	unlock: 'M7 11V7a5 5 0 0 1 9.9-1M5 11h14v10H5z',
 	check: 'M5 12l5 5L20 7',
 	copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 	close: 'M6 6l12 12M18 6L6 18',
@@ -32,13 +31,10 @@ const PATHS = Object.freeze({
 	user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
 	box: 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
 	external: 'M14 3h7v7M10 14L21 3M19 14v6H4V5h6',
-	refresh: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
 	zap: 'M13 2L3 14h9l-1 8 10-12h-9z',
 	logout: 'M9 21H5V3h4M16 17l5-5-5-5M21 12H9',
 	sliders: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
 	clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
-	trash: 'M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15',
-	eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
 	sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41',
 	moon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
 	monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
@@ -50,7 +46,6 @@ const PATHS = Object.freeze({
 	receipt: 'M5 2h14v20l-3-2-2 2-2-2-2 2-2-2-3 2zM9 7h6M9 11h6M9 15h4',
 	mail: 'M3 5h18v14H3zM3 5l9 8 9-8',
 	code: 'M16 18l6-6-6-6M8 6l-6 6 6 6',
-	store: 'M3 9l2-5h14l2 5M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0zM5 13v8h14v-8M10 21v-5h4v5',
 });
 
 /** @typedef {keyof typeof PATHS} IconName */

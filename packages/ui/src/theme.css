@@ -5,10 +5,10 @@
  * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
  * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
  * Visual style (PLAN 0.6, owner 2026-10-14): panels float on the canvas with space around them (never glued to the
- * window edges), flat at rest with a hairline `line-soft` edge; lift and shadow appear only on hover, or for things that
- * sit above the page (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"): Figtree for text and
- * Bricolage Grotesque for page titles and key figures (`font-display`), loaded by each app's layout; warm neutrals,
- * kept light; a short type scale; the solid indigo `hero` card with its bar colours.
+ * window edges), flat at rest with a hairline `line-soft` edge; a glow appears only on hover (buttons), and a shadow
+ * only on things that sit above the page (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"):
+ * Figtree for text and Bricolage Grotesque for page titles and key figures (`font-display`), loaded by each app's
+ * layout; warm neutrals, kept light; a short type scale; the solid indigo `hero` card with its bar colours.
  *
  * Colour rule (PLAN 0.6, owner decision 2026-10-09: one accent): indigo is the only accent — primary buttons, links,
  * the active item, icon tiles and badges (`primary-soft` tint); surfaces are neutral; green, amber and red mean status
@@ -55,9 +55,8 @@
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 	--radius-card: 0.875rem;
 	--radius-control: 0.625rem;
-	/* flat at rest (owner, 2026-10-14: elevation by default is not premium); lift and glow only on hover */
-	--shadow-card: none;
-	--shadow-hover: 0 12px 28px -16px rgb(15 23 42 / 0.28), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+	/* flat at rest (owner, 2026-10-14: elevation by default is not premium): buttons glow on hover; menus, dialogs and
+	   toasts sit above the page */
 	--shadow-glow-primary: 0 6px 18px -8px color-mix(in srgb, var(--ss-primary) 75%, transparent);
 	--shadow-glow-danger: 0 6px 18px -8px color-mix(in srgb, var(--ss-danger) 75%, transparent);
 	--shadow-knob: 0 1px 2px rgb(15 23 42 / 0.25);
@@ -233,24 +232,6 @@
 @utility ss-press {
 	&:active:not(:disabled, [aria-disabled='true']) {
 		scale: 0.98;
-	}
-}
-
-/* a clickable card is flat at rest and lifts a little, with a soft shadow, on hover */
-@utility ss-lift {
-	transition-property: color, background-color, border-color, box-shadow, opacity, transform, translate, scale;
-	transition-duration: var(--ss-motion);
-	transition-timing-function: var(--ss-ease);
-	@media (hover: hover) {
-		&:hover {
-			translate: 0 -2px;
-			border-color: var(--ss-line);
-			box-shadow: var(--shadow-hover);
-		}
-	}
-	&:active {
-		translate: 0 0;
-		scale: 0.99;
 	}
 }
 

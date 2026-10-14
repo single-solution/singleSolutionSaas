@@ -1,8 +1,8 @@
 'use client';
 /**
  * Typed confirmation for destructive operations: the confirm button stays disabled until the exact `expected`
- * text (a domain, an e-mail, an id) is typed. Optionally collects a reason (required when `reasonRequired`), which
- * is passed to `onConfirm`. The typed text and reason reset every time the dialog opens.
+ * text (a domain, an e-mail, an id) is typed. Optionally collects a reason (`reason`; required when `reason.required`),
+ * which is passed to `onConfirm`. The typed text and reason reset every time the dialog opens.
  * @module
  */
 import { useEffect, useId, useState } from 'react';

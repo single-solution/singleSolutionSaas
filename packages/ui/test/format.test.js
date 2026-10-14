@@ -5,7 +5,6 @@ import {
 	formatCreditsPerHour,
 	formatDate,
 	formatDateTime,
-	formatNumber,
 	humanize,
 	parseCredits,
 } from '../src/format.js';
@@ -36,13 +35,11 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(parseCredits('-1').ok).toBe(false);
 		expect(parseCredits('').ok).toBe(false);
 	});
-	it('formats dates, numbers and codes', () => {
+	it('formats dates and codes', () => {
 		expect(formatDateTime('2026-10-01T10:05:00Z')).toBe('01 Oct 2026, 10:05 UTC');
 		expect(formatDateTime(null)).toBe('—');
 		expect(formatDateTime('nope')).toBe('—');
 		expect(formatDate(new Date(Date.UTC(2026, 0, 2)))).toBe('02 Jan 2026');
-		expect(formatNumber(12345)).toBe('12,345');
-		expect(formatNumber(undefined)).toBe('—');
 		expect(humanize('low_balance')).toBe('Low balance');
 		expect(humanize(null)).toBe('');
 	});

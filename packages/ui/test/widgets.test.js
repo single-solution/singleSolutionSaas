@@ -13,7 +13,6 @@ import {
 	ThemeScript,
 	ThemeToggle,
 	BarChart,
-	Breadcrumbs,
 	Button,
 	ButtonLink,
 	Callout,
@@ -33,13 +32,11 @@ import {
 	Input,
 	KeyValueList,
 	Masonry,
-	Meter,
 	PageHeader,
 	RadioGroup,
 	Section,
 	Select,
 	STAT_GRID,
-	ShareBars,
 	Skeleton,
 	SoftBreaks,
 	Spinner,
@@ -53,7 +50,7 @@ import {
 	ToastProvider,
 	copyText,
 	cx,
-	useFormState,
+	fieldErrors,
 	useToast,
 } from '../src/index.js';
 import { act, allByRole, byLabel, byText, cleanup, click, keydown, render, type } from '../src/testing.js';
@@ -189,7 +186,6 @@ describe('display', () => {
 				<Spinner label="Loading" />
 				<Stat label="Balance" value="12 credits" hint="low" tone="warning" icon="wallet" />
 				<KeyValueList items={[{ label: 'Domain', value: 'shop.com' }]} columns={3} />
-				<Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Here' }]} />
 			</div>,
 		);
 		expect(container.querySelector('h1')?.textContent).toContain('Websites');
@@ -197,7 +193,6 @@ describe('display', () => {
 		expect(container.textContent).toContain('Custom');
 		expect(allByRole(container, 'alert').length).toBeGreaterThanOrEqual(2);
 		expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-		expect(container.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe('Here');
 		expect(container.querySelector('dl dt')?.textContent).toBe('Domain');
 	});
 
@@ -258,11 +253,9 @@ describe('display', () => {
 		expect(container.textContent.match(/No data for this period\./g)?.length).toBe(2);
 	});
 
-	it('Meter exposes its value; Stepper marks the current step', () => {
+	it('Stepper marks the current step', () => {
 		const { container } = render(
 			<div>
-				<Meter label="Spend" value={90} max={100} />
-				<Meter label="Other" value={10} max={0} tone="success" valueText="none" hint="hint" />
 				<Stepper
 					current="b"
 					steps={[
@@ -273,12 +266,6 @@ describe('display', () => {
 				/>
 			</div>,
 		);
-		const [meter, other] = allByRole(container, 'meter');
-		expect(meter?.getAttribute('aria-valuenow')).toBe('90');
-		expect(meter?.getAttribute('aria-valuetext')).toBe('90 %');
-		expect(meter?.querySelector('rect')?.getAttribute('class')).toContain('fill-warning');
-		expect(meter?.querySelector('rect')?.getAttribute('width')).toBe('90');
-		expect(other?.getAttribute('aria-valuetext')).toBe('none');
 		expect(container.querySelector('[aria-current="step"]')?.textContent).toContain('B');
 	});
 
@@ -295,14 +282,6 @@ describe('display', () => {
 				/>
 				<BarChart label="Empty" data={[]} />
 				<BarChart label="Zero" data={[{ label: '01', value: 0 }]} emptyText="Nothing earned yet." />
-				<ShareBars
-					label="Share"
-					data={[
-						{ label: 'A', value: 3, hint: 'x' },
-						{ label: 'B', value: 1 },
-					]}
-				/>
-				<ShareBars label="None" data={[]} />
 			</div>,
 		);
 		expect(container.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Spend: 2 values, highest 2 c');
@@ -310,9 +289,6 @@ describe('display', () => {
 		expect(container.textContent).toContain('No data for this period.');
 		expect(container.textContent).toContain('Nothing earned yet.');
 		expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
-		expect(container.textContent).toContain('Nothing earned yet.');
-		expect(container.querySelectorAll('svg[role="img"]')).toHaveLength(1);
-		expect(container.querySelector('ul[aria-label="Share"]')?.children).toHaveLength(2);
 	});
 });
 
@@ -737,19 +713,21 @@ describe('toasts, code blocks and forms', () => {
 
 	it('Form prevents native submission and FormError explains problems', () => {
 		const onSubmit = vi.fn();
-		/** @type {ReturnType<typeof useFormState<{ email: string }>> | null} */
-		let state = null;
+		/** @type {((problem: import('../src/problems.js').Problem | null) => void) | null} */
+		let showProblem = null;
 		function Harness() {
-			state = useFormState({ email: '' });
+			const [email, setEmail] = useState('');
+			const [problem, setProblem] = useState(/** @type {import('../src/problems.js').Problem | null} */ (null));
+			showProblem = setProblem;
 			return (
 				<Form onSubmit={onSubmit}>
 					<Input
 						label="E-mail"
-						value={state.values.email}
-						onChange={(e) => state?.set('email', e.currentTarget.value)}
-						error={state.errors.email}
+						value={email}
+						onChange={(e) => setEmail(e.currentTarget.value)}
+						error={problem ? fieldErrors(problem).email : undefined}
 					/>
-					<FormError problem={state.problem} fields={['email']} />
+					<FormError problem={problem} fields={['email']} />
 					<button type="submit">Send</button>
 				</Form>
 			);
@@ -761,7 +739,7 @@ describe('toasts, code blocks and forms', () => {
 		});
 		expect(onSubmit).toHaveBeenCalledTimes(1);
 		act(() =>
-			state?.setProblem({
+			showProblem?.({
 				type: 'https://portal.test/problems/validation_failed',
 				status: 422,
 				errors: [
@@ -773,8 +751,6 @@ describe('toasts, code blocks and forms', () => {
 		expect(container.textContent).toContain('Some fields need your attention.');
 		expect(container.textContent).toContain('Must be an e-mail address.');
 		expect(container.querySelector('li')?.textContent).toContain('other');
-		type(byLabel(container, 'E-mail'), 'x@y.co');
-		expect(container.textContent).not.toContain('Must be an e-mail address.');
 	});
 });
 

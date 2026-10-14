@@ -9,7 +9,7 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `@ss/ui`           | every component, `cx`, and the schema, format and problem helpers                                                          |
 | `@ss/ui/schema`    | settings-schema helpers behind `SchemaForm` (no React): fields, groups, bounds, browser-side validation                    |
-| `@ss/ui/format`    | credit (from millicredits), date and number formatting                                                                     |
+| `@ss/ui/format`    | credit (from millicredits) and date formatting, `humanize` for codes                                                       |
 | `@ss/ui/problems`  | RFC 9457 problem → user message and field-error helpers                                                                    |
 | `@ss/ui/theme.css` | the design tokens                                                                                                          |
 | `@ss/ui/testing`   | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
@@ -85,9 +85,10 @@ settings schema as a control chosen by its type and `x-ui.widget`, grouped by `x
 `textarea` widget or a `format` of `textarea`, `multiline`, `markdown` or `html`), JSON, lists, fieldsets and fields with
 `x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
 (`ChoicePicker`: chosen ones as chips, a search box, a scrolling list); `x-ui.labels: 'country'` shows ISO country codes
-by their names. Bounds (`minimum`/`maximum`, `maxLength`,
-`maxItems`) are shown on the inputs and checked by `validateValues(schema, values)`; the product's own field errors are
-passed in `errors`. Settings marked in `overridden` get a Reset link that calls `onReset(name)`.
+by their names. Bounds (`minimum`/`maximum`, `maxLength`, `maxItems`) are shown on the inputs (number limits, character
+and item counters); the fields of a fieldset are checked as they are typed. The product checks every value when it is
+saved, and its field errors are passed in `errors`. Settings marked in `overridden` get a Reset link that calls
+`onReset(name)`.
 
 ## StatusBadge
 

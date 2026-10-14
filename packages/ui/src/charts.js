@@ -4,7 +4,6 @@
  * @module
  */
 import { cx } from './cx.js';
-import { Bar } from './display.js';
 import { Icon } from './icons.js';
 
 /** @typedef {{ label: string, value: number, hint?: string }} Datum */
@@ -76,36 +75,6 @@ export function BarChart({ data, label, format = String, height = 160, className
 				</tbody>
 			</table>
 		</figure>
-	);
-}
-
-/**
- * Horizontal bars for shares of a total (e.g. credits per product).
- * @param {{ data: Datum[], label: string, format?: (value: number) => string, className?: string, emptyText?: string }} props
- */
-export function ShareBars({ data, label, format = String, className, emptyText = 'Nothing to show yet.' }) {
-	if (data.length === 0) return <p className="py-4 text-sm text-muted">{emptyText}</p>;
-	const total = data.reduce((s, d) => s + Math.max(0, d.value), 0);
-	return (
-		<ul aria-label={label} className={cx('space-y-3', className)}>
-			{data.map((d, i) => {
-				const share = total > 0 ? Math.max(0, d.value) / total : 0;
-				return (
-					<li key={`${d.label}-${i}`} className="space-y-1">
-						<div className="flex items-baseline justify-between gap-3 text-sm">
-							<span className="min-w-0 truncate font-medium text-fg">{d.label}</span>
-							<span className="shrink-0 tabular-nums text-muted">
-								{format(d.value)}
-								{d.hint ? ` · ${d.hint}` : ''}
-							</span>
-						</div>
-						<div className="h-2 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
-							<Bar ratio={share} />
-						</div>
-					</li>
-				);
-			})}
-		</ul>
 	);
 }
 

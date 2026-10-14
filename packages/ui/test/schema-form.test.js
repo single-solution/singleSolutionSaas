@@ -2,18 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { SchemaForm } from '../src/SchemaForm.js';
-import {
-	boundsOf,
-	changedNames,
-	choiceLabel,
-	fieldsOf,
-	groupFields,
-	isWide,
-	sameValue,
-	validateValue,
-	validateValues,
-	widgetOf,
-} from '../src/schema.js';
+import { boundsOf, choiceLabel, fieldsOf, groupFields, isWide, validateValue, widgetOf } from '../src/schema.js';
 import { allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(cleanup);
@@ -151,17 +140,6 @@ describe('schema helpers', () => {
 		expect(validateValue({ type: 'array' }, ['x'])).toBeNull();
 		expect(validateValue({ type: 'object' }, { x: 1 })).toBeNull();
 		expect(validateValue({}, 'anything')).toBeNull();
-		expect(
-			validateValues(s, { ...Object.fromEntries(Object.entries(p).map(([k, n]) => [k, n.default])), maxActive: 0 }),
-		).toEqual({ maxActive: 'Must be at least 1.' });
-	});
-
-	it('compares values', () => {
-		expect(sameValue({ a: [1, { b: 2 }] }, { a: [1, { b: 2 }] })).toBe(true);
-		expect(sameValue({ a: 1 }, { a: 1, b: 2 })).toBe(false);
-		expect(sameValue([1], { 0: 1 })).toBe(false);
-		expect(sameValue(null, {})).toBe(false);
-		expect(changedNames({ a: 1, b: [1] }, { a: 1, b: [2], c: true })).toEqual(['b', 'c']);
 	});
 });
 

@@ -443,57 +443,6 @@ export function Masonry({ children, columns = 3, as = 'div', className, label, w
 }
 
 /**
- * Horizontal meter (`role="meter"`): usage against a maximum.
- * @param {{ label: ReactNode, value: number, max: number, valueText?: string, hint?: ReactNode,
- *   tone?: 'auto' | Tone, className?: string }} props `auto` turns warning above 80 % and danger above 95 %.
- */
-export function Meter({ label, value, max, valueText, hint, tone = 'auto', className }) {
-	const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
-	const resolved = tone === 'auto' ? (ratio >= 0.95 ? 'danger' : ratio >= 0.8 ? 'warning' : 'primary') : tone;
-	const bar =
-		resolved === 'danger'
-			? 'fill-danger'
-			: resolved === 'warning'
-				? 'fill-warning'
-				: resolved === 'success'
-					? 'fill-success'
-					: 'fill-primary';
-	const text = valueText ?? `${Math.round(ratio * 100)} %`;
-	return (
-		<div className={cx('space-y-1.5', className)}>
-			<div className="flex items-baseline justify-between gap-2 text-sm">
-				<span className="font-medium text-fg">{label}</span>
-				<span className="tabular-nums text-muted">{text}</span>
-			</div>
-			<div
-				role="meter"
-				aria-label={typeof label === 'string' ? label : undefined}
-				aria-valuemin={0}
-				aria-valuemax={max}
-				aria-valuenow={Math.min(value, max)}
-				aria-valuetext={text}
-				className="h-2 overflow-hidden rounded-full bg-surface-2">
-				<Bar ratio={ratio} className={bar} />
-			</div>
-			{hint ? <p className="text-xs text-muted">{hint}</p> : null}
-		</div>
-	);
-}
-
-/**
- * Filled share of a track, drawn in SVG (no inline `style`, which the Portal's CSP forbids).
- * @param {{ ratio: number, className?: string }} props
- */
-export function Bar({ ratio, className = 'fill-primary' }) {
-	const width = Math.round(Math.min(1, Math.max(0, ratio)) * 1000) / 10;
-	return (
-		<svg viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden="true" focusable="false" className="block h-full w-full">
-			<rect x="0" y="0" width={width} height="8" className={className} />
-		</svg>
-	);
-}
-
-/**
  * Ordered steps of a flow (`aria-current="step"` on the active one).
  * @param {{ steps: Array<{ id: string, label: ReactNode, description?: ReactNode }>, current: string, className?: string }} props
  */
@@ -527,37 +476,6 @@ export function Stepper({ steps, current, className }) {
 				);
 			})}
 		</ol>
-	);
-}
-
-/**
- * Breadcrumb trail; the last item is the current page.
- * @param {{ items: Array<{ label: ReactNode, href?: string }>, linkAs?: import('react').ElementType, className?: string }} props
- */
-export function Breadcrumbs({ items, linkAs, className }) {
-	const LinkTag = linkAs ?? 'a';
-	return (
-		<nav aria-label="Breadcrumb" className={className}>
-			<ol className="flex flex-wrap items-center gap-1 text-xs text-muted">
-				{items.map((item, i) => {
-					const last = i === items.length - 1;
-					return (
-						<li key={i} className="flex items-center gap-1">
-							{item.href && !last ? (
-								<LinkTag href={item.href} className="rounded font-medium hover:text-fg hover:underline">
-									{item.label}
-								</LinkTag>
-							) : (
-								<span aria-current={last ? 'page' : undefined} className={cx(last && 'font-semibold text-fg')}>
-									{item.label}
-								</span>
-							)}
-							{last ? null : <Icon name="chevronRight" size={12} />}
-						</li>
-					);
-				})}
-			</ol>
-		</nav>
 	);
 }
 

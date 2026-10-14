@@ -1,8 +1,9 @@
 /**
  * Pure helpers behind {@link SchemaForm}: read a feature's settings schema (an object schema whose top-level
  * properties are the settings, one `type` per node, no `$ref`/combinators) with its `x-ui` hints, turn it into ordered,
- * grouped field descriptors, and validate values in the browser the way the product will (bounds such as the hard
- * maximums of limits, lengths, enums, formats). The product remains the authority: its field errors are shown on top.
+ * grouped field descriptors with their bounds (shown on the inputs), and check one value against its node
+ * (`validateValue`, used for the fields of a fieldset as they are typed). The product checks every value when it is
+ * saved; its field errors are passed to the form.
  *
  * `x-ui`: `widget` (switch|checkbox|number|text|textarea|select|radio|checkboxes|tags|color|url|email|password|json),
  * `group`, `order`, `help`, `placeholder`, `hidden`, `advanced`, `wide` (span the whole row of the field grid; long
@@ -67,7 +68,6 @@
 
 const DEFAULT_GROUP = 'General';
 
-/** String formats that hold long text (shown as a text area, full width). */
 /** Short words written in capitals (or with their own casing) when a choice's value is shown as a label. */
 const WORD_CASE = Object.freeze({
 	ai: 'AI',
@@ -111,7 +111,7 @@ export const choiceLabel = (value) => {
 const REGION_NAMES = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en'], { type: 'region' }) : null;
 
 /**
- * The English name of an ISO 3166-1 alpha-2 country code (`PK` → "Pakistan"); the code itself when unknown.
+ * The English name of an ISO 3166-1 alpha-2 country code (`GB` → "United Kingdom"); the code itself when unknown.
  * @param {string} code
  * @returns {string}
  */
@@ -134,9 +134,10 @@ export const countryName = (code) => {
 export const optionLabel = (value, labels) => (labels === 'country' ? countryName(String(value)) : choiceLabel(value));
 
 /** A list of choices longer than this is a searchable picker, not a group of checkboxes. */
-export const PICKER_FROM = 12;
+const PICKER_FROM = 12;
 
-export const LONG_TEXT_FORMATS = Object.freeze(['textarea', 'multiline', 'markdown', 'html']);
+/** String formats that hold long text (shown as a text area, full width). */
+const LONG_TEXT_FORMATS = Object.freeze(['textarea', 'multiline', 'markdown', 'html']);
 
 /** Widgets that take the whole row of the field grid. */
 const WIDE_WIDGETS = Object.freeze(['textarea', 'json', 'tags', 'checkboxes', 'fieldset']);
@@ -334,48 +335,3 @@ const safeTest = (pattern, value) => {
 		return true; // an unparseable pattern is the server's to judge
 	}
 };
-
-/**
- * Errors of every visible field, keyed by name.
- * @param {SettingsSchema | null | undefined} schema
- * @param {Record<string, unknown>} values
- * @returns {Record<string, string>}
- */
-export const validateValues = (schema, values) => {
-	/** @type {Record<string, string>} */
-	const errors = {};
-	for (const field of fieldsOf(schema)) {
-		const problem = validateValue(field.node, values[field.name]);
-		if (problem) errors[field.name] = problem;
-	}
-	return errors;
-};
-
-/**
- * Structural equality for JSON values.
- * @param {unknown} a
- * @param {unknown} b
- * @returns {boolean}
- */
-export const sameValue = (a, b) => {
-	if (a === b) return true;
-	if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') return false;
-	if (Array.isArray(a) !== Array.isArray(b)) return false;
-	if (Array.isArray(a)) {
-		const other = /** @type {unknown[]} */ (b);
-		return a.length === other.length && a.every((v, i) => sameValue(v, other[i]));
-	}
-	const ra = /** @type {Record<string, unknown>} */ (a);
-	const rb = /** @type {Record<string, unknown>} */ (b);
-	const keys = Object.keys(ra);
-	return keys.length === Object.keys(rb).length && keys.every((k) => Object.hasOwn(rb, k) && sameValue(ra[k], rb[k]));
-};
-
-/**
- * Names whose value differs between two value maps.
- * @param {Record<string, unknown>} before
- * @param {Record<string, unknown>} after
- * @returns {string[]}
- */
-export const changedNames = (before, after) =>
-	[...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => !sameValue(before[k], after[k])).sort();
