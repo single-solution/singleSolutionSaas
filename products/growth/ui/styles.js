@@ -1,5 +1,5 @@
 /**
- * The widgets' CSS, injected into their shadow roots only. Colours, font and corner radius come from the website's
+ * The widgets' CSS, injected into their shadow roots only. Colors, font and corner radius come from the website's
  * theme (`--ss-color-<name>`, `--ss-font-family`, `--ss-radius`), with fallbacks for light and dark. The admin widgets
  * follow the dashboards' style (PLAN 0.6 "A + B"): grid sections with a heading and a lighter line under it, soft
  * tinted tiles with a round icon badge, one solid hero card with a bar chart, rounded surfaces, no borders or shadows;

@@ -1299,7 +1299,7 @@ describe('admin widgets', () => {
 			'1800 ms',
 			'0.30',
 			'—',
-			'50 % of the step before',
+			'50% of the step before',
 		])
 			expect(text()).toContain(words);
 		expect(text()).toContain('Days are in the UTC time zone.');
@@ -1376,7 +1376,7 @@ describe('admin widgets', () => {
 			'Visitors now',
 			'/shop',
 			'Bounce rate',
-			'50 %',
+			'50%',
 			'1 min 5 s',
 			'1.5',
 			'Samsung Internet',

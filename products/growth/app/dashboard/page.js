@@ -17,7 +17,7 @@ import { TABS } from './tabs.js';
 import { TEXTS } from './texts.js';
 
 /**
- * Sidebar icon and kind of each tab: the kind gives its colour, the same in every product (PLAN 0.6 colour rule).
+ * Sidebar icon and kind of each tab: the kind gives its color, the same in every product (PLAN 0.6 color rule).
  * @type {{ [tab in keyof typeof TABS]: { icon: import('@ss/ui').IconName, kind: import('@ss/ui').Kind } }}
  */
 const TAB_ICONS = {

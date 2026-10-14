@@ -606,7 +606,7 @@ describe('pixels and money', () => {
 			{ vendor: 'tiktok', args: ['Contact', {}] },
 		]);
 		expect(searchCalls('x', { meta: false, google: false, gtm: false, ads: null, tiktok: false })).toEqual([]);
-		// G7: a Web Vital as a GA4 event, labelled as web.dev and the stores' reports have it (SG-26)
+		// G7: a Web Vital as a GA4 event, labeled as web.dev and the stores' reports have it (SG-26)
 		expect(vitalCalls('CLS', 125.4, 'needs_improvement', { ...all, gtm: false }, 'v1-1-CLS')).toEqual([
 			{
 				vendor: 'google',

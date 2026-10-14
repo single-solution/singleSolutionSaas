@@ -3673,7 +3673,7 @@
 				"name": "SS-Actor-Email",
 				"in": "header",
 				"required": false,
-				"description": "The acting member's e-mail address.",
+				"description": "The acting member's email address.",
 				"schema": {
 					"type": "string",
 					"maxLength": 320
@@ -4182,7 +4182,7 @@
 						"properties": {
 							"locale": {
 								"type": "string",
-								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
+								"description": "A language tag such as en-US or fr-FR, or '' for the viewer's (en-US in text the server makes)."
 							},
 							"currencyDisplay": {
 								"type": "string",
@@ -5376,7 +5376,7 @@
 									"type": "string",
 									"pattern": "^#[0-9a-fA-F]{6}$"
 								},
-								"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+								"description": "Color name → #rrggbb (the product's CSS supplies the others)."
 							},
 							"fontFamily": {
 								"type": "string",

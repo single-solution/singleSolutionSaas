@@ -192,7 +192,7 @@ export const rankList = (doc, rows, empty) => {
 };
 
 /**
- * A grid of labelled values; empty values are left out.
+ * A grid of labeled values; empty values are left out.
  * @param {Document} doc @param {Array<[string, string | null | undefined]>} rows
  */
 export const fieldGrid = (doc, rows) => {
