@@ -13522,7 +13522,7 @@
 				"lowStock": {
 					"type": "string",
 					"enum": ["true", "1", "false", "0"],
-					"description": "true (or 1): tracked products with an active variant at the lowStock setting or fewer."
+					"description": "true (or 1): products that track stock, not archived, with a variant low on stock: offered, not marked sold out, with 1 to the catalog setting lowStock units."
 				},
 				"featured": {
 					"type": "string",
@@ -13591,7 +13591,7 @@
 				"lowStock": {
 					"type": "string",
 					"enum": ["true", "1", "false", "0"],
-					"description": "true (or 1): tracked products with an active variant at the lowStock setting or fewer."
+					"description": "true (or 1): products that track stock, not archived, with a variant low on stock: offered, not marked sold out, with 1 to the catalog setting lowStock units."
 				},
 				"featured": {
 					"type": "string",
@@ -13649,7 +13649,7 @@
 				"lowStock": {
 					"type": "string",
 					"enum": ["true", "1", "false", "0"],
-					"description": "true (or 1): tracked products with an active variant at the lowStock setting or fewer."
+					"description": "true (or 1): products that track stock, not archived, with a variant low on stock: offered, not marked sold out, with 1 to the catalog setting lowStock units."
 				},
 				"featured": {
 					"type": "string",
@@ -13707,7 +13707,7 @@
 				"lowStock": {
 					"type": "string",
 					"enum": ["true", "1", "false", "0"],
-					"description": "true (or 1): tracked products with an active variant at the lowStock setting or fewer."
+					"description": "true (or 1): products that track stock, not archived, with a variant low on stock: offered, not marked sold out, with 1 to the catalog setting lowStock units."
 				},
 				"featured": {
 					"type": "string",
@@ -13738,15 +13738,15 @@
 		}
 	},
 	"GET /v1/products/counts": {
-		"summary": "Count the products by status, brand, stock state, featured, grade or category",
-		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. 422 validation_failed for another by.",
+		"summary": "Count the products by status, brand, stock state, featured, grade or category, or their variants by stock",
+		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. by=variantStock counts variants instead: the offered variants of products that track stock and are not archived (with the other filters), as out (no units, or marked sold out), low (1 to the catalog setting lowStock units) and in (more), a group without variants left out, the total every variant counted. 422 validation_failed for another by.",
 		"query": {
 			"type": "object",
 			"required": ["by"],
 			"properties": {
 				"by": {
 					"type": "string",
-					"enum": ["status", "brand", "stockState", "featured", "grade", "category"]
+					"enum": ["status", "brand", "stockState", "featured", "grade", "category", "variantStock"]
 				},
 				"q": {
 					"type": "string",
@@ -13771,7 +13771,7 @@
 				"lowStock": {
 					"type": "string",
 					"enum": ["true", "1", "false", "0"],
-					"description": "true (or 1): tracked products with an active variant at the lowStock setting or fewer."
+					"description": "true (or 1): products that track stock, not archived, with a variant low on stock: offered, not marked sold out, with 1 to the catalog setting lowStock units."
 				},
 				"featured": {
 					"type": "string",
@@ -13802,15 +13802,15 @@
 		}
 	},
 	"GET /v1/admin/products/counts": {
-		"summary": "Count the products by status, brand, stock state, featured, grade or category (Catalog admin widget)",
-		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. 422 validation_failed for another by.",
+		"summary": "Count the products by status, brand, stock state, featured, grade or category, or their variants by stock (Catalog admin widget)",
+		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. by=variantStock counts variants instead: the offered variants of products that track stock and are not archived (with the other filters), as out (no units, or marked sold out), low (1 to the catalog setting lowStock units) and in (more), a group without variants left out, the total every variant counted. 422 validation_failed for another by.",
 		"query": {
 			"type": "object",
 			"required": ["by"],
 			"properties": {
 				"by": {
 					"type": "string",
-					"enum": ["status", "brand", "stockState", "featured", "grade", "category"]
+					"enum": ["status", "brand", "stockState", "featured", "grade", "category", "variantStock"]
 				},
 				"q": {
 					"type": "string",
@@ -13835,7 +13835,7 @@
 				"lowStock": {
 					"type": "string",
 					"enum": ["true", "1", "false", "0"],
-					"description": "true (or 1): tracked products with an active variant at the lowStock setting or fewer."
+					"description": "true (or 1): products that track stock, not archived, with a variant low on stock: offered, not marked sold out, with 1 to the catalog setting lowStock units."
 				},
 				"featured": {
 					"type": "string",

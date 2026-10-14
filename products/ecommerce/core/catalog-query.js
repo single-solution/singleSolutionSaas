@@ -422,6 +422,69 @@ export const facetsOf = (raw, names) => {
 const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
 
 /**
+ * A variant low on stock (E44, EN-18, PL-14), as a variant match: offered (active), not marked sold out, with more than
+ * 0 and at most `level` units. Level 0: no variant is low.
+ * @param {number} level the `catalog` setting `lowStock`
+ */
+export const lowVariantMatch = (level) => ({ active: true, soldOut: { $ne: true }, stock: { $gt: 0, $lte: level } });
+
+/**
+ * Products with a variant low on stock (E44): products that track stock and are not archived.
+ * @param {number} level the `catalog` setting `lowStock`
+ */
+export const lowStockFilter = (level) => ({
+	trackStock: true,
+	status: { $ne: 'archived' },
+	variants: { $elemMatch: lowVariantMatch(level) },
+});
+
+/** The groups of a count of variants by stock (E44). */
+export const VARIANT_STOCK = Object.freeze(/** @type {const} */ (['out', 'low', 'in']));
+
+/**
+ * Counts of variants by stock (E44), as a pipeline: the offered variants of products that track stock and are not
+ * archived, `out` (no units, or marked sold out), `low` (1 to `level` units) or `in` (more).
+ * @param {string} websiteId
+ * @param {Record<string, unknown>} match the products to look at (a list's filter, without `websiteId`)
+ * @param {number} level the `catalog` setting `lowStock`
+ */
+export const variantStockPipeline = (websiteId, match, level) => [
+	{ $match: { websiteId, $and: [match, { trackStock: true, status: { $ne: 'archived' } }] } },
+	{ $unwind: '$variants' },
+	{ $match: { 'variants.active': true } },
+	{
+		$group: {
+			_id: {
+				$switch: {
+					branches: [
+						{
+							case: { $or: [{ $eq: ['$variants.soldOut', true] }, { $lte: [{ $ifNull: ['$variants.stock', 0] }, 0] }] },
+							then: 'out',
+						},
+						{ case: { $lte: ['$variants.stock', level] }, then: 'low' },
+					],
+					default: 'in',
+				},
+			},
+			n: { $sum: 1 },
+		},
+	},
+];
+
+/**
+ * The counts of {@link variantStockPipeline}'s rows, every group present.
+ * @param {ReadonlyArray<{ _id: unknown, n: unknown }>} rows
+ * @returns {{ out: number, low: number, in: number }}
+ */
+export const variantStockCounts = (rows) => {
+	const counts = { out: 0, low: 0, in: 0 };
+	for (const row of rows)
+		if (VARIANT_STOCK.includes(/** @type {any} */ (row._id)))
+			counts[/** @type {'out' | 'low' | 'in'} */ (row._id)] = Number(row.n);
+	return counts;
+};
+
+/**
  * The staff's product list filter (the caller adds `websiteId`).
  * @param {Record<string, string>} query `q`, `status`, `kind`, `lowStock`, `featured`, `stockState` (one or several),
  *   `hasMedia`, `grade` (one or several), `ids` (product ids, at most 20)
@@ -437,8 +500,7 @@ export const staffFilter = (query, resolved) => {
 	if (['physical', 'digital', 'booking'].includes(query.kind ?? '')) and.push({ kind: query.kind });
 	if (resolved.categoryIds) and.push({ categoryIds: { $in: resolved.categoryIds } });
 	if (resolved.brandIds) and.push({ brandId: { $in: resolved.brandIds } });
-	if (query.lowStock === 'true' || query.lowStock === '1')
-		and.push({ trackStock: true, variants: { $elemMatch: { active: true, stock: { $lte: resolved.lowStock } } } });
+	if (query.lowStock === 'true' || query.lowStock === '1') and.push(lowStockFilter(resolved.lowStock));
 	if (query.featured === 'true' || query.featured === '1') and.push({ featured: true });
 	if (query.featured === 'false' || query.featured === '0') and.push({ featured: { $ne: true } });
 	const states = listOf(query.stockState).filter((state) => STOCK_STATES.includes(state));

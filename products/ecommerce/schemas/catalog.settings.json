@@ -55,7 +55,7 @@
 		"lowStock": {
 			"type": "integer",
 			"title": "Low stock at",
-			"description": "A variant with this many units or fewer counts as low on stock in the products list.",
+			"description": "A variant still for sale with 1 to this many units counts as low on stock (archived products and variants marked sold out are left out): the products list's low-stock filter and counts, and Shop health. 0: no variant is low.",
 			"default": 3,
 			"minimum": 0,
 			"maximum": 1000000

@@ -96,7 +96,7 @@
 				"id": "featured-filters",
 				"title": "Featured products and staff filters",
 				"paragraphs": [
-					"Products have a featured flag; shop listings take featured=1. The staff product list filters by q, status, kind, category, brand (several, comma-separated), lowStock, featured (1 or 0), stockState (none, out, partial or full; several), hasMedia (1 or 0) and grade (several), and its rows add featured, stockState, grades and mediaCount. Counts take the same filters: /v1/products/count, and /v1/products/counts?by=status, brand, stockState, featured or grade."
+					"Products have a featured flag; shop listings take featured=1. The staff product list filters by q, status, kind, category, brand (several, comma-separated), lowStock, featured (1 or 0), stockState (none, out, partial or full; several), hasMedia (1 or 0) and grade (several), and its rows add featured, stockState, grades and mediaCount. lowStock=1 keeps products that track stock and are not archived with a variant low on stock: still for sale (offered, not marked sold out) with 1 to the catalog setting lowStock units. Counts take the same filters: /v1/products/count, and /v1/products/counts?by=status, brand, stockState, featured or grade; by=variantStock counts the variants instead, as out, low and in (for a dashboard or a bell)."
 				],
 				"routes": [
 					["GET /v1/products", "catalog"],

@@ -5,7 +5,10 @@
  * (every missing combination of a product's set-up attribute values, for one product or many). Each route exists for
  * the merchant's server (`/v1/products…`, server token) and for the catalog admin widget (`/v1/admin/products…`,
  * ticket with `catalog.edit`), sharing one handler. The list has counts with the same filters (`count`, and `counts`
- * by `status`, `brand`, `stockState`, `featured`, `grade` and `category`; PLAN 0.8.10 K4). A changed slug keeps the old one (E13).
+ * by `status`, `brand`, `stockState`, `featured`, `grade` and `category`; PLAN 0.8.10 K4; and by `variantStock`, the
+ * variants out of stock, low on stock by the `catalog` setting `lowStock` and in stock, E44). Low stock (`lowStock=1`)
+ * is a sellable variant with 1 to `lowStock` units on a product that tracks stock and is not archived (E44). A changed
+ * slug keeps the old one (E13).
  * Every write is in the activity log (with the product's name), tells the other parts (alerts) what changed, and sends
  * the page to IndexNow when the website asks (E16).
  * @module
@@ -25,7 +28,7 @@ import {
 } from '../adapters/catalog-store.js';
 import { LIMITS, checkProduct, checkStockChanges, changedStock, heldKeys, missingVariants, summarize } from '../core/catalog.js';
 import { VIDEO_TYPES } from '../core/catalog-content.js';
-import { afterFilter, cursorKey, listOf, staffFilter } from '../core/catalog-query.js';
+import { afterFilter, cursorKey, listOf, staffFilter, variantStockCounts, variantStockPipeline } from '../core/catalog-query.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
@@ -198,12 +201,28 @@ export const createCatalogProducts = (product, service, common) => {
 
 	/**
 	 * Counts by `grade` and `category` group each product under every grade its active variants have and every category
-	 * it is in (`none` without one); the other fields are the kit's (K4).
+	 * it is in (`none` without one); `variantStock` counts offered variants as `out`, `low` and `in` (E44); the other
+	 * fields are the kit's (K4).
 	 */
 	const counts = {
 		count: kitCounts.count,
 		/** @param {any} ctx */
 		counts: async (ctx) => {
+			if (ctx.query.by === 'variantStock') {
+				// the offered variants of tracked products not archived, by the catalog's low-stock level (E44)
+				const { s, data, inner } = await staffSource(ctx);
+				const { lowStock } = await s.values('catalog');
+				const rows = await data
+					.collection(COLLECTIONS.products)
+					.aggregate(variantStockPipeline(data.websiteId, inner, Number(lowStock)), {
+						maxTimeMS: 3000,
+					})
+					.toArray();
+				const counted = variantStockCounts(/** @type {Array<{ _id: unknown, n: unknown }>} */ (rows));
+				// as every count answers: groups with none are left out
+				const groups = Object.fromEntries(Object.entries(counted).filter(([, n]) => n > 0));
+				return { total: counted.out + counted.low + counted.in, groups };
+			}
 			const field = LIST_COUNTS[String(ctx.query.by)];
 			if (!field) return kitCounts.counts(ctx);
 			const { data, inner } = await staffSource(ctx);
