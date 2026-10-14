@@ -20,9 +20,9 @@ const DESCRIPTION_LENGTH = 5000;
 /**
  * One feed row (one variant).
  * @typedef {object} FeedRow
- * @property {string} id the variant id
- * @property {string} itemGroupId the product id when it has more than one variant, else ''; with legacy item ids the
- *   product's imported id on every row (SG-24)
+ * @property {string} id the variant's imported feed id, else the variant id
+ * @property {string} itemGroupId the product's imported feed group id, else the product id when it has more than one
+ *   variant, else '' (SG-24)
  * @property {string} title
  * @property {string} description
  * @property {string} link
@@ -54,7 +54,6 @@ const DESCRIPTION_LENGTH = 5000;
  *   grade's, else the setting for graded items; E10)
  * @property {'none' | 'mpn' | 'gtin'} skuAs
  * @property {boolean} includeOutOfStock
- * @property {'variant' | 'legacy'} [itemId] legacy: `<product hex>_<variant hex>` of imported ids (E17)
  * @property {string} [googleCategory]
  * @property {(variant: import('./model.js').VariantRecord) => string} [gradeLabel] the grade label for custom_label_0
  * @property {{ fee: number, freeOver?: number, country: string } | null} [shipping] the default delivery fee, free from
@@ -69,22 +68,12 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {'auto' | 'no'} [identifierExists] `no`: rows without GTIN and MPN say so (SG-22)
  */
 
-/** Imported ids: a prefix and an ObjectId's 24 hex digits. */
-const IMPORTED = /^[a-z]+_([0-9a-f]{24})$/;
-
 /**
- * A feed item id: the variant id, or with `legacy` the `<product hex>_<variant hex>` of imported ids (E17); a variant
- * whose ids were not imported keeps its own id.
- * @param {string} productId
- * @param {string} variantId
- * @param {'variant' | 'legacy'} mode
+ * A feed item id (E17): the id the shop's earlier product feed listed the variant under, kept by an import
+ * (`feedId`), so shopping catalogs keep the items they already list; else the variant's own id.
+ * @param {import('./model.js').VariantRecord} variant
  */
-export const feedItemId = (productId, variantId, mode) => {
-	if (mode !== 'legacy') return variantId;
-	const product = IMPORTED.exec(productId)?.[1];
-	const variant = IMPORTED.exec(variantId)?.[1];
-	return product && variant ? `${product}_${variant}` : variantId;
-};
+export const feedItemId = (variant) => variant.feedId || variant.id;
 
 /**
  * An amount as feeds take it: decimals and the currency code, or whole units (rounded half up) with `wholeUnits`.
@@ -105,16 +94,12 @@ export const feedMoney = (amount, currency, whole) => {
 const line = (value, max) => value.replace(/\s+/g, ' ').trim().slice(0, max);
 
 /**
- * The item group of a product's rows: the product id when it has several variants; with legacy item ids, the
- * product's imported id (`<hex>`) on every row, as the shop's earlier feed sent it (SG-24).
- * @param {string} productId
+ * The item group of a product's rows (SG-24): the group id the shop's earlier feed sent, kept by an import
+ * (`feedGroupId`) and sent on every row; else the product id when it has several variants.
+ * @param {ProductRecord} product
  * @param {boolean} many
- * @param {'variant' | 'legacy'} mode
  */
-export const feedGroupId = (productId, many, mode) => {
-	if (mode !== 'legacy') return many ? productId : '';
-	return IMPORTED.exec(productId)?.[1] ?? productId;
-};
+export const feedGroupId = (product, many) => product.feedGroupId || (many ? product.id : '');
 
 /**
  * The rows of one product.
@@ -125,7 +110,6 @@ export const feedGroupId = (productId, many, mode) => {
 export const feedRows = (product, context) => {
 	const variants = activeVariants(product);
 	const many = variants.length > 1;
-	const mode = context.itemId ?? 'variant';
 	const money = (/** @type {number} */ amount) => feedMoney(amount, context.currency, context.wholeUnits === true);
 	const body = product.description || product.summary || product.name;
 	const description = (context.description === 'seo' ? product.seo.description || body : body)
@@ -146,8 +130,8 @@ export const feedRows = (product, context) => {
 				options: label,
 			});
 			return {
-				id: feedItemId(product.id, variant.id, mode),
-				itemGroupId: feedGroupId(product.id, many, mode),
+				id: feedItemId(variant),
+				itemGroupId: feedGroupId(product, many),
 				title: line(title || product.name, TITLE_LENGTH),
 				description,
 				link: context.variantLink?.(variant) ?? context.link,

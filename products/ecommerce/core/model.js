@@ -101,6 +101,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {MediaRecord[]} media this variant's photos (E6)
  * @property {boolean} soldOut shown as sold out without changing stock (E9)
  * @property {number | null} warrantyDays null = the product's, then the grade's, then the setting (E12)
+ * @property {string} [feedId] the item id the shop's earlier product feed listed it under, kept by an import so shopping
+ *   catalogs keep the item (E17); none = its own id
  */
 
 /**
@@ -133,6 +135,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {string} descriptionHtml cleaned rich description; `description` is derived from it (E3)
  * @property {import('./catalog-content.js').Video | null} video (E4)
  * @property {string | null} sizeChartId (E5)
+ * @property {string} [feedGroupId] the item group id the shop's earlier product feed sent on its items, kept by an
+ *   import (E17, SG-24); none = the product id on products with several variants
  * @property {boolean} hideSizeGuide (E5)
  * @property {Array<{ attributeId: string, values: Array<string | number>, customValues: string[],
  *   defaultValue: string | number | null }>} attributeSetup (E7)

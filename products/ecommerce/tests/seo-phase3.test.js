@@ -347,7 +347,7 @@ describe('E16 llms-full.txt and IndexNow', () => {
 });
 
 describe('E17 feed options', () => {
-	it('sends legacy ids, the Google category, grade labels, shipping and whole units', async () => {
+	it('sends imported feed ids, the Google category, grade labels, shipping and whole units', async () => {
 		const data = await shop.db();
 		await data.collection('products').insertOne({
 			...(await data
@@ -356,9 +356,11 @@ describe('E17 feed options', () => {
 			id: 'prd_0123456789abcdef01234567',
 			slug: 'imported',
 			name: 'Imported phone',
+			feedGroupId: '0123456789abcdef01234567',
 			variants: [
 				{
 					id: 'var_76543210fedcba9876543210',
+					feedId: '0123456789abcdef01234567_76543210fedcba9876543210',
 					sku: 'IMP',
 					options: {},
 					price: 12345,
@@ -374,7 +376,6 @@ describe('E17 feed options', () => {
 			media: [{ key: 'ecommerce/products/x/1.jpg', type: 'image/jpeg', size: 1, alt: '' }],
 		});
 		await shop.setting('feeds', 'items', 'all');
-		await shop.setting('feeds', 'itemId', 'legacy');
 		await shop.setting('feeds', 'googleCategory', '267');
 		await shop.setting('feeds', 'gradeLabel', true);
 		const business = shop.responders.get(`${ORIGIN}/.well-known/business.json`);

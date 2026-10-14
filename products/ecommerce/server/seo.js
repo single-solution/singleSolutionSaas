@@ -585,7 +585,6 @@ export const createSeo = (product, service) => {
 				condition: (variant) => conditions.of(item, variant),
 				skuAs: settings.skuAs,
 				includeOutOfStock: settings.includeOutOfStock !== false,
-				itemId: settings.itemId === 'legacy' ? 'legacy' : 'variant',
 				googleCategory: String(settings.googleCategory ?? ''),
 				gradeLabel: (variant) => (settings.gradeLabel === true ? (conditions.gradeOf(item, variant)?.label ?? '') : ''),
 				shipping,

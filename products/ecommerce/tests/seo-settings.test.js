@@ -94,13 +94,20 @@ describe('patterns, shipping and feed rows', () => {
 		expect(single[0]).toMatchObject({ title: 'Lawn Suit', itemGroupId: '' });
 	});
 
-	it('takes the title pattern, the SEO description, identifier_exists and legacy item groups (SG-3, SG-22–SG-24)', () => {
-		const rows = feedRows(product, {
+	it('takes the title pattern, the SEO description, identifier_exists and imported feed ids (SG-3, SG-22–SG-24)', () => {
+		// the ids the shop's earlier feed used, kept by an import
+		const imported = {
+			...product,
+			feedGroupId: '0123456789abcdef01234567',
+			variants: product.variants.map((each, index) =>
+				index === 0 ? { ...each, feedId: '0123456789abcdef01234567_76543210fedcba9876543210' } : each,
+			),
+		};
+		const rows = feedRows(imported, {
 			...context,
 			title: '{brand} {name} ({options})',
 			description: 'seo',
 			identifierExists: 'no',
-			itemId: 'legacy',
 		});
 		const first = /** @type {import('../core/feeds.js').FeedRow} */ (rows[0]);
 		expect(first).toMatchObject({
@@ -112,9 +119,11 @@ describe('patterns, shipping and feed rows', () => {
 		});
 		expect(googleItem(first)).toContain('<g:identifier_exists>no</g:identifier_exists>');
 		expect(metaLine(first)).toContain(',0123456789abcdef01234567,');
+		// a variant without one keeps its own id; the imported group is sent on a single variant too
+		expect(rows[1]).toMatchObject({ id: product.variants[1]?.id, itemGroupId: '0123456789abcdef01234567' });
 		const single = feedRows(
-			{ ...product, variants: [variant({ sku: 'X' })] },
-			{ ...context, itemId: 'legacy', skuAs: 'mpn', identifierExists: 'no' },
+			{ ...imported, variants: [variant({ sku: 'X' })] },
+			{ ...context, skuAs: 'mpn', identifierExists: 'no' },
 		);
 		expect(single[0]).toMatchObject({ itemGroupId: '0123456789abcdef01234567', identifierExists: '', mpn: 'X' });
 		expect(
@@ -122,8 +131,9 @@ describe('patterns, shipping and feed rows', () => {
 		).toMatchObject({
 			description: 'A long description.',
 		});
-		expect(feedGroupId('prd_new', true, 'legacy')).toBe('prd_new');
-		expect(feedGroupId('prd_new', false, 'variant')).toBe('');
+		expect(feedGroupId(/** @type {any} */ ({ id: 'prd_new' }), true)).toBe('prd_new');
+		expect(feedGroupId(/** @type {any} */ ({ id: 'prd_new' }), false)).toBe('');
+		expect(feedGroupId(/** @type {any} */ ({ id: 'prd_new', feedGroupId: 'g1' }), false)).toBe('g1');
 	});
 });
 

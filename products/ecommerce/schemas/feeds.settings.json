@@ -50,13 +50,6 @@
 			"default": "used",
 			"enum": ["used", "refurbished", "new"]
 		},
-		"itemId": {
-			"type": "string",
-			"title": "Item ids",
-			"description": "variant: each variant's own id. legacy: the item ids an import kept from the previous shop (<product>_<variant> of imported records), so shopping catalogues keep the items they already list.",
-			"default": "variant",
-			"enum": ["variant", "legacy"]
-		},
 		"googleCategory": {
 			"type": "string",
 			"title": "Google product category",

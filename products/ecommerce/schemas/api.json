@@ -8210,6 +8210,11 @@
 				"hideSizeGuide": {
 					"type": "boolean"
 				},
+				"feedGroupId": {
+					"type": "string",
+					"maxLength": 50,
+					"description": "The item group id the shop's earlier product feed sent, kept by an import; feeds send it as item_group_id on every item of the product. Only an import sets it; edits keep it."
+				},
 				"attributeSetup": {
 					"type": "array",
 					"items": {
@@ -13606,6 +13611,11 @@
 					"minimum": 0,
 					"maximum": 3650,
 					"description": "null: the product’s, then the grade’s, then the returns setting."
+				},
+				"feedId": {
+					"type": "string",
+					"maxLength": 50,
+					"description": "The item id the shop's earlier product feed listed this variant under, kept by an import so shopping catalogs keep the item; feeds send it as the item id. Only an import sets it; edits keep it."
 				}
 			},
 			"description": "A sellable variant, as staff get it."
@@ -24398,7 +24408,7 @@
 	},
 	"GET /v1/feeds/products.xml": {
 		"summary": "The Google Merchant Center feed",
-		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, condition, brand, gtin, mpn, identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, gradedCondition, itemId, googleCategory and gradeLabel; shipping from Delivery zones. The cost is never in it."
+		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, condition, brand, gtin, mpn, identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, gradedCondition, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it."
 	},
 	"GET /v1/feeds/products.csv": {
 		"summary": "The Meta (Facebook) catalog feed",

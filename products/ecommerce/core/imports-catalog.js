@@ -65,6 +65,7 @@ const VARIANT_FIELDS = Object.freeze([
 	'media',
 	'soldOut',
 	'warrantyDays',
+	'feedId',
 ]);
 
 /** The fields each collection's records may have (the stored shapes of `model.js`). */
@@ -152,6 +153,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'previousSlugs',
 		'returnDays',
 		'warrantyDays',
+		'feedGroupId',
 		'sold',
 		'rating',
 		'publishedAt',

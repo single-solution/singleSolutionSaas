@@ -234,8 +234,8 @@ export const heldKeys = (product) =>
  * and the timestamps are kept by the adapter and the ledger).
  * @typedef {Pick<ProductRecord, 'slug' | 'name' | 'kind' | 'status' | 'summary' | 'description' | 'categoryIds' | 'brandId'
  *   | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'serialized' | 'digital' | 'booking' | 'seo' | 'returnDays'
- *   | 'warrantyDays'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId' | 'hideSizeGuide'
- *   | 'attributeSetup' | 'faqs'>>} ProductFields `slug` '' = make one from the name
+ *   | 'warrantyDays' | 'feedGroupId'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId'
+ *   | 'hideSizeGuide' | 'attributeSetup' | 'faqs'>>} ProductFields `slug` '' = make one from the name
  */
 
 /**
@@ -455,6 +455,22 @@ const variantMediaOf = (input, existing, place, path, errors) => {
 	return out;
 };
 
+/** An item or item group id of a product feed (Google takes at most 50 characters). */
+const FEED_ID = /^[A-Za-z0-9._-]{1,50}$/;
+
+/**
+ * The feed id an import gives (E17: the id the shop's earlier product feed used, so shopping catalogs keep their
+ * items), '' for none; only an import sets it, and later edits keep it.
+ * @param {unknown} value @param {string} path @param {FieldError[]} errors
+ * @returns {string}
+ */
+const importedFeedId = (value, path, errors) => {
+	if (value === undefined || value === '') return '';
+	if (typeof value === 'string' && FEED_ID.test(value)) return value;
+	errors.push({ path, message: 'A feed id has 1 to 50 letters, digits, dots, dashes or underscores.' });
+	return '';
+};
+
 /**
  * A variant from input, merged over the existing one (whose stock is kept).
  * @param {Record<string, any>} input
@@ -495,6 +511,7 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 	const attributes = variantAttributesOf(input, existing, rules, path, errors);
 	const media = variantMediaOf(input, existing, place, path, errors);
 	const stock = existing ? { stock: existing.stock, locations: existing.locations } : stockOf(input, rules, path, errors);
+	const feedId = rules.importing ? importedFeedId(input.feedId, `${path}/feedId`, errors) : (existing?.feedId ?? '');
 	/** @type {Record<string, string>} */
 	const options = {};
 	if (input.options !== undefined && !isObject(input.options)) fail('options', 'Give the option values.');
@@ -517,6 +534,7 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 		media,
 		soldOut: typeof input.soldOut === 'boolean' ? input.soldOut : (existing?.soldOut ?? false),
 		warrantyDays: isDays(warrantyDays) ? warrantyDays : (existing?.warrantyDays ?? null),
+		...(feedId ? { feedId } : {}),
 	};
 };
 
@@ -974,6 +992,9 @@ export const checkProduct = (body, rules, existing) => {
 	};
 	const returnDays = daysOf('returnDays');
 	const warrantyDays = daysOf('warrantyDays');
+	const feedGroupId = rules.importing
+		? importedFeedId(input.feedGroupId, '/feedGroupId', errors)
+		: (existing?.feedGroupId ?? '');
 
 	if (errors.length > 0) return { ok: false, errors };
 	return {
@@ -1005,6 +1026,7 @@ export const checkProduct = (body, rules, existing) => {
 			hideSizeGuide,
 			attributeSetup,
 			faqs,
+			...(feedGroupId ? { feedGroupId } : {}),
 		},
 	};
 };

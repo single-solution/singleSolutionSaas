@@ -73,6 +73,10 @@ times in the future, and slugs, SKUs, variant ids, serial numbers, deal slugs an
 holds (in the database or earlier in the same call). With Multi-location stock a variant gives `locations` (its
 `stock` is their sum). A unit `in_stock` or `faulty` belongs to no order; a `sold` one names its `orderId`.
 
+A product may carry `feedGroupId` and a variant `feedId`: the item group and item ids the earlier shop's product feed
+used (1 to 50 letters, digits, `.`, `_` or `-`), which the feeds then send, so shopping catalogs keep listing the same
+items; only an import sets them and edits keep them.
+
 Smallest records (one per line in a file):
 
 ```json

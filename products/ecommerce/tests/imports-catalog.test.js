@@ -150,6 +150,7 @@ const RECORDS = {
 			name: 'Linen dress',
 			kind: 'physical',
 			status: 'active',
+			feedGroupId: 'dress-001',
 			summary: 'A summer dress.',
 			description: 'Light linen.',
 			categoryIds: [ID.dresses],
@@ -184,6 +185,8 @@ const RECORDS = {
 					media: [{ key: KEY.variant, type: 'image/webp', size: 3000, alt: 'Red' }],
 					soldOut: false,
 					warrantyDays: null,
+					// the item id the earlier shop's product feed used (E17)
+					feedId: 'dress-001_red',
 				},
 				{
 					id: ID.blue,
@@ -415,7 +418,10 @@ describe('import', () => {
 			stock: 3,
 			options: { Colour: 'Red' },
 			media: [{ key: KEY.variant }],
+			feedId: 'dress-001_red',
 		});
+		expect(dress.variants[1]).not.toHaveProperty('feedId');
+		expect(dress.feedGroupId).toBe('dress-001');
 		expect(dress.createdAt.toISOString()).toBe('2023-04-01T08:00:00.000Z');
 		expect(dress.publishedAt.toISOString()).toBe('2023-04-01T08:00:00.000Z');
 		expect(await stored('products', ID.shell)).toMatchObject({ status: 'draft', variants: [], stockState: 'none', price: 0 });
@@ -435,6 +441,20 @@ describe('import', () => {
 		expect((await api('GET', '/v1/events')).items.length).toBe(eventsBefore);
 		expect((await api('GET', '/v1/activity?action=import.products')).items).toHaveLength(2);
 		expect((await api('GET', '/v1/activity?action=product.created')).items).toHaveLength(0);
+	});
+
+	it('refuses a feed id a product feed cannot take (E17)', async () => {
+		const [dress] = RECORDS.products;
+		const odd = {
+			...dress,
+			feedGroupId: 7,
+			variants: [{ .../** @type {any} */ (dress).variants[0], feedId: 'not an id!' }],
+		};
+		const answer = await send('products', [odd], { dryRun: true });
+		expect(answer.failed[0].errors.map((/** @type {any} */ e) => [e.path, e.message])).toEqual([
+			['/variants/0/feedId', 'A feed id has 1 to 50 letters, digits, dots, dashes or underscores.'],
+			['/feedGroupId', 'A feed id has 1 to 50 letters, digits, dots, dashes or underscores.'],
+		]);
 	});
 
 	it('refuses slugs, SKUs, variant ids, serials, landing combinations and deal slugs another record holds', async () => {
@@ -629,6 +649,22 @@ describe('storage keys (CA-5)', () => {
 			[KEY.photo, 'image/webp'],
 		]);
 		expect(after.video).toEqual(RECORDS.products[0].video);
+		// the imported feed ids stay on edits, and only an import sets them (E17)
+		expect([after.feedGroupId, after.variants[0].feedId]).toEqual(['dress-001', 'dress-001_red']);
+		const ignored = await shop.api('PATCH', `/v1/products/${ID.dress}`, {
+			feedGroupId: 'other',
+			variants: [
+				{ id: ID.red, feedId: 'other' },
+				{ id: ID.blue, feedId: 'other' },
+			],
+		});
+		expect(ignored.status).toBe(200);
+		const same = /** @type {any} */ (await stored('products', ID.dress));
+		expect([same.feedGroupId, same.variants[0].feedId, same.variants[1].feedId]).toEqual([
+			'dress-001',
+			'dress-001_red',
+			undefined,
+		]);
 		const foreign = await shop.api('PATCH', `/v1/products/${ID.dress}`, {
 			variants: [{ id: ID.red, media: [{ key: KEY.variant }, { key: 'uploads/other/new.webp' }] }, { id: ID.blue }],
 		});

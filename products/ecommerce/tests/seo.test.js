@@ -165,16 +165,21 @@ describe('core/feeds and core/llms', () => {
 		]);
 		const single = feedRows({ ...product, variants: [variant({ id: 'var_s' })], description: 'Long' }, context);
 		expect(single[0]).toMatchObject({ itemGroupId: '', title: 'Phone', description: 'Long' });
-		// E17: legacy ids, the Google category, the grade label, shipping, whole units, variant links and photos
+		// E17: imported feed ids, the Google category, the grade label, shipping, whole units, variant links and photos
 		const legacy = feedRows(
 			{
 				...product,
 				id: 'prd_0123456789abcdef01234567',
-				variants: [variant({ id: 'var_76543210fedcba9876543210', price: 1250, grade: 'a' }), variant({ id: 'var_new' })],
+				variants: [
+					{
+						...variant({ id: 'var_76543210fedcba9876543210', price: 1250, grade: 'a' }),
+						feedId: '0123456789abcdef01234567_76543210fedcba9876543210',
+					},
+					variant({ id: 'var_new' }),
+				],
 			},
 			{
 				...context,
-				itemId: 'legacy',
 				googleCategory: '267',
 				gradeLabel: (v) => (v.grade ? 'Grade A' : ''),
 				shipping: { fee: 250, country: 'PK' },
@@ -198,8 +203,9 @@ describe('core/feeds and core/llms', () => {
 		expect(item).toContain('<g:google_product_category>267</g:google_product_category>');
 		expect(item).toContain('<g:custom_label_0>Grade A</g:custom_label_0>');
 		expect(item).toContain('<g:shipping><g:country>PK</g:country><g:price>3 USD</g:price></g:shipping>');
-		expect(feedItemId('prd_x', 'var_y', 'legacy')).toBe('var_y');
-		expect(feedItemId('prd_x', 'var_y', 'variant')).toBe('var_y');
+		expect(feedItemId(/** @type {any} */ ({ id: 'var_y' }))).toBe('var_y');
+		expect(feedItemId(/** @type {any} */ ({ id: 'var_y', feedId: '' }))).toBe('var_y');
+		expect(feedItemId(/** @type {any} */ ({ id: 'var_y', feedId: 'old_1' }))).toBe('old_1');
 		expect(feedMoney(1050, 'PKR', false)).toBe('10.50 PKR');
 		expect(feedMoney(1050, 'PKR', true)).toBe('11 PKR');
 	});
