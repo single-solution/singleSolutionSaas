@@ -140,7 +140,7 @@
 		"defaultCallingCode": {
 			"type": "string",
 			"title": "Default calling code",
-			"description": "For phones typed without a country code (guests, alerts, delivery addresses), for example +92 or +1. Empty: the calling code of the country in business.json; without one, numbers must start with + or 00.",
+			"description": "For phones typed without a country code (guests, alerts, delivery addresses), for example +44 or +1. Empty: the calling code of the country in business.json; without one, numbers must start with + or 00.",
 			"default": "",
 			"maxLength": 4
 		},
@@ -154,7 +154,7 @@
 		"countries": {
 			"type": "array",
 			"title": "Countries of guest and alert phones",
-			"description": "Only phones with these countries' calling codes may be used to order as a guest or to get alerts (ISO codes, for example PK); alerts never go to a member's phone of another country. Empty: any country.",
+			"description": "Only phones with these countries' calling codes may be used to order as a guest or to get alerts; alerts never go to a member's phone of another country. Empty: any country.",
 			"default": [],
 			"items": {
 				"type": "string",
@@ -405,7 +405,9 @@
 				]
 			},
 			"x-ui": {
-				"widget": "tags"
+				"widget": "tags",
+				"labels": "country",
+				"placeholder": "Any country"
 			}
 		},
 		"customerRecords": {

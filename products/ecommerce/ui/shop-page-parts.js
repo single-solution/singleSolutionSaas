@@ -2,7 +2,7 @@
  * Parts of the product page (PLAN 0.8.10 E4, E5, E7, E9, E10, E12, E16): the variant picker's axes (the option axes,
  * up to 6, else the variants' attributes, plus the condition when two variants differ only by grade), the stock text
  * of a variant ("Only N left", "N in stock", Sold out), photos with their smaller sizes, size and blur placeholder, the
- * grade's details (colour, description, content, return days and inspection video), the product video, the FAQs, the
+ * grade's details (colour, description, content, return days and condition video), the product video, the FAQs, the
  * Size guide (a dialog, a full-screen sheet on phones, with an in/cm switch) and the shopper's own alerts
  * (`GET /v1/shop/alerts`, read once per sign-in and shared by the widgets of a page).
  * @module
@@ -183,7 +183,7 @@ export const photoOf = (doc, media, size, alt) => {
 };
 
 /**
- * The link to a grade's inspection video: its YouTube page, or the https address of the file (`videoUrl`, which the
+ * The link to a grade's condition video: its YouTube page, or the https address of the file (`videoUrl`, which the
  * shop answer fills in; an older answer's `video` is read the same way); '' without one.
  * @param {Pick<PageGrade, 'video' | 'videoUrl'>} grade
  */
@@ -195,7 +195,7 @@ export const gradeVideoUrl = (grade) => {
 };
 
 /**
- * The details of a grade (E10): its colour, label, description, content, return days and inspection video.
+ * The details of a grade (E10): its colour, label, description, content, return days and condition video.
  * @param {Document} doc
  * @param {Texts} t
  * @param {PageGrade} grade

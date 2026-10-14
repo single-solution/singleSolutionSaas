@@ -16,7 +16,7 @@ import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js
  */
 export const WIDGET_ATTRIBUTES = Object.freeze({
 	product_grid: Object.freeze([
-		{ name: 'data-category', example: 'phones', help: 'only this category (its id or slug) and its subcategories' },
+		{ name: 'data-category', example: 'accessories', help: 'only this category (its id or slug) and its subcategories' },
 		{ name: 'data-brand', example: 'acme', help: 'only these brands (ids or slugs, comma-separated)' },
 		{ name: 'data-grade', example: '', help: 'only these grades (keys, comma-separated)' },
 		{ name: 'data-featured', example: '', help: '1: only featured products' },

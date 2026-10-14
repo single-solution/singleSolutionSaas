@@ -1,6 +1,6 @@
 /**
  * The product grid with search, filters and sort (visitor widget `product_grid`, feature catalog; PLAN 0.8.8 Shopper
- * widgets, 0.8.10 E1, E2, E6, E8). Placed as `<div data-ss-ecommerce="product_grid" data-category="phones"
+ * widgets, 0.8.10 E1, E2, E6, E8). Placed as `<div data-ss-ecommerce="product_grid" data-category="accessories"
  * data-brand="acme,zeta" data-grade="" data-deal="" data-featured="" data-sort="newest" data-query=""
  * data-limit="24"></div>`: the data attributes are where the grid starts; the shopper can change everything.
  *

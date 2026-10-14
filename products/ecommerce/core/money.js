@@ -53,7 +53,7 @@ export const isAmount = (value) => Number.isSafeInteger(value) && Number(value) 
 export const exponentOf = (currency) => (ZERO_DECIMAL.has(currency) ? 0 : THREE_DECIMAL.has(currency) ? 3 : 2);
 
 /**
- * Minor units as the decimal text gateways take (`1050`, `PKR` → `10.50`).
+ * Minor units as the decimal text gateways take (`1050`, `USD` → `10.50`).
  * @param {number} amount
  * @param {string} currency
  */
@@ -126,7 +126,7 @@ export const allocate = (total, weights) => {
 };
 
 /**
- * The smallest amount Ecommerce computes (PLAN 0.8.10 E25): one whole unit of the currency (100 minor units of PKR)
+ * The smallest amount Ecommerce computes (PLAN 0.8.10 E25): one whole unit of the currency (100 minor units of USD)
  * while the website's Format shows whole units, else one minor unit.
  * @param {string} currency
  * @param {boolean} wholeUnits the Format's `wholeUnits`

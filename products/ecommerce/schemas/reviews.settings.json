@@ -19,7 +19,7 @@
 		"nameFormat": {
 			"type": "string",
 			"title": "Names shown",
-			"description": "Full, or First initial (\"Ayesha K.\").",
+			"description": "Full, or First initial (\"Alex K.\").",
 			"default": "full",
 			"enum": ["full", "first_initial"]
 		},

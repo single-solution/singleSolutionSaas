@@ -379,7 +379,7 @@ describe('product page content', () => {
 			text('page.optionSoldOut', { value: text('page.gradeNone') }),
 			text('page.optionOutOfStock', { value: 'Fair' }),
 		]);
-		// Like new: its colour, content, return days and inspection video; only 3 left; 6 months of warranty
+		// Like new: its colour, content, return days and condition video; only 3 left; 6 months of warranty
 		const details = $(host, '.grade');
 		expect(details.querySelector('.swatch').style.backgroundColor).toBe('rgb(22, 163, 74)');
 		expect(details.textContent).toContain(text('page.grade', { grade: 'Like new' }));

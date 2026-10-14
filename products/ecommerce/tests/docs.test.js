@@ -39,7 +39,7 @@ describe('createSnippets', () => {
 		for (const widget of manifest.widgets.filter((w) => w.kind === 'visitor'))
 			expect(snippets.visitor).toContain(`data-ss-ecommerce="${widget.key}"`);
 		expect(snippets.visitor).toContain(
-			'<div data-ss-ecommerce="product_grid" data-category="phones" data-brand="acme" data-grade="" data-featured="" data-deal="" data-sort="newest" data-query="" data-limit="24"></div>',
+			'<div data-ss-ecommerce="product_grid" data-category="accessories" data-brand="acme" data-grade="" data-featured="" data-deal="" data-sort="newest" data-query="" data-limit="24"></div>',
 		);
 		expect(snippets.visitor).toContain('<div data-ss-ecommerce="product_page" data-product="blue-kettle"></div>');
 		expect(snippets.visitor).toContain('<div data-ss-ecommerce="cart"></div>');

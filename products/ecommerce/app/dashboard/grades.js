@@ -4,7 +4,7 @@
  * list shows each grade's colour, name, key, condition, return and warranty days and categories, with Edit and a More
  * menu (move, remove); a grade's every field is edited in a dialog (PLAN 0.6: secondary forms in dialogs): name and
  * key (hyphens allowed), condition (new, refurbished, used, or the SEO and feeds setting), days, colour with a swatch,
- * whether it is offered, a description of up to 1,200 characters, an inspection video (a file key or a YouTube id;
+ * whether it is offered, a description of up to 1,200 characters, a condition video (a file key or a YouTube id;
  * a pasted YouTube address keeps its id), the category it is the definition for (E45: the same key once per category,
  * with its own label, texts, days and glossary, and once for every other category), the categories it is for, its
  * content (summary and bullets with icon names) and its glossary page (title, description, text and questions). Done keeps the grade in the list; Save list

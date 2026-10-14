@@ -344,7 +344,7 @@ export const createCatalogShop = (product, service, common) => {
 	};
 
 	/**
-	 * A product's grades (its category's entries first, E45) with each inspection video's address (a YouTube id becomes
+	 * A product's grades (its category's entries first, E45) with each condition video's address (a YouTube id becomes
 	 * its embed address, a file key its storage address; E10).
 	 * @param {Site} s @param {ProductRecord} item
 	 */

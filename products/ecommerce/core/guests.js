@@ -20,7 +20,7 @@ export const COUNTRY_REFUSED = Object.freeze({
 });
 
 /**
- * How a website reads the phones shoppers type (K12): its default calling code (`+92`, or '' when it has none: a
+ * How a website reads the phones shoppers type (K12): its default calling code (`+44`, or '' when it has none: a
  * number must then start with + or 00), its trunk prefix ('' = the country's usual one) and the countries whose phones
  * guests and alerts may use (`countries`, ISO codes; [] = any, SE-5).
  * @typedef {{ defaultCallingCode: string, trunkPrefix: string, countries: string[] }} PhoneRules

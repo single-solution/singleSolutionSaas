@@ -1588,7 +1588,7 @@
 										"type": "string",
 										"maxLength": 120,
 										"pattern": "^$|^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
-										"description": "Lowercase letters, digits and dashes; '' (or none for a new category) makes a free one from the name (phones, phones-2 …). A changed slug is kept in previousSlugs."
+										"description": "Lowercase letters, digits and dashes; '' (or none for a new category) makes a free one from the name (accessories, accessories-2 …). A changed slug is kept in previousSlugs."
 									},
 									"description": {
 										"type": "string",
@@ -12675,7 +12675,7 @@
 										"type": "string",
 										"maxLength": 120,
 										"pattern": "^$|^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
-										"description": "Lowercase letters, digits and dashes; '' (or none for a new category) makes a free one from the name (phones, phones-2 …). A changed slug is kept in previousSlugs."
+										"description": "Lowercase letters, digits and dashes; '' (or none for a new category) makes a free one from the name (accessories, accessories-2 …). A changed slug is kept in previousSlugs."
 									},
 									"description": {
 										"type": "string",
@@ -33207,7 +33207,7 @@
 						"type": "string",
 						"maxLength": 120,
 						"pattern": "^$|^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
-						"description": "Lowercase letters, digits and dashes; '' (or none for a new category) makes a free one from the name (phones, phones-2 …). A changed slug is kept in previousSlugs."
+						"description": "Lowercase letters, digits and dashes; '' (or none for a new category) makes a free one from the name (accessories, accessories-2 …). A changed slug is kept in previousSlugs."
 					},
 					"description": {
 						"type": "string",
@@ -34691,7 +34691,7 @@
 					},
 					"priceText": {
 						"type": "string",
-						"description": "price written in the website's Format, for example 'Rs 1,500'."
+						"description": "price written in the website's Format, for example '$1,500.00'."
 					},
 					"compareAtPrice": {
 						"type": [
@@ -34704,7 +34704,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"inStock": {
 						"type": "boolean",
@@ -36915,7 +36915,7 @@
 					},
 					"priceText": {
 						"type": "string",
-						"description": "price written in the website's Format, for example 'Rs 1,500'."
+						"description": "price written in the website's Format, for example '$1,500.00'."
 					},
 					"compareAtPrice": {
 						"type": [
@@ -36928,7 +36928,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"inStock": {
 						"type": "boolean",
@@ -37940,7 +37940,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"lots": {
 						"type": "array",
@@ -38096,7 +38096,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"totals": {
 						"type": "object",
@@ -41564,7 +41564,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"deals": {
 						"type": "array",
@@ -41905,7 +41905,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"statuses": {
 						"type": [
@@ -43234,7 +43234,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"by": {
 						"type": "string",
@@ -44726,7 +44726,7 @@
 					},
 					"video": {
 						"type": "string",
-						"description": "The inspection video's storage key or YouTube id ('' = none)."
+						"description": "The condition video's storage key or YouTube id ('' = none)."
 					},
 					"videoUrl": {
 						"type": [
@@ -44855,7 +44855,7 @@
 						"type": "string",
 						"minLength": 1,
 						"maxLength": 3,
-						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or PKR)."
+						"description": "The shop's currency (the catalog setting currency, an ISO 4217 code such as USD or EUR)."
 					},
 					"pointValue": {
 						"type": "integer",
@@ -46729,7 +46729,7 @@
 					"name": {
 						"type": "string",
 						"maxLength": 80,
-						"description": "The reviewer's name: the whole name, or with the reviews setting nameFormat: first_initial the first name and the last name's initial (\"Ayesha K.\"). '' when unknown."
+						"description": "The reviewer's name: the whole name, or with the reviews setting nameFormat: first_initial the first name and the last name's initial (\"Alex K.\"). '' when unknown."
 					},
 					"verified": {
 						"type": "boolean",

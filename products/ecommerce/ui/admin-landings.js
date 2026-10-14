@@ -22,7 +22,7 @@ import { categoryChoices, faqList } from './admin-taxonomy.js';
 const AI_FIELDS = Object.freeze(['h1', 'title', 'description', 'intro', 'faqs']);
 
 /**
- * What a landing page lists, for people (`Phones · Acme · Grade A`).
+ * What a landing page lists, for people (`Chairs · Acme · Grade A`).
  * @param {Lookups} lookups @param {Landing} landing
  */
 const comboOf = (lookups, landing) => {

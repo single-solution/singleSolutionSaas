@@ -34,10 +34,10 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} brand
  * @property {string} gtin
  * @property {string} mpn
- * @property {string} productType category path (`Phones > Android`)
+ * @property {string} productType category path (`Home > Kitchen`)
  * @property {string} [googleCategory] the Google product category (E17)
  * @property {string} [customLabel0] the grade's label (E17)
- * @property {string} [shipping] the delivery fee (`250 PKR`) for the business's country (E17), 0 from the free-delivery
+ * @property {string} [shipping] the delivery fee (`2.50 USD`) for the business's country (E17), 0 from the free-delivery
  *   amount (SG-2)
  * @property {string} [shippingCountry]
  * @property {'no' | ''} [identifierExists] `no` when the row has no GTIN and no MPN and the setting says so (SG-22)

@@ -85,7 +85,7 @@ export const checkLineReviewInput = (body) => {
 };
 
 /**
- * The name a review shows (`nameFormat`): the whole name, or the first name and the last name's initial ("Ayesha K.").
+ * The name a review shows (`nameFormat`): the whole name, or the first name and the last name's initial ("Alex K.").
  * @param {string} name
  * @param {unknown} format
  */

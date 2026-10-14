@@ -2,7 +2,7 @@
  * Condition grades (PLAN 0.8.8 Items: used or refurbished items carry a condition grade; PLAN 0.8.10 E10): the
  * `grades` list the merchant keeps in the dashboard — a stable key (letters, digits, `_` and `-`), a label shown to
  * shoppers, a description, the item's return and warranty days for that grade (null = the `returns` setting), and per
- * grade the categories it is for ([] = all), a colour, an inspection video, content, whether it is offered, the item
+ * grade the categories it is for ([] = all), a colour, a condition video, content, whether it is offered, the item
  * condition structured data and feeds use, and its glossary SEO. A grade entry may be the definition for one category
  * (`categoryId`, E45): the same key then exists once per category with its own label, texts, days and SEO, and once
  * without a category for every other one. Variants name a grade by its key; a product's grade is its category's entry
@@ -44,7 +44,7 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @property {Condition | null} [condition] null = the SEO and feeds setting for graded items
  * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} [seo]
  *   the glossary page (E15)
- * @property {string | null} [videoUrl] the inspection video's address, filled in for shoppers (not stored)
+ * @property {string | null} [videoUrl] the condition video's address, filled in for shoppers (not stored)
  */
 
 /** @param {unknown} value */

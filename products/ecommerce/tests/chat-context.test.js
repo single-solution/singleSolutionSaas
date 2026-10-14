@@ -293,7 +293,7 @@ describe('Chat lookups (E37)', () => {
 		const placedAt = new Date('2026-10-02T00:00:00Z');
 		await data.collection(COLLECTIONS.orders).insertOne({
 			id: 'ord_sara1',
-			number: 'IM-2026-0043',
+			number: 'SH-2026-0043',
 			customer: { userId: sara, name: 'Sara Shopper', email: '', phone: '+923001234567' },
 			address: {
 				name: 'Sara',
@@ -490,7 +490,7 @@ describe('Chat lookups (E37)', () => {
 		const orders = await shop.api('GET', '/v1/chat/me/orders', undefined, headers);
 		expect(orders.json.items).toEqual([
 			expect.objectContaining({
-				number: 'IM-2026-0043',
+				number: 'SH-2026-0043',
 				statusKey: 'dispatched',
 				paymentMethod: 'cod',
 				paid: 20000,

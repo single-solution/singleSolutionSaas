@@ -5,7 +5,7 @@
 		"currency": {
 			"type": "string",
 			"title": "Currency",
-			"description": "The shop's currency: an ISO 4217 code (USD, EUR, PKR …). Every price is in it.",
+			"description": "The shop's currency: an ISO 4217 code (USD, EUR, JPY …). Every price is in it.",
 			"default": "USD",
 			"maxLength": 3
 		},

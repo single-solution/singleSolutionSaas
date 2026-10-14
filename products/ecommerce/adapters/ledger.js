@@ -518,7 +518,7 @@ export const counterId = (prefix, year) => `orders-${prefix}${year}`;
 
 /**
  * The next order number of a year (the year in the business time zone, PLAN 0.8.10 K8; E30):
- * `<prefix><year>-<sequence of numberDigits>` (`IM-2026-0043`). A missing yearly counter starts after the highest
+ * `<prefix><year>-<sequence of numberDigits>` (`SH-2026-0043`). A missing yearly counter starts after the highest
  * number already used for that prefix and year.
  * @param {WebsiteData} data
  * @param {{ prefix: string, year: number, digits?: number, session?: Session }} options
