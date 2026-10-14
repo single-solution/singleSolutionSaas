@@ -1957,6 +1957,11 @@ can provide merchants what their requirements are." So SB's earlier D5 ("SB send
 SB gets the SaaS's standard shopper messages like CT and IM (its mapping writes the default channels and leaves every
 status's `notify` at the default). Merchants differ only by the features and settings the admin and the merchant switch
 on, never by code.
+Owner, ~21:55: "dont touch any store now until i ask, just complete saas and if any store has any changes ignore it."
+Until the owner asks: no work on or reading of the store repositories, and no store-mapping or conversion work (SB
+messages switch, SB importer fixes, CT and IM mappings, data dry runs); the SaaS is completed first. A SaaS change that
+would break the importer's existing tests gets only the smallest mechanical mapping change (the SaaS default), listed
+for review.
 
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
