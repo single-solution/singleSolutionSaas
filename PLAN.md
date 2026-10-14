@@ -1971,6 +1971,26 @@ tables and landing facets, measured quantities.
   advance but not a paid open order; only staff moves record payment on confirm and check video/shipment/serials/refund
   permission. Open risk for phase 2: the staff refund route calls Payments before its write (two simultaneous staff
   refunds of one order) → a refund lock on the order.
+- **Phase 2 built (2026-10-14; 65e4ee45, importer 22cd98af, e2e f770962c):** each move of the flow carries `who`
+  (staff | staff + shopper | shopper | system), `permission`, `needs` (note, reason = a note for the shopper, units) and
+  the options its stages leave open (§3.4): `paidOnConfirm`, `window` restart | none, `video` off | optional |
+  required, `tracking` required | optional, cancel `refund` auto | staff, `shopperPaid` refuse | flag | refund (default
+  flag out of waiting, refuse out of open/packed), `unpaid` refuse | cancel (E40), `restock` yes | no | ask (refunds and
+  cancels after delivery default **no**, owner), `points` take_back | keep (E39). Statuses have `shopperLabel`,
+  `shopperText` per payment method and `notify`; the flow has `triggers` { paid, windowEnd, refundsCover } and `starts`
+  { cod, pickup, free }; at most one awaiting-confirmation status (none allowed). E40's extra moves are allowed when
+  listed and settle by the facts. Removed (no aliases): checkout.returnRestock, shopperCancel, paidOnConfirm,
+  rewaitWindow, trackingRequired, packingVideo, autoRefundedStatus, notifyStatuses, freeOrderStart, cod.startStatus.
+  New checkout settings `editPricing` reprice | keep_placed and `deleteGivesBack` held | all. Staff refunds go through a
+  refund lock (`lockedRefund`). Dashboard flow editor (`app/dashboard/flow-editor.js`); the admin move dialog asks what
+  a move needs and replaces the dispatch video; My orders shows the status line and the notes for the shopper. Defaults
+  reproduce phase 1 exactly (golden replay and both property tests green, the pure one with random options and E40
+  moves). The 8 fixes of `audit/review-order-engine-2026-10-14.md` are in with failing-first tests
+  (`tests/transitions-money.test.js`); also: a move or shopper cancel that loses its race after Payments cancelled the
+  payment drops it (`dropVoided`), a courier booking left by a failed move is kept and reused, a refund asked before
+  is first looked up in Payments' refunds (`unrecordedRefund`), deletes are refused while a refund is pending or money
+  is held, warning `refund_skipped`. SB mapping: its rules as flow options, `editPricing: keep_placed`,
+  `deleteGivesBack: all`; `loyalty.returnPoints` dropped. Ecommerce 90 files / 878 tests; importer 38; e2e 7 files.
 
 #### Principles
 
