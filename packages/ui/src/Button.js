@@ -15,8 +15,8 @@ export const FormBusyContext = createContext(false);
 /** @typedef {'primary' | 'secondary' | 'ghost' | 'danger' | 'soft'} ButtonVariant */
 /** @typedef {'sm' | 'md' | 'lg'} ButtonSize */
 
-// flat at rest; a filled button gets a soft glow of its own colour only on hover (PLAN 0.6: no elevation by default).
-// A disabled button turns neutral instead of a faded accent; a busy one (spinner) keeps its colour.
+// flat at rest; a filled button gets a soft glow of its own color only on hover (PLAN 0.6: no elevation by default).
+// A disabled button turns neutral instead of a faded accent; a busy one (spinner) keeps its color.
 const BASE =
 	'inline-flex shrink-0 items-center justify-center gap-2 rounded-control font-semibold tracking-[-0.005em] ss-motion ss-press select-none ' +
 	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed ' +

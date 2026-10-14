@@ -11,14 +11,14 @@ import { Icon } from './icons.js';
 /** @typedef {'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'} Tone */
 /**
  * Kind of thing a tile, badge or menu item stands for. It names the thing in the code; every kind takes the one indigo
- * accent (PLAN 0.6 colour rule: one accent, neutral surfaces, colour for status only), so a `kind` marks an item as
+ * accent (PLAN 0.6 color rule: one accent, neutral surfaces, color for status only), so a `kind` marks an item as
  * accented and its absence leaves it neutral.
  * @typedef {'overview' | 'merchant' | 'website' | 'product' | 'feature' | 'credit' | 'price' | 'admin' | 'settings'
  *   | 'default' | 'activity' | 'connection' | 'developer'} Kind
  */
 
 /**
- * Text that may wrap between the parts of a domain, e-mail address or path: a soft break (`<wbr>`) after every dot,
+ * Text that may wrap between the parts of a domain, email address or path: a soft break (`<wbr>`) after every dot,
  * `@` and slash, so `shop.example.com` wraps as `shop.example.` / `com` rather than mid-name, where it has to wrap at
  * all. Copying the text copies it unchanged.
  * @param {{ text: string }} props
@@ -185,7 +185,7 @@ const STATUS_TONES = /** @type {Record<string, Tone>} */ ({
 });
 
 /**
- * Status pill with a dot; the label defaults to the humanised status.
+ * Status pill with a dot; the label defaults to the humanized status.
  * @param {{ status: string, label?: ReactNode, className?: string }} props
  */
 export function StatusBadge({ status, label, className }) {
@@ -320,7 +320,7 @@ const valueSize = (value) =>
 
 /**
  * Key figure: a summary tile on a neutral surface. With a `kind` its icon sits in the accent-tinted badge, without one
- * in a neutral badge (PLAN 0.6 colour rule); `tone` colours the hint by status. A new value fades in.
+ * in a neutral badge (PLAN 0.6 color rule); `tone` colors the hint by status. A new value fades in.
  *
  * The tile follows its own width (a size container), not the screen's: a small icon sits beside the label, which
  * wraps on whole words; a figure stays on one line and is never cut, its type a step
@@ -417,7 +417,7 @@ export function Section({ title, description, actions, children, id, className }
 /**
  * Masonry of cards of different heights (PLAN 0.6 "use the space"): CSS columns by the width of the container — one
  * column below 42rem, two from 42rem, three from 72rem (`columns={2}` stops at two) — and every child is kept whole
- * (`break-inside: avoid`), so no card stretches to a taller neighbour. Children flow down the first column, then the
+ * (`break-inside: avoid`), so no card stretches to a taller neighbor. Children flow down the first column, then the
  * next, which is also the reading and tab order. Fragments are transparent: cards a component returns in a fragment are
  * items too. Rows of a list (`as="ul"`) are `li` items. With `wideAlone`, a lone card takes the whole width instead of
  * the first column (a settings section with one form).

@@ -1,21 +1,26 @@
 /**
  * Formatting for the consoles. Money is always shown in **credits** derived from integer millicredits (1 credit =
  * 1000 millicredits), with at most 3 decimals and no rounding beyond that (millicredits are exact).
- * Dates render in UTC so server and browser output agree (no hydration drift).
+ * Dates are US English (`Oct 4, 2026`; `Oct 4, 2026, 2:30 PM UTC`) and render in UTC, so server and browser output
+ * agree (no hydration drift); `formatDateTime(value, { timeZone })` shows the same style in another time zone, with
+ * its short name (the viewer's local time once the page runs in a browser).
  * @module
  */
 
 const CREDITS = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-const DATE_TIME = new Intl.DateTimeFormat('en-GB', {
+/** @type {Intl.DateTimeFormatOptions} */
+const DATE_TIME_PARTS = {
 	year: 'numeric',
 	month: 'short',
-	day: '2-digit',
-	hour: '2-digit',
+	day: 'numeric',
+	hour: 'numeric',
 	minute: '2-digit',
-	timeZone: 'UTC',
-	hourCycle: 'h23',
-});
-const DATE = new Intl.DateTimeFormat('en-GB', { year: 'numeric', month: 'short', day: '2-digit', timeZone: 'UTC' });
+	timeZoneName: 'short',
+};
+const DATE_TIME = new Intl.DateTimeFormat('en-US', { ...DATE_TIME_PARTS, timeZone: 'UTC' });
+const DATE = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+/** No-break spaces some runtimes put before AM/PM, as plain spaces (the same text on the server and in browsers). */
+const NO_BREAK_SPACES = /[\u00a0\u202f]/g;
 
 /**
  * Credits from millicredits as a plain number string (`12.345`); `—` for null/undefined/NaN.
@@ -69,16 +74,30 @@ const toDate = (value) => {
 };
 
 /**
- * `01 Oct 2026, 10:00 UTC`.
- * @param {string | number | Date | null | undefined} value
+ * The en-US date and time format of a time zone; UTC for UTC, a missing or an unknown zone.
+ * @param {string | null | undefined} timeZone IANA time zone
  */
-export const formatDateTime = (value) => {
-	const d = toDate(value);
-	return d ? `${DATE_TIME.format(d)} UTC` : '—';
+const dateTimeIn = (timeZone) => {
+	if (!timeZone || timeZone === 'UTC') return DATE_TIME;
+	try {
+		return new Intl.DateTimeFormat('en-US', { ...DATE_TIME_PARTS, timeZone });
+	} catch {
+		return DATE_TIME;
+	}
 };
 
 /**
- * `01 Oct 2026`.
+ * `Oct 1, 2026, 10:00 AM UTC`; with `timeZone`, the same style in that zone (`Oct 1, 2026, 6:00 AM EDT`).
+ * @param {string | number | Date | null | undefined} value
+ * @param {{ timeZone?: string | null }} [options] IANA time zone (default UTC)
+ */
+export const formatDateTime = (value, { timeZone } = {}) => {
+	const d = toDate(value);
+	return d ? dateTimeIn(timeZone).format(d).replace(NO_BREAK_SPACES, ' ') : '—';
+};
+
+/**
+ * `Oct 1, 2026` (UTC).
  * @param {string | number | Date | null | undefined} value
  */
 export const formatDate = (value) => {

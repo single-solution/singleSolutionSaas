@@ -53,7 +53,7 @@ const CONTROL =
 /** One height for single-line controls, the same as a medium button, so they line up in a row. */
 const LINE = 'h-9 py-0';
 
-/** A colour input: the whole control is the swatch. */
+/** A color input: the whole control is the swatch. */
 const COLOR =
 	'cursor-pointer p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg ' +
 	'[&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-0';
@@ -293,7 +293,7 @@ export function Select({
 }
 
 // Checkboxes and radios are drawn by the kit, so they look the same in every browser and theme: a hairline box at
-// rest, the accent fill (a tick, or a ring for a radio) when chosen, the accent edge on hover.
+// rest, the accent fill (a check mark, or a ring for a radio) when chosen, the accent edge on hover.
 const BOX =
 	'size-[18px] shrink-0 cursor-pointer appearance-none border border-line-strong bg-surface ss-motion hover:border-primary ' +
 	'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50';

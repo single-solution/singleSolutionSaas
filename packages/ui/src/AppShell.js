@@ -5,7 +5,7 @@
  * (switchers on the left, account actions and the System / Light / Dark theme switch on the right) that stays on top of
  * the page as it scrolls, both with space around them. The switchers keep at least 10rem on one line with the menu
  * button; where that and the actions do not fit, the actions move to a second row. The top bar and the page share one
- * width (at most 1200 px, centred beside the sidebar) and one rhythm (24 px between blocks); the components inside
+ * width (at most 1200 px, centered beside the sidebar) and one rhythm (24 px between blocks); the components inside
  * follow the width they get (container queries), not the screen's. Below 1024 px (`lg`, PLAN 0.6 Phones and tablets) the sidebar becomes an off-canvas panel opened by
  * the menu button.
  * Includes a skip link to the main content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
@@ -25,7 +25,7 @@ import { ThemeToggle } from './theme.js';
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {import('./display.js').Kind} Kind */
 /**
- * A menu link; its icon sits in a small tile, in the accent tint when the link has a `kind` (PLAN 0.6 colour rule).
+ * A menu link; its icon sits in a small tile, in the accent tint when the link has a `kind` (PLAN 0.6 color rule).
  * @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, kind?: Kind, current?: boolean, badge?: ReactNode }} NavItem
  */
 /** @typedef {{ label?: string, items: NavItem[] }} NavSection */

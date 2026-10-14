@@ -36,12 +36,34 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(parseCredits('').ok).toBe(false);
 	});
 	it('formats dates and codes', () => {
-		expect(formatDateTime('2026-10-01T10:05:00Z')).toBe('01 Oct 2026, 10:05 UTC');
+		expect(formatDateTime('2026-10-01T10:05:00Z')).toBe('Oct 1, 2026, 10:05 AM UTC');
+		expect(formatDateTime('2026-10-04T14:30:00Z')).toBe('Oct 4, 2026, 2:30 PM UTC');
+		expect(formatDateTime(Date.UTC(2026, 9, 4, 0, 5))).toBe('Oct 4, 2026, 12:05 AM UTC');
 		expect(formatDateTime(null)).toBe('—');
 		expect(formatDateTime('nope')).toBe('—');
-		expect(formatDate(new Date(Date.UTC(2026, 0, 2)))).toBe('02 Jan 2026');
+		expect(formatDate(new Date(Date.UTC(2026, 0, 2)))).toBe('Jan 2, 2026');
+		expect(formatDate('2026-10-04T23:30:00Z')).toBe('Oct 4, 2026');
+		expect(formatDate(null)).toBe('—');
 		expect(humanize('low_balance')).toBe('Low balance');
 		expect(humanize(null)).toBe('');
+	});
+});
+
+describe("date and time in a time zone (the viewer's local time)", () => {
+	it("keeps the same en-US style with the zone's short name", () => {
+		expect(formatDateTime('2026-10-04T14:30:00Z', { timeZone: 'America/New_York' })).toBe('Oct 4, 2026, 10:30 AM EDT');
+		expect(formatDateTime('2026-01-04T14:30:00Z', { timeZone: 'America/New_York' })).toBe('Jan 4, 2026, 9:30 AM EST');
+		expect(formatDateTime('2026-10-04T14:30:00Z', { timeZone: 'Asia/Tokyo' })).toBe('Oct 4, 2026, 11:30 PM GMT+9');
+		// the day changes with the zone
+		expect(formatDateTime('2026-10-04T20:30:00Z', { timeZone: 'Asia/Tokyo' })).toBe('Oct 5, 2026, 5:30 AM GMT+9');
+	});
+	it('falls back to UTC for UTC, a missing or an unknown zone', () => {
+		for (const timeZone of ['UTC', '', null, undefined, 'Not/AZone'])
+			expect(formatDateTime('2026-10-04T14:30:00Z', { timeZone })).toBe('Oct 4, 2026, 2:30 PM UTC');
+		expect(formatDateTime(null, { timeZone: 'Asia/Tokyo' })).toBe('—');
+	});
+	it('uses plain spaces only (the same text on the server and in browsers)', () => {
+		expect(formatDateTime('2026-10-04T14:30:00Z', { timeZone: 'Europe/London' })).not.toMatch(/[\u00a0\u202f]/);
 	});
 });
 
@@ -77,8 +99,8 @@ describe('problem documents', () => {
 	});
 	it('describes problems in friendly words', () => {
 		expect(describeProblem(validation)).toBe('Some fields need your attention.');
-		expect(describeProblem({ type: '/problems/invalid_credentials', detail: 'The e-mail or password is incorrect.' })).toBe(
-			'The e-mail or password is incorrect.',
+		expect(describeProblem({ type: '/problems/invalid_credentials', detail: 'The email or password is incorrect.' })).toBe(
+			'The email or password is incorrect.',
 		);
 		expect(describeProblem({ type: '/problems/catalog_launch_refused', detail: 'the launch has expired' })).toBe(
 			'the launch has expired',

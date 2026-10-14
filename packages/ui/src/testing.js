@@ -98,7 +98,7 @@ export const byText = (root, text, selector) => {
 };
 
 /**
- * Control labelled `label` (via <label for>).
+ * Control labeled `label` (via <label for>).
  * @param {ParentNode} root
  * @param {string} label
  * @returns {HTMLInputElement}

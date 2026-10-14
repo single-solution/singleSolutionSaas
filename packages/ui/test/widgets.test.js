@@ -93,18 +93,18 @@ describe('buttons and fields', () => {
 	it('Input, TextArea and Select associate labels, help and errors', () => {
 		const { container } = render(
 			<div>
-				<Input label="E-mail" help="We never share it" error="Enter an e-mail address." required suffix="@" />
+				<Input label="Email" help="We never share it" error="Enter an email address." required suffix="@" />
 				<TextArea label="Notes" />
 				<Select label="Size" placeholder="Pick one" options={[{ value: 'a', label: 'A' }]} defaultValue="" />
 			</div>,
 		);
-		const email = byLabel(container, 'E-mail');
+		const email = byLabel(container, 'Email');
 		expect(email.required).toBe(true);
 		expect(email.getAttribute('aria-invalid')).toBe('true');
 		const described = String(email.getAttribute('aria-describedby')).split(' ');
 		expect(described.map((id) => document.getElementById(id)?.textContent)).toEqual([
 			'We never share it',
-			'Enter an e-mail address.',
+			'Enter an email address.',
 		]);
 		expect(container.textContent).toContain('@');
 		expect(byLabel(container, 'Notes').tagName).toBe('TEXTAREA');
@@ -509,7 +509,7 @@ describe('widths follow the container', () => {
 		expect(render(<StatGrid />).container.querySelector('[role="group"]')).toBeNull();
 	});
 
-	it('SoftBreaks lets a domain or e-mail wrap between its parts without changing the text', () => {
+	it('SoftBreaks lets a domain or email wrap between its parts without changing the text', () => {
 		const { container } = render(
 			<p>
 				<SoftBreaks text="shop.example.com" />|<SoftBreaks text="a@b.c/d" />|<SoftBreaks text="plain" />
@@ -711,7 +711,7 @@ describe('toasts, code blocks and forms', () => {
 			return (
 				<Form onSubmit={onSubmit}>
 					<Input
-						label="E-mail"
+						label="Email"
 						value={email}
 						onChange={(e) => setEmail(e.currentTarget.value)}
 						error={problem ? fieldErrors(problem).email : undefined}
@@ -722,7 +722,7 @@ describe('toasts, code blocks and forms', () => {
 			);
 		}
 		const { container } = render(<Harness />);
-		type(byLabel(container, 'E-mail'), 'a@b.co');
+		type(byLabel(container, 'Email'), 'a@b.co');
 		act(() => {
 			container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 		});
@@ -732,13 +732,13 @@ describe('toasts, code blocks and forms', () => {
 				type: 'https://portal.test/problems/validation_failed',
 				status: 422,
 				errors: [
-					{ path: '/email', message: 'must be an e-mail address' },
+					{ path: '/email', message: 'must be an email address' },
 					{ path: '/other', message: 'bad' },
 				],
 			}),
 		);
 		expect(container.textContent).toContain('Some fields need your attention.');
-		expect(container.textContent).toContain('Must be an e-mail address.');
+		expect(container.textContent).toContain('Must be an email address.');
 		expect(container.querySelector('li')?.textContent).toContain('other');
 	});
 });

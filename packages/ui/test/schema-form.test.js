@@ -236,7 +236,7 @@ describe('SchemaForm', () => {
 		expect(onChange).toHaveBeenLastCalledWith('theme', 'c');
 	});
 
-	it('maps errors onto fields, offers reset of overrides and honours disabled', () => {
+	it('maps errors onto fields, offers reset of overrides and honors disabled', () => {
 		const schema = coupons();
 		const onReset = vi.fn();
 		const { container, rerender } = render(

@@ -12,14 +12,14 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | `@ss/ui/theme.css` | the design tokens                                                                                                          |
 | `@ss/ui/testing`   | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
 
-## Colour rule
+## Color rule
 
 One accent (PLAN.md 0.6): indigo (`primary`) is used for primary buttons, links, the active item, icon tiles and
 badges; surfaces are neutral; green, amber and red mean status only (`tone` `success`, `warning`, `danger`). `IconBadge`,
 `Stat`, `Badge`, `EmptyState` and `AppShell` menu items take a `kind` (`overview`, `merchant`, `website`, `product`,
 `feature`, `credit`, `price`, `admin`, `settings`, `default`, `activity`, `connection`, `developer`) that names the thing;
 every kind takes the same indigo tint (`primary-soft`), and leaving `kind` out keeps the item neutral. No screen names a
-colour for meaning. The `hero` card is solid indigo.
+color for meaning. The `hero` card is solid indigo.
 
 ## Widths: containers, not the screen
 
@@ -35,12 +35,12 @@ it is the menu button.
 - `PageHeader` keeps its actions beside the title while both fit on one line, else moves them together under it.
 - `Table` cells keep one line (a column with `wrap` wraps on whole words within 10rem); a table wider than its card
   scrolls inside it. With no rows it shows only its empty message.
-- `<SoftBreaks text>` lets a domain, e-mail or path wrap between its parts (`<wbr>` after dots, `@` and slashes).
+- `<SoftBreaks text>` lets a domain, email or path wrap between its parts (`<wbr>` after dots, `@` and slashes).
 
 ## Masonry and the More menu
 
 `<Masonry columns? as? label?>` lays cards of different heights out in CSS columns (1, 2 from a 42rem container, 3 from
-72rem; `columns={2}` stops at two) with every card kept whole, so no card stretches to a taller neighbour; with
+72rem; `columns={2}` stops at two) with every card kept whole, so no card stretches to a taller neighbor; with
 `wideAlone` a lone card takes the whole width (a settings section with one form). Settings pages, website cards and the
 product dashboards' card lists use it.
 
@@ -89,8 +89,15 @@ product checks every value when it is saved, and its field errors are passed in 
 
 ## StatusBadge
 
-`<StatusBadge status label? />` colours the statuses of PLAN.md 0.5.5: `active` green, `low_balance` and `grace` amber,
-`stopped` and `suspended` red, `removed` grey; any other status is grey unless listed in `display.js`.
+`<StatusBadge status label? />` colors the statuses of PLAN.md 0.5.5: `active` green, `low_balance` and `grace` amber,
+`stopped` and `suspended` red, `removed` gray; any other status is gray unless listed in `display.js`.
+
+## Dates and credits
+
+One style for the Portal and every dashboard, in US English: `formatDate` gives `Oct 4, 2026` and `formatDateTime`
+gives `Oct 4, 2026, 2:30 PM UTC` (UTC, so the server and the browser render the same text). With
+`formatDateTime(value, { timeZone })` the same style shows another time zone with its short name
+(`Oct 4, 2026, 10:30 AM EDT`), for the viewer's local time once the page runs. `formatCredits` gives `12.5 credits`.
 
 ## Check
 

@@ -1,6 +1,6 @@
 'use client';
 /**
- * Modal dialog: `role="dialog"` + `aria-modal`, labelled by its title, traps focus (Tab / Shift+Tab cycle inside), close on Escape and on backdrop click, lock page scroll,
+ * Modal dialog: `role="dialog"` + `aria-modal`, labeled by its title, traps focus (Tab / Shift+Tab cycle inside), close on Escape and on backdrop click, lock page scroll,
  * and restore focus to the element that opened them. The backdrop fades and the dialog scales in (slides up as a sheet
  * on phones), and both animate out when it closes (PLAN 0.6 motion).
  * @module
@@ -87,7 +87,7 @@ export const useFocusTrap = (ref, open, onClose) => {
  */
 
 /**
- * Centred modal dialog (bottom sheet on small screens).
+ * Centered modal dialog (bottom sheet on small screens).
  * @param {OverlayProps} props
  */
 export function Dialog({

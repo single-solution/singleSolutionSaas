@@ -1,6 +1,6 @@
 'use client';
 /**
- * Colour theme switch: the OS setting by default (`prefers-color-scheme`, see theme.css), or a stored choice.
+ * Color theme switch: the OS setting by default (`prefers-color-scheme`, see theme.css), or a stored choice.
  * `ThemeToggle` is the System / Light / Dark switch of the console header; the choice is kept in `localStorage` (when
  * storage is blocked the OS setting applies) and applied before paint by `ThemeScript` (theme-script.js).
  * @module
