@@ -813,6 +813,43 @@ describe('reports', () => {
 	});
 });
 
+describe('formatted answers in the inbox (C2)', () => {
+	it('shows AI and staff answers as the visitor sees them; the visitor’s text and notes stay plain', async () => {
+		const { hosts } = await startAdmin({
+			features: ['inbox', 'internal_notes'],
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], hasMore: false, unread: 0 }),
+				'GET /v1/admin/conversations/c1': () =>
+					answer(200, {
+						conversation: full(),
+						messages: [
+							message(1, 'visitor', { text: '**need** <b>help</b>', format: 'text' }),
+							message(2, 'ai', {
+								text: 'We have:\n1. **Red**\n2. Blue\n\n| A | B |\n|---|---|\n| 1 | 2 |\n\n[Open](https://shop.test/p) [x](javascript:x)',
+								format: 'markdown',
+							}),
+							message(3, 'staff', { text: 'Done, see `A-1001`', format: 'markdown' }),
+							message(4, 'staff', { text: '**note** as typed', internal: true, format: 'text' }),
+						],
+					}),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+			},
+		});
+		const root = shadow(hosts.inbox);
+		await click(buttonIn(root, 'Ana'));
+		const ai = /** @type {HTMLElement} */ (root.querySelector('.log li.ai > .rich'));
+		expect(textsIn(ai, 'ol li')).toEqual(['Red', 'Blue']);
+		expect(textsIn(ai, '.table th, .table td')).toEqual(['A', 'B', '1', '2']);
+		expect([...ai.querySelectorAll('a')].map((link) => [link.getAttribute('href'), link.target, link.rel])).toEqual([
+			['https://shop.test/p', '_blank', 'noopener noreferrer nofollow'],
+		]);
+		expect(root.querySelector('.log li[data-seq="3"] > .rich code')?.textContent).toBe('A-1001');
+		expect(textsIn(root, '.log li.visitor > p')).toEqual(['**need** <b>help</b>']);
+		expect(textsIn(root, '.log li.note > p')).toEqual(['**note** as typed']);
+		expect(root.querySelectorAll('.log li.visitor .rich, .log li.note .rich, .log b')).toHaveLength(0);
+	});
+});
+
 describe('context panel shop info', () => {
 	/** @param {unknown} shop */
 	const open = async (shop) => {

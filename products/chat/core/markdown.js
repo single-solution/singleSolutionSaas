@@ -1,24 +1,30 @@
 /**
  * Rich answers (PLAN 0.8.10 C2; pure): AI and staff messages carry `format: 'markdown'` with a small subset — bold,
- * italic, lists, tables and links. The server keeps a link only when it is site-relative, on the website's own domain,
- * or allowed by the moderation link policy (while moderation is on); any other link keeps just its label. An AI answer
- * splits on `---` lines (and around tables, with `tableBubble`, CH-21) into at most `bubbles` messages. The widgets
- * render the parsed blocks as DOM nodes, never as HTML.
+ * italic, code, lists, tables and links. The server keeps a link only when it is site-relative, on the website's own
+ * domain, or allowed by the moderation link policy (while moderation is on); any other link keeps just its label. An AI
+ * answer splits on `---` lines (and around tables, with `tableBubble`, CH-21) into at most `bubbles` messages. The
+ * widgets render the parsed blocks as DOM nodes, never as HTML (`ui/rich.js`); there are no images and no raw HTML.
  * @module
  */
 
-/** @typedef {{ t: 'text', v: string } | { t: 'b' | 'i', c: Inline[] } | { t: 'a', href: string, c: Inline[] }} Inline */
+/**
+ * @typedef {{ t: 'text', v: string } | { t: 'code', v: string } | { t: 'b' | 'i', c: Inline[] }
+ *   | { t: 'a', href: string, c: Inline[] }} Inline
+ */
 /**
  * @typedef {{ kind: 'p', lines: Inline[][] } | { kind: 'ul' | 'ol', items: Inline[][] }
- *   | { kind: 'table', head: Inline[][], rows: Inline[][][] }} Block
+ *   | { kind: 'table', head: Inline[][], rows: Inline[][][] } | { kind: 'code', text: string }} Block
  */
 
 const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/;
 const LIST_ITEM = /^[ \t]*(?:([-*+])|(\d{1,3})[.)])[ \t]+(.*)$/;
 const TABLE_RULE = /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/;
+const FENCE = /^[ \t]*```/;
 const MARKDOWN_LINK = /\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)/g;
 const INLINE =
-	/\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|\*([^*\n]+?)\*|(?<![\p{L}\p{N}])_([^_\n]+?)_(?![\p{L}\p{N}])/gu;
+	/\[([^\]\n]{1,300})\]\(([^)\s]{1,2048})\)|\*\*([^*\n]+?)\*\*|__([^_\n]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_(?![\p{L}\p{N}])|`([^`\n]+)`/gu;
+/** A letter or digit right before a `_` (snake_case, no mark). A test, not a lookbehind: the widget bundle runs this. */
+const WORD_END = /[\p{L}\p{N}]$/u;
 
 /**
  * Is this line the start of a markdown table (a row, then a rule line)?
@@ -123,22 +129,29 @@ export const safeHref = (target) => {
 };
 
 /**
- * Inline marks of one line.
+ * Inline marks of one line; inside `code` nothing is a mark. A link keeps its target only through `safeHref`, else just
+ * its label.
  * @param {string} text
  * @returns {Inline[]}
  */
 export const parseInline = (text) => {
 	/** @type {Inline[]} */
 	const out = [];
+	const pattern = new RegExp(INLINE); // a lastIndex of its own: marks are parsed inside marks
 	let at = 0;
-	for (const match of text.matchAll(INLINE)) {
-		const index = match.index ?? 0;
+	for (let match = pattern.exec(text); match !== null; match = pattern.exec(text)) {
+		const { index } = match;
+		const [whole, label, target, bold1, bold2, italic1, italic2, code] = match;
+		if (italic2 !== undefined && WORD_END.test(text.slice(Math.max(0, index - 2), index))) {
+			pattern.lastIndex = index + 1;
+			continue;
+		}
 		if (index > at) out.push({ t: 'text', v: text.slice(at, index) });
-		const [whole, label, target, bold1, bold2, italic1, italic2] = match;
 		if (label !== undefined && target !== undefined) {
 			const href = safeHref(target);
 			out.push(href ? { t: 'a', href, c: parseInline(label) } : { t: 'text', v: label });
-		} else if (bold1 !== undefined || bold2 !== undefined) out.push({ t: 'b', c: parseInline(String(bold1 ?? bold2)) });
+		} else if (code !== undefined) out.push({ t: 'code', v: code });
+		else if (bold1 !== undefined || bold2 !== undefined) out.push({ t: 'b', c: parseInline(String(bold1 ?? bold2)) });
 		else out.push({ t: 'i', c: parseInline(String(italic1 ?? italic2)) });
 		at = index + whole.length;
 	}
@@ -156,8 +169,8 @@ const cellsOf = (line) =>
 		.map((cell) => parseInline(cell.trim()));
 
 /**
- * The blocks of a markdown message: paragraphs (single newlines kept), bullet and numbered lists, and tables;
- * headings (`#`) become bold paragraphs.
+ * The blocks of a markdown message: paragraphs (single newlines kept), bullet and numbered lists, tables and code
+ * between ``` lines (to the end when not closed); headings (`#`) become bold paragraphs.
  * @param {string} text
  * @returns {Block[]}
  */
@@ -178,6 +191,18 @@ export const parseMarkdown = (text) => {
 		const next = lines[i + 1];
 		if (line.trim() === '' || SEPARATOR.test(line)) {
 			endParagraph();
+			continue;
+		}
+		if (FENCE.test(line)) {
+			endParagraph();
+			/** @type {string[]} */
+			const code = [];
+			while (i + 1 < lines.length && !FENCE.test(String(lines[i + 1]))) {
+				i += 1;
+				code.push(String(lines[i]));
+			}
+			i += 1;
+			blocks.push({ kind: 'code', text: code.join('\n') });
 			continue;
 		}
 		if (tableStarts(line, next)) {
@@ -224,6 +249,8 @@ export const plainOf = (text) =>
 		.replace(MARKDOWN_LINK, '$1')
 		.replace(/\*\*([^*\n]+?)\*\*|__([^_\n]+?)__/g, (_m, a, b) => a ?? b)
 		.replace(/(^|[^*])\*([^*\n]+?)\*/g, '$1$2')
+		.replace(/`([^`\n]+)`/g, '$1')
+		.replace(/^[ \t]*```.*$/gm, '')
 		.replace(/^[ \t]*-{3,}[ \t]*$/gm, '')
 		.replace(/^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/gm, '')
 		.replace(/^[ \t]*#{1,6}[ \t]+/gm, '')

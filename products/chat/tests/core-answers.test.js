@@ -72,6 +72,30 @@ describe('markdown and bubbles (C2)', () => {
 		expect(parseMarkdown('- a\n\n- b')).toHaveLength(2);
 		expect(plainOf('**Hi** [x](/y)\n---\n# T\n| a |\n| --- |\n*i*')).toBe('Hi x\n\nT\n| a |\n\ni');
 	});
+
+	it('parses code: no marks inside, fenced lines kept as they are (to the end when not closed)', () => {
+		expect(parseInline('run `a*b*_c_ [x](/y)` now **`k`**')).toEqual([
+			{ t: 'text', v: 'run ' },
+			{ t: 'code', v: 'a*b*_c_ [x](/y)' },
+			{ t: 'text', v: ' now ' },
+			{ t: 'b', c: [{ t: 'code', v: 'k' }] },
+		]);
+		expect(parseMarkdown('Try:\n```js\nconst a = **1**;\n\n- x\n---\n```\nafter\n```\nopen')).toEqual([
+			{ kind: 'p', lines: [[{ t: 'text', v: 'Try:' }]] },
+			{ kind: 'code', text: 'const a = **1**;\n\n- x\n---' },
+			{ kind: 'p', lines: [[{ t: 'text', v: 'after' }]] },
+			{ kind: 'code', text: 'open' },
+		]);
+		expect(plainOf('Use `CODE10` today\n```\nx\n```')).toBe('Use CODE10 today\n\nx');
+	});
+
+	it('keeps _ inside words (also after a letter beyond one UTF-16 unit) as text', () => {
+		expect(parseInline('size_a_ x𝐀_b_ (_c_)')).toEqual([
+			{ t: 'text', v: 'size_a_ x𝐀_b_ (' },
+			{ t: 'i', c: [{ t: 'text', v: 'c' }] },
+			{ t: 'text', v: ')' },
+		]);
+	});
 });
 
 describe('fallback answers (C3)', () => {

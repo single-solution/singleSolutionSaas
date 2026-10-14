@@ -1,7 +1,8 @@
 /**
  * The admin widget `inbox` (permissions `inbox.read`, `inbox.reply`, `inbox.manage`): conversations newest activity
  * first, with filters (status, assigned, waiting, guest or signed in), search and unread counts; a conversation with
- * its messages and internal notes, reply (with attachments of the staff file types and size, C12, and saved replies), notes, status, AI paused, Hand back to
+ * its messages (AI and staff answers formatted as the visitor sees them) and internal notes, reply (with attachments of
+ * the staff file types and size, C12, and saved replies), notes, status, AI paused, Hand back to
  * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context
  * panel with the AI summary, transcripts and rating requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
  * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
@@ -28,6 +29,7 @@ import {
 } from './common.js';
 import { element } from './dom.js';
 import { contextPart, savedReplies, staffPart } from './inbox-parts.js';
+import { messageBody } from './rich.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
 import { createChecks } from './transport.js';
@@ -346,7 +348,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				const line = element(doc, 'span', { class: 'who' }, who);
 				if (message.internal) line.append(' ', element(doc, 'span', { class: 'tag' }, t('inbox.note')));
 				node.append(line);
-				if (message.text) node.append(element(doc, 'p', {}, message.text));
+				if (message.text) node.append(messageBody(doc, message));
 				if (message.attachment) node.append(attachmentNode(doc, message.attachment));
 				node.append(element(doc, 'span', { class: 'meta' }, when(message.createdAt)));
 				return node;

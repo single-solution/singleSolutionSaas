@@ -1,7 +1,8 @@
 /**
  * The widgets' CSS, injected into their shadow roots only. Colours, font and corner radius come from the website's
  * theme (`--ss-color-<name>`, `--ss-font-family`, `--ss-radius`), with fallbacks for light and dark. Usable on phones
- * from 360 px wide; the visitor chat goes full screen on phones when the merchant chose it.
+ * from 360 px wide; the visitor chat goes full screen on phones when the merchant chose it. Formatted answers (`.rich`)
+ * wrap long words and links, and their tables and code scroll inside the bubble.
  * @module
  */
 export const WIDGET_CSS = `
@@ -54,10 +55,20 @@ p { overflow-wrap: anywhere; }
   background: var(--on-accent); color: var(--accent); font-weight: 600; }
 .window .log { flex: 1; overflow-y: auto; padding: 8px 12px; }
 .msg { border: 0; padding: 4px 0; display: flex; flex-direction: column; align-items: flex-start; }
-.msg p { margin: 0; padding: 8px 12px; border-radius: var(--r); background: var(--soft); max-width: 85%; white-space: pre-wrap; }
-.msg.visitor { align-items: flex-end; } .msg.visitor p { background: var(--accent); color: var(--on-accent); }
-.msg.system p { background: transparent; font-size: 0.85em; opacity: 0.8; }
-.msg.note p { border: 1px dashed var(--line); background: transparent; }
+.msg > p, .msg > .rich { margin: 0; padding: 8px 12px; border-radius: var(--r); background: var(--soft); max-width: 85%;
+  box-sizing: border-box; } .msg > p { white-space: pre-wrap; }
+.msg.visitor { align-items: flex-end; } .msg.visitor > p { background: var(--accent); color: var(--on-accent); }
+.msg.system > p { background: transparent; font-size: 0.85em; opacity: 0.8; }
+.msg.note > p, .msg.note > .rich { border: 1px dashed var(--line); background: transparent; }
+.rich { min-width: 0; overflow-wrap: anywhere; } .rich > * { margin: 0; } .rich > * + * { margin-top: 8px; }
+.rich ul { list-style: disc; padding-left: 20px; } .rich ol { list-style: decimal; padding-left: 24px; }
+.rich li { padding: 0; border: 0; }
+.rich code { font-family: ui-monospace, monospace; font-size: 0.9em; padding: 0 4px; border-radius: 4px; background: var(--bg); }
+.rich pre { overflow-x: auto; padding: 8px; border-radius: var(--r); background: var(--bg); }
+.rich pre code { padding: 0; }
+.rich .table { overflow-x: auto; }
+.rich table { border-collapse: collapse; overflow-wrap: normal; font-size: 0.9em; }
+.rich th, .rich td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; min-width: 4em; }
 .msg img { max-width: 220px; border-radius: var(--r); margin-top: 4px; }
 .cards { display: flex; gap: 8px; overflow-x: auto; max-width: 100%; margin-top: 4px; padding-bottom: 4px; }
 .card { flex: 0 0 148px; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line);

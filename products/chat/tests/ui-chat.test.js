@@ -898,3 +898,54 @@ describe('product cards', () => {
 		expect(root.querySelector('.card')).toBeNull();
 	});
 });
+
+describe('formatted answers (C2)', () => {
+	const VISITOR = '**Is it** <b>in</b> [stock](https://shop.example.com)?\n- yes';
+	const ANSWER = [
+		'**Phone X** is in stock:',
+		'- 128 GB',
+		'- 256 GB',
+		'',
+		'| Size | Price |',
+		'| --- | --- |',
+		'| 128 GB | `PKR 10` |',
+		'',
+		'[See it](https://shop.example.com/p/x) or [this](javascript:alert%281%29) <img src=x onerror=alert(1)>',
+	].join('\n');
+
+	it('shows AI and staff answers formatted and the visitor’s own text exactly as typed', async () => {
+		keepGuest();
+		const { root, api } = await start({
+			features: ['visitor_chat', 'guest_chat', 'ai_replies'],
+			routes: {
+				'GET /v1/chat': () =>
+					answer(200, {
+						...view(),
+						messages: [
+							msg(1, 'visitor', VISITOR, { format: 'text' }),
+							msg(2, 'ai', ANSWER, { format: 'markdown' }),
+							msg(3, 'staff', 'Thanks, *Ana* here.', { name: 'Ana', format: 'markdown' }),
+							msg(4, 'visitor', '__also__ plain', { format: 'markdown' }),
+						],
+					}),
+				'POST /v1/chat/read': () => answer(204),
+			},
+		});
+		await api.open();
+		const ai = /** @type {HTMLElement} */ (root.querySelector('.msg.ai:not(.welcome) > .rich'));
+		expect(ai.querySelector('p strong')?.textContent).toBe('Phone X');
+		expect(textsIn(ai, 'ul li')).toEqual(['128 GB', '256 GB']);
+		expect(textsIn(ai, '.table th')).toEqual(['Size', 'Price']);
+		expect(textsIn(ai, '.table td')).toEqual(['128 GB', 'PKR 10']);
+		expect(ai.querySelector('td code')?.textContent).toBe('PKR 10');
+		const links = [...ai.querySelectorAll('a')];
+		expect(links.map((link) => [link.textContent, link.getAttribute('href'), link.target, link.rel])).toEqual([
+			['See it', 'https://shop.example.com/p/x', '_blank', 'noopener noreferrer nofollow'],
+		]);
+		expect(ai.textContent).toContain('or this <img src=x onerror=alert(1)>');
+		expect(ai.querySelector('img')).toBeNull();
+		expect(root.querySelector('.msg.staff > .rich em')?.textContent).toBe('Ana');
+		expect(textsIn(root, '.msg.visitor > p')).toEqual([VISITOR, '__also__ plain']);
+		expect(root.querySelectorAll('.msg.visitor .rich, .msg.visitor strong, .msg.visitor a, .msg.visitor li')).toHaveLength(0);
+	});
+});
