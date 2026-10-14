@@ -48,7 +48,8 @@ The exact API is in [API.md](./API.md).
   sealed (K-21; their public keys readable); keys kept in clear before are sealed on their next use.
 - **Merchant database** — guarded access (`websiteId` on every query, no cross-collection stages, inserts stamped
   with `websiteId` and `merchantId`; Atlas Search only as a first `$search` whose compound filter pins the website) to
-  collections `ss_<product id>_<name>`.
+  collections `ss_<product id>_<name>`; the product's declared indexes are the truth (a changed or retired index of a
+  collection it declares indexes for is replaced on a database's first use per instance, no record is changed).
 - **business.json**, **data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
   Accounts, **Recent changes**.
 - **Product dashboard** — `GET /sso?launch=` sessions, the switcher, roles and the dashboard API every product's

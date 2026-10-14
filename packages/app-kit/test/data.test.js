@@ -11,6 +11,7 @@ import {
 	guardUpdate,
 	isDatabaseUnavailable,
 	planIndexes,
+	sameIndex,
 } from '../src/data.js';
 import { kitError } from '../src/util.js';
 import { createTestLogger, freshDb, mongoUri } from './helpers.js';
@@ -267,6 +268,121 @@ describe('merchant database (MongoDB)', () => {
 		} finally {
 			spy.mockRestore();
 		}
+	});
+
+	it("makes the product's declared indexes the truth: changed and retired ones are replaced, nothing else is touched", async () => {
+		const dbName = freshDb('indexes');
+		const db = client.db(dbName);
+		/** A new instance of the product on this database, with these declared indexes. @param {any[]} indexes */
+		const instance = (indexes) => {
+			const { logger, entries } = createTestLogger();
+			const data = createData({
+				productId: 'coupon-box',
+				uriOf: async () => mongoUri(dbName),
+				logger,
+				policy: createOutboundPolicy({ allowHosts: ['127.0.0.1'] }),
+				idleMs: 0,
+				indexes,
+			});
+			return { data, entries };
+		};
+		/** @param {string} name */
+		const indexesOf = async (name) =>
+			Object.fromEntries(
+				(await db.collection(name).indexes())
+					.filter((index) => index.name !== '_id_')
+					.map((index) => [
+						index.name,
+						{
+							key: index.key,
+							...(index.unique ? { unique: true } : {}),
+							...(index.partialFilterExpression ? { partial: index.partialFilterExpression } : {}),
+							...(index.expireAfterSeconds !== undefined ? { ttl: index.expireAfterSeconds } : {}),
+						},
+					]),
+			);
+		/** @type {import('../src/index.js').IndexDefinition[]} */
+		const before = [
+			{ collection: 'coupons', keys: { websiteId: 1, code: 1 }, name: 'by_code' },
+			{ collection: 'coupons', keys: { websiteId: 1, slug: 1 }, name: 'by_slug', unique: true },
+			{
+				collection: 'coupons',
+				keys: { websiteId: 1, at: -1 },
+				name: 'by_at',
+				partialFilterExpression: { at: { $type: 'date' }, active: true },
+			},
+			{ collection: 'sessions', keys: { expiresAt: 1 }, name: 'ttl', expireAfterSeconds: 60 },
+		];
+		const first = instance(before);
+		const site = await first.data.forWebsite(WEBSITE);
+		await site.collection('coupons').insertMany([{ code: 'A', slug: 'a' }, { code: 'B' }]);
+		// another product's collection and a collection this product declares nothing for are never touched
+		await db.collection('ss_other_coupons').createIndex({ websiteId: 1, code: 1 }, { name: 'by_code' });
+		await db.collection('ss_coupon_box_notes').createIndex({ websiteId: 1, at: 1 }, { name: 'by_at' });
+		await first.data.closeAll();
+
+		// the next release: by_code becomes unique, by_slug is retired for a per-category one, the TTL changes
+		/** @type {import('../src/index.js').IndexDefinition[]} */
+		const after = [
+			{ collection: 'coupons', keys: { websiteId: 1, code: 1 }, name: 'by_code', unique: true },
+			{ collection: 'coupons', keys: { websiteId: 1, categoryId: 1, slug: 1 }, name: 'by_category_slug', unique: true },
+			{
+				collection: 'coupons',
+				keys: { websiteId: 1, at: -1 },
+				name: 'by_at',
+				partialFilterExpression: { at: { $type: 'date' }, active: true },
+			},
+			{ collection: 'sessions', keys: { expiresAt: 1 }, name: 'ttl', expireAfterSeconds: 3600 },
+		];
+		const second = instance(after);
+		const upgraded = await second.data.forWebsite(WEBSITE);
+		expect(await indexesOf('ss_coupon_box_coupons')).toEqual({
+			by_code: { key: { websiteId: 1, code: 1 }, unique: true },
+			by_category_slug: { key: { websiteId: 1, categoryId: 1, slug: 1 }, unique: true },
+			by_at: { key: { websiteId: 1, at: -1 }, partial: { at: { $type: 'date' }, active: true } },
+		});
+		expect(await indexesOf('ss_coupon_box_sessions')).toEqual({ ttl: { key: { expiresAt: 1 }, ttl: 3600 } });
+		expect(second.entries.find((entry) => entry.msg === 'merchant database indexes replaced')?.fields).toEqual({
+			dropped: ['ss_coupon_box_coupons.by_code', 'ss_coupon_box_coupons.by_slug', 'ss_coupon_box_sessions.ttl'],
+		});
+		expect(Object.keys(await indexesOf('ss_other_coupons'))).toEqual(['by_code']);
+		expect(Object.keys(await indexesOf('ss_coupon_box_notes'))).toEqual(['by_at']);
+		// no record changed; a missing field reads as null, so the new index needs no backfill
+		expect(await upgraded.collection('coupons').countDocuments({ websiteId: WEBSITE, categoryId: null })).toBe(2);
+		await expect(upgraded.collection('coupons').insertOne({ code: 'A' })).rejects.toMatchObject({ code: 11000 });
+		await second.data.closeAll();
+
+		// an instance of the same release finds everything as declared: nothing dropped or created
+		const third = instance(after);
+		const dropIndex = vi.spyOn(Collection.prototype, 'dropIndex');
+		const createIndexes = vi.spyOn(Collection.prototype, 'createIndexes');
+		try {
+			await third.data.forWebsite(WEBSITE);
+			expect(dropIndex).not.toHaveBeenCalled();
+			expect(createIndexes).not.toHaveBeenCalled();
+			expect(third.entries.some((entry) => entry.msg === 'merchant database indexes replaced')).toBe(false);
+		} finally {
+			dropIndex.mockRestore();
+			createIndexes.mockRestore();
+			await third.data.closeAll();
+		}
+	});
+
+	it('compares an index found with the one declared by keys in order and options', () => {
+		const declared = { key: { websiteId: 1, slug: 1 }, name: 'by_slug', unique: true };
+		expect(sameIndex({ v: 2, key: { websiteId: 1, slug: 1 }, name: 'by_slug', unique: true }, declared)).toBe(true);
+		expect(sameIndex({ key: { slug: 1, websiteId: 1 }, name: 'by_slug', unique: true }, declared)).toBe(false);
+		expect(sameIndex({ key: { websiteId: 1, slug: -1 }, name: 'by_slug', unique: true }, declared)).toBe(false);
+		expect(sameIndex({ key: { websiteId: 1, slug: 1 }, name: 'by_slug' }, declared)).toBe(false);
+		expect(sameIndex({ key: { websiteId: 1, slug: 1 }, unique: true, sparse: true }, declared)).toBe(false);
+		expect(
+			sameIndex(
+				{ key: { websiteId: 1, slug: 1 }, unique: true, partialFilterExpression: { slug: { $type: 'string' } } },
+				declared,
+			),
+		).toBe(false);
+		expect(sameIndex({ key: { at: 1 }, expireAfterSeconds: 60 }, { key: { at: 1 }, expireAfterSeconds: 60 })).toBe(true);
+		expect(sameIndex({ key: { at: 1 }, expireAfterSeconds: 60 }, { key: { at: 1 }, expireAfterSeconds: 0 })).toBe(false);
 	});
 
 	it('gives every database call deadlines and recognizes a database that cannot be reached (K-16)', async () => {

@@ -11,9 +11,12 @@
  *   `websiteId`, and stamps `websiteId`, `merchantId`, `createdAt` and `updatedAt` on inserts. An Atlas Search pipeline
  *   may start with `$search` instead of `$match`, only when its `compound.filter` holds an `equals` on `websiteId` with
  *   this website (PLAN 0.8.10 K11).
- * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted); the
- *   product's indexes are created on a database's first use per instance, two collections at a time, and concurrent
- *   requests wait for the same creation.
+ * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted).
+ * - A product's declared indexes are the truth: on a database's first use per instance, each collection the product
+ *   declares indexes for gets exactly them — an index there that is no longer declared, or declared with other keys
+ *   or options (same name), is dropped, and a declared one missing is created — two collections at a time; concurrent
+ *   requests wait for the same work. No record is changed (a query for `field: null` also matches a missing field, so
+ *   a new field needs no backfill).
  * - Every database call has deadlines ({@link DATABASE_DEADLINES}): a database that cannot be reached or does not answer
  *   in time fails fast with an error {@link isDatabaseUnavailable} recognizes, which requests answer 503
  *   `database_unavailable` (K-16).
@@ -31,6 +34,30 @@ import { collectionPrefix, isKitError, isObject, kitError, sha256Hex } from './u
 const CLIENT_DB_POOL_SIZE = 5;
 /** Index creations a database runs at once on a cold instance (fewer than the pool's connections). */
 const INDEX_BUILDS_AT_ONCE = 2;
+/** MongoDB's codes for a collection and an index that do not exist. */
+const NAMESPACE_NOT_FOUND = 26;
+const INDEX_NOT_FOUND = 27;
+
+/** @param {unknown} error @param {number} code */
+const hasCode = (error, code) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === code;
+
+/**
+ * Whether an index in the database is the one declared: the same keys in the same order, and the same unique, sparse,
+ * TTL and partial filter options.
+ * @param {import('mongodb').Document} found what `listIndexes` answers
+ * @param {import('mongodb').IndexDescription} declared
+ */
+export const sameIndex = (found, declared) => {
+	const keys = (/** @type {Record<string, unknown>} */ key) =>
+		JSON.stringify(Object.entries(key ?? {}).map(([name, value]) => [name, typeof value === 'number' ? value : String(value)]));
+	return (
+		keys(found.key) === keys(/** @type {Record<string, unknown>} */ (declared.key)) &&
+		Boolean(found.unique) === Boolean(declared.unique) &&
+		Boolean(found.sparse) === Boolean(declared.sparse) &&
+		(found.expireAfterSeconds ?? null) === (declared.expireAfterSeconds ?? null) &&
+		JSON.stringify(found.partialFilterExpression ?? null) === JSON.stringify(declared.partialFilterExpression ?? null)
+	);
+};
 
 /**
  * Deadlines of every database call, for serverless functions (K-16): finding a server that answers (an unreachable
@@ -548,6 +575,57 @@ export const createData = ({
 			return { created: created.sort() };
 		};
 
+		/**
+		 * Give each collection the product declares indexes for exactly its declared indexes (the product's declaration is
+		 * the truth): drop the ones no longer declared or declared otherwise, create the missing ones.
+		 * @returns {Promise<{ dropped: string[], created: string[] }>}
+		 */
+		const syncIndexes = async () => {
+			/** @type {string[]} */
+			const dropped = [];
+			/** @type {string[]} */
+			const created = [];
+			const plan = [...planIndexes(indexes)];
+			let next = 0;
+			const sync = async () => {
+				for (let item = plan[next++]; item; item = plan[next++]) {
+					const [name, specs] = item;
+					const target = db.collection(`${prefix}${name}`);
+					const found = await target
+						.listIndexes()
+						.toArray()
+						.catch((error) => {
+							if (hasCode(error, NAMESPACE_NOT_FOUND)) return [];
+							throw error;
+						});
+					/** @type {Set<string>} */
+					const kept = new Set();
+					for (const index of found) {
+						if (index.name === '_id_') continue;
+						const declared = specs.find((spec) => spec.name === index.name);
+						if (declared && sameIndex(index, declared)) {
+							kept.add(index.name);
+							continue;
+						}
+						try {
+							await target.dropIndex(index.name);
+						} catch (error) {
+							// another instance dropped it first
+							if (!hasCode(error, INDEX_NOT_FOUND)) throw error;
+						}
+						dropped.push(`${prefix}${name}.${index.name}`);
+					}
+					const todo = specs.filter((spec) => !kept.has(/** @type {string} */ (spec.name)));
+					if (todo.length > 0) await target.createIndexes(todo);
+					for (const spec of specs) indexed.add(`${scopeKey}|${name}|${spec.name}`);
+					for (const spec of todo) created.push(`${prefix}${name}.${spec.name}`);
+				}
+			};
+			await Promise.all(Array.from({ length: Math.min(INDEX_BUILDS_AT_ONCE, plan.length) }, sync));
+			if (dropped.length > 0) logger.info('merchant database indexes replaced', { dropped: dropped.sort() });
+			return { dropped: dropped.sort(), created: created.sort() };
+		};
+
 		/** @type {WebsiteData['transaction']} */
 		const transaction = async (fn) => {
 			const session = client.startSession();
@@ -567,7 +645,7 @@ export const createData = ({
 			// once per database and instance; a failed creation is tried again by the next request
 			let creating = ready.get(scopeKey);
 			if (!creating) {
-				creating = ensureIndexes(indexes).then(
+				creating = syncIndexes().then(
 					() => {},
 					(error) => {
 						ready.delete(scopeKey);
