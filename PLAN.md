@@ -2026,6 +2026,15 @@ advisor).
   when deployed); Notifications forwarded events only from five named products. **Ecommerce's part is next** (tags,
   guide `build` texts, `openapi` + `build` options, `hooks.blueprint` with event types and list/route/SEO summaries,
   `/openapi.json` rewrite, its setup-sheet test, and removing the Ecommerce skip in e2e setup-sheet).
+- **Ecommerce Setup-sheet part built (2026-10-15; da6b5648, fb7789b3, 0110b39e, bc5032ff, adbd6d95):** `recommendFor`
+  tags on 25 of 34 features (size charts, multi-location, grades and serials, compare, CSV, bulk actions, reports,
+  events and AI copy stay neutral where the profile cannot tell); a "What your website builds" text for every feature
+  (sheet and `/docs`); `openapi` + `/openapi.json` rewrite; `hooks.blueprint` with the event types (`core/events.js`,
+  while Events is on), the seven lists in its own words and summaries of the pages, the routes served from the
+  merchant's domain and the SEO tags. Chat's product answers use `shownPrice` with `compareAtPrice` and the deal (Chat
+  said 1,100.00 where the page said 990.00); the quote adds the own "was" price. Bug fixed: the product page opens the
+  variant its address names (`variantQuery`; shoppers from a shopping ad saw another variant). Known limit (same as
+  the shop's listing filters): price filters compare the variants' own prices, not deal prices.
 
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
