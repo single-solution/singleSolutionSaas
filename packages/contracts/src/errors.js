@@ -66,7 +66,6 @@ export const PROBLEM_CODES = Object.freeze({
 	idempotency_key_required: Object.freeze({ status: 428, title: 'Idempotency-Key header required' }),
 	rate_limited: Object.freeze({ status: 429, title: 'Too many requests' }),
 	internal_error: Object.freeze({ status: 500, title: 'Internal error' }),
-	not_implemented: Object.freeze({ status: 501, title: 'Not implemented' }),
 	upstream_error: Object.freeze({ status: 502, title: 'Upstream error' }),
 	unavailable: Object.freeze({ status: 503, title: 'Service unavailable' }),
 	portal_unreachable: Object.freeze({ status: 503, title: 'Portal unreachable' }),

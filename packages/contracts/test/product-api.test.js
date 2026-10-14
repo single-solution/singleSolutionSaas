@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	ADMIN_ROLES,
-	DASHBOARD_ROLES,
 	MERCHANT_STATUSES,
 	NOTICE_TYPES,
-	PRODUCT_IDS,
 	PRODUCT_STATUSES,
 	PRODUCT_UNAVAILABLE_REASONS,
 	RULES,
@@ -20,13 +18,11 @@ import { MERCHANT, WEBSITE, priceReport, statusResponse } from '../src/testing.j
 import { expectProblem } from './helpers.js';
 
 describe('vocabularies', () => {
-	it('lists the statuses, roles, notices and products', () => {
+	it('lists the statuses, roles and notices', () => {
 		expect(PRODUCT_STATUSES).toEqual(['active', 'grace', 'stopped', 'suspended', 'removed']);
 		expect(MERCHANT_STATUSES).toEqual(['active', 'low_balance', 'grace', 'stopped', 'suspended']);
 		expect(ADMIN_ROLES).toEqual(['owner', 'support', 'finance']);
-		expect(DASHBOARD_ROLES).toEqual(['owner', 'support']);
 		expect(NOTICE_TYPES).toEqual(['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted']);
-		expect(PRODUCT_IDS).toEqual(['accounts', 'ecommerce', 'chat', 'notifications', 'payments', 'growth']);
 		expect(PRODUCT_UNAVAILABLE_REASONS).toEqual(['stopped', 'suspended', 'removed']);
 	});
 });

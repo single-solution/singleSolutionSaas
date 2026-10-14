@@ -3,11 +3,6 @@
  * @module
  */
 
-/** The six products. Product ids are checked only against `PATTERNS.productId`, so other ids work in tests. */
-export const PRODUCT_IDS = Object.freeze(
-	/** @type {const} */ (['accounts', 'ecommerce', 'chat', 'notifications', 'payments', 'growth']),
-);
-
 /** Status of a product on a website, in check order: removed, suspended, stopped, grace, active. */
 export const PRODUCT_STATUSES = Object.freeze(/** @type {const} */ (['active', 'grace', 'stopped', 'suspended', 'removed']));
 
@@ -16,9 +11,6 @@ export const MERCHANT_STATUSES = Object.freeze(/** @type {const} */ (['active', 
 
 /** Admin roles. */
 export const ADMIN_ROLES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
-
-/** Admin roles that may open a product dashboard (the Portal refuses Finance launches). */
-export const DASHBOARD_ROLES = Object.freeze(/** @type {const} */ (['owner', 'support']));
 
 /** Notice types (the same list as `@ss/protocol` `NOTICE_TYPES`). */
 export const NOTICE_TYPES = Object.freeze(
@@ -34,10 +26,8 @@ export const PRODUCT_UNAVAILABLE_REASONS = Object.freeze(/** @type {const} */ ([
  */
 export const IMPORT_LIMITS = Object.freeze({ records: 1000, bytes: 4 * 1024 * 1024 });
 
-/** @typedef {typeof PRODUCT_IDS[number]} KnownProductId */
 /** @typedef {typeof PRODUCT_STATUSES[number]} ProductStatus */
 /** @typedef {typeof MERCHANT_STATUSES[number]} MerchantStatus */
 /** @typedef {typeof ADMIN_ROLES[number]} AdminRole */
-/** @typedef {typeof DASHBOARD_ROLES[number]} DashboardRole */
 /** @typedef {typeof NOTICE_TYPES[number]} NoticeType */
 /** @typedef {typeof PRODUCT_UNAVAILABLE_REASONS[number]} ProductUnavailableReason */

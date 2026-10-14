@@ -25,7 +25,7 @@ const prices = manifestPriceList(json); // { version: 1, features: [{ key, name,
 (or `null`), `docsUrl`, `features: [{ key, name, description, dependsOn, settings }]`,
 `permissions: [{ key, name, feature }]` and `widgets: [{ key, feature, kind: 'visitor' | 'admin' }]`. Rules:
 
-- `id` matches `^[a-z][a-z0-9-]{1,30}$` (the six products are `PRODUCT_IDS`).
+- `id` matches `^[a-z][a-z0-9-]{1,30}$`.
 - Feature keys `^[a-z][a-z0-9_]{0,39}$`, unique; `dependsOn` keys exist, no self-dependency, no cycles.
 - Permission keys `^[a-z][a-z0-9_.]{0,63}$`, unique, and their feature exists. Widget keys unique, feature exists.
 - `widgetScriptUrl` is `null` exactly when there are no widgets.
@@ -39,7 +39,9 @@ A feature's settings are `{ type: 'object', properties: { <setting>: <node> }, a
 setting has `type` (`string`, `integer`, `number`, `boolean`, `array`), `title` and `default`, and may add
 `description`, `minimum` / `maximum` (the hard maximums of limits), `maxLength`, `enum`, `format`, `items` (lists, item
 `type` plus `minimum`, `maximum`, `maxLength`, `enum`, `format`) and `x-ui` (`widget`, `group`, `order`, `help`,
-`placeholder`, `labels`: `country` shows ISO country codes by name). Keywords must fit the type, lists need `items`, defaults and enum values must be valid.
+`placeholder`, `labels`: `country` shows ISO country codes by name, `advanced`: behind the form's disclosure, `hidden`:
+left out of the form, `wide`: spans the whole row of the form or, `false`, keeps a list or long text in one cell).
+Keywords must fit the type, lists need `items`, defaults and enum values must be valid.
 
 - `checkSettingsSchema(schema)` → problems (empty when valid).
 - `validateSettingValue(schema, key, value)` → result for one value; unknown keys are refused.
@@ -62,7 +64,7 @@ Times are ISO-8601 UTC strings (`Z`) and must be real instants; `graceEndsAt` is
 
 Vocabularies: `PRODUCT_STATUSES` (`active`, `grace`, `stopped`, `suspended`, `removed`), `MERCHANT_STATUSES`
 (`active`, `low_balance`, `grace`, `stopped`, `suspended`), `ADMIN_ROLES` (`owner`, `support`, `finance`),
-`DASHBOARD_ROLES` (`owner`, `support`), `NOTICE_TYPES`, `PRODUCT_IDS`, `PRODUCT_UNAVAILABLE_REASONS`.
+`NOTICE_TYPES`, `PRODUCT_UNAVAILABLE_REASONS`.
 
 ## business.json (0.4.9)
 
@@ -86,7 +88,7 @@ Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/wi
 - `DEFAULT_FORMAT` `{ locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' }`,
   `FORMAT_FIELDS`, `formatViolation(field, value)`, `normaliseFormat(value)`.
 - `formatMoney(amount, currency, format?, viewer?)`: integer minor units (ISO 4217 exponents, `currencyDigits`) as
-  `PKR 12,500.00` (code), `Rs 12,500.00` (symbol), a custom symbol, or without minor units (`wholeUnits`). The locale is
+  `USD 12,500.00` (code), `$12,500.00` (symbol), a custom symbol, or without minor units (`wholeUnits`). The locale is
   the Format's, else the viewer's (widgets), else `en`.
 - `formatDate(value, format?, { timeZone, style: 'date' | 'datetime' | 'time', viewer })`: text the server makes
   (`viewer` null) uses the business time zone; widgets use the viewer's unless `times` is `business`.
@@ -101,7 +103,7 @@ Pure and browser-safe; every product normalises phones with it, so one person ha
   dots, slashes and brackets are dropped; `+` or `00` name the calling code (any assigned code, +800 and +882 too);
   after it a trunk `0` (also `(0)`) is dropped, except where national numbers keep their 0 (Italy, San Marino, Côte
   d'Ivoire, Benin, Gabon, Congo). A number without `+`/`00` needs the default calling code and is read as already
-  international (`923001234567`), national after its trunk prefix (`0`; `8` for +7; or `trunkPrefix`) or national as
+  international (`447700900123`), national after its trunk prefix (`0`; `8` for +7; or `trunkPrefix`) or national as
   typed; the country's usual national lengths, where listed, pick the reading, else the digits are kept as typed (no
   second code). Any reading of 8–15 digits is accepted: the lengths never refuse a number.
 - `websiteCallingCode(setting, country)`: the website's default calling code, its setting else the calling code of its
@@ -125,10 +127,11 @@ Codes include `invalid_token` (401), `product_unavailable` (403, with `reason`),
 
 ## Ids and domains
 
-`createId(prefix)` → `<prefix>_<26 lowercase Crockford base32 chars>` (128 random bits); `ID_PREFIXES` lists the
-Portal's (`web`, `mer`, `adm`, `req`). `isId`, `parseId`. `normaliseDomain(input, { allowLocal?, isPublicSuffix? })`
-returns `{ ok, value }` or `{ ok: false, code, message }`: lower-case punycode, no scheme, port, path or trailing dot;
-IP literals, `localhost` and single-label names refused. `hostMatchesDomain(host, domain)` compares exactly.
+`createId(prefix)` → `<prefix>_<26 lowercase Crockford base32 chars>` (128 random bits; the prefix is 2–8 lower-case
+letters naming the kind, such as `web`, `mer` or `req`); `isId(value, prefix?)` checks one.
+`normaliseDomain(input, { allowLocal?, isPublicSuffix? })` returns `{ ok, value }` or `{ ok: false, code, message }`:
+lower-case punycode, no scheme, port, path or trailing dot; IP literals, `localhost` and single-label names refused.
+`hostMatchesDomain(host, domain)` compares exactly.
 
 ## Testing entry
 

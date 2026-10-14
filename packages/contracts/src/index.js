@@ -42,17 +42,7 @@ export {
 } from './format.js';
 export { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from './phone.js';
 export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
-export {
-	ID_PREFIXES,
-	ID_ALPHABET,
-	idPattern,
-	encodeBase32,
-	createId,
-	isId,
-	parseId,
-	normaliseDomain,
-	hostMatchesDomain,
-} from './ids.js';
+export { ID_ALPHABET, idPattern, encodeBase32, createId, isId, normaliseDomain, hostMatchesDomain } from './ids.js';
 
 /** @typedef {import('./format.js').Format} Format */
 /** @typedef {import('./format.js').Viewer} Viewer */
@@ -86,7 +76,6 @@ export {
 /** @typedef {import('./constants.js').ProductStatus} ProductStatus */
 /** @typedef {import('./constants.js').MerchantStatus} MerchantStatus */
 /** @typedef {import('./constants.js').AdminRole} AdminRole */
-/** @typedef {import('./constants.js').DashboardRole} DashboardRole */
 /** @typedef {import('./constants.js').NoticeType} NoticeType */
 /** @typedef {import('./constants.js').ProductUnavailableReason} ProductUnavailableReason */
 /**

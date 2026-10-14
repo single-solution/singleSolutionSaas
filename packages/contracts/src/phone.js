@@ -7,15 +7,15 @@
  *
  * - spaces, dashes, dots, slashes and brackets are dropped; one `+` may lead; `00` leads like `+`;
  * - a number with `+` or `00` names its calling code (any assigned code: a country's, or a non-country one such as
- *   +800 or +882); right after it a trunk `0` (also written `(0)`) is dropped (`+92 0300 …`, `+44 (0)20 …`), except
+ *   +800 or +882); right after it a trunk `0` (also written `(0)`) is dropped (`+44 07700 …`, `+44 (0)20 …`), except
  *   where national numbers keep their 0 (`+39 06 …`);
  * - a number without them needs the website's default calling code (a setting, else the business.json country,
  *   `websiteCallingCode`); without one it is refused, as the product never guesses a country. It may be read as:
  *   1. already international without the `+` (it starts with the code's digits; a trunk `0` after them is dropped):
- *      `923001234567` with +92 keeps its digits, no second code;
+ *      `447700900123` with +44 keeps its digits, no second code;
  *   2. national with the trunk prefix (`0`, Russia and Kazakhstan `8`, or the website's own), which is dropped:
- *      `03001234567`;
- *   3. national as typed: `3001234567`.
+ *      `07700900123`;
+ *   3. national as typed: `7700900123`.
  *   Where the country's national lengths are listed (`NATIONAL_LENGTHS`), the first reading whose length is listed
  *   wins (reading 3 before 1 where national numbers keep their 0, as such numbers may start with the code's digits);
  *   otherwise the first possible reading in the order 1, 2, 3, which keeps the digits as typed;
@@ -96,7 +96,7 @@ const PHONE_CHARACTERS = /^\+?[\d\s()./-]+$/;
 const TRUNK = /^\d{1,2}$/;
 
 /**
- * The calling code of a country, as `+92`, or '' for an unknown country.
+ * The calling code of a country, as `+44`, or '' for an unknown country.
  * @param {unknown} country ISO 3166-1 alpha-2 (any case)
  */
 export const callingCodeOf = (country) => {
@@ -105,7 +105,7 @@ export const callingCodeOf = (country) => {
 };
 
 /**
- * The digits of a country calling code given as `+92` or `92`, or ''.
+ * The digits of a country calling code given as `+44` or `44`, or ''.
  * @param {unknown} value
  */
 const codeDigits = (value) => {
@@ -116,7 +116,7 @@ const codeDigits = (value) => {
 /**
  * A website's default calling code: its phone setting when that is an assigned code, else the calling code of its
  * business.json country, else '' (national numbers are then refused).
- * @param {unknown} setting `+92`, `92` or ''
+ * @param {unknown} setting `+44`, `44` or ''
  * @param {unknown} [country] business.json `country`
  */
 export const websiteCallingCode = (setting, country) => {
@@ -161,7 +161,7 @@ const usualLength = (code, national) => {
  * A phone number as E.164, or null when it cannot be one (see the rules above).
  * @param {unknown} input as typed
  * @param {string | { defaultCallingCode?: string, trunkPrefix?: string }} [options] the website's default calling code
- *   (`+92`; see `websiteCallingCode`), or that and its trunk prefix (1–2 digits; '' = the country's usual one: 0, 8 for
+ *   (`+44`; see `websiteCallingCode`), or that and its trunk prefix (1–2 digits; '' = the country's usual one: 0, 8 for
  *   +7, none where national numbers keep their 0)
  * @returns {string | null}
  */

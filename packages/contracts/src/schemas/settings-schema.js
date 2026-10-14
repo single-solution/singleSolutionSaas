@@ -92,6 +92,12 @@ export const settingsMetaSchema = deepFreeze({
 						placeholder: { type: 'string', maxLength: 200 },
 						// `country`: the choices are ISO 3166-1 alpha-2 codes, shown by their country names
 						labels: { type: 'string', enum: ['country'] },
+						// behind the form's "advanced" disclosure
+						advanced: { type: 'boolean' },
+						// left out of the form (it keeps its default and can still be set through the settings API)
+						hidden: { type: 'boolean' },
+						// spans the whole row of the form's field grid (`false` keeps a list or long text in one cell)
+						wide: { type: 'boolean' },
 					},
 				},
 			},

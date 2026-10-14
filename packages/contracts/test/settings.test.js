@@ -46,6 +46,18 @@ describe('checkSettingsSchema', () => {
 		expect(SETTING_KEYWORDS).toContain('x-ui');
 	});
 
+	it('accepts the form hints advanced, hidden and wide', () => {
+		const advanced = schema();
+		advanced.properties.ratio['x-ui'] = { advanced: true };
+		expect(checkSettingsSchema(advanced)).toEqual([]);
+		const hidden = schema();
+		hidden.properties.ratio['x-ui'] = { hidden: true };
+		expect(checkSettingsSchema(hidden)).toEqual([]);
+		const wide = schema();
+		wide.properties.pages['x-ui'] = { wide: false };
+		expect(checkSettingsSchema(wide)).toEqual([]);
+	});
+
 	/** @type {Array<[string, (s: any) => unknown, string, string]>} */
 	const meta = [
 		['a non-object root type', (s) => (s.type = 'array'), '/type', 'const'],
@@ -62,9 +74,27 @@ describe('checkSettingsSchema', () => {
 		['x-lock', (s) => (s.properties.ratio['x-lock'] = true), '/properties/ratio/x-lock', 'additionalProperties'],
 		[
 			'an unknown x-ui member',
-			(s) => (s.properties.ratio['x-ui'] = { hidden: true }),
-			'/properties/ratio/x-ui/hidden',
+			(s) => (s.properties.ratio['x-ui'] = { tooltip: 'x' }),
+			'/properties/ratio/x-ui/tooltip',
 			'additionalProperties',
+		],
+		[
+			'advanced that is not true or false',
+			(s) => (s.properties.ratio['x-ui'] = { advanced: 'yes' }),
+			'/properties/ratio/x-ui/advanced',
+			'type',
+		],
+		[
+			'hidden that is not true or false',
+			(s) => (s.properties.ratio['x-ui'] = { hidden: 1 }),
+			'/properties/ratio/x-ui/hidden',
+			'type',
+		],
+		[
+			'wide that is not true or false',
+			(s) => (s.properties.pages['x-ui'] = { wide: 'row' }),
+			'/properties/pages/x-ui/wide',
+			'type',
 		],
 		['an unknown format', (s) => (s.properties.greeting.format = 'ipv4'), '/properties/greeting/format', 'enum'],
 		['nested lists', (s) => (s.properties.pages.items.type = 'array'), '/properties/pages/items/type', 'enum'],

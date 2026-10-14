@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	ID_ALPHABET,
-	ID_PREFIXES,
 	createId,
 	encodeBase32,
 	getDefaultValidator,
@@ -9,13 +8,12 @@ import {
 	idPattern,
 	isId,
 	normaliseDomain,
-	parseId,
 	SCHEMA_IDS,
 } from '../src/index.js';
 
 describe('ids', () => {
 	it('creates prefixed 26-char base32 ids', () => {
-		const id = createId(ID_PREFIXES.website);
+		const id = createId('web');
 		expect(id).toMatch(/^web_[0-9a-hjkmnp-tv-z]{26}$/);
 		expect(new RegExp(idPattern('web')).test(id)).toBe(true);
 		expect(createId('web')).not.toBe(id);
@@ -41,22 +39,21 @@ describe('ids', () => {
 		expect(() => createId('web_')).toThrow(TypeError);
 	});
 
-	it('checks and parses ids', () => {
+	it('checks ids', () => {
 		const id = createId('req');
 		expect(isId(id)).toBe(true);
 		expect(isId(id, 'req')).toBe(true);
 		expect(isId(id, 'web')).toBe(false);
 		expect(isId('req_short')).toBe(false);
 		expect(isId(42)).toBe(false);
-		expect(parseId(id)).toEqual({ prefix: 'req', random: id.slice(4) });
-		expect(parseId('nope')).toBeNull();
 	});
 
 	it('generated ids satisfy the opaque id pattern of the wire shapes', () => {
 		const v = getDefaultValidator();
 		const common = `${SCHEMA_IDS.common}#/$defs/`;
-		for (const prefix of Object.values(ID_PREFIXES)) expect(v.validate(`${common}opaqueId`, createId(prefix)).ok).toBe(true);
-		expect(ID_PREFIXES).toEqual({ website: 'web', merchant: 'mer', admin: 'adm', request: 'req' });
+		// the shortest and longest prefixes, and those of the Portal's websites, merchants, admins and requests
+		for (const prefix of ['ab', 'web', 'mer', 'adm', 'req', 'abcdefgh'])
+			expect(v.validate(`${common}opaqueId`, createId(prefix)).ok).toBe(true);
 	});
 });
 

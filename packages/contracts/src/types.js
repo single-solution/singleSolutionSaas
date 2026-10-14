@@ -42,8 +42,10 @@
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items]
- * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, labels?: 'country' }} [x-ui]
- *   `labels: 'country'` shows ISO country codes by their names
+ * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string, labels?: 'country',
+ *   advanced?: boolean, hidden?: boolean, wide?: boolean }} [x-ui] `labels: 'country'` shows ISO country codes by their
+ *   names; `advanced` puts the setting behind a disclosure, `hidden` leaves it out of the form, `wide` sets whether it
+ *   spans the whole row
  */
 
 /**

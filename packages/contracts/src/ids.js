@@ -8,14 +8,6 @@
 import { domainToASCII } from 'node:url';
 import { isIP } from 'node:net';
 
-/** Prefixes of Portal-issued ids. */
-export const ID_PREFIXES = Object.freeze({
-	website: 'web',
-	merchant: 'mer',
-	admin: 'adm',
-	request: 'req',
-});
-
 /** Lowercase Crockford base32 alphabet (no i, l, o, u). */
 export const ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
 
@@ -80,17 +72,6 @@ export const createId = (prefix, options = {}) => {
  */
 export const isId = (value, prefix) =>
 	typeof value === 'string' && new RegExp(prefix === undefined ? idPattern('[a-z]{2,8}') : idPattern(prefix)).test(value);
-
-/**
- * Split an id into prefix and opaque part; `null` when malformed.
- * @param {unknown} value
- * @returns {{ prefix: string, random: string } | null}
- */
-export const parseId = (value) => {
-	if (!isId(value)) return null;
-	const index = value.indexOf('_');
-	return { prefix: value.slice(0, index), random: value.slice(index + 1) };
-};
 
 /**
  * @typedef {'invalid_type' | 'empty' | 'invalid_domain' | 'too_long' | 'wildcard' | 'ip_not_allowed' | 'local_not_allowed' | 'single_label' | 'public_suffix'} DomainErrorCode
