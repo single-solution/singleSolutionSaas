@@ -9,8 +9,6 @@ export {
 	classifyAddress,
 	formatIPv4,
 	formatIPv6,
-	isBlockedAddress,
-	isIpLiteral,
 	parseIPv4,
 	parseIPv6,
 	parseLooseIPv4,

@@ -5,8 +5,6 @@ import {
 	classifyAddress,
 	formatIPv4,
 	formatIPv6,
-	isBlockedAddress,
-	isIpLiteral,
 	parseIPv4,
 	parseIPv6,
 	parseLooseIPv4,
@@ -183,11 +181,9 @@ describe('classifyAddress', () => {
 	it('fails closed on anything that is not an IP', () => {
 		for (const value of ['', 'example.com', 'fe80::1%lo0', ' 1.2.3.4', 'x'.repeat(65), null, 42, undefined, {}]) {
 			expect(classifyAddress(value)).toMatchObject({ category: 'invalid', blocked: true, family: null, address: null });
-			expect(isBlockedAddress(value)).toBe(true);
-			expect(isIpLiteral(value)).toBe(false);
 		}
-		expect(isBlockedAddress('8.8.8.8')).toBe(false);
-		expect(isIpLiteral('::1')).toBe(true);
+		expect(classifyAddress('8.8.8.8').blocked).toBe(false);
+		expect(classifyAddress('::1')).toMatchObject({ blocked: true, family: 6 });
 	});
 
 	it('keeps every range table entry reachable (first match wins)', () => {

@@ -28,7 +28,6 @@ both steps.
 ```js
 import {
 	classifyAddress,
-	isBlockedAddress,
 	createOutboundPolicy,
 	checkUrl,
 	checkHost,
@@ -155,5 +154,4 @@ presignV4({ method, url, region, service = 's3', accessKeyId, secretAccessKey, s
   `uriEncode(key, true)` or `objectUrl(store, key)`.
 - Query parameters are RFC 3986 encoded and sorted by name, then value.
 - The output is checked against the AWS documentation vectors: S3 GET/PUT object, GET lifecycle, list objects,
-  presigned GET, and the SigV4 suite `get-vanilla` and `get-vanilla-query-order-key-case`. It is byte-identical to the
-  former `@ss/app-kit` and Portal connector implementations.
+  presigned GET, and the SigV4 suite `get-vanilla` and `get-vanilla-query-order-key-case`.

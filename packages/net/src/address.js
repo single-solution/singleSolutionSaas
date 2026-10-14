@@ -283,17 +283,3 @@ export const classifyAddress = (ip) => {
 	if (!h) return INVALID;
 	return classifyV6(h, text.startsWith('[') ? text.slice(1, -1) : text);
 };
-
-/**
- * True when an address must not be connected to (anything but a public unicast IP, including non-IPs).
- * @param {unknown} ip
- * @returns {boolean}
- */
-export const isBlockedAddress = (ip) => classifyAddress(ip).blocked;
-
-/**
- * True when `value` is an IP literal in any spelling {@link classifyAddress} understands.
- * @param {unknown} value
- * @returns {boolean}
- */
-export const isIpLiteral = (value) => classifyAddress(value).family !== null;
