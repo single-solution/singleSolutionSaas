@@ -910,6 +910,8 @@ export const SHOP_MAPPING = defineMapping({
 		for await (const doc of db.collection('settings').find({}, { limit: 1 }))
 			plan.ecommerce = {
 				settings: {
+					// the old shop numbered orders per year: <prefix><year>-<number>
+					'checkout.numberPattern': '{prefix}{year}-{number}',
 					'checkout.numberPrefix': doc.orderPrefix,
 					'catalog.currency': doc.currency,
 					'catalog.mediaBaseUrl': doc.imageBase,

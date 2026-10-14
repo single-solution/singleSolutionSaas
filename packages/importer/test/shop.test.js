@@ -180,6 +180,7 @@ describe('the example shop (fixture)', () => {
 		expect(JSON.parse(await readFile(path.join(dir, SETTINGS_FILE), 'utf8'))).toEqual({
 			ecommerce: {
 				settings: {
+					'checkout.numberPattern': '{prefix}{year}-{number}',
 					'checkout.numberPrefix': 'EX-',
 					'catalog.currency': 'USD',
 					'catalog.mediaBaseUrl': 'https://cdn.example.com',

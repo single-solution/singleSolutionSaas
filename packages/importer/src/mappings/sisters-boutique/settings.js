@@ -9,7 +9,7 @@
  * @module
  */
 import { DEFAULT_CHART_ID } from './catalog.js';
-import { CURRENCY, ORDER_DIGITS, ORDER_PREFIX, PHONE_FORMAT, isObject, text } from './common.js';
+import { CURRENCY, ORDER_DIGITS, ORDER_PATTERN, ORDER_PREFIX, PHONE_FORMAT, isObject, text } from './common.js';
 import { STATUSES } from './orders.js';
 import { MEMBER_ROLE } from './people.js';
 
@@ -254,6 +254,7 @@ export const settingsPlan = (values) => {
 				'catalog.searchMatch': 'phrase',
 				'catalog.searchIndex': 'ss_ecommerce_products_search',
 				'size_charts.defaultChartId': DEFAULT_CHART_ID,
+				'checkout.numberPattern': ORDER_PATTERN,
 				'checkout.numberPrefix': ORDER_PREFIX,
 				'checkout.numberDigits': ORDER_DIGITS,
 				// SB sends shoppers no message (owner decision D5, "Store facts corrected after the re-audit")
@@ -347,6 +348,8 @@ export const settingsPlan = (values) => {
 				'staff_alerts.recipients': recipientsOf(values),
 				'staff_alerts.staffPermission': 'orders.read',
 				'staff_alerts.phoneChannel': 'whatsapp',
+				// SB's staff alerts never showed the shopper's phone
+				'staff_alerts.includePhone': false,
 				...(admin ? { 'staff_alerts.adminUrl': `${admin}/orders?order={number}` } : {}),
 				// SEO (`apps/web/src/lib/seo/seoSettings.ts`:51-62, `packages/shared/src/seo/composeSeoMeta.ts`:224)
 				'seo.titleTemplate': (seo.titleTemplate || '{title} | {storeName}')

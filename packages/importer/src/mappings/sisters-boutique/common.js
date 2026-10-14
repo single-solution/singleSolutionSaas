@@ -18,7 +18,8 @@ import { hexOf, legacyId } from '../../mapping.js';
  */
 export const PHONE_FORMAT = Object.freeze({ defaultCallingCode: '+92', trunkPrefix: '0' });
 
-/** SB's order numbers: `IM-<year>-<4 digits>` (`packages/db/src/orderNumber.ts`:22, :27; kept, E30). */
+/** SB's order numbers: `IM-<year>-<4 digits>`, a counter per year (`packages/db/src/orderNumber.ts`:22, :27; kept, E30). */
+export const ORDER_PATTERN = '{prefix}{year}-{number}';
 export const ORDER_PREFIX = 'IM-';
 export const ORDER_DIGITS = 4;
 

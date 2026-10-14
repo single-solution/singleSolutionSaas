@@ -451,6 +451,7 @@ describe('the Sisters Boutique mapping', () => {
 		expect(Object.keys(settings)).toEqual(['accounts', 'ecommerce', 'notifications', 'payments', 'growth']);
 		const ecommerce = /** @type {Record<string, any>} */ (settings.ecommerce?.settings);
 		expect(ecommerce).toMatchObject({
+			'checkout.numberPattern': '{prefix}{year}-{number}',
 			'checkout.numberPrefix': 'IM-',
 			'checkout.numberDigits': 4,
 			'checkout.messageChannels': [],
