@@ -1963,6 +1963,17 @@ messages switch, SB importer fixes, CT and IM mappings, data dry runs); the SaaS
 would break the importer's existing tests gets only the smallest mechanical mapping change (the SaaS default), listed
 for review.
 
+**Owner request, 2026-10-14 ~22:00 — website setup sheet and setup advisor (new SaaS feature, design
+`audit/design/website-blueprint.md`).** "Once it is complete I will add websites and products … there should be
+something you tell me what to enable and add for each website, and there should be an auto JSON which can also be
+shared with the client … and this can also help any developer what access he has and what to build." Each website gets
+a Setup sheet: one generated JSON (`ss.blueprint/1`) and page with every product's features, settings (never secrets),
+connections state, widgets with the install snippet, API and docs addresses, staff permissions, events, checklist and
+"what your website builds"; downloadable, and shareable by an expiring, revocable, read-only link. A setup advisor
+recommends features from a short merchant profile (what they sell, how shoppers pay, delivery, countries, languages …),
+from tags in each product's manifest. Built after the Ecommerce clean pass (kit endpoint, Portal page, share links,
+advisor).
+
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
 physical / digital / service, plus the parts it uses: variants, grades, unit numbers, measurement table, measured
