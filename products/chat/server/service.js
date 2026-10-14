@@ -3,6 +3,8 @@
  *
  * - `site(ctx)`: the website of a request (merchant database store, switched-on features, settings and texts read
  *   once per request).
+ * - `guestLimit(websiteId, settings)`: a guest's message limit, lifted while the Customer role's sign-in is paused at
+ *   Accounts and the Guest chat setting says so (C17).
  * - `visitorOf(site)`: who is chatting — the Accounts user of a sign-in verified on this request (signed-in chat on),
  *   else the guest of the device's guest key (any key of 16–128 characters, so imported store cookies work); a device
  *   showing both moves the guest's chats to the account, merged by time into the account's own conversation when it has
@@ -75,6 +77,12 @@ export const PRESENCE_MS = 5 * 60_000;
 const NEW_GUESTS_WINDOW_MS = 15 * 60_000;
 /** Longest transcript value Notifications accepts (characters). */
 const TRANSCRIPT_MAX = 1000;
+/** Accounts' role of shoppers and new sign-ups, whose sign-in may be paused there (A6). */
+const CUSTOMER_ROLE = 'customer';
+/** How long Accounts' answer whether the Customer role's sign-in is paused is kept per website (C17). */
+const SIGN_IN_STATE_MS = 60_000;
+/** Most websites whose sign-in state an instance keeps (the oldest is dropped first). */
+const SIGN_IN_STATES_MAX = 500;
 
 /**
  * The permission the staff alert setting `staffPermission: all_staff` stands for: every staff member who may see the
@@ -105,6 +113,40 @@ export const phoneCodeOf = async (s) => callingCodeOf((await s.business()).count
  */
 export const createService = (product) => {
 	const { now } = product;
+	/** @type {Map<string, { at: number, paused: boolean }>} */
+	const signInStates = new Map();
+
+	/**
+	 * Whether the Customer role's sign-in is paused at Accounts (A6): its roles read with the pasted Accounts token
+	 * (`GET /v1/roles`) and kept 60 s per website. Without the token, with the token refused or Roles and permissions off
+	 * there, it is not paused; while Accounts cannot be reached, the last answer stands (none yet: not paused).
+	 * @param {string} websiteId
+	 */
+	const customerSignInPaused = async (websiteId) => {
+		const kept = signInStates.get(websiteId);
+		if (kept && now() - kept.at < SIGN_IN_STATE_MS) return kept.paused;
+		const answer = await product.callProduct(websiteId, 'accounts', '/v1/roles');
+		const roles = answer.ok ? bodyOf(answer.body).items : [];
+		const paused = answer.ok
+			? Array.isArray(roles) && roles.some((role) => role?.key === CUSTOMER_ROLE && role?.signIn === 'paused')
+			: answer.reason === 'unreachable' && kept?.paused === true;
+		signInStates.delete(websiteId);
+		signInStates.set(websiteId, { at: now(), paused });
+		if (signInStates.size > SIGN_IN_STATES_MAX) signInStates.delete(/** @type {string} */ (signInStates.keys().next().value));
+		return paused;
+	};
+
+	/**
+	 * A guest's message limit per conversation (Guest chat): the setting `messageLimit` (0 = none), and none while the
+	 * setting `noLimitWithoutSignIn` is on and the Customer role's sign-in is paused at Accounts (C17).
+	 * @param {string} websiteId
+	 * @param {Record<string, any>} settings the Guest chat settings
+	 */
+	const guestLimit = async (websiteId, settings) => {
+		const limit = Number(settings.messageLimit);
+		if (limit <= 0 || settings.noLimitWithoutSignIn !== true) return limit;
+		return (await customerSignInPaused(websiteId)) ? 0 : limit;
+	};
 
 	/**
 	 * The website of a request.
@@ -373,7 +415,7 @@ export const createService = (product) => {
 		const receipts = s.on.includes('typing_receipts') ? await s.values('typing_receipts') : null;
 		const { showPaused } = await s.values('visitor_chat');
 		const guestChat = s.on.includes('guest_chat');
-		const limit = visitor?.kind !== 'user' && guestChat ? Number((await s.values('guest_chat')).messageLimit) : 0;
+		const limit = visitor?.kind !== 'user' && guestChat ? await guestLimit(s.websiteId, await s.values('guest_chat')) : 0;
 		/** @type {Record<string, unknown> | null} */
 		let conversation = null;
 		if (c) {
@@ -727,6 +769,7 @@ export const createService = (product) => {
 
 	return Object.freeze({
 		site,
+		guestLimit,
 		visitorOf,
 		newGuest,
 		append,

@@ -1,9 +1,10 @@
 /**
- * The visitor API: guests, the AI reply after the response, the guest limit, signed-in visitors and the merge,
- * handoff and office hours, flows, leads, contact capture, ratings, transcripts, read receipts and attachments.
+ * The visitor API: guests, the AI reply after the response, the guest limit (lifted while the Customer role's sign-in
+ * is paused, C17), signed-in visitors and the merge, handoff and office hours, flows, leads, contact capture, ratings,
+ * transcripts, read receipts and attachments.
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { AI_KEY, ready } from './helpers.js';
+import { ACCOUNTS, AI_KEY, ORIGIN, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
@@ -60,6 +61,60 @@ describe('guests and AI replies', () => {
 		expect((await v('POST', '/v1/chat/messages', { text: 'two' })).json).toMatchObject({ next: 'sign_in' });
 		const state = await v('GET', '/v1/chat');
 		expect(state.json.guestLimit).toEqual({ limit: 1, used: 1 });
+	});
+
+	it('lifts the guest limit while the Customer role’s sign-in is paused at Accounts, with the setting (C17)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat']);
+		await sys.setting('guest_chat', 'messageLimit', 1);
+		await sys.paste('accounts');
+		/** @type {{ status: number, body: unknown }} */
+		let roles = {
+			status: 200,
+			body: {
+				items: [
+					{ key: 'owner', signIn: 'on' },
+					{ key: 'customer', signIn: 'paused' },
+				],
+			},
+		};
+		sys.responders.set(`${ACCOUNTS}/v1/roles`, () => roles);
+		const reads = () => sys.calls.filter((c) => c.url === `${ACCOUNTS}/v1/roles`);
+		const v = sys.visitor();
+		/** @param {string} text */
+		const send = async (text) => (await v('POST', '/v1/chat/messages', { text })).status;
+		const config = async () =>
+			(await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN })).json.settings.guests;
+		expect(await send('one')).toBe(201);
+		// the setting off (the default): the limit applies and Accounts is never asked
+		expect(await send('two')).toBe(403);
+		expect(reads()).toHaveLength(0);
+		await sys.setting('guest_chat', 'noLimitWithoutSignIn', true);
+		expect(await send('two')).toBe(201);
+		expect(await send('three')).toBe(201);
+		const state = await v('GET', '/v1/chat');
+		expect(state.json).toMatchObject({ guestLimit: null, guestMessagesLeft: null });
+		expect((await config()).messageLimit).toBe(0);
+		// asked once with the pasted Accounts token, then kept for a minute
+		expect(reads()).toHaveLength(1);
+		expect(reads()[0]?.headers.authorization).toMatch(/^Bearer /);
+		// sign-in back on: the limit applies again once the minute is over
+		roles = { status: 200, body: { items: [{ key: 'customer', signIn: 'on' }] } };
+		expect(await send('four')).toBe(201);
+		sys.advance(61_000);
+		expect(await send('four')).toBe(403);
+		expect((await config()).messageLimit).toBe(1);
+		// paused again, then Accounts cannot be reached: the last answer stands
+		roles = { status: 200, body: { items: [{ key: 'customer', signIn: 'paused' }] } };
+		sys.advance(61_000);
+		expect(await send('five')).toBe(201);
+		roles = { status: 503, body: {} };
+		sys.advance(61_000);
+		expect(await send('six')).toBe(201);
+		// Roles and permissions off at Accounts (or the token refused): not paused
+		roles = { status: 403, body: { type: 'https://errors.example.dev/feature_off', title: 'Feature off', status: 403 } };
+		sys.advance(61_000);
+		expect(await send('seven')).toBe(403);
+		expect(reads()).toHaveLength(5);
 	});
 
 	it('without guest chat a visitor must sign in; a bad message is refused', async () => {

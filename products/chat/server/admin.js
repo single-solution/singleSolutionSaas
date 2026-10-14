@@ -207,7 +207,12 @@ export const createAdmin = (product, service) => {
 				showTimes: look.showTimes,
 				showPaused: look.showPaused,
 			},
-			guests: { messageLimit: guests.messageLimit, rememberDays: guests.rememberDays, contactCapture: guests.contactCapture },
+			// the limit that applies now: none while the Customer role's sign-in is paused, with the setting (C17)
+			guests: {
+				messageLimit: on.includes('guest_chat') ? await service.guestLimit(websiteId, guests) : guests.messageLimit,
+				rememberDays: guests.rememberDays,
+				contactCapture: guests.contactCapture,
+			},
 			signInUrl: on.includes('signed_in_chat') ? (await values('signed_in_chat')).signInUrl : '',
 			// "never disclose" hides the AI label (C1)
 			ai: { showLabel: ai.showAiLabel === true && ai.neverDisclose !== true },

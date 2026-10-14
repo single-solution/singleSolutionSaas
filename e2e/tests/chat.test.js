@@ -3,7 +3,8 @@
  * (manifest and price list), price and feature reports, a guest message answered by a faked AI provider through the
  * browser token the Portal issued, a signed-in visitor trusted through the pasted Accounts token, an inbox reply through
  * a ticket, a `Chat needs you` staff alert delivered through the pasted Notifications token (the email provider is a
- * fake in this process), and the hourly charge.
+ * fake in this process), the guest limit lifted while Accounts pauses the Customer role's sign-in (C17), and the hourly
+ * charge.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -332,6 +333,44 @@ describe('Chat on the real Portal', () => {
 		expect(file.json.records.chat.conversations[0].messages.map((/** @type {any} */ msg) => msg.text)).toContain(
 			'It ships today.',
 		);
+	});
+
+	it('guests have no message limit while the Customer role’s sign-in is paused at Accounts, with the setting (C17)', async () => {
+		const accountsCookie = await sys.adminSession(await sys.owner(), websiteId, 'accounts');
+		const switched = await sys.dashboard(
+			accountsCookie,
+			'PUT',
+			`/v1/dashboard/websites/${websiteId}/features`,
+			{ on: ['data_rights', 'email_password', 'roles'] },
+			ACCOUNTS,
+		);
+		expect(switched.status).toBe(200);
+		/** @param {string} method @param {string} path @param {unknown} [body] */
+		const accounts = (method, path, body) =>
+			sys.call(method, path, { base: ACCOUNTS, token: accountsTokens.server, ...(body === undefined ? {} : { body }) });
+		const customer = (await accounts('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
+		expect((await accounts('PUT', '/v1/roles/customer', { ...customer, signIn: 'paused' })).status).toBe(200);
+		const cookie = await sys.adminSession(await sys.owner(), websiteId);
+		for (const [name, value] of /** @type {Array<[string, unknown]>} */ ([
+			['messageLimit', 1],
+			['noLimitWithoutSignIn', true],
+		])) {
+			const saved = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/guest_chat.${name}`, {
+				value,
+			});
+			expect(saved.status).toBe(204);
+		}
+		const first = await visitor('POST', '/v1/chat/messages', { body: { text: 'Do you have gift cards?' } });
+		const headers = { 'ss-guest': String(first.json.guestKey) };
+		const second = await visitor('POST', '/v1/chat/messages', { body: { text: 'And gift wrap?' }, headers });
+		expect(second.status).toBe(201);
+		expect(second.json.chat.guestMessagesLeft).toBeNull();
+		// customer sign-in on again: the limit applies again within a minute
+		expect((await accounts('PUT', '/v1/roles/customer', { ...customer, signIn: 'on' })).status).toBe(200);
+		sys.clock.advance(61_000);
+		const third = await visitor('POST', '/v1/chat/messages', { body: { text: 'Thanks!' }, headers });
+		expect(third.status).toBe(403);
+		expect(third.json.type).toMatch(/guest_limit_reached$/);
 	});
 
 	it('the Portal charges the switched-on features every clock hour', async () => {

@@ -2724,7 +2724,7 @@
 													"type": "null"
 												}
 											],
-											"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise."
+											"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise, also while the limit is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
 										},
 										"guestMessagesLeft": {
 											"type": [
@@ -8706,7 +8706,7 @@
 								"type": "null"
 							}
 						],
-						"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise."
+						"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise, also while the limit is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
 					},
 					"guestMessagesLeft": {
 						"type": [

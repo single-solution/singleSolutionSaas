@@ -10,6 +10,12 @@
 			"maximum": 1000,
 			"description": "0 = no limit. Uploads count too."
 		},
+		"noLimitWithoutSignIn": {
+			"type": "boolean",
+			"title": "No limit while customer sign-in is paused",
+			"default": false,
+			"description": "On: guests have no message limit while the Customer role's sign-in is paused in Accounts (Roles and permissions), as on a website that does not use sign-in. Needs the Accounts token in Connections; a change in Accounts applies within a minute."
+		},
 		"rememberDays": {
 			"type": "integer",
 			"title": "Remember guests on their device (days)",

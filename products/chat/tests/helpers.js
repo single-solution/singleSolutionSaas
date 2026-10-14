@@ -2,7 +2,7 @@
  * Test harness: Chat on the kit, connected to the kit's fake Portal (`@ss/app-kit/testing`), with one website, its two
  * tokens, dashboard sessions, a merchant database on the run's MongoDB (`TEST_MONGODB_URI`) and fakes for every outside
  * service: the AI provider (OpenAI-compatible answers queued by the test), Notifications (records what Chat sends), the
- * Accounts double (sign-ins and public keys), Ecommerce (answers set per test with `responders`), S3 storage, the merchant's tool and booking endpoints, and the website
+ * Accounts double (sign-ins and public keys; other Accounts answers set per test with `responders`), Ecommerce (answers set per test with `responders`), S3 storage, the merchant's tool and booking endpoints, and the website
  * (business.json and pages). No real network call is ever made. Every answer `call()` sees is checked against
  * `schemas/api.json` and the kit's own routes: a test fails when an answer does not fit its description.
  * @module
@@ -20,7 +20,7 @@ const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
 export const ADMIN_ORIGIN = 'https://admin.shop.example.com';
 const NOTIFY = 'https://notifications.example.dev';
-const ACCOUNTS = 'https://accounts.example.dev';
+export const ACCOUNTS = 'https://accounts.example.dev';
 export const AI = 'https://api.openai.com';
 const STORAGE = 'https://s3.example.dev';
 export const TOOLS = 'https://tools.example.dev';
@@ -91,7 +91,9 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 	/** @type {Record<string, (request: Request) => Promise<Response>>} */
 	const handlers = {
 		[portal.url]: portal.handle,
-		[ACCOUNTS]: accounts.handle,
+		// the Accounts double, and the answers a test sets for other Accounts paths (for example its roles)
+		[ACCOUNTS]: (request) =>
+			responders.has(`${ACCOUNTS}${new URL(request.url).pathname}`) ? fake(ACCOUNTS)(request) : accounts.handle(request),
 		...Object.fromEntries([NOTIFY, AI, STORAGE, TOOLS, ECOMMERCE, ORIGIN].map((origin) => [origin, fake(origin)])),
 	};
 	responders.set(NOTIFY, (call) =>

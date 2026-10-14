@@ -290,7 +290,7 @@ export const createProductInstance = (options) => {
 				test: ai.test,
 			},
 			accounts: {
-				label: 'Accounts token (signed-in visitors, activity-log copies)',
+				label: 'Accounts token (signed-in visitors, the guest limit while customer sign-in is paused, activity-log copies)',
 				kind: 'token',
 				productId: 'accounts',
 				neededBy: ['signed_in_chat'],

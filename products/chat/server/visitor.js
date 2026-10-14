@@ -219,8 +219,7 @@ export const createVisitorApi = (product, service, reply) => {
 		const attachment = await visitorAttachment(s, visitor, body.attachment);
 		let c = await conversationOf(s, visitor, body.page);
 		if (visitor.kind === 'guest' && s.on.includes('guest_chat')) {
-			const { messageLimit } = await s.values('guest_chat');
-			if (guestLimitReached(c, Number(messageLimit))) {
+			if (guestLimitReached(c, await service.guestLimit(s.websiteId, await s.values('guest_chat')))) {
 				const next = limitNext({
 					signedInChat: s.on.includes('signed_in_chat'),
 					signInUrl: String((await s.values('signed_in_chat')).signInUrl),
