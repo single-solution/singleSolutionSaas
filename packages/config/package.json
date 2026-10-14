@@ -7,7 +7,6 @@
 	"exports": {
 		"./eslint": "./eslint.js",
 		"./vitest": "./vitest.js",
-		"./mongo-setup": "./mongo-setup.js",
 		"./tsconfig.base.json": "./tsconfig.base.json",
 		"./prettier.json": "./prettier.json",
 		"./package.json": "./package.json"
@@ -33,10 +32,6 @@
 			"./vitest": {
 				"types": "./types/vitest.d.ts",
 				"default": "./vitest.js"
-			},
-			"./mongo-setup": {
-				"types": "./types/mongo-setup.d.ts",
-				"default": "./mongo-setup.js"
 			},
 			"./tsconfig.base.json": "./tsconfig.base.json",
 			"./prettier.json": "./prettier.json",

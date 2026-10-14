@@ -4,13 +4,12 @@ The one place the code standard lives (PLAN 0.10): every unit of the repository 
 each `packages/*`, `e2e/`) builds its own lint, typecheck, format and test config from this package, so each folder
 works on its own and can move to a repository of its own unchanged.
 
-| Entry                           | What it is                                                                                                                                                                                   |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@ss/config/eslint`             | `createEslintConfig({ jsx?, browserJsx?, ignores? })`: the functional rules (no classes, no `console`, no mutation of inputs, `===`), plus a JSX variant for React components in `.js` files |
-| `@ss/config/tsconfig.base.json` | `tsc --checkJs --strict --noUncheckedIndexedAccess` over JSDoc-typed JavaScript, no emit                                                                                                     |
-| `@ss/config/prettier.json`      | tabs, width 130, single quotes                                                                                                                                                               |
-| `@ss/config/vitest`             | `defineUnitConfig({ dir, include?, coverageInclude?, coverageExclude?, jsx?, mongo? })`: thresholds 90 % lines, 90 % functions, 85 % branches                                                |
-| `@ss/config/mongo-setup`        | Vitest global setup: one MongoMemoryReplSet for the run, exposed as `TEST_MONGODB_URI` (TTL monitor off)                                                                                     |
+| Entry                           | What it is                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@ss/config/eslint`             | `createEslintConfig({ jsx?, browserJsx?, ignores? })`: the functional rules (no classes, no `console`, no mutation of inputs, `===`), plus a JSX variant for React components in `.js` files                                                                                             |
+| `@ss/config/tsconfig.base.json` | `tsc --checkJs --strict --noUncheckedIndexedAccess` over JSDoc-typed JavaScript, no emit                                                                                                                                                                                                 |
+| `@ss/config/prettier.json`      | tabs, width 130, single quotes                                                                                                                                                                                                                                                           |
+| `@ss/config/vitest`             | `defineUnitConfig({ dir, include?, coverageInclude?, coverageExclude?, jsx?, mongo? })`: thresholds 90 % lines, 90 % functions, 85 % branches; `mongo: true` adds the global setup `mongo-setup.js` (one MongoMemoryReplSet for the run, exposed as `TEST_MONGODB_URI`, TTL monitor off) |
 
 ## Use
 
