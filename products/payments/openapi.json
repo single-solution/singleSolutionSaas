@@ -473,7 +473,7 @@
 									"currency": {
 										"type": "string",
 										"pattern": "^[A-Z]{3}$",
-										"description": "ISO 4217 code, for example USD or PKR."
+										"description": "ISO 4217 code, for example USD or EUR."
 									},
 									"amount": {
 										"type": [
@@ -1363,7 +1363,7 @@
 										"currency": {
 											"type": "string",
 											"pattern": "^[A-Z]{3}$",
-											"description": "ISO 4217 code, for example USD or PKR."
+											"description": "ISO 4217 code, for example USD or EUR."
 										},
 										"gateways": {
 											"type": "array",
@@ -1597,7 +1597,7 @@
 										"currency": {
 											"type": "string",
 											"pattern": "^[A-Z]{3}$",
-											"description": "ISO 4217 code, for example USD or PKR."
+											"description": "ISO 4217 code, for example USD or EUR."
 										},
 										"description": {
 											"type": "string"
@@ -2657,7 +2657,7 @@
 									"currency": {
 										"type": "string",
 										"pattern": "^[A-Z]{3}$",
-										"description": "ISO 4217 code, for example USD or PKR."
+										"description": "ISO 4217 code, for example USD or EUR."
 									},
 									"amount": {
 										"type": [
@@ -3142,7 +3142,7 @@
 									"currency": {
 										"type": "string",
 										"pattern": "^[A-Z]{3}$",
-										"description": "ISO 4217 code, for example USD or PKR."
+										"description": "ISO 4217 code, for example USD or EUR."
 									},
 									"gateway": {
 										"oneOf": [
@@ -3793,7 +3793,7 @@
 									"currency": {
 										"type": "string",
 										"pattern": "^[A-Z]{3}$",
-										"description": "ISO 4217 code, for example USD or PKR."
+										"description": "ISO 4217 code, for example USD or EUR."
 									}
 								}
 							}
@@ -5307,7 +5307,7 @@
 						"properties": {
 							"locale": {
 								"type": "string",
-								"description": "A language tag (en, en-GB, ur-PK), or '' for the viewer's."
+								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
 							},
 							"currencyDisplay": {
 								"type": "string",
@@ -5434,7 +5434,7 @@
 					"currency": {
 						"type": "string",
 						"pattern": "^[A-Z]{3}$",
-						"description": "ISO 4217 code, for example USD or PKR."
+						"description": "ISO 4217 code, for example USD or EUR."
 					},
 					"gateways": {
 						"type": "array",
@@ -5670,7 +5670,7 @@
 					"currency": {
 						"type": "string",
 						"pattern": "^[A-Z]{3}$",
-						"description": "ISO 4217 code, for example USD or PKR."
+						"description": "ISO 4217 code, for example USD or EUR."
 					},
 					"amountText": {
 						"type": "string",

@@ -120,13 +120,13 @@ ${block(urls.payfast)}
 <h3>PayFast (Pakistan)</h3>
 ${para(guide.payfast_pk)}
 ${block(urls.payfast_pk)}
-<h3>JazzCash</h3>
+<h3>JazzCash (Pakistan)</h3>
 ${para(guide.jazzcash)}
 ${block(`${urls.jazzcash}/<paymentId>`)}
-<h3>Easypaisa</h3>
+<h3>Easypaisa (Pakistan)</h3>
 ${para(guide.easypaisa)}
 ${block(`${urls.easypaisa}/<paymentId>`)}
-<h3>Rapid Gateway</h3>
+<h3>Rapid Gateway (Pakistan)</h3>
 ${para(guide.rapid)}
 ${block(urls.rapid)}
 <h3>Generic gateway adapter</h3>

@@ -51,7 +51,7 @@ export const isAmount = (value) => Number.isSafeInteger(value) && Number(value) 
 export const exponentOf = (currency) => (ZERO_DECIMAL.has(currency) ? 0 : THREE_DECIMAL.has(currency) ? 3 : 2);
 
 /**
- * Minor units as the decimal text gateways take (`1050`, `PKR` → `10.50`).
+ * Minor units as the decimal text gateways take (`1050`, `USD` → `10.50`).
  * @param {number} amount
  * @param {string} currency
  */
@@ -81,7 +81,7 @@ export const fromDecimal = (text, currency) => {
 };
 
 /**
- * An amount for people: the currency code and the decimal with thousands grouped by commas (`PKR 1,250.00`).
+ * An amount for people: the currency code and the decimal with thousands grouped by commas (`USD 1,250.00`).
  * @param {number} amount
  * @param {string} currency
  */

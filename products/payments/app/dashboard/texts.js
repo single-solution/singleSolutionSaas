@@ -92,11 +92,11 @@ export const TEXTS = Object.freeze({
 		format: 'Format',
 		formatHelp: 'How money and dates look in the pay button, the admin widgets and the hosted payment pages.',
 		locale: 'Language and region',
-		localeHelp: "A tag such as en-GB or ur-PK; empty uses each visitor's browser (en on the hosted pages).",
+		localeHelp: "A tag such as en-GB or fr-FR; empty uses each visitor's browser (en on the hosted pages).",
 		currencyDisplay: 'Currency shown as',
 		currencyDisplays: Object.freeze({
-			code: 'Code (PKR 12,500.00)',
-			symbol: 'Symbol (Rs 12,500.00)',
+			code: 'Code (USD 12,500.00)',
+			symbol: 'Symbol ($12,500.00)',
 			custom: 'Your own symbol',
 		}),
 		currencySymbol: 'Your own symbol (up to 8 characters)',
@@ -154,7 +154,6 @@ export const TEXTS = Object.freeze({
 		more: 'More actions for {name}',
 		removeTitle: 'Remove {name}?',
 		removeHelp: 'The saved value is deleted here. The features that need it stop working until it is connected again.',
-		none: 'No connections.',
 	}),
 	developers: Object.freeze({
 		api: 'Payment API',

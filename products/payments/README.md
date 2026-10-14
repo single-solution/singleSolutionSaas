@@ -1,9 +1,9 @@
 # Payments
 
 Online payments with the merchant's own gateway keys (PLAN.md 0.8.7): Stripe, PayPal, PayFast (South Africa), PayFast
-(Pakistan), JazzCash, Easypaisa, Rapid Gateway, bank transfer and a generic adapter; payment links, the payment API,
-subscriptions and refunds. Payers always pay on the gateway's own page, so card details never reach Payments. Feature
-keys are in `manifest.json`, the public docs at `/docs`.
+(Pakistan), JazzCash (Pakistan), Easypaisa (Pakistan), Rapid Gateway (Pakistan), bank transfer and a generic adapter;
+payment links, the payment API, subscriptions and refunds. Payers always pay on the gateway's own page, so card details
+never reach Payments. Feature keys are in `manifest.json`, the public docs at `/docs`.
 
 ## Environment
 

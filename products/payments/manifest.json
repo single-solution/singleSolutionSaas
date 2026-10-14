@@ -47,7 +47,7 @@
 		},
 		{
 			"key": "jazzcash",
-			"name": "JazzCash",
+			"name": "JazzCash (Pakistan)",
 			"description": "Payments on JazzCash's hosted checkout with the merchant's own JazzCash account.",
 			"dependsOn": [],
 			"settings": {
@@ -56,7 +56,7 @@
 		},
 		{
 			"key": "easypaisa",
-			"name": "Easypaisa",
+			"name": "Easypaisa (Pakistan)",
 			"description": "Payments on Easypaisa's hosted checkout (Easypay) with the merchant's own store.",
 			"dependsOn": [],
 			"settings": {
@@ -65,7 +65,7 @@
 		},
 		{
 			"key": "rapid",
-			"name": "Rapid Gateway",
+			"name": "Rapid Gateway (Pakistan)",
 			"description": "Payments on Rapid Gateway's hosted checkout (card, Easypaisa, JazzCash, Raast; PKR) with the merchant's own Rapid account.",
 			"dependsOn": [],
 			"settings": {

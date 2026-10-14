@@ -123,7 +123,7 @@ export const checkPaymentInput = (body) => {
 	if (!isAmount(input.amount))
 		return { ok: false, field: 'amount', message: 'amount is a whole number of minor units (cents, paisa …), at least 1.' };
 	if (!isCurrency(input.currency))
-		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, PKR …).' };
+		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, EUR …).' };
 	if (input.gateway !== undefined && input.gateway !== null && !isGateway(input.gateway))
 		return { ok: false, field: 'gateway', message: 'gateway is not one of the gateways.' };
 	const description = cleanText(input.description, 200);
@@ -166,7 +166,7 @@ export const checkLinkInput = (body) => {
 	const description = cleanText(input.description, 1000);
 	if (description === null) return { ok: false, field: 'description', message: 'description is at most 1000 characters.' };
 	if (!isCurrency(input.currency))
-		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, PKR …).' };
+		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, EUR …).' };
 	const amount = input.amount ?? null;
 	if (amount !== null && !isAmount(amount))
 		return {

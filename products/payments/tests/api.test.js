@@ -934,7 +934,7 @@ describe('payment links and the pay button routes', () => {
 			title: 'Invoice 12',
 			amount: 150000,
 			gateways: [
-				{ id: 'jazzcash', name: 'JazzCash' },
+				{ id: 'jazzcash', name: 'JazzCash (Pakistan)' },
 				{ id: 'bank_transfer', name: 'Bank transfer' },
 			],
 		});
