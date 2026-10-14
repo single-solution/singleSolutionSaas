@@ -176,7 +176,7 @@ export const TEXTS = Object.freeze({
 		returnsHelp: 'Register these with Google, Apple and Facebook as the allowed redirect addresses.',
 		templates: 'Message templates',
 		templatesHelp:
-			'Accounts sends codes, links and invites through Notifications. Write these templates in the Notifications dashboard; each can use the values shown.',
+			'Accounts sends codes, links and invites through Notifications, with its own default words until you write these templates in the Notifications dashboard; each can use the values shown. WhatsApp needs your template approved at Meta.',
 		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
 		openDocs: 'Open the docs',
 		manageTokens: 'Manage tokens in the Portal',

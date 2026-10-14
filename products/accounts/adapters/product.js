@@ -3,8 +3,9 @@
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (the
  * Notifications token for codes, invites and resets; Google, Apple and Facebook keys; the other products' tokens for
  * data rights, permissions and the Orders tab), the merchant database indexes, the data-rights hooks, the widget
- * settings and the `import` feature's collections (`imports.js`, PLAN 0.8.10 K10), and adds the sealer, the outside
- * services and the website signing keys on the same outbound policy.
+ * settings, the `import` feature's collections (`imports.js`, PLAN 0.8.10 K10) and the messages it sends through
+ * Notifications with their US-English default words (`schemas/messages.json`, parity P1), and adds the sealer, the
+ * outside services and the website signing keys on the same outbound policy.
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -23,6 +24,7 @@ import emailPassword from '../schemas/email_password.settings.json' with { type:
 import facebook from '../schemas/facebook.settings.json' with { type: 'json' };
 import google from '../schemas/google.settings.json' with { type: 'json' };
 import importSettings from '../schemas/import.settings.json' with { type: 'json' };
+import messages from '../schemas/messages.json' with { type: 'json' };
 import ordersTab from '../schemas/orders_tab.settings.json' with { type: 'json' };
 import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 import phonePassword from '../schemas/phone_password.settings.json' with { type: 'json' };
@@ -202,6 +204,8 @@ export const createProductInstance = (options) => {
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,
+		// codes, links and invites with their default words: every send to Notifications carries them (parity P1)
+		messages,
 		connections: {
 			notifications: token('notifications', 'Notifications token (codes, invites and resets)', [
 				'phone_code',
