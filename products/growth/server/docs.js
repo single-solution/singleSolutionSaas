@@ -1,11 +1,11 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.9): the page script, consent and Google Consent Mode, privacy and
  * storage, the shop events, searches, 404s and Web Vitals, robots.txt and verification, IndexNow, the SEO checklist,
- * redirects, the notice bar, per-feature routes and widgets, the widget and ticket snippets, the kit's routes for your server
- * (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the
- * localhost note and the API reference from `openapi.json`: every call with its auth, feature, parameters, request
- * fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's own descriptions). Plain HTML;
- * every value is escaped.
+ * redirects, the notice bar, per-feature routes, widgets and what the website builds, the widget and ticket snippets, the
+ * kit's routes for your server (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the
+ * business.json template, the localhost note and the API reference from `openapi.json`: every call with its auth,
+ * feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's
+ * own descriptions). Plain HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
@@ -58,6 +58,7 @@ const routeTable = (rows) =>
  */
 export const renderDocs = ({ base }) => {
 	const features = /** @type {Record<string, string[]>} */ (/** @type {unknown} */ (guide.features));
+	const build = /** @type {Record<string, string>} */ (guide.build);
 	const snippets = createSnippets({
 		base,
 		widgets: manifest.widgets,
@@ -71,6 +72,7 @@ export const renderDocs = ({ base }) => {
 			para(feature.description),
 			...(feature.dependsOn.length > 0 ? [para(`Needs: ${feature.dependsOn.join(', ')}`)] : []),
 			...(features[feature.key] ?? []).map(para),
+			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
 			`<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`,
 			routeTable(rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key))),
 			'</section>',

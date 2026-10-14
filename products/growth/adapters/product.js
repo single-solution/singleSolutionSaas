@@ -2,15 +2,18 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Growth's manifest
  * (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (the merchant database,
  * which the kit always adds, and the Accounts token for activity-log copies), the merchant database indexes (the raw
- * events' expiry index included), the page script's settings and what the `import` feature takes, and adds the web
- * calls (SEO checklist, IndexNow) on the same outbound policy. The Next.js route and the tests pass the rest (config,
- * store, clock, network).
+ * events' expiry index included), the page script's settings, what the `import` feature takes and its part of the
+ * website Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, the tags that are on
+ * with how they wait for consent, and the number of redirect rules), and adds the web calls (SEO checklist, IndexNow)
+ * on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import consentBanner from '../schemas/consent_banner.settings.json' with { type: 'json' };
 import conversionFunnel from '../schemas/conversion_funnel.settings.json' with { type: 'json' };
@@ -31,7 +34,7 @@ import tagsShared from '../schemas/tags.shared.json' with { type: 'json' };
 import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { createImportOptions } from './imports.js';
-import { REDIRECT_INDEXES } from './redirects.js';
+import { REDIRECT_INDEXES, createRedirectStore } from './redirects.js';
 import { INDEXES } from './store.js';
 import { createWeb } from './web.js';
 
@@ -54,17 +57,16 @@ const SETTINGS = {
 	import: importSettings,
 };
 
+/** The features that load tags once the visitor consents (they share the Tags and consent settings). */
+const TAG_FEATURES = ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'];
+
 /**
  * Settings several features use, stored once as `<group>.<setting>` and shown while any of their features is on
  * (PLAN 0.8.10 G1, G2): whether the tags wait for consent, and which item ids the pixels get.
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 export const SHARED_SETTINGS = {
-	tags: {
-		name: 'Tags and consent',
-		features: ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'],
-		settings: tagsShared,
-	},
+	tags: { name: 'Tags and consent', features: TAG_FEATURES, settings: tagsShared },
 	pixels: { name: 'Pixel events', features: ['meta_pixel', 'google_tags', 'tiktok_pixel'], settings: pixelsShared },
 };
 
@@ -88,7 +90,7 @@ const PROBLEM_CODES = Object.freeze({
 });
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes'>
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes' | 'imports' | 'sharedSettings' | 'openapi' | 'build'>
  *   & { data?: { createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => import('mongodb').MongoClient } }} InstanceOptions
  *   `data.createClient`: the merchant database client factory (tests watch its commands)
  */
@@ -121,6 +123,54 @@ export const createProductInstance = (options) => {
 		);
 	};
 
+	/**
+	 * How many redirect rules a website has (one count in the merchant database), or null when the database is not
+	 * connected or the count fails.
+	 * @param {string} websiteId
+	 * @param {string} merchantId
+	 */
+	const redirectCount = async (websiteId, merchantId) => {
+		try {
+			const rules = createRedirectStore(await product.data.forWebsite(websiteId, { merchantId }), { merchantId });
+			const { collection, filter } = rules.countSource({});
+			return /** @type {number} */ (await collection.countDocuments(filter));
+		} catch {
+			return null;
+		}
+	};
+
+	/**
+	 * Growth's own part of the website Setup sheet: the tags that are on and how they wait for the visitor's consent
+	 * (the guide's consent section), and the number of redirect rules while Redirects is on and the count can be had.
+	 * Never a secret.
+	 * @param {{ websiteId: string, merchantId: string, on: string[] }} website
+	 * @returns {Promise<{ summaries: Array<{ title: string, text: string }> }>}
+	 */
+	const setupPart = async ({ websiteId, merchantId, on }) => {
+		const tags = manifest.features.filter((feature) => TAG_FEATURES.includes(feature.key) && on.includes(feature.key));
+		const [consentRequired, rules] = await Promise.all([
+			tags.length > 0 ? product.settings.values(websiteId, 'tags').then((values) => values.consentRequired !== false) : true,
+			on.includes('redirects') ? redirectCount(websiteId, merchantId) : null,
+		]);
+		const waiting = !consentRequired
+			? "They load at once, with Google Consent Mode granted, until the visitor chooses: 'Tags wait for the visitor's consent' is off (Settings → Tags and consent)."
+			: on.includes('consent_banner')
+				? 'The consent banner asks visitors first.'
+				: "The consent banner is off, so they wait until your own consent tool passes the visitor's choice on with SSGrowth.consent.set().";
+		return {
+			summaries: [
+				{
+					title: 'Tags after consent',
+					text:
+						tags.length > 0 ? `${tags.map((feature) => feature.name).join(', ')}. ${waiting}` : 'No marketing tags are on.',
+				},
+				...(rules === null
+					? []
+					: [{ title: 'Redirects', text: `${rules.toLocaleString('en-US')} ${rules === 1 ? 'rule' : 'rules'}.` }]),
+			],
+		};
+	};
+
 	const product = createProduct({
 		...options,
 		manifest,
@@ -138,6 +188,7 @@ export const createProductInstance = (options) => {
 				const admin = ctx.ticket ? { domain: String(ctx.status?.domain ?? '') } : null;
 				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin });
 			},
+			blueprint: setupPart,
 		},
 		data: {
 			indexes: [...INDEXES, ...REDIRECT_INDEXES],
@@ -146,6 +197,9 @@ export const createProductInstance = (options) => {
 		// days of daily totals moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions(),
 		sharedSettings: SHARED_SETTINGS,
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 	});
 	return Object.freeze({ ...product, web, now, valuesOf });
 };
