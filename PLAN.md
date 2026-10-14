@@ -1963,6 +1963,14 @@ messages switch, SB importer fixes, CT and IM mappings, data dry runs); the SaaS
 would break the importer's existing tests gets only the smallest mechanical mapping change (the SaaS default), listed
 for review.
 
+**Owner, 2026-10-14 ~22:05 (binding):** "do it … this time complete and professionally without any issues, and in the
+way if you find any bug or issue just fix that too, and I want 0 legacy code, folders, files, nothing extra even."
+So every bug found on the way is fixed with a test, and before the SaaS is called complete a final sweep removes
+anything unused or left over (files, folders, exports, settings, texts, generated output in git, stale docs). SEO
+(`audit/seo-audit-2026-10-14.md`, built in phases S1–S12): baseline SEO — product, category and listing answers,
+sitemaps and the new site answer (E49) — is served whenever the catalog is on; the priced `seo` feature is the SEO
+product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
+
 **Owner request, 2026-10-14 ~22:00 — website setup sheet and setup advisor (new SaaS feature, design
 `audit/design/website-blueprint.md`).** "Once it is complete I will add websites and products … there should be
 something you tell me what to enable and add for each website, and there should be an auto JSON which can also be
