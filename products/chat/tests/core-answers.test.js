@@ -6,8 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
 import {
+	FALLBACK_LIMITS,
 	budgetOf,
 	checkFallbackAnswers,
+	fallbackProblems,
 	fillFallback,
 	matchingFallbacks,
 	placeholdersOf,
@@ -104,10 +106,44 @@ describe('fallback answers (C3)', () => {
 		expect(checkFallbackAnswers(Array.from({ length: 51 }, () => ({}))).ok).toBe(false);
 		const bad = checkFallbackAnswers([1, { intent: 'x', language: 'english', keywords: ['k'.repeat(101)], text: '' }]);
 		expect(bad.ok).toBe(false);
-		expect(checkFallbackAnswers([{ intent: 'other', language: ' pt-BR ', keywords: [' hi ', '', 3], text: ' ok ' }])).toEqual({
+		expect(checkFallbackAnswers([{ intent: 'other', language: ' pt-BR ', keywords: [' hi ', ''], text: ' ok ' }])).toEqual({
 			ok: true,
 			value: [{ intent: 'other', language: 'pt-BR', keywords: ['hi'], text: 'ok' }],
 		});
+		// no language and no keywords: any
+		expect(checkFallbackAnswers([{ intent: 'greeting', text: 'Hello!' }])).toEqual({
+			ok: true,
+			value: [{ intent: 'greeting', language: '', keywords: [], text: 'Hello!' }],
+		});
+		expect(bad).toEqual({
+			ok: false,
+			errors: [
+				'Answer 1: not valid.',
+				'Answer 2: the intent is one of greeting, deals, products, budget, my_orders, other.',
+				'Answer 2: the language is empty (any) or a code such as en.',
+				'Answer 2: the keywords are a list of up to 30 words or phrases of up to 100 characters.',
+				'Answer 2: write the answer (up to 2000 characters).',
+			],
+		});
+	});
+
+	it('names what is wrong per field, the same rules for Settings and the server', () => {
+		const good = { intent: 'deals', language: 'en', keywords: ['deal'], text: 'Our deals: {deals_table}' };
+		expect(fallbackProblems(good)).toEqual([]);
+		expect(fallbackProblems(null)).toEqual(['item']);
+		expect(fallbackProblems([good])).toEqual(['item']);
+		// a keyword list or language of the wrong type is refused, never read as "any message"
+		expect(fallbackProblems({ ...good, keywords: 'deal' })).toEqual(['keywords']);
+		expect(fallbackProblems({ ...good, keywords: ['deal', 3] })).toEqual(['keywords']);
+		expect(fallbackProblems({ ...good, language: 5 })).toEqual(['language']);
+		expect(fallbackProblems({ ...good, language: 'ur-Latn' })).toEqual([]);
+		expect(
+			fallbackProblems({ ...good, keywords: Array.from({ length: FALLBACK_LIMITS.keywords + 1 }, (_, i) => `k${i}`) }),
+		).toEqual(['keywords']);
+		expect(fallbackProblems({ ...good, text: 'x'.repeat(FALLBACK_LIMITS.text) })).toEqual([]);
+		expect(fallbackProblems({ ...good, text: 'x'.repeat(FALLBACK_LIMITS.text + 1) })).toEqual(['text']);
+		expect(fallbackProblems({ ...good, text: '   ' })).toEqual(['text']);
+		expect(checkFallbackAnswers([{ ...good, keywords: 'deal' }]).ok).toBe(false);
 	});
 
 	it('matches by language and keywords, finds budgets and fills placeholders', () => {

@@ -9,7 +9,10 @@
  */
 import { containsPhrase } from './text.js';
 
-const INTENTS = Object.freeze(/** @type {const} */ (['greeting', 'deals', 'products', 'budget', 'my_orders', 'other']));
+/** What an answer is for (C3); the merchant picks one per answer. */
+export const FALLBACK_INTENTS = Object.freeze(
+	/** @type {const} */ (['greeting', 'deals', 'products', 'budget', 'my_orders', 'other']),
+);
 /** The placeholders and the shop feature each one needs. */
 export const PLACEHOLDERS = Object.freeze({
 	deals_table: 'shop_deals',
@@ -17,19 +20,18 @@ export const PLACEHOLDERS = Object.freeze({
 	products_under: 'shop_search',
 	my_orders: 'shop_my_orders',
 });
-/** Most entries in the list. */
-const MAX_FALLBACKS = 50;
-const MAX_KEYWORDS = 30;
-const MAX_TEXT = 2000;
+/** The list's limits, the same in Settings and in the server's check. */
+export const FALLBACK_LIMITS = Object.freeze({ answers: 50, keywords: 30, keywordLength: 100, text: 2000 });
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
 
 /**
  * @typedef {object} FallbackAnswer
- * @property {(typeof INTENTS)[number]} intent
+ * @property {(typeof FALLBACK_INTENTS)[number]} intent
  * @property {string} language '' = any, else a language-lock language
  * @property {string[]} keywords any one of them in the message (none = any message)
  * @property {string} text markdown with placeholders
  */
+/** @typedef {'item' | 'intent' | 'language' | 'keywords' | 'text'} FallbackProblem what is wrong with an answer */
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -43,36 +45,72 @@ export const placeholdersOf = (text) =>
 	/** @type {Array<keyof typeof PLACEHOLDERS>} */ (Object.keys(PLACEHOLDERS).filter((name) => text.includes(`{${name}}`)));
 
 /**
+ * An answer as it is kept: language and text trimmed, keywords trimmed with the empty ones dropped (blank lines of the
+ * editor). A missing language or keyword list means any.
+ * @param {Record<string, unknown>} item
+ */
+const keptOf = (item) => ({
+	intent: item.intent,
+	language: typeof item.language === 'string' ? item.language.trim() : '',
+	keywords: (Array.isArray(item.keywords) ? item.keywords : [])
+		.map((keyword) => (typeof keyword === 'string' ? keyword.trim() : keyword))
+		.filter((keyword) => keyword !== ''),
+	text: typeof item.text === 'string' ? item.text.trim() : '',
+});
+
+/** @param {unknown} value */
+const missing = (value) => value === undefined || value === null;
+
+/**
+ * What is wrong with one answer, field by field (none: it is fine). The server's check and the Settings editor both
+ * use it, so the editor refuses exactly what the server would. A language or keyword list of the wrong type is wrong,
+ * never read as "any" (which would answer every message).
+ * @param {unknown} item
+ * @returns {FallbackProblem[]}
+ */
+export const fallbackProblems = (item) => {
+	if (!isObject(item)) return ['item'];
+	const { intent, language, keywords, text } = keptOf(item);
+	/** @type {FallbackProblem[]} */
+	const problems = [];
+	if (!FALLBACK_INTENTS.includes(/** @type {any} */ (intent))) problems.push('intent');
+	if ((!missing(item.language) && typeof item.language !== 'string') || (language !== '' && !LANGUAGE.test(language)))
+		problems.push('language');
+	if (
+		(!missing(item.keywords) && !Array.isArray(item.keywords)) ||
+		keywords.length > FALLBACK_LIMITS.keywords ||
+		keywords.some((keyword) => typeof keyword !== 'string' || keyword.length > FALLBACK_LIMITS.keywordLength)
+	)
+		problems.push('keywords');
+	if (text === '' || text.length > FALLBACK_LIMITS.text) problems.push('text');
+	return problems;
+};
+
+/** The server's words for each problem. */
+const PROBLEM_TEXTS = Object.freeze({
+	item: 'not valid.',
+	intent: `the intent is one of ${FALLBACK_INTENTS.join(', ')}.`,
+	language: 'the language is empty (any) or a code such as en.',
+	keywords: `the keywords are a list of up to ${FALLBACK_LIMITS.keywords} words or phrases of up to ${FALLBACK_LIMITS.keywordLength} characters.`,
+	text: `write the answer (up to ${FALLBACK_LIMITS.text} characters).`,
+});
+
+/**
  * Check the list setting.
  * @param {unknown} raw
  * @returns {{ ok: true, value: FallbackAnswer[] } | { ok: false, errors: string[] }}
  */
 export const checkFallbackAnswers = (raw) => {
 	if (!Array.isArray(raw)) return { ok: false, errors: ['Send a list of fallback answers.'] };
-	if (raw.length > MAX_FALLBACKS) return { ok: false, errors: [`Up to ${MAX_FALLBACKS} fallback answers.`] };
-	/** @type {string[]} */
-	const errors = [];
-	/** @type {FallbackAnswer[]} */
-	const value = [];
-	raw.forEach((item, index) => {
-		const at = `Answer ${index + 1}`;
-		if (!isObject(item)) return void errors.push(`${at}: not valid.`);
-		const intent = INTENTS.includes(/** @type {any} */ (item.intent))
-			? /** @type {FallbackAnswer['intent']} */ (item.intent)
-			: null;
-		if (!intent) errors.push(`${at}: the intent is one of ${INTENTS.join(', ')}.`);
-		const language = typeof item.language === 'string' ? item.language.trim() : '';
-		if (language !== '' && !LANGUAGE.test(language)) errors.push(`${at}: the language is empty (any) or a code such as en.`);
-		const keywords = (Array.isArray(item.keywords) ? item.keywords : [])
-			.filter((keyword) => typeof keyword === 'string' && keyword.trim() !== '')
-			.map((keyword) => String(keyword).trim());
-		if (keywords.length > MAX_KEYWORDS || keywords.some((keyword) => keyword.length > 100))
-			errors.push(`${at}: up to ${MAX_KEYWORDS} keywords of up to 100 characters.`);
-		const text = typeof item.text === 'string' ? item.text.trim() : '';
-		if (text === '' || text.length > MAX_TEXT) errors.push(`${at}: write the answer (up to ${MAX_TEXT} characters).`);
-		if (intent) value.push({ intent, language, keywords, text });
-	});
-	return errors.length > 0 ? { ok: false, errors } : { ok: true, value };
+	if (raw.length > FALLBACK_LIMITS.answers) return { ok: false, errors: [`Up to ${FALLBACK_LIMITS.answers} fallback answers.`] };
+	const errors = raw.flatMap((item, index) =>
+		fallbackProblems(item).map((problem) => `Answer ${index + 1}: ${PROBLEM_TEXTS[problem]}`),
+	);
+	if (errors.length > 0) return { ok: false, errors };
+	return {
+		ok: true,
+		value: raw.map((item) => /** @type {FallbackAnswer} */ (keptOf(/** @type {Record<string, unknown>} */ (item)))),
+	};
 };
 
 /** @param {string} tag */

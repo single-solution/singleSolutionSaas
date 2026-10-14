@@ -1,14 +1,14 @@
 'use client';
 /**
  * Settings tab (PLAN 0.8.3 Chat dashboard): the kit's settings forms of the features the viewer may see, grouped in
- * Chat's sections, with the list editors, the tool signing secret, the theme, the Format (with the theme, in Widget
- * look) and the widget texts. A section shows only when one of its features is visible (merchants: switched-on
- * features; admins: all, off ones marked); Widget look always shows, for the Format.
+ * Chat's sections, with the list editors (fallback answers with the Assistant), the tool signing secret, the theme,
+ * the Format (with the theme, in Widget look) and the widget texts. A section shows only when one of its features is
+ * visible (merchants: switched-on features; admins: all, off ones marked); Widget look always shows, for the Format.
  * @module
  */
 import { Callout, Masonry, Section } from '@ss/ui';
 import { call, useLoad } from './api.js';
-import { CustomFieldsEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
+import { CustomFieldsEditor, FallbackAnswersEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -79,9 +79,20 @@ export function SettingsTab({ websiteId: id }) {
 						notice={aiLabelNotice}
 					/>
 				);
+				/** @param {string} key */
+				const on = (key) => seen(key) !== null && !off(key);
+				/** Language lock's languages, offered for fallback answers. */
+				const languages = on('language_lock') ? seen('language_lock')?.values.allowedLanguages?.value : [];
 				/** @type {Record<SectionId, import('react').ReactNode>} */
 				const extras = {
-					assistant: null,
+					assistant: seen('fallback_answers') ? (
+						<FallbackAnswersEditor
+							websiteId={websiteId}
+							off={off('fallback_answers')}
+							languages={Array.isArray(languages) ? languages.map(String) : []}
+							on={on}
+						/>
+					) : null,
 					tools:
 						seen('webhook_tools') || seen('book_slot') ? (
 							<>

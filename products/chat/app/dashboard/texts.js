@@ -75,7 +75,7 @@ export const TEXTS = Object.freeze({
 		sections: Object.freeze({
 			assistant: Object.freeze({
 				title: 'Assistant',
-				help: 'How the AI answers: behavior, your instructions, token caps, cost alerts and languages.',
+				help: 'How the AI answers: behavior, your instructions, token caps, cost alerts, languages and your fallback answers.',
 			}),
 			tools: Object.freeze({
 				title: 'Tools',
@@ -202,6 +202,42 @@ export const TEXTS = Object.freeze({
 			field: 'Field',
 			fields: Object.freeze({ name: 'Name', email: 'Email', phone: 'Phone', text: 'Free text' }),
 			custom: 'Custom: {label}',
+		}),
+		fallbackAnswers: Object.freeze({
+			title: 'Fallback answers',
+			help: 'Your own answers when the AI fails, reaches a cap or its answer is refused: the first answer whose language and keywords fit the visitor’s message is sent, else the When the AI cannot answer message.',
+			item: 'Answer',
+			intent: 'For',
+			intents: Object.freeze({
+				greeting: 'Greetings',
+				deals: 'Deals',
+				products: 'Products',
+				budget: 'A budget',
+				my_orders: 'The visitor’s orders',
+				other: 'Anything else',
+			}),
+			language: 'Language',
+			anyLanguage: 'Any language',
+			languageHelp: 'A language answers only visitors writing in it, and needs Language lock (its languages are listed here).',
+			keywords: 'Keywords (one per line)',
+			keywordsHelp:
+				'Sent when the message contains one of them; none = any message. Up to {max} of up to {length} characters.',
+			text: 'Answer',
+			textHelp:
+				'Markdown, up to {max} characters. Placeholders, filled by the shop tools that are on: {deals_table} the active deals, {top_products} the top products, {products_under} products under the budget in the message, {my_orders} the visitor’s orders. An answer whose placeholder cannot be filled is skipped.',
+			needsOff: 'Skipped while these are off: {features}.',
+			placeholderFeatures: Object.freeze({
+				deals_table: 'Shop tools: deals and savings quotes',
+				top_products: 'Shop tools: top and new products',
+				products_under: 'Shop tools: product search and details',
+				my_orders: 'Shop tools: my orders and account',
+			}),
+			problems: Object.freeze({
+				intent: 'Pick what the answer is for.',
+				language: 'Pick a language, or Any language.',
+				keywords: 'Up to {max} keywords of up to {length} characters each.',
+				text: 'Write the answer (up to {max} characters).',
+			}),
 		}),
 		customFields: Object.freeze({
 			title: 'Custom fields',

@@ -1,8 +1,9 @@
 'use client';
 /**
- * Settings list editors (Chat's own dashboard routes, PLAN 0.8.3): webhook tools, page rules, flows and custom fields,
- * each saved whole with `PUT /v1/dashboard/websites/:websiteId/lists/:list { items }` (a 422 lists its `errors`), and
- * the tool signing secret (reveal, copy, regenerate).
+ * Settings list editors (Chat's own dashboard routes, PLAN 0.8.3): webhook tools, page rules, flows, custom fields and
+ * fallback answers (PLAN 0.8.10 C3), each saved whole with `PUT /v1/dashboard/websites/:websiteId/lists/:list
+ * { items }` (a 422 lists its `errors`), and the tool signing secret (reveal, copy, regenerate). The fallback answers
+ * editor checks each answer with the server's own rules before it saves.
  * @module
  */
 import { useState } from 'react';
@@ -21,6 +22,7 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
+import { FALLBACK_INTENTS, FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { call, fill, useLoad } from './api.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
@@ -101,10 +103,11 @@ function EntryHead({ label, index, count, onMove, onRemove }) {
 /**
  * One list, edited as a whole and saved with one PUT.
  * @param {{ websiteId: string, list: string, title: string, help: string, itemLabel: string, max: number,
- *   blank: () => Item, clean: (item: Item) => Item, off?: boolean,
- *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props
+ *   blank: () => Item, clean: (item: Item) => Item, off?: boolean, invalid?: (item: Item) => boolean,
+ *   render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props `invalid`: an entry the
+ *   server would refuse (its fields say why): the list is not saved while one is
  */
-function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean, off, render }) {
+function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean, off, invalid, render }) {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${list}`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Item[] | null} */ (null));
@@ -143,7 +146,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 								</Button>
 								<Button
 									size="sm"
-									disabled={draft === null}
+									disabled={draft === null || (invalid !== undefined && items.some((item) => invalid(clean(item))))}
 									onClick={async () => {
 										const next = await call('PUT', path, { items: items.map(clean) });
 										setResult(next);
@@ -554,6 +557,110 @@ export function FlowsEditor({ websiteId, off, customFields }) {
 							onClick={() => set({ steps: [...steps, stepOf('message')] })}>
 							{F.addStep}
 						</Button>
+					</>
+				);
+			}}
+		/>
+	);
+}
+
+const A = L.fallbackAnswers;
+
+/** English names of languages for the language list (the code alone where the browser has none). */
+const LANGUAGE_NAMES = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en-US'], { type: 'language' }) : null;
+
+/**
+ * A language as the editor lists it: `English (en)`, else its code.
+ * @param {string} code
+ */
+const languageLabel = (code) => {
+	try {
+		const name = LANGUAGE_NAMES?.of(code);
+		return name && name !== code ? `${name} (${code})` : code;
+	} catch {
+		return code;
+	}
+};
+
+/**
+ * A fallback answer as saved (C3): keywords from the lines typed, trimmed.
+ * @param {Item} answer
+ */
+const cleanAnswer = (answer) => ({
+	intent: answer.intent,
+	language: String(answer.language ?? '').trim(),
+	keywords: cleanLines(answer.keywords),
+	text: String(answer.text ?? '').trim(),
+});
+
+/**
+ * Settings → Assistant: the merchant's fallback answers (PLAN 0.8.10 C3), checked as the server checks them.
+ * @param {EditorProps & { languages: string[], on: (feature: string) => boolean }} props `languages`: Language lock's
+ *   languages; `on`: whether a feature is on (an answer whose placeholder needs an off shop tool is skipped)
+ */
+export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
+	const limits = { max: FALLBACK_LIMITS.keywords, length: FALLBACK_LIMITS.keywordLength };
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="fallback_answers"
+			title={A.title}
+			help={A.help}
+			itemLabel={A.item}
+			max={FALLBACK_LIMITS.answers}
+			off={off}
+			blank={() => ({ intent: 'other', language: '', keywords: [], text: '' })}
+			clean={cleanAnswer}
+			invalid={(answer) => fallbackProblems(answer).length > 0}
+			render={(answer, set) => {
+				const problems = fallbackProblems(cleanAnswer(answer));
+				/** @param {'intent' | 'language' | 'keywords' | 'text'} field @param {Record<string, number>} [values] */
+				const problem = (field, values = {}) => (problems.includes(field) ? fill(A.problems[field], values) : undefined);
+				const choices = [...new Set([...languages, ...(answer.language ? [answer.language] : [])])];
+				const offTools = placeholdersOf(String(answer.text ?? ''))
+					.filter((name) => !on(PLACEHOLDERS[name]))
+					.map((name) => A.placeholderFeatures[name]);
+				return (
+					<>
+						<FieldGrid>
+							<Select
+								label={A.intent}
+								value={answer.intent}
+								options={FALLBACK_INTENTS.map((value) => ({ value, label: A.intents[value] }))}
+								error={problem('intent')}
+								onChange={(event) => set({ intent: event.target.value })}
+							/>
+							<Select
+								label={A.language}
+								value={answer.language ?? ''}
+								options={[
+									{ value: '', label: A.anyLanguage },
+									...choices.map((value) => ({ value, label: languageLabel(value) })),
+								]}
+								help={A.languageHelp}
+								error={problem('language')}
+								onChange={(event) => set({ language: event.target.value })}
+							/>
+						</FieldGrid>
+						<TextArea
+							label={A.keywords}
+							rows={3}
+							value={(answer.keywords ?? []).join('\n')}
+							help={fill(A.keywordsHelp, limits)}
+							error={problem('keywords', limits)}
+							onChange={(event) => set({ keywords: toLines(event.target.value) })}
+						/>
+						<TextArea
+							label={A.text}
+							rows={4}
+							value={answer.text ?? ''}
+							help={fill(A.textHelp, { max: FALLBACK_LIMITS.text })}
+							error={problem('text', { max: FALLBACK_LIMITS.text })}
+							onChange={(event) => set({ text: event.target.value })}
+						/>
+						{offTools.length > 0 ? (
+							<Callout tone="warning">{fill(A.needsOff, { features: offTools.join(', ') })}</Callout>
+						) : null}
 					</>
 				);
 			}}
