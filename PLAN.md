@@ -1388,8 +1388,8 @@ Chat when Ecommerce is built (0.12 step 10) and are not in Chat's feature list b
 loaded, rules); SLA targets and breach alerts; priorities and tags; snooze, merge, transfer and auto-close; channels
 other than the website widget (WhatsApp, Messenger, Instagram, e-mail-to-inbox, SMS); a JSON flow graph or any
 visual flow builder; per-language text catalogs; transcript retention days; topic grouping in reports; guest order
-lookup by order number; a realtime service or websockets. Tuning knobs (BM25, chunk sizes, timeouts, poll intervals,
-retry counts) are constants in code, not settings.
+lookup by order number; a realtime service or websockets. Tuning knobs (BM25, chunk sizes, timeouts, the inbox's poll
+intervals, retry counts) are constants in code, not settings (the widget's poll intervals are settings since C19).
 
 **Rules between features**
 
