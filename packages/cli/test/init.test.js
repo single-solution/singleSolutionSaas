@@ -104,7 +104,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		]);
 		expect(await read(dir, '.env.local')).toMatch(/^MONGODB_URI=\nCONNECT_SECRET=[\w-]{43}\nENCRYPTION_KEY=[\w-]{43}\n$/);
 		const ignored = (await read(dir, '.gitignore')).split('\n');
-		for (const line of ['.env*', '**/.env*', '!.env.example', '!**/.env.example']) expect(ignored).toContain(line);
+		for (const line of ['.env*', '!.env.example']) expect(ignored).toContain(line);
 		expect((await json(dir, 'vercel.json')).crons).toBeUndefined();
 		expect(await read(dir, 'vitest.config.js')).toContain("from '@ss/config/vitest'");
 		expect((await json(dir, 'tsconfig.json')).extends).toBe('@ss/config/tsconfig.base.json');

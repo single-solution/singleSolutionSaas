@@ -36,7 +36,6 @@ const DEFAULT_BASE_URL = 'http://localhost:3000';
  * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default `workspace:^`)
  * @property {boolean} [standalone] add the files of a repository of its own (default: when `dir` is not inside a pnpm
  *   workspace)
- * @property {string} [templatesDir]
  */
 
 /**
@@ -120,15 +119,7 @@ const secret = (bytes) => randomBytes(bytes).toString('base64url');
  * @param {InitOptions} options
  * @returns {Promise<{ dir: string, files: string[] }>} files written (relative, sorted)
  */
-export const initApp = async ({
-	dir,
-	id,
-	name,
-	baseUrl = DEFAULT_BASE_URL,
-	sdkVersion = 'workspace:^',
-	standalone,
-	templatesDir = TEMPLATES_DIR,
-}) => {
+export const initApp = async ({ dir, id, name, baseUrl = DEFAULT_BASE_URL, sdkVersion = 'workspace:^', standalone }) => {
 	const errors = checkInitOptions({ dir, id, name, baseUrl });
 	if (errors.length > 0) throw Object.assign(new Error(errors.join('; ')), { code: 'invalid_options' });
 	const target = path.resolve(dir);
@@ -143,7 +134,7 @@ export const initApp = async ({
 	/** @type {Map<string, string>} destination → source */
 	const plan = new Map();
 	for (const layer of ['product', ...(own ? ['standalone'] : [])]) {
-		const root = path.join(templatesDir, layer);
+		const root = path.join(TEMPLATES_DIR, layer);
 		for (const file of await walk(root, { ignore: new Set(['node_modules']) })) {
 			const destination = fill(file, values)
 				.split('/')
