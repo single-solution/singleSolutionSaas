@@ -2273,8 +2273,9 @@ keep the timing of the dummy check.
   `role_requests.giveRoleAt` `invite` (default) | `completion`; `POST /v1/setup-links/lookup { code }` (POST so the code
   never sits in request logs; 6/min per visitor) answers `valid` with the display name, the phone's last 4 digits and
   the end date, else `expired`, `used`, `canceled` or `invalid` (unknown codes are always `invalid`); a City (or any
-  profile field) is a custom field. Follow-up (privacy): detailed outcomes only when the website chooses to reveal them
-  (default: the same answer for everyone).
+  profile field) is a custom field. Privacy (5965e9c4): `role_requests.revealStatus` (default false) — while false every
+  request answers the same `{ outcome: 'requested' }` with the same database work, so nobody can probe who is a member
+  or invited; true gives the detailed outcomes (a store that shows them today sets it in its mapping).
 
 **A6. Per-role sign-in options.**
 
