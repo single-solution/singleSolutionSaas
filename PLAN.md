@@ -1869,6 +1869,19 @@ that says otherwise.
   added and the low-balance e-mail is tested; BP-1 and BP-3 (a false "credits ran out" and an early stop) are fixed
   before any moved store depends on billing.
 
+**Owner answers, 2026-10-14 (store quirks raised under D1; all as Claude recommended).** (1) Account lock: keep a lock;
+the stores' values become `networkLimit` 8, `maxAttempts` 20, `lockMinutes` 1. (2) A guest who types a member's phone
+at checkout: the order is linked to the member's customer record and moves into their account only at a verified
+sign-in (changes E59). (3) A staff cancel note stays internal; only a separate "reason for the shopper" reaches the
+shopper (changes E61). (4) A deal that ended between cart and order answers `price_changed` (E58; fixed, not copied).
+(5) CT's chat inbox: `inbox.guests: escalated`. (6) CT's price filter and sort on the sale price and "In stock" hiding
+sold-out variants: accepted. (7) The importer copies the "seen" markers, so old orders do not turn unread. (8) Customer
+"spent" counts paid orders only. (9) Chat attachment image sizes: not now. (10) CT's "never disclose" persona: off.
+(11) The products' own caps and page-view counting: accepted. **Phase 4b go for SB (2026-10-14):** E39, E41, E43, E44,
+E45, E46, E47 are built now, with the re-audit's amendments (PL-3, CU-10, CU-14, SG-10, SG-20, RW-5). **SB conversion
+go (2026-10-14):** the owner created the SB merchant; the work happens on a branch of the SB repository, never pushed or
+deployed without the owner; SB's live data may be read (never written), through an address the owner gives.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
