@@ -279,7 +279,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 		expect(page.variants.every((/** @type {any} */ variant) => variant.media.length === 1)).toBe(true);
 	});
 
-	it('writes a phones catalog: grades per category with their own conditions, serials and warranty', async () => {
+	it('writes a phones catalog: an item type, grades per category with their own conditions, unit numbers and warranty', async () => {
 		await configure(DEVICES, {
 			'catalog.productUrl': '/{category}/{slug}',
 			'catalog.categoryUrl': '/{slug}',
@@ -295,21 +295,36 @@ describe('Ecommerce catalogs on the real Portal', () => {
 				},
 				{ key: 'b', label: 'B', condition: 'used', warrantyDays: 30 },
 			],
-			'grades_serials.serialMode': 'typed',
 			'landing_pages.gradeUrl': '/grades/{key}',
 		});
-		const phones = await write(DEVICES, 'POST', '/v1/categories', { name: 'Phones', slug: 'phones', requiresSerial: true });
 		// the IMEI is this shop's own unit field: 15 digits with a Luhn check digit, two per dual-SIM phone
 		const imei = await write(DEVICES, 'POST', '/v1/attributes', {
 			name: 'IMEI',
 			on: 'unit',
 			multiple: true,
 			required: true,
-			categoryIds: [phones.id],
 			format: { chars: 'digits', minLength: 15, maxLength: 15, checkDigit: 'luhn', ignoreSpaces: true },
 			show: { shopper: true, invoice: true, packingSlip: true },
 		});
 		expect(imei).toMatchObject({ on: 'unit', maxValues: 2, format: { checkDigit: 'luhn' } });
+		// its used phones: options, grades, a package, own warranty days and IMEIs typed at packing, needed before dispatch
+		await configure(DEVICES, {
+			'list.item_types': [
+				{
+					key: 'used_phone',
+					name: 'Used phone',
+					kind: 'physical',
+					elements: {
+						variants: true,
+						grades: true,
+						parcel: true,
+						warranty: true,
+						units: { fieldIds: [imei.id], capture: 'packing', requiredBefore: 'shipped' },
+					},
+				},
+			],
+		});
+		const phones = await write(DEVICES, 'POST', '/v1/categories', { name: 'Phones', slug: 'phones', typeKey: 'used_phone' });
 		const brand = await write(DEVICES, 'POST', '/v1/brands', { name: 'Pixel', slug: 'pixel' });
 		const phone = await write(DEVICES, 'POST', '/v1/products', {
 			name: 'Pixel 8 Pro',
@@ -317,7 +332,6 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			status: 'active',
 			categoryIds: [phones.id],
 			brandId: brand.id,
-			serialized: null,
 			options: [{ name: 'Storage', values: ['128 GB'] }],
 			variants: [
 				{ options: { Storage: '128 GB' }, price: 15_000_000, stock: 2, grade: 'a-plus' },
@@ -332,8 +346,10 @@ describe('Ecommerce catalogs on the real Portal', () => {
 		});
 		Object.assign(ids, { phone, phones });
 
+		expect(phone).toMatchObject({ typeKey: null, type: { key: 'used_phone', kind: 'physical' } });
 		const page = (await serverCall(DEVICES, 'GET', '/v1/shop/products/pixel-8-pro')).json;
 		expect(page.url).toBe('https://devices.example.com/phones/pixel-8-pro');
+		expect(page.type).toEqual({ key: 'used_phone', kind: 'physical' });
 		expect(page.variants.map((/** @type {any} */ v) => [v.grade.key, v.grade.condition, v.warrantyDays, v.stockLeft])).toEqual([
 			['a-plus', 'refurbished', 90, 2],
 			['b', 'used', 60, 3],

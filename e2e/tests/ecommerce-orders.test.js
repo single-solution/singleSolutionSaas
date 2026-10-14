@@ -1085,7 +1085,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		expect(String(file.json).split('\r\n')[1]).toMatch(new RegExp(`^2026-10-01,${counted.length},`));
 	});
 
-	it('asks the shop’s order fields at checkout, needs a stage’s field before packing, and keeps a dual-SIM phone’s IMEIs as its own unit field (dynamic model §2)', async () => {
+	it('asks the shop’s order fields at checkout, needs a stage’s field before packing, and keeps a dual-SIM phone’s IMEIs as its own unit field of its item type (dynamic model §1–§2)', async () => {
 		const gift = await write('POST', '/v1/attributes', {
 			name: 'Gift message',
 			on: 'order',
@@ -1111,13 +1111,23 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 			format: { chars: 'digits', minLength: 15, maxLength: 15, checkDigit: 'luhn', ignoreSpaces: true },
 			show: { shopper: true, invoice: true },
 		});
-		await configure({ 'grades_serials.serialMode': 'typed' });
+		// the shop's phones: an item type whose units are numbered by the IMEI, typed at packing, needed before dispatch
+		await configure({
+			'list.item_types': [
+				{
+					key: 'phone',
+					name: 'Phone',
+					kind: 'physical',
+					elements: { units: { fieldIds: [imei.id], capture: 'packing', requiredBefore: 'shipped' } },
+				},
+			],
+		});
 		const dual = await write('POST', '/v1/products', {
 			name: 'Dual-SIM phone',
 			status: 'active',
 			price: PHONE_PRICE,
 			stock: 3,
-			serialized: true,
+			typeKey: 'phone',
 		});
 		const sara = await signIn('07700900111');
 		const lines = [{ productId: dual.id, quantity: 1 }];
@@ -1146,6 +1156,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const typed = await write('PATCH', `/v1/orders/${order.id}`, {
 			serials: { [lineId]: [{ values: { [imei.id]: ['4901 5420 3237 518', '356938035643809'] } }] },
 		});
+		expect(typed.lines[0]).toMatchObject({ unitCapture: 'packing', unitsRequiredBefore: 'shipped' });
 		expect(typed.lines[0].units).toEqual([
 			{ serial: '490154203237518', values: { [imei.id]: ['490154203237518', '356938035643809'] } },
 		]);
