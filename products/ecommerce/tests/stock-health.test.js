@@ -6,7 +6,7 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { staffFilter, variantStockCounts } from '../core/catalog-query.js';
+import { countsForStock, staffFilter, stockEventOf, variantStockCounts } from '../core/catalog-query.js';
 import { HEALTH_CHECKS, badTagIds, healthOf, isPublicAddress, paymentMethodsOn } from '../core/health.js';
 import { GROWTH, readyShop } from './helpers.js';
 
@@ -64,6 +64,27 @@ describe('low stock (E44)', () => {
 				{ _id: 'other', n: 9 },
 			]),
 		).toEqual({ out: 0, low: 2, in: 0 });
+	});
+
+	it('calls a drop into 1 to lowStock low and a drop to 0 out, nothing else (the stock events)', () => {
+		expect(stockEventOf(5, 2, 2)).toBe('stock.low');
+		expect(stockEventOf(3, 1, 2)).toBe('stock.low');
+		expect(stockEventOf(2, 1, 2)).toBeNull(); // already low
+		expect(stockEventOf(5, 3, 2)).toBeNull(); // still above
+		expect(stockEventOf(1, 0, 2)).toBe('stock.out');
+		expect(stockEventOf(9, 0, 2)).toBe('stock.out');
+		expect(stockEventOf(0, 2, 2)).toBeNull(); // a rise
+		expect(stockEventOf(2, 2, 2)).toBeNull();
+		expect(stockEventOf(5, 1, 0)).toBeNull(); // level 0: never low
+		expect(stockEventOf(1, 0, 0)).toBe('stock.out');
+		const product = { trackStock: true, status: /** @type {const} */ ('active') };
+		const offered = { active: true, soldOut: false };
+		expect(countsForStock(product, offered)).toBe(true);
+		expect(countsForStock({ ...product, status: 'draft' }, offered)).toBe(true);
+		expect(countsForStock({ ...product, status: 'archived' }, offered)).toBe(false);
+		expect(countsForStock({ ...product, trackStock: false }, offered)).toBe(false);
+		expect(countsForStock(product, { ...offered, active: false })).toBe(false);
+		expect(countsForStock(product, { ...offered, soldOut: true })).toBe(false);
 	});
 
 	it('counts sellable variants with 1 to lowStock units on products not archived', async () => {

@@ -6,8 +6,10 @@
  *   template, or one per status with `statusTemplates: per_status`); an order its window cancels says so (`expired`);
  * - events (feature `events`, the kit's K5): `order.placed`, `order.status_changed`, `order.paid`,
  *   `order.payment_recorded`, `order.proof_uploaded`, `order.cancelled`, `order.refunded`, `return.requested`,
- *   `return.status_changed`, `review.submitted`, `catalog.changed` and `stock.low` — ids and small facts only, listed by
- *   `GET /v1/events` and sent to the merchant's webhooks through Notifications;
+ *   `return.status_changed`, `review.submitted`, `catalog.changed`, `stock.low` and `stock.out` — ids and small facts
+ *   only, listed by `GET /v1/events` and sent to the merchant's webhooks through Notifications; the stock events follow
+ *   E44's levels: a variant that counts for stock (`countsForStock`) whose units an order or a catalog write drops into
+ *   1 to the catalog setting `lowStock` (`stock.low`) or to 0 (`stock.out`);
  * - staff alerts (feature `staff_alerts`, the kit's K6 rules, `server/staff-alerts.js`): the events the setting `events`
  *   lists, as `ecommerce.staff_<event>` templates to its recipients, required and saved before they are sent (K-17).
  *
@@ -15,6 +17,7 @@
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
+import { countsForStock, stockEventOf } from '../core/catalog-query.js';
 import { statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
@@ -174,25 +177,59 @@ export const createOrderEvents = (product, service) => {
 		});
 	});
 
-	// catalog writes, and each write that leaves a variant at or under the catalog's low-stock level
-	service.on('products.changed', async (s, { productIds }) => {
+	/** The catalog setting `lowStock` (E44). @param {Site} s */
+	const lowStockOf = async (s) => Number((await s.values('catalog')).lowStock ?? 0);
+
+	/**
+	 * Publish a stock event (E44), as `stockEventOf` names it.
+	 * @param {Site} s @param {'stock.low' | 'stock.out'} type
+	 * @param {{ productId: string, variantId: string, stock: number }} data
+	 */
+	const publishStock = (s, type, data) => (type === 'stock.out' ? publish(s, 'stock.out', data) : publish(s, 'stock.low', data));
+
+	// catalog writes: the product changed, and a variant counting for stock the write left with fewer units may be low
+	// or out (its units before come with the write; stock given back has none, and only rises)
+	service.on('products.changed', async (s, { productIds, before }) => {
 		if (!s.has('events') || !Array.isArray(productIds) || productIds.length === 0) return;
 		const data = await s.data();
-		const { lowStock } = await s.values('catalog');
+		const level = await lowStockOf(s);
 		const rows = await data
 			.collection('products')
 			.find(
 				{ websiteId: s.websiteId, id: { $in: productIds.slice(0, 200) } },
-				{ projection: { _id: 0, id: 1, slug: 1, trackStock: 1, variants: { id: 1, stock: 1, active: 1 } } },
+				{
+					projection: {
+						_id: 0,
+						id: 1,
+						slug: 1,
+						status: 1,
+						trackStock: 1,
+						variants: { id: 1, stock: 1, active: 1, soldOut: 1 },
+					},
+				},
 			)
 			.toArray();
 		for (const row of rows) {
-			await publish(s, 'catalog.changed', { kind: 'product', id: row.id, slug: row.slug ?? '' });
-			if (!row.trackStock) continue;
-			for (const variant of row.variants ?? []) {
-				if (!variant.active || variant.stock > Number(lowStock ?? 0)) continue;
-				await publish(s, 'stock.low', { productId: row.id, variantId: variant.id, stock: variant.stock });
+			await publish(s, 'catalog.changed', { kind: 'product', id: row.id, slug: row.slug });
+			/** @type {Map<string, number> | undefined} */
+			const units = before?.get(row.id)?.stock;
+			if (!units) continue;
+			for (const variant of row.variants) {
+				const was = units.get(variant.id);
+				const type = was === undefined || !countsForStock(row, variant) ? null : stockEventOf(was, variant.stock, level);
+				if (type) await publishStock(s, type, { productId: row.id, variantId: variant.id, stock: variant.stock });
 			}
+		}
+	});
+
+	// an order took stock (placed, or edited to more units): only offered variants not marked sold out, of active
+	// products that track stock, are held, so each counts for stock
+	service.on('stock.taken', async (s, { lines }) => {
+		if (!s.has('events') || !Array.isArray(lines) || lines.length === 0) return;
+		const level = await lowStockOf(s);
+		for (const line of /** @type {import('../adapters/ledger.js').TakenStock[]} */ (lines)) {
+			const type = stockEventOf(line.left + line.quantity, line.left, level);
+			if (type) await publishStock(s, type, { productId: line.productId, variantId: line.variantId, stock: line.left });
 		}
 	});
 

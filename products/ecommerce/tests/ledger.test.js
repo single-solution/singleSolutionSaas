@@ -14,6 +14,7 @@ import {
 	restockClaimLines,
 	returnToOrigin,
 	spendPoints,
+	swapOrderStock,
 	takePoints,
 } from '../adapters/ledger.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -269,7 +270,7 @@ describe('placing an order', () => {
 		const held = await holdStock(data, [
 			{ productId: untracked.id, variantId: /** @type {string} */ (untracked.variants[0]?.id), quantity: 9 },
 		]);
-		expect(held.ok).toBe(true);
+		expect(held).toMatchObject({ ok: true, taken: [{ quantity: 9, left: null }] });
 		expect(await holdStock(data, [{ productId: 'prd_missing000000', variantId: 'var_x', quantity: 1 }])).toMatchObject({
 			ok: false,
 		});
@@ -279,6 +280,43 @@ describe('placing an order', () => {
 				{ productId: 'p', variantId: 'v', quantity: 2 },
 			]),
 		).toEqual([{ productId: 'p', variantId: 'v', quantity: 3 }]);
+	});
+
+	it('reports the stock an order takes: placed, and edited to more units (the stock events)', async () => {
+		const product = await shop.seedProduct({ stock: 6 });
+		const variantId = /** @type {string} */ (product.variants[0]?.id);
+		const placed = await placeOrder(
+			data,
+			{ order: orderOf([{ productId: product.id, variantId, quantity: 2 }]), numberPrefix: '' },
+			{ now: shop.now() },
+		);
+		if (!placed.ok) throw new Error('not placed');
+		expect(placed.taken).toEqual([{ productId: product.id, variantId, quantity: 2, left: 4 }]);
+		const order = /** @type {any} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: placed.order.id })
+		);
+		const edit = (/** @type {number} */ quantity, /** @type {any} */ current) =>
+			swapOrderStock(data, current, {
+				lines: [{ productId: product.id, variantId, quantity }],
+				update: async (session) =>
+					(
+						await data
+							.collection(COLLECTIONS.orders)
+							.updateOne(
+								{ websiteId: data.websiteId, id: current.id },
+								{ $set: { 'lines.0.quantity': quantity } },
+								{ session },
+							)
+					).modifiedCount === 1,
+			});
+		// 2 → 5 units: the variant lost 3 more
+		expect(await edit(5, order)).toEqual({ ok: true, taken: [{ productId: product.id, variantId, quantity: 3, left: 1 }] });
+		const edited = /** @type {any} */ (
+			await data.collection(COLLECTIONS.orders).findOne({ websiteId: data.websiteId, id: order.id })
+		);
+		// 5 → 4 units: the variant got one back, nothing was taken
+		expect(await edit(4, edited)).toEqual({ ok: true, taken: [] });
+		expect((await stockOf(product.id)).stock).toBe(2);
 	});
 
 	it('returns to origin and restocks a claim exactly once', async () => {

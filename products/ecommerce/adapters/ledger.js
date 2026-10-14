@@ -76,6 +76,11 @@ export const LEDGER_INDEXES = [
  * @property {string | null} [locationId] where it was taken (release, restock)
  */
 
+/**
+ * Units an order took from a variant that tracks stock, and what the variant holds after (for the stock events, E44).
+ * @typedef {{ productId: string, variantId: string, quantity: number, left: number }} TakenStock
+ */
+
 /** @param {unknown} error */
 const isDuplicate = (error) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === 11000;
 
@@ -126,14 +131,15 @@ export const refreshProducts = async (data, productIds, session) => {
 /**
  * Hold stock for lines (an order's placement). Stock is taken from the variant's `stock`, and with locations from the
  * first location in `locationOrder` that has the whole quantity. A product that does not track stock is not touched.
+ * `left` is what the variant holds right after (null when stock is not tracked), read in the same write.
  * @param {WebsiteData} data
  * @param {StockLine[]} lines
  * @param {{ locationOrder?: string[], session?: Session }} [options]
- * @returns {Promise<{ ok: true, taken: Array<StockLine & { locationId: string | null }> } | { ok: false, productId: string, variantId: string }>}
+ * @returns {Promise<{ ok: true, taken: Array<StockLine & { locationId: string | null, left: number | null }> } | { ok: false, productId: string, variantId: string }>}
  */
 export const holdStock = async (data, lines, { locationOrder = [], session } = {}) => {
 	const products = data.collection(COLLECTIONS.products);
-	/** @type {Array<StockLine & { locationId: string | null }>} */
+	/** @type {Array<StockLine & { locationId: string | null, left: number | null }>} */
 	const taken = [];
 	for (const line of mergeStockLines(lines)) {
 		const product = /** @type {any} */ (
@@ -147,7 +153,7 @@ export const holdStock = async (data, lines, { locationOrder = [], session } = {
 		const variant = (product.variants ?? []).find((/** @type {any} */ v) => v.id === line.variantId);
 		if (variant?.soldOut === true) return { ok: false, productId: line.productId, variantId: line.variantId };
 		if (!product.trackStock) {
-			taken.push({ ...line, locationId: null });
+			taken.push({ ...line, locationId: null, left: null });
 			continue;
 		}
 		const tries = locationOrder.length > 0 ? locationOrder : [null];
@@ -161,13 +167,16 @@ export const holdStock = async (data, lines, { locationOrder = [], session } = {
 				match[`locations.${locationId}`] = { $gte: line.quantity };
 				inc[`variants.$.locations.${locationId}`] = -line.quantity;
 			}
-			const result = await products.updateOne(
-				{ websiteId: data.websiteId, id: line.productId, status: 'active', variants: { $elemMatch: match } },
-				{ $inc: inc },
-				{ session },
+			const after = /** @type {{ variants: Array<{ id: string, stock: number }> } | null} */ (
+				await products.findOneAndUpdate(
+					{ websiteId: data.websiteId, id: line.productId, status: 'active', variants: { $elemMatch: match } },
+					{ $inc: inc },
+					{ session, returnDocument: 'after', projection: { _id: 0, 'variants.id': 1, 'variants.stock': 1 } },
+				)
 			);
-			if (result.modifiedCount === 1) {
-				taken.push({ ...line, locationId });
+			if (after) {
+				const left = after.variants.find((variant) => variant.id === line.variantId)?.stock ?? 0;
+				taken.push({ ...line, locationId, left });
 				held = true;
 				break;
 			}
@@ -580,13 +589,26 @@ export const setOrderCounter = async (data, { prefix, year, next }) => {
  */
 
 /**
- * @typedef {{ ok: true, order: OrderRecord, duplicate: boolean }
+ * @typedef {{ ok: true, order: OrderRecord, duplicate: boolean, taken: TakenStock[] }
  *   | { ok: false, code: 'out_of_stock', productId: string, variantId: string }
  *   | { ok: false, code: 'offer_unavailable', offerId: string }
  *   | { ok: false, code: 'points_changed' }
  *   | { ok: false, code: 'slot_taken' }} PlacementResult
- *   `duplicate`: the same customer already placed an order with this checkout key (that order is returned)
+ *   `duplicate`: the same customer already placed an order with this checkout key (that order is returned); `taken`: the
+ *   stock the order took (none for a duplicate)
  */
+
+/**
+ * The held lines of variants that track stock, as the stock events take them.
+ * @param {Array<StockLine & { left: number | null }>} taken
+ * @returns {TakenStock[]}
+ */
+const tracked = (taken) =>
+	taken.flatMap((line) =>
+		line.left === null
+			? []
+			: [{ productId: line.productId, variantId: line.variantId, quantity: line.quantity, left: line.left }],
+	);
 
 /**
  * A business-rule refusal inside the transaction: thrown, it aborts everything.
@@ -621,7 +643,7 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 			)
 		);
 	const before = await existing();
-	if (before) return { ok: true, order: before, duplicate: true };
+	if (before) return { ok: true, order: before, duplicate: true, taken: [] };
 	try {
 		const placed = await data.transaction(async (session) => {
 			const number = await nextOrderNumber(data, {
@@ -677,9 +699,14 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 				})),
 			};
 			await orders.insertOne({ ...record }, { session });
-			return record;
+			return { record, taken: tracked(stock.taken) };
 		});
-		return { ok: true, order: /** @type {OrderRecord} */ (/** @type {unknown} */ (placed)), duplicate: false };
+		return {
+			ok: true,
+			order: /** @type {OrderRecord} */ (/** @type {unknown} */ (placed.record)),
+			duplicate: false,
+			taken: placed.taken,
+		};
 	} catch (error) {
 		if (error instanceof Error && 'refused' in error) return /** @type {any} */ (error).refused;
 		if (duplicateIn(error, COLLECTIONS.slots)) return { ok: false, code: 'slot_taken' };
@@ -687,7 +714,7 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 			return { ok: false, code: 'offer_unavailable', offerId: order.promotions.couponId ?? '' };
 		if (duplicateIn(error, COLLECTIONS.orders)) {
 			const won = await existing();
-			if (won) return { ok: true, order: won, duplicate: true };
+			if (won) return { ok: true, order: won, duplicate: true, taken: [] };
 		}
 		throw error;
 	}
@@ -751,32 +778,36 @@ export const releaseOrder = async (data, order, { now, update }) =>
 /**
  * Swap the stock an edited order holds (E29), in one transaction: its old physical lines go back, the new ones are
  * held, and `update` writes the order (claimed by its `updatedAt`). Nothing changes when the new stock is short or the
- * order changed meanwhile.
+ * order changed meanwhile. `taken`: the variants the edit leaves with fewer units than before, by how many.
  * @param {WebsiteData} data
  * @param {OrderRecord} order as read
  * @param {{ lines: StockLine[], update: (session: Session) => Promise<boolean> }} swap
- * @returns {Promise<{ ok: true } | { ok: false, code: 'out_of_stock', productId: string, variantId: string } | { ok: false, code: 'changed' }>}
+ * @returns {Promise<{ ok: true, taken: TakenStock[] } | { ok: false, code: 'out_of_stock', productId: string, variantId: string } | { ok: false, code: 'changed' }>}
  */
 export const swapOrderStock = async (data, order, { lines, update }) => {
 	try {
 		return await data.transaction(async (session) => {
-			if (order.stockHeld)
-				await releaseStock(
-					data,
-					order.lines
+			const back = order.stockHeld
+				? order.lines
 						.filter((line) => line.kind === 'physical')
 						.map((line) => ({
 							productId: line.productId,
 							variantId: line.variantId,
 							quantity: line.quantity,
 							locationId: line.locationId,
-						})),
-					session,
-				);
+						}))
+				: [];
+			if (back.length > 0) await releaseStock(data, back, session);
 			const held = await holdStock(data, lines, { session });
 			if (!held.ok) throw refused({ ok: false, code: 'out_of_stock', productId: held.productId, variantId: held.variantId });
 			if (!(await update(session))) throw Object.assign(new Error('changed'), { changed: true });
-			return /** @type {{ ok: true }} */ ({ ok: true });
+			// what each variant lost overall: the units held now less those the old lines gave back
+			const returned = new Map(mergeStockLines(back).map((line) => [`${line.productId}|${line.variantId}`, line.quantity]));
+			const taken = tracked(held.taken).flatMap((line) => {
+				const quantity = line.quantity - (returned.get(`${line.productId}|${line.variantId}`) ?? 0);
+				return quantity > 0 ? [{ ...line, quantity }] : [];
+			});
+			return /** @type {{ ok: true, taken: TakenStock[] }} */ ({ ok: true, taken });
 		});
 	} catch (error) {
 		const failed = /** @type {any} */ (error);

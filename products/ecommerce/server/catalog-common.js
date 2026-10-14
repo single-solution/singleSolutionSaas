@@ -113,16 +113,22 @@ export const createCatalogCommon = (product, service) => {
 	};
 
 	/**
-	 * Tell the other parts (alerts) that products may have changed price, stock or status.
+	 * Tell the other parts (alerts, stock events) that products may have changed price, stock or status.
 	 * @param {Site} s
-	 * @param {Array<Pick<ProductRecord, 'id' | 'price' | 'inStock'>>} before as read before the write (missing = new)
+	 * @param {Array<Pick<ProductRecord, 'id' | 'price' | 'inStock' | 'variants'>>} before as read before the write
+	 *   (missing = new)
 	 * @param {string[]} [ids] the products written (default: those of `before`)
 	 */
 	const changed = async (s, before, ids = before.map((p) => p.id)) => {
 		if (ids.length === 0) return;
 		await service.emit('products.changed', s, {
 			productIds: [...new Set(ids)],
-			before: new Map(before.map((p) => [p.id, { price: p.price, inStock: p.inStock }])),
+			before: new Map(
+				before.map((p) => [
+					p.id,
+					{ price: p.price, inStock: p.inStock, stock: new Map(p.variants.map((variant) => [variant.id, variant.stock])) },
+				]),
+			),
 		});
 	};
 

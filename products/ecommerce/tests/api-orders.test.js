@@ -1,10 +1,11 @@
 /**
  * The orders area's API answers as `schemas/api.json` describes them (every answer `call()` sees is checked against
- * it): the shop's events with each kind of data, their count and counts, the staff view of a guest's order (never its
+ * it): the shop's events with each kind of data, their count and counts, the stock events by E44's levels, the staff
+ * view of a guest's order (never its
  * key's hash nor the checkout's Idempotency-Key), customers by segment and a bulk move's answer per order.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ORIGIN, readyShop } from './helpers.js';
+import { ALL, ORIGIN, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -13,18 +14,19 @@ let visits = 0;
 const ADDRESS = { name: 'Sara Shopper', phone: '+15550001111', line1: '1 Main Street', city: 'Springfield', country: 'US' };
 
 /**
- * Place a cash-on-delivery order through checkout: a member's (signed in) or a guest's.
- * @param {{ guest?: boolean }} [options]
+ * Place a cash-on-delivery order through checkout: a member's (signed in) or a guest's, of a new product (10 in
+ * stock) or of `item`.
+ * @param {{ guest?: boolean, item?: import('../core/model.js').ProductRecord, quantity?: number }} [options]
  */
-const placeOrder = async ({ guest = false } = {}) => {
-	const item = await shop.seedProduct({ price: 1000, stock: 10 });
+const placeOrder = async ({ guest = false, item: given, quantity = 1 } = {}) => {
+	const item = given ?? (await shop.seedProduct({ price: 1000, stock: 10 }));
 	visits += 1;
 	const signIn = guest ? null : await shop.signIn({ id: `usr_apiorders${String(visits).padStart(4, '0')}` });
 	const placed = await shop.call('POST', '/v1/shop/orders', {
 		token: shop.browser,
 		origin: ORIGIN,
 		body: {
-			lines: [{ productId: item.id }],
+			lines: [{ productId: item.id, quantity }],
 			payment: 'cod',
 			address: ADDRESS,
 			...(guest ? { customer: { name: 'Gina Guest', phone: '555 000 7777' } } : {}),
@@ -47,7 +49,7 @@ afterAll(async () => shop.product.close());
 
 describe('the shop events (GET /v1/events)', () => {
 	it('lists each kind of order event with its data, and counts them by type and delivery', async () => {
-		expect((await shop.api('PUT', '/v1/settings/catalog.lowStock', { value: 100 })).status).toBeLessThan(300);
+		expect((await shop.api('PUT', '/v1/settings/catalog.lowStock', { value: 9 })).status).toBeLessThan(300);
 		const { order: paid } = await placeOrder();
 		expect((await shop.api('POST', `/v1/orders/${paid.id}/move`, { to: 'confirmed' })).status).toBe(200);
 		const payment = await shop.api('POST', `/v1/orders/${paid.id}/payments`, { method: 'cash', amount: 1000 });
@@ -90,16 +92,17 @@ describe('the shop events (GET /v1/events)', () => {
 		expect(find('ecommerce.order.cancelled', cancelled.id)[0]?.data).toMatchObject({ reason: 'staff' });
 		// a staff move carries no reason of its own (only order.cancelled says who)
 		expect(find('ecommerce.order.status_changed', cancelled.id)[0]?.data).toMatchObject({ to: 'cancelled', reason: null });
-		// the cancel gives the stock back: the product changed, and it is at or under the low-stock level
+		// the order took 10 down to 9, the low-stock level; the cancel gives the stock back: the product changed, and a
+		// rise publishes no stock event
 		expect(events).toContainEqual(
 			expect.objectContaining({ type: 'ecommerce.catalog.changed', data: { kind: 'product', id: item.id, slug: item.slug } }),
 		);
-		expect(events).toContainEqual(
+		expect(events.filter((event) => event.type.startsWith('ecommerce.stock.') && event.data.productId === item.id)).toEqual([
 			expect.objectContaining({
 				type: 'ecommerce.stock.low',
-				data: { productId: item.id, variantId: item.variants[0]?.id, stock: 10 },
+				data: { productId: item.id, variantId: item.variants[0]?.id, stock: 9 },
 			}),
-		);
+		]);
 		expect(events).toContainEqual(
 			expect.objectContaining({
 				type: 'ecommerce.settings.changed',
@@ -122,6 +125,41 @@ describe('the shop events (GET /v1/events)', () => {
 		expect((await shop.api('GET', '/v1/events?since=yesterday')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/events/count?types=payments.payment.paid')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/events/counts?by=status')).status).toBe(422);
+	});
+});
+
+describe('the stock events (E44)', () => {
+	/** @type {{ stocked?: string }} */
+	const ids = {};
+	it('publishes stock.low when a variant drops into 1 to lowStock units and stock.out when it drops to 0, never on a rise', async () => {
+		expect((await shop.api('PUT', '/v1/settings/catalog.lowStock', { value: 2 })).status).toBeLessThan(300);
+		// stock without locations, so staff set a variant's units straight
+		await shop.switchOn(ALL.filter((feature) => feature !== 'multi_location'));
+		try {
+			const item = await shop.seedProduct({ price: 500, stock: 4 });
+			const variantId = /** @type {string} */ (item.variants[0]?.id);
+			/** @param {number} set */
+			const stock = async (set) =>
+				expect((await shop.api('POST', `/v1/products/${item.id}/stock`, { changes: [{ variantId, set }] })).status).toBe(200);
+			await placeOrder({ item }); // 4 → 3: above the level
+			await placeOrder({ item }); // 3 → 2: low
+			await placeOrder({ item }); // 2 → 1: still low
+			await stock(5); // a rise
+			await stock(0); // out, by a catalog write
+			await stock(2); // a rise into the low range
+			await placeOrder({ item, quantity: 2 }); // 2 → 0: out, by an order
+			await shop.flush();
+			ids.stocked = item.id;
+		} finally {
+			await shop.switchOn(ALL);
+		}
+		const listed = (await shop.api('GET', '/v1/events?types=ecommerce.stock.low,ecommerce.stock.out&limit=100')).json.items;
+		// one low (3 → 2) and two outs (a catalog write to 0, an order to 0); the test clock stands still, so by kind
+		const mine = listed
+			.filter((/** @type {any} */ event) => event.data.productId === ids.stocked)
+			.map((/** @type {any} */ event) => `${event.type} ${event.data.stock}`)
+			.sort();
+		expect(mine).toEqual(['ecommerce.stock.low 2', 'ecommerce.stock.out 0', 'ecommerce.stock.out 0']);
 	});
 });
 

@@ -819,7 +819,7 @@ describe('AI copy', () => {
 });
 
 describe('change notices', () => {
-	it('tells the other parts which products changed, with their price and availability before', async () => {
+	it('tells the other parts which products changed, with their price, availability and stock before', async () => {
 		/** @type {any[]} */
 		const emitted = [];
 		const common = createCatalogCommon(
@@ -829,9 +829,25 @@ describe('change notices', () => {
 		const s = /** @type {any} */ ({});
 		await common.changed(s, []);
 		expect(emitted).toEqual([]);
-		await common.changed(s, [{ id: 'prd_1', price: 5, inStock: false }], ['prd_1', 'prd_2', 'prd_1']);
+		const variants = /** @type {any[]} */ ([
+			{ id: 'var_1', stock: 0 },
+			{ id: 'var_2', stock: 4 },
+		]);
+		await common.changed(s, [{ id: 'prd_1', price: 5, inStock: false, variants }], ['prd_1', 'prd_2', 'prd_1']);
 		expect(emitted[0][0]).toBe('products.changed');
 		expect(emitted[0][2].productIds).toEqual(['prd_1', 'prd_2']);
-		expect([...emitted[0][2].before.entries()]).toEqual([['prd_1', { price: 5, inStock: false }]]);
+		expect([...emitted[0][2].before.entries()]).toEqual([
+			[
+				'prd_1',
+				{
+					price: 5,
+					inStock: false,
+					stock: new Map([
+						['var_1', 0],
+						['var_2', 4],
+					]),
+				},
+			],
+		]);
 	});
 });

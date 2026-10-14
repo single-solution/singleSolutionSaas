@@ -451,7 +451,8 @@
 		"return.status_changed": "{ claimId, orderId, from, to }: a claim moved (requested, approved, rejected, received, refunded, replaced, repaired or closed).",
 		"review.submitted": "{ reviewId, productId, rating, status }: a shopper wrote a review (status pending or approved, as the reviews setting moderation says).",
 		"catalog.changed": "{ kind, id, slug }: a product (kind product) was made or changed by a catalog write, or stock came back to it from an order (a cancel, a refund before delivery, a returned parcel or a claim's restock).",
-		"stock.low": "{ productId, variantId, stock }: after such a change, an active variant of a product that tracks stock is at or under the catalog setting lowStock.",
+		"stock.low": "{ productId, variantId, stock }: an order or a catalog write dropped a variant from above the catalog setting lowStock into 1 to lowStock units (a variant offered and not marked sold out, of a product that tracks stock and is not archived, as the low-stock counts take them); a rise or a drop within the same range publishes nothing.",
+		"stock.out": "{ productId, variantId, stock }: an order or a catalog write dropped such a variant to 0 units (stock is 0).",
 		"settings.changed": "{ what, key }: a setting (key <feature>.<setting>), text, list (key the list), the theme or the Format was saved through the API or the dashboard. This one is recorded whether Events is on or not."
 	},
 	"orders": {

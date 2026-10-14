@@ -733,6 +733,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		}
 		const money = (await s.format()).money(q.totals.total, order.totals.currency);
 		await service.log(ctx, 'order.edited', order.id, { label: order.number, detail: `New total ${money}` });
+		if (swapped.taken.length > 0) await service.emit('stock.taken', s, { lines: swapped.taken });
 		return /** @type {OrderRecord} */ (await store.order(order.id));
 	};
 
@@ -948,6 +949,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		await store.countOrder(/** @type {string} */ (customer.id), { city: order.address?.city ?? '', at: new Date(now) });
 		if (viaPayments) current = (await startPayment(s, current, returnUrl, current.id)) ?? current;
 		await service.emit('order.placed', s, { order: current, statusLabel: labelOf(flow, status) });
+		if (placed.taken.length > 0) await service.emit('stock.taken', s, { lines: placed.taken });
 		// a free order is paid as it is placed (its digital items are given now)
 		if (current.payment.state === 'paid') {
 			await service.emit('order.paid', s, { order: current, entry: null });

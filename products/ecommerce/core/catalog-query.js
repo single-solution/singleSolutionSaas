@@ -10,6 +10,8 @@ import { isObject, valueLabel } from './catalog.js';
 import { MAX_AMOUNT } from './money.js';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
+/** @typedef {import('./model.js').ProductRecord} ProductRecord */
+/** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 
 /**
@@ -447,6 +449,29 @@ const lowStockFilter = (level) => ({
 	status: { $ne: 'archived' },
 	variants: { $elemMatch: lowVariantMatch(level) },
 });
+
+/**
+ * Whether a variant counts for stock levels (E44): its product tracks stock and is not archived, and it is offered and
+ * not marked sold out.
+ * @param {Pick<ProductRecord, 'trackStock' | 'status'>} product
+ * @param {Pick<VariantRecord, 'active' | 'soldOut'>} variant
+ */
+export const countsForStock = (product, variant) =>
+	product.trackStock && product.status !== 'archived' && variant.active && !variant.soldOut;
+
+/**
+ * The stock event a variant's move calls for (E44's levels): `stock.out` when its units drop to 0, `stock.low` when they
+ * drop from above `level` into 1 to `level`; null for a rise, a drop within the same range, or level 0 for low.
+ * @param {number} before units before the move
+ * @param {number} after units after it
+ * @param {number} level the `catalog` setting `lowStock`
+ * @returns {'stock.out' | 'stock.low' | null}
+ */
+export const stockEventOf = (before, after, level) => {
+	if (after >= before) return null;
+	if (after <= 0) return 'stock.out';
+	return after <= level && before > level ? 'stock.low' : null;
+};
 
 /** The groups of a count of variants by stock (E44). */
 const VARIANT_STOCK = Object.freeze(/** @type {const} */ (['out', 'low', 'in']));

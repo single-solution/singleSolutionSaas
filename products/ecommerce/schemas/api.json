@@ -5994,9 +5994,10 @@
 						"ecommerce.review.submitted",
 						"ecommerce.catalog.changed",
 						"ecommerce.stock.low",
+						"ecommerce.stock.out",
 						"ecommerce.settings.changed"
 					],
-					"description": "data by type: order.placed OrderEventOrder, order.status_changed OrderEventStatusChanged, order.paid OrderEventPaid, order.payment_recorded OrderEventPaymentRecorded, order.proof_uploaded OrderEventProofUploaded, order.cancelled OrderEventCancelled, order.refunded OrderEventRefunded, return.requested OrderEventReturnRequested, return.status_changed OrderEventReturnStatusChanged, review.submitted OrderEventReviewSubmitted, catalog.changed OrderEventCatalogChanged, stock.low OrderEventStockLow, settings.changed OrderEventSettingsChanged."
+					"description": "data by type: order.placed OrderEventOrder, order.status_changed OrderEventStatusChanged, order.paid OrderEventPaid, order.payment_recorded OrderEventPaymentRecorded, order.proof_uploaded OrderEventProofUploaded, order.cancelled OrderEventCancelled, order.refunded OrderEventRefunded, return.requested OrderEventReturnRequested, return.status_changed OrderEventReturnStatusChanged, review.submitted OrderEventReviewSubmitted, catalog.changed OrderEventCatalogChanged, stock.low and stock.out OrderEventStock, settings.changed OrderEventSettingsChanged."
 				},
 				"at": {
 					"type": "string",
@@ -6038,7 +6039,7 @@
 							"$ref": "#/components/schemas/OrderEventCatalogChanged"
 						},
 						{
-							"$ref": "#/components/schemas/OrderEventStockLow"
+							"$ref": "#/components/schemas/OrderEventStock"
 						},
 						{
 							"$ref": "#/components/schemas/OrderEventSettingsChanged"
@@ -6508,9 +6509,9 @@
 				}
 			}
 		},
-		"OrderEventStockLow": {
+		"OrderEventStock": {
 			"type": "object",
-			"description": "ecommerce.stock.low: an active variant at or under the catalog's lowStock setting after a write.",
+			"description": "ecommerce.stock.low: a variant that counts for stock levels (offered, not marked sold out, of a product that tracks stock and is not archived) dropped from above the catalog setting lowStock into 1 to lowStock units, by an order or a catalog write. ecommerce.stock.out: such a variant dropped to 0 units. A rise, or a drop within the same range, publishes nothing.",
 			"required": ["productId", "variantId", "stock"],
 			"additionalProperties": false,
 			"properties": {
@@ -6521,7 +6522,8 @@
 					"type": "string"
 				},
 				"stock": {
-					"type": "integer"
+					"type": "integer",
+					"description": "The variant's units after the drop (0 for stock.out)."
 				}
 			}
 		},
