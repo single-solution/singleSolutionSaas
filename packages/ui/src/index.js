@@ -60,7 +60,7 @@ export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell } from './AppShell.js';
 export { THEME_SCRIPT, THEME_STORAGE_KEY, ThemeScript } from './theme-script.js';
 export { ThemeToggle } from './theme.js';
-export { BarChart, HeroCard, isEmptySeries } from './charts.js';
+export { BarChart, isEmptySeries } from './charts.js';
 export { SchemaForm } from './SchemaForm.js';
 export * from './schema.js';
 export * from './format.js';

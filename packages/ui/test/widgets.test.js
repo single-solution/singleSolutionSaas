@@ -26,7 +26,6 @@ import {
 	ErrorState,
 	Form,
 	FormError,
-	HeroCard,
 	Icon,
 	IconButton,
 	Input,
@@ -196,7 +195,7 @@ describe('display', () => {
 		expect(container.querySelector('dl dt')?.textContent).toBe('Domain');
 	});
 
-	it('Stat tiles stay neutral and a kind takes the one accent; Section and HeroCard label their content', () => {
+	it('Stat tiles stay neutral and a kind takes the one accent; Section labels its content; a chart with nothing to draw is a line of text', () => {
 		const { container } = render(
 			<div>
 				<PageHeader title="Detail" level={2} />
@@ -209,29 +208,20 @@ describe('display', () => {
 				<Section id="s1" title="Websites" description="Your websites">
 					<p>body</p>
 				</Section>
-				<HeroCard
-					label="Credit balance"
-					value="1,000 credits"
-					details={[{ label: 'Days left', value: '12 days' }]}
-					chart={{
-						label: 'Spend',
-						data: [
-							{ label: '10-01', value: 2 },
-							{ label: '10-02', value: 0 },
-						],
-					}}
+				<BarChart
+					label="Spend"
+					data={[
+						{ label: '10-01', value: 2 },
+						{ label: '10-02', value: 0 },
+					]}
 				/>
-				<HeroCard label="Empty" value="0" chart={{ label: 'None', data: [] }} />
-				<HeroCard
-					label="Zeros"
-					value="0"
-					chart={{
-						label: 'Only zeros',
-						data: [
-							{ label: 'a', value: 0 },
-							{ label: 'b', value: 0 },
-						],
-					}}
+				<BarChart label="None" data={[]} />
+				<BarChart
+					label="Only zeros"
+					data={[
+						{ label: 'a', value: 0 },
+						{ label: 'b', value: 0 },
+					]}
 				/>
 			</div>,
 		);
@@ -245,8 +235,7 @@ describe('display', () => {
 		expect(byText(container, 'No websites').closest('.rounded-card')?.querySelector('.bg-primary-soft')).not.toBeNull();
 		expect(container.querySelector('section[aria-labelledby="s1"] h2')?.textContent).toBe('Websites');
 		expect(container.querySelector('h2 > span')?.textContent).toBe('Detail');
-		expect(container.querySelector('section[aria-label="Credit balance"] svg[role="img"]')).not.toBeNull();
-		expect(container.querySelector('section[aria-label="Credit balance"] dd')?.textContent).toBe('12 days');
+		expect(container.querySelector('svg[aria-label^="Spend"]')).not.toBeNull();
 		expect(container.textContent).toContain('No data for this period.');
 		// only zeros: the empty text, not a row of empty tracks that reads like full bars
 		expect(container.querySelector('svg[aria-label^="Only zeros"]')).toBeNull();

@@ -8,7 +8,7 @@
  * window edges), flat at rest with a hairline `line-soft` edge; a glow appears only on hover (buttons), and a shadow
  * only on things that sit above the page (menus, dialogs, toasts). Two typefaces (owner's pick, look "A. Workbench"):
  * Figtree for text and Bricolage Grotesque for page titles and key figures (`font-display`), loaded by each app's
- * layout; warm neutrals, kept light; a short type scale; the solid indigo `hero` card with its bar colours.
+ * layout; warm neutrals, kept light; a short type scale.
  *
  * Colour rule (PLAN 0.6, owner decision 2026-10-09: one accent): indigo is the only accent — primary buttons, links,
  * the active item, icon tiles and badges (`primary-soft` tint); surfaces are neutral; green, amber and red mean status
@@ -43,11 +43,6 @@
 	--color-focus: var(--ss-focus);
 	--color-line-soft: var(--ss-line-soft);
 	--color-surface-3: var(--ss-surface-3);
-	--color-hero: var(--ss-hero);
-	--color-on-hero: var(--ss-on-hero);
-	--color-on-hero-muted: var(--ss-on-hero-muted);
-	--color-hero-bar: var(--ss-hero-bar);
-	--color-hero-track: var(--ss-hero-track);
 	--color-overlay: var(--ss-overlay);
 	/* text and headings/figures: each app's layout loads the faces (`--ss-font-text`, `--ss-font-display`) */
 	--font-sans: var(--ss-font-text, ui-sans-serif), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -374,11 +369,6 @@
 	--ss-overlay: rgb(29 27 38 / 0.45);
 	--ss-line-soft: #ece9e4;
 	--ss-surface-3: #e9e6e1;
-	--ss-hero: #4f46e5;
-	--ss-on-hero: #ffffff;
-	--ss-on-hero-muted: #e0e7ff;
-	--ss-hero-bar: rgb(255 255 255 / 0.9);
-	--ss-hero-track: rgb(255 255 255 / 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -413,11 +403,6 @@
 		--ss-overlay: rgb(8 7 10 / 0.7);
 		--ss-line-soft: #26232b;
 		--ss-surface-3: #2c2933;
-		--ss-hero: #4338ca;
-		--ss-on-hero: #ffffff;
-		--ss-on-hero-muted: #e0e7ff;
-		--ss-hero-bar: rgb(255 255 255 / 0.88);
-		--ss-hero-track: rgb(255 255 255 / 0.08);
 	}
 }
 
@@ -452,11 +437,6 @@
 	--ss-overlay: rgb(8 7 10 / 0.7);
 	--ss-line-soft: #26232b;
 	--ss-surface-3: #2c2933;
-	--ss-hero: #4338ca;
-	--ss-on-hero: #ffffff;
-	--ss-on-hero-muted: #e0e7ff;
-	--ss-hero-bar: rgb(255 255 255 / 0.88);
-	--ss-hero-track: rgb(255 255 255 / 0.08);
 }
 
 @layer base {
