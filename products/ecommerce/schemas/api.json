@@ -2723,11 +2723,28 @@
 				"accountNumber": {
 					"type": "string"
 				},
+				"routingNumber": {
+					"type": "string",
+					"description": "Where the country uses one (for example the ABA routing number in the United States)."
+				},
+				"sortCode": {
+					"type": "string",
+					"description": "Where the country uses one (for example in the United Kingdom and Ireland)."
+				},
+				"branchCode": {
+					"type": "string",
+					"description": "A branch or clearing code where the country uses one (for example a BSB, IFSC or transit number)."
+				},
 				"iban": {
 					"type": "string"
 				},
+				"bic": {
+					"type": "string",
+					"description": "The bank's SWIFT/BIC code."
+				},
 				"instructions": {
-					"type": "string"
+					"type": "string",
+					"description": "The merchant's own words shown under the details (plain text)."
 				}
 			}
 		},
