@@ -119,11 +119,8 @@ export const videoOf = (text) => {
 	return id && /^[\w-]{6,20}$/.test(id) ? id : value;
 };
 
-/** @param {unknown} value */
-const textOf = (value) => (typeof value === 'string' ? value : '');
-
-/** @param {unknown} value */
-const daysText = (value) => (typeof value === 'number' && Number.isFinite(value) ? String(value) : '');
+/** @param {number | null} value */
+const daysText = (value) => (value === null ? '' : String(value));
 
 /** @returns {GradeDraft} a new grade (offered, no condition of its own) */
 export const blankGrade = () => ({
@@ -143,44 +140,38 @@ export const blankGrade = () => ({
 });
 
 /**
- * A saved grade as the editor shows it (fields a grade saved before E10 lacks are filled in).
- * @param {Record<string, any>} grade
+ * A grade of the saved list (`core/grades.js` `checkGrades` stores every field).
+ * @typedef {Required<Omit<import('../../core/grades.js').Grade, 'videoUrl'>>} SavedGrade
+ */
+
+/**
+ * A saved grade as the editor shows it: days as text, no category and no condition of its own as ''.
+ * @param {SavedGrade} grade
  * @returns {GradeDraft}
  */
-export const loadGrade = (grade) => {
-	const content = grade.content && typeof grade.content === 'object' ? grade.content : {};
-	const seo = grade.seo && typeof grade.seo === 'object' ? grade.seo : {};
-	const condition = GRADE_CONDITIONS.includes(grade.condition) ? grade.condition : '';
-	return {
-		key: textOf(grade.key),
-		label: textOf(grade.label),
-		description: textOf(grade.description),
-		returnDays: daysText(grade.returnDays),
-		warrantyDays: daysText(grade.warrantyDays),
-		categoryId: textOf(grade.categoryId),
-		categoryIds: Array.isArray(grade.categoryIds) ? grade.categoryIds.map(String) : [],
-		color: textOf(grade.color),
-		video: textOf(grade.video),
-		content: {
-			summary: textOf(content.summary),
-			bullets: (Array.isArray(content.bullets) ? content.bullets : []).map((/** @type {any} */ bullet) => ({
-				text: textOf(bullet?.text),
-				icon: textOf(bullet?.icon),
-			})),
-		},
-		active: grade.active !== false,
-		condition,
-		seo: {
-			title: textOf(seo.title),
-			description: textOf(seo.description),
-			body: textOf(seo.body),
-			faqs: (Array.isArray(seo.faqs) ? seo.faqs : []).map((/** @type {any} */ faq) => ({
-				question: textOf(faq?.question),
-				answer: textOf(faq?.answer),
-			})),
-		},
-	};
-};
+export const loadGrade = (grade) => ({
+	key: grade.key,
+	label: grade.label,
+	description: grade.description,
+	returnDays: daysText(grade.returnDays),
+	warrantyDays: daysText(grade.warrantyDays),
+	categoryId: grade.categoryId ?? '',
+	categoryIds: [...grade.categoryIds],
+	color: grade.color,
+	video: grade.video,
+	content: {
+		summary: grade.content.summary,
+		bullets: grade.content.bullets.map((bullet) => ({ text: bullet.text, icon: bullet.icon })),
+	},
+	active: grade.active,
+	condition: grade.condition ?? '',
+	seo: {
+		title: grade.seo.title,
+		description: grade.seo.description,
+		body: grade.seo.body,
+		faqs: grade.seo.faqs.map((faq) => ({ question: faq.question, answer: faq.answer })),
+	},
+});
 
 /**
  * A grade as saved: the key made from the name when empty, texts trimmed, empty bullets and questions dropped, days as

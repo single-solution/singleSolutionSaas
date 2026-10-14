@@ -138,7 +138,7 @@ export const applyPromotions = ({
 	/** @param {DealRecord} deal @param {number} index */
 	const estimate = (deal, index) => {
 		const line = /** @type {PricingLine} */ (lines[index]);
-		if ((deal.target ?? 'items') !== 'cart' || deal.type !== 'fixed') return dealLineDiscount(deal, line, { unit, rounding });
+		if (deal.target !== 'cart' || deal.type !== 'fixed') return dealLineDiscount(deal, line, { unit, rounding });
 		const indexes = covered.get(deal.id) ?? [];
 		const total = indexes.reduce(
 			(sum, i) => sum + /** @type {PricingLine} */ (lines[i]).unitPrice * /** @type {PricingLine} */ (lines[i]).quantity,
@@ -233,11 +233,11 @@ export const applyPromotions = ({
 		const units = Math.max(0, line.quantity - bundleUnits);
 		if (!pick.deal || units === 0) return 0;
 		if (pick.locked) return Math.min(line.unitPrice, /** @type {{ perUnit: number }} */ (line.lock).perUnit) * units;
-		if ((pick.deal.target ?? 'items') === 'cart' && pick.deal.type === 'fixed') return -1;
+		if (pick.deal.target === 'cart' && pick.deal.type === 'fixed') return -1;
 		return dealLineDiscount(pick.deal, { unitPrice: line.unitPrice, quantity: units }, { unit, rounding });
 	});
 	for (const deal of live) {
-		if ((deal.target ?? 'items') !== 'cart' || deal.type !== 'fixed') continue;
+		if (deal.target !== 'cart' || deal.type !== 'fixed') continue;
 		const takers = lines.flatMap((_, index) =>
 			chosen[index]?.deal?.id === deal.id && dealDiscounts[index] === -1 ? [index] : [],
 		);
@@ -331,7 +331,7 @@ export const applyPromotions = ({
 			eligibleDealIds: pick.eligible,
 			locked: own > 0 && pick.locked,
 			perUnit:
-				own > 0 && pick.deal && (pick.deal.target ?? 'items') === 'items'
+				own > 0 && pick.deal && pick.deal.target === 'items'
 					? Math.floor(
 							own / Math.max(1, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits),
 						)
@@ -389,9 +389,7 @@ export const applyPromotions = ({
 		freeDelivery: last?.type === 'free_delivery',
 		couponProblem: null,
 		applied,
-		pointsBlocked: used.some(
-			(deal) => deal.allowPoints === false && (rules.pointsBlockedBy === 'any_deal' || checkoutLevel(deal)),
-		),
+		pointsBlocked: used.some((deal) => !deal.allowPoints && (rules.pointsBlockedBy === 'any_deal' || checkoutLevel(deal))),
 	};
 	if (code === '') return result;
 	const blocked = asPlaced ? null : couponBlocked(coupon, { code, now, customer });

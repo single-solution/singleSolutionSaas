@@ -428,10 +428,10 @@ export const STATUS_ROLES = Object.freeze([
  * An automatic offer: a percent or a fixed amount off the price of the items in scope, or free delivery (E18).
  * @typedef {{ id: string, name: string, description: string, type: 'percent' | 'fixed' | 'free_delivery', value: number,
  *   scope: OfferScope, startsAt: Date | null, endsAt: Date | null, limit: number | null, used: number, priority: number,
- *   active: boolean, slug?: string, badgeLabel?: string, discountLabel?: string, color?: string,
- *   banner?: MediaRecord | null, content?: string, seo?: { title: string, description: string }, sort?: number,
- *   conditions?: DealConditions | null, target?: 'items' | 'cart', days?: number[], timeFrom?: string, timeTo?: string,
- *   allowPoints?: boolean }} DealRecord
+ *   active: boolean, slug: string, badgeLabel: string, discountLabel: string, color: string,
+ *   banner: MediaRecord | null, content: string, seo: { title: string, description: string }, sort: number,
+ *   conditions: DealConditions | null, target: 'items' | 'cart', days: number[], timeFrom: string, timeTo: string,
+ *   allowPoints: boolean }} DealRecord
  */
 
 /**

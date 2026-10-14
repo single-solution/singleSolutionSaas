@@ -189,7 +189,7 @@ const minutesOf = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3,
  * @param {{ weekday: number, minutes: number }} at the business time zone's weekday (0 = Sunday) and minutes
  */
 export const inWindow = (deal, { weekday, minutes }) => {
-	const days = deal.days ?? [];
+	const days = deal.days;
 	const from = deal.timeFrom ? minutesOf(deal.timeFrom) : null;
 	const to = deal.timeTo ? minutesOf(deal.timeTo) : null;
 	if (from !== null && to !== null && to < from) {
@@ -225,7 +225,7 @@ export const utcClock = (now) => {
  * Whether a deal is checkout-level: off the cart (`target: 'cart'`) or free delivery (`cartOffer`, D4).
  * @param {Pick<DealRecord, 'type' | 'target'>} deal
  */
-export const checkoutLevel = (deal) => (deal.target ?? 'items') === 'cart' || deal.type === 'free_delivery';
+export const checkoutLevel = (deal) => deal.target === 'cart' || deal.type === 'free_delivery';
 
 /**
  * Whether a deal covers a line (scope and conditions; not its dates).
@@ -378,7 +378,7 @@ export const dealLineDiscount = (deal, line, { unit = 1, share = 0, rounding = '
 	if (deal.type === 'free_delivery') return 0;
 	const amount = line.unitPrice * line.quantity;
 	const exact = rounding === 'total_half_up';
-	if ((deal.target ?? 'items') === 'cart') {
+	if (deal.target === 'cart') {
 		const off = deal.type === 'percent' ? (exact ? exactPercentOf(amount, deal.value) : percentOf(amount, deal.value)) : share;
 		return Math.max(0, Math.min(amount, exact ? off : roundDown(off, unit)));
 	}
@@ -408,7 +408,7 @@ export const bestDeal = (line, deals, now, { cart, unit = 1, rules = DEAL_RULES 
 	let best = null;
 	const first = rules.lineChoice === 'first';
 	for (const deal of first ? [...deals].sort(byShowOrder) : deals) {
-		if ((deal.target ?? 'items') !== 'items' || deal.type === 'free_delivery') continue;
+		if (deal.target !== 'items' || deal.type === 'free_delivery') continue;
 		if (!dealLiveFor(deal, line, facts, now)) continue;
 		const perUnit =
 			rules.rounding === 'total_half_up'
@@ -694,18 +694,18 @@ export const checkDealInput = (input, keys = {}) => {
 };
 
 /**
- * The display fields every deal view carries (E18), with defaults for deals written before them.
+ * The display fields every deal view carries (E18).
  * @param {DealRecord} deal
  */
 const displayOf = (deal) => ({
-	slug: deal.slug ?? '',
-	badgeLabel: deal.badgeLabel ?? '',
-	discountLabel: deal.discountLabel ?? '',
-	color: deal.color ?? '',
-	banner: deal.banner ?? null,
-	content: deal.content ?? '',
-	seo: deal.seo ?? { title: '', description: '' },
-	sort: deal.sort ?? 0,
+	slug: deal.slug,
+	badgeLabel: deal.badgeLabel,
+	discountLabel: deal.discountLabel,
+	color: deal.color,
+	banner: deal.banner,
+	content: deal.content,
+	seo: deal.seo,
+	sort: deal.sort,
 });
 
 /**
@@ -717,14 +717,14 @@ export const dealView = (deal) => ({
 	name: deal.name,
 	description: deal.description,
 	type: deal.type,
-	target: deal.target ?? 'items',
+	target: deal.target,
 	value: deal.value,
 	scope: deal.scope,
-	conditions: deal.conditions ?? null,
-	days: deal.days ?? [],
-	timeFrom: deal.timeFrom ?? '',
-	timeTo: deal.timeTo ?? '',
-	allowPoints: deal.allowPoints !== false,
+	conditions: deal.conditions,
+	days: deal.days,
+	timeFrom: deal.timeFrom,
+	timeTo: deal.timeTo,
+	allowPoints: deal.allowPoints,
 	...displayOf(deal),
 	startsAt: isoOrNull(deal.startsAt),
 	endsAt: isoOrNull(deal.endsAt),
@@ -746,17 +746,17 @@ export const publicDeal = (deal, { bannerUrl = null } = {}) => ({
 	name: deal.name,
 	description: deal.description,
 	type: deal.type,
-	target: deal.target ?? 'items',
+	target: deal.target,
 	value: deal.value,
 	...displayOf(deal),
 	banner: deal.banner ? { url: bannerUrl, alt: deal.banner.alt ?? '' } : null,
 	minQuantity: deal.conditions?.minQuantity ?? 0,
 	cartTotal: deal.conditions?.cartTotal ?? 0,
 	paymentMethods: deal.conditions?.paymentMethods ?? [],
-	days: deal.days ?? [],
-	timeFrom: deal.timeFrom ?? '',
-	timeTo: deal.timeTo ?? '',
-	allowPoints: deal.allowPoints !== false,
+	days: deal.days,
+	timeFrom: deal.timeFrom,
+	timeTo: deal.timeTo,
+	allowPoints: deal.allowPoints,
 	startsAt: isoOrNull(deal.startsAt),
 	endsAt: isoOrNull(deal.endsAt),
 	scope: {

@@ -138,11 +138,11 @@ const createCards = (common, service) => {
 					deal: first
 						? {
 								id: first.id,
-								slug: first.slug ?? '',
+								slug: first.slug,
 								name: first.name,
-								badgeLabel: first.badgeLabel ?? '',
-								discountLabel: first.discountLabel ?? '',
-								color: first.color ?? '',
+								badgeLabel: first.badgeLabel,
+								discountLabel: first.discountLabel,
+								color: first.color,
 							}
 						: null,
 				};

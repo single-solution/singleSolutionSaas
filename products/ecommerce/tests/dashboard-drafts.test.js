@@ -14,7 +14,7 @@ import {
 } from '../app/dashboard/drafts.js';
 import { MAX_GRADES, checkGrades } from '../core/grades.js';
 
-/** A grade with every E10 field, as the server saves it. */
+/** A grade with every field, as the server saves it. @type {import('../app/dashboard/drafts.js').SavedGrade} */
 const FULL = {
 	key: 'grade-a',
 	label: 'Grade A',
@@ -84,36 +84,10 @@ describe('grade drafts (E10)', () => {
 		expect(saved).toEqual(FULL);
 		const checked = checkGrades([saved]);
 		expect(checked).toEqual({ ok: true, value: [FULL] });
-	});
-
-	it('fills in what a grade saved before E10 lacks', () => {
-		const draft = loadGrade({ key: 'b', label: 'B', description: 'Used', returnDays: null, warrantyDays: 30 });
-		expect(draft).toEqual({
-			...blankGrade(),
-			key: 'b',
-			label: 'B',
-			description: 'Used',
-			warrantyDays: '30',
-		});
-		const odd = loadGrade({ key: 1, condition: 'mint', content: 'x', seo: null, categoryIds: 'cat_a' });
-		expect(odd.key).toBe('');
-		expect(odd.condition).toBe('');
-		expect(odd.content).toEqual({ summary: '', bullets: [] });
-		expect(odd.categoryIds).toEqual([]);
-		const partial = loadGrade({
-			key: 'c',
-			label: 'C',
-			content: { bullets: [null, { text: 'x' }] },
-			seo: { faqs: [{ question: 'q' }, null] },
-		});
-		expect(partial.content.bullets).toEqual([
-			{ text: '', icon: '' },
-			{ text: 'x', icon: '' },
-		]);
-		expect(partial.seo.faqs).toEqual([
-			{ question: 'q', answer: '' },
-			{ question: '', answer: '' },
-		]);
+		// no category, no days and no condition of its own show as empty fields
+		const plain = loadGrade({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: null });
+		expect(plain).toMatchObject({ categoryId: '', returnDays: '', warrantyDays: '', condition: '' });
+		expect(cleanGrade(plain)).toEqual({ ...FULL, categoryId: null, returnDays: null, warrantyDays: null, condition: null });
 	});
 
 	it('saves a new grade the server takes: key from the name, empty rows dropped, no condition as null', () => {

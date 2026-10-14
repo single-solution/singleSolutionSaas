@@ -589,10 +589,10 @@ export const createQuoting = (product, service) => {
 			? {
 					id: deal.id,
 					name: deal.name,
-					slug: deal.slug ?? '',
-					badgeLabel: deal.badgeLabel ?? '',
-					discountLabel: deal.discountLabel ?? '',
-					color: deal.color ?? '',
+					slug: deal.slug,
+					badgeLabel: deal.badgeLabel,
+					discountLabel: deal.discountLabel,
+					color: deal.color,
 					minQuantity: deal.conditions?.minQuantity ?? 0,
 				}
 			: null;
