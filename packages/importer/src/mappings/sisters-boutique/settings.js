@@ -222,6 +222,9 @@ export const settingsPlan = (values) => {
 				// (`apps/web/src/app/api/membership/requests/route.ts`:95-99, `account/_components/RequestMembership.tsx`:56-57):
 				// Accounts' detailed answers keep that (its default answers every ask the same)
 				'role_requests.revealStatus': true,
+				// the member role comes when the setup link is used, not when staff invite
+				// (`apps/web/src/app/api/account/setup/route.ts`:68 sets isMember with the password)
+				'role_requests.giveRoleAt': 'completion',
 				// no sign-up at all (`apps/web/src/lib/auth.ts`:5-15): staff invite
 				'approval.mode': 'invite',
 				'approval.requiredFields': [],
