@@ -1,8 +1,9 @@
 /**
- * PLAN 0.4.12 rows 4–7 and notices: the websites list (the admin switcher), revocations, the directory and the status
- * response as the product receives them, and notices kept while the product cannot be reached and delivered right after
- * its next call to the Portal.
+ * PLAN 0.4.12 rows 4–7 and notices: the websites list (the admin switcher), revocations, the directory (one product,
+ * or every connected product) and the status response as the product receives them, and notices kept while the
+ * product cannot be reached and delivered right after its next call to the Portal.
  */
+import { validateDirectoryList } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PRODUCT_URL, codeOf, startSystem } from './helpers.js';
 
@@ -106,10 +107,13 @@ describe('the product side of the contract', () => {
 		expect(after.json.tokenIds).toEqual([]);
 	});
 
-	it('the directory answers where a connected product lives', async () => {
+	it('the directory answers where a connected product lives, and lists every connected product', async () => {
 		expect((await sys.productApi('GET', '/v1/product/directory/notes')).json).toEqual({ baseUrl: PRODUCT_URL });
 		const missing = await sys.productApi('GET', '/v1/product/directory/chat');
 		expect(missing.status).toBe(404);
+		const listed = await sys.productApi('GET', '/v1/product/directory');
+		expect(listed.json).toEqual({ items: [{ productId: 'notes', name: 'Notes', baseUrl: PRODUCT_URL }] });
+		expect(validateDirectoryList(listed.json).ok).toBe(true);
 	});
 });
 

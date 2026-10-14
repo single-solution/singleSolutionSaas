@@ -248,7 +248,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 		expect((await dash('notifications', 'GET', '/templates')).json.items).toEqual([]);
 	});
 
-	it('Notifications’ dashboard lists both products’ messages through the Portal directory; a switched-off one is skipped', async () => {
+	it('Notifications’ dashboard lists the connected products’ messages through the Portal directory; a switched-off one is skipped', async () => {
 		const listed = await dash('notifications', 'GET', '/messages');
 		expect(listed.status).toBe(200);
 		const keys = listed.json.items.map((/** @type {any} */ m) => `${m.productId}:${m.key}`);
@@ -263,8 +263,14 @@ describe('default templates: no template written, messages still go (parity P1)'
 		const reset = listed.json.items.find((/** @type {any} */ m) => m.key === 'accounts.password_reset');
 		expect(reset.channels.email.subject).toBe('Reset your password for {business}');
 		expect(keys).toEqual(expect.arrayContaining(['ecommerce:ecommerce.order_status', 'ecommerce:ecommerce.staff_placed']));
-		// Payments and Growth are not in this system: named, never a failure of the list
-		expect(listed.json.unavailable).toEqual(['payments', 'growth']);
+		// the products are the ones connected to this Portal (its directory), named as their manifests say; Payments and
+		// Growth are not in this system, so they are not listed at all, and every listed product answered its list
+		expect(listed.json.products).toEqual([
+			{ productId: 'accounts', name: 'Accounts' },
+			{ productId: 'chat', name: 'Chat' },
+			{ productId: 'ecommerce', name: 'Ecommerce' },
+		]);
+		expect(listed.json.unavailable).toEqual([]);
 
 		expect((await dash('notifications', 'PUT', '/messages/chat.staff_new_message/email', { off: true })).status).toBe(200);
 		const before = mails.length;
