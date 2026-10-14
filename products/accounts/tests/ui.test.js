@@ -1944,7 +1944,6 @@ describe('admin widgets', () => {
 		);
 		expect(statusIn(shadow(users))).toBe(strings['users.empty']);
 		expect(shadow(users).querySelector('form.part')).toBeNull();
-		expect(() => checkIn(shadow(users), strings['users.deletionOnly'])).toThrow();
 		expect(() => fieldIn(shadow(roles), strings['roles.twoStep'])).toThrow();
 		await time.fire();
 		expect(statusIn(shadow(users))).toBe(strings['users.signedOut']);

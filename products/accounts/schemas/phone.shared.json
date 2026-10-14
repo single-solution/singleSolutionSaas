@@ -5,7 +5,7 @@
 		"defaultCallingCode": {
 			"type": "string",
 			"title": "Default calling code",
-			"description": "For numbers typed without a country code, for example +92 or +1. Empty: the calling code of the country in business.json; without one, numbers must start with + or 00.",
+			"description": "For numbers typed without a country code, for example +44 or +1. Empty: the calling code of the country in business.json; without one, numbers must start with + or 00.",
 			"default": "",
 			"maxLength": 4
 		},

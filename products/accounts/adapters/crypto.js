@@ -273,9 +273,8 @@ export const generateRecoveryCodes = () => {
 const legacyRecoveryHash = (code) => sha256(`recovery:${code.replace(/[\s-]/g, '').toUpperCase()}`);
 
 /**
- * A stored recovery code: its hash and format (`v1`, Accounts' own; `sha256_prefixed`, imported, A8). Records saved
- * before A8 hold the hash alone (v1).
- * @typedef {{ hash: string, format: 'v1' | 'sha256_prefixed' } | string} RecoveryItem
+ * A stored recovery code: its hash and format (`v1`, Accounts' own; `sha256_prefixed`, imported, A8).
+ * @typedef {{ hash: string, format: 'v1' | 'sha256_prefixed' }} RecoveryItem
  */
 
 /**
@@ -287,8 +286,7 @@ export const matchRecoveryCode = (code, items) => {
 	if (typeof code !== 'string' || code.length > 32) return -1;
 	const hashes = { v1: recoveryHash(code), sha256_prefixed: legacyRecoveryHash(code) };
 	let found = -1;
-	items.forEach((item, index) => {
-		const { hash, format } = typeof item === 'string' ? { hash: item, format: /** @type {const} */ ('v1') } : item;
+	items.forEach(({ hash, format }, index) => {
 		if (found === -1 && format in hashes && safeEqual(hash, hashes[format])) found = index;
 	});
 	return found;

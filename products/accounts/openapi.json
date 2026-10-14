@@ -11001,7 +11001,7 @@
 						"properties": {
 							"locale": {
 								"type": "string",
-								"description": "A language tag (en, en-GB, ur-PK), or '' for the viewer's."
+								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
 							},
 							"currencyDisplay": {
 								"type": "string",

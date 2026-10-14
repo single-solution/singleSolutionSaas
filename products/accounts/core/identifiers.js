@@ -37,16 +37,3 @@ export const normaliseEmail = (input) => {
 
 /** @param {string} email a canonical address */
 export const emailDomain = (email) => email.slice(email.lastIndexOf('@') + 1);
-
-/**
- * An address masked for display (`a•••@example.com`, `+92•••••••403`).
- * @param {string} value a canonical e-mail address or E.164 number
- */
-export const maskAddress = (value) => {
-	if (value.includes('@')) {
-		const at = value.lastIndexOf('@');
-		const local = value.slice(0, at);
-		return `${local.slice(0, 1)}${'•'.repeat(Math.max(3, local.length - 1))}${value.slice(at)}`;
-	}
-	return `${value.slice(0, 3)}${'•'.repeat(Math.max(3, value.length - 6))}${value.slice(-3)}`;
-};

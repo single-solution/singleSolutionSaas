@@ -56,7 +56,7 @@ import { createStore } from '../adapters/store.js';
  */
 
 /** The visitor's browser on a sign-in from the merchant's server (A12; the device list names it). */
-export const VISITOR_AGENT_HEADER = 'ss-visitor-agent';
+const VISITOR_AGENT_HEADER = 'ss-visitor-agent';
 /** Time a two-step step or a social hand-over stays open. */
 const STEP_MS = 10 * 60_000;
 /** Data exports are single-use links valid for 15 minutes (PLAN 0.4.11). */

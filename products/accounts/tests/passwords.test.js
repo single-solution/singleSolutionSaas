@@ -296,7 +296,7 @@ describe('Forgot password by e-mail: only a proven address or the one the accoun
 		expect(sentTo('own@example.com')).toHaveLength(1);
 	});
 
-	it('an account made before its identity was kept: the e-mail address of an account without a phone number', async () => {
+	it('an account stored without an identity (an import whose source did not say): the e-mail address of one without a phone number', async () => {
 		const store = await env.store();
 		const alone = await env.visitor('POST', '/v1/sign-up/password', { email: 'old1@example.com', password: 'old password 1' });
 		const both = await env.visitor('POST', '/v1/sign-up/password', {

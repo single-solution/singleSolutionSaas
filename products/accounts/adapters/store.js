@@ -21,7 +21,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { DEFAULT_ROLE, READY_ROLES, roleWithDefaults } from '../core/roles.js';
+import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
@@ -476,13 +476,12 @@ export const createStore = (data, { now }) => {
 				await seedRoles();
 				/** @type {Role[]} */
 				const all = as(await roles.find({ websiteId }, NO_ID).limit(200).toArray());
-				return all.map(roleWithDefaults).sort((a, b) => a.rank - b.rank || a.key.localeCompare(b.key));
+				return all.sort((a, b) => a.rank - b.rank || a.key.localeCompare(b.key));
 			},
 			/** @param {string} key @returns {Promise<Role | null>} */
 			get: async (key) => {
 				await seedRoles();
-				const found = as(await roles.findOne({ websiteId, key }, NO_ID));
-				return found ? roleWithDefaults(found) : null;
+				return as(await roles.findOne({ websiteId, key }, NO_ID));
 			},
 			count: () => roles.countDocuments({ websiteId }),
 			/** @param {Omit<Role, 'ready'>} role */
@@ -493,7 +492,7 @@ export const createStore = (data, { now }) => {
 					{ $set: { ...role }, $setOnInsert: { ready: false } },
 					{ upsert: true },
 				);
-				return roleWithDefaults(as(await roles.findOne({ websiteId, key: role.key }, NO_ID)));
+				return as(await roles.findOne({ websiteId, key: role.key }, NO_ID));
 			},
 			/** Delete a role of the merchant's own (never a ready-made one). @param {string} key */
 			remove: async (key) => (await roles.deleteOne({ websiteId, key, ready: false })).deletedCount === 1,

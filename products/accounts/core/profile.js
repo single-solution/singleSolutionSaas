@@ -199,8 +199,9 @@ const IDENTITY_OF_METHOD = Object.freeze({
 export const identityOfMethod = (method) => IDENTITY_OF_METHOD[method] ?? 'provider';
 
 /**
- * An account's identity. Accounts made before it was kept have none stored: one with an e-mail address and no phone
- * number signs in by the address; for one with both, which one it was made with is not known (null).
+ * An account's identity. An imported account may have none stored (its source did not say, and it had both an e-mail
+ * address and a phone number, or neither): while it has an e-mail address and no phone number it signs in by the
+ * address; otherwise which one is not known (null).
  * @param {Pick<UserRecord, 'identity' | 'email' | 'phone'>} user
  * @returns {Identity | null}
  */
@@ -229,10 +230,10 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  * @property {'active' | 'pending' | 'invited'} status
  * @property {string} role
  * @property {Record<string, string>} providers social sign-ins: provider → the provider's user id
- * @property {Identity} [identity] the address the account was made with and signs in by (absent on accounts made
- *   before it was kept: see `identityOf`)
+ * @property {Identity} [identity] the address the account was made with and signs in by (absent on an imported
+ *   account whose source did not say: see `identityOf`)
  * @property {string | null} passwordHash
- * @property {{ sealed: string, lastStep: number | null, recovery: Array<{ hash: string, format: 'v1' | 'sha256_prefixed' } | string>,
+ * @property {{ sealed: string, lastStep: number | null, recovery: Array<{ hash: string, format: 'v1' | 'sha256_prefixed' }>,
  *   enabledAt: Date | null } | null} twoStep recovery codes as hashes with their format (A8)
  * @property {number} failedLogins
  * @property {Date | null} lockedUntil

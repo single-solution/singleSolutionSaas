@@ -12,7 +12,7 @@ import {
 } from '../adapters/crypto.js';
 import { appleClientSecret, createProviders, pkceChallenge } from '../adapters/providers.js';
 import { PHONE_COUNTRIES } from '@ss/contracts/phone';
-import { emailDomain, maskAddress, normaliseEmail } from '../core/identifiers.js';
+import { emailDomain, normaliseEmail } from '../core/identifiers.js';
 import {
 	checkAddresses,
 	checkCustomValues,
@@ -44,8 +44,6 @@ describe('identifiers', () => {
 		for (const bad of [5, 'a@b', 'a@@b.com', '.a@b.com', 'a..b@b.com', 'a@b.123', 'a@-b.com', `${'a'.repeat(65)}@b.com`])
 			expect(normaliseEmail(bad)).toBeNull();
 		expect(emailDomain('a@shop.example.com')).toBe('shop.example.com');
-		expect(maskAddress('ana@example.com')).toBe('a•••@example.com');
-		expect(maskAddress('+923001234567')).toBe('+92•••••••567');
 	});
 
 	it('the allowed phone countries are the shared normaliser’s countries', () => {
@@ -111,7 +109,7 @@ describe('profile', () => {
 });
 
 describe('identities', () => {
-	it('keeps the address an account was made with, and derives it for older accounts', () => {
+	it('keeps the address an account was made with, and derives it for an imported account without one', () => {
 		expect(['email_password', 'email_code', 'phone_password', 'phone_code', 'google'].map(identityOfMethod)).toEqual([
 			'email',
 			'email',
@@ -214,7 +212,7 @@ describe('crypto', () => {
 		expect(verifyTotp(secret, code, { now: at, lastStep: Math.floor(at / 30_000) + 1 }).ok).toBe(false);
 		expect(verifyTotp(secret, 'abc', { now: at, lastStep: null }).ok).toBe(false);
 		expect(verifyTotp('!!!', '123456', { now: at, lastStep: null }).ok).toBe(false);
-		expect(matchRecoveryCode(5, ['x'])).toBe(-1);
+		expect(matchRecoveryCode(5, [{ hash: 'x', format: 'v1' }])).toBe(-1);
 	});
 });
 

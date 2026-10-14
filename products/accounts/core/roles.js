@@ -1,8 +1,8 @@
 /**
  * Roles and permissions of the merchant's users (PLAN 0.8.6), pure.
  *
- * - Every user of a website has exactly one role. The ready-made roles follow ibrahimMobiles' team roles (Owner,
- *   Business manager, Product manager, Marketing manager, Support staff) plus Customer, the role of every new sign-up.
+ * - Every user of a website has exactly one role. The ready-made roles are a usual shop team (Owner, Business manager,
+ *   Product manager, Marketing manager, Support staff) plus Customer, the role of every new sign-up.
  *   The merchant can change them (except their keys), copy them and add their own.
  * - A permission is `<source>:<key>`: `<source>` is the product that supplies it (`accounts`, `chat`, `ecommerce`, …,
  *   from each pasted product's `GET /v1/permissions`) or `site` for the merchant's own names. Owner carries every
@@ -39,7 +39,7 @@ const OWN_RANK = Object.freeze({ min: 101, max: 899, default: 600 });
 /** The key of the Owner role (A4: the last unblocked Owner stays). */
 export const OWNER_ROLE = 'owner';
 /** "Remember me" per role (A6). */
-export const REMEMBER_OPTIONS = Object.freeze(/** @type {const} */ (['ask', 'ask_ticked', 'always']));
+const REMEMBER_OPTIONS = Object.freeze(/** @type {const} */ (['ask', 'ask_ticked', 'always']));
 /** The sign-in methods a role may be limited to (A6): the sign-in features. */
 export const ROLE_METHODS = Object.freeze(
 	/** @type {const} */ (['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook']),
@@ -85,27 +85,6 @@ const ready = (key, name, rank, description, permissions) => ({
 	logSignIns: false,
 	ready: true,
 });
-
-/**
- * A stored role with the fields added later filled in (roles saved before A4, A6 and K-27).
- * @param {Partial<Role> & Pick<Role, 'key'>} role
- * @returns {Role}
- */
-export const roleWithDefaults = (role) => {
-	const readyMade = READY_ROLES.find((each) => each.key === role.key && role.ready !== false);
-	return /** @type {Role} */ ({
-		twoStep: 'optional',
-		sessionHours: 24,
-		rememberDays: 30,
-		sessionRolling: false,
-		remember: 'ask',
-		methods: [],
-		signIn: 'on',
-		logSignIns: false,
-		...role,
-		rank: readyMade ? readyMade.rank : (role.rank ?? OWN_RANK.default),
-	});
-};
 
 /**
  * A role as the API answers it: its own members only (never the website or the times the database stamps).
