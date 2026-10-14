@@ -135,6 +135,9 @@ export const pushKeys = () => {
 	};
 };
 
+/** The other products the test Portal's directory lists from the start. */
+export const OTHER_PRODUCTS = Object.freeze(['accounts', 'chat', 'ecommerce', 'growth', 'payments']);
+
 /**
  * A connected product with one website.
  * @param {{ start?: number }} [options]
@@ -193,6 +196,9 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 	const handler = product.handler(createRoutes(product), { after: (task) => tasks.push(task) });
 	handlers[BASE] = handler;
 	await portal.connect({ handler, baseUrl: BASE, secret: SECRET });
+	// the other products connected to this Portal: their template keys are theirs (a product made later is added by
+	// the test that needs it)
+	for (const productId of OTHER_PRODUCTS) portal.addProduct({ productId, baseUrl: `https://${productId}.example.dev` });
 	const websiteId = portal.addWebsite({ domain: DOMAIN });
 	const browser = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'browser' })).token;
 	const server = (await portal.issueToken({ websiteId, productId: manifest.id, kind: 'server' })).token;

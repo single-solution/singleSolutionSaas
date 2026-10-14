@@ -44,7 +44,14 @@ const CATALOG = {
 		},
 	],
 	off: [{ key: 'chat.staff_new_message', channel: 'sms' }],
-	unavailable: ['ecommerce'],
+	// the other products of the Portal's directory with their names, a product made later included
+	products: [
+		{ productId: 'accounts', name: 'Accounts' },
+		{ productId: 'bookings', name: 'Bookings' },
+		{ productId: 'chat', name: 'Chat' },
+		{ productId: 'ecommerce', name: 'Ecommerce' },
+	],
+	unavailable: ['bookings', 'ecommerce'],
 };
 /** The merchant's own templates: an edited Chat alert and a key of their own. */
 const TEMPLATES = {
@@ -119,7 +126,9 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		expect(rows[3]).toContain(T.states.not_set_up);
 		expect(rows[3]).toContain(T.setUp);
 		expect(rows[4]).toContain('welcome');
-		expect(container.textContent).toContain(T.unavailable.replace('{products}', 'Ecommerce'));
+		// each product by the name the directory gives
+		expect(rows[0]).toContain('Accounts');
+		expect(container.textContent).toContain(T.unavailable.replace('{products}', 'Bookings, Ecommerce'));
 	});
 
 	it('Edit starts from the default words; the key and channel of a product’s message stay fixed', async () => {

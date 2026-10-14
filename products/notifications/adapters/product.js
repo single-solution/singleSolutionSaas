@@ -6,8 +6,8 @@
  * widget settings, the list `webhook_urls` (in the product database, whose store it owns) and its part of the website
  * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, the channels that are on, and
  * while Outgoing webhooks is on the events it sends and its webhook URLs by host only), and adds the sealer of sensitive
- * messages, the providers and web push on the same outbound policy, and the products' message defaults its dashboard
- * lists (parity P1). The Next.js route and the tests pass the rest (config, store, clock, network).
+ * messages, the providers and web push on the same outbound policy, and the other products from the Portal's directory
+ * (whose template keys are theirs) with the message defaults its dashboard lists (parity P1). The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
@@ -276,9 +276,11 @@ export const createProductInstance = (options) => {
 			},
 		},
 	});
-	// the products' messages with their defaults (dashboard only; a send carries its own defaults)
+	// the other products (the Portal's directory): whose template keys are theirs, and their messages with their
+	// defaults (the dashboard's list; a send carries its own defaults)
 	const defaults = createDefaults({
-		addressOf: (productId) => product.addressOf(productId),
+		products: () => product.products(),
+		self: manifest.id,
 		send,
 		now,
 		...(options.logger ? { logger: options.logger } : {}),

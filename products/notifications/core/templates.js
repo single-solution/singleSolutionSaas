@@ -22,13 +22,6 @@ import { CHANNELS } from './channels.js';
 export { placeholdersOf, sectionProblem, valueNamesOf };
 
 /**
- * Template keys of the other products' own events start with that product's id and a dot. They work without the
- * Merchant send API feature; every other key is the merchant's own and needs it (PLAN 0.8.4 builder choice).
- */
-export const PRODUCT_IDS = Object.freeze(['accounts', 'ecommerce', 'chat', 'payments', 'growth']);
-const PRODUCT_KEY_PREFIXES = Object.freeze(PRODUCT_IDS.map((id) => `${id}.`));
-
-/**
  * Template keys of Accounts' messages (sign-in codes, magic, reset and setup links, account updates): always required
  * (no unsubscribe or STOP reply stops them, PLAN 0.8.5), always urgent (neither quiet hours nor a delayed send hold
  * them) and always sensitive (PLAN 0.8.10 D11), whatever the template says. They are never switched off either.
@@ -82,30 +75,26 @@ const MAX_BUTTONS = 10;
 const BUTTON_VALUE_LIMIT = 2000;
 
 /**
- * Whether a template key belongs to another product's own events.
+ * The product a template key belongs to, or null for the merchant's own keys. A key of another product's own messages
+ * starts with that product's id and a dot (`chat.staff_new_message`); the products are the ones the Portal's directory
+ * lists, so a product made later is known without a change here. Products' keys work without the Merchant send API
+ * feature, and their messages can be switched off (but Accounts'); every other key is the merchant's own (PLAN 0.8.4
+ * builder choice).
  * @param {string} key
- */
-export const isProductKey = (key) => PRODUCT_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
-
-/**
- * The product a template key belongs to, or null for the merchant's own keys.
- * @param {string} key
+ * @param {ReadonlyArray<string>} productIds the other products (the Portal's directory)
  * @returns {string | null}
  */
-export const productOfKey = (key) => PRODUCT_IDS.find((id) => key.startsWith(`${id}.`)) ?? null;
+export const productOfKey = (key, productIds) => {
+	const dot = key.indexOf('.');
+	const id = dot > 0 ? key.slice(0, dot) : '';
+	return productIds.includes(id) ? id : null;
+};
 
 /**
  * Whether a template key belongs to Accounts' messages.
  * @param {string} key
  */
 export const isAccountKey = (key) => key.startsWith(ACCOUNT_KEY_PREFIX);
-
-/**
- * Whether the merchant may switch a product's message off on a channel (parity P1): every one but Accounts' (sign-in
- * codes and links are always sent; the merchant switches the sign-in method off in Accounts instead).
- * @param {string} key
- */
-export const canSwitchOff = (key) => isProductKey(key) && !isAccountKey(key);
 
 /**
  * Whether the messages of a template are required (sent to people who unsubscribed): Accounts' always, else when the
@@ -456,7 +445,8 @@ export const templateRows = ({ messages, templates, off }) => {
 				message,
 				template,
 				defaults,
-				switchable: canSwitchOff(message.key),
+				// every product's message but Accounts' (sign-in codes and links are always sent)
+				switchable: !isAccountKey(message.key),
 			});
 		}
 	for (const template of templates)

@@ -8,9 +8,9 @@ import { TEMPLATE_CHANNELS } from '@ss/contracts/templates';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULTS_TTL_MS } from '../adapters/defaults.js';
 import { CHANNELS } from '../core/channels.js';
-import { canSwitchOff, checkDefaults, productOfKey, templateRows } from '../core/templates.js';
+import { checkDefaults, productOfKey, templateRows } from '../core/templates.js';
 import { SWITCHED_OFF } from '../server/sending.js';
-import { setup } from './helpers.js';
+import { OTHER_PRODUCTS, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -445,8 +445,8 @@ describe('the dashboard’s list of products’ messages (parity P1)', () => {
 		]);
 		expect(first.items[1].channels.whatsapp).toBeNull();
 		expect(first.off).toEqual([{ key: 'chat.staff_new_message', channel: 'sms' }]);
-		// products the directory does not know (or that answer no list) are named
-		expect(first.unavailable).toEqual(['ecommerce', 'payments', 'growth']);
+		// products of the directory that answer no list are named
+		expect(first.unavailable).toEqual(['ecommerce', 'growth', 'payments']);
 		await list();
 		expect(reads).toEqual({ accounts: 1, chat: 1 });
 		env.advance(DEFAULTS_TTL_MS);
@@ -459,19 +459,120 @@ describe('the dashboard’s list of products’ messages (parity P1)', () => {
 		expect(reads).toEqual({ accounts: 2, chat: 2 });
 		// the last good copies stay while a product cannot be read or answers a list that does not fit the contract
 		expect(later.items).toEqual(first.items);
-		expect(later.unavailable).toEqual(['ecommerce', 'payments', 'growth']);
+		expect(later.unavailable).toEqual(['ecommerce', 'growth', 'payments']);
 		await switchMessage('chat.staff_new_message', 'sms', { off: false });
+	});
+});
+
+describe('a product made after Notifications (any product the Portal’s directory lists)', () => {
+	const BOOKINGS = 'https://bookings.example.dev';
+	/** What the new product's kit attaches to its confirmation. */
+	const CONFIRMED = {
+		email: {
+			subject: 'Booking {number} is confirmed',
+			text: 'See you on {day}.',
+			required: false,
+			urgent: false,
+			sensitive: false,
+		},
+	};
+	/** @param {Awaited<ReturnType<typeof setup>>} own @param {string} [template] */
+	const confirm = (own, template = 'bookings.confirmed') =>
+		own.send('email', {
+			template,
+			to: { email: 'sam@example.com' },
+			values: { number: 'B-12', day: 'Monday' },
+			defaults: CONFIRMED,
+		});
+
+	it('its keys are its own once the directory lists it: no Merchant send API, listed with its defaults, switchable', async () => {
+		const own = await setup();
+		await own.switchOn(['email']);
+		await own.connectDatabase();
+		expect((await own.connect('email', RESEND)).status).toBe('connected');
+		// not connected to the Portal yet: the key is the merchant's own, which needs the Merchant send API
+		const before = await confirm(own);
+		expect(before.status).toBe(403);
+		expect(before.json.type).toMatch(/feature_off$/);
+		// the new product connects; within 5 minutes (the directory's cache) its keys are its own
+		own.portal.addProduct({ productId: 'bookings', name: 'Bookings', baseUrl: BOOKINGS });
+		own.handlers[BOOKINGS] = async () =>
+			new Response(
+				JSON.stringify({
+					productId: 'bookings',
+					messages: [
+						{
+							key: 'bookings.confirmed',
+							name: 'Booking confirmed',
+							values: ['number', 'day'],
+							channels: { email: { subject: CONFIRMED.email.subject, text: CONFIRMED.email.text } },
+						},
+					],
+				}),
+				{ headers: { 'content-type': 'application/json' } },
+			);
+		own.advance(5 * 60_000);
+		const sent = await confirm(own);
+		expect(sent.status).toBe(201);
+		expect(sent.json).toMatchObject({ status: 'sent', subject: 'Booking B-12 is confirmed', text: 'See you on Monday.' });
+		// the dashboard lists its messages with their defaults; the merchant can switch one off
+		const cookie = await own.adminSession();
+		const listed = await (await own.dashboard(cookie, 'GET', `/v1/dashboard/websites/${own.websiteId}/messages`)).json();
+		expect(listed.items).toContainEqual(
+			expect.objectContaining({ productId: 'bookings', key: 'bookings.confirmed', name: 'Booking confirmed' }),
+		);
+		expect(listed.products).toContainEqual({ productId: 'bookings', name: 'Bookings' });
+		expect(listed.products.map((/** @type {any} */ p) => p.productId)).not.toContain('notifications');
+		const off = await own.dashboard(
+			cookie,
+			'PUT',
+			`/v1/dashboard/websites/${own.websiteId}/messages/bookings.confirmed/email`,
+			{
+				off: true,
+			},
+		);
+		expect(off.status).toBe(200);
+		expect((await confirm(own)).json).toMatchObject({ status: 'skipped', reason: SWITCHED_OFF });
+		// a merchant's own key with a dot is not a product's: it still needs the Merchant send API, and cannot be
+		// switched off
+		expect((await confirm(own, 'promo.summer')).status).toBe(403);
+		const mine = await own.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${own.websiteId}/messages/promo.summer/email`, {
+			off: true,
+		});
+		expect(mine.status).toBe(422);
+		expect((await mine.json()).errors[0].message).toBe(
+			'Only the messages of products can be switched off: delete your own template instead.',
+		);
+	});
+
+	it('while the Portal’s directory cannot be read, a product’s message still goes; the dashboard asks to try again', async () => {
+		const own = await setup();
+		await own.switchOn(['email']);
+		await own.connectDatabase();
+		expect((await own.connect('email', RESEND)).status).toBe('connected');
+		const cookie = await own.adminSession();
+		own.portal.setReachable(false);
+		// never read on this instance: a key whose first part can be a product's counts as that product's
+		expect((await confirm(own)).json).toMatchObject({ status: 'sent', subject: 'Booking B-12 is confirmed' });
+		// Notifications' own id is never another product
+		expect((await confirm(own, 'notifications.test')).status).toBe(403);
+		const listed = await own.dashboard(cookie, 'GET', `/v1/dashboard/websites/${own.websiteId}/messages`);
+		expect(listed.status).toBe(503);
+		expect((await listed.json()).type).toMatch(/portal_unreachable$/);
 	});
 });
 
 describe('rules of defaults and rows (core)', () => {
 	it('uses the contract’s channels and knows the products’ keys', () => {
 		expect(CHANNELS).toEqual(TEMPLATE_CHANNELS);
-		expect(productOfKey('chat.staff_new_message')).toBe('chat');
-		expect(productOfKey('welcome')).toBeNull();
-		expect(canSwitchOff('chat.transcript')).toBe(true);
-		expect(canSwitchOff('accounts.invite')).toBe(false);
-		expect(canSwitchOff('welcome')).toBe(false);
+		// a key is a product's when its first part names a product of the Portal's directory, whichever product it is
+		const products = [...OTHER_PRODUCTS, 'bookings'];
+		expect(productOfKey('chat.staff_new_message', products)).toBe('chat');
+		expect(productOfKey('bookings.confirmed', products)).toBe('bookings');
+		expect(productOfKey('bookings.confirmed', OTHER_PRODUCTS)).toBeNull();
+		expect(productOfKey('promo.summer', products)).toBeNull();
+		expect(productOfKey('welcome', products)).toBeNull();
+		expect(productOfKey('.chat', products)).toBeNull();
 		expect(checkDefaults(undefined, 'chat.x')).toEqual({ ok: true, value: {} });
 		const checked = checkDefaults({ sms: { text: ' Hi ' } }, 'accounts.phone_code');
 		expect(checked).toMatchObject({ ok: true, value: { sms: { text: 'Hi', required: true, urgent: true, sensitive: true } } });

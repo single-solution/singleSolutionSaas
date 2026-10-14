@@ -15,12 +15,11 @@ import { isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import {
-	canSwitchOff,
 	checkDefaults,
 	checkSecretValues,
 	checkTemplate,
 	checkValues,
-	isProductKey,
+	isAccountKey,
 	languageOfSegment,
 	templateView,
 } from '../core/templates.js';
@@ -131,7 +130,7 @@ export const createRoutes = (product) => {
 		const defaults = checkDefaults(body.defaults, body.template);
 		if (!defaults.ok) return invalid(defaults.field, defaults.message);
 		const s = await siteOf(ctx);
-		if (!isProductKey(body.template) && !s.on.includes('send_api'))
+		if (!s.on.includes('send_api') && (await product.defaults.ownerOf(body.template)) === null)
 			return problem('feature_off', 'Your own template keys need the Merchant send API feature (send_api).');
 		/** @type {number | null} */
 		let sendAt = null;
@@ -285,13 +284,10 @@ export const createRoutes = (product) => {
 	const switchMessage = async (ctx) => {
 		const { key, channel } = ctx.params;
 		if (!CHANNELS.includes(channel) || !/^[a-z][a-z0-9_.-]{0,63}$/.test(key)) return problem('not_found', 'No such message.');
-		if (!canSwitchOff(key))
-			return invalid(
-				'key',
-				isProductKey(key)
-					? 'Sign-in messages are always sent: switch the sign-in method off in Accounts instead.'
-					: 'Only the messages of products can be switched off: delete your own template instead.',
-			);
+		if ((await product.defaults.ownerOf(key)) === null)
+			return invalid('key', 'Only the messages of products can be switched off: delete your own template instead.');
+		if (isAccountKey(key))
+			return invalid('key', 'Sign-in messages are always sent: switch the sign-in method off in Accounts instead.');
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
 		if (typeof body.off !== 'boolean') return invalid('off', 'off is true or false.');
 		const store = createStore(await ctx.data(), { now });
@@ -711,8 +707,10 @@ export const createRoutes = (product) => {
 			auth: 'dashboard',
 			handler: async (ctx) => {
 				const store = createStore(await ctx.data(), { now });
-				const [{ messages, unavailable }, off] = await Promise.all([product.defaults.all(), store.off.list()]);
-				return { items: messages, off, unavailable };
+				// the products come from the Portal's directory: without it (never read here) they are not known yet
+				const [listed, off] = await Promise.all([product.defaults.all().catch(() => null), store.off.list()]);
+				if (!listed) return problem('portal_unreachable', 'The Portal cannot be reached to list the products. Try again.');
+				return { items: listed.messages, off, products: listed.products, unavailable: listed.unavailable };
 			},
 		}),
 		defineRoute({

@@ -16,10 +16,10 @@ import {
 	checkTemplate,
 	checkValues,
 	fillText,
-	isProductKey,
 	languageOfSegment,
 	pickVersion,
 	placeholdersOf,
+	productOfKey,
 	renderTemplate,
 	sectionProblem,
 	templateView,
@@ -138,8 +138,8 @@ describe('templates', () => {
 	it('fills values, picks the language version and renders', () => {
 		expect(placeholdersOf('{a} {b} {a} {1x}')).toEqual(['a', 'b']);
 		expect(fillText('Hi {name}, {missing}', { name: 'Ana' })).toBe('Hi Ana, {missing}');
-		expect(isProductKey('accounts.code')).toBe(true);
-		expect(isProductKey('order_ready')).toBe(false);
+		expect(productOfKey('accounts.code', ['accounts', 'chat'])).toBe('accounts');
+		expect(productOfKey('order_ready', ['accounts', 'chat'])).toBeNull();
 		expect(languageOfSegment('default')).toBe('');
 		expect(languageOfSegment('x!')).toBeNull();
 		const versions = [{ language: '' }, { language: 'fr' }, { language: 'pt-BR' }, { language: 'ar' }, { language: 'ur' }];

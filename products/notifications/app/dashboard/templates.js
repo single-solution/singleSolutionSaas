@@ -261,8 +261,15 @@ export function TemplatesSection({ websiteId }) {
 				off: catalog?.ok ? catalog.data.off : [],
 			})
 		: [];
+	/** The other products' names, from the Portal's directory. @type {Map<string, string>} */
+	const names = new Map(
+		(catalog?.ok ? /** @type {Array<{ productId: string, name: string }>} */ (catalog.data.products) : []).map((p) => [
+			p.productId,
+			p.name,
+		]),
+	);
 	/** @param {string} id */
-	const productName = (id) => T.products[/** @type {keyof typeof T.products} */ (id)] ?? id;
+	const productName = (id) => names.get(id) ?? id;
 	const unavailable = catalog?.ok ? /** @type {string[]} */ (catalog.data.unavailable) : [];
 	return (
 		<Section

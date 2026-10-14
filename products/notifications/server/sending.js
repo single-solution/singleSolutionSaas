@@ -24,11 +24,9 @@ import { problem } from '@ss/app-kit';
 import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor, normaliseEmail } from '../core/channels.js';
 import {
 	DEFAULT_LANGUAGE,
-	canSwitchOff,
 	hiddenNamesOf,
 	hideValues,
 	isAccountKey,
-	isProductKey,
 	isRequired,
 	isSensitive,
 	isUrgent,
@@ -373,12 +371,14 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * Whether the merchant switched a product's message off on a channel: its key, or the key it falls back to.
+	 * Whether the merchant switched a product's message off on a channel: its key, or the key it falls back to. Only a
+	 * product's message can be switched off, never Accounts'.
 	 * @param {Site} s @param {string} key @param {string | null} fallbackKey @param {Channel} channel
 	 */
 	const switchedOff = async (s, key, fallbackKey, channel) => {
 		for (const each of fallbackKey ? [key, fallbackKey] : [key])
-			if (canSwitchOff(each) && (await s.store.off.has(each, channel))) return true;
+			if (!isAccountKey(each) && (await product.defaults.ownerOf(each)) !== null && (await s.store.off.has(each, channel)))
+				return true;
 		return false;
 	};
 
@@ -586,7 +586,7 @@ export const createSending = (product) => {
 				defaults: input.defaults,
 			});
 			if (found) made = found;
-			else if (input.channel === 'whatsapp' && isProductKey(input.template)) {
+			else if (input.channel === 'whatsapp' && (await product.defaults.ownerOf(input.template)) !== null) {
 				// WhatsApp never has a default: recorded as not set up (and its fallback tried), never dropped silently
 				notSetUp = true;
 				const sensitive = isAccountKey(input.template) || declared.some((words) => words.sensitive);
