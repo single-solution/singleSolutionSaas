@@ -284,7 +284,8 @@ export const productCard = (product, context, chosen = null) => {
  * @param {ProductRecord} product
  * @param {CardContext & { brand: string | null, attributes: Map<string, { name: string, unit: string }>,
  *   grades: Map<string, string>, warrantyDays?: (variant: VariantRecord) => number | null }} context
- *   `attributes`: attribute id → name and unit; `grades`: grade key → label; `warrantyDays`: the variant's warranty in
+ *   `attributes`: attribute id → name and unit of the fields Chat may tell (others are left out); `grades`: grade key →
+ *   label; `warrantyDays`: the variant's warranty in
  *   days (E12)
  */
 export const productDetails = (product, context) => {
@@ -302,9 +303,9 @@ export const productDetails = (product, context) => {
 		brand: context.brand,
 		options: product.options.map((option) => ({ name: option.name, values: [...option.values] })),
 		priceRange: { ...range, minText: text(range.min), maxText: text(range.max) },
-		specs: Object.entries(product.specs ?? {}).map(([id, value]) => {
+		specs: Object.entries(product.specs ?? {}).flatMap(([id, value]) => {
 			const attribute = context.attributes.get(id);
-			return { name: attribute?.name ?? id, value, unit: attribute?.unit ?? '' };
+			return attribute ? [{ name: attribute.name, value, unit: attribute.unit }] : [];
 		}),
 		variants: activeVariants(product)
 			.slice(0, DETAILS_VARIANTS)

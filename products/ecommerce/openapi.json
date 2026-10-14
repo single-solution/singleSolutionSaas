@@ -372,7 +372,7 @@
 		},
 		"/v1/admin/attributes": {
 			"get": {
-				"summary": "Every attribute (Catalog admin widget)",
+				"summary": "Every field (attribute) (Catalog admin widget)",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -406,8 +406,8 @@
 				}
 			},
 			"post": {
-				"summary": "Create an attribute (Catalog admin widget)",
-				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"summary": "Create a field (Catalog admin widget)",
+				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug, or the shop already has 200 fields. Send an Idempotency-Key so a retried request makes one field. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -448,15 +448,28 @@
 										"pattern": "^$|^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
 										"description": "Lowercase letters, digits and dashes; '' (or none for a new attribute) makes a free one from the name."
 									},
+									"on": {
+										"type": "string",
+										"enum": [
+											"product",
+											"variant",
+											"unit",
+											"order",
+											"customer"
+										],
+										"default": "product"
+									},
 									"type": {
 										"type": "string",
 										"enum": [
 											"text",
 											"number",
-											"boolean",
-											"choice"
+											"choice",
+											"yes_no",
+											"date"
 										],
-										"default": "text"
+										"default": "text",
+										"description": "Variant fields: not yes_no; unit fields: text. Type, where values live and fewer values cannot change while records have values (409 conflict)."
 									},
 									"choices": {
 										"type": "array",
@@ -492,15 +505,203 @@
 									},
 									"unit": {
 										"type": "string",
-										"maxLength": 20
+										"maxLength": 20,
+										"description": "Not for yes/no and date fields."
 									},
-									"filterable": {
-										"type": "boolean",
-										"default": false
+									"min": {
+										"type": [
+											"number",
+											"null"
+										],
+										"description": "Number fields only; at most the most."
 									},
-									"comparable": {
+									"max": {
+										"type": [
+											"number",
+											"null"
+										],
+										"description": "Number fields only."
+									},
+									"decimals": {
+										"type": "integer",
+										"minimum": 0,
+										"maximum": 3,
+										"default": 2,
+										"description": "Number fields only."
+									},
+									"dates": {
+										"type": "string",
+										"enum": [
+											"any",
+											"past",
+											"future"
+										],
+										"default": "any",
+										"description": "Date fields only."
+									},
+									"multiple": {
 										"type": "boolean",
-										"default": false
+										"default": false,
+										"description": "Only text and choice fields."
+									},
+									"maxValues": {
+										"type": "integer",
+										"minimum": 2,
+										"maximum": 20,
+										"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+									},
+									"format": {
+										"type": [
+											"object",
+											"null"
+										],
+										"description": "null for none; the parts left out take their defaults (any characters, 1 to 200 long, no starts, no pattern, no check digit). 422 at /format/<part> for a part that is not valid.",
+										"additionalProperties": false,
+										"properties": {
+											"chars": {
+												"type": "string",
+												"enum": [
+													"any",
+													"digits",
+													"letters",
+													"letters_digits",
+													"letters_digits_dash"
+												],
+												"description": "The characters a value may have (letters of any script)."
+											},
+											"minLength": {
+												"type": "integer",
+												"minimum": 1,
+												"maximum": 200
+											},
+											"maxLength": {
+												"type": "integer",
+												"minimum": 1,
+												"maximum": 200
+											},
+											"startsWith": {
+												"type": "array",
+												"maxItems": 10,
+												"items": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 20
+												},
+												"description": "A value starts with one of these ([] = anything)."
+											},
+											"mask": {
+												"type": "string",
+												"maxLength": 64,
+												"description": "A pattern as long as the values: A a letter, 9 a digit, * a letter or a digit, any other character itself ('' = none)."
+											},
+											"checkDigit": {
+												"type": "string",
+												"enum": [
+													"none",
+													"luhn"
+												],
+												"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+											},
+											"ignoreSpaces": {
+												"type": "boolean",
+												"description": "Spaces are dropped before the check (the value is kept without them)."
+											},
+											"upperCase": {
+												"type": "boolean",
+												"description": "Letters are upper-cased before the check (the value is kept that way)."
+											}
+										}
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "Not for customer fields."
+									},
+									"requiredAt": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"checkout",
+											"packed",
+											"shipped",
+											"delivered",
+											null
+										],
+										"description": "Required order fields only, and then needed."
+									},
+									"show": {
+										"type": "object",
+										"description": "The places given change; the others keep their values (a new field: product and variant fields show on the page and in Chat, the others nowhere). 422 at /show/<place> for a place its values cannot show.",
+										"additionalProperties": false,
+										"properties": {
+											"page": {
+												"type": "boolean",
+												"description": "The product page shows it (variant fields: they make the options shoppers pick)."
+											},
+											"card": {
+												"type": "string",
+												"enum": [
+													"none",
+													"image",
+													"chips"
+												],
+												"description": "How product cards show it (variant fields: the card variants carry it)."
+											},
+											"filter": {
+												"type": "boolean",
+												"description": "Shoppers can filter listings by it."
+											},
+											"compare": {
+												"type": "boolean",
+												"description": "Shown in the product comparison (product fields)."
+											},
+											"feeds": {
+												"type": "string",
+												"enum": [
+													"none",
+													"custom_label_0",
+													"custom_label_1",
+													"custom_label_2",
+													"custom_label_3",
+													"custom_label_4",
+													"color",
+													"material",
+													"size",
+													"pattern"
+												],
+												"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+											},
+											"jsonLd": {
+												"type": "string",
+												"enum": [
+													"none",
+													"additionalProperty",
+													"color",
+													"material",
+													"size",
+													"pattern"
+												],
+												"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+											},
+											"invoice": {
+												"type": "boolean",
+												"description": "Printed on invoices."
+											},
+											"packingSlip": {
+												"type": "boolean",
+												"description": "Printed on packing slips."
+											},
+											"shopper": {
+												"type": "boolean",
+												"description": "The shopper sees it on their order; an order field is also asked at checkout."
+											},
+											"chat": {
+												"type": "boolean",
+												"description": "Chat's product answers tell it."
+											}
+										}
 									},
 									"sort": {
 										"type": "integer",
@@ -525,21 +726,7 @@
 											"minLength": 1,
 											"maxLength": 64
 										},
-										"description": "Existing category ids ([] = every category)."
-									},
-									"on": {
-										"type": "string",
-										"enum": [
-											"product",
-											"variant"
-										],
-										"default": "product",
-										"description": "variant: not for boolean attributes."
-									},
-									"multiple": {
-										"type": "boolean",
-										"default": false,
-										"description": "Only text and choice attributes."
+										"description": "Existing category ids ([] = every category); not for order and customer fields. At most 3 active unit fields apply to one category (with those above it), one of them with two values (422 at /categoryIds)."
 									},
 									"visibility": {
 										"description": "'always' or null, or { when: 'brands' | 'grades', ids } (existing brand ids or grade keys, 1 to 200), or { when: 'attribute', attributeId, value } (another existing attribute).",
@@ -589,15 +776,6 @@
 												}
 											}
 										]
-									},
-									"card": {
-										"type": "string",
-										"enum": [
-											"none",
-											"image",
-											"chips"
-										],
-										"default": "none"
 									},
 									"active": {
 										"type": "boolean",
@@ -662,8 +840,8 @@
 		},
 		"/v1/admin/attributes/{id}": {
 			"delete": {
-				"summary": "Delete an attribute (Catalog admin widget)",
-				"description": "409 conflict while products or variants have values of it; 404 not_found.",
+				"summary": "Delete a field (Catalog admin widget)",
+				"description": "409 conflict while records hold values of it (products and variants, units, orders or customers); 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -699,8 +877,8 @@
 				}
 			},
 			"patch": {
-				"summary": "Change an attribute (Catalog admin widget)",
-				"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"summary": "Change a field (Catalog admin widget)",
+				"description": "Only the members sent change. 409 conflict when records hold values of it (products and variants, units, orders or customers, as its values live) and the change is to its type, where its values live (on) or to fewer values; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -11484,7 +11662,7 @@
 		},
 		"/v1/attributes": {
 			"get": {
-				"summary": "Every attribute",
+				"summary": "Every field (attribute)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -11530,8 +11708,8 @@
 				}
 			},
 			"post": {
-				"summary": "Create an attribute",
-				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. Send an Idempotency-Key so a retried request makes one attribute. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"summary": "Create a field",
+				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug, or the shop already has 200 fields. Send an Idempotency-Key so a retried request makes one field. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -11583,15 +11761,28 @@
 										"pattern": "^$|^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
 										"description": "Lowercase letters, digits and dashes; '' (or none for a new attribute) makes a free one from the name."
 									},
+									"on": {
+										"type": "string",
+										"enum": [
+											"product",
+											"variant",
+											"unit",
+											"order",
+											"customer"
+										],
+										"default": "product"
+									},
 									"type": {
 										"type": "string",
 										"enum": [
 											"text",
 											"number",
-											"boolean",
-											"choice"
+											"choice",
+											"yes_no",
+											"date"
 										],
-										"default": "text"
+										"default": "text",
+										"description": "Variant fields: not yes_no; unit fields: text. Type, where values live and fewer values cannot change while records have values (409 conflict)."
 									},
 									"choices": {
 										"type": "array",
@@ -11627,15 +11818,203 @@
 									},
 									"unit": {
 										"type": "string",
-										"maxLength": 20
+										"maxLength": 20,
+										"description": "Not for yes/no and date fields."
 									},
-									"filterable": {
-										"type": "boolean",
-										"default": false
+									"min": {
+										"type": [
+											"number",
+											"null"
+										],
+										"description": "Number fields only; at most the most."
 									},
-									"comparable": {
+									"max": {
+										"type": [
+											"number",
+											"null"
+										],
+										"description": "Number fields only."
+									},
+									"decimals": {
+										"type": "integer",
+										"minimum": 0,
+										"maximum": 3,
+										"default": 2,
+										"description": "Number fields only."
+									},
+									"dates": {
+										"type": "string",
+										"enum": [
+											"any",
+											"past",
+											"future"
+										],
+										"default": "any",
+										"description": "Date fields only."
+									},
+									"multiple": {
 										"type": "boolean",
-										"default": false
+										"default": false,
+										"description": "Only text and choice fields."
+									},
+									"maxValues": {
+										"type": "integer",
+										"minimum": 2,
+										"maximum": 20,
+										"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+									},
+									"format": {
+										"type": [
+											"object",
+											"null"
+										],
+										"description": "null for none; the parts left out take their defaults (any characters, 1 to 200 long, no starts, no pattern, no check digit). 422 at /format/<part> for a part that is not valid.",
+										"additionalProperties": false,
+										"properties": {
+											"chars": {
+												"type": "string",
+												"enum": [
+													"any",
+													"digits",
+													"letters",
+													"letters_digits",
+													"letters_digits_dash"
+												],
+												"description": "The characters a value may have (letters of any script)."
+											},
+											"minLength": {
+												"type": "integer",
+												"minimum": 1,
+												"maximum": 200
+											},
+											"maxLength": {
+												"type": "integer",
+												"minimum": 1,
+												"maximum": 200
+											},
+											"startsWith": {
+												"type": "array",
+												"maxItems": 10,
+												"items": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 20
+												},
+												"description": "A value starts with one of these ([] = anything)."
+											},
+											"mask": {
+												"type": "string",
+												"maxLength": 64,
+												"description": "A pattern as long as the values: A a letter, 9 a digit, * a letter or a digit, any other character itself ('' = none)."
+											},
+											"checkDigit": {
+												"type": "string",
+												"enum": [
+													"none",
+													"luhn"
+												],
+												"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+											},
+											"ignoreSpaces": {
+												"type": "boolean",
+												"description": "Spaces are dropped before the check (the value is kept without them)."
+											},
+											"upperCase": {
+												"type": "boolean",
+												"description": "Letters are upper-cased before the check (the value is kept that way)."
+											}
+										}
+									},
+									"required": {
+										"type": "boolean",
+										"default": false,
+										"description": "Not for customer fields."
+									},
+									"requiredAt": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"checkout",
+											"packed",
+											"shipped",
+											"delivered",
+											null
+										],
+										"description": "Required order fields only, and then needed."
+									},
+									"show": {
+										"type": "object",
+										"description": "The places given change; the others keep their values (a new field: product and variant fields show on the page and in Chat, the others nowhere). 422 at /show/<place> for a place its values cannot show.",
+										"additionalProperties": false,
+										"properties": {
+											"page": {
+												"type": "boolean",
+												"description": "The product page shows it (variant fields: they make the options shoppers pick)."
+											},
+											"card": {
+												"type": "string",
+												"enum": [
+													"none",
+													"image",
+													"chips"
+												],
+												"description": "How product cards show it (variant fields: the card variants carry it)."
+											},
+											"filter": {
+												"type": "boolean",
+												"description": "Shoppers can filter listings by it."
+											},
+											"compare": {
+												"type": "boolean",
+												"description": "Shown in the product comparison (product fields)."
+											},
+											"feeds": {
+												"type": "string",
+												"enum": [
+													"none",
+													"custom_label_0",
+													"custom_label_1",
+													"custom_label_2",
+													"custom_label_3",
+													"custom_label_4",
+													"color",
+													"material",
+													"size",
+													"pattern"
+												],
+												"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+											},
+											"jsonLd": {
+												"type": "string",
+												"enum": [
+													"none",
+													"additionalProperty",
+													"color",
+													"material",
+													"size",
+													"pattern"
+												],
+												"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+											},
+											"invoice": {
+												"type": "boolean",
+												"description": "Printed on invoices."
+											},
+											"packingSlip": {
+												"type": "boolean",
+												"description": "Printed on packing slips."
+											},
+											"shopper": {
+												"type": "boolean",
+												"description": "The shopper sees it on their order; an order field is also asked at checkout."
+											},
+											"chat": {
+												"type": "boolean",
+												"description": "Chat's product answers tell it."
+											}
+										}
 									},
 									"sort": {
 										"type": "integer",
@@ -11660,21 +12039,7 @@
 											"minLength": 1,
 											"maxLength": 64
 										},
-										"description": "Existing category ids ([] = every category)."
-									},
-									"on": {
-										"type": "string",
-										"enum": [
-											"product",
-											"variant"
-										],
-										"default": "product",
-										"description": "variant: not for boolean attributes."
-									},
-									"multiple": {
-										"type": "boolean",
-										"default": false,
-										"description": "Only text and choice attributes."
+										"description": "Existing category ids ([] = every category); not for order and customer fields. At most 3 active unit fields apply to one category (with those above it), one of them with two values (422 at /categoryIds)."
 									},
 									"visibility": {
 										"description": "'always' or null, or { when: 'brands' | 'grades', ids } (existing brand ids or grade keys, 1 to 200), or { when: 'attribute', attributeId, value } (another existing attribute).",
@@ -11724,15 +12089,6 @@
 												}
 											}
 										]
-									},
-									"card": {
-										"type": "string",
-										"enum": [
-											"none",
-											"image",
-											"chips"
-										],
-										"default": "none"
 									},
 									"active": {
 										"type": "boolean",
@@ -11797,8 +12153,8 @@
 		},
 		"/v1/attributes/{id}": {
 			"delete": {
-				"summary": "Delete an attribute",
-				"description": "409 conflict while products or variants have values of it; 404 not_found.",
+				"summary": "Delete a field",
+				"description": "409 conflict while records hold values of it (products and variants, units, orders or customers); 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -11845,8 +12201,8 @@
 				}
 			},
 			"patch": {
-				"summary": "Change an attribute",
-				"description": "Only the members sent change. 409 conflict when products have values of it and the change is to its type, its place (on) or from several values to one; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice attribute without choices, /multiple, /on, /categoryId, /categoryIds, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another attribute for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"summary": "Change a field",
+				"description": "Only the members sent change. 409 conflict when records hold values of it (products and variants, units, orders or customers, as its values live) and the change is to its type, where its values live (on) or to fewer values; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -27923,7 +28279,7 @@
 		"/v1/shop/compare": {
 			"get": {
 				"summary": "Compare products side by side",
-				"description": "On their comparable attributes, price, brand, grades, rating and image. ids names 1 to the compare setting maxProducts (2–4, default 4) products; repeats are dropped. Too many or none, or an id that is not a product id, answer 422 validation_failed at /ids.",
+				"description": "On their fields shown in the comparison (show.compare), price, brand, grades, rating and image. ids names 1 to the compare setting maxProducts (2–4, default 4) products; repeats are dropped. Too many or none, or an id that is not a product id, answer 422 validation_failed at /ids.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "compare",
 				"security": [
@@ -31892,23 +32248,29 @@
 			},
 			"Attribute": {
 				"type": "object",
-				"description": "A product attribute (a specification such as RAM or Color).",
+				"description": "A field (an attribute): a value products, variants, units (numbered items), orders or customers keep, with its type, checks and where it shows.",
 				"required": [
 					"id",
 					"name",
 					"slug",
+					"on",
 					"type",
 					"choices",
 					"unit",
-					"filterable",
-					"comparable",
+					"min",
+					"max",
+					"decimals",
+					"dates",
+					"multiple",
+					"maxValues",
+					"format",
+					"required",
+					"requiredAt",
+					"show",
 					"sort",
 					"categoryId",
 					"categoryIds",
-					"on",
-					"multiple",
 					"visibility",
-					"card",
 					"active",
 					"seo"
 				],
@@ -31929,14 +32291,27 @@
 						"pattern": "^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
 						"description": "Unique among the attributes for the same category (and among those for every category); listings filter by attr.<slug>, taking the listing's category's attribute first, then the one for every category."
 					},
+					"on": {
+						"type": "string",
+						"enum": [
+							"product",
+							"variant",
+							"unit",
+							"order",
+							"customer"
+						],
+						"description": "Where its values live: a product's specs, each variant's attributes, a unit's values (serial numbers), an order's fields or a customer's fields."
+					},
 					"type": {
 						"type": "string",
 						"enum": [
 							"text",
 							"number",
-							"boolean",
-							"choice"
-						]
+							"choice",
+							"yes_no",
+							"date"
+						],
+						"description": "date values are YYYY-MM-DD."
 					},
 					"choices": {
 						"type": "array",
@@ -31944,20 +32319,75 @@
 						"items": {
 							"$ref": "#/components/schemas/AttributeChoice"
 						},
-						"description": "The values a choice attribute takes (empty for the other types)."
+						"description": "The values a choice field takes (empty for the other types)."
 					},
 					"unit": {
 						"type": "string",
 						"maxLength": 20,
-						"description": "For example GB or mAh."
+						"description": "Shown after its values, for example GB or mAh ('' for yes/no and date fields)."
 					},
-					"filterable": {
-						"type": "boolean",
-						"description": "Shoppers can filter listings by it."
+					"min": {
+						"type": [
+							"number",
+							"null"
+						],
+						"description": "A number field's least value (null = none)."
 					},
-					"comparable": {
+					"max": {
+						"type": [
+							"number",
+							"null"
+						],
+						"description": "A number field's most value (null = none)."
+					},
+					"decimals": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3,
+						"description": "A number field's most decimals (0 for other types)."
+					},
+					"dates": {
+						"type": "string",
+						"enum": [
+							"any",
+							"past",
+							"future"
+						],
+						"description": "The days a date field takes: any, today or earlier, today or later (any for other types)."
+					},
+					"multiple": {
 						"type": "boolean",
-						"description": "Shown in the product comparison."
+						"description": "It takes several values (text and choice fields)."
+					},
+					"maxValues": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 20,
+						"description": "The most values (1 unless it takes several; a unit field at most 2)."
+					},
+					"format": {
+						"$ref": "#/components/schemas/FieldFormat"
+					},
+					"required": {
+						"type": "boolean",
+						"description": "Product and variant fields: needed on products on sale (in its categories); unit fields: on every unit; order fields: by requiredAt."
+					},
+					"requiredAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"checkout",
+							"packed",
+							"shipped",
+							"delivered",
+							null
+						],
+						"description": "A required order field: checkout (the shopper gives it; needs show.shopper) or before staff move the order into a packed, shipped or delivered status; null otherwise."
+					},
+					"show": {
+						"$ref": "#/components/schemas/FieldShow"
 					},
 					"sort": {
 						"type": "integer",
@@ -31979,31 +32409,10 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "The categories it applies to (empty: every category)."
-					},
-					"on": {
-						"type": "string",
-						"enum": [
-							"product",
-							"variant"
-						],
-						"description": "Its values live on the product or on each variant."
-					},
-					"multiple": {
-						"type": "boolean",
-						"description": "A product may have several values (text and choice attributes)."
+						"description": "The categories it applies to (empty: every category); product, variant and unit fields."
 					},
 					"visibility": {
 						"$ref": "#/components/schemas/AttributeVisibility"
-					},
-					"card": {
-						"type": "string",
-						"enum": [
-							"none",
-							"image",
-							"chips"
-						],
-						"description": "How product cards show it."
 					},
 					"active": {
 						"type": "boolean"
@@ -32070,7 +32479,7 @@
 			},
 			"AttributeInput": {
 				"type": "object",
-				"description": "A member left out keeps its value (a new attribute: its default). Unknown members are ignored.",
+				"description": "A member left out keeps its value (a new field: its default). Unknown members are ignored.",
 				"properties": {
 					"name": {
 						"type": "string",
@@ -32084,15 +32493,28 @@
 						"pattern": "^$|^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
 						"description": "Lowercase letters, digits and dashes; '' (or none for a new attribute) makes a free one from the name."
 					},
+					"on": {
+						"type": "string",
+						"enum": [
+							"product",
+							"variant",
+							"unit",
+							"order",
+							"customer"
+						],
+						"default": "product"
+					},
 					"type": {
 						"type": "string",
 						"enum": [
 							"text",
 							"number",
-							"boolean",
-							"choice"
+							"choice",
+							"yes_no",
+							"date"
 						],
-						"default": "text"
+						"default": "text",
+						"description": "Variant fields: not yes_no; unit fields: text. Type, where values live and fewer values cannot change while records have values (409 conflict)."
 					},
 					"choices": {
 						"type": "array",
@@ -32128,15 +32550,203 @@
 					},
 					"unit": {
 						"type": "string",
-						"maxLength": 20
+						"maxLength": 20,
+						"description": "Not for yes/no and date fields."
 					},
-					"filterable": {
-						"type": "boolean",
-						"default": false
+					"min": {
+						"type": [
+							"number",
+							"null"
+						],
+						"description": "Number fields only; at most the most."
 					},
-					"comparable": {
+					"max": {
+						"type": [
+							"number",
+							"null"
+						],
+						"description": "Number fields only."
+					},
+					"decimals": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3,
+						"default": 2,
+						"description": "Number fields only."
+					},
+					"dates": {
+						"type": "string",
+						"enum": [
+							"any",
+							"past",
+							"future"
+						],
+						"default": "any",
+						"description": "Date fields only."
+					},
+					"multiple": {
 						"type": "boolean",
-						"default": false
+						"default": false,
+						"description": "Only text and choice fields."
+					},
+					"maxValues": {
+						"type": "integer",
+						"minimum": 2,
+						"maximum": 20,
+						"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+					},
+					"format": {
+						"type": [
+							"object",
+							"null"
+						],
+						"description": "null for none; the parts left out take their defaults (any characters, 1 to 200 long, no starts, no pattern, no check digit). 422 at /format/<part> for a part that is not valid.",
+						"additionalProperties": false,
+						"properties": {
+							"chars": {
+								"type": "string",
+								"enum": [
+									"any",
+									"digits",
+									"letters",
+									"letters_digits",
+									"letters_digits_dash"
+								],
+								"description": "The characters a value may have (letters of any script)."
+							},
+							"minLength": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 200
+							},
+							"maxLength": {
+								"type": "integer",
+								"minimum": 1,
+								"maximum": 200
+							},
+							"startsWith": {
+								"type": "array",
+								"maxItems": 10,
+								"items": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 20
+								},
+								"description": "A value starts with one of these ([] = anything)."
+							},
+							"mask": {
+								"type": "string",
+								"maxLength": 64,
+								"description": "A pattern as long as the values: A a letter, 9 a digit, * a letter or a digit, any other character itself ('' = none)."
+							},
+							"checkDigit": {
+								"type": "string",
+								"enum": [
+									"none",
+									"luhn"
+								],
+								"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+							},
+							"ignoreSpaces": {
+								"type": "boolean",
+								"description": "Spaces are dropped before the check (the value is kept without them)."
+							},
+							"upperCase": {
+								"type": "boolean",
+								"description": "Letters are upper-cased before the check (the value is kept that way)."
+							}
+						}
+					},
+					"required": {
+						"type": "boolean",
+						"default": false,
+						"description": "Not for customer fields."
+					},
+					"requiredAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"checkout",
+							"packed",
+							"shipped",
+							"delivered",
+							null
+						],
+						"description": "Required order fields only, and then needed."
+					},
+					"show": {
+						"type": "object",
+						"description": "The places given change; the others keep their values (a new field: product and variant fields show on the page and in Chat, the others nowhere). 422 at /show/<place> for a place its values cannot show.",
+						"additionalProperties": false,
+						"properties": {
+							"page": {
+								"type": "boolean",
+								"description": "The product page shows it (variant fields: they make the options shoppers pick)."
+							},
+							"card": {
+								"type": "string",
+								"enum": [
+									"none",
+									"image",
+									"chips"
+								],
+								"description": "How product cards show it (variant fields: the card variants carry it)."
+							},
+							"filter": {
+								"type": "boolean",
+								"description": "Shoppers can filter listings by it."
+							},
+							"compare": {
+								"type": "boolean",
+								"description": "Shown in the product comparison (product fields)."
+							},
+							"feeds": {
+								"type": "string",
+								"enum": [
+									"none",
+									"custom_label_0",
+									"custom_label_1",
+									"custom_label_2",
+									"custom_label_3",
+									"custom_label_4",
+									"color",
+									"material",
+									"size",
+									"pattern"
+								],
+								"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+							},
+							"jsonLd": {
+								"type": "string",
+								"enum": [
+									"none",
+									"additionalProperty",
+									"color",
+									"material",
+									"size",
+									"pattern"
+								],
+								"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+							},
+							"invoice": {
+								"type": "boolean",
+								"description": "Printed on invoices."
+							},
+							"packingSlip": {
+								"type": "boolean",
+								"description": "Printed on packing slips."
+							},
+							"shopper": {
+								"type": "boolean",
+								"description": "The shopper sees it on their order; an order field is also asked at checkout."
+							},
+							"chat": {
+								"type": "boolean",
+								"description": "Chat's product answers tell it."
+							}
+						}
 					},
 					"sort": {
 						"type": "integer",
@@ -32161,21 +32771,7 @@
 							"minLength": 1,
 							"maxLength": 64
 						},
-						"description": "Existing category ids ([] = every category)."
-					},
-					"on": {
-						"type": "string",
-						"enum": [
-							"product",
-							"variant"
-						],
-						"default": "product",
-						"description": "variant: not for boolean attributes."
-					},
-					"multiple": {
-						"type": "boolean",
-						"default": false,
-						"description": "Only text and choice attributes."
+						"description": "Existing category ids ([] = every category); not for order and customer fields. At most 3 active unit fields apply to one category (with those above it), one of them with two values (422 at /categoryIds)."
 					},
 					"visibility": {
 						"description": "'always' or null, or { when: 'brands' | 'grades', ids } (existing brand ids or grade keys, 1 to 200), or { when: 'attribute', attributeId, value } (another existing attribute).",
@@ -32226,15 +32822,6 @@
 							}
 						]
 					},
-					"card": {
-						"type": "string",
-						"enum": [
-							"none",
-							"image",
-							"chips"
-						],
-						"default": "none"
-					},
 					"active": {
 						"type": "boolean",
 						"default": true
@@ -32268,7 +32855,7 @@
 			},
 			"AttributeList": {
 				"type": "object",
-				"description": "Every attribute (at most 5,000), by sort then name.",
+				"description": "Every field (at most 5,000; a shop has at most 200), by sort then name.",
 				"required": [
 					"items"
 				],
@@ -35369,7 +35956,7 @@
 					},
 					"rows": {
 						"type": "array",
-						"description": "One row per comparable attribute (comparable: true) that at least one product has, in the attributes' order.",
+						"description": "One row per product field shown in the comparison (show.compare) that at least one product has, in the fields' order.",
 						"items": {
 							"type": "object",
 							"required": [
@@ -37758,6 +38345,162 @@
 								}
 							}
 						}
+					}
+				}
+			},
+			"FieldFormat": {
+				"type": [
+					"object",
+					"null"
+				],
+				"description": "What a text field's values look like, checked in one pass over each value (no pattern built from what you type, so a check never slows down); null = any text of up to 200 characters. Starts and the pattern are kept as values are (upper-cased, without spaces).",
+				"additionalProperties": false,
+				"required": [
+					"chars",
+					"minLength",
+					"maxLength",
+					"startsWith",
+					"mask",
+					"checkDigit",
+					"ignoreSpaces",
+					"upperCase"
+				],
+				"properties": {
+					"chars": {
+						"type": "string",
+						"enum": [
+							"any",
+							"digits",
+							"letters",
+							"letters_digits",
+							"letters_digits_dash"
+						],
+						"description": "The characters a value may have (letters of any script)."
+					},
+					"minLength": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 200
+					},
+					"maxLength": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 200
+					},
+					"startsWith": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 20
+						},
+						"description": "A value starts with one of these ([] = anything)."
+					},
+					"mask": {
+						"type": "string",
+						"maxLength": 64,
+						"description": "A pattern as long as the values: A a letter, 9 a digit, * a letter or a digit, any other character itself ('' = none)."
+					},
+					"checkDigit": {
+						"type": "string",
+						"enum": [
+							"none",
+							"luhn"
+						],
+						"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+					},
+					"ignoreSpaces": {
+						"type": "boolean",
+						"description": "Spaces are dropped before the check (the value is kept without them)."
+					},
+					"upperCase": {
+						"type": "boolean",
+						"description": "Letters are upper-cased before the check (the value is kept that way)."
+					}
+				}
+			},
+			"FieldShow": {
+				"type": "object",
+				"description": "Where its values show. Each place only where its values live (product: page, card, filter, compare, feeds, jsonLd, chat; variant: the same but compare; unit and order: shopper, invoice, packingSlip; customer: invoice, packingSlip); the others stay off. A field shown nowhere a shopper looks (page, card, filter, compare, feeds, jsonLd, shopper, chat) is your staff's: its values never leave staff answers.",
+				"additionalProperties": false,
+				"required": [
+					"page",
+					"card",
+					"filter",
+					"compare",
+					"feeds",
+					"jsonLd",
+					"invoice",
+					"packingSlip",
+					"shopper",
+					"chat"
+				],
+				"properties": {
+					"page": {
+						"type": "boolean",
+						"description": "The product page shows it (variant fields: they make the options shoppers pick)."
+					},
+					"card": {
+						"type": "string",
+						"enum": [
+							"none",
+							"image",
+							"chips"
+						],
+						"description": "How product cards show it (variant fields: the card variants carry it)."
+					},
+					"filter": {
+						"type": "boolean",
+						"description": "Shoppers can filter listings by it."
+					},
+					"compare": {
+						"type": "boolean",
+						"description": "Shown in the product comparison (product fields)."
+					},
+					"feeds": {
+						"type": "string",
+						"enum": [
+							"none",
+							"custom_label_0",
+							"custom_label_1",
+							"custom_label_2",
+							"custom_label_3",
+							"custom_label_4",
+							"color",
+							"material",
+							"size",
+							"pattern"
+						],
+						"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+					},
+					"jsonLd": {
+						"type": "string",
+						"enum": [
+							"none",
+							"additionalProperty",
+							"color",
+							"material",
+							"size",
+							"pattern"
+						],
+						"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+					},
+					"invoice": {
+						"type": "boolean",
+						"description": "Printed on invoices."
+					},
+					"packingSlip": {
+						"type": "boolean",
+						"description": "Printed on packing slips."
+					},
+					"shopper": {
+						"type": "boolean",
+						"description": "The shopper sees it on their order; an order field is also asked at checkout."
+					},
+					"chat": {
+						"type": "boolean",
+						"description": "Chat's product answers tell it."
 					}
 				}
 			},
@@ -45724,8 +46467,9 @@
 									"enum": [
 										"text",
 										"number",
-										"boolean",
-										"choice"
+										"choice",
+										"yes_no",
+										"date"
 									]
 								},
 								"values": {
@@ -47164,7 +47908,7 @@
 								"value",
 								"label",
 								"unit",
-								"comparable"
+								"compare"
 							],
 							"additionalProperties": false,
 							"properties": {
@@ -47190,7 +47934,7 @@
 											"number"
 										]
 									},
-									"description": "One value of the attribute (text, number or yes/no), or several different ones when the attribute takes several."
+									"description": "One value of the field (text, number, yes/no or a date), or several different ones when the field takes several."
 								},
 								"label": {
 									"type": "string"
@@ -47198,12 +47942,13 @@
 								"unit": {
 									"type": "string"
 								},
-								"comparable": {
-									"type": "boolean"
+								"compare": {
+									"type": "boolean",
+									"description": "Shown in the product comparison."
 								}
 							}
 						},
-						"description": "Product attributes in the attributes' order."
+						"description": "The product fields shown on its page (show.page), in their order; fields shoppers do not see are left out."
 					},
 					"brand": {
 						"oneOf": [

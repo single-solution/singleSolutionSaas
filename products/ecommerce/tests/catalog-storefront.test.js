@@ -60,7 +60,7 @@ beforeAll(async () => {
 			{ value: 'blue', label: 'Blue' },
 			{ value: 'green', label: 'Green' },
 		],
-		filterable: true,
+		show: { filter: true },
 		sort: 1,
 	});
 	ids.size = await api('POST', '/v1/attributes', {
@@ -68,7 +68,7 @@ beforeAll(async () => {
 		type: 'choice',
 		on: 'variant',
 		choices: ['S', 'M'],
-		filterable: true,
+		show: { filter: true },
 		sort: 2,
 		categoryIds: [ids.clothes.id],
 	});
@@ -77,7 +77,7 @@ beforeAll(async () => {
 		type: 'choice',
 		choices: ['Silk', 'Cotton'],
 		multiple: true,
-		filterable: true,
+		show: { filter: true },
 		sort: 3,
 	});
 });
@@ -396,7 +396,7 @@ describe('E7 attributes on variants and the generator', () => {
 		});
 		expect(ids.size.slug).toBe('size');
 		expect((await shop.api('POST', '/v1/attributes', { name: 'Color', slug: 'color' })).status).toBe(409);
-		expect((await shop.api('POST', '/v1/attributes', { name: 'Flag', type: 'boolean', on: 'variant' })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/attributes', { name: 'Flag', type: 'yes_no', on: 'variant' })).status).toBe(422);
 		expect(
 			(await shop.api('POST', '/v1/attributes', { name: 'Visible', visibility: { when: 'brands', ids: ['brd_none'] } }))
 				.status,
@@ -415,10 +415,10 @@ describe('E7 attributes on variants and the generator', () => {
 		const visible = await api('POST', '/v1/attributes', {
 			name: 'Battery',
 			visibility: { when: 'grades', ids: ['b'] },
-			card: 'chips',
+			show: { card: 'chips' },
 			seo: { title: 'Battery health', body: 'What it means.', faqs: [{ question: 'Q', answer: 'A' }] },
 		});
-		expect(visible).toMatchObject({ visibility: { when: 'grades', ids: ['b'] }, card: 'chips', active: true });
+		expect(visible).toMatchObject({ visibility: { when: 'grades', ids: ['b'] }, show: { card: 'chips' }, active: true });
 
 		const item = await api('POST', '/v1/products', {
 			name: 'Printed scarf',

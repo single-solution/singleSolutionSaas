@@ -3,6 +3,7 @@
  * refuses by name, what it takes as given and what it derives, and the category tree finish rebuilds.
  */
 import { describe, expect, it } from 'vitest';
+import { showDefaults } from '../core/fields.js';
 import {
 	categoryPaths,
 	checkImportedAttribute,
@@ -52,6 +53,7 @@ const contextOf = ({ features = ['variants', 'grades_serials', 'digital_goods', 
 		gradeKeys: new Set(['a-plus']),
 		locationIds: new Set([LOC]),
 		categoryIds: new Set([CAT]),
+		categoryPaths: new Map([[CAT, []]]),
 		brandIds: new Set([BRD]),
 		attributes: new Map([
 			[
@@ -65,16 +67,22 @@ const contextOf = ({ features = ['variants', 'grades_serials', 'digital_goods', 
 						{ value: 'blue', label: 'Blue' },
 					],
 					unit: '',
-					filterable: true,
-					comparable: false,
+					min: null,
+					max: null,
+					decimals: 0,
+					dates: 'any',
+					format: null,
+					required: false,
+					requiredAt: null,
+					show: { ...showDefaults('variant'), filter: true },
 					sort: 0,
 					on: 'variant',
 					categoryId: null,
 					slug: 'color',
 					categoryIds: [],
 					multiple: false,
+					maxValues: 1,
 					visibility: { when: 'always', ids: [], attributeId: null, value: null },
-					card: 'none',
 					active: true,
 					seo: { title: '', description: '', body: '', faqs: [] },
 				},

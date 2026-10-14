@@ -407,7 +407,11 @@ export const createChatLookup = (product, service, media) => {
 				? []
 				: data
 						.collection(COLLECTIONS.attributes)
-						.find({ websiteId: data.websiteId, id: { $in: specIds } }, { projection: { _id: 0, id: 1, name: 1, unit: 1 } })
+						.find(
+							// only the fields the merchant shows in Chat (staff-only values never leave staff answers)
+							{ websiteId: data.websiteId, id: { $in: specIds }, 'show.chat': true },
+							{ projection: { _id: 0, id: 1, name: 1, unit: 1 } },
+						)
 						.toArray(),
 			cardRules(s),
 		]);

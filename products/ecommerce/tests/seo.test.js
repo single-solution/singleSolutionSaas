@@ -206,14 +206,39 @@ describe('core/feeds and core/llms', () => {
 		expect(legacy[0]).toMatchObject({
 			id: '0123456789abcdef01234567_76543210fedcba9876543210',
 			googleCategory: '267',
-			customLabel0: 'Grade A',
+			customLabels: ['Grade A', '', '', '', ''],
 			shipping: '3 USD',
 			shippingCountry: 'US',
 			price: '13 USD',
 			link: 'https://shop.example/p?v=var_76543210fedcba9876543210',
 			image: 'https://cdn.example/v.jpg',
 		});
-		expect(legacy[1]).toMatchObject({ id: 'var_new', customLabel0: '', image: 'https://cdn.example/i.jpg' });
+		expect(legacy[1]).toMatchObject({ id: 'var_new', customLabels: ['', '', '', '', ''], image: 'https://cdn.example/i.jpg' });
+		// field values the merchant sends (`show.feeds`): the grade label keeps custom label 0, the first value wins a column
+		const [labelled] = feedRows(product, {
+			...context,
+			gradeLabel: () => 'Grade A',
+			values: () => [
+				{ target: 'custom_label_0', name: 'Season', value: 'Summer' },
+				{ target: 'custom_label_2', name: 'Season', value: 'Summer' },
+				{ target: 'color', name: 'Color', value: 'Red' },
+				{ target: 'color', name: 'Shade', value: 'Dark red' },
+				{ target: 'material', name: 'Material', value: 'Cotton' },
+				{ target: 'size', name: 'Size', value: 'M' },
+				{ target: 'pattern', name: 'Pattern', value: 'x'.repeat(150) },
+			],
+		});
+		expect(labelled).toMatchObject({
+			customLabels: ['Grade A', '', 'Summer', '', ''],
+			color: 'Red',
+			material: 'Cotton',
+			size: 'M',
+			pattern: 'x'.repeat(100),
+		});
+		const labelledItem = googleItem(/** @type {any} */ (labelled));
+		expect(labelledItem).toContain('<g:color>Red</g:color><g:material>Cotton</g:material><g:size>M</g:size>');
+		expect(labelledItem).toContain('<g:custom_label_0>Grade A</g:custom_label_0><g:custom_label_2>Summer</g:custom_label_2>');
+		expect(metaLine(/** @type {any} */ (labelled))).toContain(',Red,Cotton,M,');
 		const item = googleItem(/** @type {any} */ (legacy[0]));
 		expect(item).toContain('<g:google_product_category>267</g:google_product_category>');
 		expect(item).toContain('<g:custom_label_0>Grade A</g:custom_label_0>');
@@ -236,7 +261,7 @@ describe('core/feeds and core/llms', () => {
 		expect(out).toContain('out_of_stock');
 		// Meta gets the regular price and the sale price in their own columns (G4)
 		expect(metaLine(/** @type {any} */ (row))).toBe(
-			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,Brand,,SKU-A,prd_1,,\r\n',
+			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,Brand,,SKU-A,prd_1,,,,,,,,,,\r\n',
 		);
 		expect(metaLine(/** @type {any} */ ({ ...row, inStock: false, condition: '', salePrice: '' }))).toContain(
 			'out of stock,new,12.00 USD,,',
@@ -497,7 +522,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(csv.headers.get('content-type')).toContain('text/csv');
 		const lines = csv.text.trim().split('\r\n');
 		expect(lines[0]).toBe(
-			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,brand,gtin,mpn,item_group_id,google_product_category,custom_label_0',
+			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,brand,gtin,mpn,item_group_id,color,material,size,pattern,google_product_category,custom_label_0,custom_label_1,custom_label_2,custom_label_3,custom_label_4',
 		);
 		expect(lines).toHaveLength(3);
 		expect(lines[2]).toContain('out of stock');

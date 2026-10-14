@@ -84,17 +84,18 @@ describe('categories, brands and attributes', () => {
 			name: 'RAM',
 			type: 'number',
 			unit: 'GB',
-			filterable: true,
-			comparable: true,
+			show: { filter: true, compare: true },
 		});
 		expect(ram.status).toBe(201);
 		expect((await api('POST', '/v1/attributes', { name: 'Color', type: 'choice' })).status).toBe(422);
-		expect((await api('POST', '/v1/attributes', { name: 'Bad', type: 'date', filterable: 'yes' })).json.errors).toHaveLength(2);
+		expect(
+			(await api('POST', '/v1/attributes', { name: 'Bad', type: 'colour', show: { filter: 'yes' } })).json.errors,
+		).toHaveLength(2);
 		const color = await api('POST', '/v1/attributes', {
 			name: 'Color',
 			type: 'choice',
 			choices: ['Black', 'Blue'],
-			filterable: true,
+			show: { filter: true },
 		});
 		expect(color.json.choices).toEqual([
 			{ value: 'Black', label: 'Black' },
@@ -105,7 +106,7 @@ describe('categories, brands and attributes', () => {
 		).toHaveLength(3);
 		expect((await api('PATCH', `/v1/attributes/${color.json.id}`, { choices: ['A', 'A'] })).status).toBe(422);
 		expect((await api('GET', '/v1/attributes')).json.items).toHaveLength(2);
-		const gone = await api('POST', '/v1/attributes', { name: 'Gone', type: 'boolean' });
+		const gone = await api('POST', '/v1/attributes', { name: 'Gone', type: 'yes_no' });
 		expect((await api('DELETE', `/v1/attributes/${gone.json.id}`)).status).toBe(204);
 		expect((await api('PATCH', `/v1/attributes/${gone.json.id}`, { name: 'x' })).status).toBe(404);
 		// in use

@@ -41,7 +41,7 @@ export const parseCompareIds = (value, max) => {
  */
 export const compareRows = (products, attributes) =>
 	[...attributes]
-		.filter((attribute) => attribute.comparable)
+		.filter((attribute) => attribute.on === 'product' && attribute.show.compare)
 		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
 		.map((attribute) => ({
 			attributeId: attribute.id,

@@ -236,3 +236,315 @@ export const gtinOf = (value) => {
 		sum += (digits.charCodeAt(digits.length - 1 - index) - 48) * (index % 2 === 1 ? 3 : 1);
 	return (10 - (sum % 10)) % 10 === digits.charCodeAt(digits.length - 1) - 48 ? digits : null;
 };
+
+// ------------------------------------------------------------------------------------------------------ fields
+
+/** Where a field's values live: products, variants, units (one numbered item each), orders and customers. */
+export const FIELD_ON = Object.freeze(/** @type {const} */ (['product', 'variant', 'unit', 'order', 'customer']));
+/** Field types. */
+export const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'choice', 'yes_no', 'date']));
+/** The dates a date field takes: any, only today or before, only today or after. */
+export const FIELD_DATES = Object.freeze(/** @type {const} */ (['any', 'past', 'future']));
+/**
+ * When a required order field must be filled: at checkout (by the shopper), or before staff move the order into a
+ * packed, shipped or delivered status.
+ */
+export const REQUIRED_AT = Object.freeze(/** @type {const} */ (['checkout', 'packed', 'shipped', 'delivered']));
+/** How product cards show a field's values. */
+export const CARD_MODES = Object.freeze(/** @type {const} */ (['none', 'image', 'chips']));
+/** Where the product feeds send a field's value. */
+export const FEED_TARGETS = Object.freeze(
+	/** @type {const} */ ([
+		'none',
+		'custom_label_0',
+		'custom_label_1',
+		'custom_label_2',
+		'custom_label_3',
+		'custom_label_4',
+		'color',
+		'material',
+		'size',
+		'pattern',
+	]),
+);
+/** Where structured data names a field's value. */
+export const JSONLD_TARGETS = Object.freeze(
+	/** @type {const} */ (['none', 'additionalProperty', 'color', 'material', 'size', 'pattern']),
+);
+/** The places a field's values may show, by where they live; every other place stays off. */
+export const SHOW_PLACES = Object.freeze({
+	product: Object.freeze(['page', 'card', 'filter', 'compare', 'feeds', 'jsonLd', 'chat']),
+	variant: Object.freeze(['page', 'card', 'filter', 'feeds', 'jsonLd', 'chat']),
+	unit: Object.freeze(['shopper', 'invoice', 'packingSlip']),
+	order: Object.freeze(['shopper', 'invoice', 'packingSlip']),
+	customer: Object.freeze(['invoice', 'packingSlip']),
+});
+/** The limits of fields: per shop, values of a field, unit fields that apply to one product, values of a unit field. */
+export const FIELD_LIMITS = Object.freeze({ fields: 200, values: 20, unitFields: 3, unitValues: 2, number: 1e12 });
+
+/** @typedef {typeof FIELD_ON[number]} FieldOn */
+/** @typedef {typeof FIELD_TYPES[number]} FieldType */
+/** @typedef {typeof FEED_TARGETS[number]} FeedTarget */
+/** @typedef {typeof JSONLD_TARGETS[number]} JsonLdTarget */
+/**
+ * Where a field's values show (each place only where its values live, {@link SHOW_PLACES}): the product page, cards,
+ * the shop's filters, compare, the feeds and structured data (as which attribute), invoices, packing slips, the
+ * shopper's own order (and, for order fields, the checkout) and Chat. A field shown nowhere a shopper looks is the
+ * staff's alone: its values never leave staff answers.
+ * @typedef {{ page: boolean, card: typeof CARD_MODES[number], filter: boolean, compare: boolean, feeds: FeedTarget,
+ *   jsonLd: JsonLdTarget, invoice: boolean, packingSlip: boolean, shopper: boolean, chat: boolean }} FieldShow
+ */
+/** @typedef {string | number | boolean | Array<string | number>} FieldValue */
+/**
+ * What checking a value needs of its field.
+ * @typedef {{ name: string, type: FieldType, choices: Array<{ value: string, label: string }>, multiple: boolean,
+ *   maxValues: number, min: number | null, max: number | null, decimals: number, dates: typeof FIELD_DATES[number],
+ *   format: Format | null }} ValueRules
+ */
+
+/**
+ * Where a field shows when nothing is said: product and variant fields on the product page and in Chat (as attributes
+ * always did), the others nowhere a shopper looks.
+ * @param {FieldOn} on
+ * @returns {FieldShow}
+ */
+export const showDefaults = (on) => {
+	const catalog = on === 'product' || on === 'variant';
+	return {
+		page: catalog,
+		card: 'none',
+		filter: false,
+		compare: false,
+		feeds: 'none',
+		jsonLd: 'none',
+		invoice: false,
+		packingSlip: false,
+		shopper: false,
+		chat: catalog,
+	};
+};
+
+/** The value each place of `show` takes. */
+const SHOW_VALUES = Object.freeze({
+	page: [true, false],
+	card: CARD_MODES,
+	filter: [true, false],
+	compare: [true, false],
+	feeds: FEED_TARGETS,
+	jsonLd: JSONLD_TARGETS,
+	invoice: [true, false],
+	packingSlip: [true, false],
+	shopper: [true, false],
+	chat: [true, false],
+});
+
+/**
+ * Check where a field shows: the places given over those it had (or the defaults), each one of its values, and every
+ * place that does not apply to where its values live left off.
+ * @param {unknown} given
+ * @param {FieldOn} on
+ * @param {FieldShow | null} before
+ * @returns {{ ok: true, value: FieldShow } | { ok: false, errors: Array<{ path: string, message: string }> }}
+ */
+export const checkShow = (given, on, before) => {
+	const base = before ?? showDefaults(on);
+	const raw = given === undefined ? {} : given;
+	if (!isObject(raw)) return { ok: false, errors: [{ path: '/show', message: 'Say where the field shows, as an object.' }] };
+	/** @type {Array<{ path: string, message: string }>} */
+	const errors = [];
+	const off = showDefaults('customer');
+	/** @type {Record<string, unknown>} */
+	const out = {};
+	for (const [place, values] of Object.entries(SHOW_VALUES)) {
+		const given = raw[place];
+		if (given !== undefined && !(/** @type {readonly unknown[]} */ (values).includes(given))) {
+			errors.push({ path: `/show/${place}`, message: `${place} is one of ${values.join(', ')}.` });
+			continue;
+		}
+		const value = given === undefined ? /** @type {Record<string, unknown>} */ (base)[place] : given;
+		const applies = /** @type {readonly string[]} */ (SHOW_PLACES[on]).includes(place);
+		const empty = /** @type {Record<string, unknown>} */ (off)[place];
+		if (!applies && given !== undefined && given !== empty)
+			errors.push({ path: `/show/${place}`, message: `${on} fields show only in: ${SHOW_PLACES[on].join(', ')}.` });
+		out[place] = applies ? value : empty;
+	}
+	for (const place of Object.keys(raw))
+		if (!(place in SHOW_VALUES)) errors.push({ path: `/show/${place}`, message: 'There is no such place.' });
+	return errors.length > 0 ? { ok: false, errors } : { ok: true, value: /** @type {FieldShow} */ (out) };
+};
+
+/**
+ * Whether a field's values show at a place.
+ * @param {{ show: FieldShow }} field
+ * @param {keyof FieldShow} place
+ */
+export const showsAt = (field, place) => {
+	const value = field.show[place];
+	return value !== false && value !== 'none';
+};
+
+/**
+ * Whether shoppers see a field's values anywhere (the product page, cards, filters, compare, feeds, structured data,
+ * their own orders or Chat). Values of a field they never see stay in staff answers.
+ * @param {{ show: FieldShow }} field
+ */
+export const shownToShoppers = (field) =>
+	/** @type {Array<keyof FieldShow>} */ (['page', 'card', 'filter', 'compare', 'feeds', 'jsonLd', 'shopper', 'chat']).some(
+		(place) => showsAt(field, place),
+	);
+
+// eslint-disable-next-line no-control-regex
+const CONTROLS = /[\u0000-\u001F\u007F]/g;
+
+/**
+ * A text value on one line without control characters, or null when empty, too long or not text.
+ * @param {unknown} value @param {number} max
+ */
+const textOf = (value, max) => {
+	if (typeof value !== 'string') return null;
+	const text = value
+		.replace(/[\r\n\t]+/g, ' ')
+		.replace(CONTROLS, '')
+		.trim();
+	return text === '' || text.length > max ? null : text;
+};
+
+/** A date as values keep it: `YYYY-MM-DD`, a real calendar day. */
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * A calendar day `YYYY-MM-DD`, or null.
+ * @param {unknown} value
+ */
+export const dayOf = (value) => {
+	if (typeof value !== 'string') return null;
+	const match = DATE.exec(value);
+	if (!match) return null;
+	const day = new Date(`${value}T00:00:00Z`);
+	return Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== value ? null : value;
+};
+
+/**
+ * Why a value is refused: not of the field's type, not one of its choices, out of its range, too many decimals, a day
+ * not allowed, a wrong number of values, or a format refusal.
+ * @typedef {'type' | 'choice' | 'range' | 'decimals' | 'date' | 'values' | FormatRefusal} ValueRefusal
+ */
+
+/**
+ * Check one value of a field.
+ * @param {ValueRules} field @param {unknown} raw @param {ReadonlyArray<string>} extra @param {string} today
+ * @returns {{ ok: true, value: string | number | boolean } | { ok: false, code: ValueRefusal }}
+ */
+const oneValue = (field, raw, extra, today) => {
+	if (field.type === 'yes_no') return typeof raw === 'boolean' ? { ok: true, value: raw } : { ok: false, code: 'type' };
+	if (field.type === 'number') {
+		if (typeof raw !== 'number' || !Number.isFinite(raw) || Math.abs(raw) > FIELD_LIMITS.number)
+			return { ok: false, code: 'type' };
+		if ((field.min !== null && raw < field.min) || (field.max !== null && raw > field.max)) return { ok: false, code: 'range' };
+		return Number(raw.toFixed(field.decimals)) === raw ? { ok: true, value: raw } : { ok: false, code: 'decimals' };
+	}
+	if (field.type === 'date') {
+		const day = dayOf(raw);
+		if (!day) return { ok: false, code: 'type' };
+		if ((field.dates === 'past' && day > today) || (field.dates === 'future' && day < today))
+			return { ok: false, code: 'date' };
+		return { ok: true, value: day };
+	}
+	const text = textOf(raw, FORMAT_LIMITS.length);
+	if (text === null) return { ok: false, code: 'type' };
+	if (field.type === 'choice')
+		return field.choices.some((choice) => choice.value === text) || extra.includes(text)
+			? { ok: true, value: text }
+			: { ok: false, code: 'choice' };
+	return field.format ? checkFormat(text, field.format) : { ok: true, value: text };
+};
+
+/**
+ * Check a value of a field: one value, or several different ones (1 to its `maxValues`) when it takes several.
+ * @param {ValueRules} field
+ * @param {unknown} raw
+ * @param {{ extra?: ReadonlyArray<string>, today?: string }} [options] `extra`: more choice values (a product's own,
+ *   E7); `today`: the day past and future dates compare with (UTC, `YYYY-MM-DD`)
+ * @returns {{ ok: true, value: FieldValue } | { ok: false, code: ValueRefusal, value?: string }} `value`: the value
+ *   refused
+ */
+export const checkValue = (field, raw, { extra = [], today = new Date().toISOString().slice(0, 10) } = {}) => {
+	if (!Array.isArray(raw)) {
+		const one = oneValue(field, raw, extra, today);
+		return one.ok ? one : { ...one, ...(typeof raw === 'string' ? { value: raw } : {}) };
+	}
+	if (!field.multiple || field.type === 'yes_no' || raw.length === 0 || raw.length > field.maxValues)
+		return { ok: false, code: 'values' };
+	/** @type {Array<string | number>} */
+	const out = [];
+	for (const entry of raw) {
+		const one = oneValue(field, entry, extra, today);
+		if (!one.ok) return { ...one, ...(typeof entry === 'string' ? { value: entry } : {}) };
+		if (out.includes(/** @type {string | number} */ (one.value))) return { ok: false, code: 'values' };
+		out.push(/** @type {string | number} */ (one.value));
+	}
+	return { ok: true, value: out };
+};
+
+/**
+ * The English words of a refused value (the API's message; widgets show their own texts by the code).
+ * @param {ValueRules} field
+ * @param {{ code: ValueRefusal, value?: string }} refusal
+ */
+export const valueProblem = (field, { code, value }) => {
+	const name = field.name;
+	if (code === 'choice') return `Pick one of the choices of ${name}.`;
+	if (code === 'range')
+		return field.min !== null && field.max !== null
+			? `${name} is from ${field.min} to ${field.max}.`
+			: field.min !== null
+				? `${name} is at least ${field.min}.`
+				: `${name} is at most ${field.max}.`;
+	if (code === 'decimals') return `${name} has at most ${field.decimals} decimals.`;
+	if (code === 'date') return field.dates === 'past' ? `${name} is today or earlier.` : `${name} is today or later.`;
+	if (code === 'values') return `${name} takes 1 to ${field.maxValues} different values.`;
+	if (code === 'type') return `This is not a valid value of ${name}.`;
+	return `${value ?? 'This value'} does not match the format of ${name}.`;
+};
+
+/**
+ * Whether a field applies to a product: its category, else its categories ([] = every one), among the product's
+ * categories and those above them (`lineage`).
+ * @param {{ categoryId: string | null, categoryIds: string[] }} field
+ * @param {ReadonlyArray<string>} lineage
+ */
+export const fieldApplies = (field, lineage) => {
+	const scope = field.categoryId ? [field.categoryId] : field.categoryIds;
+	return scope.length === 0 || scope.some((id) => lineage.includes(id));
+};
+
+/**
+ * The unit fields of a product's units: the active ones its categories (with those above them) take, in their order.
+ * Without any, a unit is named by a plain serial number.
+ * @template {{ id: string, name: string, sort: number, on: FieldOn, active: boolean, categoryId: string | null,
+ *   categoryIds: string[] }} F
+ * @param {ReadonlyArray<F>} fields
+ * @param {ReadonlyArray<string>} lineage
+ * @returns {F[]}
+ */
+export const unitFieldsFor = (fields, lineage) =>
+	fields
+		.filter((field) => field.on === 'unit' && field.active && fieldApplies(field, lineage))
+		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+/**
+ * Where active unit fields would ask too much of one product's units: more than {@link FIELD_LIMITS.unitFields} apply
+ * to one category (with those above it), or more than one of them takes two values. The category's id ('' for products
+ * without a category), or null when every category is within the limits.
+ * @param {ReadonlyArray<{ id: string, name: string, sort: number, on: FieldOn, active: boolean, multiple: boolean,
+ *   categoryId: string | null, categoryIds: string[] }>} fields
+ * @param {ReadonlyArray<{ id: string, path: string[] }>} categories every category of the website
+ * @returns {string | null}
+ */
+export const crowdedUnits = (fields, categories) => {
+	for (const lineage of [[], ...categories.map((category) => [category.id, ...category.path])]) {
+		const units = unitFieldsFor(fields, lineage);
+		if (units.length > FIELD_LIMITS.unitFields || units.filter((field) => field.multiple).length > 1) return lineage[0] ?? '';
+	}
+	return null;
+};

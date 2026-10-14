@@ -175,7 +175,7 @@ describe('attributes, locations and serials through the admin widget', () => {
 			choices: ['Black', { value: 'blue', label: 'Blue' }],
 			on: 'variant',
 			multiple: true,
-			card: 'chips',
+			show: { card: 'chips' },
 			visibility: { when: 'brands', ids: [brand.id] },
 		});
 		expect(color.status).toBe(201);
@@ -186,13 +186,11 @@ describe('attributes, locations and serials through the admin widget', () => {
 				{ value: 'blue', label: 'Blue' },
 			],
 			unit: '',
-			filterable: false,
-			comparable: false,
+			show: { filter: false, compare: false, card: 'chips' },
 			categoryIds: [],
 			on: 'variant',
 			multiple: true,
 			visibility: { when: 'brands', ids: [brand.id], attributeId: null, value: null },
-			card: 'chips',
 			active: true,
 			seo: { title: '', description: '', body: '', faqs: [] },
 		});
@@ -211,8 +209,11 @@ describe('attributes, locations and serials through the admin widget', () => {
 		const listed = (await admin('GET', '/v1/admin/attributes')).json.items;
 		expect(listed).toEqual(expect.arrayContaining([color.json, grade.json, shade.json]));
 		listed.forEach(noStamps);
-		const patched = await admin('PATCH', `/v1/admin/attributes/${grade.json.id}`, { filterable: true, visibility: 'always' });
-		expect(patched.json).toMatchObject({ filterable: true, unit: '%', visibility: { when: 'always', ids: [] } });
+		const patched = await admin('PATCH', `/v1/admin/attributes/${grade.json.id}`, {
+			show: { filter: true },
+			visibility: 'always',
+		});
+		expect(patched.json).toMatchObject({ show: { filter: true }, unit: '%', visibility: { when: 'always', ids: [] } });
 		expect((await api('GET', '/v1/attributes')).json.items).toContainEqual(patched.json);
 		expect((await admin('DELETE', `/v1/admin/attributes/${shade.json.id}`)).status).toBe(204);
 	});

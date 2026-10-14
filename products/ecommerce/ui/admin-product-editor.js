@@ -63,15 +63,17 @@ const blank = () => ({
 });
 
 /**
- * A control for a product attribute's value (spec): yes / no, a choice (checkboxes where it takes several), a number or
- * text (comma separated where it takes several).
+ * A control for a product field's value (spec): yes / no, a choice (checkboxes where it takes several), a number (in its
+ * range and decimals), a date (in the days it takes) or text (comma separated where it takes several). A required field
+ * says so in its label.
  * @param {Kit} kit @param {Named} attribute @param {unknown} current @param {string[]} own the product's own values
  * @returns {{ node: HTMLElement, read: () => unknown }}
  */
-const specControl = (kit, attribute, current, own) => {
+export const specControl = (kit, attribute, current, own) => {
 	const { t } = kit;
-	const label = attribute.unit ? `${attribute.name} (${attribute.unit})` : attribute.name;
-	if (attribute.type === 'boolean') {
+	const named = attribute.unit ? `${attribute.name} (${attribute.unit})` : attribute.name;
+	const label = attribute.required ? t('catalogAdmin.requiredLabel', { name: named }) : named;
+	if (attribute.type === 'yes_no') {
 		const select = kit.select(
 			[
 				{ value: '', label: t('catalogAdmin.notSet') },
@@ -101,8 +103,18 @@ const specControl = (kit, attribute, current, own) => {
 		return { node: kit.field(label, select), read: () => select.value || null };
 	}
 	if (attribute.type === 'number') {
-		const input = kit.input(typeof current === 'number' ? current : '', { type: 'number', step: 'any' });
+		const decimals = Number(attribute.decimals ?? 2);
+		const input = kit.input(typeof current === 'number' ? current : '', {
+			type: 'number',
+			step: decimals === 0 ? '1' : String(10 ** -decimals),
+			...(attribute.min === null || attribute.min === undefined ? {} : { min: String(attribute.min) }),
+			...(attribute.max === null || attribute.max === undefined ? {} : { max: String(attribute.max) }),
+		});
 		return { node: kit.field(label, input), read: () => (input.value.trim() === '' ? null : Number(input.value)) };
+	}
+	if (attribute.type === 'date') {
+		const input = kit.input(typeof current === 'string' ? current : '', { type: 'date' });
+		return { node: kit.field(label, input), read: () => input.value || null };
 	}
 	const input = kit.input(Array.isArray(current) ? current.join(', ') : String(current ?? ''), { maxlength: '200' });
 	return {
@@ -176,7 +188,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 					)
 				: null;
 		const setup = setupEditor(kit, product.attributeSetup ?? [], attributes, [generate]);
-		const specAttributes = attributes.filter((attribute) => attribute.on !== 'variant');
+		const specAttributes = attributes.filter((attribute) => attribute.on === 'product');
 		const specs = specAttributes.map((attribute) => ({
 			attribute,
 			...specControl(

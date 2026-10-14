@@ -376,6 +376,10 @@ describe('E17 feed options', () => {
 					locations: {},
 					grade: 'mint',
 					active: true,
+					attributes: {},
+					media: [],
+					soldOut: false,
+					warrantyDays: null,
 				},
 			],
 			options: [],
@@ -401,7 +405,7 @@ describe('E17 feed options', () => {
 		expect(google).toContain('<g:price>123 USD</g:price>');
 		expect(google).toContain('<g:shipping><g:country>GB</g:country><g:price>250 USD</g:price></g:shipping>');
 		const csv = (await shop.api('GET', '/v1/feeds/products.csv')).text;
-		expect(csv).toContain(',267,Mint\r\n');
+		expect(csv).toContain(',267,Mint,,,,\r\n');
 		if (business) shop.responders.set(`${ORIGIN}/.well-known/business.json`, business);
 	});
 });

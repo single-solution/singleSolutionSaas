@@ -88,7 +88,7 @@ const FACETS = {
 			slug: 'fast-charging',
 			name: 'Fast charging',
 			unit: '',
-			type: 'boolean',
+			type: 'yes_no',
 			values: [{ value: true, label: 'true', count: 1 }],
 		},
 		{ id: 'atr_3', name: 'Color', unit: '', type: 'choice', values: [{ value: 'red', label: 'Red', count: 1 }] },

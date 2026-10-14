@@ -12,7 +12,7 @@
 		{
 			"key": "catalog",
 			"name": "Catalog",
-			"description": "Products, categories with SEO text, brands, attributes, media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
+			"description": "Products, categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
 			"dependsOn": [],
 			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {

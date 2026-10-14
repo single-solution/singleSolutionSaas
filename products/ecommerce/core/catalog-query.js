@@ -166,7 +166,7 @@ export const readShopQuery = (query, { defaultSort = 'newest' } = {}) => {
 export const storedValues = (attribute, values) => {
 	if (!attribute) return [];
 	if (attribute.type === 'number') return values.map(Number).filter(Number.isFinite);
-	if (attribute.type === 'boolean') return values.filter((v) => v === 'true' || v === 'false').map((v) => v === 'true');
+	if (attribute.type === 'yes_no') return values.filter((v) => v === 'true' || v === 'false').map((v) => v === 'true');
 	return values;
 };
 

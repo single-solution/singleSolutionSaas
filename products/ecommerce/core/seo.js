@@ -6,6 +6,7 @@
  * `<script>` element. Pure functions, no I/O.
  * @module
  */
+import { valueLabel } from './catalog.js';
 import { toDecimal } from './money.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -310,7 +311,50 @@ export const feedGroupId = (product, many) => product.feedGroupId || (many ? pro
  *   approved reviews shown as review nodes (E16)
  * @property {boolean} [faqMarkup] whether the product's questions are also given as `FAQPage` markup (the `seo` setting
  *   `faqMarkup`; Google shows no FAQ rich results since 2026-05-07, other engines may read it)
+ * @property {(variant: VariantRecord | null) => FieldTarget[]} [values] the values of the fields structured data names
+ *   (`show.jsonLd`): the product's own (null), else a variant's
+ * @property {ReadonlyMap<string, string>} [axes] option name → the schema.org property its variant field names (`color`,
+ *   `material`, `size`, `pattern`), for `variesBy`
  */
+
+/**
+ * A field value a place names (structured data or a feed): where it goes and its value as shoppers read it.
+ * @typedef {{ target: string, name: string, value: string }} FieldTarget
+ */
+
+/**
+ * The values of the fields a place names (`show.jsonLd` or `show.feeds`): each active field with a target there, in
+ * the fields' order, its value as shoppers read it (a choice's label, a number with its unit).
+ * @param {Record<string, unknown>} values a product's specs or a variant's attributes
+ * @param {ReadonlyMap<string, import('./model.js').AttributeRecord>} fields
+ * @param {'jsonLd' | 'feeds'} place
+ * @returns {FieldTarget[]}
+ */
+export const fieldTargets = (values, fields, place) =>
+	Object.keys(values)
+		.flatMap((id) => {
+			const field = fields.get(id);
+			return field && field.active && field.show[place] !== 'none' ? [field] : [];
+		})
+		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+		.map((field) => ({ target: field.show[place], name: field.name, value: valueLabel(field, values[field.id]) }));
+
+/**
+ * Structured data properties of field values: `color`, `material`, `size` and `pattern` as such (the first of each),
+ * the others as `additionalProperty` name and value pairs.
+ * @param {FieldTarget[]} values
+ */
+const propertiesOf = (values) => {
+	/** @type {Record<string, unknown>} */
+	const out = {};
+	const extra = values
+		.filter((entry) => entry.target === 'additionalProperty')
+		.map((entry) => ({ '@type': 'PropertyValue', name: entry.name, value: entry.value }));
+	for (const entry of values)
+		if (entry.target !== 'additionalProperty' && !(entry.target in out)) out[entry.target] = entry.value;
+	if (extra.length > 0) out.additionalProperty = extra;
+	return out;
+};
 
 /**
  * The delivery fee of one item at a price: free from the free-delivery amount (0 = never free), as the cart charges it
@@ -516,7 +560,11 @@ export const productJsonLd = (page) => {
 			name: product.name,
 			url,
 			productGroupID: feedGroupId(product, true),
-			variesBy: product.options.map((axis) => VARIES_BY[axis.name.toLowerCase()] ?? axis.name),
+			...propertiesOf(page.values?.(null) ?? []),
+			variesBy: product.options.map((axis) => {
+				const named = page.axes?.get(axis.name);
+				return named ? `${SCHEMA}/${named}` : (VARIES_BY[axis.name.toLowerCase()] ?? axis.name);
+			}),
 			...shared,
 			hasVariant: variants.map((variant) =>
 				compact({
@@ -528,10 +576,11 @@ export const productJsonLd = (page) => {
 					image: page.variantImage?.(variant) || images,
 					...Object.fromEntries(
 						Object.entries(variant.options ?? {}).flatMap(([axis, value]) => {
-							const property = VARIES_BY[axis.toLowerCase()];
-							return property ? [[property.slice(SCHEMA.length + 1), value]] : [];
+							const property = page.axes?.get(axis) ?? VARIES_BY[axis.toLowerCase()]?.slice(SCHEMA.length + 1);
+							return property ? [[property, value]] : [];
 						}),
 					),
+					...propertiesOf(page.values?.(variant) ?? []),
 					offers: offerOf(variant),
 				}),
 			),
@@ -547,6 +596,7 @@ export const productJsonLd = (page) => {
 			gtin: sole.gtin,
 			mpn: sole.mpn,
 			...shared,
+			...propertiesOf([...(page.values?.(null) ?? []), ...(page.values?.(sole) ?? [])]),
 			offers: offerOf(sole),
 		});
 	}

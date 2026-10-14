@@ -12,7 +12,7 @@ import { createCards } from '../server/extras-cards.js';
 import { createExtras } from '../server/extras.js';
 import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
-import { DOMAIN, PAYMENTS, STORAGE, readyShop } from './helpers.js';
+import { DOMAIN, PAYMENTS, STORAGE, readyShop, storedAttribute } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -698,8 +698,10 @@ describe('wishlist, alerts and compare', () => {
 		const brand = createId('brd');
 		await data.collection(COLLECTIONS.brands).insertOne({ id: brand, slug: 'acme', name: 'Acme', description: '', logo: null });
 		await data.collection(COLLECTIONS.attributes).insertMany([
-			{ id: 'att_ram', name: 'RAM', type: 'text', choices: [], unit: 'GB', filterable: true, comparable: true, sort: 1 },
-			{ id: 'att_sku', name: 'Code', type: 'text', choices: [], unit: '', filterable: false, comparable: false, sort: 0 },
+			storedAttribute({ id: 'att_ram', name: 'RAM', slug: 'ram', unit: 'GB', show: { filter: true, compare: true }, sort: 1 }),
+			storedAttribute({ id: 'att_sku', name: 'Code', slug: 'code', sort: 0 }),
+			// a variant field is never a comparison row
+			storedAttribute({ id: 'att_var', name: 'Size', slug: 'size', on: 'variant', show: { compare: true } }),
 		]);
 		const variant = (/** @type {string | null} */ grade) => ({
 			id: createId('var'),

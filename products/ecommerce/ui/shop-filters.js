@@ -321,7 +321,7 @@ export const filterControls = ({ doc, t, filters, facets, known, currency, expan
 	for (const slug of slugs) {
 		const attribute = known.attributes.get(slug);
 		/** @param {string} value @param {string} label */
-		const shown = (value, label) => (attribute?.type === 'boolean' ? t(value === 'true' ? 'shop.yes' : 'shop.no') : label);
+		const shown = (value, label) => (attribute?.type === 'yes_no' ? t(value === 'true' ? 'shop.yes' : 'shop.no') : label);
 		checkList(
 			`attr.${slug}`,
 			attribute?.name ?? slug,

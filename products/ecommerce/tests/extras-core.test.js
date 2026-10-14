@@ -240,10 +240,10 @@ describe('alerts and compare', () => {
 		expect(parseCompareIds('prd_1,prd_2,prd_3', 2)).toMatchObject({ ok: false });
 		expect(parseCompareIds('nope', 4)).toMatchObject({ ok: false });
 		const attributes = /** @type {any[]} */ ([
-			{ id: 'att_2', name: 'NFC', unit: '', comparable: true, sort: 2 },
-			{ id: 'att_1', name: 'RAM', unit: '', comparable: true, sort: 1 },
-			{ id: 'att_3', name: 'Color', unit: '', comparable: true, sort: 1 },
-			{ id: 'att_4', name: 'Hidden', unit: '', comparable: false, sort: 0 },
+			{ id: 'att_2', name: 'NFC', unit: '', on: 'product', show: { compare: true }, sort: 2 },
+			{ id: 'att_1', name: 'RAM', unit: '', on: 'product', show: { compare: true }, sort: 1 },
+			{ id: 'att_3', name: 'Color', unit: '', on: 'product', show: { compare: true }, sort: 1 },
+			{ id: 'att_4', name: 'Hidden', unit: '', on: 'product', show: { compare: false }, sort: 0 },
 		]);
 		expect(compareRows([product, { specs: {} }], attributes)).toEqual([
 			{ attributeId: 'att_1', name: 'RAM', unit: '', values: ['6 GB', null] },

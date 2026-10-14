@@ -194,23 +194,34 @@ export const ID_PREFIX = Object.freeze({
  *   value: string | null }} AttributeVisibility
  */
 /**
+ * A merchant field (an attribute, PLAN 0.8.10 dynamic model §2; screens say "Fields"): values on products (`specs`),
+ * variants (`attributes`, from which option axes are made), units (a numbered item's values), orders (`fields`) or
+ * customers (`fields`).
  * @typedef {object} AttributeRecord
  * @property {string} id
  * @property {string} name
- * @property {'text' | 'number' | 'boolean' | 'choice'} type
+ * @property {'product' | 'variant' | 'unit' | 'order' | 'customer'} on where its values live (E7)
+ * @property {'text' | 'number' | 'choice' | 'yes_no' | 'date'} type dates are `YYYY-MM-DD`
  * @property {AttributeChoice[]} choices (E7)
- * @property {string} unit
- * @property {boolean} filterable
- * @property {boolean} comparable
+ * @property {string} unit a number's unit ('' = none), shown after its values
+ * @property {number | null} min a number's least value (null = none)
+ * @property {number | null} max a number's most value (null = none)
+ * @property {number} decimals a number's most decimals (0–3)
+ * @property {'any' | 'past' | 'future'} dates the days a date field takes: any, today or before, today or after
+ * @property {boolean} multiple several values at once (E7)
+ * @property {number} maxValues the most values (1 unless several; a unit field at most 2)
+ * @property {import('./fields.js').Format | null} format what a text field's values look like (null = any text)
+ * @property {boolean} required products and variants: needed while on sale; units: on every unit; orders: by
+ *   `requiredAt`
+ * @property {'checkout' | 'packed' | 'shipped' | 'delivered' | null} requiredAt a required order field: at checkout (the
+ *   shopper gives it) or before staff move the order into that stage
+ * @property {import('./fields.js').FieldShow} show where its values show
  * @property {number} sort
  * @property {string} slug the filter name `attr.<slug>` (E7)
  * @property {string | null} categoryId the category this attribute is the definition for (E45: the same slug may exist
  *   once per category, with its own name, choices, unit, glossary and SEO); null = every category
- * @property {string[]} categoryIds [] = every category (E7)
- * @property {'product' | 'variant'} on where its values live (E7)
- * @property {boolean} multiple several values at once (E7)
+ * @property {string[]} categoryIds [] = every category (E7); product, variant and unit fields
  * @property {AttributeVisibility} visibility (E7)
- * @property {'none' | 'image' | 'chips'} card how product cards show it (E7)
  * @property {boolean} active (E7)
  * @property {{ title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] }} seo
  *   its glossary page (E7, E15)

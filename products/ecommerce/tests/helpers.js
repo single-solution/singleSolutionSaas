@@ -89,7 +89,11 @@ export const storedBrand = (given) => ({ ...storedFields(checkBrand({ name: give
  * An attribute as every write stores it (the fields of `checkAttribute`), with the given fields on top.
  * @param {{ id: string, name: string, slug: string } & Record<string, unknown>} given
  */
-export const storedAttribute = (given) => ({ ...storedFields(checkAttribute({ name: given.name }, null)), ...given });
+export const storedAttribute = (given) => {
+	const base = storedFields(checkAttribute({ name: given.name, ...(given.on ? { on: given.on } : {}) }, null));
+	// the places given change where it shows; the others stay as a new field of its kind has them
+	return { ...base, ...given, show: { ...base.show, .../** @type {object} */ (given.show ?? {}) } };
+};
 
 /**
  * A connected product with one website.

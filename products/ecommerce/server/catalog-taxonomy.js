@@ -22,6 +22,7 @@ import {
 	slugTaken,
 } from '../adapters/catalog-store.js';
 import { cleanText, isObject } from '../core/catalog.js';
+import { FIELD_LIMITS, crowdedUnits } from '../core/fields.js';
 import {
 	checkAttribute,
 	checkBrand,
@@ -367,11 +368,39 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	};
 
 	/**
-	 * How many products use an attribute, on the product or on a variant.
-	 * @param {WebsiteData} data @param {string} id
+	 * Whether records hold values of a field: products (their own or their variants'), units, orders or customers, as
+	 * the field's values live.
+	 * @param {WebsiteData} data @param {AttributeRecord} field
 	 */
-	const attributeUses = (data, id) =>
-		productsWith(data, { $or: [{ [`specs.${id}`]: { $exists: true } }, { [`variants.attributes.${id}`]: { $exists: true } }] });
+	const fieldUses = async (data, field) => {
+		const one = (/** @type {string} */ collection, /** @type {string} */ path) =>
+			data.collection(collection).countDocuments({ websiteId: data.websiteId, [path]: { $exists: true } }, { limit: 1 });
+		if (field.on === 'product' || field.on === 'variant')
+			return productsWith(data, {
+				$or: [{ [`specs.${field.id}`]: { $exists: true } }, { [`variants.attributes.${field.id}`]: { $exists: true } }],
+			});
+		if (field.on === 'unit') return one(COLLECTIONS.serials, `values.${field.id}`);
+		return one(field.on === 'order' ? COLLECTIONS.orders : COLLECTIONS.customers, `fields.${field.id}`);
+	};
+
+	/**
+	 * Refuse a field the shop cannot take: more than {@link FIELD_LIMITS.fields} fields, or unit fields that would ask
+	 * too much of one product's units (more than 3 for one category, or two of them with two values).
+	 * @param {WebsiteData} data @param {AttributeRecord} next the field as it would be saved
+	 */
+	const checkFieldLimits = async (data, next) => {
+		const fields = (await attributesOf(data)).filter((field) => field.id !== next.id);
+		if (fields.length >= FIELD_LIMITS.fields) throw problem('conflict', `A shop has at most ${FIELD_LIMITS.fields} fields.`);
+		if (next.on !== 'unit') return;
+		const crowded = crowdedUnits([...fields, next], await categoriesOf(data));
+		if (crowded !== null)
+			throw refuse([
+				{
+					path: '/categoryIds',
+					message: `At most ${FIELD_LIMITS.unitFields} unit fields apply to one category, one of them with two values.`,
+				},
+			]);
+	};
 
 	const attributes = {
 		/** @param {any} ctx */
@@ -386,6 +415,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkAttributeRefs(s, data, checked.value, null);
 			const id = createId(ID_PREFIX.attribute);
+			await checkFieldLimits(data, { id, ...checked.value });
 			// a slug is unique among the attributes for the same category (E45)
 			const scope = { categoryId: checked.value.categoryId };
 			/** @type {AttributeRecord} */
@@ -417,14 +447,15 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const checked = checkAttribute(ctx.body, existing);
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkAttributeRefs(s, data, checked.value, existing.id);
+			await checkFieldLimits(data, { id: existing.id, ...checked.value });
 			const changesShape =
 				checked.value.type !== existing.type ||
 				checked.value.on !== existing.on ||
-				(checked.value.multiple === false && existing.multiple === true);
-			if (changesShape && (await attributeUses(data, existing.id)) > 0)
+				checked.value.maxValues < existing.maxValues;
+			if (changesShape && (await fieldUses(data, existing)) > 0)
 				throw problem(
 					'conflict',
-					'Products have values of this attribute: its type, place and several values cannot change.',
+					'Records have values of this field: its type, where its values live and how many it takes cannot change.',
 				);
 			const slug = await slugFor(data, COLLECTIONS.attributes, checked.value, existing.id, existing.id, existing.slug, {
 				scope: { categoryId: checked.value.categoryId },
@@ -449,8 +480,8 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const { data } = await common.open(ctx);
 			/** @type {AttributeRecord} */
 			const existing = await one(data, COLLECTIONS.attributes, String(ctx.params.id), 'attribute');
-			if ((await attributeUses(data, existing.id)) > 0)
-				throw problem('conflict', 'Products have values of this attribute: remove them first.');
+			if ((await fieldUses(data, existing)) > 0)
+				throw problem('conflict', 'Records have values of this field: remove them first.');
 			await data.collection(COLLECTIONS.attributes).deleteOne({ websiteId: data.websiteId, id: existing.id });
 			await service.log(ctx, 'attribute.deleted', existing.id, { label: existing.name });
 			return undefined;

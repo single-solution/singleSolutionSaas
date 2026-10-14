@@ -282,8 +282,16 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 			return { control: select, read: () => select.value || null };
 		}
 		if (attribute.type === 'number') {
-			const input = kit.input(typeof value === 'number' ? value : '', { type: 'number', step: 'any', 'aria-label': aria });
+			const input = kit.input(typeof value === 'number' ? value : '', {
+				type: 'number',
+				step: Number(attribute.decimals ?? 2) === 0 ? '1' : 'any',
+				'aria-label': aria,
+			});
 			return { control: input, read: () => (input.value.trim() === '' ? null : Number(input.value)) };
+		}
+		if (attribute.type === 'date') {
+			const input = kit.input(typeof value === 'string' ? value : '', { type: 'date', 'aria-label': aria });
+			return { control: input, read: () => input.value || null };
 		}
 		const input = kit.input(Array.isArray(value) ? value.join(', ') : String(value ?? ''), { 'aria-label': aria });
 		return {

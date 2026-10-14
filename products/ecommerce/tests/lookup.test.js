@@ -198,10 +198,8 @@ describe('core/lookup', () => {
 		});
 		expect(details.image).toBe('https://cdn.example/i.jpg');
 		expect(details.description).toHaveLength(1500);
-		expect(details.specs).toEqual([
-			{ name: 'Screen', value: '6 in', unit: '' },
-			{ name: 'att_gone', value: true, unit: '' },
-		]);
+		// only the fields Chat may tell: a spec of another field is left out
+		expect(details.specs).toEqual([{ name: 'Screen', value: '6 in', unit: '' }]);
 		expect(details.variants.map((v) => v.grade)).toEqual([null, 'Grade A', 'zz']);
 		expect(details.priceRange).toEqual({ min: 500, max: 900, minText: 'US$ 5', maxText: 'US$ 9' });
 		expect(details.variants[0]).toMatchObject({ priceText: expect.stringMatching(/^US\$ /) });
@@ -288,8 +286,8 @@ describe('Chat lookups', () => {
 			type: 'text',
 			choices: [],
 			unit: 'in',
-			filterable: true,
-			comparable: true,
+			on: 'product',
+			show: { page: true, filter: true, compare: true, chat: true },
 			sort: 0,
 		});
 		phone = await shop.seedProduct({

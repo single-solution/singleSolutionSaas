@@ -95,9 +95,12 @@ export const cardVariantsOf = (product, { attributes, variantUrls, url, shown })
 		.map((variant) => ({
 			id: variant.id,
 			options: variant.options,
+			// the variant fields cards show (as chips or images)
 			attributes: Object.entries(variant.attributes).flatMap(([id, value]) => {
 				const attribute = attributes.get(id);
-				return attribute ? [{ slug: attribute.slug, name: attribute.name, label: valueLabel(attribute, value) }] : [];
+				return attribute && attribute.show.card !== 'none'
+					? [{ slug: attribute.slug, name: attribute.name, label: valueLabel(attribute, value) }]
+					: [];
 			}),
 			...(({ price, was }) => ({ price, compareAtPrice: was }))(shown(variant)),
 			inStock: variantInStock(variant, product.trackStock),
@@ -161,13 +164,14 @@ export const cardOf = (product, { currency, image, url, brand, grades, cardImage
 });
 
 /**
- * The specs of a product as shown: attributes in their order, with their units.
+ * The specs of a product as shown: the product fields shown on its page, in their order, with their units (values of
+ * fields shoppers do not see never leave staff answers).
  * @param {ProductRecord} product
  * @param {ReadonlyMap<string, AttributeRecord>} attributes
  */
 export const specsOf = (product, attributes) =>
 	Object.entries(product.specs)
-		.filter(([id]) => attributes.has(id))
+		.filter(([id]) => attributes.get(id)?.show.page === true)
 		.map(([id, value]) => ({ attribute: /** @type {AttributeRecord} */ (attributes.get(id)), value }))
 		.sort((a, b) => a.attribute.sort - b.attribute.sort || a.attribute.name.localeCompare(b.attribute.name))
 		.map(({ attribute, value }) => ({
@@ -177,7 +181,7 @@ export const specsOf = (product, attributes) =>
 			value,
 			label: valueLabel(attribute, value),
 			unit: attribute.unit,
-			comparable: attribute.comparable,
+			compare: attribute.show.compare,
 		}));
 
 /**
@@ -218,9 +222,10 @@ export const pageOf = (product, context) => {
 				name: variantName(product.options, variant.options),
 				sku: variant.sku,
 				options: variant.options,
+				// the variant fields its page shows (a staff-only field's values stay in staff answers)
 				attributes: Object.entries(variant.attributes).flatMap(([id, value]) => {
 					const attribute = attributes.get(id);
-					return attribute
+					return attribute?.show.page
 						? [{ id, slug: attribute.slug, name: attribute.name, value, label: valueLabel(attribute, value) }]
 						: [];
 				}),

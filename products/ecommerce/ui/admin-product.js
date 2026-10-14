@@ -227,7 +227,7 @@ export const productDetail = (kit, product, context, message = '') => {
 	const valueText = (attribute, value) =>
 		(Array.isArray(value) ? value : [value])
 			.map((entry) =>
-				attribute?.type === 'boolean'
+				attribute?.type === 'yes_no'
 					? yesNo(kit, entry === true)
 					: ((attribute?.choices ?? []).find((/** @type {any} */ choice) => choice.value === entry)?.label ?? String(entry)),
 			)

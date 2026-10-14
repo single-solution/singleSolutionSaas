@@ -160,6 +160,8 @@ describe('attributes and variants', () => {
 		type: 'choice',
 		on: 'variant',
 		multiple: true,
+		maxValues: 20,
+		show: { page: true },
 		sort: 1,
 		unit: '',
 		choices: [
@@ -174,29 +176,35 @@ describe('attributes and variants', () => {
 		on: 'variant',
 		sort: 2,
 		unit: 'g',
+		min: null,
+		max: null,
+		decimals: 2,
+		show: { page: true },
 		choices: [],
 	});
 
 	it('reads values and labels, several values, and derives options', () => {
-		expect(specValue(color, ['r', 'Blue'])).toEqual(['r', 'Blue']);
-		expect(specValue(color, ['r', 'r'])).toBeNull();
-		expect(specValue(color, [])).toBeNull();
-		expect(specValue(color, ['x'], ['x'])).toEqual(['x']);
-		expect(specValue({ ...color, multiple: false }, ['r'])).toBeNull();
-		expect(specValue(weight, 12)).toBe(12);
+		expect(specValue(color, ['r', 'Blue'])).toEqual({ ok: true, value: ['r', 'Blue'] });
+		expect(specValue(color, ['r', 'r'])).toEqual({ ok: false, message: 'Color takes 1 to 20 different values.' });
+		expect(specValue(color, []).ok).toBe(false);
+		expect(specValue(color, ['x'], ['x'])).toEqual({ ok: true, value: ['x'] });
+		expect(specValue({ ...color, multiple: false }, ['r']).ok).toBe(false);
+		expect(specValue(weight, 12)).toEqual({ ok: true, value: 12 });
 		expect(valueLabel(color, ['r', 'Blue'])).toBe('Red, Blue');
 		expect(valueLabel(color, 'gone')).toBe('gone');
 		expect(valueLabel(weight, 12)).toBe('12 g');
 		expect(valueLabel({ ...weight, unit: '' }, 12)).toBe('12');
 		const derived = optionsFromAttributes(
 			/** @type {any} */ ([
-				{ id: 'v1', attributes: { att_c: ['r'], att_w: 10 }, options: {} },
+				{ id: 'v1', attributes: { att_c: ['r'], att_w: 10, att_s: 7 }, options: {} },
 				{ id: 'v2', attributes: { att_c: 'Blue' }, options: {} },
 			]),
 			new Map([
 				['att_w', weight],
 				['att_c', color],
 				['att_x', { ...weight, id: 'att_x', name: 'Unused' }],
+				// a staff-only variant field names no option
+				['att_s', { ...weight, id: 'att_s', name: 'Batch', show: { page: false } }],
 			]),
 		);
 		expect(derived.axes).toEqual([
@@ -232,7 +240,7 @@ describe('attributes and variants', () => {
 		expect(checkAttribute({ name: 'A', visibility: { when: 'brands', ids: [] } }, null).ok).toBe(false);
 		expect(checkAttribute({ name: 'A', visibility: { when: 'attribute' } }, null).ok).toBe(false);
 		expect(checkAttribute({ name: 'A', visibility: { when: 'never' } }, null).ok).toBe(false);
-		expect(checkAttribute({ name: 'A', card: 'big' }, null).ok).toBe(false);
+		expect(checkAttribute({ name: 'A', show: { card: 'big' } }, null).ok).toBe(false);
 		expect(checkAttribute({ name: 'A', seo: 'x' }, null).ok).toBe(false);
 		expect(checkAttribute({ name: 'A', seo: { faqs: [{}] } }, null).ok).toBe(false);
 		expect(checkAttribute({ name: 'A', type: 'choice', choices: [{ value: 'a' }, { value: 'a' }] }, null).ok).toBe(false);

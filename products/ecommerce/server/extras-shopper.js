@@ -138,7 +138,10 @@ export const createShopperLists = (_product, service, cards) => {
 		const products = await cards.activeProducts(s, parsed.ids);
 		const data = await s.data();
 		const attributes = /** @type {AttributeRecord[]} */ (
-			await data.collection(COLLECTIONS.attributes).find({ websiteId: data.websiteId, comparable: true }, NO_ID).toArray()
+			await data
+				.collection(COLLECTIONS.attributes)
+				.find({ websiteId: data.websiteId, on: 'product', 'show.compare': true }, NO_ID)
+				.toArray()
 		);
 		const brandIds = [...new Set(products.flatMap((p) => (p.brandId ? [p.brandId] : [])))];
 		const brands = /** @type {Array<{ id: string, name: string }>} */ (

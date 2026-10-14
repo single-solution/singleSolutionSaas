@@ -12,7 +12,7 @@
  */
 import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
-import { gtinOf } from './fields.js';
+import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
 import {
 	VIDEO_TYPES,
 	checkFaqs,
@@ -194,6 +194,8 @@ export const summarize = (variants, trackStock) => {
  * @property {ReadonlySet<string>} gradeKeys keys of the `grades` list
  * @property {ReadonlySet<string>} locationIds
  * @property {ReadonlySet<string>} categoryIds
+ * @property {ReadonlyMap<string, ReadonlyArray<string>>} categoryPaths each category's ancestors (required fields apply by
+ *   the categories a product is in and those above them)
  * @property {ReadonlySet<string>} brandIds
  * @property {ReadonlyMap<string, AttributeRecord>} attributes
  * @property {(prefix: string) => string} newId
@@ -241,37 +243,16 @@ export const heldKeys = (product) =>
  */
 
 /**
- * Check one value against its attribute's type (a choice must be one of its choices or of `extra`).
+ * Check a spec or variant attribute value against its field (`core/fields.js` `checkValue`): one value, or several
+ * different ones when the field takes several (E7); a choice may also be one of `extra`, the product's own values.
  * @param {AttributeRecord} attribute
  * @param {unknown} value
- * @param {ReadonlyArray<string>} [extra] more allowed values (a product's own values, E7)
- * @returns {string | number | boolean | null} null when invalid
- */
-const oneValue = (attribute, value, extra = []) => {
-	if (attribute.type === 'number') return typeof value === 'number' && Number.isFinite(value) ? value : null;
-	if (attribute.type === 'boolean') return typeof value === 'boolean' ? value : null;
-	const text = cleanText(value, LIMITS.specText);
-	if (!text) return null;
-	if (attribute.type === 'choice')
-		return attribute.choices.some((choice) => choice.value === text) || extra.includes(text) ? text : null;
-	return text;
-};
-
-/**
- * Check a spec or variant attribute value against its attribute: one value, or several different ones when the
- * attribute takes several (E7).
- * @param {AttributeRecord} attribute
- * @param {unknown} value
- * @param {ReadonlyArray<string>} [extra] more allowed choice values
- * @returns {string | number | boolean | Array<string | number> | null} null when invalid
+ * @param {ReadonlyArray<string>} [extra]
+ * @returns {{ ok: true, value: import('./fields.js').FieldValue } | { ok: false, message: string }}
  */
 export const specValue = (attribute, value, extra = []) => {
-	if (!Array.isArray(value)) return oneValue(attribute, value, extra);
-	if (!attribute.multiple || value.length === 0 || value.length > LIMITS.attributeValues) return null;
-	const out = value.map((entry) => oneValue(attribute, entry, extra));
-	if (out.some((entry) => entry === null || typeof entry === 'boolean')) return null;
-	const list = /** @type {Array<string | number>} */ (out);
-	return new Set(list).size === list.length ? list : null;
+	const checked = checkValue(attribute, value, { extra });
+	return checked.ok ? checked : { ok: false, message: valueProblem(attribute, checked) };
 };
 
 /**
@@ -382,13 +363,12 @@ const variantAttributesOf = (input, existing, rules, path, errors) => {
 		if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
 		const attribute = rules.attributes.get(id);
 		if (!attribute || attribute.on !== 'variant') {
-			errors.push({ path: `${path}/attributes/${id}`, message: 'There is no such variant attribute.' });
+			errors.push({ path: `${path}/attributes/${id}`, message: 'There is no such variant field.' });
 			continue;
 		}
 		const checked = specValue(attribute, value, rules.custom?.get(id) ?? []);
-		if (checked === null || typeof checked === 'boolean')
-			errors.push({ path: `${path}/attributes/${id}`, message: `This is not a valid value of ${attribute.name}.` });
-		else out[id] = checked;
+		if (!checked.ok) errors.push({ path: `${path}/attributes/${id}`, message: checked.message });
+		else out[id] = checked.value;
 	}
 	return out;
 };
@@ -551,14 +531,15 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 const SHORTCUT = Object.freeze(['sku', 'gtin', 'mpn', 'price', 'compareAtPrice', 'cost', 'stock', 'locations', 'grade']);
 
 /**
- * The option axes and each variant's option values derived from variant attributes (E7): one axis per attribute used,
- * in the attributes' order, its values as shoppers read them (several values joined with commas).
+ * The option axes and each variant's option values derived from variant attributes (E7): one axis per attribute used
+ * that shoppers see on the product page (a staff-only variant field names no option), in the attributes' order, its
+ * values as shoppers read them (several values joined with commas).
  * @param {VariantRecord[]} variants
  * @param {ReadonlyMap<string, AttributeRecord>} attributes
  */
 export const optionsFromAttributes = (variants, attributes) => {
 	const used = [...attributes.values()]
-		.filter((attribute) => variants.some((variant) => variant.attributes?.[attribute.id] !== undefined))
+		.filter((attribute) => attribute.show.page && variants.some((variant) => variant.attributes?.[attribute.id] !== undefined))
 		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
 	/** @type {Array<{ name: string, values: string[] }>} */
 	const axes = used.map((attribute) => ({ name: attribute.name, values: [] }));
@@ -653,8 +634,10 @@ const variantsOf = (input, existing, given, rules, errors) => {
 	if (total > LIMITS.allVariantMedia)
 		errors.push({ path: '/variants', message: `A product's variants have at most ${LIMITS.allVariantMedia} photos together.` });
 
-	// variant attributes decide the options (E7); two variants may share options when their grades differ
-	const byAttributes = variants.some((variant) => Object.keys(variant.attributes).length > 0);
+	// variant attributes shoppers see decide the options (E7); two variants may share options when their grades differ
+	const byAttributes = variants.some((variant) =>
+		Object.keys(variant.attributes).some((id) => rules.attributes.get(id)?.show.page === true),
+	);
 	/** @type {Array<{ name: string, values: string[] }>} */
 	let options = given;
 	if (byAttributes) {
@@ -729,9 +712,14 @@ const setupOf = (input, existing, rules, errors) => {
 		else
 			for (const value of raw) {
 				const checked = specValue({ ...attribute, multiple: false }, value, customValues);
-				if (checked === null || typeof checked === 'boolean' || Array.isArray(checked) || values.includes(checked))
+				if (
+					!checked.ok ||
+					typeof checked.value === 'boolean' ||
+					Array.isArray(checked.value) ||
+					values.includes(checked.value)
+				)
 					errors.push({ path: `${path}/values`, message: `Give different values of ${attribute.name}.` });
-				else values.push(checked);
+				else values.push(checked.value);
 			}
 		const defaultValue = entry.defaultValue ?? null;
 		if (defaultValue !== null && !values.includes(defaultValue) && !customValues.includes(String(defaultValue)))
@@ -881,9 +869,9 @@ export const checkProduct = (body, rules, existing) => {
 				if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
 				const attribute = rules.attributes.get(id);
 				const checked = attribute ? specValue(attribute, value, custom.get(id) ?? []) : null;
-				if (!attribute || attribute.on === 'variant') fail(`/specs/${id}`, 'There is no such product attribute.');
-				else if (checked === null) fail(`/specs/${id}`, `This is not a valid ${attribute.type} for ${attribute.name}.`);
-				else specs[id] = checked;
+				if (!attribute || !checked || attribute.on !== 'product') fail(`/specs/${id}`, 'There is no such product field.');
+				else if (!checked.ok) fail(`/specs/${id}`, checked.message);
+				else specs[id] = checked.value;
 			}
 		}
 	}
@@ -895,6 +883,20 @@ export const checkProduct = (body, rules, existing) => {
 	if (new Set(skus).size !== skus.length) fail('/variants', 'Each variant needs its own SKU.');
 	// a draft without variants (an imported shell, CA-2) goes on sale once it has one
 	if (variants.length === 0 && status === 'active') fail('/status', 'Add a variant before the product goes on sale.');
+	// a product on sale has the required fields of its categories: its own, and those of each variant on sale (§2)
+	if (status === 'active') {
+		const lineage = categoryIds.flatMap((id) => [id, ...(rules.categoryPaths.get(id) ?? [])]);
+		for (const required of rules.attributes.values()) {
+			if (!required.required || !required.active || !fieldApplies(required, lineage)) continue;
+			const needed = `${required.name} is required on products on sale.`;
+			if (required.on === 'product' && specs[required.id] === undefined) fail(`/specs/${required.id}`, needed);
+			if (required.on === 'variant')
+				variants.forEach((variant, index) => {
+					if (variant.active && variant.attributes[required.id] === undefined)
+						fail(`/variants/${index}/attributes/${required.id}`, needed);
+				});
+		}
+	}
 
 	const trackStock = field(
 		'trackStock',

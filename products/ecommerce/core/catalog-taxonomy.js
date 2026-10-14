@@ -6,6 +6,16 @@
  */
 import { LIMITS, cleanText, isObject, isSlug } from './catalog.js';
 import { EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './catalog-content.js';
+import {
+	FIELD_DATES,
+	FIELD_LIMITS,
+	FIELD_ON,
+	FIELD_TYPES,
+	REQUIRED_AT,
+	checkFormatRule,
+	checkShow,
+	showDefaults,
+} from './fields.js';
 
 /** @typedef {import('./model.js').CategoryRecord} CategoryRecord */
 /** @typedef {import('./model.js').BrandRecord} BrandRecord */
@@ -14,26 +24,21 @@ import { EMPTY_CONTENT, checkContent, checkFaqs, checkSeo, iconOf } from './cata
 /** @typedef {import('./model.js').AttributeChoice} AttributeChoice */
 /** @typedef {import('./model.js').AttributeVisibility} AttributeVisibility */
 /** @typedef {import('./catalog.js').FieldError} FieldError */
+/** @typedef {import('./fields.js').FieldOn} FieldOn */
+/** @typedef {import('./fields.js').FieldType} FieldType */
 
 /** Category statuses (E1): coming soon is listed with its products hidden; hidden is neither. */
 export const CATEGORY_STATUSES = Object.freeze(/** @type {const} */ (['active', 'coming_soon', 'hidden']));
 /** Brand statuses (E1). */
 export const BRAND_STATUSES = Object.freeze(/** @type {const} */ (['active', 'hidden']));
-/** Where an attribute's values live (E7). */
-const ATTRIBUTE_ON = Object.freeze(/** @type {const} */ (['product', 'variant']));
 /** When an attribute is shown (E7). */
 const VISIBILITY = Object.freeze(/** @type {const} */ (['always', 'brands', 'grades', 'attribute']));
-/** How product cards show an attribute (E7). */
-const CARD_MODES = Object.freeze(/** @type {const} */ (['none', 'image', 'chips']));
 /** At most this many FAQs on a category, a brand, a product, a glossary page or a landing page. */
 export const MAX_FAQS = 20;
 /** Most categories a brand or an attribute is limited to. */
 const MAX_SCOPE = 200;
 /** Longest glossary text. */
 const GLOSSARY_BODY = 20_000;
-
-/** Attribute types. */
-const ATTRIBUTE_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'boolean', 'choice']));
 
 /** Limits of the catalog's records. */
 const TAXONOMY_LIMITS = Object.freeze({
@@ -389,80 +394,172 @@ const glossaryOf = (v) => {
 };
 
 /**
- * The editable fields of an attribute.
- * @typedef {Omit<AttributeRecord, 'id'> & { slug: string, categoryId: string | null, categoryIds: string[], on: 'product' | 'variant',
- *   multiple: boolean, visibility: AttributeVisibility, card: 'none' | 'image' | 'chips', active: boolean,
- *   seo: { title: string, description: string, body: string, faqs: import('./catalog-content.js').Faq[] } }} AttributeFields
+ * The editable fields of an attribute (a merchant field, PLAN 0.8.10 dynamic model §2).
+ * @typedef {Omit<AttributeRecord, 'id'>} AttributeFields
  */
 
+/** @param {unknown} v */
+const numberOrNull = (v) =>
+	v === null ? NULL_NUMBER : typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= FIELD_LIMITS.number ? v : null;
+/** Stands for an explicit null among numbers a reader may answer (its null means "invalid"). */
+const NULL_NUMBER = Symbol('no number');
+
 /**
- * Check a new attribute or changes to one (E7; its slug, categories and visibility ids are checked by the route). An
- * attribute may be the definition for one category (`categoryId`, E45: the same slug once per category, with its own
- * name, choices, unit, glossary and SEO); null is for every category.
+ * Check a new attribute or changes to one (E7; its slug, categories and visibility ids are checked by the route): a
+ * merchant field (PLAN 0.8.10 dynamic model §2) whose values live on products, variants, units, orders or customers; its
+ * type (text, number, choice, yes/no or date) with what the type takes (choices, a unit, a range and decimals, which
+ * dates, a format), whether it takes several values (up to `maxValues`), whether it is required (order fields: at
+ * checkout or before a stage), where its values show, its category scope, visibility and glossary (product and
+ * variant fields). An attribute may be the definition for one category (`categoryId`, E45: the same slug once per
+ * category, with its own name, choices, unit, glossary and SEO); null is for every category.
  * @param {unknown} body
  * @param {AttributeRecord | null} existing
  * @returns {{ ok: true, value: AttributeFields } | { ok: false, errors: FieldError[] }}
  */
 export const checkAttribute = (body, existing) => {
-	if (!isObject(body)) return { ok: false, errors: [{ path: '', message: 'Send the attribute as an object.' }] };
+	if (!isObject(body)) return { ok: false, errors: [{ path: '', message: 'Send the field as an object.' }] };
 	/** @type {FieldError[]} */
 	const errors = [];
 	const read = reader(body, existing, errors);
 	const name = read('name', nameOf, '', NAME_MESSAGE);
-	if (!existing && body.name === undefined) errors.push({ path: '/name', message: 'Give the attribute a name.' });
+	if (!existing && body.name === undefined) errors.push({ path: '/name', message: 'Give the field a name.' });
 	const slug = read('slug', slugOf, '', SLUG_MESSAGE);
+	const on = read(
+		'on',
+		(v) => (FIELD_ON.includes(/** @type {any} */ (v)) ? /** @type {FieldOn} */ (v) : null),
+		/** @type {FieldOn} */ ('product'),
+		`On is one of ${FIELD_ON.join(', ')}.`,
+	);
+	const catalog = on === 'product' || on === 'variant';
 	const type = read(
 		'type',
-		(v) => (ATTRIBUTE_TYPES.includes(/** @type {any} */ (v)) ? /** @type {AttributeRecord['type']} */ (v) : null),
-		/** @type {AttributeRecord['type']} */ ('text'),
-		'Type is text, number, boolean or choice.',
+		(v) => (FIELD_TYPES.includes(/** @type {any} */ (v)) ? /** @type {FieldType} */ (v) : null),
+		/** @type {FieldType} */ ('text'),
+		`Type is one of ${FIELD_TYPES.join(', ')}.`,
 	);
+	if (on === 'variant' && type === 'yes_no')
+		errors.push({ path: '/type', message: 'Variant fields are text, number, choice or date fields.' });
+	if (on === 'unit' && type !== 'text')
+		errors.push({ path: '/type', message: 'Unit fields are text: each value names one unit.' });
 	const choices = read(
 		'choices',
 		checkChoices,
 		/** @type {AttributeChoice[]} */ ([]),
 		`Give up to ${TAXONOMY_LIMITS.choices} different choices (a value and a label each).`,
 	);
-	if (type === 'choice' && choices.length === 0) errors.push({ path: '/choices', message: 'A choice attribute needs choices.' });
+	if (type === 'choice' && choices.length === 0) errors.push({ path: '/choices', message: 'A choice field needs choices.' });
 	const unit = read(
 		'unit',
 		(v) => cleanText(v, TAXONOMY_LIMITS.unit),
 		'',
 		`A unit has at most ${TAXONOMY_LIMITS.unit} characters.`,
 	);
-	const filterable = read('filterable', boolOf, false, 'Filterable is true or false.');
-	const comparable = read('comparable', boolOf, false, 'Comparable is true or false.');
+	if (unit && (type === 'yes_no' || type === 'date'))
+		errors.push({ path: '/unit', message: 'Yes/no and date fields have no unit.' });
+	const min = read(
+		'min',
+		numberOrNull,
+		/** @type {number | null | typeof NULL_NUMBER} */ (null),
+		'The least is a number, or null.',
+	);
+	const max = read(
+		'max',
+		numberOrNull,
+		/** @type {number | null | typeof NULL_NUMBER} */ (null),
+		'The most is a number, or null.',
+	);
+	const least = min === NULL_NUMBER ? null : min;
+	const most = max === NULL_NUMBER ? null : max;
+	const decimals = read(
+		'decimals',
+		(v) => (Number.isSafeInteger(v) && Number(v) >= 0 && Number(v) <= 3 ? Number(v) : null),
+		2,
+		'Decimals are 0 to 3.',
+	);
+	if (type !== 'number' && (least !== null || most !== null))
+		errors.push({ path: '/min', message: 'Only number fields have a range.' });
+	if (least !== null && most !== null && least > most)
+		errors.push({ path: '/min', message: 'The least is no more than the most.' });
+	const dates = read(
+		'dates',
+		(v) => (FIELD_DATES.includes(/** @type {any} */ (v)) ? /** @type {typeof FIELD_DATES[number]} */ (v) : null),
+		/** @type {typeof FIELD_DATES[number]} */ ('any'),
+		`Dates are one of ${FIELD_DATES.join(', ')}.`,
+	);
+	if (type !== 'date' && dates !== 'any') errors.push({ path: '/dates', message: 'Only date fields limit their dates.' });
+	const multiple = read('multiple', boolOf, false, 'Multiple is true or false.');
+	if (multiple && type !== 'choice' && type !== 'text')
+		errors.push({ path: '/multiple', message: 'Only text and choice fields take several values.' });
+	const valuesCap = on === 'unit' ? FIELD_LIMITS.unitValues : FIELD_LIMITS.values;
+	const maxValues = read(
+		'maxValues',
+		(v) => (Number.isSafeInteger(v) && Number(v) >= 1 && Number(v) <= FIELD_LIMITS.values ? Number(v) : null),
+		multiple ? valuesCap : 1,
+		`A field takes 1 to ${FIELD_LIMITS.values} values.`,
+	);
+	const values = multiple ? (body.maxValues === undefined && !existing?.multiple ? valuesCap : maxValues) : 1;
+	if (multiple && (values < 2 || values > valuesCap))
+		errors.push({
+			path: '/maxValues',
+			message:
+				on === 'unit'
+					? 'A unit field takes up to 2 values (two numbers of one unit).'
+					: `Several values are 2 to ${valuesCap}.`,
+		});
+	const format = (() => {
+		if (body.format === undefined) return existing?.format ?? null;
+		const checked = checkFormatRule(body.format);
+		if (!checked.ok) {
+			errors.push(...checked.errors);
+			return null;
+		}
+		return checked.value;
+	})();
+	if (format && type !== 'text') errors.push({ path: '/format', message: 'Only text fields have a format.' });
+	const required = read('required', boolOf, false, 'Required is true or false.');
+	if (required && on === 'customer')
+		errors.push({ path: '/required', message: 'Customer fields are filled by staff when they have the value.' });
+	const requiredAt = read(
+		'requiredAt',
+		(v) => (v === null ? NULL_REF : REQUIRED_AT.includes(/** @type {any} */ (v)) ? /** @type {string} */ (v) : null),
+		/** @type {string | null} */ (null),
+		`Required at is one of ${REQUIRED_AT.join(', ')}, or null.`,
+	);
+	const show = (() => {
+		const checked = checkShow(body.show, on, existing && existing.on === on ? existing.show : null);
+		if (!checked.ok) {
+			errors.push(...checked.errors);
+			return showDefaults(on);
+		}
+		return checked.value;
+	})();
+	const stage = on === 'order' && required ? requiredAt || null : null;
+	if (on === 'order' && required && !stage)
+		errors.push({
+			path: '/requiredAt',
+			message: 'Say when a required order field is needed: checkout, packed, shipped or delivered.',
+		});
+	if (stage === 'checkout' && !show.shopper)
+		errors.push({ path: '/requiredAt', message: 'Only fields shoppers see are asked at checkout.' });
+	if (on !== 'order' && requiredAt) errors.push({ path: '/requiredAt', message: 'Only order fields are required at a stage.' });
 	const sort = read('sort', sortOf, 0, SORT_MESSAGE);
 	const categoryIds = read('categoryIds', idsOf, /** @type {string[]} */ ([]), 'Pick existing categories ([] = all).');
 	const categoryId = read(
 		'categoryId',
 		refOrNull,
 		/** @type {string | null} */ (null),
-		'Pick the category this attribute is for, or null for every category.',
+		'Pick the category this field is for, or null for every category.',
 	);
-	const on = read(
-		'on',
-		(v) => (ATTRIBUTE_ON.includes(/** @type {any} */ (v)) ? /** @type {'product' | 'variant'} */ (v) : null),
-		/** @type {'product' | 'variant'} */ ('product'),
-		'On is product or variant.',
-	);
-	const multiple = read('multiple', boolOf, false, 'Multiple is true or false.');
-	if (multiple && type !== 'choice' && type !== 'text')
-		errors.push({ path: '/multiple', message: 'Only text and choice attributes take several values.' });
-	if (on === 'variant' && type === 'boolean')
-		errors.push({ path: '/on', message: 'Variants take text, number or choice attributes.' });
+	if ((on === 'order' || on === 'customer') && (categoryId || categoryIds.length > 0))
+		errors.push({ path: '/categoryIds', message: 'Order and customer fields are for every order and customer.' });
 	const visibility = read(
 		'visibility',
 		checkVisibility,
 		/** @type {AttributeVisibility} */ ({ ...ALWAYS }),
 		'Visibility is always, or brands or grades with their ids, or attribute with an attributeId and a value.',
 	);
-	const card = read(
-		'card',
-		(v) => (CARD_MODES.includes(/** @type {any} */ (v)) ? /** @type {'none' | 'image' | 'chips'} */ (v) : null),
-		/** @type {'none' | 'image' | 'chips'} */ ('none'),
-		'Card is none, image or chips.',
-	);
+	if (!catalog && visibility.when !== 'always')
+		errors.push({ path: '/visibility', message: 'Only product and variant fields depend on brands, grades or fields.' });
 	const active = read('active', boolOf, true, 'Active is true or false.');
 	const seo = read(
 		'seo',
@@ -470,24 +567,32 @@ export const checkAttribute = (body, existing) => {
 		{ title: '', description: '', body: '', faqs: /** @type {import('./catalog-content.js').Faq[]} */ ([]) },
 		`The glossary has a title, a description, a text of at most ${GLOSSARY_BODY} characters and at most ${MAX_FAQS} questions.`,
 	);
+	if (!catalog && (seo.title || seo.description || seo.body || seo.faqs.length > 0))
+		errors.push({ path: '/seo', message: 'Only product and variant fields have a glossary page.' });
 	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,
 		value: {
 			name,
 			slug,
+			on,
 			type,
 			choices: type === 'choice' ? choices : [],
 			unit,
-			filterable,
-			comparable,
+			min: type === 'number' ? least : null,
+			max: type === 'number' ? most : null,
+			decimals: type === 'number' ? decimals : 0,
+			dates: type === 'date' ? dates : 'any',
+			multiple,
+			maxValues: values,
+			format: type === 'text' ? format : null,
+			required,
+			requiredAt: /** @type {AttributeRecord['requiredAt']} */ (stage),
+			show,
 			sort,
 			categoryId: categoryId || null,
 			categoryIds,
-			on,
-			multiple,
 			visibility,
-			card,
 			active,
 			seo,
 		},

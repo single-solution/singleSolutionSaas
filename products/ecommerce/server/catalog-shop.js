@@ -246,7 +246,9 @@ export const createCatalogShop = (product, service, common) => {
 			match: searchMatch === 'phrase' ? /** @type {const} */ ('phrase') : /** @type {const} */ ('words'),
 		};
 		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);
-		const filterable = attributes.filter((attribute) => attribute.filterable && attribute.active);
+		const filterable = attributes.filter(
+			(attribute) => (attribute.on === 'product' || attribute.on === 'variant') && attribute.show.filter && attribute.active,
+		);
 		const names = {
 			categories: byCategory,
 			brands: new Map(brands.map((b) => [b.id, b])),

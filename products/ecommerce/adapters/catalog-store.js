@@ -127,7 +127,10 @@ export const locationsOf = (data) => allOf(data, COLLECTIONS.locations);
  */
 export const loadRules = async (data, switches) => {
 	const [categories, brands, attributes, locations] = await Promise.all([
-		data.collection(COLLECTIONS.categories).distinct('id', { websiteId: data.websiteId }),
+		data
+			.collection(COLLECTIONS.categories)
+			.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1 } })
+			.toArray(),
 		data.collection(COLLECTIONS.brands).distinct('id', { websiteId: data.websiteId }),
 		attributesOf(data),
 		switches.locations ? data.collection(COLLECTIONS.locations).distinct('id', { websiteId: data.websiteId }) : [],
@@ -140,7 +143,8 @@ export const loadRules = async (data, switches) => {
 		bookings: switches.bookings,
 		gradeKeys: new Set(switches.gradeKeys),
 		locationIds: new Set(locations.map(String)),
-		categoryIds: new Set(categories.map(String)),
+		categoryIds: new Set(categories.map((category) => String(category.id))),
+		categoryPaths: new Map(categories.map((category) => [String(category.id), (category.path ?? []).map(String)])),
 		brandIds: new Set(brands.map(String)),
 		attributes: new Map(attributes.map((attribute) => [attribute.id, attribute])),
 		newId: (prefix) => createId(prefix),

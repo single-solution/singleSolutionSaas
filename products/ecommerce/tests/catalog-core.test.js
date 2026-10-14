@@ -45,6 +45,7 @@ import { EMPTY_CONTENT, EMPTY_SEO } from '../core/catalog-content.js';
 import { cardOf, pageOf, shownRange, specsOf } from '../core/catalog-views.js';
 import { listShown } from '../core/promotions.js';
 import { formatCell, parseCsv, recordsOf, toCsv, unescapeFormula } from '../core/csv.js';
+import { showDefaults } from '../core/fields.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
 
 /** @typedef {import('../core/catalog.js').CatalogRules} CatalogRules */
@@ -53,12 +54,24 @@ import { checkGrades, gradesByKey } from '../core/grades.js';
 const STORED_ATTRIBUTE = Object.freeze({
 	categoryIds: [],
 	on: /** @type {const} */ ('product'),
+	min: null,
+	max: null,
+	decimals: 0,
+	dates: /** @type {const} */ ('any'),
 	multiple: false,
+	maxValues: 1,
+	format: null,
+	required: false,
+	requiredAt: null,
 	visibility: { when: /** @type {const} */ ('always'), ids: [], attributeId: null, value: null },
-	card: /** @type {const} */ ('none'),
 	active: true,
 	seo: { title: '', description: '', body: '', faqs: [] },
 });
+/**
+ * Where a product field shows by default, with some places changed.
+ * @param {Partial<import('../core/fields.js').FieldShow>} places
+ */
+const shown = (places) => ({ ...showDefaults('product'), ...places });
 /** What every category write stores besides its own fields (`checkCategory`). */
 const STORED_CATEGORY = Object.freeze({
 	status: /** @type {const} */ ('active'),
@@ -81,6 +94,7 @@ const rules = (over = {}) => ({
 	gradeKeys: new Set(['a']),
 	locationIds: new Set(['loc_1']),
 	categoryIds: new Set(['cat_1']),
+	categoryPaths: new Map([['cat_1', []]]),
 	brandIds: new Set(['brd_1']),
 	attributes: new Map([
 		[
@@ -91,11 +105,11 @@ const rules = (over = {}) => ({
 				type: 'number',
 				choices: [],
 				unit: 'cm',
-				filterable: true,
-				comparable: true,
 				sort: 0,
 				categoryId: null,
 				...STORED_ATTRIBUTE,
+				decimals: 2,
+				show: shown({ filter: true, compare: true }),
 				slug: 'n',
 			},
 		],
@@ -104,14 +118,13 @@ const rules = (over = {}) => ({
 			{
 				id: 'att_b',
 				name: 'B',
-				type: 'boolean',
+				type: 'yes_no',
 				choices: [],
 				unit: '',
-				filterable: true,
-				comparable: false,
 				sort: 1,
 				categoryId: null,
 				...STORED_ATTRIBUTE,
+				show: shown({ filter: true, compare: false }),
 				slug: 'b',
 			},
 		],
@@ -123,11 +136,10 @@ const rules = (over = {}) => ({
 				type: 'choice',
 				choices: [{ value: 'x', label: 'X' }],
 				unit: '',
-				filterable: false,
-				comparable: false,
 				sort: 2,
 				categoryId: null,
 				...STORED_ATTRIBUTE,
+				show: shown({ filter: false, compare: false }),
 				slug: 'c',
 			},
 		],
@@ -139,11 +151,10 @@ const rules = (over = {}) => ({
 				type: 'text',
 				choices: [],
 				unit: '',
-				filterable: false,
-				comparable: false,
 				sort: 3,
 				categoryId: null,
 				...STORED_ATTRIBUTE,
+				show: shown({ filter: false, compare: false }),
 				slug: 't',
 			},
 		],
@@ -204,11 +215,11 @@ describe('product checks', () => {
 	it('checks specs against attribute types', () => {
 		const attributes = rules().attributes;
 		const of = (/** @type {string} */ id) => /** @type {any} */ (attributes.get(id));
-		expect(specValue(of('att_n'), 'x')).toBeNull();
-		expect(specValue(of('att_b'), 1)).toBeNull();
-		expect(specValue(of('att_c'), 'y')).toBeNull();
-		expect(specValue(of('att_c'), 'x')).toBe('x');
-		expect(specValue(of('att_t'), '')).toBeNull();
+		expect(specValue(of('att_n'), 'x')).toEqual({ ok: false, message: 'This is not a valid value of N.' });
+		expect(specValue(of('att_b'), 1).ok).toBe(false);
+		expect(specValue(of('att_c'), 'y')).toEqual({ ok: false, message: 'Pick one of the choices of C.' });
+		expect(specValue(of('att_c'), 'x')).toEqual({ ok: true, value: 'x' });
+		expect(specValue(of('att_t'), '').ok).toBe(false);
 		expect(paths({ name: 'P', price: 1, specs: { att_n: 'x', att_t: null, att_b: '' } })).toEqual(['/specs/att_n']);
 		expect(paths({ name: 'P', price: 1, specs: [] })).toEqual(['/specs']);
 	});
@@ -348,7 +359,7 @@ describe('categories, brands, attributes and locations', () => {
 		expect(checkCategory(null, null).ok).toBe(false);
 		expect(checkBrand({ name: 'B', description: 5 }, null).ok).toBe(false);
 		expect(checkAttribute(null, null).ok).toBe(false);
-		expect(checkAttribute({ name: 'A', unit: 'x'.repeat(30), comparable: 1 }, null).ok).toBe(false);
+		expect(checkAttribute({ name: 'A', unit: 'x'.repeat(30), show: { compare: 1 } }, null).ok).toBe(false);
 		const attribute = checkAttribute({ name: 'A', type: 'text', choices: ['x'] }, null);
 		expect(attribute.ok && attribute.value.choices).toEqual([]);
 		expect(checkLocation(null, null).ok).toBe(false);

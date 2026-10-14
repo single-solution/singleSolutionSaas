@@ -28,6 +28,7 @@ import {
 	SITEMAP_HEAD,
 	asWritten,
 	categoryJsonLd,
+	fieldTargets,
 	fillTemplate,
 	metaDescription,
 	pageName,
@@ -94,6 +95,9 @@ const POLICY_TITLES = Object.freeze({
 	terms: 'Terms',
 	warranty: 'Warranty',
 });
+
+/** The schema.org properties a variant field may name, which then name its option in `variesBy`. */
+const SCHEMA_PROPERTIES = Object.freeze(['color', 'material', 'size', 'pattern']);
 
 /** What the feeds read of a product (the imported group id and the specs deal conditions name too). */
 const LISTING_FIELDS = Object.freeze({
@@ -265,6 +269,7 @@ export const createSeo = (product, service) => {
 		]);
 		const url = await media.productUrl(s, item);
 		const images = await imagesOf(s, item);
+		const fields = new Map(attributes.map((attribute) => [attribute.id, attribute]));
 		const [primary] = /** @type {CategoryRecord[]} */ (
 			await data
 				.collection(COLLECTIONS.categories)
@@ -285,7 +290,7 @@ export const createSeo = (product, service) => {
 			...productFacts(item, {
 				money: (amount) => money(amount, s.currency),
 				grades: conditions.gradesOf(item),
-				specs: specsOf(item, new Map(attributes.map((attribute) => [attribute.id, attribute]))),
+				specs: specsOf(item, fields),
 				priceOf: (variant) => shown(variant).price,
 			}),
 		};
@@ -338,6 +343,13 @@ export const createSeo = (product, service) => {
 			shown,
 			variantUrl: (variant) => variantUrls.get(variant.id) ?? url,
 			variantImage: (variant) => variantImages.get(variant.id) ?? null,
+			// the fields the merchant names in structured data (`show.jsonLd`), and the options they make
+			values: (variant) => fieldTargets(variant ? variant.attributes : item.specs, fields, 'jsonLd'),
+			axes: new Map(
+				attributes
+					.filter((field) => field.on === 'variant' && field.active && SCHEMA_PROPERTIES.includes(field.show.jsonLd))
+					.map((field) => [field.name, field.show.jsonLd]),
+			),
 			shipping: await shippingOf(s),
 			returns: await returnsOf(s, item, conditions, String(business.country ?? '')),
 			reviews: reviews.map((row) => ({
@@ -611,11 +623,9 @@ export const createSeo = (product, service) => {
 			brandNames(data),
 			hiddenFor(s),
 			s.format(),
-			data
-				.collection(COLLECTIONS.attributes)
-				.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1 } })
-				.toArray(),
+			attributesOf(data),
 		]);
+		const fields = new Map(attributes.map((field) => [field.id, field]));
 		const byId = new Map(categories.map((category) => [category.id, category]));
 		const conditions = await conditionsOf(s, byId);
 		const shipping = await shippingOf(s);
@@ -676,6 +686,11 @@ export const createSeo = (product, service) => {
 				wholeUnits: format.format.wholeUnits === true,
 				variantLink: (variant) => perVariant.get(variant.id)?.link ?? '',
 				variantImage: (variant) => perVariant.get(variant.id)?.image ?? '',
+				// the fields the merchant sends (`show.feeds`): the product's, then the variant's
+				values: (variant) => [
+					...fieldTargets(item.specs, fields, 'feeds'),
+					...fieldTargets(variant.attributes, fields, 'feeds'),
+				],
 			}).slice(0, MAX_FEED_ROWS - count);
 			count += made.length;
 			batch.push(...made);

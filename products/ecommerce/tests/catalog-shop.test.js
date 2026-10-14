@@ -32,15 +32,15 @@ beforeAll(async () => {
 	const android = await api('POST', '/v1/categories', { name: 'Android', parentId: phones.id });
 	const cases = await api('POST', '/v1/categories', { name: 'Cases', sort: 5 });
 	const acme = await api('POST', '/v1/brands', { name: 'Acme' });
-	const ram = await api('POST', '/v1/attributes', { name: 'RAM', type: 'number', unit: 'GB', filterable: true, sort: 1 });
+	const ram = await api('POST', '/v1/attributes', { name: 'RAM', type: 'number', unit: 'GB', show: { filter: true }, sort: 1 });
 	const color = await api('POST', '/v1/attributes', {
 		name: 'Color',
 		type: 'choice',
 		choices: ['Black', 'Blue'],
-		filterable: true,
+		show: { filter: true },
 		sort: 2,
 	});
-	const fiveG = await api('POST', '/v1/attributes', { name: '5G', type: 'boolean', filterable: true, sort: 3 });
+	const fiveG = await api('POST', '/v1/attributes', { name: '5G', type: 'yes_no', show: { filter: true }, sort: 3 });
 	const note = await api('POST', '/v1/attributes', { name: 'Note', type: 'text' });
 	Object.assign(ids, { phones, android, cases, acme, ram, color, fiveG, note });
 	ids.pixel = await api('POST', '/v1/products', {

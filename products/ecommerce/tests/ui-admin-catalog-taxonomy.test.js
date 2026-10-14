@@ -386,14 +386,14 @@ describe('catalog admin: attributes', () => {
 		const panel = await openTab(root, 'attributes');
 		expect(rowsOf(panel)).toEqual(ATTRIBUTES.map((item) => item.name));
 		expect(textOf(panel)).toContain('Number');
-		expect(textOf(panel)).toContain('in · Shoppers can filter by it');
+		expect(textOf(panel)).toContain('in · On the product page · Shoppers can filter by it');
 		await change(fieldIn(panel, 'Values are on'), 'variant');
 		expect(rowsOf(panel)).toEqual(['Storage', 'Bands']);
 		const detail = textOf(detailOf(panel));
 		for (const part of [
 			'On variants',
 			'Filter nameattr.storage',
-			'On product cardsAs chips',
+			'Where values showAs chips · Shoppers can filter by it',
 			'Categories (none = all)Phones',
 			'For brands: Acme',
 			'64 GB',
@@ -419,7 +419,7 @@ describe('catalog admin: attributes', () => {
 		expect(statuses(await openTab(denied.root, 'attributes'))).toContain('You are not allowed to do this.');
 		resetPage();
 		const empty = await start(['catalog'], { 'GET /v1/admin/attributes': () => answer(200, { items: [] }) });
-		expect(statuses(await openTab(empty.root, 'attributes'))).toContain('No attributes yet.');
+		expect(statuses(await openTab(empty.root, 'attributes'))).toContain('No fields yet.');
 	});
 
 	it('creates and edits attributes: choices, categories, visibility, card display and glossary', async () => {
@@ -455,10 +455,16 @@ describe('catalog admin: attributes', () => {
 			on: 'variant',
 			unit: '',
 			sort: 4,
-			card: 'image',
+			min: null,
+			max: null,
+			decimals: 0,
+			dates: 'any',
+			format: null,
+			required: false,
+			requiredAt: null,
+			// a variant field shows in the places variants have (no compare)
+			show: { page: false, filter: true, chat: false, card: 'image', feeds: 'none', jsonLd: 'none' },
 			multiple: false,
-			filterable: true,
-			comparable: true,
 			active: true,
 			choices: [
 				{ value: '128', label: '128 GB' },
@@ -470,13 +476,13 @@ describe('catalog admin: attributes', () => {
 			seo: { title: 'Storage', description: 'How much fits', body: 'More bytes.', faqs: [{ question: 'Q?', answer: 'A.' }] },
 		});
 		// a new text attribute shown when another attribute has a value
-		await click(buttonIn(panel, 'New attribute'));
+		await click(buttonIn(panel, 'New field'));
 		dialog = dialogOf(root);
 		expect(textOf(dialog).includes('Add a choice')).toBe(true);
 		expect(shows(dialog, 'Add a choice')).toBe(false);
 		type(fieldIn(dialog, 'Name'), 'Finish');
 		await change(fieldIn(dialog, 'Show it'), 'attribute');
-		await change(fieldIn(dialog, 'Attribute'), 'att_2');
+		await change(fieldIn(dialog, 'Field'), 'att_2');
 		type(fieldIn(dialog, 'Has the value'), 'Red');
 		await tick(checkIn(dialog, 'Phones'), true);
 		await change(fieldIn(dialog, 'Definition for'), 'cat_b');
@@ -490,9 +496,10 @@ describe('catalog admin: attributes', () => {
 			categoryIds: ['cat_b'],
 			visibility: { when: 'attribute', attributeId: 'att_2', value: 'Red' },
 			active: true,
-			card: 'none',
+			// a new product field shows on the page and in Chat
+			show: { page: true, chat: true, filter: false, compare: false, card: 'none', feeds: 'none', jsonLd: 'none' },
 		});
-		await click(buttonIn(panel, 'New attribute'));
+		await click(buttonIn(panel, 'New field'));
 		dialog = dialogOf(root);
 		type(fieldIn(dialog, 'Name'), 'Size');
 		await change(fieldIn(dialog, 'Type'), 'choice');
@@ -505,10 +512,100 @@ describe('catalog admin: attributes', () => {
 			choices: [],
 			visibility: { when: 'brands', ids: ['brd_2'] },
 		});
-		await click(buttonIn(panel, 'New attribute'));
+		await click(buttonIn(panel, 'New field'));
 		type(fieldIn(dialogOf(root), 'Name'), 'Plain');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/attributes')?.body.visibility).toEqual({ when: 'always' });
+	});
+});
+
+/**
+ * Whether a field or checkbox with this label shows (not inside a hidden part).
+ * @param {ParentNode} scope @param {string} text
+ */
+const labelShown = (scope, text) =>
+	[...scope.querySelectorAll('label')].some((label) => label.textContent === text && !label.closest('[hidden]'));
+
+describe('catalog admin: fields of units, orders and customers (dynamic model §2)', () => {
+	it('builds a unit field with a format it tries live, and an order field asked at checkout', async () => {
+		const { root, server } = await start(ALL, {
+			'POST /v1/admin/attributes': (/** @type {any} */ call) => answer(201, { id: 'att_9', ...call.body }),
+		});
+		const panel = await openTab(root, 'attributes');
+		await click(buttonIn(panel, 'New field'));
+		let dialog = dialogOf(root);
+		type(fieldIn(dialog, 'Name'), 'IMEI');
+		await change(fieldIn(dialog, 'Values are on'), 'unit');
+		// a unit's places only: no product page, filters or glossary
+		expect(labelShown(dialog, 'Shown to the shopper (order fields: asked at checkout)')).toBe(true);
+		expect(labelShown(dialog, 'On the product page')).toBe(false);
+		expect(labelShown(dialog, 'Glossary text')).toBe(false);
+		await tick(checkIn(dialog, 'Check a format'), true);
+		await change(fieldIn(dialog, 'Characters'), 'digits');
+		await change(fieldIn(dialog, 'Shortest'), '15');
+		await change(fieldIn(dialog, 'Longest'), '15');
+		await change(fieldIn(dialog, 'Check digit'), 'luhn');
+		await tick(checkIn(dialog, 'Spaces are dropped'), true);
+		await change(fieldIn(dialog, 'Try a value'), '490154203237519');
+		expect(statuses(dialog)).toContain('490154203237519 does not match the format of this field. Its check digit is wrong.');
+		await change(fieldIn(dialog, 'Try a value'), '4901 5420 3237 518');
+		expect(statuses(dialog)).toContain('490154203237518 matches.');
+		await change(fieldIn(dialog, 'Shortest'), '20');
+		expect(statuses(dialog)).toContain('Fix the format first: check its lengths, starts and pattern.');
+		await change(fieldIn(dialog, 'Shortest'), '15');
+		await tick(checkIn(dialog, 'Takes several values'), true);
+		expect(fieldIn(dialog, 'Most values').getAttribute('max')).toBe('2');
+		type(fieldIn(dialog, 'Most values'), '2');
+		await tick(checkIn(dialog, 'Required'), true);
+		await tick(checkIn(dialog, 'Shown to the shopper (order fields: asked at checkout)'), true);
+		await tick(checkIn(dialog, 'On invoices'), true);
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/attributes')?.body).toMatchObject({
+			name: 'IMEI',
+			on: 'unit',
+			type: 'text',
+			multiple: true,
+			maxValues: 2,
+			required: true,
+			requiredAt: null,
+			format: {
+				chars: 'digits',
+				minLength: 15,
+				maxLength: 15,
+				startsWith: [],
+				mask: '',
+				checkDigit: 'luhn',
+				ignoreSpaces: true,
+				upperCase: false,
+			},
+			show: { shopper: true, invoice: true, packingSlip: false },
+			visibility: { when: 'always' },
+			seo: { title: '', description: '', body: '', faqs: [] },
+		});
+		await click(buttonIn(panel, 'New field'));
+		dialog = dialogOf(root);
+		type(fieldIn(dialog, 'Name'), 'Gift message');
+		await change(fieldIn(dialog, 'Values are on'), 'order');
+		expect(labelShown(dialog, 'Categories (none = all)')).toBe(false);
+		expect(labelShown(dialog, 'Required by')).toBe(false);
+		await tick(checkIn(dialog, 'Required'), true);
+		expect(labelShown(dialog, 'Required by')).toBe(true);
+		await change(fieldIn(dialog, 'Required by'), 'checkout');
+		await tick(checkIn(dialog, 'Shown to the shopper (order fields: asked at checkout)'), true);
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/attributes')?.body).toMatchObject({
+			on: 'order',
+			required: true,
+			requiredAt: 'checkout',
+			categoryId: null,
+			categoryIds: [],
+			show: { shopper: true, invoice: false, packingSlip: false },
+		});
+		// a customer field is never required
+		await click(buttonIn(panel, 'New field'));
+		dialog = dialogOf(root);
+		await change(fieldIn(dialog, 'Values are on'), 'customer');
+		expect(labelShown(dialog, 'Required')).toBe(false);
 	});
 });
 
@@ -521,15 +618,13 @@ describe('catalog admin: attributes per category (E45)', () => {
 			type: 'text',
 			unit: '',
 			choices: [],
-			filterable: false,
-			comparable: false,
+			show: { filter: false, compare: false, card: 'none' },
 			sort: 0,
 			categoryId,
 			categoryIds: [],
 			on: 'product',
 			multiple: false,
 			visibility: { when: 'always', ids: [], attributeId: null, value: null },
-			card: 'none',
 			active: true,
 			seo: { title: '', description: '', body: '', faqs: [] },
 		});
@@ -548,7 +643,7 @@ describe('catalog admin: attributes per category (E45)', () => {
 		const dialog = dialogOf(root);
 		expect(fieldIn(dialog, 'Definition for').value).toBe('');
 		await change(fieldIn(dialog, 'Show it'), 'attribute');
-		const options = [...fieldIn(dialog, 'Attribute').querySelectorAll('option')].map((option) => option.textContent);
+		const options = [...fieldIn(dialog, 'Field').querySelectorAll('option')].map((option) => option.textContent);
 		expect(options).toContain('Fabric (Phones)');
 	});
 });

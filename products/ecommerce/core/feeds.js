@@ -47,7 +47,12 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} mpn the variant's MPN, else its SKU when `skuAs` is mpn
  * @property {string} productType category path (`Home > Kitchen`)
  * @property {string} [googleCategory] the Google product category (E17)
- * @property {string} [customLabel0] the grade's label (E17)
+ * @property {string[]} customLabels custom_label_0 to custom_label_4: the grade's label (E17, `gradeLabel`) as label 0,
+ *   then the field values the merchant sends as labels ('' = none)
+ * @property {string} color the field values sent as color, material, size and pattern ('' = none)
+ * @property {string} material
+ * @property {string} size
+ * @property {string} pattern
  * @property {string} [shipping] the delivery fee (`2.50 USD`) for the business's country (E17), 0 from the free-delivery
  *   amount (SG-2)
  * @property {string} [shippingCountry]
@@ -70,6 +75,8 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {boolean} includeOutOfStock
  * @property {string} [googleCategory]
  * @property {(variant: import('./model.js').VariantRecord) => string} [gradeLabel] the grade label for custom_label_0
+ * @property {(variant: import('./model.js').VariantRecord) => import('./seo.js').FieldTarget[]} [values] the values of
+ *   the fields the feeds send (`show.feeds`), the product's and the variant's
  * @property {{ fee: number, freeOver?: number, country: string } | null} [shipping] the default delivery fee, free from
  *   `freeOver` (0 = never; SG-2)
  * @property {boolean} [wholeUnits] amounts without minor units (K7, E17)
@@ -150,12 +157,43 @@ export const feedRows = (product, context) => {
 				mpn,
 				productType: context.productType,
 				googleCategory: context.googleCategory ?? '',
-				customLabel0: context.gradeLabel?.(variant) ?? '',
+				...fieldColumns(context.gradeLabel?.(variant) ?? '', context.values?.(variant) ?? []),
 				shipping: context.shipping ? money(shippingFee(context.shipping, shown.price)) : '',
 				shippingCountry: context.shipping?.country ?? '',
 				identifierExists: context.identifierExists === 'no' && !gtin && !mpn ? 'no' : '',
 			};
 		});
+};
+
+/** The feed attributes field values may fill besides the custom labels. */
+const FIELD_COLUMNS = Object.freeze(/** @type {const} */ (['color', 'material', 'size', 'pattern']));
+
+/**
+ * The custom labels and the color, material, size and pattern of a row: the grade's label first as custom label 0,
+ * then each field value where the merchant sends it (the first value for a column wins; a value longer than the 100
+ * characters a custom label takes is cut).
+ * @param {string} gradeLabel
+ * @param {import('./seo.js').FieldTarget[]} values
+ */
+const fieldColumns = (gradeLabel, values) => {
+	const customLabels = ['', '', '', '', ''];
+	customLabels[0] = gradeLabel;
+	/** @type {Record<string, string>} */
+	const named = { color: '', material: '', size: '', pattern: '' };
+	for (const entry of values) {
+		const label = /^custom_label_([0-4])$/.exec(entry.target);
+		if (label) {
+			const index = Number(label[1]);
+			if (!customLabels[index]) customLabels[index] = line(entry.value, 100);
+		} else if (entry.target in named && !named[entry.target]) named[entry.target] = line(entry.value, 100);
+	}
+	return {
+		customLabels,
+		color: named.color ?? '',
+		material: named.material ?? '',
+		size: named.size ?? '',
+		pattern: named.pattern ?? '',
+	};
 };
 
 /**
@@ -193,7 +231,8 @@ export const googleItem = (row) => {
 		['g:identifier_exists', row.identifierExists ?? ''],
 		['g:product_type', row.productType],
 		['g:google_product_category', row.googleCategory ?? ''],
-		['g:custom_label_0', row.customLabel0 ?? ''],
+		...FIELD_COLUMNS.map((name) => /** @type {[string, string]} */ ([`g:${name}`, row[name]])),
+		...row.customLabels.map((label, index) => /** @type {[string, string]} */ ([`g:custom_label_${index}`, label])),
 	];
 	const body = fields
 		.filter(([, value]) => value !== '')
@@ -222,8 +261,16 @@ const META_COLUMNS = Object.freeze([
 	'gtin',
 	'mpn',
 	'item_group_id',
+	'color',
+	'material',
+	'size',
+	'pattern',
 	'google_product_category',
 	'custom_label_0',
+	'custom_label_1',
+	'custom_label_2',
+	'custom_label_3',
+	'custom_label_4',
 ]);
 
 /**
@@ -255,8 +302,12 @@ export const metaLine = (row) =>
 		row.gtin,
 		row.mpn,
 		row.itemGroupId,
+		row.color,
+		row.material,
+		row.size,
+		row.pattern,
 		row.googleCategory ?? '',
-		row.customLabel0 ?? '',
+		...row.customLabels,
 	]
 		.map(csvCell)
 		.join(',')}\r\n`;

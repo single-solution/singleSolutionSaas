@@ -546,7 +546,9 @@ describe('catalog admin: other product shapes', () => {
 				multiple: true,
 			},
 			{ id: 'att_t', name: 'Material', type: 'text', unit: '', choices: [], sort: 2, on: 'variant' },
-			{ id: 'att_n', name: 'Notes', type: 'text', unit: '', choices: [], sort: 3, multiple: true },
+			{ id: 'att_n', name: 'Notes', type: 'text', unit: '', choices: [], sort: 3, multiple: true, on: 'product' },
+			// a date and a required field (marked in its label)
+			{ id: 'att_d', name: 'Made', type: 'date', unit: '', choices: [], sort: 5, on: 'product', required: true },
 			{
 				id: 'att_s',
 				name: 'Fit',
@@ -558,11 +560,12 @@ describe('catalog admin: other product shapes', () => {
 				],
 				sort: 4,
 				multiple: true,
+				on: 'product',
 			},
 		];
 		const shaped = product({
 			attributeSetup: [{ attributeId: 'att_c', values: ['red'], customValues: ['green'], defaultValue: null }],
-			specs: { att_n: ['soft', 'warm'], att_s: 'Slim' },
+			specs: { att_n: ['soft', 'warm'], att_s: 'Slim', att_d: '2026-01-05' },
 			options: [],
 			variants: [
 				{
@@ -594,6 +597,8 @@ describe('catalog admin: other product shapes', () => {
 			'green',
 		]);
 		expect(fieldIn(editor, 'Notes (comma separated)').value).toBe('soft, warm');
+		expect(fieldIn(editor, 'Made (required)').value).toBe('2026-01-05');
+		expect(fieldIn(editor, 'Made (required)').getAttribute('type')).toBe('date');
 		expect(checkIn(editor, 'Slim').checked).toBe(true);
 		type(labelled(editor, `Weight of ${label}`), '');
 		type(labelled(editor, `Material of ${label}`), '');
@@ -607,7 +612,7 @@ describe('catalog admin: other product shapes', () => {
 		type(labelled(editor, 'Material of Default'), 'Wool');
 		await click(buttonIn(editor, 'Save'));
 		const body = server.last('PATCH /v1/admin/products/prd_1')?.body;
-		expect(body.specs).toEqual({});
+		expect(body.specs).toEqual({ att_d: '2026-01-05' });
 		expect(body.variants[0]).toMatchObject({ attributes: {}, options: { Colors: 'Red', Weight: '100 g' } });
 		expect(body.variants[0].grade).toBe('b');
 		expect(body.variants[1]).toMatchObject({ attributes: { att_w: 250, att_t: 'Wool' }, options: {}, stock: 3 });

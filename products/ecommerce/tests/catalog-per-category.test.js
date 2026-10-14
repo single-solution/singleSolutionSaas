@@ -46,7 +46,7 @@ beforeAll(async () => {
 	ids.dresses = await api('POST', '/v1/categories', { name: 'Dresses' });
 	ids.evening = await api('POST', '/v1/categories', { name: 'Evening', parentId: ids.dresses.id });
 	ids.shirts = await api('POST', '/v1/categories', { name: 'Shirts' });
-	ids.fabric = await api('POST', '/v1/attributes', { name: 'Fabric', slug: 'fabric', filterable: true });
+	ids.fabric = await api('POST', '/v1/attributes', { name: 'Fabric', slug: 'fabric', show: { filter: true } });
 	ids.dressFabric = await api('POST', '/v1/attributes', {
 		name: 'Dress fabric',
 		slug: 'fabric',
@@ -54,7 +54,7 @@ beforeAll(async () => {
 		unit: 'gsm',
 		type: 'choice',
 		choices: [{ value: 'silk', label: 'Pure silk' }, 'linen'],
-		filterable: true,
+		show: { filter: true },
 	});
 	await shop.list('grades', [
 		{ key: 'a', label: 'Grade A', description: 'Light marks.', warrantyDays: 30 },

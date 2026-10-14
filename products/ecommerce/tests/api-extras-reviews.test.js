@@ -374,11 +374,17 @@ describe('wishlist and compare', () => {
 				name: 'Colors',
 				slug: 'colors',
 				type: 'choice',
-				filterable: true,
-				comparable: true,
+				show: { filter: true, compare: true },
 				sort: 1,
 			}),
-			storedAttribute({ id: 'att_5g', name: '5G', slug: '5g', type: 'boolean', filterable: true, comparable: true, sort: 2 }),
+			storedAttribute({
+				id: 'att_5g',
+				name: '5G',
+				slug: '5g',
+				type: 'yes_no',
+				show: { filter: true, compare: true },
+				sort: 2,
+			}),
 		]);
 		await shop.list('grades', [{ key: 'used_b', label: 'Used B' }]);
 		const a = await shop.seedProduct({
