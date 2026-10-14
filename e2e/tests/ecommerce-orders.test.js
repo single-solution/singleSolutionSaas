@@ -7,7 +7,8 @@
  * before delivery only when paid; a customer return after delivery with and without restock), the payments log, an
  * order numbered `SO-2026-0043` (prefix, digits and the counter, in the business year of business.json's time zone),
  * events, staff alerts (listed recipients and Accounts staff whose role grants the permission) and per-status
- * messages (the mails the real Notifications sends), claims, invoices and the reports summary. Ecommerce runs on the
+ * messages (the mails the real Notifications sends), claims, invoices, the reports summary, and the shop's own order and
+ * unit fields (a gift message asked at checkout, a box size needed before packing, a dual-SIM phone's IMEIs). Ecommerce runs on the
  * REAL Portal with the real Accounts, Payments and Notifications next to it; the email provider (Resend), the
  * merchant's S3 bucket and the shop's own site (its business.json) are fakes in this process.
  */
@@ -1082,6 +1083,81 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const file = await server('GET', '/v1/reports/summary?from=2026-10-01&to=2026-10-01&format=csv');
 		expect(file.headers.get('content-type')).toBe('text/csv; charset=utf-8');
 		expect(String(file.json).split('\r\n')[1]).toMatch(new RegExp(`^2026-10-01,${counted.length},`));
+	});
+
+	it('asks the shop’s order fields at checkout, needs a stage’s field before packing, and keeps a dual-SIM phone’s IMEIs as its own unit field (dynamic model §2)', async () => {
+		const gift = await write('POST', '/v1/attributes', {
+			name: 'Gift message',
+			on: 'order',
+			required: true,
+			requiredAt: 'checkout',
+			show: { shopper: true, invoice: true },
+		});
+		const box = await write('POST', '/v1/attributes', {
+			name: 'Box',
+			on: 'order',
+			type: 'choice',
+			choices: ['S', 'M'],
+			required: true,
+			requiredAt: 'packed',
+			show: { packingSlip: true },
+		});
+		// the IMEI is this shop's own unit field: 15 digits with a Luhn check digit, two per dual-SIM phone
+		const imei = await write('POST', '/v1/attributes', {
+			name: 'IMEI',
+			on: 'unit',
+			multiple: true,
+			required: true,
+			format: { chars: 'digits', minLength: 15, maxLength: 15, checkDigit: 'luhn', ignoreSpaces: true },
+			show: { shopper: true, invoice: true },
+		});
+		await configure({ 'grades_serials.serialMode': 'typed' });
+		const dual = await write('POST', '/v1/products', {
+			name: 'Dual-SIM phone',
+			status: 'active',
+			price: PHONE_PRICE,
+			stock: 3,
+			serialized: true,
+		});
+		const sara = await signIn('07700900111');
+		const lines = [{ productId: dual.id, quantity: 1 }];
+		const priced = await quote({ lines, payment: 'cod' }, sara);
+		expect(priced.json.fields.map((/** @type {any} */ field) => [field.name, field.required])).toEqual([
+			['Gift message', true],
+		]);
+		const refused = await place({ lines, payment: 'cod' }, sara);
+		expect(refused.status).toBe(422);
+		expect(refused.json.errors[0].path).toBe(`/fields/${gift.id}`);
+		const placed = await place({ lines, payment: 'cod', fields: { [gift.id]: 'Happy birthday' } }, sara);
+		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
+		const order = placed.json.order;
+		const lineId = order.lines[0].id;
+		expect((await move(order.id, 'confirmed')).status).toBe(200);
+		const early = await move(order.id, 'packed');
+		expect(early.status).toBe(422);
+		expect(early.json.errors[0].path).toBe(`/fields/${box.id}`);
+		await write('PATCH', `/v1/orders/${order.id}`, { fields: { [box.id]: 'M' } });
+		expect((await move(order.id, 'packed')).status).toBe(200);
+		// typed at packing or later, in the field's format
+		const wrong = await server('PATCH', `/v1/orders/${order.id}`, {
+			serials: { [lineId]: [{ values: { [imei.id]: ['490154203237519'] } }] },
+		});
+		expect(wrong.status).toBe(422);
+		const typed = await write('PATCH', `/v1/orders/${order.id}`, {
+			serials: { [lineId]: [{ values: { [imei.id]: ['4901 5420 3237 518', '356938035643809'] } }] },
+		});
+		expect(typed.lines[0].units).toEqual([
+			{ serial: '490154203237518', values: { [imei.id]: ['490154203237518', '356938035643809'] } },
+		]);
+		// the shopper sees the gift message and the IMEIs; the box size stays the staff's
+		const view = await shopper('GET', `/v1/shop/orders/${order.id}`, { signIn: sara });
+		expect(view.json.fields).toEqual([{ name: 'Gift message', value: 'Happy birthday' }]);
+		expect(view.json.lines[0].unitValues).toEqual([{ name: 'IMEI', values: ['490154203237518', '356938035643809'] }]);
+		const invoice = String((await server('GET', `/v1/orders/${order.id}/invoice`)).json);
+		expect(invoice).toContain('Gift message: Happy birthday');
+		expect(invoice).toContain('IMEI: 490154203237518, 356938035643809');
+		expect(invoice).not.toContain('Box: M');
+		expect(String((await server('GET', `/v1/orders/${order.id}/packing-slip`)).json)).toContain('Box: M');
 	});
 });
 
