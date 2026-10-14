@@ -170,6 +170,43 @@ describe('handler results and the Next.js adapter', () => {
 		expect((await call('GET', '/v1/items/%E0%A4%A')).status).toBe(404);
 	});
 
+	it("passes a route's own Response through byte for byte: a CSV keeps its byte order mark, binary stays intact, and so does a repeat", async () => {
+		const csv = '\uFEFFname,city\r\nChloé,Paris\r\n';
+		const binary = new Uint8Array([0xff, 0xd8, 0xff, 0x00, 0x80, 0xfe, 0xef, 0xbb, 0xbf]);
+		let made = 0;
+		const { call } = await setup({
+			routes: [
+				defineRoute({
+					method: 'GET',
+					path: '/v1/export.csv',
+					auth: 'none',
+					handler: () => new Response(csv, { headers: { 'content-type': 'text/csv; charset=utf-8' } }),
+				}),
+				defineRoute({ method: 'GET', path: '/v1/file', auth: 'none', handler: () => new Response(binary) }),
+				defineRoute({
+					method: 'POST',
+					path: '/v1/export.csv',
+					auth: 'none',
+					idempotent: true,
+					handler: () => {
+						made += 1;
+						return new Response(csv, { headers: { 'content-type': 'text/csv; charset=utf-8' } });
+					},
+				}),
+			],
+		});
+		const bytes = async (/** @type {Response} */ response) => [...new Uint8Array(await response.arrayBuffer())];
+		const expected = [...new TextEncoder().encode(csv)];
+		expect(expected.slice(0, 3)).toEqual([0xef, 0xbb, 0xbf]);
+		expect(await bytes(await call('GET', '/v1/export.csv'))).toEqual(expected);
+		expect(await bytes(await call('GET', '/v1/file'))).toEqual([...binary]);
+		const first = await call('POST', '/v1/export.csv', { headers: { 'idempotency-key': 'csv-1' } });
+		expect(await bytes(first)).toEqual(expected);
+		const repeat = await call('POST', '/v1/export.csv', { headers: { 'idempotency-key': 'csv-1' } });
+		expect([repeat.headers.get('idempotent-replayed'), made]).toEqual(['true', 1]);
+		expect(await bytes(repeat)).toEqual(expected);
+	});
+
 	it('strips /api in Next.js and schedules work after the response', async () => {
 		const { handler, server } = await setup();
 		/** @type {Array<() => Promise<unknown>>} */

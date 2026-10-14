@@ -2,8 +2,8 @@
  * `createProduct` wires the kit for one product: the Portal connection, tokens and tickets, the status cache, notices,
  * price and feature reports, settings, widget texts, theme and Format, encrypted connections, the merchant database,
  * business.json, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
- * API for the merchant's server, events, staff alerts, imports (PLAN 0.8.10 K1–K10) and the default templates of the
- * messages the product sends (parity P1). Every side effect is injected (fetch, clock, randomness, logger, store,
+ * API for the merchant's server, events, staff alerts, imports (PLAN 0.8.10 K1–K10), the default templates of the
+ * messages the product sends (parity P1) and the product's part of each website's Setup sheet (`GET /v1/blueprint`). Every side effect is injected (fetch, clock, randomness, logger, store,
  * outbound calls).
  * @module
  */
@@ -18,6 +18,7 @@ import {
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { ACTIVITY_INDEXES, createActivity } from './activity.js';
+import { createBlueprint } from './blueprint.js';
 import { createBusiness } from './business.js';
 import { createConnection } from './connection.js';
 import { checkConnectionDefinitions, createConnections } from './connections.js';
@@ -27,6 +28,7 @@ import { EVENT_INDEXES, createEvents } from './events.js';
 import { createImports } from './imports.js';
 import { createMessages } from './messages.js';
 import { createRequestHandler } from './http/handler.js';
+import { defineRoute } from './http/routes.js';
 import { createAccountsSignIns, createIdentity } from './identity.js';
 import { createKitRoutes } from './kit-routes.js';
 import { noopLogger } from './logger.js';
@@ -80,6 +82,8 @@ import { verifyToken } from '@ss/protocol';
  * @property {unknown} [messages] the messages the product sends through Notifications with their default words (its
  *   `schemas/messages.json`, `{ messages: [...] }`; parity P1): attached to every send to Notifications and served at
  *   `GET /v1/message-defaults`
+ * @property {unknown} [openapi] the product's OpenAPI document (its generated `openapi.json`): served publicly at
+ *   `GET /openapi.json` and named in the Setup sheet (`docs.openapi`)
  */
 
 /**
@@ -312,7 +316,30 @@ export const createProduct = (options) => {
 	};
 	/** @type {Kit} */
 	const kit = { ...parts, dashboard: createDashboard(parts) };
-	const kitRoutes = [...createKitRoutes(kit, hooks), ...kit.dashboard.routes, ...createServerApi(kit, lists)];
+	if (options.openapi !== undefined && !isObject(options.openapi))
+		throw kitError('invalid_config', 'openapi must be the OpenAPI document (a JSON object)');
+	const openapi = options.openapi === undefined ? null : JSON.stringify(options.openapi);
+	const blueprint = createBlueprint({ kit, lists, hooks, events: options.events === true, openapi: openapi !== null });
+	const kitRoutes = [
+		...createKitRoutes(kit, hooks),
+		...kit.dashboard.routes,
+		...createServerApi(kit, lists),
+		...blueprint.routes,
+		// the product's OpenAPI document: public, the same for every website
+		...(openapi === null
+			? []
+			: [
+					defineRoute({
+						method: 'GET',
+						path: '/openapi.json',
+						auth: 'none',
+						handler: () =>
+							new Response(openapi, {
+								headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' },
+							}),
+					}),
+				]),
+	];
 
 	/**
 	 * A website's Format and business time zone, with `money` and `date` for text the server makes (messages, invoices,

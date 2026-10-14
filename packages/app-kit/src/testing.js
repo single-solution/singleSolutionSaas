@@ -3,7 +3,7 @@
  *
  * - `createFakePortal()`: the Portal side of the Product ↔ Portal contract (PLAN 0.4.12): connect, price and feature
  *   reports, status (settable), websites, revocations, directory and launch consume, plus helpers that sign tokens,
- *   launches and notices;
+ *   launches, notices and Portal calls (`signCall`, `callAsPortal`: `GET /v1/blueprint`);
  * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and the
  *   users with a permission (staff alerts), and calls a product's data-rights routes with a pasted server token;
  * - `createNotificationsDouble()`: Notifications as products see it: it takes events (`POST /v1/events`) and messages
@@ -28,6 +28,7 @@ import {
 	issueLaunch,
 	issueToken,
 	signNotice,
+	signPortalCall,
 	toPublicJwk,
 	verifyAssertion,
 	verifyConnectResponse,
@@ -447,6 +448,35 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				'content-type': 'application/json',
 			};
 			return product.handler(new Request(`${product.baseUrl}/.well-known/ss-events`, { method: 'POST', headers, body }));
+		},
+		/**
+		 * Sign a Portal call (`auth: 'portal'` routes such as `GET /v1/blueprint?websiteId=`) with the Portal key.
+		 * @param {string} productId the product it is for
+		 * @param {string} method
+		 * @param {string} target the path and query
+		 * @param {string} [body] the raw body
+		 * @returns {Promise<Record<string, string>>} the headers
+		 */
+		signCall: (productId, method, target, body = '') =>
+			signPortalCall({ signer, audience: productId, method, target, body, timestamp: Math.floor(now() / 1000) }),
+		/**
+		 * Make a signed Portal call to a connected product.
+		 * @param {string} productId
+		 * @param {string} method
+		 * @param {string} target the path and query
+		 * @returns {Promise<Response>}
+		 */
+		callAsPortal: async (productId, method, target) => {
+			const product = products.get(productId);
+			if (!product?.handler) throw new Error(`product ${productId} is not connected`);
+			const headers = await signPortalCall({
+				signer,
+				audience: productId,
+				method,
+				target,
+				timestamp: Math.floor(now() / 1000),
+			});
+			return product.handler(new Request(`${product.baseUrl}${target}`, { method, headers }));
 		},
 		/** What the products sent. */
 		priceReports,

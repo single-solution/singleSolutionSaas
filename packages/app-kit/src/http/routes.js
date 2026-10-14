@@ -4,7 +4,7 @@
  * @module
  */
 
-/** @typedef {'browser' | 'server' | 'ticket' | 'dashboard' | 'none'} AuthMode */
+/** @typedef {'browser' | 'server' | 'ticket' | 'dashboard' | 'portal' | 'none'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 /** @typedef {'merchant' | 'owner' | 'support'} DashboardRole */
 /**
@@ -20,7 +20,8 @@
  * @property {string} path
  * @property {AuthMode} auth `browser`: browser token + allowed Origin (visitor routes, CORS for that origin);
  *   `server`: server token, refused with an Origin header; `ticket`: ticket + its Origin (CORS for it); `dashboard`:
- *   product dashboard session; `none`: public
+ *   product dashboard session; `portal`: a call signed by the Portal (`@ss/protocol` `verifyPortalCall`) naming its website
+ *   in `?websiteId=`; `none`: public
  * @property {string | string[]} [feature] browser, server and ticket routes: answers 403 `feature_off` while the feature
  *   is off (a list: while all of them are off); ticket routes default to the feature of their `permission`
  * @property {string} [permission] ticket routes: the ticket must carry this permission
@@ -39,7 +40,7 @@
 /** @typedef {RouteDefinition & { segments: string[], id: string }} CompiledRoute */
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const AUTH = new Set(['browser', 'server', 'ticket', 'dashboard', 'none']);
+const AUTH = new Set(['browser', 'server', 'ticket', 'dashboard', 'portal', 'none']);
 const WEBSITE_AUTH = new Set(['browser', 'server', 'ticket']);
 const ROLES = new Set(['merchant', 'owner', 'support']);
 
@@ -54,7 +55,7 @@ export const defineRoute = (definition) => {
 	if (!METHODS.has(method)) throw new TypeError(`route method must be one of ${[...METHODS].join(', ')}`);
 	if (typeof path !== 'string' || !path.startsWith('/') || /\s/.test(path))
 		throw new TypeError(`route path must start with /: ${path}`);
-	if (!AUTH.has(auth)) throw new TypeError(`route auth must be browser, server, ticket, dashboard or none ${where}`);
+	if (!AUTH.has(auth)) throw new TypeError(`route auth must be browser, server, ticket, dashboard, portal or none ${where}`);
 	if (typeof handler !== 'function') throw new TypeError(`route needs a handler ${where}`);
 	if ((definition.feature !== undefined || definition.database !== undefined) && !WEBSITE_AUTH.has(auth))
 		throw new TypeError(`feature and database need browser, server or ticket auth ${where}`);

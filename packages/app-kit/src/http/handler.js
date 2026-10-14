@@ -10,8 +10,10 @@
  * Auth: `browser` (browser token from `Authorization: Bearer`; the Origin must be `https://<exact domain>` or local,
  * CORS only for it; without an Origin, the server token: a visitor call from the merchant's server, PLAN 0.8.10 K3),
  * `server` (server token; refused when an Origin header is present; no CORS), `ticket` (ticket bound to the request's
- * Origin; CORS only for it), `dashboard` (session cookie; writes only from the product's own address; never framed)
- * and `none`. Every token or ticket failure is the same 401 `invalid_token`.
+ * Origin; CORS only for it), `dashboard` (session cookie; writes only from the product's own address; never framed),
+ * `portal` (a call signed by the pinned Portal keys for this product, method, path, query and body, used once; its
+ * website is `?websiteId=`; 401 `unauthorized` otherwise; no CORS) and `none`. Every token or ticket failure is the
+ * same 401 `invalid_token`.
  *
  * Server-token requests may name the acting member of the merchant's staff with `SS-Actor-*` headers (K2; 400
  * `invalid_actor` when malformed). A visitor call from the merchant's server names its visitor with `SS-Visitor-IP`
@@ -25,7 +27,7 @@
  * @module
  */
 import { isIP } from 'node:net';
-import { canonicalOrigin, isLocalOrigin, isProtocolError, originAllowed, verifyToken } from '@ss/protocol';
+import { canonicalOrigin, isLocalOrigin, isProtocolError, originAllowed, verifyPortalCall, verifyToken } from '@ss/protocol';
 import { createId } from '@ss/contracts';
 import { parseActor } from '../actor.js';
 import { isDatabaseUnavailable } from '../data.js';
@@ -37,6 +39,11 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
 /** @typedef {import('./routes.js').CompiledRoute} CompiledRoute */
 /** @typedef {import('./results.js').ProblemResult} ProblemResult */
 /** @typedef {import('./results.js').RouteResult} RouteResult */
+/**
+ * An answer before it is sent: JSON and problems as text, a route's own `Response` as its exact bytes (a CSV keeps its
+ * byte order mark, a file its binary content).
+ * @typedef {{ status: number, headers: Record<string, string>, body: string | Uint8Array | null }} Rendered
+ */
 
 /**
  * @typedef {object} RequestContext
@@ -82,6 +89,8 @@ export const rememberScheduler = (request, after) => {
 };
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+/** A website id a Portal call names (`?websiteId=`). */
+const WEBSITE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** How long the answer of an idempotent request is given again for a repeat of its `Idempotency-Key` (K-14). */
@@ -174,7 +183,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 	 * @param {RouteResult} result
 	 * @param {string} requestId
 	 * @param {string} instance
-	 * @returns {{ status: number, headers: Record<string, string>, body: string | null }}
+	 * @returns {Rendered}
 	 */
 	const render = (result, requestId, instance) => {
 		if (isProblem(result)) {
@@ -324,7 +333,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 		/** @type {string | null} */
 		let websiteId = null;
 
-		/** @param {{ status: number, headers: Record<string, string>, body: string | null }} rendered */
+		/** @param {Rendered} rendered */
 		const finish = (rendered) => {
 			/** @type {(task: () => Promise<unknown>) => void} */
 			const scheduler = SCHEDULERS.get(request) ?? options.after ?? ((task) => void task());
@@ -344,7 +353,7 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				ms: now() - started,
 				...(websiteId ? { websiteId } : {}),
 			});
-			return new Response(method === 'HEAD' ? null : rendered.body, {
+			return new Response(method === 'HEAD' ? null : /** @type {BodyInit | null} */ (rendered.body), {
 				status: rendered.status,
 				headers: { ...rendered.headers, ...extra },
 			});
@@ -472,6 +481,25 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				Object.assign(extra, { 'access-control-allow-origin': ctx.ticket.origin, vary: 'Origin' });
 				if (r.permission !== undefined && !ctx.ticket.permissions.includes(r.permission))
 					return fail(problem('forbidden', 'The ticket does not carry this permission.'));
+			} else if (r.auth === 'portal') {
+				const { portalKeys } = kit.connection.active();
+				try {
+					await verifyPortalCall({
+						headers: request.headers,
+						audience: manifest.id,
+						method,
+						target: `${url.pathname}${url.search}`,
+						rawBody: ctx.rawBody,
+						keyResolver: portalKeys,
+						replayStore: { seen: store.seen },
+						now,
+					});
+				} catch (error) {
+					if (!isProtocolError(error)) throw error;
+					return fail(problem('unauthorized', 'The call is not signed by the Portal.'));
+				}
+				const named = ctx.query.websiteId;
+				ctx.websiteId = named !== undefined && WEBSITE_ID.test(named) ? named : null;
 			} else if (r.auth === 'dashboard') {
 				const allowed = await kit.dashboard.authorize(ctx, r);
 				if (!allowed.ok) return fail(allowed.problem);
@@ -570,7 +598,14 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				if (!(await store.insert('idempotency', duplicateKey, running))) {
 					const earlier = await store.get('idempotency', duplicateKey);
 					if (earlier !== null && earlier.fingerprint === fingerprint && earlier.answer)
-						return finish({ ...earlier.answer, headers: { ...earlier.answer.headers, 'idempotent-replayed': 'true' } });
+						return finish({
+							status: earlier.answer.status,
+							headers: { ...earlier.answer.headers, 'idempotent-replayed': 'true' },
+							body:
+								typeof earlier.answer.bytes === 'string'
+									? Buffer.from(earlier.answer.bytes, 'base64')
+									: earlier.answer.body,
+						});
 					if (earlier === null || (earlier.fingerprint === fingerprint && earlier.state === 'running')) {
 						extra['retry-after'] = '1';
 						return fail(problem('in_progress', 'A request with this Idempotency-Key is still running. Try again.'));
@@ -579,16 +614,17 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				}
 			}
 
-			/** @type {{ status: number, headers: Record<string, string>, body: string | null }} */
+			/** @type {Rendered} */
 			let rendered;
 			try {
 				const out = await r.handler(ctx);
 				if (out instanceof Response) {
-					const text = await out.text();
+					// the exact bytes: decoding them as text would drop a CSV's byte order mark and garble binary bodies
+					const bytes = new Uint8Array(await out.arrayBuffer());
 					rendered = {
 						status: out.status,
 						headers: Object.fromEntries(out.headers.entries()),
-						body: text.length > 0 ? text : null,
+						body: bytes.byteLength > 0 ? bytes : null,
 					};
 				} else rendered = render(isResult(out) ? out : out === undefined ? noContent() : ok(out), requestId, pathname);
 			} catch (error) {
@@ -609,14 +645,28 @@ export const createRequestHandler = (kit, routes, options = {}) => {
 				const headers = Object.fromEntries(
 					Object.entries(rendered.headers).filter(([name]) => !NOT_REPLAYED.has(name.toLowerCase())),
 				);
-				const kept = (rendered.body ?? '').length <= REPLAY_MAX_CHARS;
+				const body = rendered.body;
+				const kept = (body instanceof Uint8Array ? body.byteLength : (body ?? '').length) <= REPLAY_MAX_CHARS;
 				await (
 					rendered.status >= 500
 						? store.delete('idempotency', id)
 						: store.put('idempotency', id, {
 								fingerprint,
 								state: 'done',
-								...(kept ? { answer: { status: rendered.status, headers, body: rendered.body } } : {}),
+								...(kept
+									? {
+											// bytes kept as base64, so every store keeps them as they were
+											answer:
+												body instanceof Uint8Array
+													? {
+															status: rendered.status,
+															headers,
+															body: null,
+															bytes: Buffer.from(body).toString('base64'),
+														}
+													: { status: rendered.status, headers, body },
+										}
+									: {}),
 								expiresAt: claimedAt + DUPLICATE_WINDOW_MS,
 							})
 				).catch((error) => log.warn('the answer of an idempotent request was not kept', { error }));
