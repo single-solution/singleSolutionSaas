@@ -3666,6 +3666,12 @@ while the Portal is down), and Notifications no longer names products in code: a
 their defaults and directory name and can be switched off; without the directory, product messages still go and the
 list asks to try again. The Accounts rule stays (N6/N8/N10).
 
+**Chat shows the shop's price (2026-10-15; b03df855, e2e 277e5bb2):** product cards show the price on the product page
+with the "was" price crossed out (screen readers hear the widget text `chat.wasPrice`); the AI's search, top and details
+answers give each product and variant `price`, `wasPrice` and `deal` (name and saving), the quote adds the variant's own
+`wasPrice`, the tool descriptions say which price to name, and fallback lists say "(was …)". Bug fixed: the fallback
+deals-table headers are widget texts merchants can change (`chat.dealName`, `chat.dealDetails`, `chat.dealEnds`).
+
 **Chat C3/C14 completed (2026-10-15; 175570b0, 397d5bd1):** the widget's idle nudge uses `proactive_idle`'s text per
 page kind from `setPage` (`{product}`; empty = the general text), `oncePer` session | product, and `hideOnMobile` (the
 phone width shared with full screen); Settings → Assistant edits `fallback_answers` (intent, language from Language
