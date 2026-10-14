@@ -1,6 +1,6 @@
 /**
  * Checkout's queries in the merchant database: the catalog records a cart is priced with, the shopper's orders, the
- * waiting orders whose window ended, payment rechecks, customer records, booked slots, licence keys and download
+ * waiting orders whose window ended, payment rechecks, customer records, booked slots, license keys and download
  * counts. Stock, offer uses, points and slots are changed only by the ledger (`adapters/ledger.js`).
  * @module
  */
@@ -51,7 +51,7 @@ export const INDEXES = [
 		name: 'by_pending_effect',
 		partialFilterExpression: { 'effects.state': 'pending' },
 	},
-	// cancels Payments could not take yet, and cancelled orders watched for money paid after (K-13)
+	// cancels Payments could not take yet, and canceled orders watched for money paid after (K-13)
 	{
 		collection: COLLECTIONS.orders,
 		keys: { websiteId: 1, 'payment.voidPendingAt': 1 },
@@ -110,7 +110,7 @@ export const createOrdersStore = (data) => {
 			/** @type {any[]} */ (
 				await data.collection(COLLECTIONS.locations).find({ websiteId }, NO_ID).sort({ sort: 1, id: 1 }).limit(200).toArray()
 			),
-		/** Available licence keys per product. @param {string[]} productIds @returns {Promise<Map<string, number>>} */
+		/** Available license keys per product. @param {string[]} productIds @returns {Promise<Map<string, number>>} */
 		availableLicences: async (productIds) => {
 			/** @type {Map<string, number>} */
 			const counts = new Map();
@@ -143,13 +143,13 @@ export const createOrdersStore = (data) => {
 			/** @type {CustomerRecord | null} */ (
 				await data.collection(COLLECTIONS.customers).findOne({ websiteId, userId }, NO_ID)
 			),
-		/** A guest's record by their normalised phone (E21). @param {string} phone @returns {Promise<CustomerRecord | null>} */
+		/** A guest's record by their normalized phone (E21). @param {string} phone @returns {Promise<CustomerRecord | null>} */
 		guestCustomer: async (phone) =>
 			/** @type {CustomerRecord | null} */ (
 				await data.collection(COLLECTIONS.customers).findOne({ websiteId, guest: true, phone }, NO_ID)
 			),
 		/**
-		 * A member's record with this normalised phone (a returning customer ordering as a guest, K-6).
+		 * A member's record with this normalized phone (a returning customer ordering as a guest, K-6).
 		 * @param {string} phone @returns {Promise<CustomerRecord | null>}
 		 */
 		memberByPhone: async (phone) =>
@@ -161,7 +161,7 @@ export const createOrdersStore = (data) => {
 		/**
 		 * The customer record of a member or a guest, made when missing (its `cus_` id is kept for good, and when it was
 		 * made, CU-4), with their latest details (`refresh: false`: only when it is made). A member is found by user id, a
-		 * guest by normalised phone (E21).
+		 * guest by normalized phone (E21).
 		 * @param {{ userId: string | null, name: string, email: string, phone: string }} who
 		 * @param {{ at: Date, refresh?: boolean }} when `at`: the record's `createdAt` when it is made
 		 * @returns {Promise<CustomerRecord>}
@@ -323,7 +323,7 @@ export const createOrdersStore = (data) => {
 					.toArray()
 			),
 		/**
-		 * Orders cancelled while Payments could not take the cancel of their payment (K-13), within `windowMs` of the
+		 * Orders canceled while Payments could not take the cancel of their payment (K-13), within `windowMs` of the
 		 * cancel and not tried in the last `everyMs`, least recently tried first.
 		 * @param {number} now @param {number} everyMs @param {number} windowMs
 		 * @returns {Promise<OrderRecord[]>}
@@ -344,7 +344,7 @@ export const createOrdersStore = (data) => {
 					.toArray()
 			),
 		/**
-		 * Cancelled orders whose Payments payment was cancelled within `windowMs` and that hold no money from it, not
+		 * Canceled orders whose Payments payment was canceled within `windowMs` and that hold no money from it, not
 		 * checked in the last `everyMs`, least recently checked first (money may still arrive, K-13).
 		 * @param {number} now @param {number} everyMs @param {number} windowMs
 		 * @returns {Promise<OrderRecord[]>}
@@ -395,9 +395,9 @@ export const createOrdersStore = (data) => {
 			return result.modifiedCount === 1;
 		},
 
-		// ------------------------------------------------------------------------------------------------ licences
+		// ------------------------------------------------------------------------------------------------ licenses
 		/**
-		 * Add licence keys to a product (keys it already has are skipped).
+		 * Add license keys to a product (keys it already has are skipped).
 		 * @param {string} productId @param {Array<{ id: string, key: string }>} keys
 		 * @returns {Promise<number>} how many were added
 		 */
@@ -420,9 +420,9 @@ export const createOrdersStore = (data) => {
 		countLicences: (productId) =>
 			data.collection(COLLECTIONS.licences).countDocuments({ websiteId, productId, status: 'available' }),
 		/**
-		 * Give an order line up to `count` available licence keys of a product (each to one line only).
+		 * Give an order line up to `count` available license keys of a product (each to one line only).
 		 * @param {{ productId: string, orderId: string, lineId: string, count: number }} give
-		 * @returns {Promise<string[]>} the licence ids given
+		 * @returns {Promise<string[]>} the license ids given
 		 */
 		assignLicences: async ({ productId, orderId, lineId, count }) => {
 			/** @type {string[]} */
@@ -440,7 +440,7 @@ export const createOrdersStore = (data) => {
 			}
 			return ids;
 		},
-		/** Record licences given to an order line. @param {string} orderId @param {string} lineId @param {string[]} ids */
+		/** Record licenses given to an order line. @param {string} orderId @param {string} lineId @param {string[]} ids */
 		addLineLicences: async (orderId, lineId, ids) => {
 			if (ids.length === 0) return;
 			await orders.updateOne(
@@ -454,7 +454,7 @@ export const createOrdersStore = (data) => {
 		 */
 		setDigital: (productId, digital) =>
 			data.collection(COLLECTIONS.products).updateOne({ websiteId, id: productId }, { $set: { digital } }),
-		/** The keys of licences. @param {string[]} ids @returns {Promise<Map<string, string>>} id → key */
+		/** The keys of licenses. @param {string[]} ids @returns {Promise<Map<string, string>>} id → key */
 		licenceKeys: async (ids) => {
 			if (ids.length === 0) return new Map();
 			const found = await data

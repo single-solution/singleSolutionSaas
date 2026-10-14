@@ -154,9 +154,9 @@ describe('content fields', () => {
 });
 
 describe('attributes and variants', () => {
-	const colour = /** @type {any} */ ({
+	const color = /** @type {any} */ ({
 		id: 'att_c',
-		name: 'Colour',
+		name: 'Color',
 		type: 'choice',
 		on: 'variant',
 		multiple: true,
@@ -178,14 +178,14 @@ describe('attributes and variants', () => {
 	});
 
 	it('reads values and labels, several values, and derives options', () => {
-		expect(specValue(colour, ['r', 'Blue'])).toEqual(['r', 'Blue']);
-		expect(specValue(colour, ['r', 'r'])).toBeNull();
-		expect(specValue(colour, [])).toBeNull();
-		expect(specValue(colour, ['x'], ['x'])).toEqual(['x']);
-		expect(specValue({ ...colour, multiple: false }, ['r'])).toBeNull();
+		expect(specValue(color, ['r', 'Blue'])).toEqual(['r', 'Blue']);
+		expect(specValue(color, ['r', 'r'])).toBeNull();
+		expect(specValue(color, [])).toBeNull();
+		expect(specValue(color, ['x'], ['x'])).toEqual(['x']);
+		expect(specValue({ ...color, multiple: false }, ['r'])).toBeNull();
 		expect(specValue(weight, 12)).toBe(12);
-		expect(valueLabel(colour, ['r', 'Blue'])).toBe('Red, Blue');
-		expect(valueLabel(colour, 'gone')).toBe('gone');
+		expect(valueLabel(color, ['r', 'Blue'])).toBe('Red, Blue');
+		expect(valueLabel(color, 'gone')).toBe('gone');
 		expect(valueLabel(weight, 12)).toBe('12 g');
 		expect(valueLabel({ ...weight, unit: '' }, 12)).toBe('12');
 		const derived = optionsFromAttributes(
@@ -195,15 +195,15 @@ describe('attributes and variants', () => {
 			]),
 			new Map([
 				['att_w', weight],
-				['att_c', colour],
+				['att_c', color],
 				['att_x', { ...weight, id: 'att_x', name: 'Unused' }],
 			]),
 		);
 		expect(derived.axes).toEqual([
-			{ name: 'Colour', values: ['Red', 'Blue'] },
+			{ name: 'Color', values: ['Red', 'Blue'] },
 			{ name: 'Weight', values: ['10 g'] },
 		]);
-		expect(derived.variants.map((variant) => variant.options)).toEqual([{ Colour: 'Red', Weight: '10 g' }, { Colour: 'Blue' }]);
+		expect(derived.variants.map((variant) => variant.options)).toEqual([{ Color: 'Red', Weight: '10 g' }, { Color: 'Blue' }]);
 	});
 
 	it('checks categories, brands and attributes', () => {
@@ -237,7 +237,7 @@ describe('attributes and variants', () => {
 		expect(checkAttribute({ name: 'A', seo: { faqs: [{}] } }, null).ok).toBe(false);
 		expect(checkAttribute({ name: 'A', type: 'choice', choices: [{ value: 'a' }, { value: 'a' }] }, null).ok).toBe(false);
 		expect(
-			checkAttribute({ name: 'A', visibility: { when: 'always' } }, /** @type {any} */ ({ ...colour, id: 'att_c' })),
+			checkAttribute({ name: 'A', visibility: { when: 'always' } }, /** @type {any} */ ({ ...color, id: 'att_c' })),
 		).toMatchObject({
 			ok: true,
 			value: {
@@ -273,12 +273,12 @@ describe('links', () => {
 		expect(categoryLink('', { slug: 'x' }, context)).toBe('https://shop.example/categories/x');
 		expect(absolute('a', 'shop.example')).toBe('https://shop.example/a');
 		const attributes = new Map([
-			['att_c', { slug: 'colour' }],
+			['att_c', { slug: 'color' }],
 			['att_x', {}],
 		]);
 		expect(
 			variantQueryOf('grade={grade}&{attributes}', { grade: 'a', attributes: { att_c: ['r', 'b'], att_x: 'y' } }, attributes),
-		).toBe('grade=a&colour=r');
+		).toBe('grade=a&color=r');
 		expect(variantQueryOf('grade={grade}&{attributes}', { grade: null }, attributes)).toBe('');
 		expect(variantQueryOf('', { grade: 'a' }, attributes)).toBe('');
 		expect(withQuery('https://x/p', 'a=1')).toBe('https://x/p?a=1');

@@ -1,7 +1,7 @@
 /**
  * Cash-on-delivery safety (PLAN 0.8.8): a largest COD order value, an optional advance
  * (a flat amount, else a percent of the total rounded up, never more than the total) paid through Payments before the
- * order is confirmed, and the returned-parcel (RTO) flag: a customer whose RTO count reaches the threshold may use
+ * order is confirmed, and the returned-package (RTO) flag: a customer whose RTO count reaches the threshold may use
  * COD only with an advance (when `rtoRequireAdvance`), else not at all. The blocklist and the open-order cap apply to
  * every order and are checked by checkout. Settings are the `cod` feature's; amounts are minor units. No I/O.
  * @module

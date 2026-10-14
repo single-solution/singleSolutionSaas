@@ -2,7 +2,7 @@
  * A product's files in the catalog admin widget (PLAN 0.8.8 media in the merchant's storage; PLAN 0.8.10 E4, E6):
  * photos (upload with their width and height read in the browser, alternative text, order, removal — which also
  * removes them from variants), the video (an MP4 or WebM upload, a YouTube video, an https address, or none), the
- * photos of one variant (picked from the product's photos or uploaded for the product), and the licence keys and
+ * photos of one variant (picked from the product's photos or uploaded for the product), and the license keys and
  * downloadable files of a digital product. Uploads go to presigned addresses of the merchant's storage.
  * @module
  */
@@ -226,8 +226,8 @@ export const videoDialog = (kit, product, changed) => {
 };
 
 /**
- * The photos of one variant (E6): ticked among the product's photos; new ones are uploaded for the product first.
- * `chosen` gets the ticked photos (they are saved with the product).
+ * The photos of one variant (E6): checked among the product's photos; new ones are uploaded for the product first.
+ * `chosen` gets the checked photos (they are saved with the product).
  * @param {Kit} kit
  * @param {{ productId: string, name: string, photos: Photo[], picked: Photo[], uploaded: (media: Photo[]) => void,
  *   chosen: (photos: Photo[]) => void }} options
@@ -280,7 +280,7 @@ export const variantPhotosDialog = (kit, { productId, name, photos, picked, uplo
 };
 
 /**
- * Licence keys (one per line, in a dialog) and downloadable files of a saved digital product, as a card.
+ * License keys (one per line, in a dialog) and downloadable files of a saved digital product, as a card.
  * @param {Kit} kit @param {any} product
  */
 export const digitalCard = (kit, product) => {

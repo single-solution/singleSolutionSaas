@@ -203,7 +203,7 @@ export const createCustomers = (service) => {
 		const changes = [
 			...(action === 'customer.blocked' ? ['blocked'] : action === 'customer.unblocked' ? ['unblocked'] : []),
 			...(note === undefined ? [] : ['note changed']),
-			...(resetRto ? ['returned parcels reset'] : []),
+			...(resetRto ? ['returned packages reset'] : []),
 		];
 		await service.log(ctx, action, ref, {
 			label: (record?.name || details.name || ref).slice(0, 200),

@@ -96,7 +96,7 @@ describe('deals', () => {
 			scope: { brandIds: ['brd_acme'] },
 			conditions: {
 				match: 'any',
-				rules: [{ field: 'attribute', attributeId: 'colour', values: ['black'], op: 'not_in' }],
+				rules: [{ field: 'attribute', attributeId: 'color', values: ['black'], op: 'not_in' }],
 				groups: [{ match: 'all', rules: [{ field: 'categories', values: ['cat_phones'] }] }],
 				priceRange: { min: 1_000, max: null },
 				minQuantity: 2,

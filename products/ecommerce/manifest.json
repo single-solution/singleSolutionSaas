@@ -21,7 +21,7 @@
 		{
 			"key": "variants",
 			"name": "Variants",
-			"description": "Options such as size or colour, each variant with its own price, stock and SKU.",
+			"description": "Options such as size or color, each variant with its own price, stock and SKU.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/variants.settings.json"
@@ -30,7 +30,7 @@
 		{
 			"key": "size_charts",
 			"name": "Size charts",
-			"description": "Size charts in inches or centimetres with fit advice, shown on product pages from the product, its brand or its category.",
+			"description": "Size charts in inches or centimeters with fit advice, shown on product pages from the product, its brand or its category.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/size_charts.settings.json"
@@ -57,7 +57,7 @@
 		{
 			"key": "digital_goods",
 			"name": "Digital goods",
-			"description": "Downloads and licence keys, given to the shopper once the order is paid.",
+			"description": "Downloads and license keys, given to the shopper once the order is paid.",
 			"dependsOn": ["checkout"],
 			"settings": {
 				"$ref": "schemas/digital_goods.settings.json"
@@ -255,7 +255,7 @@
 		{
 			"key": "staff_alerts",
 			"name": "Staff alerts",
-			"description": "E-mail or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
+			"description": "Email or WhatsApp your staff about new orders, status changes, payments, transfer proofs, cancels, expiries and return claims, through Notifications.",
 			"dependsOn": ["checkout"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
@@ -282,7 +282,7 @@
 		{
 			"key": "feeds",
 			"name": "Feeds",
-			"description": "Product feeds for shopping and social catalogues.",
+			"description": "Product feeds for shopping and social catalogs.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/feeds.settings.json"

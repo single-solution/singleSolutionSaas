@@ -101,7 +101,7 @@ export const ATTRIBUTES = [
 	{ id: 'att_1', name: 'Screen', type: 'number', unit: 'in', choices: [], filterable: true, comparable: false, sort: 0 },
 	{
 		id: 'att_2',
-		name: 'Colour',
+		name: 'Color',
 		type: 'choice',
 		unit: '',
 		choices: [
@@ -238,12 +238,12 @@ export const product = (over = {}) => ({
 	tags: ['new', 'hot'],
 	specs: { att_1: 6.1, att_2: 'Red', att_3: true, att_7: ['x'] },
 	attributeSetup: [{ attributeId: 'att_5', values: ['64'], customValues: ['256'], defaultValue: '64' }],
-	options: [{ name: 'Colour', values: ['Red', 'Blue'] }],
+	options: [{ name: 'Color', values: ['Red', 'Blue'] }],
 	variants: [
 		{
 			id: 'var_1',
 			sku: 'P-1',
-			options: { Colour: 'Red' },
+			options: { Color: 'Red' },
 			price: 125000,
 			compareAtPrice: 130000,
 			cost: 100000,
@@ -259,7 +259,7 @@ export const product = (over = {}) => ({
 		{
 			id: 'var_2',
 			sku: 'P-2',
-			options: { Colour: 'Blue' },
+			options: { Color: 'Blue' },
 			price: 126000,
 			compareAtPrice: null,
 			cost: null,

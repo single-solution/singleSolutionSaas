@@ -88,7 +88,7 @@ export const ID_PREFIX = Object.freeze({
  * @typedef {object} VariantRecord
  * @property {string} id `var_…`
  * @property {string} sku unique per website among active products ('' = none)
- * @property {Record<string, string>} options option name → value (`{ Colour: 'Red' }`)
+ * @property {Record<string, string>} options option name → value (`{ Color: 'Red' }`)
  * @property {number} price minor units
  * @property {number | null} compareAtPrice the "was" price, minor units
  * @property {number | null} cost what the merchant paid (margin reports), minor units
@@ -249,7 +249,7 @@ export const ID_PREFIX = Object.freeze({
  * - `delivered`: points are earned, reviews open, return windows start;
  * - `cancelled`: stock, offer use and points are given back; paid money is refunded as the move says; after delivery
  *   (E40, a listed move) the items go back in stock only as the move says;
- * - `returned_to_origin`: the parcel came back (RTO); stock comes back as the move says and the customer's RTO count
+ * - `returned_to_origin`: the package came back (RTO); stock comes back as the move says and the customer's RTO count
  *   rises;
  * - `refunded`: money returned (after `delivered`, `returned_to_origin` or `returned`; before delivery only when
  *   something was paid, E27, and it acts as a cancel);
@@ -336,7 +336,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string | null} locationId where its stock was taken (multi_location)
  * @property {string[]} serials serial numbers captured when packed
  * @property {{ start: Date, end: Date } | null} booking the booked slot
- * @property {string[]} licences licence ids given after payment (digital)
+ * @property {string[]} licences license ids given after payment (digital)
  * @property {number} [downloads] downloads made so far (digital)
  * @property {number} returnedQuantity units returned through approved return claims
  * @property {number | null} [warrantyDays] the warranty at placement: the variant's, else the product's, the grade's or
@@ -370,8 +370,8 @@ export const STATUS_ROLES = Object.freeze([
  *   proof?: { key: string, reference: string, at: Date } | null, voidedAt?: Date | null,
  *   voidPendingAt?: Date | null }} payment `paymentId`: the Payments payment; `advance`: the COD advance;
  *   `checkoutUrl`: Payments' page for paying it; `via`: a bank transfer or advance taken through Payments or recorded by
- *   staff (E23, E24); `proof`: the shopper's transfer proof (E24); `voidedAt`: its Payments payment was cancelled with
- *   the order; `voidPendingAt`: the order was cancelled while Payments could not take that cancel (tried again on use,
+ *   staff (E23, E24); `proof`: the shopper's transfer proof (E24); `voidedAt`: its Payments payment was canceled with
+ *   the order; `voidPendingAt`: the order was canceled while Payments could not take that cancel (tried again on use,
  *   K-13); `checkedAt`: when Payments was last asked. `paid` and `refunded` add up `payments` and `refunds` (E26)
  * @property {OrderPaymentEntry[]} [payments] money received (E26)
  * @property {OrderRefundEntry[]} [refunds] money given back (E26)
@@ -400,7 +400,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {boolean} [returnRestocked] its return (RTO or a customer's return) put its units back in stock: a claim
  *   restocked later puts none back (OR-10)
  * @property {Date} [claimRestockedAt] when a return claim of it last put units back in stock (OR-10)
- * @property {Date | null} holdUntil an unconfirmed order is cancelled after this time (on use)
+ * @property {Date | null} holdUntil an unconfirmed order is canceled after this time (on use)
  * @property {string} idempotencyKey the checkout's Idempotency-Key, unique per customer
  * @property {string} note the shopper's note
  * @property {string} staffNote
@@ -426,7 +426,7 @@ export const STATUS_ROLES = Object.freeze([
 
 /**
  * Shop records about one shopper (PLAN 0.8.8: only shop records, linked to the Accounts user id; E21: guests too,
- * unique by normalised phone): a guest has no user id (`userId: null`, `guest: true`).
+ * unique by normalized phone): a guest has no user id (`userId: null`, `guest: true`).
  * @typedef {{ id: string, userId: string | null, guest: boolean, name: string, email: string, phone: string,
  *   phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
  *   note: string, seenBy: string[], lastOrderAt?: Date | null }} CustomerRecord
@@ -506,7 +506,7 @@ export const STATUS_ROLES = Object.freeze([
  * @typedef {{ id: string, productId: string, start: Date, end: Date, orderId: string, lineId: string }} SlotRecord
  */
 /**
- * A licence key of a digital product: `available` until an order is paid, then `assigned` to it.
+ * A license key of a digital product: `available` until an order is paid, then `assigned` to it.
  * @typedef {{ id: string, productId: string, key: string, status: 'available' | 'assigned', orderId: string | null,
  *   lineId: string | null }} LicenceRecord
  */

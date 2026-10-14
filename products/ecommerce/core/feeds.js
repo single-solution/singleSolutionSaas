@@ -2,7 +2,7 @@
  * Product feeds (PLAN 0.8.8: sitemaps and product feeds): one row per active variant of every active product, written
  * as a Google Merchant Center RSS 2.0 feed (`g:` namespace) or a Meta (Facebook) catalog CSV. The merchant's site
  * serves them at its own addresses from the product's API (PLAN 0.4.10). The private cost is never a column; a
- * variant priced 0 is never a row (the catalogues refuse free items). Pure functions, no I/O.
+ * variant priced 0 is never a row (the catalogs refuse free items). Pure functions, no I/O.
  * @module
  */
 import { activeVariants, escapeXml, fillTemplate, shippingFee, variantInStock, variantLabel } from './seo.js';
@@ -13,7 +13,7 @@ import { toDecimal } from './money.js';
 
 /** At most this many rows in one feed (the rest are left out). */
 export const MAX_FEED_ROWS = 100_000;
-/** Longest title and description the catalogues take. */
+/** Longest title and description the catalogs take. */
 const TITLE_LENGTH = 150;
 const DESCRIPTION_LENGTH = 5000;
 

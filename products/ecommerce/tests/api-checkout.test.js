@@ -1,7 +1,7 @@
 /**
  * The checkout area's routes as schemas/api.json describes them (`call()` checks every answer against it): a digital
  * product's files added with the server token, the one pickup point and a coupon that does not apply in a quote and an
- * order, and a guest order read, paid and cancelled with its key (SS-Order-Key).
+ * order, and a guest order read, paid and canceled with its key (SS-Order-Key).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLLECTIONS } from '../core/model.js';
@@ -139,7 +139,7 @@ describe('the pickup point and coupon problems', () => {
 });
 
 describe('a guest order and its key (SS-Order-Key)', () => {
-	it('is read by number, paid again and cancelled with its key only', async () => {
+	it('is read by number, paid again and canceled with its key only', async () => {
 		await shop.setting('checkout', 'guests', 'on');
 		const item = await shop.seedProduct({ price: 1500, stock: 5 });
 		const placed = await visit('POST', '/v1/shop/orders', {
@@ -190,7 +190,7 @@ describe('a guest order and its key (SS-Order-Key)', () => {
 			canCancel: false,
 			payment: { payUrl: null, payBy: null },
 		});
-		expect(cancelled.json.order.history.at(-1)).toMatchObject({ status: 'cancelled', label: 'Cancelled' });
+		expect(cancelled.json.order.history.at(-1)).toMatchObject({ status: 'cancelled', label: 'Canceled' });
 		expect(codeOf(await visit('POST', `/v1/shop/orders/${order.id}/pay`, { orderKey, key: 'guest-pay-2' }))).toBe(
 			'nothing_to_pay',
 		);

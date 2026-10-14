@@ -34,7 +34,7 @@ import { WIDGET_SCRIPT } from './widget-script.js';
  * @typedef {object} Area
  * @property {import('@ss/app-kit').RouteDefinition[]} routes
  * @property {(s: Site, user: Person) => Promise<Record<string, unknown[]>>} [exportUser] the person's records (data rights)
- * @property {(s: Site, user: Person) => Promise<{ deleted: number, anonymised: number }>} [deleteUser] erase or anonymise them
+ * @property {(s: Site, user: Person) => Promise<{ deleted: number, anonymised: number }>} [deleteUser] erase or anonymize them
  * @property {(s: Site) => Promise<Record<string, unknown>>} [widgetSettings] settings the visitor widgets need (never secrets)
  */
 

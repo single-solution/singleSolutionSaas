@@ -307,7 +307,7 @@ describe('guest checkout and order keys (E21)', () => {
 		const mine = await visit('GET', '/v1/shop/orders', { signIn: member.token });
 		expect(mine.json.items.map((/** @type {any} */ o) => o.id)).toContain(asGuest.json.order.id);
 
-		await shop.api('PATCH', `/v1/customers/${records[0]?.id}`, { blocked: true, blockedReason: 'Refused parcels' });
+		await shop.api('PATCH', `/v1/customers/${records[0]?.id}`, { blocked: true, blockedReason: 'Refused packages' });
 		const refused = await place({
 			lines: [{ productId: item.id }],
 			payment: 'cod',

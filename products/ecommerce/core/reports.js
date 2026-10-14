@@ -2,7 +2,7 @@
  * Reports (PLAN 0.8.8: sales by product/category/brand/city, stock age, return rate, margin; E36: the summary with its
  * daily series, sales by grade and payment method, sell-through, oldest stock and every report as CSV): the date range,
  * the aggregation pipelines over orders (each starts with a `$match` on the website; no `$lookup`) and the rows built
- * from their results. Money is minor units of the shop's currency; only orders in that currency and not cancelled
+ * from their results. Money is minor units of the shop's currency; only orders in that currency and not canceled
  * count (the summary's `statuses` can name the status keys that count instead). Days are business days: a
  * `YYYY-MM-DD` day is that day in the business.json time zone (PLAN 0.8.10 K8). No I/O.
  * @module
@@ -63,7 +63,7 @@ export const parseRange = (query, now, timeZone = 'UTC') => {
 };
 
 /**
- * The orders that count: placed in the range, not cancelled, in the shop's currency.
+ * The orders that count: placed in the range, not canceled, in the shop's currency.
  * @param {string} websiteId
  * @param {Range} range
  * @param {string} currency
@@ -158,7 +158,7 @@ export const marginPipeline = (websiteId, range, currency) => [
 ];
 
 /**
- * The last sale of each of these products (orders not cancelled).
+ * The last sale of each of these products (orders not canceled).
  * @param {string} websiteId @param {string[]} productIds
  */
 export const lastSalePipeline = (websiteId, productIds) => [
@@ -223,7 +223,7 @@ export const returnRateRows = (sold, claims, lineProducts) => {
 
 /**
  * The summary's `statuses`: comma-separated status keys of the website's order flow (null = none given: orders count
- * as the other reports count them, not cancelled).
+ * as the other reports count them, not canceled).
  * @param {unknown} value
  * @param {ReadonlySet<string>} keys the status keys of the order flow
  * @returns {{ ok: true, statuses: string[] | null } | { ok: false, field: string, message: string }}
@@ -247,7 +247,7 @@ export const parseStatuses = (value, keys) => {
 
 /**
  * The summary per business day: orders, total, goods (subtotals), delivery, fees, discount, refunded and units of the
- * orders that count (with `statuses`, the orders in those status keys; else the orders not cancelled).
+ * orders that count (with `statuses`, the orders in those status keys; else the orders not canceled).
  * @param {string} websiteId @param {Range} range @param {string} currency @param {string[] | null} statuses
  * @param {string} timeZone
  */
@@ -338,7 +338,7 @@ export const sellThroughRows = (sold, products) => {
 };
 
 /**
- * The last sale of each of these variants (orders not cancelled).
+ * The last sale of each of these variants (orders not canceled).
  * @param {string} websiteId @param {string[]} productIds
  */
 export const lastVariantSalePipeline = (websiteId, productIds) => [

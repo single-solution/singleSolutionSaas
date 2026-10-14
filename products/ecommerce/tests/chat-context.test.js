@@ -171,7 +171,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 				priceRange: { minText: 'Rs 1', maxText: 'Rs 2' },
 				variants: [
 					{ options: {}, grade: null, priceText: 'Rs 1', inStock: true, stockLeft: 3, warrantyDays: 30 },
-					{ options: { Colour: 'Red' }, grade: 'A', priceText: 'Rs 2', inStock: false, stockLeft: 0, warrantyDays: null },
+					{ options: { Color: 'Red' }, grade: 'A', priceText: 'Rs 2', inStock: false, stockLeft: 0, warrantyDays: null },
 					{ options: {}, grade: null, priceText: 'Rs 2', inStock: true, stockLeft: null, warrantyDays: null },
 				],
 			},

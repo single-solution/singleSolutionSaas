@@ -70,7 +70,7 @@ export const rulesOf = async (s) => {
 };
 
 /**
- * The part of a transition's guard that keeps money right: a move into a cancelled or refunded status works out what
+ * The part of a transition's guard that keeps money right: a move into a canceled or refunded status works out what
  * is left to refund from the order as read, so it happens only while the order's refunds are as read and no refund runs
  * at Payments for it (a staff refund taken meanwhile: the move gets 409 `conflict`).
  * @param {OrderRecord} order @param {import('../core/transitions.js').TransitionPlan} plan

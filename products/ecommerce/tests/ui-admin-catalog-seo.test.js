@@ -275,7 +275,7 @@ describe('catalog admin: landing pages', () => {
 			fields: ['h1', 'title', 'description', 'faqs'],
 		});
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Tick at least one suggestion to apply.');
+		expect(statuses(dialog)).toContain('Check at least one suggestion to apply.');
 		ai = () =>
 			answer(200, {
 				suggestions: { h1: 'Fail', title: 'T', description: 'D', intro: 'I', faqs: [{ question: 'Q', answer: 'A' }] },

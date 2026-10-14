@@ -63,7 +63,7 @@ const blank = () => ({
 });
 
 /**
- * A control for a product attribute's value (spec): yes / no, a choice (ticks where it takes several), a number or
+ * A control for a product attribute's value (spec): yes / no, a choice (checkboxes where it takes several), a number or
  * text (comma separated where it takes several).
  * @param {Kit} kit @param {Named} attribute @param {unknown} current @param {string[]} own the product's own values
  * @returns {{ node: HTMLElement, read: () => unknown }}

@@ -2,7 +2,7 @@
 	"$schemas": {
 		"Attribute": {
 			"type": "object",
-			"description": "A product attribute (a specification such as RAM or Colour).",
+			"description": "A product attribute (a specification such as RAM or Color).",
 			"required": [
 				"id",
 				"name",
@@ -662,7 +662,7 @@
 				"used": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Uses so far: counted when an order is placed with it, given back when that order is cancelled. Never written by these routes."
+					"description": "Uses so far: counted when an order is placed with it, given back when that order is canceled. Never written by these routes."
 				},
 				"active": {
 					"type": "boolean",
@@ -1016,7 +1016,7 @@
 				"reason": {
 					"type": ["string", "null"],
 					"enum": ["needs_delivery", "needs_pickup", "digital_items", "over_max", "advance_unavailable", "not_ready", null],
-					"description": "Why it cannot be used (null when available): needs_delivery / needs_pickup, digital_items (digital goods are paid first), over_max (cod.maxOrderValue), advance_unavailable (a returned-parcel customer needs an advance that cannot be paid), not_ready (Payments has no bank details)."
+					"description": "Why it cannot be used (null when available): needs_delivery / needs_pickup, digital_items (digital goods are paid first), over_max (cod.maxOrderValue), advance_unavailable (a returned-package customer needs an advance that cannot be paid), not_ready (Payments has no bank details)."
 				},
 				"advance": {
 					"type": "integer",
@@ -2987,7 +2987,7 @@
 				"used": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Uses so far: counted when an order is placed with it, given back when that order is cancelled. Never written by these routes."
+					"description": "Uses so far: counted when an order is placed with it, given back when that order is canceled. Never written by these routes."
 				},
 				"perCustomer": {
 					"type": ["integer", "null"],
@@ -3469,7 +3469,7 @@
 				"rtoCount": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Parcels returned to origin."
+					"description": "Packages returned to origin."
 				},
 				"orderCount": {
 					"type": "integer",
@@ -3560,7 +3560,7 @@
 				"rtoCount": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Parcels returned to origin."
+					"description": "Packages returned to origin."
 				},
 				"orderCount": {
 					"type": "integer",
@@ -3792,7 +3792,7 @@
 				"color": {
 					"type": "string",
 					"maxLength": 40,
-					"description": "A CSS colour ('': none)."
+					"description": "A CSS color ('': none)."
 				},
 				"banner": {
 					"oneOf": [
@@ -3858,7 +3858,7 @@
 				"used": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Uses so far: counted when an order is placed with it, given back when that order is cancelled. Never written by these routes."
+					"description": "Uses so far: counted when an order is placed with it, given back when that order is canceled. Never written by these routes."
 				},
 				"priority": {
 					"type": "integer",
@@ -3967,7 +3967,7 @@
 					"type": "string",
 					"maxLength": 40,
 					"default": "",
-					"description": "A CSS colour (a name, #rgb, #rrggbb, rgb(…) …)."
+					"description": "A CSS color (a name, #rgb, #rrggbb, rgb(…) …)."
 				},
 				"content": {
 					"type": "string",
@@ -4343,7 +4343,7 @@
 					"type": "string",
 					"maxLength": 40,
 					"default": "",
-					"description": "A CSS colour (a name, #rgb, #rrggbb, rgb(…) …)."
+					"description": "A CSS color (a name, #rgb, #rrggbb, rgb(…) …)."
 				},
 				"content": {
 					"type": "string",
@@ -5334,7 +5334,7 @@
 		},
 		"LicenceKeysAdded": {
 			"type": "object",
-			"description": "Licence keys added.",
+			"description": "License keys added.",
 			"required": ["added", "available"],
 			"additionalProperties": false,
 			"properties": {
@@ -5490,7 +5490,7 @@
 				"kind": {
 					"type": "string",
 					"enum": ["earn", "redeem", "refund", "expire", "adjust", "reverse"],
-					"description": "earn: from a delivered order; redeem: spent on an order; refund: given back (an order cancelled); expire: written off; adjust: staff; reverse: taken back (an order returned)."
+					"description": "earn: from a delivered order; redeem: spent on an order; refund: given back (an order canceled); expire: written off; adjust: staff; reverse: taken back (an order returned)."
 				},
 				"points": {
 					"type": "integer",
@@ -5845,7 +5845,7 @@
 				"holdUntil": {
 					"type": ["string", "null"],
 					"format": "date-time",
-					"description": "A waiting order is cancelled after this time (null: it waits until staff move it)."
+					"description": "A waiting order is canceled after this time (null: it waits until staff move it)."
 				},
 				"note": {
 					"type": "string",
@@ -5973,7 +5973,7 @@
 				"rtoCount": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Parcels that came back."
+					"description": "Packages that came back."
 				},
 				"orderCount": {
 					"type": "integer",
@@ -6613,7 +6613,7 @@
 				"reason": {
 					"type": ["string", "null"],
 					"enum": ["rto", "customer_return", "staff", "shopper", "expired", null],
-					"description": "Why: a parcel came back (rto, customer_return), or the shopper (shopper) or the end of its window (expired) cancelled it; null otherwise, also for a staff cancel (order.cancelled says staff)."
+					"description": "Why: a package came back (rto, customer_return), or the shopper (shopper) or the end of its window (expired) canceled it; null otherwise, also for a staff cancel (order.cancelled says staff)."
 				},
 				"by": {
 					"type": "string",
@@ -6648,7 +6648,7 @@
 				"stock": {
 					"type": "string",
 					"enum": ["held", "sold", "back", "none"],
-					"description": "held: its stock and booked slots are held; sold: delivered; back: given back (cancel, refund before delivery, a return put back in stock); none: a parcel that came back was kept out of stock (its move's restock no); after delivery sold stays sold unless a cancel or refund puts the items back (restock)."
+					"description": "held: its stock and booked slots are held; sold: delivered; back: given back (cancel, refund before delivery, a return put back in stock); none: a package that came back was kept out of stock (its move's restock no); after delivery sold stays sold unless a cancel or refund puts the items back (restock)."
 				},
 				"offers": {
 					"type": "string",
@@ -6734,7 +6734,7 @@
 						"restatus",
 						"video_replaced"
 					],
-					"description": "An entry the server wrote itself, for your own words: shopper (the shopper cancelled), not_paid_in_time and not_confirmed_in_time (a waiting order ended), payment_confirmed (Payments confirmed the payment), payments_took and paid_after_cancel (amount: Payments took money outside that, after the cancel for the second), proof_sent, edited, serials_typed, refunded and refunded_recorded (amount, reason), claim_refunded and claim_refunded_recorded (amount, reference: a claim refunded without a note; _recorded: partly recorded), refunds_cover_payments (the move to the refunded status that follows), payment_recorded (amount) and payment_recorded_reference (amount, reference) for a payment staff recorded, confirmed_on_payment (the move to the confirmed status that follows), restatus (staff moved the orders of a status to another status of the same kind, POST /v1/orders/restatus). Missing on entries staff wrote and on older entries."
+					"description": "An entry the server wrote itself, for your own words: shopper (the shopper canceled), not_paid_in_time and not_confirmed_in_time (a waiting order ended), payment_confirmed (Payments confirmed the payment), payments_took and paid_after_cancel (amount: Payments took money outside that, after the cancel for the second), proof_sent, edited, serials_typed, refunded and refunded_recorded (amount, reason), claim_refunded and claim_refunded_recorded (amount, reference: a claim refunded without a note; _recorded: partly recorded), refunds_cover_payments (the move to the refunded status that follows), payment_recorded (amount) and payment_recorded_reference (amount, reference) for a payment staff recorded, confirmed_on_payment (the move to the confirmed status that follows), restatus (staff moved the orders of a status to another status of the same kind, POST /v1/orders/restatus). Missing on entries staff wrote and on older entries."
 				},
 				"values": {
 					"$ref": "#/components/schemas/OrderNoteValues"
@@ -6742,7 +6742,7 @@
 				"reason": {
 					"type": "string",
 					"enum": ["rto", "customer_return", "staff", "shopper", "expired"],
-					"description": "Why a parcel came back (rto, customer_return) or who cancelled (staff, shopper, expired: its window ended)."
+					"description": "Why a package came back (rto, customer_return) or who canceled (staff, shopper, expired: its window ended)."
 				},
 				"kind": {
 					"type": "string",
@@ -6903,7 +6903,7 @@
 					"items": {
 						"type": "string"
 					},
-					"description": "Licence ids given after payment (digital goods)."
+					"description": "License ids given after payment (digital goods)."
 				},
 				"downloads": {
 					"type": "integer",
@@ -7127,7 +7127,7 @@
 				"holdUntil": {
 					"type": ["string", "null"],
 					"format": "date-time",
-					"description": "A waiting order is cancelled after this time (null: it waits until staff move it)."
+					"description": "A waiting order is canceled after this time (null: it waits until staff move it)."
 				},
 				"note": {
 					"type": "string",
@@ -7425,12 +7425,12 @@
 				"voidedAt": {
 					"type": ["string", "null"],
 					"format": "date-time",
-					"description": "Its Payments payment was cancelled with the order."
+					"description": "Its Payments payment was canceled with the order."
 				},
 				"voidPendingAt": {
 					"type": ["string", "null"],
 					"format": "date-time",
-					"description": "The order was cancelled while Payments could not take the cancel (tried again on use)."
+					"description": "The order was canceled while Payments could not take the cancel (tried again on use)."
 				},
 				"refundable": {
 					"type": "integer",
@@ -7445,7 +7445,7 @@
 				"refundDue": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "The shopper's money a cancelled order still holds, to be refunded. Minor units."
+					"description": "The shopper's money a canceled order still holds, to be refunded. Minor units."
 				}
 			}
 		},
@@ -7684,7 +7684,7 @@
 				},
 				"status": {
 					"type": "string",
-					"description": "The courier's latest status of a booked parcel, asked again on read at most every 30 minutes."
+					"description": "The courier's latest status of a booked package, asked again on read at most every 30 minutes."
 				},
 				"checkedAt": {
 					"type": ["string", "null"],
@@ -8813,7 +8813,7 @@
 					"items": {
 						"type": "string"
 					},
-					"description": "The status keys counted (null: every order not cancelled)."
+					"description": "The status keys counted (null: every order not canceled)."
 				},
 				"orders": {
 					"type": "integer",
@@ -10193,7 +10193,7 @@
 				},
 				"color": {
 					"type": "string",
-					"description": "A CSS colour ('' = none)."
+					"description": "A CSS color ('' = none)."
 				},
 				"condition": {
 					"type": ["string", "null"],
@@ -10455,7 +10455,7 @@
 				"status": {
 					"type": "string",
 					"enum": ["in_stock", "sold", "faulty"],
-					"description": "sold: captured on an order when it was packed (back in_stock when the order is cancelled or returned)."
+					"description": "sold: captured on an order when it was packed (back in_stock when the order is canceled or returned)."
 				},
 				"orderId": {
 					"type": ["string", "null"],
@@ -10784,7 +10784,7 @@
 				"color": {
 					"type": "string",
 					"maxLength": 40,
-					"description": "A CSS colour ('': none)."
+					"description": "A CSS color ('': none)."
 				},
 				"banner": {
 					"oneOf": [
@@ -11087,7 +11087,7 @@
 				},
 				"color": {
 					"type": "string",
-					"description": "A CSS colour ('' = none)."
+					"description": "A CSS color ('' = none)."
 				},
 				"video": {
 					"type": "string",
@@ -11555,7 +11555,7 @@
 						"payBy": {
 							"type": ["string", "null"],
 							"format": "date-time",
-							"description": "When an order awaiting payment is cancelled unpaid (null: no time limit, or a transfer proof was sent and staff decide)."
+							"description": "When an order awaiting payment is canceled unpaid (null: no time limit, or a transfer proof was sent and staff decide)."
 						},
 						"proof": {
 							"oneOf": [
@@ -11724,7 +11724,7 @@
 				},
 				"canCancel": {
 					"type": "boolean",
-					"description": "The shopper may cancel it now: the flow lists a move from its status into a cancelled one that the shopper may make, and it is not a paid order that move refuses."
+					"description": "The shopper may cancel it now: the flow lists a move from its status into a canceled one that the shopper may make, and it is not a paid order that move refuses."
 				},
 				"invoice": {
 					"type": "boolean",
@@ -16733,7 +16733,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "An order number, name, e-mail address or phone."
+					"description": "An order number, name, email address or phone."
 				}
 			}
 		}
@@ -16800,7 +16800,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "An order number, name, e-mail address or phone."
+					"description": "An order number, name, email address or phone."
 				}
 			}
 		}
@@ -18784,7 +18784,7 @@
 	},
 	"POST /v1/shop/orders": {
 		"summary": "Place an order",
-		"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: awaiting_confirmation (open with cod.startStatus open) / unpaid / done; pickup (pay at pickup): awaiting_confirmation / unpaid / done; a free order (total 0): paid, awaiting_confirmation (online or bank_transfer with checkout.freeOrderStart awaiting_payment: awaiting_payment without a time limit). Unpaid orders awaiting payment are cancelled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed.",
+		"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: awaiting_confirmation (open with cod.startStatus open) / unpaid / done; pickup (pay at pickup): awaiting_confirmation / unpaid / done; a free order (total 0): paid, awaiting_confirmation (online or bank_transfer with checkout.freeOrderStart awaiting_payment: awaiting_payment without a time limit). Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed.",
 		"body": {
 			"type": "object",
 			"required": ["lines", "payment"],
@@ -18937,7 +18937,7 @@
 						},
 						"email": {
 							"type": ["string", "null"],
-							"description": "An e-mail address, or '' or null for none."
+							"description": "An email address, or '' or null for none."
 						}
 					}
 				},
@@ -19007,7 +19007,7 @@
 	},
 	"GET /v1/shop/orders/:id": {
 		"summary": "Read one of the shopper’s orders",
-		"description": "Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. A waiting payment is asked of Payments again (at most every 30 seconds). Downloads and licence keys are listed once the order is paid (digital_goods).",
+		"description": "Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first. A waiting payment is asked of Payments again (at most every 30 seconds). Downloads and license keys are listed once the order is paid (digital_goods).",
 		"response": {
 			"$ref": "#/components/schemas/ShopOrder"
 		},
@@ -19167,7 +19167,7 @@
 	},
 	"POST /v1/shop/orders/:id/cancel": {
 		"summary": "Cancel an order as its shopper",
-		"description": "Only along a move of the order flow the shopper may make (lists/order_flow: a move from its status into a cancelled one with shopper in who; by default from awaiting_payment and awaiting_confirmation; canCancel says it), else 409 move_not_allowed. A paid order as that move's shopperPaid says: refuse (409 move_not_allowed: staff cancel and refund it; the default out of open or packed), flag (cancelled, the money shown as due to refund; the default out of waiting) or refund (cancelled and what Payments took refunded right after). An order paid at Payments meanwhile is not cancelled (409). Stock, booked slots, offer uses and points go back, and its Payments payment is cancelled. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first.",
+		"description": "Only along a move of the order flow the shopper may make (lists/order_flow: a move from its status into a canceled one with shopper in who; by default from awaiting_payment and awaiting_confirmation; canCancel says it), else 409 move_not_allowed. A paid order as that move's shopperPaid says: refuse (409 move_not_allowed: staff cancel and refund it; the default out of open or packed), flag (canceled, the money shown as due to refund; the default out of waiting) or refund (canceled and what Payments took refunded right after). An order paid at Payments meanwhile is not canceled (409). Stock, booked slots, offer uses and points go back, and its Payments payment is canceled. Send the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it. A verified phone in the sign-in makes the guest orders of that phone the shopper’s first.",
 		"response": {
 			"type": "object",
 			"required": ["order"],
@@ -19300,7 +19300,7 @@
 		}
 	},
 	"POST /v1/products/:id/licences": {
-		"summary": "Add licence keys to a digital product",
+		"summary": "Add license keys to a digital product",
 		"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product); 404 not_found.",
 		"body": {
 			"type": "object",
@@ -19647,7 +19647,7 @@
 		}
 	},
 	"POST /v1/admin/products/:id/licences": {
-		"summary": "Add licence keys to a digital product (Catalog admin widget)",
+		"summary": "Add license keys to a digital product (Catalog admin widget)",
 		"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product); 404 not_found. The ticket needs catalog.edit.",
 		"body": {
 			"type": "object",
@@ -19778,7 +19778,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, e-mail or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -19867,7 +19867,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, e-mail or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -19946,7 +19946,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, e-mail or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -20025,7 +20025,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, e-mail or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -20109,7 +20109,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, e-mail or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -20193,7 +20193,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, e-mail or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -20203,21 +20203,21 @@
 	},
 	"GET /v1/orders/:id": {
 		"summary": "Read an order",
-		"description": "A waiting Payments payment is asked again (at most every 30 seconds), money paid after a cancel is looked for, and a booked parcel's courier status is read again (courier_apis, at most every 30 minutes). 404 not_found.",
+		"description": "A waiting Payments payment is asked again (at most every 30 seconds), money paid after a cancel is looked for, and a booked package's courier status is read again (courier_apis, at most every 30 minutes). 404 not_found.",
 		"response": {
 			"$ref": "#/components/schemas/Order"
 		}
 	},
 	"GET /v1/admin/orders/:id": {
 		"summary": "Read an order (Orders admin widget)",
-		"description": "A waiting Payments payment is asked again (at most every 30 seconds), money paid after a cancel is looked for, and a booked parcel's courier status is read again (courier_apis, at most every 30 minutes). 404 not_found.",
+		"description": "A waiting Payments payment is asked again (at most every 30 seconds), money paid after a cancel is looked for, and a booked package's courier status is read again (courier_apis, at most every 30 minutes). 404 not_found.",
 		"response": {
 			"$ref": "#/components/schemas/Order"
 		}
 	},
 	"PATCH /v1/orders/:id": {
 		"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines",
-		"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is cancelled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found.",
+		"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found.",
 		"body": {
 			"type": "object",
 			"description": "Send at least one member.",
@@ -20383,7 +20383,7 @@
 	},
 	"PATCH /v1/admin/orders/:id": {
 		"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines (Orders admin widget)",
-		"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is cancelled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found.",
+		"description": "The address changes only before shipping (422 at /address); serials need Grades and serials with typed serial numbers. lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found.",
 		"body": {
 			"type": "object",
 			"description": "Send at least one member.",
@@ -20549,7 +20549,7 @@
 	},
 	"POST /v1/orders/:id/move": {
 		"summary": "Move an order to another status of the flow",
-		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it cancelled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once.",
+		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["to"],
@@ -20620,7 +20620,7 @@
 									"description": "The courier (key or name); missing: the courier_apis setting's courier."
 								}
 							},
-							"description": "Book the parcel through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
+							"description": "Book the package through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
 						},
 						{
 							"type": "null"
@@ -20635,7 +20635,7 @@
 				"reason": {
 					"type": ["string", "null"],
 					"enum": ["rto", "customer_return", null],
-					"description": "Why a parcel came back to a returned-to-origin status: rto (counted on the customer, the default) or customer_return."
+					"description": "Why a package came back to a returned-to-origin status: rto (counted on the customer, the default) or customer_return."
 				},
 				"shopperNote": {
 					"type": ["string", "null"],
@@ -20654,7 +20654,7 @@
 	},
 	"POST /v1/admin/orders/:id/move": {
 		"summary": "Move an order to another status of the flow (Orders admin widget)",
-		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it cancelled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once.",
+		"description": "What entering a status does depends on its role and the move's options (lists/order_flow, nextStatuses on the order): packed takes serial numbers (grades_serials; registered ones from stock, typed ones may follow) and the dispatch video as the move's video option says; shipped needs a shipment (its tracking number unless the move's tracking is optional; typed serial numbers when the move needs units); delivered makes cash on delivery and pickup paid (cod.paidOnDelivery), counts units sold and credits loyalty points; cancelled gives stock, slots, offer uses and points back, cancels the open Payments payment and refunds what Payments took right after when the move's refund is auto (when Payments cannot be reached the refund stays pending in effects and is tried again; a warning says so); returned_to_origin and returned put stock back as the move's restock says (ask: send restock); refunded refunds what is left (before dispatch it acts as a cancel; with nothing paid it cancels with no money unless the move's unpaid is refuse: 409 nothing_paid); a dispatched order is never canceled or refunded as a cancel: it comes back as returned_to_origin first (money paid can be refunded meanwhile with POST /v1/orders/:id/refunds); after delivery a cancel or a refund puts the items back in stock only as the move's restock says and takes earned points back unless its points is keep. A waiting order whose method is listed in the move's paidOnConfirm is recorded as paid when moved on. 409 move_not_allowed when the flow does not list the move for staff (or the shopper paid meanwhile); 409 flow_changed when the order's role is no longer the flow's role of its status; 409 conflict when the order changed meanwhile or a refund runs at Payments for it; 422 validation_failed for a missing shipment, tracking number, serial numbers, video, note, shopperNote or restock; 503 payments_unavailable when Payments cannot be reached for a cancel; 404 not_found. A widget ticket needs the move's permission (into a refunded status orders.refund; 403 forbidden). The move is written to the history with the staff member's name (a ticket's user, or the SS-Actor-* headers of a server call, else Server), the activity log, the shopper's message and the events. Each move is one transaction: the order, its facts and everything it gives back or takes are written together, so of two moves at once one wins and the other gets 409 conflict. A move refused after it called out leaves nothing behind: a Payments payment it canceled is dropped from the order (the shopper's next pay starts a new one), and a courier booking is kept as the order's shipment and used when the move is made again (never booked twice). Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["to"],
@@ -20725,7 +20725,7 @@
 									"description": "The courier (key or name); missing: the courier_apis setting's courier."
 								}
 							},
-							"description": "Book the parcel through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
+							"description": "Book the package through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
 						},
 						{
 							"type": "null"
@@ -20740,7 +20740,7 @@
 				"reason": {
 					"type": ["string", "null"],
 					"enum": ["rto", "customer_return", null],
-					"description": "Why a parcel came back to a returned-to-origin status: rto (counted on the customer, the default) or customer_return."
+					"description": "Why a package came back to a returned-to-origin status: rto (counted on the customer, the default) or customer_return."
 				},
 				"shopperNote": {
 					"type": ["string", "null"],
@@ -20773,17 +20773,17 @@
 	},
 	"DELETE /v1/orders/:id": {
 		"summary": "Delete an order",
-		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is cancelled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
+		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is canceled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
 		"status": 204
 	},
 	"DELETE /v1/admin/orders/:id": {
 		"summary": "Delete an order (Orders admin widget)",
-		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is cancelled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
+		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is canceled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
 		"status": 204
 	},
 	"POST /v1/orders/:id/payments": {
 		"summary": "Record a payment staff took",
-		"description": "A bank transfer, cash or another way, at most the balance due, never on a closed order (cancelled, returned to origin, refunded or returned). The order's open Payments payment is cancelled first so the money cannot be taken twice. With confirm, a waiting order moves on to its confirmed status in the same call. 422 validation_failed (method, amount, reference, note, confirm); 409 conflict when Payments says it was paid meanwhile or the order changed; 409 move_not_allowed when confirm finds no move to a confirmed status; 503 payments_unavailable. Send an Idempotency-Key so a retried request is done once.",
+		"description": "A bank transfer, cash or another way, at most the balance due, never on a closed order (canceled, returned to origin, refunded or returned). The order's open Payments payment is canceled first so the money cannot be taken twice. With confirm, a waiting order moves on to its confirmed status in the same call. 422 validation_failed (method, amount, reference, note, confirm); 409 conflict when Payments says it was paid meanwhile or the order changed; 409 move_not_allowed when confirm finds no move to a confirmed status; 503 payments_unavailable. Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["method", "amount"],
@@ -20818,7 +20818,7 @@
 	},
 	"POST /v1/admin/orders/:id/payments": {
 		"summary": "Record a payment staff took (Orders admin widget)",
-		"description": "A bank transfer, cash or another way, at most the balance due, never on a closed order (cancelled, returned to origin, refunded or returned). The order's open Payments payment is cancelled first so the money cannot be taken twice. With confirm, a waiting order moves on to its confirmed status in the same call. 422 validation_failed (method, amount, reference, note, confirm); 409 conflict when Payments says it was paid meanwhile or the order changed; 409 move_not_allowed when confirm finds no move to a confirmed status; 503 payments_unavailable. Send an Idempotency-Key so a retried request is done once.",
+		"description": "A bank transfer, cash or another way, at most the balance due, never on a closed order (canceled, returned to origin, refunded or returned). The order's open Payments payment is canceled first so the money cannot be taken twice. With confirm, a waiting order moves on to its confirmed status in the same call. 422 validation_failed (method, amount, reference, note, confirm); 409 conflict when Payments says it was paid meanwhile or the order changed; 409 move_not_allowed when confirm finds no move to a confirmed status; 503 payments_unavailable. Send an Idempotency-Key so a retried request is done once.",
 		"body": {
 			"type": "object",
 			"required": ["method", "amount"],
@@ -20949,7 +20949,7 @@
 	},
 	"GET /v1/shop/orders/:id/invoice": {
 		"summary": "The shopper's invoice of their order",
-		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. The shopper's copy has no staff names. Opened as the order page is: the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it, and with the invoices setting shopperFrom confirmed, while the order waits or once it is cancelled (the order’s invoice field says whether it can be read).",
+		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. The shopper's copy has no staff names. Opened as the order page is: the shopper’s Accounts sign-in in SS-Sign-In (their own orders), or a guest order’s key in SS-Order-Key (the orderKey answered once when it was placed). 403 sign_in_required with neither; 404 not_found when the order is not the shopper’s and the key does not open it, and with the invoices setting shopperFrom confirmed, while the order waits or once it is canceled (the order’s invoice field says whether it can be read).",
 		"headers": {
 			"type": "object",
 			"properties": {
@@ -21102,7 +21102,7 @@
 												"description": "The courier (key or name); missing: the courier_apis setting's courier."
 											}
 										},
-										"description": "Book the parcel through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
+										"description": "Book the package through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
 									},
 									{
 										"type": "null"
@@ -21222,7 +21222,7 @@
 												"description": "The courier (key or name); missing: the courier_apis setting's courier."
 											}
 										},
-										"description": "Book the parcel through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
+										"description": "Book the package through the courier API (Courier APIs; a failed booking moves nothing: 502 courier_failed)."
 									},
 									{
 										"type": "null"
@@ -21269,7 +21269,7 @@
 	},
 	"POST /v1/data/delete-all": {
 		"summary": "Delete every record of a scope",
-		"description": "catalog: products, categories, brands, attributes, serial numbers, size charts and landing pages; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment cancelled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm repeats the website's domain (422 at /confirm). Needs bulk_actions.",
+		"description": "catalog: products, categories, brands, attributes, serial numbers, size charts and landing pages; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment canceled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm repeats the website's domain (422 at /confirm). Needs bulk_actions.",
 		"body": {
 			"type": "object",
 			"required": ["scope", "confirm"],
@@ -21472,7 +21472,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the e-mail, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
 				},
 				"blocked": {
 					"type": "string",
@@ -21523,7 +21523,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the e-mail, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
 				},
 				"blocked": {
 					"type": "string",
@@ -21564,7 +21564,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the e-mail, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
 				},
 				"blocked": {
 					"type": "string",
@@ -21605,7 +21605,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the e-mail, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
 				},
 				"blocked": {
 					"type": "string",
@@ -21651,7 +21651,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the e-mail, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
 				},
 				"blocked": {
 					"type": "string",
@@ -21697,7 +21697,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the e-mail, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
 				},
 				"blocked": {
 					"type": "string",
@@ -21744,7 +21744,7 @@
 		}
 	},
 	"PATCH /v1/customers/:userId": {
-		"summary": "Block or unblock a customer, change their staff note or reset their returned parcels",
+		"summary": "Block or unblock a customer, change their staff note or reset their returned packages",
 		"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found.",
 		"body": {
 			"type": "object",
@@ -21774,7 +21774,7 @@
 		}
 	},
 	"PATCH /v1/admin/customers/:userId": {
-		"summary": "Block or unblock a customer, change their staff note or reset their returned parcels (Customers admin widget)",
+		"summary": "Block or unblock a customer, change their staff note or reset their returned packages (Customers admin widget)",
 		"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found.",
 		"body": {
 			"type": "object",
@@ -22794,7 +22794,7 @@
 		}
 	},
 	"POST /v1/returns/:id/receive": {
-		"summary": "Mark the parcel received",
+		"summary": "Mark the package received",
 		"description": "Only while the claim is approved (409 move_not_allowed otherwise, also when the claim changed meanwhile). lines says per claimed line whether it goes back in stock: those with restock true are put back at once (each exactly once, with the products.changed hook for back-in-stock alerts), false keeps a line out of later restocks, lines not named wait for POST …/restock. 422 validation_failed at /lines (not a list), /lines/<i>/lineId (not a claimed line, or named twice), /lines/<i>/restock or /note; 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs. A server call may name the staff member in the SS-Actor-Id and SS-Actor-Name headers: the history and notes then show their name (else Server).",
 		"body": {
 			"type": "object",
@@ -23091,7 +23091,7 @@
 		}
 	},
 	"POST /v1/admin/returns/:id/receive": {
-		"summary": "Mark the parcel received (Orders admin widget)",
+		"summary": "Mark the package received (Orders admin widget)",
 		"description": "Only while the claim is approved (409 move_not_allowed otherwise, also when the claim changed meanwhile). lines says per claimed line whether it goes back in stock: those with restock true are put back at once (each exactly once, with the products.changed hook for back-in-stock alerts), false keeps a line out of later restocks, lines not named wait for POST …/restock. 422 validation_failed at /lines (not a list), /lines/<i>/lineId (not a claimed line, or named twice), /lines/<i>/restock or /note; 404 not_found. The shopper gets the ecommerce.return_status message and the return.status_changed hook runs.",
 		"body": {
 			"type": "object",
@@ -23241,7 +23241,7 @@
 	},
 	"POST /v1/shop/alerts": {
 		"summary": "Set a back-in-stock or price-drop alert",
-		"description": "A signed-in shopper (SS-Sign-In) gets it at the e-mail and phone of their sign-in (422 validation_failed at /kind when they have neither, or only a phone of a country the shop does not serve). Without a sign-in, while the alerts setting guests is on, a guest gives a phone (else 403 sign_in_required): 422 validation_failed at /phone (code invalid, or country_not_allowed outside the checkout setting countries). The message goes out once, through Notifications on the alerts setting channels, when the product (or the variant) is back in stock, or its price falls below the price now (or to targetPrice). Setting the same waiting alert again answers that one. 404 not_found for a product that is missing, not active or hidden from the shopper; 422 validation_failed at /kind (back_in_stock for an item in stock), /productId (at most 100 waiting alerts), /variantId (not an active variant) or /targetPrice. Send an Idempotency-Key so a retried request sets one alert.",
+		"description": "A signed-in shopper (SS-Sign-In) gets it at the email and phone of their sign-in (422 validation_failed at /kind when they have neither, or only a phone of a country the shop does not serve). Without a sign-in, while the alerts setting guests is on, a guest gives a phone (else 403 sign_in_required): 422 validation_failed at /phone (code invalid, or country_not_allowed outside the checkout setting countries). The message goes out once, through Notifications on the alerts setting channels, when the product (or the variant) is back in stock, or its price falls below the price now (or to targetPrice). Setting the same waiting alert again answers that one. 404 not_found for a product that is missing, not active or hidden from the shopper; 422 validation_failed at /kind (back_in_stock for an item in stock), /productId (at most 100 waiting alerts), /variantId (not an active variant) or /targetPrice. Send an Idempotency-Key so a retried request sets one alert.",
 		"headers": {
 			"type": "object",
 			"properties": {
@@ -23303,7 +23303,7 @@
 	},
 	"POST /v1/shop/alerts/unsubscribe/:token": {
 		"summary": "Stop the alerts of a message’s recipient",
-		"description": "The token comes from the {stopUrl} link of an alert message (the alerts setting stopUrl, default /alerts/unsubscribe/{token}, on the page with the alerts_stop widget). Every alert of the e-mail address or phone that message went to is removed; no sign-in is needed. A token not known (or not 32 characters) removes nothing.",
+		"description": "The token comes from the {stopUrl} link of an alert message (the alerts setting stopUrl, default /alerts/unsubscribe/{token}, on the page with the alerts_stop widget). Every alert of the email address or phone that message went to is removed; no sign-in is needed. A token not known (or not 32 characters) removes nothing.",
 		"response": {
 			"type": "object",
 			"required": ["removed"],
@@ -23662,7 +23662,7 @@
 	},
 	"GET /v1/reports/sales": {
 		"summary": "Sales by product, category, brand, city, grade or payment method",
-		"description": "Orders count when placed in the range, in the shop's currency and not cancelled. Money is minor units of the shop's currency. by=category counts a line in each of its categories. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+		"description": "Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. by=category counts a line in each of its categories. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23694,7 +23694,7 @@
 	},
 	"GET /v1/admin/reports/sales": {
 		"summary": "Sales by product, category, brand, city, grade or payment method (Customers admin widget)",
-		"description": "Orders count when placed in the range, in the shop's currency and not cancelled. Money is minor units of the shop's currency. by=category counts a line in each of its categories. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+		"description": "Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. by=category counts a line in each of its categories. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23726,7 +23726,7 @@
 	},
 	"GET /v1/reports/stock-age": {
 		"summary": "Stock age: products waiting since their last sale",
-		"description": "Now, not over a range (from and to are not read). The last sale is of an order not cancelled. With format=csv the answer is text/csv, not JSON: the file stock-age.csv (the csv setting's delimiter) with the columns product_id, name, stock, published_at, last_sold_at, days_listed, days_since_sale. Another format answers 422 validation_failed at /format.",
+		"description": "Now, not over a range (from and to are not read). The last sale is of an order not canceled. With format=csv the answer is text/csv, not JSON: the file stock-age.csv (the csv setting's delimiter) with the columns product_id, name, stock, published_at, last_sold_at, days_listed, days_since_sale. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23744,7 +23744,7 @@
 	},
 	"GET /v1/admin/reports/stock-age": {
 		"summary": "Stock age: products waiting since their last sale (Customers admin widget)",
-		"description": "Now, not over a range (from and to are not read). The last sale is of an order not cancelled. With format=csv the answer is text/csv, not JSON: the file stock-age.csv (the csv setting's delimiter) with the columns product_id, name, stock, published_at, last_sold_at, days_listed, days_since_sale. Another format answers 422 validation_failed at /format.",
+		"description": "Now, not over a range (from and to are not read). The last sale is of an order not canceled. With format=csv the answer is text/csv, not JSON: the file stock-age.csv (the csv setting's delimiter) with the columns product_id, name, stock, published_at, last_sold_at, days_listed, days_since_sale. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23762,7 +23762,7 @@
 	},
 	"GET /v1/reports/returns": {
 		"summary": "Return rate per product",
-		"description": "Units sold in the range (orders count when placed in the range, in the shop's currency and not cancelled) against units in return, warranty and exchange claims made in the range and not rejected. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file returns.csv (the csv setting's delimiter) with the columns product_id, name, sold, claimed, rate. Another format answers 422 validation_failed at /format.",
+		"description": "Units sold in the range (orders count when placed in the range, in the shop's currency and not canceled) against units in return, warranty and exchange claims made in the range and not rejected. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file returns.csv (the csv setting's delimiter) with the columns product_id, name, sold, claimed, rate. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23788,7 +23788,7 @@
 	},
 	"GET /v1/admin/reports/returns": {
 		"summary": "Return rate per product (Customers admin widget)",
-		"description": "Units sold in the range (orders count when placed in the range, in the shop's currency and not cancelled) against units in return, warranty and exchange claims made in the range and not rejected. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file returns.csv (the csv setting's delimiter) with the columns product_id, name, sold, claimed, rate. Another format answers 422 validation_failed at /format.",
+		"description": "Units sold in the range (orders count when placed in the range, in the shop's currency and not canceled) against units in return, warranty and exchange claims made in the range and not rejected. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file returns.csv (the csv setting's delimiter) with the columns product_id, name, sold, claimed, rate. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23814,7 +23814,7 @@
 	},
 	"GET /v1/reports/margin": {
 		"summary": "Margin per product",
-		"description": "Order lines whose unit cost was known when placed (the variant's cost). Orders count when placed in the range, in the shop's currency and not cancelled. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file margin.csv (the csv setting's delimiter) with the columns product_id, name, units, revenue, cost, margin; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+		"description": "Order lines whose unit cost was known when placed (the variant's cost). Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file margin.csv (the csv setting's delimiter) with the columns product_id, name, units, revenue, cost, margin; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23840,7 +23840,7 @@
 	},
 	"GET /v1/admin/reports/margin": {
 		"summary": "Margin per product (Customers admin widget)",
-		"description": "Order lines whose unit cost was known when placed (the variant's cost). Orders count when placed in the range, in the shop's currency and not cancelled. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file margin.csv (the csv setting's delimiter) with the columns product_id, name, units, revenue, cost, margin; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+		"description": "Order lines whose unit cost was known when placed (the variant's cost). Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file margin.csv (the csv setting's delimiter) with the columns product_id, name, units, revenue, cost, margin; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23866,7 +23866,7 @@
 	},
 	"GET /v1/reports/summary": {
 		"summary": "The sales summary with a daily series",
-		"description": "Orders count when placed in the range and in the shop's currency: not cancelled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per day with the columns day, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+		"description": "Orders count when placed in the range and in the shop's currency: not canceled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per day with the columns day, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23880,7 +23880,7 @@
 				},
 				"statuses": {
 					"type": "string",
-					"description": "Comma-separated status keys of the order flow, 1 to 50 (none: every order not cancelled)."
+					"description": "Comma-separated status keys of the order flow, 1 to 50 (none: every order not canceled)."
 				},
 				"series": {
 					"type": "string",
@@ -23902,7 +23902,7 @@
 	},
 	"GET /v1/admin/reports/summary": {
 		"summary": "The sales summary with a daily series (Customers admin widget)",
-		"description": "Orders count when placed in the range and in the shop's currency: not cancelled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per day with the columns day, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+		"description": "Orders count when placed in the range and in the shop's currency: not canceled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per day with the columns day, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -23916,7 +23916,7 @@
 				},
 				"statuses": {
 					"type": "string",
-					"description": "Comma-separated status keys of the order flow, 1 to 50 (none: every order not cancelled)."
+					"description": "Comma-separated status keys of the order flow, 1 to 50 (none: every order not canceled)."
 				},
 				"series": {
 					"type": "string",
@@ -23990,7 +23990,7 @@
 	},
 	"GET /v1/reports/oldest-stock": {
 		"summary": "Oldest stock: variants waiting since their last sale",
-		"description": "Now, not over a range (from and to are not read). Each active variant with stock of an active product that tracks stock; the last sale is of an order not cancelled. With format=csv the answer is text/csv, not JSON: the file oldest-stock.csv (the csv setting's delimiter) with the columns product_id, variant_id, name, variant, sku, grade, stock, since, days. Another format answers 422 validation_failed at /format.",
+		"description": "Now, not over a range (from and to are not read). Each active variant with stock of an active product that tracks stock; the last sale is of an order not canceled. With format=csv the answer is text/csv, not JSON: the file oldest-stock.csv (the csv setting's delimiter) with the columns product_id, variant_id, name, variant, sku, grade, stock, since, days. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -24008,7 +24008,7 @@
 	},
 	"GET /v1/admin/reports/oldest-stock": {
 		"summary": "Oldest stock: variants waiting since their last sale (Customers admin widget)",
-		"description": "Now, not over a range (from and to are not read). Each active variant with stock of an active product that tracks stock; the last sale is of an order not cancelled. With format=csv the answer is text/csv, not JSON: the file oldest-stock.csv (the csv setting's delimiter) with the columns product_id, variant_id, name, variant, sku, grade, stock, since, days. Another format answers 422 validation_failed at /format.",
+		"description": "Now, not over a range (from and to are not read). Each active variant with stock of an active product that tracks stock; the last sale is of an order not canceled. With format=csv the answer is text/csv, not JSON: the file oldest-stock.csv (the csv setting's delimiter) with the columns product_id, variant_id, name, variant, sku, grade, stock, since, days. Another format answers 422 validation_failed at /format.",
 		"query": {
 			"type": "object",
 			"properties": {

@@ -134,7 +134,7 @@ const detail = (over = {}) => ({
 	nextStatuses: [
 		{ key: 'packed', label: 'Packed', role: 'packed' },
 		{ key: 'dispatched', label: 'Dispatched', role: 'shipped' },
-		{ key: 'cancelled', label: 'Cancelled', role: 'cancelled' },
+		{ key: 'cancelled', label: 'Canceled', role: 'cancelled' },
 	],
 	...over,
 });
@@ -442,9 +442,9 @@ describe('orders admin: one order', () => {
 			'Edit staff note',
 			'Invoice',
 			'Packing slip',
-			'Move to Cancelled',
+			'Move to Canceled',
 		]);
-		expect(pane.querySelector('.menu button.danger')?.textContent).toBe('Move to Cancelled');
+		expect(pane.querySelector('.menu button.danger')?.textContent).toBe('Move to Canceled');
 	});
 
 	it('moves an order with serial numbers, a shipment or a typed confirmation', async () => {
@@ -510,10 +510,10 @@ describe('orders admin: one order', () => {
 		await tick(checkIn(dialogOf(root), 'Book with the courier API'), true);
 		await submitDialog(root);
 		expect(moves[5].shipment).toEqual({ book: true });
-		// cancelling asks for the order number
-		await pickMenu(pane, 'Move to Cancelled');
+		// canceling asks for the order number
+		await pickMenu(pane, 'Move to Canceled');
 		dialog = dialogOf(root);
-		expect(textOf(dialog)).toContain('Order SO2026-1 will be cancelled');
+		expect(textOf(dialog)).toContain('Order SO2026-1 will be canceled');
 		expect(/** @type {HTMLButtonElement} */ (dialog.querySelector('button[type="submit"]')).disabled).toBe(true);
 		expect((await confirmDialog(root, 'SO2026-1')).disabled).toBe(false);
 		reply = () => problem(409, 'conflict');
@@ -802,8 +802,8 @@ describe('orders admin: one order', () => {
 				by: 'guest',
 				note: '',
 			},
-			moved('Awaiting confirmation', 'Cancelled', { by: 'system', note: SERVER_ENGLISH, reason: 'expired' }),
-			moved('Confirmed', 'Cancelled', { by: 'shopper', note: SERVER_ENGLISH, reason: 'shopper' }),
+			moved('Awaiting confirmation', 'Canceled', { by: 'system', note: SERVER_ENGLISH, reason: 'expired' }),
+			moved('Confirmed', 'Canceled', { by: 'shopper', note: SERVER_ENGLISH, reason: 'shopper' }),
 			moved('Confirmed', 'Confirmed', { by: 'Sam', note: SERVER_ENGLISH, kind: 'edited' }),
 			// a staff member's own words stay as typed
 			moved('Shipped', 'Returned to origin', { by: 'Sam', note: 'Refused at the door', reason: 'rto' }),
@@ -832,8 +832,8 @@ describe('orders admin: one order', () => {
 		const text = textOf(detailOf(panelOf(root, 'orders')));
 		for (const part of [
 			`Awaiting confirmation · ${TEXTS['ordersAdmin.by.guest']}`,
-			`Awaiting confirmation → Cancelled · ${TEXTS['ordersAdmin.by.system']} · ${TEXTS['ordersAdmin.historyNote.expired']}`,
-			`Confirmed → Cancelled · ${TEXTS['ordersAdmin.by.shopper']} · ${TEXTS['ordersAdmin.historyNote.shopper']}`,
+			`Awaiting confirmation → Canceled · ${TEXTS['ordersAdmin.by.system']} · ${TEXTS['ordersAdmin.historyNote.expired']}`,
+			`Confirmed → Canceled · ${TEXTS['ordersAdmin.by.shopper']} · ${TEXTS['ordersAdmin.historyNote.shopper']}`,
 			`Confirmed → Confirmed · Sam · ${TEXTS['ordersAdmin.historyNote.edited']}`,
 			'Shipped → Returned to origin · Sam · Refused at the door',
 			`Awaiting payment → Confirmed · ${TEXTS['ordersAdmin.by.system']} · ${TEXTS['ordersAdmin.historyNote.payment_confirmed']}`,

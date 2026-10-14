@@ -96,7 +96,7 @@ export const createOrders = (product, service, { ordering }) => {
 	};
 
 	/**
-	 * Ask the courier API for the latest status of a booked parcel, at most every 30 minutes (on read). The order's
+	 * Ask the courier API for the latest status of a booked package, at most every 30 minutes (on read). The order's
 	 * `updatedAt` stays as it was, so a move staff are making meanwhile is not refused.
 	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<OrderRecord>}
@@ -192,7 +192,7 @@ export const createOrders = (product, service, { ordering }) => {
 
 	/**
 	 * One order, with its waiting payment asked again (at most every 30 seconds), money paid after its cancel looked for
-	 * (K-13) and its booked parcel's status.
+	 * (K-13) and its booked package's status.
 	 * @param {any} ctx
 	 */
 	const readOrder = async (ctx) => {
@@ -233,7 +233,7 @@ export const createOrders = (product, service, { ordering }) => {
 
 	/**
 	 * DELETE /v1/orders/:id (E31): what the order holds is given back as a cancel does (stock, slots, offer uses, points,
-	 * serials; its open Payments payment is cancelled, K-13), then it is deleted; the activity entry keeps its number and
+	 * serials; its open Payments payment is canceled, K-13), then it is deleted; the activity entry keeps its number and
 	 * total.
 	 * @param {any} ctx
 	 */
@@ -307,7 +307,7 @@ export const createOrders = (product, service, { ordering }) => {
 
 	/**
 	 * POST /v1/data/delete-all `{ scope, confirm }` (server token, E31): every record of a scope goes, after held stock
-	 * is given back (and, for orders, their open Payments payments are cancelled); `confirm` repeats the website's
+	 * is given back (and, for orders, their open Payments payments are canceled); `confirm` repeats the website's
 	 * domain.
 	 * @param {any} ctx
 	 */
@@ -546,7 +546,7 @@ export const createOrders = (product, service, { ordering }) => {
 	/**
 	 * GET /v1/shop/orders/:id/invoice: the order the shopper may open, as on its page (their sign-in, or a guest order's
 	 * key in `SS-Order-Key`, E21); with `shopperFrom` confirmed, once the order is confirmed: not while it waits, nor once
-	 * cancelled (E35).
+	 * canceled (E35).
 	 * @param {any} ctx
 	 */
 	const shopInvoice = async (ctx) => {

@@ -1,6 +1,6 @@
 /**
  * Orders for the merchant (PLAN 0.8.8): the staff list and detail, moves through the flow with their role effects
- * (serials when packed, couriers when shipped, cash and points when delivered, give-backs and refunds when cancelled,
+ * (serials when packed, couriers when shipped, cash and points when delivered, give-backs and refunds when canceled,
  * returned or refunded), refunds without a move, edits, bulk moves and the data-rights answers. Orders are placed with
  * the ledger directly, so this part is tested on its own.
  */
@@ -330,7 +330,7 @@ describe('moving orders', () => {
 		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'IMEI-2' }))?.status).toBe('in_stock');
 		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'IMEI-3' }))?.orderId).toBe(order.id);
 		await shop.list('order_flow', (await import('../core/flow.js')).DEFAULT_FLOW);
-		// cancelling puts the serials back in stock
+		// canceling puts the serials back in stock
 		const cancelled = await move(order.id, 'cancelled', { note: 'Out of stock' });
 		expect(cancelled.status).toBe(200);
 		expect(await serials.countDocuments({ websiteId: data.websiteId, orderId: order.id })).toBe(0);
@@ -446,7 +446,7 @@ describe('moving orders', () => {
 		// staff refund the advance afterwards
 		const refund = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/refunds`, {
 			amount: 200,
-			reason: 'Cancelled',
+			reason: 'Canceled',
 		});
 		expect(refund.status).toBe(201);
 		expect(refund.json.refund).toMatchObject({ online: 200, manual: 0, recorded: false });
@@ -604,11 +604,11 @@ describe('bulk moves', () => {
 });
 
 describe('data rights', () => {
-	it('exports what the shopper sees of their orders and record, never what staff keep (SE-1), and anonymises on delete', async () => {
+	it('exports what the shopper sees of their orders and record, never what staff keep (SE-1), and anonymizes on delete', async () => {
 		const userId = 'usr_rights000001';
 		const { order } = await place({ userId, email: 'Rights@Example.com', phone: '+15550002222' });
 		// what staff keep: a unit cost, a staff note, a payment and a move with staff names and notes, who opened the
-		// order and the customer, a block and its reason, returned parcels
+		// order and the customer, a block and its reason, returned packages
 		await data
 			.collection(COLLECTIONS.orders)
 			.updateOne({ websiteId: shop.websiteId, id: order.id }, { $set: { 'lines.$[].cost': 600 } });
@@ -620,7 +620,7 @@ describe('data rights', () => {
 		});
 		expect(recorded.status).toBe(201);
 		await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/seen`);
-		await shop.api('PATCH', `/v1/customers/${userId}`, { note: 'VIP', blocked: true, blockedReason: 'Refused parcels' });
+		await shop.api('PATCH', `/v1/customers/${userId}`, { note: 'VIP', blocked: true, blockedReason: 'Refused packages' });
 		await shop.admin(ticket, 'POST', `/v1/admin/customers/${userId}/seen`);
 		await data.collection(COLLECTIONS.customers).updateOne({ websiteId: shop.websiteId, userId }, { $set: { rtoCount: 2 } });
 		const service = createService(shop.product);
@@ -689,7 +689,7 @@ describe('data rights', () => {
 			'Sam Staff',
 			'usr_staff0000001',
 			'VIP',
-			'Refused parcels',
+			'Refused packages',
 		])
 			expect(text, staffText).not.toContain(staffText);
 		const byPhone = await exportOf(s, { phone: '+15550002222' });

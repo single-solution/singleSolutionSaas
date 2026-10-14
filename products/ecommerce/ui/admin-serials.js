@@ -47,7 +47,7 @@ export const createSerialFilter = () => {
  * @typedef {{ serialsOf: (product: SerialProduct) => void, serialFilter: SerialFilter }} Links
  */
 
-/** Serial statuses and their status colours. */
+/** Serial statuses and their status colors. */
 const TONES = Object.freeze(/** @type {Record<string, Tone>} */ ({ in_stock: 'success', sold: 'neutral', faulty: 'danger' }));
 
 /**

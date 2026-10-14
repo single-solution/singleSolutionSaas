@@ -2,7 +2,7 @@
  * The shopper's orders (visitor widget `my_orders`, feature checkout; PLAN 0.8.8 "my orders + tracking + invoices +
  * returns"). Signed in, the shopper sees their orders (newest first, more with Load more) and each order's lines,
  * status history, payment (and the way to pay while it waits), delivery and tracking link, totals, the invoice
- * (`invoices`), downloads and licence keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
+ * (`invoices`), downloads and license keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
  * E11, E12), Cancel while the order allows it, and return or warranty claims (`returns`) with their own list. Above the
  * orders, the loyalty points balance with the points expiring soon and the points history (`loyalty`,
  * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows.

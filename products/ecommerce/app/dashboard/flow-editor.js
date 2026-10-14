@@ -46,11 +46,11 @@ const WHO = Object.freeze({
 	system: ['system'],
 });
 
-/** Roles after which the items may be with the customer (a move from them into a cancelled or refunded status is E40's). */
+/** Roles after which the items may be with the customer (a move from them into a canceled or refunded status is E40's). */
 const AFTER_DELIVERY = Object.freeze(['delivered', 'returned_to_origin', 'returned', 'cancelled', 'refunded']);
 
 /**
- * The statuses an order in `from` could move to under the role rules (whether or not the move is ticked).
+ * The statuses an order in `from` could move to under the role rules (whether or not the move is checked).
  * @param {OrderFlow} flow @param {string} from
  */
 const possibleTargets = (flow, from) =>

@@ -615,7 +615,7 @@ describe('wishlist, alerts and compare', () => {
 			shop.advance(ms);
 			await shop.visitor('GET', '/v1/shop/products');
 		};
-		// e-mail is down: Sara (e-mail and phone) gets her SMS, and her alert is sent; Omar (e-mail only) got nothing
+		// email is down: Sara (email and phone) gets her SMS, and her alert is sent; Omar (email only) got nothing
 		shop.responders.set('https://notifications.example.dev/v1/messages/email', () => ({ status: 503, body: {} }));
 		const since = shop.calls.length;
 		// back in stock, then any catalog write of the product tells the alerts

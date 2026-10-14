@@ -102,7 +102,7 @@ export const courierNamed = (list, keyOrName) => {
 };
 
 /**
- * The tracking link of a parcel ('' when the courier has no tracking page).
+ * The tracking link of a package ('' when the courier has no tracking page).
  * @param {string} template
  * @param {string} trackingNumber
  */
@@ -110,7 +110,7 @@ export const trackingLink = (template, trackingNumber) =>
 	template && isTrackingTemplate(template) ? template.replaceAll(TRACKING_TOKEN, encodeURIComponent(trackingNumber)) : '';
 
 /**
- * A parcel's tracking page, built on read from today's `couriers` list (E28): the courier is found by its key or its
+ * A package's tracking page, built on read from today's `couriers` list (E28): the courier is found by its key or its
  * name (any case); without a template, the address kept on the shipment (a courier API's answer), else ''.
  * @param {unknown} couriers the `couriers` list
  * @param {{ courier: string, trackingNumber: string, trackingUrl?: string } | null} shipment

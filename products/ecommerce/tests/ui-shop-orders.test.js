@@ -304,10 +304,10 @@ describe('my orders', () => {
 		await click(buttonOf(host, text('orders.cancel')));
 		await click(buttonOf(host, text('orders.cancelYes')));
 		expect(textOf(host)).toContain(text('orders.problem.move_not_allowed'));
-		cancel = ok({ order: detail({ statusLabel: 'Cancelled', role: 'cancelled', canCancel: false }) });
+		cancel = ok({ order: detail({ statusLabel: 'Canceled', role: 'cancelled', canCancel: false }) });
 		await click(buttonOf(host, text('orders.cancel')));
 		await click(buttonOf(host, text('orders.cancelYes')));
-		expect(textOf(host)).toContain(text('orders.placed', { date: '', status: 'Cancelled' }).split('·')[1]?.trim() ?? '');
+		expect(textOf(host)).toContain(text('orders.placed', { date: '', status: 'Canceled' }).split('·')[1]?.trim() ?? '');
 		expect(() => buttonOf(host, text('orders.cancel'))).toThrow();
 		await click(buttonOf(host, text('orders.back')));
 		expect(textOf(host)).toContain(text('orders.title'));

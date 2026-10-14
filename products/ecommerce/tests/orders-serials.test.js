@@ -55,10 +55,10 @@ beforeAll(async () => {
 		status: 'active',
 		categoryIds: [ids.android.id],
 		serialized: null,
-		options: [{ name: 'Colour', values: ['Black', 'Blue'] }],
+		options: [{ name: 'Color', values: ['Black', 'Blue'] }],
 		variants: [
-			{ options: { Colour: 'Black' }, price: 1000, stock: 9, warrantyDays: 365 },
-			{ options: { Colour: 'Blue' }, price: 1000, stock: 9, grade: 'used' },
+			{ options: { Color: 'Black' }, price: 1000, stock: 9, warrantyDays: 365 },
+			{ options: { Color: 'Blue' }, price: 1000, stock: 9, grade: 'used' },
 		],
 	});
 	ids.case = await api('POST', '/v1/products', {

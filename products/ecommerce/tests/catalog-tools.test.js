@@ -132,8 +132,8 @@ describe('CSV', () => {
 
 		const good = [
 			head,
-			`Tablet,,active,phones,acme,big|new,"=1+1, said ""he""",TB-1,Colour,Black,9.99,12.50,4,true`,
-			'Tablet,,active,,,,,TB-2,Colour,White,10,,0,true',
+			`Tablet,,active,phones,acme,big|new,"=1+1, said ""he""",TB-1,Color,Black,9.99,12.50,4,true`,
+			'Tablet,,active,,,,,TB-2,Color,White,10,,0,true',
 			'Phone,phone,,,,,,PH-1,,,1.50,,7,',
 		].join('\r\n');
 		const check = await ok('POST', '/v1/csv/products', { csv: good });
@@ -147,7 +147,7 @@ describe('CSV', () => {
 			brandId: ids.acme.id,
 			tags: ['big', 'new'],
 			description: '=1+1, said "he"',
-			options: [{ name: 'Colour', values: ['Black', 'White'] }],
+			options: [{ name: 'Color', values: ['Black', 'White'] }],
 			price: 999,
 		});
 		expect(tablet.variants.map((/** @type {any} */ v) => [v.sku, v.price, v.compareAtPrice, v.stock])).toEqual([
@@ -175,7 +175,7 @@ describe('CSV', () => {
 		expect((await send('name\n"open')).status).toBe(422);
 		expect((await send('\n\n')).status).toBe(422);
 		expect((await send(`name,price\n${'A,1\n'.repeat(5001)}`)).json.detail).toContain('5000');
-		const columns = await api('POST', '/v1/csv/products', { csv: 'colour\nred' });
+		const columns = await api('POST', '/v1/csv/products', { csv: 'color\nred' });
 		expect(columns.json.errors[0]).toMatchObject({ line: 1, code: 'columns' });
 		const location = await api('POST', '/v1/csv/products', { csv: 'name,price,stock@loc_none\nA,1,1' });
 		expect(location.json.errors[0]).toMatchObject({ path: '/stock@loc_none', code: 'unknown_location' });
@@ -317,8 +317,8 @@ describe('AI copy', () => {
 			description: 'Old text',
 			categoryIds: [ids.phones.id],
 			brandId: ids.acme.id,
-			options: [{ name: 'Colour', values: ['Black'] }],
-			variants: [{ options: { Colour: 'Black' }, price: 100 }],
+			options: [{ name: 'Color', values: ['Black'] }],
+			variants: [{ options: { Color: 'Black' }, price: 100 }],
 		});
 		const path = `/v1/admin/products/${item.id}/ai-copy`;
 		expect((await shop.admin(staff, 'POST', path, { fields: ['description'] })).status).toBe(503);

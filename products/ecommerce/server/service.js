@@ -136,7 +136,7 @@ const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
 export const BUSINESS_VALUE = 'business';
 
 /**
- * A Payments payment as Ecommerce reads it: `refundDue` when it was paid after the shop cancelled it (K-13); what was
+ * A Payments payment as Ecommerce reads it: `refundDue` when it was paid after the shop canceled it (K-13); what was
  * refunded of it, and each refund (an order's refund whose answer never came is found there).
  * @typedef {{ status: string, amount: number, currency: string, refundDue: boolean, refunded: number, gateway: string,
  *   refunds: Array<{ id: string, amount: number, manual: boolean }> }} PaymentFacts
@@ -622,13 +622,13 @@ export const createService = (product) => {
 		},
 		/**
 		 * A payment as Payments has it now: its status, amount and currency, and `refundDue` (paid after it was
-		 * cancelled, K-13).
+		 * canceled, K-13).
 		 * @param {Site} s @param {string} paymentId
 		 * @returns {Promise<PaymentFacts>}
 		 */
 		read: async (s, paymentId) => factsOf(await callPayments(s, 'GET', `/v1/payments/${encodeURIComponent(paymentId)}`)),
 		/**
-		 * Cancel a payment the shop no longer wants (P4, K-13): `voided` (also when it was cancelled before), `paid` (it
+		 * Cancel a payment the shop no longer wants (P4, K-13): `voided` (also when it was canceled before), `paid` (it
 		 * was paid: 409 `already_paid`, with the payment), `gone` (Payments has no such payment, or refuses for good), or
 		 * `unreachable` (not connected, cannot be reached, the token refused, 408 or 429: try again later).
 		 * @param {Site} s @param {string} paymentId @param {string} reason

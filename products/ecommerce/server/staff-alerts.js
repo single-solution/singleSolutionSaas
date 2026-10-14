@@ -2,7 +2,7 @@
  * Staff alerts (PLAN 0.8.10 K6, E32) sent by Ecommerce as required messages through its outbox (K-17, owner decision
  * D7: an alert is saved before it is sent, right after the answer, and tried again on the website's next uses while
  * Notifications cannot be reached). Recipients and the link follow the kit's staff-alert rules: the feature's
- * `recipients` setting (e-mail addresses, and international phone numbers that get WhatsApp, or SMS with
+ * `recipients` setting (email addresses, and international phone numbers that get WhatsApp, or SMS with
  * `phoneChannel: sms`; at most 20), plus every unblocked Accounts user whose role grants `staffPermission` (asked
  * through the pasted Accounts token, kept 5 minutes on this instance) — `all_staff` stands for the permission of each
  * alert's own work ({@link ALL_STAFF_PERMISSIONS}: `orders.read` for orders, `returns.manage` for claims); the
@@ -75,7 +75,7 @@ export const ALL_STAFF_PERMISSIONS = Object.freeze(
 
 /**
  * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null. Phones are E.164 through the
- * normaliser every product shares (`@ss/contracts/phone`, K12), with their `+` or `00` and calling code, as the kit's
+ * normalizer every product shares (`@ss/contracts/phone`, K12), with their `+` or `00` and calling code, as the kit's
  * staff alerts read them; a local number is left out.
  * @param {unknown} value
  * @returns {{ key: string, to: { email: string } | { phone: string } } | null}
@@ -97,7 +97,7 @@ export const createStaffAlerts = (product, service) => {
 	const staffCache = new Map();
 
 	/**
-	 * The e-mail addresses (else phones) of unblocked Accounts users whose role grants a permission.
+	 * The email addresses (else phones) of unblocked Accounts users whose role grants a permission.
 	 * @param {Site} s @param {string} permission `ecommerce:<key>`
 	 * @returns {Promise<string[]>}
 	 */

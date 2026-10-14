@@ -240,7 +240,7 @@ describe('a delete', () => {
 		expect((await shop.api('GET', `/v1/orders/${pending.order.id}`)).json.effects[0].state).toBe('done');
 		expect((await shop.api('DELETE', `/v1/orders/${pending.order.id}`)).status).toBe(204);
 
-		// cancelled with the refund left to staff: the money is still the shopper's
+		// canceled with the refund left to staff: the money is still the shopper's
 		await shop.moveOptions('confirmed', 'cancelled', { refund: 'staff' });
 		try {
 			const held = await records.seedOrder();
@@ -332,8 +332,8 @@ describe('orders without a payments log', () => {
 			kind: 'refund',
 			amount: 1000,
 			state: 'pending',
-			reason: 'Order cancelled',
-			note: 'Order cancelled',
+			reason: 'Order canceled',
+			note: 'Order canceled',
 			by: { kind: 'staff', id: 'usr_staff', name: 'Sam' },
 			at: new Date(shop.now()),
 			tries: 0,
@@ -493,7 +493,7 @@ describe('loyalty points', () => {
 });
 
 describe('a move that loses its race after calling out', () => {
-	it('leaves a waiting order payable when its Payments payment was cancelled for it (review 8)', async () => {
+	it('leaves a waiting order payable when its Payments payment was canceled for it (review 8)', async () => {
 		const paymentId = `pay_${createId('ord').slice(4, 16)}`;
 		const { order } = await records.seedOrder({
 			status: 'pending_payment',
@@ -516,7 +516,7 @@ describe('a move that loses its race after calling out', () => {
 		const s = await service.site(ctx());
 		await expect(moves.move(s, ctx(), order, input('cancelled'), DEFAULT_FLOW)).rejects.toMatchObject({ code: 'conflict' });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/${paymentId}/cancel`)).toHaveLength(1);
-		// the payment Payments cancelled is dropped: the shopper's next pay starts a new one
+		// the payment Payments canceled is dropped: the shopper's next pay starts a new one
 		expect(await records.recordOf(order.id)).toMatchObject({
 			status: 'pending_payment',
 			payment: { paymentId: null, checkoutUrl: '', state: 'pending' },
@@ -553,7 +553,7 @@ describe('a move that loses its race after calling out', () => {
 		).rejects.toMatchObject({ code: 'conflict' });
 		expect(booked).toBe(1);
 		expect((await records.recordOf(order.id)).shipment).toMatchObject({ trackingNumber: 'CN 1', booked: true });
-		// made again: the parcel booked already ships, it is not booked twice
+		// made again: the package booked already ships, it is not booked twice
 		const shipped = await records.moveTo(order.id, 'dispatched', { shipment: { book: true } });
 		expect(shipped.status).toBe(200);
 		expect(shipped.json.shipment).toMatchObject({ trackingNumber: 'CN 1', booked: true, courier: 'Swift Post' });

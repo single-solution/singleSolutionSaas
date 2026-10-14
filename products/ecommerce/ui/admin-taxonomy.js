@@ -27,7 +27,7 @@ import { card, createScreen, deleteEntry, detailHead, fieldsOf, readFrom, saveDi
 /** Image types the catalog stores. */
 export const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/avif';
 
-/** Category statuses (E1) and their status colours. */
+/** Category statuses (E1) and their status colors. */
 const CATEGORY_TONES = Object.freeze(
 	/** @type {Record<string, Tone>} */ ({ active: 'success', coming_soon: 'warning', hidden: 'neutral' }),
 );

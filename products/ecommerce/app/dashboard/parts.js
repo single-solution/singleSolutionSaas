@@ -246,7 +246,7 @@ export function TextsForm({ texts, saveUrl, resetBody, savedSource, reload }) {
 }
 
 /**
- * The widgets' theme (one per website): light or dark, font, corner radius, accent colour and custom CSS.
+ * The widgets' theme (one per website): light or dark, font, corner radius, accent color and custom CSS.
  * @param {{ theme: { colors: Record<string, string>, fontFamily: string, radius: number, mode: string, customCss: string },
  *   save: (theme: Record<string, unknown>) => Promise<import('./api.js').Answer>, reload: () => void }} props
  */
@@ -315,7 +315,7 @@ export function FormatForm({ format, save, reload }) {
 				<Input
 					label={TEXTS.settings.locale}
 					help={TEXTS.settings.localeHelp}
-					placeholder="en-GB"
+					placeholder="en-US"
 					value={draft.locale}
 					onChange={(event) => setDraft({ ...draft, locale: event.target.value.trim() })}
 				/>

@@ -4,7 +4,7 @@
  * the write that changes them is guarded by them, so nothing is given back or taken twice.
  *
  * - `stock`: `held` (its stock and booked slots are held), `sold` (delivered: its units are sold), `back` (given back),
- *   `none` (a parcel that came back kept out of stock: its move's `restock` no);
+ *   `none` (a package that came back kept out of stock: its move's `restock` no);
  * - `offers`: its offer uses are `counted` or `released`;
  * - `redeemed`: the points it redeemed are `spent` or `given_back`;
  * - `earned`: the points it earns are `none` yet, `credited` or `reversed`;
@@ -57,7 +57,7 @@ export const PLACED_FACTS = Object.freeze({
 const AFTER_DELIVERY = Object.freeze(/** @type {StatusRole[]} */ (['delivered', 'returned']));
 /** Roles whose orders may hold earned points from before (an order whose flag was never written). */
 const SETTLED = Object.freeze(/** @type {StatusRole[]} */ (['delivered', 'returned_to_origin', 'returned', 'refunded']));
-/** Why a parcel came back (a move into a returned_to_origin or returned status keeps it in the history). */
+/** Why a package came back (a move into a returned_to_origin or returned status keeps it in the history). */
 const CAME_BACK = Object.freeze(['rto', 'customer_return']);
 
 /**
@@ -72,7 +72,7 @@ export const isFacts = (value) =>
 
 /**
  * The facts of an order written before they existed, from the flags today's give-backs check: stock from `stockHeld`
- * (sold once delivered), `returnRestocked` and whether a parcel came back; offer uses released and redeemed points
+ * (sold once delivered), `returnRestocked` and whether a package came back; offer uses released and redeemed points
  * given back by `promotions.released` (a return gives the points back but keeps the offers counted); earned points
  * credited by `pointsCredited` (an order that never wrote it counts as credited once settled, as the reversal reads
  * it), reversed when a return or a refund after delivery gave them back; serial numbers captured while its lines list

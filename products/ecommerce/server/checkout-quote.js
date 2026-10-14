@@ -1,6 +1,6 @@
 /**
  * Pricing a cart against the website's catalog and settings (`core/checkout.js` does the arithmetic): the products
- * and variants, category ancestors, grade names, licence keys and booked slots it needs, the offers (`loadOffers` and
+ * and variants, category ancestors, grade names, license keys and booked slots it needs, the offers (`loadOffers` and
  * `applyPromotions`, while `deals`, `bundles` and `coupons` are on: conditions, hours in the business time zone, the
  * payment method, the shopper's picked deal and signed deal locks, E18; how they round, D4), the role price of a
  * signed-in shopper (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20),

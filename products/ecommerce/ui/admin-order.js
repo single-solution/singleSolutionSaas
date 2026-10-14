@@ -2,9 +2,9 @@
  * One order in the orders admin widget (PLAN 0.8.8 Orders, 0.6): a head with the number and status, the next step as
  * a button (Move to …) and Refund or Type serial numbers beside it, and in its More menu the other next statuses, the
  * typed serial numbers (E11), Refund, Edit delivery address (before shipping), Edit staff note, Invoice and Packing
- * slip (opened in a new tab), and a cancelling status last, in danger text behind its typed confirmation. Then the
+ * slip (opened in a new tab), and a canceling status last, in danger text behind its typed confirmation. Then the
  * figures in a grid, the lines with their warranty and serial numbers (E12), and cards: customer (blocked, returned
- * parcels), delivery address, shipment, notes, the order's return claims and history (the website's words for who and
+ * packages), delivery address, shipment, notes, the order's return claims and history (the website's words for who and
  * what the server wrote itself, PLAN 0.4.10). Forms open in dialogs (the packing step asks one serial number per unit;
  * shipping asks a courier and tracking number, or books the courier API); the warnings a move or a refund answers show
  * in the website's words too.
@@ -224,7 +224,7 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.advance'), order.payment.advance > 0 ? money(order.payment.advance) : ''],
 		[t('ordersAdmin.refundedAmount'), order.payment.refunded > 0 ? money(order.payment.refunded) : ''],
 		[t('ordersAdmin.refundableAmount'), refundable > 0 ? money(refundable) : ''],
-		// money a cancelled order still holds (paid after its cancel, or recorded by staff): to be refunded (K-13)
+		// money a canceled order still holds (paid after its cancel, or recorded by staff): to be refunded (K-13)
 		[t('ordersAdmin.refundDue'), order.payment.refundDue > 0 ? money(order.payment.refundDue) : ''],
 		// a refund its cancel asked of Payments: tried again while pending; failed ones staff refund from the order
 		[t('ordersAdmin.refundPending'), effectsSum(order, 'pending') > 0 ? money(effectsSum(order, 'pending')) : ''],
@@ -397,7 +397,7 @@ const VIDEO_ROLES = Object.freeze(['packed', 'shipped']);
 /**
  * Move the order to a status, with what its role and the move need: the serial numbers and the dispatch video when
  * packing, the shipment, a staff note and a note for the shopper (required when the move needs them), and whether the
- * items go back in stock when the move asks; a cancelling status asks for the order number first.
+ * items go back in stock when the move asks; a canceling status asks for the order number first.
  * @param {Kit} kit @param {any} order @param {NextStatus} status
  * @param {(order: any, text: string) => void} done
  */

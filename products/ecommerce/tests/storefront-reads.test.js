@@ -140,8 +140,8 @@ describe('storefront reads through the API', () => {
 	beforeAll(async () => {
 		shop = await readyShop({ features: ALL.filter((feature) => feature !== 'multi_location') });
 		ids.brand = await api('POST', '/v1/brands', { name: 'Maison' });
-		ids.colour = await api('POST', '/v1/attributes', {
-			name: 'Colour',
+		ids.color = await api('POST', '/v1/attributes', {
+			name: 'Color',
 			type: 'choice',
 			choices: ['red', 'gold'],
 			variant: true,

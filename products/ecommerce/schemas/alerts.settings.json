@@ -5,7 +5,7 @@
 		"channels": {
 			"type": "array",
 			"title": "Send alerts by",
-			"description": "How shoppers get back-in-stock and price-drop alerts, through Notifications, to the e-mail or phone of their sign-in.",
+			"description": "How shoppers get back-in-stock and price-drop alerts, through Notifications, to the email or phone of their sign-in.",
 			"default": ["email"],
 			"items": {
 				"type": "string",

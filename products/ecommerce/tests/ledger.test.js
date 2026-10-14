@@ -411,7 +411,7 @@ describe('placing an order', () => {
 			{ now: shop.now() },
 		);
 		if (!placed.ok) throw new Error('not placed');
-		// the parcel was dispatched, then comes back
+		// the package was dispatched, then comes back
 		await data
 			.collection(COLLECTIONS.orders)
 			.updateOne({ websiteId: data.websiteId, id: placed.order.id }, { $set: { status: 'dispatched', role: 'shipped' } });

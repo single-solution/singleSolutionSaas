@@ -44,14 +44,14 @@ const product = (over = {}) => ({
 		{ url: null, alt: 'Gone', type: 'image/png' },
 	],
 	options: [
-		{ name: 'Colour', values: ['Red', 'Blue', 'Green'] },
+		{ name: 'Color', values: ['Red', 'Blue', 'Green'] },
 		{ name: 'Storage', values: ['128 GB', '256 GB'] },
 	],
 	variants: [
 		{
 			id: 'var_r1',
 			name: 'Red / 128 GB',
-			options: { Colour: 'Red', Storage: '128 GB' },
+			options: { Color: 'Red', Storage: '128 GB' },
 			price: 100000,
 			compareAtPrice: 110000,
 			inStock: false,
@@ -60,7 +60,7 @@ const product = (over = {}) => ({
 		{
 			id: 'var_b1',
 			name: 'Blue / 128 GB',
-			options: { Colour: 'Blue', Storage: '128 GB' },
+			options: { Color: 'Blue', Storage: '128 GB' },
 			price: 105000,
 			compareAtPrice: null,
 			inStock: true,
@@ -69,7 +69,7 @@ const product = (over = {}) => ({
 		{
 			id: 'var_b2',
 			name: 'Blue / 256 GB',
-			options: { Colour: 'Blue', Storage: '256 GB' },
+			options: { Color: 'Blue', Storage: '256 GB' },
 			price: 120000,
 			compareAtPrice: null,
 			inStock: true,
@@ -135,9 +135,9 @@ describe('product page', () => {
 			text('page.showImage', { n: 2, total: 2 }),
 		);
 		// variant picker: Green does not exist, Red / 256 GB does not exist, Red / 128 GB is out of stock
-		const colour = $(host, '#ss-page-option-0');
-		expect([...colour.options].find((/** @type {any} */ o) => o.value === 'Green').disabled).toBe(true);
-		expect([...colour.options].find((/** @type {any} */ o) => o.value === 'Red').textContent).toBe(
+		const color = $(host, '#ss-page-option-0');
+		expect([...color.options].find((/** @type {any} */ o) => o.value === 'Green').disabled).toBe(true);
+		expect([...color.options].find((/** @type {any} */ o) => o.value === 'Red').textContent).toBe(
 			text('page.optionOutOfStock', { value: 'Red' }),
 		);
 		await setValue($(host, '#ss-page-option-1'), '256 GB');
@@ -457,8 +457,8 @@ describe('product page', () => {
 	it('finds the variant of chosen options', () => {
 		const item = /** @type {any} */ (product());
 		const axes = axesOf(item);
-		expect(pickVariant(axes, item.variants, { Colour: 'Blue', Storage: '256 GB' })?.id).toBe('var_b2');
-		expect(pickVariant(axes, item.variants, { Colour: 'Green', Storage: '256 GB' })).toBeNull();
+		expect(pickVariant(axes, item.variants, { Color: 'Blue', Storage: '256 GB' })?.id).toBe('var_b2');
+		expect(pickVariant(axes, item.variants, { Color: 'Green', Storage: '256 GB' })).toBeNull();
 	});
 });
 

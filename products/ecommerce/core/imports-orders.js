@@ -55,7 +55,7 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
  *   phoneRules: { defaultCallingCode: string, trunkPrefix: string } }} ImportRules
  */
 
-/** The longest name of a person (checkout's guest and address name, IMP-31) and e-mail address. */
+/** The longest name of a person (checkout's guest and address name, IMP-31) and email address. */
 const MAX_PERSON = 120;
 const MAX_EMAIL = 254;
 /** Lines of an imported order, units of one line, entries of its logs, at most. */
@@ -76,7 +76,7 @@ const MAX_KEY = 300;
 const MAX_URL = 2000;
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-/** A phone as checkout keeps one the normaliser cannot read (digits, spaces, + ( ) -). */
+/** A phone as checkout keeps one the normalizer cannot read (digits, spaces, + ( ) -). */
 const PHONE_TEXT = /^\+?[0-9][0-9 ()-]{5,38}$/;
 /** A staff member's id (who opened a record), a Payments id, a stored key hash (SHA-256, base64url). */
 const STAFF_ID = /^[A-Za-z0-9_.:@-]{1,80}$/;
@@ -267,18 +267,18 @@ const checker = () => {
 	};
 
 	/**
-	 * An e-mail address, lower case ('' when missing).
+	 * An email address, lower case ('' when missing).
 	 * @param {unknown} value @param {string} path
 	 */
 	const email = (value, path) => {
 		const clean = text(value, path, MAX_EMAIL).toLowerCase();
-		if (clean !== '' && !EMAIL.test(clean)) fail(path, 'An e-mail address or nothing is expected.');
+		if (clean !== '' && !EMAIL.test(clean)) fail(path, 'An email address or nothing is expected.');
 		return clean;
 	};
 
 	/**
 	 * A phone as E.164 by the website's rules (`@ss/contracts/phone`, K12) ('' when missing). With `strict` it must be
-	 * one (a customer's, an alert's); else a phone-like text the normaliser cannot read is kept as checkout keeps it (an
+	 * one (a customer's, an alert's); else a phone-like text the normalizer cannot read is kept as checkout keeps it (an
 	 * order's).
 	 * @param {unknown} value @param {string} path @param {ImportRules['phoneRules']} rules
 	 * @param {{ required?: boolean, strict?: boolean }} [options]
@@ -351,7 +351,7 @@ const CUSTOMER_FIELDS = fieldList(
 );
 
 /**
- * A customer (`customers`, by `id`): a member (`userId`) or a guest (no `userId`, a phone, E21: one per normalised
+ * A customer (`customers`, by `id`): a member (`userId`) or a guest (no `userId`, a phone, E21: one per normalized
  * phone); the phone as E.164; blocked with a reason (as staff block). `orderCount`, `rtoCount` and `lastOrderAt` given
  * are ignored: they are 0 until `finish` counts the customer's orders.
  * @param {Record<string, unknown>} record
@@ -1213,7 +1213,7 @@ export const checkImportedAlert = (record, rules) => {
 	const userId = c.user(record.userId, '/userId');
 	const email = c.email(record.email, '/email');
 	const phone = c.phone(record.phone, '/phone', rules.phoneRules, { strict: true, required: userId === '' });
-	if (userId !== '' && !email && !phone) c.fail('/email', 'An alert goes to an e-mail address or a phone.');
+	if (userId !== '' && !email && !phone) c.fail('/email', 'An alert goes to an email address or a phone.');
 	const price = c.wholeOrNull(record.price, '/price');
 	const targetPrice = c.wholeOrNull(record.targetPrice, '/targetPrice');
 	if (kind === 'price_drop' && price === null) c.fail('/price', 'A price-drop alert keeps the price it watches.');
@@ -1272,7 +1272,7 @@ export const rtoKeysOf = (flow) =>
 	flow.statuses.filter((status) => status.role === 'returned_to_origin').map((status) => status.key);
 
 /**
- * A customer's counts from the sums of their orders (`finish`): orders placed, parcels returned to origin, the last
+ * A customer's counts from the sums of their orders (`finish`): orders placed, packages returned to origin, the last
  * order.
  * @param {{ count: number, rto: number, last: Date | null } | undefined} sums undefined: no orders
  * @returns {{ orderCount: number, rtoCount: number, lastOrderAt: Date | null }}
@@ -1284,7 +1284,7 @@ export const customerCounts = (sums) => ({
 });
 
 /**
- * Whether an order's lines still hold the serial numbers they list: not when it was cancelled, came back or was
+ * Whether an order's lines still hold the serial numbers they list: not when it was canceled, came back or was
  * returned, nor refunded before delivery (each of those puts its serials back in stock).
  * @param {{ role: string, deliveredAt?: Date | null }} order
  */

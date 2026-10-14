@@ -21,8 +21,8 @@
  *   are taken back.
  *
  * What a move needs is checked before anything is called: the shipment (its tracking number as the move's `tracking`
- * says), the serial numbers (every one before the parcel goes out when the move `needs` units) and the dispatch video
- * (the move's `video`); then the open Payments payment is cancelled (K-13), a shipment booked and a refund made, as the
+ * says), the serial numbers (every one before the package goes out when the move `needs` units) and the dispatch video
+ * (the move's `video`); then the open Payments payment is canceled (K-13), a shipment booked and a refund made, as the
  * move needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
  *
  * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
@@ -83,7 +83,7 @@ export const createMoves = (product, service) => {
 	const transitions = createTransitions(product, service);
 
 	/**
-	 * Cancel at Payments the open payment of an order about to be cancelled or refunded before delivery (K-13): what
+	 * Cancel at Payments the open payment of an order about to be canceled or refunded before delivery (K-13): what
 	 * the move then writes with it, or a refusal when the shopper paid meanwhile (the order is paid now).
 	 * @param {Site} s @param {OrderRecord} order @param {string} reason
 	 */
@@ -154,7 +154,7 @@ export const createMoves = (product, service) => {
 			const key = input.courier ?? String((await s.values('courier_apis')).courier);
 			const courier = key ? courierOf(couriers, key) : null;
 			if (input.courier && !courier) throw service.invalid('shipment/courier', 'There is no such courier.');
-			// a parcel booked for it already (a move that failed after the booking) ships with that booking, never booked
+			// a package booked for it already (a move that failed after the booking) ships with that booking, never booked
 			// twice
 			const booked = order.shipment;
 			if (booked?.booked && booked.trackingNumber && (!input.courier || courier?.name === booked.courier))
@@ -210,7 +210,7 @@ export const createMoves = (product, service) => {
 	/**
 	 * The payment a move out of waiting records when the order's method counts as paid then (`paidOnConfirm`, OR-7):
 	 * the balance due, as a payment of the order's method (cash for cash on delivery and pay at pickup), after its open
-	 * Payments payment is cancelled (K-13); null when the move records none.
+	 * Payments payment is canceled (K-13); null when the move records none.
 	 * @param {Site} s @param {any} ctx @param {OrderRecord} order @param {import('../core/model.js').StatusRole} to
 	 * @param {ReadonlyArray<string>} methods the move's `paidOnConfirm`
 	 */
@@ -360,7 +360,7 @@ export const createMoves = (product, service) => {
 
 		async function moveOn() {
 			// a waiting order staff move on counts as paid when its method is listed (`paidOnConfirm`, OR-7), once its open
-			// Payments payment is cancelled (K-13)
+			// Payments payment is canceled (K-13)
 			const paid = await paidOnConfirm(s, ctx, order, target.role, rules.options.paidOnConfirm ?? []);
 			if (paid) called.steps.push(paid.step);
 			const shipment = shipping
@@ -370,9 +370,9 @@ export const createMoves = (product, service) => {
 				: undefined;
 			const cancelling =
 				(target.role === 'cancelled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
-			// a cancel before dispatch, or a refund acting as one: its open payment is cancelled at Payments first (K-13)
+			// a cancel before dispatch, or a refund acting as one: its open payment is canceled at Payments first (K-13)
 			const step = cancelling
-				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order cancelled' : 'Order refunded'))
+				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order canceled' : 'Order refunded'))
 				: null;
 			if (step) called.steps.push(step);
 			// stock an order gives back tells the alerts (E34): what its products were before
@@ -408,7 +408,7 @@ export const createMoves = (product, service) => {
 					: problem(planned.code, planned.message);
 			const { plan } = planned;
 			let after = await transitions.apply(s, order, plan);
-			// money paid after an earlier cancel of its payment is recorded on the cancelled order (K-13)
+			// money paid after an earlier cancel of its payment is recorded on the canceled order (K-13)
 			if (step && target.role === 'cancelled') {
 				await payments.afterCancel(s, after, step);
 				after = /** @type {OrderRecord} */ (
@@ -463,8 +463,8 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * What a move that failed after calling out leaves on the order, so nothing is lost or done twice: a payment Payments
-	 * cancelled for it is dropped while the order still names it and nothing cancelled the order meanwhile (the
-	 * shopper's next pay starts one for the order as it is, as an edit does); a parcel the courier booked is kept as its
+	 * canceled for it is dropped while the order still names it and nothing canceled the order meanwhile (the
+	 * shopper's next pay starts one for the order as it is, as an edit does); a package the courier booked is kept as its
 	 * shipment (staff see the tracking number; the move made again ships with it, never booking twice).
 	 * @param {Site} s @param {OrderRecord} order as read
 	 * @param {{ steps: import('./order-payments.js').CancelStep[], booked: NonNullable<OrderRecord['shipment']> | null }} called
@@ -710,7 +710,7 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * Record a payment staff took (E26): a bank transfer, cash or another way, at most the balance due. The order's open
-	 * Payments payment is cancelled first, so the money cannot be taken twice (CK-21, as `paidOnConfirm` does); a payment
+	 * Payments payment is canceled first, so the money cannot be taken twice (CK-21, as `paidOnConfirm` does); a payment
 	 * made there meanwhile, or a Payments that cannot be reached, refuses it. With `confirm`, a waiting order moves to its
 	 * confirmed status in the same call (a transition like any other).
 	 * @param {Site} s
@@ -796,7 +796,7 @@ export const createMoves = (product, service) => {
 	 * without a status): its stock and slots, offer uses and redeemed points, and its serial numbers, each once; with the
 	 * checkout setting `deleteGivesBack: all`, a delivered or closed order's items still with the customer, offer uses
 	 * and points too (stock back, earned points taken back, redeemed ones given back). With
-	 * `payments`, its open Payments payment is cancelled first; a payment made meanwhile refuses the delete (K-13), and
+	 * `payments`, its open Payments payment is canceled first; a payment made meanwhile refuses the delete (K-13), and
 	 * so does a Payments that cannot be reached (a deleted order cannot try the cancel again later).
 	 * @param {Site} s @param {OrderRecord} order @param {{ payments?: boolean }} [options]
 	 * @returns {Promise<boolean>} false when the order changed meanwhile (nothing was given back)

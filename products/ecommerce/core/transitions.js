@@ -31,11 +31,11 @@
  *   unless the move keeps them;
  * - into `refunded`: what is left is refunded — the part Payments took through Payments after the transaction (an
  *   external effect, as a staff cancel's), the rest recorded as given back by hand; before dispatch it acts as a cancel,
- *   and an order with nothing paid is cancelled with no money unless the move refuses it (`unpaid`, default `cancel`).
- *   A dispatched parcel is never canceled or refunded as a cancel: it comes back (`returned_to_origin`) first.
+ *   and an order with nothing paid is canceled with no money unless the move refuses it (`unpaid`, default `cancel`).
+ *   A dispatched package is never canceled or refunded as a cancel: it comes back (`returned_to_origin`) first.
  *
  * Refusals: `move_not_allowed` (the flow's moves, who may make them and the role rules; an ended window needs no listed
- * move, and nothing else does: only a waiting order becomes cancelled without one), `flow_changed` (the order's role is not the flow's role of its status any
+ * move, and nothing else does: only a waiting order becomes canceled without one), `flow_changed` (the order's role is not the flow's role of its status any
  * more), `nothing_paid` (a refund before delivery when nothing was paid) and `input_needed` (a move that asks staff
  * whether the items go back in stock, without the answer). What the caller sends (the shipment, the serial numbers,
  * the dispatch video) it checks before. Pure functions, no I/O (ids are random).
@@ -93,7 +93,7 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  * @property {boolean} [restock] staff's answer when the move asks whether the items go back in stock (`restock: ask`)
  * @property {HistoryNote} [code] a note the server writes itself
  * @property {NoteValues} [values]
- * @property {'rto' | 'customer_return'} [reason] why a parcel came back (staff)
+ * @property {'rto' | 'customer_return'} [reason] why a package came back (staff)
  * @property {'staff' | 'shopper' | 'expired'} [cancelReason] why a checkout cancel happened (kept as the reason)
  * @property {boolean} [listed] false: no listed move is needed (an ended window), only the role rules
  * @property {boolean} [trigger] the shop moves it by itself for staff (refunds that cover the payments): any listed
@@ -105,7 +105,7 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  * @property {{ plan: UnitsPlan, mode: 'registered' | 'typed' }} [units] the serial numbers a move into `packed` captures
  * @property {{ set: Record<string, unknown>, entry: Record<string, unknown> }} [paid] a payment the move records
  *   (paid when staff confirm, OR-7; Payments' confirmation)
- * @property {Record<string, unknown>} [payments] what cancelling the open Payments payment writes (K-13)
+ * @property {Record<string, unknown>} [payments] what canceling the open Payments payment writes (K-13)
  */
 
 /** @typedef {Array<{ lineId: string, productId: string, variantId: string, serials: string[], before: string[] }>} UnitsPlan */
@@ -410,8 +410,8 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		triedAt: null,
 	});
 
-	// why: a parcel that came back is a return to origin (counted) or a customer's return (not counted, E27); a checkout
-	// cancel keeps who or what cancelled it
+	// why: a package that came back is a return to origin (counted) or a customer's return (not counted, E27); a checkout
+	// cancel keeps who or what canceled it
 	const reason =
 		stage === 'returned_to_origin'
 			? (input.reason ?? 'rto')
@@ -489,7 +489,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			}));
 
 	/**
-	 * A parcel back: its stock back as the move says (less what claims put back), else kept out; serial numbers back.
+	 * A package back: its stock back as the move says (less what claims put back), else kept out; serial numbers back.
 	 * @param {boolean} countRto
 	 */
 	const comeBack = (countRto) => {
@@ -637,7 +637,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			const { online } = moneyLeft();
 			if (choices.refund && online > 0)
 				external.push(
-					refundEffect(effectId(order, `${order.id}:cancel`), online, input.note || 'Order cancelled', 'Order cancelled'),
+					refundEffect(effectId(order, `${order.id}:cancel`), online, input.note || 'Order canceled', 'Order canceled'),
 				);
 			break;
 		}

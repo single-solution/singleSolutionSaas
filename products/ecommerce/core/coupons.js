@@ -1,7 +1,7 @@
 /**
  * Coupons (PLAN 0.8.8 Promotions): codes (upper case, unique per website), why a code does not apply (stable problem
  * codes), what a coupon takes off the lines in its scope after deals and bundles, the checks of a coupon the merchant
- * writes, and random codes for a batch: normalisation, percent with a cap, fixed amounts spread by value, free
+ * writes, and random codes for a batch: normalization, percent with a cap, fixed amounts spread by value, free
  * delivery, first-order and per-customer limits. No I/O.
  * @module
  */

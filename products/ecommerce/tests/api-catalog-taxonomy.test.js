@@ -169,8 +169,8 @@ describe('size charts, categories and brands through the admin widget', () => {
 describe('attributes, locations and serials through the admin widget', () => {
 	it('answers full attributes with their choices, visibility and glossary', async () => {
 		const brand = (await api('POST', '/v1/brands', { name: 'Visible brand' })).json;
-		const colour = await admin('POST', '/v1/admin/attributes', {
-			name: 'Colour',
+		const color = await admin('POST', '/v1/admin/attributes', {
+			name: 'Color',
 			type: 'choice',
 			choices: ['Black', { value: 'blue', label: 'Blue' }],
 			on: 'variant',
@@ -178,9 +178,9 @@ describe('attributes, locations and serials through the admin widget', () => {
 			card: 'chips',
 			visibility: { when: 'brands', ids: [brand.id] },
 		});
-		expect(colour.status).toBe(201);
-		expect(colour.json).toMatchObject({
-			slug: 'colour',
+		expect(color.status).toBe(201);
+		expect(color.json).toMatchObject({
+			slug: 'color',
 			choices: [
 				{ value: 'Black', label: 'Black' },
 				{ value: 'blue', label: 'Blue' },
@@ -204,12 +204,12 @@ describe('attributes, locations and serials through the admin widget', () => {
 		});
 		const shade = await admin('POST', '/v1/admin/attributes', {
 			name: 'Shade',
-			visibility: { when: 'attribute', attributeId: colour.json.id, value: 'blue' },
+			visibility: { when: 'attribute', attributeId: color.json.id, value: 'blue' },
 			seo: { title: 'Shades', body: 'What a shade is.', faqs: [{ question: 'Why?', answer: 'Because.' }] },
 		});
-		expect(shade.json.visibility).toEqual({ when: 'attribute', ids: [], attributeId: colour.json.id, value: 'blue' });
+		expect(shade.json.visibility).toEqual({ when: 'attribute', ids: [], attributeId: color.json.id, value: 'blue' });
 		const listed = (await admin('GET', '/v1/admin/attributes')).json.items;
-		expect(listed).toEqual(expect.arrayContaining([colour.json, grade.json, shade.json]));
+		expect(listed).toEqual(expect.arrayContaining([color.json, grade.json, shade.json]));
 		listed.forEach(noStamps);
 		const patched = await admin('PATCH', `/v1/admin/attributes/${grade.json.id}`, { filterable: true, visibility: 'always' });
 		expect(patched.json).toMatchObject({ filterable: true, unit: '%', visibility: { when: 'always', ids: [] } });

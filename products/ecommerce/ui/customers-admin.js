@@ -3,7 +3,7 @@
  * each switched-on feature — customers (Cart and checkout, `customers.manage`) as a list-and-detail screen: the count
  * of matching customers as a badge, search, Blocked / Not blocked chips with their counts, and one customer with their
  * figures, staff note, latest orders and return claims, Block (with a reason) or Unblock and Edit note as buttons, and
- * Reset returned parcels in the More menu; reviews moderation (Reviews, `./admin-reviews.js`); reports (Reports,
+ * Reset returned packages in the More menu; reviews moderation (Reviews, `./admin-reviews.js`); reports (Reports,
  * `reports.read`) and CSV (CSV, `csv.run`) from `./admin-reports.js`.
  * @module
  */
@@ -40,7 +40,7 @@ export const mountCustomersAdmin = async (input) => {
 };
 
 /**
- * A customer's name for people: the name, else the e-mail, else the user id or customer id.
+ * A customer's name for people: the name, else the email, else the user id or customer id.
  * @param {any} customer
  */
 const nameOf = (customer) => customer.name || customer.email || customer.userId || customer.id;

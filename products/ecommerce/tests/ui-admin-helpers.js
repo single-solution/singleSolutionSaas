@@ -160,7 +160,7 @@ export const shows = (scope, text) =>
 	[...scope.querySelectorAll('button')].some((b) => b.textContent === text && !b.closest('[hidden]'));
 
 /**
- * The control of a labelled field.
+ * The control of a labeled field.
  * @param {ParentNode} scope @param {string} label @param {number} [index]
  * @returns {any}
  */
@@ -189,7 +189,7 @@ export const change = async (node, value) => {
 	node.dispatchEvent(new window.Event('change'));
 	await flush();
 };
-/** Tick or untick a checkbox. @param {HTMLInputElement} box @param {boolean} value */
+/** Check or uncheck a checkbox. @param {HTMLInputElement} box @param {boolean} value */
 export const tick = async (box, value) => {
 	Object.assign(box, { checked: value });
 	box.dispatchEvent(new window.Event('change'));

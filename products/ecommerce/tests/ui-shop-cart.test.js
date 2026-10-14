@@ -248,7 +248,7 @@ describe('cart', () => {
 					quoteOf({
 						lines: [
 							line({
-								url: 'https://shop.example.com/products/phone?colour=blue',
+								url: 'https://shop.example.com/products/phone?color=blue',
 								problems: [{ code: 'out_of_stock', message: 'This item is out of stock.' }],
 							}),
 							line({
@@ -264,7 +264,7 @@ describe('cart', () => {
 		});
 		const items = $$(host, 'ul.lines > li');
 		expect(items.map((item) => item.classList.contains('problem'))).toEqual([true, true]);
-		expect(items[0].querySelector('strong a').getAttribute('href')).toBe('https://shop.example.com/products/phone?colour=blue');
+		expect(items[0].querySelector('strong a').getAttribute('href')).toBe('https://shop.example.com/products/phone?color=blue');
 		expect(items[1].querySelector('strong a')).toBeNull();
 		expect(textOf(host)).toContain(text('cart.problem.out_of_stock'));
 		expect(textOf(host)).toContain(text('cart.problem.sold_out'));

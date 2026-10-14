@@ -58,7 +58,7 @@ const contextOf = ({ features = ['variants', 'grades_serials', 'digital_goods', 
 				ATT,
 				{
 					id: ATT,
-					name: 'Colour',
+					name: 'Color',
 					type: 'choice',
 					choices: [
 						{ value: 'red', label: 'Red' },
@@ -191,7 +191,7 @@ describe('taxonomy', () => {
 		});
 		/** @param {unknown} visibility */
 		const attribute = (visibility) =>
-			checkImportedAttribute({ id: ATT, slug: 'colour', name: 'Colour', type: 'text', visibility }, context);
+			checkImportedAttribute({ id: ATT, slug: 'color', name: 'Color', type: 'text', visibility }, context);
 		expect(paths(attribute({ when: 'brands', ids: [idOf('brd', 9)] }))).toEqual(['/visibility/ids']);
 		expect(paths(attribute({ when: 'grades', ids: ['z'] }))).toEqual(['/visibility/ids']);
 		expect(paths(attribute({ when: 'attribute', attributeId: ATT, value: 'x' }))).toEqual(['/visibility/attributeId']);

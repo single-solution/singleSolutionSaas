@@ -126,7 +126,7 @@ export const landingsTab = (kit, panel, lookups) => {
 	};
 
 	/**
-	 * AI copy (E15): ask for suggestions of the fields picked, change them if needed, and apply the ones ticked.
+	 * AI copy (E15): ask for suggestions of the fields picked, change them if needed, and apply the ones checked.
 	 * @param {Landing} landing
 	 */
 	const writeWithAi = (landing) => {

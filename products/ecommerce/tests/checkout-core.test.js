@@ -24,7 +24,7 @@ import { checkTaxRules, taxOf, taxPercent } from '../core/taxes.js';
 const variant = (over = {}) => ({
 	id: 'var_1',
 	sku: 'SKU1',
-	options: { Colour: 'Red', Size: 'M' },
+	options: { Color: 'Red', Size: 'M' },
 	price: 1000,
 	compareAtPrice: null,
 	cost: 600,
@@ -223,7 +223,7 @@ describe('lines', () => {
 		expect(lines.every((line) => !line.priced)).toBe(true);
 	});
 
-	it('checks booking slots and licence keys', () => {
+	it('checks booking slots and license keys', () => {
 		const booking = productOf({ id: 'prd_book', kind: 'booking', trackStock: false, booking: { durationMinutes: 60 } });
 		const digital = productOf({
 			id: 'prd_dig',
@@ -380,7 +380,7 @@ describe('COD safety', () => {
 		expect(codAdvance(1000, { advanceAmount: 0, advancePercent: 0 })).toBe(0);
 	});
 
-	it('flags returned parcels and decides', () => {
+	it('flags returned packages and decides', () => {
 		expect(isRtoFlagged(2, 2)).toBe(true);
 		expect(isRtoFlagged(5, 0)).toBe(false);
 		const settings = { maxOrderValue: 0, advanceAmount: 0, advancePercent: 0, rtoThreshold: 1, rtoRequireAdvance: true };

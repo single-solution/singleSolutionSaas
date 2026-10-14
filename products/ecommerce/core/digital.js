@@ -1,6 +1,6 @@
 /**
  * Digital goods (PLAN 0.8.8: download/licence after payment). A digital product keeps its files in the merchant's own
- * storage (`ecommerce/digital/<productId>/<name>`) and may have licence keys (one per unit sold, given when the order
+ * storage (`ecommerce/digital/<productId>/<name>`) and may have license keys (one per unit sold, given when the order
  * is paid). Downloads are short-lived signed links (5 minutes), counted per order line up to the product's download
  * limit (else the `digital_goods` setting `downloadLimit`; 0 = no limit). No I/O.
  * @module
@@ -10,7 +10,7 @@
 export const DOWNLOAD_SECONDS = 300;
 /** The largest digital file (one signed upload). */
 export const MAX_FILE_BYTES = 5 * 1024 * 1024 * 1024;
-/** At most this many licence keys per call, and this long each. */
+/** At most this many license keys per call, and this long each. */
 const MAX_KEYS_PER_CALL = 1000;
 const MAX_KEY_LENGTH = 500;
 
@@ -37,12 +37,12 @@ export const fileKey = (productId, name) => `ecommerce/digital/${productId}/${na
 export const fileNameOf = (key) => key.slice(key.lastIndexOf('/') + 1);
 
 /**
- * Licence keys to add: trimmed, without blanks and repeats.
+ * License keys to add: trimmed, without blanks and repeats.
  * @param {unknown} value
  * @returns {{ ok: true, value: string[] } | { ok: false, message: string }}
  */
 export const checkLicenceKeys = (value) => {
-	const message = `keys is a list of 1–${MAX_KEYS_PER_CALL} licence keys of at most ${MAX_KEY_LENGTH} characters.`;
+	const message = `keys is a list of 1–${MAX_KEYS_PER_CALL} license keys of at most ${MAX_KEY_LENGTH} characters.`;
 	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_KEYS_PER_CALL) return { ok: false, message };
 	/** @type {Set<string>} */
 	const keys = new Set();

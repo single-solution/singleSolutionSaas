@@ -1,6 +1,6 @@
 /**
  * The cart and checkout through the API: quotes, placing COD, online, bank-transfer and advance orders, payment
- * confirmation through the fake Payments, the shopper's orders, cancelling, the end of waiting windows on use, pickup,
+ * confirmation through the fake Payments, the shopper's orders, canceling, the end of waiting windows on use, pickup,
  * loyalty points and the widget settings.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -168,7 +168,7 @@ describe('quote', () => {
 		expect(order.promotions).toMatchObject({ dealIds: ['deal_checkout1'], pointsRedeemed: 150, pointsValue: 15_000 });
 		expect(order.promotions.pointsEarned).toBeGreaterThan(0);
 		const cancelled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, { signIn: shopper.token });
-		expect(cancelled.json.order.statusLabel).toBe('Cancelled');
+		expect(cancelled.json.order.statusLabel).toBe('Canceled');
 		const again = await visit('POST', '/v1/shop/cart/quote', { body, signIn: shopper.token });
 		expect(again.json.points.balance).toBe(300);
 		await data

@@ -8,7 +8,7 @@
  * order numbered `IM-2026-0043` (prefix, digits and the counter, in the business year of business.json's time zone),
  * events, staff alerts (listed recipients and Accounts staff whose role grants the permission) and per-status
  * messages (the mails the real Notifications sends), claims, invoices and the reports summary. Ecommerce runs on the
- * REAL Portal with the real Accounts, Payments and Notifications next to it; the e-mail provider (Resend), the
+ * REAL Portal with the real Accounts, Payments and Notifications next to it; the email provider (Resend), the
  * merchant's S3 bucket and the store's own site (its business.json) are fakes in this process.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -60,7 +60,7 @@ const FLOW = {
 		{ key: 'packed', label: 'Packed', role: 'packed' },
 		{ key: 'dispatched', label: 'Dispatched', role: 'shipped' },
 		{ key: 'delivered', label: 'Delivered', role: 'delivered' },
-		{ key: 'cancelled', label: 'Cancelled', role: 'cancelled' },
+		{ key: 'cancelled', label: 'Canceled', role: 'cancelled' },
 		{ key: 'returned', label: 'Returned to origin', role: 'returned_to_origin' },
 		{ key: 'refunded', label: 'Refunded', role: 'refunded' },
 		{ key: 'customer-returned', label: 'Returned by the customer', role: 'returned' },
@@ -329,7 +329,7 @@ beforeAll(async () => {
 		'bank_transfer.instructions': 'Write your order number as the reference.',
 	});
 
-	// Notifications: e-mail through the merchant's provider, with the shopper's and the staff's templates
+	// Notifications: email through the merchant's provider, with the shopper's and the staff's templates
 	await dashboardOf(NOTIFY, 'notifications', '/features', { on: ['email'] });
 	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'notifications'), websiteId, NOTIFY);
 	await dashboardOf(NOTIFY, 'notifications', '/connections/email', {
@@ -342,7 +342,7 @@ beforeAll(async () => {
 		['ecommerce.order_status.refunded', 'Order {number}: {status}', 'Order {number} is {status}.'],
 		['ecommerce.staff_placed', 'New order {number}', '{name} placed {number} for {total} ({paymentMethod}).'],
 		['ecommerce.staff_paid', 'Paid: {number}', 'Order {number} is paid.'],
-		['ecommerce.staff_cancelled', 'Cancelled: {number}', 'Order {number} was cancelled ({reason}).'],
+		['ecommerce.staff_cancelled', 'Canceled: {number}', 'Order {number} was canceled ({reason}).'],
 		['ecommerce.staff_proof_uploaded', 'Transfer proof: {number}', 'Proof for {number}, reference {reference}.'],
 		['ecommerce.staff_return_requested', 'Claim {reference}', 'A claim {reference} on order {number}.'],
 		['ecommerce.back_in_stock', 'Back in stock: {name}', '{name} is back for {price}: {url} Stop these alerts: {stopUrl}'],
@@ -488,10 +488,10 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		const sara = await signIn('03001112233');
 		const cancelled = await shopper('POST', `/v1/shop/orders/${ids.first.id}/cancel`, { signIn: sara });
 		expect(cancelled.json.order.status).toBe('cancelled');
-		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Order IM-2026-0001: Cancelled');
+		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Order IM-2026-0001: Canceled');
 		// the reason in words from the website's texts, not the code (K-10)
-		expect(told?.text).toBe('Order IM-2026-0001 is Cancelled (Cancelled at your request).');
-		expect(mailsTo(before, TEAM).map((mail) => mail.subject)).toContain('Cancelled: IM-2026-0001');
+		expect(told?.text).toBe('Order IM-2026-0001 is Canceled (Canceled at your request).');
+		expect(mailsTo(before, TEAM).map((mail) => mail.subject)).toContain('Canceled: IM-2026-0001');
 
 		const events = await eventsOf('ecommerce.order.placed,ecommerce.order.status_changed,ecommerce.order.cancelled');
 		const of43 = events.filter((/** @type {any} */ e) => e.data.number === 'IM-2026-0043');
@@ -773,7 +773,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		const refunded = await server(
 			'POST',
 			`/v1/orders/${order.id}/refunds`,
-			{ amount: total, reason: 'Order was cancelled' },
+			{ amount: total, reason: 'Order was canceled' },
 			{ staff: 'Ayesha Khan', key: `k13-${order.id}` },
 		);
 		expect(refunded.status, JSON.stringify(refunded.json)).toBe(201);

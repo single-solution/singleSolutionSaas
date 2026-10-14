@@ -127,8 +127,8 @@ describe('core/feeds and core/llms', () => {
 		description: '',
 		trackStock: true,
 		variants: [
-			variant({ id: 'var_a', options: { Colour: 'Red' }, price: 900, compareAtPrice: 1200, sku: 'SKU-A', grade: 'a' }),
-			variant({ id: 'var_b', options: { Colour: 'Blue' }, stock: 0, sku: 'SKU-B' }),
+			variant({ id: 'var_a', options: { Color: 'Red' }, price: 900, compareAtPrice: 1200, sku: 'SKU-A', grade: 'a' }),
+			variant({ id: 'var_b', options: { Color: 'Blue' }, stock: 0, sku: 'SKU-B' }),
 			variant({ id: 'var_c', active: false }),
 		],
 	});
@@ -354,10 +354,10 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 			sold: 9,
 			rating: { average: 4.36, count: 3 },
 			media: [{ key: 'ecommerce/products/p/1.jpg', type: 'image/jpeg', size: 10, alt: '' }],
-			options: [{ name: 'Colour', values: ['Red', 'Blue'] }],
+			options: [{ name: 'Color', values: ['Red', 'Blue'] }],
 			variants: [
-				variant({ options: { Colour: 'Red' }, price: 25000, compareAtPrice: 30000, sku: 'AP-R', grade: 'b' }),
-				variant({ options: { Colour: 'Blue' }, price: 26000, stock: 0, sku: 'AP-B' }),
+				variant({ options: { Color: 'Red' }, price: 25000, compareAtPrice: 30000, sku: 'AP-R', grade: 'b' }),
+				variant({ options: { Color: 'Blue' }, price: 26000, stock: 0, sku: 'AP-B' }),
 			],
 		});
 		ebook = await shop.seedProduct({ slug: 'ebook', name: 'Ebook', kind: 'digital', trackStock: false, stock: 0, price: 500 });

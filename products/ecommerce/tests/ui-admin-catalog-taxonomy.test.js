@@ -399,7 +399,7 @@ describe('catalog admin: attributes', () => {
 		search(panel, 'tag');
 		expect(rowsOf(panel)).toEqual(['Tags']);
 		await pick(panel, 'Tags');
-		expect(textOf(detailOf(panel))).toContain('When Colour is Red');
+		expect(textOf(detailOf(panel))).toContain('When Color is Red');
 		search(panel, 'zzz');
 		expect(statuses(panel)).toContain('Nothing matches.');
 		search(panel, 'screen');
@@ -570,7 +570,7 @@ describe('catalog admin: logos and deletions', () => {
 		server.routes['GET /v1/admin/attributes'] = () => answer(200, { items: ATTRIBUTES.slice(1) });
 		await menu(detailOf(attributes), 'Delete');
 		await confirmDialog(root, 'Screen');
-		expect(rowsOf(attributes)[0]).toBe('Colour');
+		expect(rowsOf(attributes)[0]).toBe('Color');
 		const locations = await openTab(root, 'locations');
 		await pick(locations, 'Store room');
 		server.routes['GET /v1/admin/locations'] = () =>

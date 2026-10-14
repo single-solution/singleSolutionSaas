@@ -42,7 +42,7 @@ export const TRACK_EVERY_MS = 30 * 60_000;
 /**
  * History entries the server writes itself (PLAN 0.4.10: every word a widget shows is a text the merchant can edit):
  * each keeps its English `note` and gets its `code` (the widgets' words, `ordersAdmin.historyNote.<code>`) with its
- * `values`. `shopper`: the shopper cancelled; `not_paid_in_time` and `not_confirmed_in_time`: a waiting order ended;
+ * `values`. `shopper`: the shopper canceled; `not_paid_in_time` and `not_confirmed_in_time`: a waiting order ended;
  * `payment_confirmed`: Payments confirmed the payment (a move); `payments_took` and `paid_after_cancel` (`amount`):
  * Payments took money outside that, after the cancel for the second; `proof_sent`: the shopper sent a transfer proof;
  * `edited`; `serials_typed`; `refunded` and `refunded_recorded` (`amount`, `reason`), `claim_refunded` and
@@ -81,7 +81,7 @@ export const HISTORY_NOTES = Object.freeze(
 /**
  * What staff are warned of after a move, a refund or a recorded payment (the widgets' words `ordersAdmin.warning.<code>`):
  * `refund_by_hand` (`amount`): Payments only recorded a refund, so the shop gives the money back by hand (OR-8);
- * `cancel_refund_failed` (`amount`): the order was cancelled but its refund through Payments failed; `refund_failed`
+ * `cancel_refund_failed` (`amount`): the order was canceled but its refund through Payments failed; `refund_failed`
  * (`amount`): the order moved to a refunded status but refunding through Payments failed (tried again while Payments
  * cannot be reached); `refund_pending` (`amount`): a staff refund Payments did not answer is kept on the order and sent
  * again when the order is next used (the refund lock: never twice, always recorded); `refund_skipped` (`amount`): a
@@ -195,7 +195,7 @@ const leftAtPayments = (order) => {
  * An order's money, the one way every view, invoice, message, lookup and check counts it (CK-5, K-23): `paid` and
  * `refunded` as its payments and refunds logs add up (E26); `net` what the shop holds of it; `due` what is still to pay,
  * the total less what was paid (a refund never makes a debt), and nothing once the order is closed (`CLOSED_ROLES`);
- * `refundable` what can still be given back; `refundDue` the shopper's money a cancelled order still holds, to be
+ * `refundable` what can still be given back; `refundDue` the shopper's money a canceled order still holds, to be
  * refunded (a payment that came after the cancel, or money recorded by staff, K-13).
  * @param {Pick<OrderRecord, 'role' | 'totals' | 'payment'>} order
  */
@@ -272,7 +272,7 @@ export const stateAfterRefund = (paid, refunded) => (refunded >= paid ? 'refunde
  * @property {Date} [to] placed before
  * @property {Date} [createdAfter] created after (E31)
  * @property {boolean} [unseen] not yet opened by the acting staff member (E31; the server adds who)
- * @property {string} [q] number, name, phone (its last digits), e-mail or city
+ * @property {string} [q] number, name, phone (its last digits), email or city
  */
 
 /** @param {unknown} value */
@@ -414,7 +414,7 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
  * @typedef {{ to: string, note: string, serials: Record<string, string[]>, shipment: ShipmentInput | null,
  *   updatedAt: string | null, reason?: 'rto' | 'customer_return', video?: OrderMedia, code?: HistoryNote,
  *   shopperNote?: string, restock?: boolean }} MoveInput
- *   `reason`: why a parcel came back (E27); `video`: the dispatch video taken when packing (E28); `code`: the code of a
+ *   `reason`: why a package came back (E27); `video`: the dispatch video taken when packing (E28); `code`: the code of a
  *   note the server writes itself (a move that follows a refund or a recorded payment; never from what staff send);
  *   `shopperNote`: a note the shopper reads in the order's timeline and message (the staff note stays internal);
  *   `restock`: whether the items go back in stock, for a move that asks (`restock: ask`)
@@ -598,7 +598,7 @@ export const checkRefund = (body, order) => {
  */
 
 /**
- * Check a payment staff record (E26): at most the balance due, never on a closed order (cancelled, returned or
+ * Check a payment staff record (E26): at most the balance due, never on a closed order (canceled, returned or
  * refunded: money for it is refunded, not taken, K-13).
  * @param {unknown} body
  * @param {OrderRecord} order
@@ -1133,7 +1133,7 @@ export const customerView = (customer, spent, currency, money) => ({
 
 /**
  * A customer record as the person it is about gets it (data rights, SE-1): who they are and how often they ordered,
- * never what staff keep about them (the block and its reason, returned parcels, the staff note, who opened it).
+ * never what staff keep about them (the block and its reason, returned packages, the staff note, who opened it).
  * @param {Partial<CustomerRecord> & { createdAt?: Date }} customer
  */
 export const customerOwnView = (customer) => ({

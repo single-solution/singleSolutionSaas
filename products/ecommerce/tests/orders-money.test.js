@@ -70,7 +70,7 @@ describe('orderMoney (CK-5, K-23)', () => {
 		expect(orderMoney(order({ paid: 400 })).due).toBe(600);
 		for (const role of ['cancelled', 'returned_to_origin', 'refunded', 'returned'])
 			expect(orderMoney(order({ paid: 400 }, { role })).due).toBe(0);
-		// a cancelled order still holding money owes it back
+		// a canceled order still holding money owes it back
 		expect(orderMoney(order({ paid: 1000, refunded: 200 }, { role: 'cancelled' })).refundDue).toBe(800);
 		expect(orderMoney(order({ paid: 1000 }, { role: 'returned' })).refundDue).toBe(0);
 	});

@@ -21,7 +21,7 @@ export const randomOf = (seed) => {
 /**
  * A random flow the role rules allow: one or two statuses per role (one of each waiting role), random allowed moves —
  * E40's extra moves included —, each with random options of its stage (`core/flow.js` `moveOptionSpecs`) and, out of a
- * status before dispatch into a cancelled one, the shopper among `who` at random. With `full`, always two statuses per
+ * status before dispatch into a canceled one, the shopper among `who` at random. With `full`, always two statuses per
  * role (one of each waiting role), so flows differ only in their moves and each can be saved over the last while orders
  * are in any status (the flow-save guard). With `plain`, the moves have no options (their defaults: today's behavior).
  * @param {() => number} random

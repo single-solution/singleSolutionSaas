@@ -33,8 +33,8 @@ beforeAll(async () => {
 	const cases = await api('POST', '/v1/categories', { name: 'Cases', sort: 5 });
 	const acme = await api('POST', '/v1/brands', { name: 'Acme' });
 	const ram = await api('POST', '/v1/attributes', { name: 'RAM', type: 'number', unit: 'GB', filterable: true, sort: 1 });
-	const colour = await api('POST', '/v1/attributes', {
-		name: 'Colour',
+	const color = await api('POST', '/v1/attributes', {
+		name: 'Color',
 		type: 'choice',
 		choices: ['Black', 'Blue'],
 		filterable: true,
@@ -42,14 +42,14 @@ beforeAll(async () => {
 	});
 	const fiveG = await api('POST', '/v1/attributes', { name: '5G', type: 'boolean', filterable: true, sort: 3 });
 	const note = await api('POST', '/v1/attributes', { name: 'Note', type: 'text' });
-	Object.assign(ids, { phones, android, cases, acme, ram, colour, fiveG, note });
+	Object.assign(ids, { phones, android, cases, acme, ram, color, fiveG, note });
 	ids.pixel = await api('POST', '/v1/products', {
 		name: 'Pixel 9',
 		status: 'active',
 		summary: 'Fast phone',
 		categoryIds: [android.id],
 		brandId: acme.id,
-		specs: { [ram.id]: 8, [colour.id]: 'Black', [fiveG.id]: true, [note.id]: 'Nice' },
+		specs: { [ram.id]: 8, [color.id]: 'Black', [fiveG.id]: true, [note.id]: 'Nice' },
 		options: [{ name: 'Storage', values: ['128 GB', '256 GB'] }],
 		variants: [
 			{ sku: 'PX-128', options: { Storage: '128 GB' }, price: 70000, compareAtPrice: 75000, stock: 3, grade: 'new' },
@@ -62,7 +62,7 @@ beforeAll(async () => {
 		status: 'active',
 		categoryIds: [phones.id],
 		tags: ['samsung'],
-		specs: { [ram.id]: 12, [colour.id]: 'Blue', [fiveG.id]: false },
+		specs: { [ram.id]: 12, [color.id]: 'Blue', [fiveG.id]: false },
 		price: 90000,
 		stock: 0,
 	});
@@ -104,7 +104,7 @@ describe('the product grid', () => {
 		expect(facets.price).toEqual({ min: 1500, max: 90000 });
 		expect(facets.brands).toEqual([{ id: ids.acme.id, slug: 'acme', name: 'Acme', count: 1 }]);
 		expect(facets.categories.map((/** @type {any} */ c) => c.name).sort()).toEqual(['Android', 'Cases', 'Phones']);
-		expect(facets.attributes.map((/** @type {any} */ a) => a.name)).toEqual(['RAM', 'Colour', '5G']);
+		expect(facets.attributes.map((/** @type {any} */ a) => a.name)).toEqual(['RAM', 'Color', '5G']);
 		expect(facets.attributes[0].values).toEqual([
 			{ value: 8, label: '8 GB', count: 1 },
 			{ value: 12, label: '12 GB', count: 1 },
@@ -132,7 +132,7 @@ describe('the product grid', () => {
 		]);
 		expect(names(await get('/v1/shop/products?inStock=true&sort=price_desc'))).toEqual(['Pixel 9', 'Bestseller', 'Clear case']);
 		expect(names(await get(`/v1/shop/products?attr.${ids.ram.id}=12`))).toEqual(['Galaxy S']);
-		expect(names(await get(`/v1/shop/products?attr.${ids.colour.id}=Black,Blue&sort=name`))).toEqual(['Galaxy S', 'Pixel 9']);
+		expect(names(await get(`/v1/shop/products?attr.${ids.color.id}=Black,Blue&sort=name`))).toEqual(['Galaxy S', 'Pixel 9']);
 		expect(names(await get(`/v1/shop/products?attr.${ids.fiveG.id}=true`))).toEqual(['Pixel 9']);
 		expect(names(await get('/v1/shop/products?attr.att_none=1'))).toEqual([]);
 		expect(names(await get('/v1/shop/products?grade=used'))).toEqual(['Pixel 9']);
@@ -203,7 +203,7 @@ describe('the product page', () => {
 		expect(page.json.specs.map((/** @type {any} */ s) => [s.name, s.value, s.unit])).toEqual([
 			['Note', 'Nice', ''],
 			['RAM', 8, 'GB'],
-			['Colour', 'Black', ''],
+			['Color', 'Black', ''],
 			['5G', true, ''],
 		]);
 		expect(page.json.variants).toMatchObject([

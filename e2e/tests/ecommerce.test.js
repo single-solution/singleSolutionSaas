@@ -4,7 +4,7 @@
  * server token, a shopper signed in through the real Accounts, a priced cart, a cash-on-delivery order, an order paid
  * online through the real Payments (Stripe faked in process) and marked paid only after Payments confirms it, a status
  * move by the merchant's staff with a ticket, a partial return refunded through Payments and restocked exactly once,
- * a Chat shop lookup answered from the real Ecommerce with a product card, and the hourly charge. The e-mail provider,
+ * a Chat shop lookup answered from the real Ecommerce with a product card, and the hourly charge. The email provider,
  * Stripe and the AI provider are fakes in this process; no real network call is made.
  */
 import { createHmac } from 'node:crypto';
@@ -211,7 +211,7 @@ describe('Ecommerce on the real Portal', () => {
 	});
 
 	it('sets up the shop: its database, and the pasted Accounts, Payments and Notifications tokens', async () => {
-		// Accounts: e-mail and password sign-in
+		// Accounts: email and password sign-in
 		expect((await setUp(ACCOUNTS, 'accounts', '/features', { on: ['email_password'] })).status).toBe(200);
 		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'accounts'), websiteId, ACCOUNTS);
 		// Payments: Stripe with the merchant's keys, the payment API and refunds
@@ -220,7 +220,7 @@ describe('Ecommerce on the real Portal', () => {
 		expect((await setUp(PAYMENTS, 'payments', '/connections/stripe', { value: STRIPE_KEYS })).json).toMatchObject({
 			status: 'connected',
 		});
-		// Notifications: e-mail through the merchant's provider, with the order-placed template
+		// Notifications: email through the merchant's provider, with the order-placed template
 		expect((await setUp(NOTIFY, 'notifications', '/features', { on: ['email'] })).status).toBe(200);
 		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'notifications'), websiteId, NOTIFY);
 		const provider = await setUp(NOTIFY, 'notifications', '/connections/email', {

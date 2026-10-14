@@ -92,7 +92,7 @@ describe('required messages (K-17)', () => {
 		expect(await outbox()).toEqual([]);
 	});
 
-	it('reads staff alert phones with the shared normaliser, leaving local numbers out (K12)', () => {
+	it('reads staff alert phones with the shared normalizer, leaving local numbers out (K12)', () => {
 		expect(recipientOf('+92 0320 4862403')).toEqual({ key: 'p:923204862403', to: { phone: '+923204862403' } });
 		expect(recipientOf('0092 300 1234567')).toEqual(recipientOf('+92 300 1234567'));
 		expect(recipientOf(' Team@Shop.Example.com ')).toEqual({

@@ -10,13 +10,13 @@
  *   or `packed` order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
  * - `cancelled` from waiting, open or packed statuses; `refunded` from waiting, open or packed statuses (E27: it acts
  *   as a cancel; with nothing paid only when the move says `unpaid: cancel`, the default), and after delivery;
- * - a `shipped` parcel is delivered, comes back (`returned_to_origin`) or moves to another `shipped` status: once
+ * - a `shipped` package is delivered, comes back (`returned_to_origin`) or moves to another `shipped` status: once
  *   dispatched it is never canceled or refunded as a cancel — it comes back first (owner, 2026-10-14), while money
  *   paid can still be refunded without a status change (`POST /v1/orders/:id/refunds`);
  * - `delivered` may become `refunded` or `returned` (a customer return, E27); `returned_to_origin` and `returned` only
  *   `refunded`; `returned_to_origin` only from `shipped`;
  * - the extra moves of E40, only when the flow lists them: a cancel after delivery or of a closed order, a refund of a
- *   cancelled order, and a move between two closed statuses (cancelled ↔ refunded, a return → cancelled). What each does follows the facts the order has (`core/transitions.js`),
+ *   canceled order, and a move between two closed statuses (canceled ↔ refunded, a return → canceled). What each does follows the facts the order has (`core/transitions.js`),
  *   so nothing is given back or taken twice.
  *
  * A move says who may make it (`who`: staff; staff and the shopper — a cancel before dispatch —; or only the shop
@@ -63,7 +63,7 @@ export const MOVE_PERMISSIONS = Object.freeze(
 /** The statuses whose entering sends the shopper a message unless the flow says otherwise (today's default list). */
 const NOTIFIED_KEYS = Object.freeze(['confirmed', 'dispatched', 'delivered', 'cancelled', 'refunded']);
 
-/** Roles whose orders still wait (counted by the open-order cap; cancelled when their window ends). */
+/** Roles whose orders still wait (counted by the open-order cap; canceled when their window ends). */
 export const WAITING_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['awaiting_payment', 'awaiting_confirmation']));
 /** Roles of an order before delivery (a refund then acts as a cancel). */
 export const BEFORE_DELIVERY_ROLES = Object.freeze(
@@ -99,7 +99,7 @@ const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} *
 		'refunded',
 	],
 	returned_to_origin: ['shipped'],
-	// E40: a refund of a cancelled order, when listed (a shipped parcel comes back first)
+	// E40: a refund of a canceled order, when listed (a shipped package comes back first)
 	refunded: [
 		'awaiting_payment',
 		'awaiting_confirmation',
@@ -131,11 +131,11 @@ Object.freeze(ALLOWED_FROM);
  * - into shipped: `tracking`, the tracking number `required` (default) or `optional`;
  * - into cancelled: `refund`, what Payments took is refunded `auto`matically when staff cancel (default) or by `staff`
  *   from the order; with the shopper among `who`, `shopperPaid`: a paid order the shopper cancels is refused
- *   (`refuse`, the default out of open or packed), cancelled with the refund left due (`flag`, the default out of
- *   waiting) or cancelled and refunded (`refund`);
- * - into refunded before dispatch: `unpaid`, an order with nothing paid is cancelled with no money (`cancel`, the
+ *   (`refuse`, the default out of open or packed), canceled with the refund left due (`flag`, the default out of
+ *   waiting) or canceled and refunded (`refund`);
+ * - into refunded before dispatch: `unpaid`, an order with nothing paid is canceled with no money (`cancel`, the
  *   default, owner 2026-10-14) or refused (`refuse`);
- * - into returned to origin or returned: `restock`, the parcel goes back in stock (`yes`, the default), stays out
+ * - into returned to origin or returned: `restock`, the package goes back in stock (`yes`, the default), stays out
  *   (`no`) or staff say so with each move (`ask`);
  * - into cancelled or refunded from delivered or a closed status (the items may still be with the customer): `restock`,
  *   default `no` (owner, 2026-10-14);
@@ -182,7 +182,7 @@ const OPTION_NAMES = Object.freeze([
 ]);
 
 /**
- * Who may make a move by default: staff, and the shopper too out of a waiting status into a cancelled one (today's
+ * Who may make a move by default: staff, and the shopper too out of a waiting status into a canceled one (today's
  * `shopperCancel` default).
  * @param {StatusRole} from @param {StatusRole} to
  * @returns {Mover[]}
@@ -190,7 +190,7 @@ const OPTION_NAMES = Object.freeze([
 const defaultWho = (from, to) => (WAITING_ROLES.includes(from) && to === 'cancelled' ? ['staff', 'shopper'] : ['staff']);
 
 /**
- * What staff give with a move by default: every serial number before a parcel goes out (typed serials, E11).
+ * What staff give with a move by default: every serial number before a package goes out (typed serials, E11).
  * @param {StatusRole} to
  * @returns {Array<'note' | 'reason' | 'units'>}
  */
@@ -232,7 +232,7 @@ const DEFAULT_DEFINITION = {
 		{ key: 'packed', label: 'Packed', role: /** @type {StatusRole} */ ('packed') },
 		{ key: 'dispatched', label: 'Dispatched', role: /** @type {StatusRole} */ ('shipped') },
 		{ key: 'delivered', label: 'Delivered', role: /** @type {StatusRole} */ ('delivered') },
-		{ key: 'cancelled', label: 'Cancelled', role: /** @type {StatusRole} */ ('cancelled') },
+		{ key: 'cancelled', label: 'Canceled', role: /** @type {StatusRole} */ ('cancelled') },
 		{ key: 'returned', label: 'Returned to origin', role: /** @type {StatusRole} */ ('returned_to_origin') },
 		{ key: 'refunded', label: 'Refunded', role: /** @type {StatusRole} */ ('refunded') },
 	],
@@ -259,7 +259,7 @@ const DEFAULT_DEFINITION = {
  * its name), shopper lines ('' each) and message (the statuses `confirmed`, `dispatched`, `delivered`, `cancelled` and
  * `refunded` send one, as the `notifyStatuses` default did); a move's `who`, permission, needs and options
  * ({@link moveRules}); the triggers (Payments' confirmation: the first open status listed from the awaiting-payment
- * status; an ended window: the first cancelled status listed from it, else the first; refunds covering the payments:
+ * status; an ended window: the first canceled status listed from it, else the first; refunds covering the payments:
  * none) and the starts (the awaiting-confirmation status, else the first open one).
  * @param {unknown} value
  * @returns {{ ok: true, value: Required<OrderFlow> } | { ok: false, errors: string[] }}
@@ -438,7 +438,7 @@ const moveProblems = (name, move, from, to) => {
 
 /**
  * The flow's triggers, checked: `paid` an open status listed from the awaiting-payment status ('' = Payments'
- * confirmation leaves the order where it is, paid), `windowEnd` a cancelled status, `refundsCover` a refunded status or
+ * confirmation leaves the order where it is, paid), `windowEnd` a canceled status, `refundsCover` a refunded status or
  * ''. Missing ones are today's choices.
  * @param {OrderFlow} flow checked @param {Record<string, unknown>} input @param {string[]} errors
  * @returns {import('./model.js').FlowTriggers}
@@ -669,7 +669,7 @@ export const confirmedStatus = (flow, from, who = 'system') =>
 	nextStatuses(flow, from, who).find((status) => status.role === 'open')?.key ?? null;
 
 /**
- * The first cancelled status listed from a status, else the first cancelled status (an ended window's default).
+ * The first canceled status listed from a status, else the first canceled status (an ended window's default).
  * @param {OrderFlow} flow @param {string} from
  * @returns {string}
  */
@@ -677,7 +677,7 @@ export const cancelledStatus = (flow, from) =>
 	nextStatuses(flow, from).find((status) => status.role === 'cancelled')?.key ?? statusWithRole(flow, 'cancelled');
 
 /**
- * The move a shopper cancels with from a status: the first listed move into a cancelled status the shopper may make, or
+ * The move a shopper cancels with from a status: the first listed move into a canceled status the shopper may make, or
  * null.
  * @param {OrderFlow} flow @param {string} from
  */

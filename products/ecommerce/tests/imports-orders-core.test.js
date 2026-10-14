@@ -410,7 +410,7 @@ describe('orders', () => {
 			'/returnRestocked',
 			'/note',
 		]);
-		// a cancelled order holds no stock
+		// a canceled order holds no stock
 		expect(
 			pathsOf(
 				checkImportedOrder(
@@ -465,10 +465,10 @@ describe('orders', () => {
 			warrantyDays: 99999,
 			dealId: 'deal',
 			booking: 'today',
-			colour: 'red',
+			color: 'red',
 		};
 		expect(pathsOf(checkImportedOrder(order({ lines: [bad] }), RULES))).toEqual([
-			'/lines/0/colour',
+			'/lines/0/color',
 			'/lines/0/kind',
 			'/lines/0/quantity',
 			'/lines/0/discount',
@@ -980,7 +980,7 @@ describe('reviews, claims, alerts and wishlists', () => {
 });
 
 describe('finish', () => {
-	it('count a customer’s orders, RTO parcels and last order', () => {
+	it('count a customer’s orders, RTO packages and last order', () => {
 		expect(rtoKeysOf(DEFAULT_FLOW)).toEqual(['returned']);
 		const late = new Date('2026-02-01T00:00:00Z');
 		expect(customerCounts(undefined)).toEqual({ orderCount: 0, rtoCount: 0, lastOrderAt: null });

@@ -80,7 +80,7 @@ describe('events and staff alerts (E32)', () => {
 		});
 	});
 
-	it('sends words, not codes: payment and delivery methods and why it was cancelled, from the texts (K-10)', async () => {
+	it('sends words, not codes: payment and delivery methods and why it was canceled, from the texts (K-10)', async () => {
 		const before = shop.messages().length;
 		const order = await placeOrder();
 		const placed = shop
@@ -94,7 +94,7 @@ describe('events and staff alerts (E32)', () => {
 			.find((m) => m.template === 'ecommerce.staff_placed');
 		expect(staffPlaced.values.paymentMethod).toBe('Cash on delivery');
 
-		// the staff's note is the reason; without one, the website's text for who cancelled
+		// the staff's note is the reason; without one, the website's text for who canceled
 		const noted = shop.messages().length;
 		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled', note: 'Out of stock at the warehouse' });
 		const told = shop.messages().slice(noted);

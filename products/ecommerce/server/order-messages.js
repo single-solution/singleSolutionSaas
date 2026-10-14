@@ -9,7 +9,7 @@
  * `deliveryMethod` (words, not codes: the website's texts `checkout.method.<method>` and
  * `messages.delivery.<method>`, '' without delivery; K-10), `courier`, `trackingNumber`, `trackingUrl`,
  * `trackingDetails`, `orderUrl` and `reviewUrl` (the `checkout` templates with `{number}`), `cancelReason` (why it was
- * cancelled: the note for the shopper staff wrote with the move, else the note staff typed, else the text
+ * canceled: the note for the shopper staff wrote with the move, else the note staff typed, else the text
  * `messages.cancelReason.<staff | shopper | unpaid | unconfirmed>`; '' for other statuses), `shopperNote` (the note for
  * the shopper staff wrote with the move, '' without one) and `business`. The merchant edits those words in Texts. Order messages are
  * required (sent whatever the shopper opted out of) and saved before they are sent, so a call to Notifications that
@@ -51,7 +51,7 @@ export const ORDER_MESSAGE_VALUES = Object.freeze(
 
 /** @typedef {typeof ORDER_MESSAGE_VALUES[number]} OrderMessageValue */
 
-/** Why an order was cancelled (`messages.cancelReason.<code>`). @typedef {'staff' | 'shopper' | 'unpaid' | 'unconfirmed'} CancelCode */
+/** Why an order was canceled (`messages.cancelReason.<code>`). @typedef {'staff' | 'shopper' | 'unpaid' | 'unconfirmed'} CancelCode */
 
 /**
  * The words messages and staff alerts show for an order's codes (K-10), from the website's texts.
@@ -65,7 +65,7 @@ export const messageWords = async (s) => {
 		/** @param {string} method `delivery`, `pickup` or `none` (no delivery: '') */
 		delivery: (method) => (method === 'none' ? '' : (texts[`messages.delivery.${method}`] ?? method)),
 		/**
-		 * Why it was cancelled: the note staff typed with the move, else the text for who or what cancelled it.
+		 * Why it was canceled: the note staff typed with the move, else the text for who or what canceled it.
 		 * @param {CancelCode} code @param {string} [note]
 		 */
 		cancel: (code, note = '') => note.trim() || (texts[`messages.cancelReason.${code}`] ?? ''),

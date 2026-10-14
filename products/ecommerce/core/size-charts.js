@@ -1,5 +1,5 @@
 /**
- * Size charts (PLAN 0.8.10 E5): a named table of sizes in inches or centimetres, with columns, rows of values, fit
+ * Size charts (PLAN 0.8.10 E5): a named table of sizes in inches or centimeters, with columns, rows of values, fit
  * advice and notes. A product shows the chart named on it, else its brand's, else its first category's (or the nearest
  * ancestor's), unless it hides the size guide. No I/O.
  * @module

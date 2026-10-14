@@ -65,9 +65,9 @@ describe('patterns, shipping and feed rows', () => {
 		seo: { title: '', description: 'Short SEO copy.' },
 		trackStock: true,
 		variants: [
-			variant({ id: 'var_76543210fedcba9876543210', options: { Size: 'M', Colour: 'Maroon' }, price: 6000 }),
-			variant({ options: { Size: 'L', Colour: 'Green' }, price: 4000 }),
-			variant({ options: { Size: 'S', Colour: 'Blue' }, price: 0 }),
+			variant({ id: 'var_76543210fedcba9876543210', options: { Size: 'M', Color: 'Maroon' }, price: 6000 }),
+			variant({ options: { Size: 'L', Color: 'Green' }, price: 4000 }),
+			variant({ options: { Size: 'S', Color: 'Blue' }, price: 0 }),
 		],
 	});
 	const context = {

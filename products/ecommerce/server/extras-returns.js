@@ -1,7 +1,7 @@
 /**
  * Return and warranty claims (feature `returns`, PLAN 0.8.8): a signed-in shopper claims items of their own delivered
  * order within each item's window, with photos uploaded straight to the merchant's storage; the merchant's staff (or
- * server) approve or reject, mark the parcel received, refund (through Payments when the order was paid online, else
+ * server) approve or reject, mark the package received, refund (through Payments when the order was paid online, else
  * recorded), restock each line exactly once (the ledger's `restockClaimLines`) and close. Loyalty points earned on the
  * returned part are taken back on the first refund. The shopper gets a message (`ecommerce.return_status`) at each
  * step. Each step's history entry names who did it (a ticket's user, the staff member a server-token call names in its

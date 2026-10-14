@@ -49,9 +49,9 @@ beforeAll(async () => {
 	ids.below = await api('POST', '/v1/categories', { name: 'Below secret', parentId: ids.secret.id });
 	ids.brand = await api('POST', '/v1/brands', { name: 'Maison', categoryIds: [ids.clothes.id] });
 	ids.gone = await api('POST', '/v1/brands', { name: 'Gone', status: 'hidden' });
-	ids.colour = await api('POST', '/v1/attributes', {
-		name: 'Colour',
-		slug: 'colour',
+	ids.color = await api('POST', '/v1/attributes', {
+		name: 'Color',
+		slug: 'color',
 		type: 'choice',
 		on: 'variant',
 		multiple: true,
@@ -388,14 +388,14 @@ describe('E5 size charts', () => {
 
 describe('E7 attributes on variants and the generator', () => {
 	it('derives options from variant attributes, allows the same options with other grades, and generates variants', async () => {
-		expect(ids.colour).toMatchObject({
-			slug: 'colour',
+		expect(ids.color).toMatchObject({
+			slug: 'color',
 			on: 'variant',
 			multiple: true,
 			choices: [{ value: 'red', label: 'Red' }, expect.anything(), expect.anything()],
 		});
 		expect(ids.size.slug).toBe('size');
-		expect((await shop.api('POST', '/v1/attributes', { name: 'Colour', slug: 'colour' })).status).toBe(409);
+		expect((await shop.api('POST', '/v1/attributes', { name: 'Color', slug: 'color' })).status).toBe(409);
 		expect((await shop.api('POST', '/v1/attributes', { name: 'Flag', type: 'boolean', on: 'variant' })).status).toBe(422);
 		expect(
 			(await shop.api('POST', '/v1/attributes', { name: 'Visible', visibility: { when: 'brands', ids: ['brd_none'] } }))
@@ -426,15 +426,15 @@ describe('E7 attributes on variants and the generator', () => {
 			categoryIds: [ids.clothes.id],
 			specs: { [ids.fabric.id]: ['Silk', 'Cotton'] },
 			variants: [
-				{ attributes: { [ids.colour.id]: ['red', 'blue'], [ids.size.id]: 'S' }, price: 1000, stock: 1, grade: 'a-plus' },
-				{ attributes: { [ids.colour.id]: ['red', 'blue'], [ids.size.id]: 'S' }, price: 800, stock: 1, grade: 'b' },
+				{ attributes: { [ids.color.id]: ['red', 'blue'], [ids.size.id]: 'S' }, price: 1000, stock: 1, grade: 'a-plus' },
+				{ attributes: { [ids.color.id]: ['red', 'blue'], [ids.size.id]: 'S' }, price: 800, stock: 1, grade: 'b' },
 			],
 		});
 		expect(item.options).toEqual([
-			{ name: 'Colour', values: ['Red, Blue'] },
+			{ name: 'Color', values: ['Red, Blue'] },
 			{ name: 'Size', values: ['S'] },
 		]);
-		expect(item.variants[0].options).toEqual({ Colour: 'Red, Blue', Size: 'S' });
+		expect(item.variants[0].options).toEqual({ Color: 'Red, Blue', Size: 'S' });
 		expect(
 			(
 				await shop.api('POST', '/v1/products', {
@@ -458,16 +458,16 @@ describe('E7 attributes on variants and the generator', () => {
 				})
 			).status,
 		).toBe(422);
-		expect((await shop.api('POST', '/v1/products', { name: 'Bad', specs: { [ids.colour.id]: 'red' } })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/products', { name: 'Bad', specs: { [ids.color.id]: 'red' } })).status).toBe(422);
 
 		const setup = await api('PATCH', `/v1/products/${item.id}`, {
 			attributeSetup: [
-				{ attributeId: ids.colour.id, values: ['green'], customValues: ['Ochre'], defaultValue: 'green' },
+				{ attributeId: ids.color.id, values: ['green'], customValues: ['Ochre'], defaultValue: 'green' },
 				{ attributeId: ids.size.id, values: ['S', 'M'] },
 			],
 		});
 		expect(setup.attributeSetup[0]).toEqual({
-			attributeId: ids.colour.id,
+			attributeId: ids.color.id,
 			values: ['green'],
 			customValues: ['Ochre'],
 			defaultValue: 'green',
@@ -507,11 +507,11 @@ describe('E7 attributes on variants and the generator', () => {
 
 describe('E8 listing and filtering', () => {
 	it('matches one variant on every filter, filters several values, pages and counts', async () => {
-		const colour = `attr.colour`;
-		expect(names(await get(`/v1/shop/products?${colour}=green`))).toEqual(['Printed scarf']);
-		expect(names(await get(`/v1/shop/products?${colour}=red&grade=b&maxPrice=900`))).toEqual(['Printed scarf']);
+		const color = `attr.color`;
+		expect(names(await get(`/v1/shop/products?${color}=green`))).toEqual(['Printed scarf']);
+		expect(names(await get(`/v1/shop/products?${color}=red&grade=b&maxPrice=900`))).toEqual(['Printed scarf']);
 		// red only exists at 1000 and 800, green at 1200: no single variant is green and under 900
-		expect(names(await get(`/v1/shop/products?${colour}=green&maxPrice=900`))).toEqual([]);
+		expect(names(await get(`/v1/shop/products?${color}=green&maxPrice=900`))).toEqual([]);
 		expect(names(await get(`/v1/shop/products?attr.fabric=Silk`))).toEqual(['Printed scarf']);
 		expect(names(await get(`/v1/shop/products?grade=a-plus,b&inStock=1`)).sort()).toEqual(['Featured gown', 'Printed scarf']);
 		expect(names(await get(`/v1/shop/products?brand=${ids.brand.slug},nothing`))).toEqual(['Featured gown']);
@@ -534,8 +534,8 @@ describe('E8 listing and filtering', () => {
 		const card = (await get('/v1/shop/products?q=scarf')).json.items[0];
 		expect(card).toMatchObject({ price: 800, priceMax: 1200, featured: false });
 		const facets = (await get('/v1/shop/products')).json.facets;
-		const colours = facets.attributes.find((/** @type {any} */ a) => a.slug === 'colour');
-		expect(colours.values.map((/** @type {any} */ v) => [v.value, v.label, v.count])).toEqual([
+		const colors = facets.attributes.find((/** @type {any} */ a) => a.slug === 'color');
+		expect(colors.values.map((/** @type {any} */ v) => [v.value, v.label, v.count])).toEqual([
 			['blue', 'Blue', 1],
 			['green', 'Green', 1],
 			['Ochre', 'Ochre', 1],
@@ -578,9 +578,9 @@ describe('E8 listing and filtering', () => {
 		const cases = [
 			[{}, all],
 			[{ conditions: { rules: [{ field: 'grades', values: ['b'] }] } }, ['Featured gown', 'Printed scarf']],
-			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.colour.id, values: ['green'] }] } }, ['Printed scarf']],
+			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.color.id, values: ['green'] }] } }, ['Printed scarf']],
 			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.fabric.id, values: ['Silk'] }] } }, ['Printed scarf']],
-			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.colour.id, values: ['red'], op: 'not_in' }] } }, all],
+			[{ conditions: { rules: [{ field: 'attribute', attributeId: ids.color.id, values: ['red'], op: 'not_in' }] } }, all],
 			[{ conditions: { priceRange: { min: 1_000, max: null } } }, ['Printed scarf']],
 			[{ conditions: { priceRange: { min: null, max: 600 } } }, ['Featured gown', 'Shown dress']],
 			[
@@ -679,7 +679,7 @@ describe('E13 URL templates and slug history', () => {
 		expect(page.url).toBe(`https://shop.example.com/clothes/dresses/maison/${ids.featured.slug}`);
 		expect(page.variants[0].url).toBe(`${page.url}?grade=a-plus`);
 		const scarf = (await get(`/v1/shop/products/${ids.scarf.slug}`)).json;
-		expect(scarf.variants[0].url).toBe(`https://shop.example.com/clothes/${ids.scarf.slug}?grade=a-plus&colour=red&size=S`);
+		expect(scarf.variants[0].url).toBe(`https://shop.example.com/clothes/${ids.scarf.slug}?grade=a-plus&color=red&size=S`);
 		expect(page.breadcrumb.map((/** @type {any} */ c) => c.url)).toEqual([
 			'https://shop.example.com/clothes',
 			'https://shop.example.com/clothes/dresses',

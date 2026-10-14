@@ -2,7 +2,7 @@
  * Ecommerce on the store-conversion kit (PLAN 0.8.10 K1–K9): the list settings through the kit's settings API, the
  * staff member a server-token call names in its `SS-Actor-*` headers on order, claim, refund and catalog records,
  * visitor calls from the merchant's server, counts that equal their lists, the Format and the business time zone in
- * server texts and order numbers and report days, and labelled activity entries.
+ * server texts and order numbers and report days, and labeled activity entries.
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -183,7 +183,7 @@ describe('K1: list settings for the merchant’s server', () => {
 	});
 });
 
-describe('K2 and K9: the acting staff member and labelled activity', () => {
+describe('K2 and K9: the acting staff member and labeled activity', () => {
 	it('records the staff member a server-token move names, and Server without the headers', async () => {
 		const order = await seedOrder();
 		const moved = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'confirmed' }, ACTOR);

@@ -58,7 +58,7 @@ const pageOf = (batch) => ({ read: batch.length, last: batch.length === 0 ? null
 const timeOf = (at) => (at instanceof Date ? at.getTime() : null);
 
 /**
- * Customers' order count, RTO count (parcels moved to a `returned_to_origin` status for another reason than a
+ * Customers' order count, RTO count (packages moved to a `returned_to_origin` status for another reason than a
  * customer's return, as the ledger counts them) and last order time, from their orders (by customer id). A page of
  * customers.
  * @param {WebsiteData} data @param {string[]} rtoKeys @param {Page} page
@@ -242,7 +242,7 @@ const finishSold = async (data, { after, limit }) => {
 };
 
 /**
- * Serials sold through order lines: each serial number a line of a holding order lists (not cancelled, returned or
+ * Serials sold through order lines: each serial number a line of a holding order lists (not canceled, returned or
  * refunded before delivery; not put back by a claim) is `sold` with its order and line. A serial sold to another order
  * is left as it is, and one without a record is only counted (the catalog import writes the serials). A page of the
  * orders whose lines list serials.

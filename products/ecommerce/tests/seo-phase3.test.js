@@ -45,10 +45,10 @@ beforeAll(async () => {
 		brandId: ids.acme.id,
 		faqs: [{ question: 'Charger included?', answer: 'No.' }],
 		seo: { title: 'Acme One phone', focusKeyword: 'acme one' },
-		options: [{ name: 'Colour', values: ['Black', 'White'] }],
+		options: [{ name: 'Color', values: ['Black', 'White'] }],
 		variants: [
-			{ sku: 'A1-B', options: { Colour: 'Black' }, price: 50000, stock: 5, grade: 'mint' },
-			{ sku: 'A1-W', options: { Colour: 'White' }, price: 45000, stock: 5, grade: 'fair' },
+			{ sku: 'A1-B', options: { Color: 'Black' }, price: 50000, stock: 5, grade: 'mint' },
+			{ sku: 'A1-W', options: { Color: 'White' }, price: 45000, stock: 5, grade: 'fair' },
 		],
 	});
 	ids.other = await api('POST', '/v1/products', {

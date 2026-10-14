@@ -2,7 +2,7 @@
  * Condition grades (PLAN 0.8.8 Items: used or refurbished items carry a condition grade; PLAN 0.8.10 E10): the
  * `grades` list the merchant keeps in the dashboard — a stable key (letters, digits, `_` and `-`), a label shown to
  * shoppers, a description, the item's return and warranty days for that grade (null = the `returns` setting), and per
- * grade the categories it is for ([] = all), a colour, a condition video, content, whether it is offered, the item
+ * grade the categories it is for ([] = all), a color, a condition video, content, whether it is offered, the item
  * condition structured data and feeds use, and its glossary SEO. A grade entry may be the definition for one category
  * (`categoryId`, E45): the same key then exists once per category with its own label, texts, days and SEO, and once
  * without a category for every other one. Variants name a grade by its key; a product's grade is the entry of its
@@ -18,7 +18,7 @@ const MAX_DESCRIPTION = 1200;
 
 /** Grade keys. */
 const KEY = /^[a-z][a-z0-9_-]{0,39}$/;
-/** A CSS colour as the website writes it (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
+/** A CSS color as the website writes it (a name, `#rgb`, `#rrggbb`, `rgb(…)` …). */
 const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
 /** Grade conditions (schema.org item conditions). */
 const CONDITIONS = Object.freeze(/** @type {const} */ (['new', 'refurbished', 'used']));
@@ -99,7 +99,7 @@ export const checkGrades = (value) => {
 			errors.push(`Grade ${n}: categories are a list of category ids.`);
 		const color = entry.color === undefined ? '' : entry.color;
 		if (typeof color !== 'string' || !COLOUR.test(color))
-			errors.push(`Grade ${n}: the colour is a CSS colour of up to 40 characters.`);
+			errors.push(`Grade ${n}: the color is a CSS color of up to 40 characters.`);
 		const video = entry.video === undefined ? '' : shortText(entry.video, 500);
 		if (video === null) errors.push(`Grade ${n}: the video is a file key or a YouTube id.`);
 		/** @type {Array<{ path: string, message: string }>} */

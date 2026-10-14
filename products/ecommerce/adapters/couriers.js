@@ -84,7 +84,7 @@ const headersOf = (value) => {
  * @returns {string | null}
  */
 export const courierViolation = (value, policy) => {
-	if (!isObject(value)) return 'Fill in the booking address, the tracking address and the API key.';
+	if (!isObject(value)) return 'Enter the booking address, the tracking address and the API key.';
 	const book = typeof value.bookUrl === 'string' ? value.bookUrl : '';
 	if (!book.startsWith('https://') || !checkUrl(book, policy).ok) return 'The booking address must be a public https address.';
 	const track = typeof value.trackUrl === 'string' ? value.trackUrl : '';
@@ -221,7 +221,7 @@ export const createCouriers = ({ send, policy = createOutboundPolicy() }) => {
 				: { ok: false, message: 'The courier did not answer a tracking number.' };
 		},
 		/**
-		 * The latest status of a booked parcel.
+		 * The latest status of a booked package.
 		 * @param {{ trackingNumber: string, value: unknown }} input
 		 * @returns {Promise<{ ok: true, status: string } | { ok: false, message: string }>}
 		 */

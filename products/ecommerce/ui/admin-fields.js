@@ -17,7 +17,7 @@ const MAX_BULLETS = 12;
 
 /** The elements a rich description may hold (E3); `b` and `i` are read as `strong` and `em`. */
 const RICH_TAGS = new Set(['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'a']);
-/** A contact link rich text may keep (SF-1): an e-mail address or a phone number. */
+/** A contact link rich text may keep (SF-1): an email address or a phone number. */
 const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
 const RICH_SYNONYMS = Object.freeze(/** @type {Record<string, string>} */ ({ b: 'strong', i: 'em' }));
 /** Elements dropped with everything inside them. */

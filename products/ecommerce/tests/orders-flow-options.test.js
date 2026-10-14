@@ -30,7 +30,7 @@ const codeOf = (response) =>
 		.split('/')
 		.pop();
 
-/** The seeded orders' customer, with an e-mail address to write to. */
+/** The seeded orders' customer, with an email address to write to. */
 const CUSTOMER = { userId: SHOPPER, name: 'Eve', email: 'eve@example.com', phone: '', customerId: 'cus_engine000001' };
 
 let visits = 0;
@@ -67,7 +67,7 @@ const moveWith = (from, to, fields) => (/** @type {any} */ flow) => ({
 });
 
 describe('a paid order the shopper cancels', () => {
-	it('is refused, cancelled with the refund due, or cancelled and refunded, as the move says', async () => {
+	it('is refused, canceled with the refund due, or canceled and refunded, as the move says', async () => {
 		await withFlow(
 			moveWith('confirmed', 'cancelled', { who: ['staff', 'shopper'], options: { shopperPaid: 'refuse' } }),
 			async () => {
@@ -376,7 +376,7 @@ describe('checkout options of the flow', () => {
 	});
 
 	it('a flow without a confirmation step starts cash-on-delivery orders open', async () => {
-		// a status with orders cannot go (the flow-save guard): the orders waiting in it are cancelled first
+		// a status with orders cannot go (the flow-save guard): the orders waiting in it are canceled first
 		const waiting = await shop.api('GET', '/v1/orders?status=awaiting_confirmation&limit=100');
 		for (const order of waiting.json.items) expect((await records.moveTo(order.id, 'cancelled')).status).toBe(200);
 		await withFlow(

@@ -19,7 +19,7 @@ import { generateDialog, stockText } from './admin-variants.js';
 /** @typedef {import('./admin-kit.js').Tone} Tone */
 /** @typedef {import('./admin-products.js').ProductContext} ProductContext */
 
-/** Product statuses and their status colours. */
+/** Product statuses and their status colors. */
 export const STATUS_TONES = Object.freeze(
 	/** @type {Record<string, Tone>} */ ({ active: 'success', draft: 'warning', archived: 'neutral' }),
 );
@@ -115,7 +115,7 @@ const stockDialog = (kit, product, context) => {
 };
 
 /**
- * AI copy (E16): ask for suggestions of the texts picked, change them if needed, and apply the ones ticked.
+ * AI copy (E16): ask for suggestions of the texts picked, change them if needed, and apply the ones checked.
  * @param {Kit} kit @param {any} product @param {ProductContext} context
  */
 const aiDialog = (kit, product, context) => {

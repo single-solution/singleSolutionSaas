@@ -1,9 +1,9 @@
 'use client';
 /**
  * Settings → Grades and serials: the condition grades editor (`grades` list of `grades_serials`, PLAN 0.8.10 E10). The
- * list shows each grade's colour, name, key, condition, return and warranty days and categories, with Edit and a More
+ * list shows each grade's color, name, key, condition, return and warranty days and categories, with Edit and a More
  * menu (move, remove); a grade's every field is edited in a dialog (PLAN 0.6: secondary forms in dialogs): name and
- * key (hyphens allowed), condition (new, refurbished, used, or the SEO and feeds setting), days, colour with a swatch,
+ * key (hyphens allowed), condition (new, refurbished, used, or the SEO and feeds setting), days, color with a swatch,
  * whether it is offered, a description of up to 1,200 characters, a condition video (a file key or a YouTube id;
  * a pasted YouTube address keeps its id), the category it is the definition for (E45: the same key once per category,
  * with its own label, texts, days and glossary, and once for every other category), the categories it is for, its
@@ -62,7 +62,7 @@ const LEGEND = 'block text-[13px] font-medium leading-5 text-fg';
 const counter = (text, max) => fill(G.count, { count: text.length, max });
 
 /**
- * The value a colour picker can show for a CSS colour (`#rrggbb`), black for names and other forms.
+ * The value a color picker can show for a CSS color (`#rrggbb`), black for names and other forms.
  * @param {string} color
  */
 const hexOf = (color) => {
@@ -73,7 +73,7 @@ const hexOf = (color) => {
 };
 
 /**
- * A grade's colour as a small swatch (a neutral box when it has none).
+ * A grade's color as a small swatch (a neutral box when it has none).
  * @param {{ color: string, size?: 'sm' | 'md', label?: string }} props
  */
 function Swatch({ color, size = 'md', label }) {

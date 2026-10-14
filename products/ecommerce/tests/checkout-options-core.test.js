@@ -47,7 +47,7 @@ const dealLine = (o = {}) => ({
 	categoryIds: ['c1'],
 	brandId: 'b1',
 	grade: 'a',
-	attributes: { att_colour: ['red'] },
+	attributes: { att_color: ['red'] },
 	unitPrice: 1000,
 	quantity: 1,
 	...o,
@@ -115,7 +115,7 @@ describe('deal conditions and windows (E18)', () => {
 		expect(conditionsHold(null, dealLine(), cart)).toBe(true);
 		expect(conditionsHold(rules([{ field: 'grades', op: 'in', values: ['a'] }]), dealLine(), cart)).toBe(true);
 		expect(conditionsHold(rules([{ field: 'grades', op: 'not_in', values: ['a'] }]), dealLine(), cart)).toBe(false);
-		const attribute = { field: 'attribute', attributeId: 'att_colour', op: 'in', values: ['red'] };
+		const attribute = { field: 'attribute', attributeId: 'att_color', op: 'in', values: ['red'] };
 		expect(conditionsHold(rules([attribute]), dealLine(), cart)).toBe(true);
 		expect(conditionsHold(rules([attribute]), dealLine({ attributes: {} }), cart)).toBe(false);
 		const either = rules(
@@ -262,7 +262,7 @@ describe('loyalty options (E20)', () => {
 });
 
 describe('guests and order keys (E21)', () => {
-	it('reads phones with the shared normaliser and the website’s rules (K12)', () => {
+	it('reads phones with the shared normalizer and the website’s rules (K12)', () => {
 		expect(phoneRules({ defaultCallingCode: '', trunkPrefix: '' }, 'PK')).toEqual({
 			defaultCallingCode: '+92',
 			trunkPrefix: '',

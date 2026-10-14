@@ -272,7 +272,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 				amount: 3000,
 				state: 'pending',
 				reason: 'Out of stock',
-				note: 'Order cancelled',
+				note: 'Order canceled',
 			}),
 		]);
 		expect(cancelled.push.effects).toEqual({ $each: cancelled.external });
@@ -304,7 +304,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(planOf(plan(back, 'cancelled')).ledger).toEqual([]);
 	});
 
-	it('takes parcels back: restocked or kept out, an RTO counted, points of a customer’s return', () => {
+	it('takes packages back: restocked or kept out, an RTO counted, points of a customer’s return', () => {
 		const shipped = order({ status: 'dispatched', role: 'shipped' });
 		const rto = planOf(plan(shipped, 'returned'));
 		expect(kinds(rto)).toEqual(['release_units', 'restock_return', 'count_rto']);
@@ -411,7 +411,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(checkTransition({ order: order(), flow: DEFAULT_FLOW, to: 'confirmed' })).toMatchObject({
 			code: 'move_not_allowed',
 		});
-		// G1: the status of a delivered order given the role open must not let it be cancelled
+		// G1: the status of a delivered order given the role open must not let it be canceled
 		const reRoled = {
 			...DEFAULT_FLOW,
 			statuses: DEFAULT_FLOW.statuses.map((status) =>

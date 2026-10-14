@@ -1,7 +1,7 @@
 /**
  * The shopper widgets' own CSS (added after `WIDGET_CSS`, inside their shadow roots only): the grid's filters, cards
  * and listing footer, the product page's gallery, buy box, grade, video, FAQs and Size guide, the cart's lines and
- * totals, the order pages. Colours, font and corner radius come from the website's theme, with fallbacks for light and
+ * totals, the order pages. Colors, font and corner radius come from the website's theme, with fallbacks for light and
  * dark; the theme's accent is the only accent (green, amber and red only for status). Everything fits from 360 px, and
  * layouts follow the widget's own width (container queries), not the screen's: the grid puts its filters beside the
  * products, and the product page its gallery beside the buy box, where the widget is wide. Motion runs only when the

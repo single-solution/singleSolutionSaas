@@ -4,7 +4,7 @@
  * Format, PLAN 0.8.10 K7), dates and times by the Format and the business time zone, the business days of date
  * pickers (K8), calls with the ticket (JSON, and plain text for CSV files and printable documents), problem texts (the
  * website's words for the field or code of a refusal, never the server's English; a 403 without its own text means the
- * ticket's permissions do not allow it), and small builders: labelled fields, tables, sections, paged lists, id
+ * ticket's permissions do not allow it), and small builders: labeled fields, tables, sections, paged lists, id
  * pickers, two-step buttons and uploads to presigned addresses. Text is always set as text, never as HTML.
  * @module
  */
@@ -322,7 +322,7 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	};
 
 	/**
-	 * A labelled field.
+	 * A labeled field.
 	 * @param {string} label @param {HTMLElement} control
 	 */
 	const field = (label, control) => {
@@ -548,7 +548,7 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	const countBadge = (count) => (typeof count === 'number' ? text('span', { class: 'count' }, String(count)) : null);
 
 	/**
-	 * A grid of labelled values; empty values are left out.
+	 * A grid of labeled values; empty values are left out.
 	 * @param {Array<[string, Child | undefined]>} rows
 	 */
 	const fieldGrid = (rows) =>

@@ -1,7 +1,7 @@
 /**
- * Digital goods (PLAN 0.8.8: download/licence after payment): the merchant adds licence keys and uploads files for a
+ * Digital goods (PLAN 0.8.8: download/licence after payment): the merchant adds license keys and uploads files for a
  * digital product (server routes and the matching admin-widget routes, permission `catalog.edit`); when an order is
- * paid its digital lines get licence keys (one per unit, each key given once); the shopper downloads the files of a
+ * paid its digital lines get license keys (one per unit, each key given once); the shopper downloads the files of a
  * paid order through 5-minute signed links, counted per order line up to the download limit.
  * @module
  */
@@ -41,11 +41,11 @@ export const createDigital = (product, service) => {
 	const digitalProduct = async (s, id) => {
 		const found = await createOrdersStore(await s.data()).product(id);
 		if (!found) throw problem('not_found', 'There is no such product.');
-		if (found.kind !== 'digital') throw service.invalid('id', 'Only digital products have licence keys and files.');
+		if (found.kind !== 'digital') throw service.invalid('id', 'Only digital products have license keys and files.');
 		return found;
 	};
 
-	/** Add licence keys to a product (`{ keys }`). @param {any} ctx */
+	/** Add license keys to a product (`{ keys }`). @param {any} ctx */
 	const addLicences = async (ctx) => {
 		const s = await service.site(ctx);
 		const checked = checkLicenceKeys(ctx.body?.keys);
@@ -56,7 +56,7 @@ export const createDigital = (product, service) => {
 			item.id,
 			checked.value.map((key) => ({ id: createId(ID_PREFIX.licence), key })),
 		);
-		await service.log(ctx, 'product.licences_added', item.id, { label: item.name, detail: `${added} licence key(s) added` });
+		await service.log(ctx, 'product.licences_added', item.id, { label: item.name, detail: `${added} license key(s) added` });
 		return { added, available: await store.countLicences(item.id) };
 	};
 
@@ -90,7 +90,7 @@ export const createDigital = (product, service) => {
 	};
 
 	/**
-	 * Give the digital lines of a paid order their licence keys (lines that still miss some). Runs on `order.paid`.
+	 * Give the digital lines of a paid order their license keys (lines that still miss some). Runs on `order.paid`.
 	 * @param {Site} s
 	 * @param {OrderRecord} order
 	 */
@@ -112,7 +112,7 @@ export const createDigital = (product, service) => {
 	};
 
 	/**
-	 * The downloads and licence keys of an order's digital lines, by line id (paid orders only).
+	 * The downloads and license keys of an order's digital lines, by line id (paid orders only).
 	 * @param {Site} s
 	 * @param {OrderRecord} order
 	 * @returns {Promise<Map<string, { files: Array<{ file: string, name: string, type: string, size: number }>,

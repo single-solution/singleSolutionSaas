@@ -1,7 +1,7 @@
 /**
  * Size charts in the catalog admin widget (feature `size_charts`, PLAN 0.8.10 E5) as a list-and-detail screen: each
  * chart with how many products, brands and categories use it; its table (columns and rows of values) in inches or
- * centimetres, fit advice and notes; an editor for all of it; and Delete, which the server refuses while the chart is
+ * centimeters, fit advice and notes; an editor for all of it; and Delete, which the server refuses while the chart is
  * used (the answer is shown).
  * @module
  */

@@ -1,5 +1,5 @@
 /**
- * The orders part's (fulfilment) queries in the merchant database: the staff order list and search, customers with
+ * The orders part's (fulfillment) queries in the merchant database: the staff order list and search, customers with
  * what they spent, and the data-rights look-ups. Every query pins `websiteId` (the kit's tenant guard). Writes that
  * move stock, offer uses, points or slots go through `adapters/ledger.js`; the order moves themselves are in
  * `server/orders-moves.js`.
@@ -70,7 +70,7 @@ const namePage = (after) => {
  */
 
 /**
- * The staff customer list's filter: a search (name, start of the e-mail, the user or customer id, 4 or more digits of
+ * The staff customer list's filter: a search (name, start of the email, the user or customer id, 4 or more digits of
  * the phone, matched on its last digits), blocked or not, a segment, not yet opened by the acting staff member,
  * created after a time (E31) and given Accounts users. The list and its counts share it (PLAN 0.8.10 K4).
  * @param {string} websiteId

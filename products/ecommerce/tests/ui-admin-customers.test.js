@@ -103,7 +103,7 @@ describe('customers admin: customers', () => {
 		const { host, root, server } = await start();
 		expect(host.getAttribute('data-ss-mounted')).toBe('customers-admin');
 		const panel = panelOf(root, 'customers');
-		expect(textOf(rowOf(panel, 'u1'))).toContain('ana@example.com · 0300 · 3 orders · 2 parcels returned');
+		expect(textOf(rowOf(panel, 'u1'))).toContain('ana@example.com · 0300 · 3 orders · 2 packages returned');
 		expect(textOf(rowOf(panel, 'u1'))).toContain('PKR 5,000.00');
 		expect(rowOf(panel, 'u1').querySelector('.dot.warning')).not.toBeNull();
 		expect(rowOf(panel, 'u2').querySelector('.dot.danger')).not.toBeNull();
@@ -166,7 +166,7 @@ describe('customers admin: customers', () => {
 			expect(textOf(pane)).toContain(part);
 		expect(server.last('GET /v1/admin/returns')?.url.searchParams.get('userId')).toBe('u1');
 		expect(textOf(pane)).toContain('R-1 · Order SO-1 · Warranty');
-		expect(menuEntries(pane)).toEqual(['Reset returned parcels']);
+		expect(menuEntries(pane)).toEqual(['Reset returned packages']);
 		// block with a reason
 		await click(buttonIn(pane, 'Block'));
 		expect(textOf(dialogOf(root))).toContain('A blocked customer cannot order');
@@ -189,11 +189,11 @@ describe('customers admin: customers', () => {
 		type(fieldIn(dialogOf(root), 'Only staff see this note'), '');
 		await submitDialog(root);
 		expect(textOf(pane)).toContain('No staff note.');
-		// reset the returned parcels
-		await pickMenu(pane, 'Reset returned parcels');
-		expect(textOf(dialogOf(root))).toContain('Set the 2 returned parcels back to 0.');
+		// reset the returned packages
+		await pickMenu(pane, 'Reset returned packages');
+		expect(textOf(dialogOf(root))).toContain('Set the 2 returned packages back to 0.');
 		await submitDialog(root);
-		expect(statuses(pane)).toContain('Returned parcels reset.');
+		expect(statuses(pane)).toContain('Returned packages reset.');
 		expect(menuEntries(pane)).toEqual([]);
 		expect(patches).toEqual([
 			{ blocked: true, blockedReason: '' },

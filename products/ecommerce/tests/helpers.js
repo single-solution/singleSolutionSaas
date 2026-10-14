@@ -139,7 +139,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 				: { status: 201, body: { id: `msg_${calls.length}`, status: 'queued' } }
 			: { status: 200, body: {} },
 	);
-	// Payments: a new payment is pending; verify says no until a test says otherwise (payments.paid); a cancelled
+	// Payments: a new payment is pending; verify says no until a test says otherwise (payments.paid); a canceled
 	// payment is voided, unless it was paid (409 already_paid); money for a voided payment is flagged refundDue (P4)
 	const paid = new Set();
 	const voided = new Set();

@@ -82,7 +82,7 @@ export const refreshRating = async (data, productId) => {
 
 /**
  * The Accounts user ids a data-rights request is about: the id given, and the users of orders and alerts with the
- * e-mail or phone given.
+ * email or phone given.
  * @param {WebsiteData} data
  * @param {{ id?: string, email?: string, phone?: string }} person
  * @returns {Promise<string[]>}

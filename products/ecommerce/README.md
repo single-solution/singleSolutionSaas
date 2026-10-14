@@ -130,7 +130,7 @@ refused); the last history entry moves to `status`; `deliveredAt` given for deli
 ones never delivered; each line's `total` is unit price × quantity − discount (+ tax when prices exclude tax) and the
 totals add up as checkout adds them (lines + delivery + fee), in the shop's currency; `payment.paid` and `refunded` are
 the sums of `payments` and `refunds` (derived, refused when different) and `payment.state` is the one they give (a paid
-order has its payment entries); `stockHeld` (never true on a cancelled or returned order) and `promotions.released`
+order has its payment entries); `stockHeld` (never true on a canceled or returned order) and `promotions.released`
 are given (`pointsCredited` too when points were earned); `idempotencyKey` is `import:<id>` when missing, `createdAt`
 the placement time. Loyalty: lots and history as given; `balance` (unexpired lots), `lifetimeEarned` (earn entries)
 and `version` are derived. Alerts are never due (`dueAt` is refused). Nothing is sent, emitted or alerted, and no stock,
@@ -149,11 +149,11 @@ Smallest records (the default order flow and number form, prefix `''`, 6 digits,
 ```
 
 Finish (after the catalog's steps, in the same pages of at most 200 records, `?after=<next>` while `more`; writing only
-what changed, so a second run changes nothing) counts each customer's orders, RTO parcels and last order; sets loyalty
+what changed, so a second run changes nothing) counts each customer's orders, RTO packages and last order; sets loyalty
 balances and lifetime points; sets products' `sold` (units of delivered orders) where the product has imported order
 lines and `rating` (approved reviews) where it has imported reviews, and keeps the given numbers where there is nothing
 to derive; marks `sold` with their order and line the serials that lines of orders still holding them list (not
-cancelled, returned or refunded before delivery, nor put back by a claim); and moves the order counter of the
+canceled, returned or refunded before delivery, nor put back by a claim); and moves the order counter of the
 website's number form (the running one, or each year's) up to the highest number used, so the next order gets the
 number after. It answers
 `customersUpdated`, `loyaltyUpdated`, `productsSoldRatingUpdated`, `serialsSold`, `serialsMissing` (listed on a line, no

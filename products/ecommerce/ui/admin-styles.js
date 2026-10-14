@@ -1,7 +1,7 @@
 /**
  * The admin widgets' CSS, added after the shared widget CSS inside their shadow roots: the section picker (a list beside
  * the section in a wide widget, a select above it in a narrow one, by the widget's own width), field grids, chips,
- * image thumbnails and tables that scroll sideways on small screens (from 360 px). Colours come from the theme.
+ * image thumbnails and tables that scroll sideways on small screens (from 360 px). Colors come from the theme.
  * @module
  */
 export const ADMIN_CSS = `
@@ -48,7 +48,7 @@ td label.check { margin: 0; }
 .pill.warn { border-color: var(--ss-color-danger, #b91c1c); color: var(--ss-color-danger, #b91c1c); }
 dl { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr); gap: 4px 12px; margin: 8px 0; }
 dt { opacity: 0.7; } dd { margin: 0; }
-/* list and detail, badges, More menus, dialogs and masonry (PLAN 0.6); indigo is the theme's accent, status colours only for status */
+/* list and detail, badges, More menus, dialogs and masonry (PLAN 0.6); indigo is the theme's accent, status colors only for status */
 .admin { container-type: inline-size; }
 .split { display: grid; gap: 16px; margin-top: 12px; }
 .split[data-view='list'] .detail-pane, .split[data-view='detail'] .list-pane { display: none; }

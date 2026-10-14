@@ -34,8 +34,8 @@
 		},
 		"rtoThreshold": {
 			"type": "integer",
-			"title": "Returned parcels before a customer is flagged",
-			"description": "A customer with at least this many parcels returned to you is flagged. 0 = never.",
+			"title": "Returned packages before a customer is flagged",
+			"description": "A customer with at least this many packages returned to you is flagged. 0 = never.",
 			"default": 2,
 			"minimum": 0,
 			"maximum": 100

@@ -264,7 +264,7 @@ export const categoryTrail = async (data, categoryIds) => {
 // ------------------------------------------------------------------------------------------------ data rights
 
 /**
- * Points a member's orders will earn but have not yet (E20 `pending`): orders not delivered, cancelled or given back
+ * Points a member's orders will earn but have not yet (E20 `pending`): orders not delivered, canceled or given back
  * whose points are not credited.
  * @param {WebsiteData} data
  * @param {string} userId

@@ -91,7 +91,7 @@ export const createOutbox = (data) => {
 			await rows.deleteOne({ websiteId, id });
 		},
 		/**
-		 * Remove a person's messages (data rights): those to their e-mail addresses or phones, and those about their orders
+		 * Remove a person's messages (data rights): those to their email addresses or phones, and those about their orders
 		 * (order messages and staff alerts carry the order's `number`).
 		 * @param {{ emails: string[], phones: string[], numbers: string[] }} person
 		 * @returns {Promise<number>} the messages removed

@@ -23,7 +23,7 @@ import { variantLabel } from './admin-taxonomy.js';
 const MAX_AXES = 6;
 
 /**
- * Every combination of option values (`[{ Colour: 'Red', Size: 'S' }, …]`).
+ * Every combination of option values (`[{ Color: 'Red', Size: 'S' }, …]`).
  * @param {Axis[]} axes
  * @returns {Array<Record<string, string>>}
  */

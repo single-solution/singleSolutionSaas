@@ -908,7 +908,7 @@ export const checkProduct = (body, rules, existing) => {
 		if (!isObject(given)) fail('/digital', 'Give the download settings.');
 		const raw = isObject(given) ? given : {};
 		if (raw.licenceKeys !== undefined && typeof raw.licenceKeys !== 'boolean')
-			fail('/digital/licenceKeys', 'Licence keys is true or false.');
+			fail('/digital/licenceKeys', 'License keys is true or false.');
 		if (raw.downloadLimit !== undefined && !isCount(raw.downloadLimit, LIMITS.downloadLimit))
 			fail('/digital/downloadLimit', `Downloads are a whole number from 0 (no limit) to ${LIMITS.downloadLimit}.`);
 		digital = {

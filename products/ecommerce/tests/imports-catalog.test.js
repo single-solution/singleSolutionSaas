@@ -23,7 +23,7 @@ const ID = Object.freeze({
 	evening: idOf('cat', 3),
 	brand: idOf('brd', 1),
 	other: idOf('brd', 2),
-	colour: idOf('att', 1),
+	color: idOf('att', 1),
 	landing: idOf('lnd', 1),
 	dress: idOf('prd', 1),
 	shell: idOf('prd', 2),
@@ -109,9 +109,9 @@ const RECORDS = {
 	],
 	attributes: [
 		{
-			id: ID.colour,
-			slug: 'colour',
-			name: 'Colour',
+			id: ID.color,
+			slug: 'color',
+			name: 'Color',
 			type: 'choice',
 			choices: [
 				{ value: 'red', label: 'Red' },
@@ -181,7 +181,7 @@ const RECORDS = {
 					locations: {},
 					grade: null,
 					active: true,
-					attributes: { [ID.colour]: 'red' },
+					attributes: { [ID.color]: 'red' },
 					media: [{ key: KEY.variant, type: 'image/webp', size: 3000, alt: 'Red' }],
 					soldOut: false,
 					warrantyDays: null,
@@ -199,7 +199,7 @@ const RECORDS = {
 					locations: {},
 					grade: null,
 					active: true,
-					attributes: { [ID.colour]: 'blue' },
+					attributes: { [ID.color]: 'blue' },
 				},
 			],
 			trackStock: true,
@@ -408,7 +408,7 @@ describe('import', () => {
 			sold: 12,
 			rating: { average: 4.5, count: 2 },
 			previousSlugs: ['linen-frock'],
-			options: [{ name: 'Colour', values: ['Red', 'Blue'] }],
+			options: [{ name: 'Color', values: ['Red', 'Blue'] }],
 			video: { kind: 'file', key: KEY.video, type: 'video/mp4', size: 900000 },
 			merchantId: expect.any(String),
 		});
@@ -416,7 +416,7 @@ describe('import', () => {
 		expect(dress.variants[0]).toMatchObject({
 			id: ID.red,
 			stock: 3,
-			options: { Colour: 'Red' },
+			options: { Color: 'Red' },
 			media: [{ key: KEY.variant }],
 			feedId: 'dress-001_red',
 		});

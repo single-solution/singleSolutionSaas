@@ -1,6 +1,6 @@
 /**
- * Guest checkout (PLAN 0.8.10 E21): a guest orders with a name and phone (and an e-mail address when they like); the
- * phone is read as E.164 by the normaliser every product shares (`@ss/contracts/phone`, K12) with the website's phone
+ * Guest checkout (PLAN 0.8.10 E21): a guest orders with a name and phone (and an email address when they like); the
+ * phone is read as E.164 by the normalizer every product shares (`@ss/contracts/phone`, K12) with the website's phone
  * rules (`phoneRules`: the `checkout` settings `defaultCallingCode`, else the business.json country's, and
  * `trunkPrefix`), so one person has one customer record. A guest order gets a key — 32 random characters, shown once
  * and kept only as its hash — that the guest sends as `SS-Order-Key` to read, pay, cancel and send proof for it (made
@@ -68,6 +68,6 @@ export const checkGuest = (body, rules) => {
 	if (!phoneAllowed(phone, rules)) return { ok: false, field: 'customer/phone', ...COUNTRY_REFUSED };
 	const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
 	if (input.email !== undefined && input.email !== null && input.email !== '' && !EMAIL.test(email))
-		return { ok: false, field: 'customer/email', message: 'Give a valid e-mail address or none.' };
+		return { ok: false, field: 'customer/email', message: 'Give a valid email address or none.' };
 	return { ok: true, value: { name, phone, email } };
 };

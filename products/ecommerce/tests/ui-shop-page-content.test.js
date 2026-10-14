@@ -66,7 +66,7 @@ const grade = (over = {}) => ({
 const variant = (over = {}) => ({
 	id: 'var_1',
 	name: 'Black',
-	options: { Colour: 'Black' },
+	options: { Color: 'Black' },
 	attributes: [],
 	price: 100000,
 	compareAtPrice: null,
@@ -98,7 +98,7 @@ const product = (over = {}) => ({
 	url: 'https://shop.example.com/products/phone',
 	media: [],
 	video: null,
-	options: [{ name: 'Colour', values: ['Black'] }],
+	options: [{ name: 'Color', values: ['Black'] }],
 	variants: [variant()],
 	specs: [],
 	brand: null,
@@ -147,8 +147,8 @@ describe('product page content', () => {
 							descriptionHtml: html,
 							featured: true,
 							priceMax: 150000,
-							variants: [variant(), variant({ id: 'var_2', options: { Colour: 'Gold' }, price: 150000 })],
-							options: [{ name: 'Colour', values: ['Black', 'Gold'] }],
+							variants: [variant(), variant({ id: 'var_2', options: { Color: 'Gold' }, price: 150000 })],
+							options: [{ name: 'Color', values: ['Black', 'Gold'] }],
 							faqs: [
 								{ question: 'Does it ship abroad?', answer: 'Yes.\n\nTo most countries.' },
 								{ question: '', answer: 'Skipped' },
@@ -298,10 +298,10 @@ describe('product page content', () => {
 					ok(
 						product({
 							media: [photo('front'), photo('back', { sizes: undefined, blur: 'javascript:x', width: undefined })],
-							options: [{ name: 'Colour', values: ['Black', 'Gold'] }],
+							options: [{ name: 'Color', values: ['Black', 'Gold'] }],
 							variants: [
 								variant(),
-								variant({ id: 'var_2', options: { Colour: 'Gold' }, media: [photo('gold'), { url: null, alt: 'Gone' }] }),
+								variant({ id: 'var_2', options: { Color: 'Gold' }, media: [photo('gold'), { url: null, alt: 'Gone' }] }),
 							],
 						}),
 					),
@@ -340,7 +340,7 @@ describe('product page content', () => {
 				'GET /v1/shop/products/phone': () =>
 					ok(
 						product({
-							options: [{ name: 'Colour', values: ['Black'] }],
+							options: [{ name: 'Color', values: ['Black'] }],
 							variants: [
 								variant({ grade: grade(), stockLeft: 3, warrantyDays: 180 }),
 								variant({
@@ -362,7 +362,7 @@ describe('product page content', () => {
 								variant({
 									id: 'var_4',
 									price: 60000,
-									options: { Colour: 'Black' },
+									options: { Color: 'Black' },
 									grade: grade({ key: 'c', label: 'Fair', video: '', videoUrl: null }),
 									inStock: false,
 								}),
@@ -380,7 +380,7 @@ describe('product page content', () => {
 			text('page.optionSoldOut', { value: text('page.gradeNone') }),
 			text('page.optionOutOfStock', { value: 'Fair' }),
 		]);
-		// Like new: its colour, content, return days and condition video; only 3 left; 6 months of warranty
+		// Like new: its color, content, return days and condition video; only 3 left; 6 months of warranty
 		const details = $(host, '.grade');
 		expect(details.querySelector('.swatch').style.backgroundColor).toBe('rgb(22, 163, 74)');
 		expect(details.textContent).toContain(text('page.grade', { grade: 'Like new' }));
@@ -411,13 +411,13 @@ describe('product page content', () => {
 	});
 
 	it('picks by attribute when the variants carry attributes and the product names no options', async () => {
-		/** @param {string} id @param {string} colour @param {string} size @param {Record<string, unknown>} [over] */
-		const by = (id, colour, size, over = {}) =>
+		/** @param {string} id @param {string} color @param {string} size @param {Record<string, unknown>} [over] */
+		const by = (id, color, size, over = {}) =>
 			variant({
 				id,
 				options: {},
 				attributes: [
-					{ id: 'atr_c', slug: 'colour', name: 'Colour', value: colour.toLowerCase(), label: colour },
+					{ id: 'atr_c', slug: 'color', name: 'Color', value: color.toLowerCase(), label: color },
 					{ id: 'atr_s', slug: 'size', name: 'Size', value: size, label: size },
 				],
 				...over,
@@ -439,7 +439,7 @@ describe('product page content', () => {
 			},
 		});
 		const host = await mountPage(fake);
-		expect($(host, '#ss-page-option-0').closest('.field').textContent).toContain('Colour');
+		expect($(host, '#ss-page-option-0').closest('.field').textContent).toContain('Color');
 		expect($(host, '#ss-page-option-1').closest('.field').textContent).toContain('Size');
 		// the first variant that can be bought is shown first
 		expect($(host, '#ss-page-option-0').value).toBe('Red');
@@ -544,8 +544,8 @@ describe('product page content', () => {
 				'GET /v1/shop/products/phone': () =>
 					ok(
 						product({
-							options: [{ name: 'Colour', values: ['Black', 'Gold'] }],
-							variants: [variant(), variant({ id: 'var_2', options: { Colour: 'Gold' }, inStock: false })],
+							options: [{ name: 'Color', values: ['Black', 'Gold'] }],
+							variants: [variant(), variant({ id: 'var_2', options: { Color: 'Gold' }, inStock: false })],
 						}),
 					),
 				'GET /v1/shop/alerts': () => ok({ items: mine }),
@@ -613,12 +613,12 @@ describe('product page parts', () => {
 
 	it('finds variants by their axes, the condition and the nearest variant', () => {
 		const item = {
-			options: [{ name: 'Colour', values: ['Red', 'Blue'] }],
+			options: [{ name: 'Color', values: ['Red', 'Blue'] }],
 			variants: [
 				{
 					id: 'a',
 					name: '',
-					options: { Colour: 'Red' },
+					options: { Color: 'Red' },
 					price: 1,
 					compareAtPrice: null,
 					inStock: true,
@@ -627,22 +627,22 @@ describe('product page parts', () => {
 				{
 					id: 'b',
 					name: '',
-					options: { Colour: 'Red' },
+					options: { Color: 'Red' },
 					price: 1,
 					compareAtPrice: null,
 					inStock: true,
 					grade: { key: 'y', label: 'Y' },
 				},
-				{ id: 'c', name: '', options: { Colour: 'Blue' }, price: 1, compareAtPrice: null, inStock: false, grade: null },
+				{ id: 'c', name: '', options: { Color: 'Blue' }, price: 1, compareAtPrice: null, inStock: false, grade: null },
 			],
 		};
 		const axes = axesOf(item);
-		expect(axes.map((axis) => axis.key)).toEqual(['Colour', GRADE_AXIS]);
-		expect(pickVariant(axes, item.variants, { Colour: 'Red', [GRADE_AXIS]: 'y' })?.id).toBe('b');
-		expect(pickVariant(axes, item.variants, { Colour: 'Red' })).toBeNull();
-		const colour = /** @type {any} */ (axes[0]);
-		expect(nearestVariant(axes, item.variants, { Colour: 'Red', [GRADE_AXIS]: 'x' }, colour, 'Blue')?.id).toBe('c');
-		expect(nearestVariant(axes, item.variants, {}, colour, 'Green')).toBeNull();
+		expect(axes.map((axis) => axis.key)).toEqual(['Color', GRADE_AXIS]);
+		expect(pickVariant(axes, item.variants, { Color: 'Red', [GRADE_AXIS]: 'y' })?.id).toBe('b');
+		expect(pickVariant(axes, item.variants, { Color: 'Red' })).toBeNull();
+		const color = /** @type {any} */ (axes[0]);
+		expect(nearestVariant(axes, item.variants, { Color: 'Red', [GRADE_AXIS]: 'x' }, color, 'Blue')?.id).toBe('c');
+		expect(nearestVariant(axes, item.variants, {}, color, 'Green')).toBeNull();
 		expect(axesOf({ options: [], variants: [] })).toEqual([]);
 	});
 });

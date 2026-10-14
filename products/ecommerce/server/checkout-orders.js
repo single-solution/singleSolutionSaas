@@ -3,7 +3,7 @@
  * E18–E25, E30).
  *
  * - Placing: the cart is priced again on the server; a signed-in shopper (Accounts) or, while `guests` allows, a
- *   guest with a name and phone (E21: normalised, one customer record per phone; `unless_password` sends members to
+ *   guest with a name and phone (E21: normalized, one customer record per phone; `unless_password` sends members to
  *   sign in; a phone a member's record already has makes the order that member's, K-6) places it; COD safety, the
  *   blocklist and the open-order cap apply per customer; the ledger places the
  *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
@@ -14,12 +14,12 @@
  *   CK-41). A guest gets the order's key once (`orderKey`).
  * - Paying: an order is paid only when Payments says, server to server, that its payment is paid for exactly the
  *   order's amount (or advance) and currency; the payment is a log entry of the order (E26). A waiting payment is asked
- *   again when the order is read (at most every 30 seconds), on use, and once more before a waiting order is cancelled
- *   at the end of its window (0 = never). Nothing runs on a timer: waiting orders whose window ended are cancelled on
- *   use (`service.whenUsed`), giving back what they held. A cancelled order's Payments payment is cancelled there first
+ *   again when the order is read (at most every 30 seconds), on use, and once more before a waiting order is canceled
+ *   at the end of its window (0 = never). Nothing runs on a timer: waiting orders whose window ended are canceled on
+ *   use (`service.whenUsed`), giving back what they held. A canceled order's Payments payment is canceled there first
  *   (`server/order-payments.js`, K-13).
  * - The shopper's orders: list, detail (by id or number, with the sign-in or the order's key, E21) with downloads and
- *   licence keys, the statuses' shopper names and lines and the notes staff wrote for the shopper, cancel where the flow
+ *   license keys, the statuses' shopper names and lines and the notes staff wrote for the shopper, cancel where the flow
  *   lets the shopper (a move with `who` shopper, E27; a paid order as its `shopperPaid` says), pay again, and the
  *   transfer proof (E24).
  * @module
@@ -165,7 +165,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/**
 	 * Start the Payments payment of an order (its total, or its COD advance). Null when Payments cannot be reached or
 	 * refuses: the order keeps waiting and the shopper can try again. The order takes the payment only while it has no
-	 * other: when another start won meanwhile (two "pay" at once, CK-21) or the order moved, this payment is cancelled at
+	 * other: when another start won meanwhile (two "pay" at once, CK-21) or the order moved, this payment is canceled at
 	 * Payments and the order is returned as it is now.
 	 * @param {Site} s @param {OrderRecord} order @param {string | null} returnUrl @param {string} idempotencyKey
 	 * @returns {Promise<OrderRecord | null>}
@@ -210,18 +210,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/** @param {Site} s @param {OrderRecord} order */
 	const refresh = async (s, order) => (await payments.recheck(s, order)).order;
 
-	// ------------------------------------------------------------------------------------------------- cancelling
+	// ------------------------------------------------------------------------------------------------- canceling
 
 	/**
 	 * Cancel an order for the shopper or because its window ended, giving back its stock, slots, offer uses and points
 	 * (exactly once), through the order engine: the shopper along their move (`to`, listed for them), an ended window to
 	 * the flow's `windowEnd` status (no listed move needed; the role rules hold). Money paid is refunded through Payments
 	 * only when the shopper's move says so (`shopperPaid: refund`, `refund`), else it shows as due to refund. Its open
-	 * Payments payment is cancelled first (K-13): when it was paid meanwhile the order is paid instead and is returned as
-	 * it is now (not cancelled).
+	 * Payments payment is canceled first (K-13): when it was paid meanwhile the order is paid instead and is returned as
+	 * it is now (not canceled).
 	 * @param {Site} s @param {OrderRecord} order as just read
 	 * @param {{ by: string, note: string, code: import('../core/orders.js').HistoryNote,
-	 *   reason: 'staff' | 'shopper' | 'expired', to?: string }} who `note` also tells Payments why its payment is cancelled;
+	 *   reason: 'staff' | 'shopper' | 'expired', to?: string }} who `note` also tells Payments why its payment is canceled;
 	 *   `to`: the shopper's move's status
 	 * @returns {Promise<OrderRecord | null>} null when it moved meanwhile, or the flow changed under it
 	 */
@@ -255,7 +255,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		try {
 			await transitions.apply(s, order, planned.plan);
 		} catch (error) {
-			// lost to another change: a payment Payments cancelled for it is dropped, so the order stays payable
+			// lost to another change: a payment Payments canceled for it is dropped, so the order stays payable
 			await payments.dropVoided(s, order, step);
 			if (/** @type {any} */ (error)?.code === 'conflict') return null;
 			throw error;
@@ -286,7 +286,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 
 	/**
 	 * End a waiting order whose window passed: a waiting payment is asked once more (paid: confirmed instead); else
-	 * cancelled with the reason `expired`. When Payments cannot be reached the order waits for the next use (it may have
+	 * canceled with the reason `expired`. When Payments cannot be reached the order waits for the next use (it may have
 	 * been paid), unless the Payments token was removed.
 	 * @param {Site} s @param {OrderRecord} order
 	 */
@@ -308,7 +308,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	};
 
 	/**
-	 * Work on use: recheck waiting payments, end waiting orders whose window passed, then the Payments side of cancelled
+	 * Work on use: recheck waiting payments, end waiting orders whose window passed, then the Payments side of canceled
 	 * orders (K-13) (bounded batches).
 	 * @param {Site} s
 	 */
@@ -319,14 +319,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		for (const order of await store.toRecheck(now, RECHECK_MS)) await payments.recheck(s, order);
 		for (const order of await store.expired(WAITING_ROLES, now)) await expire(s, order);
 		await payments.sweep(s);
-		// refunds of cancelled orders Payments could not take yet (the order engine's pending effects)
+		// refunds of canceled orders Payments could not take yet (the order engine's pending effects)
 		await transitions.sweep(s);
 	};
 
 	// --------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * The move the shopper may cancel an order with (E27): a listed move from its status into a cancelled one that the
+	 * The move the shopper may cancel an order with (E27): a listed move from its status into a canceled one that the
 	 * shopper may make, unless the order is paid and the move refuses paid orders (`shopperPaid: refuse`); else null.
 	 * @param {OrderFlow} flow @param {OrderRecord} order
 	 */
@@ -624,7 +624,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	 * price), payment method and delivery. It is priced again with the offers it was placed with (kept even when they
 	 * ended since, by the same deal rules, OR-9) — or, with the checkout setting `editPricing: keep_placed`, it keeps the
 	 * offer discount, delivery fee and payment fee it was placed with —, its stock holds are swapped in one transaction, and a payment started
-	 * through Payments for the old total is cancelled there and dropped (the shopper pays the new one; K-13).
+	 * through Payments for the old total is canceled there and dropped (the shopper pays the new one; K-13).
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order as read
@@ -762,7 +762,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			...(restartPayment ? { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null } : {}),
 			updatedAt: new Date(now),
 		};
-		// the payment started for the old total is cancelled at Payments, so it can no longer be paid (K-13, CK-21)
+		// the payment started for the old total is canceled at Payments, so it can no longer be paid (K-13, CK-21)
 		const dropped = restartPayment ? await payments.beforeCancel(s, order, 'Order edited') : null;
 		if (dropped?.paid || dropped?.late)
 			throw problem('conflict', 'This order was paid meanwhile; it can no longer be edited. Reload it.');
@@ -796,7 +796,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			},
 		});
 		if (!swapped.ok) {
-			// its cancelled payment is dropped: the shopper's next pay starts one for the total as it is
+			// its canceled payment is dropped: the shopper's next pay starts one for the total as it is
 			if (dropped)
 				await store.change(order, { 'payment.paymentId': null, 'payment.checkoutUrl': '', 'payment.checkedAt': null });
 			if (swapped.code === 'changed') throw problem('conflict', 'The order changed meanwhile; reload it and try again.');
@@ -1115,19 +1115,19 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const current = await refresh(s, order);
 		const flow = await flowOf(s);
 		const move = shopperCancelOf(flow, current.status);
-		if (!move) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
-		// a paid order as the move says (E27): refused (staff cancel and refund it), cancelled with the refund due, or
-		// cancelled and refunded through Payments
+		if (!move) throw problem('move_not_allowed', 'This order can no longer be canceled here.');
+		// a paid order as the move says (E27): refused (staff cancel and refund it), canceled with the refund due, or
+		// canceled and refunded through Payments
 		if (current.payment.paid > 0 && move.options.shopperPaid === 'refuse')
 			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');
 		const cancelled = await cancel(s, current, {
 			by: shopper ? 'shopper' : 'guest',
-			note: 'Cancelled by the shopper',
+			note: 'Canceled by the shopper',
 			code: 'shopper',
 			reason: 'shopper',
 			to: move.to,
 		});
-		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be cancelled here.');
+		if (!cancelled) throw problem('move_not_allowed', 'This order can no longer be canceled here.');
 		// paid at Payments just before (K-13): it is paid now, and staff cancel and refund paid orders
 		if (cancelled.role !== 'cancelled')
 			throw problem('move_not_allowed', 'This order is paid; please ask the shop to cancel and refund it.');

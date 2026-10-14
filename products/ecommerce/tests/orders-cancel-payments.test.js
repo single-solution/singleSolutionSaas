@@ -1,5 +1,5 @@
 /**
- * Cancelling an order cancels its Payments payment (K-13, Payments P4): the shopper's, the staff's and the window's
+ * Canceling an order cancels its Payments payment (K-13, Payments P4): the shopper's, the staff's and the window's
  * cancel, an edit and a delete cancel the open payment first; money paid just before keeps the order paid; a Payments
  * that cannot be reached is asked again on use; money paid after the cancel is found on read and on use, shows as a
  * refund due and is refunded the normal way; money staff record by hand, "delete all" and two "pay" at once cancel the
@@ -85,12 +85,12 @@ beforeAll(async () => {
 });
 afterAll(async () => shop.product.close());
 
-describe('a cancelled order cancels its Payments payment (K-13)', () => {
+describe('a canceled order cancels its Payments payment (K-13)', () => {
 	it('when the shopper cancels it, and keeps it paid when the money came just before', async () => {
 		const { order, token, paymentId } = await placeOrder();
 		const cancelled = await visit('POST', `/v1/shop/orders/${order.id}/cancel`, token);
 		expect(cancelled.json.order.status).toBe('cancelled');
-		expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toEqual([{ reason: 'Cancelled by the shopper' }]);
+		expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toEqual([{ reason: 'Canceled by the shopper' }]);
 		expect((await orderRecord(order.id)).payment.voidedAt).toBeInstanceOf(Date);
 		expect((await orderRecord(order.id)).history.at(-1)).toMatchObject({ by: 'shopper', reason: 'shopper', code: 'shopper' });
 
@@ -117,7 +117,7 @@ describe('a cancelled order cancels its Payments payment (K-13)', () => {
 		const refused = await moveTo(paid.order.id, 'cancelled');
 		expect(codeOf(refused)).toBe('move_not_allowed');
 		expect((await orderRecord(paid.order.id)).status).toBe('confirmed');
-		// cancelling the paid order now refunds it through Payments, with the event other refunds raise
+		// canceling the paid order now refunds it through Payments, with the event other refunds raise
 		const again = await moveTo(paid.order.id, 'cancelled');
 		expect(again.json).toMatchObject({ status: 'cancelled', payment: { state: 'refunded', refundDue: 0 } });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/${paid.paymentId}/refunds`)).toHaveLength(1);
@@ -216,7 +216,7 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		await nextUse();
 		const record = await orderRecord(order.id);
 		expect(record).toMatchObject({ status: 'cancelled', payment: { paid: record.totals.total, voidPendingAt: null } });
-		expect(record.history.at(-1).note).toContain('arrived after the order was cancelled');
+		expect(record.history.at(-1).note).toContain('arrived after the order was canceled');
 		expect(record.history.at(-1)).toMatchObject({ code: 'paid_after_cancel', values: { amount: record.totals.total } });
 		expect((await shop.api('GET', `/v1/orders/${order.id}`)).json.payment.refundDue).toBe(record.totals.total);
 	});
@@ -230,9 +230,9 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		const total = read.json.totals.total;
 		expect(read.json).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total, refundable: total } });
 		expect(read.json.payments).toEqual([
-			expect.objectContaining({ method: 'online', reference: paymentId, note: 'Paid after the order was cancelled' }),
+			expect.objectContaining({ method: 'online', reference: paymentId, note: 'Paid after the order was canceled' }),
 		]);
-		const refunded = await shop.api('POST', `/v1/orders/${order.id}/refunds`, { amount: total, reason: 'Cancelled order' });
+		const refunded = await shop.api('POST', `/v1/orders/${order.id}/refunds`, { amount: total, reason: 'Canceled order' });
 		expect(refunded.status).toBe(201);
 		expect(refunded.json.refund).toMatchObject({ online: total, manual: 0 });
 		expect(refunded.json.order.payment).toMatchObject({ refundDue: 0, state: 'refunded' });
@@ -254,7 +254,7 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 });
 
 describe('money staff take, deletes and two "pay" at once (CK-21)', () => {
-	it('cancels the open payment before staff record money by hand, refusing when it was paid or cannot be cancelled', async () => {
+	it('cancels the open payment before staff record money by hand, refusing when it was paid or cannot be canceled', async () => {
 		const { order, paymentId } = await placeOrder({ payment: 'bank_transfer' });
 		const recorded = await shop.api('POST', `/v1/orders/${order.id}/payments`, {
 			method: 'bank_transfer',
@@ -286,7 +286,7 @@ describe('money staff take, deletes and two "pay" at once (CK-21)', () => {
 		expect((await orderRecord(down.order.id)).payment.paid).toBe(0);
 	});
 
-	it('keeps one payment when two "pay" start one at once, cancelling the other at Payments', async () => {
+	it('keeps one payment when two "pay" start one at once, canceling the other at Payments', async () => {
 		// a guest order whose payment could not be started waits for "pay"
 		await shop.setting('checkout', 'guests', 'on');
 		const normal = /** @type {any} */ (shop.responders.get(PAYMENTS));

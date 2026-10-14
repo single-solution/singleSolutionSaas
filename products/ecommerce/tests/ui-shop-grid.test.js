@@ -91,7 +91,7 @@ const FACETS = {
 			type: 'boolean',
 			values: [{ value: true, label: 'true', count: 1 }],
 		},
-		{ id: 'atr_3', name: 'Colour', unit: '', type: 'choice', values: [{ value: 'red', label: 'Red', count: 1 }] },
+		{ id: 'atr_3', name: 'Color', unit: '', type: 'choice', values: [{ value: 'red', label: 'Red', count: 1 }] },
 	],
 	grades: [{ key: 'a', label: 'Like new', count: 2 }],
 };

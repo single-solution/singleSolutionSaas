@@ -120,7 +120,7 @@ describe('catalog admin: a product', () => {
 		expect(labelled(editor, 'Bands of Blue').value).toBe('b1, b2');
 		expect(textOf(editor)).toContain('2 at Shop, 1 at Store room');
 		// specs and the kind
-		await change(fieldIn(editor, 'Colour'), '');
+		await change(fieldIn(editor, 'Color'), '');
 		await change(fieldIn(editor, 'Dual SIM'), 'false');
 		type(fieldIn(editor, 'Model'), 'X1');
 		await tick(checkIn(editor, 'Y'), true);
@@ -185,7 +185,7 @@ describe('catalog admin: a product', () => {
 			{ attributeId: 'att_5', values: ['64', '128'], customValues: ['256'], defaultValue: '64' },
 			{ attributeId: 'att_1', values: [5, 6.5], customValues: [], defaultValue: 5 },
 		]);
-		expect(body.options).toEqual([{ name: 'Colour', values: ['Red', 'Blue', 'Green'] }]);
+		expect(body.options).toEqual([{ name: 'Color', values: ['Red', 'Blue', 'Green'] }]);
 		expect(body.variants[2]).toEqual({
 			sku: '',
 			options: {},
@@ -202,7 +202,7 @@ describe('catalog admin: a product', () => {
 		});
 		expect(body.variants[0]).toMatchObject({
 			id: 'var_1',
-			options: { Colour: 'Red' },
+			options: { Color: 'Red' },
 			attributes: {},
 			price: 125000,
 			compareAtPrice: 130000,
@@ -217,7 +217,7 @@ describe('catalog admin: a product', () => {
 		await click(buttonIn(editor, 'Remove', 2));
 		await click(buttonIn(editor, 'Remove'));
 		await change(fieldIn(editor, 'Kind'), 'digital');
-		await tick(checkIn(editor, 'Give a licence key per unit'), true);
+		await tick(checkIn(editor, 'Give a license key per unit'), true);
 		type(fieldIn(editor, 'Description (HTML)'), '');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches[1].variants).toHaveLength(2);
@@ -278,7 +278,7 @@ describe('catalog admin: a product', () => {
 		// the new product opens in the list
 		expect(panel.querySelector('li.item[aria-current="true"] .name')?.textContent).toBe('Mug');
 		expect(textOf(detailOf(panel))).toContain('Mug');
-		// cancelling a new product goes back to the open one
+		// canceling a new product goes back to the open one
 		await click(buttonIn(panel, 'New product'));
 		await click(buttonIn(detailOf(panel), 'Cancel'));
 		expect(textOf(detailOf(panel))).toContain('Mug');
@@ -346,7 +346,7 @@ describe('catalog admin: a product', () => {
 			fields: ['summary', 'description', 'seoTitle', 'seoDescription'],
 		});
 		await submitDialog(root);
-		expect(statuses(dialog)).toContain('Tick at least one suggestion to apply.');
+		expect(statuses(dialog)).toContain('Check at least one suggestion to apply.');
 		ai = () =>
 			answer(200, {
 				suggestions: {
@@ -516,7 +516,7 @@ describe('catalog admin: other product shapes', () => {
 			{ id: 'att_w', name: 'Weight', type: 'number', unit: 'g', choices: [], sort: 0, on: 'variant' },
 			{
 				id: 'att_c',
-				name: 'Colours',
+				name: 'Colors',
 				type: 'choice',
 				unit: '',
 				choices: [
@@ -549,7 +549,7 @@ describe('catalog admin: other product shapes', () => {
 			variants: [
 				{
 					...product().variants[0],
-					options: { Colours: 'Red', Weight: '100 g' },
+					options: { Colors: 'Red', Weight: '100 g' },
 					locations: {},
 					attributes: { att_w: 100, att_c: ['red', 'green'], att_t: 'Cotton' },
 				},
@@ -571,7 +571,7 @@ describe('catalog admin: other product shapes', () => {
 		const editor = detailOf(panel);
 		const label = 'Red / 100 g';
 		expect(labelled(editor, `Weight of ${label}`).value).toBe('100');
-		expect([...labelled(editor, `Colours of ${label}`).selectedOptions].map((/** @type {any} */ o) => o.value)).toEqual([
+		expect([...labelled(editor, `Colors of ${label}`).selectedOptions].map((/** @type {any} */ o) => o.value)).toEqual([
 			'red',
 			'green',
 		]);
@@ -579,7 +579,7 @@ describe('catalog admin: other product shapes', () => {
 		expect(checkIn(editor, 'Slim').checked).toBe(true);
 		type(labelled(editor, `Weight of ${label}`), '');
 		type(labelled(editor, `Material of ${label}`), '');
-		for (const option of labelled(editor, `Colours of ${label}`).options) option.selected = false;
+		for (const option of labelled(editor, `Colors of ${label}`).options) option.selected = false;
 		type(labelled(editor, `Grade of ${label}`), 'b');
 		type(fieldIn(editor, 'Notes (comma separated)'), '');
 		await tick(checkIn(editor, 'Slim'), false);
@@ -590,7 +590,7 @@ describe('catalog admin: other product shapes', () => {
 		await click(buttonIn(editor, 'Save'));
 		const body = server.last('PATCH /v1/admin/products/prd_1')?.body;
 		expect(body.specs).toEqual({});
-		expect(body.variants[0]).toMatchObject({ attributes: {}, options: { Colours: 'Red', Weight: '100 g' } });
+		expect(body.variants[0]).toMatchObject({ attributes: {}, options: { Colors: 'Red', Weight: '100 g' } });
 		expect(body.variants[0].grade).toBe('b');
 		expect(body.variants[1]).toMatchObject({ attributes: { att_w: 250, att_t: 'Wool' }, options: {}, stock: 3 });
 		expect(body.attributeSetup).toEqual([

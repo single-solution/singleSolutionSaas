@@ -123,9 +123,9 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 			faqs: [{ question: 'Do they run small?', answer: 'Order one size up.' }],
 		});
 		const brand = await write(SB, 'POST', '/v1/brands', { name: 'Maison', slug: 'maison', categoryIds: [women.id] });
-		const colour = await write(SB, 'POST', '/v1/attributes', {
-			name: 'Colour',
-			slug: 'colour',
+		const color = await write(SB, 'POST', '/v1/attributes', {
+			name: 'Color',
+			slug: 'color',
 			type: 'choice',
 			on: 'variant',
 			multiple: true,
@@ -134,7 +134,7 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 				{ value: 'red', label: 'Red' },
 				{ value: 'gold', label: 'Gold' },
 			],
-			seo: { title: 'Colours', description: 'How we name our colours.', body: 'Red is red.' },
+			seo: { title: 'Colors', description: 'How we name our colors.', body: 'Red is red.' },
 		});
 		const size = await write(SB, 'POST', '/v1/attributes', {
 			name: 'Size',
@@ -166,12 +166,12 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 			video: { kind: 'youtube', id: 'https://youtu.be/dQw4w9WgXcQ' },
 			faqs: [{ question: 'Lined?', answer: 'Yes.' }],
 			variants: [
-				{ attributes: { [colour.id]: ['red', 'gold'], [size.id]: 'S' }, price: 1_250_000, stock: 3 },
-				{ attributes: { [colour.id]: ['red', 'gold'], [size.id]: 'M' }, price: 1_250_000, stock: 0 },
+				{ attributes: { [color.id]: ['red', 'gold'], [size.id]: 'S' }, price: 1_250_000, stock: 3 },
+				{ attributes: { [color.id]: ['red', 'gold'], [size.id]: 'M' }, price: 1_250_000, stock: 0 },
 			],
 		});
 		expect(dress.options).toEqual([
-			{ name: 'Colour', values: ['Red, Gold'] },
+			{ name: 'Color', values: ['Red, Gold'] },
 			{ name: 'Size', values: ['S', 'M'] },
 		]);
 		const landing = await write(SB, 'POST', '/v1/landings', {
@@ -195,11 +195,11 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 			faqs: [{ question: 'Lined?', answer: 'Yes.' }],
 		});
 		expect(page.json.variants[0].attributes.map((/** @type {any} */ a) => [a.slug, a.label])).toEqual([
-			['colour', 'Red, Gold'],
+			['color', 'Red, Gold'],
 			['size', 'S'],
 		]);
-		expect(page.json.variants[0].url).toBe('https://sisters.example.com/dresses/embroidered-dress?colour=red&size=S');
-		const listing = await serverCall(SB, 'GET', '/v1/shop/products?attr.colour=gold&inStock=1&count=1');
+		expect(page.json.variants[0].url).toBe('https://sisters.example.com/dresses/embroidered-dress?color=red&size=S');
+		const listing = await serverCall(SB, 'GET', '/v1/shop/products?attr.color=gold&inStock=1&count=1');
 		expect(listing.json).toMatchObject({ total: 1, items: [{ url: 'https://sisters.example.com/dresses/embroidered-dress' }] });
 		expect((await serverCall(SB, 'GET', '/v1/shop/products?attr.size=M&inStock=1')).json.items).toEqual([]);
 		const tree = (await serverCall(SB, 'GET', '/v1/shop/categories')).json.items;
@@ -349,7 +349,7 @@ describe('Ecommerce phase 3 on the real Portal', () => {
 			canonical: 'https://sisters.example.com/dresses?brand=maison',
 		});
 		expect(nodeOf(landing.jsonLd, 'CollectionPage').name).toBe('Maison dresses');
-		const filtered = (await serverCall(SB, 'GET', '/v1/seo/listing?category=dresses&attr.colour=red')).json;
+		const filtered = (await serverCall(SB, 'GET', '/v1/seo/listing?category=dresses&attr.color=red')).json;
 		expect(filtered.robots).toBe('noindex, follow');
 		const category = (await serverCall(SB, 'GET', '/v1/seo/listing?category=dresses')).json;
 		expect(category).toMatchObject({

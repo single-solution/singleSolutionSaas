@@ -176,7 +176,7 @@ export const listScreen = (kit, panel, spec) => {
 		if (spec.bulk) {
 			const pick = kit.input('', { type: 'checkbox', 'aria-label': t('admin.select', { name: spec.bulk.label(item) }) });
 			pick.checked = selected.has(id);
-			// ticking a box does not open the row
+			// checking a box does not open the row
 			pick.addEventListener('click', (event) => event.stopPropagation());
 			pick.addEventListener('keydown', (event) => event.stopPropagation());
 			pick.addEventListener('change', () => {

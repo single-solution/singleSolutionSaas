@@ -281,7 +281,7 @@ export const decodeEntities = (value) =>
 /** @param {string} value */
 const escapeHtml = (value) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** A contact link (SF-1): an e-mail address or a phone number, nothing a browser could run. */
+/** A contact link (SF-1): an email address or a phone number, nothing a browser could run. */
 const CONTACT_LINK = /^(?:mailto:[^\s"'<>\\]{3,254}|tel:\+?[0-9][0-9 ().-]{2,30})$/i;
 
 /**

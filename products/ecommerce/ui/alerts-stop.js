@@ -3,7 +3,7 @@
  * placed on the merchant's stop page — the `alerts` setting `stopUrl`, by default `/alerts/unsubscribe/<token>` — as
  * `<div data-ss-ecommerce="alerts_stop"></div>`. The token is the page address's `token` query value, else its last
  * path segment. The shopper presses Stop (a mail scanner that opens the link stops nothing), and every alert of the
- * phone or e-mail that message went to is removed (`POST /v1/shop/alerts/unsubscribe/:token`).
+ * phone or email that message went to is removed (`POST /v1/shop/alerts/unsubscribe/:token`).
  * @module
  */
 import { button, h, mountShop, textsOf } from './shop-common.js';

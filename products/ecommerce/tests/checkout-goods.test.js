@@ -1,6 +1,6 @@
 /**
- * Bookings and digital goods at checkout: free slots, booking a slot once, licence keys and files added by the
- * merchant, licence keys given and downloads opened once the order is paid.
+ * Bookings and digital goods at checkout: free slots, booking a slot once, license keys and files added by the
+ * merchant, license keys given and downloads opened once the order is paid.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_FLOW } from '../core/flow.js';
@@ -118,7 +118,7 @@ describe('bookings', () => {
 });
 
 describe('digital goods', () => {
-	it('lets the merchant add licence keys and files', async () => {
+	it('lets the merchant add license keys and files', async () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
@@ -160,7 +160,7 @@ describe('digital goods', () => {
 		}
 	});
 
-	it('gives licence keys and downloads once the order is paid, within the download limit', async () => {
+	it('gives license keys and downloads once the order is paid, within the download limit', async () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,
@@ -214,7 +214,7 @@ describe('digital goods', () => {
 });
 
 describe('free orders', () => {
-	it('are paid as they are placed and give their licence keys at once', async () => {
+	it('are paid as they are placed and give their license keys at once', async () => {
 		const item = await shop.seedProduct({
 			kind: 'digital',
 			trackStock: false,

@@ -175,7 +175,7 @@ describe('text and slugs', () => {
 		expect(freeSlug('a', [])).toBe('a');
 		expect(freeSlug('a', ['a', 'a-2'])).toBe('a-3');
 		expect(freeSlug('x'.repeat(120), ['x'.repeat(120)])).toHaveLength(120);
-		expect(variantName([{ name: 'Size' }, { name: 'Colour' }], { Colour: 'Red', Size: 'M' })).toBe('M / Red');
+		expect(variantName([{ name: 'Size' }, { name: 'Color' }], { Color: 'Red', Size: 'M' })).toBe('M / Red');
 		expect(summarize([], true)).toEqual({ price: 0, priceMax: 0, inStock: false, stockState: 'none', grades: [] });
 		expect(summarize([{ active: true, price: 5, stock: 0, soldOut: false, grade: null }], false)).toEqual({
 			price: 5,
@@ -454,7 +454,7 @@ describe('listings', () => {
 				'att_v',
 				/** @type {any} */ ({
 					id: 'att_v',
-					slug: 'colour',
+					slug: 'color',
 					name: 'V',
 					type: 'choice',
 					on: 'variant',
@@ -469,7 +469,7 @@ describe('listings', () => {
 				maxPrice: 9,
 				inStock: true,
 				attributes: [
-					{ id: 'colour', values: ['red'] },
+					{ id: 'color', values: ['red'] },
 					{ id: 'att_n', values: ['2'] },
 				],
 				grades: ['a'],
@@ -656,7 +656,7 @@ describe('CSV', () => {
 			/** @type {any} */ (
 				parseCsv(
 					'name,option1_name,option1_value,option2_name,option2_value,cost,compare_at_price,track_stock,stock,grade\n' +
-						'A,Size,S,Colour,,abc,,maybe,1,\n' +
+						'A,Size,S,Color,,abc,,maybe,1,\n' +
 						',,,,,,,,,\n' +
 						'B,Size,M,,,,,false,,a',
 				)

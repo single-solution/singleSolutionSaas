@@ -158,7 +158,7 @@ const customers = () => [
 		name: 'Guest Buyer',
 		phone: '+15550002222',
 		blocked: true,
-		blockedReason: 'Refused two parcels',
+		blockedReason: 'Refused two packages',
 		orderCount: 9,
 	},
 	// a customer without orders
@@ -469,7 +469,7 @@ describe('import of shoppers and orders (K10)', () => {
 			userId: null,
 			guest: true,
 			blocked: true,
-			blockedReason: 'Refused two parcels',
+			blockedReason: 'Refused two packages',
 			orderCount: 0,
 		});
 		const stored = await (await shop.db()).collection(COLLECTIONS.orders).findOne({ websiteId: shop.websiteId, id: DELIVERED });

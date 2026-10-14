@@ -3,7 +3,7 @@
  * again when the order is placed). The pipeline, all in integer minor units of the shop's currency:
  *
  * 1. lines — the product and variant from the catalog (only active ones), quantity limits, stock shortfalls reported
- *    per line (never the exact stock), booked slots and licence keys;
+ *    per line (never the exact stock), booked slots and license keys;
  * 2. promotions — deals, bundles and the coupon take their part off each line (`core/promotions.js`);
  * 3. delivery — the fee of the delivery zone (or store pickup) after promotions, waived by a free-delivery coupon;
  * 4. loyalty points — their value spread over the lines in proportion (`allocate`);
@@ -261,7 +261,7 @@ export const checkOrderExtras = (body) => {
  * @property {LineProblem[]} problems
  */
 
-/** Problems that only stock (or slots, or licence keys) cause: placing then answers 409. */
+/** Problems that only stock (or slots, or license keys) cause: placing then answers 409. */
 export const STOCK_PROBLEMS = Object.freeze(['out_of_stock', 'not_enough_stock', 'slot_taken']);
 
 /** @type {Record<string, string>} */
@@ -288,7 +288,7 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  * @param {(grade: string, categoryIds: string[]) => string} context.gradeLabel a grade's label for a product of these
  *   categories (its category's entry first, E45)
  * @param {{ digital: boolean, bookings: boolean }} context.features
- * @param {Map<string, number>} context.licences available licence keys by product id
+ * @param {Map<string, number>} context.licences available license keys by product id
  * @param {(product: ProductRecord, start: number) => { start: number, end: number } | null} context.slotOf the slot
  *   starting then (inside the hours, the lead time and the days ahead), or null
  * @param {Set<string>} context.booked `<productId>|<start ms>` of booked slots
@@ -596,7 +596,7 @@ export const merchandiseOf = (lines, promotions, kept = null, unit = 1) => {
  * @param {boolean} input.digital the cart has digital items
  * @param {number} input.total before any fee
  * @param {number} [input.feeBase] what the COD fee is a percent of (`feeBaseOf`; default `total`)
- * @param {number} input.rtoCount the shopper's returned parcels
+ * @param {number} input.rtoCount the shopper's returned packages
  * @param {number} [input.unit] whole units (E25)
  * @returns {PaymentOption[]}
  */

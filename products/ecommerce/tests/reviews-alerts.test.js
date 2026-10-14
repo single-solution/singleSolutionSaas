@@ -309,7 +309,7 @@ describe('alerts', () => {
 		const plain = await subscribe({ variantId: small?.id }, sara);
 		expect(plain.json).toMatchObject({ targetPrice: null, price: 10_000 });
 
-		// guests only while the setting allows, with a phone normalised as checkout does
+		// guests only while the setting allows, with a phone normalized as checkout does
 		expect(codeOf(await subscribe({ variantId: big?.id, phone: '0300 1234567' }, undefined))).toBe('sign_in_required');
 		await shop.setting('alerts', 'guests', true);
 		await shop.setting('alerts', 'channels', ['email', 'sms']);
@@ -395,7 +395,7 @@ describe('alerts', () => {
 		expect(second.map((m) => [m.template, m.to])).toEqual([['ecommerce.price_drop', { email: 'sara@example.com' }]]);
 		const saraToken = String(second[0]?.values.stopUrl).split('/').pop();
 
-		// unsubscribing removes every alert of that e-mail (Sara's waiting one too); a used or unknown token removes nothing
+		// unsubscribing removes every alert of that email (Sara's waiting one too); a used or unknown token removes nothing
 		const gone = await visit('POST', `/v1/shop/alerts/unsubscribe/${saraToken}`);
 		expect(gone.json).toEqual({ removed: 2 });
 		expect((await visit('POST', `/v1/shop/alerts/unsubscribe/${saraToken}`)).json).toEqual({ removed: 0 });
@@ -440,7 +440,7 @@ describe('alerts', () => {
 				.map((m) => m.values.name);
 
 		// a shopper's cancel and an ended window (orders placed through checkout hold the last unit)
-		const cancelled = await shop.seedProduct({ name: 'Cancelled', stock: 1 });
+		const cancelled = await shop.seedProduct({ name: 'Canceled', stock: 1 });
 		const expired = await shop.seedProduct({ name: 'Expired', stock: 1 });
 		const buyer = await shop.signIn({ id: 'usr_buyer0000001', name: 'Bo Buyer', email: 'bo@example.com' });
 		const place = (/** @type {string} */ id) =>
@@ -459,7 +459,7 @@ describe('alerts', () => {
 			).toBe(201);
 		let from = shop.messages().length;
 		await visit('POST', `/v1/shop/orders/${toCancel.id}/cancel`, { signIn: buyer });
-		expect(backSince(from)).toEqual(['Cancelled']);
+		expect(backSince(from)).toEqual(['Canceled']);
 		from = shop.messages().length;
 		shop.advance(25 * 3_600_000);
 		await visit('GET', '/v1/shop/products');

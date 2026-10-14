@@ -242,7 +242,7 @@ describe('alerts and compare', () => {
 		const attributes = /** @type {any[]} */ ([
 			{ id: 'att_2', name: 'NFC', unit: '', comparable: true, sort: 2 },
 			{ id: 'att_1', name: 'RAM', unit: '', comparable: true, sort: 1 },
-			{ id: 'att_3', name: 'Colour', unit: '', comparable: true, sort: 1 },
+			{ id: 'att_3', name: 'Color', unit: '', comparable: true, sort: 1 },
 			{ id: 'att_4', name: 'Hidden', unit: '', comparable: false, sort: 0 },
 		]);
 		expect(compareRows([product, { specs: {} }], attributes)).toEqual([

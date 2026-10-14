@@ -1010,7 +1010,7 @@ const applyEffect = async (data, orderId, effect, { now, session }) => {
 					.updateOne({ websiteId, id: line.productId }, { $inc: { sold: line.quantity } }, { session });
 			return;
 		case 'count_rto':
-			// a parcel that came back counts on its customer's record (K-6)
+			// a package that came back counts on its customer's record (K-6)
 			await data
 				.collection(COLLECTIONS.customers)
 				.updateOne({ websiteId, id: effect.customerId }, { $inc: { rtoCount: 1 } }, { session });

@@ -109,7 +109,7 @@ afterAll(async () => shop.product.close());
 
 describe('reviews', () => {
 	it('are written, moderated through the ticket twins, counted and shown with their summary', async () => {
-		const phone = await shop.seedProduct({ name: 'Review phone', variants: [variant({ options: { Colour: 'Black' } })] });
+		const phone = await shop.seedProduct({ name: 'Review phone', variants: [variant({ options: { Color: 'Black' } })] });
 		// long before the reports' ranges
 		await seedOrder({ product: phone, placedAt: new Date('2025-01-10T10:00:00Z'), userId: SARA, variantName: 'Black' });
 		const written = await shop.visitor('POST', '/v1/shop/reviews', {
@@ -205,7 +205,7 @@ describe('reports', () => {
 		await data.collection(COLLECTIONS.brands).insertOne(storedBrand({ id: brand, slug: 'acme', name: 'Acme' }));
 		phone = await shop.seedProduct({
 			name: 'Report phone',
-			variants: [variant({ sku: 'RP-1', options: { Colour: 'Red', Size: 'XL' }, grade: 'used_a', stock: 2 })],
+			variants: [variant({ sku: 'RP-1', options: { Color: 'Red', Size: 'XL' }, grade: 'used_a', stock: 2 })],
 			publishedAt: new Date('2026-08-01T00:00:00Z'),
 		});
 		cable = await shop.seedProduct({ name: 'Report cable', stock: 0 });
@@ -280,7 +280,7 @@ describe('reports', () => {
 			expect(report.json.rows).toEqual(expected[by]);
 		}
 		// another way is product; an unknown format is refused
-		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&by=colour&format=json`)).json.by).toBe('product');
+		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&by=color&format=json`)).json.by).toBe('product');
 		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&format=xml`)).status).toBe(422);
 	});
 
@@ -368,9 +368,9 @@ describe('wishlist and compare', () => {
 		await data.collection(COLLECTIONS.brands).insertOne(storedBrand({ id: brand, slug: 'zeta', name: 'Zeta' }));
 		await data.collection(COLLECTIONS.attributes).insertMany([
 			storedAttribute({
-				id: 'att_colours',
-				name: 'Colours',
-				slug: 'colours',
+				id: 'att_colors',
+				name: 'Colors',
+				slug: 'colors',
 				type: 'choice',
 				filterable: true,
 				comparable: true,
@@ -384,7 +384,7 @@ describe('wishlist and compare', () => {
 			brandId: brand,
 			featured: true,
 			media: [photo],
-			specs: { att_colours: ['Red', 'Blue'], att_5g: true },
+			specs: { att_colors: ['Red', 'Blue'], att_5g: true },
 			variants: [
 				variant({ price: 2000, compareAtPrice: 2500, grade: 'used_b', media: [{ ...photo, sizes: { card: 'card.jpg' } }] }),
 				variant({ price: 3000 }),
@@ -421,7 +421,7 @@ describe('wishlist and compare', () => {
 			expect.objectContaining({ id: b.id, brand: null, grades: [], image: null }),
 		]);
 		expect(compared.json.rows).toEqual([
-			{ attributeId: 'att_colours', name: 'Colours', unit: '', values: [['Red', 'Blue'], null] },
+			{ attributeId: 'att_colors', name: 'Colors', unit: '', values: [['Red', 'Blue'], null] },
 			{ attributeId: 'att_5g', name: '5G', unit: '', values: [true, null] },
 		]);
 	});

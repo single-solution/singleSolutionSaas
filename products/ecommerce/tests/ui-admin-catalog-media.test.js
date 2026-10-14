@@ -215,7 +215,7 @@ describe('catalog admin: product files', () => {
 		await tick(checkIn(dialog, 'back'), true);
 		await tick(checkIn(dialog, 'front'), false);
 		await choose(fieldIn(dialog, 'Upload photos for the product'), [file('n.png', 'image/png')]);
-		expect(statuses(dialog)).toContain('Uploaded and ticked.');
+		expect(statuses(dialog)).toContain('Uploaded and checked.');
 		expect(checkIn(dialog, 'Photo 3').checked).toBe(true);
 		server.routes['POST /v1/admin/catalog/uploads'] = () => problem(503, 'storage_not_connected');
 		await choose(fieldIn(dialog, 'Upload photos for the product'), [file('m.png', 'image/png')]);
@@ -242,7 +242,7 @@ describe('catalog admin: product files', () => {
 		expect(textOf(dialogOf(bare.root))).toContain('No photos yet.');
 	});
 
-	it('adds licence keys and files to a digital product', async () => {
+	it('adds license keys and files to a digital product', async () => {
 		const digital = product({
 			kind: 'digital',
 			options: [],
@@ -269,8 +269,8 @@ describe('catalog admin: product files', () => {
 		const detail = detailOf(panelOf(root, 'products'));
 		expect(textOf(detail)).toContain('manual.pdf (2 KB)');
 		expect(textOf(detail)).toContain('Downloads allowed (0 = no limit)3');
-		await click(buttonIn(detail, 'Add licence keys'));
-		type(fieldIn(dialogOf(root), 'Licence keys (one per line)'), 'K1\n\nK2\n');
+		await click(buttonIn(detail, 'Add license keys'));
+		type(fieldIn(dialogOf(root), 'License keys (one per line)'), 'K1\n\nK2\n');
 		keys = () => invalid('/keys');
 		await submitDialog(root);
 		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.keys']);

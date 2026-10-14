@@ -158,7 +158,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const later = await shop.api('GET', `/v1/orders/${order.id}`);
 		expect(later.json.effects[0]).toMatchObject({ state: 'done', refundId: expect.any(String), tries: 2 });
 		expect(later.json.payment).toMatchObject({ state: 'refunded', refunded: 2000 });
-		expect(later.json.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 2000, note: 'Order cancelled' })]);
+		expect(later.json.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 2000, note: 'Order canceled' })]);
 		const calls = refundCalls(paymentId);
 		expect(calls).toHaveLength(2);
 		expect(calls.map((call) => call.headers['idempotency-key'])).toEqual([`${order.id}:cancel`, `${order.id}:cancel`]);
@@ -432,7 +432,7 @@ describe('every way an order moves goes through the engine', () => {
 		expect((await activityOf(cod.id))[0]).toMatchObject({
 			actor: { kind: 'shopper', id: 'usr_engineshop01', name: 'Shopper' },
 			action: 'order.moved',
-			detail: 'Awaiting confirmation → Cancelled',
+			detail: 'Awaiting confirmation → Canceled',
 		});
 
 		const online = (await place('online', 'engine-22')).json.order;

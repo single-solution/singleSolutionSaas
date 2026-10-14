@@ -87,7 +87,7 @@ describe('core/lookup', () => {
 		trackStock: true,
 		price: 500,
 		inStock: true,
-		options: [{ name: 'Colour', values: ['Red'] }],
+		options: [{ name: 'Color', values: ['Red'] }],
 		specs: { att_1: '6 in', att_gone: true },
 		variants: [
 			variant({ id: 'var_cheap_out', price: 500, stock: 0 }),

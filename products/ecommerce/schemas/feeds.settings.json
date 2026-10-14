@@ -5,7 +5,7 @@
 		"items": {
 			"type": "string",
 			"title": "Items in the feeds",
-			"description": "All active items, or only those with an image (shopping catalogues refuse items without one).",
+			"description": "All active items, or only those with an image (shopping catalogs refuse items without one).",
 			"default": "with_images",
 			"enum": ["with_images", "all"]
 		},
@@ -32,14 +32,14 @@
 		"skuAs": {
 			"type": "string",
 			"title": "Send the SKU as",
-			"description": "Shopping catalogues match items by GTIN (barcode) or MPN (manufacturer part number). Choose what your SKUs are.",
+			"description": "Shopping catalogs match items by GTIN (barcode) or MPN (manufacturer part number). Choose what your SKUs are.",
 			"default": "none",
 			"enum": ["none", "mpn", "gtin"]
 		},
 		"identifierExists": {
 			"type": "string",
 			"title": "Items without GTIN or MPN",
-			"description": "Auto: nothing is sent and the catalogue decides. No: identifier_exists no is sent on items with neither (custom or handmade goods).",
+			"description": "Auto: nothing is sent and the catalog decides. No: identifier_exists no is sent on items with neither (custom or handmade goods).",
 			"default": "auto",
 			"enum": ["auto", "no"]
 		},

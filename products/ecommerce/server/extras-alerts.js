@@ -1,6 +1,6 @@
 /**
  * Back-in-stock and price-drop alerts (feature `alerts`, PLAN 0.8.8: via Notifications). A signed-in shopper sets an
- * alert on a product (or one variant); the contact is the e-mail and phone of their sign-in, and a price-drop alert
+ * alert on a product (or one variant); the contact is the email and phone of their sign-in, and a price-drop alert
  * stores the price at that moment, with an optional target price (E34). While the `guests` setting allows, a guest
  * sets one with a phone, read as checkout reads it (E21, K12), and the alert keeps the guest's customer id so it moves
  * to them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
@@ -11,7 +11,7 @@
  * it) it waits again and is tried on a later use, 1, 5, 15 and 60 minutes after each try, then ends `failed` (E63).
  * Each message has `{stopUrl}`: the website's stop page (the `alerts` setting `stopUrl`, else
  * `/alerts/unsubscribe/<token>`) holding the `alerts_stop` widget, which calls `POST /v1/shop/alerts/unsubscribe/:token`
- * to remove every alert of that phone or e-mail (EN-1); only the token's hash is kept. The link is not named
+ * to remove every alert of that phone or email (EN-1); only the token's hash is kept. The link is not named
  * `unsubscribeUrl`: Notifications reserves that name for its own opt-out link and refuses a send that passes it (MS-2).
  * @module
  */
@@ -214,7 +214,7 @@ export const createAlerts = (_product, service, cards) => {
 	});
 
 	/**
-	 * Who an alert is for: the signed-in shopper (the e-mail and phone of their sign-in), else a guest's normalised
+	 * Who an alert is for: the signed-in shopper (the email and phone of their sign-in), else a guest's normalized
 	 * phone while the `guests` setting allows (E34); with their customer record's id when they have one (E21). A phone
 	 * of a country the website does not serve (`checkout.countries`, SE-5) is refused for a guest and left out for a
 	 * member.
@@ -228,10 +228,7 @@ export const createAlerts = (_product, service, cards) => {
 		if (shopper) {
 			const phone = shopper.phone && phoneAllowed(shopper.phone, rules) ? shopper.phone : '';
 			if (!shopper.email && !phone)
-				throw service.invalid(
-					'kind',
-					'Add an e-mail or a phone of a country this shop serves to your account to get alerts.',
-				);
+				throw service.invalid('kind', 'Add an email or a phone of a country this shop serves to your account to get alerts.');
 			const customer = await store.customer(shopper.id);
 			return { userId: shopper.id, email: shopper.email, phone, customerId: customer?.id ?? null };
 		}
@@ -289,7 +286,7 @@ export const createAlerts = (_product, service, cards) => {
 	};
 
 	/**
-	 * POST /v1/shop/alerts/unsubscribe/:token (E34): every alert of the phone or e-mail the token's message went to is
+	 * POST /v1/shop/alerts/unsubscribe/:token (E34): every alert of the phone or email the token's message went to is
 	 * removed. A token no longer known removes nothing.
 	 * @param {any} ctx
 	 */
@@ -338,7 +335,7 @@ export const createAlerts = (_product, service, cards) => {
 	};
 
 	/**
-	 * A person's alerts: by their Accounts user, e-mail or phone.
+	 * A person's alerts: by their Accounts user, email or phone.
 	 * @param {Site} s
 	 * @param {{ id?: string, email?: string, phone?: string }} person
 	 */

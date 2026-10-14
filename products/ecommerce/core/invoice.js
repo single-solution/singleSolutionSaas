@@ -1,7 +1,7 @@
 /**
  * Invoices, packing slips and pick lists (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line;
  * E35) as printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed
- * comes from the order snapshot, business.json (name, address, e-mail, phone) and the `invoices` settings, whose texts
+ * comes from the order snapshot, business.json (name, address, email, phone) and the `invoices` settings, whose texts
  * the merchant edits (`INVOICE_TEXTS` are the English defaults). The invoice number is the order number; the invoice
  * shows the fee, the role discount and points apart, the payments and refunds (staff names on the staff copy only) and
  * the cash due on delivery. The packing slip has no prices; the batch of slips adds the cash to collect and empty slots
@@ -23,7 +23,7 @@ import { orderMoney } from './orders.js';
 
 /**
  * Whether a shopper may read their order's invoice (E35; `GET /v1/shop/orders/:id/invoice` and the order's `invoice`):
- * with the invoices setting `shopperFrom: confirmed`, not while the order waits nor once it is cancelled; else always.
+ * with the invoices setting `shopperFrom: confirmed`, not while the order waits nor once it is canceled; else always.
  * @param {Pick<OrderRecord, 'role'>} order
  * @param {Record<string, unknown>} settings the invoices settings
  */
@@ -208,7 +208,7 @@ const STATE_TEXT = {
 
 /**
  * What is still owed, counted the one way ({@link orderMoney}): the total less what was paid, nothing once the order is
- * closed (a cancelled order never shows cash to collect).
+ * closed (a canceled order never shows cash to collect).
  * @param {OrderRecord} order
  */
 const dueOf = (order) => orderMoney(order).due;

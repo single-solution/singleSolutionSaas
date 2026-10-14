@@ -35,7 +35,7 @@ beforeAll(async () => {
 			email: 'bob@example.com',
 			phone: '+15550000002',
 			blocked: true,
-			blockedReason: 'Refused 3 parcels',
+			blockedReason: 'Refused 3 packages',
 			rtoCount: 3,
 			orderCount: 3,
 			note: '',
@@ -230,10 +230,10 @@ describe('guests and members by customer id (K-6, CU-5)', () => {
 		expect(gail.json.recentOrders).toHaveLength(2);
 		const blocked = await shop.admin(ticket, 'PATCH', `/v1/admin/customers/${GUEST}`, {
 			blocked: true,
-			blockedReason: 'Refused parcels',
+			blockedReason: 'Refused packages',
 			note: 'Calls at night',
 		});
-		expect(blocked.json).toMatchObject({ id: GUEST, blocked: true, blockedReason: 'Refused parcels', note: 'Calls at night' });
+		expect(blocked.json).toMatchObject({ id: GUEST, blocked: true, blockedReason: 'Refused packages', note: 'Calls at night' });
 		const record = await (await shop.db()).collection(COLLECTIONS.customers).findOne({ websiteId: shop.websiteId, id: GUEST });
 		expect(record).toMatchObject({ userId: null, guest: true, blocked: true });
 		expect((await shop.api('POST', `/v1/customers/${GUEST}/seen`)).json).toEqual({ seen: true });

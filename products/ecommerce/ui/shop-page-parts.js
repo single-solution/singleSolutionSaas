@@ -2,7 +2,7 @@
  * Parts of the product page (PLAN 0.8.10 E4, E5, E7, E9, E10, E12, E16): the variant picker's axes (the option axes,
  * up to 6, else the variants' attributes, plus the condition when two variants differ only by grade), the stock text
  * of a variant ("Only N left", "N in stock", Sold out), photos with their smaller sizes, size and blur placeholder, the
- * grade's details (colour, description, content, return days and condition video), the product video, the FAQs, the
+ * grade's details (color, description, content, return days and condition video), the product video, the FAQs, the
  * Size guide (a dialog, a full-screen sheet on phones, with an in/cm switch) and the shopper's own alerts
  * (`GET /v1/shop/alerts`, read once per sign-in and shared by the widgets of a page).
  * @module
@@ -133,7 +133,7 @@ export const nearestVariant = (axes, variants, chosen, axis, value) => {
 
 /**
  * What the page says of a variant's stock (E9): Sold out, out of stock, "Only N left" up to `low`, "N in stock", or in
- * stock; `tone` is a status colour.
+ * stock; `tone` is a status color.
  * @param {Texts} t
  * @param {PageVariant} variant
  * @param {number} low the `lowStockShown` setting
@@ -195,7 +195,7 @@ export const gradeVideoUrl = (grade) => {
 };
 
 /**
- * The details of a grade (E10): its colour, label, description, content, return days and condition video.
+ * The details of a grade (E10): its color, label, description, content, return days and condition video.
  * @param {Document} doc
  * @param {Texts} t
  * @param {PageGrade} grade
@@ -286,7 +286,7 @@ export const faqBlock = (doc, t, faqs) => {
 
 // ---------------------------------------------------------------------------------------------- size guide (E5)
 
-/** Plain numbers and ranges of numbers ("32", "32.5", "32-34") are converted between inches and centimetres. */
+/** Plain numbers and ranges of numbers ("32", "32.5", "32-34") are converted between inches and centimeters. */
 const NUMERIC = /^\s*(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*$/;
 
 /**

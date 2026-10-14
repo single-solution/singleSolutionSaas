@@ -4,13 +4,13 @@
  * - Paid: an order is paid only when Payments says, server to server, that its payment is paid for exactly the order's
  *   amount (or COD advance) and currency; the payment is an `online` entry of its payments log (E26). A waiting payment
  *   is asked again when the order is read (at most every 30 seconds) and on use.
- * - Cancelled: when an order whose Payments payment is still open is cancelled (by staff, the shopper or the end of its
- *   window), deleted or edited, that payment is cancelled at Payments first, so it can no longer be paid. Money paid just
- *   before keeps the order: it is recorded as paid and the cancel is refused, so a paid order is never cancelled without
+ * - Canceled: when an order whose Payments payment is still open is canceled (by staff, the shopper or the end of its
+ *   window), deleted or edited, that payment is canceled at Payments first, so it can no longer be paid. Money paid just
+ *   before keeps the order: it is recorded as paid and the cancel is refused, so a paid order is never canceled without
  *   a refund someone decides. When Payments cannot be reached the cancel goes on and the step is tried again on the next
  *   uses (for three days).
  * - After the cancel: money that still arrives (a gateway's late notice, a transfer confirmed in Payments; Payments flags
- *   it `refundDue`) is recorded on the cancelled order, which then shows the refund due and is refunded the normal way.
+ *   it `refundDue`) is recorded on the canceled order, which then shows the refund due and is refunded the normal way.
  *   It is looked for when the order is read and on use, for three days after the cancel.
  * @module
  */
@@ -33,7 +33,7 @@ import { createTransitions, rulesOf } from './transitions.js';
 export const RECHECK_MS = 30_000;
 /** A cancel Payments could not take is tried again on use at most this often per order. */
 const VOID_RETRY_MS = 60_000;
-/** A cancelled order's payment is asked about on use at most this often, for this long after the cancel. */
+/** A canceled order's payment is asked about on use at most this often, for this long after the cancel. */
 const LATE_EVERY_MS = 15 * 60_000;
 const WATCH_MS = 3 * 86_400_000;
 /** Who confirms what Payments confirmed. */
@@ -56,7 +56,7 @@ const tookIn = (order) =>
 	(order.payments ?? []).some((entry) => entry.method === 'online' && entry.reference === order.payment.paymentId);
 
 /**
- * Whether an order's Payments payment may still be paid: started, not cancelled at Payments, and not paid yet (records
+ * Whether an order's Payments payment may still be paid: started, not canceled at Payments, and not paid yet (records
  * from before the payments log, E26: while the order waits for it).
  * @param {OrderRecord} order
  */
@@ -66,16 +66,16 @@ export const openAtPayments = (order) =>
 	((order.payments ?? []).length === 0 ? order.payment.state === 'pending' : !tookIn(order));
 
 /**
- * Whether money may still arrive for a cancelled order whose payment was cancelled at Payments (K-13).
+ * Whether money may still arrive for a canceled order whose payment was canceled at Payments (K-13).
  * @param {OrderRecord} order
  */
 const watched = (order) =>
 	order.role === 'cancelled' && Boolean(order.payment.paymentId) && Boolean(order.payment.voidedAt) && !tookIn(order);
 
 /**
- * What cancelling an order's payment at Payments means for the cancel: `paid` the order, recorded as paid, when the money
+ * What canceling an order's payment at Payments means for the cancel: `paid` the order, recorded as paid, when the money
  * came before (the cancel is refused); `reached` false when Payments could not be reached (the step is kept); `set` what
- * the cancel writes with it; `late` money paid after an earlier cancel, recorded on the cancelled order.
+ * the cancel writes with it; `late` money paid after an earlier cancel, recorded on the canceled order.
  * @typedef {{ paid: OrderRecord | null, reached: boolean, set: Record<string, unknown>, late: PaymentFacts | null }} CancelStep
  */
 
@@ -171,7 +171,7 @@ export const createOrderPayments = (product, service) => {
 
 	/**
 	 * Record money Payments took for an order's payment outside the usual confirmation: paid before a cancel on an order
-	 * that no longer waits for it, or paid after the cancel (`late`: the cancelled order then shows the refund due). Once
+	 * that no longer waits for it, or paid after the cancel (`late`: the canceled order then shows the refund due). Once
 	 * per payment; never moves the order.
 	 * @param {Site} s @param {OrderRecord} order @param {PaymentFacts} payment @param {{ late: boolean }} how
 	 * @returns {Promise<OrderRecord | null>} null when the order changed meanwhile
@@ -188,7 +188,7 @@ export const createOrderPayments = (product, service) => {
 			amount: payment.amount,
 			reference: paymentId,
 			proofKey: null,
-			note: late ? 'Paid after the order was cancelled' : '',
+			note: late ? 'Paid after the order was canceled' : '',
 			by: PAYMENTS_ACTOR,
 			at: new Date(now),
 		};
@@ -220,7 +220,7 @@ export const createOrderPayments = (product, service) => {
 						to: order.status,
 						by: 'system',
 						...(late
-							? serverNote('paid_after_cancel', `Payment of ${money} arrived after the order was cancelled: refund it`, {
+							? serverNote('paid_after_cancel', `Payment of ${money} arrived after the order was canceled: refund it`, {
 									amount: payment.amount,
 								})
 							: serverNote('payments_took', `Payment of ${money} confirmed by Payments`, { amount: payment.amount })),
@@ -238,7 +238,7 @@ export const createOrderPayments = (product, service) => {
 
 	/**
 	 * Ask Payments about an order's payment (at most every {@link RECHECK_MS} unless `force`): a waiting one is confirmed
-	 * once paid; a cancelled order's cancelled payment that was paid after all is recorded (refund due, K-13). Never
+	 * once paid; a canceled order's canceled payment that was paid after all is recorded (refund due, K-13). Never
 	 * throws: when Payments cannot be reached the order is returned as it was.
 	 * @param {Site} s @param {OrderRecord} order @param {{ force?: boolean }} [options]
 	 * @returns {Promise<{ order: OrderRecord, reached: boolean }>}
@@ -273,7 +273,7 @@ export const createOrderPayments = (product, service) => {
 	};
 
 	/**
-	 * Cancel an order's open Payments payment before the order is cancelled, deleted or edited (K-13).
+	 * Cancel an order's open Payments payment before the order is canceled, deleted or edited (K-13).
 	 * @param {Site} s @param {OrderRecord} order as read @param {string} reason kept in the payment's history
 	 * @returns {Promise<CancelStep>}
 	 */
@@ -295,7 +295,7 @@ export const createOrderPayments = (product, service) => {
 			!answer.payment.refundDue && answer.payment.amount === expected.amount && answer.payment.currency === expected.currency;
 		// paid after an earlier cancel (or for another amount): the cancel goes on, the money is to be refunded
 		if (!before) return { paid: null, reached: true, set: { 'payment.voidedAt': now }, late: answer.payment };
-		// paid before the cancel: the order is paid, not cancelled (confirmed as Payments' confirmation does, or, when it
+		// paid before the cancel: the order is paid, not canceled (confirmed as Payments' confirmation does, or, when it
 		// no longer waits for the payment, the money recorded as it is)
 		const checked = await recheck(s, order, { force: true });
 		const paid =
@@ -309,7 +309,7 @@ export const createOrderPayments = (product, service) => {
 	};
 
 	/**
-	 * Record on a just cancelled order the money a {@link CancelStep} found was paid after an earlier cancel.
+	 * Record on a just canceled order the money a {@link CancelStep} found was paid after an earlier cancel.
 	 * @param {Site} s @param {OrderRecord} order the order after the cancel @param {CancelStep} step
 	 */
 	const afterCancel = async (s, order, step) => {
@@ -317,7 +317,7 @@ export const createOrderPayments = (product, service) => {
 	};
 
 	/**
-	 * Work on use: cancels Payments could not take are tried again, and cancelled orders are watched for money that still
+	 * Work on use: cancels Payments could not take are tried again, and canceled orders are watched for money that still
 	 * arrives (bounded batches, for three days after the cancel).
 	 * @param {Site} s
 	 */
@@ -325,7 +325,7 @@ export const createOrderPayments = (product, service) => {
 		const store = createOrdersStore(await s.data());
 		const now = service.now();
 		for (const order of await store.voidsPending(now, VOID_RETRY_MS, WATCH_MS)) {
-			const answer = await service.payments.cancel(s, /** @type {string} */ (order.payment.paymentId), 'Order cancelled');
+			const answer = await service.payments.cancel(s, /** @type {string} */ (order.payment.paymentId), 'Order canceled');
 			const at = new Date(service.now());
 			if (answer.outcome === 'paid' && answer.payment.status === 'paid')
 				await takeIn(s, order, answer.payment, { late: true });
@@ -341,10 +341,10 @@ export const createOrderPayments = (product, service) => {
 	};
 
 	/**
-	 * Drop the payment Payments cancelled for a cancel or a move that then did not happen (it lost its race to another
-	 * change, or failed after): only while the order still names that payment and nothing cancelled the order meanwhile
+	 * Drop the payment Payments canceled for a cancel or a move that then did not happen (it lost its race to another
+	 * change, or failed after): only while the order still names that payment and nothing canceled the order meanwhile
 	 * (that keeps it, watched for money that still comes), so the shopper's next pay starts one for the order as it is,
-	 * as after an edit. Nothing to do when the step cancelled nothing.
+	 * as after an edit. Nothing to do when the step canceled nothing.
 	 * @param {Site} s @param {OrderRecord} order as read @param {CancelStep | null} step
 	 */
 	const dropVoided = async (s, order, step) => {

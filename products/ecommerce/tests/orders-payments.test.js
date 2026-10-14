@@ -1,7 +1,7 @@
 /**
  * The payments log and the extra moves through the API (PLAN 0.8.10 E26, E27): payments staff record (with the
  * confirm move), refunds with their method, reference and claim, the refunded status reached by refunds, cash paid on
- * delivery or recorded by staff, moving back to waiting or open, recalling a shipped parcel, refunding before delivery
+ * delivery or recorded by staff, moving back to waiting or open, recalling a shipped package, refunding before delivery
  * only when something was paid, returns to origin with a reason and customer returns with points and restocking.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -174,7 +174,7 @@ describe('the payments log (E26)', () => {
 		const staff = await shop.api('GET', `/v1/orders/${order.id}`);
 		expect(staff.json.payment).toMatchObject({ balanceDue: 0, refundable: 700, refundDue: 0 });
 
-		// a cancelled cash order: nothing due, no cash to collect on its invoice, and no payment recorded on it
+		// a canceled cash order: nothing due, no cash to collect on its invoice, and no payment recorded on it
 		const cancelled = await placeOrder();
 		await moveTo(cancelled.order.id, 'cancelled');
 		expect((await shop.api('GET', `/v1/orders/${cancelled.order.id}`)).json.payment).toMatchObject({ balanceDue: 0 });
@@ -252,7 +252,7 @@ describe('paid when staff confirm (OR-7)', () => {
 		// cash on delivery is not listed: confirming it records nothing
 		expect((await moveTo((await placeOrder()).order.id, 'confirmed')).json.payment).toMatchObject({ paid: 0 });
 
-		// through Payments: its payment there is cancelled first, so it can no longer be paid twice
+		// through Payments: its payment there is canceled first, so it can no longer be paid twice
 		await shop.setting('checkout', 'bankTransferVia', 'payments');
 		const viaPayments = await placeOrder({ payment: 'bank_transfer' });
 		const { paymentId } = (await orderRecord(viaPayments.order.id)).payment;
@@ -288,14 +288,14 @@ describe('more moves (E27)', () => {
 		await shop.moveOptions('confirmed', 'pending_payment', {});
 	});
 
-	it('never cancels a dispatched parcel: it comes back first, then everything is given back', async () => {
+	it('never cancels a dispatched package: it comes back first, then everything is given back', async () => {
 		await shop.list('couriers', [{ key: 'post', name: 'Post', trackingUrl: 'https://track.example/{tracking}' }]);
 		const { item, order } = await placeOrder({ stock: 3 });
 		await moveTo(order.id, 'confirmed');
 		await moveTo(order.id, 'packed');
 		await moveTo(order.id, 'dispatched', { shipment: { courier: 'post', trackingNumber: 'T1' } });
 		expect(await stockOf(item.id)).toBe(2);
-		// a flow cannot list the cancel of a shipped parcel, nor its refund as a cancel
+		// a flow cannot list the cancel of a shipped package, nor its refund as a cancel
 		const cookie = await shop.adminSession();
 		for (const to of ['cancelled', 'refunded']) {
 			const saved = await shop.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${shop.websiteId}/lists/order_flow`, {
@@ -330,7 +330,7 @@ describe('more moves (E27)', () => {
 		expect((await orderRecord(paid.order.id)).refunds).toHaveLength(1);
 	});
 
-	it('takes a reason when a parcel comes back and counts only RTOs', async () => {
+	it('takes a reason when a package comes back and counts only RTOs', async () => {
 		await shop.list('couriers', [{ key: 'post', name: 'Post', trackingUrl: 'https://track.example/{tracking}' }]);
 		const { order } = await placeOrder();
 		await moveTo(order.id, 'confirmed');
