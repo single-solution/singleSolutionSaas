@@ -11,7 +11,7 @@
  * @module
  */
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
-import { isObject } from './util.js';
+import { deepFreeze, isObject } from './util.js';
 
 /**
  * @typedef {{ issuer: string, jwks: Array<Record<string, any>>, audience?: string,
@@ -51,19 +51,6 @@ const decodeJson = (segment) => {
 	} catch {
 		return null;
 	}
-};
-
-/**
- * @template T
- * @param {T} value
- * @returns {T} the value, recursively frozen
- */
-const deepFreeze = (value) => {
-	if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
-		for (const child of Object.values(value)) deepFreeze(child);
-		Object.freeze(value);
-	}
-	return value;
 };
 
 /**
@@ -295,5 +282,3 @@ export const createAccountsSignIns = ({ connections, now }) => {
 		},
 	});
 };
-
-/** @typedef {ReturnType<typeof createAccountsSignIns>} AccountsSignIns */

@@ -218,6 +218,7 @@ page.
 | `themeCss(theme)`                                                                                                             | the `:host` rule: `--ss-color-<name>`, `--ss-font-family`, `--ss-radius`      |
 | `formatText(text, values?)`                                                                                                   | fills `{placeholders}`                                                        |
 | `formatMoney(amount, currency, format, viewer)`, `formatDate(value, format, { timeZone, style, viewer })`, `viewerOf(window)` | the kit's one formatter with the widget config's `format` and `timeZone` (K7) |
+| `normaliseFormat(format)`, `DEFAULT_FORMAT`                                                                                   | the widget config's `format` with every field valid, and the default Format   |
 
 The host gets `data-ss-mode="light" | "dark"` (`auto` follows the device).
 
@@ -226,7 +227,7 @@ The host gets `data-ss-mode="light" | "dark"` (`auto` follows the device).
 | Export                                        | What it is                                                                                              |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `createFakePortal({ url?, now?, pageSize? })` | the Portal side of PLAN 0.4.12 (async)                                                                  |
-| `createAccountsDouble({ url? })`              | receives activity copies; serves keys and users with a permission; calls data rights                    |
+| `createAccountsDouble({ url?, now? })`        | receives activity copies; serves keys and users with a permission; calls data rights                    |
 | `createNotificationsDouble({ url? })`         | takes events (`POST /v1/events`) and messages (`POST /v1/messages/<channel>`)                           |
 | `createNetwork(handlers)`                     | `{ fetch, send }` routing to in-process handlers by origin (`send` fits `outboundSend`)                 |
 | `productKeyOf({ store, encryptionKey })`      | the product's own private key from its store (kept sealed, K-21), for tests that sign as the product    |

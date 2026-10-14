@@ -20,6 +20,7 @@ import { createPrivateKey, sign as cryptoSign } from 'node:crypto';
 import { validateActivityCopy, validateFeatureReport, validatePriceReport } from '@ss/contracts';
 import { netError } from '@ss/net';
 import {
+	NOTICE_PATH,
 	createConnectRequest,
 	createJwks,
 	createKeyResolver,
@@ -456,7 +457,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				...(await signNotice({ signer, body, timestamp: Math.floor(now() / 1000) })),
 				'content-type': 'application/json',
 			};
-			return product.handler(new Request(`${product.baseUrl}/.well-known/ss-events`, { method: 'POST', headers, body }));
+			return product.handler(new Request(`${product.baseUrl}${NOTICE_PATH}`, { method: 'POST', headers, body }));
 		},
 		/**
 		 * Sign a Portal call (`auth: 'portal'` routes such as `GET /v1/blueprint?websiteId=`) with the Portal key.

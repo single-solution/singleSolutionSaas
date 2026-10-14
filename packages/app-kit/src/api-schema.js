@@ -47,7 +47,7 @@ const SCHEMA_SUBSET = Object.freeze([
 	...NOTE_KEYWORDS,
 ]);
 /** A shared schema reference; the name is group 1. */
-export const SCHEMA_REF = /^#\/components\/schemas\/([A-Za-z][A-Za-z0-9_.-]{0,63})$/;
+const SCHEMA_REF = /^#\/components\/schemas\/([A-Za-z][A-Za-z0-9_.-]{0,63})$/;
 /** Nesting deeper than this (references included) is refused. */
 const MAX_DEPTH = 64;
 
@@ -56,7 +56,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** @param {string} token */
-const escapeToken = (token) => token.replace(/~/g, '~0').replace(/\//g, '~1');
+export const escapeToken = (token) => token.replace(/~/g, '~0').replace(/\//g, '~1');
 
 /** @param {unknown} value */
 const isCount = (value) => Number.isInteger(value) && /** @type {number} */ (value) >= 0;

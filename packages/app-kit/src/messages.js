@@ -17,24 +17,10 @@
  * @module
  */
 import { validateMessageDefaults } from '@ss/contracts';
-import { isObject, kitError } from './util.js';
+import { deepFreeze, isObject, kitError } from './util.js';
 
 /** @typedef {import('@ss/contracts').DeclaredMessage} DeclaredMessage */
 /** @typedef {{ subject?: string, text: string, required: boolean, urgent: boolean, sensitive: boolean }} DefaultWords */
-
-/**
- * A value frozen all the way down.
- * @template T
- * @param {T} value
- * @returns {T}
- */
-const deepFreeze = (value) => {
-	if (typeof value === 'object' && value !== null) {
-		for (const inner of Object.values(value)) deepFreeze(inner);
-		Object.freeze(value);
-	}
-	return value;
-};
 
 /** The send API path of each channel in Notifications. */
 const SEND_PATH = /^\/v1\/messages\/(email|sms|whatsapp|push|staff-push)$/;

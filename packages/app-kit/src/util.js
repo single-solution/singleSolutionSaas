@@ -77,3 +77,17 @@ export const kitError = (code, message, details) => {
  */
 export const isKitError = (error, code) =>
 	error instanceof Error && error.name === 'AppKitError' && (code === undefined || /** @type {any} */ (error).code === code);
+
+/**
+ * A value frozen all the way down.
+ * @template T
+ * @param {T} value
+ * @returns {T} the value, recursively frozen
+ */
+export const deepFreeze = (value) => {
+	if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+		for (const child of Object.values(value)) deepFreeze(child);
+		Object.freeze(value);
+	}
+	return value;
+};

@@ -388,7 +388,7 @@ const guardCollection = (collection, { websiteId, now, stamp }) => {
 };
 
 /**
- * Normalise index definitions: an array of `{ collection, keys | key, ... }`, or a map
+ * Normalize index definitions: an array of `{ collection, keys | key, ... }`, or a map
  * `{ [collection]: [{ keys | key, name?, unique?, ... }] }` (driver-style `key` accepted).
  * @param {IndexDefinition[] | Record<string, ReadonlyArray<Omit<IndexDefinition, 'collection'> | (Omit<IndexDefinition, 'collection' | 'keys'> & { key: IndexDefinition['keys'] })>>} defs
  * @returns {IndexDefinition[]}

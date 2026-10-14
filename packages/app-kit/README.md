@@ -83,20 +83,24 @@ never its value; a product with problems answers every route with 503.
 ## Wiring a product into Next.js
 
 The product's Next.js app has two functions: the catch-all route below (every kit and product route, reached through
-rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs` and `/v1/*` to `/api/*`) and the dashboard page, which
-calls the dashboard API from the browser.
+rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/openapi.json` and `/v1/*` to `/api/*`) and the
+dashboard page, which calls the dashboard API from the browser. `adapters/product.js` makes the product
+(`createProduct` with its manifest, texts, settings and hooks) and `server/routes.js` its routes, as `ss app init`
+writes them.
 
 ```js
 // app/api/[...path]/route.js
-import { after } from 'next/server';
-import { configFromEnv, createProduct, toNextRoute } from '@ss/app-kit';
-import manifest from '../../../manifest.json' with { type: 'json' };
-import strings from '../../../strings/en.json' with { type: 'json' };
-import { routes } from '../../../api/routes.js';
+import { after } from 'next/server.js';
+import { configFromEnv, toNextRoute } from '@ss/app-kit';
+import { createProductInstance } from '../../../adapters/product.js';
+import { createRoutes } from '../../../server/routes.js';
 
+// a missing or invalid variable is named (never its value) and every route answers 503 until it is fixed
 const { config, problems } = configFromEnv();
-const product = createProduct({ manifest, strings, config, problems });
-export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(routes), { after });
+const product = createProductInstance({ config, problems });
+
+export const dynamic = 'force-dynamic';
+export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(createRoutes(product)), { after });
 ```
 
 ## Checks

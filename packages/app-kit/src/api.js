@@ -5,15 +5,16 @@
  * description cannot drift from the code. Nothing here runs in production.
  *
  * The file is an object keyed `"<METHOD> <path as in defineRoute>"` (for example `"POST /v1/payments/:id/cancel"`),
- * each value `{ summary?, description?, query?, body?, response?, status? }`: `query`, `body` and `response` are
- * schemas (`query` an object schema whose properties are the query parameters), `status` the success status (default
+ * each value `{ summary?, description?, query?, headers?, body?, response?, status? }`: `query`, `headers`, `body` and
+ * `response` are schemas (`query` and `headers` object schemas whose properties are the query parameters and the
+ * request headers the route reads), `status` the success status (default
  * 200; 204 has no `response`). The optional `"$schemas"` holds shared schemas by name, referenced as
  * `{ "$ref": "#/components/schemas/<Name>" }`; the kit's own shared schemas (`Count`, `Counts`, `Connection` …) may be
  * referenced too.
  * @module
  */
 import KIT_API_JSON from './kit-api.json' with { type: 'json' };
-import { SCHEMA_REF, schemaProblems, validateValue } from './api-schema.js';
+import { escapeToken, schemaProblems, validateValue } from './api-schema.js';
 import { isObject } from './util.js';
 
 /** @typedef {import('./api-schema.js').Schema} Schema */
@@ -34,17 +35,14 @@ import { isObject } from './util.js';
 /** The kit's own routes (tickets, data rights, permissions, features, settings, texts, theme, Format, lists, connections, activity). */
 export const KIT_API = /** @type {ApiDescription} */ (/** @type {unknown} */ (KIT_API_JSON));
 
-/** Members of a route's entry. */
 /** A request header's name, as the route's own headers are named (`SS-Guest`, `SS-Order-Key` …). */
 const HEADER_NAME = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
+/** Members of a route's entry. */
 const API_ENTRY_MEMBERS = Object.freeze(['summary', 'description', 'query', 'headers', 'body', 'response', 'status']);
 /** Methods a route may have. */
 const METHODS = Object.freeze(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const ROUTE_KEY = /^([A-Z]+) (\/\S*)$/;
 const SCHEMA_NAME = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
-
-/** @param {string} token */
-const escapeToken = (token) => token.replace(/~/g, '~0').replace(/\//g, '~1');
 
 /**
  * The method and path of a route key (`"GET /v1/payments/:id"`), or null.
@@ -265,4 +263,4 @@ export const apiChecker = (api, { kit = true } = {}) => {
 	});
 };
 
-export { SCHEMA_REF, schemaProblems, validateValue };
+export { schemaProblems, validateValue };

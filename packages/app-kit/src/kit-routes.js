@@ -19,7 +19,7 @@
  * @module
  */
 import { validateDataRightsRequest } from '@ss/contracts';
-import { NOTICE_PATH, isProtocolError, ticketOriginAllowed, verifyNotice } from '@ss/protocol';
+import { CONNECT_PATH, NOTICE_PATH, isProtocolError, ticketOriginAllowed, verifyNotice } from '@ss/protocol';
 import { defineRoute } from './http/routes.js';
 import { noContent, problem } from './http/results.js';
 import { isObject } from './util.js';
@@ -193,7 +193,7 @@ export const createKitRoutes = (kit, hooks) => {
 		defineRoute({ method: 'GET', path: '/v1/widget/admin/config', auth: 'ticket', handler: widgetConfig }),
 		defineRoute({
 			method: 'POST',
-			path: '/.well-known/ss-connect',
+			path: CONNECT_PATH,
 			auth: 'none',
 			rawBody: true,
 			maxBodyBytes: 64 * 1024,
