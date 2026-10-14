@@ -324,10 +324,10 @@ export const startWidget = ({ window: win, script }) => {
 
 	/**
 	 * Save a file a widget made (the redirects' CSV export) through a download link.
-	 * @param {string} name @param {string} text
+	 * @param {string} name @param {ArrayBuffer} bytes
 	 */
-	const save = (name, text) => {
-		const url = win.URL.createObjectURL(new win.Blob([text], { type: 'text/csv;charset=utf-8' }));
+	const save = (name, bytes) => {
+		const url = win.URL.createObjectURL(new win.Blob([bytes], { type: 'text/csv;charset=utf-8' }));
 		const link = doc.createElement('a');
 		link.href = url;
 		link.download = name;

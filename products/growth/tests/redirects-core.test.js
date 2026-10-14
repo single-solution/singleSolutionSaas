@@ -335,6 +335,10 @@ describe('CSV files', () => {
 			records: [{ values: { from: '/a', to: '/b' } }, { values: { from: '/c', to: '' } }],
 		});
 		expect(parseCsv('from,,from\r/a,x,/b', { maxRows: 5 })).toMatchObject({ ok: true, records: [{ values: { from: '/a' } }] });
+		// a header of many empty columns costs no time per record
+		const started = performance.now();
+		expect(parseCsv(`from${','.repeat(200_000)}\n${'/a\n'.repeat(5000)}`, { maxRows: 5000 })).toMatchObject({ ok: true });
+		expect(performance.now() - started).toBeLessThan(1000);
 		expect(parseCsv('', { maxRows: 5 })).toEqual({ ok: false, code: 'empty' });
 		expect(parseCsv('from\n"/a', { maxRows: 5 })).toEqual({ ok: false, code: 'unterminated_quote' });
 		expect(parseCsv('from\n/a\n/b\n/c\n', { maxRows: 2 })).toEqual({ ok: false, code: 'too_many_rows' });

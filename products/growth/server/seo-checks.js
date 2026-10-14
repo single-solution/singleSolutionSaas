@@ -64,8 +64,8 @@ const MAX_RULE_PROBES = 3;
 /** Days of Web Vitals (as Google's own field data) and of the 404 log a run reads. */
 const VITAL_DAYS = 28;
 const NOT_FOUND_DAYS = 90;
-/** Rate limit of a run (it reads the merchant's site; a code constant protecting both). */
-const RUN_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ ('website') }];
+/** Rate limit of a run, the API and the widget together (it reads the merchant's site; a code constant protecting both). */
+const RUN_LIMITS = [{ limit: 10, windowSeconds: 3600, per: /** @type {const} */ ('website'), bucket: 'seo_checks' }];
 
 /** A 422 at one field. @param {string} field @param {string} message */
 export const invalid = (field, message) =>

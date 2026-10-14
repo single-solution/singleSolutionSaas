@@ -143,6 +143,18 @@ describe('reading pages', () => {
 		expect(allNodesOf([{ a: { b: [{ c: 1 }] } }])).toHaveLength(3);
 	});
 
+	it('reads a hostile page quickly: tags, comments and scripts left open, many times over', () => {
+		const size = 200_000;
+		/** @param {string} part */
+		const page = (part) => part.repeat(Math.ceil(size / part.length));
+		const started = performance.now();
+		for (const part of ['<!--', '<script>', '<style ', '<title>', '<head ', '<meta ', '< a ', '<img alt="', '<html'])
+			scanHtml(`<html lang="en"><title>T</title>${page(part)}`);
+		expect(performance.now() - started).toBeLessThan(1000);
+		// what is closed is still read
+		expect(scanHtml(`<title>T</title><h1>A</h1>${page('<!--')}`)).toMatchObject({ title: 'T', h1: 1 });
+	});
+
 	it('finds a price however the page writes it', () => {
 		for (const [text, value] of /** @type {Array<[string, number]>} */ ([
 			['$1,250.00', 1250],
@@ -540,6 +552,19 @@ Disallow: /été`;
 		expect(sitemapsIn(ROBOTS)).toEqual([`${ORIGIN}/sitemap.xml`]);
 	});
 
+	it('decides quickly whatever the rules, as long as the file Google reads may be', () => {
+		const started = performance.now();
+		const hostile = robotsGroupsOf(`User-agent: *\nDisallow: /${'*'.repeat(40)}Q\nAllow: /${'*a'.repeat(30)}$`);
+		expect(robotsAllows(hostile, ['googlebot'], '/sitemap.xml')).toEqual({ allowed: true, rule: null });
+		expect(robotsAllows(hostile, ['googlebot'], `/products/${'a'.repeat(2000)}`)).toMatchObject({ allowed: true });
+		expect(robotsAllows(hostile, ['googlebot'], '/x/Q')).toMatchObject({ allowed: false });
+		const many = robotsGroupsOf(
+			`User-agent: *\n${Array.from({ length: 40_000 }, (_, i) => `Disallow: /p${i}/*/x`).join('\n')}`,
+		);
+		for (let i = 0; i < 30; i += 1) robotsAllows(many, ['googlebot-image', 'googlebot'], `/media/${i}.jpg`);
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
 	it('checks robots.txt: it answers, names the sitemap and lets Google in', () => {
 		const ok = robotsChecks(read('/robots.txt', { body: `User-agent: *\nDisallow: /cart\nSitemap: ${ORIGIN}/sitemap.xml` }), {
 			paths: [{ path: '/' }, { path: '/sitemap.xml' }, { path: '/media/a.jpg', image: true }],
@@ -600,6 +625,14 @@ describe('sitemaps', () => {
 			],
 		});
 		expect(sitemapOf('<html><body>Not here</body></html>')).toEqual({ type: null, files: [], entries: [] });
+	});
+
+	it('reads a hostile sitemap quickly: elements left open, many times over', () => {
+		const started = performance.now();
+		sitemapOf(`<urlset>${'<url><loc>'.repeat(40_000)}`);
+		sitemapOf(`<urlset><url>${'<loc>x'.repeat(60_000)}</url>`);
+		sitemapOf(`<sitemapindex>${'<sitemap><loc>'.repeat(30_000)}`);
+		expect(performance.now() - started).toBeLessThan(1000);
 	});
 
 	it('checks the sitemap and the addresses read from it', () => {

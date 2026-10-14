@@ -6,6 +6,7 @@
  * few addresses at a time, so a check never weighs on the merchant's site.
  * @module
  */
+import { gunzipSync } from 'node:zlib';
 import { INDEXNOW_ENDPOINT } from '../core/seo.js';
 
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
@@ -27,6 +28,23 @@ const INDEXNOW_TIMEOUT_MS = 10_000;
 const USER_AGENT = 'SingleSolution-Growth-SEO/1 (SEO checklist on request of the site owner)';
 
 /**
+ * The text of a body: a gzipped file (a `sitemap.xml.gz`, which search engines read) unpacked, never past `maxBytes`
+ * (then it throws `too_large`); bytes that are no gzip as they are.
+ * @param {Buffer} body
+ * @param {number} maxBytes
+ */
+const textOf = (body, maxBytes) => {
+	if (body[0] !== 0x1f || body[1] !== 0x8b) return body.toString('utf8');
+	try {
+		return gunzipSync(body, { maxOutputLength: maxBytes }).toString('utf8');
+	} catch (error) {
+		if (/** @type {{ code?: string }} */ (error)?.code === 'ERR_BUFFER_TOO_LARGE')
+			throw Object.assign(error, { code: 'too_large' });
+		return body.toString('utf8');
+	}
+};
+
+/**
  * @param {{ send: OutboundSend, clock?: () => number }} deps `clock`: milliseconds for the run's deadline and the
  *   response times (a monotonic clock by default)
  */
@@ -38,8 +56,9 @@ export const createWeb = ({ send, clock = () => performance.now() }) => {
 	const deadline = (ms) => clock() + ms;
 
 	/**
-	 * Read one address: its status (a redirect as it is, never followed), headers, text and the time it took; status
-	 * null with the reason when it could not be read (`time`: the run's deadline came first, so it was not asked).
+	 * Read one address: its status (a redirect as it is, never followed), headers, text (a gzipped file unpacked) and the
+	 * time it took; status null with the reason when it could not be read (`time`: the run's deadline came first, so it
+	 * was not asked).
 	 * @param {string} url
 	 * @param {{ maxBytes?: number, until?: number }} [options] `until`: the run's deadline
 	 * @returns {Promise<Fetched>}
@@ -59,7 +78,7 @@ export const createWeb = ({ send, clock = () => performance.now() }) => {
 				url,
 				status: response.status,
 				headers: response.headers,
-				body: response.body.toString('utf8'),
+				body: textOf(response.body, maxBytes),
 				ms: clock() - started,
 				error: null,
 			};

@@ -301,4 +301,17 @@ describe('SEO checklist: the live site', () => {
 		expect(find(down, 'verification')).toBeUndefined();
 		expect(down.pages).toEqual([{ url: `${ORIGIN}/`, kind: 'home', sampled: false }]);
 	});
+
+	it('runs at most 10 times an hour per website, through the API and the widget together', async () => {
+		env.advance(60 * 60_000);
+		const ticket = await env.ticket(['seo.check']);
+		const viaApi = () => env.call('POST', '/v1/seo/checks', { token: env.server, body: {} });
+		const viaWidget = () => env.call('POST', '/v1/admin/seo/checks', { token: ticket, origin: ADMIN_ORIGIN, body: {} });
+		for (let run = 0; run < 5; run += 1) {
+			expect((await viaApi()).status).toBe(200);
+			expect((await viaWidget()).status).toBe(200);
+		}
+		expect((await viaWidget()).status).toBe(429);
+		expect((await viaApi()).status).toBe(429);
+	});
 });

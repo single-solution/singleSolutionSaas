@@ -108,12 +108,16 @@ export const parseCsv = (input, { maxRows }) => {
 	if (rows.length === 0) return { ok: false, code: 'empty' };
 	if (rows.length > maxRows + 1) return { ok: false, code: 'too_many_rows' };
 	const header = (rows[0] ?? []).map((cell) => cell.trim().toLowerCase());
+	// each named column once (its first), found once for every record: a header of many empty columns costs nothing
+	/** @type {Map<string, number>} */
+	const columns = new Map();
+	header.forEach((key, column) => {
+		if (key !== '' && !columns.has(key)) columns.set(key, column);
+	});
 	const records = rows.slice(1).map((cells, index) => {
 		/** @type {Record<string, string>} */
 		const values = {};
-		header.forEach((key, column) => {
-			if (key !== '' && !Object.hasOwn(values, key)) values[key] = unguarded((cells[column] ?? '').trim());
-		});
+		for (const [key, column] of columns) values[key] = unguarded((cells[column] ?? '').trim());
 		return { line: index + 2, values };
 	});
 	return { ok: true, header, records };

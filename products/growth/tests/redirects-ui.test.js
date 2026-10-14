@@ -135,7 +135,7 @@ const menu = async (host, item) => {
  * The widget mounted with the real page script's `admin()`.
  * @param {Record<string, (init: any, url: URL) => Response | Promise<Response>>} [routes]
  * @param {string[]} [features]
- * @param {{ download?: (name: string, text: string) => void, getTicket?: () => Promise<any> }} [options]
+ * @param {{ download?: (name: string, bytes: ArrayBuffer) => void, getTicket?: () => Promise<any> }} [options]
  */
 const start = async (routes = {}, features = ['redirects', 'searches_404s'], options = {}) => {
 	serve({ [`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(features)), ...ROUTES, ...routes });
@@ -444,7 +444,11 @@ describe('the redirects widget', () => {
 			{ download },
 		);
 		await menu(host, T['redirects.export'] ?? '');
-		expect(download).toHaveBeenCalledWith('redirects.csv', 'from,match,to,code,note\r\n');
+		// the file as the server made it, byte for byte: the byte order mark spreadsheets need to read UTF-8 stays
+		expect(download).toHaveBeenCalledWith('redirects.csv', expect.any(ArrayBuffer));
+		expect(new TextDecoder('utf-8', { ignoreBOM: true }).decode(download.mock.calls[0]?.[1])).toBe(
+			'\ufefffrom,match,to,code,note\r\n',
+		);
 		expect(status(host)).toBe(T['redirects.exported']);
 		await menu(host, T['redirects.export'] ?? '');
 		expect(status(host)).toBe(T['problem.forbidden']);

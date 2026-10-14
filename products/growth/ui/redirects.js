@@ -43,7 +43,7 @@ export const REDIRECT_PROBLEMS = Object.freeze({
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
- *   viewer: import('./widget.js').Viewer, download: (name: string, text: string) => void }} input `viewer`: the
+ *   viewer: import('./widget.js').Viewer, download: (name: string, bytes: ArrayBuffer) => void }} input `viewer`: the
  *   browser's language and time zone; `download`: save a file the widget made
  */
 export const mountRedirects = ({ host, api, config, viewer, download }) => {
@@ -375,7 +375,8 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 						});
 						return;
 					}
-					download('redirects.csv', await response.text());
+					// the bytes as sent (text() would drop the byte order mark spreadsheets need to read UTF-8)
+					download('redirects.csv', await response.arrayBuffer());
 					status.textContent = t('redirects.exported');
 				} catch {
 					status.textContent = t('redirects.failed');

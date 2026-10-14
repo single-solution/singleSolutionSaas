@@ -2,6 +2,7 @@
  * Growth's reads of the merchant's site (`adapters/web.js`): never a redirect followed, the time and size limits, the
  * run's deadline, why a read failed, and at most a few reads at a time. The network is a function given to it.
  */
+import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { PAGE_MAX_BYTES, READS_AT_ONCE, READ_TIMEOUT_MS, SITEMAP_MAX_BYTES, createWeb } from '../adapters/web.js';
 
@@ -44,6 +45,24 @@ describe('reading the site', () => {
 			error: 'time',
 		});
 		expect(asked).toHaveLength(2);
+	});
+
+	it('reads a gzipped file (a sitemap.xml.gz) as its text, within the size limit', async () => {
+		const xml = '<urlset><url><loc>https://shop.example.com/a</loc></url></urlset>';
+		/** @param {Buffer} body */
+		const webOf = (body) => createWeb({ send: async () => ({ status: 200, headers: {}, body, url: '' }) });
+		expect(await webOf(gzipSync(xml)).read('https://shop.example.com/sitemap.xml.gz')).toMatchObject({
+			status: 200,
+			body: xml,
+		});
+		// unpacked larger than the limit: too large, never unpacked in full
+		const bomb = gzipSync(Buffer.alloc(SITEMAP_MAX_BYTES + 1, 32));
+		expect(await webOf(bomb).read('https://shop.example.com/s.xml.gz', { maxBytes: SITEMAP_MAX_BYTES })).toMatchObject({
+			status: null,
+			error: 'too_large',
+		});
+		// bytes that only start like gzip stay as they are
+		expect((await webOf(Buffer.from([0x1f, 0x8b, 0x41])).read('https://shop.example.com/x')).body).toBe('\u001f\ufffdA');
 	});
 
 	it('says why a read failed', async () => {

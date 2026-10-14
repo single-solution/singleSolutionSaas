@@ -39,6 +39,147 @@ const plainText = (value) =>
 		.replace(/[\s\u00a0]+/g, ' ')
 		.trim();
 
+// ------------------------------------------------------------------------------------------------- linear scanning
+// A page or a sitemap is the site's to write: tags, comments and elements are found by scanning forward with
+// `indexOf`, never with a pattern that reads the rest of the text again for every tag left open (a hostile page of
+// unclosed tags would take minutes).
+
+/**
+ * A text with its ASCII letters in lower case: the same length, so a place in it is the same place in the text.
+ * @param {string} text
+ */
+const lowerAscii = (text) => text.replace(/[A-Z]+/g, (run) => run.toLowerCase());
+
+/** A letter, digit or `_` (a name that goes on is another name: `<header` is not `<head`). */
+const WORD = /\w/;
+
+/**
+ * Where a tag `<name` starts at or after `from` (its name ends there), or -1.
+ * @param {string} lower the text from {@link lowerAscii}
+ * @param {string} name in lower case
+ * @param {number} from
+ */
+const openingAt = (lower, name, from) => {
+	let at = lower.indexOf(`<${name}`, from);
+	while (at >= 0 && WORD.test(lower[at + name.length + 1] ?? '')) at = lower.indexOf(`<${name}`, at + 1);
+	return at;
+};
+
+/**
+ * The closing tag `</name>` (spaces allowed before `>`) at or after `from`: where it starts and ends, or null.
+ * @param {string} lower
+ * @param {string} name
+ * @param {number} from
+ */
+const closingAt = (lower, name, from) => {
+	for (let at = lower.indexOf(`</${name}`, from); at >= 0; at = lower.indexOf(`</${name}`, at + 1)) {
+		let end = at + name.length + 2;
+		while (/\s/.test(lower[end] ?? '')) end += 1;
+		if (lower[end] === '>') return { at, end: end + 1 };
+	}
+	return null;
+};
+
+/**
+ * The elements `<name …>…</name>` of a text, in order: the opening tag and what is inside (an element left open, and
+ * every one after it, is not one).
+ * @param {string} text
+ * @param {string} name in lower case
+ * @returns {Array<{ tag: string, inner: string }>}
+ */
+const elementsOf = (text, name) => {
+	const lower = lowerAscii(text);
+	/** @type {Array<{ tag: string, inner: string }>} */
+	const found = [];
+	for (let from = 0; ;) {
+		const at = openingAt(lower, name, from);
+		const open = at < 0 ? -1 : lower.indexOf('>', at);
+		const close = open < 0 ? null : closingAt(lower, name, open + 1);
+		if (close === null) return found;
+		found.push({ tag: text.slice(at, open + 1), inner: text.slice(open + 1, close.at) });
+		from = close.end;
+	}
+};
+
+/**
+ * The tags `<name …>` of a text, in order (`<meta`, `<link` …).
+ * @param {string} text
+ * @param {string} lower the text from {@link lowerAscii}
+ * @param {string} name in lower case
+ * @returns {string[]}
+ */
+const tagsOf = (text, lower, name) => {
+	/** @type {string[]} */
+	const found = [];
+	for (let from = 0; ;) {
+		const at = openingAt(lower, name, from);
+		const end = at < 0 ? -1 : lower.indexOf('>', at);
+		if (end < 0) return found;
+		found.push(text.slice(at, end + 1));
+		from = end + 1;
+	}
+};
+
+/**
+ * A text without its elements of these names, from `<name` to `</name>` (each replaced by `by`); `once`: only the
+ * first. An element left open stays, as does every later one of its name.
+ * @param {string} text
+ * @param {string[]} names in lower case
+ * @param {{ by?: string, once?: boolean }} [options]
+ */
+const withoutElements = (text, names, { by = '', once = false } = {}) => {
+	const lower = lowerAscii(text);
+	const open = new Set(names);
+	let out = '';
+	let kept = 0;
+	for (let at = lower.indexOf('<'); at >= 0 && open.size > 0;) {
+		const name = [...open].find((n) => lower.startsWith(n, at + 1) && !WORD.test(lower[at + n.length + 1] ?? ''));
+		const close = name === undefined ? null : closingAt(lower, name, at + name.length + 1);
+		if (name !== undefined && close === null) open.delete(name);
+		if (close === null) {
+			at = lower.indexOf('<', at + 1);
+			continue;
+		}
+		out += `${text.slice(kept, at)}${by}`;
+		kept = close.end;
+		if (once) break;
+		at = lower.indexOf('<', kept);
+	}
+	return out + text.slice(kept);
+};
+
+/**
+ * A text without its comments (`<!-- … -->`); one left open stays.
+ * @param {string} text
+ */
+const withoutComments = (text) => {
+	let out = '';
+	let kept = 0;
+	for (let at = text.indexOf('<!--'); at >= 0; at = text.indexOf('<!--', kept)) {
+		const end = text.indexOf('-->', at + 4);
+		if (end < 0) break;
+		out += text.slice(kept, at);
+		kept = end + 3;
+	}
+	return out + text.slice(kept);
+};
+
+/**
+ * A text with every tag (`<…>`) replaced by a space.
+ * @param {string} text
+ */
+const withoutTags = (text) => {
+	let out = '';
+	let kept = 0;
+	for (let at = text.indexOf('<'); at >= 0; at = text.indexOf('<', kept)) {
+		const end = text.indexOf('>', at);
+		if (end < 0) break;
+		out += `${text.slice(kept, at)} `;
+		kept = end + 1;
+	}
+	return out + text.slice(kept);
+};
+
 // ----------------------------------------------------------------------------------------------------------- HTML
 
 /**
@@ -144,22 +285,21 @@ export const allNodesOf = (top) => {
  * @param {string} html
  */
 export const scanHtml = (html) => {
-	const blocks = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)].filter((match) =>
-		/type\s*=\s*["']?application\/ld\+json/i.test(match[1] ?? ''),
-	);
-	const parsed = blocks.map((match) => parseBlock(match[2] ?? ''));
-	const clean = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<(script|style|template|noscript)\b[\s\S]*?<\/\1\s*>/gi, '');
+	const blocks = elementsOf(html, 'script').filter((script) => /type\s*=\s*["']?application\/ld\+json/i.test(script.tag));
+	const parsed = blocks.map((script) => parseBlock(script.inner));
+	const clean = withoutElements(withoutComments(html), ['script', 'style', 'template', 'noscript']);
+	const lower = lowerAscii(clean);
 	/** @param {string} name */
-	const tags = (name) => [...clean.matchAll(new RegExp(`<${name}\\b[^>]*>`, 'gi'))].map((match) => attributesOf(match[0]));
+	const tags = (name) => tagsOf(clean, lower, name).map(attributesOf);
 	const metas = tags('meta');
 	/** @param {string} key @param {string} value */
 	const meta = (key, value) => metas.find((m) => (m[key] ?? '').toLowerCase() === value)?.content ?? null;
-	const title = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(clean)?.[1] ?? null;
+	const title = elementsOf(clean, 'title')[0]?.inner ?? null;
 	const canonicals = tags('link')
 		.filter((link) => (link.rel ?? '').toLowerCase().split(/\s+/).includes('canonical'))
 		.map((link) => link.href ?? '');
 	const images = tags('img');
-	const body = clean.replace(/<head\b[\s\S]*?<\/head\s*>/i, ' ').replace(/<title\b[\s\S]*?<\/title\s*>/gi, ' ');
+	const body = withoutElements(withoutElements(clean, ['head'], { by: ' ', once: true }), ['title'], { by: ' ' });
 	const top = topNodesOf(parsed.filter((block) => block.ok).map((block) => block.value));
 	return {
 		title: title === null ? null : plainText(title),
@@ -179,7 +319,7 @@ export const scanHtml = (html) => {
 		imagesWithoutSize: images.filter((img) => !img.width || !img.height).length,
 		jsonLd: { blocks: blocks.length, invalid: parsed.filter((block) => !block.ok).length, nodes: top },
 		verification: VERIFICATION_NAMES.filter((name) => meta('name', name) !== null),
-		text: plainText(body.replace(/<[^>]*>/g, ' ')),
+		text: plainText(withoutTags(body)),
 	};
 };
 
@@ -253,18 +393,26 @@ export const sitemapsIn = (text) =>
 
 /**
  * Whether a rule's pattern matches a path (with its query string): `*` any characters, a final `$` the end; else a
- * match of the path's start. Characters outside ASCII in the pattern are compared percent-encoded.
+ * match of the path's start. Characters outside ASCII in the pattern are compared percent-encoded. The parts between
+ * the `*`s are found in order, each as early as it can be (never a pattern that tries every split: a rule of many `*`s
+ * would take minutes).
  * @param {string} pattern
  * @param {string} path
  */
 const matches = (pattern, path) => {
 	const anchored = pattern.endsWith('$');
 	const body = (anchored ? pattern.slice(0, -1) : pattern).replace(/[^\u0020-\u007e]/gu, (char) => encodeURIComponent(char));
-	const source = body
-		.split('*')
-		.map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
-		.join('.*');
-	return new RegExp(`^${source}${anchored ? '$' : ''}`).test(path);
+	const [first = '', ...rest] = body.split('*');
+	if (!path.startsWith(first)) return false;
+	if (rest.length === 0) return !anchored || path.length === first.length;
+	const last = /** @type {string} */ (rest.pop());
+	let at = first.length;
+	for (const part of rest) {
+		const found = path.indexOf(part, at);
+		if (found < 0) return false;
+		at = found + part.length;
+	}
+	return anchored ? path.length - last.length >= at && path.endsWith(last) : path.includes(last, at);
 };
 
 /**
@@ -313,20 +461,23 @@ const locOf = (text) => decodeEntities(text.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g
  * @returns {{ type: 'index' | 'urlset' | null, files: string[], entries: SitemapEntry[] }}
  */
 export const sitemapOf = (xml) => {
+	/** The `<loc>` of an element, or undefined. @param {string} inner */
+	const locIn = (inner) => elementsOf(inner, 'loc')[0]?.inner;
 	if (/<sitemapindex[\s>]/i.test(xml)) {
-		const files = [...xml.matchAll(/<sitemap\b[^>]*>[\s\S]*?<loc>([\s\S]*?)<\/loc>[\s\S]*?<\/sitemap>/gi)]
-			.map((match) => locOf(match[1] ?? ''))
-			.slice(0, MAX_SITEMAP_ENTRIES);
+		const files = elementsOf(xml, 'sitemap')
+			.map((sitemap) => locIn(sitemap.inner))
+			.filter(/** @returns {loc is string} */ (loc) => loc !== undefined)
+			.slice(0, MAX_SITEMAP_ENTRIES)
+			.map(locOf);
 		return { type: 'index', files, entries: [] };
 	}
 	if (!/<urlset[\s>]/i.test(xml)) return { type: null, files: [], entries: [] };
 	/** @type {SitemapEntry[]} */
 	const entries = [];
-	for (const match of xml.matchAll(/<url\b[^>]*>([\s\S]*?)<\/url>/gi)) {
-		const block = match[1] ?? '';
-		const loc = /<loc>([\s\S]*?)<\/loc>/i.exec(block)?.[1];
+	for (const { inner } of elementsOf(xml, 'url')) {
+		const loc = locIn(inner);
 		if (loc === undefined) continue;
-		entries.push({ loc: locOf(loc), images: [...block.matchAll(/<(?:[\w-]+:)?image(?=[\s>])/gi)].length });
+		entries.push({ loc: locOf(loc), images: [...inner.matchAll(/<(?:[\w-]+:)?image(?=[\s>])/gi)].length });
 		if (entries.length >= MAX_SITEMAP_ENTRIES) break;
 	}
 	return { type: 'urlset', files: [], entries };
