@@ -296,10 +296,20 @@ describe('Ecommerce catalogs on the real Portal', () => {
 				{ key: 'b', label: 'B', condition: 'used', warrantyDays: 30 },
 			],
 			'grades_serials.serialMode': 'typed',
-			'grades_serials.serialCheck': 'imei',
 			'landing_pages.gradeUrl': '/grades/{key}',
 		});
 		const phones = await write(DEVICES, 'POST', '/v1/categories', { name: 'Phones', slug: 'phones', requiresSerial: true });
+		// the IMEI is this shop's own unit field: 15 digits with a Luhn check digit, two per dual-SIM phone
+		const imei = await write(DEVICES, 'POST', '/v1/attributes', {
+			name: 'IMEI',
+			on: 'unit',
+			multiple: true,
+			required: true,
+			categoryIds: [phones.id],
+			format: { chars: 'digits', minLength: 15, maxLength: 15, checkDigit: 'luhn', ignoreSpaces: true },
+			show: { shopper: true, invoice: true, packingSlip: true },
+		});
+		expect(imei).toMatchObject({ on: 'unit', maxValues: 2, format: { checkDigit: 'luhn' } });
 		const brand = await write(DEVICES, 'POST', '/v1/brands', { name: 'Pixel', slug: 'pixel' });
 		const phone = await write(DEVICES, 'POST', '/v1/products', {
 			name: 'Pixel 8 Pro',
