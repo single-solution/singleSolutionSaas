@@ -251,14 +251,14 @@ export const taxonomySteps = Object.freeze([
 						.filter(isObject)
 						.map((option) => ({ value: text(option.value), label: text(option.label) || text(option.value) })),
 					...(text(doc.unit) ? { unit: text(doc.unit) } : {}),
-					filterable: true,
 					// the definition for its category (E45: the same slug once per category), applying to it alone
 					...(categoryId ? { categoryId, categoryIds: [categoryId] } : { categoryIds: [] }),
 					on: 'variant',
 					multiple: false,
 					// SB reads `attribute` visibility as always (IMP-46); brand visibility names the brands of the category
 					visibility: brandIds.length > 0 ? { when: 'brands', ids: brandIds } : 'always',
-					card: CARDS[doc.cardPosition] ?? 'chips',
+					// filtered by in listings, shown on cards as SB places it (the product page and Chat as every field)
+					show: { filter: true, card: CARDS[doc.cardPosition] ?? 'chips' },
 					active: doc.isActive !== false,
 					...(seo
 						? { seo: { title: text(seo.title), description: text(seo.description), body: '', faqs: faqsOf(seo) } }

@@ -218,6 +218,7 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 			gradeKeys: new Set(),
 			locationIds: new Set(),
 			categoryIds: context.categoryIds,
+			categoryPaths: new Map([...paths].map(([id, entry]) => [id, entry.path])),
 			brandIds: context.brandIds,
 			attributes,
 			newId: () => 'var_unused0000',

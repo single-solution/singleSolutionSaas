@@ -549,7 +549,7 @@ export const SHOP_MAPPING = defineMapping({
 				name: doc.name,
 				type: 'choice',
 				on: 'variant',
-				filterable: true,
+				show: { filter: true },
 				choices: doc.values.map((/** @type {string} */ label) => ({ value: label.toLowerCase(), label })),
 			}),
 		},

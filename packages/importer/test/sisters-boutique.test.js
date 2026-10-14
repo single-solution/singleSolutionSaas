@@ -200,7 +200,9 @@ describe('the Sisters Boutique mapping', () => {
 			sizeChartId: id('szc', SB_IDS.chart),
 		});
 		const attributes = await records('ecommerce.attributes');
-		expect(attributes.map((attribute) => [attribute.slug, attribute.categoryId, attribute.multiple, attribute.card])).toEqual([
+		expect(
+			attributes.map((attribute) => [attribute.slug, attribute.categoryId, attribute.multiple, attribute.show.card]),
+		).toEqual([
 			['size', id('cat', SB_IDS.lawn), false, 'chips'],
 			['colour', id('cat', SB_IDS.lawn), true, 'image'],
 			['size', id('cat', SB_IDS.formals), false, 'chips'],
