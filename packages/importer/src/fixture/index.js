@@ -2,14 +2,15 @@
  * `@ss/importer/fixture` — the test mappings and their source documents: a small store-like `feedback` collection
  * (ObjectId ids, mixed-case e-mails, a duplicate, a hidden message and an empty one) mapped into the e2e test product
  * Notes (`notes` import collection), and the example shop (`shop.js`: people, catalog, orders, chats and analytics)
- * mapped into Accounts, Ecommerce, Chat and Growth. Used by this unit's tests and by the e2e import tests; the store
- * mappings come with each store's cut-over (PLAN 0.8.10 Build phases).
+ * mapped into Accounts, Ecommerce, Chat and Growth; and sample records shaped as Sisters Boutique keeps them
+ * (`sisters-boutique.js`) for the store mapping of the same name. Used by this unit's tests and by the e2e import tests.
  * @module
  */
 import { ObjectId } from 'mongodb';
 import { defineMapping } from '../mapping.js';
 
 export { SHOP_GUEST_COOKIE, SHOP_IDS, SHOP_MAPPING, SHOP_PASSWORDS, seedShop, shopHex, shopSource } from './shop.js';
+export { SB_IDS, SB_PASSWORDS, sbHex, sbSource, seedSistersBoutique } from './sisters-boutique.js';
 
 /** The source documents (ids as hex; `seed` stores them as ObjectIds). */
 export const FEEDBACK = Object.freeze([
