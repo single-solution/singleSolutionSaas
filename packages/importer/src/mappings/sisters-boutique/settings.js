@@ -360,6 +360,7 @@ export const settingsPlan = (values) => {
 				'seo.categoryTitle': 'Shop {name}',
 				'seo.productDescription': '',
 				'seo.categoryDescription': '',
+				'seo.variantTitle': '{name} - {options}',
 				'seo.gradedCondition': 'used',
 				'seo.pagedListings': 'index',
 				'seo.sitemapUrl': '/sitemap.xml',
