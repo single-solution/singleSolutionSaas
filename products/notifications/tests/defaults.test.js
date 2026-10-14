@@ -226,9 +226,16 @@ describe('default templates of products (parity P1)', () => {
 		});
 		expect(set.json).toMatchObject({ status: 'sent', channel: 'whatsapp' });
 		expect(env.providers.callsTo('https://graph.facebook.com')).toHaveLength(meta + 1);
-		// the merchant's own keys keep answering template_not_found on WhatsApp
+		// the merchant's own keys keep answering template_not_found on WhatsApp, and use defaults their send carries
 		const own = await env.send('whatsapp', { template: 'welcome', to: { phone: '+15550002222' } });
 		expect(own.json.type).toMatch(/template_not_found$/);
+		const ownDefault = await env.send('sms', {
+			template: 'my.receipt',
+			to: { phone: '+15550002222' },
+			values: { amount: '12' },
+			defaults: { sms: { text: 'Paid: {amount}' } },
+		});
+		expect(ownDefault.json).toMatchObject({ status: 'sent', text: 'Paid: 12' });
 	});
 
 	it('keeps the defaults on a waiting message for its fallback, never in a delivery-log read, and drops them once done', async () => {
@@ -263,7 +270,7 @@ describe('default templates of products (parity P1)', () => {
 		await env.setting('fallback', 'email', 'none');
 	});
 
-	it('refuses defaults that are not a product’s or break the template rules', async () => {
+	it('refuses defaults that break the template rules, and WhatsApp defaults', async () => {
 		/** @param {string} channel @param {Record<string, unknown>} body */
 		const refused = async (channel, body) => {
 			const answer = await env.send(channel, { to: { email: 'a@example.com', phone: '+15550002222' }, ...body });
@@ -273,10 +280,6 @@ describe('default templates of products (parity P1)', () => {
 		expect(
 			await refused('whatsapp', { template: 'chat.staff_new_message', defaults: { whatsapp: { text: 'Hi' } } }),
 		).toMatchObject({ path: '/defaults/whatsapp' });
-		expect(await refused('email', { template: 'welcome', defaults: { email: { subject: 'Hi', text: 'Hi' } } })).toMatchObject({
-			path: '/defaults',
-			message: 'Only the messages of products have defaults.',
-		});
 		expect(await refused('email', { template: 'chat.x', defaults: { email: { text: 'Hi' } } })).toMatchObject({
 			path: '/defaults/email/subject',
 			message: 'Write the subject.',

@@ -218,9 +218,9 @@ export const checkTemplate = (input) => {
 };
 
 /**
- * Check the defaults a product's send carries (parity P1): for each channel but WhatsApp, the default words of the
- * product's message `{ subject?, text, required?, urgent?, sensitive? }`, checked as a template the merchant saves.
- * Only products' own keys have defaults; WhatsApp never has one (it sends only templates approved at Meta).
+ * Check the defaults a send carries (parity P1; the kit adds them to every send of a product's declared message): for
+ * each channel but WhatsApp, the default words `{ subject?, text, required?, urgent?, sensitive? }`, checked as a
+ * template the merchant saves. WhatsApp never has a default (it sends only templates approved at Meta).
  * @param {unknown} input
  * @param {string} key the send's template key
  * @returns {{ ok: true, value: Partial<Record<Channel, Template>> } | { ok: false, field: string, message: string }}
@@ -231,7 +231,6 @@ export const checkDefaults = (input, key) => {
 	if (input === undefined || input === null) return { ok: true, value: {} };
 	if (typeof input !== 'object' || Array.isArray(input))
 		return fail('defaults', 'defaults maps channels to the default words { subject?, text }.');
-	if (!isProductKey(key)) return fail('defaults', 'Only the messages of products have defaults.');
 	/** @type {Partial<Record<Channel, Template>>} */
 	const value = {};
 	for (const [channel, given] of Object.entries(/** @type {Record<string, unknown>} */ (input))) {

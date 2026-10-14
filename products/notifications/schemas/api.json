@@ -178,7 +178,7 @@
 		},
 		"Defaults": {
 			"type": "object",
-			"description": "A product's message only (keys accounts., chat., ecommerce., payments., growth.): its default words per channel, as the product declares them (parity P1; the kit adds them). They are used while your website has no template of its own for the channel (its language version, else its default version), and kept for the fallback channel. Checked as a template you save. WhatsApp never has a default: it sends only templates approved at Meta.",
+			"description": "The default words of the message per channel (parity P1): every product adds the ones it declares to each send of its messages. They are used while your website has no template of its own for the channel (its language version, else its default version), and kept for the fallback channel. Checked as a template you save. WhatsApp never has a default: it sends only templates approved at Meta.",
 			"properties": {
 				"email": {
 					"$ref": "#/components/schemas/DefaultWords"
