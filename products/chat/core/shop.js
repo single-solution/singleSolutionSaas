@@ -31,13 +31,13 @@ const SHOP_TOOLS = Object.freeze({
 export const SHOP_LIMIT = 5;
 
 /** Most products one search asks for, and most cards under one answer (C13). */
-export const SHOP_MAX = 12;
+const SHOP_MAX = 12;
 
 /** Most units one quote asks for (C13). */
 const QUOTE_MAX_QUANTITY = 5;
 
 /** The longest store context given to the AI (characters, C1). */
-export const CONTEXT_MAX = 6000;
+const CONTEXT_MAX = 6000;
 
 /** Most deals one list asks for. */
 const DEALS_LIMIT = 10;
@@ -74,12 +74,6 @@ export const SHOP_ENDPOINTS = Object.freeze([
 	{ tool: SHOP_TOOLS.account, feature: 'shop_my_orders', signIn: true, request: 'GET /v1/chat/me/account (SS-Sign-In)' },
 	{ tool: SHOP_TOOLS.track, feature: 'track_shipment', signIn: true, request: 'GET /v1/chat/me/shipments (SS-Sign-In)' },
 ]);
-
-/** The store context of an AI reply (C1, store context on; the visitor's verified sign-in forwarded when there is one). */
-export const STORE_CONTEXT_ENDPOINT = Object.freeze({
-	feature: 'shop_context',
-	request: 'GET /v1/chat/context?productId=<the product of SSChat.setPage> (SS-Sign-In when signed in)',
-});
 
 /** The request of the context panel's shop info (server token; the conversation's signed-in visitor). */
 export const CONTEXT_ENDPOINT = Object.freeze({
@@ -174,7 +168,7 @@ const pageUrl = (value) =>
 const countOf = (value) => (Number.isSafeInteger(value) ? Number(value) : null);
 
 /**
- * An amount in minor units for people, in the website's Format (`125000`, `PKR` → `PKR 1,250.00` by default).
+ * An amount in minor units for people, in the website's Format (`125000`, `USD` → `USD 1,250.00` by default).
  * @param {number} amount integer minor units
  * @param {string} currency ISO 4217
  * @param {Look} look

@@ -20,7 +20,15 @@ import { createId } from '@ss/contracts';
 import { callingCodeOf } from '@ss/contracts/phone';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
-import { excerptOf, iso, pendingStale, previewOf, staffMessageView, visitorMessageView } from '../core/conversation.js';
+import {
+	alertRoutes,
+	excerptOf,
+	iso,
+	pendingStale,
+	previewOf,
+	staffMessageView,
+	visitorMessageView,
+} from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
 import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
@@ -80,7 +88,7 @@ export const invalid = (errors) =>
 	problem('validation_failed', errors[0] ?? 'Not valid.', { errors: errors.map((message) => ({ path: '', message })) });
 
 /**
- * The website's default calling code for phones typed without one: its business.json country's (`+92`), else ''
+ * The website's default calling code for phones typed without one: its business.json country's (`+44`), else ''
  * (such phones are then refused).
  * @param {Site} s
  */
@@ -501,23 +509,27 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------ notifications
 
 	/**
-	 * Send one template through Notifications.
+	 * Send one template through Notifications on a channel: `sent` once Notifications took it (sent, or queued and
+	 * retried there), `not_taken` when Notifications answered that it does not take it on that channel (the channel is
+	 * off, has no template, or the message failed or was skipped there), `not_connected` without the Notifications token,
+	 * else `failed` (Notifications unreachable or the token refused).
 	 * @param {Site} s
 	 * @param {string} template
-	 * @param {{ email: string } | { phone: string }} to e-mail, or WhatsApp to a phone
+	 * @param {'email' | 'sms' | 'whatsapp'} channel
+	 * @param {{ email: string } | { phone: string }} to an e-mail address for e-mail, a phone for SMS and WhatsApp
 	 * @param {Record<string, string | number>} values
-	 * @returns {Promise<'sent' | 'not_connected' | 'failed'>}
+	 * @returns {Promise<'sent' | 'not_taken' | 'not_connected' | 'failed'>}
 	 */
-	const notify = async (s, template, to, values) => {
+	const notify = async (s, template, channel, to, values) => {
 		const business = (await s.business()).name;
-		const channel = 'phone' in to ? 'whatsapp' : 'email';
 		const answer = await product.callProduct(s.websiteId, 'notifications', `/v1/messages/${channel}`, {
 			method: 'POST',
 			body: { template, to, values: { ...values, business } },
 		});
-		if (!answer.ok) return answer.reason === 'not_connected' ? 'not_connected' : 'failed';
+		if (!answer.ok)
+			return answer.reason === 'not_connected' ? 'not_connected' : answer.reason === 'failed' ? 'not_taken' : 'failed';
 		const status = bodyOf(answer.body).status;
-		return status === 'failed' || status === 'skipped' ? 'failed' : 'sent';
+		return status === 'failed' || status === 'skipped' ? 'not_taken' : 'sent';
 	};
 
 	/**
@@ -571,16 +583,19 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor with a phone or e-mail who has
-	 * not checked the conversation for the away time, `chat.staff_reply` goes by WhatsApp to the phone, else by e-mail;
-	 * once until the visitor checks again. Sent after the answer.
+	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor who has not checked the
+	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (WhatsApp, then e-mail,
+	 * by default): the first channel the visitor has an address for that Notifications takes; one it does not take
+	 * passes to the next. Once until the visitor checks again; sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c the conversation after the reply
 	 * @param {{ staff: string, text: string }} reply
 	 */
 	const visitorAlert = async (s, c, reply) => {
 		if (!s.on.includes('visitor_alerts') || (!c.phone && !c.email)) return;
-		const { awaySeconds } = await s.values('visitor_alerts');
+		const { awaySeconds, channels } = await s.values('visitor_alerts');
+		const routes = alertRoutes(channels, c);
+		if (routes.length === 0) return;
 		const checked = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
 		if (now() - checked < Number(awaySeconds) * 1000) return;
 		if (c.visitorAlertedAt && new Date(c.visitorAlertedAt).getTime() >= checked) return;
@@ -589,15 +604,16 @@ export const createService = (product) => {
 			unless: { visitorAlertedAt: c.visitorAlertedAt ?? null },
 		});
 		if (!claimed) return;
-		/** @type {{ email: string } | { phone: string }} */
-		const to = c.phone ? { phone: c.phone } : { email: /** @type {string} */ (c.email) };
 		const values = {
 			name: c.name ?? '',
 			staff: reply.staff,
 			preview: previewOf(plainOf(reply.text)),
 			link: c.currentPage?.url || c.page?.url || '',
 		};
-		s.ctx.after(() => notify(s, 'chat.staff_reply', to, values));
+		s.ctx.after(async () => {
+			for (const { channel, to } of routes)
+				if ((await notify(s, 'chat.staff_reply', channel, to, values)) !== 'not_taken') return;
+		});
 	};
 
 	/**
@@ -622,10 +638,10 @@ export const createService = (product) => {
 		let transcript = lines.join('\n');
 		if (transcript.length > TRANSCRIPT_MAX) transcript = `…${transcript.slice(-(TRANSCRIPT_MAX - 1))}`;
 		const date = (await s.format()).date(c.createdAt, 'date');
-		const outcome = await notify(s, 'chat.transcript', { email }, { transcript, date });
+		const outcome = await notify(s, 'chat.transcript', 'email', { email }, { transcript, date });
 		if (outcome === 'not_connected')
 			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');
-		if (outcome === 'failed') throw problem('not_sent', 'The transcript could not be sent. Try again later.');
+		if (outcome !== 'sent') throw problem('not_sent', 'The transcript could not be sent. Try again later.');
 	};
 
 	// ------------------------------------------------------------------------------------------------ tokens

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
 import { alertCrossed, capReached, windowKeys } from '../core/caps.js';
-import { deviceOf, limitNext, messageText, pageContext, statusAfter } from '../core/conversation.js';
+import { alertRoutes, deviceOf, limitNext, messageText, pageContext, statusAfter } from '../core/conversation.js';
 import { checkCustomFields, checkFieldValue, checkLead, checkPageRules } from '../core/fields.js';
 import { advance, answerStep, checkFlows, waitingView } from '../core/flows.js';
 import { handoffReason, officeState, parseOfficeHours } from '../core/handoff.js';
@@ -153,6 +153,21 @@ describe('AI wire formats', () => {
 });
 
 describe('conversations, flows and fields', () => {
+	it('reply alerts go by the channels in the merchant’s order, each once, where the visitor has an address', () => {
+		const both = { email: 'ann@example.com', phone: '+447700900123' };
+		expect(alertRoutes(['whatsapp', 'email'], both)).toEqual([
+			{ channel: 'whatsapp', to: { phone: '+447700900123' } },
+			{ channel: 'email', to: { email: 'ann@example.com' } },
+		]);
+		expect(alertRoutes(['email', 'sms', 'email', 'fax'], both).map((route) => route.channel)).toEqual(['email', 'sms']);
+		expect(alertRoutes(['sms', 'whatsapp', 'email'], { phone: null, email: 'ann@example.com' })).toEqual([
+			{ channel: 'email', to: { email: 'ann@example.com' } },
+		]);
+		expect(alertRoutes(['email'], { phone: '+447700900123' })).toEqual([]);
+		expect(alertRoutes([], both)).toEqual([]);
+		expect(alertRoutes('email', both)).toEqual([]);
+	});
+
 	it('statuses, texts, pages and devices', () => {
 		expect(statusAfter('resolved', 'visitor')).toBe('open');
 		expect(statusAfter('open', 'staff')).toBe('awaiting_visitor');

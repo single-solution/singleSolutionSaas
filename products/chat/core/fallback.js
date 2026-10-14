@@ -9,7 +9,7 @@
  */
 import { containsPhrase } from './text.js';
 
-export const INTENTS = Object.freeze(/** @type {const} */ (['greeting', 'deals', 'products', 'budget', 'my_orders', 'other']));
+const INTENTS = Object.freeze(/** @type {const} */ (['greeting', 'deals', 'products', 'budget', 'my_orders', 'other']));
 /** The placeholders and the shop feature each one needs. */
 export const PLACEHOLDERS = Object.freeze({
 	deals_table: 'shop_deals',
@@ -18,7 +18,7 @@ export const PLACEHOLDERS = Object.freeze({
 	my_orders: 'shop_my_orders',
 });
 /** Most entries in the list. */
-export const MAX_FALLBACKS = 50;
+const MAX_FALLBACKS = 50;
 const MAX_KEYWORDS = 30;
 const MAX_TEXT = 2000;
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;

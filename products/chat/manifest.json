@@ -372,7 +372,7 @@
 		{
 			"key": "visitor_alerts",
 			"name": "Reply alerts to visitors",
-			"description": "A visitor who left the chat gets a WhatsApp or an e-mail when your staff reply, through Notifications.",
+			"description": "A visitor who left the chat gets a WhatsApp, an SMS or an e-mail when your staff reply, through Notifications.",
 			"dependsOn": ["inbox"],
 			"settings": {
 				"$ref": "schemas/visitor_alerts.settings.json"

@@ -13,9 +13,6 @@
  *   | { kind: 'table', head: Inline[][], rows: Inline[][][] }} Block
  */
 
-/** The message formats: plain text (visitor and bot messages, older messages) and the markdown subset. */
-export const FORMATS = Object.freeze(/** @type {const} */ (['text', 'markdown']));
-
 const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/;
 const LIST_ITEM = /^[ \t]*(?:([-*+])|(\d{1,3})[.)])[ \t]+(.*)$/;
 const TABLE_RULE = /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/;

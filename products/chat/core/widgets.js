@@ -62,7 +62,7 @@ export const CHECKS = Object.freeze({
 	closedEveryMs: 5 * 60_000,
 });
 
-/** The human-like typing pace of AI replies in the widget (as in ibrahimMobiles). */
+/** The human-like typing pace of AI replies in the widget. */
 export const PACE = Object.freeze({ msPerChar: 10, maxTypingMs: 2500, readingMsPerChar: 50, maxReadingMs: 1200 });
 
 /** Longest visitor or staff message (characters). */
@@ -75,7 +75,7 @@ export const ATTACHMENT_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 /** File types staff may also send (C12): Word, Excel and plain text, offered as downloads only. */
-export const STAFF_ONLY_TYPES = Object.freeze([
+const STAFF_ONLY_TYPES = Object.freeze([
 	'application/msword',
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 	'application/vnd.ms-excel',
@@ -113,7 +113,8 @@ export const PAGE_MAX = 50;
  * The Notifications templates Chat sends and the values each one gets (`business` is always added). Staff alerts go
  * by e-mail, WhatsApp or SMS through the kit's staff alerts (K6), `preview` cut to 140 characters on one line and
  * `message` up to 500 with its line breaks, `phone` only with the staff alert setting `includePhone` (CH-9); the
- * transcript by e-mail; the reply alert (C6) by WhatsApp to the visitor's phone, else by e-mail.
+ * transcript by e-mail; the reply alert (C6) by the first of the setting "Channels, in order" that the visitor has an
+ * address for and Notifications takes.
  */
 export const MESSAGE_TEMPLATES = Object.freeze({
 	'chat.staff_new_message': Object.freeze([

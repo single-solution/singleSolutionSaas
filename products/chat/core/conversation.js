@@ -1,8 +1,7 @@
 /**
- * Conversations and messages (pure), ported from ibrahimMobiles (`packages/shared/src/chat/inquiryStatus.ts`,
- * `guestLimits.ts`, `types.ts`): the statuses Open, Awaiting visitor and Resolved with their moves, the guest message
- * limit, the page a chat started on, and the views each audience gets (visitors never see internal notes, staff ids or
- * the AI pause; staff see everything their features allow).
+ * Conversations and messages (pure): the statuses Open, Awaiting visitor and Resolved with their moves, the guest
+ * message limit, the page a chat started on, the channels of a reply alert, and the views each audience gets (visitors
+ * never see internal notes, staff ids or the AI pause; staff see everything their features allow).
  * @module
  */
 import { cardsOf } from './shop.js';
@@ -83,8 +82,8 @@ export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_v
  */
 
 /**
- * The status after a message (as ibrahimMobiles): a visitor message reopens a resolved conversation; a staff reply
- * moves an open one to Awaiting visitor. AI replies change nothing.
+ * The status after a message: a visitor message reopens a resolved conversation; a staff reply moves an open one to
+ * Awaiting visitor. AI replies change nothing.
  * @param {Status} current
  * @param {Author} author
  * @returns {Status}
@@ -100,7 +99,7 @@ export const statusAfter = (current, author) => {
  * already running, main and backup). A reply still pending after it was cut short (the function stopped) or failed
  * (RT-6): it shows no typing, and the visitor's next check starts it again once.
  */
-export const PENDING_STALE_MS = 2 * 60_000;
+const PENDING_STALE_MS = 2 * 60_000;
 
 /**
  * Whether a conversation's pending AI reply went stale (judged when read).
@@ -116,6 +115,26 @@ export const pendingStale = (c, now) =>
  * @param {number} limit
  */
 export const guestLimitReached = (conversation, limit) => limit > 0 && (conversation?.visitorMessages ?? 0) >= limit;
+
+/** @typedef {'email' | 'sms' | 'whatsapp'} AlertChannel */
+
+/**
+ * Where a reply alert (C6) may go, in the merchant's order (the setting "Channels, in order"): each channel once, with
+ * the visitor's address on it (an e-mail address for e-mail, a phone for SMS and WhatsApp); a channel the visitor has
+ * no address for is left out.
+ * @param {unknown} channels the setting's value
+ * @param {{ email?: string | null, phone?: string | null }} contact
+ * @returns {Array<{ channel: AlertChannel, to: { email: string } | { phone: string } }>}
+ */
+export const alertRoutes = (channels, { email, phone }) => {
+	/** @type {Array<{ channel: AlertChannel, to: { email: string } | { phone: string } }>} */
+	const routes = [];
+	for (const channel of new Set(Array.isArray(channels) ? channels : [])) {
+		if (channel === 'email' && email) routes.push({ channel, to: { email } });
+		else if ((channel === 'sms' || channel === 'whatsapp') && phone) routes.push({ channel, to: { phone } });
+	}
+	return routes;
+};
 
 /**
  * What a guest at the limit is offered: sign in (signed-in chat on and a sign-in page), leave contact (lead capture

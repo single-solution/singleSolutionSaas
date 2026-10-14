@@ -1,11 +1,11 @@
 /**
- * Language handling (pure), generalised from the ibrahimMobiles server-side language lock: prompt rules alone drift,
- * so the customer's language is detected from each message and an AI answer in another language is retried once or
- * replaced. Nothing is regional: non-Latin scripts are recognised from Unicode script data, and the languages that
- * share a script are told apart by the letters only some of them use plus the merchant's marker words; Latin-script
- * languages (including romanised ones) are told apart by the marker words, with thresholds the merchant sets (PLAN
- * 0.8.10, the re-audit's CH-16, CH-17). A reply is checked as a whole or part by part (`checkMode`, CH-18), and a
- * language may be accepted in its own script or in Latin letters (`acceptLatinFor`, CH-16).
+ * Language handling (pure), a language lock on the server: prompt rules alone drift, so the customer's language is
+ * detected from each message and an AI answer in another language is retried once or replaced. Nothing is regional:
+ * non-Latin scripts are recognised from Unicode script data, and the languages that share a script are told apart by
+ * the letters only some of them use plus the merchant's marker words; Latin-script languages (including romanised ones)
+ * are told apart by the marker words, with thresholds the merchant sets (PLAN 0.8.10, the re-audit's CH-16, CH-17). A
+ * reply is checked as a whole or part by part (`checkMode`, CH-18), and a language may be accepted in its own script or
+ * in Latin letters (`acceptLatinFor`, CH-16).
  * @module
  */
 import { tokenize } from './text.js';
@@ -146,7 +146,7 @@ const SEPARATOR = /^[ \t]*-{3,}[ \t]*$/m;
  */
 const primary = (tag) => String(tag).toLowerCase().split('-')[0] ?? '';
 
-/** ISO 15924 script subtags (`ur-Latn`, `sr-Cyrl`) → the script names used here. */
+/** ISO 15924 script subtags (`sr-Latn`, `zh-Hant`) → the script names used here. */
 const SCRIPT_SUBTAGS = Object.freeze({
 	latn: 'Latin',
 	arab: 'Arabic',
@@ -179,8 +179,8 @@ const SCRIPT_SUBTAGS = Object.freeze({
 });
 
 /**
- * Script of a language tag: its script subtag (`ur-Latn` is romanised Urdu), else the language's usual script, else
- * Latin.
+ * Script of a language tag: its script subtag (`sr-Latn` is Serbian in Latin letters), else the language's usual
+ * script, else Latin.
  * @param {string} tag
  */
 const scriptOf = (tag) => {
@@ -391,7 +391,7 @@ export const isLanguageNeutral = (text) => {
 };
 
 /** The least share of a reply's words that must be marker words of its language in a strict check. */
-export const STRICT_SHARE = 0.1;
+const STRICT_SHARE = 0.1;
 
 /**
  * The forms a reply may take: the language itself, and with `latinFor` also its other script (its own script for
@@ -480,7 +480,7 @@ export const replyMatchesLanguage = (reply, required, options = {}) => {
 
 /**
  * A text for a language from lines `<language>: text`: the line of the exact language, else of its primary subtag
- * (`pt` for `pt-BR`, `ur` for `ur-Latn`), else null.
+ * (`pt` for `pt-BR`, `sr` for `sr-Latn`), else null.
  * @param {readonly string[]} lines
  * @param {string} language
  * @returns {string | null}

@@ -10,7 +10,7 @@
 				"type": "string",
 				"maxLength": 20
 			},
-			"description": "Language codes such as en, ur, ar or pt-BR. Empty = any language."
+			"description": "Language codes such as en, fr, ar or pt-BR. Empty = any language."
 		},
 		"defaultLanguage": {
 			"type": "string",

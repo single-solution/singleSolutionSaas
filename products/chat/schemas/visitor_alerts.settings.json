@@ -8,7 +8,20 @@
 			"default": 60,
 			"minimum": 0,
 			"maximum": 3600,
-			"description": "A staff reply alerts the visitor (WhatsApp to their phone, else e-mail) when they have not checked the chat for this long; once until they check again."
+			"description": "A staff reply alerts the visitor when they have not checked the chat for this long; once until they check again."
+		},
+		"channels": {
+			"type": "array",
+			"title": "Channels, in order",
+			"default": ["whatsapp", "email"],
+			"description": "Pick them in the order to try. The alert goes by the first one the visitor has an address for (a phone for WhatsApp and SMS, an e-mail address for e-mail); when Notifications does not take it there (that channel is off or has no template), the next one is tried. None: no alerts.",
+			"items": {
+				"type": "string",
+				"enum": ["email", "sms", "whatsapp"]
+			},
+			"x-ui": {
+				"widget": "tags"
+			}
 		}
 	}
 }

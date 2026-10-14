@@ -144,6 +144,69 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		await sys.admin(ticket, 'POST', path, { text: 'Back?' });
 		expect(sys.messages()).toHaveLength(2);
 	});
+
+	/**
+	 * A visitor with these contacts who left the chat, and a staff reply to them: the reply alert's calls to
+	 * Notifications as [channel, to].
+	 * @param {Awaited<ReturnType<typeof start>>} sys
+	 * @param {{ email?: string, phone?: string }} contact
+	 */
+	const alertOf = async (sys, contact) => {
+		const v = sys.visitor();
+		const sent = await v('POST', '/v1/chat/messages', { text: 'hello' });
+		await v('POST', '/v1/chat/contact', { name: 'Ann', ...contact });
+		sys.advance(61_000);
+		const before = sys.messages().length;
+		const path = `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`;
+		await sys.admin(await sys.ticket(), 'POST', path, { text: 'Hi Ann' });
+		return sys
+			.messages()
+			.slice(before)
+			.map((m) => [m.channel, m.to]);
+	};
+	const both = { email: 'ann@example.com', phone: '+447700900123' };
+
+	it('a reply alert goes by the channels in the order set: the first the visitor has an address for', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		await sys.paste('notifications');
+		// the default: WhatsApp, then e-mail
+		expect(await alertOf(sys, both)).toEqual([['whatsapp', { phone: '+447700900123' }]]);
+		expect(await alertOf(sys, { email: 'ann@example.com' })).toEqual([['email', { email: 'ann@example.com' }]]);
+		await sys.setting('visitor_alerts', 'channels', ['email', 'sms']);
+		expect(await alertOf(sys, both)).toEqual([['email', { email: 'ann@example.com' }]]);
+		expect(await alertOf(sys, { phone: '+447700900123' })).toEqual([['sms', { phone: '+447700900123' }]]);
+		await sys.setting('visitor_alerts', 'channels', ['sms', 'whatsapp', 'email']);
+		expect(await alertOf(sys, both)).toEqual([['sms', { phone: '+447700900123' }]]);
+		// a channel the visitor has no address for is passed over; none left, or none chosen: no alert
+		await sys.setting('visitor_alerts', 'channels', ['whatsapp']);
+		expect(await alertOf(sys, { email: 'ann@example.com' })).toEqual([]);
+		await sys.setting('visitor_alerts', 'channels', []);
+		expect(await alertOf(sys, both)).toEqual([]);
+	});
+
+	it('a channel Notifications does not take passes the alert to the next one', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		await sys.paste('notifications');
+		const whatsapp = 'https://notifications.example.dev/v1/messages/whatsapp';
+		// WhatsApp is off in Notifications
+		sys.responders.set(whatsapp, () => ({
+			status: 403,
+			body: { type: 'https://errors.example.dev/feature_off', title: 'Feature off', status: 403 },
+		}));
+		const sent = [
+			['whatsapp', { phone: '+447700900123' }],
+			['email', { email: 'ann@example.com' }],
+		];
+		expect(await alertOf(sys, both)).toEqual(sent);
+		// WhatsApp has no provider there: the message fails at once
+		sys.responders.set(whatsapp, () => ({ status: 201, body: { id: 'msg_failed', status: 'failed' } }));
+		expect(await alertOf(sys, both)).toEqual(sent);
+		// the last channel not taken: nothing more to try
+		expect(await alertOf(sys, { phone: '+447700900123' })).toEqual([['whatsapp', { phone: '+447700900123' }]]);
+		// Notifications itself unreachable: the next channel is not tried
+		sys.responders.set(whatsapp, () => ({ status: 503, body: {} }));
+		expect(await alertOf(sys, both)).toEqual([['whatsapp', { phone: '+447700900123' }]]);
+	});
 });
 
 describe('guests and sign-ins (C7)', () => {

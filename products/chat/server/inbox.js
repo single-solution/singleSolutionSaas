@@ -51,7 +51,7 @@ export const actorOf = (ctx) => {
  * The activity label of a conversation: the visitor's name, never their message.
  * @param {ConversationRecord} c
  */
-export const conversationLabel = (c) => c.name || (c.visitor.kind === 'guest' ? 'Guest' : 'Signed-in visitor');
+const conversationLabel = (c) => c.name || (c.visitor.kind === 'guest' ? 'Guest' : 'Signed-in visitor');
 
 /**
  * @param {import('../adapters/product.js').Product} product

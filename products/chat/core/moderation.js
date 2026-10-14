@@ -1,5 +1,5 @@
 /**
- * Moderation (pure), ported and generalised from the ibrahimMobiles assistant sanitiser and leak filter:
+ * Moderation (pure): the checks on what visitors and the AI write:
  *
  * - **PII redaction** in and out: payment cards (Luhn-checked), IBANs (mod-97), e-mails, phone numbers (8–15 digits),
  *   IPv4 addresses — replaced by a label so the conversation stays readable.

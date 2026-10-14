@@ -1,9 +1,9 @@
 /**
- * Tools the AI may call (pure), from the ibrahimMobiles assistant tools and their security model: the model only
- * fills public inputs (a webhook tool's declared parameters, a date range, a slot id); who the visitor is comes from the
- * verified conversation, never from the model. `escalate_to_human` belongs to handoff. Webhook tools and the book-a-slot
- * tool are signed POSTs to the merchant's own https endpoints (adapters/tools.js); the timeout and the answer size cap
- * are code constants, the same for every tool. The shop tools are in shop.js.
+ * Tools the AI may call (pure) and their security model: the model only fills public inputs (a webhook tool's declared
+ * parameters, a date range, a slot id); who the visitor is comes from the verified conversation, never from the model.
+ * `escalate_to_human` belongs to handoff. Webhook tools and the book-a-slot tool are signed POSTs to the merchant's own
+ * https endpoints (adapters/tools.js); the timeout and the answer size cap are code constants, the same for every tool.
+ * The shop tools are in shop.js.
  * @module
  */
 import { SHOP_TOOL_NAMES } from './shop.js';

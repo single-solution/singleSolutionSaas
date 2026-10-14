@@ -25,7 +25,7 @@ import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, PAGE_KINDS, STAFF_TYPES
 /** @typedef {import('./fields.js').CustomField} CustomField */
 
 /** The longest texts Chat keeps (characters), as its own routes take them. */
-export const IMPORT_TEXT_LIMITS = Object.freeze({
+const IMPORT_TEXT_LIMITS = Object.freeze({
 	/** a member of staff's or a message author's name (the acting user's name, K2) */
 	name: 120,
 	/** a visitor's captured name (lead capture) */

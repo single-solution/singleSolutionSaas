@@ -73,7 +73,7 @@ export const checkCustomFields = (items) => {
  * Check one value of a field (custom or standard).
  * @param {CustomField} field
  * @param {unknown} raw
- * @param {string} [callingCode] the website's default calling code (`+92`), for phones typed without one
+ * @param {string} [callingCode] the website's default calling code (`+44`), for phones typed without one
  * @returns {{ ok: true, value: string | number | boolean } | { ok: false }}
  */
 export const checkFieldValue = (field, raw, callingCode = '') => {

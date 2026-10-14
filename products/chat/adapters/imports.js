@@ -22,7 +22,7 @@ import { changesOf, checkConversation, checkGuest, checkMessage, checkStaff, fin
  */
 
 /** Conversations one `finish` call takes (call again with `?after=<next>` while `more`). */
-export const FINISH_BATCH = 100;
+const FINISH_BATCH = 100;
 /** The kit's note of the keys imports wrote (`ss_chat_imports`): `finish` takes only imported conversations. */
 const LEDGER = 'imports';
 

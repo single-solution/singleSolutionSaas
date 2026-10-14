@@ -1,10 +1,10 @@
 /**
- * The answer loop (pure orchestration; every effect is injected), ported from the ibrahimMobiles `generateReply`:
- * the model may request tools, which run and feed their results back, for at most `maxRounds` rounds; the last round
- * offers no tools so the model must answer in text. One shared deadline covers every call; the token budget is checked
- * before each call and charged after it (provider usage, else an estimate). An answer in the wrong language is retried
- * once with an explicit instruction and dropped if it is still wrong; so is an answer any other check refuses (an
- * answer that says it is a bot while "never disclose" is on, PLAN 0.8.10 C1).
+ * The answer loop (pure orchestration; every effect is injected): the model may request tools, which run and feed their
+ * results back, for at most `maxRounds` rounds; the last round offers no tools so the model must answer in text. One
+ * shared deadline covers every call; the token budget is checked before each call and charged after it (provider usage,
+ * else an estimate). An answer in the wrong language is retried once with an explicit instruction and dropped if it is
+ * still wrong; so is an answer any other check refuses (an answer that says it is a bot while "never disclose" is on,
+ * PLAN 0.8.10 C1).
  * @module
  */
 import { estimateTokens } from './providers.js';

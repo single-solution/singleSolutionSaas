@@ -1,6 +1,5 @@
 {
 	"chat.aiUnavailable": "Sorry, I cannot answer right now.",
-	"chat.handoff": "A person from our team will reply here.",
 	"chat.officeClosed": "Our team is away right now. They are back {time}.",
 	"chat.contactAsk": "Please leave your name and how we can reach you, and we will reply.",
 	"transcript.you": "You",
