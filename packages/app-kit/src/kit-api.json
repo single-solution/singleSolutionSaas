@@ -87,7 +87,7 @@
 					"required": ["locale", "currencyDisplay", "currencySymbol", "wholeUnits", "times"],
 					"additionalProperties": false,
 					"properties": {
-						"locale": { "type": "string", "description": "A language tag (en, en-GB, ur-PK), or '' for the viewer's." },
+						"locale": { "type": "string", "description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's." },
 						"currencyDisplay": { "type": "string", "enum": ["code", "symbol", "custom"] },
 						"currencySymbol": { "type": "string", "maxLength": 8, "description": "With currencyDisplay custom." },
 						"wholeUnits": { "type": "boolean", "description": "Amounts without the minor unit." },
