@@ -245,7 +245,7 @@ describe('Setup sheet (end to end)', () => {
 
 	it('names each real product’s OpenAPI document and what the website builds for each feature on', async () => {
 		const res = await merchant.client.get(sheetPath());
-		for (const product of res.json.products.filter((/** @type {any} */ p) => p.productId !== 'ecommerce')) {
+		for (const product of res.json.products) {
 			const base =
 				product.productId === 'notes'
 					? PRODUCT_URL
@@ -292,6 +292,14 @@ describe('Setup sheet (end to end)', () => {
 		);
 		expect(partOf(saved.json, 'accounts').notRecommended).toContainEqual(
 			expect.objectContaining({ feature: 'phone_code', missing: ['signIn.phone'] }),
+		);
+		// Ecommerce: the shop of physical goods with what it needs; digital goods and bookings are on but not called for
+		const shop = partOf(saved.json, 'ecommerce');
+		expect(shop.recommended.map((/** @type {any} */ entry) => entry.feature)).toEqual(
+			expect.arrayContaining(['catalog', 'checkout', 'variants', 'returns', 'wishlist', 'alerts', 'staff_alerts', 'import']),
+		);
+		expect(shop.notRecommended.map((/** @type {any} */ entry) => entry.feature)).toEqual(
+			expect.arrayContaining(['digital_goods', 'bookings', 'cod']),
 		);
 
 		// the merchant cannot switch features; the Owner does it in one click, through the product's feature report
