@@ -3,8 +3,11 @@
  * and Notifications, in this process: the Portal gathers each product's part through a signed Portal call
  * (`GET /v1/blueprint`), the merchant and the admin read and download it, a product that cannot be reached shows as
  * not reachable while the sheet still renders, and a share link gives a read-only copy (without values when asked)
- * until it is revoked. No secret is ever in a sheet: not a connection value, not a server token. The email provider
- * (Resend) is a fake in this process.
+ * until it is revoked. No secret is ever in a sheet: not a connection value, not a server token. The setup advisor
+ * on the real products: the merchant's business profile, the features each product recommends for it (by their
+ * `recommendFor` tags) and the ones that are on although it rules them out, and the admin's Switch on through the
+ * product's own feature report; every product names its OpenAPI document and says what the website builds. The email
+ * provider (Resend) is a fake in this process.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateBlueprint } from '@ss/contracts';
@@ -238,5 +241,71 @@ describe('Setup sheet (end to end)', () => {
 		const text = JSON.stringify(res.json);
 		for (const secret of [EMAIL_KEY, tokens.notes?.server, tokens.notifications?.server])
 			expect(text.includes(String(secret))).toBe(false);
+	});
+
+	it('names each real product’s OpenAPI document and what the website builds for each feature on', async () => {
+		const res = await merchant.client.get(sheetPath());
+		for (const product of res.json.products.filter((/** @type {any} */ p) => p.productId !== 'ecommerce')) {
+			const base =
+				product.productId === 'notes'
+					? PRODUCT_URL
+					: product.productId === 'notifications'
+						? NOTIFY
+						: baseOf(product.productId);
+			expect(product.docs.openapi, product.productId).toBe(`${base}/openapi.json`);
+			expect((await sys.call('GET', '/openapi.json', { base })).status).toBe(200);
+			const on = product.features.filter((/** @type {any} */ f) => f.on).map((/** @type {any} */ f) => f.key);
+			expect(
+				product.build.map((/** @type {any} */ b) => b.feature),
+				product.productId,
+			).toEqual(on);
+			for (const entry of product.build) expect(entry.docs).toBe(`${base}/docs#feature-${entry.feature}`);
+		}
+	});
+
+	it('recommends features from the merchant’s business profile, and the admin switches one on through the product', async () => {
+		const saved = await merchant.client.put(`${sheetPath()}/profile`, {
+			sells: ['physical'],
+			pays: ['online'],
+			signIn: ['email'],
+			chat: ['people'],
+			messages: ['sms'],
+			moving: true,
+			countries: ['US'],
+		});
+		expect(saved.status).toBe(200);
+		const checked = validateBlueprint(saved.json);
+		expect(checked.ok, JSON.stringify(checked.ok ? [] : checked.problems.slice(0, 5))).toBe(true);
+		/** @param {any} sheet @param {string} id */
+		const partOf = (sheet, id) => sheet.products.find((/** @type {any} */ p) => p.productId === id);
+		const notes = partOf(saved.json, 'notes');
+		expect(notes.recommended).toEqual([
+			{ feature: 'notes', on: true, because: ['chat.people'], why: 'Your staff answer visitors in chat.' },
+			{ feature: 'import', on: false, because: ['moving.yes'], why: 'You are moving from another website or system.' },
+		]);
+		// Notifications: SMS is recommended and off; Payments: a gateway of another country is on but not called for
+		expect(partOf(saved.json, 'notifications').recommended).toContainEqual(
+			expect.objectContaining({ feature: 'sms', on: false, because: ['messages.sms'] }),
+		);
+		expect(partOf(saved.json, 'payments').notRecommended).toContainEqual(
+			expect.objectContaining({ feature: 'payfast_pk', missing: ['countries.pk'] }),
+		);
+		expect(partOf(saved.json, 'accounts').notRecommended).toContainEqual(
+			expect.objectContaining({ feature: 'phone_code', missing: ['signIn.phone'] }),
+		);
+
+		// the merchant cannot switch features; the Owner does it in one click, through the product's feature report
+		expect((await merchant.client.post(`${sheetPath()}/features`, { productId: 'notes', feature: 'import' })).status).toBe(401);
+		const before = (await sys.activity('product.features_changed')).length;
+		const owner = await sys.owner();
+		const switched = await owner.post(`${sheetPath()}/features`, { productId: 'notes', feature: 'import' });
+		expect(switched.status).toBe(200);
+		expect(switched.json.added).toEqual(['import']);
+		expect(partOf(switched.json.sheet, 'notes').recommended[1]).toMatchObject({ feature: 'import', on: true });
+		expect((await sys.activity('product.features_changed')).length).toBe(before + 1);
+		// a feature with what it needs: Chat's language lock needs AI replies and visitor chat (all on already here)
+		const again = await owner.post(`${sheetPath()}/features`, { productId: 'chat', feature: 'language_lock' });
+		expect(again.json.added).toEqual([]);
+		expect((await sys.activity('website.setup_profile_saved')).length).toBe(1);
 	});
 });
