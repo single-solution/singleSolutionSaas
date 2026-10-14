@@ -1981,6 +1981,20 @@ connections state, widgets with the install snippet, API and docs addresses, sta
 recommends features from a short merchant profile (what they sell, how shoppers pay, delivery, countries, languages …),
 from tags in each product's manifest. Built after the Ecommerce clean pass (kit endpoint, Portal page, share links,
 advisor).
+- **Stages 1–3 built (2026-10-14; 444260da, 5ab21a5b, 77f65b92, be8b2f3e, b5553a94, 779896e6, 86a4d35e, a7c46a8e,
+  2a77bb8d):** signed Portal → product calls (`ss-call.v1`, packages/protocol); `ss.blueprint/1` in @ss/contracts;
+  every product answers `GET /v1/blueprint?websiteId=` through the kit (auth `portal`: features, settings with defaults
+  marked, lists summarized, connection states, widget readiness, permissions, events, checklist, docs, a product hook
+  `hooks.blueprint`; secrets never shown — the contract refuses secret fields and any text holding a saved secret is
+  replaced, property-tested). The Portal gathers all products in parallel (5 s each, unreachable ones shown, 60 s
+  in-memory cache), adds domain, origins, browser tokens and install snippets (never server tokens), and shows a Setup
+  page in the admin and merchant consoles (not Finance) with Refresh, Copy and Download JSON. Share links: a 256-bit
+  key in the URL fragment, stored hashed, 1–30 days (default 7), at most 50 per website, revocable, values and install
+  switchable off; a public read-only page and `POST /v1/setup/shared` (rate-limited, noindex); all in Activity. Kit
+  fix: route responses pass byte for byte (a CSV keeps its UTF-8 byte order mark). **Stages 4–5 still need, per
+  product:** `hooks.blueprint` (event types, list summaries in its own words), the `openapi` option, `recommendFor`
+  tags (a manifest contract change), a "what your website builds" guide section; the CLI template could add the hook
+  and option.
 
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
