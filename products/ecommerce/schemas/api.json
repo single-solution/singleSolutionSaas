@@ -16770,10 +16770,6 @@
 					"type": "string",
 					"description": "nextCursor of the previous page."
 				},
-				"next": {
-					"type": "string",
-					"description": "The old name of cursor (read when cursor is not given)."
-				},
 				"limit": {
 					"type": "integer",
 					"minimum": 1,

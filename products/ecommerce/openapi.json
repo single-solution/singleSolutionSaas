@@ -29030,16 +29030,6 @@
 						}
 					},
 					{
-						"name": "next",
-						"in": "query",
-						"required": false,
-						"description": "The old name of cursor (read when cursor is not given).",
-						"schema": {
-							"type": "string",
-							"description": "The old name of cursor (read when cursor is not given)."
-						}
-					},
-					{
 						"name": "limit",
 						"in": "query",
 						"required": false,

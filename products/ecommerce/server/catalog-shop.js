@@ -192,9 +192,9 @@ export const createCatalogShop = (product, service, common) => {
 	const listing = async (ctx) => {
 		const { s, data } = await common.open(ctx);
 		const { pageSize, searchMatch } = await s.values('catalog');
-		// pages by cursor like every other list (`nextCursor`, `hasMore`); `next` is the cursor's old name
+		// pages by cursor like every other list (`nextCursor`, `hasMore`)
 		const page = paginate(
-			{ cursor: ctx.query.page ? null : (ctx.query.cursor ?? ctx.query.next), limit: ctx.query.limit },
+			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
 			{ defaultLimit: Math.min(MAX_PAGE, Number(pageSize)), maxLimit: MAX_PAGE },
 		);
 		const read = readShopQuery(ctx.query);
