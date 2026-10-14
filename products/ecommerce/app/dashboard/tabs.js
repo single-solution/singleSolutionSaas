@@ -165,7 +165,7 @@ function OverviewTab({ websiteId }) {
 				const atlas =
 					on.includes('catalog') && search.answer?.ok && search.answer.data?.search === 'atlas' ? search.answer.data : null;
 				return (
-					<div className="space-y-8">
+					<div className="space-y-6">
 						<StatusBanner status={data.status} />
 						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
 							<StatGrid>
@@ -488,7 +488,7 @@ function DevelopersTab({ websiteId, portal }) {
 	return (
 		<Loaded answer={answer}>
 			{(data) => (
-				<div className="space-y-8">
+				<div className="space-y-6">
 					<Card title={TEXTS.tabs.developers}>
 						<p className="text-sm">{D.intro}</p>
 						<ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">

@@ -214,7 +214,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, load 
 						<div className="space-y-4">
 							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 							{items.map((item, index) => (
-								<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-4">
+								<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
 									<EntryHead
 										label={itemLabel}
 										index={index}
@@ -584,7 +584,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 								const targets = possibleTargets(flow, status.key);
 								const ticked = flow.moves.filter((move) => move.from === status.key).map((move) => move.to);
 								return (
-									<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-4">
+									<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
 										<EntryHead
 											label={F.status}
 											index={index}

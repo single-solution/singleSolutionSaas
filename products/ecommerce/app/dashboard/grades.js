@@ -52,7 +52,7 @@ const L = TEXTS.lists;
 const G = L.grades;
 
 /** The look of a field label (as the shared form controls have it). */
-const LEGEND = 'block text-xs font-semibold uppercase tracking-wider text-muted';
+const LEGEND = 'block text-[13px] font-medium leading-5 text-fg';
 
 /**
  * `{length}/{max}` beside a long text's label.
@@ -214,7 +214,7 @@ function FaqsField({ faqs, onChange }) {
 				</span>
 			</p>
 			{faqs.map((faq, index) => (
-				<div key={index} className="space-y-3 rounded-2xl bg-surface-2 p-4">
+				<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
 					<div className="flex items-center gap-2">
 						<span className="mr-auto text-sm font-bold">{fill(G.faq, { number: index + 1 })}</span>
 						<IconButton

@@ -121,14 +121,12 @@ const settingsIn = (features, section) =>
 		const properties = feature.schema.properties;
 		const names = Object.keys(properties).filter((name) => sectionOf(feature.key, name) === section);
 		if (names.length === 0) return [];
-		const required = Array.isArray(feature.schema.required) ? feature.schema.required : null;
 		return [
 			{
 				...feature,
 				schema: {
 					...feature.schema,
 					properties: Object.fromEntries(names.map((name) => [name, widened(properties[name])])),
-					...(required ? { required: required.filter((/** @type {string} */ name) => names.includes(name)) } : {}),
 				},
 				values: Object.fromEntries(Object.entries(feature.values).filter(([name]) => names.includes(name))),
 			},
@@ -165,7 +163,7 @@ export function SettingsSections({ features, forms, extras }) {
 							onChange={(event) => pick(/** @type {SectionId} */ (event.target.value))}
 						/>
 					</div>
-					<ul className="hidden space-y-0.5 rounded-card bg-surface p-2 @5xl:block">
+					<ul className="hidden space-y-0.5 rounded-card border border-line-soft bg-surface p-2 @5xl:block">
 						{shown.map((section) => (
 							<li key={section.id}>
 								<button
@@ -173,9 +171,11 @@ export function SettingsSections({ features, forms, extras }) {
 									aria-current={section.id === active.id ? 'true' : undefined}
 									onClick={() => pick(section.id)}
 									className={cx(
-										'ss-motion ss-press w-full rounded-[12px] px-3 py-2 text-left text-sm font-semibold',
+										'ss-motion ss-press w-full rounded-[10px] px-3 py-2 text-left text-sm',
 										'focus-visible:outline-2 focus-visible:outline-focus',
-										section.id === active.id ? 'bg-primary-soft text-on-primary-soft' : 'text-fg hover:bg-surface-2',
+										section.id === active.id
+											? 'bg-primary-soft font-semibold text-on-primary-soft'
+											: 'font-medium text-fg/80 hover:bg-surface-2 hover:text-fg',
 									)}>
 									{S[section.id].title}
 								</button>
