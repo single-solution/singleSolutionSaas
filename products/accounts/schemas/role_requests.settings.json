@@ -19,6 +19,13 @@
 			"type": "boolean",
 			"title": "A note is required",
 			"default": false
+		},
+		"giveRoleAt": {
+			"type": "string",
+			"title": "Give the role",
+			"description": "Invite: when staff invite the person (the setup link only sets their password). Completion: when the person sets their password with the setup link, or at once when they already have one; until then a new user has the default role and an existing user keeps theirs.",
+			"default": "invite",
+			"enum": ["invite", "completion"]
 		}
 	}
 }

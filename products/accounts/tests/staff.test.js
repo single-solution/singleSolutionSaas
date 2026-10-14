@@ -349,12 +349,15 @@ describe('A5: role requests', () => {
 			note: 'Hi',
 		});
 		expect(asked.status).toBe(201);
-		expect(asked.json.status).toBe('pending');
-		expect(
-			code(
-				await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+447700900100', note: 'Hi' }),
-			),
-		).toBe('already_exists');
+		expect(asked.json).toMatchObject({ outcome: 'requested', status: 'pending' });
+		// a repeat ask makes no second request: it answers what is there
+		const again = await env.visitor('POST', '/v1/role-requests', {
+			role: 'member',
+			name: 'Nia',
+			phone: '+447700900100',
+			note: 'Hi',
+		});
+		expect([again.status, again.json]).toEqual([201, { outcome: 'already_requested' }]);
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests;
 		expect(config).toEqual({ roles: [{ key: 'member', name: 'Member' }], requireNote: true });
 

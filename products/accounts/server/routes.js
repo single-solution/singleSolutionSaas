@@ -155,6 +155,15 @@ export const createRoutes = (product) => {
 			rateLimit: SENSITIVE_LIMITS,
 			handler: flows.acceptSetup,
 		}),
+		// what a setup page shows before the password (the code in the body: it stays out of addresses and logs)
+		defineRoute({
+			method: 'POST',
+			path: '/v1/setup-links/lookup',
+			auth: 'browser',
+			feature: ['staff_links', 'role_requests'],
+			rateLimit: SENSITIVE_LIMITS,
+			handler: flows.lookupSetup,
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/role-requests',
@@ -474,6 +483,13 @@ export const createRoutes = (product) => {
 		}),
 		defineRoute({
 			method: 'POST',
+			path: '/v1/role-requests/:id/setup-link',
+			auth: 'server',
+			feature: 'role_requests',
+			handler: manage.renewRequestLink,
+		}),
+		defineRoute({
+			method: 'POST',
 			path: '/v1/role-requests/:id/decline',
 			auth: 'server',
 			feature: 'role_requests',
@@ -689,6 +705,14 @@ export const createRoutes = (product) => {
 			feature: 'role_requests',
 			permission: 'users.manage',
 			handler: manage.inviteRequest,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/role-requests/:id/setup-link',
+			auth: 'ticket',
+			feature: 'role_requests',
+			permission: 'users.manage',
+			handler: manage.renewRequestLink,
 		}),
 		defineRoute({
 			method: 'POST',

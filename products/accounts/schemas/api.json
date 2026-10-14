@@ -1646,7 +1646,7 @@
 	},
 	"POST /v1/setup-links/accept": {
 		"summary": "Choose a password with a setup link and sign in",
-		"description": "The link’s code comes from POST /v1/users/:id/setup-link or a role-request invite (?ss_setup=<code>). Proves the user’s phone number, activates an invited user, completes their invited role request and signs their other devices out. 422 code_invalid (not valid, used or expired), weak_password; 403 blocked. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+		"description": "The link’s code comes from POST /v1/users/:id/setup-link or a role-request invite (?ss_setup=<code>). Proves the user’s phone number, activates an invited user, completes their invited role request (and gives its role now when Role requests → giveRoleAt is completion) and signs their other devices out; the link’s lookup says used from then on. 422 code_invalid (not valid, used or expired), weak_password; 403 blocked. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
 		"body": {
 			"type": "object",
 			"required": ["code", "password"],
@@ -1677,9 +1677,49 @@
 			"$ref": "#/components/schemas/SignInAnswer"
 		}
 	},
+	"POST /v1/setup-links/lookup": {
+		"summary": "What a setup page shows before the password",
+		"description": "For your setup page (and the sign-in widget’s): whether the link works, and while it does, whom to greet. The link’s code goes in the body, never in an address, so its secret stays out of request logs. Answers valid with the person’s display name, the last 4 digits of their phone number (null without one; never the whole number or the email address) and when the link ends; else expired (past its end), used (the password was set with it), canceled (a newer link replaced it, or staff declined its request) or invalid. Only a code whose secret matches learns anything: an unknown or wrong code always answers invalid, so the lookup tells nothing about other links or people. A link is known 30 days past its end; later it is invalid. Rate-limited per visitor like the accept route.",
+		"body": {
+			"type": "object",
+			"required": ["code"],
+			"properties": {
+				"code": {
+					"type": "string",
+					"description": "The link’s code as the setup page got it ({code} in your setupPageUrl, or ?ss_setup=)."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["status"],
+			"additionalProperties": false,
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["valid", "expired", "used", "canceled", "invalid"]
+				},
+				"name": {
+					"type": "string",
+					"maxLength": 120,
+					"description": "valid only: the person’s display name (may be empty)."
+				},
+				"phoneLast4": {
+					"type": ["string", "null"],
+					"pattern": "^\\d{4}$",
+					"description": "valid only: the last 4 digits of their phone number, or null."
+				},
+				"expiresAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "valid only: when the link stops working."
+				}
+			}
+		}
+	},
 	"POST /v1/role-requests": {
 		"summary": "Ask for a role (no account needed)",
-		"description": "Only the roles listed in Role requests → requestableRoles. 422 validation_failed for role, name, phone, email or note (requireNote); 409 already_exists while the same request is pending.",
+		"description": "Only the roles listed in Role requests → requestableRoles. 422 validation_failed for role, name, phone, email or note (requireNote). A repeat ask changes nothing and answers what is already there, for your own words: outcome already_member (the user holding this phone number, else this email address, proven, has the role), already_requested (a request of this role with this phone number, else email address, waits for your staff), already_invited (your staff invited it and its setup link still works) or invite_expired (its setup link ran out: your staff give a new one). A new request answers outcome requested with its id. The answer is 201 either way.",
 		"body": {
 			"type": "object",
 			"required": ["role", "name"],
@@ -1709,16 +1749,22 @@
 		"status": 201,
 		"response": {
 			"type": "object",
-			"description": "The request, waiting for your staff.",
-			"required": ["id", "status"],
+			"description": "What happened: a new request waiting for your staff, or what a repeat ask found.",
+			"required": ["outcome"],
 			"additionalProperties": false,
 			"properties": {
+				"outcome": {
+					"type": "string",
+					"enum": ["requested", "already_requested", "already_invited", "invite_expired", "already_member"]
+				},
 				"id": {
 					"type": "string",
-					"pattern": "^rrq_[0-9a-z]{10,64}$"
+					"pattern": "^rrq_[0-9a-z]{10,64}$",
+					"description": "requested only."
 				},
 				"status": {
-					"const": "pending"
+					"const": "pending",
+					"description": "requested only."
 				}
 			}
 		}
@@ -2870,7 +2916,35 @@
 	},
 	"POST /v1/role-requests/:id/invite": {
 		"summary": "Invite the person of a pending request",
-		"description": "Creates their user, or gives the role to the user with that phone number (else email address); answers a setup link for your staff to send, unless the user already has a password (the request is then completed). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+		"description": "Creates their user, or finds the user with that phone number (else email address), and answers a setup link for your staff to send, unless the user already has a password (the request is then completed). The role is given at the invite, or with Role requests → giveRoleAt set to completion when the request is completed (a new user has the default role until then, an existing user keeps theirs). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+		"response": {
+			"type": "object",
+			"required": ["request", "user", "setupLink"],
+			"additionalProperties": false,
+			"properties": {
+				"request": {
+					"$ref": "#/components/schemas/RoleRequest"
+				},
+				"user": {
+					"$ref": "#/components/schemas/StaffUser"
+				},
+				"setupLink": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Link"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "null when the user already has a password."
+				}
+			}
+		}
+	},
+	"POST /v1/role-requests/:id/setup-link": {
+		"summary": "A new setup link for an invited role request",
+		"description": "For a request whose setup link still works or ran out (status invited or expired): the old link stops working (its lookup says canceled) and the request ends with the new one. A user who has a password by now completes the request at once (setupLink null; the role is given then with giveRoleAt completion). 409 conflict when the request is not invited, its role is gone or its user no longer exists (decline it, open it again and invite); 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 		"response": {
 			"type": "object",
 			"required": ["request", "user", "setupLink"],
@@ -2897,8 +2971,8 @@
 		}
 	},
 	"POST /v1/role-requests/:id/decline": {
-		"summary": "Decline a pending role request",
-		"description": "409 conflict when it is not pending; 404 not_found.",
+		"summary": "Decline a pending or invited role request",
+		"description": "A pending request, or an invited one whose setup link still works or ran out. An invited request’s link stops working (its lookup says canceled), and what the invite did is undone: a user the invite created who was never signed in to and has no password is removed from Accounts (the request’s userId becomes null); otherwise, when the invite gave the role and the user still holds it, they get their role from before back. 409 conflict when it is completed or declined; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 		"response": {
 			"$ref": "#/components/schemas/RoleRequest"
 		}
@@ -3850,7 +3924,35 @@
 	},
 	"POST /v1/admin/role-requests/:id/invite": {
 		"summary": "Invite the person of a pending request (Users admin widget)",
-		"description": "Creates their user, or gives the role to the user with that phone number (else email address); answers a setup link for your staff to send, unless the user already has a password (the request is then completed). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+		"description": "Creates their user, or finds the user with that phone number (else email address), and answers a setup link for your staff to send, unless the user already has a password (the request is then completed). The role is given at the invite, or with Role requests → giveRoleAt set to completion when the request is completed (a new user has the default role until then, an existing user keeps theirs). 409 contact_unverified when that user never proved the phone or email and someone signed in to it (check with the person, confirm it on their user or remove that account, then invite again); 409 conflict when the request is not pending, its role is gone or another user has the contact; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
+		"response": {
+			"type": "object",
+			"required": ["request", "user", "setupLink"],
+			"additionalProperties": false,
+			"properties": {
+				"request": {
+					"$ref": "#/components/schemas/RoleRequest"
+				},
+				"user": {
+					"$ref": "#/components/schemas/StaffUser"
+				},
+				"setupLink": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/Link"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "null when the user already has a password."
+				}
+			}
+		}
+	},
+	"POST /v1/admin/role-requests/:id/setup-link": {
+		"summary": "A new setup link for an invited role request (Users admin widget)",
+		"description": "For a request whose setup link still works or ran out (status invited or expired): the old link stops working (its lookup says canceled) and the request ends with the new one. A user who has a password by now completes the request at once (setupLink null; the role is given then with giveRoleAt completion). 409 conflict when the request is not invited, its role is gone or its user no longer exists (decline it, open it again and invite); 403 blocked; 404 not_found; 422 validation_failed when setupPageUrl is not a page of your website. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 		"response": {
 			"type": "object",
 			"required": ["request", "user", "setupLink"],
@@ -3877,8 +3979,8 @@
 		}
 	},
 	"POST /v1/admin/role-requests/:id/decline": {
-		"summary": "Decline a pending role request (Users admin widget)",
-		"description": "409 conflict when it is not pending; 404 not_found.",
+		"summary": "Decline a pending or invited role request (Users admin widget)",
+		"description": "A pending request, or an invited one whose setup link still works or ran out. An invited request’s link stops working (its lookup says canceled), and what the invite did is undone: a user the invite created who was never signed in to and has no password is removed from Accounts (the request’s userId becomes null); otherwise, when the invite gave the role and the user still holds it, they get their role from before back. 409 conflict when it is completed or declined; 404 not_found. 403 forbidden by the guards when the call names its acting user (SS-Actor-Id) or comes with a ticket: nobody changes their own role, blocks or deletes themselves, touches a user whose role ranks above theirs or gives a role ranking above theirs, and the last unblocked Owner stays.",
 		"response": {
 			"$ref": "#/components/schemas/RoleRequest"
 		}

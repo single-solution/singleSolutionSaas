@@ -23,7 +23,7 @@ import {
 	permissionCatalog,
 	roleView,
 } from '../core/roles.js';
-import { generateCode, returnAddress } from '../core/rules.js';
+import { SETUP_TRACE_DAYS, generateCode, returnAddress } from '../core/rules.js';
 import { LINK_PARAMS, SETUP_PARAM } from '../core/widgets.js';
 import { randomBytes, randomSecret, sha256 } from '../adapters/crypto.js';
 import { manifest } from '../adapters/product.js';
@@ -349,6 +349,8 @@ export const createManage = (product, service, flows) => {
 	/**
 	 * A setup link for a user (A3, also A5's invites): it sets a password, also for users with no email address. A new
 	 * one cancels the old. The setup page takes `{code}`; without one the link goes to the website with `?ss_setup=`.
+	 * The link leaves a trace (its hash, its user and its end; SETUP_TRACE_DAYS past its end) for the setup page's
+	 * lookup to tell "used", "expired" or "canceled" apart.
 	 * @param {import('./service.js').Site} s @param {import('../core/profile.js').UserRecord} user
 	 */
 	const setupLinkFor = async (s, user) => {
@@ -357,8 +359,17 @@ export const createManage = (product, service, flows) => {
 		const page = returnAddress(template.replaceAll('{code}', 'code'), s.domain);
 		if (!page) throw invalid('setupPageUrl', 'Set the setup page (a page of your website) in Settings first.');
 		const secret = randomSecret(32);
+		const hash = sha256(secret);
 		const expireAt = new Date(now() + Number(setupDays) * 86_400_000);
-		const id = await s.store.codes.add({ kind: 'setup', target: user.id, hash: sha256(secret), expireAt, replace: true });
+		await s.store.codes.cancelSetups(user.id);
+		const id = await s.store.codes.add({ kind: 'setup', target: user.id, hash, expireAt, replace: true });
+		await s.store.codes.add({
+			kind: 'setup_trace',
+			target: id,
+			hash,
+			expireAt: new Date(expireAt.getTime() + SETUP_TRACE_DAYS * 86_400_000),
+			data: { userId: user.id, validUntil: expireAt, state: 'issued' },
+		});
 		const code = `${id}.${secret}`;
 		/** @type {string} */
 		let url;
@@ -378,6 +389,9 @@ export const createManage = (product, service, flows) => {
 		await guard(ctx, s, user);
 		if (user.blocked) throw problem('blocked', 'This account is blocked.');
 		const link = await setupLinkFor(s, user);
+		// the new link replaced the one of the user's invited role request: the request ends with it (A5)
+		const request = await s.store.requests.invitedFor(user.id);
+		if (request) await s.store.requests.update(request.id, { setupExpiresAt: new Date(link.expiresAt) });
 		await log(ctx, 'user.setup_link_issued', user.id, {
 			label: labelOf(user.name),
 			detail: `Valid until ${link.expiresAt.slice(0, 10)}`,
@@ -639,7 +653,14 @@ export const createManage = (product, service, flows) => {
 		return filter;
 	};
 
-	/** A visitor asks for a role (A5): `{ role, name, phone | email, note }`, no account needed. @param {any} ctx */
+	/**
+	 * A visitor asks for a role (A5): `{ role, name, phone | email, note }`, no account needed. The answer's `outcome` says
+	 * what happened, for the website's own words: `requested` (a new request, with its id), or for a repeat ask, which
+	 * changes nothing: `already_member` (the user holding this proven phone number, else email address, has the role),
+	 * `already_requested` (a request of the same role and phone number, else email address, waits for staff),
+	 * `already_invited` (staff invited it and its setup link still works) or `invite_expired` (its setup link ran out).
+	 * @param {any} ctx
+	 */
 	const requestRole = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
@@ -657,12 +678,23 @@ export const createManage = (product, service, flows) => {
 		const note = typeof body.note === 'string' ? body.note.trim() : '';
 		if (note.length > 1000) throw invalid('note', 'The note is at most 1000 characters.');
 		if (requireNote && !note) throw invalid('note', 'Write a note.');
-		const open = await s.store.requests.list({
+		/** @param {string} outcome */
+		const repeat = (outcome) =>
+			new Response(JSON.stringify({ outcome }), { status: 201, headers: { 'content-type': 'application/json' } });
+		// the person already has the role: the user an invite would give it to (phone first), with that contact proven
+		const byPhone = phone ? await s.store.users.byPhone(phone) : null;
+		const holder = byPhone ?? (email ? await s.store.users.byEmail(email) : null);
+		if (holder && holder.role === body.role && (byPhone ? holder.phoneVerified : holder.emailVerified))
+			return repeat('already_member');
+		const [open] = await s.store.requests.list({
 			after: null,
 			limit: 1,
-			filter: { role: body.role, status: 'pending', ...(phone ? { phone } : { email }) },
+			filter: { role: body.role, status: { $in: ['pending', 'invited'] }, ...(phone ? { phone } : { email }) },
 		});
-		if (open.length > 0) throw problem('already_exists', 'This request is already waiting for the shop.');
+		if (open) {
+			const status = requestView(open, now()).status;
+			return repeat(status === 'pending' ? 'already_requested' : status === 'invited' ? 'already_invited' : 'invite_expired');
+		}
 		const request = await s.store.requests.create({
 			role: body.role,
 			name,
@@ -676,7 +708,7 @@ export const createManage = (product, service, flows) => {
 			setupExpiresAt: null,
 			completedAt: null,
 		});
-		return new Response(JSON.stringify({ id: request.id, status: request.status }), {
+		return new Response(JSON.stringify({ outcome: 'requested', id: request.id, status: request.status }), {
 			status: 201,
 			headers: { 'content-type': 'application/json' },
 		});
@@ -717,12 +749,20 @@ export const createManage = (product, service, flows) => {
 	 */
 	const untouched = (user) => !user.passwordHash && !user.lastSignInAt && Object.keys(user.providers).length === 0;
 
+	/** Who acts, as a request keeps it. @param {any} ctx */
+	const invitedByOf = (ctx) => {
+		const who = actor(ctx);
+		return { kind: who.kind, id: who.id, ...(who.name ? { name: who.name } : {}) };
+	};
+
 	/**
-	 * Invite the person of a pending request (A5): their user is created, or the user with that phone or email gets
-	 * the role; the answer holds a setup link (A3) unless the user already has a password (then the request is
-	 * completed at once). A user who never proved the request's phone or email gets nothing (409
-	 * `contact_unverified`): someone may have signed up first with another person's number (SA-2); only an untouched
-	 * user is invited again.
+	 * Invite the person of a pending request (A5): their user is created, or the user with that phone or email is
+	 * found; the answer holds a setup link (A3) unless the user already has a password (then the request is completed at
+	 * once). The role is given at the invite (`giveRoleAt: invite`, the default), or when the request is completed
+	 * (`completion`: a new user starts with the default role, an existing one keeps theirs until then). What the invite
+	 * did is kept on the request (its `grant`), so a decline can undo it. A user who never proved the request's phone or
+	 * email gets nothing (409 `contact_unverified`): someone may have signed up first with another person's number
+	 * (SA-2); only an untouched user is invited again.
 	 * @param {any} ctx
 	 */
 	const inviteRequest = async (ctx) => {
@@ -738,11 +778,23 @@ export const createManage = (product, service, flows) => {
 				'Someone signed up with this phone number or email address without proving it. Check with the person: ' +
 					'confirm it on their user if the account is theirs, or remove that account; then invite again.',
 			);
+		const at = (await service.settings(s, 'role_requests')).giveRoleAt === 'completion' ? 'completion' : 'invite';
 		/** @type {import('../core/profile.js').UserRecord} */
 		let user;
+		/** @type {import('../adapters/store.js').RequestGrant} */
+		let grant;
 		if (existing) {
 			await guard(ctx, s, existing, { role: request.role });
-			user = (await s.store.users.update(existing.id, { role: request.role })) ?? existing;
+			// an earlier invite of this request made or changed this user (it was opened again after its link ran out): keep
+			// what it did, and a role it gave stays given (a decline takes it back)
+			const earlier = request.grant && request.userId === existing.id ? request.grant : null;
+			const given = earlier?.at === 'invite' && existing.role === request.role;
+			grant = {
+				at: given ? 'invite' : at,
+				createdUser: earlier?.createdUser ?? false,
+				roleBefore: earlier?.roleBefore ?? existing.role,
+			};
+			user = at === 'invite' ? ((await s.store.users.update(existing.id, { role: request.role })) ?? existing) : existing;
 		} else {
 			await guard(ctx, s, /** @type {any} */ ({ id: '', role: DEFAULT_ROLE, blocked: null }), { role: request.role });
 			// the setup link proves the phone number when there is one
@@ -751,27 +803,30 @@ export const createManage = (product, service, flows) => {
 				name: request.name,
 				phone: request.phone,
 				email: request.email,
-				role: request.role,
+				role: at === 'invite' ? request.role : DEFAULT_ROLE,
 				identity: request.phone ? 'phone' : 'email',
 			});
 			if (!created) throw problem('conflict', 'Someone else has this phone number or email address.');
 			user = created;
+			grant = { at, createdUser: true, roleBefore: DEFAULT_ROLE };
 		}
 		const link = user.passwordHash ? null : await setupLinkFor(s, user);
-		const who = actor(ctx);
-		const updated = await s.store.requests.update(request.id, {
+		let updated = await s.store.requests.update(request.id, {
 			userId: user.id,
-			invitedBy: { kind: who.kind, id: who.id, ...(who.name ? { name: who.name } : {}) },
+			invitedBy: invitedByOf(ctx),
 			invitedAt: new Date(now()),
-			...(link
-				? { status: 'invited', setupExpiresAt: new Date(link.expiresAt), completedAt: null }
-				: { status: 'completed', setupExpiresAt: null, completedAt: new Date(now()) }),
+			grant,
+			status: 'invited',
+			setupExpiresAt: link ? new Date(link.expiresAt) : null,
+			completedAt: null,
 		});
+		if (!link && updated) ({ user, request: updated } = await service.completeRequest(s, updated, user));
 		await log(ctx, 'role_request.invited', request.id, {
 			label: labelOf(request.name),
 			detail: detailOf([
 				`Role: ${request.role}`,
-				existing ? 'role given to the existing user' : 'user created',
+				existing ? 'existing user' : 'user created',
+				at === 'invite' || !link ? 'role given' : 'role given when the setup link is used',
 				link && 'setup link given to staff',
 			]),
 		});
@@ -779,26 +834,100 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * Decline a pending request, or open a declined or expired one again (A5).
-	 * @param {'declined' | 'pending'} to
+	 * A new setup link for an invited request whose link still works or ran out (A5): the old link stops working. A
+	 * user who has a password by now completes the request at once (no link), as an invite does.
+	 * @param {any} ctx
 	 */
-	const moveRequest = (to) => async (/** @type {any} */ ctx) => {
+	const renewRequestLink = async (ctx) => {
 		const s = await service.site(ctx);
 		const request = await requestOr404(s, ctx.params.id);
 		const status = requestView(request, now()).status;
-		const allowed = to === 'declined' ? ['pending'] : ['declined', 'expired'];
-		if (!allowed.includes(status))
-			throw problem(
-				'conflict',
-				to === 'declined'
-					? 'Only a pending request can be declined.'
-					: 'Only a declined or expired request can be opened again.',
-			);
-		const updated = await s.store.requests.update(request.id, {
-			status: to,
-			...(to === 'pending' ? { setupExpiresAt: null, invitedAt: null, invitedBy: null } : {}),
+		if (status !== 'invited' && status !== 'expired')
+			throw problem('conflict', 'Only an invited request (its link working or expired) gets a new link.');
+		if (!(await s.store.roles.get(request.role))) throw problem('conflict', 'The role of this request no longer exists.');
+		const found = request.userId ? await s.store.users.get(request.userId) : null;
+		if (!found) throw problem('conflict', 'The user of this request no longer exists: decline it, open it again and invite.');
+		await guard(ctx, s, found);
+		if (found.blocked) throw problem('blocked', 'This account is blocked.');
+		let user = found;
+		const link = user.passwordHash ? null : await setupLinkFor(s, user);
+		let updated = await s.store.requests.update(request.id, {
+			invitedBy: invitedByOf(ctx),
+			invitedAt: new Date(now()),
+			setupExpiresAt: link ? new Date(link.expiresAt) : null,
 		});
-		await log(ctx, to === 'declined' ? 'role_request.declined' : 'role_request.reopened', request.id, {
+		if (!link && updated) ({ user, request: updated } = await service.completeRequest(s, updated, user));
+		await log(ctx, 'role_request.link_renewed', request.id, {
+			label: labelOf(request.name),
+			detail: detailOf([
+				`Role: ${request.role}`,
+				link
+					? `new setup link given to staff; valid until ${link.expiresAt.slice(0, 10)}`
+					: 'completed: the user has a password',
+			]),
+		});
+		return { request: requestView(/** @type {any} */ (updated), now()), user: staffView(user), setupLink: link };
+	};
+
+	/**
+	 * Decline a pending or invited request (its link working or expired; A5). An invited request's setup link stops
+	 * working, and what its invite did is undone: a user the invite made who was never signed in to and has no password is
+	 * removed from Accounts; otherwise, when the invite gave the role and the user still holds it, they get their role
+	 * from before back. The guards apply to both, before anything changes.
+	 * @param {any} ctx
+	 */
+	const declineRequest = async (ctx) => {
+		const s = await service.site(ctx);
+		const request = await requestOr404(s, ctx.params.id);
+		const status = requestView(request, now()).status;
+		if (!['pending', 'invited', 'expired'].includes(status))
+			throw problem('conflict', 'Only a pending or invited request can be declined.');
+		const user = request.userId ? await s.store.users.get(request.userId) : null;
+		const grant = request.grant ?? null;
+		const remove = Boolean(user && grant?.createdUser && untouched(user));
+		const roleBack =
+			user && grant && !remove && grant.at === 'invite' && user.role === request.role && grant.roleBefore !== request.role
+				? grant.roleBefore
+				: null;
+		if (user && remove) await guard(ctx, s, user, { remove: true });
+		if (user && roleBack) await guard(ctx, s, user, { role: roleBack });
+		/** @type {Array<string | false>} */
+		const done = [`Role: ${request.role}`];
+		if (user && (status === 'invited' || status === 'expired')) {
+			await s.store.codes.removeKind('setup', user.id);
+			await s.store.codes.cancelSetups(user.id);
+			done.push('setup link canceled');
+		}
+		if (user && remove) {
+			await service.removeHere(s, user);
+			done.push('the user the invite made was removed');
+		} else if (user && roleBack) {
+			await s.store.users.update(user.id, { role: roleBack });
+			done.push(`role back to ${roleBack}`);
+		}
+		const updated = await s.store.requests.update(request.id, {
+			status: 'declined',
+			grant: null,
+			...(remove ? { userId: null } : {}),
+		});
+		await log(ctx, 'role_request.declined', request.id, { label: labelOf(request.name), detail: detailOf(done) });
+		return requestView(/** @type {any} */ (updated), now());
+	};
+
+	/** Open a declined or expired request again (A5): it waits for staff, who invite it anew. @param {any} ctx */
+	const reopenRequest = async (ctx) => {
+		const s = await service.site(ctx);
+		const request = await requestOr404(s, ctx.params.id);
+		const status = requestView(request, now()).status;
+		if (status !== 'declined' && status !== 'expired')
+			throw problem('conflict', 'Only a declined or expired request can be opened again.');
+		const updated = await s.store.requests.update(request.id, {
+			status: 'pending',
+			setupExpiresAt: null,
+			invitedAt: null,
+			invitedBy: null,
+		});
+		await log(ctx, 'role_request.reopened', request.id, {
 			label: labelOf(request.name),
 			detail: `Role: ${request.role}`,
 		});
@@ -1019,8 +1148,9 @@ export const createManage = (product, service, flows) => {
 		countRequests: requestCounts.count,
 		countRequestsBy: requestCounts.counts,
 		inviteRequest,
-		declineRequest: moveRequest('declined'),
-		reopenRequest: moveRequest('pending'),
+		renewRequestLink,
+		declineRequest,
+		reopenRequest,
 		updateUser,
 		signOutUser,
 		invite,

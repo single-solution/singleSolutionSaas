@@ -563,8 +563,24 @@ export const createService = (product) => {
 	const removeHere = async (s, user) => {
 		await s.store.sessions.removeAll(user.id);
 		for (const target of [user.id, user.email, user.phone]) if (target) await s.store.codes.removeTarget(target);
+		await s.store.codes.removeSetupTraces(user.id);
 		await s.store.outbox.removeTo(user);
 		await s.store.users.remove(user.id);
+	};
+
+	/**
+	 * Complete a role request (A5): its user set a password with its setup link, or already had one. When its role is
+	 * given at completion (the request's invite says so; for a request invited before that was kept, the website's
+	 * `giveRoleAt`), the user gets the role now, if it still exists and they do not hold it yet.
+	 * @param {Site} s @param {import('../adapters/store.js').RequestRecord} request @param {UserRecord} user
+	 * @returns {Promise<{ user: UserRecord, request: import('../adapters/store.js').RequestRecord }>}
+	 */
+	const completeRequest = async (s, request, user) => {
+		const at = request.grant?.at ?? (await settings(s, 'role_requests')).giveRoleAt;
+		const give = at === 'completion' && user.role !== request.role && (await s.store.roles.get(request.role)) !== null;
+		const current = give ? ((await s.store.users.update(user.id, { role: request.role })) ?? user) : user;
+		const completed = await s.store.requests.update(request.id, { status: 'completed', completedAt: new Date(now()) });
+		return { user: current, request: completed ?? request };
 	};
 
 	/**
@@ -668,6 +684,7 @@ export const createService = (product) => {
 		notify,
 		deliver,
 		removeHere,
+		completeRequest,
 		erase,
 		exportFor,
 		connectedProducts,

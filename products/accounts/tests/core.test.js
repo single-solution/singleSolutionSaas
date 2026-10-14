@@ -32,6 +32,7 @@ import {
 	normaliseCode,
 	passwordProblem,
 	returnAddress,
+	setupLinkState,
 } from '../core/rules.js';
 import { createSnippets } from '../core/snippets.js';
 import { parseSecret } from '../server/service.js';
@@ -193,6 +194,23 @@ describe('roles and rules', () => {
 		expect(deviceIdOf('short')).toBeNull();
 		expect(parseSecret('cod_abc.short')).toBeNull();
 		expect(parseSecret(5)).toBeNull();
+	});
+
+	it('a setup link’s state for a setup page: from its live record and its trace (A3, P4)', () => {
+		const end = new Date(10_000);
+		const live = { expireAt: end };
+		/** @param {string} state @param {number} [until] */
+		const trace = (state, until = 10_000) => ({ data: { state, validUntil: new Date(until) } });
+		expect(setupLinkState({ live: null, trace: null, now: 0 })).toEqual({ status: 'invalid' });
+		// a link made before traces were kept
+		expect(setupLinkState({ live, trace: null, now: 0 })).toEqual({ status: 'valid', until: end });
+		expect(setupLinkState({ live, trace: trace('issued'), now: 0 })).toEqual({ status: 'valid', until: end });
+		expect(setupLinkState({ live: null, trace: trace('issued'), now: 10_000 })).toEqual({ status: 'expired' });
+		expect(setupLinkState({ live: null, trace: trace('used'), now: 0 })).toEqual({ status: 'used' });
+		expect(setupLinkState({ live: null, trace: trace('used'), now: 99_000 })).toEqual({ status: 'used' });
+		expect(setupLinkState({ live: null, trace: trace('canceled'), now: 0 })).toEqual({ status: 'canceled' });
+		// gone while it still worked, without a trace saying why
+		expect(setupLinkState({ live: null, trace: trace('issued'), now: 0 })).toEqual({ status: 'canceled' });
 	});
 
 	it('snippets name the website when it is known', () => {

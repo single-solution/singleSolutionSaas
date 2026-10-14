@@ -24,6 +24,7 @@ import {
 	textsOf,
 	webAddress,
 } from '../ui/common.js';
+import { REQUEST_OUTCOMES } from '../ui/role-request.js';
 import { RENEW_BEFORE_MS, RETRY_MS, createSession } from '../ui/session.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -1787,6 +1788,70 @@ describe('admin widgets', () => {
 		expect(statusIn(part)).toBe(strings['requests.empty']);
 	});
 
+	it('Users admin: an invited or expired request gets a new link to hand over, or is declined (P4)', async () => {
+		const host = place('users_admin');
+		const request = (/** @type {string} */ id, /** @type {string} */ status) => ({
+			id,
+			role: 'helper',
+			name: id === 'rrq_5' ? 'Ivo' : 'Eve',
+			phone: '+447700900255',
+			email: null,
+			note: '',
+			status,
+			createdAt: at(0),
+		});
+		const { server } = await startAdmin(
+			{
+				'GET /v1/admin/roles': () => answer(200, { items: ROLES }),
+				'GET /v1/admin/users': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
+				'GET /v1/admin/role-requests/counts': () => answer(200, { total: 2, groups: { invited: 2 } }),
+				'GET /v1/admin/role-requests/count': () => answer(200, { count: 1, capped: false }),
+				'GET /v1/admin/role-requests': () =>
+					answer(200, {
+						items: [request('rrq_5', 'invited'), request('rrq_6', 'expired')],
+						nextCursor: null,
+						hasMore: false,
+					}),
+				'POST /v1/admin/role-requests/rrq_5/setup-link': () =>
+					answer(200, {
+						request: {},
+						user: {},
+						setupLink: { url: 'https://shop.example.com/?ss_setup=fresh', expiresAt: at(0) },
+					}),
+				'POST /v1/admin/role-requests/rrq_6/setup-link': () => answer(200, { request: {}, user: {}, setupLink: null }),
+				'POST /v1/admin/role-requests/rrq_6/decline': () => answer(200, {}),
+			},
+			['roles', 'staff_links', 'role_requests'],
+		);
+		const root = shadow(host);
+		const part = /** @type {HTMLElement} */ (root.querySelector('section.part'));
+		await click(/** @type {HTMLButtonElement} */ (part.querySelectorAll('.chip')[0]));
+		const menuOf = async (/** @type {number} */ index) => {
+			const row = /** @type {HTMLElement} */ (part.querySelectorAll('li')[index]);
+			await click(/** @type {HTMLButtonElement} */ (row.querySelector('.more > button')));
+			return row;
+		};
+		const labels = (/** @type {HTMLElement} */ row) => [...row.querySelectorAll('.menu button')].map((b) => b.textContent);
+		const invited = await menuOf(0);
+		expect(labels(invited)).toEqual([strings['requests.newLink'], strings['requests.decline']]);
+		await click(buttonIn(invited, strings['requests.newLink']));
+		const dialog = /** @type {HTMLElement} */ (root.querySelector('.dialog'));
+		expect(dialog.textContent).toContain('New link for Ivo');
+		expect(dialog.querySelector('.code')?.textContent).toBe('https://shop.example.com/?ss_setup=fresh');
+		await click(buttonIn(dialog, '×'));
+		const expired = await menuOf(1);
+		expect(labels(expired)).toEqual([strings['requests.newLink'], strings['requests.reopen'], strings['requests.decline']]);
+		await click(buttonIn(expired, strings['requests.newLink']));
+		expect(statusIn(part)).toBe('Eve already has a password: the role is given.');
+		await click(buttonIn(await menuOf(1), strings['requests.decline']));
+		expect(statusIn(part)).toBe(strings['requests.declinedDone']);
+		expect(server.calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+			'/v1/admin/role-requests/rrq_5/setup-link',
+			'/v1/admin/role-requests/rrq_6/setup-link',
+			'/v1/admin/role-requests/rrq_6/decline',
+		]);
+	});
+
 	it('Roles admin edits, copies, deletes roles and names the merchant’s own permissions', async () => {
 		const host = place('roles_admin');
 		let roles = [...ROLES];
@@ -2239,6 +2304,68 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		await submit(buttonIn(root, strings['setup.submit']));
 		expect(server.last('POST /v1/setup-links/accept')?.body).toMatchObject({ code: 'cod_1.secret', password: 'long enough' });
 		expect(heading(host)).toBe(strings['signedIn.title']);
+		// the lookup could not be read (404 here): the form worked as it is
+		expect(server.last('POST /v1/setup-links/lookup')?.body).toEqual({ code: 'cod_1.secret' });
+	});
+
+	it('a setup link greets the person by name, or says at once why it no longer works (P4)', async () => {
+		const host = place('sign_in');
+		await start(
+			{
+				'POST /v1/setup-links/lookup': () =>
+					answer(200, { status: 'valid', name: 'Nia Lane', phoneLast4: '0222', expiresAt: at(86_400_000) }),
+			},
+			{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES }, page: '/account?ss_setup=cod_1.secret' },
+		);
+		expect(shadow(host).textContent).toContain('Hi Nia Lane! Finish setting up your account: choose a password.');
+		expect(shadow(host).textContent).toContain('For the phone number ending in 0222.');
+		host.remove();
+		vi.restoreAllMocks();
+
+		for (const status of /** @type {const} */ (['expired', 'used', 'canceled', 'invalid'])) {
+			const ended = place('sign_in');
+			await start(
+				{ 'POST /v1/setup-links/lookup': () => answer(200, { status }) },
+				{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES }, page: '/account?ss_setup=cod_2.secret' },
+			);
+			expect(heading(ended)).toBe(strings['setup.endedTitle']);
+			expect(shadow(ended).textContent).toContain(strings[`setup.${status}`]);
+			expect(shadow(ended).querySelector('form')).toBeNull();
+			await click(buttonIn(shadow(ended), strings['setup.toSignIn']));
+			expect(heading(ended)).toBe(strings['signIn.title']);
+			ended.remove();
+			vi.restoreAllMocks();
+		}
+
+		// a valid link of a person without a name or a phone keeps the plain words
+		const plain = place('sign_in');
+		await start(
+			{ 'POST /v1/setup-links/lookup': () => answer(200, { status: 'valid', name: '', phoneLast4: null, expiresAt: at(0) }) },
+			{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES }, page: '/account?ss_setup=cod_3.secret' },
+		);
+		expect(shadow(plain).textContent).toContain(strings['setup.help']);
+		expect(shadow(plain).textContent).not.toContain('ending in');
+		plain.remove();
+		vi.restoreAllMocks();
+
+		// the lookup answers after the person already sent the password: the form is left alone
+		/** @type {(value: Response) => void} */
+		let release = () => {};
+		const late = place('sign_in');
+		const { server } = await start(
+			{
+				'POST /v1/setup-links/lookup': () => new Promise((resolve) => (release = resolve)),
+				'POST /v1/setup-links/accept': () => problem(422, 'code_invalid'),
+			},
+			{ features: ['phone_password'], settings: { phonePassword: PHONE_RULES }, page: '/account?ss_setup=cod_4.secret' },
+		);
+		fieldIn(shadow(late), strings['fields.password']).value = 'long enough';
+		await submit(buttonIn(shadow(late), strings['setup.submit']));
+		release(answer(200, { status: 'used' }));
+		await flush();
+		expect(heading(late)).toBe(strings['setup.title']);
+		expect(statusIn(shadow(late))).toBe(strings['error.code_invalid']);
+		expect(server.last('POST /v1/setup-links/accept')?.body).toMatchObject({ code: 'cod_4.secret' });
 	});
 
 	it('the role request widget sends a visitor’s request, even with no sign-in method on', async () => {
@@ -2248,7 +2375,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 				'POST /v1/role-requests': ({ body }) =>
 					body.name === ''
 						? problem(422, 'validation_failed', { errors: [{ path: '/name', message: 'Write your name.' }] })
-						: answer(201, { id: 'rrq_1', status: 'pending' }),
+						: answer(201, { outcome: 'requested', id: 'rrq_1', status: 'pending' }),
 			},
 			{
 				features: ['role_requests'],
@@ -2279,6 +2406,46 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			note: 'Shop owner',
 		});
 		expect(root.textContent).toContain(strings['request.sent']);
+	});
+
+	it('the role request widget words what a repeat ask found (P4)', async () => {
+		for (const [outcome, key] of Object.entries(REQUEST_OUTCOMES)) {
+			const host = place('role_request');
+			await start(
+				{ 'POST /v1/role-requests': () => answer(201, { outcome }) },
+				{
+					features: ['role_requests'],
+					settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false } },
+				},
+			);
+			const root = shadow(host);
+			fieldIn(root, strings['fields.name']).value = 'Nia';
+			fieldIn(root, strings['fields.phone']).value = '07700 900222';
+			await submit(buttonIn(root, strings['request.submit']));
+			expect(root.textContent).toContain(strings[key]);
+			host.remove();
+			vi.restoreAllMocks();
+		}
+		expect(Object.keys(REQUEST_OUTCOMES)).toEqual([
+			'requested',
+			'already_requested',
+			'already_invited',
+			'invite_expired',
+			'already_member',
+		]);
+		// an answer the widget does not know reads as a new request
+		const host = place('role_request');
+		await start(
+			{ 'POST /v1/role-requests': () => answer(201, { outcome: 'constructor' }) },
+			{
+				features: ['role_requests'],
+				settings: { roleRequests: { roles: [{ key: 'member', name: 'Member' }], requireNote: false } },
+			},
+		);
+		fieldIn(shadow(host), strings['fields.name']).value = 'Nia';
+		fieldIn(shadow(host), strings['fields.phone']).value = '07700 900222';
+		await submit(buttonIn(shadow(host), strings['request.submit']));
+		expect(shadow(host).textContent).toContain(strings['request.sent']);
 	});
 
 	it('My account: area, the default address, the Profile limits, Member since and a phone user’s password', async () => {
@@ -2352,6 +2519,8 @@ describe('helpers', () => {
 			...['google', 'apple', 'facebook'].map((provider) => `social.${provider}`),
 			...['active', 'pending', 'invited', 'blocked'].map((status) => `status.${status}`),
 			...['pending', 'invited', 'completed', 'declined', 'expired'].map((status) => `requests.${status}`),
+			...['expired', 'used', 'canceled', 'invalid'].map((status) => `setup.${status}`),
+			...Object.values(REQUEST_OUTCOMES),
 			...['label', ...ADDRESS_FIELDS].map((field) => `address.${field}`),
 			...[...OWN_TEXT, 'generic', 'locked', 'validation_failed', 'weak_password'].map((code) => `error.${code}`),
 			...[...FIELD_TEXT].map((field) => `error.field.${field}`),

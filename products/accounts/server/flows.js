@@ -21,6 +21,7 @@ import {
 	normaliseCode,
 	passwordProblem,
 	returnAddress,
+	setupLinkState,
 } from '../core/rules.js';
 import { LINK_PARAMS } from '../core/widgets.js';
 import {
@@ -979,8 +980,9 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * Accept a setup link (A3, A5): `{ code, password }` sets the password and signs in; an invited role request of the
-	 * user is completed. Staff send the link to the user's phone, so using it proves the number (other products then
-	 * join the user's guest orders and points to the account); like a reset, every other device signs in again.
+	 * user is completed (its role given now when the request gives it at completion). Staff send the link to the user's
+	 * phone, so using it proves the number (other products then join the user's guest orders and points to the
+	 * account); like a reset, every other device signs in again. The link's trace says `used` from then on.
 	 * @param {any} ctx
 	 */
 	const acceptSetup = async (ctx) => {
@@ -994,7 +996,7 @@ export const createFlows = (product, service) => {
 		const passwordHash = await newPassword(s, body.password, { method, who: user });
 		if (!(await s.store.codes.consume(record.id)))
 			throw problem('code_invalid', 'This setup link is not valid or has expired.');
-		const active =
+		let active =
 			(await s.store.users.update(user.id, {
 				passwordHash,
 				failedLogins: 0,
@@ -1003,10 +1005,39 @@ export const createFlows = (product, service) => {
 				...(user.phone ? { phoneVerified: true } : {}),
 				...(user.status === 'invited' ? { status: 'active' } : {}),
 			})) ?? user;
+		await s.store.codes.traceSetup(record.id, 'used');
 		await s.store.sessions.revokeAll(user.id);
 		const request = await s.store.requests.invitedFor(user.id);
-		if (request) await s.store.requests.update(request.id, { status: 'completed', completedAt: new Date(now()) });
+		if (request) active = (await service.completeRequest(s, request, active)).user;
 		return service.finish(s, active, { method: 'setup_link', ...service.howOf(ctx), acceptTerms: body.acceptTerms });
+	};
+
+	/**
+	 * What a setup page needs before the person types a password (A3, A5): `{ code }` (in the body, so the secret stays
+	 * out of addresses and request logs) answers `valid` with the person's display name, the last 4 digits of their phone
+	 * number (never the whole number or the email address) and when the link ends; else `expired`, `used`, `canceled`
+	 * (a newer link replaced it, or staff declined its request) or `invalid`. Only a code whose secret matches learns
+	 * anything: an unknown or wrong code is always `invalid`, so the lookup tells nothing about other links or people.
+	 * @param {any} ctx
+	 */
+	const lookupSetup = async (ctx) => {
+		const s = await service.site(ctx);
+		const parsed = parseSecret(bodyOf(ctx.body).code);
+		if (!parsed) return { status: 'invalid' };
+		const hash = sha256(parsed.secret);
+		const [record, traced] = await Promise.all([s.store.codes.get(parsed.id), s.store.codes.latest('setup_trace', parsed.id)]);
+		const live = record?.kind === 'setup' && safeEqual(record.hash, hash) ? record : null;
+		const trace = traced && safeEqual(traced.hash, hash) ? traced : null;
+		const state = setupLinkState({ live, trace, now: now() });
+		if (state.status !== 'valid' || !live) return { status: state.status };
+		const user = await s.store.users.get(live.target);
+		if (!user) return { status: 'invalid' };
+		return {
+			status: 'valid',
+			name: user.name,
+			phoneLast4: user.phone ? user.phone.slice(-4) : null,
+			expiresAt: state.until.toISOString(),
+		};
 	};
 
 	// --------------------------------------------------------------------------------------------------- invites
@@ -1046,6 +1077,7 @@ export const createFlows = (product, service) => {
 		phoneForgot,
 		phoneReset,
 		acceptSetup,
+		lookupSetup,
 		phoneCodeRequest,
 		phoneCodeSignIn,
 		emailCodeRequest,

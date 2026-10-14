@@ -7,7 +7,8 @@
  * sign-in codes and setup links), sign out everywhere, approve or decline a sign-up, keep or delete on a deletion
  * request, block or unblock, and Delete user (typed confirmation). Add user and Invite (Approval / invite, the link
  * sent or handed to staff) open dialogs. With Role requests on, the requests list sits below with its own chips:
- * invite (the setup link to send), decline, open again. PLAN 0.8.6, 0.8.10 A3–A5.
+ * invite (the setup link to send), a new link for an invited request (its link working or expired), decline (pending or
+ * invited), open again. PLAN 0.8.6, 0.8.10 A3–A5.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -794,32 +795,38 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 					requestNote.textContent = message;
 					return answer;
 				};
+				/**
+				 * Invite, or give a new link to an invited request: the setup link to hand over, or "the role is given" when
+				 * the user already has a password.
+				 * @param {string} path @param {string} title
+				 */
+				const linkOf = async (path, title) => {
+					const answer = await move(path, '');
+					if (!answer) return;
+					if (answer.data.setupLink)
+						handOver(
+							formatText(t(title), { name: request.name }),
+							formatText(t('users.setupLinkHelp'), {
+								name: request.name,
+								time: when(answer.data.setupLink.expiresAt),
+							}),
+							String(answer.data.setupLink.url),
+						);
+					else requestNote.textContent = formatText(t('requests.given'), { name: request.name });
+				};
 				/** @type {import('./parts.js').MenuItem[]} */
 				const items = [];
-				if (request.status === 'pending') {
-					items.push({
-						label: t('requests.invite'),
-						run: async () => {
-							const answer = await move('/invite', '');
-							if (!answer) return;
-							if (answer.data.setupLink)
-								handOver(
-									formatText(t('requests.inviteTitle'), { name: request.name }),
-									formatText(t('users.setupLinkHelp'), {
-										name: request.name,
-										time: when(answer.data.setupLink.expiresAt),
-									}),
-									String(answer.data.setupLink.url),
-								);
-							else requestNote.textContent = formatText(t('requests.given'), { name: request.name });
-						},
-					});
+				if (request.status === 'pending')
+					items.push({ label: t('requests.invite'), run: () => linkOf('/invite', 'requests.inviteTitle') });
+				// an invited request, its link working or expired, gets a new one (the old one stops working)
+				if (request.status === 'invited' || request.status === 'expired')
+					items.push({ label: t('requests.newLink'), run: () => linkOf('/setup-link', 'requests.newLinkTitle') });
+				if (request.status === 'pending' || request.status === 'invited' || request.status === 'expired')
 					items.push({
 						label: t('requests.decline'),
 						run: async () => void (await move('/decline', t('requests.declinedDone'))),
 						danger: true,
 					});
-				}
 				if (request.status === 'declined' || request.status === 'expired')
 					items.push({ label: t('requests.reopen'), run: async () => void (await move('/reopen', t('requests.reopened'))) });
 				item.append(dot(doc, tone, t(`requests.${request.status}`)), who, moreMenu(doc, t('users.moreActions'), items));

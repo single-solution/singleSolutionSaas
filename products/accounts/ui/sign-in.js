@@ -718,9 +718,17 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				});
 			};
 
-			/** A setup link from staff (A3, A5): choose a password, then signed in. @param {string} code */
+			/**
+			 * A setup link from staff (A3, A5): choose a password, then signed in. The link's lookup greets the person by
+			 * name (with their number's last 4 digits), or says at once why the link no longer works; while it has not
+			 * answered, or when it cannot be reached, the form works as it is.
+			 * @param {string} code
+			 */
 			const setupView = (code) => {
 				const form = element(doc, 'form');
+				const help = para(t('setup.help'));
+				const phone = para('', 'meta');
+				setHidden(phone, true);
 				const password = make.field('input', t('fields.password'), {
 					type: 'password',
 					autocomplete: 'new-password',
@@ -729,10 +737,27 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				const terms = termsBox(doc, t, settings.terms);
 				setHidden(terms.wrap, !settings.terms);
 				const submit = element(doc, 'button', { type: 'submit' }, t('setup.submit'));
-				form.append(para(t('setup.help')), password.wrap, terms.wrap, remember.wrap, submit);
+				form.append(help, phone, password.wrap, terms.wrap, remember.wrap, submit);
 				const note = view('setup', t('setup.title'), [form]);
+				let sent = false;
+				void session.call('POST', '/v1/setup-links/lookup', { code }).then((answer) => {
+					if (!answer.ok || sent || showing !== 'setup') return;
+					const data = answer.data ?? {};
+					if (data.status === 'valid') {
+						if (data.name) help.textContent = formatText(t('setup.greeting'), { name: String(data.name) });
+						if (data.phoneLast4) {
+							phone.textContent = formatText(t('setup.phone'), { last4: String(data.phoneLast4) });
+							setHidden(phone, false);
+						}
+					} else if (['expired', 'used', 'canceled', 'invalid'].includes(data.status)) {
+						const go = button(t('setup.toSignIn'), { class: 'secondary' });
+						go.addEventListener('click', () => start());
+						view('setup-ended', t('setup.endedTitle'), [para(t(`setup.${data.status}`)), go]);
+					}
+				});
 				form.addEventListener('submit', (event) => {
 					event.preventDefault();
+					sent = true;
 					void run(submit, note, async () =>
 						handle(
 							await session.call('POST', '/v1/setup-links/accept', {

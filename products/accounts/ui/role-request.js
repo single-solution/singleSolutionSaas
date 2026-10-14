@@ -1,9 +1,19 @@
 /**
  * The visitor widget `role_request` (Role requests, PLAN 0.8.10 A5): a visitor without an account asks for a role the
  * merchant offers (for example membership) with their name, phone number or email address and a note; staff answer
- * in the Users admin widget.
+ * in the Users admin widget. A repeat ask says what is already there (already asked, already invited, the invite's
+ * link expired, already joined) in the website's own words.
  * @module
  */
+
+/** The text of each answer's outcome (a new request, or what a repeat ask found). */
+export const REQUEST_OUTCOMES = Object.freeze({
+	requested: 'request.sent',
+	already_requested: 'request.alreadyRequested',
+	already_invited: 'request.alreadyInvited',
+	invite_expired: 'request.inviteExpired',
+	already_member: 'request.alreadyMember',
+});
 import { mountWidget } from '@ss/app-kit/widget';
 import { datesOf, errorText, fieldMaker, say, textsOf } from './common.js';
 import { element } from './dom.js';
@@ -62,7 +72,11 @@ export const mountRoleRequest = ({ host, win, config, call }) => {
 					note: note.input.value.trim(),
 				});
 				submit.removeAttribute('disabled');
-				if (answer.ok) form.replaceChildren(element(doc, 'p', { class: 'wide' }, t('request.sent')));
+				const outcome = String(answer.data?.outcome ?? '');
+				const text = Object.hasOwn(REQUEST_OUTCOMES, outcome)
+					? REQUEST_OUTCOMES[/** @type {keyof typeof REQUEST_OUTCOMES} */ (outcome)]
+					: 'request.sent';
+				if (answer.ok) form.replaceChildren(element(doc, 'p', { class: 'wide' }, t(text)));
 				else say(status, errorText(t, answer, when));
 			});
 		},

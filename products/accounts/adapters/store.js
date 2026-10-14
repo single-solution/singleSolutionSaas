@@ -6,7 +6,9 @@
  * - `sessions`: signed-in devices with their rotating refresh token (hash only; the current secret sealed for the
  *   30-second grace of parallel renewals, dropped when the session is signed out), removed 7 days after their end (TTL)
  * - `codes`: one-time codes and links (sign-in codes, magic links, resets, invites, two-step steps, social hand-overs,
- *   data exports), kept as hashes and removed by a TTL index once expired
+ *   data exports), kept as hashes and removed by a TTL index once expired; a setup link also leaves a trace (its hash,
+ *   its user, its end and whether it was used or canceled) kept 30 days past its end, so a setup page can say "used"
+ *   or "expired" (A3)
  * - `oauth`: social sign-ins in progress (state, PKCE verifier, nonce), TTL
  * - `roles`, `fields` (custom fields), `permissions` (the merchant's own permission names)
  * - `keys`: the website's sign-in signing key (private part sealed with `ENCRYPTION_KEY`)
@@ -48,7 +50,7 @@ import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
 
 /**
  * @typedef {'phone' | 'email' | 'link' | 'reset' | 'invite' | 'step' | 'handoff' | 'export' | 'phone_reset' | 'staff_code'
- *   | 'setup'} CodeKind
+ *   | 'setup' | 'setup_trace'} CodeKind
  * @typedef {{ id: string, kind: CodeKind, target: string, hash: string, attempts: number, expireAt: Date,
  *   data: Record<string, any>, createdAt: Date }} CodeRecord
  */
@@ -59,6 +61,13 @@ import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
  * exact phone, the last 10 digits of a phone, and users made after a time (PLAN 0.8.10 A4).
  * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, phone?: string,
  *   phoneDigits?: string, createdAfter?: Date }} UserQuery
+ */
+
+/**
+ * What an invite of a role request did, so a decline can undo it (kept on the request, never answered): `at` when the
+ * request's role is given (`invite`, or `completion`: when the setup link is used), `createdUser` whether the invite
+ * made the user, `roleBefore` the user's role before (the default role for a user the invite made).
+ * @typedef {{ at: 'invite' | 'completion', createdUser: boolean, roleBefore: string }} RequestGrant
  */
 
 /**
@@ -76,6 +85,7 @@ import { DEFAULT_ROLE, READY_ROLES } from '../core/roles.js';
  * @property {Date | null} invitedAt
  * @property {Date | null} setupExpiresAt when the setup link answered at the invite expires
  * @property {Date | null} completedAt
+ * @property {RequestGrant | null} [grant] what its invite did (absent on requests invited before, or imported)
  * @property {Date} createdAt
  */
 
@@ -458,6 +468,39 @@ export const createStore = (data, { now }) => {
 			consume: async (id) => (await codes.deleteOne({ websiteId, id })).deletedCount === 1,
 			/** @param {string} target */
 			removeTarget: async (target) => (await codes.deleteMany({ websiteId, target })).deletedCount,
+			/** Remove the records of one kind and target (a declined request's setup link). @param {CodeRecord['kind']} kind @param {string} target */
+			removeKind: async (kind, target) => (await codes.deleteMany({ websiteId, kind, target })).deletedCount,
+			/**
+			 * Mark the trace of a setup link that is still issued: `used`, or `canceled` (A3).
+			 * @param {string} linkId the setup link's record id @param {'used' | 'canceled'} state
+			 */
+			traceSetup: async (linkId, state) => {
+				await codes.updateOne(
+					{ websiteId, kind: 'setup_trace', target: linkId, 'data.state': 'issued' },
+					{ $set: { 'data.state': state } },
+				);
+			},
+			/**
+			 * Mark the traces of a user's setup links that still work as canceled (a new link, a decline); a link already past
+			 * its end stays expired.
+			 * @param {string} userId
+			 */
+			cancelSetups: async (userId) =>
+				(
+					await codes.updateMany(
+						{
+							websiteId,
+							kind: 'setup_trace',
+							'data.userId': userId,
+							'data.state': 'issued',
+							'data.validUntil': { $gt: at() },
+						},
+						{ $set: { 'data.state': 'canceled' } },
+					)
+				).modifiedCount,
+			/** Remove the traces of a user's setup links (the user is removed). @param {string} userId */
+			removeSetupTraces: async (userId) =>
+				(await codes.deleteMany({ websiteId, kind: 'setup_trace', 'data.userId': userId })).deletedCount,
 		}),
 
 		oauth: Object.freeze({
