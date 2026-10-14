@@ -13,56 +13,152 @@ afterAll(async () => {
 	for (const sys of systems) await sys.product.close();
 });
 
-const PHONE = {
-	id: 'prd_phone',
-	name: 'Phone X',
-	price: 125000,
-	currency: 'PKR',
-	image: 'https://cdn.shop.example.com/phone.jpg',
-	url: 'https://shop.example.com/products/phone-x',
+/** Products as Ecommerce answers them (ChatProduct). */
+const LAMP = {
+	id: 'prd_lamp',
+	name: 'Desk lamp',
+	price: 4500,
+	priceText: '$45.00',
+	priceMax: 4500,
+	priceMaxText: '$45.00',
+	currency: 'USD',
+	image: 'https://cdn.shop.example.com/lamp.jpg',
+	url: 'https://shop.example.com/products/desk-lamp',
 	inStock: true,
 	variantId: 'var_1',
+	grade: null,
+	stockLeft: null,
 };
-const CASE = { ...PHONE, id: 'prd_case', name: 'Case', price: 1500, image: 'http://insecure.example.com/c.jpg', inStock: false };
+// an image that is not https is dropped (cards are shown to visitors)
+const TOTE = {
+	...LAMP,
+	id: 'prd_tote',
+	name: 'Canvas tote',
+	price: 1500,
+	priceText: '$15.00',
+	priceMax: 1500,
+	priceMaxText: '$15.00',
+	image: 'http://insecure.example.com/c.jpg',
+	url: 'https://shop.example.com/products/canvas-tote',
+	inStock: false,
+};
+
+/** An order as Ecommerce answers it (ChatOrder), with a street address it never sends: it would never be passed on. */
+const ORDER = {
+	id: 'ord_1001',
+	number: 'SH-1001',
+	status: 'Dispatched',
+	statusKey: 'dispatched',
+	total: 4500,
+	totalText: '$45.00',
+	currency: 'USD',
+	placedAt: '2026-10-01T09:00:00.000Z',
+	paymentMethod: 'online',
+	paid: 4500,
+	paidText: '$45.00',
+	balanceDue: 0,
+	balanceDueText: '$0.00',
+	lines: [],
+	courier: '',
+	trackingNumber: '',
+	trackingUrl: '',
+	trackingNote: '',
+	expectedAt: null,
+	dispatchVideo: null,
+	address: '1 Main Street',
+};
 
 /** Ecommerce's answers by path. @type {Record<string, unknown>} */
 const ANSWERS = {
-	'/v1/chat/products': { items: [PHONE, CASE, { id: 'broken' }] },
-	'/v1/chat/products/top': { items: [PHONE] },
-	'/v1/chat/products/prd_phone': {
-		...PHONE,
-		summary: 'A phone.',
+	'/v1/chat/products': { items: [LAMP, TOTE, { id: 'broken' }] },
+	'/v1/chat/products/top': { items: [LAMP] },
+	'/v1/chat/products/prd_lamp': {
+		...LAMP,
+		summary: 'A steady light.',
 		description: 'A long description.',
-		brand: 'Acme',
-		options: [{ name: 'Colour', values: ['Black', { name: 'White' }] }],
-		specs: { Storage: '128 GB' },
+		brand: 'Northlight',
+		options: [{ name: 'Colour', values: ['Black', 'White'] }],
+		priceRange: { min: 4500, max: 4500, minText: '$45.00', maxText: '$45.00' },
+		specs: [{ name: 'Height', value: 42, unit: 'cm' }],
+		variants: [],
 	},
-	'/v1/chat/products/prd_phone/quote': {
-		productId: 'prd_phone',
-		price: 125000,
-		priceAfterDeals: 120000,
-		savings: 5000,
-		currency: 'PKR',
-		deals: ['Eid sale'],
+	'/v1/chat/products/prd_lamp/quote': {
+		productId: 'prd_lamp',
+		variantId: 'var_1',
+		quantity: 1,
+		price: 4500,
+		priceText: '$45.00',
+		priceAfterDeals: 4000,
+		priceAfterDealsText: '$40.00',
+		savings: 500,
+		savingsText: '$5.00',
+		currency: 'USD',
+		deals: ['Autumn sale'],
+		dealsApplied: [{ id: 'd1', name: 'Autumn sale', amount: 500, amountText: '$5.00' }],
+		inStock: true,
+		problems: [],
+		paymentMethod: null,
+		paymentMethods: [{ method: 'online', available: true, reason: null, advance: 0, fee: 0, advanceText: '$0.00' }],
+		subtotal: 4500,
+		subtotalText: '$45.00',
+		discount: 500,
+		discountText: '$5.00',
+		roleDiscount: 0,
+		roleDiscountText: '$0.00',
+		fee: 0,
+		feeText: '$0.00',
+		tax: 0,
+		taxText: '$0.00',
+		delivery: null,
+		freeDeliveryOver: null,
+		freeDeliveryOverText: '',
+		total: 4000,
+		totalText: '$40.00',
 	},
-	'/v1/chat/deals': { items: [{ id: 'd1', name: 'Eid sale', description: '5% off', endsAt: '2026-10-30T00:00:00.000Z' }] },
-	'/v1/chat/me/orders': {
-		name: 'Rea Der',
-		loyaltyPoints: 120,
+	'/v1/chat/deals': {
 		items: [
-			{ number: 'A-1001', status: 'Dispatched', total: 125000, currency: 'PKR', placedAt: '2026-10-01', address: '1 Road' },
+			{
+				id: 'd1',
+				name: 'Autumn sale',
+				description: 'On every lamp',
+				slug: 'autumn-sale',
+				type: 'percent',
+				value: 5,
+				valueText: '5%',
+				badgeLabel: '',
+				discountLabel: '5% off',
+				color: '',
+				bannerUrl: null,
+				minQuantity: null,
+				days: [],
+				timeFrom: '',
+				timeTo: '',
+				endsAt: '2026-10-30T00:00:00.000Z',
+				endsText: 'Oct 30, 2026',
+			},
 		],
 	},
-	'/v1/chat/me/account': { name: 'Rea Der', loyaltyPoints: 120, phone: '+923001234567' },
+	'/v1/chat/me/orders': { name: 'Rea Der', loyaltyPoints: 120, items: [ORDER] },
+	// a phone it never sends, never passed on
+	'/v1/chat/me/account': {
+		name: 'Rea Der',
+		firstName: 'Rea',
+		loyaltyPoints: 120,
+		city: '',
+		area: '',
+		phone: '+447700900123',
+	},
 	'/v1/chat/me/shipments': {
 		items: [
 			{
-				orderNumber: 'A-1001',
+				orderNumber: 'SH-1001',
 				courier: 'Fast',
 				trackingNumber: 'T1',
 				trackingUrl: 'https://track.example.com/T1',
+				trackingNote: '',
+				expectedAt: null,
 				status: 'In transit',
-				address: '1 Road',
+				address: '1 Main Street',
 			},
 		],
 	},
@@ -71,14 +167,24 @@ const ANSWERS = {
 		items: [
 			{
 				id: 'o1',
-				number: 'A-1001',
+				number: 'SH-1001',
 				status: 'dispatched',
 				statusLabel: 'On its way',
-				totalText: 'PKR 1,250.00',
-				total: 125000,
-				currency: 'PKR',
+				total: 4500,
+				totalText: '$45.00',
+				currency: 'USD',
+				createdAt: '2026-10-01T09:00:00.000Z',
 			},
-			{ id: 'o2', number: 'A-1000', status: 'delivered', total: 9900, currency: 'PKR', createdAt: '2026-09-01T00:00:00.000Z' },
+			{
+				id: 'o2',
+				number: 'SH-1000',
+				status: 'delivered',
+				statusLabel: 'Delivered',
+				total: 9900,
+				totalText: '$99.00',
+				currency: 'USD',
+				createdAt: '2026-09-01T00:00:00.000Z',
+			},
 		],
 	},
 };
@@ -153,24 +259,24 @@ describe('shop tools', () => {
 		sys.ai(
 			{
 				tools: [
-					{ name: 'search_catalog', arguments: { query: 'phone x' } },
-					{ name: 'get_product_details', arguments: { productId: 'prd_phone' } },
-					{ name: 'quote_product_savings', arguments: { productId: 'prd_phone' } },
+					{ name: 'search_catalog', arguments: { query: 'desk lamp' } },
+					{ name: 'get_product_details', arguments: { productId: 'prd_lamp' } },
+					{ name: 'quote_product_savings', arguments: { productId: 'prd_lamp' } },
 					{ name: 'list_active_deals', arguments: {} },
 					{ name: 'get_top_products', arguments: { kind: 'new' } },
 				],
 			},
-			{ text: 'Phone X is 1,250.' },
+			{ text: 'The desk lamp is $45.' },
 		);
-		await sys.visitor()('POST', '/v1/chat/messages', { text: 'Phone X price?' });
+		await sys.visitor()('POST', '/v1/chat/messages', { text: 'Desk lamp price?' });
 		// the tools of one round run together: compare without their order
 		const urls = sys.shopCalls().map((c) => c.url.replace(ECOMMERCE, ''));
 		expect(urls.sort()).toEqual([
 			'/v1/chat/deals?limit=10',
-			'/v1/chat/products/prd_phone',
-			'/v1/chat/products/prd_phone/quote',
+			'/v1/chat/products/prd_lamp',
+			'/v1/chat/products/prd_lamp/quote',
 			'/v1/chat/products/top?kind=new&limit=5',
-			'/v1/chat/products?q=phone+x&limit=5',
+			'/v1/chat/products?q=desk+lamp&limit=5',
 		]);
 		expect(sys.shopCalls().every((c) => c.headers.authorization === `Bearer ${sys.ecommerceToken}`)).toBe(true);
 		expect(sys.shopCalls().every((c) => !c.headers['ss-sign-in'])).toBe(true);
@@ -178,23 +284,31 @@ describe('shop tools', () => {
 			JSON.parse(text),
 		);
 		expect(search.products).toEqual([
-			{ id: 'prd_phone', name: 'Phone X', price: 'PKR 1,250.00', inStock: true, link: PHONE.url },
-			{ id: 'prd_case', name: 'Case', price: 'PKR 15.00', inStock: false, link: PHONE.url },
+			{ id: 'prd_lamp', name: 'Desk lamp', price: '$45.00', inStock: true, link: LAMP.url },
+			{ id: 'prd_tote', name: 'Canvas tote', price: '$15.00', inStock: false, link: TOTE.url },
 		]);
 		expect(details).toMatchObject({
-			brand: 'Acme',
-			summary: 'A phone.',
+			brand: 'Northlight',
+			summary: 'A steady light.',
 			options: [{ name: 'Colour', values: ['Black', 'White'] }],
-			specs: ['Storage: 128 GB'],
+			specs: ['Height: 42 cm'],
 		});
 		expect(quote).toEqual({
-			productId: 'prd_phone',
-			price: 'PKR 1,250.00',
-			priceAfterDeals: 'PKR 1,200.00',
-			savings: 'PKR 50.00',
-			deals: ['Eid sale'],
+			productId: 'prd_lamp',
+			variantId: 'var_1',
+			quantity: 1,
+			price: '$45.00',
+			priceAfterDeals: '$40.00',
+			savings: '$5.00',
+			deals: ['Autumn sale'],
+			subtotal: '$45.00',
+			discount: '$5.00',
+			total: '$40.00',
+			paymentMethods: [{ method: 'online', available: true }],
 		});
-		expect(deals.deals).toEqual([{ name: 'Eid sale', description: '5% off', endsAt: 'Oct 30, 2026, 12:00 AM' }]);
+		expect(deals.deals).toEqual([
+			{ name: 'Autumn sale', description: 'On every lamp', offer: '5% off', endsAt: 'Oct 30, 2026' },
+		]);
 		expect(top.products).toHaveLength(1);
 	});
 
@@ -223,19 +337,19 @@ describe('shop tools', () => {
 		expect(JSON.parse(String(answers[0]))).toEqual({
 			name: 'Rea Der',
 			loyaltyPoints: 120,
-			orders: [{ number: 'A-1001', status: 'Dispatched', total: 'PKR 1,250.00', placedAt: 'Oct 1, 2026' }],
+			orders: [{ number: 'SH-1001', status: 'Dispatched', total: '$45.00', placedAt: 'Oct 1, 2026', paymentMethod: 'online' }],
 		});
-		expect(JSON.parse(String(answers[1]))).toEqual({ name: 'Rea Der', loyaltyPoints: 120 });
+		expect(JSON.parse(String(answers[1]))).toEqual({ name: 'Rea Der', firstName: 'Rea', loyaltyPoints: 120 });
 		expect(JSON.parse(String(answers[2])).shipments).toEqual([
 			{
-				orderNumber: 'A-1001',
+				orderNumber: 'SH-1001',
 				courier: 'Fast',
 				trackingNumber: 'T1',
 				trackingLink: 'https://track.example.com/T1',
 				status: 'In transit',
 			},
 		]);
-		expect(answers.join(' ')).not.toMatch(/1 Road|\+92/);
+		expect(answers.join(' ')).not.toMatch(/1 Main Street|\+44|7700/);
 	});
 
 	it('never runs a sign-in tool for a guest, even when the model asks for it', async () => {
@@ -248,8 +362,8 @@ describe('shop tools', () => {
 
 	it('answers that it cannot look this up now when Ecommerce is not connected, refuses or is stopped', async () => {
 		const missing = await start([...SHOP, 'shop_search'], { ecommerce: false });
-		missing.ai({ tools: [{ name: 'search_catalog', arguments: { query: 'phone' } }] }, { text: 'Sorry.' });
-		await missing.visitor()('POST', '/v1/chat/messages', { text: 'Phones?' });
+		missing.ai({ tools: [{ name: 'search_catalog', arguments: { query: 'lamp' } }] }, { text: 'Sorry.' });
+		await missing.visitor()('POST', '/v1/chat/messages', { text: 'Lamps?' });
 		expect(toolAnswers(missing.aiCalls()[1])).toEqual([SHOP_UNAVAILABLE]);
 
 		const sys = await start([...SHOP, 'shop_search', 'shop_deals']);
@@ -261,7 +375,7 @@ describe('shop tools', () => {
 		sys.ai(
 			{
 				tools: [
-					{ name: 'search_catalog', arguments: { query: 'phone' } },
+					{ name: 'search_catalog', arguments: { query: 'lamp' } },
 					{ name: 'list_active_deals', arguments: {} },
 					{ name: 'search_catalog', arguments: { query: '  ' } },
 					{ name: 'get_product_details', arguments: { productId: '../../admin' } },
@@ -270,7 +384,7 @@ describe('shop tools', () => {
 			{ text: 'Sorry.' },
 		);
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/messages', { text: 'Phones?' });
+		await v('POST', '/v1/chat/messages', { text: 'Lamps?' });
 		expect(toolAnswers(sys.aiCalls()[1])).toEqual([
 			SHOP_UNAVAILABLE,
 			SHOP_UNAVAILABLE,
@@ -319,36 +433,36 @@ describe('product cards', () => {
 		sys.ai(
 			{
 				tools: [
-					{ name: 'search_catalog', arguments: { query: 'phone' } },
+					{ name: 'search_catalog', arguments: { query: 'lamp' } },
 					{ name: 'get_top_products', arguments: { kind: 'top' } },
 				],
 			},
 			{ text: 'Here you go.' },
 		);
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/messages', { text: 'Phones?' });
+		await v('POST', '/v1/chat/messages', { text: 'Lamps?' });
 		expect(sys.aiCalls()[0].messages[0].content).toContain('Add to cart');
 		const answer = (await v('GET', '/v1/chat')).json.messages[1];
 		expect(answer.text).toBe('Here you go.');
 		expect(answer.cards).toEqual([
 			{
-				productId: 'prd_phone',
+				productId: 'prd_lamp',
 				variantId: 'var_1',
-				name: 'Phone X',
-				price: 125000,
-				currency: 'PKR',
-				image: PHONE.image,
-				url: PHONE.url,
+				name: 'Desk lamp',
+				price: 4500,
+				currency: 'USD',
+				image: LAMP.image,
+				url: LAMP.url,
 				inStock: true,
 			},
 			{
-				productId: 'prd_case',
+				productId: 'prd_tote',
 				variantId: 'var_1',
-				name: 'Case',
+				name: 'Canvas tote',
 				price: 1500,
-				currency: 'PKR',
+				currency: 'USD',
 				image: null,
-				url: PHONE.url,
+				url: TOTE.url,
 				inStock: false,
 			},
 		]);
@@ -358,9 +472,9 @@ describe('product cards', () => {
 
 	it('adds no cards without the feature', async () => {
 		const sys = await start([...SHOP, 'shop_search']);
-		sys.ai({ tools: [{ name: 'search_catalog', arguments: { query: 'phone' } }] }, { text: 'Phone X.' });
+		sys.ai({ tools: [{ name: 'search_catalog', arguments: { query: 'lamp' } }] }, { text: 'Desk lamp.' });
 		const v = sys.visitor();
-		await v('POST', '/v1/chat/messages', { text: 'Phones?' });
+		await v('POST', '/v1/chat/messages', { text: 'Lamps?' });
 		expect(sys.aiCalls()[0].messages[0].content).not.toContain('Add to cart');
 		await sys.switchOn([...SHOP, 'shop_search', 'product_cards']);
 		expect((await v('GET', '/v1/chat')).json.messages[1].cards).toBeUndefined();
@@ -381,8 +495,8 @@ describe('context panel shop info', () => {
 		expect(user.json.conversation.context.shop).toEqual({
 			loyaltyPoints: 120,
 			orders: [
-				{ number: 'A-1001', status: 'On its way', total: 'PKR 1,250.00', createdAt: null },
-				{ number: 'A-1000', status: 'delivered', total: 'PKR 99.00', createdAt: '2026-09-01T00:00:00.000Z' },
+				{ number: 'SH-1001', status: 'On its way', total: '$45.00', createdAt: '2026-10-01T09:00:00.000Z' },
+				{ number: 'SH-1000', status: 'Delivered', total: '$99.00', createdAt: '2026-09-01T00:00:00.000Z' },
 			],
 		});
 		const guest = await sys.admin(ticket, 'GET', `/v1/admin/conversations/${byKind.guest}`);

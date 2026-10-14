@@ -232,8 +232,8 @@ describe('conversations, flows and fields', () => {
 		expect(answerStep(flow, 2, 'Because', [])).toEqual({ ok: true, key: 'f:3', value: 'Because' });
 		expect(answerStep(flow, 3, 'abc', [])).toEqual({ ok: false });
 		// phones are kept as E.164, with the website's calling code for national numbers
-		expect(answerStep(flow, 3, '0300-1234567', [], '+92')).toEqual({ ok: true, key: 'phone', value: '+923001234567' });
-		expect(answerStep(flow, 3, '0300-1234567', [])).toEqual({ ok: false });
+		expect(answerStep(flow, 3, '07700-900123', [], '+44')).toEqual({ ok: true, key: 'phone', value: '+447700900123' });
+		expect(answerStep(flow, 3, '07700-900123', [])).toEqual({ ok: false });
 		expect(answerStep(flow, 1, 'x', [])).toEqual({ ok: false });
 		expect(answerStep({ ...flow, steps: [{ kind: 'collect', field: 'custom:gone', text: '?' }] }, 0, 'x', [])).toEqual({
 			ok: false,
@@ -255,11 +255,18 @@ describe('conversations, flows and fields', () => {
 		expect(checkFieldValue({ ...field, type: 'yes_no' }, 'maybe')).toEqual({ ok: false });
 		expect(checkFieldValue({ ...field, type: 'number' }, '')).toEqual({ ok: false });
 		expect(checkFieldValue({ ...field, type: 'text' }, 5)).toEqual({ ok: false });
-		for (const typed of ['923001234567', '+92 0300 1234567', '0092 300 1234567', '0300 1234567'])
-			expect(checkFieldValue({ ...field, type: 'phone' }, typed, '+92')).toEqual({ ok: true, value: '+923001234567' });
+		// any country: the code typed or not, with a trunk 0, 00 or + first
+		for (const [code, value, forms] of /** @type {Array<[string, string, string[]]>} */ ([
+			['+44', '+447700900123', ['447700900123', '+44 07700 900123', '0044 7700 900123', '07700 900123']],
+			['+1', '+12025550143', ['(202) 555-0143', '1 202 555 0143', '+1 (202) 555-0143']],
+			['+33', '+33142685300', ['01 42 68 53 00', '0033 1 42 68 53 00']],
+			['+92', '+923001234567', ['923001234567', '+92 0300 1234567', '0092 300 1234567', '0300 1234567']],
+		]))
+			for (const typed of forms)
+				expect(checkFieldValue({ ...field, type: 'phone' }, typed, code)).toEqual({ ok: true, value });
 		expect(checkFieldValue({ ...field, type: 'phone' }, '+44 (0)20 7946 0018')).toEqual({ ok: true, value: '+442079460018' });
-		expect(checkFieldValue({ ...field, type: 'phone' }, '0300 1234567')).toEqual({ ok: false });
-		expect(checkFieldValue({ ...field, type: 'phone' }, '+92 3001', '+92')).toEqual({ ok: false });
+		expect(checkFieldValue({ ...field, type: 'phone' }, '07700 900123')).toEqual({ ok: false });
+		expect(checkFieldValue({ ...field, type: 'phone' }, '+44 7700', '+44')).toEqual({ ok: false });
 		const lead = checkLead(
 			{ fields: { email: 'bad', size: 'XL' } },
 			{
@@ -280,10 +287,10 @@ describe('conversations, flows and fields', () => {
 		});
 		expect(
 			checkLead(
-				{ fields: { phone: '92 300 1234567' } },
-				{ fields: ['phone'], customKeys: [], customFields: [], consentRequired: false, callingCode: '+92' },
+				{ fields: { phone: '44 7700 900123' } },
+				{ fields: ['phone'], customKeys: [], customFields: [], consentRequired: false, callingCode: '+44' },
 			),
-		).toMatchObject({ ok: true, value: { phone: '+923001234567' } });
+		).toMatchObject({ ok: true, value: { phone: '+447700900123' } });
 		expect(checkPageRules('x')).toMatchObject({ ok: false });
 		expect(checkPageRules([{ path: '/', delay: -1, message: 'm' }])).toMatchObject({ ok: false });
 	});
@@ -338,14 +345,14 @@ describe('handoff, time, caps and reports', () => {
 	});
 
 	it('days and months of caps and reports are business days (K8)', () => {
-		// 2026-10-31 20:00 UTC is already 1 November in Karachi (UTC+5), still 31 October in New York
+		// 2026-10-31 20:00 UTC is already 1 November in Tokyo (UTC+9), still 31 October in New York
 		const at = Date.parse('2026-10-31T20:00:00Z');
-		expect([dayKey(at, 'Asia/Karachi'), monthKey(at, 'Asia/Karachi')]).toEqual(['2026-11-01', '2026-11']);
+		expect([dayKey(at, 'Asia/Tokyo'), monthKey(at, 'Asia/Tokyo')]).toEqual(['2026-11-01', '2026-11']);
 		expect([dayKey(at, 'America/New_York'), monthKey(at, 'America/New_York')]).toEqual(['2026-10-31', '2026-10']);
-		expect(windowKeys(at, 'Asia/Karachi')).toEqual({ day: 'day:2026-11-01', month: 'month:2026-11' });
+		expect(windowKeys(at, 'Asia/Tokyo')).toEqual({ day: 'day:2026-11-01', month: 'month:2026-11' });
 		expect(dayKey(at, 'Not/AZone')).toBe('2026-10-31');
-		expect(new Date(dayStart('2026-11-01', 'Asia/Karachi')).toISOString()).toBe('2026-10-31T19:00:00.000Z');
-		expect(reportRange({}, at, 'Asia/Karachi')?.to).toBe('2026-11-01');
+		expect(new Date(dayStart('2026-11-01', 'Asia/Tokyo')).toISOString()).toBe('2026-10-31T15:00:00.000Z');
+		expect(reportRange({}, at, 'Asia/Tokyo')?.to).toBe('2026-11-01');
 		const late = summarise({
 			rows: [
 				{
@@ -361,7 +368,7 @@ describe('handoff, time, caps and reports', () => {
 				},
 			],
 			dates: ['2026-10-31', '2026-11-01'],
-			timeZone: 'Asia/Karachi',
+			timeZone: 'Asia/Tokyo',
 			leads: 0,
 			aiTokens: 0,
 		});
@@ -441,18 +448,18 @@ describe('moderation, language, knowledge and the prompt', () => {
 
 	it('detects languages and checks answers', () => {
 		const markers = [
-			{ language: 'tl', words: ['hai', 'kya', 'mein'] },
+			{ language: 'tl', words: ['po', 'ba', 'ito'] },
 			{ language: 'en', words: ['the', 'is', 'and'] },
 		];
-		expect(detectLanguage('kya hai', { fallback: 'en', markers })).toMatchObject({ language: 'tl', confident: true });
+		expect(detectLanguage('ito po', { fallback: 'en', markers })).toMatchObject({ language: 'tl', confident: true });
 		expect(detectLanguage('hello', { fallback: 'en', markers })).toMatchObject({ language: 'en', confident: false });
 		expect(detectLanguage('Привет', { fallback: 'en', allowed: ['en'] })).toMatchObject({ language: 'en', confident: false });
 		expect(replyMatchesLanguage('| a | b |\n|---|---|', 'ar')).toBe(true);
 		expect(replyMatchesLanguage('', 'en')).toBe(false);
 		expect(replyMatchesLanguage('123', 'en')).toBe(true);
 		expect(replyMatchesLanguage('Привет мир', 'en')).toBe(false);
-		expect(replyMatchesLanguage('the cat is here and kya', 'en', { markers })).toBe(true);
-		expect(replyMatchesLanguage('yeh kya hai mein bahut acha', 'en', { markers })).toBe(false);
+		expect(replyMatchesLanguage('the cat is here and po', 'en', { markers })).toBe(true);
+		expect(replyMatchesLanguage('ito po ba ang presyo salamat', 'en', { markers })).toBe(false);
 		expect(isLanguageNeutral('')).toBe(false);
 	});
 
@@ -491,33 +498,33 @@ describe('shop', () => {
 			/** @type {any} */ (shopAnswer('quote_product_savings', { price, priceAfterDeals: price, currency }, look).content)
 				.price;
 		// the default Format: the currency code and its ISO 4217 decimals
-		expect([quoted(125000, 'PKR'), quoted(1250, 'JPY'), quoted(1250, 'KWD')]).toEqual([
-			'PKR 1,250.00',
+		expect([quoted(125000, 'EUR'), quoted(1250, 'JPY'), quoted(1250, 'KWD')]).toEqual([
+			'EUR 1,250.00',
 			'JPY 1,250',
 			'KWD 1.250',
 		]);
 		const look = {
-			format: { locale: 'en-GB', currencyDisplay: /** @type {const} */ ('custom'), currencySymbol: 'Rs', wholeUnits: true },
-			timeZone: 'Asia/Karachi',
+			format: { locale: 'en-GB', currencyDisplay: /** @type {const} */ ('custom'), currencySymbol: 'kr', wholeUnits: true },
+			timeZone: 'Europe/Stockholm',
 		};
-		expect(quoted(125000, 'PKR', look)).toBe('Rs 1,250');
+		expect(quoted(125000, 'SEK', look)).toBe('kr 1,250');
 		const orders = /** @type {any} */ (
 			shopAnswer(
 				'get_my_orders',
-				{ items: [{ number: 'A-1', total: 99900, currency: 'PKR', placedAt: '2026-10-01' }, { placedAt: 'soon' }] },
+				{ items: [{ number: 'SH-1', total: 99900, currency: 'SEK', placedAt: '2026-10-01' }, { placedAt: 'soon' }] },
 				look,
 			).content
 		).orders;
 		// a calendar day stays that day; text that is not a time stays as it came
 		expect(orders.map((/** @type {any} */ o) => [o.total, o.placedAt])).toEqual([
-			['Rs 999', '1 Oct 2026'],
+			['kr 999', '1 Oct 2026'],
 			[null, 'soon'],
 		]);
 		const deals = /** @type {any} */ (
 			shopAnswer('list_active_deals', { items: [{ name: 'Sale', endsAt: '2026-10-06T09:00:00.000Z' }] }, look).content
 		).deals;
-		expect(deals[0].endsAt).toBe('6 Oct 2026, 14:00');
-		expect(shopInfoOf({ items: [{ number: 'A-1', total: 125000, currency: 'PKR' }] }, look).orders[0]?.total).toBe('Rs 1,250');
+		expect(deals[0].endsAt).toBe('6 Oct 2026, 11:00');
+		expect(shopInfoOf({ items: [{ number: 'SH-1', total: 125000, currency: 'SEK' }] }, look).orders[0]?.total).toBe('kr 1,250');
 	});
 
 	it('keeps only checked card fields and refuses unknown tools', () => {
@@ -525,11 +532,11 @@ describe('shop', () => {
 		expect(
 			cardsOf([
 				null,
-				{ productId: 'p', name: 'N', price: -1, currency: 'PKR' },
-				{ productId: 'p', name: 'N', price: 1, currency: 'PKR', url: 'javascript:x' },
+				{ productId: 'p', name: 'N', price: -1, currency: 'EUR' },
+				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', url: 'javascript:x' },
 			]),
 		).toEqual([
-			{ productId: 'p', variantId: null, name: 'N', price: 1, currency: 'PKR', image: null, url: null, inStock: false },
+			{ productId: 'p', variantId: null, name: 'N', price: 1, currency: 'EUR', image: null, url: null, inStock: false },
 		]);
 		expect(shopRequest('nope', {})).toEqual({ ok: false, content: 'No such tool.' });
 		expect(
@@ -540,29 +547,47 @@ describe('shop', () => {
 	});
 
 	it('reads odd answers safely', () => {
+		// shapes Ecommerce never sends are not read: specs as an object, a grade or a warranty as an object, deal objects
 		expect(
 			shopAnswer('get_product_details', {
-				...{ id: 'p', name: 'N', price: 1, currency: 'PKR' },
-				specs: [{ label: 'A', value: 2 }],
+				...{ id: 'p', name: 'N', price: 1, currency: 'EUR', grade: { label: 'New' }, warranty: '1 year' },
+				specs: [{ name: 'Weight', value: { kg: 2 } }, 'x'],
 				options: 'x',
+				variants: [{ id: 'v', options: 'Large', grade: { label: 'New' }, warranty: { months: 6 }, inStock: true }],
 			}).content,
-		).toMatchObject({
-			specs: ['A: 2'],
+		).toEqual({
+			id: 'p',
+			name: 'N',
+			price: 'EUR 0.01',
+			inStock: false,
+			brand: null,
+			summary: null,
+			description: null,
+			specs: ['Weight: '],
 			options: [],
+			variants: [{ id: 'v', options: null, price: null, inStock: true }],
 		});
 		expect(
-			shopAnswer('get_product_details', { id: 'p', name: 'N', price: 1, currency: 'PKR', specs: 'x' }).content,
+			shopAnswer('get_product_details', { id: 'p', name: 'N', price: 1, currency: 'EUR', specs: { Weight: '2 kg' } }).content,
 		).toMatchObject({ specs: [] });
 		expect(shopAnswer('get_my_orders', { items: [{ number: 7, total: 'x' }] }).content).toMatchObject({
 			orders: [{ number: '7', status: null, total: null, placedAt: null }],
 		});
 		expect(shopAnswer('list_active_deals', null).content).toBe('No deals are running right now.');
 		expect(
-			shopAnswer('quote_product_savings', { price: 1, priceAfterDeals: 1, currency: 'PKR', deals: 'x' }).content,
+			shopAnswer('quote_product_savings', { price: 1, priceAfterDeals: 1, currency: 'EUR', deals: 'x' }).content,
 		).toMatchObject({
-			savings: 'PKR 0.00',
+			savings: 'EUR 0.00',
 			deals: [],
 		});
+		const odd = /** @type {any} */ (
+			shopAnswer('quote_product_savings', {
+				...{ price: 1, priceAfterDeals: 1, currency: 'EUR' },
+				deals: [{ name: 'Sale' }],
+				paymentMethods: [{ key: 'cod', label: 'Cash on delivery' }, { method: 'card', available: true }, 'x'],
+			}).content
+		);
+		expect([odd.deals, odd.paymentMethods]).toEqual([[], undefined]);
 		expect(shopInfoOf('x')).toEqual({ orders: [], loyaltyPoints: null });
 		expect(shopInfoOf({ items: [{ status: 'packed' }] }).orders).toEqual([
 			{ number: '', status: 'packed', total: '', createdAt: null },

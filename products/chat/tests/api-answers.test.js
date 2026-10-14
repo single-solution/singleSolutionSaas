@@ -21,18 +21,66 @@ const start = async (on) => {
 /** @param {any} json */
 const texts = (json) => json.messages.map((/** @type {any} */ m) => [m.author, m.text]);
 
+/** A product card as Ecommerce answers it (ChatProduct). */
 const PRODUCT = {
-	id: 'prd_fan',
-	name: 'Ceiling Fan',
-	price: 1250000,
-	priceText: 'Rs 12,500',
-	currency: 'PKR',
-	image: 'https://cdn.shop.example.com/fan.jpg',
-	url: 'https://shop.example.com/fans/ceiling-fan',
+	id: 'prd_lamp',
+	name: 'Desk Lamp',
+	price: 4500,
+	priceText: '$45.00',
+	priceMax: 4500,
+	priceMaxText: '$45.00',
+	currency: 'USD',
+	image: 'https://cdn.shop.example.com/lamp.jpg',
+	url: 'https://shop.example.com/lighting/desk-lamp',
 	inStock: true,
-	variantId: 'var_white',
-	grade: { label: 'New' },
+	variantId: 'var_black',
+	grade: 'New',
 	stockLeft: 3,
+};
+
+/** A deal as Ecommerce answers it (ChatDeal). */
+const DEAL = {
+	id: 'deal_1',
+	name: 'Autumn sale',
+	description: '10% off lamps',
+	slug: 'autumn-sale',
+	type: 'percent',
+	value: 10,
+	valueText: '10%',
+	badgeLabel: '',
+	discountLabel: '10% off',
+	color: '',
+	bannerUrl: null,
+	minQuantity: null,
+	days: [],
+	timeFrom: '',
+	timeTo: '',
+	endsAt: null,
+	endsText: '',
+};
+
+/** An order as Ecommerce answers it (ChatOrder). */
+const ORDER = {
+	id: 'ord_1',
+	number: 'SH-1001',
+	status: 'Shipped',
+	statusKey: 'shipped',
+	total: 5000,
+	totalText: '$50.00',
+	currency: 'USD',
+	placedAt: '2026-10-01T09:00:00.000Z',
+	paymentMethod: 'online',
+	paid: 5000,
+	paidText: '$50.00',
+	balanceDue: 0,
+	balanceDueText: '$0.00',
+	lines: [],
+	courier: '',
+	trackingNumber: '',
+	trackingUrl: '',
+	trackingNote: '',
+	expectedAt: null,
+	dispatchVideo: null,
 };
 
 describe('instructions, never disclose and rich answers (C1, C2)', () => {
@@ -65,7 +113,7 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 		await sys.setting('moderation', 'linkPolicy', 'allow_list');
 		await sys.setting('moderation', 'allowedLinkHosts', ['docs.example.org']);
 		sys.ai({
-			text: 'Hello **there**\n---\nSee [the fan](/fans/1), [our page](https://shop.example.com/a), [docs](https://docs.example.org/x) and [elsewhere](https://evil.example.net)\n---\nBye',
+			text: 'Hello **there**\n---\nSee [the lamp](/lamps/1), [our page](https://shop.example.com/a), [docs](https://docs.example.org/x) and [elsewhere](https://evil.example.net)\n---\nBye',
 		});
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
@@ -74,7 +122,7 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 			['markdown', 'Hello **there**'],
 			[
 				'markdown',
-				'See [the fan](/fans/1), [our page](https://shop.example.com/a), [docs](https://docs.example.org/x) and elsewhere\n\nBye',
+				'See [the lamp](/lamps/1), [our page](https://shop.example.com/a), [docs](https://docs.example.org/x) and elsewhere\n\nBye',
 			],
 		]);
 		expect(sys.aiCalls()[0].messages[0].content).toContain('at most 2 messages');
@@ -135,12 +183,7 @@ describe('fallback answers (C3)', () => {
 			{ intent: 'products', language: '', keywords: ['best'], text: 'Popular:\n{top_products}' },
 			{ intent: 'other', language: '', keywords: ['hours'], text: 'We are open 9 to 5.' },
 		]);
-		sys.responders.set(`${ECOMMERCE}/v1/chat/deals`, () => ({
-			status: 200,
-			body: {
-				items: [{ id: 'deal_1', name: 'Eid sale', description: '10% off fans', discountLabel: '10% off', endsAt: null }],
-			},
-		}));
+		sys.responders.set(`${ECOMMERCE}/v1/chat/deals`, () => ({ status: 200, body: { items: [DEAL] } }));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, () => ({ status: 200, body: { items: [PRODUCT] } }));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products/top`, () => ({ status: 200, body: { items: [PRODUCT] } }));
 		const v = sys.visitor();
@@ -149,13 +192,13 @@ describe('fallback answers (C3)', () => {
 		await v('POST', '/v1/chat/messages', { text: 'any deal today?' });
 		let last = (await v('GET', '/v1/chat')).json.messages.at(-1);
 		expect(last).toMatchObject({ author: 'ai', format: 'markdown' });
-		expect(last.text).toBe('Our deals:\n\n| Deal | Details | Ends |\n| --- | --- | --- |\n| Eid sale | 10% off |  |');
+		expect(last.text).toBe('Our deals:\n\n| Deal | Details | Ends |\n| --- | --- | --- |\n| Autumn sale | 10% off |  |');
 		sys.ai(fail);
-		await v('POST', '/v1/chat/messages', { text: 'something under 15,000 please' });
+		await v('POST', '/v1/chat/messages', { text: 'something under 1,500 please' });
 		last = (await v('GET', '/v1/chat')).json.messages.at(-1);
-		expect(last.text).toBe('Within your budget:\n- [Ceiling Fan](https://shop.example.com/fans/ceiling-fan) — Rs 12,500');
+		expect(last.text).toBe('Within your budget:\n- [Desk Lamp](https://shop.example.com/lighting/desk-lamp) — $45.00');
 		const search = sys.shopCalls().find((c) => c.url.includes('/v1/chat/products?'));
-		expect(new URL(String(search?.url)).searchParams.get('maxPrice')).toBe('1500000');
+		expect(new URL(String(search?.url)).searchParams.get('maxPrice')).toBe('150000');
 		// a guest's order question skips the my-orders entry (no sign-in): nothing else matches
 		sys.ai(fail);
 		await v('POST', '/v1/chat/messages', { text: 'where is my order' });
@@ -163,26 +206,14 @@ describe('fallback answers (C3)', () => {
 		// signed in: the visitor's own orders
 		sys.responders.set(`${ECOMMERCE}/v1/chat/me/orders`, () => ({
 			status: 200,
-			body: {
-				items: [
-					{
-						number: 'CT-1',
-						status: 'Shipped',
-						total: 500000,
-						totalText: 'Rs 5,000',
-						currency: 'PKR',
-						placedAt: '2026-10-01',
-					},
-				],
-				name: 'Ann',
-			},
+			body: { items: [ORDER], loyaltyPoints: 0, name: 'Ann' },
 		}));
 		const signIn = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
 		const user = sys.visitor({ signIn });
 		sys.ai(fail);
 		await user('POST', '/v1/chat/messages', { text: 'my order please' });
 		expect((await user('GET', '/v1/chat')).json.messages.at(-1).text).toBe(
-			'Your orders:\n- CT-1 — Shipped — Rs 5,000 — Oct 1, 2026',
+			'Your orders:\n- SH-1001 — Shipped — $50.00 — Oct 1, 2026',
 		);
 		// the language of an entry follows the language lock
 		sys.ai(fail);
@@ -202,9 +233,9 @@ describe('fallback answers (C3)', () => {
 		]);
 		await sys.setting('ai_caps', 'dailyTokens', 1);
 		const calls = sys.aiCalls().length;
-		const best = await v('POST', '/v1/chat/messages', { text: 'what are your best fans' });
+		const best = await v('POST', '/v1/chat/messages', { text: 'what are your best lamps' });
 		expect(best.status, best.text).toBe(201);
-		expect((await v('GET', '/v1/chat')).json.messages.at(-1).text).toContain('Popular:\n- [Ceiling Fan]');
+		expect((await v('GET', '/v1/chat')).json.messages.at(-1).text).toContain('Popular:\n- [Desk Lamp]');
 		expect(sys.aiCalls()).toHaveLength(calls);
 	});
 });
@@ -226,60 +257,92 @@ describe('the AI reply in the same request (C10)', () => {
 });
 
 describe('fuller shop tools and the store context (C13, C1)', () => {
-	it('passes filters, the search size and quote options; answers grades, variants, stock and warranty', async () => {
+	it('passes filters, the search size and quote options; answers grades, variants, stock, warranty and payment methods', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'shop_search', 'shop_deals']);
 		await sys.paste('ecommerce');
 		await sys.setting('shop_search', 'maxResults', 8);
+		/** A variant as Ecommerce answers it (ChatVariant). */
+		const variant = {
+			id: 'var_black',
+			options: { Colour: 'Black' },
+			price: 4500,
+			priceText: '$45.00',
+			compareAtPrice: null,
+			compareAtPriceText: null,
+			grade: 'New',
+			gradeKey: 'new',
+			inStock: true,
+			soldOut: false,
+			stockLeft: 3,
+			warrantyDays: 365,
+		};
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, () => ({ status: 200, body: { items: [PRODUCT] } }));
-		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_fan`, () => ({
+		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_lamp`, () => ({
 			status: 200,
 			body: {
 				...PRODUCT,
+				summary: 'A steady light for long evenings.',
+				description: 'Brushed steel.',
+				brand: 'Northlight',
+				options: [{ name: 'Colour', values: ['Black', 'Grey'] }],
+				priceRange: { min: 3000, max: 4500, minText: '$30.00', maxText: '$45.00' },
+				specs: [{ name: 'Height', value: 42, unit: 'cm' }],
 				variants: [
+					variant,
 					{
-						id: 'var_white',
-						options: { Colour: 'White' },
-						price: 1250000,
-						priceText: 'Rs 12,500',
-						grade: 'New',
-						gradeKey: 'new',
-						stockLeft: 3,
-						soldOut: false,
-						warrantyDays: 365,
-					},
-					{
+						...variant,
 						id: 'var_used',
 						options: { Colour: 'Grey' },
-						price: 900000,
+						price: 3000,
+						priceText: '$30.00',
 						grade: 'Used',
 						gradeKey: 'used',
+						inStock: false,
 						soldOut: true,
+						stockLeft: null,
 						warrantyDays: 90,
 					},
 				],
 			},
 		}));
-		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_fan/quote`, () => ({
+		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_lamp/quote`, () => ({
 			status: 200,
 			body: {
-				productId: 'prd_fan',
-				variantId: 'var_white',
+				productId: 'prd_lamp',
+				variantId: 'var_black',
 				quantity: 2,
+				price: 4500,
+				priceText: '$45.00',
+				priceAfterDeals: 4000,
+				priceAfterDealsText: '$40.00',
+				savings: 500,
+				savingsText: '$5.00',
+				currency: 'USD',
+				deals: ['Autumn sale'],
+				dealsApplied: [{ ...DEAL, amount: 1000, amountText: '$10.00' }],
+				inStock: true,
+				problems: [],
 				paymentMethod: 'cod',
-				price: 2500000,
-				priceAfterDeals: 2400000,
-				savings: 100000,
-				subtotal: 2500000,
-				discount: 100000,
-				fee: 10000,
-				feeText: 'Rs 100',
+				paymentMethods: [
+					{ method: 'cod', available: true, reason: null, advance: 1000, fee: 100, advanceText: '$10.00' },
+					{ method: 'online', available: true, reason: null, advance: 0, fee: 0, advanceText: '$0.00' },
+					{ method: 'bank_transfer', available: false, reason: 'over_max', advance: 0, fee: 0, advanceText: '$0.00' },
+				],
+				subtotal: 9000,
+				subtotalText: '$90.00',
+				discount: 1000,
+				discountText: '$10.00',
+				roleDiscount: 0,
+				roleDiscountText: '$0.00',
+				fee: 100,
+				feeText: '$1.00',
 				tax: 0,
-				delivery: { method: 'standard', name: 'Courier', fee: 0, feeText: 'Free', minDays: 2, maxDays: 4 },
-				freeDeliveryOver: 500000,
-				total: 2410000,
-				paymentMethods: [{ key: 'cod', label: 'Cash on delivery', advance: 0 }],
-				currency: 'PKR',
-				deals: ['Eid sale'],
+				taxText: '$0.00',
+				delivery: { method: 'delivery', name: 'Courier', fee: 0, feeText: '$0.00', minDays: 2, maxDays: 4 },
+				freeDeliveryOver: 10000,
+				freeDeliveryOverText: '$100.00',
+				total: 8100,
+				totalText: '$81.00',
 			},
 		}));
 		sys.ai(
@@ -288,40 +351,43 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					{
 						name: 'search_catalog',
 						arguments: {
-							query: 'fan',
-							category: 'Ceiling Fans',
+							query: 'lamp',
+							category: 'Desk Lamps',
 							grade: 'New, like new, !',
-							minPrice: 5000,
-							maxPrice: '15,000',
+							minPrice: 20,
+							maxPrice: '1,500',
 							inStock: true,
 						},
 					},
-					{ name: 'get_product_details', arguments: { productId: 'prd_fan' } },
+					{ name: 'get_product_details', arguments: { productId: 'prd_lamp' } },
 					{
 						name: 'quote_product_savings',
-						arguments: { productId: 'prd_fan', variantId: 'var_white', quantity: 9, paymentMethod: 'cod', city: 'Lahore' },
+						arguments: { productId: 'prd_lamp', variantId: 'var_black', quantity: 9, paymentMethod: 'cod', city: 'Leeds' },
 					},
 				],
 			},
 			{ text: 'Here you go.' },
 		);
-		await sys.visitor()('POST', '/v1/chat/messages', { text: 'a new fan under 15000' });
+		await sys.visitor()('POST', '/v1/chat/messages', { text: 'a new desk lamp under 1500' });
 		const paths = sys.shopCalls().map((c) => new URL(c.url).pathname + new URL(c.url).search);
 		expect(paths).toContain(
-			'/v1/chat/products?q=fan&category=ceiling-fans&grade=new%2Clike_new&minPrice=500000&maxPrice=1500000&inStock=1&limit=8',
+			'/v1/chat/products?q=lamp&category=desk-lamps&grade=new%2Clike_new&minPrice=2000&maxPrice=150000&inStock=1&limit=8',
 		);
-		expect(paths).toContain('/v1/chat/products/prd_fan/quote?variantId=var_white&quantity=5&paymentMethod=cod&city=Lahore');
+		expect(paths).toContain('/v1/chat/products/prd_lamp/quote?variantId=var_black&quantity=5&paymentMethod=cod&city=Leeds');
 		const results = sys
 			.aiCalls()[1]
 			.messages.filter((/** @type {any} */ m) => m.role === 'tool')
 			.map((/** @type {any} */ m) => JSON.parse(m.content));
-		expect(results[0].products[0]).toMatchObject({ price: 'Rs 12,500', grade: 'New', stockLeft: 3 });
+		expect(results[0].products[0]).toMatchObject({ price: '$45.00', grade: 'New', stockLeft: 3 });
 		expect(results[1]).toMatchObject({
+			brand: 'Northlight',
+			specs: ['Height: 42 cm'],
+			options: [{ name: 'Colour', values: ['Black', 'Grey'] }],
 			variants: [
 				{
-					id: 'var_white',
-					options: 'Colour: White',
-					price: 'Rs 12,500',
+					id: 'var_black',
+					options: 'Colour: Black',
+					price: '$45.00',
 					grade: 'New',
 					gradeKey: 'new',
 					inStock: true,
@@ -331,7 +397,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				{
 					id: 'var_used',
 					options: 'Colour: Grey',
-					price: 'PKR 9,000.00',
+					price: '$30.00',
 					grade: 'Used',
 					inStock: false,
 					warranty: '90 days',
@@ -339,22 +405,30 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			],
 		});
 		expect(results[2]).toEqual({
-			productId: 'prd_fan',
-			variantId: 'var_white',
+			productId: 'prd_lamp',
+			variantId: 'var_black',
 			quantity: 2,
 			paymentMethod: 'cod',
-			price: 'PKR 25,000.00',
-			priceAfterDeals: 'PKR 24,000.00',
-			savings: 'PKR 1,000.00',
-			deals: ['Eid sale'],
-			subtotal: 'PKR 25,000.00',
-			discount: 'PKR 1,000.00',
-			fee: 'Rs 100',
-			freeDeliveryOver: 'PKR 5,000.00',
-			total: 'PKR 24,100.00',
-			delivery: 'Courier, Free, 2–4 days',
-			paymentMethods: ['Cash on delivery'],
+			price: '$45.00',
+			priceAfterDeals: '$40.00',
+			savings: '$5.00',
+			deals: ['Autumn sale'],
+			subtotal: '$90.00',
+			discount: '$10.00',
+			fee: '$1.00',
+			freeDeliveryOver: '$100.00',
+			total: '$81.00',
+			delivery: 'Courier, $0.00, 2–4 days',
+			// Ecommerce's payment options (ChatPaymentOption), in the merchant's order
+			paymentMethods: [
+				{ method: 'cod', available: true, advance: '$10.00', fee: 'USD 1.00' },
+				{ method: 'online', available: true },
+				{ method: 'bank_transfer', available: false, reason: 'over_max' },
+			],
 		});
+		// the AI sees the payment methods a quote takes
+		const quoteTool = sys.aiCalls()[0].tools.find((/** @type {any} */ t) => t.function.name === 'quote_product_savings');
+		expect(quoteTool.function.parameters.properties.paymentMethod.enum).toEqual(['cod', 'online', 'bank_transfer', 'pickup']);
 	});
 
 	it('adds the store context for the viewed product, cached 60 s per website and sign-in', async () => {
@@ -362,19 +436,28 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		await sys.paste('ecommerce');
 		sys.responders.set(`${ECOMMERCE}/v1/chat/context`, () => ({
 			status: 200,
-			body: { text: 'Policies: returns in 7 days.\nViewing: Ceiling Fan, Rs 12,500.' },
+			body: {
+				text: 'Policies: returns in 7 days.\nViewing: Desk Lamp, $45.00.',
+				business: 'Shop',
+				currency: 'USD',
+				policies: [{ key: 'returns', text: 'Returns in 7 days.' }],
+				products: [],
+				deals: [],
+				product: null,
+				visitor: null,
+			},
 		}));
 		const v = sys.visitor();
 		const page = {
-			url: 'https://shop.example.com/fans/ceiling-fan',
+			url: 'https://shop.example.com/lighting/desk-lamp',
 			kind: 'product',
-			productId: 'prd_fan',
-			productName: 'Fan',
+			productId: 'prd_lamp',
+			productName: 'Desk Lamp',
 		};
 		await v('POST', '/v1/chat/messages', { text: 'returns?', page });
 		await v('POST', '/v1/chat/messages', { text: 'and warranty?', page });
 		const contextCalls = sys.shopCalls().filter((c) => c.url.includes('/v1/chat/context'));
-		expect(contextCalls.map((c) => new URL(c.url).search)).toEqual(['?productId=prd_fan']);
+		expect(contextCalls.map((c) => new URL(c.url).search)).toEqual(['?productId=prd_lamp']);
 		expect(sys.aiCalls()[1].messages[0].content).toContain('Store information (live):\nPolicies: returns in 7 days.');
 		sys.advance(61_000);
 		await v('POST', '/v1/chat/messages', { text: 'thanks', page: { ...page, productId: null, kind: 'other' } });
@@ -390,31 +473,31 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 describe('the strict language check, the current page and the website’s own contact (C14, C15)', () => {
 	it('a strict check wants the visitor’s marker words; later messages update the page', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'language_lock', 'moderation']);
-		await sys.setting('language_lock', 'markerWords', ['ur-Latn: hai kya mein aap ji haan yeh nahi']);
+		await sys.setting('language_lock', 'markerWords', ['es: hola sí tienen está esta hay precio gracias disponible']);
 		await sys.setting('language_lock', 'strict', true);
-		sys.ai({ text: 'Yes, it is available.' }, { text: 'Ji haan, yeh available hai.' });
+		sys.ai({ text: 'Yes, it is available.' }, { text: 'Sí, está disponible.' });
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', {
-			text: 'kya yeh fan available hai',
-			page: { url: 'https://shop.example.com/fans/a', kind: 'product', productName: 'Fan A' },
+			text: '¿Tienen esta lámpara disponible?',
+			page: { url: 'https://shop.example.com/lamps/a', kind: 'product', productName: 'Lamp A' },
 		});
-		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Ji haan, yeh available hai.']);
-		sys.ai({ text: 'Ji haan.' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Sí, está disponible.']);
+		sys.ai({ text: 'Sí.' });
 		await v('POST', '/v1/chat/messages', {
-			text: 'aur yeh wala kya hai',
-			page: { url: 'https://shop.example.com/fans/b', kind: 'product', productName: 'Fan B' },
+			text: 'y esta, ¿hay precio?',
+			page: { url: 'https://shop.example.com/lamps/b', kind: 'product', productName: 'Lamp B' },
 		});
-		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Fan B');
+		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Lamp B');
 		// the website's own e-mail and phone are never hidden; others are
 		await sys.setting('moderation', 'redact', ['email', 'phone']);
 		sys.responders.set('https://shop.example.com/.well-known/business.json', () => ({
 			status: 200,
-			body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', phone: '+92 300 1234567', timeZone: 'UTC' },
+			body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', phone: '+44 20 7946 0123', timeZone: 'UTC' },
 		}));
 		await sys.dashboard(await sys.adminSession(), 'POST', `/v1/dashboard/websites/${sys.websiteId}/business/refresh`);
 		const sent = await v('POST', '/v1/chat/messages', {
-			text: 'I wrote to hello@shop.example.com and 0300-1234567, also me@x.com and +44 20 7946 0958',
+			text: 'I wrote to hello@shop.example.com and 020 7946 0123, also me@x.com and +1 415 555 0100',
 		});
-		expect(sent.json.message.text).toBe('I wrote to hello@shop.example.com and 0300-1234567, also [e-mail] and [phone]');
+		expect(sent.json.message.text).toBe('I wrote to hello@shop.example.com and 020 7946 0123, also [e-mail] and [phone]');
 	});
 });

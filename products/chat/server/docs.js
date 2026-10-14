@@ -14,7 +14,7 @@ import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
-import { CONTEXT_ENDPOINT, SHOP_ANSWERS, SHOP_ENDPOINTS } from '../core/shop.js';
+import { CONTEXT_ENDPOINT, SHOP_ANSWERS, SHOP_ENDPOINTS, STORE_CONTEXT_ENDPOINT } from '../core/shop.js';
 import { createSnippets } from '../core/snippets.js';
 import { MESSAGE_TEMPLATES, WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
@@ -88,6 +88,7 @@ export const renderDocs = ({ base }) => {
 		...SHOP_ENDPOINTS.map(
 			(row) => `<li><code>${escape(row.tool)}</code> (${escape(row.feature)}): <code>${escape(row.request)}</code></li>`,
 		),
+		`<li>store context (${escape(STORE_CONTEXT_ENDPOINT.feature)}): <code>${escape(STORE_CONTEXT_ENDPOINT.request)}</code></li>`,
 		`<li>context panel (${escape(CONTEXT_ENDPOINT.feature)}): <code>${escape(CONTEXT_ENDPOINT.request)}</code></li>`,
 	].join('');
 	const answers = Object.entries(SHOP_ANSWERS)
