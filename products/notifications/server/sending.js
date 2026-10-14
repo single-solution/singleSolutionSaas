@@ -184,7 +184,7 @@ export const createSending = (product) => {
 	 * @returns {MessageRecord | null}
 	 */
 	const reveal = (s, message) => {
-		if (!message.hidden?.length) return message;
+		if (message.hidden.length === 0) return message;
 		const opened = product.sealer.open(message.sealed, aadOf(s, message.channel, message.address));
 		return opened === null ? null : { ...message, ...JSON.parse(opened) };
 	};
@@ -302,7 +302,7 @@ export const createSending = (product) => {
 				text: message.text,
 				parameters: message.parameters,
 				providerTemplate: message.providerTemplate,
-				buttons: message.buttons ?? [],
+				buttons: message.buttons,
 				language: message.language,
 				...extra,
 			});
@@ -370,7 +370,7 @@ export const createSending = (product) => {
 			address,
 			values: message.values,
 			language: message.to.language,
-			secretValues: message.hidden ?? [],
+			secretValues: message.hidden,
 		});
 		return made
 			? { channel: target, address, ...keep(s, { channel: target, address, values: message.values, ...made }) }
@@ -419,7 +419,7 @@ export const createSending = (product) => {
 			return sent;
 		}
 		const failed = message.channelAttempts + 1;
-		const next = result.retryable ? nextAttemptAt(failed, now(), RETRY_PLANS[retryPlanOf(message.retryPlan)]) : null;
+		const next = result.retryable ? nextAttemptAt(failed, now(), RETRY_PLANS[message.retryPlan]) : null;
 		if (next !== null)
 			return s.store.messages.update(message.id, {
 				status: 'retrying',

@@ -116,7 +116,7 @@ export const createRoutes = (product) => {
 		if (body.required !== undefined && typeof body.required !== 'boolean')
 			return invalid('required', 'required is true or false.');
 		if (body.language !== undefined && languageOfSegment(body.language) === null)
-			return invalid('language', 'Use a language code such as en, ur or pt-BR.');
+			return invalid('language', 'Use a language code such as en, fr or pt-BR.');
 		const s = await siteOf(ctx);
 		if (!isProductKey(body.template) && !s.on.includes('send_api'))
 			return problem('feature_off', 'Your own template keys need the Merchant send API feature (send_api).');
@@ -545,7 +545,7 @@ export const createRoutes = (product) => {
 						return invalid('values', 'values must map up to 50 names to text or numbers (at most 1000 characters).');
 					const language = body.language === undefined ? null : languageOfSegment(body.language);
 					if (body.language !== undefined && language === null)
-						return invalid('language', 'Use a language code such as en, ur or pt-BR.');
+						return invalid('language', 'Use a language code such as en, fr or pt-BR.');
 					result = await sending.accept(await siteOf(ctx), {
 						channel,
 						template,

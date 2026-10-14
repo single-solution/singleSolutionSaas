@@ -117,7 +117,7 @@
 	"problem.failed": "Something went wrong. Try again.",
 	"problem.field.key": "Use 1–64 lower-case letters, digits, _, . or - for the template key, starting with a letter.",
 	"problem.field.channel": "Pick a channel.",
-	"problem.field.language": "Use a language code such as en, ur or pt-BR, or leave the language empty.",
+	"problem.field.language": "Use a language code such as en, fr or pt-BR, or leave the language empty.",
 	"problem.field.subject": "Write the subject or title: one line of at most 200 characters.",
 	"problem.field.text": "Write the message within the channel's length, and close every optional section.",
 	"problem.field.providerTemplate": "Only WhatsApp templates have a template name at Meta: lower-case letters, digits and _.",

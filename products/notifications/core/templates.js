@@ -61,10 +61,9 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  *   Accounts' templates always are
  * @property {boolean} urgent urgent messages ignore quiet hours; Accounts' templates always are
  * @property {string} providerTemplate WhatsApp: the name of an approved Meta template (`''` = plain text)
- * @property {Button[]} [buttons] WhatsApp templates at Meta: the buttons that take a value (PLAN 0.8.10 N1); missing on
- *   templates saved before them
- * @property {boolean} [sensitive] sensitive messages (codes, links) keep none of their values in the delivery log (PLAN
- *   0.8.10 D11); missing on templates saved before it
+ * @property {Button[]} buttons WhatsApp templates at Meta: the buttons that take a value (PLAN 0.8.10 N1)
+ * @property {boolean} sensitive sensitive messages (codes, links) keep none of their values in the delivery log (PLAN
+ *   0.8.10 D11); Accounts' templates always are
  */
 /**
  * A button of a WhatsApp template at Meta that takes a value: a URL button's variable part, or the code a copy-code
@@ -216,7 +215,7 @@ export const checkTemplate = (input) => {
 	const channel = /** @type {Channel} */ (body.channel);
 	const language = body.language === undefined || body.language === null ? 'default' : body.language;
 	const lang = languageOfSegment(language === '' ? 'default' : language);
-	if (lang === null) return fail('language', 'Use a language code such as en, ur or pt-BR.');
+	if (lang === null) return fail('language', 'Use a language code such as en, fr or pt-BR.');
 	const text = typeof body.text === 'string' ? body.text.trim() : '';
 	if (text.length === 0) return fail('text', 'Write the message.');
 	if (text.length > TEXT_LIMITS[channel])
@@ -368,7 +367,7 @@ export const renderTemplate = (template, values) => ({
 	subject: fillText(template.subject, values),
 	text: fillText(template.text, values),
 	parameters: placeholdersOf(template.text).map((name) => values[name] ?? ''),
-	buttons: (template.buttons ?? []).map((button) => ({ ...button, value: fillText(button.value, values) })),
+	buttons: template.buttons.map((button) => ({ ...button, value: fillText(button.value, values) })),
 });
 
 /**
@@ -384,7 +383,7 @@ export const templateView = (template) => ({
 	required: isRequired(template),
 	urgent: isUrgent(template),
 	providerTemplate: template.providerTemplate,
-	buttons: template.buttons ?? [],
+	buttons: template.buttons,
 	sensitive: isSensitive(template),
 	...(template.updatedAt ? { updatedAt: new Date(template.updatedAt).toISOString() } : {}),
 });

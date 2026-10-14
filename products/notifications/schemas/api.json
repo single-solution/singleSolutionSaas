@@ -160,17 +160,17 @@
 				},
 				"phone": {
 					"type": "string",
-					"description": "With its calling code: + or 00 first, for example +923001234567; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
+					"description": "With its calling code: + or 00 first, for example +447700900123; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
 				},
 				"language": {
 					"type": "string",
 					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
-					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					"description": "The recipient's language, for example en, fr or pt-BR: it picks the template version while Multi-language templates are on."
 				},
 				"timeZone": {
 					"type": "string",
 					"maxLength": 64,
-					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					"description": "An IANA time zone, for example Europe/Paris: quiet hours end in it (else the business.json time zone)."
 				}
 			}
 		},
@@ -181,7 +181,7 @@
 			"properties": {
 				"phone": {
 					"type": "string",
-					"description": "With its calling code: + or 00 first, for example +923001234567; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
+					"description": "With its calling code: + or 00 first, for example +447700900123; spaces, dashes, dots, slashes and brackets are dropped, and a trunk 0 after the code too."
 				},
 				"email": {
 					"type": "string",
@@ -191,12 +191,12 @@
 				"language": {
 					"type": "string",
 					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
-					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					"description": "The recipient's language, for example en, fr or pt-BR: it picks the template version while Multi-language templates are on."
 				},
 				"timeZone": {
 					"type": "string",
 					"maxLength": 64,
-					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					"description": "An IANA time zone, for example Europe/Paris: quiet hours end in it (else the business.json time zone)."
 				}
 			}
 		},
@@ -213,12 +213,12 @@
 				"language": {
 					"type": "string",
 					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
-					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					"description": "The recipient's language, for example en, fr or pt-BR: it picks the template version while Multi-language templates are on."
 				},
 				"timeZone": {
 					"type": "string",
 					"maxLength": 64,
-					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					"description": "An IANA time zone, for example Europe/Paris: quiet hours end in it (else the business.json time zone)."
 				}
 			}
 		},
@@ -235,12 +235,12 @@
 				"language": {
 					"type": "string",
 					"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$",
-					"description": "The recipient's language, for example en, ur or pt-BR: it picks the template version while Multi-language templates are on."
+					"description": "The recipient's language, for example en, fr or pt-BR: it picks the template version while Multi-language templates are on."
 				},
 				"timeZone": {
 					"type": "string",
 					"maxLength": 64,
-					"description": "An IANA time zone, for example Asia/Karachi: quiet hours end in it (else the business.json time zone)."
+					"description": "An IANA time zone, for example Europe/Paris: quiet hours end in it (else the business.json time zone)."
 				}
 			}
 		},
@@ -298,7 +298,7 @@
 				"language": {
 					"type": "string",
 					"pattern": "^(default|[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3})$",
-					"description": "default for the version every recipient falls back to, else a language code such as en, ur or pt-BR."
+					"description": "default for the version every recipient falls back to, else a language code such as en, fr or pt-BR."
 				},
 				"subject": {
 					"type": "string",
@@ -357,7 +357,7 @@
 				},
 				"language": {
 					"type": ["string", "null"],
-					"description": "default ('', null or none) for the default version, else a language code such as en, ur or pt-BR."
+					"description": "default ('', null or none) for the default version, else a language code such as en, fr or pt-BR."
 				},
 				"subject": {
 					"type": "string",
@@ -481,7 +481,7 @@
 				},
 				"language": {
 					"type": "string",
-					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+					"description": "A language code such as en, fr or pt-BR (default: to.language)."
 				},
 				"sendAt": {
 					"type": "string",
@@ -529,7 +529,7 @@
 				},
 				"language": {
 					"type": "string",
-					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+					"description": "A language code such as en, fr or pt-BR (default: to.language)."
 				},
 				"sendAt": {
 					"type": "string",
@@ -577,7 +577,7 @@
 				},
 				"language": {
 					"type": "string",
-					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+					"description": "A language code such as en, fr or pt-BR (default: to.language)."
 				},
 				"sendAt": {
 					"type": "string",
@@ -625,7 +625,7 @@
 				},
 				"language": {
 					"type": "string",
-					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+					"description": "A language code such as en, fr or pt-BR (default: to.language)."
 				},
 				"sendAt": {
 					"type": "string",
@@ -673,7 +673,7 @@
 				},
 				"language": {
 					"type": "string",
-					"description": "A language code such as en, ur or pt-BR (default: to.language)."
+					"description": "A language code such as en, fr or pt-BR (default: to.language)."
 				},
 				"sendAt": {
 					"type": "string",
@@ -993,7 +993,7 @@
 				},
 				"language": {
 					"type": "string",
-					"description": "With template: the version to use, default or a language code such as en, ur or pt-BR."
+					"description": "With template: the version to use, default or a language code such as en, fr or pt-BR."
 				},
 				"values": {
 					"$ref": "#/components/schemas/Values"

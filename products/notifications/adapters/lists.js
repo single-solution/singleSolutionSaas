@@ -1,11 +1,10 @@
 /**
  * Notifications' list setting `webhook_urls` (PLAN 0.8.10 N5): the webhook URLs of a website, each with the events it
  * takes, kept in the kit's settings collection of the product database (so a removed website's list goes with its
- * settings). The old setting `webhooks.urls` moves into the list on the list's first read: each of its URLs takes every
- * event, as before, and the old value is removed. Lists have no global defaults.
+ * settings). Lists have no global defaults.
  * @module
  */
-import { checkWebhookUrls, fromOldUrls } from '../core/webhooks.js';
+import { checkWebhookUrls } from '../core/webhooks.js';
 
 /** @typedef {import('../core/webhooks.js').WebhookUrl} WebhookUrl */
 
@@ -20,8 +19,6 @@ export const LISTS = Object.freeze({
 export const createLists = ({ store, now }) => {
 	/** @param {string} websiteId */
 	const idOf = (websiteId) => `${websiteId}|notifications|list.webhook_urls`;
-	/** The old setting's saved value (the kit's id of a website setting). @param {string} websiteId */
-	const oldIdOf = (websiteId) => `${websiteId}|setting|webhooks.urls`;
 	/** @param {string} websiteId @param {WebhookUrl[]} value */
 	const put = (websiteId, value) =>
 		store.put('settings', idOf(websiteId), {
@@ -32,24 +29,16 @@ export const createLists = ({ store, now }) => {
 			at: now(),
 		});
 
-	/**
-	 * The website's webhook URLs (empty when none); the first read moves the old setting into the list.
-	 * @param {string} websiteId
-	 * @returns {Promise<WebhookUrl[]>}
-	 */
-	const webhookUrls = async (websiteId) => {
-		const doc = await store.get('settings', idOf(websiteId));
-		if (doc) return Array.isArray(doc.value) ? doc.value : [];
-		const old = await store.get('settings', oldIdOf(websiteId));
-		if (!old) return [];
-		const value = fromOldUrls(old.value);
-		await put(websiteId, value);
-		await store.delete('settings', oldIdOf(websiteId));
-		return value;
-	};
-
 	return Object.freeze({
-		webhookUrls,
+		/**
+		 * The website's webhook URLs (empty when none).
+		 * @param {string} websiteId
+		 * @returns {Promise<WebhookUrl[]>}
+		 */
+		webhookUrls: async (websiteId) => {
+			const doc = await store.get('settings', idOf(websiteId));
+			return doc && Array.isArray(doc.value) ? doc.value : [];
+		},
 		/**
 		 * Check and save the webhook URLs whole.
 		 * @param {string} websiteId

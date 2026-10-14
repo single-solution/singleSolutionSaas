@@ -44,10 +44,10 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string} text
  * @property {string[]} parameters
  * @property {string} providerTemplate
- * @property {import('../core/templates.js').Button[]} [buttons] a WhatsApp template's buttons, values filled (PLAN 0.8.10
- *   N1); missing on messages accepted before them
- * @property {string[]} [hidden] the values the delivery log hides (PLAN 0.8.10 D11): `values`, the subject, text,
- *   parameters and buttons show them replaced; missing on messages accepted before it
+ * @property {import('../core/templates.js').Button[]} buttons a WhatsApp template's buttons, values filled (PLAN 0.8.10
+ *   N1)
+ * @property {string[]} hidden the values the delivery log hides (PLAN 0.8.10 D11): `values`, the subject, text,
+ *   parameters and buttons show them replaced
  * @property {string | null} [sealed] the real values and words of a message with hidden values, sealed, while it still
  *   has attempts to make; null once it is sent, failed or skipped. Never in a delivery-log read
  * @property {boolean} required
@@ -56,8 +56,8 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string | null} reason why it failed or was skipped
  * @property {Attempt[]} attempts every attempt, on every channel
  * @property {number} channelAttempts failed attempts on `channel`
- * @property {import('../core/timing.js').RetryPlan} [retryPlan] the retry plan on `channel`, kept from when the message
- *   was accepted (or moved to its fallback channel); missing on messages accepted before plans (short)
+ * @property {import('../core/timing.js').RetryPlan} retryPlan the retry plan on `channel`, kept from when the message
+ *   was accepted (or moved to its fallback channel)
  * @property {boolean} fellBack
  * @property {Date} dueAt
  * @property {Date | null} leaseUntil

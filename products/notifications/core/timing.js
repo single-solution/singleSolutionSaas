@@ -24,7 +24,7 @@ const MAX_ATTEMPTS = RETRY_PLANS.short.max;
 const RETRY_DELAYS_MS = RETRY_PLANS.short.delays;
 
 /**
- * A retry plan by its name (a message accepted before plans, or any other value, has the short one).
+ * The retry plan a channel's `retryPlan` setting names (any other value is the short one).
  * @param {unknown} value
  * @returns {RetryPlan}
  */

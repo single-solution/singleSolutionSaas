@@ -203,25 +203,17 @@ describe('webhook URLs per event (N5)', () => {
 			.slice(from)
 			.map((call) => `${new URL(call.url).pathname} ${JSON.parse(call.body).type}`);
 
-	it('moves the old urls setting into the list on its first read, each URL taking every event', async () => {
-		await env.store.put('settings', `${env.websiteId}|setting|webhooks.urls`, {
-			websiteId: env.websiteId,
-			kind: 'setting',
-			key: 'webhooks.urls',
-			value: [`${HOOKS}/old`, 'http://insecure.example/x'],
-			at: env.now(),
-		});
+	it('keeps the URLs in their own list, which the merchant’s server and the dashboard read the same', async () => {
 		const read = await env.call('GET', '/v1/lists/webhook_urls', { token: env.server });
-		expect(await read.json()).toEqual({ value: [{ url: `${HOOKS}/old`, events: [] }] });
-		expect(await env.store.get('settings', `${env.websiteId}|setting|webhooks.urls`)).toBeFalsy();
+		expect(await read.json()).toEqual({ value: [] });
 		const settings = await (await env.call('GET', '/v1/settings', { token: env.server })).json();
 		const webhooks = settings.features.find((/** @type {any} */ f) => f.key === 'webhooks');
 		expect(Object.keys(webhooks.values)).toEqual(['events']);
+		const value = [{ url: `${HOOKS}/first`, events: [] }];
+		expect((await env.call('PUT', '/v1/lists/webhook_urls', { token: env.server, body: { value } })).status).toBe(200);
 		// the dashboard reads the same list
 		const cookie = await env.adminSession();
-		expect(await (await env.dashboard(cookie, 'GET', list())).json()).toEqual({
-			value: [{ url: `${HOOKS}/old`, events: [] }],
-		});
+		expect(await (await env.dashboard(cookie, 'GET', list())).json()).toEqual({ value });
 		expect((await env.dashboard(cookie, 'GET', `/v1/dashboard/websites/${env.websiteId}/lists/other`)).status).toBe(404);
 	});
 

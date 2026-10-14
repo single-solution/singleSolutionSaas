@@ -319,15 +319,15 @@ describe('required messages are never stopped by an opt-out (PLAN 0.8.5, MS-4)',
 		});
 		expect(answer.status).toBe(200);
 	};
-	/** Save a template as optional, as templates were saved before (straight in the merchant database). @param {string} key @param {string} channel */
-	const asSavedBefore = async (key, channel) =>
+	/** Mark a stored template optional, straight in the merchant database. @param {string} key @param {string} channel */
+	const storeAsOptional = async (key, channel) =>
 		(await env.merchantCollection('templates')).updateOne(
 			{ websiteId: env.websiteId, key, channel, language: '' },
 			{ $set: { required: false } },
 		);
 
 	it('sends Accounts’ messages after a STOP reply or an unsubscribe, without unsubscribe headers', async () => {
-		await asSavedBefore('accounts.phone_code', 'sms');
+		await storeAsOptional('accounts.phone_code', 'sms');
 		await stop('+15550004040');
 		const code = await env.send('sms', {
 			template: 'accounts.phone_code',
@@ -341,7 +341,7 @@ describe('required messages are never stopped by an opt-out (PLAN 0.8.5, MS-4)',
 			(await env.send('sms', { template: 'promo_sms', to: { phone: '+15550004040' }, values: { pct: '5%' } })).json,
 		).toMatchObject({ status: 'skipped', reason: 'unsubscribed' });
 		// an e-mail of Accounts carries no unsubscribe link or header
-		await asSavedBefore('accounts.email_code', 'email');
+		await storeAsOptional('accounts.email_code', 'email');
 		await env.send('email', {
 			template: 'accounts.email_code',
 			to: { email: 'cy@example.com' },
@@ -412,7 +412,7 @@ describe('Accounts’ messages are never held by quiet hours or a delayed send (
 		await env.switchOn(['email', 'sms', 'whatsapp', 'fallback', 'send_api', 'webhooks', 'quiet_hours', 'delayed_send']);
 		await env.template({ key: 'accounts.phone_code', channel: 'sms', text: 'Code {code}', urgent: false });
 		await env.template({ key: 'promo_sms', channel: 'sms', text: 'Sale {pct}' });
-		// a template saved before, not urgent
+		// stored as not urgent, straight in the merchant database
 		await (
 			await env.merchantCollection('templates')
 		).updateOne(

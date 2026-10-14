@@ -34,7 +34,7 @@ import {
 	retryPlanOf,
 	withinLimits,
 } from '../core/timing.js';
-import { checkForwardedEvent, checkWebhookUrls, eventTime, fromOldUrls, urlsFor } from '../core/webhooks.js';
+import { checkForwardedEvent, checkWebhookUrls, eventTime, urlsFor } from '../core/webhooks.js';
 import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
@@ -148,6 +148,8 @@ describe('templates', () => {
 			required: false,
 			urgent: false,
 			providerTemplate: 'sale',
+			buttons: [],
+			sensitive: false,
 		};
 		expect(renderTemplate(template, { pct: '5%' })).toEqual({
 			subject: '',
@@ -230,10 +232,6 @@ describe('templates', () => {
 			buttons: [{ index: 0, type: 'copy_code', value: '482913' }],
 		});
 		expect(templateView(checked.value).buttons).toEqual(one);
-		const older = { ...checked.value };
-		delete older.buttons;
-		expect(templateView(older).buttons).toEqual([]);
-		expect(renderTemplate(older, { code: '1' }).buttons).toEqual([]);
 	});
 
 	it('shows an optional section only when its value is not empty (PLAN 0.8.10 N2)', () => {
@@ -446,15 +444,6 @@ describe('provider answers, replies and webhook URLs', () => {
 		expect(isOptOut('stop please', ['STOP'])).toBe(false);
 		expect(isOptOut('stop', 'STOP')).toBe(false);
 		expect(isOptOut('', ['', 5])).toBe(false);
-	});
-
-	it('moves the old setting’s https URLs into the list, each taking every event (PLAN 0.8.10 N5)', () => {
-		const many = Array.from({ length: 7 }, (_, i) => `https://h${i}.example/x`);
-		expect(fromOldUrls(['https://a.example', 'http://b.example', 5, 'https://a.example', ...many])).toHaveLength(5);
-		expect(fromOldUrls(['https://a.example', 'https://u:p@b.example', 'https://%zz'])).toEqual([
-			{ url: 'https://a.example', events: [] },
-		]);
-		expect(fromOldUrls('https://a.example')).toEqual([]);
 	});
 
 	it('checks the list of webhook URLs and picks the URLs of an event (PLAN 0.8.10 N5)', () => {

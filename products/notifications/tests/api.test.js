@@ -1,8 +1,17 @@
 import { createDecipheriv, createHmac } from 'node:crypto';
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { verifyWebhook } from '../adapters/signatures.js';
-import { ADMIN_ORIGIN, GATEWAY_URL, HOOK_URL, ORIGIN, PUSH_ORIGIN, browserSubscription, pushKeys, setup } from './helpers.js';
+import {
+	ADMIN_ORIGIN,
+	GATEWAY_URL,
+	HOOK_URL,
+	ORIGIN,
+	PUSH_ORIGIN,
+	browserSubscription,
+	pushKeys,
+	setup,
+	verifySignature,
+} from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -502,7 +511,12 @@ describe('the send API', () => {
 		expect(calls).toHaveLength(2);
 		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
 		expect(
-			verifyWebhook({ body: last.body, header: last.headers['ss-signature'] ?? null, secret: WEBHOOK_SECRET, now: env.now() }),
+			verifySignature({
+				body: last.body,
+				header: last.headers['ss-signature'] ?? null,
+				secret: WEBHOOK_SECRET,
+				now: env.now(),
+			}),
 		).toBe(true);
 		expect(JSON.parse(last.body)).toMatchObject({
 			type: 'message.sent',
@@ -526,7 +540,12 @@ describe('the send API', () => {
 		expect(calls).toHaveLength(before + 1);
 		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
 		expect(
-			verifyWebhook({ body: last.body, header: last.headers['ss-signature'] ?? null, secret: WEBHOOK_SECRET, now: env.now() }),
+			verifySignature({
+				body: last.body,
+				header: last.headers['ss-signature'] ?? null,
+				secret: WEBHOOK_SECRET,
+				now: env.now(),
+			}),
 		).toBe(true);
 		expect(JSON.parse(last.body)).toMatchObject({
 			type: 'payments.payment.paid',
@@ -559,7 +578,12 @@ describe('the send API', () => {
 		expect(calls).toHaveLength(before + 1);
 		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
 		expect(
-			verifyWebhook({ body: last.body, header: last.headers['ss-signature'] ?? null, secret: WEBHOOK_SECRET, now: env.now() }),
+			verifySignature({
+				body: last.body,
+				header: last.headers['ss-signature'] ?? null,
+				secret: WEBHOOK_SECRET,
+				now: env.now(),
+			}),
 		).toBe(true);
 		expect(JSON.parse(last.body)).toEqual({
 			id,

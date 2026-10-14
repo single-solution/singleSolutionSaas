@@ -11,13 +11,11 @@ export const WEBHOOK_EVENTS = Object.freeze(['message.sent', 'message.failed', '
 /** Name of the signature header. */
 export const SIGNATURE_HEADER = 'ss-signature';
 /** URLs a website may send events to, at most. */
-export const MAX_WEBHOOK_URLS = 5;
+const MAX_WEBHOOK_URLS = 5;
 /** Event types one URL may name, at most. */
 const MAX_URL_EVENTS = 50;
 /** Longest webhook URL. */
 const MAX_URL_LENGTH = 2048;
-/** A receiver should refuse signatures older than this (the docs say so). */
-export const SIGNATURE_TOLERANCE_SECONDS = 300;
 /** Largest `data` of a forwarded event, in bytes of JSON. */
 export const EVENT_DATA_MAX_BYTES = 16 * 1024;
 
@@ -53,17 +51,6 @@ const isWebhookUrl = (url) => {
  * @returns {type is string}
  */
 const isEventType = (type) => typeof type === 'string' && (WEBHOOK_EVENTS.includes(type) || PRODUCT_EVENT.test(type));
-
-/**
- * The https URLs of the old `urls` setting (at most five, each once), moved into the list on its first read: each takes
- * every event, as before (PLAN 0.8.10 N5).
- * @param {unknown} urls
- * @returns {WebhookUrl[]}
- */
-export const fromOldUrls = (urls) =>
-	[...new Set((Array.isArray(urls) ? urls : []).filter(isWebhookUrl))]
-		.slice(0, MAX_WEBHOOK_URLS)
-		.map((url) => ({ url, events: [] }));
 
 /**
  * Check the list `webhook_urls`: at most five https URLs, each once, each with the events it takes (at most 50 types;

@@ -58,14 +58,14 @@ export const normaliseEmail = (value) => {
 /**
  * A phone number as E.164, or null: the normaliser every product shares (`@ss/contracts/phone`), with no default
  * calling code, so a number needs its `+` or `00` and calling code (Notifications never guesses a country); a trunk 0
- * after the code is dropped (`+92 0300 …`, `+44 (0)20 …`).
+ * after the code is dropped (`+49 030 …`, `+44 (0)20 …`).
  * @param {unknown} value
  * @returns {string | null}
  */
 export const normalisePhone = (value) => normaliseAnyPhone(value);
 
 /**
- * A language tag (`en`, `ur`, `pt-BR`), or null.
+ * A language tag (`en`, `fr`, `pt-BR`), or null.
  * @param {unknown} value
  * @returns {string | null}
  */
