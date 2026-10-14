@@ -69,7 +69,7 @@ const recordingLogger = () => {
 	return { logger: make(), entries };
 };
 
-/** E-mails the Portal sends, kept in memory; `token(to, template)` reads the link token of the last one. */
+/** Emails the Portal sends, kept in memory; `token(to, template)` reads the link token of the last one. */
 const memoryMailer = () => {
 	/** @type {Array<{ to: string, template: string, data: Record<string, string | null | undefined> }>} */
 	const sent = [];

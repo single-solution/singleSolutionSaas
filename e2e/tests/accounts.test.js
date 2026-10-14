@@ -1,6 +1,6 @@
 /**
  * PLAN 0.12 step 7: Accounts against the REAL Portal, with the real Notifications next to it — connect (manifest and
- * price list), price and feature reports, a sign-up with e-mail and password through the browser token the Portal
+ * price list), price and feature reports, a sign-up with email and password through the browser token the Portal
  * issued, the sign-in verified offline with the public keys (by the merchant's server and by Notifications through the
  * pasted Accounts token), Notifications' activity-log copies arriving in Accounts, "delete my account" erased in
  * Notifications through the pasted Notifications token, and the hourly charge.
@@ -96,7 +96,7 @@ describe('Accounts on the real Portal', () => {
 		expect(entry?.after).toMatchObject({ on });
 	});
 
-	it('signs up with e-mail and password through the Portal-issued browser token', async () => {
+	it('signs up with email and password through the Portal-issued browser token', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
 		await sys.connectDatabase(cookie, websiteId);
 		const up = await sys.call('POST', '/v1/sign-up/password', {

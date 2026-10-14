@@ -369,7 +369,7 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
 		await server('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
-		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by e-mail.' });
+		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by email.' });
 		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
 			accountHolder: '',
@@ -380,12 +380,12 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 			branchCode: '',
 			iban: '',
 			bic: '',
-			instructions: 'We send our bank details by e-mail.',
+			instructions: 'We send our bank details by email.',
 		});
 		const payment = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
 		expect(payment.status).toBe(201);
 		const shown = await sys.call('GET', `/pay/${websiteId}/${payment.json.id}`);
-		expect(shown.json).toContain('We send our bank details by e-mail.');
+		expect(shown.json).toContain('We send our bank details by email.');
 		expect(shown.json).not.toContain('Account number');
 	});
 
