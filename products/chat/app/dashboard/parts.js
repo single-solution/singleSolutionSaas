@@ -13,6 +13,7 @@ import {
 	ErrorState,
 	FieldGrid,
 	Input,
+	LocalTime,
 	SchemaForm,
 	Select,
 	Skeleton,
@@ -20,6 +21,7 @@ import {
 	TextArea,
 	describeProblem,
 	formatDateTime,
+	useViewerTimeZone,
 } from '@ss/ui';
 import { call, fill } from './api.js';
 import { TEXTS } from './texts.js';
@@ -74,7 +76,9 @@ export function RecentChanges({ items, titled = true }) {
 					{items.map((item) => (
 						<li key={`${item.at}-${item.detail}`}>
 							<span className="font-semibold">{item.who.name}</span> · {item.detail}{' '}
-							<span className="text-muted">{formatDateTime(item.at)}</span>
+							<span className="text-muted">
+								<LocalTime value={item.at} />
+							</span>
 						</li>
 					))}
 				</ul>
@@ -85,8 +89,9 @@ export function RecentChanges({ items, titled = true }) {
 
 /** @param {{ status: { status: string, graceEndsAt: string | null } }} props */
 export function StatusBanner({ status }) {
+	const timeZone = useViewerTimeZone();
 	const text = fill(TEXTS.status[/** @type {keyof typeof TEXTS.status} */ (status.status)] ?? status.status, {
-		time: formatDateTime(status.graceEndsAt),
+		time: formatDateTime(status.graceEndsAt, { timeZone }),
 	});
 	const tone = status.status === 'active' ? 'success' : status.status === 'grace' ? 'warning' : 'danger';
 	return <Callout tone={tone}>{text}</Callout>;

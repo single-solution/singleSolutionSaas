@@ -24,6 +24,7 @@ import {
 	formatCreditsPerHour,
 	formatDateTime,
 	parseCredits,
+	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
@@ -80,6 +81,7 @@ function CheckRow({ tone, badge, label, detail, children }) {
 
 /** @param {TabProps} props */
 function OverviewTab({ websiteId }) {
+	const timeZone = useViewerTimeZone();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const settings = useLoad(`${base}/settings`);
@@ -147,7 +149,7 @@ function OverviewTab({ websiteId }) {
 											badge={
 												data.checklist.widget.installed
 													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt),
+															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
 														})
 													: TEXTS.overview.widgetMissing
 											}
