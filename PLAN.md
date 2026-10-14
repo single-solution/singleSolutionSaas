@@ -2094,6 +2094,25 @@ tables and landing facets, measured quantities.
   is held, warning `refund_skipped`. SB mapping: its rules as flow options, `editPricing: keep_placed`,
   `deleteGivesBack: all`; `loyalty.returnPoints` dropped. Ecommerce 90 files / 878 tests; importer 38; e2e 7 files.
 
+- **Phase 3 built (2026-10-15; 0888bb88, a4f416e5, 7d400c84, 192c9cdd, 96158e2e, cb14f88c; importer fa39e5bd,
+  980e3e8b — store mappings to review when the owner asks; e2e 0347924d, 51c4eec6, ab35ccca):** attributes widened into
+  merchant **fields** (screens say Fields; same collection and `/v1/attributes` routes) on products, variants, units,
+  orders or customers; types text, number (unit, min, max, 0–3 decimals), choice, yes/no, date (any, past, future),
+  several values up to `maxValues`; text formats checked by one linear-time `checkFormat` (characters, length, starts,
+  mask, Luhn, ignore spaces, upper-case; no merchant-built regular expression; a live "Try a value" box);
+  `required`/`requiredAt` (checkout; before packed, shipped or delivered); `show` per place (page, card, filter,
+  compare, feeds incl. custom labels and color/material/size/pattern, JSON-LD, Chat, the shopper's order, invoice,
+  packing slip) replaces filterable/comparable/card, and staff-only values never leave staff answers; limits 200 per
+  shop, 3 unit fields per category (per type with phase 4). Units keep `values`/`keys` under a unique multikey index
+  (`by_key`), formats checked on stock add, CSV, import and packing. **IMEI is no longer built in** (a merchant unit
+  field: digits, 15, Luhn, 2 values). GTIN (GS1 check) and MPN are built-in variant fields used by JSON-LD, feeds and the
+  CSVs. Grades always keep a standard condition. Checkout asks the order fields shown to shoppers; staff edit order and
+  customer fields; invoices and slips print the fields set to show there. Bugs fixed: grades could get different
+  conditions in feeds and JSON-LD; stock-added units skipped the format check; data-rights erasure kept order fields;
+  the Meta CSV lacked gtin/mpn. Left for phase 4: `serialMode`/`serialized`/`requiresSerial`/`isSerialized` into item
+  types' `units`, the flow's `needs: ['units']`, unit fields scoped by type, `typeKeys` scope and per-type limits, kind
+  booking → service.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
