@@ -248,7 +248,7 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 		} catch (error) {
 			if (!isNetError(error)) throw error;
 			ctx.logger.warn('setup sheet: a product did not answer a switch', { productId, reason: error.code });
-			throw problem('upstream_error', 'The product did not answer. Nothing was changed; try again in a moment.');
+			throw problem('upstream_error', 'The product did not answer. Refresh to see whether the feature is on, then try again.');
 		}
 		/** @type {Record<string, any>} */
 		let answer = {};

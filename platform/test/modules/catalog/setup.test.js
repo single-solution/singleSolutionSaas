@@ -272,7 +272,7 @@ describe('business profile and advisor', () => {
 		await notes.close();
 		const down = await owner.post(`${base}/setup/features`, { productId: 'notes', feature: 'inbox' });
 		expect(codeOf(down)).toEqual([502, 'upstream_error']);
-		expect(down.json.detail).toBe('The product did not answer. Nothing was changed; try again in a moment.');
+		expect(down.json.detail).toBe('The product did not answer. Refresh to see whether the feature is on, then try again.');
 	});
 
 	it('parses a profile and words the advice', () => {
