@@ -1,6 +1,6 @@
 /**
  * The pay button (visitor widget, browser token; PLAN 0.8.7). Placed with `data-link="link_…"` it shows the payment
- * link (title, amount or an amount field, the payer's name and e-mail, the payment method) and makes the payment;
+ * link (title, amount or an amount field, the payer's name and email, the payment method) and makes the payment;
  * placed with `data-payment="pay_…"` it shows a payment the merchant's server created. Either way the payer then goes
  * to the pay page, and from there to the gateway's own page: card details are never asked here. Amounts follow the
  * website's Format. It renders nothing when the link or payment cannot be shown (feature off, product stopped, unknown
@@ -56,7 +56,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				if (data.description) box.append(element(doc, 'h2', {}, data.description));
 				if (['paid', 'partially_refunded', 'refunded'].includes(data.status))
 					box.append(element(doc, 'p', { class: 'amount' }, `${amount} · ${t('button.paid')}`));
-				// the merchant cancelled it: no Pay button (K-13)
+				// the merchant canceled it: no Pay button (K-13)
 				else if (data.status === 'voided')
 					box.append(element(doc, 'p', { class: 'amount' }, `${amount} · ${t('button.voided')}`));
 				else {

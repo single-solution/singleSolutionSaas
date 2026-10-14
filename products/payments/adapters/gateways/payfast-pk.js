@@ -119,12 +119,12 @@ const confirmation = (data, keys) => {
 export const payfastPk = {
 	id: 'payfast_pk',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the merchant id, the secured key and the merchant name.';
+		if (!isObject(keys)) return 'Enter the merchant id, the secured key and the merchant name.';
 		if (typeof keys.merchantId !== 'string' || !/^\d{1,20}$/.test(keys.merchantId)) return 'The merchant id is a number.';
 		if (typeof keys.securedKey !== 'string' || keys.securedKey.trim() === '' || /\s/.test(keys.securedKey))
-			return 'Fill in the secured key.';
+			return 'Enter the secured key.';
 		if (typeof keys.merchantName !== 'string' || keys.merchantName.trim() === '' || keys.merchantName.length > 100)
-			return 'Fill in the merchant name registered with PayFast (at most 100 characters).';
+			return 'Enter the merchant name registered with PayFast (at most 100 characters).';
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},

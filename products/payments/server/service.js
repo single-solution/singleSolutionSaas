@@ -217,7 +217,7 @@ export const createService = (product) => {
 
 	/**
 	 * What follows a payment becoming paid: its link counts it, and the merchant is told (`payment.paid`). Money for a
-	 * payment the merchant cancelled is not counted on its link, and its history says it is to be refunded (K-13).
+	 * payment the merchant canceled is not counted on its link, and its history says it is to be refunded (K-13).
 	 * @param {Site} s @param {PaymentRecord} paid
 	 * @returns {Promise<PaymentRecord>}
 	 */
@@ -227,7 +227,7 @@ export const createService = (product) => {
 					paid.id,
 					['paid'],
 					{},
-					{ event: 'refund_due', detail: 'paid after the merchant cancelled it' },
+					{ event: 'refund_due', detail: 'paid after the merchant canceled it' },
 				)) ?? paid)
 			: paid;
 		if (after.linkId && !after.voidedAt) await s.store.links.countPaid(after.linkId);
@@ -238,7 +238,7 @@ export const createService = (product) => {
 	/**
 	 * Apply what a gateway confirmed about a payment of this website. A payment becomes paid only for its own amount and
 	 * currency (a mismatch is recorded and changes nothing); a confirmation that arrives twice changes nothing. Money for
-	 * a payment the merchant cancelled is recorded too (the payer paid), with a history entry saying it is to be refunded:
+	 * a payment the merchant canceled is recorded too (the payer paid), with a history entry saying it is to be refunded:
 	 * the payment answers `refundDue: true`, also in its `payment.paid` event, and never verifies an order (K-13).
 	 * @param {Site} s @param {Gateway} gateway @param {import('../adapters/gateways/types.js').PaymentNews} news @param {string} via
 	 * @returns {Promise<PaymentRecord | null>} the payment after it, or null when it is not this website's
@@ -324,11 +324,11 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The merchant cancels a payment it no longer wants, for example because its order was cancelled or expired (K-13):
+	 * The merchant cancels a payment it no longer wants, for example because its order was canceled or expired (K-13):
 	 * the payment becomes `voided`, its pay page and the payer's retry are closed, a bank transfer takes no proof, and
 	 * the gateway's own page is stopped where the gateway allows it (Stripe expires the Checkout Session; PayPal's
 	 * order is never captured). Money that still arrives is recorded with `refundDue`. A payment already paid is not
-	 * cancelled (409 `already_paid`, with the payment): refund it instead. Cancelling it again changes nothing.
+	 * canceled (409 `already_paid`, with the payment): refund it instead. Canceling it again changes nothing.
 	 * @param {Site} s @param {PaymentRecord} payment @param {string} reason @param {Actor} by
 	 * @returns {Promise<PaymentRecord>}
 	 */
@@ -342,9 +342,9 @@ export const createService = (product) => {
 			payment.id,
 			['pending', 'failed', 'cancelled'],
 			{ status: 'voided', voidedAt: new Date(now()), checkout: null },
-			{ event: 'voided', detail: reason || 'cancelled by the merchant', by: nameOf(by) },
+			{ event: 'voided', detail: reason || 'canceled by the merchant', by: nameOf(by) },
 		);
-		// it changed meanwhile (paid, or cancelled by another call): judged again as it is now
+		// it changed meanwhile (paid, or canceled by another call): judged again as it is now
 		if (!voided) return voidPayment(s, /** @type {PaymentRecord} */ (await s.store.payments.get(payment.id)), reason, by);
 		const gateway = payment.gateway;
 		const adapter = gateway && gateway !== 'bank_transfer' && payment.gatewayRef ? gateways[gateway] : null;
@@ -459,7 +459,7 @@ export const createService = (product) => {
 
 	/**
 	 * The merchant confirms a bank transfer arrived, with the transfer's reference and a note (PLAN 0.8.10 P3). A
-	 * transfer that arrives after the merchant cancelled the payment is confirmed too, and is then to be refunded
+	 * transfer that arrives after the merchant canceled the payment is confirmed too, and is then to be refunded
 	 * (`refundDue`, K-13).
 	 * @param {Site} s @param {PaymentRecord} payment @param {Actor} by
 	 * @param {{ reference: string, note: string }} [input]

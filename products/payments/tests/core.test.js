@@ -85,9 +85,9 @@ describe('gateways', () => {
 		expect(bankTransfer({ requireDetails: true, accountNumber: '31926819' }).ready).toBe(false);
 		expect(bankTransfer({ requireDetails: true, iban: ibanOnly.iban, bic: ibanOnly.bic }).ready).toBe(false);
 		// Require bank details off: offered by its switch alone, with the instructions
-		expect(bankTransfer({ requireDetails: false, instructions: 'We send our details by e-mail.' })).toEqual({
+		expect(bankTransfer({ requireDetails: false, instructions: 'We send our details by email.' })).toEqual({
 			...empty,
-			instructions: 'We send our details by e-mail.',
+			instructions: 'We send our details by email.',
 			ready: true,
 		});
 		// a value that is not text reads as not set
@@ -186,7 +186,7 @@ describe('payments', () => {
 		expect(isConfirmedFor(payment, { amount: 999, currency: 'EUR' })).toBe(false);
 		expect(isConfirmedFor(payment, { amount: 1000, currency: 'USD' })).toBe(false);
 		expect(isConfirmedFor({ ...payment, status: 'pending' }, { amount: 1000, currency: 'EUR' })).toBe(false);
-		// money that arrived after the merchant cancelled the payment never confirms an order (K-13)
+		// money that arrived after the merchant canceled the payment never confirms an order (K-13)
 		const late = { ...payment, voidedAt: new Date('2026-10-01T10:00:00Z') };
 		expect(isConfirmedFor(late, { amount: 1000, currency: 'EUR' })).toBe(false);
 		expect(isRefundDue(late)).toBe(true);
@@ -253,7 +253,7 @@ describe('payments', () => {
 			refunded: 'Refunded',
 			gateway: 'Gateway',
 			reference: 'Reference',
-			email: 'E-mail',
+			email: 'Email',
 			description: 'Description',
 		});
 		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,EUR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);

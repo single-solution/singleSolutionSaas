@@ -130,7 +130,7 @@ export const gatewayName = (texts, gateway, genericName = '') =>
 	translator(texts)(`gateway.${gateway}`, gateway === 'generic' ? { name: genericName } : {});
 
 /**
- * The payment-link page: amount (when the link has none), the payer's name and e-mail, the payment method.
+ * The payment-link page: amount (when the link has none), the payer's name and email, the payment method.
  * @param {PageLook & { business: string, link: { title: string, description: string, amount: number | null, minAmount: number | null,
  *   currency: string }, gateways: Array<{ id: string, name: string }>, action: string, error?: string,
  *   values?: Record<string, string> }} input

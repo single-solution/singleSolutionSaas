@@ -699,10 +699,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "A payment id, a payer e-mail address, a reference, or the start of a reference.",
+						"description": "A payment id, a payer email address, a reference, or the start of a reference.",
 						"schema": {
 							"type": "string",
-							"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+							"description": "A payment id, a payer email address, a reference, or the start of a reference."
 						}
 					}
 				],
@@ -765,10 +765,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "A payment id, a payer e-mail address, a reference, or the start of a reference.",
+						"description": "A payment id, a payer email address, a reference, or the start of a reference.",
 						"schema": {
 							"type": "string",
-							"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+							"description": "A payment id, a payer email address, a reference, or the start of a reference."
 						}
 					}
 				],
@@ -844,10 +844,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "A payment id, a payer e-mail address, a reference, or the start of a reference.",
+						"description": "A payment id, a payer email address, a reference, or the start of a reference.",
 						"schema": {
 							"type": "string",
-							"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+							"description": "A payment id, a payer email address, a reference, or the start of a reference."
 						}
 					}
 				],
@@ -924,7 +924,7 @@
 		"/v1/admin/payments/{id}/confirm": {
 			"post": {
 				"summary": "Confirm a bank transfer arrived (Payments admin widget)",
-				"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you cancelled is confirmed too, and is then to be refunded (refundDue).",
+				"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you canceled is confirmed too, and is then to be refunded (refundDue).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bank_transfer",
 				"x-ss-permission": "payments.confirm",
@@ -1405,7 +1405,7 @@
 			},
 			"post": {
 				"summary": "Pay a payment link",
-				"description": "Makes the payment; send the payer to checkoutUrl. A wrong amount, e-mail address or gateway answers 422 validation_failed for that field.",
+				"description": "Makes the payment; send the payer to checkoutUrl. A wrong amount, email address or gateway answers 422 validation_failed for that field.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "payment_links",
 				"security": [
@@ -3046,10 +3046,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "A payment id, a payer e-mail address, a reference, or the start of a reference.",
+						"description": "A payment id, a payer email address, a reference, or the start of a reference.",
 						"schema": {
 							"type": "string",
-							"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+							"description": "A payment id, a payer email address, a reference, or the start of a reference."
 						}
 					},
 					{
@@ -3188,7 +3188,7 @@
 									"cancelUrl": {
 										"type": "string",
 										"maxLength": 2048,
-										"description": "Where the payer goes after cancelling at the gateway."
+										"description": "Where the payer goes after canceling at the gateway."
 									}
 								}
 							}
@@ -3253,10 +3253,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "A payment id, a payer e-mail address, a reference, or the start of a reference.",
+						"description": "A payment id, a payer email address, a reference, or the start of a reference.",
 						"schema": {
 							"type": "string",
-							"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+							"description": "A payment id, a payer email address, a reference, or the start of a reference."
 						}
 					},
 					{
@@ -3343,10 +3343,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "A payment id, a payer e-mail address, a reference, or the start of a reference.",
+						"description": "A payment id, a payer email address, a reference, or the start of a reference.",
 						"schema": {
 							"type": "string",
-							"description": "A payment id, a payer e-mail address, a reference, or the start of a reference."
+							"description": "A payment id, a payer email address, a reference, or the start of a reference."
 						}
 					},
 					{
@@ -3446,7 +3446,7 @@
 		"/v1/payments/{id}/cancel": {
 			"post": {
 				"summary": "Cancel a payment nobody should pay any more",
-				"description": "For example when its order was cancelled or expired: the payment becomes voided and its page closes. A paid payment answers 409 already_paid (with the payment): refund it instead. Cancelling it again changes nothing.",
+				"description": "For example when its order was canceled or expired: the payment becomes voided and its page closes. A paid payment answers 409 already_paid (with the payment): refund it instead. Canceling it again changes nothing.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
 				"security": [
@@ -3520,7 +3520,7 @@
 		"/v1/payments/{id}/confirm": {
 			"post": {
 				"summary": "Confirm a bank transfer arrived",
-				"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you cancelled is confirmed too, and is then to be refunded (refundDue).",
+				"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you canceled is confirmed too, and is then to be refunded (refundDue).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bank_transfer",
 				"security": [
@@ -3743,7 +3743,7 @@
 		"/v1/payments/{id}/verify": {
 			"post": {
 				"summary": "Is the payment confirmed for this exact amount?",
-				"description": "Use it before marking an order paid: verified is true only for a payment confirmed by the gateway (refunded later included) with the same amount and currency, never for one you cancelled.",
+				"description": "Use it before marking an order paid: verified is true only for a payment confirmed by the gateway (refunded later included) with the same amount and currency, never for one you canceled.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "payment_api",
 				"security": [
@@ -4984,7 +4984,7 @@
 				"name": "SS-Actor-Email",
 				"in": "header",
 				"required": false,
-				"description": "The acting member's e-mail address.",
+				"description": "The acting member's email address.",
 				"schema": {
 					"type": "string",
 					"maxLength": 320
@@ -5276,7 +5276,7 @@
 					},
 					"phone": {
 						"type": "string",
-						"description": "International format (+…); spaces, brackets and dashes are removed. '' for none."
+						"description": "International format (+…); spaces, parentheses and dashes are removed. '' for none."
 					}
 				}
 			},
@@ -5329,7 +5329,7 @@
 						"properties": {
 							"locale": {
 								"type": "string",
-								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
+								"description": "A language tag such as en-US or fr-FR, or '' for the viewer's (en-US in text the server makes)."
 							},
 							"currencyDisplay": {
 								"type": "string",
@@ -5677,11 +5677,11 @@
 							"partially_refunded",
 							"refunded"
 						],
-						"description": "pending: waiting for the payer or the gateway; cancelled: the payer cancelled at the gateway (they may try again); voided: you cancelled it, nobody can pay it."
+						"description": "pending: waiting for the payer or the gateway; cancelled: the payer canceled at the gateway (they may try again); voided: you canceled it, nobody can pay it."
 					},
 					"refundDue": {
 						"type": "boolean",
-						"description": "Money arrived after you cancelled it: refund it."
+						"description": "Money arrived after you canceled it: refund it."
 					},
 					"amount": {
 						"type": "integer",
@@ -5904,7 +5904,7 @@
 							"null"
 						],
 						"format": "date-time",
-						"description": "When you cancelled it."
+						"description": "When you canceled it."
 					},
 					"createdAt": {
 						"type": "string",
@@ -6338,7 +6338,7 @@
 									"type": "string",
 									"pattern": "^#[0-9a-fA-F]{6}$"
 								},
-								"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+								"description": "Color name → #rrggbb (the product's CSS supplies the others)."
 							},
 							"fontFamily": {
 								"type": "string",

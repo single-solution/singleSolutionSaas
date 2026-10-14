@@ -52,11 +52,11 @@ export const webhookSignature = (body, secret) => hmacHex(secret, body);
 export const rapid = {
 	id: 'rapid',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the secret key and the webhook secret.';
+		if (!isObject(keys)) return 'Enter the secret key and the webhook secret.';
 		if (typeof keys.secretKey !== 'string' || keys.secretKey.trim().length < 8 || /\s/.test(keys.secretKey))
-			return 'Fill in the secret key.';
+			return 'Enter the secret key.';
 		if (typeof keys.webhookSecret !== 'string' || keys.webhookSecret.trim().length < 8 || /\s/.test(keys.webhookSecret))
-			return 'Fill in the webhook secret.';
+			return 'Enter the webhook secret.';
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},

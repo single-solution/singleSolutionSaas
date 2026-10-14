@@ -594,7 +594,7 @@ describe('the other gateways', () => {
 		await page(`/pay/${env.websiteId}/${payment.id}`);
 		const cancel = await page(`/return/cancel/${env.websiteId}/${payment.id}`);
 		expect(cancel.headers.get('location')).toBe(`/pay/${env.websiteId}/${payment.id}`);
-		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('The payment was cancelled.');
+		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('The payment was canceled.');
 		const withCancel = await createPayment({ gateway: 'stripe', cancelUrl: `${ORIGIN}/cart` });
 		expect((await page(`/return/cancel/${env.websiteId}/${withCancel.id}`)).headers.get('location')).toBe(
 			`${ORIGIN}/cart?ss_payment=${withCancel.id}`,
@@ -784,7 +784,7 @@ describe('bank transfer', () => {
 		for (const name of ['accountNumber', 'accountHolder']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
 		expect((await env.api('GET', '/v1/bank-transfer')).json.ready).toBe(false);
 		await env.api('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
-		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by e-mail.' });
+		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by email.' });
 		expect((await env.api('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
 			accountHolder: '',
@@ -795,11 +795,11 @@ describe('bank transfer', () => {
 			branchCode: '',
 			iban: '',
 			bic: '',
-			instructions: 'We send our bank details by e-mail.',
+			instructions: 'We send our bank details by email.',
 		});
 		const payment = await createPayment({ gateway: 'bank_transfer', reference: 'ORD-7' });
 		const shown = (await page(`/pay/${env.websiteId}/${payment.id}`)).text;
-		expect(shown).toContain('We send our bank details by e-mail.');
+		expect(shown).toContain('We send our bank details by email.');
 		expect(shown).toContain('as explained below');
 		expect(shown).toContain('ORD-7');
 		expect(shown).not.toContain('Account number');
@@ -832,14 +832,14 @@ describe('a payment the merchant cancels (K-13)', () => {
 		const logged = await env.api('GET', `/v1/activity?target=${payment.id}&action=payment.voided`);
 		expect(logged.json.items[0]).toMatchObject({
 			label: 'order-77',
-			detail: 'Payment cancelled; it can no longer be paid (Order expired)',
+			detail: 'Payment canceled; it can no longer be paid (Order expired)',
 		});
-		// cancelling again changes nothing
+		// canceling again changes nothing
 		const again = await env.api('POST', `/v1/payments/${payment.id}/cancel`, {});
 		expect(again.json.history).toHaveLength(voided.json.history.length);
 		// the pay page, the payer's retry and the pay button are closed
 		const closed = await page(`/pay/${env.websiteId}/${payment.id}`);
-		expect(closed.text).toContain('This payment was cancelled and can no longer be paid.');
+		expect(closed.text).toContain('This payment was canceled and can no longer be paid.');
 		expect(closed.text).not.toContain('Try again');
 		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { retry: '1' } });
 		await env.call('POST', `/pay/${env.websiteId}/${payment.id}`, { form: { gateway: 'jazzcash' } });
@@ -853,7 +853,7 @@ describe('a payment the merchant cancels (K-13)', () => {
 		expect(late).toMatchObject({ status: 'paid', refundDue: true, voidedAt: voided.json.voidedAt });
 		expect(late.history.slice(-2)).toMatchObject([
 			{ event: 'paid', detail: 'stripe notice' },
-			{ event: 'refund_due', detail: 'paid after the merchant cancelled it' },
+			{ event: 'refund_due', detail: 'paid after the merchant canceled it' },
 		]);
 		const told = events.filter((e) => e.type === 'payments.payment.paid');
 		expect(told).toHaveLength(paidBefore + 1);
@@ -862,7 +862,7 @@ describe('a payment the merchant cancels (K-13)', () => {
 		const verify = await env.api('POST', `/v1/payments/${payment.id}/verify`, { amount: 250000, currency: 'USD' });
 		expect(verify.json).toMatchObject({ verified: false, payment: { refundDue: true } });
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('so it is to be refunded');
-		// a paid payment is not cancelled: it is refunded, which clears the mark
+		// a paid payment is not canceled: it is refunded, which clears the mark
 		const paidAlready = await env.api('POST', `/v1/payments/${payment.id}/cancel`, {});
 		expect(paidAlready.status).toBe(409);
 		expect(paidAlready.json.type).toMatch(/already_paid$/);
@@ -871,19 +871,19 @@ describe('a payment the merchant cancels (K-13)', () => {
 		expect(refunded.json).toMatchObject({ status: 'refunded', refundDue: false });
 	});
 
-	it('a bank transfer takes no proof once cancelled, and one confirmed after is to be refunded; PayPal is never captured', async () => {
+	it('a bank transfer takes no proof once canceled, and one confirmed after is to be refunded; PayPal is never captured', async () => {
 		const transfer = await createPayment({ gateway: 'bank_transfer', reference: 'INV-77' });
 		await page(`/pay/${env.websiteId}/${transfer.id}`);
-		const voided = await env.api('POST', `/v1/payments/${transfer.id}/cancel`, { reason: 'Order cancelled' });
+		const voided = await env.api('POST', `/v1/payments/${transfer.id}/cancel`, { reason: 'Order canceled' });
 		expect(voided.json).toMatchObject({ status: 'voided' });
-		expect(voided.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'Order cancelled' });
+		expect(voided.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'Order canceled' });
 		const proof = `/pay/${env.websiteId}/${transfer.id}/proof`;
 		expect((await env.call('POST', proof, { body: { type: 'image/png', size: 10 } })).status).toBe(404);
 		const confirmed = await env.api('POST', `/v1/payments/${transfer.id}/confirm`, { reference: 'TRX-77' });
 		expect(confirmed.json).toMatchObject({ status: 'paid', refundDue: true });
 		expect(confirmed.json.history.at(-1)).toMatchObject({ event: 'refund_due' });
 
-		// PayPal: the approved order of a cancelled payment is not captured when the payer comes back
+		// PayPal: the approved order of a canceled payment is not captured when the payer comes back
 		env.gateways.respond('https://api-m.paypal.com', (c) => {
 			if (c.path === '/v1/oauth2/token') return { status: 200, body: { access_token: 'tok' } };
 			if (c.path === '/v2/checkout/orders')
@@ -894,16 +894,16 @@ describe('a payment the merchant cancels (K-13)', () => {
 		const viaPaypal = await createPayment({ amount: 2500, currency: 'USD', gateway: 'paypal', reference: '' });
 		await page(`/pay/${env.websiteId}/${viaPaypal.id}`);
 		const stopped = await env.api('POST', `/v1/payments/${viaPaypal.id}/cancel`, {});
-		expect(stopped.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'cancelled by the merchant' });
+		expect(stopped.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'canceled by the merchant' });
 		const logged = await env.api('GET', `/v1/activity?target=${viaPaypal.id}&action=payment.voided`);
-		expect(logged.json.items[0]).toMatchObject({ label: viaPaypal.id, detail: 'Payment cancelled; it can no longer be paid' });
+		expect(logged.json.items[0]).toMatchObject({ label: viaPaypal.id, detail: 'Payment canceled; it can no longer be paid' });
 		await page(`/return/paypal/${env.websiteId}/${viaPaypal.id}?token=ORD7`);
 		const paths = env.gateways.callsTo('https://api-m.paypal.com').map((c) => c.path);
 		expect(paths).toContain('/v2/checkout/orders/ORD7');
 		expect(paths).not.toContain('/v2/checkout/orders/ORD7/capture');
 		expect((await env.api('GET', `/v1/payments/${viaPaypal.id}`)).json.status).toBe('voided');
 
-		// Stripe could not stop its page: the history says so; payer-cancelled and unstarted payments are cancelled too
+		// Stripe could not stop its page: the history says so; payer-canceled and unstarted payments are canceled too
 		env.gateways.respond('https://api.stripe.com', (c) =>
 			c.path.endsWith('/expire')
 				? { status: 400, body: { error: { message: 'This session is not open.' } } }
@@ -970,7 +970,7 @@ describe('payment links and the pay button routes', () => {
 		const email = await env.call('POST', `/l/${env.websiteId}/${open.id}`, {
 			form: { amount: '10', gateway: 'stripe', email: 'x' },
 		});
-		expect(email.text).toContain('Enter a valid e-mail address.');
+		expect(email.text).toContain('Enter a valid email address.');
 		const method = await env.call('POST', `/l/${env.websiteId}/${open.id}`, { form: { amount: '10', gateway: 'jazzcash' } });
 		expect(method.text).toContain('Choose a payment method.');
 		const made = await env.call('POST', `/l/${env.websiteId}/${open.id}`, {
@@ -1313,7 +1313,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 		expect(byAction['subscription.cancelled']).toMatchObject({
 			target: sub.json.id,
 			label: 'club-9',
-			detail: 'Cancelled at Stripe (plan price_2)',
+			detail: 'Canceled at Stripe (plan price_2)',
 		});
 		// the server itself, and a ticket's staff member
 		const plain = await createPayment({ gateway: 'bank_transfer' });
@@ -1431,7 +1431,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 });
 
 describe('data rights, statuses and public files', () => {
-	it('exports and anonymises a person’s payments', async () => {
+	it('exports and anonymizes a person’s payments', async () => {
 		const exported = await env.api('POST', '/v1/data-rights/export', { user: { email: 'sub@example.com' } });
 		expect(exported.json.records.subscriptions).toHaveLength(1);
 		const ana = await env.api('POST', '/v1/data-rights/export', {

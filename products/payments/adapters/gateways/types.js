@@ -48,10 +48,10 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
  * @property {(incoming: Incoming, payment: PaymentLike, keys: Keys, ctx: GatewayContext) => Promise<{ news: PaymentNews | null, next?: Started }>} [returned]
  *   the payer came back from the gateway: what the gateway confirms (signed, or asked server to server)
  * @property {(payment: PaymentLike, keys: Keys, ctx: GatewayContext) => Promise<PaymentNews | null>} [status] ask the gateway
- *   (it never takes the money of a payment the merchant cancelled, status `voided`)
+ *   (it never takes the money of a payment the merchant canceled, status `voided`)
  * @property {(payment: PaymentLike, keys: Keys, ctx: GatewayContext) => Promise<{ ok: boolean, message?: string }>} [expire]
  *   stop the payer's checkout at the gateway, so the gateway's page refuses to take the payment (the merchant
- *   cancelled it)
+ *   canceled it)
  * @property {(input: { payment: PaymentLike, amount: number, reason: string, refundId: string }, keys: Keys, ctx: GatewayContext) => Promise<Refunded>} refund
  * @property {(input: { subscription: SubscriptionLike, keys: Keys, urls: Urls }, ctx: GatewayContext) => Promise<Started>} [subscribe]
  * @property {(subscription: SubscriptionLike, keys: Keys, ctx: GatewayContext) => Promise<SubscriptionNews | null>} [subscriptionStatus]

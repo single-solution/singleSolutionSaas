@@ -228,7 +228,7 @@ describe('pay button', () => {
 		}
 	});
 
-	it('shows no Pay button for a payment the merchant cancelled (K-13)', async () => {
+	it('shows no Pay button for a payment the merchant canceled (K-13)', async () => {
 		/** @type {import('../ui/pay-button.js').VisitorCall} */
 		const call = async () => ({
 			ok: true,
@@ -503,7 +503,7 @@ describe('Payments admin widget', () => {
 		expect(rows(host)[0]?.getAttribute('aria-current')).toBe('true');
 	});
 
-	it('marks money that arrived after the merchant cancelled the payment as a refund due (K-13)', async () => {
+	it('marks money that arrived after the merchant canceled the payment as a refund due (K-13)', async () => {
 		const host = place('payments_admin');
 		const voided = {
 			...PAYMENT,
@@ -637,7 +637,7 @@ describe('Subscriptions admin widget', () => {
 		menuItem(host, strings['subs.cancel'])?.click();
 		expect(dialog(host)?.textContent).toContain('price_1');
 		await submitDialog(host);
-		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not cancelled: Stripe refused the keys.');
+		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not canceled: Stripe refused the keys.');
 		cancel = answer(200, { ...sub, status: 'cancelled' });
 		await submitDialog(host);
 		expect(dialog(host)).toBeNull();
@@ -922,7 +922,7 @@ describe('the hosted bank page and /pay.js', () => {
 				branchCode: '',
 				iban: '',
 				bic: '',
-				instructions: 'We send our details by e-mail.',
+				instructions: 'We send our details by email.',
 			},
 			proof: { action: 'https://payments.example.dev/pay/web_1/pay_1/proof', maxBytes: 1000 },
 			uploaded: false,

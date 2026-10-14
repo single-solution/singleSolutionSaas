@@ -83,12 +83,11 @@ const api = (keys, ctx, method, path, body = {}) => {
 export const payfast = {
 	id: 'payfast',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the merchant id, the merchant key and the passphrase.';
+		if (!isObject(keys)) return 'Enter the merchant id, the merchant key and the passphrase.';
 		if (typeof keys.merchantId !== 'string' || !/^\d{4,20}$/.test(keys.merchantId)) return 'The merchant id is a number.';
-		if (typeof keys.merchantKey !== 'string' || !/^[A-Za-z0-9]{6,40}$/.test(keys.merchantKey))
-			return 'Fill in the merchant key.';
+		if (typeof keys.merchantKey !== 'string' || !/^[A-Za-z0-9]{6,40}$/.test(keys.merchantKey)) return 'Enter the merchant key.';
 		if (typeof keys.passphrase !== 'string' || keys.passphrase.trim().length < 8)
-			return 'Fill in the passphrase set in your PayFast account (needed for the API).';
+			return 'Enter the passphrase set in your PayFast account (needed for the API).';
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},

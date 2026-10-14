@@ -7,9 +7,9 @@ import { isGateway, SUBSCRIPTION_GATEWAYS } from './gateways.js';
 import { formatMoney, isAmount, isCurrency, toDecimal } from './money.js';
 
 /**
- * Payment statuses. `pending`: waiting for the payer or the gateway; `cancelled`: the payer cancelled at the gateway
- * (they may try again); `voided`: the merchant cancelled it (`POST /v1/payments/:id/cancel`, for example its order was
- * cancelled or expired), so nobody can pay it any more; `refunded` and `partially_refunded` were paid.
+ * Payment statuses. `pending`: waiting for the payer or the gateway; `cancelled`: the payer canceled at the gateway
+ * (they may try again); `voided`: the merchant canceled it (`POST /v1/payments/:id/cancel`, for example its order was
+ * canceled or expired), so nobody can pay it any more; `refunded` and `partially_refunded` were paid.
  */
 export const PAYMENT_STATUSES = Object.freeze(
 	/** @type {const} */ (['pending', 'paid', 'failed', 'cancelled', 'voided', 'partially_refunded', 'refunded']),
@@ -60,7 +60,7 @@ const EMAIL = /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}\.[^\s@<>"]{1,63}$/;
 const PHONE = /^\+[1-9]\d{6,14}$/;
 
 /**
- * A payer's details: the Accounts user id, name, e-mail and phone (international format), each optional.
+ * A payer's details: the Accounts user id, name, email and phone (international format), each optional.
  * @param {unknown} value
  * @returns {Checked}
  */
@@ -77,7 +77,7 @@ export const checkCustomer = (value) => {
 	if (name) customer.name = name;
 	if (value.email !== undefined && value.email !== '') {
 		const email = typeof value.email === 'string' ? value.email.trim().toLowerCase() : '';
-		if (!EMAIL.test(email)) return { ok: false, field: 'customer/email', message: 'customer.email is not an e-mail address.' };
+		if (!EMAIL.test(email)) return { ok: false, field: 'customer/email', message: 'customer.email is not an email address.' };
 		customer.email = email;
 	}
 	if (value.phone !== undefined && value.phone !== '') {
@@ -275,7 +275,7 @@ export const checkTransferInput = (body, { note: withNote = false } = {}) => {
 };
 
 /**
- * Whether money arrived for a payment the merchant had cancelled (K-13): it is recorded as paid, and is to be
+ * Whether money arrived for a payment the merchant had canceled (K-13): it is recorded as paid, and is to be
  * refunded (until all of it is).
  * @param {{ status: string, voidedAt?: Date | string | null }} payment
  */
@@ -284,7 +284,7 @@ export const isRefundDue = (payment) =>
 
 /**
  * Whether a payment is confirmed for the exact amount and currency (PLAN 0.3: Ecommerce marks an order paid only for
- * the same website and the order's exact amount). A payment refunded later was still paid; one the merchant cancelled
+ * the same website and the order's exact amount). A payment refunded later was still paid; one the merchant canceled
  * never confirms, even when money arrived after (it is to be refunded).
  * @param {{ status: string, amount: number, currency: string, voidedAt?: Date | string | null }} payment
  * @param {{ amount: unknown, currency: unknown }} expected
@@ -300,7 +300,7 @@ const iso = (at) => (at === null || at === undefined ? null : new Date(at).toISO
 
 /**
  * A payment as the API answers it (no gateway secrets; the proof as a mark only). `voidedAt`: when the merchant
- * cancelled it; `refundDue`: money arrived after that, and is to be refunded (K-13).
+ * canceled it; `refundDue`: money arrived after that, and is to be refunded (K-13).
  * @param {any} payment the stored record
  * @param {string} checkoutUrl the payer's page for it
  */

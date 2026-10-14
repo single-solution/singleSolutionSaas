@@ -42,7 +42,7 @@ import { createId } from '@ss/contracts';
  * @property {{ key: string, type: string, size: number, at: Date } | null} proof bank-transfer proof in the merchant's storage
  * @property {HistoryEntry[]} history
  * @property {Date | null} paidAt
- * @property {Date | null} voidedAt when the merchant cancelled it (status `voided`, K-13); kept once it is paid after,
+ * @property {Date | null} voidedAt when the merchant canceled it (status `voided`, K-13); kept once it is paid after,
  *   so the payment shows a refund is due
  * @property {Date} createdAt
  * @property {Date} updatedAt
@@ -116,7 +116,7 @@ export const createStore = (data, { now }) => {
 
 	/**
 	 * The filter of the payments list and of its counts (one builder, so a count always matches the list): `status`
-	 * exactly, `q` the id, the reference or the payer e-mail exactly, or a reference prefix.
+	 * exactly, `q` the id, the reference or the payer email exactly, or a reference prefix.
 	 * @param {PaymentQuery} query
 	 */
 	const paymentFilter = ({ status, q }) => {

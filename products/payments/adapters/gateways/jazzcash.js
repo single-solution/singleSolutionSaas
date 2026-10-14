@@ -60,9 +60,9 @@ const plain = (text, max) =>
 export const jazzcash = {
 	id: 'jazzcash',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the merchant id, the password and the integrity salt.';
+		if (!isObject(keys)) return 'Enter the merchant id, the password and the integrity salt.';
 		for (const name of ['merchantId', 'password', 'integritySalt'])
-			if (typeof keys[name] !== 'string' || keys[name].trim() === '') return `Fill in: ${name}.`;
+			if (typeof keys[name] !== 'string' || keys[name].trim() === '') return `Missing: ${name}.`;
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},

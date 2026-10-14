@@ -45,7 +45,7 @@ const sessionNews = (session) => ({
 export const stripe = {
 	id: 'stripe',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the secret key and the webhook signing secret.';
+		if (!isObject(keys)) return 'Enter the secret key and the webhook signing secret.';
 		if (typeof keys.secretKey !== 'string' || !/^(sk|rk)_(live|test)_[A-Za-z0-9]{8,}$/.test(keys.secretKey))
 			return 'The secret key starts with sk_live_, sk_test_ or rk_….';
 		if (typeof keys.webhookSecret !== 'string' || !/^whsec_[A-Za-z0-9+/=]{8,}$/.test(keys.webhookSecret))
@@ -145,7 +145,7 @@ export const stripe = {
 		return news;
 	},
 	returned: async (_incoming, payment, keys, ctx) => ({ news: (await stripe.status?.(payment, keys, ctx)) ?? null }),
-	// the merchant cancelled the payment: its Checkout Session is expired, so Stripe's page no longer takes it
+	// the merchant canceled the payment: its Checkout Session is expired, so Stripe's page no longer takes it
 	expire: async (payment, keys, ctx) => {
 		if (!payment.gatewayRef) return { ok: true };
 		const answer = await call(ctx, `${STRIPE_API}/v1/checkout/sessions/${encodeURIComponent(payment.gatewayRef)}/expire`, {

@@ -192,7 +192,7 @@ describe('Stripe', () => {
 		const bad = incoming({ 'stripe-signature': signTimestamped('nope', keys.webhookSecret, NOW) }, 'nope');
 		expect(await stripe.notice?.(bad, keys, ctx)).toEqual({ ok: false });
 	});
-	it('expires the Checkout Session of a payment the merchant cancelled, so Stripe’s page refuses it', async () => {
+	it('expires the Checkout Session of a payment the merchant canceled, so Stripe’s page refuses it', async () => {
 		expect(await stripe.expire?.(PAYMENT, keys, ctx)).toEqual({ ok: true });
 		expect(fake.calls).toHaveLength(0);
 		fake.respond('https://api.stripe.com', () => ({ status: 200, body: { id: 'cs_1', status: 'expired' } }));
@@ -304,7 +304,7 @@ describe('PayPal', () => {
 		fake.respond(API, (c) => (c.path === '/v1/oauth2/token' ? { status: 200, body: { access_token: 'tok' } } : answer(c)));
 	it('checks the keys and gets a token', async () => {
 		expect(paypal.violation(null)).toMatch(/client id/);
-		expect(paypal.violation({ clientId: 'a', secret: 'b' })).toBe('Fill in: webhookId.');
+		expect(paypal.violation({ clientId: 'a', secret: 'b' })).toBe('Missing: webhookId.');
 		expect(paypal.violation({ ...keys, sandbox: 'yes' })).toMatch(/sandbox/);
 		expect(paypal.violation(keys)).toBeNull();
 		paypalAnswers(() => ({ status: 200 }));
@@ -354,7 +354,7 @@ describe('PayPal', () => {
 				capture: 'CAP1',
 			},
 		});
-		// the order of a payment the merchant cancelled is never captured: PayPal takes no money
+		// the order of a payment the merchant canceled is never captured: PayPal takes no money
 		const calls = fake.calls.length;
 		expect(await paypal.returned?.(incoming(), { ...withRef, status: 'voided' }, keys, ctx)).toMatchObject({
 			news: { outcome: 'pending', capture: null },
@@ -792,7 +792,7 @@ describe('JazzCash', () => {
 	const jazzcash = adapters.jazzcash;
 	it('checks the keys by their shape', async () => {
 		expect(jazzcash.violation(null)).toMatch(/merchant id/);
-		expect(jazzcash.violation({ merchantId: 'x' })).toBe('Fill in: password.');
+		expect(jazzcash.violation({ merchantId: 'x' })).toBe('Missing: password.');
 		expect(jazzcash.violation({ ...keys, sandbox: 'no' })).toMatch(/sandbox/);
 		expect(await jazzcash.test(keys, ctx)).toEqual({ ok: true });
 		expect(await jazzcash.test({}, ctx)).toMatchObject({ ok: false });
@@ -891,7 +891,7 @@ describe('Easypaisa', () => {
 		expect(easypaisa.violation(null)).toMatch(/store id/);
 		expect(easypaisa.violation({ storeId: 'x' })).toMatch(/number/);
 		expect(easypaisa.violation({ storeId: '1', hashKey: 'short' })).toMatch(/16/);
-		expect(easypaisa.violation({ storeId: '1', hashKey: keys.hashKey })).toBe('Fill in: username.');
+		expect(easypaisa.violation({ storeId: '1', hashKey: keys.hashKey })).toBe('Missing: username.');
 		expect(easypaisa.violation({ ...keys, sandbox: 0 })).toMatch(/sandbox/);
 		expect(await easypaisa.test(keys, ctx)).toEqual({ ok: true });
 		expect(await easypaisa.test({}, ctx)).toMatchObject({ ok: false });
@@ -995,9 +995,9 @@ describe('Rapid Gateway', () => {
 	};
 	it('checks the keys by their shape', async () => {
 		expect(rapid.violation(null)).toMatch(/secret key/);
-		expect(rapid.violation({ secretKey: 'short' })).toBe('Fill in the secret key.');
-		expect(rapid.violation({ secretKey: 'rg sk test 123' })).toBe('Fill in the secret key.');
-		expect(rapid.violation({ secretKey: keys.secretKey, webhookSecret: '' })).toBe('Fill in the webhook secret.');
+		expect(rapid.violation({ secretKey: 'short' })).toBe('Enter the secret key.');
+		expect(rapid.violation({ secretKey: 'rg sk test 123' })).toBe('Enter the secret key.');
+		expect(rapid.violation({ secretKey: keys.secretKey, webhookSecret: '' })).toBe('Enter the webhook secret.');
 		expect(rapid.violation({ ...keys, sandbox: 1 })).toMatch(/sandbox/);
 		expect(rapid.violation(keys)).toBeNull();
 		expect(await rapid.test(keys, ctx)).toEqual({ ok: true });

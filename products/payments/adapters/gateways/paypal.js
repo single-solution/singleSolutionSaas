@@ -102,9 +102,9 @@ const orderNews = (order, paymentId) => {
 export const paypal = {
 	id: 'paypal',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the client id, the secret and the webhook id.';
+		if (!isObject(keys)) return 'Enter the client id, the secret and the webhook id.';
 		for (const name of ['clientId', 'secret', 'webhookId'])
-			if (typeof keys[name] !== 'string' || keys[name].trim() === '') return `Fill in: ${name}.`;
+			if (typeof keys[name] !== 'string' || keys[name].trim() === '') return `Missing: ${name}.`;
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},
@@ -146,7 +146,7 @@ export const paypal = {
 		return { kind: 'redirect', url, ref: String(answer.json.id) };
 	},
 	// the payer approved on PayPal's page: capture the order (server to server); an order captured before is read back.
-	// The order of a payment the merchant cancelled is never captured, so PayPal takes no money for it.
+	// The order of a payment the merchant canceled is never captured, so PayPal takes no money for it.
 	returned: async (_incoming, payment, keys, ctx) => ({ news: (await paypal.status?.(payment, keys, ctx)) ?? null }),
 	status: async (payment, keys, ctx) => {
 		if (!payment.gatewayRef) return null;
@@ -266,7 +266,7 @@ export const paypal = {
 			ctx,
 			'POST',
 			`/v1/billing/subscriptions/${encodeURIComponent(String(subscription.gatewayRef))}/cancel`,
-			{ reason: 'Cancelled by the merchant' },
+			{ reason: 'Canceled by the merchant' },
 		);
 		return ok2xx(answer.status) ? { ok: true } : { ok: false, message: failure('PayPal', answer.status) };
 	},

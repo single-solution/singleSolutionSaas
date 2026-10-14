@@ -263,7 +263,7 @@ export const createRoutes = (product) => {
 
 	/**
 	 * The merchant's server or Ecommerce cancels a payment it no longer wants, for example because its order was
-	 * cancelled or expired (K-13): `{ reason? }` (at most 200 characters, kept in the history). Answers the payment.
+	 * canceled or expired (K-13): `{ reason? }` (at most 200 characters, kept in the history). Answers the payment.
 	 * @param {any} ctx
 	 */
 	const cancelPayment = async (ctx) => {
@@ -278,7 +278,7 @@ export const createRoutes = (product) => {
 				'payment.voided',
 				voided.id,
 				voided.reference || voided.id,
-				`Payment cancelled; it can no longer be paid${reason ? ` (${reason})` : ''}`,
+				`Payment canceled; it can no longer be paid${reason ? ` (${reason})` : ''}`,
 			);
 		return service.view(s, voided);
 	};
@@ -316,7 +316,7 @@ export const createRoutes = (product) => {
 			'subscription.cancelled',
 			cancelled.id,
 			cancelled.reference || cancelled.id,
-			`Cancelled at ${cancelled.gateway === 'stripe' ? 'Stripe' : 'PayPal'} (plan ${cancelled.plan})`,
+			`Canceled at ${cancelled.gateway === 'stripe' ? 'Stripe' : 'PayPal'} (plan ${cancelled.plan})`,
 		);
 		return subscriptionView(cancelled);
 	};
@@ -432,7 +432,7 @@ export const createRoutes = (product) => {
 		if (payment.status === 'paid' || payment.status === 'partially_refunded')
 			return html(renderResultPage({ ...result, state: isRefundDue(payment) ? 'refundDue' : 'paid', backUrl: back }));
 		if (payment.status === 'refunded') return html(renderResultPage({ ...result, state: 'refunded', backUrl: back }));
-		// the merchant cancelled it: nobody pays it any more (K-13)
+		// the merchant canceled it: nobody pays it any more (K-13)
 		if (payment.status === 'voided') return html(renderResultPage({ ...result, state: 'voided', backUrl: back }));
 		if (payment.status === 'failed' || payment.status === 'cancelled')
 			return html(
@@ -490,7 +490,7 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * The payer picked a gateway, or tries again after a failed or cancelled attempt.
+	 * The payer picked a gateway, or tries again after a failed or canceled attempt.
 	 * @param {any} ctx
 	 */
 	const payPick = async (ctx) => {
@@ -524,7 +524,7 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * The payer came back from a gateway (or cancelled there).
+	 * The payer came back from a gateway (or canceled there).
 	 * @param {any} ctx
 	 */
 	const returned = async (ctx) => {

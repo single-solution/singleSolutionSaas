@@ -30,7 +30,7 @@ export const badge = (doc, text, tone = 'neutral') => element(doc, 'span', { cla
 export const dot = (doc, tone, label) => element(doc, 'span', { class: `dot ${tone}`, role: 'img', 'aria-label': label });
 
 /**
- * A grid of labelled values; empty values are left out.
+ * A grid of labeled values; empty values are left out.
  * @param {Document} doc
  * @param {Array<[string, string | Node | null | undefined]>} rows
  */
@@ -49,7 +49,7 @@ export const fieldGrid = (doc, rows) => {
 };
 
 /**
- * A labelled form control.
+ * A labeled form control.
  * @param {Document} doc @param {string} label @param {HTMLElement} control
  */
 export const field = (doc, label, control) => {

@@ -65,7 +65,7 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 	const generic = {
 		id: 'generic',
 		violation: (keys) => {
-			if (!isObject(keys)) return 'Fill in the name, the checkout address and the secret.';
+			if (!isObject(keys)) return 'Enter the name, the checkout address and the secret.';
 			if (typeof keys.name !== 'string' || keys.name.trim() === '' || keys.name.length > 40)
 				return 'The name payers see is required (at most 40 characters).';
 			if (!httpsAddress(keys.url, policy)) return 'The checkout address must be a public https address.';

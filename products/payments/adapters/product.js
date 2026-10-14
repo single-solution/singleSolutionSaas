@@ -66,7 +66,7 @@ const PROBLEM_CODES = Object.freeze({
 });
 
 /**
- * Data rights (PLAN 0.4.11): a person's payments and subscriptions are found by their Accounts user id, e-mail or
+ * Data rights (PLAN 0.4.11): a person's payments and subscriptions are found by their Accounts user id, email or
  * phone. Delete removes their details from those records; the amounts stay, because they are the merchant's money
  * records.
  * @param {() => number} now

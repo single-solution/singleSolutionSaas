@@ -1,11 +1,11 @@
 /**
  * The Payments admin widget (admin widget, ticket; PLAN 0.8.7, 0.6): a list-and-detail screen of the website's
- * payments, newest first. The list has search by id, reference or e-mail, a status filter with each status's count,
+ * payments, newest first. The list has search by id, reference or email, a status filter with each status's count,
  * the total as a badge, the counts per gateway, paging and a CSV export of the payments that match the filters (at most
  * 2,000). The detail shows every field of the payment, its refunds and history, with Refund (full or partial,
  * `payments.refund`) and Confirm transfer received (with the transfer's reference and a note, `payments.confirm`, PLAN
- * 0.8.10 P3; also for a transfer that arrives after the payment was cancelled) as buttons, a Refund due mark on money
- * that arrived after the merchant cancelled the payment (K-13), and View proof, Copy pay link, Open pay page and Copy payment id in its More menu; forms open
+ * 0.8.10 P3; also for a transfer that arrives after the payment was canceled) as buttons, a Refund due mark on money
+ * that arrived after the merchant canceled the payment (K-13), and View proof, Copy pay link, Open pay page and Copy payment id in its More menu; forms open
  * in dialogs. Amounts and times follow the website's Format and time zone; the CSV keeps the stored times and the
  * amounts with their currency codes.
  * @module
@@ -176,7 +176,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					});
 					buttons.push(refund);
 				}
-				// a transfer that arrives after the payment was cancelled is confirmed too, and is then to be refunded
+				// a transfer that arrives after the payment was canceled is confirmed too, and is then to be refunded
 				if (
 					can('bank_transfer') &&
 					payment.gateway === 'bank_transfer' &&

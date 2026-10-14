@@ -49,11 +49,11 @@ export const localMobile = (phone) => (phone && /^\+923\d{9}$/.test(phone) ? `0$
 export const easypaisa = {
 	id: 'easypaisa',
 	violation: (keys) => {
-		if (!isObject(keys)) return 'Fill in the store id, the hash key and the API credentials.';
+		if (!isObject(keys)) return 'Enter the store id, the hash key and the API credentials.';
 		if (typeof keys.storeId !== 'string' || !/^\d{1,12}$/.test(keys.storeId)) return 'The store id is a number.';
 		if (typeof keys.hashKey !== 'string' || keys.hashKey.length !== 16) return 'The hash key has 16 characters.';
 		for (const name of ['username', 'password', 'accountNum'])
-			if (typeof keys[name] !== 'string' || keys[name].trim() === '') return `Fill in: ${name}.`;
+			if (typeof keys[name] !== 'string' || keys[name].trim() === '') return `Missing: ${name}.`;
 		if (keys.sandbox !== undefined && typeof keys.sandbox !== 'boolean') return 'sandbox is true or false.';
 		return null;
 	},
