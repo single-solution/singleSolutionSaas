@@ -170,6 +170,8 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 			sizeChartIds,
 			gradeKeys: new Set(),
 			locationIds: new Set(),
+			// no item types: every item has the built-in type of its kind
+			types: [],
 			categories: paths,
 		};
 		/**
@@ -215,10 +217,14 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 			grades: false,
 			digital: false,
 			bookings: false,
+			parcels: false,
 			gradeKeys: new Set(),
+			gradeTypes: new Map(),
 			locationIds: new Set(),
 			categoryIds: context.categoryIds,
 			categoryPaths: new Map([...paths].map(([id, entry]) => [id, entry.path])),
+			categoryTypes: new Map(),
+			types: [],
 			brandIds: context.brandIds,
 			attributes,
 			newId: () => 'var_unused0000',
