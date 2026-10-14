@@ -251,7 +251,10 @@ describe('CSV', () => {
 		const file = await env.call('GET', '/v1/redirects/csv', { token: env.server });
 		expect(file.headers.get('content-type')).toBe('text/csv; charset=utf-8');
 		expect(file.headers.get('content-disposition')).toBe('attachment; filename="redirects.csv"');
-		const lines = (await file.text()).replace(/^\uFEFF/, '').split('\r\n');
+		// the byte order mark Excel needs to read UTF-8 arrives byte for byte
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+		const lines = new TextDecoder('utf-8', { ignoreBOM: false }).decode(bytes).split('\r\n');
 		expect(lines[0]).toBe('from,match,to,code,note');
 		expect(lines).toContain('/retired,prefix,,410,');
 		expect(lines).toContain('/blog,prefix,/news?ref=old,301,');
