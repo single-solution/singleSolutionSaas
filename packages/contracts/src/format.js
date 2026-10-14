@@ -6,9 +6,9 @@
  * `@ss/contracts/format` and `@ss/app-kit/widget`.
  *
  * - `locale`: BCP 47; '' = the viewer's browser in widgets and `en` in text the server makes.
- * - `currencyDisplay`: `code` ("PKR 12,500.00"), `symbol` (the locale's narrow symbol, "Rs 12,500.00") or `custom`
- *   (`currencySymbol` in the place of the code, "Rs. 12,500.00").
- * - `wholeUnits`: true shows no minor units ("PKR 12,500").
+ * - `currencyDisplay`: `code` ("USD 12,500.00"), `symbol` (the locale's narrow symbol, "$12,500.00") or `custom`
+ *   (`currencySymbol` in the place of the code, "US$ 12,500.00").
+ * - `wholeUnits`: true shows no minor units ("USD 12,500").
  * - `times`: `viewer` (widgets show the viewer's own time zone) or `business` (the business.json time zone). Text the
  *   server makes has no viewer, so it always uses the business time zone.
  *
@@ -78,7 +78,7 @@ export const formatViolation = (field, value) => {
 		case 'locale':
 			return value === '' || (typeof value === 'string' && LOCALE.test(value) && knownLocale(value))
 				? null
-				: "locale is a language tag such as en, en-GB or ur-PK, or '' for the viewer's";
+				: "locale is a language tag such as en, en-GB or fr-FR, or '' for the viewer's";
 		case 'currencyDisplay':
 			return value === 'code' || value === 'symbol' || value === 'custom' ? null : 'currencyDisplay is code, symbol or custom';
 		case 'currencySymbol':
