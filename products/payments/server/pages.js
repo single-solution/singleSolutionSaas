@@ -9,6 +9,7 @@
  */
 import { formatMoney, formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
+import { BANK_DETAILS } from '../core/gateways.js';
 
 /** Security headers of the hosted pages (forms may post to the gateways' own https pages). */
 export const PAGE_HEADERS = Object.freeze({
@@ -245,7 +246,7 @@ ${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" val
 /**
  * Bank-transfer details, with the proof upload when the merchant allows it and storage is connected.
  * @param {PageLook & { business: string, amount: number, currency: string, reference: string,
- *   bank: { accountTitle: string, bankName: string, accountNumber: string, iban: string, instructions: string },
+ *   bank: import('../core/gateways.js').BankTransfer,
  *   proof: { action: string, maxBytes: number } | null, uploaded: boolean }} input
  */
 export const renderBankPage = ({
@@ -261,16 +262,14 @@ export const renderBankPage = ({
 	uploaded,
 }) => {
 	const t = translator(texts);
+	// only the details the merchant gave, each under its own text (`bank.<name>`), then the payment's reference
 	/** @type {Array<[string, string]>} */
 	const rows = [
-		['bank.accountTitle', bank.accountTitle],
-		['bank.bankName', bank.bankName],
-		['bank.accountNumber', bank.accountNumber],
-		['bank.iban', bank.iban],
+		...BANK_DETAILS.map((name) => /** @type {[string, string]} */ ([`bank.${name}`, bank[name]])),
 		['bank.reference', reference],
 	];
 	// without an account (Require bank details off, PLAN 0.8.10 P2) the payer follows the instructions alone
-	const account = [bank.accountTitle, bank.bankName, bank.accountNumber, bank.iban].some((value) => value !== '');
+	const account = BANK_DETAILS.some((name) => bank[name] !== '');
 	const upload =
 		proof && !uploaded
 			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">

@@ -2,16 +2,28 @@
 	"$schemas": {
 		"BankTransfer": {
 			"type": "object",
-			"description": "The bank details payers see ('' when not set).",
-			"required": ["ready", "accountTitle", "bankName", "accountNumber", "iban", "instructions"],
+			"description": "The bank details payers see, each '' when not set: show only the ones given.",
+			"required": [
+				"ready",
+				"accountHolder",
+				"bankName",
+				"accountNumber",
+				"routingNumber",
+				"sortCode",
+				"branchCode",
+				"iban",
+				"bic",
+				"instructions"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"ready": {
 					"type": "boolean",
-					"description": "Payers can pick bank transfer: its account number or IBAN is set (or details are not required)."
+					"description": "Payers can pick bank transfer: the account holder and the account number or IBAN are set (or details are not required)."
 				},
-				"accountTitle": {
-					"type": "string"
+				"accountHolder": {
+					"type": "string",
+					"description": "The name on the bank account."
 				},
 				"bankName": {
 					"type": "string"
@@ -19,11 +31,28 @@
 				"accountNumber": {
 					"type": "string"
 				},
+				"routingNumber": {
+					"type": "string",
+					"description": "Where the country uses one (for example the ABA routing number in the United States)."
+				},
+				"sortCode": {
+					"type": "string",
+					"description": "Where the country uses one (for example in the United Kingdom and Ireland)."
+				},
+				"branchCode": {
+					"type": "string",
+					"description": "A branch or clearing code where the country uses one (for example a BSB, IFSC or transit number)."
+				},
 				"iban": {
 					"type": "string"
 				},
+				"bic": {
+					"type": "string",
+					"description": "The bank's SWIFT/BIC code."
+				},
 				"instructions": {
-					"type": "string"
+					"type": "string",
+					"description": "The merchant's own words shown under the details (plain text)."
 				}
 			}
 		},
@@ -337,7 +366,7 @@
 					"type": "integer",
 					"minimum": 1,
 					"maximum": 1000000000000,
-					"description": "Minor units (cents, paisa …)."
+					"description": "Minor units (cents, pence …)."
 				},
 				"currency": {
 					"type": "string",
@@ -445,7 +474,7 @@
 								"type": "integer",
 								"minimum": 1,
 								"maximum": 1000000000000,
-								"description": "Minor units (cents, paisa …)."
+								"description": "Minor units (cents, pence …)."
 							},
 							"reason": {
 								"type": "string",
@@ -559,7 +588,7 @@
 							"type": "integer",
 							"minimum": 1,
 							"maximum": 1000000000000,
-							"description": "Minor units (cents, paisa …)."
+							"description": "Minor units (cents, pence …)."
 						}
 					}
 				}
@@ -784,7 +813,7 @@
 					"type": "integer",
 					"minimum": 1,
 					"maximum": 1000000000000,
-					"description": "Minor units (cents, paisa …)."
+					"description": "Minor units (cents, pence …)."
 				},
 				"currency": {
 					"type": "string",
@@ -1403,7 +1432,7 @@
 					"type": "integer",
 					"minimum": 1,
 					"maximum": 1000000000000,
-					"description": "Minor units (cents, paisa …)."
+					"description": "Minor units (cents, pence …)."
 				},
 				"currency": {
 					"type": "string",

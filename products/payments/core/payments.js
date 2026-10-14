@@ -121,7 +121,7 @@ export const checkMetadata = (value) => {
 export const checkPaymentInput = (body) => {
 	const input = isObject(body) ? body : {};
 	if (!isAmount(input.amount))
-		return { ok: false, field: 'amount', message: 'amount is a whole number of minor units (cents, paisa …), at least 1.' };
+		return { ok: false, field: 'amount', message: 'amount is a whole number of minor units (cents, pence …), at least 1.' };
 	if (!isCurrency(input.currency))
 		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, EUR …).' };
 	if (input.gateway !== undefined && input.gateway !== null && !isGateway(input.gateway))

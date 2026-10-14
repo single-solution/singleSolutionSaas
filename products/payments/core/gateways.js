@@ -115,8 +115,8 @@ export const takesCurrency = (gateway, currency, own = null) => {
 };
 
 /**
- * The gateways a payer may pick for a payment: switched on, connected (bank transfer: its account number is set) and
- * taking the currency, in {@link GATEWAYS} order.
+ * The gateways a payer may pick for a payment: switched on, connected (bank transfer: ready, see {@link bankTransfer})
+ * and taking the currency, in {@link GATEWAYS} order.
  * @param {{ on: readonly string[], ready: (gateway: Gateway) => boolean, currency: string, own?: ReadonlyArray<string> | null,
  *   only?: readonly string[] | null }} input `only`: a payment link's own choice of gateways
  * @returns {Gateway[]}
@@ -131,22 +131,37 @@ export const gatewaysFor = ({ on, ready, currency, own = null, only = null }) =>
 	);
 
 /**
+ * The bank details a merchant may give, in the order payers see them: what any country's bank transfer needs (the
+ * account holder, the account number or IBAN) and the codes some countries add (routing number, sort code, branch
+ * code, SWIFT/BIC). Each is a `bank_transfer` setting and a payer-facing text `bank.<name>`.
+ */
+export const BANK_DETAILS = /** @type {const} */ ([
+	'accountHolder',
+	'bankName',
+	'accountNumber',
+	'routingNumber',
+	'sortCode',
+	'branchCode',
+	'iban',
+	'bic',
+]);
+
+/** @typedef {Record<(typeof BANK_DETAILS)[number] | 'instructions', string> & { ready: boolean }} BankTransfer */
+
+/**
  * Bank transfer as the payer and the merchant's server see it (PLAN 0.8.10 P1): the bank details from the
- * `bank_transfer` settings, and whether it is ready: its account number or IBAN is set, or, with `requireDetails`
- * off, by its switch alone, with only its instructions (P2).
+ * `bank_transfer` settings ('' when not set), and whether it is ready: the account holder and the account number or
+ * IBAN are set, or, with `requireDetails` off, by its switch alone, with only its instructions (P2).
  * @param {Readonly<Record<string, unknown>>} values the resolved `bank_transfer` settings
- * @returns {{ ready: boolean, accountTitle: string, bankName: string, accountNumber: string, iban: string, instructions: string }}
+ * @returns {BankTransfer}
  */
 export const bankTransfer = (values) => {
 	/** @param {string} name */
 	const text = (name) => (typeof values[name] === 'string' ? /** @type {string} */ (values[name]) : '');
-	const details = {
-		accountTitle: text('accountTitle'),
-		bankName: text('bankName'),
-		accountNumber: text('accountNumber'),
-		iban: text('iban'),
-		instructions: text('instructions'),
-	};
-	const ready = values.requireDetails === false || details.accountNumber !== '' || details.iban !== '';
+	const details = /** @type {Record<(typeof BANK_DETAILS)[number] | 'instructions', string>} */ (
+		Object.fromEntries([...BANK_DETAILS, 'instructions'].map((name) => [name, text(name)]))
+	);
+	const ready =
+		values.requireDetails === false || (details.accountHolder !== '' && (details.accountNumber !== '' || details.iban !== ''));
 	return { ready, ...details };
 };

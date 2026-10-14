@@ -39,7 +39,7 @@ export const TEXTS = Object.freeze({
 		connectionsReady: 'Connections ready',
 		gateways: 'Gateways ready',
 		gatewaysHelp:
-			'Switched-on gateways with their keys connected (bank transfer: account number or IBAN set, or Require bank details off).',
+			'Switched-on gateways with their keys connected (bank transfer: account holder and account number or IBAN set, or Require bank details off).',
 		ofTotal: '{count} of {total}',
 		setup: 'Setup',
 		setupHelp: 'Only what the switched-on features need.',
@@ -59,7 +59,7 @@ export const TEXTS = Object.freeze({
 		bank: 'Bank transfer',
 		bankReady: 'Ready',
 		bankNotReady: 'Not offered yet',
-		bankHelp: 'Set the account number or IBAN in Settings, or turn off Require bank details.',
+		bankHelp: 'Set the account holder name and the account number or IBAN in Settings, or turn off Require bank details.',
 		recent: 'Recent changes',
 		noChanges: 'No changes yet.',
 	}),

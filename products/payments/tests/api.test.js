@@ -131,7 +131,7 @@ describe('before setup', () => {
 		expect(await env.connect('storage', STORAGE)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('notifications', env.notificationsToken)).toMatchObject({ status: 'connected' });
 		await env.setting('bank_transfer', 'accountNumber', '0123-456789');
-		await env.setting('bank_transfer', 'accountTitle', 'Shop Ltd');
+		await env.setting('bank_transfer', 'accountHolder', 'Shop Ltd');
 	});
 });
 
@@ -685,14 +685,18 @@ describe('bank transfer', () => {
 	});
 
 	it('serves the bank details to the merchant’s server, kept through the settings API (P1, K1)', async () => {
-		const IBAN = 'PK36SCBL0000001123456702';
+		const IBAN = 'GB29 NWBK 6016 1331 9268 19';
 		const read = () => env.api('GET', '/v1/bank-transfer');
 		expect((await read()).json).toEqual({
 			ready: true,
-			accountTitle: 'Shop Ltd',
+			accountHolder: 'Shop Ltd',
 			bankName: '',
 			accountNumber: '0123-456789',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
 			iban: '',
+			bic: '',
 			instructions: '',
 		});
 		expect((await env.call('GET', '/v1/bank-transfer', { token: env.browser, origin: ORIGIN })).status).toBe(401);
@@ -707,27 +711,96 @@ describe('bank transfer', () => {
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
 		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
 		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '0123-456789' });
+		// the account holder is needed too
+		await env.api('DELETE', '/v1/settings/bank_transfer.accountHolder');
+		expect((await read()).json).toMatchObject({ ready: false, accountHolder: '', accountNumber: '0123-456789' });
+		await env.api('PUT', '/v1/settings/bank_transfer.accountHolder', { value: 'Shop Ltd' });
+		expect((await read()).json.ready).toBe(true);
+	});
+
+	it('shows payers only the bank details the merchant gave, each under its editable text (UK, US, IBAN only, local)', async () => {
+		const set = (/** @type {Record<string, string>} */ values) =>
+			Promise.all(
+				['accountHolder', 'bankName', 'accountNumber', 'routingNumber', 'sortCode', 'branchCode', 'iban', 'bic'].map(
+					(name) =>
+						name in values
+							? env.api('PUT', `/v1/settings/bank_transfer.${name}`, { value: values[name] })
+							: env.api('DELETE', `/v1/settings/bank_transfer.${name}`),
+				),
+			);
+		/** The labels and values of the bank page's details. */
+		const shown = async () => {
+			const payment = await createPayment({ gateway: 'bank_transfer', reference: 'SH-2026-0043' });
+			const html = (await page(`/pay/${env.websiteId}/${payment.id}`)).text;
+			return [...html.matchAll(/<dt>([^<]*)<\/dt><dd>([^<]*)<\/dd>/g)].map(([, label, value]) => `${label}: ${value}`);
+		};
+		await set({ accountHolder: 'Northwind Ltd', bankName: 'Example Bank', accountNumber: '31926819', sortCode: '60-16-13' });
+		expect(await shown()).toEqual([
+			'Account holder: Northwind Ltd',
+			'Bank: Example Bank',
+			'Account number: 31926819',
+			'Sort code: 60-16-13',
+			'Reference: SH-2026-0043',
+		]);
+		await set({ accountHolder: 'Northwind Inc.', accountNumber: '000123456789', routingNumber: '110000000' });
+		expect(await shown()).toEqual([
+			'Account holder: Northwind Inc.',
+			'Account number: 000123456789',
+			'Routing number: 110000000',
+			'Reference: SH-2026-0043',
+		]);
+		await set({ accountHolder: 'Northwind GmbH', iban: 'DE89 3704 0044 0532 0130 00', bic: 'COBADEFFXXX' });
+		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({
+			ready: true,
+			accountNumber: '',
+			iban: 'DE89 3704 0044 0532 0130 00',
+		});
+		expect(await shown()).toEqual([
+			'Account holder: Northwind GmbH',
+			'IBAN: DE89 3704 0044 0532 0130 00',
+			'SWIFT/BIC: COBADEFFXXX',
+			'Reference: SH-2026-0043',
+		]);
+		// a local account with a branch code, its label renamed in Settings → Texts
+		const cookie = await env.adminSession();
+		const renamed = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/texts/bank.branchCode`, {
+			value: 'BSB',
+		});
+		expect(renamed.status).toBe(204);
+		await set({ accountHolder: 'Northwind Pty Ltd', accountNumber: '12345678', branchCode: '062-000' });
+		expect(await shown()).toEqual([
+			'Account holder: Northwind Pty Ltd',
+			'Account number: 12345678',
+			'BSB: 062-000',
+			'Reference: SH-2026-0043',
+		]);
+		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/texts/bank.branchCode`);
+		await set({ accountHolder: 'Shop Ltd', accountNumber: '0123-456789' });
 	});
 
 	it('is ready without details when they are not required, with only its instructions (P2)', async () => {
 		const settings = await env.api('GET', '/v1/settings');
 		const bank = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'bank_transfer');
 		expect(bank.values.requireDetails).toEqual({ value: true, source: 'built-in' });
-		for (const name of ['accountNumber', 'accountTitle']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
+		for (const name of ['accountNumber', 'accountHolder']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
 		expect((await env.api('GET', '/v1/bank-transfer')).json.ready).toBe(false);
 		await env.api('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
-		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details on WhatsApp.' });
+		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by e-mail.' });
 		expect((await env.api('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
-			accountTitle: '',
+			accountHolder: '',
 			bankName: '',
 			accountNumber: '',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
 			iban: '',
-			instructions: 'We send our bank details on WhatsApp.',
+			bic: '',
+			instructions: 'We send our bank details by e-mail.',
 		});
 		const payment = await createPayment({ gateway: 'bank_transfer', reference: 'ORD-7' });
 		const shown = (await page(`/pay/${env.websiteId}/${payment.id}`)).text;
-		expect(shown).toContain('We send our bank details on WhatsApp.');
+		expect(shown).toContain('We send our bank details by e-mail.');
 		expect(shown).toContain('as explained below');
 		expect(shown).toContain('ORD-7');
 		expect(shown).not.toContain('Account number');
@@ -735,8 +808,8 @@ describe('bank transfer', () => {
 		expect((await page(`/pay/${env.websiteId}/${choice.id}`)).text).toContain('value="bank_transfer"');
 		for (const name of ['requireDetails', 'instructions']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
 		await env.setting('bank_transfer', 'accountNumber', '0123-456789');
-		await env.setting('bank_transfer', 'accountTitle', 'Shop Ltd');
-		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, accountTitle: 'Shop Ltd' });
+		await env.setting('bank_transfer', 'accountHolder', 'Shop Ltd');
+		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, accountHolder: 'Shop Ltd' });
 	});
 });
 
@@ -1321,10 +1394,14 @@ describe('kit features (PLAN 0.8.10)', () => {
 		const settings = await env.api('GET', '/v1/settings');
 		const bank = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'bank_transfer');
 		expect(Object.keys(bank.values)).toEqual([
-			'accountTitle',
+			'accountHolder',
 			'bankName',
 			'accountNumber',
+			'routingNumber',
+			'sortCode',
+			'branchCode',
 			'iban',
+			'bic',
 			'requireDetails',
 			'instructions',
 			'proofUpload',
@@ -1381,7 +1458,7 @@ describe('data rights, statuses and public files', () => {
 		for (const part of [
 			'<a href="#op-post-v1-payments"><code>POST /v1/payments</code></a> Create a payment',
 			'<section class="ss-api-op" id="op-post-v1-payments"><h3><code>POST /v1/payments</code> Create a payment</h3>',
-			'<td><code>amount</code></td><td>integer</td><td>yes</td><td>Minor units (cents, paisa …). 1–1000000000000.</td>',
+			'<td><code>amount</code></td><td>integer</td><td>yes</td><td>Minor units (cents, pence …). 1–1000000000000.</td>',
 			'<td><code>customer</code></td><td><a href="#schema-CustomerInput">CustomerInput</a></td>',
 			'<h4>Answer 201 (JSON)</h4><p><a href="#schema-Payment">Payment</a></p>',
 			'<td><code>refunds[].manual</code></td><td>boolean</td><td>yes</td>',

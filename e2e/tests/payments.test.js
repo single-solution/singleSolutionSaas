@@ -323,48 +323,60 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 		expect([...(await sys.switchFeatures(cookie, websiteId, on)).on].sort()).toEqual([...on].sort());
 		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, accountNumber: '' });
 		const details = {
-			accountTitle: 'Shop Ltd',
+			accountHolder: 'Shop Ltd',
 			bankName: 'Example Bank',
-			accountNumber: '0123-4567890',
-			iban: 'PK36SCBL0000001123456702',
+			accountNumber: '31926819',
+			sortCode: '60-16-13',
+			iban: 'GB29 NWBK 6016 1331 9268 19',
+			bic: 'NWBKGB2L',
 			instructions: 'Quote your order number.',
 		};
 		for (const [name, value] of Object.entries(details))
 			expect((await server('PUT', `/v1/settings/bank_transfer.${name}`, { value })).status).toBe(200);
-		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({ ready: true, ...details });
+		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
+			ready: true,
+			routingNumber: '',
+			branchCode: '',
+			...details,
+		});
 		const payment = await server('POST', '/v1/payments', {
 			amount: 450_000,
-			currency: 'PKR',
+			currency: 'GBP',
 			gateway: 'bank_transfer',
 			reference: 'ORD-1001',
 		});
 		expect(payment.status).toBe(201);
 		transferId = payment.json.id;
 		const shown = await sys.call('GET', `/pay/${websiteId}/${transferId}`);
-		for (const text of ['Example Bank', '0123-4567890', 'ORD-1001', 'Quote your order number.'])
+		for (const text of ['Shop Ltd', 'Example Bank', '31926819', 'Sort code', '60-16-13', 'NWBKGB2L', 'ORD-1001', 'Quote your order number.'])
 			expect(shown.json).toContain(text);
+		expect(shown.json).not.toContain('Routing number');
 	});
 
 	it('bank transfer is ready without details when they are not required', async () => {
-		for (const name of ['accountTitle', 'bankName', 'accountNumber', 'iban'])
+		for (const name of ['accountHolder', 'bankName', 'accountNumber', 'sortCode', 'iban', 'bic'])
 			expect((await server('DELETE', `/v1/settings/bank_transfer.${name}`)).status).toBe(200);
 		expect((await server('GET', '/v1/bank-transfer')).json.ready).toBe(false);
-		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'PKR', gateway: 'bank_transfer' });
+		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
 		await server('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
-		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details on WhatsApp.' });
+		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by e-mail.' });
 		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
-			accountTitle: '',
+			accountHolder: '',
 			bankName: '',
 			accountNumber: '',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
 			iban: '',
-			instructions: 'We send our bank details on WhatsApp.',
+			bic: '',
+			instructions: 'We send our bank details by e-mail.',
 		});
-		const payment = await server('POST', '/v1/payments', { amount: 1000, currency: 'PKR', gateway: 'bank_transfer' });
+		const payment = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
 		expect(payment.status).toBe(201);
 		const shown = await sys.call('GET', `/pay/${websiteId}/${payment.json.id}`);
-		expect(shown.json).toContain('We send our bank details on WhatsApp.');
+		expect(shown.json).toContain('We send our bank details by e-mail.');
 		expect(shown.json).not.toContain('Account number');
 	});
 

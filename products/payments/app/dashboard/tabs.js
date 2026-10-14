@@ -163,7 +163,7 @@ const bankOf = (settings) => {
 
 /**
  * Switched-on gateways whose keys are connected; bank transfer, whose details are settings, counts when it is ready
- * (its account number or IBAN set, or Require bank details off).
+ * (its account holder and account number or IBAN set, or Require bank details off).
  * @param {{ featuresOn: string[], checklist: { connections: Array<{ name: string, status: string }> } }} data
  * @param {import('./api.js').Answer | null} settings the website's settings
  */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GATEWAYS, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import { BANK_DETAILS, GATEWAYS, bankTransfer, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
 import { MAX_AMOUNT, exponentOf, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
@@ -71,6 +71,27 @@ describe('gateways', () => {
 		expect(gatewaysFor({ on, ready, currency: 'PKR' })).toEqual(['stripe', 'jazzcash', 'bank_transfer']);
 		expect(gatewaysFor({ on, ready, currency: 'USD' })).toEqual(['stripe', 'bank_transfer']);
 		expect(gatewaysFor({ on, ready, currency: 'PKR', only: ['jazzcash'] })).toEqual(['jazzcash']);
+	});
+	it('bank transfer: any country’s details, ready with the account holder and the account number or IBAN (P1, P2)', () => {
+		const empty = Object.fromEntries([...BANK_DETAILS, 'instructions'].map((name) => [name, '']));
+		const uk = { accountHolder: 'Northwind Ltd', accountNumber: '31926819', sortCode: '60-16-13' };
+		const us = { accountHolder: 'Northwind Inc.', accountNumber: '000123456789', routingNumber: '110000000' };
+		const ibanOnly = { accountHolder: 'Northwind GmbH', iban: 'DE89 3704 0044 0532 0130 00', bic: 'COBADEFFXXX' };
+		const local = { accountHolder: 'Northwind', bankName: 'Example Bank', accountNumber: '12345678', branchCode: '062-000' };
+		for (const values of [uk, us, ibanOnly, local])
+			expect(bankTransfer({ requireDetails: true, ...values })).toEqual({ ...empty, ...values, ready: true });
+		// the holder alone, or a number without its holder, is not enough to pay
+		expect(bankTransfer({ requireDetails: true, accountHolder: 'Northwind Ltd', sortCode: '60-16-13' }).ready).toBe(false);
+		expect(bankTransfer({ requireDetails: true, accountNumber: '31926819' }).ready).toBe(false);
+		expect(bankTransfer({ requireDetails: true, iban: ibanOnly.iban, bic: ibanOnly.bic }).ready).toBe(false);
+		// Require bank details off: offered by its switch alone, with the instructions
+		expect(bankTransfer({ requireDetails: false, instructions: 'We send our details by e-mail.' })).toEqual({
+			...empty,
+			instructions: 'We send our details by e-mail.',
+			ready: true,
+		});
+		// a value that is not text reads as not set
+		expect(bankTransfer({ requireDetails: true, accountHolder: 5, accountNumber: null })).toEqual({ ...empty, ready: false });
 	});
 });
 
