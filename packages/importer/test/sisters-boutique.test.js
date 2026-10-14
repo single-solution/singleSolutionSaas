@@ -226,7 +226,7 @@ describe('the Sisters Boutique mapping', () => {
 					blur: expect.stringMatching(/^data:image\/webp;base64,/),
 				},
 			],
-			video: { kind: 'youtube', url: 'https://youtu.be/abcdefghijk' },
+			video: { kind: 'youtube', id: 'https://youtu.be/abcdefghijk' },
 			variants: [
 				// the stale `fit` key is cleared; several colors stay a list
 				{

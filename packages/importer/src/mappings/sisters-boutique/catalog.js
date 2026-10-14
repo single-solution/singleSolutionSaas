@@ -312,7 +312,7 @@ const videoOf = (value) => {
 	if (/^(https?:)?\/\//i.test(raw)) {
 		const url = siteAddress(raw);
 		return /(^|\.)(youtube\.com|youtu\.be)\//i.test(url.replace(/^https:\/\//i, '').replace(/^www\./i, ''))
-			? { kind: 'youtube', url }
+			? { kind: 'youtube', id: url }
 			: { kind: 'url', url };
 	}
 	const key = mediaKey(raw);
