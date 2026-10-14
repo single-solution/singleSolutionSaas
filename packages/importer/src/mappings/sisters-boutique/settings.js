@@ -368,6 +368,7 @@ export const settingsPlan = (values) => {
 				'seo.defaultImage': store.brandLogoLight || store.brandLogoDark || seo.ogImageDefault || seo.storeLogo,
 				'seo.indexNowOnSave': false,
 				'seo.autoSeo': 'off',
+				'seo.faqMarkup': false,
 				// the Google feed (`packages/shared/src/seo/merchantFeed.ts`:84-153)
 				'feeds.items': 'with_images',
 				'feeds.includeOutOfStock': false,
