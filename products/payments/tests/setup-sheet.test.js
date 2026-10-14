@@ -1,6 +1,7 @@
 import { validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { describe, expect, it } from 'vitest';
 import guide from '../docs/guide.json' with { type: 'json' };
+import nextConfig from '../next.config.js';
 import openapi from '../openapi.json' with { type: 'json' };
 import { manifest } from '../adapters/product.js';
 import { BASE, setup } from './helpers.js';
@@ -71,5 +72,15 @@ describe('the website Setup sheet', () => {
 		const env = await setup();
 		const docs = await env.call('GET', '/docs');
 		expect(docs.text).toContain('<p><strong>What your website builds.</strong> Create links with POST /v1/links');
+	});
+
+	it('reaches the docs and the OpenAPI document through the Next.js rewrites', async () => {
+		const rewrites = /** @type {Array<{ source: string, destination: string }>} */ (await nextConfig.rewrites?.());
+		expect(rewrites).toEqual(
+			expect.arrayContaining([
+				{ source: '/docs', destination: '/api/docs' },
+				{ source: '/openapi.json', destination: '/api/openapi.json' },
+			]),
+		);
 	});
 });

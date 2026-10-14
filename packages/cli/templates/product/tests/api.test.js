@@ -1,6 +1,7 @@
 import { validateProductBlueprint } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import guide from '../docs/guide.json' with { type: 'json' };
+import nextConfig from '../next.config.js';
 import openapi from '../openapi.json' with { type: 'json' };
 import { manifest } from '../adapters/product.js';
 import { ADMIN_ORIGIN, BASE, ORIGIN, setup } from './helpers.js';
@@ -165,5 +166,15 @@ describe('the website Setup sheet', () => {
 		const part = await (await env.portal.callAsPortal(manifest.id, 'GET', `/v1/blueprint?websiteId=${env.websiteId}`)).json();
 		expect(part.summaries).toEqual([]);
 		expect(part.build).toEqual([]);
+	});
+
+	it('reaches the docs and the OpenAPI document through the Next.js rewrites', async () => {
+		const rewrites = /** @type {Array<{ source: string, destination: string }>} */ (await nextConfig.rewrites?.());
+		expect(rewrites).toEqual(
+			expect.arrayContaining([
+				{ source: '/docs', destination: '/api/docs' },
+				{ source: '/openapi.json', destination: '/api/openapi.json' },
+			]),
+		);
 	});
 });

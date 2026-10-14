@@ -108,7 +108,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect((await json(dir, 'vercel.json')).crons).toBeUndefined();
 		expect(await read(dir, 'vitest.config.js')).toContain("from '@ss/config/vitest'");
 		expect((await json(dir, 'tsconfig.json')).extends).toBe('@ss/config/tsconfig.base.json');
-		expect(await read(dir, 'next.config.js')).toContain("'/widget.js', '/docs', '/v1/:path*'");
+		expect(await read(dir, 'next.config.js')).toContain("'/widget.js', '/docs', '/openapi.json', '/v1/:path*'");
 		expect(await read(dir, 'core/widgets.js')).toContain("WIDGET_GLOBAL = 'SSOrderNotes'");
 		expect(await read(dir, 'core/widgets.js')).toContain("WIDGET_ATTRIBUTE = 'data-ss-order-notes'");
 		expect(await read(dir, 'server/widget-script.js')).toContain('export const WIDGET_SCRIPT = ');

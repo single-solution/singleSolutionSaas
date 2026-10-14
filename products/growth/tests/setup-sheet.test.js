@@ -7,6 +7,7 @@
 import { validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { afterAll, describe, expect, it } from 'vitest';
 import guide from '../docs/guide.json' with { type: 'json' };
+import nextConfig from '../next.config.js';
 import openapi from '../openapi.json' with { type: 'json' };
 import { manifest } from '../adapters/product.js';
 import { BASE, setup } from './helpers.js';
@@ -136,5 +137,15 @@ describe('the website Setup sheet', () => {
 		);
 		// every value is escaped
 		expect(html).toContain('or where you place &#60;div data-ss-growth=&#34;notice_bar&#34;&#62;&#60;/div&#62;.');
+	});
+
+	it('reaches the docs and the OpenAPI document through the Next.js rewrites', async () => {
+		const rewrites = /** @type {Array<{ source: string, destination: string }>} */ (await nextConfig.rewrites?.());
+		expect(rewrites).toEqual(
+			expect.arrayContaining([
+				{ source: '/docs', destination: '/api/docs' },
+				{ source: '/openapi.json', destination: '/api/openapi.json' },
+			]),
+		);
 	});
 });

@@ -1,6 +1,6 @@
 /**
  * Next.js config. The product has two functions: the API route `app/api/[...path]/route.js`, which serves every kit
- * and product route through these rewrites (`/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/pay.js`, `/pay/*`, `/l/*`, `/return/*`, `/v1/*`), and the
+ * and product route through these rewrites (`/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/openapi.json`, `/pay.js`, `/pay/*`, `/l/*`, `/return/*`, `/v1/*`), and the
  * dashboard page.
  */
 import { existsSync } from 'node:fs';
@@ -29,6 +29,7 @@ const config = {
 			'/sso',
 			'/widget.js',
 			'/docs',
+			'/openapi.json',
 			'/pay.js',
 			'/pay/:path*',
 			'/l/:path*',
