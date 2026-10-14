@@ -5,7 +5,7 @@
  * (E36 `mode=update`) change only the price, stock and sold-out flag of the variants they name, and only from rows whose
  * `updated_at` is not older than the product's. Prices are decimals of the shop's currency in the files and minor
  * units inside. Empty cells keep a value (name, price, stock …) or clear it (texts, lists, the "was" price, cost,
- * grade); a column left out keeps the value. Import never deletes variants. No I/O.
+ * grade, GTIN, MPN); a column left out keeps the value. Import never deletes variants. No I/O.
  * @module
  */
 import { LIMITS, isObject, slugify } from './catalog.js';
@@ -42,6 +42,8 @@ const PRODUCT_COLUMNS = Object.freeze([
 	'track_stock',
 	'variant_id',
 	'sku',
+	'gtin',
+	'mpn',
 	...Array.from({ length: OPTION_COLUMNS }, (_, i) => [`option${i + 1}_name`, `option${i + 1}_value`]).flat(),
 	'price',
 	'compare_at_price',
@@ -153,6 +155,8 @@ export const productRows = (products, { currency, categorySlugs, brandSlugs, loc
 				product.trackStock,
 				variant.id,
 				variant.sku,
+				variant.gtin ?? '',
+				variant.mpn ?? '',
 				...options,
 				money(variant.price),
 				money(variant.compareAtPrice),
@@ -339,6 +343,8 @@ export const customerRows = (customers, spent, currency) => {
  * @typedef {object} VariantRow
  * @property {string} [id]
  * @property {string} [sku]
+ * @property {string} [gtin] '' = none
+ * @property {string} [mpn] '' = none
  * @property {Record<string, string>} [options]
  * @property {number} [price]
  * @property {number | null} [compareAtPrice]
@@ -411,6 +417,7 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 		const variant = {};
 		if (values.variant_id) variant.id = values.variant_id;
 		if (has('sku')) variant.sku = sku;
+		for (const column of /** @type {const} */ (['gtin', 'mpn'])) if (has(column)) variant[column] = values[column] ?? '';
 		/** @type {Record<string, string>} */
 		const options = {};
 		let optionColumns = false;

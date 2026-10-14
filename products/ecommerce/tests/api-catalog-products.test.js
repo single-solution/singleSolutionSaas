@@ -141,6 +141,51 @@ describe('the catalog admin widget', () => {
 	});
 });
 
+describe('GTIN and MPN (SEO audit G5.6)', () => {
+	it("keeps each variant's barcode number and part number, checked, in the API, the CSV and structured data", async () => {
+		const made = await shop.api('POST', '/v1/products', {
+			name: 'Scanner',
+			status: 'active',
+			price: 4500,
+			stock: 3,
+			sku: 'SCN-1',
+			gtin: '5 901234 123457',
+			mpn: ' SC-100 ',
+		});
+		expect(made.status).toBe(201);
+		expect(made.json.variants[0]).toMatchObject({ sku: 'SCN-1', gtin: '5901234123457', mpn: 'SC-100' });
+		const variantId = made.json.variants[0].id;
+		const wrong = await shop.api('PATCH', `/v1/products/${made.json.id}`, {
+			variants: [{ id: variantId, gtin: '5901234123458', mpn: 'x'.repeat(71) }],
+		});
+		expect(wrong.status).toBe(422);
+		expect(wrong.json.errors.map((/** @type {any} */ error) => error.path)).toEqual(['/variants/0/gtin', '/variants/0/mpn']);
+		// the structured data names them on the product
+		const page = await shop.api('GET', `/v1/seo/products/${made.json.id}`);
+		expect(JSON.parse(page.json.jsonLd)['@graph'][0]).toMatchObject({ gtin: '5901234123457', mpn: 'SC-100' });
+		// the products CSV has the columns; an empty cell clears, a typed one sets
+		const file = await admin('GET', '/v1/admin/csv/products');
+		const [header, ...rows] = file.text
+			.replace(/^\uFEFF/, '')
+			.trim()
+			.split('\r\n');
+		expect(header).toContain('variant_id,sku,gtin,mpn,option1_name');
+		expect(rows.find((row) => row.includes('SCN-1'))).toContain('SCN-1,5901234123457,SC-100,');
+		const imported = await admin('POST', '/v1/admin/csv/products', {
+			csv: `product_id,variant_id,gtin,mpn\n${made.json.id},${variantId},,SC-200`,
+			dryRun: false,
+		});
+		expect(imported.json).toMatchObject({ updated: 1, errors: [] });
+		const read = await shop.api('GET', `/v1/products/${made.json.id}`);
+		expect(read.json.variants[0].gtin).toBeUndefined();
+		expect(read.json.variants[0].mpn).toBe('SC-200');
+		const refused = await admin('POST', '/v1/admin/csv/products', {
+			csv: `product_id,variant_id,gtin\n${made.json.id},${variantId},123`,
+		});
+		expect(refused.json.errors).toEqual([expect.objectContaining({ line: 2, path: '/variants/0/gtin', code: 'invalid' })]);
+	});
+});
+
 describe('the staff view of a product', () => {
 	it('answers every field of a product saved before the newer fields existed', async () => {
 		const seeded = await shop.seedProduct({ name: 'Old phone' });

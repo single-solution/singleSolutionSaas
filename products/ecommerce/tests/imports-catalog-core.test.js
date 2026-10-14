@@ -296,6 +296,13 @@ describe('products', () => {
 		expect(draft.ok && draft.value.publishedAt).toBeNull();
 		const shell = checkImportedProduct(product({ variants: [] }), contextOf());
 		expect(shell).toMatchObject({ ok: true, value: { status: 'draft', variants: [], stockState: 'none' } });
+		// the barcode and part numbers an earlier shop kept come along, checked (G5.6)
+		const [first] = /** @type {any[]} */ (product().variants);
+		const coded = checkImportedProduct(product({ variants: [{ ...first, gtin: '036000291452', mpn: 'P-1' }] }), contextOf());
+		expect(coded).toMatchObject({ ok: true, value: { variants: [{ gtin: '036000291452', mpn: 'P-1' }] } });
+		expect(paths(checkImportedProduct(product({ variants: [{ ...first, gtin: '036000291453' }] }), contextOf()))).toEqual([
+			'/variants/0/gtin',
+		]);
 	});
 
 	it('refuses a product by field', () => {

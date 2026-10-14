@@ -3,9 +3,11 @@
  * with Make variants from the options), the attribute setup (values, own values and the default per attribute) with
  * Generate (every missing combination, `POST …/variants/generate { price, stock }`), and the variants table: variant
  * attribute values (several where the attribute takes several), SKU, price, was price, cost, stock (per location with
- * multi-location stock) for new variants, grade, warranty days, on sale, sold out and the variant's photos.
+ * multi-location stock) for new variants, GTIN and MPN, grade, warranty days, on sale, sold out and the variant's
+ * photos.
  * @module
  */
+import { gtinOf } from '../core/fields.js';
 import { entriesOf, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import { checkGroup } from './admin-fields.js';
@@ -213,6 +215,8 @@ export const generateDialog = (kit, { productId, before, done }) => {
  * @typedef {object} VariantRow
  * @property {any} variant
  * @property {HTMLInputElement} sku
+ * @property {HTMLInputElement} gtin
+ * @property {HTMLInputElement} mpn
  * @property {HTMLInputElement} price
  * @property {HTMLInputElement} was
  * @property {HTMLInputElement} cost
@@ -306,6 +310,12 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 		return {
 			variant,
 			sku: kit.input(variant.sku, { maxlength: '64', 'aria-label': aria('catalogAdmin.skuOf') }),
+			gtin: kit.input(variant.gtin ?? '', {
+				inputmode: 'numeric',
+				maxlength: '20',
+				'aria-label': aria('catalogAdmin.gtinOf'),
+			}),
+			mpn: kit.input(variant.mpn ?? '', { maxlength: '70', 'aria-label': aria('catalogAdmin.mpnOf') }),
 			price: kit.input(kit.decimal(variant.price), { inputmode: 'decimal', 'aria-label': aria('catalogAdmin.priceOf') }),
 			was: kit.input(kit.decimal(variant.compareAtPrice), { inputmode: 'decimal', 'aria-label': aria('catalogAdmin.wasOf') }),
 			cost: kit.input(kit.decimal(variant.cost), { inputmode: 'decimal', 'aria-label': aria('catalogAdmin.costOf') }),
@@ -395,6 +405,8 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 					...(has('variants') ? [t('catalogAdmin.variant')] : []),
 					...attributes.map((attribute) => attribute.name),
 					t('catalogAdmin.sku'),
+					t('catalogAdmin.gtin'),
+					t('catalogAdmin.mpn'),
 					t('catalogAdmin.price'),
 					t('catalogAdmin.wasPrice'),
 					t('catalogAdmin.cost'),
@@ -416,6 +428,8 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 						: []),
 					...attributes.map((attribute) => entry.attributes.get(attribute.id)?.control ?? null),
 					entry.sku,
+					entry.gtin,
+					entry.mpn,
 					entry.price,
 					entry.was,
 					entry.cost,
@@ -478,9 +492,15 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 				);
 				const warranty = wholeOf(entry.warranty.value);
 				if (Number.isNaN(warranty)) bad = true;
+				// a GTIN ends in its check digit: a mistyped barcode number is caught before saving
+				const gtin = entry.gtin.value.trim() ? gtinOf(entry.gtin.value) : '';
+				entry.gtin.toggleAttribute('aria-invalid', gtin === null);
+				if (gtin === null) bad = true;
 				return {
 					...(entry.variant.id ? { id: entry.variant.id } : {}),
 					sku: entry.sku.value.trim(),
+					gtin: gtin ?? '',
+					mpn: entry.mpn.value.trim(),
 					options: has('variants') && Object.keys(values).length === 0 ? entry.variant.options : {},
 					...(attributes.length > 0 ? { attributes: values } : {}),
 					price: priceOf(entry.price, true),

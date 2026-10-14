@@ -88,6 +88,8 @@ export const ID_PREFIX = Object.freeze({
  * @typedef {object} VariantRecord
  * @property {string} id `var_…`
  * @property {string} sku unique per website among active products ('' = none)
+ * @property {string} [gtin] its GTIN (barcode number: 8, 12, 13 or 14 digits with the GS1 check digit); none = not known
+ * @property {string} [mpn] its manufacturer part number (at most 70 characters); none = not known
  * @property {Record<string, string>} options option name → value (`{ Color: 'Red' }`)
  * @property {number} price minor units
  * @property {number | null} compareAtPrice the "was" price, minor units

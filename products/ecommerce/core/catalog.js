@@ -12,6 +12,7 @@
  */
 import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
+import { gtinOf } from './fields.js';
 import {
 	VIDEO_TYPES,
 	checkFaqs,
@@ -54,6 +55,7 @@ export const LIMITS = Object.freeze({
 	media: 20,
 	alt: 200,
 	variantMedia: 24,
+	mpn: 70,
 	allVariantMedia: 200,
 	faqs: 20,
 	setup: 20,
@@ -486,6 +488,12 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 	const fail = (field, message) => errors.push({ path: `${path}/${field}`, message });
 	const sku = input.sku === undefined ? (existing?.sku ?? '') : cleanText(input.sku, LIMITS.sku);
 	if (sku === null) fail('sku', `A SKU has at most ${LIMITS.sku} characters.`);
+	// the barcode number and the manufacturer part number shopping catalogs match items by (SEO audit G5.6)
+	const gtin =
+		input.gtin === undefined ? (existing?.gtin ?? '') : input.gtin === null || input.gtin === '' ? '' : gtinOf(input.gtin);
+	if (gtin === null) fail('gtin', 'A GTIN is 8, 12, 13 or 14 digits ending in its GS1 check digit.');
+	const mpn = input.mpn === undefined ? (existing?.mpn ?? '') : input.mpn === null ? '' : cleanText(input.mpn, LIMITS.mpn);
+	if (mpn === null) fail('mpn', `An MPN has at most ${LIMITS.mpn} characters.`);
 	const price = input.price === undefined ? existing?.price : input.price;
 	if (!isPrice(price)) fail('price', 'The price is a whole number of minor units from 0.');
 	/** @param {string} field */
@@ -533,12 +541,14 @@ const variantOf = (input, existing, rules, path, errors, place = NEW_PLACE, id =
 		media,
 		soldOut: typeof input.soldOut === 'boolean' ? input.soldOut : (existing?.soldOut ?? false),
 		warrantyDays: isDays(warrantyDays) ? warrantyDays : (existing?.warrantyDays ?? null),
+		...(gtin ? { gtin } : {}),
+		...(mpn ? { mpn } : {}),
 		...(feedId ? { feedId } : {}),
 	};
 };
 
 /** The fields of a single-variant product that may be given at the top level. */
-const SHORTCUT = Object.freeze(['sku', 'price', 'compareAtPrice', 'cost', 'stock', 'locations', 'grade']);
+const SHORTCUT = Object.freeze(['sku', 'gtin', 'mpn', 'price', 'compareAtPrice', 'cost', 'stock', 'locations', 'grade']);
 
 /**
  * The option axes and each variant's option values derived from variant attributes (E7): one axis per attribute used,

@@ -112,6 +112,22 @@ describe('variants: images, ids and the group id', () => {
 		]);
 		const single = nodeOf(productJsonLd(page(product())), 'Product');
 		expect(single.sku).toBe('var_1');
+		expect(single.gtin).toBeUndefined();
+	});
+
+	it("names each variant's GTIN and MPN when the merchant gave them (G5.6)", () => {
+		const coded = {
+			...two,
+			variants: [
+				{ ...variant({ id: 'var_red', options: { Color: 'Red' } }), gtin: '96385074', mpn: 'MUG-01' },
+				two.variants[1],
+			],
+		};
+		const group = nodeOf(productJsonLd(page(/** @type {any} */ (coded))), 'ProductGroup');
+		expect(group.hasVariant.map((/** @type {any} */ v) => [v.gtin, v.mpn])).toEqual([
+			['96385074', 'MUG-01'],
+			[undefined, undefined],
+		]);
 	});
 
 	it('names the group as the feed does: its imported group id, else the product id', () => {

@@ -341,6 +341,7 @@ export const productDetail = (kit, product, context, message = '') => {
 					[
 						t('catalogAdmin.variant'),
 						t('catalogAdmin.sku'),
+						t('catalogAdmin.gtin'),
 						t('catalogAdmin.price'),
 						t('catalogAdmin.stock'),
 						...(has('grades_serials') ? [t('catalogAdmin.grade')] : []),
@@ -349,6 +350,7 @@ export const productDetail = (kit, product, context, message = '') => {
 					variants.map((variant) => [
 						variantLabel(kit, variant),
 						variant.sku,
+						variant.gtin ?? '',
 						variant.compareAtPrice
 							? `${kit.money(variant.price)} (${kit.money(variant.compareAtPrice)})`
 							: kit.money(variant.price),

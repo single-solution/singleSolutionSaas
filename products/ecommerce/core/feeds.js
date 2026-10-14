@@ -43,8 +43,8 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {boolean} inStock
  * @property {Condition | ''} condition
  * @property {string} brand
- * @property {string} gtin
- * @property {string} mpn
+ * @property {string} gtin the variant's GTIN, else its SKU when `skuAs` is gtin
+ * @property {string} mpn the variant's MPN, else its SKU when `skuAs` is mpn
  * @property {string} productType category path (`Home > Kitchen`)
  * @property {string} [googleCategory] the Google product category (E17)
  * @property {string} [customLabel0] the grade's label (E17)
@@ -66,7 +66,7 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {(variant: import('./model.js').VariantRecord) => import('./promotions.js').ShownPrice} shown a variant's
  *   shown price (`shownPrice` with the deals that hold all day, G4)
  * @property {number} now the feed's read time (the start of a sale that names none)
- * @property {'none' | 'mpn' | 'gtin'} skuAs
+ * @property {'none' | 'mpn' | 'gtin'} skuAs what the SKU is sent as for variants without their own GTIN or MPN
  * @property {boolean} includeOutOfStock
  * @property {string} [googleCategory]
  * @property {(variant: import('./model.js').VariantRecord) => string} [gradeLabel] the grade label for custom_label_0
@@ -123,9 +123,10 @@ export const feedRows = (product, context) => {
 			const shown = context.shown(variant);
 			const until = shown.was !== null && shown.sale?.until ? new Date(shown.sale.until) : null;
 			const from = shown.sale?.from ? new Date(shown.sale.from) : new Date(context.now);
+			// the variant's own GTIN and MPN first, else the SKU as the merchant says it is one (G5.6)
 			const sku = variant.sku ?? '';
-			const gtin = context.skuAs === 'gtin' ? sku : '';
-			const mpn = context.skuAs === 'mpn' ? sku : '';
+			const gtin = variant.gtin || (context.skuAs === 'gtin' ? sku : '');
+			const mpn = variant.mpn || (context.skuAs === 'mpn' ? sku : '');
 			const title = fillTemplate(context.title || '{name} - {variant}', {
 				name: product.name,
 				brand: context.brand,
@@ -218,6 +219,8 @@ const META_COLUMNS = Object.freeze([
 	'link',
 	'image_link',
 	'brand',
+	'gtin',
+	'mpn',
 	'item_group_id',
 	'google_product_category',
 	'custom_label_0',
@@ -249,6 +252,8 @@ export const metaLine = (row) =>
 		row.link,
 		row.image,
 		row.brand,
+		row.gtin,
+		row.mpn,
 		row.itemGroupId,
 		row.googleCategory ?? '',
 		row.customLabel0 ?? '',

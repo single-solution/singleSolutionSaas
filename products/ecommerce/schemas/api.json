@@ -13745,6 +13745,14 @@
 					"type": "string",
 					"description": "'' = none."
 				},
+				"gtin": {
+					"type": "string",
+					"description": "Its GTIN (barcode number), digits only; missing when not known."
+				},
+				"mpn": {
+					"type": "string",
+					"description": "Its manufacturer part number; missing when not known."
+				},
 				"options": {
 					"type": "object",
 					"additionalProperties": {
@@ -14570,6 +14578,16 @@
 								"maxLength": 64,
 								"description": "Unique among your products ('' = none)."
 							},
+							"gtin": {
+								"type": ["string", "null"],
+								"maxLength": 40,
+								"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+							},
+							"mpn": {
+								"type": ["string", "null"],
+								"maxLength": 70,
+								"description": "Its manufacturer part number; '' or null clears it. Structured data and feeds send it."
+							},
 							"options": {
 								"type": "object",
 								"additionalProperties": {
@@ -14703,6 +14721,16 @@
 					"type": "string",
 					"maxLength": 64,
 					"description": "Single-variant shortcut."
+				},
+				"gtin": {
+					"type": ["string", "null"],
+					"maxLength": 40,
+					"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+				},
+				"mpn": {
+					"type": ["string", "null"],
+					"maxLength": 70,
+					"description": "Single-variant shortcut: its manufacturer part number; '' or null clears it. Structured data and feeds send it."
 				},
 				"price": {
 					"type": "integer",
@@ -15046,6 +15074,16 @@
 								"maxLength": 64,
 								"description": "Unique among your products ('' = none)."
 							},
+							"gtin": {
+								"type": ["string", "null"],
+								"maxLength": 40,
+								"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+							},
+							"mpn": {
+								"type": ["string", "null"],
+								"maxLength": 70,
+								"description": "Its manufacturer part number; '' or null clears it. Structured data and feeds send it."
+							},
 							"options": {
 								"type": "object",
 								"additionalProperties": {
@@ -15179,6 +15217,16 @@
 					"type": "string",
 					"maxLength": 64,
 					"description": "Single-variant shortcut."
+				},
+				"gtin": {
+					"type": ["string", "null"],
+					"maxLength": 40,
+					"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+				},
+				"mpn": {
+					"type": ["string", "null"],
+					"maxLength": 70,
+					"description": "Single-variant shortcut: its manufacturer part number; '' or null clears it. Structured data and feeds send it."
 				},
 				"price": {
 					"type": "integer",
@@ -15535,6 +15583,16 @@
 								"maxLength": 64,
 								"description": "Unique among your products ('' = none)."
 							},
+							"gtin": {
+								"type": ["string", "null"],
+								"maxLength": 40,
+								"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+							},
+							"mpn": {
+								"type": ["string", "null"],
+								"maxLength": 70,
+								"description": "Its manufacturer part number; '' or null clears it. Structured data and feeds send it."
+							},
 							"options": {
 								"type": "object",
 								"additionalProperties": {
@@ -15668,6 +15726,16 @@
 					"type": "string",
 					"maxLength": 64,
 					"description": "Single-variant shortcut."
+				},
+				"gtin": {
+					"type": ["string", "null"],
+					"maxLength": 40,
+					"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+				},
+				"mpn": {
+					"type": ["string", "null"],
+					"maxLength": 70,
+					"description": "Single-variant shortcut: its manufacturer part number; '' or null clears it. Structured data and feeds send it."
 				},
 				"price": {
 					"type": "integer",
@@ -16009,6 +16077,16 @@
 								"maxLength": 64,
 								"description": "Unique among your products ('' = none)."
 							},
+							"gtin": {
+								"type": ["string", "null"],
+								"maxLength": 40,
+								"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+							},
+							"mpn": {
+								"type": ["string", "null"],
+								"maxLength": 70,
+								"description": "Its manufacturer part number; '' or null clears it. Structured data and feeds send it."
+							},
 							"options": {
 								"type": "object",
 								"additionalProperties": {
@@ -16142,6 +16220,16 @@
 					"type": "string",
 					"maxLength": 64,
 					"description": "Single-variant shortcut."
+				},
+				"gtin": {
+					"type": ["string", "null"],
+					"maxLength": 40,
+					"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+				},
+				"mpn": {
+					"type": ["string", "null"],
+					"maxLength": 70,
+					"description": "Single-variant shortcut: its manufacturer part number; '' or null clears it. Structured data and feeds send it."
 				},
 				"price": {
 					"type": "integer",
@@ -16823,17 +16911,17 @@
 	},
 	"GET /v1/csv/products": {
 		"summary": "Export the products as CSV",
-		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 		"status": 200
 	},
 	"GET /v1/admin/csv/products": {
 		"summary": "Export the products as CSV (Customers admin widget)",
-		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 		"status": 200
 	},
 	"POST /v1/csv/products": {
 		"summary": "Import products from CSV, or update prices and stock",
-		"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products. A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
+		"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -16874,7 +16962,7 @@
 	},
 	"POST /v1/admin/csv/products": {
 		"summary": "Import products from CSV, or update prices and stock (Customers admin widget)",
-		"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products. A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
+		"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -24681,11 +24769,11 @@
 	},
 	"GET /v1/feeds/products.xml": {
 		"summary": "The Google Merchant Center feed",
-		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, sale_price_effective_date, condition, brand, gtin, mpn, identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, gradedCondition, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it. Prices (G4): price is the regular price; on sale (a \"was\" price above the price, or an automatic deal on one unit that holds all day), sale_price is the price shown, and sale_price_effective_date (start/end, ISO 8601) is sent while the deal has an end."
+		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, sale_price_effective_date, condition (each grade's standard condition; new without a grade), brand, gtin and mpn (the variant's own, else its SKU as skuAs says), identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it. Prices (G4): price is the regular price; on sale (a \"was\" price above the price, or an automatic deal on one unit that holds all day), sale_price is the price shown, and sale_price_effective_date (start/end, ISO 8601) is sent while the deal has an end."
 	},
 	"GET /v1/feeds/products.csv": {
 		"summary": "The Meta (Facebook) catalog feed",
-		"description": "Answers text/csv, not JSON: a header line, then one line per active variant priced above 0 of every active product shoppers may see (at most 100,000), with the columns id, title, description, availability, condition, price (the regular price), sale_price and sale_price_effective_date (on sale, as in products.xml), link, image_link, brand, item_group_id, google_product_category and custom_label_0 (RFC 4180, CRLF line ends). The same feeds settings as products.xml."
+		"description": "Answers text/csv, not JSON: a header line, then one line per active variant priced above 0 of every active product shoppers may see (at most 100,000), with the columns id, title, description, availability, condition, price (the regular price), sale_price and sale_price_effective_date (on sale, as in products.xml), link, image_link, brand, gtin, mpn, item_group_id, google_product_category and custom_label_0 (RFC 4180, CRLF line ends). The same feeds settings as products.xml."
 	},
 	"GET /v1/llms.txt": {
 		"summary": "llms.txt of the catalog",

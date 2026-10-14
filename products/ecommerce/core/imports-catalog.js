@@ -61,6 +61,8 @@ const MEDIA_FIELDS = Object.freeze(['key', 'type', 'size', 'alt', 'sizes', 'widt
 const VARIANT_FIELDS = Object.freeze([
 	'id',
 	'sku',
+	'gtin',
+	'mpn',
 	'options',
 	'price',
 	'compareAtPrice',

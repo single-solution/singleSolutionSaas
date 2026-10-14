@@ -155,6 +155,13 @@ describe('catalog admin: a product', () => {
 		await click(buttonIn(editor, 'Save'));
 		expect(patches).toHaveLength(0);
 		type(labelled(editor, 'Warranty days of Green'), '');
+		// a GTIN must end in its check digit (G5.6)
+		type(labelled(editor, 'GTIN (barcode number) of Green'), '4006381333932');
+		await click(buttonIn(editor, 'Save'));
+		expect(patches).toHaveLength(0);
+		expect(labelled(editor, 'GTIN (barcode number) of Green').hasAttribute('aria-invalid')).toBe(true);
+		type(labelled(editor, 'GTIN (barcode number) of Green'), '4006381 333931');
+		type(labelled(editor, 'Manufacturer part number of Green'), ' MX-1 ');
 		// the rest of the form
 		type(fieldIn(editor, 'Focus keyword'), 'mobile');
 		await tick(checkIn(editor, 'Keep out of search results (noindex)'), true);
@@ -197,6 +204,8 @@ describe('catalog admin: a product', () => {
 		expect(body.options).toEqual([{ name: 'Color', values: ['Red', 'Blue', 'Green'] }]);
 		expect(body.variants[2]).toEqual({
 			sku: '',
+			gtin: '4006381333931',
+			mpn: 'MX-1',
 			options: {},
 			attributes: { att_5: '128' },
 			price: 9950,

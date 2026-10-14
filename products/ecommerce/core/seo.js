@@ -456,8 +456,8 @@ export const productFacts = (product, { money, grades, specs, priceOf = (variant
 
 /**
  * Product structured data as a JSON-LD graph (E16, G5): a `ProductGroup` with each variant offered as a `Product` (its
- * own image, else the product's; its SKU, else its feed item id; its condition by grade, offer, shipping and return
- * policy) when there are several, else one `Product`; the rating and review nodes; the `BreadcrumbList`; and, while the
+ * own image, else the product's; its SKU, else its feed item id; its GTIN and MPN when known; its condition by grade,
+ * offer, shipping and return policy) when there are several, else one `Product`; the rating and review nodes; the `BreadcrumbList`; and, while the
  * merchant asks for it, a `FAQPage` of the product's questions. A product with nothing offered (no active variant
  * priced above 0) has no Product node: a Product without offers is not valid markup.
  * @param {ProductPage} page
@@ -523,6 +523,8 @@ export const productJsonLd = (page) => {
 					'@type': 'Product',
 					name: page.variantName(variant) || product.name,
 					sku: variant.sku || feedItemId(variant),
+					gtin: variant.gtin,
+					mpn: variant.mpn,
 					image: page.variantImage?.(variant) || images,
 					...Object.fromEntries(
 						Object.entries(variant.options ?? {}).flatMap(([axis, value]) => {
@@ -542,6 +544,8 @@ export const productJsonLd = (page) => {
 			name: product.name,
 			url,
 			sku: sole.sku || feedItemId(sole),
+			gtin: sole.gtin,
+			mpn: sole.mpn,
 			...shared,
 			offers: offerOf(sole),
 		});

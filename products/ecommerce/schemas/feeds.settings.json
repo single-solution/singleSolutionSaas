@@ -32,7 +32,7 @@
 		"skuAs": {
 			"type": "string",
 			"title": "Send the SKU as",
-			"description": "Shopping catalogs match items by GTIN (barcode) or MPN (manufacturer part number). Choose what your SKUs are.",
+			"description": "Shopping catalogs match items by GTIN (barcode) or MPN (manufacturer part number). A variant's own GTIN and MPN are always sent; for variants without them, choose what your SKUs are.",
 			"default": "none",
 			"enum": ["none", "mpn", "gtin"]
 		},
