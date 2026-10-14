@@ -3674,6 +3674,21 @@ shop tool is off. Bug fixed: a wrong-typed language or keyword list is refused (
 
 #### Growth
 
+**SEO health report built (2026-10-15; 19710c15, e2e 6a2c2a18, 26d0f83c; SEO audit §3.2 B, S12 Growth side).** The SEO
+checklist reads the live website as a search engine does, when staff ask (never on a timer): robots.txt, the sitemap
+and its index files, the checklist's pages and samples from the sitemap (product, category, landing or listing,
+glossary, told apart by structured data), an address the site does not have, the old paths of up to 3 redirect rules,
+28 days of Web Vitals and 90 days of 404s. 30 checks, each pass/warn/fail with a finding code, reason, fix (US-English
+widget texts) and a Rich Results Test link: status codes, soft 404, redirect rules applied, robots.txt (RFC 9309 for
+Googlebot and Googlebot-Image), sitemap, canonical, noindex, JSON-LD validity and Product data, shown price and server
+HTML, breadcrumbs, Organization and WebSite on the home page, h1, lang, image alt and size, response time,
+ETag/Last-Modified, Web Vitals per site and page level, 404s without a rule. Reads never follow redirects; at most 4 at a
+time, 8 s and 2 MB each (sitemap 16 MB), 25 s per run, 10 runs an hour; the last full run is kept
+(`ss_growth_seo_reports`, `GET /v1/seo/report`; the checklist routes need the merchant database); a full run within 5
+minutes answers the kept report. Eight checklist bugs fixed (cross-host redirects, Googlebot rules and Allow lines,
+noscript images, robots.txt 5xx, relative or several canonicals, 1–2 MB pages, `none`/`googlebot` meta, verification
+without a home page).
+
 **Redirects built (2026-10-14; c6d3463f, e2e 3d1ff141; SEO audit G9, Growth part).** Feature `redirects`: rules `{ from,
 match exact | prefix, to, code 301 | 308 | 410, note }`, at most 5,000 per website, one per normalized path (one leading
 slash, no trailing slash except `/`, percent-encoded, case kept; `?`/`#` in an old path refused). Matching uses the
