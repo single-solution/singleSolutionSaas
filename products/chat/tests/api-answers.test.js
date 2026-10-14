@@ -21,14 +21,20 @@ const start = async (on) => {
 /** @param {any} json */
 const texts = (json) => json.messages.map((/** @type {any} */ m) => [m.author, m.text]);
 
-/** A product card as Ecommerce answers it (ChatProduct). */
+/** The deal in the lamp's price, with what it takes off one unit. */
+const LAMP_DEAL = { id: 'deal_1', name: 'Autumn sale', savings: 450, savingsText: '$4.50' };
+
+/** A product card as Ecommerce answers it (ChatProduct): the price on the product page, after its 10% deal. */
 const PRODUCT = {
 	id: 'prd_lamp',
 	name: 'Desk Lamp',
-	price: 4500,
-	priceText: '$45.00',
-	priceMax: 4500,
-	priceMaxText: '$45.00',
+	price: 4050,
+	priceText: '$40.50',
+	compareAtPrice: 4500,
+	compareAtPriceText: '$45.00',
+	deal: LAMP_DEAL,
+	priceMax: 4050,
+	priceMaxText: '$40.50',
 	currency: 'USD',
 	image: 'https://cdn.shop.example.com/lamp.jpg',
 	url: 'https://shop.example.com/lighting/desk-lamp',
@@ -163,6 +169,23 @@ describe('fallback answers (C3)', () => {
 		await sys.paste('accounts');
 		await sys.setting('language_lock', 'allowedLanguages', ['en', 'ar']);
 		await sys.setting('guest_chat', 'messageLimit', 0);
+		// the words of the deals table and of the "was" price are the merchant's widget texts
+		for (const [key, value] of Object.entries({
+			'chat.dealName': 'Offer',
+			'chat.dealDetails': 'What',
+			'chat.dealEnds': 'Until',
+			'chat.wasPrice': 'before {price}',
+		})) {
+			const saved = await sys.dashboard(
+				await sys.adminSession(),
+				'PUT',
+				`/v1/dashboard/websites/${sys.websiteId}/texts/${key}`,
+				{
+					value,
+				},
+			);
+			expect(saved.status, saved.text).toBe(204);
+		}
 		expect(
 			(
 				await sys.dashboard(
@@ -192,11 +215,13 @@ describe('fallback answers (C3)', () => {
 		await v('POST', '/v1/chat/messages', { text: 'any deal today?' });
 		let last = (await v('GET', '/v1/chat')).json.messages.at(-1);
 		expect(last).toMatchObject({ author: 'ai', format: 'markdown' });
-		expect(last.text).toBe('Our deals:\n\n| Deal | Details | Ends |\n| --- | --- | --- |\n| Autumn sale | 10% off |  |');
+		expect(last.text).toBe('Our deals:\n\n| Offer | What | Until |\n| --- | --- | --- |\n| Autumn sale | 10% off |  |');
 		sys.ai(fail);
 		await v('POST', '/v1/chat/messages', { text: 'something under 1,500 please' });
 		last = (await v('GET', '/v1/chat')).json.messages.at(-1);
-		expect(last.text).toBe('Within your budget:\n- [Desk Lamp](https://shop.example.com/lighting/desk-lamp) — $45.00');
+		expect(last.text).toBe(
+			'Within your budget:\n- [Desk Lamp](https://shop.example.com/lighting/desk-lamp) — $40.50 (before $45.00)',
+		);
 		const search = sys.shopCalls().find((c) => c.url.includes('/v1/chat/products?'));
 		expect(new URL(String(search?.url)).searchParams.get('maxPrice')).toBe('150000');
 		// a guest's order question skips the my-orders entry (no sign-in): nothing else matches
@@ -265,10 +290,11 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		const variant = {
 			id: 'var_black',
 			options: { Color: 'Black' },
-			price: 4500,
-			priceText: '$45.00',
-			compareAtPrice: null,
-			compareAtPriceText: null,
+			price: 4050,
+			priceText: '$40.50',
+			compareAtPrice: 4500,
+			compareAtPriceText: '$45.00',
+			deal: LAMP_DEAL,
 			grade: 'New',
 			gradeKey: 'new',
 			inStock: true,
@@ -285,7 +311,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				description: 'Brushed steel.',
 				brand: 'Northlight',
 				options: [{ name: 'Color', values: ['Black', 'Gray'] }],
-				priceRange: { min: 3000, max: 4500, minText: '$30.00', maxText: '$45.00' },
+				priceRange: { min: 3000, max: 4050, minText: '$30.00', maxText: '$40.50' },
 				specs: [{ name: 'Height', value: 42, unit: 'cm' }],
 				variants: [
 					variant,
@@ -295,6 +321,9 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						options: { Color: 'Gray' },
 						price: 3000,
 						priceText: '$30.00',
+						compareAtPrice: null,
+						compareAtPriceText: null,
+						deal: null,
 						grade: 'Used',
 						gradeKey: 'used',
 						inStock: false,
@@ -313,6 +342,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				quantity: 2,
 				price: 4500,
 				priceText: '$45.00',
+				compareAtPrice: null,
+				compareAtPriceText: null,
 				priceAfterDeals: 4000,
 				priceAfterDealsText: '$40.00',
 				savings: 500,
@@ -378,7 +409,13 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			.aiCalls()[1]
 			.messages.filter((/** @type {any} */ m) => m.role === 'tool')
 			.map((/** @type {any} */ m) => JSON.parse(m.content));
-		expect(results[0].products[0]).toMatchObject({ price: '$45.00', grade: 'New', stockLeft: 3 });
+		expect(results[0].products[0]).toMatchObject({
+			price: '$40.50',
+			wasPrice: '$45.00',
+			deal: { name: 'Autumn sale', savings: '$4.50' },
+			grade: 'New',
+			stockLeft: 3,
+		});
 		expect(results[1]).toMatchObject({
 			brand: 'Northlight',
 			specs: ['Height: 42 cm'],
@@ -387,7 +424,9 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				{
 					id: 'var_black',
 					options: 'Color: Black',
-					price: '$45.00',
+					price: '$40.50',
+					wasPrice: '$45.00',
+					deal: { name: 'Autumn sale', savings: '$4.50' },
 					grade: 'New',
 					gradeKey: 'new',
 					inStock: true,

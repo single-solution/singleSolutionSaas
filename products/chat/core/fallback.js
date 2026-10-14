@@ -175,14 +175,15 @@ export const tableOf = (head, rows) =>
 	].join('\n');
 
 /**
- * A markdown list of products: name (linked to its page), price and stock.
- * @param {Array<{ name: string, price: string, link?: string | null, inStock?: boolean }>} products
- * @param {{ outOfStock: string }} words
+ * A markdown list of products: name (linked to its page), price as the product page shows it (with its "was" price)
+ * and stock.
+ * @param {Array<{ name: string, price: string, wasPrice?: string, link?: string | null, inStock?: boolean }>} products
+ * @param {{ outOfStock: string, was: (price: string) => string }} words `was`: the "was" price in words
  */
 export const productList = (products, words) =>
 	products
 		.map(
 			(p) =>
-				`- ${p.link ? `[${p.name.replace(/[[\]]/g, '')}](${p.link})` : p.name} — ${p.price}${p.inStock === false ? ` (${words.outOfStock})` : ''}`,
+				`- ${p.link ? `[${p.name.replace(/[[\]]/g, '')}](${p.link})` : p.name} — ${p.price}${p.wasPrice ? ` (${words.was(p.wasPrice)})` : ''}${p.inStock === false ? ` (${words.outOfStock})` : ''}`,
 		)
 		.join('\n');

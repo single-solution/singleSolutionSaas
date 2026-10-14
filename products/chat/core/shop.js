@@ -9,9 +9,11 @@
  * passes is ignored. Only whitelisted fields are kept, so no street address or phone number ever reaches the AI.
  * Prices, dates and deal days and times in what the AI and the context panel get follow the website's Format and
  * business time zone (PLAN 0.8.10 K7; day names in the Format's language, else en-US), so the chat answers show them
- * as the website does: Ecommerce's `priceText` when it sends one. The fuller lookups (C13, Ecommerce E37) pass the
- * category, grade, price and stock filters and answer grades, variants, stock left, warranty, quotes per variant and
- * payment method, order lines and the store context (C1).
+ * as the website does: Ecommerce's `priceText` when it sends one. Products are priced as the shop shows them: the shown
+ * price (after the best live deal on one unit), the price struck through beside it (`compareAtPrice`, the "was" price)
+ * and the deal in it with what it saves; cards keep the "was" price and the AI gets it as `wasPrice`. The fuller lookups
+ * (C13, Ecommerce E37) pass the category, grade, price and stock filters and answer grades, variants, stock left,
+ * warranty, quotes per variant and payment method, order lines and the store context (C1).
  * @module
  */
 import { formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
@@ -95,17 +97,17 @@ export const CONTEXT_ENDPOINT = Object.freeze({
  */
 export const SHOP_ANSWERS = Object.freeze({
 	product:
-		'id, name, price, priceText, priceMax, priceMaxText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade (the label, or null), stockLeft (or null)',
+		'id, name, price (the shown price: after the best live deal on one unit), priceText, compareAtPrice and compareAtPriceText (the price struck through beside it, or null), deal ({ name, savings, savingsText } or null), priceMax, priceMaxText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade (the label, or null), stockLeft (or null)',
 	details:
-		'a product plus summary, description, brand, options: [{ name, values: [text] }], specs: [{ name, value (text, number, true/false or a list), unit }], variants: [{ id, options: { name: value }, price, priceText, grade, gradeKey, inStock, soldOut, stockLeft, warrantyDays }]',
-	quote: 'productId, variantId, quantity, paymentMethod, price, priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), inStock, deals: [name], paymentMethods: [{ method (cod, online, bank_transfer or pickup), available, reason (or null), advance, advanceText, fee }]',
+		'a product plus summary, description, brand, options: [{ name, values: [text] }], specs: [{ name, value (text, number, true/false or a list), unit }], variants: [{ id, options: { name: value }, price, priceText, compareAtPrice, compareAtPriceText, deal, grade, gradeKey, inStock, soldOut, stockLeft, warrantyDays }]',
+	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), inStock, deals: [name], paymentMethods: [{ method (cod, online, bank_transfer or pickup), available, reason (or null), advance, advanceText, fee }]',
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
 		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyDays }] }] (the last 5), loyaltyPoints, name',
 	account: 'name, firstName, loyaltyPoints, city, area',
 	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status, trackingNote, expectedAt }]',
 	context:
-		'text (at most 6,000 characters: the policies, the 10 newest products with their price per grade, the deals table, the named product and, signed in, first name, city and points), currency',
+		'text (at most 6,000 characters: the policies, the 10 newest products with their shown price per grade and its "was" price, the deals table, the named product and, signed in, first name, city and points), currency',
 	customerOrders: 'items: [{ number, status, statusLabel, total, totalText, currency, createdAt }], loyaltyPoints',
 });
 
@@ -121,11 +123,18 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
 
 /** @typedef {import('./providers.js').ToolSchema} ToolSchema */
 /**
+ * The deal in a shown price, with what it takes off one unit (Ecommerce's `deal`).
+ * @typedef {{ name: string, savings: number, savingsText: string | null }} ShopDeal
+ */
+/**
  * A product as Ecommerce answers it (only these fields are kept).
  * @typedef {object} ShopProduct
  * @property {string} id
  * @property {string} name
- * @property {number} price integer minor units
+ * @property {number} price integer minor units: the shown price, as the product page shows it
+ * @property {number | null} compareAtPrice the price struck through beside it (higher than `price`), else null
+ * @property {string | null} compareAtPriceText
+ * @property {ShopDeal | null} deal the deal in the price
  * @property {string} currency ISO 4217
  * @property {string | null} image https
  * @property {string | null} url the product page
@@ -143,6 +152,7 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * @property {string | null} variantId
  * @property {string} name
  * @property {number} price integer minor units
+ * @property {number | null} compareAtPrice the price struck through beside it (higher than `price`), else null
  * @property {string} currency
  * @property {string | null} image https
  * @property {string | null} url the product page
@@ -186,6 +196,41 @@ const pageUrl = (value) =>
 const countOf = (value) => (Number.isSafeInteger(value) ? Number(value) : null);
 
 /**
+ * The price struck through beside a price (`compareAtPrice`) when it is higher, else null.
+ * @param {Record<string, any>} b a product, variant or quote as Ecommerce answers it
+ */
+const wasOf = (b) =>
+	isMinor(b.compareAtPrice) && isMinor(b.price) && b.compareAtPrice > b.price ? Number(b.compareAtPrice) : null;
+
+/**
+ * The deal in a shown price (`{ name, savings, savingsText }`), else null.
+ * @param {unknown} raw
+ * @returns {ShopDeal | null}
+ */
+const dealOf = (raw) => {
+	if (!isObject(raw)) return null;
+	const name = textOf(raw.name, 120);
+	return name && isMinor(raw.savings) && raw.savings > 0
+		? { name, savings: Number(raw.savings), savingsText: textOf(raw.savingsText, 60) }
+		: null;
+};
+
+/**
+ * What a shown price carries besides its amount (a product or variant as Ecommerce answers it): the price struck
+ * through beside it and the deal in it.
+ * @param {Record<string, any>} raw
+ * @returns {{ compareAtPrice: number | null, compareAtPriceText: string | null, deal: ShopDeal | null }}
+ */
+const shownOf = (raw) => {
+	const was = wasOf(raw);
+	return {
+		compareAtPrice: was,
+		compareAtPriceText: was === null ? null : textOf(raw.compareAtPriceText, 60),
+		deal: dealOf(raw.deal),
+	};
+};
+
+/**
  * An amount in minor units for people, in the website's Format (`125000`, `USD` → `USD 1,250.00` by default).
  * @param {number} amount integer minor units
  * @param {string} currency ISO 4217
@@ -223,6 +268,7 @@ const productOf = (raw) => {
 		id,
 		name,
 		price: Number(raw.price),
+		...shownOf(raw),
 		currency: raw.currency,
 		image: isHttpsUrl(raw.image) ? String(raw.image) : null,
 		url: pageUrl(raw.url),
@@ -245,6 +291,7 @@ export const cardOf = (product) => ({
 	variantId: product.variantId,
 	name: product.name,
 	price: product.price,
+	compareAtPrice: product.compareAtPrice,
 	currency: product.currency,
 	image: product.image,
 	url: product.url,
@@ -272,11 +319,15 @@ const schema = (name, description, properties = {}, required = []) => ({
 
 const PRODUCT_ID = { type: 'string', description: 'The product id from search_catalog or get_top_products.' };
 
+/** How the product tools price, in their descriptions (so the AI names the price the product page shows). */
+const PRICE_FIELDS =
+	'price is what the product page charges now, after any live deal (lowest to highest when the variants differ); wasPrice, when given, is the old price the page shows struck through beside it (mention it as "was …", never as the price to pay); deal, when given, is the deal in the price and what it saves on one unit';
+
 /** @type {Record<string, ToolSchema>} */
 const SCHEMAS = {
 	[SHOP_TOOLS.search]: schema(
 		SHOP_TOOLS.search,
-		'Search the live shop catalog by name, brand, model or kind of product, optionally within a category, a grade, a price range or only in stock. Returns matching products with price, grade, stock, link and id. Use it for any product, price, budget or availability question.',
+		`Search the live shop catalog by name, brand, model or kind of product, optionally within a category, a grade, a price range or only in stock. Returns matching products with price, wasPrice, deal, grade, stock, link and id: ${PRICE_FIELDS}. Use it for any product, price, budget or availability question.`,
 		{
 			query: { type: 'string', description: 'What to search for, e.g. a product name or brand (may be empty with a filter).' },
 			category: { type: 'string', description: 'Only this category: its slug as in its link (e.g. new-arrivals) or id.' },
@@ -294,13 +345,13 @@ const SCHEMAS = {
 	),
 	[SHOP_TOOLS.details]: schema(
 		SHOP_TOOLS.details,
-		'Get the full details of ONE product you already found: summary, description, brand, options, specs, warranty and its variants with grade, price and stock left.',
+		'Get the full details of ONE product you already found: summary, description, brand, options, specs, warranty and its variants, each with grade, price, wasPrice and deal (as search_catalog gives them) and stock left.',
 		{ productId: PRODUCT_ID },
 		['productId'],
 	),
 	[SHOP_TOOLS.quote]: schema(
 		SHOP_TOOLS.quote,
-		'Quote ONE product’s price after the active deals, for a variant, a quantity and a payment method: the price, the price after deals, the saving, the fees, the delivery charge, the free-delivery threshold, the total, the deals that apply and the payment methods it can be paid with.',
+		'Quote ONE product’s price after the active deals, for a variant, a quantity and a payment method: price (one unit before deals) with wasPrice (its old price, struck through on the product page, when given), priceAfterDeals (one unit after the deals; for one unit, the price on the product page), the saving per unit, the fees, the delivery charge, the free-delivery threshold, the total, the deals that apply and the payment methods it can be paid with.',
 		{
 			productId: PRODUCT_ID,
 			variantId: { type: 'string', description: 'The variant id from get_product_details (optional).' },
@@ -319,9 +370,11 @@ const SCHEMAS = {
 		SHOP_TOOLS.deals,
 		'List the active deals with their description and end date. Never invent offers that are not returned here.',
 	),
-	[SHOP_TOOLS.top]: schema(SHOP_TOOLS.top, 'List the best-selling products (kind "top") or the newest arrivals (kind "new").', {
-		kind: { type: 'string', enum: ['top', 'new'], description: '"top" (default) or "new".' },
-	}),
+	[SHOP_TOOLS.top]: schema(
+		SHOP_TOOLS.top,
+		'List the best-selling products (kind "top") or the newest arrivals (kind "new"), with the fields search_catalog gives.',
+		{ kind: { type: 'string', enum: ['top', 'new'], description: '"top" (default) or "new".' } },
+	),
 	[SHOP_TOOLS.orders]: schema(
 		SHOP_TOOLS.orders,
 		'Look up the signed-in visitor’s own last orders (number, status, total, date, items, expected date, tracking note), loyalty points and name. Only for questions about their own orders.',
@@ -474,11 +527,24 @@ const priceOf = (b, key, look) => {
 	return isMinor(b[key]) && isCurrency(b.currency) ? moneyText(Number(b[key]), b.currency, look) : null;
 };
 
+/**
+ * What a shown price adds for the AI (a product or variant): `wasPrice`, the price struck through beside it, and `deal`,
+ * the deal in the price with what it saves on one unit; each only when there is one.
+ * @param {{ compareAtPrice: number | null, compareAtPriceText: string | null, deal: ShopDeal | null }} shown
+ * @param {string} currency
+ * @param {Look} look
+ */
+const shownExtras = ({ compareAtPrice, compareAtPriceText, deal }, currency, look) => ({
+	...(compareAtPrice !== null ? { wasPrice: compareAtPriceText ?? moneyText(compareAtPrice, currency, look) } : {}),
+	...(deal ? { deal: { name: deal.name, savings: deal.savingsText ?? moneyText(deal.savings, currency, look) } } : {}),
+});
+
 /** @param {ShopProduct} p @param {Look} look */
 const productLine = (p, look) => ({
 	id: p.id,
 	name: p.name,
 	price: `${p.priceText ?? moneyText(p.price, p.currency, look)}${p.priceMaxText ? ` – ${p.priceMaxText}` : ''}`,
+	...shownExtras(p, p.currency, look),
 	inStock: p.inStock,
 	...(p.grade ? { grade: p.grade } : {}),
 	...(p.stockLeft !== null ? { stockLeft: p.stockLeft } : {}),
@@ -601,6 +667,7 @@ export const shopAnswer = (name, body, look = {}) => {
 					id: textOf(v.id, 100),
 					options: variantOptions(v.options),
 					price: priceOf({ ...v, currency: product.currency }, 'price', look),
+					...shownExtras(shownOf(v), product.currency, look),
 					...(grade ? { grade } : {}),
 					...(gradeKey ? { gradeKey } : {}),
 					inStock: v.inStock === true && v.soldOut !== true,
@@ -631,6 +698,7 @@ export const shopAnswer = (name, body, look = {}) => {
 			...(countOf(b.quantity) !== null ? { quantity: countOf(b.quantity) } : {}),
 			...(textOf(b.paymentMethod, 60) ? { paymentMethod: textOf(b.paymentMethod, 60) } : {}),
 			price: priceOf(b, 'price', look),
+			...(wasOf(b) !== null ? { wasPrice: priceOf(b, 'compareAtPrice', look) } : {}),
 			priceAfterDeals: priceOf(b, 'priceAfterDeals', look),
 			savings: priceOf(b, 'savings', look) ?? moneyText(0, b.currency, look),
 			deals: listOfTexts(b.deals),

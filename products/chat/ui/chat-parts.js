@@ -4,7 +4,7 @@
  * product cards under an AI answer.
  * @module
  */
-import { formatMoney, viewerOf } from '@ss/app-kit/widget';
+import { formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
 import { ADD_TO_CART_EVENT } from '../core/widgets.js';
 import { buttonOf, customInput, formPart, webAddress } from './common.js';
 import { element } from './dom.js';
@@ -166,13 +166,36 @@ export const ratingPart = ({ doc, t, make, scale, comment, send }) => {
 };
 
 /**
- * The product cards under an AI answer (product cards): image, name linking to the product page, price (in the
- * website's Format, K7) and Add to cart. Add to cart dispatches the cancelable `ss-ecommerce:add-to-cart` window event;
- * when no widget on the page (Ecommerce's) calls `preventDefault()`, the button follows its link to the product page.
+ * A card's price as the product page shows it (in the website's Format, K7): the price, and the "was" price struck
+ * through beside it when it is higher. The struck-through amount is hidden from screen readers, which read the widget
+ * text `chat.wasPrice` ("was $50.00") instead.
+ * @param {Document} doc
+ * @param {import('./common.js').Texts} t
+ * @param {(amount: number) => string} money
+ * @param {{ price: number, compareAtPrice: number | null }} card
+ */
+const pricePart = (doc, t, money, { price, compareAtPrice }) => {
+	const part = element(doc, 'span', { class: 'prices' });
+	part.append(element(doc, 'span', { class: 'price' }, money(price)));
+	if (compareAtPrice !== null && compareAtPrice > price) {
+		const was = money(compareAtPrice);
+		part.append(
+			' ',
+			element(doc, 's', { class: 'was', 'aria-hidden': 'true' }, was),
+			element(doc, 'span', { class: 'sr-only' }, formatText(t('chat.wasPrice'), { price: was })),
+		);
+	}
+	return part;
+};
+
+/**
+ * The product cards under an AI answer (product cards): image, name linking to the product page, price with the "was"
+ * price struck through beside it (as the product page shows them) and Add to cart. Add to cart dispatches the
+ * cancelable `ss-ecommerce:add-to-cart` window event; when no widget on the page (Ecommerce's) calls `preventDefault()`,
+ * the button follows its link to the product page.
  * @param {{ doc: Document, win: Window, t: import('./common.js').Texts,
  *   config: { format?: import('./common.js').WidgetConfig['format'] },
- *   cards: Array<{ productId: string, variantId: string | null, name: string, price: number, currency: string,
- *   image: string | null, url: string | null, inStock: boolean }> }} input
+ *   cards: import('../core/shop.js').ProductCard[] }} input
  */
 export const cardsPart = ({ doc, win, t, config, cards }) => {
 	const list = element(doc, 'ul', { class: 'cards', 'aria-label': t('chat.products') });
@@ -181,10 +204,12 @@ export const cardsPart = ({ doc, win, t, config, cards }) => {
 		const item = element(doc, 'li', { class: 'card' });
 		const url = card.url ? webAddress(card.url) : null;
 		const image = card.image ? webAddress(card.image) : null;
+		/** @param {number} amount */
+		const money = (amount) => formatMoney(amount, card.currency, config.format, viewer);
 		if (image) item.append(element(doc, 'img', { src: image, alt: '', loading: 'lazy' }));
 		item.append(
 			url ? element(doc, 'a', { href: url, class: 'name' }, card.name) : element(doc, 'span', { class: 'name' }, card.name),
-			element(doc, 'span', { class: 'price' }, formatMoney(card.price, card.currency, config.format, viewer)),
+			pricePart(doc, t, money, card),
 		);
 		if (!card.inStock) {
 			item.append(element(doc, 'span', { class: 'meta' }, t('chat.outOfStock')));

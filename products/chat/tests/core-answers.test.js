@@ -164,15 +164,16 @@ describe('fallback answers (C3)', () => {
 		expect(fillFallback('x {top_products}', { top_products: 'T' })).toBe('x T');
 		expect(fillFallback('x {top_products}', { top_products: null })).toBeNull();
 		expect(tableOf(['A|B'], [['x\ny']])).toBe('| A/B |\n| --- |\n| x y |');
+		// the price as the product page shows it: with its "was" price in the website's words
 		expect(
 			productList(
 				[
 					{ name: 'F[1]', price: '€1', link: '/f', inStock: false },
-					{ name: 'G', price: '€2' },
+					{ name: 'G', price: '€2', wasPrice: '€3' },
 				],
-				{ outOfStock: 'sold out' },
+				{ outOfStock: 'sold out', was: (price) => `avant ${price}` },
 			),
-		).toBe('- [F1](/f) — €1 (sold out)\n- G — €2');
+		).toBe('- [F1](/f) — €1 (sold out)\n- G — €2 (avant €3)');
 	});
 });
 
@@ -308,11 +309,16 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 
 	it('reads Ecommerce’s documented answers: details with specs and warranties, a quote with its payment methods', () => {
 		const look = { format: { locale: 'en-GB' }, timeZone: 'UTC' };
+		// priced as the product page shows it: a 10% deal on the black lamp, the white one with its own "was" price
+		const deal = { id: 'deal_1', name: 'Autumn offer', savings: 450, savingsText: '€4.50' };
 		const card = {
 			id: 'prd_lamp',
 			name: 'Desk lamp',
-			price: 4500,
-			priceText: '€45.00',
+			price: 4050,
+			priceText: '€40.50',
+			compareAtPrice: 4500,
+			compareAtPriceText: '€45.00',
+			deal,
 			priceMax: 5200,
 			priceMaxText: '€52.00',
 			currency: 'EUR',
@@ -326,10 +332,11 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		const variant = {
 			id: 'var_black',
 			options: { Color: 'Black' },
-			price: 4500,
-			priceText: '€45.00',
-			compareAtPrice: null,
-			compareAtPriceText: null,
+			price: 4050,
+			priceText: '€40.50',
+			compareAtPrice: 4500,
+			compareAtPriceText: '€45.00',
+			deal,
 			grade: 'New',
 			gradeKey: 'new',
 			inStock: true,
@@ -345,7 +352,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				description: 'Brushed steel, warm white.',
 				brand: 'Northlight',
 				options: [{ name: 'Color', values: ['Black', 'White'] }],
-				priceRange: { min: 4500, max: 5200, minText: '€45.00', maxText: '€52.00' },
+				priceRange: { min: 4050, max: 5200, minText: '€40.50', maxText: '€52.00' },
 				specs: [
 					{ name: 'Height', value: 42, unit: 'cm' },
 					{ name: 'Dimmable', value: true, unit: '' },
@@ -360,6 +367,10 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						options: { Color: 'White' },
 						price: 5200,
 						priceText: '€52.00',
+						// without its text, the amount in the website's Format
+						compareAtPrice: 5900,
+						compareAtPriceText: null,
+						deal: null,
 						grade: null,
 						gradeKey: null,
 						inStock: false,
@@ -374,7 +385,9 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(details.content).toEqual({
 			id: 'prd_lamp',
 			name: 'Desk lamp',
-			price: '€45.00 – €52.00',
+			price: '€40.50 – €52.00',
+			wasPrice: '€45.00',
+			deal: { name: 'Autumn offer', savings: '€4.50' },
 			inStock: true,
 			stockLeft: 3,
 			link: 'https://shop.example.com/products/desk-lamp',
@@ -387,17 +400,28 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				{
 					id: 'var_black',
 					options: 'Color: Black',
-					price: '€45.00',
+					price: '€40.50',
+					wasPrice: '€45.00',
+					deal: { name: 'Autumn offer', savings: '€4.50' },
 					grade: 'New',
 					gradeKey: 'new',
 					inStock: true,
 					stockLeft: 3,
 					warranty: '730 days',
 				},
-				{ id: 'var_white', options: 'Color: White', price: '€52.00', inStock: false },
+				{ id: 'var_white', options: 'Color: White', price: '€52.00', wasPrice: 'EUR 59.00', inStock: false },
 			],
 		});
-		expect(details.products).toEqual([expect.objectContaining({ id: 'prd_lamp', grade: null, variantId: 'var_black' })]);
+		expect(details.products).toEqual([
+			expect.objectContaining({
+				id: 'prd_lamp',
+				price: 4050,
+				compareAtPrice: 4500,
+				deal: { name: 'Autumn offer', savings: 450, savingsText: '€4.50' },
+				grade: null,
+				variantId: 'var_black',
+			}),
+		]);
 		const quote = shopAnswer(
 			'quote_product_savings',
 			{
@@ -406,6 +430,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				quantity: 2,
 				price: 4500,
 				priceText: '€45.00',
+				compareAtPrice: 5000,
+				compareAtPriceText: '€50.00',
 				priceAfterDeals: 4050,
 				priceAfterDealsText: '€40.50',
 				savings: 450,
@@ -446,6 +472,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			quantity: 2,
 			paymentMethod: 'cod',
 			price: '€45.00',
+			wasPrice: '€50.00',
 			priceAfterDeals: '€40.50',
 			savings: '€4.50',
 			deals: ['Autumn offer'],

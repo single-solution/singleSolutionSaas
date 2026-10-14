@@ -809,11 +809,13 @@ describe('proactive', () => {
 
 describe('product cards', () => {
 	const CARDS = [
+		// after a deal: the list price struck through beside it
 		{
 			productId: 'prd_1',
 			variantId: 'var_1',
 			name: 'Desk lamp',
-			price: 125000,
+			price: 112500,
+			compareAtPrice: 125000,
 			currency: 'EUR',
 			image: 'https://cdn.example.com/x.jpg',
 			url: 'https://shop.example.com/products/desk-lamp',
@@ -824,12 +826,16 @@ describe('product cards', () => {
 			variantId: null,
 			name: 'Canvas tote',
 			price: 1500,
+			compareAtPrice: null,
 			currency: 'EUR',
 			image: null,
 			url: null,
 			inStock: true,
 		},
-		{ productId: 'prd_3', variantId: null, name: 'Old', price: 100, currency: 'EUR', image: null, url: null, inStock: false },
+		{
+			...{ productId: 'prd_3', variantId: null, name: 'Old', price: 100, compareAtPrice: null, currency: 'EUR' },
+			...{ image: null, url: null, inStock: false },
+		},
 	];
 	const ROUTES = {
 		'GET /v1/chat': () =>
@@ -837,7 +843,7 @@ describe('product cards', () => {
 		'POST /v1/chat/read': () => answer(204),
 	};
 
-	it('shows image, name, price and Add to cart; a cart on the page takes the item', async () => {
+	it('shows image, name, price (with the struck-through "was" price) and Add to cart; a cart on the page takes the item', async () => {
 		keepGuest();
 		document.documentElement.lang = 'en-US';
 		const { root, api } = await start({
@@ -850,7 +856,15 @@ describe('product cards', () => {
 		expect(root.querySelector('.cards')?.getAttribute('aria-label')).toBe(TEXTS['chat.products']);
 		expect(cards[0]?.querySelector('img')?.getAttribute('src')).toBe(CARDS[0]?.image);
 		expect(cards[0]?.querySelector('a.name')?.getAttribute('href')).toBe(CARDS[0]?.url);
-		expect(textsIn(root, '.card .price')).toEqual(['EUR 1,250.00', 'EUR 15.00', 'EUR 1.00']);
+		expect(textsIn(root, '.card .price')).toEqual(['EUR 1,125.00', 'EUR 15.00', 'EUR 1.00']);
+		// the "was" price struck through beside it, read out with its words (the struck amount is hidden from readers)
+		const was = cards[0]?.querySelector('.prices s.was');
+		expect(was?.textContent).toBe('EUR 1,250.00');
+		expect(was?.getAttribute('aria-hidden')).toBe('true');
+		expect(cards[0]?.querySelector('.prices .sr-only')?.textContent).toBe(
+			TEXTS['chat.wasPrice']?.replace('{price}', 'EUR 1,250.00'),
+		);
+		expect(cards[1]?.querySelector('.was, .sr-only')).toBeNull();
 		expect(textsIn(root, '.card .name')).toEqual(['Desk lamp', 'Canvas tote', 'Old']);
 		expect(cards[2]?.textContent).toContain(TEXTS['chat.outOfStock']);
 		expect(cards[2]?.querySelector('.add')).toBeNull();
@@ -918,7 +932,8 @@ describe('product cards', () => {
 			},
 		});
 		await api.open();
-		expect(textsIn(root, '.card .price')).toEqual(['€ 1,250', '€ 15', '€ 1']);
+		expect(textsIn(root, '.card .price')).toEqual(['€ 1,125', '€ 15', '€ 1']);
+		expect(textsIn(root, '.card .was')).toEqual(['€ 1,250']);
 		expect(textsIn(root, '.notices p')[0]).toBe('Our team is away right now. They are back 2 Oct 2026, 09:00.');
 	});
 

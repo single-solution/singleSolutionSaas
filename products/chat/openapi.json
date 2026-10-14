@@ -10234,6 +10234,7 @@
 					"variantId",
 					"name",
 					"price",
+					"compareAtPrice",
 					"currency",
 					"image",
 					"url",
@@ -10256,7 +10257,15 @@
 					"price": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Minor units."
+						"description": "Minor units: the price the product page shows, after the best live deal on one unit."
+					},
+					"compareAtPrice": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 0,
+						"description": "Minor units: the earlier price the product page shows struck through beside the price (higher than it); null when none."
 					},
 					"currency": {
 						"type": "string",

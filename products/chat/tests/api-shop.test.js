@@ -13,14 +13,20 @@ afterAll(async () => {
 	for (const sys of systems) await sys.product.close();
 });
 
-/** Products as Ecommerce answers them (ChatProduct). */
+/**
+ * Products as Ecommerce answers them (ChatProduct), at the price the product page shows: the lamp after its deal (the
+ * list price struck through), the tote with its own "was" price.
+ */
 const LAMP = {
 	id: 'prd_lamp',
 	name: 'Desk lamp',
-	price: 4500,
-	priceText: '$45.00',
-	priceMax: 4500,
-	priceMaxText: '$45.00',
+	price: 4000,
+	priceText: '$40.00',
+	compareAtPrice: 4500,
+	compareAtPriceText: '$45.00',
+	deal: { id: 'd1', name: 'Autumn sale', savings: 500, savingsText: '$5.00' },
+	priceMax: 4000,
+	priceMaxText: '$40.00',
 	currency: 'USD',
 	image: 'https://cdn.shop.example.com/lamp.jpg',
 	url: 'https://shop.example.com/products/desk-lamp',
@@ -36,6 +42,9 @@ const TOTE = {
 	name: 'Canvas tote',
 	price: 1500,
 	priceText: '$15.00',
+	compareAtPrice: 2000,
+	compareAtPriceText: '$20.00',
+	deal: null,
 	priceMax: 1500,
 	priceMaxText: '$15.00',
 	image: 'http://insecure.example.com/c.jpg',
@@ -78,7 +87,7 @@ const ANSWERS = {
 		description: 'A long description.',
 		brand: 'Northlight',
 		options: [{ name: 'Color', values: ['Black', 'White'] }],
-		priceRange: { min: 4500, max: 4500, minText: '$45.00', maxText: '$45.00' },
+		priceRange: { min: 4000, max: 4000, minText: '$40.00', maxText: '$40.00' },
 		specs: [{ name: 'Height', value: 42, unit: 'cm' }],
 		variants: [],
 	},
@@ -88,6 +97,8 @@ const ANSWERS = {
 		quantity: 1,
 		price: 4500,
 		priceText: '$45.00',
+		compareAtPrice: null,
+		compareAtPriceText: null,
 		priceAfterDeals: 4000,
 		priceAfterDealsText: '$40.00',
 		savings: 500,
@@ -266,7 +277,7 @@ describe('shop tools', () => {
 					{ name: 'get_top_products', arguments: { kind: 'new' } },
 				],
 			},
-			{ text: 'The desk lamp is $45.' },
+			{ text: 'The desk lamp is $40 (was $45).' },
 		);
 		await sys.visitor()('POST', '/v1/chat/messages', { text: 'Desk lamp price?' });
 		// the tools of one round run together: compare without their order
@@ -284,8 +295,16 @@ describe('shop tools', () => {
 			JSON.parse(text),
 		);
 		expect(search.products).toEqual([
-			{ id: 'prd_lamp', name: 'Desk lamp', price: '$45.00', inStock: true, link: LAMP.url },
-			{ id: 'prd_tote', name: 'Canvas tote', price: '$15.00', inStock: false, link: TOTE.url },
+			{
+				id: 'prd_lamp',
+				name: 'Desk lamp',
+				price: '$40.00',
+				wasPrice: '$45.00',
+				deal: { name: 'Autumn sale', savings: '$5.00' },
+				inStock: true,
+				link: LAMP.url,
+			},
+			{ id: 'prd_tote', name: 'Canvas tote', price: '$15.00', wasPrice: '$20.00', inStock: false, link: TOTE.url },
 		]);
 		expect(details).toMatchObject({
 			brand: 'Northlight',
@@ -310,6 +329,15 @@ describe('shop tools', () => {
 			{ name: 'Autumn sale', description: 'On every lamp', offer: '5% off', endsAt: 'Oct 30, 2026' },
 		]);
 		expect(top.products).toHaveLength(1);
+		// the AI is told which price to name: the price on the product page, the "was" price beside it and the deal in it
+		const told = Object.fromEntries(
+			sys.aiCalls()[0].tools.map((/** @type {any} */ tool) => [tool.function.name, tool.function.description]),
+		);
+		expect(told.search_catalog).toContain('price is what the product page charges now, after any live deal');
+		expect(told.search_catalog).toContain('never as the price to pay');
+		expect(told.get_product_details).toContain('price, wasPrice and deal');
+		expect(told.get_top_products).toContain('the fields search_catalog gives');
+		expect(told.quote_product_savings).toContain('for one unit, the price on the product page');
 	});
 
 	it('forwards the verified sign-in for my orders, account and shipments, ignoring a user the model names', async () => {
@@ -449,7 +477,8 @@ describe('product cards', () => {
 				productId: 'prd_lamp',
 				variantId: 'var_1',
 				name: 'Desk lamp',
-				price: 4500,
+				price: 4000,
+				compareAtPrice: 4500,
 				currency: 'USD',
 				image: LAMP.image,
 				url: LAMP.url,
@@ -460,6 +489,7 @@ describe('product cards', () => {
 				variantId: 'var_1',
 				name: 'Canvas tote',
 				price: 1500,
+				compareAtPrice: 2000,
 				currency: 'USD',
 				image: null,
 				url: TOTE.url,

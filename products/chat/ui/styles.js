@@ -14,6 +14,8 @@ export const WIDGET_CSS = `
 :host([data-ss-mode='dark']) { color: var(--ss-color-text, #f3f4f6); --bg: var(--ss-color-background, #111827);
   --line: var(--ss-color-border, #374151); --soft: var(--ss-color-muted, #1f2937); }
 [hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0; }
 .box { border: 1px solid var(--line); border-radius: var(--r); padding: 16px; background: var(--bg); box-sizing: border-box; }
 h2 { font-size: 1.1em; margin: 0 0 8px; } h3 { font-size: 1em; margin: 0 0 8px; }
 .part { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -76,7 +78,7 @@ p { overflow-wrap: anywhere; }
 .card { flex: 0 0 148px; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line);
   border-radius: var(--r); background: var(--bg); }
 .msg .card img { width: 100%; max-width: none; aspect-ratio: 1; object-fit: cover; margin: 0; }
-.card .name { font-weight: 600; } .card .price { font-size: 0.9em; }
+.card .name { font-weight: 600; } .card .prices { font-size: 0.9em; } .card .was { opacity: 0.7; }
 .card .add { display: block; text-align: center; padding: 6px 10px; border-radius: var(--r); background: var(--accent);
   color: var(--on-accent); text-decoration: none; font-size: 0.9em; }
 .card .status { margin: 0; }

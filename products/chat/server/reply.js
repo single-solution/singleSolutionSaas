@@ -15,7 +15,7 @@
  * never hands off by itself, CH-19). Staff alerts go out as the features say.
  * @module
  */
-import { problem } from '@ss/app-kit';
+import { formatText, problem } from '@ss/app-kit';
 import { runAssistant } from '../core/assistant.js';
 import { checkAiConnection } from '../core/models.js';
 import { advance, keywordFlow } from '../core/flows.js';
@@ -603,15 +603,20 @@ export const createReply = (product, service) => {
 	 */
 	const placeholderText = async (s, name, { message, signIn }) => {
 		const texts = await s.texts();
-		const outOfStock = String(texts['chat.outOfStock'] ?? 'out of stock');
+		/** @param {string} key a widget text (Settings, Texts) */
+		const text = (key) => String(texts[key]);
+		const words = {
+			outOfStock: text('chat.outOfStock'),
+			was: (/** @type {string} */ price) => formatText(text('chat.wasPrice'), { price }),
+		};
 		/** @param {any} content */
 		const products = (content) =>
-			Array.isArray(content?.products) && content.products.length > 0 ? productList(content.products, { outOfStock }) : null;
+			Array.isArray(content?.products) && content.products.length > 0 ? productList(content.products, words) : null;
 		if (name === 'deals_table') {
 			const content = /** @type {any} */ (await shopRead(s, 'list_active_deals', {}, null));
 			if (!Array.isArray(content?.deals) || content.deals.length === 0) return null;
 			return tableOf(
-				[texts['chat.dealName'] ?? 'Deal', texts['chat.dealDetails'] ?? 'Details', texts['chat.dealEnds'] ?? 'Ends'],
+				[text('chat.dealName'), text('chat.dealDetails'), text('chat.dealEnds')],
 				content.deals.map((/** @type {any} */ d) => [
 					String(d.name),
 					String(d.offer ?? d.description ?? ''),

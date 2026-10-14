@@ -529,14 +529,31 @@ describe('shop', () => {
 
 	it('keeps only checked card fields and refuses unknown tools', () => {
 		expect(cardsOf('x')).toEqual([]);
+		const card = {
+			productId: 'p',
+			variantId: null,
+			name: 'N',
+			price: 1,
+			currency: 'EUR',
+			image: null,
+			url: null,
+			inStock: false,
+		};
 		expect(
 			cardsOf([
 				null,
 				{ productId: 'p', name: 'N', price: -1, currency: 'EUR' },
 				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', url: 'javascript:x' },
+				// the "was" price only when it is higher than the price
+				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', compareAtPrice: 3 },
+				{ productId: 'p', name: 'N', price: 2, currency: 'EUR', compareAtPrice: 2 },
+				{ productId: 'p', name: 'N', price: 1, currency: 'EUR', compareAtPrice: '3' },
 			]),
 		).toEqual([
-			{ productId: 'p', variantId: null, name: 'N', price: 1, currency: 'EUR', image: null, url: null, inStock: false },
+			{ ...card, compareAtPrice: null },
+			{ ...card, compareAtPrice: 3 },
+			{ ...card, price: 2, compareAtPrice: null },
+			{ ...card, compareAtPrice: null },
 		]);
 		expect(shopRequest('nope', {})).toEqual({ ok: false, content: 'No such tool.' });
 		expect(
@@ -547,13 +564,18 @@ describe('shop', () => {
 	});
 
 	it('reads odd answers safely', () => {
-		// shapes Ecommerce never sends are not read: specs as an object, a grade or a warranty as an object, deal objects
+		// shapes Ecommerce never sends are not read: specs as an object, a grade or a warranty as an object, deal objects,
+		// a "was" price as text or not above the price, a deal without a name or a saving
 		expect(
 			shopAnswer('get_product_details', {
 				...{ id: 'p', name: 'N', price: 1, currency: 'EUR', grade: { label: 'New' }, warranty: '1 year' },
+				...{ compareAtPrice: '5', compareAtPriceText: '€5', deal: { name: 'Sale', savings: 0, savingsText: '€0' } },
 				specs: [{ name: 'Weight', value: { kg: 2 } }, 'x'],
 				options: 'x',
-				variants: [{ id: 'v', options: 'Large', grade: { label: 'New' }, warranty: { months: 6 }, inStock: true }],
+				variants: [
+					{ id: 'v', options: 'Large', grade: { label: 'New' }, warranty: { months: 6 }, inStock: true },
+					{ id: 'w', price: 2, compareAtPrice: 1, deal: { savings: 1 }, inStock: true },
+				],
 			}).content,
 		).toEqual({
 			id: 'p',
@@ -565,7 +587,10 @@ describe('shop', () => {
 			description: null,
 			specs: ['Weight: '],
 			options: [],
-			variants: [{ id: 'v', options: null, price: null, inStock: true }],
+			variants: [
+				{ id: 'v', options: null, price: null, inStock: true },
+				{ id: 'w', options: null, price: 'EUR 0.02', inStock: true },
+			],
 		});
 		expect(
 			shopAnswer('get_product_details', { id: 'p', name: 'N', price: 1, currency: 'EUR', specs: { Weight: '2 kg' } }).content,
