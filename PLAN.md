@@ -1963,7 +1963,7 @@ messages switch, SB importer fixes, CT and IM mappings, data dry runs); the SaaS
 would break the importer's existing tests gets only the smallest mechanical mapping change (the SaaS default), listed
 for review.
 
-**Owner, 2026-10-14 ~22:05 (binding):** "do it … this time complete and professionally without any issues, and in the
+**Owner, 2026-10-14 ~22:02 (binding):** "do it … this time complete and professionally without any issues, and in the
 way if you find any bug or issue just fix that too, and I want 0 legacy code, folders, files, nothing extra even."
 So every bug found on the way is fixed with a test, and before the SaaS is called complete a final sweep removes
 anything unused or left over (files, folders, exports, settings, texts, generated output in git, stale docs). SEO
