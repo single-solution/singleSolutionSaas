@@ -23,7 +23,7 @@ import { WIDGET_CSS } from './styles.js';
 const ORDER = Object.freeze({ fail: 0, warn: 1, pass: 2 });
 
 /** The kept check is run again by itself when the widget opens after this long. */
-export const STALE_MS = 86_400_000;
+const STALE_MS = 86_400_000;
 
 /** The widget texts of the checklist's refused runs. */
 export const SEO_PROBLEMS = Object.freeze({

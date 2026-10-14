@@ -11,7 +11,7 @@ import { allNodesOf, numbersIn, robotsAllows, robotsGroupsOf, scanHtml, typesOf 
 import { pathOfUrl } from './seo.js';
 
 /** The merchant's own pages one run reads at most (the home page included). */
-export const MAX_PAGES = 20;
+const MAX_PAGES = 20;
 
 /** Sitemap addresses one run reads to find the sample pages. */
 export const MAX_CANDIDATES = 6;
@@ -27,7 +27,7 @@ const TITLE_LENGTH = Object.freeze({ min: 10, max: 60 });
 const DESCRIPTION_LENGTH = Object.freeze({ min: 50, max: 160 });
 
 /** Fewest Web Vitals measurements a judgment is made on. */
-export const MIN_VITAL_SAMPLES = 5;
+const MIN_VITAL_SAMPLES = 5;
 
 /** The Core Web Vitals (Google's page experience), judged by the share of good visits (at least 75 %). */
 const CORE_VITALS = Object.freeze(/** @type {const} */ (['LCP', 'INP', 'CLS']));
