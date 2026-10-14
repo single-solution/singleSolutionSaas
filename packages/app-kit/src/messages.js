@@ -8,6 +8,9 @@
  *   `callProduct` or the staff alerts), as `defaults: { <channel>: { subject?, text, required, urgent, sensitive } }`
  *   for each channel that has default words (never WhatsApp: it sends only templates approved at Meta). Notifications
  *   uses them when the website has no template of its own: no extra round trip, the words of the running product.
+ * - A send whose key the product does not declare but whose `fallbackTemplate` it does (a key made per case, such as
+ *   Ecommerce's `ecommerce.order_status.<status key>` falling back to `ecommerce.order_status`) carries the fallback
+ *   message's defaults: Notifications tries the website's template for the key, then for the fallback key, then them.
  * - `GET /v1/message-defaults` (public, the same for every website) answers `{ productId, messages }`, so Notifications'
  *   dashboard can show every product's messages with their defaults; a product without a declaration answers
  *   `messages: []`.
@@ -75,7 +78,7 @@ export const createMessages = ({ productId, declaration }) => {
 
 	/**
 	 * A call to another product with the defaults of its message added: only a send to Notifications whose template
-	 * the product declares, when the caller gave none of its own.
+	 * (else whose `fallbackTemplate`) the product declares, when the caller gave none of its own.
 	 * @template {{ method?: string, body?: unknown, headers?: Record<string, string> }} T
 	 * @param {string} otherProductId
 	 * @param {string} path
@@ -86,7 +89,8 @@ export const createMessages = ({ productId, declaration }) => {
 		const { method = 'GET', body } = init;
 		if (otherProductId !== 'notifications' || method !== 'POST' || !SEND_PATH.test(path)) return init;
 		if (!isObject(body) || typeof body.template !== 'string' || body.defaults !== undefined) return init;
-		const words = defaultsFor(body.template);
+		const words =
+			defaultsFor(body.template) ?? (typeof body.fallbackTemplate === 'string' ? defaultsFor(body.fallbackTemplate) : null);
 		return words ? { ...init, body: { ...body, defaults: words } } : init;
 	};
 

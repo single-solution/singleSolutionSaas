@@ -33,8 +33,9 @@ The exact API is in [API.md](./API.md).
 - **Default message templates** (parity P1) — the product declares the messages it sends through Notifications with
   their US-English default words (`schemas/messages.json`, checked with the contract at start); the kit attaches them
   to every send to Notifications, which uses them while the website has no template of its own, and serves them at
-  `GET /v1/message-defaults` for Notifications' dashboard. WhatsApp never has a default (it sends only templates
-  approved at Meta).
+  `GET /v1/message-defaults` for Notifications' dashboard. A send with an undeclared key made per case (for example
+  per status) and a declared `fallbackTemplate` carries the fallback message's defaults. WhatsApp never has a default
+  (it sends only templates approved at Meta).
 - **Format and time zone** (K7, K8) — `formatMoney`, `formatDate` and the calendar helpers from `@ss/contracts`, fed by
   the website's Format and its business.json time zone (`product.format(websiteId)`, the widget config).
 - **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived

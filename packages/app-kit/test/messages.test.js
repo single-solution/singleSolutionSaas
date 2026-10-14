@@ -90,6 +90,25 @@ describe('message defaults (parity P1)', () => {
 		expect(attach('notifications', '/v1/messages/whatsapp', whatsappOnly)).toBe(whatsappOnly);
 	});
 
+	it('a key made per case carries the defaults of the declared message it falls back to', () => {
+		const { attach } = createMessages({ productId: 'notes', declaration: DECLARATION });
+		const perCase = {
+			method: 'POST',
+			body: { template: 'notes.staff_note_created.urgent', fallbackTemplate: 'notes.staff_note_created', to: {} },
+		};
+		expect(attach('notifications', '/v1/messages/email', perCase)).toEqual({
+			...perCase,
+			body: { ...perCase.body, defaults: ALERT_DEFAULTS },
+		});
+		// a declared key keeps its own defaults; an undeclared fallback, or one that is not a key, adds none
+		const declared = { method: 'POST', body: { template: 'notes.staff_note_created', fallbackTemplate: 'notes.code' } };
+		expect(attach('notifications', '/v1/messages/email', declared).body).toMatchObject({ defaults: ALERT_DEFAULTS });
+		const unknown = { method: 'POST', body: { template: 'notes.a', fallbackTemplate: 'notes.b' } };
+		expect(attach('notifications', '/v1/messages/email', unknown)).toBe(unknown);
+		const odd = { method: 'POST', body: { template: 'notes.a', fallbackTemplate: 42 } };
+		expect(attach('notifications', '/v1/messages/email', odd)).toBe(odd);
+	});
+
 	it('serves the declaration publicly and sends the defaults with every message to Notifications', async () => {
 		/** @type {{ product: any }} */
 		const holder = { product: null };
