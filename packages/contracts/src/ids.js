@@ -108,7 +108,7 @@ const ipResult = (ip, options) =>
 		: fail('ip_not_allowed', 'IP addresses are not accepted as website domains.');
 
 /**
- * Normalise user input to a bare ASCII (punycode) hostname: lowercase, no scheme, userinfo, path, query, fragment,
+ * Normalize user input to a bare ASCII (punycode) hostname: lowercase, no scheme, userinfo, path, query, fragment,
  * port or trailing dot. Rejects IPs, `localhost` and single-label names unless `allowLocal` is set.
  * @param {unknown} input e.g. `HTTPS://Shop.Example.COM:443/path?q`
  * @param {NormaliseDomainOptions} [options]

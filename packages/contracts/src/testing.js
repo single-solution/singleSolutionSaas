@@ -98,7 +98,7 @@ export const businessJson = () => ({
 	phone: '+1 555 0100',
 	address: '1 Example Street\nExample City',
 	country: 'us',
-	timeZone: 'Europe/London',
+	timeZone: 'America/New_York',
 });
 
 /**

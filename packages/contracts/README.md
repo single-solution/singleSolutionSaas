@@ -23,7 +23,8 @@ const prices = manifestPriceList(json); // { version: 1, features: [{ key, name,
 
 `manifest.json` has exactly `id`, `name`, `version` (semver), `endpoints: { base, dashboard }`, `widgetScriptUrl`
 (or `null`), `docsUrl`, `features: [{ key, name, description, dependsOn, settings, recommendFor? }]`,
-`permissions: [{ key, name, feature }]` and `widgets: [{ key, feature, kind: 'visitor' | 'admin' }]`. Rules:
+`permissions: [{ key, name, feature }]` and `widgets: [{ key, feature, kind: 'visitor' | 'admin' }]` (a widget's
+`feature` is one key or a list of keys, any of which turns it on). Rules:
 
 - `id` matches `^[a-z][a-z0-9-]{1,30}$`.
 - Feature keys `^[a-z][a-z0-9_]{0,39}$`, unique; `dependsOn` keys exist, no self-dependency, no cycles.
@@ -96,7 +97,7 @@ knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example ever
 
 ## Website Setup sheet (`ss.blueprint/1`)
 
-One sheet per website (owner request 2026-10-14): every product's features, settings, connections state, widgets,
+One sheet per website: every product's features, settings, connections state, widgets,
 permissions, events, checklist and docs, generated on request and never stored.
 
 - `validateProductBlueprint`: a product's part, answered by `@ss/app-kit` at `GET /v1/blueprint?websiteId=` (a signed
@@ -124,7 +125,8 @@ A website's business profile is a few optional answers kept by the Portal: what 
 orders reach them, how shoppers sign in, who answers the chat, how it messages customers, marketing, what it offers
 shoppers (`PROFILE_CHOICES`, each a list of options; `none` stands alone), whether it is moving from another website
 or system (`moving`, yes or no), and its countries (ISO 3166-1 alpha-2, capitals) and languages (ISO 639, two or three
-small letters). `validateBusinessProfile(value)` checks it (`RULES.profileAnswer` for `none` with other options).
+small letters). `validateBusinessProfile(value)` checks it (`RULES.profileAnswer` for `none` with other options;
+`PROFILE_NONE` is that option).
 
 - `profileTags(profile)`: `<question>.<option>` (`pays.cod`, `moving.yes`, `countries.us`, `languages.fr`) and
   `<question>.many` for two countries or languages or more. A rule's `<choice>.*` holds for any option but `none`.
@@ -195,7 +197,9 @@ Codes include `invalid_token` (401), `product_unavailable` (403, with `reason`),
 ## Ids and domains
 
 `createId(prefix)` → `<prefix>_<26 lowercase Crockford base32 chars>` (128 random bits; the prefix is 2–8 lower-case
-letters naming the kind, such as `web`, `mer` or `req`); `isId(value, prefix?)` checks one.
+letters naming the kind, such as `web`, `mer` or `req`); `isId(value, prefix?)` checks one. `PATTERNS` holds the
+patterns of the schemas (product ids, feature, permission, widget and setting keys, versions, times, countries,
+host names) for code that checks the same values.
 `normaliseDomain(input, { allowLocal?, isPublicSuffix? })` returns `{ ok, value }` or `{ ok: false, code, message }`:
 lower-case punycode, no scheme, port, path or trailing dot; IP literals, `localhost` and single-label names refused.
 `hostMatchesDomain(host, domain)` compares exactly.

@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-	RULES,
-	SETTING_KEYWORDS,
-	checkSettingsRules,
-	checkSettingsSchema,
-	createValidator,
-	validateSettingValue,
-	validateSettings,
-} from '../src/index.js';
+import { RULES, checkSettingsSchema, createValidator, validateSettingValue, validateSettings } from '../src/index.js';
+import { checkSettingsRules } from '../src/semantics.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 /** @returns {any} */
@@ -43,7 +36,6 @@ describe('checkSettingsSchema', () => {
 	it('accepts the allowed subset', () => {
 		expect(checkSettingsSchema(schema())).toEqual([]);
 		expect(checkSettingsSchema({ type: 'object', properties: {} })).toEqual([]);
-		expect(SETTING_KEYWORDS).toContain('x-ui');
 	});
 
 	it('accepts the form hints labels and wide, and the formats email, uri and hostname', () => {

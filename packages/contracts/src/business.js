@@ -71,13 +71,6 @@ const timeZoneOf = (value) => {
 };
 
 /**
- * True when `value` is an IANA time zone the runtime knows.
- * @param {unknown} value
- * @returns {value is string}
- */
-export const isTimeZone = (value) => timeZoneOf(value) !== null;
-
-/**
  * @param {unknown} value
  * @returns {string | null}
  */
@@ -101,7 +94,7 @@ const matching = (value, pattern) => (value !== null && pattern.test(value) ? va
 
 /**
  * Validate and normalize a business.json document. Fails only when it is not an object or `name` is missing or
- * invalid; any other invalid field is dropped (`null`). Normalises: trimmed text, `logo` an https URL, `country`
+ * invalid; any other invalid field is dropped (`null`). Normalizes: trimmed text, `logo` an https URL, `country`
  * upper-case ISO 3166-1 alpha-2, `timeZone` the canonical IANA name. Unknown members are ignored.
  * @param {unknown} value
  * @returns {ValidationResult<BusinessInfo>}

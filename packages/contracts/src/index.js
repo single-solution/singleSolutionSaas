@@ -8,11 +8,10 @@
  */
 export * from './types.js';
 export * from './constants.js';
-export * from './schemas/index.js';
+export { BLUEPRINT_SCHEMA, BLUEPRINT_UNREACHABLE_REASONS, BUILD_TEXT_MAX } from './schemas/blueprint.js';
+export { PATTERNS } from './schemas/common.js';
 export {
 	createValidator,
-	getDefaultValidator,
-	problemsFromAjv,
 	validateManifest,
 	checkSettingsSchema,
 	validateSettingValue,
@@ -32,23 +31,15 @@ export {
 	validateProductBlueprint,
 	validateBlueprint,
 } from './validate.js';
-export { RULES, checkManifest, checkMessageDefaults, checkSettingsRules, findCycles, manifestPriceList } from './semantics.js';
-export { BUSINESS_JSON_TEMPLATE, isTimeZone, validateBusinessJson } from './business.js';
+export { RULES, manifestPriceList } from './semantics.js';
+export { BUSINESS_JSON_TEMPLATE, validateBusinessJson } from './business.js';
 export {
 	PROFILE_CHOICES,
-	PROFILE_CODES,
-	PROFILE_LISTS,
 	PROFILE_NONE,
-	PROFILE_QUESTIONS,
-	PROFILE_YES_NO,
-	RULE_MAX_TAGS,
 	adviseFeatures,
-	answeredQuestions,
 	featureFit,
 	isRecommendTag,
-	profileProblems,
 	profileTags,
-	questionOf,
 	ruleHolds,
 	ruleProblem,
 } from './profile.js';
@@ -66,7 +57,7 @@ export {
 } from './format.js';
 export { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from './phone.js';
 export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
-export { ID_ALPHABET, idPattern, encodeBase32, createId, isId, normaliseDomain, hostMatchesDomain } from './ids.js';
+export { createId, isId, normaliseDomain, hostMatchesDomain } from './ids.js';
 
 /** @typedef {import('./format.js').Format} Format */
 /** @typedef {import('./format.js').Viewer} Viewer */
@@ -76,41 +67,5 @@ export { ID_ALPHABET, idPattern, encodeBase32, createId, isId, normaliseDomain, 
 /** @typedef {import('./errors.js').ProblemFactory} ProblemFactory */
 /** @typedef {import('./validate.js').Validator} Validator */
 /** @typedef {import('./ids.js').DomainResult} DomainResult */
-/** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
-/** @typedef {import('./types.js').Manifest} Manifest */
-/** @typedef {import('./types.js').ManifestFeature} ManifestFeature */
-/** @typedef {import('./types.js').ManifestPermission} ManifestPermission */
-/** @typedef {import('./types.js').ManifestWidget} ManifestWidget */
-/** @typedef {import('./types.js').SettingsSchema} SettingsSchema */
-/** @typedef {import('./types.js').SettingNode} SettingNode */
-/** @typedef {import('./types.js').PriceList} PriceList */
-/** @typedef {import('./types.js').PriceListFeature} PriceListFeature */
-/** @typedef {import('./types.js').FeatureReport} FeatureReport */
-/** @typedef {import('./types.js').StatusResponse} StatusResponse */
-/** @typedef {import('./types.js').WebsiteRow} WebsiteRow */
-/** @typedef {import('./types.js').WebsitesPage} WebsitesPage */
-/** @typedef {import('./types.js').Revocations} Revocations */
-/** @typedef {import('./types.js').Directory} Directory */
-/** @typedef {import('./types.js').DirectoryList} DirectoryList */
-/** @typedef {import('./types.js').Notice} Notice */
-/** @typedef {import('./types.js').BusinessInfo} BusinessInfo */
-/** @typedef {import('./types.js').DataRightsRequest} DataRightsRequest */
-/** @typedef {import('./types.js').DataRightsExport} DataRightsExport */
-/** @typedef {import('./types.js').DataRightsDelete} DataRightsDelete */
-/** @typedef {import('./types.js').ActivityCopy} ActivityCopy */
-/** @typedef {import('./types.js').MessageDefaults} MessageDefaults */
-/** @typedef {import('./types.js').DeclaredMessage} DeclaredMessage */
-/** @typedef {import('./types.js').ProductBlueprint} ProductBlueprint */
-/** @typedef {import('./types.js').BlueprintAdvice} BlueprintAdvice */
-/** @typedef {import('./types.js').Blueprint} Blueprint */
 /** @typedef {import('./profile.js').BusinessProfile} BusinessProfile */
 /** @typedef {import('./profile.js').FeatureFit} FeatureFit */
-/** @typedef {import('./constants.js').ProductStatus} ProductStatus */
-/** @typedef {import('./constants.js').MerchantStatus} MerchantStatus */
-/** @typedef {import('./constants.js').AdminRole} AdminRole */
-/** @typedef {import('./constants.js').NoticeType} NoticeType */
-/** @typedef {import('./constants.js').ProductUnavailableReason} ProductUnavailableReason */
-/**
- * @template T
- * @typedef {import('./types.js').ValidationResult<T>} ValidationResult
- */

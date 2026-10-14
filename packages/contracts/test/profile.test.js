@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	PROFILE_CHOICES,
-	PROFILE_QUESTIONS,
 	RULES,
 	adviseFeatures,
-	answeredQuestions,
 	featureFit,
 	isRecommendTag,
 	profileTags,
@@ -13,6 +11,7 @@ import {
 	validateBusinessProfile,
 	validateManifest,
 } from '../src/index.js';
+import { answeredQuestions, PROFILE_QUESTIONS } from '../src/profile.js';
 import * as browser from '../src/profile.js';
 import { manifest } from '../src/testing.js';
 import { expectProblem } from './helpers.js';

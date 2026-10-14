@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_SCHEMAS, SCHEMA_IDS, createValidator, getDefaultValidator, problemsFromAjv } from '../src/index.js';
+import { createValidator } from '../src/index.js';
+import { ALL_SCHEMAS } from '../src/schemas/index.js';
+import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
+import { getDefaultValidator, problemsFromAjv } from '../src/validate.js';
 import { expectProblem } from './helpers.js';
 
 describe('createValidator', () => {

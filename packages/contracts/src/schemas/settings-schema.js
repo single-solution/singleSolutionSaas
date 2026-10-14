@@ -25,23 +25,6 @@ const SETTING_FORMATS = Object.freeze(/** @type {const} */ (['email', 'uri', 'ho
 /** Annotation keywords added to the subset (registered with Ajv). */
 export const SETTING_EXTENSION_KEYWORDS = Object.freeze(/** @type {const} */ (['x-ui']));
 
-/** Keywords allowed on a setting node. */
-export const SETTING_KEYWORDS = Object.freeze(
-	/** @type {const} */ ([
-		'type',
-		'title',
-		'default',
-		'description',
-		'minimum',
-		'maximum',
-		'maxLength',
-		'enum',
-		'format',
-		'items',
-		'x-ui',
-	]),
-);
-
 const limits = {
 	minimum: { type: 'number' },
 	maximum: { type: 'number' },

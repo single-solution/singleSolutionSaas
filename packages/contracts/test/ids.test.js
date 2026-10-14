@@ -1,15 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-	ID_ALPHABET,
-	createId,
-	encodeBase32,
-	getDefaultValidator,
-	hostMatchesDomain,
-	idPattern,
-	isId,
-	normaliseDomain,
-	SCHEMA_IDS,
-} from '../src/index.js';
+import { createId, hostMatchesDomain, isId, normaliseDomain } from '../src/index.js';
+import { encodeBase32, ID_ALPHABET, idPattern } from '../src/ids.js';
+import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
+import { getDefaultValidator } from '../src/validate.js';
 
 describe('ids', () => {
 	it('creates prefixed 26-char base32 ids', () => {

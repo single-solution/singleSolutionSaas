@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
 	BLUEPRINT_SCHEMA,
 	BLUEPRINT_UNREACHABLE_REASONS,
-	SCHEMA_IDS,
 	createValidator,
 	validateBlueprint,
 	validateProductBlueprint,
 } from '../src/index.js';
+import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
 import { WEBSITE, productBlueprint } from '../src/testing.js';
 import { expectProblem } from './helpers.js';
 

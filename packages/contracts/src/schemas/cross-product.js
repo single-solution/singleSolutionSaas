@@ -86,7 +86,7 @@ const titledWords = Object.freeze({
 });
 
 /** Most messages one product declares. */
-export const MAX_DECLARED_MESSAGES = 200;
+const MAX_DECLARED_MESSAGES = 200;
 
 /** A product's message defaults (`schemas/messages.json`; the kit's `GET /v1/message-defaults` adds `productId`). */
 export const messageDefaultsSchema = deepFreeze({

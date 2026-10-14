@@ -70,8 +70,6 @@ export const PROBLEM_CODES = Object.freeze({
 	timeout: Object.freeze({ status: 504, title: 'Upstream timeout' }),
 });
 
-/** @typedef {keyof typeof PROBLEM_CODES} ProblemCode */
-
 /**
  * @param {ProblemError} error
  * @returns {ProblemError}
