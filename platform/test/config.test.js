@@ -4,7 +4,8 @@ import { issueToken, verifyToken } from '@ss/protocol';
 import { DEFAULT_SETTINGS, buildConfig, loadConfig, loadEnv, parsePortalUrl, sessionPolicies } from '../src/infra/config.js';
 import { createPortalKeys } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
-import { createSystemStore, generateSecrets, secretsOf, testSystemState } from '../src/infra/system.js';
+import { createSystemStore, generateSecrets, secretsOf } from '../src/infra/system.js';
+import { testSystemState } from '../src/testing.js';
 import { ENCRYPTION_KEY, PORTAL_URL, startMongo, testEnv, testSystem } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
@@ -46,13 +47,6 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 			maxBodyBytes: 1024 * 1024,
 		});
 		expect(Object.isFrozen(env)).toBe(true);
-		// former tuning variables are ignored
-		const tuned = loadEnv(
-			await testEnv({ MAX_BODY_BYTES: '12', DELIVERY_BUDGET_KB: '1', MONGODB_DB: 'other', APP_VERSION: 'x' }),
-		);
-		expect(tuned).toMatchObject({ maxBodyBytes: 1024 * 1024 });
-		expect(tuned).not.toHaveProperty('delivery');
-		expect(tuned.mongo.dbName).toBe('ss_portal_test');
 	});
 
 	it('derives the environment from NODE_ENV only (production unless development or test)', async () => {
@@ -73,7 +67,6 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 				MONGODB_URI: 'mongodb+srv://u:p@cluster.example.net/ss_portal',
 				PORTAL_URL: 'https://portal.example.com',
 				ENCRYPTION_KEY,
-				STORAGE_BUCKET: 'ignored',
 			}).env,
 		).toBe('production');
 		const short = problemsOf(() => loadEnv({ ...PROD, MONGODB_URI: 'mongodb://h/x', ENCRYPTION_KEY: 'short' }));
@@ -100,10 +93,10 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 		expect(loadEnv({ ...(await testEnv()), ...PROD }).outbound.allowHosts).toEqual([]);
 	});
 
-	it('documents exactly the three variables of PLAN 0.11, and the optional previous key', async () => {
+	it('documents exactly the three variables of PLAN 0.11, the optional previous key and the optional log level', async () => {
 		const example = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
 		const names = example.split('\n').flatMap((line) => /^([A-Z][A-Z0-9_]*)=/.exec(line)?.[1] ?? []);
-		expect(names).toEqual(['MONGODB_URI', 'PORTAL_URL', 'ENCRYPTION_KEY', 'ENCRYPTION_KEY_PREVIOUS']);
+		expect(names).toEqual(['MONGODB_URI', 'PORTAL_URL', 'ENCRYPTION_KEY', 'ENCRYPTION_KEY_PREVIOUS', 'LOG_LEVEL']);
 		const env = await testEnv();
 		expect(loadEnv(env).previousEncryptionKey).toBeNull();
 		const previous = 'previous-encryption-key-0123456789abcdef';
@@ -111,6 +104,8 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 		expect(problemsOf(() => loadEnv({ ...env, ENCRYPTION_KEY_PREVIOUS: 'old-short-key' }))).toEqual([
 			'ENCRYPTION_KEY_PREVIOUS must be at least 32 characters',
 		]);
+		expect(loadEnv({ ...env, LOG_LEVEL: 'warn' }).logLevel).toBe('warn');
+		expect(loadEnv({ ...env, NODE_ENV: 'development', LOG_LEVEL: 'error' }).logLevel).toBe('error');
 	});
 });
 

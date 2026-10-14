@@ -26,7 +26,7 @@ import {
 	humanize,
 	useToast,
 } from '@ss/ui';
-import { LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
+import { AUTH, LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 
@@ -411,7 +411,7 @@ export function PasswordPanel({ twoStepOn }) {
 					required
 				/>
 				<Input
-					label="New password"
+					label={AUTH.newPassword}
 					type="password"
 					autoComplete="new-password"
 					value={next}
@@ -486,7 +486,7 @@ function Changes({ entry }) {
 }
 
 /**
- * Initials of a name for a small avatar (`Bilal Ahmed` → `BA`, `shop.example` → `SH`).
+ * Initials of a name for a small avatar (`Alex Morgan` → `AM`, `shop.example` → `SH`).
  * @param {string} name
  */
 export const initialsOf = (name) => {

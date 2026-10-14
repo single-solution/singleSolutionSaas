@@ -9,7 +9,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
-import { closeMongoClients } from '../../src/infra/db.js';
+import { closeMongoClients } from '../../src/testing.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
@@ -260,7 +260,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect((await ownerBrowser.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' })).ok).toBe(true);
 		await ownerBrowser.api.post(adminApi.addReceipt(merchantId), {
 			credits: 100,
-			amountPaid: 'PKR 10,000',
+			amountPaid: 'USD 100',
 			method: 'Cash',
 			reference: 'seed-1',
 		});
@@ -318,9 +318,9 @@ describe('admin console interactions (jsdom)', () => {
 		fillDialog('Business name', 'Ops Made Ltd');
 		fillDialog('Owner name', 'Olga');
 		fillDialog('Owner e-mail (login)', 'ops-owner@made.test');
-		fillDialog('Phone', '+92 300 1111111');
+		fillDialog('Phone', '+44 7700 900111');
 		await act(async () => {
-			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Country'), 'PK');
+			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Country'), 'GB');
 		});
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
@@ -496,7 +496,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Review');
 		expect(shows('A whole number of 1 or more.')).toBe(true);
 		fill('Credits', '25');
-		fill('Amount paid', 'PKR 2,500');
+		fill('Amount paid', 'EUR 25');
 		fill('Payment method', 'Bank transfer');
 		fill('Reference (optional)', 'bank-2');
 		await press('Review');
@@ -564,7 +564,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
 		fill('E-mail', 'help@acme.test');
-		fill('Phone', '+92 300 1234567');
+		fill('Phone', '+1 415 555 0134');
 		await saveIn('Support contact');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
 		fill('Session length (hours)', '0');

@@ -7,7 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { sessionCookieName, totpCode } from '../../src/infra/auth.js';
-import { closeMongoClients } from '../../src/infra/db.js';
+import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes, query } from '../../src/console/admin/paths.js';
 import { AdminShell, adminSections } from '../../src/console/admin/views/shell.js';
@@ -317,7 +317,7 @@ describe('admin console smoke', () => {
 				),
 			);
 			expect(creditsHtml).toContain('bank-1');
-			expect(creditsHtml).toContain('PKR 1,000');
+			expect(creditsHtml).toContain('USD 10');
 			expect(creditsHtml).toContain('notes 3 h');
 
 			// ------------------------------------------------------------------ failures render friendly states

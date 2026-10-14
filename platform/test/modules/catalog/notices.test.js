@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { manifest as notesManifest } from '@ss/contracts/testing';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { startMongo } from '../../helpers.js';
 import { PASSWORD, bootPortal } from './boot.js';
 
@@ -89,7 +89,7 @@ describe('notices (PLAN 0.4.12)', () => {
 		expect(notes.notices).toEqual([changed(w1)]);
 		const receipt = await owner.post(`/v1/admin/merchants/${m.merchantId}/receipts`, {
 			credits: 100,
-			amountPaid: 'PKR 1',
+			amountPaid: 'USD 1',
 			method: 'Cash',
 		});
 		expect(receipt.status).toBe(201);

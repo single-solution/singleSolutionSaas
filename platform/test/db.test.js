@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	DATABASE_DEADLINES,
-	closeMongoClients,
 	connectMongoClient,
 	createLocks,
 	createRegistry,
@@ -15,6 +14,7 @@ import {
 	indexSpecs,
 	isDatabaseUnavailable,
 } from '../src/infra/db.js';
+import { closeMongoClients } from '../src/testing.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from '../src/infra/schema.js';
 import { MERCHANT, MERCHANT_2, createClock, createTestLogger, startMongo } from './helpers.js';

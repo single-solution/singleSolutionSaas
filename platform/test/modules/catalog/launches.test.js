@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { manifest as notesManifest } from '@ss/contracts/testing';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { startMongo } from '../../helpers.js';
 import { bootPortal, codeOf } from './boot.js';
 
@@ -30,7 +30,7 @@ const setUp = async (name) => {
 		db: mongo.db(name),
 		settings: {
 			branding: { name: 'Acme Portal', accent: '#112233' },
-			support: { email: 'help@acme.test', phone: '+92 300 0000000', whatsapp: '+92 300 1111111' },
+			support: { email: 'help@acme.test', phone: '+1 212 555 0100', whatsapp: '+1 212 555 0111' },
 		},
 	});
 	cleanups.push(h.close);
@@ -61,7 +61,7 @@ describe('launches (PLAN 0.4.3)', () => {
 			kind: 'merchant',
 			sessionExpiresAt: '2026-10-01T22:00:00.000Z',
 			branding: { name: 'Acme Portal', accent: '#112233', logoUrl: null },
-			support: { email: 'help@acme.test', phone: '+92 300 0000000', whatsapp: '+92 300 1111111' },
+			support: { email: 'help@acme.test', phone: '+1 212 555 0100', whatsapp: '+1 212 555 0111' },
 			merchant: { id: m.merchantId, name: m.name, websites: [{ websiteId: w1, domain: 'shop.example.com' }], websiteId: w1 },
 		});
 		expect(claims.admin).toBeUndefined();

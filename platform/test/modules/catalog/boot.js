@@ -6,7 +6,7 @@
  * @module
  */
 import { createKeyResolver, consumeWith, createMemoryReplayStore, verifyLaunch } from '@ss/protocol';
-import { createPortalClient } from '../../../src/infra/client.js';
+import { createPortalClient } from '../../../src/testing.js';
 import { createSystemStore } from '../../../src/infra/system.js';
 import { createCatalogModule } from '../../../src/modules/catalog/index.js';
 import { commerceModule } from '../../../src/modules/commerce/index.js';

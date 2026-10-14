@@ -15,8 +15,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { manifest as notesManifest } from '@ss/contracts/testing';
-import { closeMongoClients } from '../src/infra/db.js';
-import { PRODUCT_ENFORCED_ROWS } from '../src/infra/rbac.js';
+import { closeMongoClients } from '../src/testing.js';
 import { startMongo } from './helpers.js';
 import { boot as bootIdentity, setupMongo, teardownMongo } from './modules/identity/boot.js';
 import { FINANCE_ADMIN, M1, M2, OWNER_ADMIN, PRODUCT, SUPPORT_ADMIN, W1, W2, bootCommerce } from './modules/commerce/fixtures.js';
@@ -28,6 +27,16 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 });
 /** @typedef {'owner' | 'support' | 'finance' | 'merchant'} Column */
 
 const COLUMNS = /** @type {const} */ (['owner', 'support', 'finance', 'merchant']);
+
+/** Rows of the rights table (PLAN 0.2) that each product checks on its own server for every request. */
+const PRODUCT_ENFORCED_ROWS = Object.freeze([
+	'Switch features on and off',
+	'Edit settings, widget texts, theme and connections',
+	'Edit global defaults and prices',
+]);
+
+/** The name of every row the sections below test. @type {string[]} */
+const testedRows = [];
 
 /** @param {Res} res */
 const allowed = (res) => res.status !== 401 && res.status !== 403;
@@ -62,6 +71,7 @@ const section = (setup, rows) => {
 	beforeAll(async () => {
 		as = await setup();
 	}, 180_000);
+	testedRows.push(...rows.map((row) => row.name));
 	for (const row of rows)
 		describe(row.name, () => {
 			for (const column of COLUMNS) it(column, () => row.columns[column](as));
@@ -115,7 +125,7 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 					expect((await as.finance.get(`/v1/admin/merchants/${as.m.merchantId}`)).status).toBe(200);
 				},
 				merchant: async (as) => {
-					expect((await as.merchant.patch('/v1/me', { address: 'Lahore' })).status).toBe(200);
+					expect((await as.merchant.patch('/v1/me', { address: 'London' })).status).toBe(200);
 					expect((await as.merchant.get(`/v1/merchants/${as.m.merchantId}`)).status).toBe(200);
 					expect((await as.merchant.get(`/v1/merchants/${as.otherM.merchantId}`)).status).toBe(403);
 					expect((await as.merchant.post('/v1/admin/merchants', {})).status).toBe(401);
@@ -465,11 +475,8 @@ describe('rights: product dashboards, Products, settings, defaults and prices', 
 		},
 	]);
 
-	it('names the rows each product enforces on its own server', () => {
-		expect(PRODUCT_ENFORCED_ROWS).toEqual([
-			'Switch features on and off',
-			'Edit settings, widget texts, theme and connections',
-			'Edit global defaults and prices',
-		]);
+	it('tests the Portal part of every row each product enforces on its own server', () => {
+		for (const row of PRODUCT_ENFORCED_ROWS)
+			expect(testedRows.filter((name) => name.startsWith(`${row} (product-enforced;`))).toHaveLength(1);
 	});
 });

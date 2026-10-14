@@ -14,6 +14,13 @@ export const CONSOLE = Object.freeze({
 	forbiddenHint: (/** @type {string} */ detail) => `${detail} Your role does not include this area; ask an Owner.`,
 	backToWebsites: 'Back to websites',
 	backToMerchants: 'Back to merchants',
+	pageNotFound: 'Page not found',
+	pageMissing: 'The page does not exist or you do not have access to it.',
+	adminPageMissing: 'The admin page does not exist.',
+	pageCrashed: 'Something went wrong',
+	pageFailed: (/** @type {string | undefined} */ reference) =>
+		`This page failed to load. Try again in a moment.${reference ? ` (reference ${reference})` : ''}`,
+	tryAgain: 'Try again',
 	loading: 'Loading the page',
 	showList: 'Show list',
 	hideList: 'Hide list',

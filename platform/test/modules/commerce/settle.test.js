@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { createCommerceService } from '../../../src/modules/commerce/service.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import { M1, OWNER_ADMIN, PRODUCT, PRODUCT2, W1, W2, bootCommerce } from './fixtures.js';

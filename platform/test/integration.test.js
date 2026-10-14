@@ -12,7 +12,8 @@ import { toNextRoute } from '../src/infra/http.js';
 import { getPortal } from '../src/runtime.js';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { closeMongoClients, getMongoClient, isDatabaseUnavailable } from '../src/infra/db.js';
+import { getMongoClient, isDatabaseUnavailable } from '../src/infra/db.js';
+import { closeMongoClients } from '../src/testing.js';
 import { createSystemStore } from '../src/infra/system.js';
 import {
 	ENCRYPTION_KEY,
@@ -673,9 +674,9 @@ describe('Settings (stored in the database, never in the environment; Owner only
 
 		const supportContact = await call('PUT', '/v1/admin/settings/support', {
 			headers: as(owner),
-			body: { email: 'help@acme.test', phone: '+92 300 1234567', whatsapp: '' },
+			body: { email: 'help@acme.test', phone: '+44 20 7946 0123', whatsapp: '' },
 		});
-		expect(supportContact.json.support).toEqual({ email: 'help@acme.test', phone: '+92 300 1234567', whatsapp: null });
+		expect(supportContact.json.support).toEqual({ email: 'help@acme.test', phone: '+44 20 7946 0123', whatsapp: null });
 		expect(
 			(await call('PUT', '/v1/admin/settings/support', { headers: as(owner), body: { email: 'nope', phone: 'x' } })).status,
 		).toBe(422);

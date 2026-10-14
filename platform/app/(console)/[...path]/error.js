@@ -1,13 +1,14 @@
 'use client';
 import { Button, ErrorState } from '@ss/ui';
+import { CONSOLE } from '../../../src/texts/console.js';
 
 /** @param {{ error: Error & { digest?: string }, reset: () => void }} props */
 export default function ConsoleError({ error, reset }) {
 	return (
 		<ErrorState
-			title="Something went wrong"
-			message={`This page failed to load. Try again in a moment.${error.digest ? ` (reference ${error.digest})` : ''}`}
-			action={<Button onClick={reset}>Try again</Button>}
+			title={CONSOLE.pageCrashed}
+			message={CONSOLE.pageFailed(error.digest)}
+			action={<Button onClick={reset}>{CONSOLE.tryAgain}</Button>}
 		/>
 	);
 }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { createCommerceService } from '../../../src/modules/commerce/service.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import { HOUR, M1, M2, OWNER_ADMIN, PRODUCT, STAFF, W1, bootCommerce } from './fixtures.js';
@@ -140,7 +140,7 @@ const historyFaults = (ctx) => {
 
 /** @param {any} faulty @param {string} merchantId @param {number} amount */
 const receiptVia = (faulty, merchantId, amount) =>
-	faulty.addReceipt({ merchantId, amount, amountPaid: 'PKR 1', method: 'cash', reference: null, actor: STAFF });
+	faulty.addReceipt({ merchantId, amount, amountPaid: 'EUR 1', method: 'cash', reference: null, actor: STAFF });
 
 /** @param {any} h @param {string} merchantId */
 const accountOf = (h, merchantId) => h.db.collection('commerce_accounts').findOne({ _id: merchantId });

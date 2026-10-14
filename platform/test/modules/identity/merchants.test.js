@@ -20,18 +20,18 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 			name: 'Shop & Co',
 			ownerName: 'Sam Seller',
 			email: 'Sam@Shop.test',
-			phone: '+92 300 1234567',
-			address: 'Main Road 1, Lahore',
-			country: 'pk',
+			phone: '+33 1 42 68 53 00',
+			address: '10 Rue de Rivoli, Paris',
+			country: 'fr',
 		});
 		expect(created.status).toBe(201);
 		expect(created.json.merchant).toMatchObject({
 			name: 'Shop & Co',
 			ownerName: 'Sam Seller',
 			email: 'sam@shop.test',
-			phone: '+92 300 1234567',
-			address: 'Main Road 1, Lahore',
-			country: 'PK',
+			phone: '+33 1 42 68 53 00',
+			address: '10 Rue de Rivoli, Paris',
+			country: 'FR',
 			status: 'active',
 			setupPending: true,
 			twoStep: { enabled: false, recoveryCodesLeft: 0 },
@@ -61,7 +61,7 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 			'email_taken',
 		);
 		const entry = (await h.activity('merchant.created'))[0];
-		expect(JSON.stringify(entry)).not.toMatch(/sam@shop\.test|Sam Seller|Lahore|1234567/);
+		expect(JSON.stringify(entry)).not.toMatch(/sam@shop\.test|Sam Seller|Rivoli|42 68 53 00/);
 	});
 
 	it('without e-mail sending the setup link is skipped and can be copied (shown once, logged)', async () => {

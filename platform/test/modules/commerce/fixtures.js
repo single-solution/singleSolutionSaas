@@ -120,7 +120,7 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0) }) =
 
 	/** @param {string} merchantId @param {number} amount millicredits (whole credits) @param {string | null} [reference] */
 	const credit = (merchantId, amount, reference = null) =>
-		service.addReceipt({ merchantId, amount, amountPaid: 'PKR 1,000', method: 'Bank transfer', reference, actor: STAFF });
+		service.addReceipt({ merchantId, amount, amountPaid: 'GBP 10', method: 'Bank transfer', reference, actor: STAFF });
 
 	return {
 		portal,

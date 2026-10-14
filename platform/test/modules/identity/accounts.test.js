@@ -303,13 +303,13 @@ describe('changing a login (PLAN 0.2)', () => {
 		expect((await o.client.patch('/v1/me', { name: 'Olivia O.' })).json).toMatchObject({ name: 'Olivia O.' });
 		expect((await o.client.patch('/v1/me', { role: 'finance' })).status).toBe(422);
 		const m = await h.merchant('sam@shop.test');
-		const edited = await m.client.patch('/v1/me', { phone: '+92 300 1234567', country: 'pk', address: 'Lahore' });
-		expect(edited.json).toMatchObject({ phone: '+92 300 1234567', country: 'PK', address: 'Lahore' });
+		const edited = await m.client.patch('/v1/me', { phone: '+44 7700 900123', country: 'gb', address: 'London' });
+		expect(edited.json).toMatchObject({ phone: '+44 7700 900123', country: 'GB', address: 'London' });
 		expect((await m.client.patch('/v1/me', { email: 'x@shop.test' })).status).toBe(422);
 		expect((await m.client.patch('/v1/me', { country: 'XX' })).status).toBe(422);
 		const entry = (await h.activity('merchant.edited'))[0];
 		expect(entry?.after).toEqual({ fields: ['phone', 'address', 'country'] });
-		expect(JSON.stringify(entry)).not.toContain('Lahore');
+		expect(JSON.stringify(entry)).not.toContain('London');
 	});
 });
 

@@ -22,7 +22,7 @@ describe('ledger chain', () => {
 			entryKey: 'receipt:a',
 			reference: 'a',
 			actor: { type: 'admin', id: 'adm' },
-			details: { amountPaid: 'PKR 5,000', method: 'cash' },
+			details: { amountPaid: 'USD 50', method: 'cash' },
 		},
 		{
 			type: /** @type {const} */ ('day_charge'),
@@ -144,9 +144,9 @@ describe('validation', () => {
 	});
 
 	it('receipts (PLAN 0.5.8) and day ranges', () => {
-		expect(checkReceipt({ credits: 5, amountPaid: ' PKR 5,000 ', method: 'Bank', reference: 'TX-1' })).toEqual({
+		expect(checkReceipt({ credits: 5, amountPaid: ' USD 50 ', method: 'Bank', reference: 'TX-1' })).toEqual({
 			ok: true,
-			value: { amount: 5000, amountPaid: 'PKR 5,000', method: 'Bank', reference: 'TX-1' },
+			value: { amount: 5000, amountPaid: 'USD 50', method: 'Bank', reference: 'TX-1' },
 		});
 		expect(checkReceipt({ credits: 1, amountPaid: 'x', method: 'y', reference: '' })).toMatchObject({
 			value: { reference: null },

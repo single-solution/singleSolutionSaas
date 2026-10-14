@@ -53,9 +53,9 @@ describe('inputs: fields', () => {
 	});
 	it('countries (ISO 3166-1 alpha-2) and optional texts', () => {
 		expect(COUNTRY_CODES).toHaveLength(249);
-		expect(isCountryCode('PK')).toBe(true);
+		expect(isCountryCode('US')).toBe(true);
 		expect(isCountryCode('UK')).toBe(false);
-		expect(I.country(' pk ')).toEqual({ ok: true, value: 'PK' });
+		expect(I.country(' us ')).toEqual({ ok: true, value: 'US' });
 		expect(I.country('XX').ok).toBe(false);
 		expect(I.country(5).ok).toBe(false);
 		expect(I.optionalText(5)('')).toEqual({ ok: true, value: null });
@@ -68,7 +68,7 @@ describe('inputs: fields', () => {
 		expect(I.domain()('10.0.0.1').ok).toBe(false);
 		expect(I.domain({ isPublicSuffix: (d) => d === 'github.io' })('github.io').ok).toBe(false);
 		expect(I.nullable(I.country)(null)).toEqual({ ok: true, value: null });
-		expect(I.nullable(I.country)('pk')).toEqual({ ok: true, value: 'PK' });
+		expect(I.nullable(I.country)('fr')).toEqual({ ok: true, value: 'FR' });
 		expect(I.oneOf(['a', 'b'])('b').ok).toBe(true);
 		expect(I.oneOf(['a', 'b'])('c').ok).toBe(false);
 	});
@@ -116,7 +116,7 @@ describe('inputs: objects', () => {
 			['twoStepWithPassword', { password: 'p', code: '123456' }],
 			['adminProfile', { name: 'N' }],
 			['merchantProfile', { phone: '' }],
-			['merchantCreate', { ...merchant, country: 'PK' }],
+			['merchantCreate', { ...merchant, country: 'GB' }],
 			['merchantUpdate', { email: 'b@b.co' }],
 			['merchantDelete', { confirm: 'M' }],
 			['bulk', { action: 'suspend', merchantIds: ['mer_0123456789'], reason: 'r' }],

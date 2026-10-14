@@ -109,13 +109,13 @@ export const recoveryCode = (value) =>
 export const bool = (value) => (typeof value === 'boolean' ? okv(value) : bad('must be a boolean'));
 
 /**
- * An ISO 3166-1 alpha-2 country code, upper-cased (`pk` → `PK`).
+ * An ISO 3166-1 alpha-2 country code, upper-cased (`us` → `US`).
  * @type {Field<string>}
  */
 export const country = (value) =>
 	typeof value === 'string' && isCountryCode(value.trim().toUpperCase())
 		? okv(value.trim().toUpperCase())
-		: bad('must be an ISO 3166-1 alpha-2 country code such as PK');
+		: bad('must be an ISO 3166-1 alpha-2 country code such as US');
 
 /**
  * Optional free text: `null` or an empty string clears it, else 1..`max` characters.

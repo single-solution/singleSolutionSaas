@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateStatusResponse, validateWebsitesPage } from '@ss/contracts';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import {
 	FINANCE_ADMIN,

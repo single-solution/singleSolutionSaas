@@ -11,7 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import * as hooks from 'next/dist/shared/lib/hooks-client-context.shared-runtime.js';
 import { ToastProvider } from '@ss/ui';
 import { totpCode } from '../../src/infra/auth.js';
-import { closeMongoClients } from '../../src/infra/db.js';
+import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
 import { apiFetch, signInAgain, takeFragmentToken, useResource } from '../../src/console/client.js';
 import { AccountView } from '../../src/console/views/account.js';
@@ -67,7 +67,7 @@ const BRANDING = {
 	name: 'Single Solution',
 	accent: '#4f46e5',
 	logoUrl: null,
-	support: { email: 'help@ss.test', phone: '+92 300 1234567', whatsapp: null },
+	support: { email: 'help@ss.test', phone: '+44 20 7946 0123', whatsapp: null },
 };
 
 /** Two-step code of a secret now. @param {string} secret */
@@ -134,9 +134,9 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		// ---------------------------------------------------------------- Account: details, e-mail, password, two-step
 		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
 		expect(shows('Business details') && shows('Your activity')).toBe(true);
-		fill('Phone', '+92 300 7654321');
-		type(byLabel(document, 'Country'), 'PK');
-		fill('Address', 'Mall Road, Lahore');
+		fill('Phone', '+1 212 555 0187');
+		type(byLabel(document, 'Country'), 'US');
+		fill('Address', '5th Avenue, New York');
 		await press('Save');
 		await a.waitCall('PATCH', '/v1/me', (st) => st === 200);
 		await until(() => shows('Business details saved.'));
@@ -234,7 +234,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		fill('E-mail', 'owner@shop.test');
 		fill('Password', 'a brand new passphrase');
 		await press('Sign in');
-		await until(() => shows('Your account is suspended. Contact help@ss.test, +92 300 1234567.'));
+		await until(() => shows('Your account is suspended. Contact help@ss.test, +44 20 7946 0123.'));
 		cleanup();
 		await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/resume`, {});
 

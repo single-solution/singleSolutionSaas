@@ -223,7 +223,7 @@ export const loadEnv = (env = process.env) => {
 	if (previousEncryptionKey !== null && previousEncryptionKey.length < 32)
 		problems.push('ENCRYPTION_KEY_PREVIOUS must be at least 32 characters');
 
-	// Log level: info in production, debug in development (LOG_LEVEL overrides, undocumented)
+	// Log level: info, debug in development; the optional LOG_LEVEL (`.env.example`) overrides it
 	const logLevel = read('LOG_LEVEL') ?? (portalEnv === 'development' ? 'debug' : 'info');
 	if (!LEVELS.has(logLevel)) problems.push('LOG_LEVEL must be debug, info, warn, error or silent');
 	if (problems.length > 0) {

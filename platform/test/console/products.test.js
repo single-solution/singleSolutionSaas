@@ -8,7 +8,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
 import { cleanup, render } from '@ss/ui/testing';
-import { closeMongoClients } from '../../src/infra/db.js';
+import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { ProductsView } from '../../src/console/admin/views/products.js';
 import { startMongo } from '../helpers.js';

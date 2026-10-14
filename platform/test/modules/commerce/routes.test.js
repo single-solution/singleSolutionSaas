@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import { HOUR, M1, M2, PRODUCT, PRODUCT2, STAFF, W1, W2, W3, bootCommerce } from './fixtures.js';
 
@@ -102,14 +102,14 @@ describe('commerce routes and tenant isolation', () => {
 		// adding credits: Owner and Finance only, with the receipt form (PLAN 0.5.8)
 		const receipt = (/** @type {Record<string, string>} */ who, /** @type {unknown} */ body) =>
 			h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...who, ...idem() }, body });
-		const form = { credits: 50, amountPaid: 'PKR 5,000', method: 'Bank transfer', reference: 'wire-77' };
+		const form = { credits: 50, amountPaid: 'USD 50', method: 'Bank transfer', reference: 'wire-77' };
 		expect((await receipt(owner1, form)).status).toBe(401);
 		expect((await receipt(support, form)).status).toBe(403);
 		expect((await receipt(admin, { ...form, credits: 0 })).status).toBe(422);
 		const key = idem();
 		const added = await h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
 		expect(added.status).toBe(201);
-		expect(added.json.receipt).toMatchObject({ credits: 50_000, amountPaid: 'PKR 5,000', method: 'Bank transfer' });
+		expect(added.json.receipt).toMatchObject({ credits: 50_000, amountPaid: 'USD 50', method: 'Bank transfer' });
 		expect(added.json.summary.balance).toBe(147_000);
 		// a double submit with the same one-time key saves once
 		const again = await h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
@@ -121,7 +121,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect(own.json.items).toHaveLength(3);
 		expect(own.json.items.every((/** @type {any} */ r) => !('amountPaid' in r))).toBe(true);
 		const seen = await h.call('GET', `/v1/merchants/${M1}/receipts`, { headers: support });
-		expect(seen.json.items[1]).toMatchObject({ amountPaid: 'PKR 5,000' });
+		expect(seen.json.items[1]).toMatchObject({ amountPaid: 'USD 50' });
 		expect((await h.portal.shared.audit.list({ merchantId: M1 })).map((a) => a.action)).toContain('credits.added');
 
 		// Credits and billing: Support views, Finance views
@@ -159,7 +159,7 @@ describe('commerce routes and tenant isolation', () => {
 	it('saves a receipt once: a failure after saving still answers 201, and its key never saves it again (BP-2)', async () => {
 		const h = await bootCommerce({ mongo, dbName: 'cm_receipt_once', clock: createClock(T0) });
 		const admin = await h.login({ kind: 'admin', subject: 'adm_owner' });
-		const form = { credits: 5000, amountPaid: 'PKR 5,000', method: 'Bank transfer' };
+		const form = { credits: 5000, amountPaid: 'USD 50', method: 'Bank transfer' };
 		const key = { 'idempotency-key': 'add-credits-dialog-1' };
 		const post = () => h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
 		// the e-mail contacts cannot be read after the receipt is saved: logged, not a 500 that frees the key
@@ -170,7 +170,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect(h.logs.find((l) => l.msg === 'receipt saved; a later step failed')?.fields).toMatchObject({ step: 'mail' });
 		expect((await post()).headers.get('idempotent-replayed')).toBe('true');
 		// the same request again once the stored answer is gone (a crash after saving, or the key's time passed)
-		const repeat = { merchantId: M1, amount: 5_000_000, amountPaid: 'PKR 5,000', method: 'Bank transfer', reference: null };
+		const repeat = { merchantId: M1, amount: 5_000_000, amountPaid: 'USD 50', method: 'Bank transfer', reference: null };
 		const caller = { actor: /** @type {const} */ ({ type: 'admin', id: 'adm_owner' }), idempotencyKey: key['idempotency-key'] };
 		const again = await h.service.addReceipt({ ...repeat, ...caller });
 		expect(again.receipt.receiptId).toBe(added.json.receipt.receiptId);

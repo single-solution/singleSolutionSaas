@@ -8,7 +8,7 @@
  * - `product` actors (client assertions) have no rights here: their routes authorise by protocol, so `can` is false
  *   for them unless the actor carries explicit `permissions`.
  * - Rows the products enforce on their own servers (switching features, settings, widget texts, theme, connections,
- *   global defaults and prices: {@link PRODUCT_ENFORCED_ROWS}) have no Portal permission. The Portal's part of them is
+ *   global defaults and prices) have no Portal permission. The Portal's part of them is
  *   what it signs and accepts: launches carry the role (Finance is never launched), and a feature report is accepted
  *   only for a current Owner or Support admin.
  * - `system` actors may do everything.
@@ -78,13 +78,6 @@ export const PERMISSIONS = Object.freeze({
 });
 
 const P = PERMISSIONS;
-
-/** Rows of the rights table (PLAN 0.2) that each product checks on its own server for every request. */
-export const PRODUCT_ENFORCED_ROWS = Object.freeze([
-	'Switch features on and off',
-	'Edit settings, widget texts, theme and connections',
-	'Edit global defaults and prices',
-]);
 
 /** Every permission. */
 export const ALL_PERMISSIONS = Object.freeze(Object.values(PERMISSIONS));

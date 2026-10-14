@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { manifest as notesManifest } from '@ss/contracts/testing';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { launchUrl, parseAdminLaunch, parseConnect, parseConsume, parseStatus } from '../../../src/modules/catalog/core/input.js';
 import { startMongo } from '../../helpers.js';
 import { bootPortal, codeOf } from './boot.js';

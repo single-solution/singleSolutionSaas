@@ -54,7 +54,8 @@ import { isDuplicateKey, isObject, randomToken, sha256Hex, defaultRandomBytes } 
 
 const NAME = /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/;
 const MODULE = /^[a-z][a-z0-9]*$/;
-const CLIENTS = Symbol.for('ss.platform.mongo-clients');
+/** Where {@link getMongoClient} caches its clients on `globalThis` (one per URI and pool size). */
+export const MONGO_CLIENTS = Symbol.for('ss.platform.mongo-clients');
 const WRITE_STAGES = new Set(['$out', '$merge']);
 const CROSS_STAGES = new Set([
 	'$lookup',
@@ -116,7 +117,7 @@ export const isDatabaseUnavailable = (error) =>
 export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', createClient }) => {
 	const store = /** @type {any} */ (globalThis);
 	/** @type {Map<string, MongoClient>} */
-	const cache = (store[CLIENTS] ??= new Map());
+	const cache = (store[MONGO_CLIENTS] ??= new Map());
 	const key = `${sha256Hex(uri)}:${maxPoolSize}`;
 	let client = cache.get(key);
 	if (!client) {
@@ -138,17 +139,6 @@ export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', cr
  * @returns {Promise<MongoClient>}
  */
 export const connectMongoClient = (options) => getMongoClient(options).connect();
-
-/** Close and forget every cached client (tests, scripts). */
-export const closeMongoClients = async () => {
-	const store = /** @type {any} */ (globalThis);
-	/** @type {Map<string, MongoClient> | undefined} */
-	const cache = store[CLIENTS];
-	if (!cache) return;
-	const clients = [...cache.values()];
-	cache.clear();
-	await Promise.all(clients.map((client) => client.close()));
-};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Registry

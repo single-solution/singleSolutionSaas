@@ -4,7 +4,6 @@ import {
 	ADMIN_ROLES,
 	ALL_PERMISSIONS,
 	MERCHANT_PERMISSIONS,
-	PRODUCT_ENFORCED_ROWS,
 	PERMISSIONS,
 	ROLE_PERMISSIONS,
 	can,
@@ -127,7 +126,6 @@ describe('rbac (PLAN 0.2 rights table)', () => {
 		expect([...ALL_PERMISSIONS].sort()).toEqual(Object.keys(TABLE).sort());
 		expect(Object.keys(PERMISSIONS)).toHaveLength(ALL_PERMISSIONS.length);
 		expect(ADMIN_ROLES).toEqual(['owner', 'support', 'finance']);
-		expect(PRODUCT_ENFORCED_ROWS).toHaveLength(3);
 		for (const role of ADMIN_ROLES) for (const p of ROLE_PERMISSIONS[role]) expect(ALL_PERMISSIONS).toContain(p);
 		for (const p of MERCHANT_PERMISSIONS) expect(ALL_PERMISSIONS).toContain(p);
 	});

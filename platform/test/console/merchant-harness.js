@@ -319,7 +319,7 @@ export const createWorld = async ({ db }) => {
 	const credit = async (merchantId, millicredits, reference) => {
 		const r = await ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/receipts`, {
 			credits: Math.round(millicredits / 1000),
-			amountPaid: 'PKR 1,000',
+			amountPaid: 'USD 10',
 			method: 'Bank transfer',
 			reference,
 		});

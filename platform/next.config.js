@@ -27,7 +27,7 @@ const config = {
 			destination: `/api${source}`,
 		})),
 	}),
-	// the console lives under /websites (signed-out visitors are sent on to /login by the console shell)
+	// the merchant console's home is /overview (signed-out visitors are sent on to /login by the console shell)
 	redirects: async () => [{ source: '/', destination: '/overview', permanent: false }],
 	headers: async () => [
 		{ source: '/:path*', headers: staticSecurityHeaders() },

@@ -5,7 +5,7 @@
  * Work after responses (e-mails) runs before each call returns.
  */
 import { totpCode } from '../../../src/infra/auth.js';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { createIdentityModule } from '../../../src/modules/identity/index.js';
 import { systemModule } from '../../../src/modules/system/index.js';
 import { createSystemStore } from '../../../src/infra/system.js';

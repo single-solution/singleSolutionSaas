@@ -12,7 +12,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
 import { byLabel, cleanup, keydown, render, type } from '@ss/ui/testing';
-import { closeMongoClients } from '../../src/infra/db.js';
+import { closeMongoClients } from '../../src/testing.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import * as loaders from '../../src/console/loaders.js';
 import { adminApi } from '../../src/console/admin/paths.js';

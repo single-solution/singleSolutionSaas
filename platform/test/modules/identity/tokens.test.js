@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { createKeyResolver, verifyToken } from '@ss/protocol';
 import { createSecretBox } from '../../../src/infra/crypto.js';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { createSystemStore } from '../../../src/infra/system.js';
 import { startMongo } from '../../helpers.js';
 import { PORTAL_URL, bootPortal, codeOf } from '../catalog/boot.js';

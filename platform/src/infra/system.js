@@ -128,17 +128,6 @@ export const secretsOf = (doc, open = () => null) => {
 };
 
 /**
- * A complete system state for tests and tools: fresh secrets plus the given settings.
- * @param {{ mail?: SystemState['mail'], settings?: SystemState['settings'] }} [settings]
- * @returns {SystemState}
- */
-export const testSystemState = ({ mail = null, settings } = {}) => ({
-	...secretsOf(generateSecrets()),
-	mail,
-	...(settings ? { settings } : {}),
-});
-
-/**
  * @param {unknown} error
  * @returns {boolean}
  */

@@ -6,7 +6,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { closeMongoClients } from '../../src/infra/db.js';
+import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
 import { routes } from '../../src/console/paths.js';
 import { AccountView } from '../../src/console/views/account.js';

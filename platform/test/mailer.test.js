@@ -63,7 +63,7 @@ const startSmtp = async () => {
 };
 
 describe('mail templates (PLAN 0.5.10)', () => {
-	const CONTEXT = { brand: 'Acme Portal', support: { email: 'help@acme.test', phone: '+92 300 1234567', whatsapp: null } };
+	const CONTEXT = { brand: 'Acme Portal', support: { email: 'help@acme.test', phone: '+1 212 555 0123', whatsapp: null } };
 
 	it('renders every template as text and simple HTML without external assets, with the Branding and support contact', () => {
 		for (const template of /** @type {Array<keyof typeof MAIL_TEXTS>} */ (Object.keys(MAIL_TEXTS))) {
@@ -72,7 +72,7 @@ describe('mail templates (PLAN 0.5.10)', () => {
 			expect(mail.html).not.toMatch(/<img|<link|<script|src=|url\(/i);
 			expect(mail.html).not.toContain('<b>&</b>');
 			expect(mail.text).toContain('Acme Portal');
-			expect(mail.text).toContain('Support: e-mail help@acme.test, phone +92 300 1234567.');
+			expect(mail.text).toContain('Support: e-mail help@acme.test, phone +1 212 555 0123.');
 			expect(mail.html).toContain('help@acme.test');
 		}
 		for (const linked of ['merchant_setup', 'admin_invite', 'password_reset', 'email_change_confirm']) {

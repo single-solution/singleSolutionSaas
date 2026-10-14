@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { closeMongoClients } from '../../../src/infra/db.js';
+import { closeMongoClients } from '../../../src/testing.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import { HOUR, M1, M2, PRODUCT, PRODUCT2, STAFF, W1, W2, bootCommerce } from './fixtures.js';
 
@@ -124,7 +124,7 @@ describe('credits and billing (PLAN 0.5)', () => {
 		]);
 		expect(await h.service.attention()).toMatchObject([{ merchantId: M1, merchantName: 'One', status: 'low_balance' }]);
 		expect(await h.service.allReceipts({ from: '2026-10-01', to: '2026-10-02', merchantId: M1 })).toMatchObject([
-			{ merchantId: M1, merchantName: 'One', credits: 90_000, amountPaid: 'PKR 1,000' },
+			{ merchantId: M1, merchantName: 'One', credits: 90_000, amountPaid: 'GBP 10' },
 		]);
 		expect(await h.service.billingSummaries([M2])).toMatchObject([{ merchantId: M2, status: 'active', balance: 0 }]);
 	});

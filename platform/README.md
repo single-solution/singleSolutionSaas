@@ -8,8 +8,8 @@ products. Next.js 16, React 19, MongoDB. The modules and their services are desc
 
 ## Environment
 
-Exactly three variables, plus one optional during a key change (PLAN 0.11, `.env.example`), validated at start (only
-names are reported, never values):
+Exactly three variables, plus one optional during a key change and an optional log level (PLAN 0.11,
+`.env.example`), validated at start (only names are reported, never values):
 
 | Variable                  | What it is                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -17,6 +17,7 @@ names are reported, never values):
 | `PORTAL_URL`              | the Portal's final address (https in production, no path): e-mail links, token, launch and notice issuer, CSRF origin, products pin it           |
 | `ENCRYPTION_KEY`          | random, at least 32 characters: seals the stored secrets (mail password, two-step secrets, server tokens, signing keys)                          |
 | `ENCRYPTION_KEY_PREVIOUS` | optional, only while `ENCRYPTION_KEY` is changed: the old key, so stored secrets keep opening; removed after Settings → Encryption key → Re-seal |
+| `LOG_LEVEL`               | optional: `debug`, `info`, `warn`, `error` or `silent` (default `info`; `debug` in development)                                                  |
 
 Signing keys and the session and idempotency secrets are generated on first start into the Portal's own database; the
 signing keys are kept sealed with `ENCRYPTION_KEY` (their public keys readable).
