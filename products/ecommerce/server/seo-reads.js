@@ -53,25 +53,6 @@ export const activeProduct = async (data, ref) => {
 };
 
 /**
- * A category by id or slug, or 404 `not_found`.
- * @param {WebsiteData} data
- * @param {unknown} ref
- * @returns {Promise<CategoryRecord & { updatedAt?: Date }>}
- */
-export const categoryByRef = async (data, ref) => {
-	const key = refOf(ref);
-	const found = key
-		? /** @type {(CategoryRecord & { updatedAt?: Date }) | null} */ (
-				await data
-					.collection(COLLECTIONS.categories)
-					.findOne({ websiteId: data.websiteId, $or: [{ id: key }, { slug: key }] }, { projection: { _id: 0 } })
-			)
-		: null;
-	if (!found) throw problem('not_found', 'There is no such category.');
-	return found;
-};
-
-/**
  * Categories by id (in no particular order).
  * @param {WebsiteData} data
  * @param {string[]} ids

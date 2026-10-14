@@ -565,21 +565,6 @@ export const setOrderCounter = async (data, { prefix, year, next }) => {
 	return { ok: true, next };
 };
 
-/**
- * The next order number a prefix and year would get (the counter's next, else after the highest used).
- * @param {WebsiteData} data
- * @param {{ prefix: string, year: number }} input
- */
-export const peekOrderCounter = async (data, { prefix, year }) => {
-	const counter = /** @type {any} */ (
-		await data
-			.collection(COLLECTIONS.counters)
-			.findOne({ websiteId: data.websiteId, id: counterId(prefix, year) }, { projection: { _id: 0, seq: 1 } })
-	);
-	const used = await highestNumber(data, { prefix, year });
-	return { next: Math.max(Number(counter?.seq ?? 0), used) + 1, used };
-};
-
 // ------------------------------------------------------------------------------------------------- placing orders
 
 /**
@@ -875,34 +860,6 @@ const countReturnedParcel = async (data, order, session) => {
 		.collection(COLLECTIONS.customers)
 		.updateOne({ websiteId: data.websiteId, id: order.customer.customerId }, { $inc: { rtoCount: 1 } }, { session });
 };
-
-/**
- * Restock the items of a return claim, exactly once (`restockedAt`), and mark the serials back in stock.
- * @param {WebsiteData} data
- * @param {{ claimId: string, lines: StockLine[], serials?: string[], now: number }} restock
- * @returns {Promise<boolean>} false when the claim was already restocked
- */
-export const restockClaim = async (data, { claimId, lines, serials = [], now }) =>
-	data.transaction(async (session) => {
-		const claimed = await data
-			.collection(COLLECTIONS.returns)
-			.updateOne(
-				{ websiteId: data.websiteId, id: claimId, restockedAt: null },
-				{ $set: { restockedAt: new Date(now) } },
-				{ session },
-			);
-		if (claimed.modifiedCount !== 1) return false;
-		await releaseStock(data, lines, session);
-		if (serials.length > 0)
-			await data
-				.collection(COLLECTIONS.serials)
-				.updateMany(
-					{ websiteId: data.websiteId, serial: { $in: serials }, status: 'sold' },
-					{ $set: { status: 'in_stock', orderId: null, lineId: null } },
-					{ session },
-				);
-		return true;
-	});
 
 /**
  * Restock some lines of a return claim, each exactly once (the line's `restockedAt`), and mark their serials back in

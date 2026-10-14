@@ -11,7 +11,7 @@ import {
 	mergeStockLines,
 	placeOrder,
 	releaseOrder,
-	restockClaim,
+	restockClaimLines,
 	returnToOrigin,
 	spendPoints,
 	takePoints,
@@ -309,18 +309,25 @@ describe('placing an order', () => {
 		expect(customer.rtoCount).toBe(1);
 
 		const claimId = createId('ret');
-		await data.collection(COLLECTIONS.returns).insertOne({ id: claimId, restockedAt: null });
+		await data
+			.collection(COLLECTIONS.returns)
+			.insertOne({ id: claimId, restockedAt: null, lines: [{ lineId: 'oln_1', quantity: 1, restockedAt: null }] });
 		await data
 			.collection(COLLECTIONS.serials)
-			.insertOne({ id: createId('ser'), serial: 'IMEI1', status: 'sold', orderId: 'x', lineId: 'y' });
-		const lines = [{ productId: product.id, variantId, quantity: 1, locationId: null }];
-		expect(await restockClaim(data, { claimId, lines, serials: ['IMEI1'], now: shop.now() })).toBe(true);
-		expect(await restockClaim(data, { claimId, lines, serials: ['IMEI1'], now: shop.now() })).toBe(false);
+			.insertOne({ id: createId('ser'), serial: 'SN1', status: 'sold', orderId: 'x', lineId: 'y' });
+		const lines = [{ productId: product.id, variantId, quantity: 1, locationId: null, lineId: 'oln_1', serials: ['SN1'] }];
+		// each line exactly once, and the claim is restocked once every line is
+		expect(await restockClaimLines(data, { claimId, lines, now: shop.now() })).toEqual(['oln_1']);
+		expect(await restockClaimLines(data, { claimId, lines, now: shop.now() })).toEqual([]);
 		expect((await stockOf(product.id)).stock).toBe(3);
 		const serial = /** @type {any} */ (
-			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'IMEI1' })
+			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'SN1' })
 		);
 		expect(serial.status).toBe('in_stock');
+		const claim = /** @type {any} */ (
+			await data.collection(COLLECTIONS.returns).findOne({ websiteId: data.websiteId, id: claimId })
+		);
+		expect(claim.restockedAt).toBeInstanceOf(Date);
 	});
 });
 

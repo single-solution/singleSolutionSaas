@@ -2,10 +2,10 @@
  * Return and warranty claims (feature `returns`, PLAN 0.8.8): a signed-in shopper claims items of their own delivered
  * order within each item's window, with photos uploaded straight to the merchant's storage; the merchant's staff (or
  * server) approve or reject, mark the parcel received, refund (through Payments when the order was paid online, else
- * recorded), restock exactly once (the ledger's `restockClaim`) and close. Loyalty points earned on the returned part
- * are taken back on the first refund. The shopper gets a message (`ecommerce.return_status`) at each step. Each step's
- * history entry names who did it (a ticket's user, the staff member a server-token call names in its `SS-Actor-*`
- * headers, else `Server`), and its activity entry the claim (order number and reference) and the move.
+ * recorded), restock each line exactly once (the ledger's `restockClaimLines`) and close. Loyalty points earned on the
+ * returned part are taken back on the first refund. The shopper gets a message (`ecommerce.return_status`) at each
+ * step. Each step's history entry names who did it (a ticket's user, the staff member a server-token call names in its
+ * `SS-Actor-*` headers, else `Server`), and its activity entry the claim (order number and reference) and the move.
  *
  * E33: exchange claims and fixed reasons as the `returns` settings say; `replaced` and `repaired` outcomes; staff choose
  * per line when receiving whether it goes back in stock (those lines are restocked at once, each exactly once); a

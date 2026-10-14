@@ -42797,16 +42797,6 @@
 					}
 				}
 			},
-			"ReturnRefundMethod": {
-				"type": "string",
-				"enum": [
-					"online",
-					"bank_transfer",
-					"cash",
-					"other"
-				],
-				"description": "online: through Payments; the others are recorded by staff, who give the money back themselves."
-			},
 			"ReturnsReport": {
 				"type": "object",
 				"description": "Return rate per product.",

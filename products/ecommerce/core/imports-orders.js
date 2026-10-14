@@ -14,7 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
-import { checkAlertInput } from './alerts.js';
+import { ALERT_TRIES, checkAlertInput } from './alerts.js';
 import { LIMITS } from './catalog.js';
 import { statusOf } from './flow.js';
 import { phoneDigitsOf, phoneRules } from './guests.js';
@@ -71,8 +71,6 @@ const MAX_SEEN = 50;
 /** Longest storage key and https address. */
 const MAX_KEY = 300;
 const MAX_URL = 2000;
-/** Most tries of an alert's message (`core/alerts.js` `ALERT_TRIES`). */
-const MAX_TRIES = 5;
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 /** A phone as checkout keeps one the normaliser cannot read (digits, spaces, + ( ) -). */
@@ -1248,7 +1246,7 @@ export const checkImportedAlert = (record, rules) => {
 		targetPrice,
 		status: c.oneOf(record.status, /** @type {const} */ (['waiting', 'sent', 'failed']), '/status'),
 		dueAt: null,
-		...(missing(record.tries) ? {} : { tries: c.whole(record.tries, '/tries', { max: MAX_TRIES }) }),
+		...(missing(record.tries) ? {} : { tries: c.whole(record.tries, '/tries', { max: ALERT_TRIES }) }),
 		...(tokenHash ? { tokenHash } : {}),
 		...(createdAt ? { createdAt } : {}),
 	});
