@@ -220,7 +220,7 @@ describe('reports', () => {
 			brandId: brand,
 			grade: 'used_a',
 			gradeLabel: 'Used A',
-			city: ' Lahore ',
+			city: ' Paris ',
 			method: 'cod',
 		});
 		await seedOrder({ product: cable, placedAt, total: 500, method: 'card', status: 'confirmed', role: 'open' });
@@ -257,7 +257,7 @@ describe('reports', () => {
 				{ key: '', name: '', units: 1, revenue: 500, discount: 0 },
 			],
 			city: [
-				{ key: 'lahore', name: 'Lahore', units: 2, revenue: 3000, discount: 0 },
+				{ key: 'paris', name: 'Paris', units: 2, revenue: 3000, discount: 0 },
 				{ key: '', name: '', units: 1, revenue: 500, discount: 0 },
 			],
 			grade: [

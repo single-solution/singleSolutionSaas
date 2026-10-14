@@ -21,7 +21,7 @@ const codeOf = (response) =>
  * Place a COD order as a new shopper.
  * @param {{ phone?: string, city?: string, stock?: number }} [options]
  */
-const placeOrder = async ({ phone = '+923001234567', city = 'Springfield', stock = 10 } = {}) => {
+const placeOrder = async ({ phone = '+447700900123', city = 'Springfield', stock = 10 } = {}) => {
 	const item = await shop.seedProduct({ price: 1000, stock });
 	users += 1;
 	const id = `usr_e31${String(users).padStart(6, '0')}`;
@@ -59,18 +59,18 @@ afterAll(async () => shop.product.close());
 
 describe('order list filters and seen markers (E31)', () => {
 	it('filters by several statuses, methods, city and customer, and finds a phone by its last digits', async () => {
-		const a = await placeOrder({ phone: '+923001110001', city: 'Lahore' });
-		const b = await placeOrder({ phone: '+923001110002', city: 'Karachi' });
+		const a = await placeOrder({ phone: '+447700900101', city: 'London' });
+		const b = await placeOrder({ phone: '+447700900102', city: 'Manchester' });
 		await shop.api('POST', `/v1/orders/${b.order.id}/move`, { to: 'confirmed' });
 		const both = await shop.api('GET', '/v1/orders?status=awaiting_confirmation,confirmed&paymentMethod=cod,online');
 		const ids = both.json.items.map((/** @type {any} */ o) => o.id);
 		expect(ids).toEqual(expect.arrayContaining([a.order.id, b.order.id]));
-		const lahore = await shop.api('GET', '/v1/orders?city=lahore&deliveryMethod=delivery');
-		expect(lahore.json.items.map((/** @type {any} */ o) => o.id)).toEqual([a.order.id]);
+		const london = await shop.api('GET', '/v1/orders?city=london&deliveryMethod=delivery');
+		expect(london.json.items.map((/** @type {any} */ o) => o.id)).toEqual([a.order.id]);
 		expect((await shop.api('GET', `/v1/orders?customer=${b.userId}`)).json.items.map((/** @type {any} */ o) => o.id)).toEqual([
 			b.order.id,
 		]);
-		const byPhone = await shop.api('GET', '/v1/orders?q=0300-111-0002');
+		const byPhone = await shop.api('GET', '/v1/orders?q=07700-900-102');
 		expect(byPhone.json.items.map((/** @type {any} */ o) => o.id)).toEqual([b.order.id]);
 		expect((await shop.api('GET', '/v1/orders?deliveryMethod=boat')).status).toBe(422);
 	});
@@ -90,11 +90,11 @@ describe('order list filters and seen markers (E31)', () => {
 
 describe('customers (E31)', () => {
 	it('lists segments and marks customers seen', async () => {
-		const { userId } = await placeOrder({ phone: '+923009990001' });
+		const { userId } = await placeOrder({ phone: '+447700900188' });
 		const active = await shop.api('GET', '/v1/customers?segment=active');
 		expect(active.json.items.map((/** @type {any} */ c) => c.userId)).toContain(userId);
 		expect((await shop.api('GET', '/v1/customers?segment=nobody')).status).toBe(422);
-		const byPhone = await shop.api('GET', '/v1/customers?q=3009990001');
+		const byPhone = await shop.api('GET', '/v1/customers?q=7700900188');
 		expect(byPhone.json.items.map((/** @type {any} */ c) => c.userId)).toEqual([userId]);
 		expect((await asStaff('POST', `/v1/customers/${userId}/seen`, 'usr_staffann001')).json).toEqual({ seen: true });
 		const unseen = await asStaff('GET', '/v1/customers?unseen=1', 'usr_staffann001');

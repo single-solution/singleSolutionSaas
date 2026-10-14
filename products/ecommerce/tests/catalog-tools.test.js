@@ -219,7 +219,7 @@ describe('CSV', () => {
 			placedAt: new Date(at),
 			status: 'delivered',
 			customer: { userId: 'usr_1', name: 'Sara', email: 's@example.com', phone: '' },
-			address: { city: 'Lahore' },
+			address: { city: 'Berlin' },
 			lines: [
 				{ name: 'Phone', variantName: 'Black', sku: 'PH-1', quantity: 2, unitPrice: 1050, discount: 100, total: 2000 },
 				{ name: '@Case', variantName: '', sku: '', quantity: 1, unitPrice: 500, discount: 0, total: 500 },
@@ -239,8 +239,8 @@ describe('CSV', () => {
 			'number,placed_at,status,customer,city,product,variant,sku,quantity,unit_price,discount,total,currency,payment_method,payment_state',
 		);
 		expect(lines.slice(1)).toEqual([
-			'2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Lahore,Phone,Black,PH-1,2,10.50,1.00,20.00,USD,cod,paid',
-			"2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Lahore,'@Case,,,1,5.00,0.00,5.00,USD,cod,paid",
+			'2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,Phone,Black,PH-1,2,10.50,1.00,20.00,USD,cod,paid',
+			"2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,'@Case,,,1,5.00,0.00,5.00,USD,cod,paid",
 		]);
 		expect((await shop.api('GET', '/v1/csv/orders?from=yesterday')).status).toBe(422);
 		const staff = await shop.ticket(['csv.run']);

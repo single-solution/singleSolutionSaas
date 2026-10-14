@@ -9,7 +9,7 @@ import { richNodes } from '../ui/admin-fields.js';
 import { richText } from '../ui/shop-common.js';
 
 const HTML =
-	'<h2>Contact</h2><p><a href="mailto:help@shop.example.com">Mail</a> <a href=" tel:+92 300 1234567 ">Call</a> <a href="javascript:alert(1)">x</a> <a href="https://shop.example.com/a">y</a></p>';
+	'<h2>Contact</h2><p><a href="mailto:help@shop.example.com">Mail</a> <a href=" tel:+1 202 555 0143 ">Call</a> <a href="javascript:alert(1)">x</a> <a href="https://shop.example.com/a">y</a></p>';
 
 describe('rich text in the widgets (SF-1)', () => {
 	it('rebuilds headings and contact links in the shop', () => {
@@ -18,7 +18,7 @@ describe('rich text in the widgets (SF-1)', () => {
 		expect(box.querySelector('h2')?.textContent).toBe('Contact');
 		expect([...box.querySelectorAll('a')].map((a) => [a.getAttribute('href'), a.getAttribute('rel')])).toEqual([
 			['mailto:help@shop.example.com', null],
-			['tel:+92 300 1234567', null],
+			['tel:+1 202 555 0143', null],
 			[null, null],
 			['https://shop.example.com/a', 'noopener'],
 		]);
@@ -30,7 +30,7 @@ describe('rich text in the widgets (SF-1)', () => {
 		expect(box.querySelector('h2')?.textContent).toBe('Contact');
 		expect([...box.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual([
 			'mailto:help@shop.example.com',
-			'tel:+92 300 1234567',
+			'tel:+1 202 555 0143',
 			null,
 			'https://shop.example.com/a',
 		]);

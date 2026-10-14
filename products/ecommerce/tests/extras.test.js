@@ -62,7 +62,7 @@ const order = async ({
 	payment = {},
 	delivered = true,
 	pointsEarned = 0,
-	city = 'Lahore',
+	city = 'London',
 	placedAt = shop.now(),
 	role = 'delivered',
 	currency = 'USD',
@@ -110,7 +110,7 @@ const order = async ({
 					email: userId === SARA ? 'sara@example.com' : 'omar@example.com',
 					phone: '',
 				},
-				address: { name: 'Sara', phone: '', line1: 'x', line2: '', city, area: '', postalCode: '', country: 'PK', notes: '' },
+				address: { name: 'Sara', phone: '', line1: 'x', line2: '', city, area: '', postalCode: '', country: 'GB', notes: '' },
 				delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
 				lines: records,
 				totals: { subtotal: total, discount: 0, delivery: 0, tax: 0, total, currency, taxIncluded: true },
@@ -185,11 +185,11 @@ describe('returns and warranty claims', () => {
 		fakeBucket();
 		const phone = await shop.seedProduct({ name: 'Phone A', stock: 5, price: 1000 });
 		const placed = await order({
-			lines: [{ product: phone, quantity: 2, serials: ['IMEI-1', 'IMEI-2'] }],
+			lines: [{ product: phone, quantity: 2, serials: ['SN-1', 'SN-2'] }],
 			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000001', paid: 2000 },
 			pointsEarned: 20,
 		});
-		for (const serial of ['IMEI-1', 'IMEI-2'])
+		for (const serial of ['SN-1', 'SN-2'])
 			await data
 				.collection(COLLECTIONS.serials)
 				.insertOne({ id: createId('ser'), productId: phone.id, serial, status: 'sold', orderId: placed.id, lineId: 'x' });
@@ -264,7 +264,7 @@ describe('returns and warranty claims', () => {
 			refundable: 1000,
 			refundsOnline: true,
 			actions: ['approve', 'reject'],
-			lines: [{ lineId, quantity: 1, serials: ['IMEI-1'], name: 'Phone A', bought: 2 }],
+			lines: [{ lineId, quantity: 1, serials: ['SN-1'], name: 'Phone A', bought: 2 }],
 			order: { number: placed.number, payment: { state: 'paid' } },
 		});
 		expect(detail.json.photos[0].url).toContain(STORAGE);
@@ -316,7 +316,7 @@ describe('returns and warranty claims', () => {
 		expect(restocked.json.restockedAt).not.toBeNull();
 		expect((await productOf(phone.id)).variants[0].stock).toBe(stockBefore + 1);
 		const serial = /** @type {any} */ (
-			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'IMEI-1' })
+			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'SN-1' })
 		);
 		expect(serial.status).toBe('in_stock');
 		expect((await shop.api('POST', `/v1/returns/${claimId}/restock`, {})).status).toBe(409);
@@ -745,8 +745,8 @@ describe('reports', () => {
 			publishedAt: new Date(shop.now() - 50 * DAY),
 		});
 		const from = new Date(shop.now()).toISOString().slice(0, 10);
-		const first = await order({ lines: [{ product: tab, quantity: 2, cost: 7000 }], city: ' Karachi ' });
-		await order({ userId: OMAR, lines: [{ product: tab, quantity: 1 }], city: 'karachi' });
+		const first = await order({ lines: [{ product: tab, quantity: 2, cost: 7000 }], city: ' Paris ' });
+		await order({ userId: OMAR, lines: [{ product: tab, quantity: 1 }], city: 'paris' });
 		await order({ lines: [{ product: tab, quantity: 5 }], role: 'cancelled', delivered: false });
 		await order({ lines: [{ product: tab, quantity: 1 }], currency: 'EUR' });
 		const claim = await shop.visitor('POST', '/v1/shop/returns', {
@@ -768,7 +768,7 @@ describe('reports', () => {
 			units: 3,
 		});
 		const byCity = await shop.api('GET', `/v1/reports/sales?by=city&${range}`);
-		expect(byCity.json.rows.find((/** @type {any} */ r) => r.key === 'karachi')).toMatchObject({ units: 3 });
+		expect(byCity.json.rows.find((/** @type {any} */ r) => r.key === 'paris')).toMatchObject({ units: 3 });
 		const byBrand = await shop.api('GET', `/v1/reports/sales?by=brand&${range}`);
 		expect(byBrand.status).toBe(200);
 		expect((await shop.api('GET', '/v1/reports/sales?from=2020-01-01&to=2026-01-01')).status).toBe(422);

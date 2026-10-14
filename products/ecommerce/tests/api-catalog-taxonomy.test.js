@@ -230,7 +230,7 @@ describe('attributes, locations and serials through the admin widget', () => {
 		const added = await admin('POST', '/v1/admin/serials', {
 			productId: item.id,
 			variantId,
-			serials: [' IMEI-1 ', 'IMEI-2'],
+			serials: [' SN-1 ', 'SN-2'],
 			locationId: floor.json.id,
 		});
 		expect(added.status).toBe(201);
@@ -239,13 +239,13 @@ describe('attributes, locations and serials through the admin widget', () => {
 				id: added.json.items[0].id,
 				productId: item.id,
 				variantId,
-				serial: 'IMEI-1',
+				serial: 'SN-1',
 				status: 'in_stock',
 				orderId: null,
 				lineId: null,
 				locationId: floor.json.id,
 			},
-			expect.objectContaining({ serial: 'IMEI-2', locationId: floor.json.id }),
+			expect.objectContaining({ serial: 'SN-2', locationId: floor.json.id }),
 		]);
 		const page = await api('GET', `/v1/serials?productId=${item.id}`);
 		expect(page.json).toEqual({ items: added.json.items, nextCursor: null, hasMore: false });

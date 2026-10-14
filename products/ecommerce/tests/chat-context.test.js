@@ -130,14 +130,14 @@ describe('core: Chat filters, warranties and the context text', () => {
 	});
 
 	it('builds tracking pages from today’s couriers', () => {
-		const couriers = [{ key: 'tcs', name: 'TCS', trackingUrl: 'https://t.example/{tracking}' }];
+		const couriers = [{ key: 'fastship', name: 'FastShip', trackingUrl: 'https://t.example/{tracking}' }];
 		expect(shipmentLink(couriers, null)).toBe('');
-		expect(shipmentLink(couriers, { courier: 'tcs', trackingNumber: 'A 1' })).toBe('https://t.example/A%201');
-		expect(shipmentLink(couriers, { courier: ' tcs ', trackingNumber: 'X' })).toBe('https://t.example/X');
+		expect(shipmentLink(couriers, { courier: 'fastship', trackingNumber: 'A 1' })).toBe('https://t.example/A%201');
+		expect(shipmentLink(couriers, { courier: ' fastship ', trackingNumber: 'X' })).toBe('https://t.example/X');
 		expect(shipmentLink(couriers, { courier: 'Other', trackingNumber: 'X', trackingUrl: 'https://kept.example/X' })).toBe(
 			'https://kept.example/X',
 		);
-		expect(shipmentLink('nope', { courier: 'tcs', trackingNumber: 'X', trackingUrl: 'http://insecure' })).toBe('');
+		expect(shipmentLink('nope', { courier: 'fastship', trackingNumber: 'X', trackingUrl: 'http://insecure' })).toBe('');
 	});
 
 	it('keeps the context text within 6,000 characters, the visitor and product first', () => {
@@ -155,7 +155,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 				name: `Product ${index} ${'n'.repeat(200)}`,
 				url: `https://shop.example.com/p/${index}`,
 				inStock: true,
-				prices: [{ grade: 'A', priceText: 'Rs 1,000', inStock: index % 2 === 0 }],
+				prices: [{ grade: 'A', priceText: '$1,000', inStock: index % 2 === 0 }],
 			})),
 			deals: Array.from({ length: 10 }, (_, index) => ({
 				name: `Deal ${index}`,
@@ -168,22 +168,22 @@ describe('core: Chat filters, warranties and the context text', () => {
 				name: 'Viewed phone',
 				url: 'https://shop.example.com/p/v',
 				summary: 'Nice',
-				priceRange: { minText: 'Rs 1', maxText: 'Rs 2' },
+				priceRange: { minText: '$1', maxText: '$2' },
 				variants: [
-					{ options: {}, grade: null, priceText: 'Rs 1', inStock: true, stockLeft: 3, warrantyDays: 30 },
-					{ options: { Color: 'Red' }, grade: 'A', priceText: 'Rs 2', inStock: false, stockLeft: 0, warrantyDays: null },
-					{ options: {}, grade: null, priceText: 'Rs 2', inStock: true, stockLeft: null, warrantyDays: null },
+					{ options: {}, grade: null, priceText: '$1', inStock: true, stockLeft: 3, warrantyDays: 30 },
+					{ options: { Color: 'Red' }, grade: 'A', priceText: '$2', inStock: false, stockLeft: 0, warrantyDays: null },
+					{ options: {}, grade: null, priceText: '$2', inStock: true, stockLeft: null, warrantyDays: null },
 				],
 			},
-			visitor: { firstName: 'Ayesha', city: 'Lahore', points: 120 },
+			visitor: { firstName: 'Alex', city: 'London', points: 120 },
 		});
 		expect(text.length).toBeLessThanOrEqual(MAX_CONTEXT);
-		expect(text).toContain('first name Ayesha; city Lahore; 120 loyalty points');
-		expect(text).toContain('Viewed phone (Rs 1 – Rs 2)');
-		expect(text).toContain('- Standard, Rs 1, 3 in stock, 30 days warranty');
-		expect(text).toContain('- Red, grade A, Rs 2, out of stock');
+		expect(text).toContain('first name Alex; city London; 120 loyalty points');
+		expect(text).toContain('Viewed phone ($1 – $2)');
+		expect(text).toContain('- Standard, $1, 3 in stock, 30 days warranty');
+		expect(text).toContain('- Red, grade A, $2, out of stock');
 		expect(text).toContain('| Deal 0 (Hot) | 10% off | no end date |');
-		expect(text).toContain('A Rs 1,000 (out of stock)');
+		expect(text).toContain('A $1,000 (out of stock)');
 		expect(text).toContain('Delivery: Policy text.');
 		expect(text).toContain('custom: Custom.');
 		const small = contextText({ business: 'Shop', policies: [], products: [], deals: [], product: null, visitor: null });
@@ -197,12 +197,12 @@ describe('core: Chat filters, warranties and the context text', () => {
 				name: 'One',
 				url: 'u',
 				summary: '',
-				priceRange: { minText: 'Rs 1', maxText: 'Rs 1' },
+				priceRange: { minText: '$1', maxText: '$1' },
 				variants: [],
 			},
 			visitor: { firstName: '', city: '', points: null },
 		});
-		expect(quiet).toContain('One (Rs 1) u');
+		expect(quiet).toContain('One ($1) u');
 		expect(quiet).not.toContain('Signed-in visitor');
 	});
 });
@@ -301,27 +301,27 @@ describe('Chat lookups (E37)', () => {
 			deal({ id: 'deal_gone', name: 'Over', active: false }),
 		]);
 		await shop.list('delivery_zones', [
-			{ key: 'lhr', name: 'Lahore', cities: ['Lahore'], areas: [], fee: 25000, freeOver: 500000, minDays: 1, maxDays: 2 },
+			{ key: 'bos', name: 'Boston', cities: ['Boston'], areas: [], fee: 25000, freeOver: 500000, minDays: 1, maxDays: 2 },
 		]);
 		await shop.setting('delivery_zones', 'defaultFee', 30000);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
 		await shop.setting('checkout', 'policyShipping', 'We deliver in {business} style.');
 		await shop.setting('checkout', 'policyReturns', 'Returns within {returnDays} days.');
-		await shop.list('couriers', [{ key: 'tcs', name: 'TCS', trackingUrl: 'https://track.example/{tracking}' }]);
+		await shop.list('couriers', [{ key: 'fastship', name: 'FastShip', trackingUrl: 'https://track.example/{tracking}' }]);
 		const placedAt = new Date('2026-10-02T00:00:00Z');
 		await data.collection(COLLECTIONS.orders).insertOne({
 			id: 'ord_sara1',
 			number: 'SH-2026-0043',
-			customer: { userId: sara, name: 'Sara Shopper', email: '', phone: '+923001234567' },
+			customer: { userId: sara, name: 'Sara Shopper', email: '', phone: '+12025550143' },
 			address: {
 				name: 'Sara',
-				phone: '+923001234567',
+				phone: '+12025550143',
 				line1: 'Hidden street',
 				line2: '',
-				city: 'Lahore',
-				area: 'DHA',
+				city: 'Boston',
+				area: 'Back Bay',
 				postalCode: '',
-				country: 'PK',
+				country: 'US',
 				notes: '',
 			},
 			delivery: { method: 'delivery', zone: 'lhr', fee: 0, locationId: null },
@@ -352,13 +352,13 @@ describe('Chat lookups (E37)', () => {
 			role: 'shipped',
 			history: [],
 			shipment: {
-				courier: 'TCS',
+				courier: 'FastShip',
 				trackingNumber: 'TRK 9',
 				trackingUrl: '',
 				booked: false,
 				status: '',
 				checkedAt: null,
-				trackingNote: 'Leaves Karachi today',
+				trackingNote: 'Leaves Chicago today',
 				estimatedDeliveryAt: new Date('2026-10-05T00:00:00Z'),
 			},
 			media: [{ kind: 'dispatch_video', url: 'https://www.youtube-nocookie.com/embed/abcdefghijk' }],
@@ -404,7 +404,7 @@ describe('Chat lookups (E37)', () => {
 		const id = /** @type {string} */ (phone.variants[2]?.id);
 		const answer = await shop.api(
 			'GET',
-			`/v1/chat/products/iphone-13/quote?variantId=${id}&quantity=2&paymentMethod=cod&city=Lahore`,
+			`/v1/chat/products/iphone-13/quote?variantId=${id}&quantity=2&paymentMethod=cod&city=Boston`,
 		);
 		expect(answer.status).toBe(200);
 		expect(answer.json).toMatchObject({
@@ -430,7 +430,7 @@ describe('Chat lookups (E37)', () => {
 			discount: 22000,
 			fee: 0,
 			roleDiscount: 0,
-			delivery: { method: 'delivery', name: 'Lahore', fee: 25000, feeText: 'USD 250.00', minDays: 1, maxDays: 2 },
+			delivery: { method: 'delivery', name: 'Boston', fee: 25000, feeText: 'USD 250.00', minDays: 1, maxDays: 2 },
 			freeDeliveryOver: 500000,
 			freeDeliveryOverText: 'USD 5,000.00',
 			total: 223000,
@@ -527,9 +527,9 @@ describe('Chat lookups (E37)', () => {
 						warrantyDays: 90,
 					},
 				],
-				courier: 'TCS',
+				courier: 'FastShip',
 				trackingUrl: 'https://track.example/TRK%209',
-				trackingNote: 'Leaves Karachi today',
+				trackingNote: 'Leaves Chicago today',
 				expectedAt: '2026-10-05T00:00:00.000Z',
 				dispatchVideo: { kind: 'youtube', url: 'https://www.youtube-nocookie.com/embed/abcdefghijk' },
 			}),
@@ -538,11 +538,11 @@ describe('Chat lookups (E37)', () => {
 		expect(orders.text).not.toContain('356938035643809');
 		const shipments = await shop.api('GET', '/v1/chat/me/shipments', undefined, headers);
 		expect(shipments.json.items[0]).toMatchObject({
-			trackingNote: 'Leaves Karachi today',
+			trackingNote: 'Leaves Chicago today',
 			expectedAt: '2026-10-05T00:00:00.000Z',
 		});
 		// the city of the last order, until Accounts answers with a default address
-		expect((await shop.api('GET', '/v1/chat/me/account', undefined, headers)).json).toMatchObject({ city: 'Lahore', area: '' });
+		expect((await shop.api('GET', '/v1/chat/me/account', undefined, headers)).json).toMatchObject({ city: 'Boston', area: '' });
 		shop.responders.set(`${ACCOUNTS}/v1/me`, (call) =>
 			call.headers['ss-sign-in'] === token
 				? {
@@ -550,8 +550,8 @@ describe('Chat lookups (E37)', () => {
 						body: {
 							name: 'Sara Shopper',
 							addresses: [
-								{ city: 'Karachi', area: 'Clifton', default: false },
-								{ city: 'Islamabad', area: 'F-7', default: true },
+								{ city: 'Chicago', area: 'Loop', default: false },
+								{ city: 'Seattle', area: 'Downtown', default: true },
 							],
 						},
 					}
@@ -561,8 +561,8 @@ describe('Chat lookups (E37)', () => {
 			name: 'Sara Shopper',
 			firstName: 'Sara',
 			loyaltyPoints: 0,
-			city: 'Islamabad',
-			area: 'F-7',
+			city: 'Seattle',
+			area: 'Downtown',
 		});
 		shop.responders.delete(`${ACCOUNTS}/v1/me`);
 	});
@@ -597,8 +597,8 @@ describe('Chat lookups (E37)', () => {
 		expect(guest.json.text).toContain('## Product the visitor is viewing');
 		const token = await shop.signIn({ id: sara, name: 'Sara Shopper' });
 		const signed = await shop.api('GET', '/v1/chat/context', undefined, { 'ss-sign-in': token });
-		expect(signed.json).toMatchObject({ product: null, visitor: { firstName: 'Sara', city: 'Lahore', points: 0 } });
-		expect(signed.json.text).toContain('first name Sara; city Lahore; 0 loyalty points');
+		expect(signed.json).toMatchObject({ product: null, visitor: { firstName: 'Sara', city: 'Boston', points: 0 } });
+		expect(signed.json.text).toContain('first name Sara; city Boston; 0 loyalty points');
 		expect((await shop.api('GET', '/v1/chat/context?productId=nope')).json.product).toBeNull();
 		expect((await shop.api('GET', '/v1/chat/context?productId=a%20b')).status).toBe(422);
 		await shop.switchOn(['catalog']);

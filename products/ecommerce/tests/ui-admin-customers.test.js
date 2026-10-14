@@ -48,14 +48,14 @@ const customer = (over = {}) => ({
 	userId: 'u1',
 	name: 'Ana',
 	email: 'ana@example.com',
-	phone: '0300',
+	phone: '+12025550143',
 	blocked: false,
 	blockedReason: '',
 	rtoCount: 2,
 	orderCount: 3,
 	note: 'VIP',
 	totalSpent: 500000,
-	totalSpentText: 'PKR 5,000.00',
+	totalSpentText: 'USD 5,000.00',
 	ordersPlaced: 3,
 	createdAt: AT,
 	updatedAt: AT,
@@ -84,7 +84,7 @@ const start = (routes = {}, features = ['checkout', 'reviews', 'reports', 'csv',
 				answer(200, {
 					...customer(),
 					recentOrders: [
-						{ id: 'ord_1', number: 'SO-1', statusLabel: 'Delivered', total: 1000, currency: 'PKR', placedAt: AT },
+						{ id: 'ord_1', number: 'SO-1', statusLabel: 'Delivered', total: 1000, currency: 'USD', placedAt: AT },
 					],
 				}),
 			'GET /v1/admin/customers/u2': () => problem(404, 'not_found'),
@@ -103,8 +103,8 @@ describe('customers admin: customers', () => {
 		const { host, root, server } = await start();
 		expect(host.getAttribute('data-ss-mounted')).toBe('customers-admin');
 		const panel = panelOf(root, 'customers');
-		expect(textOf(rowOf(panel, 'u1'))).toContain('ana@example.com · 0300 · 3 orders · 2 packages returned');
-		expect(textOf(rowOf(panel, 'u1'))).toContain('PKR 5,000.00');
+		expect(textOf(rowOf(panel, 'u1'))).toContain('ana@example.com · +12025550143 · 3 orders · 2 packages returned');
+		expect(textOf(rowOf(panel, 'u1'))).toContain('USD 5,000.00');
 		expect(rowOf(panel, 'u1').querySelector('.dot.warning')).not.toBeNull();
 		expect(rowOf(panel, 'u2').querySelector('.dot.danger')).not.toBeNull();
 		expect(rowOf(panel, 'u3').querySelector('.dot.neutral')?.getAttribute('aria-label')).toBe('Can order');
@@ -156,10 +156,10 @@ describe('customers admin: customers', () => {
 			'Ana',
 			'ana@example.com',
 			'u1',
-			'PKR 5,000.00',
+			'USD 5,000.00',
 			'SO-1',
 			'Delivered',
-			'PKR 10.00',
+			'USD 10.00',
 			'VIP',
 			'Customer since',
 		])
@@ -355,7 +355,7 @@ describe('customers admin: reports and CSV', () => {
 					? answer(200, {
 							from: AT,
 							to: AT,
-							currency: 'PKR',
+							currency: 'USD',
 							by: 'city',
 							totals: { orders: 0, units: 0, revenue: 0, discount: 0 },
 							rows: [],
@@ -363,7 +363,7 @@ describe('customers admin: reports and CSV', () => {
 					: answer(200, {
 							from: AT,
 							to: AT,
-							currency: 'PKR',
+							currency: 'USD',
 							by: 'product',
 							totals: { orders: 2, units: 3, revenue: 300000, discount: 1000 },
 							rows: [
@@ -414,7 +414,7 @@ describe('customers admin: reports and CSV', () => {
 			from: '2026-09-01',
 			to: '2026-09-30',
 		});
-		expect(textOf(panel.querySelector('.facts') ?? panel)).toContain('Orders2Units3SalesPKR 3,000.00DiscountPKR 10.00');
+		expect(textOf(panel.querySelector('.facts') ?? panel)).toContain('Orders2Units3SalesUSD 3,000.00DiscountUSD 10.00');
 		expect(textOf(panel)).toContain('None');
 		await click(buttonIn(panel, 'Download CSV'));
 		expect(saved[0]?.name).toBe('report-sales_product.csv');
@@ -443,7 +443,7 @@ describe('customers admin: reports and CSV', () => {
 					answer(200, {
 						from: AT,
 						to: AT,
-						currency: 'PKR',
+						currency: 'USD',
 						totals: { units: 1, revenue: 1000, cost: 600, margin: 400 },
 						rows: [{ productId: 'prd_1', name: 'Phone', units: 1, revenue: 1000, cost: 600, margin: 400 }],
 					}),
@@ -453,7 +453,7 @@ describe('customers admin: reports and CSV', () => {
 		const panel = panelOf(root, 'reports');
 		await change(fieldIn(panel, 'Report'), 'margin');
 		await click(buttonIn(panel, 'Show'));
-		expect(textOf(panel.querySelector('.facts') ?? panel)).toBe('SalesPKR 10.00CostPKR 6.00MarginPKR 4.00');
+		expect(textOf(panel.querySelector('.facts') ?? panel)).toBe('SalesUSD 10.00CostUSD 6.00MarginUSD 4.00');
 		await click(buttonIn(panel, 'Download CSV'));
 		expect(saved[0]?.text).toContain('Phone,1,10.00,6.00,4.00');
 	});

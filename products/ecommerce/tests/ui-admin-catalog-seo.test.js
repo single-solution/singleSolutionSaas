@@ -324,7 +324,7 @@ describe('catalog admin: serial numbers', () => {
 		id: 'ser_1',
 		productId: 'prd_1',
 		variantId: 'var_1',
-		serial: 'IMEI1',
+		serial: 'SN-1',
 		status: 'in_stock',
 		orderId: null,
 		locationId: 'loc_1',
@@ -334,14 +334,14 @@ describe('catalog admin: serial numbers', () => {
 		/** @type {any[]} */
 		let items = [
 			SERIAL,
-			{ ...SERIAL, id: 'ser_4', serial: 'IMEI4', status: 'sold', orderId: 'ord_1', locationId: null },
-			{ ...SERIAL, id: 'ser_5', serial: 'IMEI5', status: 'faulty', productId: 'prd_x', variantId: 'var_x' },
+			{ ...SERIAL, id: 'ser_4', serial: 'SN-4', status: 'sold', orderId: 'ord_1', locationId: null },
+			{ ...SERIAL, id: 'ser_5', serial: 'SN-5', status: 'faulty', productId: 'prd_x', variantId: 'var_x' },
 		];
 		const { root, server } = await start(ALL, {
 			'GET /v1/admin/serials': (/** @type {any} */ call) =>
 				call.url.searchParams.get('cursor')
-					? answer(200, { items: [{ ...SERIAL, id: 'ser_9', serial: 'IMEI9' }], nextCursor: null, hasMore: false })
-					: answer(200, { items, nextCursor: 'IMEI5', hasMore: true }),
+					? answer(200, { items: [{ ...SERIAL, id: 'ser_9', serial: 'SN-9' }], nextCursor: null, hasMore: false })
+					: answer(200, { items, nextCursor: 'SN-5', hasMore: true }),
 			'PATCH /v1/admin/serials/ser_1': (/** @type {any} */ call) => {
 				items = items.map((item) => (item.id === 'ser_1' ? { ...item, status: call.body.status } : item));
 				return answer(200, { ...SERIAL, status: call.body.status });
@@ -351,30 +351,30 @@ describe('catalog admin: serial numbers', () => {
 			'GET /v1/admin/products/prd_x': () => problem(404, 'not_found'),
 		});
 		const panel = await openTab(root, 'serials');
-		expect(rowsOf(panel)).toEqual(['IMEI1', 'IMEI4', 'IMEI5']);
+		expect(rowsOf(panel)).toEqual(['SN-1', 'SN-4', 'SN-5']);
 		expect(textOf(panel)).toContain('ord_1');
 		const detail = () => textOf(detailOf(panel));
 		for (const part of ['In stock', 'ProductPhone', 'VariantRed', 'LocationShop']) expect(detail()).toContain(part);
 		await click(buttonIn(detailOf(panel), 'Mark faulty'));
 		expect(server.last('PATCH /v1/admin/serials/ser_1')?.body).toEqual({ status: 'faulty' });
 		expect(detail()).toContain('Back in stock');
-		await pick(panel, 'IMEI4');
+		await pick(panel, 'SN-4');
 		expect(detail()).toContain('Orderord_1');
 		expect(shows(detailOf(panel), 'Mark faulty')).toBe(false);
 		expect(/** @type {HTMLElement} */ (detailOf(panel).querySelector('.more')).hidden).toBe(true);
-		await pick(panel, 'IMEI5');
+		await pick(panel, 'SN-5');
 		expect(detail()).toContain('Productprd_x');
 		await click(buttonIn(detailOf(panel), 'Back in stock'));
 		expect(statuses(detailOf(panel))).toContain(TEXTS['problem.conflict']);
-		await pick(panel, 'IMEI1');
+		await pick(panel, 'SN-1');
 		await menu(detailOf(panel), 'Delete');
-		await confirmDialog(root, 'IMEI1');
+		await confirmDialog(root, 'SN-1');
 		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.conflict']);
 		server.routes['DELETE /v1/admin/serials/ser_1'] = () => answer(204);
 		await submitDialog(root);
 		expect(hasDialog(root)).toBe(false);
 		await click(buttonIn(panel, 'Load more'));
-		expect(rowsOf(panel)).toContain('IMEI9');
+		expect(rowsOf(panel)).toContain('SN-9');
 		type(fieldIn(panel, 'Search'), 'IME');
 		await submit(fieldIn(panel, 'Search'));
 		await change(fieldIn(panel, 'Status'), 'faulty');

@@ -204,7 +204,7 @@ describe('visitor widgets', () => {
 			id: 'prd_1',
 			name: 'Phone One',
 			price: 100000,
-			currency: 'PKR',
+			currency: 'USD',
 			variants: [
 				{ id: 'var_1', price: 100000 },
 				{ id: 'var_2', price: 120000 },
@@ -226,12 +226,12 @@ describe('visitor widgets', () => {
 		await flush();
 		expect(events.of('ss:add_to_cart')).toEqual([
 			{
-				currency: 'PKR',
+				currency: 'USD',
 				value: 240000,
 				items: [{ id: 'prd_1', variantId: 'var_2', name: 'Phone One', price: 120000, quantity: 2 }],
 			},
 			{
-				currency: 'PKR',
+				currency: 'USD',
 				value: 9900000,
 				items: [{ id: 'prd_1', variantId: null, name: 'Phone One', price: 100000, quantity: 99 }],
 			},
@@ -248,7 +248,7 @@ describe('visitor widgets', () => {
 			expect(entry).toEqual({
 				name: 'ss:add_to_cart',
 				detail: {
-					currency: 'PKR',
+					currency: 'USD',
 					value: 100000,
 					items: [{ id: 'prd_1', variantId: 'var_1', name: 'Phone One', price: 100000, quantity: 1 }],
 				},

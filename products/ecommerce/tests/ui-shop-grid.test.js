@@ -56,7 +56,7 @@ const card = (id, over = {}) => ({
 	name: `Phone ${id}`,
 	price: 100000,
 	compareAtPrice: 120000,
-	currency: 'PKR',
+	currency: 'USD',
 	image: `https://cdn.example.com/${id}.png`,
 	url: `https://shop.example.com/products/${id}`,
 	inStock: true,
@@ -228,8 +228,8 @@ describe('product grid', () => {
 		expect(fake.all('GET /v1/shop/deals')).toHaveLength(0);
 		const page = textOf(host);
 		expect(page).toContain('Phone prd_a');
-		expect(page).toContain(text('shop.priceRange', { min: 'PKR 1,000.00', max: 'PKR 1,500.00' }));
-		expect(page).toContain('PKR 1,200.00');
+		expect(page).toContain(text('shop.priceRange', { min: 'USD 1,000.00', max: 'USD 1,500.00' }));
+		expect(page).toContain('USD 1,200.00');
 		expect(page).toContain(text('shop.rating', { average: '4.5', count: 2 }));
 		expect(page).toContain(text('shop.outOfStock'));
 		expect(page).toContain('Like new');
@@ -657,7 +657,7 @@ describe('shared helpers', () => {
 		expect(full.checkout.paymentMethods).toEqual(['cod']);
 		expect(full.checkout.cities).toEqual(['A']);
 		expect(currencyOf(settings, 'nope', 'USD')).toBe('USD');
-		expect(currencyOf(full)).toBe('PKR');
+		expect(currencyOf(full)).toBe('USD');
 		expect(codeOf({ ok: false, status: 0, data: null })).toBe('offline');
 		expect(codeOf({ ok: false, status: 500, data: null })).toBe('');
 		expect(codeOf({ ok: false, status: 409, data: { type: 'https://x/problems/slot_taken' } })).toBe('slot_taken');
@@ -666,21 +666,21 @@ describe('shared helpers', () => {
 		const plain = formatsOf(config, viewer);
 		expect(plain.dateText(null)).toBe('');
 		expect(plain.dateText('not a date')).toBe('');
-		expect(plain.money(250000, 'PKR')).toBe('PKR 2,500.00');
-		expect(plain.money(undefined, 'PKR')).toBe('PKR 0.00');
+		expect(plain.money(250000, 'USD')).toBe('USD 2,500.00');
+		expect(plain.money(undefined, 'USD')).toBe('USD 0.00');
 		const business = formatsOf(
 			{
 				...config,
-				format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-				timeZone: 'Asia/Karachi',
+				format: { locale: 'fr-FR', currencyDisplay: 'custom', currencySymbol: '€', wholeUnits: true, times: 'business' },
+				timeZone: 'Asia/Tokyo',
 			},
 			viewer,
 		);
-		expect(business.money(1250000, 'PKR')).toBe('Rs 12,500');
-		expect(business.dateText('2026-03-12T20:00:00Z', { time: false })).toBe('13 Mar 2026');
-		expect(business.dateText('2026-03-12T20:00:00Z')).toBe('13 Mar 2026, 01:00');
+		expect(business.money(1250000, 'EUR')).toBe('12 500 €');
+		expect(business.dateText('2026-03-12T20:00:00Z', { time: false })).toBe('13 mars 2026');
+		expect(business.dateText('2026-03-12T20:00:00Z')).toBe('13 mars 2026, 05:00');
 		expect(business.timeText('2026-03-12T20:00:00Z', 'UTC')).toBe('20:00');
-		expect(business.dateText('2026-03-12T20:00:00Z', { time: false, zone: 'Nowhere/Never' })).toBe('12 Mar 2026');
+		expect(business.dateText('2026-03-12T20:00:00Z', { time: false, zone: 'Nowhere/Never' })).toBe('12 mars 2026');
 		expect(ratingText(t, null)).toBe('');
 		expect(ratingText(t, { average: 0, count: 0 })).toBe('');
 	});
@@ -790,7 +790,7 @@ describe('shared helpers', () => {
 			},
 			facets: { attributes: [{ id: 'atr_2', name: 'Fit', type: 'text' }] },
 			known,
-			currency: 'PKR',
+			currency: 'USD',
 			expanded: new Set(),
 			onChange: (event, patch) => changes.push([event, patch]),
 		});

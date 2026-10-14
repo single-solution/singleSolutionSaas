@@ -23,12 +23,12 @@ describe('search modes (core)', () => {
 		const search = createCatalogSearch(/** @type {any} */ ({}));
 		/** @param {Record<string, string>} catalog */
 		const site = (catalog) => /** @type {any} */ ({ values: async () => catalog });
-		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'same' }), 'fan', 'chat')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'basic' }), 'fan', 'chat')).toBe(false);
-		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'basic' }), 'fan')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'basic', chatSearch: 'atlas' }), 'fan', 'chat')).toBe(true);
-		expect(await search.useAtlas(site({ search: 'basic', chatSearch: 'atlas' }), 'fan', 'shop')).toBe(false);
-		expect(await search.useAtlas(site({ search: 'atlas' }), 'fan', 'chat')).toBe(true);
+		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'same' }), 'lamp', 'chat')).toBe(true);
+		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'basic' }), 'lamp', 'chat')).toBe(false);
+		expect(await search.useAtlas(site({ search: 'atlas', chatSearch: 'basic' }), 'lamp')).toBe(true);
+		expect(await search.useAtlas(site({ search: 'basic', chatSearch: 'atlas' }), 'lamp', 'chat')).toBe(true);
+		expect(await search.useAtlas(site({ search: 'basic', chatSearch: 'atlas' }), 'lamp', 'shop')).toBe(false);
+		expect(await search.useAtlas(site({ search: 'atlas' }), 'lamp', 'chat')).toBe(true);
 		expect(await search.useAtlas(site({ search: 'atlas' }), '  ', 'chat')).toBe(false);
 	});
 });

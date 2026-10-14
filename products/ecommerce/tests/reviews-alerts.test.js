@@ -211,7 +211,7 @@ describe('reviews per order line', () => {
 
 		// a guest's order opens with its key
 		const key = newOrderKey();
-		const guest = await seedOrder({ userId: '', name: 'Ayesha Khan', key, lines: [{ product: item, variantName: '128 GB' }] });
+		const guest = await seedOrder({ userId: '', name: 'Chloé Martin', key, lines: [{ product: item, variantName: '128 GB' }] });
 		const guestWrite = (/** @type {string} */ orderKey) =>
 			visit('POST', '/v1/shop/reviews', {
 				body: { orderId: guest.id, lineId: guest.lines[0]?.id, rating: 4, body: 'Good' },
@@ -221,12 +221,12 @@ describe('reviews per order line', () => {
 		shop.advance(1000);
 		const byGuest = await guestWrite(key);
 		expect(byGuest.status).toBe(201);
-		expect(byGuest.json).toMatchObject({ name: 'Ayesha Khan', userId: '', verified: true });
+		expect(byGuest.json).toMatchObject({ name: 'Chloé Martin', userId: '', verified: true });
 
-		// visitors see "Ayesha K.", the badge and the variant
+		// visitors see "Chloé M.", the badge and the variant
 		const list = await visit('GET', `/v1/shop/products/${item.id}/reviews`);
 		expect(list.json.items.map((/** @type {any} */ r) => [r.name, r.verified, r.variantName])).toEqual([
-			['Ayesha K.', true, '128 GB'],
+			['Chloé M.', true, '128 GB'],
 			['Sara S.', true, '256 GB'],
 			['Sara S.', true, '128 GB'],
 		]);
@@ -234,9 +234,9 @@ describe('reviews per order line', () => {
 		expect((await productOf(item.id)).rating.count).toBe(3);
 		// staff see the whole name
 		const staff = await shop.api('GET', `/v1/reviews?productId=${item.id}`);
-		expect(staff.json.items.map((/** @type {any} */ r) => r.name)).toContain('Ayesha Khan');
+		expect(staff.json.items.map((/** @type {any} */ r) => r.name)).toContain('Chloé Martin');
 		await shop.setting('reviews', 'nameFormat', 'full');
-		expect((await visit('GET', `/v1/shop/products/${item.id}/reviews`)).json.items[0].name).toBe('Ayesha Khan');
+		expect((await visit('GET', `/v1/shop/products/${item.id}/reviews`)).json.items[0].name).toBe('Chloé Martin');
 		await shop.setting('reviews', 'moderation', 'manual');
 		await shop.setting('reviews', 'per', 'product');
 	});
@@ -310,10 +310,10 @@ describe('alerts', () => {
 		expect(plain.json).toMatchObject({ targetPrice: null, price: 10_000 });
 
 		// guests only while the setting allows, with a phone normalized as checkout does
-		expect(codeOf(await subscribe({ variantId: big?.id, phone: '0300 1234567' }, undefined))).toBe('sign_in_required');
+		expect(codeOf(await subscribe({ variantId: big?.id, phone: '07700 900123' }, undefined))).toBe('sign_in_required');
 		await shop.setting('alerts', 'guests', true);
 		await shop.setting('alerts', 'channels', ['email', 'sms']);
-		await shop.setting('checkout', 'defaultCallingCode', '+92');
+		await shop.setting('checkout', 'defaultCallingCode', '+44');
 		await shop.setting('checkout', 'trunkPrefix', '0');
 		expect((await subscribe({ variantId: big?.id, phone: 'call me' }, undefined)).status).toBe(422);
 		const customerId = createId('cus');
@@ -323,8 +323,8 @@ describe('alerts', () => {
 			guest: true,
 			name: 'Guest',
 			email: '',
-			phone: '+923001234567',
-			phoneDigits: '3001234567',
+			phone: '+447700900123',
+			phoneDigits: '7700900123',
 			blocked: false,
 			blockedReason: '',
 			rtoCount: 0,
@@ -333,25 +333,25 @@ describe('alerts', () => {
 			city: '',
 			seenBy: [],
 		});
-		const guest = await subscribe({ variantId: big?.id, phone: '0300 1234567', targetPrice: 11_000 }, undefined);
+		const guest = await subscribe({ variantId: big?.id, phone: '07700 900123', targetPrice: 11_000 }, undefined);
 		expect(guest.status).toBe(201);
 		// the same alert set again answers the waiting one (201 all the same)
-		const same = await subscribe({ variantId: big?.id, phone: '+92 300 1234567' }, undefined);
+		const same = await subscribe({ variantId: big?.id, phone: '+44 7700 900123' }, undefined);
 		expect([same.status, same.json.id]).toEqual([201, guest.json.id]);
 		// one number however it is typed (K12): already international without the +, or a trunk 0 after the code
-		expect((await subscribe({ variantId: big?.id, phone: '923001234567' }, undefined)).json.id).toBe(guest.json.id);
-		expect((await subscribe({ variantId: big?.id, phone: '+92 0300 1234567' }, undefined)).json.id).toBe(guest.json.id);
+		expect((await subscribe({ variantId: big?.id, phone: '447700900123' }, undefined)).json.id).toBe(guest.json.id);
+		expect((await subscribe({ variantId: big?.id, phone: '+44 07700 900123' }, undefined)).json.id).toBe(guest.json.id);
 		const stored = /** @type {any} */ (
 			await data.collection(COLLECTIONS.alerts).findOne({ websiteId: data.websiteId, id: guest.json.id })
 		);
-		expect(stored).toMatchObject({ userId: '', phone: '+923001234567', email: '', customerId, targetPrice: 11_000 });
+		expect(stored).toMatchObject({ userId: '', phone: '+447700900123', email: '', customerId, targetPrice: 11_000 });
 		const guestBack = await visit('POST', '/v1/shop/alerts', {
-			body: { kind: 'back_in_stock', productId: item.id, variantId: big?.id, phone: '03001234567' },
+			body: { kind: 'back_in_stock', productId: item.id, variantId: big?.id, phone: '07700900123' },
 		});
 		expect(guestBack.status).toBe(422);
 		// phones only of the countries the website serves (SE-5): a guest's other phone is refused, a member's left out
-		await shop.setting('checkout', 'countries', ['PK']);
-		const abroad = await subscribe({ variantId: big?.id, phone: '+447700900123' }, undefined);
+		await shop.setting('checkout', 'countries', ['GB']);
+		const abroad = await subscribe({ variantId: big?.id, phone: '+12025550143' }, undefined);
 		expect(abroad.json.errors[0]).toMatchObject({ path: '/phone', code: 'country_not_allowed' });
 		const lamp = await shop.seedProduct({ name: 'Lamp', price: 500, stock: 0 });
 		const memberAlert = await visit('POST', '/v1/shop/alerts', {
@@ -378,7 +378,7 @@ describe('alerts', () => {
 		const sent = shop.messages().length;
 		await reprice('108.00');
 		const first = shop.messages().slice(sent);
-		expect(first.map((m) => [m.template, m.to])).toEqual([['ecommerce.price_drop', { phone: '+923001234567' }]]);
+		expect(first.map((m) => [m.template, m.to])).toEqual([['ecommerce.price_drop', { phone: '+447700900123' }]]);
 		const link = String(first[0]?.values.stopUrl);
 		expect(link).toMatch(new RegExp(`^https://${DOMAIN.replace(/\./g, '\\.')}/alerts/unsubscribe/[A-Za-z0-9]{32}$`));
 		const token = link.split('/').pop() ?? '';
@@ -407,12 +407,12 @@ describe('alerts', () => {
 		for (const message of alertSends) expect(Object.keys(message.values)).not.toContain('unsubscribeUrl');
 
 		// and every alert of that phone
-		await subscribe({ variantId: small?.id, phone: '03001234567' }, undefined);
+		await subscribe({ variantId: small?.id, phone: '07700900123' }, undefined);
 		expect((await visit('POST', `/v1/shop/alerts/unsubscribe/${token}`)).json).toEqual({ removed: 2 });
 
 		// a guest's alert moves to the member whose verified phone it is (E21)
-		const again = await subscribe({ variantId: small?.id, phone: '03001234567' }, undefined);
-		const member = await shop.signIn({ id: 'usr_shopper0000009', name: 'Guest Member', phone: '+923001234567' });
+		const again = await subscribe({ variantId: small?.id, phone: '07700900123' }, undefined);
+		const member = await shop.signIn({ id: 'usr_shopper0000009', name: 'Guest Member', phone: '+447700900123' });
 		await visit('GET', '/v1/shop/orders', { signIn: member });
 		const listed = await visit('GET', '/v1/shop/alerts', { signIn: member });
 		expect(listed.json.items.map((/** @type {any} */ a) => a.id)).toEqual([again.json.id]);

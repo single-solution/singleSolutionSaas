@@ -2,14 +2,14 @@
  * PLAN 0.8.10 build phase 4, Ecommerce's "done when": guest and member checkout (a guest's order key and order page by
  * number; a member's sign-in claims the guest's orders and points), COD (the cash-handling fee, the open start status),
  * bank transfer (through the real Payments `bank_transfer` gateway with its bank details, and `bankTransferVia: manual`
- * with the shopper's proof upload and staff-recorded payments) and whole-unit totals (Format `wholeUnits` with PKR),
+ * with the shopper's proof upload and staff-recorded payments) and whole-unit totals (Format `wholeUnits` with GBP),
  * deal rules and locks, role pricing (an Accounts role on the sign-in), the loyalty options, the extra moves (refunded
  * before delivery only when paid; a customer return after delivery with and without restock), the payments log, an
- * order numbered `IM-2026-0043` (prefix, digits and the counter, in the business year of business.json's time zone),
+ * order numbered `SO-2026-0043` (prefix, digits and the counter, in the business year of business.json's time zone),
  * events, staff alerts (listed recipients and Accounts staff whose role grants the permission) and per-status
  * messages (the mails the real Notifications sends), claims, invoices and the reports summary. Ecommerce runs on the
  * REAL Portal with the real Accounts, Payments and Notifications next to it; the email provider (Resend), the
- * merchant's S3 bucket and the store's own site (its business.json) are fakes in this process.
+ * merchant's S3 bucket and the shop's own site (its business.json) are fakes in this process.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -44,9 +44,9 @@ const ORIGIN = `https://${DOMAIN}`;
 const PASSWORD = 'a long shopper password';
 const TEAM = 'orders@shop.example.com';
 const MANAGER = 'manager@shop.example.com';
-const ADDRESS = { name: 'Sara Shopper', phone: '+923001112233', line1: '1 Mall Road', city: 'Lahore', country: 'PK' };
-const LAHORE = { city: 'Lahore' };
-/** Prices in paisa (PKR minor units): whole rupees, as the merchant enters them. */
+const ADDRESS = { name: 'Sara Shopper', phone: '+447700900111', line1: '1 High Street', city: 'London', country: 'GB' };
+const LONDON = { city: 'London' };
+/** Prices in pence (GBP minor units): whole pounds, as the merchant enters them. */
 const PHONE_PRICE = 4_999_900;
 const CASE_PRICE = 99_900;
 const DELIVERY = 25_000;
@@ -110,12 +110,12 @@ const bucket = async (request) => {
 };
 
 /**
- * The store's own site: its business.json names the business time zone (PLAN 0.8.10 K8).
+ * The shop's own site: its business.json names the business time zone (PLAN 0.8.10 K8).
  * @param {Request} request
  */
 const storeSite = async (request) =>
 	new URL(request.url).pathname === '/.well-known/business.json'
-		? Response.json({ version: 1, name: 'Example Shop', email: 'hello@shop.example.com', timeZone: 'Asia/Karachi' })
+		? Response.json({ version: 1, name: 'Example Shop', email: 'hello@shop.example.com', timeZone: 'Europe/London' })
 		: new Response('not found', { status: 404 });
 
 /** @type {import('./helpers.js').System} */
@@ -246,10 +246,10 @@ const place = (body, token) => {
 
 /** @param {Record<string, unknown>} body @param {string} [token] */
 const quote = (body, token) =>
-	shopper('POST', '/v1/shop/cart/quote', { body: { delivery: LAHORE, ...body }, ...(token ? { signIn: token } : {}) });
+	shopper('POST', '/v1/shop/cart/quote', { body: { delivery: LONDON, ...body }, ...(token ? { signIn: token } : {}) });
 
 /** @param {string} id @param {string} to @param {Record<string, unknown>} [extra] @param {string} [staff] */
-const move = (id, to, extra = {}, staff = 'Ayesha Khan') => server('POST', `/v1/orders/${id}/move`, { to, ...extra }, { staff });
+const move = (id, to, extra = {}, staff = 'Alex Morgan') => server('POST', `/v1/orders/${id}/move`, { to, ...extra }, { staff });
 
 /** @param {string} id */
 const orderOf = async (id) => (await server('GET', `/v1/orders/${id}`)).json;
@@ -301,7 +301,7 @@ beforeAll(async () => {
 	await dashboardOf(ACCOUNTS, 'accounts', '/features', { on: ['phone_password', 'roles'] });
 	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'accounts'), websiteId, ACCOUNTS);
 	await configureOn(ACCOUNTS, 'accounts', {
-		'phone.defaultCallingCode': '+92',
+		'phone.defaultCallingCode': '+44',
 		'phone.trunkPrefix': '0',
 		'phone_password.breachedCheck': false,
 	});
@@ -314,7 +314,7 @@ beforeAll(async () => {
 	ids.manager = await accountsUser({
 		name: 'Maya Manager',
 		email: MANAGER,
-		phone: '+923009990000',
+		phone: '+447700900444',
 		role: 'business_manager',
 	});
 
@@ -324,8 +324,8 @@ beforeAll(async () => {
 	await configureOn(PAYMENTS, 'payments', {
 		'bank_transfer.accountHolder': 'Example Shop Ltd',
 		'bank_transfer.bankName': 'Example Bank',
-		'bank_transfer.accountNumber': '0101-2345678',
-		'bank_transfer.iban': 'PK36MEZN0000001123456702',
+		'bank_transfer.accountNumber': '31926819',
+		'bank_transfer.iban': 'GB29NWBK60161331926819',
 		'bank_transfer.instructions': 'Write your order number as the reference.',
 	});
 
@@ -385,15 +385,15 @@ beforeAll(async () => {
 	}
 	expect((await write('PUT', '/v1/format', { wholeUnits: true })).format).toMatchObject({ wholeUnits: true });
 	await configure({
-		'catalog.currency': 'PKR',
+		'catalog.currency': 'GBP',
 		'checkout.numberPattern': '{prefix}{year}-{number}',
-		'checkout.numberPrefix': 'IM-',
+		'checkout.numberPrefix': 'SO-',
 		'checkout.numberDigits': 4,
 		'checkout.paymentMethods': ['online', 'bank_transfer', 'pickup'],
 		'checkout.paymentWindowMinutes': 0,
 		'checkout.confirmationHours': 0,
 		'checkout.guests': 'unless_password',
-		'checkout.defaultCallingCode': '+92',
+		'checkout.defaultCallingCode': '+44',
 		'checkout.trunkPrefix': '0',
 		'checkout.statusTemplates': 'per_status',
 		'checkout.orderUrl': `${ORIGIN}/orders/{number}`,
@@ -411,7 +411,7 @@ beforeAll(async () => {
 		'loyalty.expiryDays': 12,
 		'list.order_flow': FLOW,
 		'list.delivery_zones': [
-			{ key: 'lahore', name: 'Lahore', cities: ['Lahore'], fee: DELIVERY, freeOver: 0, minDays: 1, maxDays: 2 },
+			{ key: 'london', name: 'London', cities: ['London'], fee: DELIVERY, freeOver: 0, minDays: 1, maxDays: 2 },
 		],
 		'list.grades': [
 			{ key: 'a-plus', label: 'A+', condition: 'refurbished', warrantyDays: 90 },
@@ -439,62 +439,62 @@ beforeAll(async () => {
 	});
 
 	// the shoppers: Sara (a customer) and Mona (a member)
-	ids.sara = await accountsUser({ name: 'Sara Shopper', email: 'sara@example.com', phone: '+923001112233' });
-	ids.mona = await accountsUser({ name: 'Mona Member', email: 'mona@example.com', phone: '+923002223344', role: 'member' });
+	ids.sara = await accountsUser({ name: 'Sara Shopper', email: 'sara@example.com', phone: '+447700900111' });
+	ids.mona = await accountsUser({ name: 'Mona Member', email: 'mona@example.com', phone: '+447700900222', role: 'member' });
 });
 afterAll(async () => {
 	await sys?.stop();
 });
 
 describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notifications', () => {
-	it('numbers orders IM-YYYY-NNNN in the business year and continues from the counter: IM-2026-0043 (E30)', async () => {
-		const sara = await signIn('03001112233');
+	it('numbers orders SO-YYYY-NNNN in the business year and continues from the counter: SO-2026-0043 (E30)', async () => {
+		const sara = await signIn('07700900111');
 		const first = await place({ lines: [caseLine()], payment: 'cod' }, sara);
 		expect(first.status, JSON.stringify(first.json)).toBe(201);
-		expect(first.json.order.number).toBe('IM-2026-0001');
+		expect(first.json.order.number).toBe('SO-2026-0001');
 		ids.first = first.json.order;
 
 		// the counter never goes back to a number already used
 		const used = await server('POST', '/v1/orders/counter', { year: 2026, next: 1 });
 		expect([used.status, codeOf(used)]).toEqual([422, 'validation_failed']);
 		const set = await server('POST', '/v1/orders/counter', { year: 2026, next: 43 });
-		expect(set.json).toEqual({ prefix: 'IM-', year: 2026, next: 43 });
+		expect(set.json).toEqual({ prefix: 'SO-', year: 2026, next: 43 });
 		const next = await place({ lines: [caseLine(2)], payment: 'cod' }, sara);
-		expect(next.json.order).toMatchObject({ number: 'IM-2026-0043', status: 'awaiting_confirmation' });
+		expect(next.json.order).toMatchObject({ number: 'SO-2026-0043', status: 'awaiting_confirmation' });
 		ids.order43 = next.json.order;
 		// the server token reads it by number in the list
-		const listed = await server('GET', '/v1/orders?q=IM-2026-0043');
-		expect(listed.json.items.map((/** @type {any} */ o) => o.number)).toContain('IM-2026-0043');
+		const listed = await server('GET', '/v1/orders?q=SO-2026-0043');
+		expect(listed.json.items.map((/** @type {any} */ o) => o.number)).toContain('SO-2026-0043');
 	});
 
 	it('messages the shopper per status, alerts the staff and records events through the real Notifications (E32)', async () => {
-		// placing IM-2026-0043 told Sara and the staff: the listed recipient and the Accounts manager with orders.read
-		const placed = mails.find((mail) => mail.subject === 'Order IM-2026-0043 placed');
+		// placing SO-2026-0043 told Sara and the staff: the listed recipient and the Accounts manager with orders.read
+		const placed = mails.find((mail) => mail.subject === 'Order SO-2026-0043 placed');
 		expect(placed).toMatchObject({ to: ['sara@example.com'] });
-		expect(placed.text).toContain('Hi Sara, order IM-2026-0043');
-		expect(placed.text).toContain(`${ORIGIN}/orders/IM-2026-0043`);
+		expect(placed.text).toContain('Hi Sara, order SO-2026-0043');
+		expect(placed.text).toContain(`${ORIGIN}/orders/SO-2026-0043`);
 		for (const to of [TEAM, MANAGER]) {
-			const alert = mails.find((mail) => mail.subject === 'New order IM-2026-0043' && mail.to.includes(to));
-			expect(alert?.text, to).toContain('Sara Shopper placed IM-2026-0043');
+			const alert = mails.find((mail) => mail.subject === 'New order SO-2026-0043' && mail.to.includes(to));
+			expect(alert?.text, to).toContain('Sara Shopper placed SO-2026-0043');
 		}
 
 		// a move into a status sends that status's own template (statusTemplates: per_status)
 		const before = mails.length;
 		const confirmed = await move(ids.order43.id, 'confirmed');
-		expect(confirmed.json.history.at(-1)).toMatchObject({ to: 'confirmed', by: 'Ayesha Khan' });
-		expect(mailsTo(before, 'sara@example.com').map((mail) => mail.subject)).toEqual(['Order IM-2026-0043: Confirmed']);
+		expect(confirmed.json.history.at(-1)).toMatchObject({ to: 'confirmed', by: 'Alex Morgan' });
+		expect(mailsTo(before, 'sara@example.com').map((mail) => mail.subject)).toEqual(['Order SO-2026-0043: Confirmed']);
 
-		// the shopper cancels IM-2026-0001: the cancel's reason reaches the message, the staff alert and the event
-		const sara = await signIn('03001112233');
+		// the shopper cancels SO-2026-0001: the cancel's reason reaches the message, the staff alert and the event
+		const sara = await signIn('07700900111');
 		const cancelled = await shopper('POST', `/v1/shop/orders/${ids.first.id}/cancel`, { signIn: sara });
 		expect(cancelled.json.order.status).toBe('cancelled');
-		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Order IM-2026-0001: Canceled');
+		const told = mailsTo(before, 'sara@example.com').find((mail) => mail.subject === 'Order SO-2026-0001: Canceled');
 		// the reason in words from the website's texts, not the code (K-10)
-		expect(told?.text).toBe('Order IM-2026-0001 is Canceled (Canceled at your request).');
-		expect(mailsTo(before, TEAM).map((mail) => mail.subject)).toContain('Canceled: IM-2026-0001');
+		expect(told?.text).toBe('Order SO-2026-0001 is Canceled (Canceled at your request).');
+		expect(mailsTo(before, TEAM).map((mail) => mail.subject)).toContain('Canceled: SO-2026-0001');
 
 		const events = await eventsOf('ecommerce.order.placed,ecommerce.order.status_changed,ecommerce.order.cancelled');
-		const of43 = events.filter((/** @type {any} */ e) => e.data.number === 'IM-2026-0043');
+		const of43 = events.filter((/** @type {any} */ e) => e.data.number === 'SO-2026-0043');
 		expect(of43.map((/** @type {any} */ e) => e.type).sort()).toEqual([
 			'ecommerce.order.placed',
 			'ecommerce.order.status_changed',
@@ -502,17 +502,17 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(of43.find((/** @type {any} */ e) => e.type === 'ecommerce.order.status_changed').data).toMatchObject({
 			from: 'awaiting_confirmation',
 			to: 'confirmed',
-			by: 'Ayesha Khan',
+			by: 'Alex Morgan',
 			paymentMethod: 'cod',
 		});
 		const cancel = events.find((/** @type {any} */ e) => e.type === 'ecommerce.order.cancelled');
-		expect(cancel.data).toMatchObject({ number: 'IM-2026-0001', reason: 'shopper' });
+		expect(cancel.data).toMatchObject({ number: 'SO-2026-0001', reason: 'shopper' });
 		// events carry ids and small facts, never the address
 		expect(JSON.stringify(events)).not.toContain(ADDRESS.line1);
 	});
 
 	it('takes a guest’s order with an order key and page by number; the member’s sign-in claims it and its points (E21)', async () => {
-		const guest = { name: 'Gina Guest', phone: '0300 4445566', email: 'gina@example.com' };
+		const guest = { name: 'Gina Guest', phone: '07700 900333', email: 'gina@example.com' };
 		const placed = await place({
 			lines: [caseLine()],
 			payment: 'cod',
@@ -525,7 +525,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(order.guest).toBe(true);
 		ids.guestOrder = order;
 		const record = await orderOf(order.id);
-		expect(record.customer).toMatchObject({ userId: '', phone: '+923004445566' });
+		expect(record.customer).toMatchObject({ userId: '', phone: '+447700900333' });
 		// guests earn on their phone (loyalty guests: earn, fixed at placement)
 		expect(record.promotions.pointsEarned).toBeGreaterThan(0);
 
@@ -540,8 +540,8 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(mails.find((mail) => mail.subject === `Order ${order.number} placed`)).toMatchObject({ to: ['gina@example.com'] });
 
 		// Gina gets an account with that phone (verified by staff); her sign-in claims the guest's order and points
-		const gina = await accountsUser({ name: 'Gina Guest', email: 'gina@example.com', phone: '+923004445566' });
-		const token = await signIn('03004445566');
+		const gina = await accountsUser({ name: 'Gina Guest', email: 'gina@example.com', phone: '+447700900333' });
+		const token = await signIn('07700900333');
 		const mine = await shopper('GET', '/v1/shop/orders', { signIn: token });
 		expect(mine.json.items.map((/** @type {any} */ o) => o.number)).toEqual([order.number]);
 		expect((await orderOf(order.id)).customer.userId).toBe(gina.id);
@@ -553,7 +553,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 
 	it('sends a guest whose phone has an Accounts password to sign in (E21 guests: unless_password)', async () => {
 		// Mona's phone belongs to an Accounts user with a password (asked through the pasted Accounts token)
-		const member = await place({ lines: [caseLine()], payment: 'cod', customer: { name: 'Mona', phone: '0300 2223344' } });
+		const member = await place({ lines: [caseLine()], payment: 'cod', customer: { name: 'Mona', phone: '07700 900222' } });
 		expect([codeOf(member), member.json.signIn], JSON.stringify(member.json)).toEqual(['sign_in_required', 'member_phone']);
 	});
 
@@ -566,11 +566,11 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			'list.role_prices': [{ role: 'member', percent: 7, label: 'Member price' }],
 		});
 		const deal = await write('POST', '/v1/deals', {
-			name: 'Eid sale',
-			slug: 'eid-sale',
+			name: 'Spring sale',
+			slug: 'spring-sale',
 			type: 'percent',
 			value: 15,
-			badgeLabel: 'Eid',
+			badgeLabel: 'Spring',
 			discountLabel: '15% off A+',
 			color: '#0a7d3b',
 			scope: { productIds: [ids.phone.id], categoryIds: [], brandIds: [] },
@@ -585,17 +585,17 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		});
 		ids.deal = deal;
 		// the deal page by slug, with its display fields
-		const shown = await shopper('GET', '/v1/shop/deals/eid-sale');
-		expect(shown.json).toMatchObject({ id: deal.id, badgeLabel: 'Eid', discountLabel: '15% off A+', color: '#0a7d3b' });
+		const shown = await shopper('GET', '/v1/shop/deals/spring-sale');
+		expect(shown.json).toMatchObject({ id: deal.id, badgeLabel: 'Spring', discountLabel: '15% off A+', color: '#0a7d3b' });
 
 		const [aPlus, gradeB] = ids.phone.variants;
-		const mona = await signIn('03002223344');
+		const mona = await signIn('07700900222');
 		const line = { productId: ids.phone.id, variantId: aPlus.id, quantity: 1 };
 		const priced = await quote({ lines: [line], payment: 'cod' }, mona);
 		expect(priced.status, JSON.stringify(priced.json)).toBe(200);
-		// 15% of PKR 49,999 is 7,499.85: deal discounts round down to whole rupees (E25)
-		// the member's 7% comes off what is left (PKR 42,500 → 2,975), before delivery (E19)
-		// the 2% cash handling of PKR 39,775 is 795.50: fees round half up (E23, E25)
+		// 15% of GBP 49,999 is 7,499.85: deal discounts round down to whole pounds (E25)
+		// the member's 7% comes off what is left (GBP 42,500 → 2,975), before delivery (E19)
+		// the 2% cash handling of GBP 39,775 is 795.50: fees round half up (E23, E25)
 		expect(priced.json.totals).toMatchObject({
 			subtotal: PHONE_PRICE,
 			discount: 749_900 + 297_500,
@@ -605,7 +605,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			total: 3_977_500 + 79_600,
 		});
 		expect(priced.json.role).toMatchObject({ key: 'member', percent: 7, label: 'Member price' });
-		expect(priced.json.lines[0].deal).toMatchObject({ id: deal.id, badgeLabel: 'Eid' });
+		expect(priced.json.lines[0].deal).toMatchObject({ id: deal.id, badgeLabel: 'Spring' });
 		// loyalty: members take part and earn 10% of the whole total (earnBase: total)
 		expect(priced.json.pointsToEarn).toBe(4057);
 		const lock = priced.json.lines[0].lock;
@@ -616,13 +616,13 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			roleOf(3_999_900),
 		);
 		expect((await quote({ lines: [line], payment: 'bank_transfer' }, mona)).json.totals.discount).toBe(roleOf(PHONE_PRICE));
-		const sara = await signIn('03001112233');
+		const sara = await signIn('07700900111');
 		const customer = (await quote({ lines: [line], payment: 'cod' }, sara)).json;
 		expect(customer.totals).toMatchObject({ roleDiscount: 0, discount: 749_900 });
 		expect(customer.pointsToEarn).toBe(0);
 
 		// the other totals rules (D4): the deal worked out on the line and rounded once, half up (7,499.85 → 7,500), the
-		// member's 7% of PKR 42,499 (2,975), and the 2% cash handling on the goods after both (PKR 39,524 → 790)
+		// member's 7% of GBP 42,499 (2,975), and the 2% cash handling on the goods after both (GBP 39,524 → 790)
 		await configure({ 'deals.rounding': 'total_half_up', 'cod.feeBase': 'goods_after_discounts' });
 		const other = await quote({ lines: [line], payment: 'cod' }, mona);
 		expect(other.json.totals).toMatchObject({
@@ -652,7 +652,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		ids.monaOrder = placed.json.order;
 		// a lock ends with its minutes
 		sys.clock.advance(31 * 60_000);
-		const late = await quote({ lines: [{ ...line, lock }], payment: 'cod' }, await signIn('03002223344'));
+		const late = await quote({ lines: [{ ...line, lock }], payment: 'cod' }, await signIn('07700900222'));
 		expect(late.json.totals.discount).toBe(roleOf(PHONE_PRICE));
 		await configure({ 'cod.feePercent': 0, 'list.order_flow': FLOW });
 	});
@@ -671,7 +671,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			detail.totalText,
 		])
 			expect(html, text).toContain(text);
-		const mona = await signIn('03002223344');
+		const mona = await signIn('07700900222');
 		const own = await shopper('GET', `/v1/shop/orders/${ids.monaOrder.id}/invoice`, { signIn: mona });
 		expect(own.status).toBe(200);
 		expect(String(own.json)).toContain('Member price');
@@ -679,17 +679,17 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect(String(slips.json).match(/<section class="sheet">/g)).toHaveLength(2);
 		const picks = await server('GET', `/v1/orders/pick-list?ids=${ids.monaOrder.id},${ids.order43.id}`);
 		expect(String(picks.json)).toContain('<h1>Pick list</h1>');
-		expect(String(picks.json)).toContain('IM-2026-0043');
+		expect(String(picks.json)).toContain('SO-2026-0043');
 	});
 
 	it('the loyalty options: points fixed at placement are credited on delivery and one switch redeems the most (E20)', async () => {
-		let mona = await signIn('03002223344');
+		let mona = await signIn('07700900222');
 		const before = await shopper('GET', '/v1/shop/loyalty?limit=5', { signIn: mona });
 		expect(before.json).toMatchObject({ balance: 0, pending: 4057, lifetimeEarned: 0 });
 		const delivered = await move(ids.monaOrder.id, 'delivered');
 		// cash on delivery is paid on delivery (paidOnDelivery), an entry of the payments log
 		expect(delivered.json.payment).toMatchObject({ state: 'paid', paid: 4_057_100 });
-		mona = await signIn('03002223344');
+		mona = await signIn('07700900222');
 		const after = await shopper('GET', '/v1/shop/loyalty?limit=5', { signIn: mona });
 		expect(after.json).toMatchObject({ balance: 4057, pending: 0, lifetimeEarned: 4057 });
 		expect(after.json.history[0]).toMatchObject({ points: 4057 });
@@ -701,18 +701,18 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	});
 
 	it('takes a bank transfer through the real Payments: bank details, its page, and paid once Payments confirms (E24)', async () => {
-		const sara = await signIn('03001112233');
+		const sara = await signIn('07700900111');
 		const priced = await quote({ lines: [caseLine()], payment: 'bank_transfer' }, sara);
 		// exactly Payments' answer: every field, '' for those the merchant did not set
 		expect(priced.json.bankDetails).toEqual({
 			ready: true,
 			accountHolder: 'Example Shop Ltd',
 			bankName: 'Example Bank',
-			accountNumber: '0101-2345678',
+			accountNumber: '31926819',
 			routingNumber: '',
 			sortCode: '',
 			branchCode: '',
-			iban: 'PK36MEZN0000001123456702',
+			iban: 'GB29NWBK60161331926819',
 			bic: '',
 			instructions: 'Write your order number as the reference.',
 		});
@@ -730,7 +730,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		expect((await payments('GET', `/v1/payments/${paymentId}`)).json).toMatchObject({
 			gateway: 'bank_transfer',
 			amount: order.totals.total,
-			currency: 'PKR',
+			currency: 'GBP',
 			reference: order.number,
 		});
 		// the store's staff confirm the transfer in Payments; Ecommerce asks Payments again when the order is read
@@ -751,7 +751,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	});
 
 	it('cancels the Payments payment with its order; a transfer confirmed after shows a refund due, refunded through Payments (K-13)', async () => {
-		const sara = await signIn('03001112233');
+		const sara = await signIn('07700900111');
 		const placed = await place({ lines: [caseLine()], payment: 'bank_transfer' }, sara);
 		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
 		const { order } = placed.json;
@@ -774,7 +774,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			'POST',
 			`/v1/orders/${order.id}/refunds`,
 			{ amount: total, reason: 'Order was canceled' },
-			{ staff: 'Ayesha Khan', key: `k13-${order.id}` },
+			{ staff: 'Alex Morgan', key: `k13-${order.id}` },
 		);
 		expect(refunded.status, JSON.stringify(refunded.json)).toBe(201);
 		expect(refunded.json.refund).toMatchObject({ online: total, recorded: true });
@@ -790,13 +790,13 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			// refunds that cover the payments move the order to refunded (the flow's trigger)
 			'list.order_flow': { ...FLOW, triggers: { refundsCover: 'refunded' } },
 		});
-		let sara = await signIn('03001112233');
+		let sara = await signIn('07700900111');
 		const placed = await place({ lines: [caseLine(2)], payment: 'bank_transfer' }, sara);
 		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
 		const { order, next } = placed.json;
 		const total = order.totals.total;
 		expect(order).toMatchObject({ status: 'pending_payment', canSendProof: true, payment: { via: 'manual', state: 'unpaid' } });
-		expect(order.bankDetails).toMatchObject({ accountNumber: '0101-2345678' });
+		expect(order.bankDetails).toMatchObject({ accountNumber: '31926819' });
 		expect(next.kind).toBe('proof');
 		expect((await orderOf(order.id)).payment.paymentId).toBeNull();
 
@@ -848,7 +848,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			['cash', total - half, '', 'Omar Staff'],
 		]);
 		// the shopper sees paid, the balance and the entries, never the staff's names
-		sara = await signIn('03001112233');
+		sara = await signIn('07700900111');
 		const mine = await shopper('GET', `/v1/shop/orders/${order.id}`, { signIn: sara });
 		expect(mine.json.payment).toMatchObject({ paid: total, balanceDue: 0 });
 		expect(mine.json.payment.entries.map((/** @type {any} */ e) => [e.method, e.amount])).toEqual([
@@ -887,7 +887,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	});
 
 	it('moves to refunded before dispatch as a cancel, giving the stock back; unpaid with no money (E27)', async () => {
-		const sara = await signIn('03001112233');
+		const sara = await signIn('07700900111');
 		const stock = await stockOf(ids.case.id);
 		// nothing paid: it is canceled with no money (the default of the move's unpaid option)
 		const unpaid = (await place({ lines: [caseLine()], payment: 'cod' }, sara)).json.order;
@@ -926,7 +926,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 					),
 				},
 			});
-			const sara = await signIn('03001112233');
+			const sara = await signIn('07700900111');
 			const stock = await stockOf(ids.case.id);
 			const order = (await place({ lines: [caseLine()], payment: 'cod' }, sara)).json.order;
 			await move(order.id, 'confirmed');
@@ -952,7 +952,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			'returns.referencePrefix': 'RR-',
 		});
 		const delivered = async () => {
-			const sara = await signIn('03001112233');
+			const sara = await signIn('07700900111');
 			const order = (await place({ lines: [caseLine()], payment: 'cod' }, sara)).json.order;
 			await move(order.id, 'confirmed');
 			await move(order.id, 'delivered');
@@ -1034,7 +1034,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			sku: 'CHG-1',
 			stock: 0,
 		});
-		const sara = await signIn('03001112233');
+		const sara = await signIn('07700900111');
 		const set = await shopper('POST', '/v1/shop/alerts', {
 			body: { kind: 'back_in_stock', productId: charger.id },
 			signIn: sara,
@@ -1061,11 +1061,11 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	it('reports the summary by business day in the business time zone, as the order list adds up (E36)', async () => {
 		const summary = await server('GET', '/v1/reports/summary?from=2026-10-01&to=2026-10-01&series=day');
 		expect(summary.status, JSON.stringify(summary.json)).toBe(200);
-		// business.json's Asia/Karachi: the day starts at 19:00 UTC the day before
+		// business.json's Europe/London (summer time in October): the day starts at 23:00 UTC the day before
 		expect(summary.json).toMatchObject({
-			from: '2026-09-30T19:00:00.000Z',
-			to: '2026-10-01T19:00:00.000Z',
-			currency: 'PKR',
+			from: '2026-09-30T23:00:00.000Z',
+			to: '2026-10-01T23:00:00.000Z',
+			currency: 'GBP',
 			statuses: null,
 		});
 		const orders = (await server('GET', '/v1/orders?limit=100')).json.items;
@@ -1085,7 +1085,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 	});
 });
 
-/** The member's 7% of a price with no deal, rounded half up to whole rupees. @param {number} price */
+/** The member's 7% of a price with no deal, rounded half up to whole pounds. @param {number} price */
 function roleOf(price) {
 	return Math.round((price * 7) / 100 / 100) * 100;
 }

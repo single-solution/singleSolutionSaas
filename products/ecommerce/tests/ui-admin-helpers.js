@@ -114,7 +114,7 @@ export const mountWith = async (mount, { features, settings = {}, routes = {}, t
 			theme: { mode: 'light' },
 			customCss: '',
 			features,
-			settings: { currency: 'PKR', ...settings },
+			settings: { currency: 'USD', ...settings },
 			...(format ? { format } : {}),
 			...(timeZone ? { timeZone } : {}),
 		},

@@ -53,7 +53,7 @@ beforeAll(async () => {
 		categoryId: ids.dresses.id,
 		unit: 'gsm',
 		type: 'choice',
-		choices: [{ value: 'silk', label: 'Pure silk' }, 'lawn'],
+		choices: [{ value: 'silk', label: 'Pure silk' }, 'linen'],
 		filterable: true,
 	});
 	await shop.list('grades', [
@@ -334,7 +334,7 @@ describe('attributes per category (E45)', () => {
 			unit: 'gsm',
 			categoryId: ids.dresses.id,
 			category: { id: ids.dresses.id, slug: ids.dresses.slug, name: 'Dresses' },
-			description: 'Dress fabric for Dresses (gsm) Pure silk, lawn',
+			description: 'Dress fabric for Dresses (gsm) Pure silk, linen',
 			canonical: `${ORIGIN}/attributes/${ids.dresses.slug}/fabric`,
 			robots: 'index, follow',
 		});

@@ -72,7 +72,7 @@ describe('E10 grades and E16 structured data', () => {
 			productId: ids.phone.id,
 			userId: 'usr_1',
 			orderId: 'ord_1',
-			name: 'Ayesha K.',
+			name: 'Sam J.',
 			rating: 5,
 			title: 'Great',
 			body: 'Works well.',
@@ -104,7 +104,7 @@ describe('E10 grades and E16 structured data', () => {
 				name: 'Great',
 				reviewBody: 'Works well.',
 				datePublished: '2026-10-05',
-				author: { '@type': 'Person', name: 'Ayesha K.' },
+				author: { '@type': 'Person', name: 'Sam J.' },
 				reviewRating: { '@type': 'Rating', ratingValue: 5, bestRating: 5, worstRating: 1 },
 			},
 		]);
@@ -112,15 +112,15 @@ describe('E10 grades and E16 structured data', () => {
 		// a reviewer is named as the reviews widget shows them, never by their full name (EN-2)
 		await data
 			.collection('reviews')
-			.updateOne({ websiteId: shop.websiteId, id: 'rev_1' }, { $set: { name: 'Ayesha Khan Malik' } });
+			.updateOne({ websiteId: shop.websiteId, id: 'rev_1' }, { $set: { name: 'Sam Jordan Lee' } });
 		const full = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
-		expect(full.review[0].author).toEqual({ '@type': 'Person', name: 'Ayesha Khan Malik' });
+		expect(full.review[0].author).toEqual({ '@type': 'Person', name: 'Sam Jordan Lee' });
 		await shop.setting('reviews', 'nameFormat', 'first_initial');
 		const short = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
-		expect(short.review[0].author).toEqual({ '@type': 'Person', name: 'Ayesha M.' });
-		expect(JSON.stringify(short)).not.toContain('Khan');
+		expect(short.review[0].author).toEqual({ '@type': 'Person', name: 'Sam L.' });
+		expect(JSON.stringify(short)).not.toContain('Jordan');
 		const shown = await shop.visitor('GET', `/v1/shop/products/${ids.phone.id}/reviews`);
-		expect(shown.json.items[0].name).toBe('Ayesha M.');
+		expect(shown.json.items[0].name).toBe('Sam L.');
 		await shop.setting('reviews', 'nameFormat', 'full');
 		await shop.setting('returns', 'returnDays', 0);
 		const none = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
@@ -381,7 +381,7 @@ describe('E17 feed options', () => {
 		const business = shop.responders.get(`${ORIGIN}/.well-known/business.json`);
 		shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 			status: 200,
-			body: { version: 1, name: 'Shop', country: 'PK', timeZone: 'UTC' },
+			body: { version: 1, name: 'Shop', country: 'GB', timeZone: 'UTC' },
 		}));
 		await shop.dashboard(await shop.adminSession(), 'POST', `/v1/dashboard/websites/${shop.websiteId}/business/refresh`);
 		const format = await shop.api('PUT', '/v1/format', { wholeUnits: true });
@@ -391,7 +391,7 @@ describe('E17 feed options', () => {
 		expect(google).toContain('<g:google_product_category>267</g:google_product_category>');
 		expect(google).toContain('<g:custom_label_0>Mint</g:custom_label_0>');
 		expect(google).toContain('<g:price>123 USD</g:price>');
-		expect(google).toContain('<g:shipping><g:country>PK</g:country><g:price>250 USD</g:price></g:shipping>');
+		expect(google).toContain('<g:shipping><g:country>GB</g:country><g:price>250 USD</g:price></g:shipping>');
 		const csv = (await shop.api('GET', '/v1/feeds/products.csv')).text;
 		expect(csv).toContain(',267,Mint\r\n');
 		if (business) shop.responders.set(`${ORIGIN}/.well-known/business.json`, business);

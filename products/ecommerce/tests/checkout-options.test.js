@@ -320,37 +320,37 @@ describe('guest checkout and order keys (E21)', () => {
 
 	it('reads a guest’s and an address’s phone as one E.164 number however it is typed (K12)', async () => {
 		await shop.setting('checkout', 'guests', 'on');
-		await shop.setting('checkout', 'defaultCallingCode', '+92');
+		await shop.setting('checkout', 'defaultCallingCode', '+44');
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const local = await place({
 			lines: [{ productId: item.id }],
 			payment: 'cod',
 			address: { ...ADDRESS, phone: 'call me' },
-			customer: { name: 'Ali Guest', phone: '03001234567' },
+			customer: { name: 'Sam Guest', phone: '07700900123' },
 		});
 		expect(local.json.errors[0].path).toBe('/address/phone');
 		/** @type {string[]} */
 		const ids = [];
-		for (const phone of ['03001234567', '923001234567', '+92 0300 1234567']) {
+		for (const phone of ['07700900123', '447700900123', '+44 07700 900123']) {
 			const placed = await place({
 				lines: [{ productId: item.id }],
 				payment: 'cod',
-				address: { ...ADDRESS, phone: '+92 0320 4862403' },
-				customer: { name: 'Ali Guest', phone },
+				address: { ...ADDRESS, phone: '+44 07700 900456' },
+				customer: { name: 'Sam Guest', phone },
 			});
 			expect(placed.status).toBe(201);
 			ids.push(placed.json.order.id);
 		}
 		for (const id of ids) {
 			const record = await orderRecord(id);
-			expect(record.customer.phone).toBe('+923001234567');
-			expect(record.address.phone).toBe('+923204862403');
+			expect(record.customer.phone).toBe('+447700900123');
+			expect(record.address.phone).toBe('+447700900456');
 		}
 		const records = await (
 			await shop.db()
 		)
 			.collection(COLLECTIONS.customers)
-			.find({ websiteId: shop.websiteId, phone: '+923001234567' })
+			.find({ websiteId: shop.websiteId, phone: '+447700900123' })
 			.toArray();
 		expect(records).toHaveLength(1);
 		expect(records[0]?.orderCount).toBe(3);

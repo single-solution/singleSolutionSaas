@@ -33,7 +33,7 @@ const row = (id, number) => ({
 	status: 'placed',
 	statusLabel: 'Placed',
 	total: 210000,
-	currency: 'PKR',
+	currency: 'GBP',
 	placedAt: '2026-10-01T10:00:00.000Z',
 	itemCount: 3,
 	image: null,
@@ -87,14 +87,14 @@ const detail = (over = {}) => ({
 			licenceKeys: ['KEY-1'],
 		},
 	],
-	totals: { subtotal: 201000, discount: 1000, delivery: 20000, tax: 500, total: 220000, currency: 'PKR', taxIncluded: false },
+	totals: { subtotal: 201000, discount: 1000, delivery: 20000, tax: 500, total: 220000, currency: 'GBP', taxIncluded: false },
 	promotions: { couponCode: '', pointsRedeemed: 0, pointsValue: 0 },
 	address: {
 		name: 'Ana',
-		phone: '+92',
+		phone: '+44 7700 900123',
 		line1: '1 Road',
 		line2: '',
-		city: 'Lahore',
+		city: 'London',
 		area: '',
 		postalCode: '',
 		country: '',
@@ -116,7 +116,7 @@ const detail = (over = {}) => ({
  */
 const mountOrders = async (fake, settings = {}) => {
 	const host = place('my_orders');
-	await mountMyOrders({ host, config: configOf(['checkout'], settings), shop: fake.shop, win: window });
+	await mountMyOrders({ host, config: configOf(['checkout'], { currency: 'GBP', ...settings }), shop: fake.shop, win: window });
 	await flush();
 	return host;
 };
@@ -137,7 +137,7 @@ describe('my orders', () => {
 		fake.identify('s1');
 		await flush();
 		expect(textOf(host)).toContain(text('orders.open', { number: 'SO-1' }));
-		expect(textOf(host)).toContain('PKR 2,100.00');
+		expect(textOf(host)).toContain('GBP 2,100.00');
 		await click(buttonOf(host, text('orders.more')));
 		expect(textOf(host)).toContain(text('orders.open', { number: 'SO-2' }));
 		expect(buttonOf(host, text('orders.more')).hidden).toBe(true);
@@ -174,7 +174,7 @@ describe('my orders', () => {
 		let points = ok({
 			balance: 1250,
 			value: 125000,
-			currency: 'PKR',
+			currency: 'GBP',
 			pointValue: 100,
 			minRedeem: 100,
 			maxPercent: 20,
@@ -198,7 +198,7 @@ describe('my orders', () => {
 		fake.identify('s1');
 		await flush();
 		const box = () => $(host, 'section[aria-label="' + text('orders.points.title') + '"]');
-		expect(box().textContent).toContain(text('orders.points.balance', { balance: 1250, value: 'PKR 1,250.00' }));
+		expect(box().textContent).toContain(text('orders.points.balance', { balance: 1250, value: 'GBP 1,250.00' }));
 		expect(box().textContent).toContain(text('orders.points.expiring', { points: 200, date: 'Nov 1, 2026' }));
 		expect(box().querySelector('summary').textContent).toBe(text('orders.points.history'));
 		expect([...box().querySelectorAll('li')].map((li) => li.textContent)).toEqual([
@@ -212,10 +212,10 @@ describe('my orders', () => {
 		await click(buttonOf(host, text('orders.back')));
 		expect(box().hidden).toBe(false);
 		expect(box().textContent).toBe(text('orders.points.error'));
-		points = ok({ balance: 0, value: 0, currency: 'PKR', history: 'x', expiringSoon: null });
+		points = ok({ balance: 0, value: 0, currency: 'GBP', history: 'x', expiringSoon: null });
 		fake.identify('s2');
 		await flush();
-		expect(box().textContent).toContain(text('orders.points.balance', { balance: 0, value: 'PKR 0.00' }));
+		expect(box().textContent).toContain(text('orders.points.balance', { balance: 0, value: 'GBP 0.00' }));
 		expect(box().querySelector('details')).toBeNull();
 		fake.identify(null);
 		await flush();
@@ -262,12 +262,12 @@ describe('my orders', () => {
 			text('orders.number', { number: 'SO-1' }),
 			'Phone (Blue)',
 			text('cart.grade', { grade: 'Like new' }),
-			text('orders.lineAmount', { quantity: 2, price: 'PKR 1,000.00', total: 'PKR 2,000.00' }),
+			text('orders.lineAmount', { quantity: 2, price: 'GBP 1,000.00', total: 'GBP 2,000.00' }),
 			text('orders.downloadsLeft', { count: 2 }),
 			'KEY-1',
 			text('orders.paymentLine', { method: text('checkout.method.cod'), state: text('orders.payment.unpaid') }),
-			text('orders.refunded', { amount: 'PKR 50.00' }),
-			'Ana, 1 Road, Lahore',
+			text('orders.refunded', { amount: 'GBP 50.00' }),
+			'Ana, 1 Road, London',
 			text('orders.shipment', { courier: 'Fast', tracking: 'T1' }),
 			text('orders.note', { note: 'Ring twice' }),
 			text('orders.discount'),
@@ -323,7 +323,7 @@ describe('my orders', () => {
 			note: '',
 			canCancel: false,
 			lines: [detail().lines[0]],
-			totals: { subtotal: 200000, discount: 0, delivery: 0, tax: 500, total: 200000, currency: 'PKR', taxIncluded: true },
+			totals: { subtotal: 200000, discount: 0, delivery: 0, tax: 500, total: 200000, currency: 'GBP', taxIncluded: true },
 			payment: {
 				method: 'online',
 				state: 'pending',
@@ -503,7 +503,7 @@ describe('returns', () => {
 		const host = await mountOrders(fake);
 		expect(textOf(host)).toContain(text('returns.claim', { reference: 'R-1', number: 'SO-1' }));
 		await click(buttonOf(host, text('returns.more')));
-		expect(textOf(host)).toContain(text('returns.refunded', { amount: 'PKR 50.00' }));
+		expect(textOf(host)).toContain(text('returns.refunded', { amount: 'GBP 50.00' }));
 		expect(textOf(host)).toContain('Refunded in full');
 		expect(textOf(host)).toContain(text('returns.status.refunded'));
 		resetPage();

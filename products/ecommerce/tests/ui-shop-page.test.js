@@ -35,7 +35,7 @@ const product = (over = {}) => ({
 	description: 'First part.\n\nSecond part.',
 	price: 100000,
 	compareAtPrice: null,
-	currency: 'PKR',
+	currency: 'EUR',
 	inStock: true,
 	url: 'https://shop.example.com/products/phone',
 	media: [
@@ -98,7 +98,12 @@ const product = (over = {}) => ({
  */
 const mountPage = async (fake, ref = 'phone', settings = {}) => {
 	const host = place('product_page', ref ? { product: ref } : {});
-	await mountProductPage({ host, config: configOf(['catalog'], settings), shop: fake.shop, win: window });
+	await mountProductPage({
+		host,
+		config: configOf(['catalog'], { currency: 'EUR', ...settings }),
+		shop: fake.shop,
+		win: window,
+	});
 	await flush();
 	return host;
 };
@@ -115,7 +120,7 @@ describe('product page', () => {
 		expect(page).toContain('Acme');
 		expect(page).toContain(text('shop.rating', { average: '4.0', count: 3 }));
 		expect(page).toContain('A good phone.');
-		expect(page).toContain('PKR 1,050.00');
+		expect(page).toContain('EUR 1,050.00');
 		expect(page).toContain(text('page.grade', { grade: 'Like new' }));
 		expect(page).toContain('Hardly used');
 		expect(page).toContain(text('page.inStock'));
@@ -141,7 +146,7 @@ describe('product page', () => {
 			text('page.optionOutOfStock', { value: 'Red' }),
 		);
 		await setValue($(host, '#ss-page-option-1'), '256 GB');
-		expect(textOf(host)).toContain('PKR 1,200.00');
+		expect(textOf(host)).toContain('EUR 1,200.00');
 		// quantity stepper
 		const qty = $(host, '#ss-page-qty');
 		await click(buttonOf(host, text('page.more')));
@@ -166,7 +171,7 @@ describe('product page', () => {
 		// a combination that does not exist moves to the nearest variant with the value picked
 		await setValue($(host, '#ss-page-option-1'), '256 GB');
 		expect($(host, '#ss-page-option-0').value).toBe('Blue');
-		expect(textOf(host)).toContain('PKR 1,200.00');
+		expect(textOf(host)).toContain('EUR 1,200.00');
 		expect(textOf(host)).not.toContain(text('page.noVariant'));
 	});
 
@@ -183,7 +188,7 @@ describe('product page', () => {
 								price: 105000,
 								priceAfterDeals: 95000,
 								savings: 10000,
-								currency: 'PKR',
+								currency: 'EUR',
 								deals: [{ id: 'dl_1', name: 'Autumn sale' }],
 							})
 						: call.query.variantId === 'var_b2'
@@ -193,24 +198,24 @@ describe('product page', () => {
 									price: 120000,
 									priceAfterDeals: 120000,
 									savings: 0,
-									currency: 'PKR',
+									currency: 'EUR',
 									deals: [],
 								})
 							: fail(500, 'internal_error'),
 			},
 		});
 		const host = await mountPage(fake);
-		expect(textOf(host)).toContain('PKR 950.00');
-		expect(textOf(host)).toContain(text('page.save', { amount: 'PKR 100.00' }));
+		expect(textOf(host)).toContain('EUR 950.00');
+		expect(textOf(host)).toContain(text('page.save', { amount: 'EUR 100.00' }));
 		expect(textOf(host)).toContain('Autumn sale');
 		expect(textOf(host)).not.toContain(text('page.addToCart'));
 		await setValue($(host, '#ss-page-option-1'), '256 GB');
-		expect(textOf(host)).not.toContain(text('page.save', { amount: 'PKR 100.00' }));
+		expect(textOf(host)).not.toContain(text('page.save', { amount: 'EUR 100.00' }));
 		await setValue($(host, '#ss-page-option-1'), '128 GB');
 		expect(fake.all('GET /v1/shop/products/prd_1/quote')).toHaveLength(2);
 		await setValue($(host, '#ss-page-option-0'), 'Red');
-		expect(textOf(host)).toContain('PKR 1,000.00');
-		expect(textOf(host)).toContain('PKR 1,100.00');
+		expect(textOf(host)).toContain('EUR 1,000.00');
+		expect(textOf(host)).toContain('EUR 1,100.00');
 	});
 
 	it('says when the product is missing or cannot be read', async () => {
@@ -285,7 +290,7 @@ describe('product page', () => {
 						return ok({
 							productId: 'prd_1',
 							durationMinutes: 30,
-							timeZone: 'Asia/Karachi',
+							timeZone: 'Europe/Paris',
 							slots: [
 								{ start: '2026-10-09T05:00:00.000Z', end: '2026-10-09T05:30:00.000Z' },
 								{ start: '2026-10-09T05:30:00.000Z', end: '2026-10-09T06:00:00.000Z' },
@@ -365,21 +370,21 @@ describe('product page', () => {
 		});
 		const host = await mountPage(fake, 'phone', { alerts: { guests: true, targetPrice: true } });
 		expect(textOf(host)).not.toContain(text('alerts.signIn'));
-		await setValue($(host, '#ss-page-alert-phone'), '0300 1234567', 'input');
+		await setValue($(host, '#ss-page-alert-phone'), '+44 7700 900123', 'input');
 		await setValue($(host, '#ss-page-alert-target'), '999.5', 'input');
 		await click(buttonOf(host, text('alerts.priceDrop')));
 		expect(fake.last('POST /v1/shop/alerts')?.body).toEqual({
 			kind: 'price_drop',
 			productId: 'prd_1',
 			variantId: 'var_b1',
-			phone: '0300 1234567',
+			phone: '+44 7700 900123',
 			targetPrice: 99950,
 		});
 		expect(textOf(host)).toContain(text('alerts.priceSet'));
 		// what the guest typed stays when the variant changes; a bad price or phone is told
 		await setValue($(host, '#ss-page-option-0'), 'Red');
 		await flush();
-		expect($(host, '#ss-page-alert-phone').value).toBe('0300 1234567');
+		expect($(host, '#ss-page-alert-phone').value).toBe('+44 7700 900123');
 		await setValue($(host, '#ss-page-alert-target'), 'cheap', 'input');
 		await click(buttonOf(host, text('alerts.priceDrop')));
 		expect(textOf(host)).toContain(text('alerts.targetInvalid'));
@@ -390,7 +395,7 @@ describe('product page', () => {
 			kind: 'back_in_stock',
 			productId: 'prd_1',
 			variantId: 'var_r1',
-			phone: '0300 1234567',
+			phone: '+44 7700 900123',
 		});
 		expect(textOf(host)).toContain(text('alerts.checkPhone'));
 		// a guest without the setting is asked to sign in, and a price field shows only with targetPrice

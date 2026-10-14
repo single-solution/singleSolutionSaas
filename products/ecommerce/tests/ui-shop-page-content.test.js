@@ -92,7 +92,7 @@ const product = (over = {}) => ({
 	price: 100000,
 	priceMax: 100000,
 	compareAtPrice: null,
-	currency: 'PKR',
+	currency: 'USD',
 	inStock: true,
 	featured: false,
 	url: 'https://shop.example.com/products/phone',
@@ -195,7 +195,7 @@ describe('product page content', () => {
 		expect(/** @type {any} */ (window).hacked).toBeUndefined();
 		// Featured, the price range, the FAQs
 		expect($(host, '.badge.accent').textContent).toBe(text('shop.featured'));
-		expect(textOf(host)).toContain(text('shop.priceRange', { min: 'PKR 1,000.00', max: 'PKR 1,500.00' }));
+		expect(textOf(host)).toContain(text('shop.priceRange', { min: 'USD 1,000.00', max: 'USD 1,500.00' }));
 		const faqs = $(host, 'section.faqs');
 		expect(faqs.querySelectorAll('details')).toHaveLength(1);
 		expect(faqs.querySelector('summary').textContent).toBe('Does it ship abroad?');
@@ -398,7 +398,7 @@ describe('product page content', () => {
 		expect($(host, '.grade .swatch')).toBeNull();
 		expect($(host, '.grade a').getAttribute('href')).toBe('https://cdn.example.com/grades/b.mp4');
 		expect(textOf(host)).toContain(text('shop.warrantyDays', { days: 45 }));
-		expect(textOf(host)).toContain('PKR 800.00');
+		expect(textOf(host)).toContain('USD 800.00');
 		// no grade, sold out: shown, and not added to the cart
 		await setValue(condition, '');
 		expect($(host, '.stock').textContent).toBe(text('page.soldOut'));
@@ -446,7 +446,7 @@ describe('product page content', () => {
 		expect($(host, '#ss-page-option-1').value).toBe('M');
 		await setValue($(host, '#ss-page-option-0'), 'Blue');
 		expect($(host, '#ss-page-option-1').value).toBe('S');
-		expect(textOf(host)).toContain('PKR 900.00');
+		expect(textOf(host)).toContain('USD 900.00');
 		await click(buttonOf(host, text('page.addToCart')));
 		expect(fake.cart.state().lines).toEqual([{ productId: 'prd_1', variantId: 'var_bs', quantity: 1 }]);
 	});

@@ -304,14 +304,14 @@ describe('restock per line', () => {
 		const cover = await shop.seedProduct({ name: 'Cover', price: 200, stock: 10 });
 		const placed = await order({
 			lines: [
-				{ product: phone, serials: ['IMEI-B1'] },
+				{ product: phone, serials: ['SN-B1'] },
 				{ product: cover, quantity: 2 },
 			],
 		});
 		await data.collection(COLLECTIONS.serials).insertOne({
 			id: createId('ser'),
 			productId: phone.id,
-			serial: 'IMEI-B1',
+			serial: 'SN-B1',
 			status: 'sold',
 			orderId: placed.id,
 			lineId: 'x',
@@ -368,7 +368,7 @@ describe('restock per line', () => {
 		expect(await stockOf(phone.id)).toBe(phoneStock + 1);
 		expect(await stockOf(cover.id)).toBe(coverStock);
 		const serial = /** @type {any} */ (
-			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'IMEI-B1' })
+			await data.collection(COLLECTIONS.serials).findOne({ websiteId: data.websiteId, serial: 'SN-B1' })
 		);
 		expect(serial.status).toBe('in_stock');
 		expect(codeOf(await shop.api('POST', `/v1/returns/${id}/restock`, {}))).toBe('conflict');

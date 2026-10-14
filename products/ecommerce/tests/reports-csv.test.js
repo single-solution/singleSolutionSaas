@@ -48,7 +48,7 @@ const seedOrder = async (input) => {
 		number: input.number,
 		idempotencyKey: input.number,
 		customer: { userId: input.userId ?? '', name: input.name ?? 'Shopper', email: '', phone: '' },
-		address: { name: '', phone: '', line1: '', line2: '', city: 'Lahore', area: '', postalCode: '', country: '', notes: '' },
+		address: { name: '', phone: '', line1: '', line2: '', city: 'Tokyo', area: '', postalCode: '', country: '', notes: '' },
 		delivery: { method: 'delivery', zone: '', fee: input.delivery ?? 0, locationId: null },
 		lines: [
 			{
@@ -106,10 +106,10 @@ const seedOrder = async (input) => {
 beforeAll(async () => {
 	shop = await readyShop();
 	data = await shop.db();
-	// the business time zone is five hours ahead of UTC (PLAN 0.8.10 K8)
+	// the business time zone is nine hours ahead of UTC (PLAN 0.8.10 K8)
 	shop.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 		status: 200,
-		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'Asia/Karachi' },
+		body: { version: 1, name: 'Shop', email: 'hello@shop.example.com', timeZone: 'Asia/Tokyo' },
 	}));
 	const refreshed = await shop.dashboard(
 		await shop.adminSession(),
@@ -122,7 +122,7 @@ beforeAll(async () => {
 	gone = await shop.seedProduct({ name: 'Last tablet', stock: 0 });
 	idle = await shop.seedProduct({ name: 'Idle watch', stock: 5, publishedAt: new Date(shop.now() - 40 * DAY) });
 	for (const item of [sold, gone, idle]) byId.set(item.id, item);
-	// 2026-10-04 20:30 UTC is 2026-10-05 01:30 in the business time zone
+	// 2026-10-04 20:30 UTC is 2026-10-05 05:30 in the business time zone
 	await seedOrder({
 		number: 'R-A',
 		placedAt: '2026-10-04T20:30:00Z',
@@ -190,8 +190,8 @@ describe('reports', () => {
 		const summary = await shop.api('GET', `/v1/reports/summary?${RANGE}&series=day`);
 		expect(summary.status).toBe(200);
 		expect(summary.json).toMatchObject({
-			from: '2026-10-02T19:00:00.000Z',
-			to: '2026-10-05T19:00:00.000Z',
+			from: '2026-10-02T15:00:00.000Z',
+			to: '2026-10-05T15:00:00.000Z',
 			currency: 'USD',
 			statuses: null,
 			orders: 2,
@@ -317,10 +317,10 @@ describe('CSV', () => {
 		expect(perOrder.status).toBe(200);
 		expect(linesOf(perOrder)).toEqual([
 			'number,placed_at,status,customer,city,lines,units,subtotal,discount,delivery,fee,tax,total,currency,payment_method,payment_state,paid,refunded',
-			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Lahore,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00',
+			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Tokyo,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00',
 		]);
 		expect(linesOf(await shop.api('GET', '/v1/csv/orders?per=order&role=cancelled')).slice(1)).toEqual([
-			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Lahore,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00',
+			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Tokyo,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00',
 		]);
 		const searched = linesOf(await shop.api('GET', '/v1/csv/orders?q=R-A'));
 		expect(searched[0]?.startsWith('number,placed_at,status,customer,city,product,')).toBe(true);
@@ -343,7 +343,7 @@ describe('CSV', () => {
 				name: 'Ann',
 				email: 'ann@example.com',
 				phone: '+15550001',
-				city: 'Lahore',
+				city: 'Tokyo',
 				blocked: false,
 				blockedReason: '',
 				rtoCount: 1,
@@ -381,7 +381,7 @@ describe('CSV', () => {
 		expect(answer.headers.get('content-disposition')).toBe('attachment; filename="customers.csv"');
 		expect(linesOf(answer)).toEqual([
 			'user_id,customer_id,name,email,phone,city,guest,orders,spent,currency,blocked,blocked_reason,returned_parcels,note,last_order_at',
-			"usr_ann,,Ann,ann@example.com,'+15550001,Lahore,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z",
+			"usr_ann,,Ann,ann@example.com,'+15550001,Tokyo,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z",
 			",cus_zed,Zed,zed@example.com,,,true,1,7.00,USD,true,Fake orders,0,'=1+1,",
 		]);
 		const staff = await shop.ticket(['csv.run']);

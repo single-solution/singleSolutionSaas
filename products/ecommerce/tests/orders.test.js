@@ -278,7 +278,7 @@ describe('moving orders', () => {
 	it('captures serial numbers when packing serialized items', async () => {
 		const { order, product, variant } = await place({ serialized: true, quantity: 2, method: 'online', paid: true });
 		const serials = data.collection(COLLECTIONS.serials);
-		for (const serial of ['IMEI-1', 'IMEI-2', 'IMEI-3'])
+		for (const serial of ['SN-1', 'SN-2', 'SN-3'])
 			await serials.insertOne({
 				id: createId('ser'),
 				productId: product.id,
@@ -293,7 +293,7 @@ describe('moving orders', () => {
 			id: createId('ser'),
 			productId: product.id,
 			variantId: 'var_other',
-			serial: 'IMEI-X',
+			serial: 'SN-X',
 			status: 'in_stock',
 			orderId: null,
 			lineId: null,
@@ -308,16 +308,16 @@ describe('moving orders', () => {
 		expect((await move(order.id, 'packed', { serials: { [lineId]: [''] } })).status).toBe(422);
 		expect((await move(order.id, 'packed', { serials: [] })).status).toBe(422);
 		expect((await move(order.id, 'packed', { serials: { [lineId]: 'A' } })).status).toBe(422);
-		const wrong = await move(order.id, 'packed', { serials: { [lineId]: ['IMEI-1', 'IMEI-X'] } });
+		const wrong = await move(order.id, 'packed', { serials: { [lineId]: ['SN-1', 'SN-X'] } });
 		expect(wrong.status).toBe(422);
-		expect(wrong.json.errors[0].message).toContain('IMEI-X');
+		expect(wrong.json.errors[0].message).toContain('SN-X');
 		// nothing was taken by the failed try
-		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'IMEI-1' }))?.status).toBe('in_stock');
-		const packed = await move(order.id, 'packed', { serials: { [lineId]: ['IMEI-1', 'IMEI-2'] } });
+		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'SN-1' }))?.status).toBe('in_stock');
+		const packed = await move(order.id, 'packed', { serials: { [lineId]: ['SN-1', 'SN-2'] } });
 		expect(packed.status).toBe(200);
-		expect(packed.json.lines[0].serials).toEqual(['IMEI-1', 'IMEI-2']);
+		expect(packed.json.lines[0].serials).toEqual(['SN-1', 'SN-2']);
 		const sold = await serials.find({ websiteId: data.websiteId, orderId: order.id }).toArray();
-		expect(sold.map((row) => row.serial).sort()).toEqual(['IMEI-1', 'IMEI-2']);
+		expect(sold.map((row) => row.serial).sort()).toEqual(['SN-1', 'SN-2']);
 		expect(sold.every((row) => row.status === 'sold' && row.lineId === lineId)).toBe(true);
 		// back to confirmed and packed again with one unit swapped
 		await shop.list('order_flow', {
@@ -325,10 +325,10 @@ describe('moving orders', () => {
 			moves: [...(await import('../core/flow.js')).DEFAULT_FLOW.moves, { from: 'packed', to: 'confirmed' }],
 		});
 		expect((await move(order.id, 'confirmed')).status).toBe(200);
-		const again = await move(order.id, 'packed', { serials: { [lineId]: ['IMEI-1', 'IMEI-3'] } });
+		const again = await move(order.id, 'packed', { serials: { [lineId]: ['SN-1', 'SN-3'] } });
 		expect(again.status).toBe(200);
-		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'IMEI-2' }))?.status).toBe('in_stock');
-		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'IMEI-3' }))?.orderId).toBe(order.id);
+		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'SN-2' }))?.status).toBe('in_stock');
+		expect((await serials.findOne({ websiteId: data.websiteId, serial: 'SN-3' }))?.orderId).toBe(order.id);
 		await shop.list('order_flow', (await import('../core/flow.js')).DEFAULT_FLOW);
 		// canceling puts the serials back in stock
 		const cancelled = await move(order.id, 'cancelled', { note: 'Out of stock' });

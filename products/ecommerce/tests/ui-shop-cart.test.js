@@ -49,7 +49,7 @@ const PICKUP = { method: 'pickup', zone: '', name: 'Main shop', fee: 0, location
 
 /** @param {Record<string, unknown>} [over] */
 const quoteOf = (over = {}) => ({
-	currency: 'PKR',
+	currency: 'EUR',
 	lines: [line()],
 	promotions: {
 		applied: [{ id: 'dl_1', name: 'Sale', kind: 'deal', amount: 10000 }],
@@ -66,7 +66,7 @@ const quoteOf = (over = {}) => ({
 		{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0 },
 	],
 	points: null,
-	totals: { subtotal: 200000, discount: 10000, delivery: 20000, tax: 0, total: 210000, currency: 'PKR', taxIncluded: true },
+	totals: { subtotal: 200000, discount: 10000, delivery: 20000, tax: 0, total: 210000, currency: 'EUR', taxIncluded: true },
 	ready: true,
 	...over,
 });
@@ -81,16 +81,17 @@ const ORDER = {
 		{ id: 'oln_1', name: 'Phone', variantName: 'Blue', quantity: 2, total: 190000 },
 		{ id: 'oln_2', name: 'Case', variantName: '', quantity: 1, total: 1000 },
 	],
-	totals: { subtotal: 200000, discount: 10000, delivery: 20000, tax: 0, total: 210000, currency: 'PKR', taxIncluded: true },
+	totals: { subtotal: 200000, discount: 10000, delivery: 20000, tax: 0, total: 210000, currency: 'EUR', taxIncluded: true },
 	payment: { method: 'cod', state: 'unpaid', advance: 0, paid: 0, refunded: 0, payUrl: null, payBy: null },
 };
 
 const SETTINGS = {
+	currency: 'EUR',
 	checkout: {
 		paymentMethods: ['cod', 'online'],
 		coupons: true,
 		loyalty: true,
-		delivery: { zones: true, cities: ['Lahore', 'Karachi'] },
+		delivery: { zones: true, cities: ['Paris', 'Lyon'] },
 		policies: { shipping: 'Ships fast.\n\nReally fast.', returns: '', privacy: '  ', terms: 'Be nice.' },
 		address: { required: ['name', 'phone', 'line1', 'city'], optional: ['line2', 'area', 'postalCode', 'country', 'notes'] },
 	},
@@ -139,13 +140,13 @@ describe('cart', () => {
 			'Phone',
 			'Blue',
 			text('cart.grade', { grade: 'Like new' }),
-			text('cart.unitPrice', { price: 'PKR 1,000.00' }),
-			text('cart.lineDiscount', { amount: 'PKR 100.00' }),
-			'PKR 1,900.00',
+			text('cart.unitPrice', { price: 'EUR 1,000.00' }),
+			text('cart.lineDiscount', { amount: 'EUR 100.00' }),
+			'EUR 1,900.00',
 			text('cart.applied', { name: 'Sale' }),
-			'−PKR 100.00',
-			'PKR 2,100.00',
-			text('checkout.codAdvance', { amount: 'PKR 50.00' }),
+			'−EUR 100.00',
+			'EUR 2,100.00',
+			text('checkout.codAdvance', { amount: 'EUR 50.00' }),
 			text('checkout.days', { min: 1, max: 3 }),
 			text('checkout.pickupAt', { name: 'Main shop' }),
 			'Ships fast.',
@@ -274,6 +275,7 @@ describe('cart', () => {
 	it('shows the filled policies as HTML rebuilt from the allowed tags, the warranty policy among them', async () => {
 		const { host } = await setup({
 			settings: {
+				...SETTINGS,
 				checkout: {
 					...SETTINGS.checkout,
 					policyFormat: 'html',
@@ -338,7 +340,7 @@ describe('cart', () => {
 		expect(textOf(host)).toContain(text('cart.coupon.coupon_not_applicable'));
 
 		resetPage();
-		const off = await setup({ settings: { checkout: { ...SETTINGS.checkout, coupons: false } } });
+		const off = await setup({ settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, coupons: false } } });
 		expect($(off.host, '#ss-cart-coupon')).toBeNull();
 	});
 
@@ -356,7 +358,7 @@ describe('cart', () => {
 		await submit($(host, '#ss-cart-points').closest('form'));
 		await timers.run();
 		expect(fake.last('POST /v1/shop/cart/quote')?.body.points).toBe(100);
-		expect(textOf(host)).toContain(text('cart.points.used', { points: 100, amount: 'PKR 10.00' }));
+		expect(textOf(host)).toContain(text('cart.points.used', { points: 100, amount: 'EUR 10.00' }));
 		expect(textOf(host)).toContain(text('cart.pointsDiscount'));
 		$(host, '#ss-cart-points').value = '5000';
 		await submit($(host, '#ss-cart-points').closest('form'));
@@ -399,15 +401,15 @@ describe('cart', () => {
 			text('checkout.deliver', { fee: text('checkout.free'), zone: text('checkout.zoneUnknown') }),
 		);
 		expect(textOf(host)).toContain(text('cart.tax'));
-		await setValue($(host, '#ss-cart-city'), 'Lahore');
+		await setValue($(host, '#ss-cart-city'), 'Paris');
 		await timers.run();
-		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery.city).toBe('Lahore');
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery.city).toBe('Paris');
 		const radios = () => $$(host, 'input[name="ss-cart-delivery"]');
 		await setValue(radios()[1], true);
 		await timers.run();
 		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery).toEqual({
 			method: 'pickup',
-			city: 'Lahore',
+			city: 'Paris',
 			area: '',
 			country: '',
 			locationId: 'loc_1',
@@ -457,7 +459,7 @@ describe('cart', () => {
 		expect(textOf(host)).toContain(text('cart.quoteError'));
 		fails = false;
 		await click(buttonOf(host, text('cart.retry')));
-		expect(textOf(host)).toContain('PKR 2,100.00');
+		expect(textOf(host)).toContain('EUR 2,100.00');
 	});
 
 	it('drops a quote that a newer one replaced', async () => {
@@ -473,8 +475,8 @@ describe('cart', () => {
 		await timers.run();
 		waiting[0]?.(ok(quoteOf({ lines: [line({ total: 111 })] })));
 		await flush();
-		expect(textOf(host)).toContain('PKR 3,000.00');
-		expect(textOf(host)).not.toContain('PKR 1.11');
+		expect(textOf(host)).toContain('EUR 3,000.00');
+		expect(textOf(host)).not.toContain('EUR 1.11');
 	});
 });
 
@@ -482,9 +484,9 @@ describe('checkout', () => {
 	/** @param {any} host */
 	const fillAddress = async (host) => {
 		$(host, '#ss-cart-name').value = 'Ana';
-		$(host, '#ss-cart-phone').value = '+92 300 0000000';
+		$(host, '#ss-cart-phone').value = '+44 7700 900123';
 		$(host, '#ss-cart-line1').value = '1 Road';
-		await setValue($(host, '#ss-cart-city'), 'Lahore');
+		await setValue($(host, '#ss-cart-city'), 'Paris');
 	};
 
 	it('asks a guest to sign in, checks the address and pays on Payments', async () => {
@@ -516,7 +518,7 @@ describe('checkout', () => {
 			payment: 'online',
 			note: 'Ring twice',
 			returnUrl: 'https://shop.example.com/cart',
-			address: { name: 'Ana', phone: '+92 300 0000000', line1: '1 Road', city: 'Lahore', line2: '', notes: '' },
+			address: { name: 'Ana', phone: '+44 7700 900123', line1: '1 Road', city: 'Paris', line2: '', notes: '' },
 		});
 		expect(fake.went).toEqual(['https://pay.example.com/p/1']);
 		expect(fake.cart.state().lines).toHaveLength(0);

@@ -45,7 +45,7 @@ const PRODUCT = {
 	description: '',
 	price: 100000,
 	compareAtPrice: null,
-	currency: 'PKR',
+	currency: 'USD',
 	inStock: true,
 	media: [],
 	options: [{ name: 'Storage', values: ['128 GB', '256 GB'] }],
@@ -86,7 +86,7 @@ describe('product page', () => {
 						price: call.query.variantId === 'var_2' ? 120000 : 100000,
 						priceAfterDeals: call.query.variantId === 'var_2' ? 110000 : 100000,
 						savings: call.query.variantId === 'var_2' ? 10000 : 0,
-						currency: 'PKR',
+						currency: 'USD',
 						deals: [],
 					}),
 			},
@@ -95,16 +95,16 @@ describe('product page', () => {
 		await mountProductPage({ host, config: configOf(['catalog']), shop: fake.shop, win: window });
 		await flush();
 		const viewed = { id: 'prd_1', variantId: 'var_1', name: 'Phone One', price: 100000, quantity: 1 };
-		expect(events.of('ss:view_item')).toEqual([{ currency: 'PKR', value: 100000, items: [viewed] }]);
+		expect(events.of('ss:view_item')).toEqual([{ currency: 'USD', value: 100000, items: [viewed] }]);
 		await click(buttonOf(host, text('page.addToCart')));
 		await setValue($(host, '#ss-page-option-0'), '256 GB');
 		await setValue($(host, '#ss-page-qty'), '2');
 		await click(buttonOf(host, text('page.addToCart')));
 		expect(events.of('ss:view_item')).toHaveLength(1);
 		expect(events.of('ss:add_to_cart')).toEqual([
-			{ currency: 'PKR', value: 100000, items: [viewed] },
+			{ currency: 'USD', value: 100000, items: [viewed] },
 			{
-				currency: 'PKR',
+				currency: 'USD',
 				value: 220000,
 				items: [{ id: 'prd_1', variantId: 'var_2', name: 'Phone One', price: 110000, quantity: 2 }],
 			},
@@ -121,7 +121,7 @@ describe('product page', () => {
 		await flush();
 		expect(events.of('ss:view_item')).toEqual([
 			{
-				currency: 'PKR',
+				currency: 'USD',
 				value: 100000,
 				items: [{ id: 'prd_1', variantId: null, name: 'Phone One', price: 100000, quantity: 1 }],
 			},
@@ -163,7 +163,7 @@ describe('cart', () => {
 	];
 	const DELIVERY = { method: 'delivery', zone: 'z1', name: 'City', fee: 20000, locationId: null, minDays: 1, maxDays: 3 };
 	const QUOTE = {
-		currency: 'PKR',
+		currency: 'USD',
 		lines: LINES.map((line) => ({
 			...line,
 			kind: 'physical',
@@ -178,7 +178,7 @@ describe('cart', () => {
 		deliveryProblem: null,
 		paymentMethods: [{ method: 'cod', available: true, reason: null, advance: 0 }],
 		points: null,
-		totals: { subtotal: 201000, discount: 0, delivery: 20000, tax: 0, total: 221000, currency: 'PKR', taxIncluded: true },
+		totals: { subtotal: 201000, discount: 0, delivery: 20000, tax: 0, total: 221000, currency: 'USD', taxIncluded: true },
 		ready: true,
 	};
 	const ORDER = {
@@ -214,11 +214,11 @@ describe('cart', () => {
 			{ id: 'prd_1', variantId: 'var_1', name: 'Phone', price: 100000, quantity: 2 },
 			{ id: 'prd_2', variantId: null, name: 'Case', price: 1000, quantity: 1 },
 		];
-		expect(events.of('ss:begin_checkout')).toEqual([{ currency: 'PKR', value: 201000, items }]);
+		expect(events.of('ss:begin_checkout')).toEqual([{ currency: 'USD', value: 201000, items }]);
 		$(host, '#ss-cart-name').value = 'Ana';
-		$(host, '#ss-cart-phone').value = '+92 300 0000000';
+		$(host, '#ss-cart-phone').value = '+1 202 555 0143';
 		$(host, '#ss-cart-line1').value = '1 Road';
-		await setValue($(host, '#ss-cart-city'), 'Lahore');
+		await setValue($(host, '#ss-cart-city'), 'Chicago');
 		await timers.run();
 		// the server failed: no order, no purchase
 		await click(buttonOf(host, text('checkout.place')));
@@ -227,7 +227,7 @@ describe('cart', () => {
 		await click(buttonOf(host, text('checkout.place')));
 		expect(events.of('ss:begin_checkout')).toHaveLength(1);
 		expect(events.of('ss:purchase')).toEqual([
-			{ orderId: 'ord_1', orderNumber: 'SO2026-1', currency: 'PKR', value: 221000, items },
+			{ orderId: 'ord_1', orderNumber: 'SO2026-1', currency: 'USD', value: 221000, items },
 		]);
 		expect(events.seen.map((entry) => entry.name)).toEqual(['ss:begin_checkout', 'ss:purchase']);
 	});

@@ -61,7 +61,7 @@ const orderOf = (patch = {}) => ({
 			categoryIds: [],
 			brandId: null,
 			locationId: null,
-			serials: ['IMEI-111', 'IMEI-222'],
+			serials: ['SN-111', 'SN-222'],
 			booking: null,
 			licences: [],
 			returnedQuantity: 0,
@@ -142,7 +142,7 @@ describe('printable documents', () => {
 		expect(html).toContain('Invoice no.');
 		expect(html).toContain('Oct 4, 2026');
 		expect(html).toContain('Black / 128 GB · SKU PH-128 · Grade: Grade A');
-		expect(html).toContain('Serial numbers: IMEI-111, IMEI-222');
+		expect(html).toContain('Serial numbers: SN-111, SN-222');
 		expect(html).toContain('USD 1,000.00');
 		expect(html).toContain('−USD 50.00');
 		expect(html).toContain('USD 2.50');
@@ -162,7 +162,7 @@ describe('printable documents', () => {
 		const slip = await shop.api('GET', `/v1/orders/${order.id}/packing-slip`);
 		expect(slip.status).toBe(200);
 		expect(slip.text).toContain('Packing slip');
-		expect(slip.text).toContain('IMEI-111, IMEI-222');
+		expect(slip.text).toContain('SN-111, SN-222');
 		expect(slip.text).toContain('Swift Post');
 		expect(slip.text).toContain('TR-9');
 		expect(slip.text).toContain('Leave with the neighbour');
@@ -263,16 +263,16 @@ describe('document parts', () => {
 			...context,
 			format: {
 				...DEFAULT_FORMAT,
-				locale: 'en-GB',
+				locale: 'fr-CA',
 				currencyDisplay: /** @type {const} */ ('custom'),
-				currencySymbol: 'Rs',
+				currencySymbol: '$ US',
 				wholeUnits: true,
 			},
 		};
 		const formatted = invoiceHtml(order, { business, texts, ...local, timeZone: 'Not/AZone' });
-		expect(formatted).toContain('4 Oct 2026');
-		expect(formatted).toContain('Rs 10');
-		expect(formatted).toContain('−Rs 3');
+		expect(formatted).toContain('4 oct. 2026');
+		expect(formatted).toContain('10 $ US');
+		expect(formatted).toContain('−3 $ US');
 		expect(esc(null)).toBe('');
 		expect(Object.keys(INVOICE_TEXTS)).toContain('labelSerials');
 	});

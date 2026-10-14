@@ -35,7 +35,7 @@ describe('catalog admin: the product list', () => {
 		expect(host.getAttribute('data-ss-mounted')).toBe('catalog-admin');
 		const panel = panelOf(root, 'products');
 		expect(rowsOf(panel)).toEqual(['Phone']);
-		expect(textOf(panel)).toContain('PKR 1,250.00');
+		expect(textOf(panel)).toContain('USD 1,250.00');
 		// the opened product refreshes its row (3 units of its active variants)
 		expect(textOf(panel)).toContain('3 in stock · Featured · P-1, P-2');
 		expect(textOf(panel)).toContain('2 products');

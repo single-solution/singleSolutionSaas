@@ -42,7 +42,7 @@ describe('growth events', () => {
 			growthItem({ productId: 'prd_1', unitPrice: 100000, quantity: 2 }),
 			growthItem({ productId: 'prd_2', unitPrice: 5000, quantity: 1 }),
 		];
-		expect(itemsDetail('PKR', items)).toEqual({ currency: 'PKR', value: 205000, items });
+		expect(itemsDetail('EUR', items)).toEqual({ currency: 'EUR', value: 205000, items });
 		expect(itemsDetail('USD', [])).toEqual({ currency: 'USD', value: 0, items: [] });
 	});
 
@@ -51,7 +51,7 @@ describe('growth events', () => {
 			purchaseDetail({
 				id: 'ord_1',
 				number: 'SO2026-1',
-				totals: { total: 210000, currency: 'PKR' },
+				totals: { total: 210000, currency: 'EUR' },
 				lines: [
 					{ productId: 'prd_1', variantId: 'var_1', name: 'Phone', unitPrice: 100000, quantity: 2 },
 					{ productId: 'prd_2', variantId: null, name: 'Case', unitPrice: 1000, quantity: 1 },
@@ -60,7 +60,7 @@ describe('growth events', () => {
 		).toEqual({
 			orderId: 'ord_1',
 			orderNumber: 'SO2026-1',
-			currency: 'PKR',
+			currency: 'EUR',
 			value: 210000,
 			items: [
 				{ id: 'prd_1', variantId: 'var_1', name: 'Phone', price: 100000, quantity: 2 },

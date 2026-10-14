@@ -388,7 +388,7 @@ describe('Ecommerce on the real Portal', () => {
 		const server = String(tokens.ecommerce?.server);
 		const actor = {
 			'ss-actor-id': 'usr_staff_7',
-			'ss-actor-name': encodeURIComponent('Ayesha Khan'),
+			'ss-actor-name': encodeURIComponent('Alex Morgan'),
 			'ss-actor-role': 'Packer',
 		};
 		const packed = await sys.call('POST', `/v1/orders/${codOrderId}/move`, {
@@ -397,10 +397,10 @@ describe('Ecommerce on the real Portal', () => {
 			body: { to: 'packed' },
 		});
 		expect(packed.status).toBe(200);
-		expect(packed.json.history.at(-1)).toMatchObject({ to: 'packed', by: 'Ayesha Khan' });
+		expect(packed.json.history.at(-1)).toMatchObject({ to: 'packed', by: 'Alex Morgan' });
 		const activity = await sys.call('GET', `/v1/activity?target=${codOrderId}&actor=usr_staff_7`, { token: server });
 		expect(activity.json.items[0]).toMatchObject({
-			actor: { kind: 'user', id: 'usr_staff_7', name: 'Ayesha Khan', role: 'Packer' },
+			actor: { kind: 'user', id: 'usr_staff_7', name: 'Alex Morgan', role: 'Packer' },
 		});
 		// without the headers the server is the actor
 		const unpacked = await sys.call('POST', `/v1/orders/${codOrderId}/move`, { token: server, body: { to: 'delivered' } });

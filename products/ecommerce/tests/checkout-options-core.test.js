@@ -56,8 +56,8 @@ const cart = { goods: 5000, paymentMethod: 'cod', weekday: 1, minutes: 600 };
 
 describe('whole units (E25)', () => {
 	it('knows the unit and rounds down, half up and in parts', () => {
-		expect(unitOf('PKR', true)).toBe(100);
-		expect(unitOf('PKR', false)).toBe(1);
+		expect(unitOf('USD', true)).toBe(100);
+		expect(unitOf('USD', false)).toBe(1);
 		expect(unitOf('JPY', true)).toBe(1);
 		expect(roundDown(1999, 100)).toBe(1900);
 		expect(roundDown(19.9)).toBe(19);
@@ -247,7 +247,7 @@ describe('loyalty options (E20)', () => {
 		expect(expiryFor(earned, { expiryDays: 0 })).toBeNull();
 		expect(expiryFor(earned, { expiryDays: 2 })?.toISOString()).toBe('2026-02-02T10:00:00.000Z');
 		expect(expiryFor(earned, { expiryDays: 1, expiryUnit: 'months' })?.toISOString()).toBe('2026-02-28T10:00:00.000Z');
-		expect(expiryFor(earned, { expiryDays: 1, expiryUnit: 'months' }, 'Asia/Karachi')?.toISOString()).toBe(
+		expect(expiryFor(earned, { expiryDays: 1, expiryUnit: 'months' }, 'Asia/Tokyo')?.toISOString()).toBe(
 			'2026-02-28T10:00:00.000Z',
 		);
 		const lots = [
@@ -263,58 +263,58 @@ describe('loyalty options (E20)', () => {
 
 describe('guests and order keys (E21)', () => {
 	it('reads phones with the shared normalizer and the website’s rules (K12)', () => {
-		expect(phoneRules({ defaultCallingCode: '', trunkPrefix: '' }, 'PK')).toEqual({
-			defaultCallingCode: '+92',
+		expect(phoneRules({ defaultCallingCode: '', trunkPrefix: '' }, 'GB')).toEqual({
+			defaultCallingCode: '+44',
 			trunkPrefix: '',
 			countries: [],
 		});
-		expect(phoneRules({ defaultCallingCode: '+44', trunkPrefix: '0' }, 'PK')).toEqual({
-			defaultCallingCode: '+44',
+		expect(phoneRules({ defaultCallingCode: '+33', trunkPrefix: '0' }, 'GB')).toEqual({
+			defaultCallingCode: '+33',
 			trunkPrefix: '0',
 			countries: [],
 		});
 		expect(phoneRules({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '', countries: [] });
-		expect(phoneRules({ countries: ['PK', 7] }, 'PK').countries).toEqual(['PK']);
-		expect(phoneDigitsOf('+923001234567')).toBe('3001234567');
+		expect(phoneRules({ countries: ['GB', 7] }, 'GB').countries).toEqual(['GB']);
+		expect(phoneDigitsOf('+447700900123')).toBe('7700900123');
 		expect(phoneDigitsOf(null)).toBe('');
 	});
 
 	it('checks a guest', () => {
-		const rules = phoneRules({}, 'PK');
-		expect(checkGuest({ name: ' Ayesha ', phone: '03001234567', email: 'A@X.PK' }, rules)).toEqual({
+		const rules = phoneRules({}, 'GB');
+		expect(checkGuest({ name: ' Chloé ', phone: '07700900123', email: 'Chloe@Example.co.uk' }, rules)).toEqual({
 			ok: true,
-			value: { name: 'Ayesha', phone: '+923001234567', email: 'a@x.pk' },
+			value: { name: 'Chloé', phone: '+447700900123', email: 'chloe@example.co.uk' },
 		});
 		// already international without the +, and a trunk 0 after the code: one number, no second code
 		for (const [typed, phone] of [
-			['923001234567', '+923001234567'],
-			['+92 0320 4862403', '+923204862403'],
-			['0300-1234567', '+923001234567'],
-			['0092 300 1234567', '+923001234567'],
+			['447700900123', '+447700900123'],
+			['+44 07700 900456', '+447700900456'],
+			['07700-900123', '+447700900123'],
+			['0044 7700 900123', '+447700900123'],
 		])
 			expect(checkGuest({ name: 'A', phone: typed }, rules)).toMatchObject({ value: { phone } });
 		// without a calling code (no setting, no business country) only international numbers are read
 		const none = phoneRules({}, null);
-		expect(checkGuest({ name: 'A', phone: '03001234567' }, none)).toMatchObject({ field: 'customer/phone' });
-		expect(checkGuest({ name: 'A', phone: '+92 300 1234567' }, none)).toMatchObject({ value: { phone: '+923001234567' } });
+		expect(checkGuest({ name: 'A', phone: '07700900123' }, none)).toMatchObject({ field: 'customer/phone' });
+		expect(checkGuest({ name: 'A', phone: '+44 7700 900123' }, none)).toMatchObject({ value: { phone: '+447700900123' } });
 		expect(checkGuest(null, rules)).toMatchObject({ ok: false, field: 'customer' });
-		expect(checkGuest({ name: '', phone: '03001234567' }, rules)).toMatchObject({ field: 'customer/name' });
+		expect(checkGuest({ name: '', phone: '07700900123' }, rules)).toMatchObject({ field: 'customer/name' });
 		expect(checkGuest({ name: 'A', phone: 'x' }, rules)).toMatchObject({ field: 'customer/phone' });
 		expect(checkGuest({ name: 'A', phone: '3+00' }, rules)).toMatchObject({ field: 'customer/phone' });
-		expect(checkGuest({ name: 'A', phone: '03001234567', email: 'nope' }, rules)).toMatchObject({ field: 'customer/email' });
+		expect(checkGuest({ name: 'A', phone: '07700900123', email: 'nope' }, rules)).toMatchObject({ field: 'customer/email' });
 	});
 
 	it('takes guest phones only of the countries the website serves (SE-5)', () => {
-		const pk = phoneRules({ countries: ['PK'] }, 'PK');
-		expect(checkGuest({ name: 'A', phone: '03001234567' }, pk)).toMatchObject({ ok: true });
-		for (const phone of ['+447700900123', '00447700900123', '+8823123456789'])
-			expect(checkGuest({ name: 'A', phone }, pk)).toMatchObject({
+		const gb = phoneRules({ countries: ['GB'] }, 'GB');
+		expect(checkGuest({ name: 'A', phone: '07700900123' }, gb)).toMatchObject({ ok: true });
+		for (const phone of ['+12025550143', '0012025550143', '+8823123456789'])
+			expect(checkGuest({ name: 'A', phone }, gb)).toMatchObject({
 				ok: false,
 				field: 'customer/phone',
 				code: 'country_not_allowed',
 			});
-		expect(phoneAllowed('+447700900123', phoneRules({}, 'PK'))).toBe(true);
-		expect(phoneAllowed('+15550001111', phoneRules({ countries: ['CA'] }, 'PK'))).toBe(true);
+		expect(phoneAllowed('+12025550143', phoneRules({}, 'GB'))).toBe(true);
+		expect(phoneAllowed('+15550001111', phoneRules({ countries: ['CA'] }, 'GB'))).toBe(true);
 	});
 
 	it('opens an order only with its own key', () => {

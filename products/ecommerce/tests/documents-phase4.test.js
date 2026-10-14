@@ -51,7 +51,7 @@ const lineOf = (patch = {}) => ({
 	categoryIds: [],
 	brandId: null,
 	locationId: null,
-	serials: ['IMEI-111', 'IMEI-222'],
+	serials: ['SN-111', 'SN-222'],
 	booking: null,
 	licences: [],
 	returnedQuantity: 0,
@@ -156,7 +156,7 @@ describe('the invoice (E35)', () => {
 		const order = await seed(orderOf());
 		const html = (await shop.admin(ticket, 'GET', `/v1/admin/orders/${order.id}/invoice`)).text;
 		expect(html).toContain('Black / 128 GB · SKU PH-128 · Grade: Grade A · Warranty: 365 days');
-		expect(html).toContain('Serial numbers: IMEI-111, IMEI-222');
+		expect(html).toContain('Serial numbers: SN-111, SN-222');
 		// discount 100.00 = deals 50.00 + the member discount 30.00 + points 20.00, each on its own line
 		expect(html).toContain('<td>Discount</td><td class="num">−USD 50.00</td>');
 		expect(html).toContain('<td>Club price</td><td class="num">−USD 30.00</td>');
@@ -223,7 +223,7 @@ describe('packing slips of several orders (E35)', () => {
 		const cod = await seed(
 			orderOf({
 				lines: [
-					lineOf({ productId: phone.id, serials: ['IMEI-1'], quantity: 3 }),
+					lineOf({ productId: phone.id, serials: ['SN-1'], quantity: 3 }),
 					lineOf({ productId: cable.id, name: 'Cable', serials: [], quantity: 2 }),
 				],
 			}),

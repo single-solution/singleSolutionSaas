@@ -576,11 +576,11 @@ describe('K4: counts equal to their lists', () => {
 
 describe('K7 and K8: Format and business time zone', () => {
 	it('formats the texts the server makes with the Format, and dates in the business time zone', async () => {
-		await useTimeZone('Asia/Karachi');
+		await useTimeZone('Asia/Tokyo');
 		const saved = await shop.api('PUT', '/v1/format', {
-			locale: 'en-GB',
+			locale: 'en-US',
 			currencyDisplay: 'custom',
-			currencySymbol: 'Rs',
+			currencySymbol: 'US$',
 			wholeUnits: true,
 			times: 'business',
 		});
@@ -588,8 +588,8 @@ describe('K7 and K8: Format and business time zone', () => {
 		try {
 			const config = await shop.visitor('GET', '/v1/widget/config');
 			expect(config.json).toMatchObject({
-				format: { locale: 'en-GB', currencySymbol: 'Rs', wholeUnits: true },
-				timeZone: 'Asia/Karachi',
+				format: { locale: 'en-US', currencySymbol: 'US$', wholeUnits: true },
+				timeZone: 'Asia/Tokyo',
 			});
 
 			const order = await seedOrder({
@@ -598,28 +598,28 @@ describe('K7 and K8: Format and business time zone', () => {
 				placedAt: new Date('2026-10-04T20:30:00Z'),
 			});
 			const list = await shop.api('GET', '/v1/orders?q=FMT-1');
-			expect(list.json.items[0]).toMatchObject({ total: 1000, totalText: 'Rs 10' });
-			expect((await shop.api('GET', `/v1/orders/${order.id}`)).json.totalText).toBe('Rs 10');
+			expect(list.json.items[0]).toMatchObject({ total: 1000, totalText: 'US$ 10' });
+			expect((await shop.api('GET', `/v1/orders/${order.id}`)).json.totalText).toBe('US$ 10');
 			const invoice = await shop.api('GET', `/v1/orders/${order.id}/invoice`);
-			expect(invoice.text).toContain('5 Oct 2026');
-			expect(invoice.text).toContain('Rs 10');
+			expect(invoice.text).toContain('Oct 5, 2026');
+			expect(invoice.text).toContain('US$ 10');
 			const customer = await shop.api('GET', '/v1/customers/usr_fmt0001');
-			expect(customer.json.recentOrders[0].totalText).toBe('Rs 10');
-			expect(customer.json.totalSpentText).toBe('Rs 0');
+			expect(customer.json.recentOrders[0].totalText).toBe('US$ 10');
+			expect(customer.json.totalSpentText).toBe('US$ 0');
 
 			const sent = shop.messages().length;
 			await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'confirmed' });
 			expect(shop.messages().slice(sent)).toEqual([
-				expect.objectContaining({ template: 'ecommerce.order_status', values: expect.objectContaining({ total: 'Rs 10' }) }),
+				expect.objectContaining({ template: 'ecommerce.order_status', values: expect.objectContaining({ total: 'US$ 10' }) }),
 			]);
 
 			const item = await shop.seedProduct({ name: 'Formatted phone', price: 70000 });
 			const card = (await shop.api('GET', `/v1/chat/products/${item.id}`)).json;
-			expect(card).toMatchObject({ price: 70000, priceText: 'Rs 700', priceRange: { minText: 'Rs 700' } });
-			expect((await shop.api('GET', '/v1/customers/usr_fmt0001/orders')).json.items[0].totalText).toBe('Rs 10');
+			expect(card).toMatchObject({ price: 70000, priceText: 'US$ 700', priceRange: { minText: 'US$ 700' } });
+			expect((await shop.api('GET', '/v1/customers/usr_fmt0001/orders')).json.items[0].totalText).toBe('US$ 10');
 
 			const sales = await shop.api('GET', '/v1/reports/sales?from=2026-10-05&to=2026-10-05');
-			expect(sales.json).toMatchObject({ from: '2026-10-04T19:00:00.000Z', to: '2026-10-05T19:00:00.000Z' });
+			expect(sales.json).toMatchObject({ from: '2026-10-04T15:00:00.000Z', to: '2026-10-05T15:00:00.000Z' });
 			expect(sales.json.totals.orders).toBeGreaterThanOrEqual(1);
 		} finally {
 			await shop.api('PUT', '/v1/format', {
@@ -634,9 +634,9 @@ describe('K7 and K8: Format and business time zone', () => {
 
 	it('reads report days and picked days in the business time zone', () => {
 		const now = Date.parse('2026-10-05T10:00:00Z');
-		expect(parseRange({ from: '2026-10-01', to: '2026-10-01' }, now, 'Asia/Karachi')).toEqual({
+		expect(parseRange({ from: '2026-10-01', to: '2026-10-01' }, now, 'Asia/Tokyo')).toEqual({
 			ok: true,
-			range: { from: new Date('2026-09-30T19:00:00.000Z'), to: new Date('2026-10-01T19:00:00.000Z') },
+			range: { from: new Date('2026-09-30T15:00:00.000Z'), to: new Date('2026-10-01T15:00:00.000Z') },
 		});
 		expect(parseRange({ from: '2026-10-01' }, now)).toMatchObject({
 			ok: true,
@@ -652,7 +652,7 @@ describe('K7 and K8: Format and business time zone', () => {
 
 	it('numbers orders by the year in the business time zone (the yearly form)', async () => {
 		await shop.setting('checkout', 'numberPattern', '{prefix}{year}-{number}');
-		await useTimeZone('Asia/Karachi');
+		await useTimeZone('Asia/Tokyo');
 		shop.advance(Date.parse('2026-12-31T20:00:00Z') - shop.now());
 		const item = await shop.seedProduct({ price: 1000, stock: 3 });
 		const signIn = await shop.signIn({ id: 'usr_newyear0001', name: 'New Year' });

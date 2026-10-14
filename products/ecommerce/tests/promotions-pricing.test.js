@@ -226,15 +226,15 @@ describe('deals', () => {
 
 	it('takes the first deal in the shoppers’ order that saves something with lineChoice first (D4)', () => {
 		const first = { ...DEAL_RULES, lineChoice: /** @type {const} */ ('first') };
-		const fan = [line({ unitPrice: 1_000_000 })];
+		const lamp = [line({ unitPrice: 1_000_000 })];
 		const deals = [
 			deal({ id: 'deal_b', type: 'fixed', value: 80_000, sort: 2 }),
 			deal({ id: 'deal_a', value: 5, sort: 1 }),
 			deal({ id: 'deal_z', value: 0.000_01, sort: 0 }),
 		];
-		// a 10,000 fan: the best saving is 800 off (B), the first in show order 5% (A); Z saves nothing
-		expect(run({ lines: fan, deals }).lines[0]).toMatchObject({ dealId: 'deal_b', dealDiscount: 80_000 });
-		expect(run({ lines: fan, deals, rules: first }).lines[0]).toMatchObject({
+		// a 10,000 lamp: the best saving is 800 off (B), the first in show order 5% (A); Z saves nothing
+		expect(run({ lines: lamp, deals }).lines[0]).toMatchObject({ dealId: 'deal_b', dealDiscount: 80_000 });
+		expect(run({ lines: lamp, deals, rules: first }).lines[0]).toMatchObject({
 			dealId: 'deal_a',
 			dealDiscount: 50_000,
 			eligibleDealIds: ['deal_b', 'deal_a', 'deal_z'],
@@ -397,12 +397,12 @@ describe('deals', () => {
 			expect(run({ lines, deals: [tenOnP1, fiveOver], rules: perLine }).applied.map((entry) => entry.amount)).toEqual([
 				30_000,
 			]);
-			// free delivery from 10,000 on a 10,500 fan with 10% off: 9,450 after the deal
-			const fan = [line({ unitPrice: 1_050_000 })];
+			// free delivery from 10,000 on a 10,500 lamp with 10% off: 9,450 after the deal
+			const lamp = [line({ unitPrice: 1_050_000 })];
 			const ship = deal({ id: 'deal_ship', type: 'free_delivery', conditions: { ...NO_CONDITIONS, cartTotal: 1_000_000 } });
-			expect(run({ lines: fan, deals: [tenOnP1, ship] }).freeDelivery).toBe(true);
-			expect(run({ lines: fan, deals: [tenOnP1, ship], rules: perLine }).freeDelivery).toBe(false);
-			expect(run({ lines: fan, deals: [tenOnP1, ship], rules: base })).toMatchObject({
+			expect(run({ lines: lamp, deals: [tenOnP1, ship] }).freeDelivery).toBe(true);
+			expect(run({ lines: lamp, deals: [tenOnP1, ship], rules: perLine }).freeDelivery).toBe(false);
+			expect(run({ lines: lamp, deals: [tenOnP1, ship], rules: base })).toMatchObject({
 				freeDelivery: false,
 				dealIds: ['deal_item'],
 			});

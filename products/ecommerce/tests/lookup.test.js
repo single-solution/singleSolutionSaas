@@ -131,7 +131,7 @@ describe('core/lookup', () => {
 		const symbol = {
 			...DEFAULT_FORMAT,
 			currencyDisplay: /** @type {const} */ ('custom'),
-			currencySymbol: 'Rs',
+			currencySymbol: 'US$',
 			wholeUnits: true,
 		};
 		/** @param {number} amount @param {string} currency */
@@ -141,9 +141,9 @@ describe('core/lookup', () => {
 			id: 'prd_1',
 			name: 'Phone',
 			price: 800,
-			priceText: 'Rs 8',
+			priceText: 'US$ 8',
 			priceMax: 900,
-			priceMaxText: 'Rs 9',
+			priceMaxText: 'US$ 9',
 			currency: 'USD',
 			image: null,
 			url: 'https://s.example/p',
@@ -167,9 +167,9 @@ describe('core/lookup', () => {
 			{ name: 'att_gone', value: true, unit: '' },
 		]);
 		expect(details.variants.map((v) => v.grade)).toEqual([null, 'Grade A', 'zz']);
-		expect(details.priceRange).toEqual({ min: 500, max: 900, minText: 'Rs 5', maxText: 'Rs 9' });
-		expect(details.variants[0]).toMatchObject({ priceText: expect.stringMatching(/^Rs /) });
-		expect(details.variants.map((v) => v.compareAtPriceText)).toEqual([null, null, 'Rs 12']);
+		expect(details.priceRange).toEqual({ min: 500, max: 900, minText: 'US$ 5', maxText: 'US$ 9' });
+		expect(details.variants[0]).toMatchObject({ priceText: expect.stringMatching(/^US\$ /) });
+		expect(details.variants.map((v) => v.compareAtPriceText)).toEqual([null, null, 'US$ 12']);
 		const short = productDetails(
 			{ ...product, description: 'Short', specs: /** @type {any} */ (undefined) },
 			{ ...context, brand: 'B', attributes: new Map(), grades: new Map() },

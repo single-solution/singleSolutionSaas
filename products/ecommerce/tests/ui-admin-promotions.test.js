@@ -169,14 +169,14 @@ describe('promotions admin: coupons', () => {
 		expect(textOf(rowOf(panel, 'cpn_1'))).toContain('Active · Used 3 of 100');
 		expect(textOf(rowOf(panel, 'cpn_2'))).toContain('Free delivery');
 		expect(textOf(rowOf(panel, 'cpn_2'))).toContain('Off · Used 3 of ∞');
-		expect(textOf(rowOf(panel, 'cpn_3'))).toContain('PKR 20.00');
+		expect(textOf(rowOf(panel, 'cpn_3'))).toContain('USD 20.00');
 		expect(textOf(rowOf(panel, 'cpn_3'))).toContain('Ended');
 		expect(textOf(rowOf(panel, 'cpn_3'))).toContain('ends ');
 		expect(rowOf(panel, 'cpn_4').querySelector('.dot.warning')?.getAttribute('aria-label')).toBe('Scheduled');
 		expect(rowOf(panel, 'cpn_5').querySelector('.dot.warning')?.getAttribute('aria-label')).toBe('Used up');
 		expect(server.last('GET /v1/admin/coupons/cpn_1')).toBeDefined();
 		const pane = detailOf(panel);
-		for (const part of ['SAVE10', 'Percent off', 'PKR 500.00', 'PKR 1,000.00', 'Phones', 'Phone X', 'Total uses100', 'Used3'])
+		for (const part of ['SAVE10', 'Percent off', 'USD 500.00', 'USD 1,000.00', 'Phones', 'Phone X', 'Total uses100', 'Used3'])
 			expect(textOf(pane)).toContain(part);
 		// product names are read by id once
 		expect(server.all('GET /v1/admin/products').map((call) => call.url.searchParams.get('ids'))).toEqual(['prd_1']);
@@ -220,7 +220,7 @@ describe('promotions admin: coupons', () => {
 		let dialog = dialogOf(root);
 		expect(textOf(dialog)).toContain('Edit SAVE10');
 		expect(fieldIn(dialog, 'Percent off').value).toBe('10');
-		expect(fieldIn(dialog, 'Largest discount (PKR, optional)').value).toBe('500.00');
+		expect(fieldIn(dialog, 'Largest discount (USD, optional)').value).toBe('500.00');
 		expect(textOf(dialog)).toContain('Phones');
 		// scope pickers: products by search, categories by name, remove a chip
 		type(fieldIn(dialog, 'Search', 0), 'ca');
@@ -283,7 +283,7 @@ describe('promotions admin: coupons', () => {
 		dialog = dialogOf(root);
 		type(fieldIn(dialog, 'Code'), ' new5 ');
 		await change(fieldIn(dialog, 'Type'), 'fixed');
-		type(fieldIn(dialog, 'Amount off (PKR)'), '5');
+		type(fieldIn(dialog, 'Amount off (USD)'), '5');
 		type(fieldIn(dialog, 'Total uses (empty = no limit)'), '');
 		await tick(checkIn(dialog, 'Active'), false);
 		await submitDialog(root);
@@ -332,10 +332,10 @@ describe('promotions admin: coupons', () => {
 		type(fieldIn(dialog, 'Code prefix'), 'VIP');
 		type(fieldIn(dialog, 'How many'), '2');
 		type(fieldIn(dialog, 'Percent off'), '5');
-		type(fieldIn(dialog, 'Largest discount (PKR, optional)'), 'abc');
+		type(fieldIn(dialog, 'Largest discount (USD, optional)'), 'abc');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
-		type(fieldIn(dialog, 'Largest discount (PKR, optional)'), '');
+		type(fieldIn(dialog, 'Largest discount (USD, optional)'), '');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.prefix']);
 		reply = () => answer(201, { created: 2, codes: ['VIPAAAA1111', 'VIPBBBB2222'] });
@@ -370,14 +370,14 @@ describe('promotions admin: coupons', () => {
 			['deals'],
 		);
 		const panel = panelOf(root, 'deals');
-		expect(textOf(rowOf(panel, 'deal_1'))).toContain('PKR 50.00');
+		expect(textOf(rowOf(panel, 'deal_1'))).toContain('USD 50.00');
 		expect(textOf(rowOf(panel, 'deal_1'))).toContain('Off · Used 0 of ∞');
 		expect(textOf(rowOf(panel, 'deal_2'))).toContain('15 % off');
 		expect(textOf(detailOf(panel))).toContain('cat_1');
 		await click(buttonIn(panel, 'New deal'));
 		const dialog = dialogOf(root);
 		type(fieldIn(dialog, 'Name'), 'Flash');
-		type(fieldIn(dialog, 'Percent, or amount in PKR'), '20');
+		type(fieldIn(dialog, 'Percent, or amount in USD'), '20');
 		type(fieldIn(dialog, 'Search', 0), 'prd_7');
 		await click(buttonIn(dialog, 'Find', 0));
 		type(fieldIn(dialog, 'Search', 2), 'brd_7');
@@ -404,14 +404,14 @@ describe('promotions admin: deals and bundles', () => {
 		});
 		const panel = await openTab(root, 'deals');
 		const pane = detailOf(panel);
-		for (const part of ['Autumn', 'Amount off', 'PKR 50.00', 'Priority2', 'Fall', 'No limit'])
+		for (const part of ['Autumn', 'Amount off', 'USD 50.00', 'Priority2', 'Fall', 'No limit'])
 			expect(textOf(pane)).toContain(part);
 		await click(buttonIn(pane, 'Edit'));
-		expect(fieldIn(dialogOf(root), 'Percent, or amount in PKR').value).toBe('50.00');
-		type(fieldIn(dialogOf(root), 'Percent, or amount in PKR'), 'x');
+		expect(fieldIn(dialogOf(root), 'Percent, or amount in USD').value).toBe('50.00');
+		type(fieldIn(dialogOf(root), 'Percent, or amount in USD'), 'x');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
-		type(fieldIn(dialogOf(root), 'Percent, or amount in PKR'), '60');
+		type(fieldIn(dialogOf(root), 'Percent, or amount in USD'), '60');
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/deals/deal_1')?.body).toMatchObject({
 			type: 'fixed',
@@ -419,12 +419,12 @@ describe('promotions admin: deals and bundles', () => {
 			priority: 2,
 			description: 'Fall',
 		});
-		expect(textOf(pane)).toContain('PKR 60.00');
+		expect(textOf(pane)).toContain('USD 60.00');
 		await pickMenu(pane, 'Duplicate');
 		expect(fieldIn(dialogOf(root), 'Name').value).toBe('Autumn');
 		await openRow(panel, 'deal_2');
 		await click(buttonIn(detailOf(panel), 'Edit'));
-		expect(fieldIn(dialogOf(root), 'Percent, or amount in PKR').value).toBe('15');
+		expect(fieldIn(dialogOf(root), 'Percent, or amount in USD').value).toBe('15');
 	});
 
 	it('uploads, describes and removes a deal’s banner', async () => {
@@ -505,7 +505,7 @@ describe('promotions admin: deals and bundles', () => {
 			},
 		});
 		const panel = await openTab(root, 'bundles');
-		expect(textOf(rowOf(panel, 'bnd_1'))).toContain('PKR 3,000.00');
+		expect(textOf(rowOf(panel, 'bnd_1'))).toContain('USD 3,000.00');
 		expect(textOf(rowOf(panel, 'bnd_2'))).toContain('Buy 2 get 1 at 100 % off');
 		expect(textOf(rowOf(panel, 'bnd_3'))).toContain('10 % off');
 		const pane = detailOf(panel);
@@ -514,17 +514,17 @@ describe('promotions admin: deals and bundles', () => {
 		expect(server.last('GET /v1/admin/products')?.url.searchParams.get('ids')).toBe('prd_1,prd_2');
 		await click(buttonIn(pane, 'Edit'));
 		let dialog = dialogOf(root);
-		expect(fieldIn(dialog, 'Bundle price (PKR)').value).toBe('3000.00');
+		expect(fieldIn(dialog, 'Bundle price (USD)').value).toBe('3000.00');
 		type(dialog.querySelector('input[aria-label="Quantity of Charger"]'), '3');
 		type(fieldIn(dialog, 'Search', 0), 'ca');
 		await click(buttonIn(dialog, 'Find', 0));
 		await click(buttonIn(dialog, 'Case'));
 		await click(buttonIn(dialog, 'Case'));
 		await click(buttonIn(dialog, 'Remove'));
-		type(fieldIn(dialog, 'Bundle price (PKR)'), 'zz');
+		type(fieldIn(dialog, 'Bundle price (USD)'), 'zz');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
-		type(fieldIn(dialog, 'Bundle price (PKR)'), '');
+		type(fieldIn(dialog, 'Bundle price (USD)'), '');
 		type(fieldIn(dialog, 'Percent off'), '10');
 		await submitDialog(root);
 		expect(bodies[0]).toMatchObject({
@@ -562,7 +562,7 @@ describe('promotions admin: deals and bundles', () => {
 		type(fieldIn(dialog, 'Search', 0), 'ca');
 		await click(buttonIn(dialog, 'Find', 0));
 		await click(buttonIn(dialog, 'Case'));
-		type(fieldIn(dialog, 'Bundle price (PKR)'), '25');
+		type(fieldIn(dialog, 'Bundle price (USD)'), '25');
 		await submitDialog(root);
 		expect(bodies[4]).toMatchObject({ type: 'bundle', price: 2500, items: [{ productId: 'prd_3', quantity: 1 }] });
 		expect(bodies[4].value).toBeUndefined();
@@ -590,7 +590,7 @@ describe('promotions admin: deals and bundles', () => {
 		type(fieldIn(dialog, 'Search', 0), '');
 		await click(buttonIn(dialog, 'Find', 0));
 		type(fieldIn(dialog, 'Name'), 'Pair');
-		type(fieldIn(dialog, 'Bundle price (PKR)'), '9');
+		type(fieldIn(dialog, 'Bundle price (USD)'), '9');
 		await submitDialog(root);
 		expect(bodies[0].items).toEqual([{ productId: 'prd_5', quantity: 1 }]);
 	});
@@ -612,7 +612,7 @@ describe('promotions admin: loyalty', () => {
 		userId: 'u 1',
 		balance: 120,
 		value: 1200,
-		currency: 'PKR',
+		currency: 'USD',
 		lots: [{ id: 'l1', points: 150, left: 120, earnedAt: AT, expiresAt: null, orderId: 'ord_1' }],
 		history: [{ at: AT, kind: 'earn', points: 150, orderId: 'ord_1', note: '' }],
 		expiringSoon: [{ points: 20, expiresAt: AT }],
@@ -623,7 +623,7 @@ describe('promotions admin: loyalty', () => {
 			userId: 'u 1',
 			balance: 120,
 			value: 1200,
-			currency: 'PKR',
+			currency: 'USD',
 			lots: [{ id: 'l1', points: 150, left: 120, earnedAt: AT, expiresAt: null, orderId: 'ord_1' }],
 			history: [{ at: AT, kind: 'earn', points: 150, orderId: 'ord_1', note: '' }],
 			expiringSoon: [{ points: 20, expiresAt: AT }],
@@ -646,7 +646,7 @@ describe('promotions admin: loyalty', () => {
 		type(fieldIn(panel, 'Customer or user id'), 'u 1');
 		await submit(fieldIn(panel, 'Customer or user id'));
 		expect(textOf(panel)).toContain('Balance120 points');
-		expect(textOf(panel)).toContain('WorthPKR 12.00');
+		expect(textOf(panel)).toContain('WorthUSD 12.00');
 		expect(textOf(panel)).toContain('20 points');
 		expect(textOf(panel)).toContain('Earned');
 		await click(buttonIn(panel, 'Change points'));

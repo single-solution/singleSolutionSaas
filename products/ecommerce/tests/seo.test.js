@@ -182,7 +182,7 @@ describe('core/feeds and core/llms', () => {
 				...context,
 				googleCategory: '267',
 				gradeLabel: (v) => (v.grade ? 'Grade A' : ''),
-				shipping: { fee: 250, country: 'PK' },
+				shipping: { fee: 250, country: 'US' },
 				wholeUnits: true,
 				variantLink: (v) => `https://shop.example/p?v=${v.id}`,
 				variantImage: (v) => (v.grade ? 'https://cdn.example/v.jpg' : ''),
@@ -193,7 +193,7 @@ describe('core/feeds and core/llms', () => {
 			googleCategory: '267',
 			customLabel0: 'Grade A',
 			shipping: '3 USD',
-			shippingCountry: 'PK',
+			shippingCountry: 'US',
 			price: '13 USD',
 			link: 'https://shop.example/p?v=var_76543210fedcba9876543210',
 			image: 'https://cdn.example/v.jpg',
@@ -202,12 +202,12 @@ describe('core/feeds and core/llms', () => {
 		const item = googleItem(/** @type {any} */ (legacy[0]));
 		expect(item).toContain('<g:google_product_category>267</g:google_product_category>');
 		expect(item).toContain('<g:custom_label_0>Grade A</g:custom_label_0>');
-		expect(item).toContain('<g:shipping><g:country>PK</g:country><g:price>3 USD</g:price></g:shipping>');
+		expect(item).toContain('<g:shipping><g:country>US</g:country><g:price>3 USD</g:price></g:shipping>');
 		expect(feedItemId(/** @type {any} */ ({ id: 'var_y' }))).toBe('var_y');
 		expect(feedItemId(/** @type {any} */ ({ id: 'var_y', feedId: '' }))).toBe('var_y');
 		expect(feedItemId(/** @type {any} */ ({ id: 'var_y', feedId: 'old_1' }))).toBe('old_1');
-		expect(feedMoney(1050, 'PKR', false)).toBe('10.50 PKR');
-		expect(feedMoney(1050, 'PKR', true)).toBe('11 PKR');
+		expect(feedMoney(1050, 'EUR', false)).toBe('10.50 EUR');
+		expect(feedMoney(1050, 'EUR', true)).toBe('11 EUR');
 	});
 
 	it('writes Google items and Meta lines', () => {

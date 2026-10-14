@@ -14,10 +14,10 @@ describe('rich text, policies and size charts (core)', () => {
 	it('keeps h2 headings and mailto: and tel: links, never other schemes (SF-1)', () => {
 		expect(
 			cleanHtml(
-				'<h2>Who we are</h2><p><a href="mailto:help@shop.example.com" target="_blank">Mail</a> <a href="tel:+92 300 1234567">Call</a> <a href="javascript:alert(1)">x</a> <a href="tel:abc">y</a></p>',
+				'<h2>Who we are</h2><p><a href="mailto:help@shop.example.com" target="_blank">Mail</a> <a href="tel:+1 202 555 0143">Call</a> <a href="javascript:alert(1)">x</a> <a href="tel:abc">y</a></p>',
 			),
 		).toBe(
-			'<h2>Who we are</h2><p><a href="mailto:help@shop.example.com">Mail</a> <a href="tel:+92 300 1234567">Call</a> <a>x</a> <a>y</a></p>',
+			'<h2>Who we are</h2><p><a href="mailto:help@shop.example.com">Mail</a> <a href="tel:+1 202 555 0143">Call</a> <a>x</a> <a>y</a></p>',
 		);
 		expect(cleanHtml('<h2> </h2>')).toBe('');
 		expect(htmlToText('<h2>Title</h2>Text')).toBe('Title\nText');
@@ -29,10 +29,10 @@ describe('rich text, policies and size charts (core)', () => {
 			warrantyDays: 180,
 			business: 'A & B',
 			email: 'help@shop.example.com',
-			phone: '+92 300 1234567',
+			phone: '+1 202 555 0143',
 			address: '1 Main St',
-			deliveryFee: 'Rs 250',
-			freeDeliveryOver: 'Rs 5,000',
+			deliveryFee: '$250',
+			freeDeliveryOver: '$5,000',
 		};
 		const text = fillPolicies(
 			{
@@ -43,10 +43,10 @@ describe('rich text, policies and size charts (core)', () => {
 			values,
 		);
 		expect(text.policies.returns).toBe(
-			'14 days, 6 months at A & B. help@shop.example.com +92 300 1234567 1 Main St Rs 250 Rs 5,000 {other} {{other}}',
+			'14 days, 6 months at A & B. help@shop.example.com +1 202 555 0143 1 Main St $250 $5,000 {other} {{other}}',
 		);
 		const html = fillPolicies({ policyFormat: 'html', policyTerms: '<h2>{{business}}</h2><p>{phone}</p>' }, values);
-		expect(html.policies.terms).toBe('<h2>A &amp; B</h2><p>+92 300 1234567</p>');
+		expect(html.policies.terms).toBe('<h2>A &amp; B</h2><p>+1 202 555 0143</p>');
 		expect(fillPolicies({ policyPrivacy: '{email}' }, { returnDays: 0, warrantyDays: 0, business: 'S' }).policies).toEqual({});
 	});
 
@@ -91,7 +91,7 @@ describe('Atlas Search that finds nothing (SF-7)', () => {
 		const site = /** @type {any} */ ({ websiteId: 'web_1', values: async () => ({ searchIndex: 'idx' }), ctx: {} });
 		const search = createCatalogSearch(product);
 		/** @param {number} [skip] */
-		const run = (skip = 0) => search.run(site, data, 'fan', { match: { websiteId: 'web_1' }, sort: null, skip, limit: 10 });
+		const run = (skip = 0) => search.run(site, data, 'lamp', { match: { websiteId: 'web_1' }, sort: null, skip, limit: 10 });
 		return { run, states, pipelines };
 	};
 
@@ -152,8 +152,8 @@ describe('storefront reads through the API', () => {
 			columns: [{ key: 'bust', label: 'Bust' }],
 			rows: [{ size: 'S', values: { bust: '34' } }],
 		});
-		ids.suit = await api('POST', '/v1/products', {
-			name: 'Lawn Suit',
+		ids.dress = await api('POST', '/v1/products', {
+			name: 'Linen Dress',
 			status: 'active',
 			brandId: ids.brand.id,
 			options: [{ name: 'Size', values: ['S', 'M'] }],
@@ -192,9 +192,9 @@ describe('storefront reads through the API', () => {
 	});
 
 	it('shows the default size chart, never on a product that hides its guide, and keeps it from deletion (SF-3)', async () => {
-		expect((await shop.visitor('GET', `/v1/shop/products/${ids.suit.slug}`)).json.sizeChart).toBeNull();
+		expect((await shop.visitor('GET', `/v1/shop/products/${ids.dress.slug}`)).json.sizeChart).toBeNull();
 		await shop.setting('size_charts', 'defaultChartId', ids.chart.id);
-		expect((await shop.visitor('GET', `/v1/shop/products/${ids.suit.slug}`)).json.sizeChart).toMatchObject({
+		expect((await shop.visitor('GET', `/v1/shop/products/${ids.dress.slug}`)).json.sizeChart).toMatchObject({
 			id: ids.chart.id,
 			name: 'Standard',
 		});
@@ -205,10 +205,10 @@ describe('storefront reads through the API', () => {
 	});
 
 	it('gives cards their variants when asked, and the brand slug (SF-6)', async () => {
-		const plain = (await shop.visitor('GET', '/v1/shop/products?q=lawn')).json.items[0];
+		const plain = (await shop.visitor('GET', '/v1/shop/products?q=linen')).json.items[0];
 		expect(plain.variants).toBeUndefined();
 		expect(plain.brand).toEqual({ id: ids.brand.id, name: 'Maison', slug: 'maison' });
-		const card = (await shop.visitor('GET', '/v1/shop/products?q=lawn&variants=1')).json.items[0];
+		const card = (await shop.visitor('GET', '/v1/shop/products?q=linen&variants=1')).json.items[0];
 		expect(card.variants).toEqual([
 			expect.objectContaining({ options: { Size: 'S' }, price: 9000, compareAtPrice: 10_000, inStock: true, grade: null }),
 			expect.objectContaining({ options: { Size: 'M' }, price: 12_000, compareAtPrice: null, inStock: false }),

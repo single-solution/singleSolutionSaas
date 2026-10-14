@@ -81,7 +81,7 @@ describe('catalog admin: fresh details and links between sections', () => {
 			'GET /v1/admin/serials': () =>
 				answer(200, {
 					items: [
-						{ id: 'ser_1', productId: 'prd_1', variantId: 'var_1', serial: 'IMEI1', status: 'in_stock', orderId: null },
+						{ id: 'ser_1', productId: 'prd_1', variantId: 'var_1', serial: 'SN-1', status: 'in_stock', orderId: null },
 					],
 					nextCursor: null,
 					hasMore: false,

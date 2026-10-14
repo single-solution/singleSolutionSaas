@@ -21,7 +21,7 @@ export const configOf = (features, settings = {}) => ({
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
 	features,
-	settings: { currency: 'PKR', ...settings },
+	settings: { currency: 'USD', ...settings },
 });
 
 /** @param {unknown} data @param {number} [status] @returns {Answer} */

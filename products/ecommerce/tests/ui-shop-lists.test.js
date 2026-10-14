@@ -34,9 +34,9 @@ const card = (id, over = {}) => ({
 	url: `https://shop.example.com/products/${id}`,
 	image: `https://cdn.example.com/${id}.png`,
 	price: 5000,
-	priceText: 'PKR 50.00',
+	priceText: 'USD 50.00',
 	compareAtPrice: 6000,
-	currency: 'PKR',
+	currency: 'USD',
 	inStock: true,
 	rating: { average: 5, count: 1 },
 	...over,
@@ -105,7 +105,7 @@ describe('wishlist', () => {
 		const host = place('wishlist');
 		await mountWishlist({ host, config: configOf(['wishlist']), shop: fake.shop, win: window });
 		await flush();
-		expect(textOf(host)).toContain(text('shop.priceRange', { min: 'PKR 50.00', max: 'PKR 90.00' }));
+		expect(textOf(host)).toContain(text('shop.priceRange', { min: 'USD 50.00', max: 'USD 90.00' }));
 		expect($(host, '.badge.accent').textContent).toBe(text('shop.featured'));
 		expect($$(host, '.quad img')).toHaveLength(2);
 		expect($(host, 'a.pic').getAttribute('href')).toBe('https://shop.example.com/products/prd_1');
@@ -159,8 +159,8 @@ describe('compare', () => {
 		const page = textOf(host);
 		for (const part of [
 			'Item prd_1',
-			text('shop.priceRange', { min: 'PKR 50.00', max: 'PKR 70.00' }),
-			'PKR 60.00',
+			text('shop.priceRange', { min: 'USD 50.00', max: 'USD 70.00' }),
+			'USD 60.00',
 			'Acme',
 			'Like new',
 			text('compare.noRating'),

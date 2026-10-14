@@ -56,7 +56,7 @@ beforeAll(async () => {
 	shop = await readyShop();
 	// orders wait for confirmation without end, so no cancel message joins in while the clock moves
 	await shop.setting('checkout', 'confirmationHours', 0);
-	await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com', '+92 300 1234567', 'nobody']);
+	await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com', '+44 7700 900123', 'nobody']);
 	await shop.setting('staff_alerts', 'events', ['placed']);
 	await shop.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/orders/{id}');
 	shop.responders.set(NOTIFY, (call) => {
@@ -87,19 +87,19 @@ describe('required messages (K-17)', () => {
 		}
 		expect(new Set(sent.map((m) => m.key)).size).toBe(3);
 		const staff = sent.filter((m) => m.template === 'ecommerce.staff_placed');
-		expect(staff.map((m) => m.to)).toEqual([{ email: 'team@shop.example.com' }, { phone: '+923001234567' }]);
+		expect(staff.map((m) => m.to)).toEqual([{ email: 'team@shop.example.com' }, { phone: '+447700900123' }]);
 		expect(staff[0].values).toMatchObject({ number: order.number, link: `https://admin.shop.example.com/orders/${order.id}` });
 		expect(await outbox()).toEqual([]);
 	});
 
 	it('reads staff alert phones with the shared normalizer, leaving local numbers out (K12)', () => {
-		expect(recipientOf('+92 0320 4862403')).toEqual({ key: 'p:923204862403', to: { phone: '+923204862403' } });
-		expect(recipientOf('0092 300 1234567')).toEqual(recipientOf('+92 300 1234567'));
+		expect(recipientOf('+44 07700 900456')).toEqual({ key: 'p:447700900456', to: { phone: '+447700900456' } });
+		expect(recipientOf('0044 7700 900123')).toEqual(recipientOf('+44 7700 900123'));
 		expect(recipientOf(' Team@Shop.Example.com ')).toEqual({
 			key: 'e:team@shop.example.com',
 			to: { email: 'team@shop.example.com' },
 		});
-		expect(recipientOf('03001234567')).toBeNull();
+		expect(recipientOf('07700900123')).toBeNull();
 		expect(recipientOf('nobody')).toBeNull();
 		expect(recipientOf(42)).toBeNull();
 	});
@@ -187,8 +187,8 @@ describe('required messages (K-17)', () => {
 						status: 200,
 						body: {
 							items: [
-								{ id: 'usr_m1', email: 'maya@shop.example.com', phone: '+923009990000' },
-								{ id: 'usr_m2', email: '', phone: '+923009990001' },
+								{ id: 'usr_m1', email: 'maya@shop.example.com', phone: '+12025550198' },
+								{ id: 'usr_m2', email: '', phone: '+12025550199' },
 								{ id: 'usr_m3', email: 'gone@shop.example.com', blocked: true },
 								'nobody',
 							],
@@ -203,16 +203,16 @@ describe('required messages (K-17)', () => {
 		const staff = sendsSince(since).filter((m) => m.template === 'ecommerce.staff_placed');
 		expect(staff.map((m) => [m.to, m.key.startsWith('ecommerce-out_')])).toEqual([
 			[{ email: 'team@shop.example.com' }, true],
-			[{ phone: '+923001234567' }, true],
+			[{ phone: '+447700900123' }, true],
 			[{ email: 'maya@shop.example.com' }, true],
-			[{ phone: '+923009990001' }, true],
+			[{ phone: '+12025550199' }, true],
 		]);
 		expect(
 			shop.calls
 				.slice(since)
 				.filter((call) => call.url.includes('/v1/messages/sms'))
 				.map((call) => JSON.parse(call.body).to),
-		).toEqual([{ phone: '+923001234567' }, { phone: '+923009990001' }]);
+		).toEqual([{ phone: '+447700900123' }, { phone: '+12025550199' }]);
 		await placeOrder();
 		expect(asked).toBe(1);
 		// Accounts down after the 5 minutes: the staff it named before are still alerted

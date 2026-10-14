@@ -51,12 +51,12 @@ const summary = (over = {}) => ({
 	status: 'confirmed',
 	statusLabel: 'Confirmed',
 	role: 'open',
-	customer: { userId: 'u1', name: 'Ana', email: 'ana@example.com', phone: '0300' },
-	city: 'Lahore',
+	customer: { userId: 'u1', name: 'Ana', email: 'ana@example.com', phone: '+12025550143' },
+	city: 'Tokyo',
 	itemCount: 2,
 	total: 250000,
-	totalText: 'PKR 2,500.00',
-	currency: 'PKR',
+	totalText: 'USD 2,500.00',
+	currency: 'USD',
 	payment: { method: 'cod', state: 'unpaid' },
 	shipment: null,
 	placedAt: AT,
@@ -95,18 +95,18 @@ const detail = (over = {}) => ({
 			warrantyDays: 0,
 		},
 	],
-	totals: { subtotal: 250000, discount: 1000, delivery: 0, tax: 500, total: 250000, currency: 'PKR', taxIncluded: true },
+	totals: { subtotal: 250000, discount: 1000, delivery: 0, tax: 500, total: 250000, currency: 'USD', taxIncluded: true },
 	promotions: { couponCode: 'SAVE', pointsRedeemed: 20, pointsEarned: 25 },
 	payment: { method: 'online', state: 'paid', paid: 250000, refunded: 1000, refundable: 249000, advance: 5000 },
 	address: {
 		name: 'Ana',
-		phone: '0300',
+		phone: '+12025550143',
 		line1: 'Street 1',
 		line2: '',
-		city: 'Lahore',
+		city: 'Tokyo',
 		area: '',
 		postalCode: '',
-		country: 'PK',
+		country: 'JP',
 		notes: '',
 	},
 	shipment: {
@@ -198,8 +198,8 @@ describe('orders admin: the list', () => {
 		const panel = panelOf(root, 'orders');
 		const row = rowOf(panel, 'ord_1');
 		expect(textOf(row)).toContain('SO2026-1');
-		expect(textOf(row)).toContain('PKR 2,500.00');
-		expect(textOf(row)).toContain('Confirmed · Ana · Lahore');
+		expect(textOf(row)).toContain('USD 2,500.00');
+		expect(textOf(row)).toContain('Confirmed · Ana · Tokyo');
 		expect(textOf(row)).toContain('Cash on delivery · Unpaid');
 		expect(row.getAttribute('aria-current')).toBe('true');
 		// the first order opens by itself, without leaving the list on a narrow widget
@@ -380,20 +380,20 @@ describe('orders admin: the list', () => {
 		const { root, server } = await mountWith(mountOrdersAdmin, {
 			features: ['checkout'],
 			settings: SETTINGS,
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-			timeZone: 'Asia/Karachi',
+			format: { locale: 'en-US', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Tokyo',
 			routes: {
 				'GET /v1/admin/orders': () => answer(200, { items: [summary()], nextCursor: null, hasMore: false }),
 				'GET /v1/admin/orders/ord_1': () => answer(200, detail()),
 			},
 		});
 		const panel = panelOf(root, 'orders');
-		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Confirmed · Ana · Lahore · 1 Oct 2026, 15:00');
-		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Rs 2,500');
+		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Confirmed · Ana · Tokyo · Oct 1, 2026, 7:00 PM');
+		expect(textOf(rowOf(panel, 'ord_1'))).toContain('US$ 2,500');
 		await change(fieldIn(panel, 'From'), '2026-10-01');
 		await change(fieldIn(panel, 'To'), '2026-10-02');
-		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('from')).toBe('2026-09-30T19:00:00.000Z');
-		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('to')).toBe('2026-10-02T19:00:00.000Z');
+		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('from')).toBe('2026-09-30T15:00:00.000Z');
+		expect(server.last('GET /v1/admin/orders')?.url.searchParams.get('to')).toBe('2026-10-02T15:00:00.000Z');
 	});
 });
 
@@ -416,8 +416,8 @@ describe('orders admin: one order', () => {
 			'365 days',
 			'None',
 			'S1',
-			'PKR 2,490.00',
-			'PKR 50.00',
+			'USD 2,490.00',
+			'USD 50.00',
 			'Blocked: Fraud',
 			'Careful',
 			'Ring twice',
@@ -479,7 +479,7 @@ describe('orders admin: one order', () => {
 		expect(moves[0]).toEqual({ to: 'packed', note: 'boxed', serials: { oln_1: ['S1', 'S2'] }, shipment: null, updatedAt: AT });
 		// a warning in the website's words, with its amount in the order's currency (PLAN 0.4.10)
 		expect(statuses(pane)).toContain(
-			`Moved to Packed. ${TEXTS['ordersAdmin.warning.refund_by_hand']?.replace('{amount}', 'PKR 250.00')}`,
+			`Moved to Packed. ${TEXTS['ordersAdmin.warning.refund_by_hand']?.replace('{amount}', 'USD 250.00')}`,
 		);
 		expect(statuses(pane)).not.toContain(SERVER_ENGLISH);
 		expect(textOf(rowOf(panel, 'ord_1'))).toContain('Packed');
@@ -693,9 +693,9 @@ describe('orders admin: one order', () => {
 		type(fieldIn(dialogOf(root), 'City'), '');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.address']);
-		type(fieldIn(dialogOf(root), 'City'), 'Karachi');
+		type(fieldIn(dialogOf(root), 'City'), 'Osaka');
 		await submitDialog(root);
-		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body.address).toMatchObject({ city: 'Karachi', line1: 'Street 1' });
+		expect(server.last('PATCH /v1/admin/orders/ord_1')?.body.address).toMatchObject({ city: 'Osaka', line1: 'Street 1' });
 		server.routes['PATCH /v1/admin/orders/ord_1'] = () => problem(500, 'internal_error');
 		await pickMenu(pane, 'Edit staff note');
 		await submitDialog(root);
@@ -709,11 +709,11 @@ describe('orders admin: one order', () => {
 		expect(statuses(pane)).toContain('You are not allowed to do this.');
 		// refunds
 		await click(buttonIn(pane, 'Refund'));
-		expect(textOf(dialogOf(root))).toContain('Up to PKR 2,490.00 can be refunded.');
-		type(fieldIn(dialogOf(root), 'Amount (PKR)'), 'x');
+		expect(textOf(dialogOf(root))).toContain('Up to USD 2,490.00 can be refunded.');
+		type(fieldIn(dialogOf(root), 'Amount (USD)'), 'x');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
-		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '10');
+		type(fieldIn(dialogOf(root), 'Amount (USD)'), '10');
 		type(fieldIn(dialogOf(root), 'Reason'), 'damaged');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.reason']);
@@ -726,7 +726,7 @@ describe('orders admin: one order', () => {
 			});
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/orders/ord_1/refunds')?.body).toEqual({ amount: 1000, reason: 'damaged' });
-		expect(statuses(pane)).toContain('PKR 10.00 refunded. Return by hand.');
+		expect(statuses(pane)).toContain('USD 10.00 refunded. Return by hand.');
 		expect(shows(pane, 'Refund')).toBe(false);
 		host.remove();
 	});
@@ -764,7 +764,7 @@ describe('orders admin: one order', () => {
 		);
 		const panel = panelOf(root, 'orders');
 		const pane = detailOf(panel);
-		expect(textOf(pane)).toContain('Street 1, Lahore, PK');
+		expect(textOf(pane)).toContain('Street 1, Tokyo, JP');
 		expect(textOf(pane)).toContain('USD 10.00');
 		expect(textOf(pane)).not.toContain('Notes');
 		expect(pane.querySelector('a')).toBeNull();
@@ -838,10 +838,10 @@ describe('orders admin: one order', () => {
 			'Shipped → Returned to origin · Sam · Refused at the door',
 			`Awaiting payment → Confirmed · ${TEXTS['ordersAdmin.by.system']} · ${TEXTS['ordersAdmin.historyNote.payment_confirmed']}`,
 			`Delivered → Delivered · ${TEXTS['ordersAdmin.by.server']} · ${TEXTS['ordersAdmin.historyNote.refunded_recorded']
-				?.replace('{amount}', 'PKR 250.00')
+				?.replace('{amount}', 'USD 250.00')
 				.replace('{reason}', 'Scratched')}`,
 			`Delivered → Delivered · system · ${TEXTS['ordersAdmin.historyNote.payment_recorded_reference']
-				?.replace('{amount}', 'PKR 10.00')
+				?.replace('{amount}', 'USD 10.00')
 				.replace('{reference}', 'TRX-1')}`,
 			'Delivered → Refunded · Server · Asked by phone',
 		])
@@ -919,7 +919,7 @@ const claim = (over = {}) => ({
 		id: 'ord_1',
 		number: 'SO2026-1',
 		customer: { name: 'Ana', email: 'ana@example.com' },
-		currency: 'PKR',
+		currency: 'USD',
 		total: 250000,
 		deliveredAt: AT,
 	},
@@ -954,7 +954,7 @@ describe('orders admin: returns', () => {
 		const { panel, server } = await startReturns();
 		expect(textOf(rowOf(panel, 'ret_1'))).toContain('R-ABC123');
 		expect(textOf(rowOf(panel, 'ret_1'))).toContain('Order SO2026-1 · Return · Requested');
-		expect(textOf(rowOf(panel, 'ret_2'))).toContain('PKR 50.00');
+		expect(textOf(rowOf(panel, 'ret_2'))).toContain('USD 50.00');
 		expect(listCount(panel)).toBe('100000+');
 		expect(chipCount(panel, 'requested')).toBe('2');
 		expect(chipCount(panel, 'closed')).toBe('0');
@@ -1045,14 +1045,14 @@ describe('orders admin: returns', () => {
 		// refund
 		await click(buttonIn(pane, 'Refund'));
 		expect(textOf(dialogOf(root))).toContain('Refunds go back through the online payment.');
-		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '0');
+		type(fieldIn(dialogOf(root), 'Amount (USD)'), '0');
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe('Check the amounts and numbers you typed.');
-		type(fieldIn(dialogOf(root), 'Amount (PKR)'), '500');
+		type(fieldIn(dialogOf(root), 'Amount (USD)'), '500');
 		await submitDialog(root);
 		expect(posts[1]).toEqual({ amount: 50000, note: '' });
 		expect(statuses(pane)).toContain(
-			`PKR 500.00 refunded. ${TEXTS['ordersAdmin.warning.refund_by_hand']?.replace('{amount}', 'PKR 500.00')}`,
+			`USD 500.00 refunded. ${TEXTS['ordersAdmin.warning.refund_by_hand']?.replace('{amount}', 'USD 500.00')}`,
 		);
 		expect(statuses(pane)).not.toContain(SERVER_ENGLISH);
 		expect(textOf(pane)).toContain('The refund is recorded; pay it back yourself.');

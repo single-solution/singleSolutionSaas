@@ -136,15 +136,15 @@ describe('cart checks', () => {
 		expect(checkAddress(good, ['postalCode'], rules)).toMatchObject({ ok: false, field: 'address/postalCode' });
 		expect(checkAddress({ ...good, phone: 'call me' }, [], rules)).toMatchObject({ ok: false, field: 'address/phone' });
 		// with no calling code a national number is kept as typed (the courier calls it)
-		expect(checkAddress({ ...good, phone: '0300 1234567' }, [], rules)).toMatchObject({
+		expect(checkAddress({ ...good, phone: '07700 900123' }, [], rules)).toMatchObject({
 			ok: true,
-			value: { phone: '0300 1234567' },
+			value: { phone: '07700 900123' },
 		});
-		const pk = { defaultCallingCode: '+92', trunkPrefix: '' };
-		for (const phone of ['923001234567', '+92 0320 4862403', '03001234567', '0300-1234567'])
-			expect(checkAddress({ ...good, phone }, [], pk)).toMatchObject({ ok: true });
-		expect(checkAddress({ ...good, phone: '+92 0320 4862403' }, [], pk)).toMatchObject({ value: { phone: '+923204862403' } });
-		expect(checkAddress({ ...good, phone: '923001234567' }, [], pk)).toMatchObject({ value: { phone: '+923001234567' } });
+		const gb = { defaultCallingCode: '+44', trunkPrefix: '' };
+		for (const phone of ['447700900123', '+44 07700 900456', '07700900123', '07700-900123'])
+			expect(checkAddress({ ...good, phone }, [], gb)).toMatchObject({ ok: true });
+		expect(checkAddress({ ...good, phone: '+44 07700 900456' }, [], gb)).toMatchObject({ value: { phone: '+447700900456' } });
+		expect(checkAddress({ ...good, phone: '447700900123' }, [], gb)).toMatchObject({ value: { phone: '+447700900123' } });
 	});
 
 	it('checks what placing adds', () => {

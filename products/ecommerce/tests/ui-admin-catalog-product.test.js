@@ -57,7 +57,7 @@ describe('catalog admin: a product', () => {
 		const detail = detailOf(panelOf(root, 'products'));
 		const text = textOf(detail);
 		for (const part of [
-			'PKR 1,250.00 – PKR 1,260.00',
+			'USD 1,250.00 – USD 1,260.00',
 			'Some variants in stock',
 			'2 (1 on sale)',
 			'old-phone',
