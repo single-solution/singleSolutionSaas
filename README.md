@@ -16,7 +16,7 @@ Each deployable's README lists its environment variables and how to deploy it.
 
 ## Setup
 
-Needs Node 22+ (`.nvmrc`) and pnpm 11.
+Needs Node 22 (`.nvmrc`) and pnpm 11.
 
 ```bash
 pnpm install
@@ -26,7 +26,7 @@ pnpm check
 `pnpm check` checks the root files' format, then runs every unit's own `check` (format, lint, typecheck and tests with
 coverage of 90 % lines, 90 % functions and 85 % branches). Tests start their own in-memory MongoDB. CI runs the same per
 unit, plus `next build` for deployables and `ss app validate` for products. `pnpm --filter <unit> <script>` runs one
-unit's script.
+unit's script; `pnpm test:all` runs every unit's tests in one Vitest run (sharing one in-memory MongoDB).
 
 ## Deploying
 
