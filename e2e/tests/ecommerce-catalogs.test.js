@@ -13,8 +13,8 @@ import { createProductInstance, manifest, strings } from '@ss/product-ecommerce/
 import { createRoutes } from '@ss/product-ecommerce/routes';
 import { startSystem } from './helpers.js';
 
-const SHOP = 'https://ecommerce-phase3.test';
-const BUCKET = 'https://bucket.phase3.test';
+const SHOP = 'https://ecommerce-catalogs.test';
+const BUCKET = 'https://bucket.catalogs.test';
 /** Three kinds of shop: clothing, lighting and phones. */
 const STORES = /** @type {const} */ (['apparel.example.com', 'lighting.example.com', 'devices.example.com']);
 
@@ -44,7 +44,7 @@ beforeAll(async () => {
 		unit: { createProductInstance, createRoutes, manifest, strings, url: SHOP, handlers: { [BUCKET]: bucket } },
 	});
 	await sys.connect();
-	const m = await sys.merchant('stores@phase3.test', [...STORES]);
+	const m = await sys.merchant('shops@catalogs.test', [...STORES]);
 	await sys.addCredits(m.merchantId, 100);
 	const support = await sys.admin('support');
 	for (const [index, domain] of STORES.entries()) {
@@ -63,8 +63,8 @@ beforeAll(async () => {
 				endpoint: BUCKET,
 				region: 'auto',
 				bucket: 'shop',
-				accessKeyId: 'AKIAPHASE3',
-				secretAccessKey: 'phase3-secret-0123456789',
+				accessKeyId: 'AKIACATALOGS',
+				secretAccessKey: 'catalogs-secret-0123456789',
 			},
 		});
 		expect(storage.json).toMatchObject({ status: 'connected' });
@@ -108,7 +108,7 @@ const [APPAREL, LIGHTING, DEVICES] = STORES;
 /** @type {Record<string, any>} */
 const ids = {};
 
-describe('Ecommerce phase 3 on the real Portal', () => {
+describe('Ecommerce catalogs on the real Portal', () => {
 	it('writes a clothing catalog: variant attributes with several values, a size chart, video and rich text', async () => {
 		await configure(APPAREL, {
 			'catalog.productUrl': '/{category}/{slug}',

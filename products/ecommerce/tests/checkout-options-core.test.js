@@ -1,5 +1,5 @@
 /**
- * The pure parts of the Phase 4 checkout options (PLAN 0.8.10 E18–E25): deal conditions, windows and locks, role
+ * The pure parts of the checkout options (PLAN 0.8.10 E18–E25): deal conditions, windows and locks, role
  * pricing, loyalty options, guests and order keys, COD fees and whole-unit amounts.
  */
 import { describe, expect, it } from 'vitest';

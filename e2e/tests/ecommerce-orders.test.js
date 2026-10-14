@@ -34,11 +34,11 @@ import {
 import { createRoutes as payRoutes } from '@ss/product-payments/routes';
 import { codeOf, startSystem } from './helpers.js';
 
-const SHOP = 'https://ecommerce-phase4.test';
-const ACCOUNTS = 'https://accounts-phase4.test';
-const PAYMENTS = 'https://payments-phase4.test';
-const NOTIFY = 'https://notifications-phase4.test';
-const BUCKET = 'https://bucket.phase4.test';
+const SHOP = 'https://ecommerce-orders.test';
+const ACCOUNTS = 'https://accounts-orders.test';
+const PAYMENTS = 'https://payments-orders.test';
+const NOTIFY = 'https://notifications-orders.test';
+const BUCKET = 'https://bucket.orders.test';
 const DOMAIN = 'shop.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const PASSWORD = 'a long shopper password';
@@ -240,7 +240,7 @@ const place = (body, token) => {
 	return shopper('POST', '/v1/shop/orders', {
 		body: { address: ADDRESS, ...body },
 		...(token ? { signIn: token } : {}),
-		key: `phase4-${keys}`,
+		key: `order-${keys}`,
 	});
 };
 
@@ -349,7 +349,7 @@ beforeAll(async () => {
 	])
 		await dashboardOf(NOTIFY, 'notifications', '/templates', { key, channel: 'email', subject, text });
 
-	// Ecommerce: the phase 4 features, its database, the bucket and the three pasted tokens
+	// Ecommerce: the features these tests use, its database, the bucket and the three pasted tokens
 	const support = await sys.admin('support');
 	await sys.switchFeatures(await sys.adminSession(support.client, websiteId), websiteId, [
 		'catalog',
@@ -375,8 +375,8 @@ beforeAll(async () => {
 			endpoint: BUCKET,
 			region: 'auto',
 			bucket: 'shop',
-			accessKeyId: 'AKIAPHASE4',
-			secretAccessKey: 'phase4-secret-0123456789',
+			accessKeyId: 'AKIAORDERS',
+			secretAccessKey: 'orders-secret-0123456789',
 		},
 	});
 	for (const id of ['accounts', 'payments', 'notifications']) {
@@ -446,7 +446,7 @@ afterAll(async () => {
 	await sys?.stop();
 });
 
-describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notifications', () => {
+describe('Ecommerce orders on the real Portal, Accounts, Payments and Notifications', () => {
 	it('numbers orders SO-YYYY-NNNN in the business year and continues from the counter: SO-2026-0043 (E30)', async () => {
 		const sara = await signIn('07700900111');
 		const first = await place({ lines: [caseLine()], payment: 'cod' }, sara);

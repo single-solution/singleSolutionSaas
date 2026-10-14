@@ -1,5 +1,5 @@
 /**
- * The Phase 4 checkout options through the API (PLAN 0.8.10 E18–E25): deal rules, pages and cart locks, role pricing,
+ * The checkout options through the API (PLAN 0.8.10 E18–E25): deal rules, pages and cart locks, role pricing,
  * loyalty options, guest checkout with order keys, payment and delivery options, COD options, bank transfers recorded
  * by staff with the shopper's proof, and whole-unit amounts.
  */
