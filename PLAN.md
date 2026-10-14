@@ -3602,6 +3602,17 @@ feature (CH-8, owner's call).
 
 #### Growth
 
+**Redirects built (2026-10-14; c6d3463f, e2e 3d1ff141; SEO audit G9, Growth part).** Feature `redirects`: rules `{ from,
+match exact | prefix, to, code 301 | 308 | 410, note }`, at most 5,000 per website, one per normalized path (one leading
+slash, no trailing slash except `/`, percent-encoded, case kept; `?`/`#` in an old path refused). Matching uses the
+path only and passes the query string on; a prefix keeps the rest of the path; exact wins, else the longest prefix.
+Loops, chains, redirects to a 410 page and chain-making deletes are refused in one transaction. The website's server
+reads `GET /v1/redirects/match` (rule and location, or 204) or `GET /v1/redirects/all` (ETag version, `private,
+max-age=300`, 304 for one small read). Staff use the `redirects` admin widget (`redirects.edit`) or server-token twins:
+list with counts, create, change, delete, suggestions from the 404 log, CSV export and import with a dry run; all
+changes in the activity log; the guide has a tested middleware example. Also fixed: raw analytics events moved from
+`ss_growth_events` (the kit's per-product event store name) to `ss_growth_analytics_events` (01e4e078).
+
 **G1. Tags without a consent step.**
 
 - Why: SB and CT load their pixels with no consent step; IM grants everything while its banner is off and loads GA4
