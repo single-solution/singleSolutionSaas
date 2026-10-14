@@ -199,7 +199,7 @@ export function MerchantCredits({ billing, receipts, dayCharges }) {
  * Add credits for those who may add them.
  * @param {{ rows: any[], onAdd?: ((merchant: any) => void) | null }} props
  */
-export function AttentionTable({ rows, onAdd = null }) {
+function AttentionTable({ rows, onAdd = null }) {
 	return (
 		<Table
 			caption={BILLING.billingSections.attention.title}
@@ -247,7 +247,7 @@ export function AttentionTable({ rows, onAdd = null }) {
  * @param {{ merchants: Array<{ value: string, label: string }>, initial?: string | null, onClose: () => void,
  *   onPicked: (merchant: { merchantId: string, merchantName: string, balance: number | null }) => void }} props
  */
-export function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
+function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
 	const [merchantId, setMerchantId] = useState(initial ?? merchants[0]?.value ?? '');
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));

@@ -187,9 +187,3 @@ export const websitesVisible = (actor, permission) => {
 	if (actor.type === 'merchant') return can(actor, permission) ? 'own' : 'none';
 	return 'none';
 };
-
-/**
- * @param {unknown} role
- * @returns {role is AdminRole}
- */
-export const validRole = (role) => typeof role === 'string' && ADMIN_ROLES.includes(/** @type {AdminRole} */ (role));

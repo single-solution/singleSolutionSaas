@@ -1,11 +1,10 @@
 'use client';
 /**
  * Websites in both consoles (PLAN 0.6, 0.8.2): the website card — its domain and daily cost, its products (status,
- * features on, daily cost, Open) and, launched from the card as dialogs, everything the old website page did: **Add
- * product** and **Remove** a product (Owner, Support), **Install and tokens** (one block per product: widget script
- * tag, browser token, server token reveal / copy / regenerate, docs; never for Finance), **Usage** (30-day chart and
- * the table by product and feature), and in the card's menu **Visit website**, **Copy domain** and **Remove website**
- * (Remove: Owner, Support). The admin's merchant page shows one card per website; the merchant console shows the
+ * features on, daily cost, Open) and, launched from the card as dialogs: **Add product** and **Remove** a product
+ * (Owner, Support), **Install and tokens** (one block per product: widget script tag, browser token, server token
+ * reveal / copy / regenerate, docs; never for Finance), **Usage** (30-day chart and the table by product and feature),
+ * and in the card's menu **Visit website**, **Copy domain** and **Remove website** (Remove: Owner, Support). The admin's merchant page shows one card per website; the merchant console shows the
  * selected website's card as the detail of its Websites screen. The consoles pass the rights, the API client and the
  * Open route; the Portal checks every right again.
  * @module

@@ -1,7 +1,6 @@
 import { createServer } from 'node:net';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
-	MAIL_TEMPLATES,
 	createLogMailer,
 	createPlatformMailer,
 	createSmtpMailer,
@@ -11,6 +10,7 @@ import {
 	smtpTransportOptions,
 } from '../src/infra/mailer.js';
 import { isProblem } from '../src/infra/http.js';
+import { MAIL_TEXTS } from '../src/texts/mail.js';
 import { DEFAULT_SETTINGS } from '../src/infra/config.js';
 import { createTestLogger } from './helpers.js';
 
@@ -66,7 +66,7 @@ describe('mail templates (PLAN 0.5.10)', () => {
 	const CONTEXT = { brand: 'Acme Portal', support: { email: 'help@acme.test', phone: '+92 300 1234567', whatsapp: null } };
 
 	it('renders every template as text and simple HTML without external assets, with the Branding and support contact', () => {
-		for (const template of MAIL_TEMPLATES) {
+		for (const template of /** @type {Array<keyof typeof MAIL_TEXTS>} */ (Object.keys(MAIL_TEXTS))) {
 			const mail = renderMail(template, { link: LINK, merchantName: 'Acme <b>&</b>', newEmail: 'n@acme.test' }, CONTEXT);
 			expect(mail.subject.length).toBeGreaterThan(5);
 			expect(mail.html).not.toMatch(/<img|<link|<script|src=|url\(/i);

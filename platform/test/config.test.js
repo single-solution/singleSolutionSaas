@@ -1,15 +1,7 @@
+import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { issueToken, verifyToken } from '@ss/protocol';
-import {
-	DEFAULT_SETTINGS,
-	ENV_VARS,
-	buildConfig,
-	deriveSecret,
-	loadConfig,
-	loadEnv,
-	parsePortalUrl,
-	sessionPolicies,
-} from '../src/infra/config.js';
+import { DEFAULT_SETTINGS, buildConfig, loadConfig, loadEnv, parsePortalUrl, sessionPolicies } from '../src/infra/config.js';
 import { createPortalKeys } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { createSystemStore, generateSecrets, secretsOf, testSystemState } from '../src/infra/system.js';
@@ -101,7 +93,6 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 		const env = loadEnv(
 			await testEnv({
 				MONGODB_URI: 'mongodb+srv://user:pass@cluster.example.net/?retryWrites=true',
-				OUTBOUND_DEV_ALLOW_HOSTS: 'example.net',
 			}),
 		);
 		expect(env.mongo.dbName).toBe('ss_portal');
@@ -110,9 +101,9 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 	});
 
 	it('documents exactly the three variables of PLAN 0.11, and the optional previous key', async () => {
-		const names = ENV_VARS.map(([name]) => name);
+		const example = await readFile(new URL('../.env.example', import.meta.url), 'utf8');
+		const names = example.split('\n').flatMap((line) => /^([A-Z][A-Z0-9_]*)=/.exec(line)?.[1] ?? []);
 		expect(names).toEqual(['MONGODB_URI', 'PORTAL_URL', 'ENCRYPTION_KEY', 'ENCRYPTION_KEY_PREVIOUS']);
-		expect(ENV_VARS.filter(([, required]) => !required).map(([name]) => name)).toEqual(['ENCRYPTION_KEY_PREVIOUS']);
 		const env = await testEnv();
 		expect(loadEnv(env).previousEncryptionKey).toBeNull();
 		const previous = 'previous-encryption-key-0123456789abcdef';
@@ -189,10 +180,6 @@ describe('buildConfig: environment + system state', () => {
 			from: 'Portal <no-reply@example.com>',
 		});
 		expect(problemsOf(() => buildConfig(env, { ...system, signingKeys: [] }))).toEqual(['system secrets are incomplete']);
-	});
-
-	it('derives labelled subkeys', () => {
-		expect(deriveSecret(Buffer.alloc(32, 1), 'a').equals(deriveSecret(Buffer.alloc(32, 1), 'b'))).toBe(false);
 	});
 });
 

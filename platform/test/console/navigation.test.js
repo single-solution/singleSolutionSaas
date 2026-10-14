@@ -14,7 +14,7 @@ import { Link, NavLink } from '../../src/console/link.js';
 import { FilterForm, useNavigation } from '../../src/console/navigation.js';
 import { ListDetail, ListPane, ListRow } from '../../src/console/views/common.js';
 import { ConsoleLoading, screenOf } from '../../src/console/views/loading.js';
-import { forgetScreens, listScroll, listWasPlaceholder, stripOpen } from '../../src/console/views/screen-memory.js';
+import { listScroll, listWasPlaceholder, stripOpen } from '../../src/console/views/screen-memory.js';
 import { memoize, runInRequestScope } from '../../src/infra/request-scope.js';
 import { testRouter } from './router.js';
 
@@ -29,7 +29,6 @@ const PathnameContext = /** @type {import('react').Context<string | null>} */ (
 
 afterEach(() => {
 	cleanup();
-	forgetScreens();
 	testRouter.push.mockClear();
 });
 

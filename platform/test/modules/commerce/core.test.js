@@ -7,7 +7,6 @@ import {
 	entryHash,
 	genesisHash,
 	ledgerActor,
-	sumAmounts,
 	verifyChain,
 } from '../../../src/modules/commerce/core/ledger.js';
 import { checkAddProduct, checkDayRange, checkReceipt } from '../../../src/modules/commerce/core/validate.js';
@@ -58,7 +57,6 @@ describe('ledger chain', () => {
 			account: { seq: 3, headHash: String(entries[2]?.hash), balance: 3500 },
 		});
 		expect(result).toMatchObject({ ok: true, entries: 3, balance: 3500, seq: 3 });
-		expect(sumAmounts(entries)).toBe(3500);
 		expect(verifyChain({ merchantId: M1, entries: [] })).toMatchObject({ ok: true, seq: 0, headHash: genesisHash(M1) });
 	});
 

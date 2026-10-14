@@ -13,7 +13,7 @@ import { ToastProvider } from '@ss/ui';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
 import * as loaders from '../../src/console/loaders.js';
-import { apiFetch, signInAgain, takeFragmentToken, useAction, useResource } from '../../src/console/client.js';
+import { apiFetch, signInAgain, takeFragmentToken, useResource } from '../../src/console/client.js';
 import { AccountView } from '../../src/console/views/account.js';
 import { QrCode } from '../../src/console/views/login-settings.js';
 import {
@@ -412,7 +412,6 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		function Probe() {
 			const r = useResource('/v1/me', null);
 			const none = useResource(null, 'initial');
-			const action = useAction(() => apiFetch('/v1/me', { redirectOn401: false }));
 			return (
 				<div>
 					<button type="button" onClick={() => void r.reload()}>
@@ -421,14 +420,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 					<button type="button" onClick={() => void none.reload()}>
 						noop
 					</button>
-					<button type="button" onClick={() => void action.run()}>
-						run
-					</button>
-					<button type="button" onClick={() => action.reset()}>
-						reset
-					</button>
 					<span>{r.problem ? 'problem' : 'none'}</span>
-					<span>{action.problem ? 'action-problem' : 'action-ok'}</span>
 				</div>
 			);
 		}
@@ -436,10 +428,6 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		await press('noop');
 		await press('reload');
 		await until(() => shows('problem'));
-		await press('run');
-		await until(() => shows('action-problem'));
-		await press('reset');
-		await until(() => shows('action-ok'));
 		// a reload that resolves after unmount is ignored
 		await act(async () => {
 			button('reload').click();

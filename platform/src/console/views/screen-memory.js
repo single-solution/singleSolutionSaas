@@ -104,11 +104,3 @@ export const ScreenContext = createContext(/** @type {Screen} */ ({ section: nul
 
 /** The screen a list pane belongs to. */
 export const useScreen = () => useContext(ScreenContext);
-
-/** Forget everything (tests). */
-export const forgetScreens = () => {
-	screens.clear();
-	scrolls.clear();
-	skeletons.clear();
-	strips.clear();
-};

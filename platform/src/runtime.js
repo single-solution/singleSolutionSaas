@@ -20,7 +20,7 @@ import { modules as defaultModules } from './modules/index.js';
 import { createPortal } from './portal.js';
 
 const KEY = Symbol.for('ss.platform.portal');
-/** Settings changes on other instances are noticed within this delay. */
+/** A settings change, made on any instance (this one too), is noticed within this delay. */
 const SETTINGS_RECHECK_MS = 5_000;
 
 /**
@@ -114,11 +114,4 @@ export const getPortal = async (given) => {
 		store.pending = null;
 	});
 	return (await store.pending).portal;
-};
-
-/** Forget the cached instance: the next `getPortal()` rebuilds it (after a settings change; tests). */
-export const resetPortal = () => {
-	const store = shared();
-	delete store.entry;
-	store.pending = null;
 };

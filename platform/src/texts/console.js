@@ -128,7 +128,6 @@ export const MERCHANT_FIELDS = Object.freeze({
 	address: 'Address',
 	country: 'Country',
 	countryNone: 'Not set',
-	optional: 'optional',
 });
 
 /** Merchant console (PLAN 0.8.2 Merchant). */
@@ -493,7 +492,6 @@ export const ADMIN = Object.freeze({
 	}),
 	activityTitle: 'Activity',
 	activityIntro: 'Every entry in the activity log, filterable by merchant, admin and date.',
-	adminsIntro: 'Who can sign in to the admin console, with their role and two-step sign-in.',
 	settingsIntro: 'E-mail sending, billing rules, branding, support contact, security and the encryption key.',
 	myAccountIntro: 'Your name, sign-in, password, two-step sign-in and activity.',
 	filters: Object.freeze({
@@ -625,7 +623,6 @@ export const MORE = Object.freeze({
 	visitWebsite: 'Visit website',
 	copyDomain: 'Copy domain',
 	// admin Overview
-	productsOnWebsites: 'Products on websites',
 	creditsAdded: 'Credits added this month (UTC)',
 	viewProduct: 'View product',
 	productMenu: (/** @type {string} */ name) => `${name} actions`,
@@ -648,7 +645,6 @@ export const MORE = Object.freeze({
 		products: 'Products on websites',
 	}),
 	twoStepOn: (/** @type {number} */ left) => `On · ${left} recovery ${left === 1 ? 'code' : 'codes'} left`,
-	suspendedLine: (/** @type {string} */ reason) => `${reason} · since`,
 	usageAll: 'Usage, all websites',
 	usageAllTitle: (/** @type {string} */ name) => `Usage · ${name}`,
 	receiptsInBilling: 'Receipts in Credits and billing',

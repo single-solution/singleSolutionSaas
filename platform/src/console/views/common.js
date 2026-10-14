@@ -299,7 +299,7 @@ export function ListSearch({ label, value, onChange, onSearch, children }) {
  * The Back link to the list, shown below 1024 px where the list and the detail stack (PLAN 0.6 Phones and tablets).
  * @param {{ href: string, label: string }} props
  */
-export function BackLink({ href, label }) {
+function BackLink({ href, label }) {
 	return (
 		<Link href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline lg:hidden">
 			<Icon name="chevronRight" size={14} className="rotate-180" />

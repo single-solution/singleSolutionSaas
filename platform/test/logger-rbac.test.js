@@ -9,7 +9,6 @@ import {
 	ROLE_PERMISSIONS,
 	can,
 	permissionsFor,
-	validRole,
 	websitesVisible,
 } from '../src/infra/rbac.js';
 import { MERCHANT, MERCHANT_2, WEBSITE } from './helpers.js';
@@ -177,7 +176,5 @@ describe('rbac (PLAN 0.2 rights table)', () => {
 		expect(websitesVisible({ type: 'system', id: 's' }, 'x')).toBe('all');
 		expect(websitesVisible({ type: 'product', id: 'p' }, 'websites.read')).toBe('none');
 		expect(websitesVisible(null, 'websites.read')).toBe('none');
-		expect(validRole('owner')).toBe(true);
-		expect(validRole('admin')).toBe(false);
 	});
 });

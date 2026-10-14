@@ -5,8 +5,8 @@
  * Two sources, both plain:
  * - **Environment** (`loadEnv`, PLAN 0.11): the database (`MONGODB_URI`), the Portal's final public address
  *   (`PORTAL_URL`) and the key that encrypts stored secrets (`ENCRYPTION_KEY`, plus the optional
- *   `ENCRYPTION_KEY_PREVIOUS` set only while the owner changes it). Everything else is a fixed constant below. The environment comes from `NODE_ENV` (production unless `development` or `test`). Listed in
- *   {@link ENV_VARS}.
+ *   `ENCRYPTION_KEY_PREVIOUS` set only while the owner changes it), listed in `.env.example`. Everything else is a fixed
+ *   constant below. The environment comes from `NODE_ENV` (production unless `development` or `test`).
  * - **System state** (`infra/system.js`, the control database): the secrets generated on first start (the Portal
  *   signing keys, the token signing keys, the session secret and the idempotency secret) and the settings an Owner
  *   records (e-mail sending, branding, support contact, security, billing rules).
@@ -14,7 +14,6 @@
  * `buildConfig(env, system)` joins them into the {@link PortalConfig} every module reads.
  * @module
  */
-import { hkdfSync } from 'node:crypto';
 import { platformError } from './errors.js';
 
 /** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
@@ -134,22 +133,6 @@ export const sessionPolicies = (hours) => {
 	return Object.freeze({ admin: policy, merchant: policy });
 };
 
-/** Documented environment variables: `[name, required, description]`. Nothing else is read. */
-export const ENV_VARS = Object.freeze([
-	['MONGODB_URI', true, 'Control-plane MongoDB connection string (never a client database).'],
-	[
-		'PORTAL_URL',
-		true,
-		"The Portal's final public address, scheme + host (+ port), no path and no trailing slash. https is required, except for localhost, *.localhost, 127.0.0.1 and [::1] in development and tests.",
-	],
-	['ENCRYPTION_KEY', true, "Random, at least 32 characters. Encrypts the Portal's stored secrets."],
-	[
-		'ENCRYPTION_KEY_PREVIOUS',
-		false,
-		'Set only while ENCRYPTION_KEY is changed: the old key, so stored secrets keep opening until Settings → Encryption key → Re-seal; removed afterwards.',
-	],
-]);
-
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
 /** Hosts outbound calls may reach over loopback and plain http outside production (products run locally). */
 const LOCAL_OUTBOUND_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
@@ -203,15 +186,6 @@ export const parsePortalUrl = (raw, production) => {
 		return { ok: false, message: 'PORTAL_URL must use https (http only for a local host in development and tests)' };
 	return { ok: true, value: url.origin };
 };
-
-/**
- * Derive a 32-byte subkey from a secret (HKDF-SHA-256).
- * @param {Uint8Array} secret
- * @param {string} label
- * @returns {Buffer}
- */
-export const deriveSecret = (secret, label) =>
-	Buffer.from(hkdfSync('sha256', secret, Buffer.alloc(0), `ss-derived-secret.v1|${label}`, 32));
 
 /**
  * Read and validate the environment. Throws `config_invalid` listing every offending variable (never values).

@@ -52,8 +52,6 @@ const DEFAULT_CONTEXT = Object.freeze({ brand: 'Single Solution', support: { ema
 export const escapeHtml = (text) =>
 	text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-export const MAIL_TEMPLATES = Object.freeze(/** @type {MailTemplate[]} */ (Object.keys(MAIL_TEXTS)));
-
 /**
  * @param {unknown} link
  * @returns {string}

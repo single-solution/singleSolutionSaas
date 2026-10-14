@@ -108,32 +108,6 @@ export const useResource = (path, initial, { problem: initialProblem = null } = 
 };
 
 /**
- * Run an API action with a busy flag and its last problem.
- * @template {unknown[]} A
- * @template R
- * @param {(...args: A) => Promise<ApiResult<R>>} action
- */
-export const useAction = (action) => {
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const ref = useRef(action);
-	ref.current = action;
-	const run = useCallback(async (/** @type {A} */ ...args) => {
-		setBusy(true);
-		setProblem(null);
-		try {
-			const result = await ref.current(...args);
-			if (!result.ok) setProblem(result.problem);
-			return result;
-		} finally {
-			setBusy(false);
-		}
-	}, []);
-	const reset = useCallback(() => setProblem(null), []);
-	return { run, busy, problem, reset };
-};
-
-/**
  * Value of `#token=…` in the URL fragment (e-mail links carry tokens there so they never reach servers or logs);
  * removes the fragment from the address bar once read.
  * @returns {string | null}

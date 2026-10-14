@@ -9,7 +9,7 @@ import { createPortal } from '../src/portal.js';
 import { createBackground } from '../src/infra/background.js';
 import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
-import { getPortal, resetPortal } from '../src/runtime.js';
+import { getPortal } from '../src/runtime.js';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { closeMongoClients, getMongoClient, isDatabaseUnavailable } from '../src/infra/db.js';
@@ -26,6 +26,14 @@ import {
 	testEnv,
 	testSessionActor,
 } from './helpers.js';
+
+/**
+ * Forget the Portal this process built (`runtime.js` keeps it on `globalThis`), so the next `getPortal` builds a new
+ * one from the options it is given.
+ */
+const resetPortal = () => {
+	delete (/** @type {any} */ (globalThis)[Symbol.for('ss.platform.portal')]);
+};
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
 let mongo;
@@ -800,6 +808,29 @@ describe('runtime', () => {
 		expect((await unreachable.json()).status).toBe('database_unavailable');
 		resetPortal();
 		await closeMongoClients();
+	}, 60_000);
+
+	it('picks up a settings change at its next check, every few seconds, on the instance that made it too', async () => {
+		resetPortal();
+		const clock = createClock();
+		const runtimeDb = mongo.dbName('it_runtime_settings');
+		const env = await testEnv({ MONGODB_URI: `${mongo.uri.replace(/\/?(\?|$)/, `/${runtimeDb}$1`)}` });
+		const before = await getPortal({ env, now: clock.now });
+		expect(before.config.settings.branding.name).toBe('Single Solution');
+		// an Owner saves a setting (on this instance or another): the settings version goes up
+		await createSystemStore(mongo.client.db(runtimeDb), { encryptionKey: ENCRYPTION_KEY }).update({
+			branding: { name: 'Renamed' },
+		});
+		clock.advance(4_000);
+		expect(await getPortal()).toBe(before);
+		clock.advance(1_000);
+		const after = await getPortal();
+		expect(after).not.toBe(before);
+		expect(after.config.settings.branding.name).toBe('Renamed');
+		// the same version: the same Portal
+		clock.advance(5_000);
+		expect(await getPortal()).toBe(after);
+		resetPortal();
 	}, 60_000);
 
 	it('serves again on the same instance once a control database that could not be reached at its start is back (K-16)', async () => {

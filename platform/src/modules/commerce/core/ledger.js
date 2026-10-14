@@ -239,10 +239,3 @@ export const verifyChain = ({ merchantId, entries, account }) => {
 	for (const entry of entries) verifier.push(entry);
 	return verifier.finish(account ?? null);
 };
-
-/**
- * Sum of amounts.
- * @param {readonly { amount: number }[]} entries
- * @returns {number}
- */
-export const sumAmounts = (entries) => entries.reduce((sum, e) => sum + e.amount, 0);
