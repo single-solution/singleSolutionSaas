@@ -161,4 +161,46 @@
  */
 /** @typedef {{ productId?: string, messages: DeclaredMessage[] }} MessageDefaults */
 
+/**
+ * One setting in a Setup sheet; `value` is absent in a shared copy without values.
+ * @typedef {{ key: string, title: string, value?: unknown, default: boolean }} BlueprintSetting
+ */
+/** @typedef {{ name: string, title: string, summary: string, count: number | null }} BlueprintList */
+/**
+ * A product's part of the Setup sheet (`GET /v1/blueprint` of the kit).
+ * @typedef {object} ProductBlueprint
+ * @property {string} productId
+ * @property {string} name
+ * @property {string} version
+ * @property {import('./constants.js').ProductStatus} status
+ * @property {{ guide: string, openapi: string | null }} docs
+ * @property {{ found: boolean, fetchedAt: string | null, name: string | null, country: string | null,
+ *   timeZone: string | null }} business the product's copy of business.json
+ * @property {{ scriptUrl: string | null, installed: boolean | null, lastSeenAt: string | null, browserToken?: string,
+ *   snippet?: string | null }} install `browserToken` and `snippet` are added by the Portal
+ * @property {Array<{ key: string, title: string, description: string, on: boolean, dependsOn: string[],
+ *   settings: BlueprintSetting[], lists: BlueprintList[] }>} features settings and lists only while on
+ * @property {Array<{ key: string, title: string, features: string[], settings: BlueprintSetting[] }>} shared shared
+ *   settings in use
+ * @property {Array<{ key: string, title: string, kind: 'database' | 'storage' | 'secret' | 'token', neededBy: string[],
+ *   needed: boolean, set: boolean, state: 'connected' | 'not_connected' | 'test_failed', testedAt: string | null }>} connections
+ * @property {Array<{ key: string, kind: 'visitor' | 'admin', features: string[], on: boolean, ready: boolean }>} widgets
+ * @property {Array<{ key: string, name: string, feature: string, on: boolean }>} staffPermissions
+ * @property {string[]} events
+ * @property {Array<{ key: string, done: boolean, text: string }>} checklist
+ * @property {Array<{ title: string, text: string }>} summaries
+ */
+/**
+ * The Setup sheet of a website, `ss.blueprint/1`.
+ * @typedef {object} Blueprint
+ * @property {'ss.blueprint/1'} schema
+ * @property {string} generatedAt
+ * @property {{ id: string, domain: string, business: { found: boolean, name: string | null, country: string | null,
+ *   timeZone: string | null } }} website
+ * @property {{ allowedOrigins: string[], testingOrigins: string[], serverTokens: string }} access
+ * @property {Array<(ProductBlueprint & { reachable: true, serverToken: { issued: boolean } })
+ *   | { productId: string, name: string, reachable: false, reason: 'timeout' | 'unreachable' | 'refused' | 'invalid' }>} products
+ * @property {{ expiresAt: string, values: boolean, install: boolean }} [share] a copy opened from a share link
+ */
+
 export {};

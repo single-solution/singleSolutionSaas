@@ -99,3 +99,68 @@ export const businessJson = () => ({
 	country: 'us',
 	timeZone: 'Europe/London',
 });
+
+/**
+ * The product blueprint of the sample product `notes` for one website: `notes` on with one saved setting, `inbox` off,
+ * the database connected.
+ * @returns {import('./types.js').ProductBlueprint}
+ */
+export const productBlueprint = () => ({
+	productId: 'notes',
+	name: 'Notes',
+	version: '1.0.0',
+	status: 'active',
+	docs: { guide: 'https://notes.example.dev/docs', openapi: null },
+	business: {
+		found: true,
+		fetchedAt: '2026-10-01T00:00:00Z',
+		name: 'Example Shop',
+		country: 'US',
+		timeZone: 'America/New_York',
+	},
+	install: { scriptUrl: 'https://notes.example.dev/widget.js', installed: false, lastSeenAt: null },
+	features: [
+		{
+			key: 'notes',
+			title: 'Notes',
+			description: 'Visitors leave short notes.',
+			on: true,
+			dependsOn: [],
+			settings: [
+				{ key: 'maxNotes', title: 'Notes per visitor per day', value: 10, default: false },
+				{ key: 'greeting', title: 'Greeting', value: 'Leave us a note', default: true },
+			],
+			lists: [],
+		},
+		{
+			key: 'inbox',
+			title: 'Notes inbox',
+			description: 'Staff read the notes in their own admin.',
+			on: false,
+			dependsOn: ['notes'],
+			settings: [],
+			lists: [],
+		},
+	],
+	shared: [],
+	connections: [
+		{
+			key: 'database',
+			title: 'Database (MongoDB)',
+			kind: 'database',
+			neededBy: ['notes', 'inbox'],
+			needed: true,
+			set: true,
+			state: 'connected',
+			testedAt: '2026-10-01T00:00:00Z',
+		},
+	],
+	widgets: [
+		{ key: 'note_form', kind: 'visitor', features: ['notes'], on: true, ready: true },
+		{ key: 'inbox', kind: 'admin', features: ['inbox'], on: false, ready: false },
+	],
+	staffPermissions: [{ key: 'notes.read', name: 'Read notes', feature: 'inbox', on: false }],
+	events: ['notes.settings.changed'],
+	checklist: [{ key: 'widget', done: false, text: 'Add the widget script to every page of your website.' }],
+	summaries: [],
+});

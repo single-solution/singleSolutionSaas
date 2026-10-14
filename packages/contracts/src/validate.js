@@ -106,6 +106,8 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
  * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
  * @property {(value: unknown) => ValidationResult<import('./types.js').MessageDefaults>} validateMessageDefaults
+ * @property {(value: unknown) => ValidationResult<import('./types.js').ProductBlueprint>} validateProductBlueprint
+ * @property {(value: unknown) => ValidationResult<import('./types.js').Blueprint>} validateBlueprint
  */
 
 /**
@@ -273,6 +275,8 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
 		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
 		validateMessageDefaults: validator(SCHEMA_IDS.messageDefaults, checkMessageDefaults),
+		validateProductBlueprint: /** @type {Validator['validateProductBlueprint']} */ (validator(SCHEMA_IDS.productBlueprint)),
+		validateBlueprint: /** @type {Validator['validateBlueprint']} */ (validator(SCHEMA_IDS.blueprint)),
 	});
 };
 
@@ -323,3 +327,7 @@ export const validateDataRightsRequest = (value) => getDefaultValidator().valida
 export const validateActivityCopy = (value) => getDefaultValidator().validateActivityCopy(value);
 /** @param {unknown} value */
 export const validateMessageDefaults = (value) => getDefaultValidator().validateMessageDefaults(value);
+/** @param {unknown} value */
+export const validateProductBlueprint = (value) => getDefaultValidator().validateProductBlueprint(value);
+/** @param {unknown} value */
+export const validateBlueprint = (value) => getDefaultValidator().validateBlueprint(value);

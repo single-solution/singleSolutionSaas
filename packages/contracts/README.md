@@ -2,7 +2,7 @@
 
 Versioned JSON Schemas (2020-12) and validators that bind the Portal and every product (PLAN.md Part 0: 0.4.9,
 0.4.11, 0.4.12, 0.4.13): the product manifest and its settings schemas, the Product ↔ Portal wire shapes,
-business.json, the cross-product data-rights and activity shapes, ids and RFC 9457 problems. Pure, functional ESM; the
+business.json, the cross-product data-rights and activity shapes, the website Setup sheet, ids and RFC 9457 problems. Pure, functional ESM; the
 only dependencies are `ajv` and `ajv-formats`.
 
 ## Results
@@ -89,6 +89,25 @@ knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example ever
   written (no spaces at their ends) and use only the message's `values`, plus `{unsubscribeUrl}` in a message that is
   not required.
 
+## Website Setup sheet (`ss.blueprint/1`)
+
+One sheet per website (owner request 2026-10-14): every product's features, settings, connections state, widgets,
+permissions, events, checklist and docs, generated on request and never stored.
+
+- `validateProductBlueprint`: a product's part, answered by `@ss/app-kit` at `GET /v1/blueprint?websiteId=` (a signed
+  Portal call): `{ productId, name, version, status, docs: { guide, openapi }, business, install, features, shared,
+connections, widgets, staffPermissions, events, checklist, summaries }`. Features carry their settings
+  `{ key, title, value, default }` (`default: true` while the website has not saved its own value) and their lists
+  `{ name, title, summary, count }` only while the feature is on. Connections are `{ key, title, kind, neededBy, needed,
+set, state, testedAt }`: never a value, its last characters or a test message (the schema refuses them).
+- `validateBlueprint`: the Portal's sheet `{ schema: 'ss.blueprint/1' (BLUEPRINT_SCHEMA), generatedAt, website: { id,
+domain, business }, access: { allowedOrigins, testingOrigins, serverTokens }, products, share? }`. A product is its
+  blueprint plus `reachable: true`, `serverToken: { issued }` (the token itself is never in a sheet) and, in `install`,
+  the public browser token and the install snippet; one that did not answer in time is `{ productId, name,
+reachable: false, reason }` (`BLUEPRINT_UNREACHABLE_REASONS`: `timeout`, `unreachable`, `refused`, `invalid`). A copy
+  opened from a share link has `share: { expiresAt, values, install }`: without values every setting's `value` is left
+  out, without install the browser token and snippet.
+
 ## Message templates (`@ss/contracts/templates`)
 
 Pure and browser-safe; Notifications checks every template with it, and `validateMessageDefaults` checks products'
@@ -158,8 +177,8 @@ lower-case punycode, no scheme, port, path or trailing dot; IP literals, `localh
 ## Testing entry
 
 `@ss/contracts/testing` returns fresh fixtures: `manifest()` (product `notes`: two features with a dependency, a
-permission, a visitor and an admin widget), `priceReport()`, `statusResponse()`, `businessJson()`, plus the ids
-`WEBSITE` and `MERCHANT`.
+permission, a visitor and an admin widget), `priceReport()`, `statusResponse()`, `businessJson()`,
+`productBlueprint()` (its Setup sheet part), plus the ids `WEBSITE` and `MERCHANT`.
 
 ## Versioning
 
