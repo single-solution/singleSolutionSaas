@@ -1952,6 +1952,26 @@ unit; landing pages by any attribute. Build order: phase 1 the order engine with
 property tests first), then flow options, fields and unit numbers (IMEI code removed), item types, addresses/guests,
 tables and landing facets, measured quantities.
 
+- **Phase 1 built (2026-10-14; c0c6eda4, 5ebf3e3d, + 852d4a3f, ae8130dc, e686aa40):** order facts written only by the
+  engine (older orders get them from their flags on first use); one pure plan (`core/transitions.js`
+  `planTransition`) and one MongoDB transaction per transition (`server/transitions.js`) on every path (staff and bulk
+  moves, shopper cancel, window end, Payments confirmation, recorded payment with confirm, refunds covering payments,
+  delete, typed serial numbers); refunds through Payments run after the commit as effects, kept pending, retried on use,
+  never sent twice (a hand refund first settles a pending one; a Payments 4xx marks it failed, answered 502
+  `payments_refused`); flow-save guard on both save routes (a status with orders keeps its key and role; the role its
+  orders are in is always accepted), `POST /v1/orders/restatus`, 409 `flow_changed`; status index includes the role.
+  Tests: golden replay; pure property test 1,000 flows × 6 orders × 12 steps; database property test 40 flows × 5
+  orders × 12 steps (~530 moves, ~600 concurrent pairs, ~160 retries, random Payments failures) checking stock, money
+  (also against Payments), points, offer uses, RTO counts, one history and activity line per move. Fixed on the way: a
+  coupon use given back by a cancel was then refused (`offer_unavailable`). Visible changes: a move into refunded while
+  Payments is down happens with warning `refund_failed` and retries; shopper cancels, window ends and Payments
+  confirmations add an activity line. Path differences kept for phase 2: only a staff cancel refunds online money
+  (shopper cancel/window end leave "refund due"); staff need a listed move, shopper cancels and window ends follow role
+  rules; Payments' confirmation goes to the first listed open status; a shopper may cancel a waiting order with a paid
+  advance but not a paid open order; only staff moves record payment on confirm and check video/shipment/serials/refund
+  permission. Open risk for phase 2: the staff refund route calls Payments before its write (two simultaneous staff
+  refunds of one order) → a refund lock on the order.
+
 #### Principles
 
 - **Latest, not legacy** (owner, 2026-10-10). The stores were built the old way; the products keep the current,
