@@ -28,9 +28,9 @@ import { kitError } from './util.js';
 const ACTIVITY_COPY_PATH = '/v1/activity-copies';
 const RETRY_BATCH = 20;
 /** Refusals of Accounts a copy waits through before it is dropped (RT-5). */
-export const COPY_TRIES = 3;
+const COPY_TRIES = 3;
 /** After Accounts refused a copy, an instance sends none of that website's copies for this long. */
-export const REFUSED_PAUSE_MS = 15 * 60_000;
+const REFUSED_PAUSE_MS = 15 * 60_000;
 /** Refused copies of a website are logged at most this often per instance. */
 const REFUSED_LOG_EVERY_MS = 24 * 3_600_000;
 const MAX_LABEL = 200;
@@ -53,7 +53,7 @@ export const ACTIVITY_INDEXES = Object.freeze(
  * copy it does not take), not when it could not be reached or asked to wait (408, 429).
  * @param {import('./connections.js').ProductCall} result
  */
-export const copyRefused = (result) =>
+const copyRefused = (result) =>
 	!result.ok &&
 	(result.reason === 'refused' ||
 		(result.reason === 'failed' && result.status !== 408 && result.status !== 429) ||

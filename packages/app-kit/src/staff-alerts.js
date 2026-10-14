@@ -56,7 +56,7 @@ const RETRY_REASONS = Object.freeze(['unreachable', 'unavailable', 'refused']);
 const COLLECTION = 'staff_alerts';
 
 /** Merchant database indexes of saved messages (created when the first one is saved). */
-export const STAFF_ALERT_INDEXES = Object.freeze(
+const STAFF_ALERT_INDEXES = Object.freeze(
 	/** @type {import('./data.js').IndexDefinition[]} */ ([
 		{ collection: COLLECTION, keys: { websiteId: 1, nextAt: 1 }, name: 'kit_staff_alerts_due' },
 		{ collection: COLLECTION, keys: { expireAt: 1 }, name: 'kit_staff_alerts_expiry', expireAfterSeconds: 0 },

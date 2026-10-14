@@ -50,7 +50,7 @@ export const SETTINGS_WRITE_LIMIT = Object.freeze({
  * @param {Record<string, unknown>} filter pins `websiteId`
  * @param {Record<string, unknown>} keyset
  */
-export const withPage = (filter, keyset) =>
+const withPage = (filter, keyset) =>
 	Object.keys(keyset).length === 0 ? filter : { websiteId: filter.websiteId, $and: [filter, keyset] };
 
 /** The merchant's server as the one who changed something. @type {Who} */

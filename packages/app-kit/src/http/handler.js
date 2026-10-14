@@ -88,7 +88,7 @@ const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
 /** A request still running holds its `Idempotency-Key` at most this long (the longest a serverless function runs). */
 const IN_PROGRESS_MS = 5 * 60_000;
-/** Largest answer body kept for a repeat; a repeat of a larger one is answered 409 `duplicate_request`, as before. */
+/** Largest answer body kept for a repeat; a repeat of a larger one is answered 409 `duplicate_request`. */
 const REPLAY_MAX_CHARS = 64 * 1024;
 /** Answer headers a repeat does not get again. */
 const NOT_REPLAYED = new Set(['set-cookie']);

@@ -53,7 +53,7 @@ const NO_ID = { projection: { _id: 0, websiteId: 0, merchantId: 0, createdAt: 0,
  * @param {string} productId
  * @param {EventRecord} event
  */
-export const eventView = (productId, event) => ({
+const eventView = (productId, event) => ({
 	id: event.id,
 	type: `${productId}.${event.type}`,
 	at: new Date(event.at).toISOString(),

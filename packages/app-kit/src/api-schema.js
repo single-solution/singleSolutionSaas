@@ -29,7 +29,7 @@ const COUNT_KEYWORDS = Object.freeze(['minLength', 'maxLength', 'minItems', 'max
 /** Keywords that only describe. */
 const NOTE_KEYWORDS = Object.freeze(['title', 'description', 'default', 'examples', 'deprecated', 'format']);
 /** Every keyword of the subset. */
-export const SCHEMA_SUBSET = Object.freeze([
+const SCHEMA_SUBSET = Object.freeze([
 	'type',
 	'properties',
 	'required',

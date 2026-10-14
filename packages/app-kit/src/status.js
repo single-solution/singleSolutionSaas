@@ -12,11 +12,10 @@
  * - `status.changed` notices mark the copy changed, so the next use waits for it to be fetched again (and the notice
  *   fetches it right after answering); the copy itself is kept for offline grace.
  * - While the Portal cannot be reached the last copy is used for up to {@link OFFLINE_GRACE_MS} (6 hours) after its
- *   fetch, then every use is refused with 503 `portal_unreachable` (PLAN 0.4.7, 0.10; shortened from 24 hours by the
- *   owner's decision 11, K-21). Revocations follow the same bound: when the revocation list could not be fetched for
- *   longer than that, a use waits for it (at most {@link WAITED_FETCH_MS}, and not again within
- *   {@link REFRESH_EVERY_MS} of a failure on the instance) and is refused while it cannot be fetched. A
- *   `token.revoked` notice fetches it at once.
+ *   fetch, then every use is refused with 503 `portal_unreachable` (PLAN 0.4.7, 0.10, K-21). Revocations follow the
+ *   same bound: when the revocation list could not be fetched for longer than that, a use waits for it (at most
+ *   {@link WAITED_FETCH_MS}, and not again within {@link REFRESH_EVERY_MS} of a failure on the instance) and is refused
+ *   while it cannot be fetched. A `token.revoked` notice fetches it at once.
  * - `graceEndsAt` in the past turns `grace` into `stopped` without asking the Portal.
  * - A fetched `removed` status turns the website's feature switches off: a re-add starts with every feature off.
  * @module
@@ -39,7 +38,7 @@ const STATUS_MAX_AGE_MS = 5 * 60_000;
  * Offline grace: how long the last status copy (and the last revocation list) is trusted while the Portal cannot be
  * reached. Six hours ride out a Portal outage on free hosting (every merchant's shop depends on it) or a bad deploy
  * rolled back, while a website stopped, suspended or removed, or a token revoked, during an outage stops working within
- * six hours at most (24 hours before K-21). Notices still apply at once whenever the Portal is up.
+ * six hours at most. Notices still apply at once whenever the Portal is up.
  */
 export const OFFLINE_GRACE_MS = 6 * 60 * 60_000;
 /** Deadline of a Portal call a use waits for (it has no status copy it may use), shorter than a call's usual 10 s. */

@@ -37,7 +37,7 @@ export const KIT_API = /** @type {ApiDescription} */ (/** @type {unknown} */ (KI
 /** Members of a route's entry. */
 /** A request header's name, as the route's own headers are named (`SS-Guest`, `SS-Order-Key` …). */
 const HEADER_NAME = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
-export const API_ENTRY_MEMBERS = Object.freeze(['summary', 'description', 'query', 'headers', 'body', 'response', 'status']);
+const API_ENTRY_MEMBERS = Object.freeze(['summary', 'description', 'query', 'headers', 'body', 'response', 'status']);
 /** Methods a route may have. */
 const METHODS = Object.freeze(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const ROUTE_KEY = /^([A-Z]+) (\/\S*)$/;
