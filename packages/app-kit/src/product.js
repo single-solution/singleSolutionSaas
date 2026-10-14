@@ -2,8 +2,9 @@
  * `createProduct` wires the kit for one product: the Portal connection, tokens and tickets, the status cache, notices,
  * price and feature reports, settings, widget texts, theme and Format, encrypted connections, the merchant database,
  * business.json, data rights, the activity log and its reads, Recent changes, the product dashboard API, the settings
- * API for the merchant's server, events, staff alerts and imports (PLAN 0.8.10 K1–K10). Every side effect is injected
- * (fetch, clock, randomness, logger, store, outbound calls).
+ * API for the merchant's server, events, staff alerts, imports (PLAN 0.8.10 K1–K10) and the default templates of the
+ * messages the product sends (parity P1). Every side effect is injected (fetch, clock, randomness, logger, store,
+ * outbound calls).
  * @module
  */
 import {
@@ -24,6 +25,7 @@ import { createDashboard } from './dashboard.js';
 import { PRODUCT_DATABASE_OPTIONS, createData } from './data.js';
 import { EVENT_INDEXES, createEvents } from './events.js';
 import { createImports } from './imports.js';
+import { createMessages } from './messages.js';
 import { createRequestHandler } from './http/handler.js';
 import { createAccountsSignIns, createIdentity } from './identity.js';
 import { createKitRoutes } from './kit-routes.js';
@@ -75,6 +77,9 @@ import { verifyToken } from '@ss/protocol';
  * @property {boolean} [events] the product publishes events (K5): `product.events.emit`, forwarded through
  *   Notifications right after the request
  * @property {import('./imports.js').ImportOptions} [imports] what the product's `import` feature takes (K10)
+ * @property {unknown} [messages] the messages the product sends through Notifications with their default words (its
+ *   `schemas/messages.json`, `{ messages: [...] }`; parity P1): attached to every send to Notifications and served at
+ *   `GET /v1/message-defaults`
  */
 
 /**
@@ -98,6 +103,7 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./activity.js').Activity} activity
  * @property {import('./events.js').Events} events
  * @property {import('./staff-alerts.js').StaffAlerts} staffAlerts
+ * @property {import('./messages.js').Messages} messages
  * @property {ReturnType<typeof createTickets>} tickets
  * @property {() => Promise<import('./reseal.js').ResealResult>} reseal the Owner's Re-seal of stored secrets (RT-14)
  * @property {ReturnType<typeof createDashboard>} dashboard
@@ -197,6 +203,7 @@ export const createProduct = (options) => {
 			);
 	}
 	const settings = createSettings({ store, manifest, strings, recent, now, shared });
+	const messages = createMessages({ productId: manifest.id, declaration: options.messages });
 	/** @type {ReturnType<typeof createData> | null} */
 	let data = null;
 	const connections = createConnections({
@@ -227,6 +234,7 @@ export const createProduct = (options) => {
 		directory: (id) => connection.active().client.directory(id),
 		now,
 		logger,
+		attach: messages.attach,
 	});
 	data = createData({
 		productId: manifest.id,
@@ -298,6 +306,7 @@ export const createProduct = (options) => {
 		activity,
 		events,
 		staffAlerts,
+		messages,
 		tickets,
 		reseal,
 	};
@@ -346,6 +355,10 @@ export const createProduct = (options) => {
 		}),
 		connections: Object.freeze({ value: connections.value, storage: connections.storage }),
 		callProduct: connections.callProduct,
+		/** Another product's address (the Portal's directory, cached 5 minutes); throws when it cannot be found. */
+		addressOf: connections.addressOf,
+		/** The messages the product sends through Notifications, with their default words (parity P1). */
+		messages: Object.freeze({ declaration: messages.declaration, defaultsFor: messages.defaultsFor }),
 		data: Object.freeze({ forWebsite: data.forWebsite }),
 		business: businessOf,
 		format: formatOf,

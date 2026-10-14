@@ -51,6 +51,7 @@ const routes = () => [
 					event: body.event ?? 'note_created',
 					values: body.values ?? { noteId: 'not_42', preview: 'Hello' },
 					assignee: body.assignee ?? null,
+					...(body.allStaff ? { allStaff: body.allStaff } : {}),
 				}),
 			};
 		},
@@ -153,6 +154,30 @@ describe('staff alerts (K6)', () => {
 		await alert();
 		expect(accounts.userReads).toHaveLength(2);
 		expect(await alert({ event: 'Bad-Event' })).toBe(0);
+	});
+
+	it('all_staff: every unblocked Accounts user whose role grants the permission the alert names (parity P1)', async () => {
+		const { set, alert, notifications, accounts } = await start();
+		await set('recipients', ['ops@shop.example.com']);
+		accounts.setUsers([
+			{ id: 'u1', email: 'sana@shop.example.com', permissions: ['notes:notes.read'] },
+			{ id: 'u2', email: 'blocked@shop.example.com', blocked: true, permissions: ['notes:notes.read'] },
+			{ id: 'u3', email: 'owner@shop.example.com', permissions: ['*'] },
+			{ id: 'u4', email: 'other@shop.example.com', permissions: ['notes:other'] },
+		]);
+		await set('staffPermission', 'all_staff');
+		// the alert names the permission all_staff stands for
+		expect(await alert({ allStaff: 'notes.read' })).toBe(3);
+		expect(notifications.messages.map((m) => m.body.to)).toEqual([
+			{ email: 'ops@shop.example.com' },
+			{ email: 'sana@shop.example.com' },
+			{ email: 'owner@shop.example.com' },
+		]);
+		expect(accounts.userReads).toEqual(['notes:notes.read']);
+		// an alert that names none: only the list (never a permission called all_staff)
+		notifications.messages.length = 0;
+		expect(await alert()).toBe(1);
+		expect(accounts.userReads).toEqual(['notes:notes.read']);
 	});
 
 	it('save what Notifications did not take and try it again with the same key on later uses, for a day (K-17)', async () => {

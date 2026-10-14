@@ -28,7 +28,13 @@ The exact API is in [API.md](./API.md).
   `SS-Actor-*` headers; visitor calls with the server token (`SS-Visitor-IP`, their own rate window); counts of lists
   (`countHandlers`); the activity log (`GET /v1/activity`).
 - **Events, staff alerts and imports** (K5, K6, K10) — events kept 30 days and forwarded through Notifications; staff
-  alerts to recipients, Accounts staff with a permission and the assignee; checked, idempotent NDJSON import routes.
+  alerts to recipients, Accounts staff with a permission (or `all_staff`: every staff member with the alert's own
+  permission) and the assignee; checked, idempotent NDJSON import routes.
+- **Default message templates** (parity P1) — the product declares the messages it sends through Notifications with
+  their US-English default words (`schemas/messages.json`, checked with the contract at start); the kit attaches them
+  to every send to Notifications, which uses them while the website has no template of its own, and serves them at
+  `GET /v1/message-defaults` for Notifications' dashboard. WhatsApp never has a default (it sends only templates
+  approved at Meta).
 - **Format and time zone** (K7, K8) — `formatMoney`, `formatDate` and the calendar helpers from `@ss/contracts`, fed by
   the website's Format and its business.json time zone (`product.format(websiteId)`, the widget config).
 - **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived

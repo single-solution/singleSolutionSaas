@@ -11,7 +11,8 @@
  *   product for the same website (else it is refused), and the definition's own `test` hook runs last.
  * - Every change writes Recent changes.
  * - `callProduct` calls another product with a pasted token, at the address the Portal's directory gives (cached up to
- *   5 minutes), through `@ss/net`.
+ *   5 minutes), through `@ss/net`; a send to Notifications carries the defaults of the product's message (`attach`,
+ *   `messages.js`). `addressOf` gives another product's address (the same cache).
  * @module
  */
 import { isNetError } from '@ss/net';
@@ -109,6 +110,7 @@ const valueViolation = (kind, value) => {
  *   verifyServerToken: (token: string, productId: string) => Promise<{ websiteId: string } | null>,
  *   directory: (productId: string) => Promise<{ baseUrl: string }>,
  *   now: () => number, logger: import('./logger.js').Logger,
+ *   attach?: import('./messages.js').Messages['attach'],
  * }} options
  */
 export const createConnections = ({
@@ -124,6 +126,7 @@ export const createConnections = ({
 	directory,
 	now,
 	logger,
+	attach = (_productId, _path, init) => init,
 }) => {
 	/** @type {Map<string, { baseUrl: string, until: number }>} */
 	const addresses = new Map();
@@ -316,7 +319,11 @@ export const createConnections = ({
 		});
 	};
 
-	/** @param {string} id */
+	/**
+	 * Another product's address (its base URL, from the Portal's directory, cached up to 5 minutes).
+	 * @param {string} id
+	 * @returns {Promise<string>}
+	 */
 	const addressOf = async (id) => {
 		const cached = addresses.get(id);
 		if (cached && cached.until > now()) return cached.baseUrl;
@@ -326,14 +333,16 @@ export const createConnections = ({
 	};
 
 	/**
-	 * Call another product with the server token pasted for it, exactly as the merchant's own server would.
+	 * Call another product with the server token pasted for it, exactly as the merchant's own server would. A send to
+	 * Notifications carries the defaults of the product's message (parity P1).
 	 * @param {string} websiteId
 	 * @param {string} otherProductId
 	 * @param {string} path e.g. `/v1/activity-copies`
 	 * @param {{ method?: string, body?: unknown, headers?: Record<string, string> }} [init]
 	 * @returns {Promise<ProductCall>}
 	 */
-	const callProduct = async (websiteId, otherProductId, path, { method = 'GET', body, headers = {} } = {}) => {
+	const callProduct = async (websiteId, otherProductId, path, init = {}) => {
+		const { method = 'GET', body, headers = {} } = attach(otherProductId, path, init);
 		const name = Object.keys(definitions).find(
 			(key) => definitions[key]?.kind === 'token' && definitions[key]?.productId === otherProductId,
 		);
@@ -415,6 +424,7 @@ export const createConnections = ({
 		remove,
 		value,
 		callProduct,
+		addressOf,
 		reseal,
 		/** @returns {Promise<string[]>} the websites whose merchant database is connected */
 		websitesWithDatabase: async () =>

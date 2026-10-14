@@ -4,13 +4,15 @@
  *
  * - Recipients: the feature's `recipients` setting (email addresses and phone numbers, at most 20); plus, when its
  *   `staffPermission` setting names a permission, every unblocked Accounts user whose role grants it (through the
- *   pasted Accounts token: `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes); plus the
- *   assignee where the product has one.
+ *   pasted Accounts token: `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes) — the value
+ *   `all_staff` names the permission the alert gives as `allStaff` (the one every staff member who works with it has,
+ *   for example Chat's `inbox.read`); plus the assignee where the product has one.
  * - An email address gets email; an international phone number gets WhatsApp, or SMS with the feature's
  *   `phoneChannel` setting.
  * - Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
- *   request with `required: true` and its own `Idempotency-Key`; the link is built from the feature's `adminUrl`
- *   template (`{placeholders}` filled from the values) and sent as the value `link`.
+ *   request with `required: true` and its own `Idempotency-Key`, carrying the product's default words of the template
+ *   (`callProduct`, parity P1); the link is built from the feature's `adminUrl` template (`{placeholders}` filled from
+ *   the values) and sent as the value `link`.
  * - Nothing that matters is lost (K-17, owner decision D7): a message Notifications did not take (no answer, 5xx, a
  *   refused token, 408, 409 `in_progress` or 429) is saved in the merchant database (`ss_<product>_staff_alerts`) and
  *   tried again with the same key on the website's next uses ({@link RETRY_MS}, then every 3 hours), for at most a day;
@@ -39,6 +41,8 @@ import { formatText } from './text.js';
  * @typedef {AlertMessage & { tries: number, nextAt: Date, firstAt: Date, expireAt: Date }} SavedAlert
  */
 
+/** The `staffPermission` value that means every staff member who works with the alert (the alert's `allStaff`). */
+export const ALL_STAFF = 'all_staff';
 /** Most recipients a `recipients` setting holds. */
 export const MAX_RECIPIENTS = 20;
 /** Waits before a message Notifications did not take is tried again (as Ecommerce's outbox, E63): 1, 5, 15, 60 minutes, then every 3 hours. */
@@ -177,10 +181,12 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 * @param {string} websiteId
 	 * @param {Record<string, any>} values the feature's settings
 	 * @param {Assignee | null | undefined} assignee
+	 * @param {string} [allStaff] the permission `staffPermission: all_staff` stands for (none: only the list)
 	 */
-	const recipientsOf = async (websiteId, values, assignee) => {
+	const recipientsOf = async (websiteId, values, assignee, allStaff = '') => {
 		const listed = Array.isArray(values.recipients) ? values.recipients.slice(0, MAX_RECIPIENTS) : [];
-		const permission = typeof values.staffPermission === 'string' ? values.staffPermission : '';
+		const chosen = typeof values.staffPermission === 'string' ? values.staffPermission : '';
+		const permission = chosen === ALL_STAFF ? allStaff : chosen;
 		const staff =
 			permission !== '' && PERMISSION.test(permission) ? await staffWith(websiteId, `${productId}:${permission}`) : [];
 		const assigned = [assignee?.email, assignee?.phone].filter((value) => typeof value === 'string' && value !== '');
@@ -196,15 +202,17 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	/**
 	 * Alert the merchant's staff of an event, right after the request. Never throws.
 	 * @param {AlertContext} ctx
-	 * @param {{ feature: string, event: string, values: Record<string, string | number>, assignee?: Assignee | null }} alert
+	 * @param {{ feature: string, event: string, values: Record<string, string | number>, assignee?: Assignee | null,
+	 *   allStaff?: string }} alert
 	 *   `feature`: the feature whose settings hold `recipients`, `staffPermission`, `phoneChannel` and `adminUrl`;
-	 *   `event`: the template is `<product>.staff_<event>`; `values`: the template's values (at most 1,000 characters each)
+	 *   `event`: the template is `<product>.staff_<event>`; `values`: the template's values (at most 1,000 characters each);
+	 *   `allStaff`: the permission key the setting's `all_staff` stands for (every staff member who works with the alert)
 	 * @returns {Promise<number>} the messages queued after the request
 	 */
-	const send = async (ctx, { feature, event, values, assignee = null }) => {
+	const send = async (ctx, { feature, event, values, assignee = null, allStaff = '' }) => {
 		if (!EVENT.test(event)) return 0;
 		const own = await settings.values(ctx.websiteId, feature);
-		const to = await recipientsOf(ctx.websiteId, own, assignee);
+		const to = await recipientsOf(ctx.websiteId, own, assignee, allStaff);
 		if (to.length === 0) return 0;
 		const template = `${productId}.staff_${event}`;
 		const adminUrl = typeof own.adminUrl === 'string' ? own.adminUrl : '';

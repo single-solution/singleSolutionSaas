@@ -9,6 +9,8 @@
  *   feature): data rights for one end user (0.4.11); a deletion also removes the person's saved staff alerts;
  * - `GET /v1/permissions` (server token, no feature, no merchant database): the product's permissions, which Accounts
  *   reads with the pasted server token to offer them on roles (0.8.6);
+ * - `GET /v1/message-defaults` (none, the same for every website): the messages the product sends through
+ *   Notifications with their default words (`{ productId, messages }`, parity P1), which Notifications' dashboard shows;
  * - `GET /v1/widget/config` (browser token, Origin required) and `GET /v1/widget/admin/config` (ticket): what the
  *   product's `widget.js` needs for a website (0.4.10): widget texts, theme, custom CSS, the Format and the business
  *   time zone (PLAN 0.8.10 K7, K8), the switched-on features and the product's own widget settings
@@ -210,6 +212,16 @@ export const createKitRoutes = (kit, hooks) => {
 					feature: p.feature,
 				})),
 			}),
+		}),
+		// the messages the product sends through Notifications with their defaults: public, the same for every website
+		defineRoute({
+			method: 'GET',
+			path: '/v1/message-defaults',
+			auth: 'none',
+			handler: () =>
+				new Response(JSON.stringify(kit.messages.declaration), {
+					headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=300' },
+				}),
 		}),
 		defineRoute({ method: 'POST', path: '/v1/data-rights/export', auth: 'server', handler: dataRights('export') }),
 		defineRoute({ method: 'POST', path: '/v1/data-rights/delete', auth: 'server', handler: dataRights('delete') }),
