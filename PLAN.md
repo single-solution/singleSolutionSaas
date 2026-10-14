@@ -2501,11 +2501,16 @@ default (Meta-approved templates only): without the merchant's template the atte
 the fallback channel. Dashboard: Settings → Templates lists every product's messages by channel (Default words,
 Edited, Switched off, Not set up). Defaults: Accounts `email_code`, `password_reset`, `invite`, `phone_code`; Chat
 `staff_new_message`, `staff_needs_you`, `staff_cost_alert`, `staff_reply`, `transcript`; Payments and Growth send none.
-Chat staff alerts gain `all_staff` (every unblocked Accounts user whose role has `inbox.read`). Ecommerce (next step):
-add its `schemas/messages.json` (order_placed, order_status, return_status, back_in_stock, price_drop,
-staff_<event>); per-status keys `ecommerce.order_status.<status>` use a chain — the website's template for that status,
-else its general order-status template, else the default "Your order {number} is now {status}"; its staff alerts take
-`all_staff` and `includePhone` too.
+Chat staff alerts gain `all_staff` (every unblocked Accounts user whose role has `inbox.read`). **Ecommerce clean pass built (2026-10-14;
+3ec0bfec … 032251e2):** Ecommerce declares its 12 messages with US-English defaults (`schemas/messages.json`:
+order_placed, order_status, return_status, back_in_stock, price_drop, seven staff alerts; email and SMS, WhatsApp only
+with the merchant's Meta-approved template); per-status keys `ecommerce.order_status.<status>` fall back through
+Notifications' `fallbackTemplate` (the website's template for the status, else its general one, else "Your order
+{number} is now {status}"); staff alerts take `all_staff` and `includePhone`. Its dashboard shows viewer-local times.
+Order numbers follow `checkout.numberPattern` (default one running number; yearly is a choice); the default payment
+order starts with online. Imported feed ids (`feedId`, `feedGroupId`) replace the feeds' `legacy` mode. The kit makes a
+product's declared indexes the truth (`upgradeDatabase` removed). Read-time defaults are gone, the guest segment uses
+the stored `guest: true`, a video is `{ id }` only, and an order-number prefix is URL-safe (bug fixed).
 
 **N1. WhatsApp template buttons.** A WhatsApp template with a provider template name may list `buttons`
 (`[{ index, type: 'url' | 'copy_code', value }]`, values with placeholders such as `{code}`), which the Meta adapter
