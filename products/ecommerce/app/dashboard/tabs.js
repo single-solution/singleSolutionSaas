@@ -24,6 +24,7 @@ import {
 	formatCreditsPerHour,
 	formatDateTime,
 	parseCredits,
+	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { SEARCH_INDEX_DEFINITION } from '../../core/search.js';
@@ -84,10 +85,11 @@ function CheckRow({ tone, badge, label, detail, children }) {
  * @param {{ item: Connection, why: string, extra?: string }} props
  */
 function ConnectionRow({ item, why, extra }) {
+	const timeZone = useViewerTimeZone();
 	const detail =
 		item.status === 'connected'
 			? item.testedAt
-				? fill(TEXTS.overview.lastTest, { time: formatDateTime(item.testedAt) })
+				? fill(TEXTS.overview.lastTest, { time: formatDateTime(item.testedAt, { timeZone }) })
 				: null
 			: (item.message ?? null);
 	return (
@@ -114,7 +116,8 @@ function ConnectionRow({ item, why, extra }) {
 function SearchIndexRow({ found }) {
 	const O = TEXTS.overview;
 	const { state, index } = found;
-	const time = state ? formatDateTime(state.at) : '';
+	const timeZone = useViewerTimeZone();
+	const time = state ? formatDateTime(state.at, { timeZone }) : '';
 	const detail = !state
 		? fill(O.searchUncheckedDetail, { index })
 		: state.missing
@@ -139,6 +142,7 @@ function SearchIndexRow({ found }) {
 
 /** @param {TabProps} props */
 function OverviewTab({ websiteId }) {
+	const timeZone = useViewerTimeZone();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const connections = useLoad(`${base}/connections`);
@@ -225,7 +229,7 @@ function OverviewTab({ websiteId }) {
 											badge={
 												data.checklist.widget.installed
 													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt),
+															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
 														})
 													: TEXTS.overview.widgetMissing
 											}
