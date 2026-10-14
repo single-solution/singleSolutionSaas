@@ -8,7 +8,6 @@ import {
 	ROLE_PERMISSIONS,
 	can,
 	permissionsFor,
-	websitesVisible,
 } from '../src/infra/rbac.js';
 import { MERCHANT, MERCHANT_2, WEBSITE } from './helpers.js';
 import { isPlatformError, platformError } from '../src/infra/errors.js';
@@ -164,15 +163,5 @@ describe('rbac (PLAN 0.2 rights table)', () => {
 		expect(can({ type: 'system', id: 'job' }, 'admins.manage')).toBe(true);
 		expect(can({ type: 'admin', id: 'adm_o', role: 'owner' }, '')).toBe(false);
 		expect(permissionsFor(null)).toEqual([]);
-	});
-
-	it('lists visible websites: all for admins with the right, own for merchants, none otherwise', () => {
-		expect(websitesVisible({ type: 'admin', id: 'a', role: 'finance' }, 'websites.read')).toBe('all');
-		expect(websitesVisible({ type: 'admin', id: 'a', role: 'finance' }, 'tokens.manage')).toBe('none');
-		expect(websitesVisible({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'websites.read')).toBe('own');
-		expect(websitesVisible({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'websites.write')).toBe('none');
-		expect(websitesVisible({ type: 'system', id: 's' }, 'x')).toBe('all');
-		expect(websitesVisible({ type: 'product', id: 'p' }, 'websites.read')).toBe('none');
-		expect(websitesVisible(null, 'websites.read')).toBe('none');
 	});
 });

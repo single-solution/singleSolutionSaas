@@ -2,7 +2,7 @@
  * The admin console: one page (one server function) renders the view of every path; any other path is a 404. The
  * console frame is the layout above (it stays on screen across navigations) and `loading.js` the skeleton shown at
  * once while a page is on the way. Pages fade and slide in (`PageTransition`); list-and-detail screens keep their
- * list in place and animate the detail only. Views keep the `params` / `searchParams` / `metadata` they had as pages.
+ * list in place and animate the detail only. Each view exports its `metadata`.
  */
 import { notFound } from 'next/navigation';
 import { PageTransition } from '@ss/ui';

@@ -3,7 +3,7 @@
  * server function) renders the view of every path; any other path is a 404. The console frame is the layout above
  * (it stays on screen across navigations; the public pages stay unframed) and `loading.js` the skeleton shown at once
  * while a page is on the way. Pages fade and slide in (`PageTransition`); the Websites screen keeps its list in place
- * and animates the detail only. Views keep the `params` / `searchParams` / `metadata` they had as pages.
+ * and animates the detail only. Each view exports its `metadata`.
  */
 import { notFound } from 'next/navigation';
 import { PageTransition } from '@ss/ui';

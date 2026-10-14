@@ -109,8 +109,8 @@ export const createSystemService = (ctx) => {
 
 		/**
 		 * Settings → Encryption key → Re-seal (PLAN 0.4.8, 0.11; RT-14): after the owner changes `ENCRYPTION_KEY` (the old
-		 * key set as `ENCRYPTION_KEY_PREVIOUS`), every stored secret is sealed again with the current key — the SMTP
-		 * password, server tokens and two-step secrets. Values already on it stay; values neither key opens are counted
+		 * key set as `ENCRYPTION_KEY_PREVIOUS`), every stored secret is sealed again with the current key — the signing
+		 * keys, the SMTP password, server tokens and two-step secrets. Values already on it stay; values neither key opens are counted
 		 * and left alone. Pressing again is safe. Written to Activity.
 		 * @param {{ actor: Actor, requestId: string, ip: string | null }} input
 		 */

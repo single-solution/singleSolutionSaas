@@ -31,7 +31,6 @@ import {
 	PageHeader,
 	Section,
 	Select,
-	StatusBadge,
 	TextArea,
 	TypedConfirmDialog,
 	describeProblem,
@@ -83,11 +82,7 @@ function MerchantStatus({ merchant, billing = null }) {
 	const status = statusOf(merchant, billing);
 	return (
 		<span className="inline-flex flex-wrap items-center gap-1">
-			{status in BILLING.merchantStatus ? (
-				<MerchantStatusBadge status={status} />
-			) : (
-				<StatusBadge status={status} label={statusLabel(status)} />
-			)}
+			<MerchantStatusBadge status={status} />
 			{merchant.setupPending ? <Badge tone="neutral">{ADMIN.setupPending}</Badge> : null}
 		</span>
 	);

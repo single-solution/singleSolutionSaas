@@ -17,7 +17,7 @@ import { api as paths } from './paths.js';
  * @param {T} fallback
  * @returns {T}
  */
-const orElse = (result, fallback) => (result.ok ? result.data : fallback);
+export const orElse = (result, fallback) => (result.ok ? result.data : fallback);
 
 /**
  * First failure among required results.
@@ -30,7 +30,7 @@ export const firstFailure = (...results) => {
 };
 
 /** @param {import('./api.js').ApiResult} r */
-const itemsOf = (r) => /** @type {any[]} */ (orElse(r, { items: [] })?.items ?? []);
+export const itemsOf = (r) => /** @type {any[]} */ (orElse(r, { items: [] })?.items ?? []);
 
 /**
  * @param {string | undefined} value

@@ -6,7 +6,7 @@
  */
 
 /**
- * Normalised name: Unicode NFKD without combining marks, lower case, single spaces, trimmed, ≤ 120 chars.
+ * Normalized name: Unicode NFKD without combining marks, lower case, single spaces, trimmed, ≤ 120 chars.
  * @param {unknown} name
  * @returns {string}
  */

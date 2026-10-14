@@ -69,7 +69,6 @@ import { platformError } from './errors.js';
  * @property {boolean} isProduction
  * @property {string} portalUrl `PORTAL_URL` (no trailing slash) — issuer of launches, audience of assertions, base of
  *   links, the only origin the CSRF check accepts
- * @property {string} portalOrigin same as `portalUrl`
  * @property {boolean} cookieSecure true when `PORTAL_URL` is https
  * @property {string} encryptionKey `ENCRYPTION_KEY`
  * @property {string | null} previousEncryptionKey `ENCRYPTION_KEY_PREVIOUS` (null when not set)
@@ -273,7 +272,6 @@ export const buildConfig = (envConfig, system, { overrides = {} } = {}) => {
 	const settings = settingsWithDefaults(system.settings);
 	const config = {
 		...envConfig,
-		portalOrigin: envConfig.portalUrl,
 		cookieSecure: envConfig.portalUrl.startsWith('https:'),
 		settings,
 		sessions: sessionPolicies(settings.security.sessionHours),

@@ -1,5 +1,5 @@
 /**
- * The website Setup sheet (`ss.blueprint/1`; design `audit/design/website-blueprint.md`), pure parts: the sheet from
+ * The website Setup sheet (`ss.blueprint/1`; PLAN.md, website setup sheet and setup advisor), pure parts: the sheet from
  * the website's facts, its business profile and each product's answer (with the advisor's view, `advisor.js`), the
  * copy a share link shows, and the input of a new share link.
  * @module

@@ -459,7 +459,7 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 export const sessionCookieName = (kind, secure) => `${secure ? '__Host-' : ''}ss_${kind}`;
 
 /**
- * Serialise a session cookie: `HttpOnly; SameSite=Lax; Path=/` (+ `Secure`).
+ * Serialize a session cookie: `HttpOnly; SameSite=Lax; Path=/` (+ `Secure`).
  * @param {string} name
  * @param {string} value
  * @param {{ maxAgeSeconds?: number, secure: boolean }} options

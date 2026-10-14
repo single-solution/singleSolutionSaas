@@ -63,4 +63,3 @@ export const createBackground = ({ logger, mode = 'on', fallback, onProductCall 
 
 	return Object.freeze({ mode, afterResponse });
 };
-/** @typedef {ReturnType<typeof createBackground>} Background */

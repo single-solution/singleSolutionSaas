@@ -1,6 +1,5 @@
 /**
- * The setup advisor of the website Setup sheet (owner request 2026-10-14; design `audit/design/website-blueprint.md`
- * §5), pure: the business profile a request saves, and the advice for a reachable product from its features'
+ * The setup advisor of the website Setup sheet (PLAN.md, website setup sheet and setup advisor), pure: the business profile a request saves, and the advice for a reachable product from its features'
  * `recommendFor` rules (`@ss/contracts` `adviseFeatures`), worded with `texts/console.js` `PROFILE`.
  * @module
  */

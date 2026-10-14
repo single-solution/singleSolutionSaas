@@ -155,4 +155,3 @@ export const createPortalClient = ({ handle, portalUrl, settle }) => {
 
 	return Object.freeze({ call, session, firstAdmin, signIn });
 };
-/** @typedef {ReturnType<typeof createPortalClient>} PortalClient */

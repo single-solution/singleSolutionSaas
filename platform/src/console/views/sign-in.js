@@ -11,6 +11,7 @@ import { Button, Callout, Form, FormError, Input, Spinner, describeProblem, fiel
 import { AUTH } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
 import { Link } from '../link.js';
+import { routes } from '../paths.js';
 import { BrandMark } from './brand.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -300,7 +301,7 @@ export function SignInView({ branding, firstAdmin, next = null, notice = null })
 					{AUTH.signIn}
 				</Button>
 				<p className="text-center text-sm">
-					<Link href="/forgot-password" className="font-semibold text-primary hover:underline">
+					<Link href={routes.forgotPassword()} className="font-semibold text-primary hover:underline">
 						{AUTH.forgot}
 					</Link>
 				</p>
@@ -337,7 +338,7 @@ export function ForgotPasswordView({ branding }) {
 			title={AUTH.forgotTitle}
 			subtitle={AUTH.forgotHelp}
 			footer={
-				<Link href="/login" className="font-semibold text-primary hover:underline">
+				<Link href={routes.login()} className="font-semibold text-primary hover:underline">
 					{AUTH.backToSignIn}
 				</Link>
 			}>
@@ -535,7 +536,7 @@ export function ConfirmEmailView({ branding }) {
 			branding={branding}
 			title={AUTH.confirmTitle}
 			footer={
-				<Link href="/login" className="font-semibold text-primary hover:underline">
+				<Link href={routes.login()} className="font-semibold text-primary hover:underline">
 					{AUTH.backToSignIn}
 				</Link>
 			}>

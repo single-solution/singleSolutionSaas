@@ -153,7 +153,7 @@ export const MERCHANT = Object.freeze({
 	accountIntro: 'Your business details, sign-in and security.',
 	detailsIntro: 'Business name, owner, phone, address and country.',
 	tiles: Object.freeze({ websites: 'Websites', products: 'Products on websites' }),
-	/** The Overview greeting (look "Workbench", owner 2026-10-14) and the one sentence of what matters now. */
+	/** The Overview greeting and the one sentence of what matters now. */
 	welcome: (/** @type {string} */ name) => (name ? `Welcome back, ${name}` : 'Welcome back'),
 	summary: (/** @type {{ websites: number, products: number, needs: number }} */ n) =>
 		`${n.websites} ${n.websites === 1 ? 'website' : 'websites'} with ${n.products} ${n.products === 1 ? 'product' : 'products'}. ` +
@@ -240,10 +240,9 @@ export const WEBSITE = Object.freeze({
 	setupOf: (/** @type {string} */ domain) => `Setup of ${domain}`,
 });
 
-/** The Setup sheet of a website and its share links (owner request 2026-10-14; `ss.blueprint/1`). */
+/** The Setup sheet of a website and its share links (`ss.blueprint/1`). */
 export const SETUP = Object.freeze({
 	title: (/** @type {string} */ domain) => `Setup · ${domain}`,
-	pageTitle: 'Setup',
 	intro: 'Everything this website runs on: each product with its features, settings, connections, widgets, staff permissions and events, and what is left to do. Secrets are never shown here.',
 	sharedTitle: (/** @type {string} */ domain) => `Setup of ${domain}`,
 	sharedIntro:
@@ -283,6 +282,7 @@ export const SETUP = Object.freeze({
 		connections: 'Connections',
 		widgets: 'Widgets',
 		install: 'Install',
+		build: 'What your website builds',
 		permissions: 'Staff permissions',
 		events: 'Events',
 		docs: 'Docs',
@@ -298,7 +298,6 @@ export const SETUP = Object.freeze({
 	empty: 'None',
 	valuesHidden: 'Settings values are not part of this copy.',
 	noSettings: 'No settings.',
-	needs: (/** @type {string} */ list) => `Needs ${list}`,
 	needed: 'Needed',
 	notNeeded: 'Not needed now',
 	states: Object.freeze({ connected: 'Connected', not_connected: 'Not connected', test_failed: 'Test failed' }),
@@ -315,10 +314,10 @@ export const SETUP = Object.freeze({
 	serverTokenIssued: 'A server token is issued; it is never shown here.',
 	guide: 'Guide',
 	openapi: 'OpenAPI document',
+	noBuild: 'Nothing to build for the features that are on.',
 	noEvents: 'No events.',
 	noPermissions: 'No staff permissions.',
 	// share links
-	share: 'Share',
 	linksTitle: 'Share links',
 	linksIntro:
 		'A read-only copy of this Setup for a client or a developer, without signing in. Each link expires, and you can revoke it at any time.',
@@ -337,7 +336,6 @@ export const SETUP = Object.freeze({
 	shareLink: 'Share link',
 	noLinks: 'No share links yet.',
 	revoke: 'Revoke',
-	revokeLabel: (/** @type {string} */ expires) => `Revoke the link that expires ${expires}`,
 	revoked: 'Share link revoked. It stops working at once.',
 	linkStatus: Object.freeze({ active: 'Active', revoked: 'Revoked', expired: 'Expired' }),
 	expires: 'Expires',
@@ -454,9 +452,6 @@ export const PROFILE = Object.freeze({
 	}),
 	yes: 'Yes',
 	no: 'No',
-	noneAlone: (/** @type {string} */ none) => `“${none}” cannot be chosen with other answers.`,
-	countriesHelp: 'Two-letter country codes, separated by commas, for example US, CA, GB.',
-	countriesInvalid: (/** @type {string} */ codes) => `Not a country code: ${codes}.`,
 	languagesHelp: 'Language codes, separated by commas, for example en, fr, es.',
 	languagesInvalid: (/** @type {string} */ codes) => `Not a language code: ${codes}.`,
 	/** What a tag says, as part of a sentence (`@ss/contracts/profile` tags; codes are kept as written). */
@@ -605,7 +600,7 @@ export const ADMIN = Object.freeze({
 	noProducts: 'No products connected yet.',
 	recentActivity: 'Recent activity',
 	recentActivityIntro: 'The latest entries in the activity log.',
-	/** The Overview greeting (look "Workbench", owner 2026-10-14) and the one sentence of what matters now. */
+	/** The Overview greeting and the one sentence of what matters now. */
 	welcome: (/** @type {string} */ name) => (name ? `Welcome back, ${name}` : 'Welcome back'),
 	summary: (/** @type {{ merchants: number, websites: number, needs: number }} */ n) =>
 		`${n.merchants} ${n.merchants === 1 ? 'merchant' : 'merchants'} and ${n.websites} ${n.websites === 1 ? 'website' : 'websites'}. ` +
@@ -665,7 +660,6 @@ export const ADMIN = Object.freeze({
 		grace: 'In grace',
 		stopped: 'Stopped',
 		suspended: 'Suspended',
-		deleted: 'Deleted',
 	}),
 	setupPending: 'Setup pending',
 	columns: Object.freeze({ status: 'Status', lastSignIn: 'Last sign-in' }),
@@ -754,7 +748,7 @@ export const ADMIN = Object.freeze({
 		}),
 		encryption: Object.freeze({
 			title: 'Encryption key',
-			help: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key (server tokens, the mail password, two-step secrets). Pressing again is safe.',
+			help: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key (signing keys, server tokens, the mail password, two-step secrets). Pressing again is safe.',
 		}),
 	}),
 	mail: Object.freeze({
@@ -810,7 +804,6 @@ export const ADMIN = Object.freeze({
 	settingsIntro: 'Email sending, billing rules, branding, support contact, security and the encryption key.',
 	myAccountIntro: 'Your name, sign-in, password, two-step sign-in and activity.',
 	filters: Object.freeze({
-		merchant: 'Merchant id',
 		admin: 'Admin id',
 		from: 'From (UTC day)',
 		to: 'To (UTC day)',
@@ -914,7 +907,7 @@ export const BILLING = Object.freeze({
 	noAttention: 'No merchant is low, in grace or stopped.',
 });
 
-/** The fuller screens (2026-10-10): details, quick actions, filters and recent activity drawn from the Portal API. */
+/** Screen details, quick actions, filters and recent activity drawn from the Portal API. */
 export const MORE = Object.freeze({
 	/** Readable names of activity entries whose code does not read well on its own (others are shown from the code). */
 	actions: Object.freeze({
@@ -928,7 +921,6 @@ export const MORE = Object.freeze({
 		'login.email_changed': 'Email changed',
 		'two_step.turned_on': 'Two-step sign-in turned on',
 		'two_step.turned_off': 'Two-step sign-in turned off',
-		'two_step.turn_off': 'Two-step sign-in turned off',
 		'two_step.turned_off_by_owner': 'Two-step sign-in turned off by the owner',
 		'two_step.recovery_code_used': 'Recovery code used',
 		'two_step.recovery_codes_replaced': 'Recovery codes replaced',
@@ -944,7 +936,6 @@ export const MORE = Object.freeze({
 	count: (/** @type {number} */ n, /** @type {boolean} */ more = false) => (more ? `${n}+` : String(n)),
 	viewAll: 'View all',
 	openInActivity: 'Open in Activity',
-	loadMore: 'Load more',
 	clearFilters: 'Clear filters',
 	copied: 'Copied.',
 	never: 'Never',
@@ -979,7 +970,6 @@ export const MORE = Object.freeze({
 		password: 'Password',
 		setupPending: 'Not set yet',
 		passwordSet: 'Set',
-		suspended: 'Suspended',
 		websites: 'Websites',
 		products: 'Products on websites',
 	}),

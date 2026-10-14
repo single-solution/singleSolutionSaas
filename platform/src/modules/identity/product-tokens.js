@@ -246,4 +246,3 @@ export const createProductTokens = (deps, hooks) => {
 		},
 	});
 };
-/** @typedef {ReturnType<typeof createProductTokens>} ProductTokens */

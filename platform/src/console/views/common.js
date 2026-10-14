@@ -309,7 +309,7 @@ function BackLink({ href, label }) {
 }
 
 /**
- * One "Needs you" item of an Overview (look "Workbench", owner 2026-10-14): what is wrong, what happens if it waits,
+ * One "Needs you" item of an Overview: what is wrong, what happens if it waits,
  * and its button; amber, or red when something has already stopped.
  * @param {{ tone: 'warning' | 'danger', title: import('react').ReactNode, effect: import('react').ReactNode,
  *   action?: import('react').ReactNode }} props

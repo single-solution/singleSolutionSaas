@@ -102,6 +102,9 @@ describe('Setup page (jsdom)', () => {
 			expect(shows('Connected')).toBe(true);
 			expect(shows('notes.settings.changed')).toBe(true);
 			expect(shows('A server token is issued; it is never shown here.')).toBe(true);
+			// what the website builds for each feature that is on, with its docs
+			expect(shows('What your website builds')).toBe(true);
+			expect(shows('Add the note form widget to the pages where visitors leave notes.')).toBe(true);
 			const download = /** @type {HTMLAnchorElement} */ (
 				[...document.querySelectorAll('a')].find((a) => a.textContent === 'Download JSON')
 			);

@@ -43,7 +43,7 @@ Indexes are applied on the first request after a deploy; there is nothing to sch
 
 ```bash
 pnpm --filter @ss/platform db:memory      # terminal 1: in-memory MongoDB replica set on port 27999
-cd platform && pnpm env:dev > .env.local  # NODE_ENV, MONGODB_URI, PORTAL_URL, ENCRYPTION_KEY
+cd platform && node scripts/dev-env.js > .env.local  # NODE_ENV, MONGODB_URI, PORTAL_URL, ENCRYPTION_KEY
 pnpm dev                                  # http://localhost:4000, then open /login and create the first admin
 ```
 

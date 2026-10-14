@@ -1,6 +1,6 @@
 'use client';
 /**
- * The Setup sheet of a website (owner request 2026-10-14; `ss.blueprint/1`), in both consoles and on its read-only
+ * The Setup sheet of a website (`ss.blueprint/1`), in both consoles and on its read-only
  * shared page: the website's facts, its **business profile** and the advisor's **recommendations** (features the
  * profile calls for that are not on, with why — the admin switches one on with **Switch on**, the features it needs
  * included — and features that are on although the profile does not call for them), then one panel per product —
@@ -343,6 +343,29 @@ function ProductPanel({ product, valuesShown }) {
 					)}
 					<p className="text-xs text-muted">{SETUP.serverTokenIssued}</p>
 				</Part>
+				<Part title={SETUP.sections.build}>
+					{product.build.length === 0 ? (
+						<p className="text-xs text-muted">{SETUP.noBuild}</p>
+					) : (
+						<ul className="space-y-2">
+							{product.build.map((item) => (
+								<li key={item.feature} className="space-y-0.5 text-sm text-fg">
+									<span className="font-medium">
+										{product.features.find((feature) => feature.key === item.feature)?.title ?? item.feature}
+									</span>{' '}
+									<span>{item.what}</span>{' '}
+									<a
+										href={item.docs}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="font-semibold text-primary hover:underline">
+										{SETUP.guide}
+									</a>
+								</li>
+							))}
+						</ul>
+					)}
+				</Part>
 				<Part title={SETUP.sections.permissions}>
 					{product.staffPermissions.length === 0 ? (
 						<p className="text-xs text-muted">{SETUP.noPermissions}</p>
@@ -602,7 +625,7 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
  * The website's facts, its business profile and the recommendations, and every product's panel.
  * @param {{ sheet: Blueprint, actions?: SheetActions | null }} props `actions`: in the consoles
  */
-export function SheetBody({ sheet, actions = null }) {
+function SheetBody({ sheet, actions = null }) {
 	const { website, access } = sheet;
 	return (
 		<div className="space-y-6">

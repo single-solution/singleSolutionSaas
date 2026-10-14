@@ -1,6 +1,6 @@
 'use client';
 /**
- * Admin Overview (PLAN 0.8.2; look "Workbench", owner 2026-10-14): a greeting with one sentence of what matters now;
+ * Admin Overview (PLAN 0.8.2): a greeting with one sentence of what matters now;
  * "Needs you" — each item says what happens if it waits and carries its button (email sending not set up, no product
  * connected or active, merchants low on credits, in grace or stopped, with Add credits); the setup checklist while
  * the platform is new; the month's numbers; credits spent per UTC day; the first merchants with their balance; the

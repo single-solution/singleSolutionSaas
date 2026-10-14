@@ -6,7 +6,7 @@
  * throw for API failures. Query-string inputs are validated here; anything malformed is ignored.
  * @module
  */
-import { loadWebsiteRows } from '../loaders.js';
+import { firstFailure, itemsOf, loadWebsiteRows, orElse } from '../loaders.js';
 import { ID, adminApi as paths, merchantFilter } from './paths.js';
 import { adminCan } from './rights.js';
 
@@ -17,26 +17,6 @@ import { adminCan } from './rights.js';
  * @template T
  * @typedef {import('../api.js').ApiResult<T>} ApiResult
  */
-
-/**
- * @template T
- * @param {ApiResult<T>} result
- * @param {T} fallback
- * @returns {T}
- */
-const orElse = (result, fallback) => (result.ok ? result.data : fallback);
-
-/**
- * @param {...ApiResult<any>} results
- * @returns {LoadFailure | null}
- */
-const firstFailure = (...results) => {
-	for (const r of results) if (!r.ok) return { ok: false, status: r.status, problem: r.problem };
-	return null;
-};
-
-/** @param {ApiResult<any>} r */
-const itemsOf = (r) => /** @type {any[]} */ (orElse(r, { items: [] })?.items ?? []);
 
 /** @param {ApiResult<any>} r */
 const pageOf = (r) => {

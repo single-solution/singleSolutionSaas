@@ -1,5 +1,5 @@
 /**
- * Website Setup sheets (owner request 2026-10-14; design `audit/design/website-blueprint.md`): one generated
+ * Website Setup sheets (PLAN.md, website setup sheet and setup advisor): one generated
  * `ss.blueprint/1` per website, for the admin and the merchant, and read-only share links for a client or a developer.
  *
  * - **Gather**: every product on the website (not removed) is asked for its part (`GET /v1/blueprint?websiteId=`, a

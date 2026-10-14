@@ -165,18 +165,3 @@ export const can = (actor, permission, resource = {}) => {
 		return permissionsFor(actor, { ...resource, merchantId: actor.merchantId ?? null }).includes(permission);
 	return permissionsFor(actor, resource).includes(permission);
 };
-
-/**
- * Websites an actor may see for a permission: `'all'` (admins with the permission, the system) or the merchant's own
- * (`'own'`), else none.
- * @param {Actor | null | undefined} actor
- * @param {string} permission
- * @returns {'all' | 'own' | 'none'}
- */
-export const websitesVisible = (actor, permission) => {
-	if (!actor) return 'none';
-	if (actor.type === 'system') return 'all';
-	if (actor.type === 'admin') return can(actor, permission) ? 'all' : 'none';
-	if (actor.type === 'merchant') return can(actor, permission) ? 'own' : 'none';
-	return 'none';
-};

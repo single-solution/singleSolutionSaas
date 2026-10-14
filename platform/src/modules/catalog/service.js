@@ -30,7 +30,7 @@ import {
 	verifyConnectResponse,
 } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
-import { isDuplicateKey } from '../../infra/util.js';
+import { isDuplicateKey, isObject } from '../../infra/util.js';
 import { launchUrl } from './core/input.js';
 import { createNotices } from './notices.js';
 import { createSetup } from './setup.js';
@@ -76,7 +76,6 @@ const fail = (code, detail, extra) => {
  * @param {unknown} value
  * @returns {value is Record<string, any>}
  */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The reason a product gives in an error answer (its `problems` or problem `detail`), at most 5 short sentences.

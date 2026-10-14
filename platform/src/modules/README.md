@@ -7,9 +7,9 @@ The Portal is four **modules**: `identity`, `catalog`, `commerce` and `system` (
 
 ```
 src/modules/<name>/
-  schema.js     collections (defineCollection) — the only place the module's data shape is declared
+  schema.js     collections (defineCollection) — the only place the module's data shape is declared (when it has data)
   core/*.js     pure logic: validation, calculations, state machines (no I/O, no imports from infra except types)
-  repo.js       data access over the module's own repositories
+  repo.js       data access over the module's own repositories (when it needs more than plain reads and writes)
   service.js    the module's public API (other modules call it via ctx.service('<name>'))
   routes.js     HTTP adapters: defineRoute(...) → service calls; no business logic
   index.js      defineModule({ ... }) wiring the pieces together
@@ -52,7 +52,6 @@ Every factory receives a `ModuleContext`:
 | `locks`                                                         | lease locks                                                                                                                                                                                          |
 | `sessions`, `loginThrottle`, `cookies`                          | console session primitives (identity module)                                                                                                                                                         |
 | `replayStore`                                                   | shared atomic replay store for `@ss/protocol` verifiers (client assertions, launch consumption)                                                                                                      |
-| `rbac`                                                          | `can(actor, permission, resource)`, `websitesVisible(actor)` (`all` / `own` / `none`) over the PLAN 0.2 rights table                                                                                 |
 
 ## Rules
 

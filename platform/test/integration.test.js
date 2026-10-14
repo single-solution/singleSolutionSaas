@@ -6,6 +6,7 @@ import { defineModule } from '../src/infra/modules.js';
 import { COLLECTIONS } from '../src/infra/schema.js';
 import { systemModule } from '../src/modules/system/index.js';
 import { createPortal } from '../src/portal.js';
+import { can } from '../src/infra/rbac.js';
 import { createBackground } from '../src/infra/background.js';
 import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
@@ -903,7 +904,6 @@ describe('infra hardening (Mongo)', () => {
 		await ctx.withTransaction(async (session) => items.insertOne({ name: 'kept' }, { session }));
 		expect(await items.countDocuments({ merchantId: MERCHANT })).toBe(1);
 
-		const { can } = portal.shared.rbac;
 		expect(can({ type: 'admin', id: 's', role: 'owner' }, 'products.manage')).toBe(true);
 		expect(can({ type: 'admin', id: 's', role: 'support' }, 'products.manage')).toBe(false);
 		expect(can({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'products.manage')).toBe(false);

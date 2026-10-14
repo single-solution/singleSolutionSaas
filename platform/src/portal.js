@@ -19,7 +19,7 @@ import { platformError } from './infra/errors.js';
 import { INFRA_PROBLEMS, createApiHandler } from './infra/http.js';
 import { createPlatformMailer } from './infra/mailer.js';
 import { composeModules, moduleProblems } from './infra/modules.js';
-import { can, websitesVisible } from './infra/rbac.js';
+import { can } from './infra/rbac.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from './infra/schema.js';
 import { createIdempotencyStore, createRateLimitStore, createReplayStore } from './infra/stores.js';
 import { defaultRandomBytes } from './infra/util.js';
@@ -94,7 +94,6 @@ export const createPortal = ({
 			clear: (/** @type {'admin' | 'merchant'} */ kind) =>
 				clearCookie(sessionCookieName(kind, config.cookieSecure), { secure: config.cookieSecure }),
 		}),
-		rbac: Object.freeze({ can, websitesVisible }),
 		system,
 	});
 

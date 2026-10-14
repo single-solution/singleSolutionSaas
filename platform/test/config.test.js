@@ -113,7 +113,6 @@ describe('buildConfig: environment + system state', () => {
 	it('joins the generated secrets and the recorded settings', async () => {
 		const config = loadConfig(await testEnv(), await testSystem());
 		expect(config.portalUrl).toBe('https://portal.test');
-		expect(config.portalOrigin).toBe('https://portal.test');
 		expect(config.cookieSecure).toBe(true);
 		expect(config.problemBaseUri).toBe('https://portal.test/problems/');
 		expect(config.signingKeys.map((k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04']);

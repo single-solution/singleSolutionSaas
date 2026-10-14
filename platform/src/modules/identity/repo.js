@@ -143,7 +143,6 @@ export const createRepo = (ctx) => {
 		dropTokens: (purpose, subject) => tokens.deleteMany({ purpose, subject }),
 	});
 };
-/** @typedef {ReturnType<typeof createRepo>} Repo */
 
 /**
  * Audit-log actor from an RBAC actor (website actors are recorded as system). An admin's name is kept with the entry.

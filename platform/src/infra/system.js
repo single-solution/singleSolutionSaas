@@ -23,6 +23,7 @@ import { signingKeyFromSeed, toPublicJwk } from '@ss/protocol';
 import { createSecretBox, resealEach, sumCounts } from './crypto.js';
 import { platformError } from './errors.js';
 import { COLLECTIONS } from './schema.js';
+import { isDuplicateKey } from './util.js';
 
 /** The collection (registered in `INFRA_COLLECTIONS`). */
 const SYSTEM_COLLECTION = COLLECTIONS.system;
@@ -131,7 +132,6 @@ export const secretsOf = (doc, open = () => null) => {
  * @param {unknown} error
  * @returns {boolean}
  */
-const isDuplicateKey = (error) => typeof error === 'object' && error !== null && /** @type {any} */ (error).code === 11000;
 
 /**
  * Access to the system state in a control database.

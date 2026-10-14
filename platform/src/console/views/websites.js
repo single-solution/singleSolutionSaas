@@ -64,7 +64,7 @@ function Welcome({ branding }) {
 }
 
 /**
- * The merchant's Overview (look "Workbench", owner 2026-10-14): a greeting with one sentence of what matters now;
+ * The merchant's Overview: a greeting with one sentence of what matters now;
  * "Needs you" (a product with no feature on, with Open; a website with no product yet) beside the 30-day spend chart;
  * the money numbers (balance, days left, daily spend, spent this month); the websites with their products and Open
  * buttons; the latest activity as a timeline beside the latest receipts. Low credits show in the frame's banner.
