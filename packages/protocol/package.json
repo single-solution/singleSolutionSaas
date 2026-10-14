@@ -6,6 +6,7 @@
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
+		"./testing": "./src/testing.js",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -21,6 +22,10 @@
 			".": {
 				"types": "./types/src/index.d.ts",
 				"default": "./src/index.js"
+			},
+			"./testing": {
+				"types": "./types/src/testing.d.ts",
+				"default": "./src/testing.js"
 			},
 			"./package.json": "./package.json"
 		}

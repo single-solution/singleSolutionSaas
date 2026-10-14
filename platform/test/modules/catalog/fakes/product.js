@@ -15,13 +15,13 @@ import {
 	createConnectResponse,
 	createJwks,
 	createKeyResolver,
-	createMemoryReplayStore,
 	createSigner,
 	generateSigningKey,
 	signAssertion,
 	verifyConnectRequest,
 	verifyNotice,
 } from '@ss/protocol';
+import { createMemoryReplayStore } from '@ss/protocol/testing';
 
 /** The connect secret fake products are deployed with (unless a test passes another). */
 const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';

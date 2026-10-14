@@ -219,7 +219,7 @@ export const issueLaunch = async ({
  *   token: unknown, keyResolver: KeyResolver, audience: string, issuer: string,
  *   consume: (jti: string, expiresAtMs: number) => boolean | Promise<boolean>,
  *   now?: () => number, skewSeconds?: number, maxTtlSeconds?: number,
- * }} params `consume` must atomically mark the jti used and return `true` only on first use (see `consumeWith`).
+ * }} params `consume` must atomically mark the jti used and return `true` only on first use (`consumeWith` of `@ss/protocol/testing` adapts a replay store in tests).
  * @returns {Promise<LaunchClaims>}
  */
 export const verifyLaunch = async ({

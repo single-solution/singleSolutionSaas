@@ -20,7 +20,7 @@ import { assertBody, checkSigningInputs, readTimestamp, signDetached, verifyDeta
 import { isObject } from './jws.js';
 
 /** @import { KeyResolver, Signer } from './keys.js' */
-/** @typedef {import('./replay.js').ReplayStore} ReplayStore */
+/** @typedef {import('./assertion.js').ReplayStore} ReplayStore */
 /** @typedef {{ 'SS-Timestamp': string, 'SS-Signature': string, 'SS-Key-Id': string }} NoticeHeaders */
 
 /** Path of the product's notice endpoint. */

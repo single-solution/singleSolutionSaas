@@ -5,7 +5,6 @@
  */
 export { ERROR_CODES, createProtocolError, isProtocolError } from './errors.js';
 export * from './keys.js';
-export { consumeWith, createMemoryReplayStore } from './replay.js';
 export * from './tokens.js';
 export * from './tickets.js';
 export * from './launch.js';
@@ -21,11 +20,11 @@ export {
 	verifyConnectResponse,
 } from './registration.js';
 export { canonicalJson } from './encoding.js';
-export { MIN_ENCRYPTION_KEY_LENGTH, SEAL_FORMAT, createSealer, legacyV1, sealKeyId } from './sealing.js';
+export { SEAL_FORMAT, createSealer, legacyV1, sealKeyId } from './sealing.js';
 
 /** @typedef {import('./errors.js').ProtocolError} ProtocolError */
 /** @typedef {import('./errors.js').ProtocolErrorCode} ProtocolErrorCode */
-/** @typedef {import('./replay.js').ReplayStore} ReplayStore */
+/** @typedef {import('./assertion.js').ReplayStore} ReplayStore */
 /** @typedef {import('./assertion.js').AssertionClaims} AssertionClaims */
 /** @typedef {import('./notices.js').Notice} Notice */
 /** @typedef {import('./notices.js').NoticeType} NoticeType */

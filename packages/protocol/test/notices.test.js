@@ -1,13 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-	NOTICE_PATH,
-	NOTICE_TYPES,
-	createJwks,
-	createKeyResolver,
-	createMemoryReplayStore,
-	signNotice,
-	verifyNotice,
-} from '../src/index.js';
+import { NOTICE_PATH, NOTICE_TYPES, createJwks, createKeyResolver, signNotice, verifyNotice } from '../src/index.js';
+import { createMemoryReplayStore } from '../src/testing.js';
 import { parseNotice } from '../src/notices.js';
 import { createClock, expectCode, expectThrowCode, makeKey, staticResolver } from './helpers.js';
 

@@ -18,7 +18,7 @@ import { createProtocolError } from './errors.js';
 /** First part of every sealed value. */
 export const SEAL_FORMAT = 'ss2';
 /** Shortest accepted `ENCRYPTION_KEY` (and `ENCRYPTION_KEY_PREVIOUS`). */
-export const MIN_ENCRYPTION_KEY_LENGTH = 32;
+const MIN_ENCRYPTION_KEY_LENGTH = 32;
 
 const LABEL = /^[a-z][a-z0-9-]{0,40}$/;
 

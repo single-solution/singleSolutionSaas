@@ -23,7 +23,6 @@ import {
 	createConnectRequest,
 	createJwks,
 	createKeyResolver,
-	createMemoryReplayStore,
 	createSigner,
 	generateSigningKey,
 	issueLaunch,
@@ -33,6 +32,7 @@ import {
 	verifyAssertion,
 	verifyConnectResponse,
 } from '@ss/protocol';
+import { createMemoryReplayStore } from '@ss/protocol/testing';
 import { PRODUCT_KEY_AAD } from './connection.js';
 import { createSealer, openKey } from './sealing.js';
 import { createMemoryStore } from './stores/memory.js';

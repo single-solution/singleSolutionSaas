@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { consumeWith, createMemoryReplayStore, signAssertion, verifyAssertion } from '../src/index.js';
+import { signAssertion, verifyAssertion } from '../src/index.js';
+import { consumeWith, createMemoryReplayStore } from '../src/testing.js';
 import { signCompact } from '../src/jws.js';
 import { createClock, expectCode, makeKey, seededRandom, staticResolver, tamperSegment, tamperSignature } from './helpers.js';
 

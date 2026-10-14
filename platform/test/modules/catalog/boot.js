@@ -5,7 +5,8 @@
  * responses (notices, e-mails) runs before each call returns.
  * @module
  */
-import { createKeyResolver, consumeWith, createMemoryReplayStore, verifyLaunch } from '@ss/protocol';
+import { createKeyResolver, verifyLaunch } from '@ss/protocol';
+import { consumeWith, createMemoryReplayStore } from '@ss/protocol/testing';
 import { createPortalClient } from '../../../src/testing.js';
 import { createSystemStore } from '../../../src/infra/system.js';
 import { createCatalogModule } from '../../../src/modules/catalog/index.js';

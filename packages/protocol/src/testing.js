@@ -1,16 +1,10 @@
 /**
- * Replay protection.
- *
- * Interface: `seen(id, expiresAtMs)` atomically records `id` until `expiresAtMs` and returns `true` when the id was
- * already recorded (i.e. the message is a replay), `false` on first sight. It may be sync or async.
- *
- * PRODUCTION: use a store shared by every instance of the deployable (serverless functions do not share memory), with
- * an atomic insert-if-absent and a TTL, e.g. a MongoDB collection with a unique index on `_id` and a TTL index on
- * `expiresAt` (`insertOne` → duplicate-key error means "seen"), or Redis `SET id 1 NX PXAT expiresAt`. The in-memory
- * store below is for tests and single-process tools only.
+ * `@ss/protocol/testing` — helpers for tests and single-process tools only, never for a deployable: an in-memory
+ * replay store and the adapter of a replay store to the single-use `consume` of `verifyLaunch`.
+ * @module
  */
 
-/** @typedef {{ seen: (id: string, expiresAtMs: number) => boolean | Promise<boolean> }} ReplayStore */
+/** @typedef {import('./assertion.js').ReplayStore} ReplayStore */
 
 /**
  * In-memory replay store for tests. When full (after pruning expired ids) it fails closed and reports every new id

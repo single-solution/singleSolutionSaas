@@ -1,13 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-	consumeWith,
-	createJwks,
-	createKeyResolver,
-	createMemoryReplayStore,
-	issueLaunch,
-	launchViolation,
-	verifyLaunch,
-} from '../src/index.js';
+import { createJwks, createKeyResolver, issueLaunch, launchViolation, verifyLaunch } from '../src/index.js';
+import { consumeWith, createMemoryReplayStore } from '../src/testing.js';
 import { signCompact } from '../src/jws.js';
 import {
 	T0,

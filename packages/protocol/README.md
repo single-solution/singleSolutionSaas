@@ -13,19 +13,18 @@ tickets, 0.4.12 Product ↔ Portal contract), and the one format of sealed store
 
 What `@ss/protocol` exports, by module:
 
-| Module            | Exports                                                                                                                                                                                                                                               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keys.js`         | `generateSigningKey`, `signingKeyFromSeed`, `createSigner`, `importPublicKey`, `importPrivateKey`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                                     |
-| `tokens.js`       | `issueToken`, `verifyToken`, `TOKEN_KINDS`, `normalizeDomain`, `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`, `isProductId`                                                                                              |
-| `tickets.js`      | `issueTicket`, `verifyTicket`, `TICKET_TTL_SECONDS`                                                                                                                                                                                                   |
-| `launch.js`       | `issueLaunch`, `verifyLaunch`, `launchViolation`                                                                                                                                                                                                      |
-| `assertion.js`    | `signAssertion`, `verifyAssertion`                                                                                                                                                                                                                    |
-| `notices.js`      | `signNotice`, `verifyNotice`, `NOTICE_PATH`, `NOTICE_TYPES`                                                                                                                                                                                           |
-| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`                                                           |
-| `replay.js`       | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                                 |
-| `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                               |
-| `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                       |
-| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, `reseal`), `legacyV1`, `sealKeyId`, `SEAL_FORMAT`, `MIN_ENCRYPTION_KEY_LENGTH` |
+| Module            | Exports                                                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `keys.js`         | `generateSigningKey`, `signingKeyFromSeed`, `createSigner`, `importPublicKey`, `importPrivateKey`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                                |
+| `tokens.js`       | `issueToken`, `verifyToken`, `TOKEN_KINDS`, `normalizeDomain`, `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`, `isProductId`                                                                                         |
+| `tickets.js`      | `issueTicket`, `verifyTicket`, `TICKET_TTL_SECONDS`                                                                                                                                                                                              |
+| `launch.js`       | `issueLaunch`, `verifyLaunch`, `launchViolation`                                                                                                                                                                                                 |
+| `assertion.js`    | `signAssertion`, `verifyAssertion` (and the `ReplayStore` type)                                                                                                                                                                                  |
+| `notices.js`      | `signNotice`, `verifyNotice`, `NOTICE_PATH`, `NOTICE_TYPES`                                                                                                                                                                                      |
+| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`                                                      |
+| `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                          |
+| `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                  |
+| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, at least 32 characters; `reseal`), `legacyV1`, `sealKeyId`, `SEAL_FORMAT` |
 
 ## What is signed
 
@@ -116,6 +115,7 @@ replay store, then the body: `status.changed`, `token.revoked` and `website.dele
 
 ## Replay stores
 
-`createMemoryReplayStore` is for tests only. In production use a store shared by every instance (serverless functions
-share no memory) with an atomic insert-if-absent and a TTL, for example a MongoDB collection with a unique `_id` and a
-TTL index on `expiresAt`. `consumeWith(store)` adapts it to the `consume(jti, expiresAtMs)` shape of `verifyLaunch`.
+A deployable uses a store shared by every instance (serverless functions share no memory) with an atomic
+insert-if-absent and a TTL, for example a MongoDB collection with a unique `_id` and a TTL index on `expiresAt`. Tests
+import `@ss/protocol/testing`: `createMemoryReplayStore` (in memory, one process) and `consumeWith(store)`, which adapts
+a store to the `consume(jti, expiresAtMs)` shape of `verifyLaunch`.
