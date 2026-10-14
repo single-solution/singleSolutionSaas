@@ -129,8 +129,21 @@ const ROBOTS_ALWAYS = '/api/';
 /** Staff roles without the Ecommerce permission `orders.read` (Accounts' ready-made roles). */
 const WITHOUT_ORDERS = Object.freeze(['product_manager', 'marketing_manager']);
 
-/** An https origin with no trailing slash, or ''. @param {string} value */
-const origin = (value) => (/^https:\/\/[^\s/]+/i.test(value) ? value.replace(/\/+$/, '') : '');
+/** An https address with no trailing slash, or ''. @param {string} value */
+const address = (value) => (/^https:\/\/[^\s/]+/i.test(value) ? value.replace(/\/+$/, '') : '');
+
+/**
+ * The scheme and host of an https address, or '': photo keys are the whole path of SB's addresses (`mediaKey`), so the
+ * base Ecommerce adds them to is the bare host.
+ * @param {string} value
+ */
+const origin = (value) => {
+	try {
+		return address(value) ? new URL(value).origin : '';
+	} catch {
+		return '';
+	}
+};
 
 /**
  * The staff alert recipients (`packages/db/src/staffNotifyContacts.ts`:10-39): SB alerts the staff address (else the
@@ -160,8 +173,8 @@ const recipientsOf = ({ store, integration, staff }) =>
  */
 export const settingsPlan = (values) => {
 	const { store, seo, integration } = values;
-	const site = origin(store.publicSiteUrl);
-	const admin = origin(integration.adminSiteUrl);
+	const site = address(store.publicSiteUrl);
+	const admin = address(integration.adminSiteUrl);
 	const media = origin(integration.awsS3PublicUrlBase);
 	const disallow = [...new Set([...(seo.robotsDisallow ?? ROBOTS_FALLBACK), ROBOTS_ALWAYS])];
 	// prices are whole rupees ("Rs 12,500", `packages/shared/src/formatters.ts`) and times are the shop's (SF-14, K8)

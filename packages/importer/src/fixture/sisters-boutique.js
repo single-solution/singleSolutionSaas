@@ -120,7 +120,8 @@ export const sbSource = () => ({
 		{ _id: oid(922), key: 'seo.googleSiteVerification', value: 'sample-verification' },
 		{ _id: oid(930), key: 'integration.staffNotifyEmail', value: 'alerts@example.com' },
 		{ _id: oid(931), key: 'integration.adminSiteUrl', value: 'https://admin.example.com/' },
-		{ _id: oid(932), key: 'integration.awsS3PublicUrlBase', value: 'https://media.example.com' },
+		// a base with a path: photo keys are whole paths, so Ecommerce's base is the host
+		{ _id: oid(932), key: 'integration.awsS3PublicUrlBase', value: 'https://media.example.com/sb/' },
 		// a secret: never read
 		{ _id: oid(933), key: 'integration.smtpPass', value: 'not-a-real-secret' },
 	],
