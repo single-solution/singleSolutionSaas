@@ -8640,16 +8640,26 @@
 		},
 		"ProductSeo": {
 			"type": "object",
-			"required": ["title", "description", "canonicalUrl", "ogImage", "noindex", "nofollow", "focusKeyword"],
+			"required": [
+				"title",
+				"description",
+				"canonicalUrl",
+				"ogImage",
+				"noindex",
+				"nofollow",
+				"focusKeyword",
+				"titleMode",
+				"source"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
 					"type": "string",
-					"description": "'' = the name."
+					"description": "'' = the productTitle pattern."
 				},
 				"description": {
 					"type": "string",
-					"description": "'' = the summary."
+					"description": "'' = made on read: a written summary, else the productDescription pattern."
 				},
 				"canonicalUrl": {
 					"type": "string",
@@ -8667,6 +8677,16 @@
 				},
 				"focusKeyword": {
 					"type": "string"
+				},
+				"titleMode": {
+					"type": "string",
+					"enum": ["template", "as_written"],
+					"description": "as_written: the title is the page's whole title (the seo setting titleTemplate is not put around it); template: the title pattern is put around it (the name in titles is never added twice)."
+				},
+				"source": {
+					"type": ["string", "null"],
+					"enum": ["merchant", "import", "ai", null],
+					"description": "Who wrote the title and description: staff (merchant), an import (the earlier shop's copy) or an AI provider (ai: suggestions applied by staff, or written on save with the seo setting autoSeo); null while both are empty (the seo patterns fill the page on every read; formula copy is never stored)."
 				}
 			},
 			"description": "SEO fields of a product."
@@ -10129,10 +10149,11 @@
 			"properties": {
 				"title": {
 					"type": "string",
-					"description": "The category's SEO title, else the seo setting categoryTitle ({name}, {category}, {storeName}), inside titleTemplate."
+					"description": "The category's own SEO title as written with titleMode as_written; else titleTemplate around its own SEO title, else around the seo setting categoryTitle ({name}, {category}, {storeName}). The name in titles is never added twice."
 				},
 				"description": {
-					"type": "string"
+					"type": "string",
+					"description": "The category's SEO description as written, else the categoryDescription pattern, its summary, its description (cut at a word to 160 characters), else the seo setting defaultDescription as written."
 				},
 				"canonical": {
 					"type": "string",
@@ -10397,11 +10418,11 @@
 			"properties": {
 				"title": {
 					"type": "string",
-					"description": "The product's SEO title, else the seo setting productTitle ({name}, {brand}, {category}, {storeName}), inside titleTemplate."
+					"description": "The product's own SEO title as written with titleMode as_written; else titleTemplate around its own SEO title, else around the seo setting productTitle ({name}, {brand}, {category}, {storeName} and the facts {price}, {minPrice}, {maxPrice}, {options}, {inStockOptions}, {conditions}, {topSpecs}). The name in titles is never added twice."
 				},
 				"description": {
 					"type": "string",
-					"description": "The meta description: the product's SEO description, else the productDescription pattern, its summary, its description as text, or the seo setting defaultDescription."
+					"description": "The meta description: the product's SEO description as written (never cut), else its summary when it has 50 characters or more, else the productDescription pattern with the product's facts as they are now, else its description as text, else the seo setting defaultDescription as written. Text not written as a description is cut at a word to 160 characters."
 				},
 				"canonical": {
 					"type": "string",
@@ -13440,7 +13461,17 @@
 		"TaxonomySeo": {
 			"type": "object",
 			"description": "The SEO fields of a category or brand page (PLAN E16).",
-			"required": ["title", "description", "canonicalUrl", "ogImage", "noindex", "nofollow", "focusKeyword"],
+			"required": [
+				"title",
+				"description",
+				"canonicalUrl",
+				"ogImage",
+				"noindex",
+				"nofollow",
+				"focusKeyword",
+				"titleMode",
+				"source"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -13474,6 +13505,16 @@
 				"focusKeyword": {
 					"type": "string",
 					"maxLength": 100
+				},
+				"titleMode": {
+					"type": "string",
+					"enum": ["template", "as_written"],
+					"description": "as_written: the title is the page's whole title (the seo setting titleTemplate is not put around it); template: the title pattern is put around it (the name in titles is never added twice)."
+				},
+				"source": {
+					"type": ["string", "null"],
+					"enum": ["merchant", "import", "ai", null],
+					"description": "Who wrote the title and description: staff (merchant), an import (the earlier shop's copy) or an AI provider (ai: suggestions applied by staff, or written on save with the seo setting autoSeo); null while both are empty (the seo patterns fill the page on every read; formula copy is never stored)."
 				}
 			}
 		},
@@ -13512,6 +13553,16 @@
 				"focusKeyword": {
 					"type": "string",
 					"maxLength": 100
+				},
+				"titleMode": {
+					"type": "string",
+					"enum": ["template", "as_written"],
+					"description": "as_written: use the title as the page's whole title; template (the default): put the seo setting titleTemplate around it."
+				},
+				"source": {
+					"type": "string",
+					"enum": ["merchant", "ai"],
+					"description": "Who wrote the title or description given: merchant (the default) or ai (an AI suggestion applied). A change of the title or description without it records merchant; both emptied record none."
 				}
 			}
 		},
@@ -14602,6 +14653,16 @@
 						"focusKeyword": {
 							"type": "string",
 							"maxLength": 100
+						},
+						"titleMode": {
+							"type": "string",
+							"enum": ["template", "as_written"],
+							"description": "as_written: use the title as the page's whole title; template (the default): put the seo setting titleTemplate around it."
+						},
+						"source": {
+							"type": "string",
+							"enum": ["merchant", "ai"],
+							"description": "Who wrote the title or description given: merchant (the default) or ai (an AI suggestion applied). A change of the title or description without it records merchant; both emptied record none."
 						}
 					},
 					"description": "SEO fields; members left out keep their value."
@@ -15068,6 +15129,16 @@
 						"focusKeyword": {
 							"type": "string",
 							"maxLength": 100
+						},
+						"titleMode": {
+							"type": "string",
+							"enum": ["template", "as_written"],
+							"description": "as_written: use the title as the page's whole title; template (the default): put the seo setting titleTemplate around it."
+						},
+						"source": {
+							"type": "string",
+							"enum": ["merchant", "ai"],
+							"description": "Who wrote the title or description given: merchant (the default) or ai (an AI suggestion applied). A change of the title or description without it records merchant; both emptied record none."
 						}
 					},
 					"description": "SEO fields; members left out keep their value."
@@ -15547,6 +15618,16 @@
 						"focusKeyword": {
 							"type": "string",
 							"maxLength": 100
+						},
+						"titleMode": {
+							"type": "string",
+							"enum": ["template", "as_written"],
+							"description": "as_written: use the title as the page's whole title; template (the default): put the seo setting titleTemplate around it."
+						},
+						"source": {
+							"type": "string",
+							"enum": ["merchant", "ai"],
+							"description": "Who wrote the title or description given: merchant (the default) or ai (an AI suggestion applied). A change of the title or description without it records merchant; both emptied record none."
 						}
 					},
 					"description": "SEO fields; members left out keep their value."
@@ -16011,6 +16092,16 @@
 						"focusKeyword": {
 							"type": "string",
 							"maxLength": 100
+						},
+						"titleMode": {
+							"type": "string",
+							"enum": ["template", "as_written"],
+							"description": "as_written: use the title as the page's whole title; template (the default): put the seo setting titleTemplate around it."
+						},
+						"source": {
+							"type": "string",
+							"enum": ["merchant", "ai"],
+							"description": "Who wrote the title or description given: merchant (the default) or ai (an AI suggestion applied). A change of the title or description without it records merchant; both emptied record none."
 						}
 					},
 					"description": "SEO fields; members left out keep their value."

@@ -374,7 +374,8 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(bySlug.json).toEqual(byId.json);
 		const answer = byId.json;
 		expect(answer.title).toMatch(/^Acme <\/script> Phone \| /);
-		expect(answer.description).toBe('A good phone.');
+		// a summary under 50 characters gives way to the product's facts (G6)
+		expect(answer.description).toBe('Acme </script> Phone by Acme — Android. USD 250.00 – USD 260.00. In stock: Red.');
 		expect(answer.canonical).toBe(`${ORIGIN}/products/acme-phone`);
 		expect(answer.image).toMatch(/^https:\/\//);
 		expect(answer.jsonLd).not.toContain('</script>');

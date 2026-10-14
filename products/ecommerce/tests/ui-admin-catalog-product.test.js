@@ -67,6 +67,8 @@ describe('catalog admin: a product', () => {
 			'Storage64, 256',
 			'Box?Charger included.',
 			'Robotsnofollow',
+			'Page titlePhone (as written)',
+			'SEO copy written byAI (check it before relying on it)',
 			'Dual SIMYes',
 			'TagsX',
 			'2 at Shop, 1 at Store room',
@@ -164,6 +166,7 @@ describe('catalog admin: a product', () => {
 		await change(fieldIn(editor, 'Size chart'), '');
 		await tick(checkIn(editor, 'Hide the size guide'), true);
 		await tick(checkIn(editor, 'Featured product'), false);
+		await tick(checkIn(editor, 'Use the page title as written (the title pattern is not added)'), false);
 		await click(buttonIn(editor, 'Save'));
 		expect(statuses(editor)).toContain(TEXTS['problem.field.slug']);
 		const body = patches[0];
@@ -176,7 +179,13 @@ describe('catalog admin: a product', () => {
 		expect(body.sizeChartId).toBeNull();
 		expect(body.hideSizeGuide).toBe(true);
 		expect(body.descriptionHtml).toBe('<p>One</p>\n<p>Two &amp; &lt;three&gt;</p>');
-		expect(body.seo).toMatchObject({ title: 'Phone', focusKeyword: 'mobile', noindex: true, nofollow: true });
+		expect(body.seo).toMatchObject({
+			title: 'Phone',
+			focusKeyword: 'mobile',
+			noindex: true,
+			nofollow: true,
+			titleMode: 'template',
+		});
 		expect(body.faqs).toEqual([
 			{ question: 'Box?', answer: 'Charger included.' },
 			{ question: 'Warranty?', answer: 'One year.' },
@@ -371,7 +380,7 @@ describe('catalog admin: a product', () => {
 			summary: 'AI summary',
 			descriptionHtml: '<p>Para one</p>\n<p>Para &lt;two&gt;</p>',
 			faqs: [{ question: 'Q1', answer: 'A1' }],
-			seo: { title: 'Better title' },
+			seo: { title: 'Better title', source: 'ai' },
 		});
 		expect(statuses(detailOf(panelOf(root, 'products')))).toContain('Suggestions applied.');
 		// only the description and the meta description
@@ -379,7 +388,7 @@ describe('catalog admin: a product', () => {
 		ai = () => answer(200, { suggestions: { seoDescription: 'Meta only' } });
 		await click(buttonIn(dialogOf(root), 'Suggest'));
 		await submitDialog(root);
-		expect(server.last('PATCH /v1/admin/products/prd_1')?.body).toEqual({ seo: { description: 'Meta only' } });
+		expect(server.last('PATCH /v1/admin/products/prd_1')?.body).toEqual({ seo: { description: 'Meta only', source: 'ai' } });
 	});
 
 	it('generates variants from the detail and from the editor (saving first)', async () => {

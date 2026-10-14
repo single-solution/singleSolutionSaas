@@ -43,6 +43,14 @@ import { checkSizeChart } from './size-charts.js';
  * @property {CatalogRules} [rules] products: what a product check needs
  */
 
+/**
+ * SEO fields moved in: their copy is marked as the import's (G6: the earlier shop's own titles and descriptions, kept
+ * as written).
+ * @param {import('./catalog-content.js').SeoFields} seo
+ * @returns {import('./catalog-content.js').SeoFields}
+ */
+const importedSeo = (seo) => ({ ...seo, source: seo.title || seo.description ? 'import' : null });
+
 /** The audit times every record may carry (`updatedAt` is the import's own time). */
 const STAMPS = Object.freeze(['createdAt', 'updatedAt']);
 
@@ -517,6 +525,7 @@ export const checkImportedCategory = (record, context) => {
 	return outcome(errors, () => ({
 		id,
 		...checked,
+		...(checked ? { seo: importedSeo(checked.seo) } : {}),
 		slug,
 		parentId,
 		path: parent ? [...parent.path, parentId] : [],
@@ -544,7 +553,14 @@ export const checkImportedBrand = (record, context) => {
 	}
 	const logo = mediaOrNull(record.logo, '/logo', errors);
 	const stamps = stampsOf(record, context.now, errors);
-	return outcome(errors, () => ({ id, ...checked, slug, logo, ...stamps }));
+	return outcome(errors, () => ({
+		id,
+		...checked,
+		...(checked ? { seo: importedSeo(checked.seo) } : {}),
+		slug,
+		logo,
+		...stamps,
+	}));
 };
 
 /**
@@ -705,6 +721,7 @@ export const checkImportedProduct = (record, context) => {
 		return {
 			id,
 			...value,
+			seo: importedSeo(value.seo),
 			slug,
 			...(value.digital ? { digital: { ...value.digital, files } } : {}),
 			media,

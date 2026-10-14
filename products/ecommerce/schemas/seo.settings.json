@@ -5,7 +5,7 @@
 		"titleTemplate": {
 			"type": "string",
 			"title": "Page title pattern",
-			"description": "How product and category page titles are written: {name} is the product or category, {business} your business name.",
+			"description": "How page titles are written: {name} is the page's part (a product's or category's own SEO title, else its title pattern), {business} the name in titles. The name in titles is never added twice: a part that already holds it gets nothing added. A title set to be used as written replaces the whole pattern.",
 			"default": "{name} | {business}",
 			"maxLength": 120
 		},
@@ -19,7 +19,7 @@
 		"productTitle": {
 			"type": "string",
 			"title": "Product title",
-			"description": "A product's part of the page title ({name} of the title pattern): {name} is the product, {brand} its brand, {category} its category, {storeName} the name in titles. A product's own SEO title replaces it.",
+			"description": "A product's part of the page title ({name} of the title pattern): {name} is the product, {brand} its brand, {category} its category, {storeName} the name in titles, and the facts {price}, {minPrice}, {maxPrice}, {options}, {inStockOptions}, {conditions} and {topSpecs}, filled from the product as it is on every read. A part in square brackets is left out when one of its placeholders is empty, for example {name}[ by {brand}]. A product's own SEO title replaces it.",
 			"default": "{name}",
 			"maxLength": 160
 		},
@@ -33,8 +33,8 @@
 		"productDescription": {
 			"type": "string",
 			"title": "Product description pattern",
-			"description": "Used when a product has no SEO description of its own, before its summary and description: {name}, {brand}, {category} and {storeName}. Empty: the summary, then the description.",
-			"default": "",
+			"description": "A product's meta description when it has no SEO description of its own and no summary of 50 characters or more: {name}, {brand}, {category}, {storeName} and the facts {price} (the price or the range), {minPrice}, {maxPrice}, {options} and {inStockOptions} (the option values offered, and those in stock), {conditions} (the grades offered) and {topSpecs} (the first 3 specs), filled on every read so they never go stale. A part in square brackets is left out when one of its placeholders is empty. Empty: its description, then the default description.",
+			"default": "{name}[ by {brand}][ — {category}][. {price}][. In stock: {inStockOptions}].",
 			"maxLength": 500,
 			"x-ui": {
 				"widget": "textarea"
@@ -43,12 +43,19 @@
 		"categoryDescription": {
 			"type": "string",
 			"title": "Category description pattern",
-			"description": "Used when a category has no SEO description of its own, before its summary and description: {name}, {category} and {storeName}, for example Browse {name} at {storeName}. Empty: the summary, then the description.",
+			"description": "Used when a category has no SEO description of its own, before its summary and description: {name}, {category} and {storeName}, for example Browse {name} at {storeName}. A part in square brackets is left out when one of its placeholders is empty. Empty: the summary, then the description.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {
 				"widget": "textarea"
 			}
+		},
+		"variantTitle": {
+			"type": "string",
+			"title": "Variant name",
+			"description": "How each variant is named in structured data: {name} is the product, {brand} its brand, {options} the variant's option values (Red / L), {grade} its grade. A part in square brackets is left out when one of its placeholders is empty.",
+			"default": "{name} - {options}",
+			"maxLength": 160
 		},
 		"gradedCondition": {
 			"type": "string",
@@ -111,7 +118,7 @@
 		"autoSeo": {
 			"type": "string",
 			"title": "SEO copy when saving",
-			"description": "On save: when staff save a product or an attribute whose SEO title, description or questions are empty, Ecommerce writes them: with your AI provider when AI copy is on and its key is in Connections, else (or when it does not answer) from the record's own data (the product and attribute title and description patterns; no questions). Off: nothing is written.",
+			"description": "On save: when staff save a product or an attribute whose SEO title, description or questions are empty, your AI provider writes them (AI copy on and its key in Connections), kept as AI copy. Without AI nothing is stored: the title and description patterns fill your pages on every read, so they never go stale. Off: nothing is written.",
 			"default": "off",
 			"enum": ["off", "on_save"]
 		}

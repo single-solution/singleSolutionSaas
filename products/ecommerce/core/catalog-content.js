@@ -11,6 +11,13 @@
 /** @typedef {{ path: string, message: string }} FieldError */
 
 /**
+ * Who wrote a record's SEO title and description (G6): staff (`merchant`), an import (`import`, the earlier shop's
+ * copy) or an AI provider (`ai`: suggestions staff applied, or written on save); null while both are empty (the
+ * patterns fill the page on every read; formula copy is never stored).
+ * @typedef {'merchant' | 'import' | 'ai'} SeoSource
+ */
+
+/**
  * @typedef {object} SeoFields
  * @property {string} title '' = derived from the name
  * @property {string} description '' = derived from the summary or description
@@ -19,6 +26,9 @@
  * @property {boolean} noindex
  * @property {boolean} nofollow
  * @property {string} focusKeyword
+ * @property {'template' | 'as_written'} titleMode `as_written`: the title is the page's whole title (the title pattern
+ *   is not put around it); `template`: it is the page's part of the pattern (the name in titles is never added twice)
+ * @property {SeoSource | null} source
  */
 
 /** SEO fields as records keep them. @typedef {SeoFields} SeoRecord */
@@ -102,10 +112,19 @@ export const EMPTY_SEO = Object.freeze({
 	noindex: false,
 	nofollow: false,
 	focusKeyword: '',
+	titleMode: 'template',
+	source: null,
 });
 
+/** The title modes. */
+const TITLE_MODES = Object.freeze(['template', 'as_written']);
+/** Who staff may say wrote a record's SEO copy (an import's is set by the import). */
+const STAFF_SOURCES = Object.freeze(['merchant', 'ai']);
+
 /**
- * Check SEO fields given over the existing ones (missing fields keep their value).
+ * Check SEO fields given over the existing ones (missing fields keep their value). A change of the title or the
+ * description records who wrote them (G6): `source` as given (`merchant` or `ai`, for an AI suggestion staff applied),
+ * else `merchant`; no title and no description: none. Imports mark their copy themselves.
  * @param {unknown} value
  * @param {SeoFields | null | undefined} existing the record's (none for a new record)
  * @param {string} path
@@ -135,7 +154,7 @@ export const checkSeo = (value, existing, path, errors) => {
 	};
 	/** @param {unknown} v */
 	const flag = (v) => (typeof v === 'boolean' ? v : null);
-	return {
+	const checked = {
 		title: read(
 			'title',
 			(v) => text(v, CONTENT_LIMITS.seoTitle),
@@ -155,7 +174,23 @@ export const checkSeo = (value, existing, path, errors) => {
 			(v) => text(v, CONTENT_LIMITS.focusKeyword),
 			`A focus keyword has at most ${CONTENT_LIMITS.focusKeyword} characters.`,
 		),
+		titleMode: read(
+			'titleMode',
+			(v) => (TITLE_MODES.includes(String(v)) ? /** @type {SeoFields['titleMode']} */ (v) : null),
+			'titleMode is template or as_written.',
+		),
 	};
+	/** @type {SeoSource | null | undefined} null: not given; undefined: not a source staff may give */
+	const given =
+		value.source === undefined
+			? null
+			: STAFF_SOURCES.includes(String(value.source))
+				? /** @type {SeoSource} */ (value.source)
+				: undefined;
+	if (given === undefined) errors.push({ path: `${path}/source`, message: 'source is merchant or ai.' });
+	const changed = checked.title !== before.title || checked.description !== before.description;
+	const source = !checked.title && !checked.description ? null : changed ? (given ?? 'merchant') : (given ?? before.source);
+	return { ...checked, source };
 };
 
 /**

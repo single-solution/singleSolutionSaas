@@ -9,9 +9,10 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
-import { findBySlugHistory } from '../adapters/catalog-store.js';
+import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
+import { specsOf } from '../core/catalog-views.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition, gradesFor } from '../core/grades.js';
 import { absolute } from '../core/links.js';
@@ -23,11 +24,14 @@ import { shownName } from '../core/reviews.js';
 import {
 	SITEMAP_FOOT,
 	SITEMAP_HEAD,
+	asWritten,
 	categoryJsonLd,
-	fillTitle,
+	fillTemplate,
 	metaDescription,
 	pageName,
+	pageTitle,
 	patternText,
+	productFacts,
 	productJsonLd,
 	robotsOf,
 	scriptJson,
@@ -35,6 +39,8 @@ import {
 	sitemapFileUrl,
 	sitemapFiles,
 	sitemapIndex,
+	variantLabel,
+	writtenSummary,
 } from '../core/seo.js';
 import { createMedia } from './catalog-media.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
@@ -146,6 +152,7 @@ export const createSeo = (product, service) => {
 			return found;
 		};
 		return {
+			gradesOf,
 			/** @param {Pick<ProductRecord, 'categoryIds'>} item @param {VariantRecord} variant */
 			gradeOf: (item, variant) => (variant.grade ? gradesOf(item).get(variant.grade) : undefined),
 			/** @param {Pick<ProductRecord, 'kind' | 'categoryIds'>} item @param {VariantRecord} variant */
@@ -240,13 +247,11 @@ export const createSeo = (product, service) => {
 		const found = await productOf(s, data, ctx.params.ref);
 		if ('moved' in found) return found;
 		const { item } = found;
-		const [settings, business, attributes] = await Promise.all([
+		const [settings, business, attributes, { money }] = await Promise.all([
 			s.values('seo'),
 			s.business(),
-			data
-				.collection(COLLECTIONS.attributes)
-				.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, slug: 1 } })
-				.toArray(),
+			attributesOf(data),
+			s.format(),
 		]);
 		const url = await media.productUrl(s, item);
 		const images = await imagesOf(s, item);
@@ -257,21 +262,27 @@ export const createSeo = (product, service) => {
 				.toArray()
 		);
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
-		// the merchant's patterns (SG-5): the page's part of the title and the description when the product has none
+		const conditions = await conditionsOf(s, settings.gradedCondition);
+		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
+		// description when the product has none of its own nor a written summary, and the variants' names
 		const names = {
 			name: item.name,
 			brand: brand ?? '',
 			category: primary?.name ?? '',
 			storeName: storeNameOf(settings, business),
+			...productFacts(item, {
+				money: (amount) => money(amount, s.currency),
+				grades: conditions.gradesOf(item),
+				specs: specsOf(item, new Map(attributes.map((attribute) => [attribute.id, attribute]))),
+			}),
 		};
 		const description = metaDescription(
-			item.seo.description,
+			asWritten(item.seo.description),
+			writtenSummary(item.summary),
 			patternText(settings.productDescription, names),
-			item.summary,
 			item.description,
-			settings.defaultDescription,
+			asWritten(settings.defaultDescription),
 		);
-		const conditions = await conditionsOf(s, settings.gradedCondition);
 		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		/** @type {Map<string, string>} */
 		const variantUrls = new Map();
@@ -304,6 +315,13 @@ export const createSeo = (product, service) => {
 			condition: (variant) => conditions.of(item, variant),
 			seller: business.name,
 			trail: await trailOf(s, data, media, primary ?? null, true, business.name),
+			variantName: (variant) =>
+				fillTemplate(String(settings.variantTitle), {
+					name: item.name,
+					brand: names.brand,
+					options: variantLabel(variant),
+					grade: conditions.gradeOf(item, variant)?.label ?? '',
+				}),
 			variantUrl: (variant) => variantUrls.get(variant.id) ?? url,
 			variantImage: (variant) => variantImages.get(variant.id) ?? null,
 			shipping: await shippingOf(s),
@@ -319,8 +337,10 @@ export const createSeo = (product, service) => {
 		});
 		const ogImage = siteAddress(item.seo.ogImage);
 		return {
-			title: fillTitle(String(settings.titleTemplate), {
-				name: item.seo.title || pageName(settings.productTitle, names),
+			title: pageTitle(String(settings.titleTemplate), {
+				own: item.seo.title,
+				mode: item.seo.titleMode,
+				name: pageName(settings.productTitle, names),
 				business: names.storeName,
 			}),
 			description,
@@ -355,11 +375,11 @@ export const createSeo = (product, service) => {
 		const parent = categories.find((c) => c.id === category.path.at(-1));
 		const names = { name: category.name, category: parent?.name ?? '', storeName: storeNameOf(settings, business) };
 		const description = metaDescription(
-			category.seo.description,
+			asWritten(category.seo.description),
 			patternText(settings.categoryDescription, names),
 			category.content.summary,
 			category.description,
-			settings.defaultDescription,
+			asWritten(settings.defaultDescription),
 			category.name,
 		);
 		const below = categories.filter((c) => c.id === category.id || c.path.includes(category.id)).map((c) => c.id);
@@ -390,8 +410,10 @@ export const createSeo = (product, service) => {
 		});
 		const ogImage = siteAddress(category.seo.ogImage);
 		return {
-			title: fillTitle(String(settings.titleTemplate), {
-				name: category.seo.title || pageName(settings.categoryTitle, names),
+			title: pageTitle(String(settings.titleTemplate), {
+				own: category.seo.title,
+				mode: category.seo.titleMode,
+				name: pageName(settings.categoryTitle, names),
 				business: names.storeName,
 			}),
 			description,

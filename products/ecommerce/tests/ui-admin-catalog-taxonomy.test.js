@@ -143,7 +143,16 @@ describe('catalog admin: categories', () => {
 			description: '',
 			content: { summary: '', bullets: [] },
 			faqs: [],
-			seo: { title: '', description: '', canonicalUrl: '', ogImage: '', noindex: false, nofollow: false, focusKeyword: '' },
+			seo: {
+				title: '',
+				description: '',
+				canonicalUrl: '',
+				ogImage: '',
+				noindex: false,
+				nofollow: false,
+				focusKeyword: '',
+				titleMode: 'template',
+			},
 			requiresSerial: null,
 			sizeChartId: null,
 		});
@@ -303,6 +312,7 @@ describe('catalog admin: brands and locations', () => {
 				noindex: false,
 				nofollow: false,
 				focusKeyword: '',
+				titleMode: 'template',
 			},
 			sizeChartId: null,
 		});

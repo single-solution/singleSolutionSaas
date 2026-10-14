@@ -193,7 +193,8 @@ export const faqsEditor = (kit, faqs, legend = kit.t('catalogAdmin.faqs')) => {
 
 /**
  * @typedef {{ title?: string, description?: string, canonicalUrl?: string, ogImage?: string, noindex?: boolean,
- *   nofollow?: boolean, focusKeyword?: string }} Seo
+ *   nofollow?: boolean, focusKeyword?: string, titleMode?: 'template' | 'as_written',
+ *   source?: 'merchant' | 'import' | 'ai' | null }} Seo
  */
 
 /**
@@ -210,6 +211,7 @@ export const seoEditor = (kit, seo) => {
 	const keyword = kit.input(given.focusKeyword ?? '', { maxlength: '100' });
 	const noindex = kit.check(t('catalogAdmin.noindex'), given.noindex === true);
 	const nofollow = kit.check(t('catalogAdmin.nofollow'), given.nofollow === true);
+	const asWritten = kit.check(t('catalogAdmin.titleAsWritten'), given.titleMode === 'as_written');
 	return {
 		node: kit.group(t('catalogAdmin.seo'), [
 			h('div', { class: 'fields' }, [
@@ -218,6 +220,7 @@ export const seoEditor = (kit, seo) => {
 				kit.field(t('catalogAdmin.canonicalUrl'), canonical),
 				kit.field(t('catalogAdmin.ogImage'), image),
 			]),
+			asWritten.node,
 			kit.field(t('catalogAdmin.seoDescription'), description),
 			h('div', { class: 'fields' }, [noindex.node, nofollow.node]),
 		]),
@@ -229,6 +232,7 @@ export const seoEditor = (kit, seo) => {
 			noindex: noindex.box.checked,
 			nofollow: nofollow.box.checked,
 			focusKeyword: keyword.value.trim(),
+			titleMode: asWritten.box.checked ? 'as_written' : 'template',
 		}),
 	};
 };
@@ -242,8 +246,14 @@ export const seoFacts = (kit, seo) => {
 	const { t } = kit;
 	const given = seo ?? {};
 	return [
-		[t('catalogAdmin.seoTitle'), given.title ?? ''],
+		[
+			t('catalogAdmin.seoTitle'),
+			given.title && given.titleMode === 'as_written'
+				? t('catalogAdmin.asWrittenTitle', { title: given.title })
+				: (given.title ?? ''),
+		],
 		[t('catalogAdmin.seoDescription'), given.description ?? ''],
+		[t('catalogAdmin.seoSource'), given.source ? t(`catalogAdmin.seoSource.${given.source}`) : ''],
 		[t('catalogAdmin.focusKeyword'), given.focusKeyword ?? ''],
 		[t('catalogAdmin.canonicalUrl'), given.canonicalUrl ?? ''],
 		[t('catalogAdmin.ogImage'), given.ogImage ?? ''],

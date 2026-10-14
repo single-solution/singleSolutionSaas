@@ -75,6 +75,7 @@ const page = (item, input = {}) => ({
 	condition: () => 'new',
 	seller: 'Shop',
 	trail: [{ name: 'Shop', url: 'https://shop.example.com/' }],
+	variantName: (variant) => `${item.name} - ${Object.values(variant.options).join(' / ')}`,
 	shipping: null,
 	returns: null,
 	reviews: [],

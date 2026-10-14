@@ -146,6 +146,10 @@ describe('E10 grades and E16 structured data', () => {
 	it('follows the SEO fields: canonical, social image, robots, defaults', async () => {
 		await shop.setting('seo', 'defaultDescription', 'The best phones in town.');
 		await shop.setting('seo', 'defaultImage', 'https://cdn.example.com/default.jpg');
+		// a product with no description of its own is described by its facts (G6), else by the default description
+		const facts = await api('GET', `/v1/seo/products/${ids.other.slug}`);
+		expect(facts).toMatchObject({ description: 'Acme Two by Acme — Phones. USD 300.00.' });
+		await shop.setting('seo', 'productDescription', '');
 		const plain = await api('GET', `/v1/seo/products/${ids.other.slug}`);
 		expect(plain).toMatchObject({ description: 'The best phones in town.', image: 'https://cdn.example.com/default.jpg' });
 		await api('PATCH', `/v1/products/${ids.other.id}`, {

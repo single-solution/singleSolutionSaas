@@ -2,8 +2,9 @@
  * Automatic landing pages and SEO copy (PLAN E43): every category and brand (and grade) combination with enough
  * products and variants in stock is a landing page without a record (a stored one wins), in the listing reads and the
  * sitemaps, with its copy from the patterns; stored pages set to Automatic need the variants too (SG-10); the defaults
- * keep today's pages. Saving a product or an attribute writes its empty SEO copy (formula, or the merchant's AI), and
- * with AI copy one automatic landing page is written as a record.
+ * keep today's pages. Saving a product or an attribute writes its empty SEO copy with the merchant's AI (marked as AI
+ * copy); formula copy is never stored, the patterns fill the answers on every read (G6). With AI copy one automatic
+ * landing page is written as a record.
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -197,31 +198,31 @@ describe('SEO copy when saving (E43)', () => {
 		expect(item.seo).toMatchObject({ title: '', description: '' });
 	});
 
-	it('writes the formula into empty fields only, without an AI key', async () => {
+	it('stores nothing without the merchant’s AI: the patterns fill the answers on every read (G6)', async () => {
 		await shop.setting('seo', 'autoSeo', 'on_save');
 		await shop.setting('seo', 'productTitle', '{name} by {brand}');
 		const item = await api('POST', '/v1/products', {
 			name: 'Linen shirt',
+			status: 'active',
 			summary: 'Cool linen for summer.',
 			brandId: ids.beta.id,
 			price: 100,
 			seo: { description: 'Kept as typed.' },
 		});
-		expect(item.seo).toMatchObject({ title: 'Linen shirt by Beta', description: 'Kept as typed.' });
+		expect(item.seo).toMatchObject({ title: '', description: 'Kept as typed.', source: 'merchant' });
 		expect(item.faqs).toEqual([]);
-		expect((await api('GET', `/v1/products/${item.id}`)).seo.title).toBe('Linen shirt by Beta');
-		// written once: a later save keeps it
-		const renamed = await api('PATCH', `/v1/products/${item.id}`, { name: 'Linen shirt II' });
-		expect(renamed.seo.title).toBe('Linen shirt by Beta');
+		expect((await api('GET', `/v1/seo/products/${item.slug}`)).title).toBe('Linen shirt by Beta | Shop');
+		// never stale: a new name shows on the next read
+		await api('PATCH', `/v1/products/${item.id}`, { name: 'Linen shirt II' });
+		expect((await api('GET', `/v1/products/${item.id}`)).seo.title).toBe('');
+		expect((await api('GET', `/v1/seo/products/${item.slug}`)).title).toBe('Linen shirt II by Beta | Shop');
 		expect(shop.callsTo(AI)).toHaveLength(0);
-		const attribute = await api('POST', '/v1/attributes', { name: 'Collar', unit: 'cm' });
-		expect(attribute.seo).toMatchObject({ title: 'Collar', description: '' });
 		await shop.setting('landing_pages', 'attributeDescription', '{name} in {unit}.');
 		const sleeve = await api('POST', '/v1/attributes', { name: 'Sleeve', unit: 'cm', categoryId: ids.dresses.id });
-		expect(sleeve.seo).toMatchObject({ title: 'Sleeve', description: 'Sleeve in cm.', faqs: [] });
+		expect(sleeve.seo).toMatchObject({ title: '', description: '', faqs: [] });
 	});
 
-	it('asks the merchant’s AI when AI copy is on, and falls back to the formula', async () => {
+	it('asks the merchant’s AI when AI copy is on and keeps its copy marked as AI copy; nothing when it fails', async () => {
 		await shop.connect('ai', { baseUrl: AI, apiKey: 'sk-test-123456', model: 'm' });
 		/** @type {any[]} */
 		const asked = [];
@@ -247,14 +248,15 @@ describe('SEO copy when saving (E43)', () => {
 			};
 		});
 		const coat = await api('POST', '/v1/products', { name: 'Wool coat', price: 100 });
-		expect(coat.seo).toMatchObject({ title: 'Wool coat for winter', description: 'A warm wool coat.' });
+		expect(coat.seo).toMatchObject({ title: 'Wool coat for winter', description: 'A warm wool coat.', source: 'ai' });
+		expect((await api('GET', `/v1/products/${coat.id}`)).seo.source).toBe('ai');
 		expect(coat.faqs).toEqual([{ question: 'Is it warm?', answer: 'Yes.' }]);
 		expect(asked[0].messages[1].content).toContain('Name: Wool coat');
 		const hem = await api('POST', '/v1/attributes', { name: 'Hem' });
 		expect(hem.seo).toMatchObject({ title: 'What is a hem?', description: 'The folded edge.' });
 		shop.responders.set(AI, () => ({ status: 500, body: {} }));
 		const cap = await api('POST', '/v1/products', { name: 'Wool cap', summary: 'Warm.', brandId: ids.beta.id, price: 100 });
-		expect(cap.seo).toMatchObject({ title: 'Wool cap by Beta', description: 'Warm.' });
+		expect(cap.seo).toMatchObject({ title: '', description: '', source: null });
 		expect(cap.faqs).toEqual([]);
 		// AI copy off: the key is never used
 		await shop.switchOn((await on()).filter((feature) => feature !== 'ai_copy'));

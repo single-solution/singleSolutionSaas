@@ -186,6 +186,8 @@ const aiDialog = (kit, product, context) => {
 				body.seo = {
 					...(chosen.has('seoTitle') ? { title: chosen.get('seoTitle') } : {}),
 					...(chosen.has('seoDescription') ? { description: chosen.get('seoDescription') } : {}),
+					// kept as AI copy (G6)
+					source: 'ai',
 				};
 			const answer = await kit.call('PATCH', `/v1/admin/products/${product.id}`, body);
 			if (!answer.ok) return kit.reason(answer);

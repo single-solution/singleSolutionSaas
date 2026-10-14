@@ -75,15 +75,34 @@ export const clip = (value, max) => {
 /** A word that only separates others in a title (`|`, `-`, `·` …). */
 const SEPARATOR = /^[|\-–—·:/,•]+$/;
 
+/** A placeholder of a pattern, or an optional group (`[ by {brand}]`, no group inside another). */
+const PIECE = /\[([^[\]]*)\]|\{([A-Za-z][A-Za-z0-9]*)\}/g;
+/** A placeholder. */
+const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
+
 /**
- * A merchant's pattern filled (SG-5, SG-21): each `{placeholder}` of `values` replaced; empty brackets, and separators
- * left at either end or doubled by an empty value, are dropped; spaces collapsed. Other text stays as typed.
+ * A merchant's pattern filled (SG-5, SG-21, G6): each `{placeholder}` of `values` replaced (in one pass: what a value
+ * holds is never read as a placeholder); an optional group in square brackets that names a placeholder (`[ by
+ * {brand}]`) is dropped when one of its placeholders is empty, else kept without its brackets (brackets that name none
+ * stay as typed); empty brackets, and separators left at either end or doubled by an empty value, are dropped; spaces
+ * collapsed. Other text stays as typed.
  * @param {string} template
  * @param {Record<string, string>} values
  */
 export const fillTemplate = (template, values) => {
-	let text = String(template ?? '');
-	for (const [key, value] of Object.entries(values)) text = text.replaceAll(`{${key}}`, value);
+	/** @param {string} key */
+	const known = (key) => Object.hasOwn(values, key);
+	/** @param {string} text */
+	const fill = (text) => text.replace(PLACEHOLDER, (all, /** @type {string} */ key) => (known(key) ? String(values[key]) : all));
+	const text = String(template ?? '').replace(
+		PIECE,
+		(all, /** @type {string | undefined} */ group, /** @type {string | undefined} */ key) => {
+			if (key !== undefined) return known(key) ? String(values[key]) : all;
+			const named = [...String(group).matchAll(PLACEHOLDER)].map((match) => String(match[1])).filter(known);
+			if (named.length === 0) return all;
+			return named.some((name) => String(values[name]).trim() === '') ? '' : fill(String(group));
+		},
+	);
 	/** @type {string[]} */
 	const words = [];
 	for (const word of text
@@ -98,24 +117,60 @@ export const fillTemplate = (template, values) => {
 	return words.join(' ');
 };
 
+/** @param {string} char */
+const isWordChar = (char) => /[\p{L}\p{N}]/u.test(char);
+
+/**
+ * Whether a text already holds a name as whole words, in any letter case (`Blue Mug — Northwind` holds `northwind`,
+ * `Northwinds` does not).
+ * @param {string} text
+ * @param {string} name
+ */
+export const holdsName = (text, name) => {
+	const haystack = String(text ?? '').toLocaleLowerCase();
+	const needle = String(name ?? '')
+		.trim()
+		.toLocaleLowerCase();
+	if (needle === '') return false;
+	for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) {
+		const before = haystack[at - 1] ?? '';
+		const after = haystack[at + needle.length] ?? '';
+		if (!(before && isWordChar(before)) && !(after && isWordChar(after))) return true;
+	}
+	return false;
+};
+
 /**
  * A page title from the merchant's pattern (`{name} | {business}`; `{storeName}` is the same name). An empty pattern
- * is the name alone.
+ * is the name alone. The name in titles is never added twice (G6): when the page's part already holds it,
+ * `{business}` and `{storeName}` stand for nothing (and the separators left over go).
  * @param {string} template
  * @param {{ name: string, business: string }} values `business`: the SEO brand name, else the business name
  */
-export const fillTitle = (template, { name, business }) =>
-	fillTemplate(String(template || '{name}'), { name, business, storeName: business }) || name;
+export const fillTitle = (template, { name, business }) => {
+	const store = holdsName(name, business) ? '' : business;
+	return fillTemplate(String(template || '{name}'), { name, business: store, storeName: store }) || name;
+};
+
+/**
+ * The title of a product's, category's or brand's page (G6): its own SEO title as written while its `titleMode` is
+ * `as_written`; else the title pattern around its own title, else around the name from its pattern.
+ * @param {string} template the `seo` setting `titleTemplate`
+ * @param {{ own: string, mode: 'template' | 'as_written', name: string, business: string }} values `own`: the record's
+ *   SEO title ('' = none); `name`: the page's part from its pattern
+ */
+export const pageTitle = (template, { own, mode, name, business }) =>
+	own && mode === 'as_written' ? own : fillTitle(template, { name: own || name, business });
 
 /**
  * The page's part of the title (`{name}` of the title pattern) from the `productTitle` or `categoryTitle` pattern
- * (SG-5): `{name}`, `{brand}`, `{category}` and `{storeName}`; the name alone when the pattern is empty or fills to
- * nothing.
+ * (SG-5): `{name}`, `{brand}`, `{category}`, `{storeName}` and, for products, the facts of {@link productFacts}; the
+ * name alone when the pattern is empty or fills to nothing.
  * @param {unknown} template
- * @param {{ name: string, brand?: string, category?: string, storeName: string }} values
+ * @param {{ name: string, brand?: string, category?: string, storeName: string } & Record<string, string>} values
  */
-export const pageName = (template, { name, brand = '', category = '', storeName }) =>
-	fillTemplate(String(template || '{name}'), { name, brand, category, storeName }) || name;
+export const pageName = (template, values) =>
+	fillTemplate(String(template || '{name}'), { brand: '', category: '', ...values }) || values.name;
 
 /**
  * A description from the `productDescription` or `categoryDescription` pattern (SG-5, SG-21), or '' when there is none.
@@ -125,13 +180,38 @@ export const pageName = (template, { name, brand = '', category = '', storeName 
 export const patternText = (template, values) => (template ? fillTemplate(String(template), values) : '');
 
 /**
- * The first text that is not empty, as a meta description.
- * @param {...unknown} texts
+ * Text the merchant wrote as a meta description (a record's SEO description, a landing page's, the default
+ * description): {@link metaDescription} sends it as written, never cut (G6).
+ * @param {unknown} text
+ * @returns {{ asWritten: string }}
+ */
+export const asWritten = (text) => ({ asWritten: typeof text === 'string' ? text : '' });
+
+/**
+ * The first text that is not empty, as a meta description on one line: the merchant's own text ({@link asWritten}) as
+ * written (its fields hold at most 500 characters), any other text (patterns, summaries, descriptions) cut at a word to
+ * at most 160 characters (G6).
+ * @param {...(string | { asWritten: string } | null | undefined)} texts
  */
 export const metaDescription = (...texts) => {
-	const found = texts.find((text) => typeof text === 'string' && text.trim() !== '');
-	return clip(found ?? '', DESCRIPTION_LENGTH);
+	for (const text of texts) {
+		const own = typeof text === 'object' && text !== null;
+		const value = own ? text.asWritten : text;
+		if (typeof value !== 'string' || value.trim() === '') continue;
+		return own ? value.replace(/\s+/g, ' ').trim() : clip(value, DESCRIPTION_LENGTH);
+	}
+	return '';
 };
+
+/** A summary this long or longer is a written description; a shorter one gives way to the description pattern (G6). */
+const WRITTEN_SUMMARY = 50;
+
+/**
+ * A product's summary when it is long enough to describe the page (at least {@link WRITTEN_SUMMARY} characters), else
+ * '' (the description pattern's facts describe it better).
+ * @param {string} summary
+ */
+export const writtenSummary = (summary) => (summary.trim().length >= WRITTEN_SUMMARY ? summary : '');
 
 /**
  * Whether a variant can be bought now (a variant marked sold out cannot, E9).
@@ -228,6 +308,7 @@ export const feedGroupId = (product, many) => product.feedGroupId || (many ? pro
  * @property {(variant: VariantRecord) => Condition | ''} condition the condition of a variant (its grade's, E10)
  * @property {string} seller the business name
  * @property {Array<{ name: string, url: string }>} trail home and categories, without the product
+ * @property {(variant: VariantRecord) => string} variantName a variant's name (the `seo` setting `variantTitle`, G6)
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
  *   variant shows the product's photos
@@ -318,6 +399,48 @@ export const faqJsonLd = (faqs, url) =>
  */
 export const offeredVariants = (product) => activeVariants(product).filter((variant) => variant.price > 0);
 
+/** The specs `{topSpecs}` names. */
+const TOP_SPECS = 3;
+
+/**
+ * The facts a product's title and description patterns take (G6), from what is offered now, filled on every read so
+ * they never go stale: `{minPrice}` and `{maxPrice}` (the lowest and highest price), `{price}` (the price, or the range
+ * `lowest – highest`), `{options}` and `{inStockOptions}` (the option values offered, and those in stock, axis by axis),
+ * `{conditions}` (the labels of the grades offered, in the grades' order) and `{topSpecs}` (the first 3 specs as
+ * `Name: value unit`). Each is '' when the product has none.
+ * @param {Pick<ProductRecord, 'variants' | 'options' | 'trackStock'>} product
+ * @param {{ money: (amount: number) => string, grades: ReadonlyMap<string, { label: string }>,
+ *   specs: ReadonlyArray<{ name: string, label: string, unit: string }>, priceOf?: (variant: VariantRecord) => number }} context
+ *   `grades`: the product's grades in the list's order; `specs`: its specs in their order; `priceOf`: the price a
+ *   variant is offered at
+ */
+export const productFacts = (product, { money, grades, specs, priceOf = (variant) => variant.price }) => {
+	const offered = offeredVariants(product);
+	const prices = offered.map(priceOf);
+	const low = prices.length > 0 ? Math.min(...prices) : null;
+	const high = prices.length > 0 ? Math.max(...prices) : null;
+	/** @param {VariantRecord[]} variants */
+	const valuesOf = (variants) =>
+		product.options
+			.flatMap((axis) => axis.values.filter((value) => variants.some((variant) => variant.options?.[axis.name] === value)))
+			.join(', ');
+	return {
+		minPrice: low === null ? '' : money(low),
+		maxPrice: high === null ? '' : money(high),
+		price: low === null || high === null ? '' : low === high ? money(low) : `${money(low)} – ${money(high)}`,
+		options: valuesOf(offered),
+		inStockOptions: valuesOf(offered.filter((variant) => variantInStock(product, variant))),
+		conditions: [...grades.entries()]
+			.filter(([key]) => offered.some((variant) => variant.grade === key))
+			.map(([, grade]) => grade.label)
+			.join(', '),
+		topSpecs: specs
+			.slice(0, TOP_SPECS)
+			.map((spec) => `${spec.name}: ${spec.label}${spec.unit ? ` ${spec.unit}` : ''}`)
+			.join(', '),
+	};
+};
+
 /**
  * Product structured data as a JSON-LD graph (E16, G5): a `ProductGroup` with each variant offered as a `Product` (its
  * own image, else the product's; its SKU, else its feed item id; its condition by grade, offer, shipping and return
@@ -385,7 +508,7 @@ export const productJsonLd = (page) => {
 			hasVariant: variants.map((variant) =>
 				compact({
 					'@type': 'Product',
-					name: variantLabel(variant) ? `${product.name} - ${variantLabel(variant)}` : product.name,
+					name: page.variantName(variant) || product.name,
 					sku: variant.sku || feedItemId(variant),
 					image: page.variantImage?.(variant) || images,
 					...Object.fromEntries(

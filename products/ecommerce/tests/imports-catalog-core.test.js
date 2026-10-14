@@ -246,6 +246,26 @@ describe('taxonomy', () => {
 	});
 });
 
+describe('SEO copy moved in (G6)', () => {
+	it('is marked as the import’s and keeps its title mode', () => {
+		const seo = { title: 'Lamps | Old Shop', description: 'Every lamp.', titleMode: 'as_written' };
+		const product = checkImportedProduct(
+			{ id: idOf('prd', 1), slug: 'lamp', name: 'Lamp', status: 'draft', variants: [], seo },
+			contextOf(),
+		);
+		expect(product).toMatchObject({ ok: true, value: { seo: { ...seo, source: 'import' } } });
+		const category = checkImportedCategory({ id: idOf('cat', 2), slug: 'lamps', name: 'Lamps', seo }, contextOf());
+		expect(category).toMatchObject({ ok: true, value: { seo: { source: 'import', titleMode: 'as_written' } } });
+		const brand = checkImportedBrand({ id: BRD, slug: 'b', name: 'B', seo: { description: 'Our brand.' } }, contextOf());
+		expect(brand).toMatchObject({ ok: true, value: { seo: { source: 'import', titleMode: 'template' } } });
+		const none = checkImportedBrand({ id: BRD, slug: 'b', name: 'B' }, contextOf());
+		expect(none).toMatchObject({ ok: true, value: { seo: { source: null } } });
+		expect(paths(checkImportedBrand({ id: BRD, slug: 'b', name: 'B', seo: { source: 'import' } }, contextOf()))).toEqual([
+			'/seo/source',
+		]);
+	});
+});
+
 describe('products', () => {
 	it('derives what a save derives and takes the given numbers, times and files', () => {
 		const checked = checkImportedProduct(

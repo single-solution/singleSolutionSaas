@@ -37,12 +37,14 @@ import {
 import { absolute, withQuery } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
+	asWritten,
 	categoryJsonLd,
 	faqJsonLd,
 	fillTemplate,
 	fillTitle,
 	metaDescription,
 	pageName,
+	pageTitle,
 	patternText,
 	robotsOf,
 	scriptJson,
@@ -559,25 +561,23 @@ export const createLandings = (product, service, media) => {
 		const own = category && !brand && !grade && !landing ? category : null;
 		const parent = own ? names.byCategory.get(own.path.at(-1) ?? '') : undefined;
 		const patternNames = { name: own?.name ?? '', category: parent?.name ?? '', storeName };
-		const title = fillTitle(String(settings.titleTemplate), {
-			name:
-				landing?.title ||
-				automatic?.copy.name ||
-				(category && !brand && !grade ? category.seo.title : '') ||
-				(own ? pageName(settings.categoryTitle, patternNames) : '') ||
-				h1,
+		// own titles: the landing page's, else the category's on its own page (with its titleMode, G6)
+		const title = pageTitle(String(settings.titleTemplate), {
+			own: landing?.title || (own?.seo.title ?? ''),
+			mode: landing?.title ? 'template' : (own?.seo.titleMode ?? 'template'),
+			name: automatic?.copy.name || (own ? pageName(settings.categoryTitle, patternNames) : '') || h1,
 			business: storeName,
 		});
 		const description = metaDescription(
-			landing?.description,
+			asWritten(landing?.description),
 			automatic?.copy.description,
-			category?.seo.description,
+			asWritten(category?.seo.description),
 			own ? patternText(settings.categoryDescription, patternNames) : '',
 			category?.content.summary,
 			category?.description,
-			brand?.seo.description,
+			asWritten(brand?.seo.description),
 			brand?.description,
-			settings.defaultDescription,
+			asWritten(settings.defaultDescription),
 		);
 		const intro = landing?.intro || category?.content.summary || category?.description || '';
 		const faqs = landing ? landing.faqs : (category?.faqs ?? []);
@@ -685,11 +685,11 @@ export const createLandings = (product, service, media) => {
 		const storeName = storeNameOf(settings, business);
 		const values = { name, storeName, ...pattern?.values };
 		const description = metaDescription(
-			seo?.description,
+			asWritten(seo?.description),
 			seo?.body,
 			fallback,
 			patternText(pattern?.description, values),
-			settings.defaultDescription,
+			asWritten(settings.defaultDescription),
 		);
 		const at = url ?? `https://${s.domain}/`;
 		return {

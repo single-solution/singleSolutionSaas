@@ -179,7 +179,10 @@ describe('SEO and feed settings through the API', () => {
 
 	it('keeps titles and descriptions by default and fills the patterns with the name in titles (SG-5, SG-21)', async () => {
 		const product = await api('GET', `/v1/seo/products/${ids.lamp.slug}`);
-		expect(product).toMatchObject({ title: 'Deluxe Lamp | Shop', description: 'A warm lamp.' });
+		expect(product).toMatchObject({
+			title: 'Deluxe Lamp | Shop',
+			description: 'Deluxe Lamp by Nova — Lamps. USD 9,000.00 – USD 12,000.00. In stock: 48, 56.',
+		});
 		const category = await api('GET', `/v1/seo/categories/${ids.lamps.slug}`);
 		expect(category.title).toBe('Lamps | Shop');
 		await shop.setting('seo', 'brandName', 'Nova Store');
