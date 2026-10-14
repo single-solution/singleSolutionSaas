@@ -29,6 +29,9 @@ importers:
       '@ss/app-kit':
         specifier: workspace:^
         version: link:../packages/app-kit
+      '@ss/cli':
+        specifier: workspace:^
+        version: link:../packages/cli
       '@ss/config':
         specifier: workspace:^
         version: link:../packages/config

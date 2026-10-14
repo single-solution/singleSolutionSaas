@@ -48,7 +48,7 @@ export const noteView = ({ id, text, email, createdAt }) => ({
 
 /**
  * Check a note an import sends (PLAN 0.8.10 K10, import mode): the given id, the text within the hard maximum, an
- * optional e-mail and a past time.
+ * optional e-mail and its time (ISO-8601).
  * @param {Record<string, unknown>} record
  * @returns {{ ok: true, value: { id: string, text: string, email: string | null, createdAt: Date } }
  *   | { ok: false, errors: Array<{ path: string, message: string }> }}

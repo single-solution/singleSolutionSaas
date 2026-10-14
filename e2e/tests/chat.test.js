@@ -219,7 +219,7 @@ describe('Chat on the real Portal', () => {
 	it('the merchant’s server replies as a named member of staff (SS-Actor), and counts match the inbox', async () => {
 		const actor = {
 			'ss-actor-id': 'usr_staff_42',
-			'ss-actor-name': encodeURIComponent('Ayesha Khan'),
+			'ss-actor-name': encodeURIComponent('Alex Morgan'),
 			'ss-actor-role': 'Support staff',
 		};
 		const replied = await sys.call('POST', `/v1/conversations/${conversationId}/messages`, {
@@ -228,9 +228,9 @@ describe('Chat on the real Portal', () => {
 			body: { text: 'Your order is packed.' },
 		});
 		expect(replied.status).toBe(201);
-		expect(replied.json.message).toMatchObject({ author: 'staff', name: 'Ayesha Khan' });
+		expect(replied.json.message).toMatchObject({ author: 'staff', name: 'Alex Morgan' });
 		const seen = await visitor('GET', '/v1/chat', { headers: signedIn });
-		expect(seen.json.messages.at(-1)).toMatchObject({ author: 'staff', name: 'Ayesha Khan', text: 'Your order is packed.' });
+		expect(seen.json.messages.at(-1)).toMatchObject({ author: 'staff', name: 'Alex Morgan', text: 'Your order is packed.' });
 		// without the headers the server is the team
 		const team = await sys.call('POST', `/v1/conversations/${conversationId}/messages`, {
 			token: chatTokens.server,
@@ -242,7 +242,7 @@ describe('Chat on the real Portal', () => {
 		});
 		expect(activity.json.items[0]).toMatchObject({
 			action: 'conversation.replied',
-			actor: { kind: 'user', id: 'usr_staff_42', name: 'Ayesha Khan', role: 'Support staff' },
+			actor: { kind: 'user', id: 'usr_staff_42', name: 'Alex Morgan', role: 'Support staff' },
 		});
 		// counts equal the inbox list (PLAN 0.8.10 K4)
 		const list = await sys.call('GET', '/v1/conversations?limit=100', { token: chatTokens.server });

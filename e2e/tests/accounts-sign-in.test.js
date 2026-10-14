@@ -1,8 +1,8 @@
 /**
- * PLAN 0.8.10, Phase 2 "done when", Accounts on the REAL Portal: imported bcrypt and PBKDF2 hashes sign in and are
- * re-hashed; phone + password, staff sign-in codes and setup links, role requests, the guards, paused roles and the
- * remember options work through the widget (Accounts' real `widget.js` code in a browser window, jsdom) and through
- * the merchant's server (server token, `SS-Visitor-IP`, `SS-Actor-*`); an old recovery code works once.
+ * Accounts' sign-in methods, staff and roles on the REAL Portal (PLAN 0.8.10): imported bcrypt and PBKDF2 hashes sign
+ * in and are re-hashed; phone + password, staff sign-in codes and setup links, role requests, the guards, paused roles
+ * and the remember options work through the widget (Accounts' real `widget.js` code in a browser window, jsdom) and
+ * through the merchant's server (server token, `SS-Visitor-IP`, `SS-Actor-*`); an old recovery code works once.
  */
 import { createHash, pbkdf2Sync, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
@@ -139,7 +139,7 @@ afterAll(async () => {
 	await sys?.stop();
 });
 
-describe('Accounts Phase 2 on the real Portal', () => {
+describe('Accounts sign-in methods, staff and roles on the real Portal', () => {
 	it('imported bcrypt and PBKDF2 hashes sign in and are re-hashed', async () => {
 		const bcryptUser = await server.call('POST', '/v1/users', { name: 'Alex Morgan', email: 'alex@members.example.com' });
 		const pbkdf2User = await server.call('POST', '/v1/users', {

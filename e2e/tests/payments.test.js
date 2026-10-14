@@ -348,7 +348,16 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 		expect(payment.status).toBe(201);
 		transferId = payment.json.id;
 		const shown = await sys.call('GET', `/pay/${websiteId}/${transferId}`);
-		for (const text of ['Shop Ltd', 'Example Bank', '31926819', 'Sort code', '60-16-13', 'NWBKGB2L', 'ORD-1001', 'Quote your order number.'])
+		for (const text of [
+			'Shop Ltd',
+			'Example Bank',
+			'31926819',
+			'Sort code',
+			'60-16-13',
+			'NWBKGB2L',
+			'ORD-1001',
+			'Quote your order number.',
+		])
 			expect(shown.json).toContain(text);
 		expect(shown.json).not.toContain('Routing number');
 	});

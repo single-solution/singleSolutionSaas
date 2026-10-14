@@ -450,7 +450,7 @@ export const startSystem = async ({ graceDays = 1, unit = NOTES, extras = [] } =
 			await owner()
 		).post(`/v1/admin/merchants/${merchantId}/receipts`, {
 			credits,
-			amountPaid: `PKR ${credits * 10}`,
+			amountPaid: `USD ${credits}`,
 			method: 'Cash',
 		});
 		if (res.status !== 201) throw new Error(`receipt ${res.status} ${JSON.stringify(res.json)}`);

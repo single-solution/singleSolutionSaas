@@ -1,0 +1,5 @@
+@import 'tailwindcss';
+@import '@ss/ui/theme.css';
+
+/* the component library lives outside this project: scan its sources for classes */
+@source '../node_modules/@ss/ui/src';

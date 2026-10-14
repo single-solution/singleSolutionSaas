@@ -2,15 +2,19 @@
  * The public docs at `/docs` (PLAN 0.4.10): per-feature guides with their routes and widgets, the widget snippets,
  * the ticket server snippet (Node.js fetch and cURL), the kit's routes for your server (settings, acting user, visitor
  * calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the localhost note and the API reference
- * from `openapi.json`. Plain HTML; every value is escaped.
+ * from `openapi.json` (every call with what it takes and answers, `renderApiReference`). Plain HTML; every value is
+ * escaped.
  * @module
  */
-import { KIT_GUIDE } from '@ss/app-kit';
+import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
+
+/** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
+let reference = null;
 
 /** @param {unknown} value */
 const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
@@ -35,7 +39,7 @@ const routeTable = (rows) =>
 	`<table><thead><tr><th>Route</th><th>Auth</th><th>Feature</th></tr></thead><tbody>${rows
 		.map(
 			([method, path, operation]) =>
-				`<tr><td><code>${escape(`${method} ${path}`)}</code>${operation.summary ? ` ${escape(operation.summary)}` : ''}</td><td>${escape(
+				`<tr><td><a href="#${escape(apiAnchor(method, path))}"><code>${escape(`${method} ${path}`)}</code></a>${operation.summary ? ` ${escape(operation.summary)}` : ''}</td><td>${escape(
 					`${operation['x-ss-auth'] ?? ''}${operation['x-ss-permission'] ? ` (${operation['x-ss-permission']})` : ''}`,
 				)}</td><td>${escape(operation['x-ss-feature'] ?? 'always')}</td></tr>`,
 		)
@@ -138,6 +142,7 @@ ${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
 <h2>API reference</h2>
 ${para(guide.api)}
 ${routeTable(rows)}
+${(reference ??= renderApiReference(openapi))}
 </body>
 </html>
 `;

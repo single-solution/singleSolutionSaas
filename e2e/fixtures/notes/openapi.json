@@ -21,6 +21,89 @@
 				],
 				"parameters": [
 					{
+						"name": "actor",
+						"in": "query",
+						"required": false,
+						"description": "An actor id.",
+						"schema": {
+							"type": "string",
+							"maxLength": 256,
+							"description": "An actor id."
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"required": false,
+						"description": "One action, or several separated by commas.",
+						"schema": {
+							"type": "string",
+							"description": "One action, or several separated by commas."
+						}
+					},
+					{
+						"name": "target",
+						"in": "query",
+						"required": false,
+						"description": "A target id.",
+						"schema": {
+							"type": "string",
+							"maxLength": 256,
+							"description": "A target id."
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"description": "Searches labels, details, actor names and targets.",
+						"schema": {
+							"type": "string",
+							"description": "Searches labels, details, actor names and targets."
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone.",
+						"schema": {
+							"type": "string",
+							"description": "An ISO-8601 time, or a day (YYYY-MM-DD) in the business time zone."
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "An ISO-8601 time, or a day (YYYY-MM-DD; its end) in the business time zone.",
+						"schema": {
+							"type": "string",
+							"description": "An ISO-8601 time, or a day (YYYY-MM-DD; its end) in the business time zone."
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -34,8 +117,38 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items",
+										"nextCursor",
+										"hasMore"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/ActivityEntry"
+											}
+										},
+										"nextCursor": {
+											"type": [
+												"string",
+												"null"
+											]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -61,6 +174,56 @@
 				],
 				"parameters": [
 					{
+						"name": "actor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "target",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -74,8 +237,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -101,6 +271,69 @@
 				],
 				"parameters": [
 					{
+						"name": "by",
+						"in": "query",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"action",
+								"actor",
+								"kind"
+							]
+						}
+					},
+					{
+						"name": "actor",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "action",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "target",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 256
+						}
+					},
+					{
+						"name": "q",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -114,8 +347,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -132,6 +372,7 @@
 		},
 		"/v1/admin/notes": {
 			"get": {
+				"summary": "The notes, newest first (inbox widget)",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "notes",
 				"x-ss-permission": "notes.read",
@@ -140,10 +381,39 @@
 						"ticket": []
 					}
 				],
-				"parameters": [],
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 20
+						}
+					}
+				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotePage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -160,6 +430,7 @@
 		},
 		"/v1/admin/notes/count": {
 			"get": {
+				"summary": "Count the notes (inbox widget)",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "notes",
 				"x-ss-permission": "notes.read",
@@ -170,8 +441,15 @@
 				],
 				"parameters": [],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -210,8 +488,27 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"connections"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"connections": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Connection"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -258,8 +555,8 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"204": {
+						"description": "No content"
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -303,9 +600,38 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {
+										"type": [
+											"string",
+											"object"
+										],
+										"description": "The secret, or its fields."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Connection"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -352,8 +678,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Connection"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -391,9 +724,69 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"user"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"user": {
+										"type": "object",
+										"additionalProperties": false,
+										"description": "At least one of id, email and phone.",
+										"properties": {
+											"id": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 256
+											},
+											"email": {
+												"type": "string",
+												"format": "email",
+												"maxLength": 320
+											},
+											"phone": {
+												"type": "string",
+												"pattern": "^\\+?[0-9 ().-]{3,40}$"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"deleted",
+										"anonymised"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"deleted": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"anonymised": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Records kept without the person's details."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -431,9 +824,66 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"user"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"user": {
+										"type": "object",
+										"additionalProperties": false,
+										"description": "At least one of id, email and phone.",
+										"properties": {
+											"id": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 256
+											},
+											"email": {
+												"type": "string",
+												"format": "email",
+												"maxLength": 320
+											},
+											"phone": {
+												"type": "string",
+												"pattern": "^\\+?[0-9 ().-]{3,40}$"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"records"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"records": {
+											"type": "object",
+											"additionalProperties": {
+												"type": "array"
+											},
+											"description": "The person's records by kind (each product names its own; staff: the kit's staff records)."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -472,8 +922,53 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"features"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"features": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"description",
+													"on",
+													"millicreditsPerHour"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"on": {
+														"type": "boolean"
+													},
+													"millicreditsPerHour": {
+														"type": "integer",
+														"minimum": 0
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -512,8 +1007,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Format"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -549,9 +1051,72 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"additionalProperties": false,
+								"description": "The fields to change; null resets a field.",
+								"properties": {
+									"locale": {
+										"type": [
+											"string",
+											"null"
+										]
+									},
+									"currencyDisplay": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"code",
+											"symbol",
+											"custom",
+											null
+										]
+									},
+									"currencySymbol": {
+										"type": [
+											"string",
+											"null"
+										],
+										"maxLength": 8
+									},
+									"wholeUnits": {
+										"type": [
+											"boolean",
+											"null"
+										]
+									},
+									"times": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"viewer",
+											"business",
+											null
+										]
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Format"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -568,6 +1133,8 @@
 		},
 		"/v1/import/finish": {
 			"post": {
+				"summary": "Finish an import",
+				"description": "Notes derives nothing from imported notes.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -590,8 +1157,24 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"finished"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"finished": {
+											"const": true
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -608,6 +1191,7 @@
 		},
 		"/v1/import/status": {
 			"get": {
+				"summary": "What the import holds now (ss-import verify)",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -630,8 +1214,57 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"collections",
+										"imported",
+										"totals"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"collections": {
+											"type": "object",
+											"required": [
+												"notes"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"notes": {
+													"type": "integer",
+													"minimum": 0
+												}
+											},
+											"description": "Notes of the website."
+										},
+										"imported": {
+											"type": "object",
+											"required": [
+												"notes"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"notes": {
+													"type": "integer",
+													"minimum": 0
+												}
+											},
+											"description": "Notes an import wrote."
+										},
+										"totals": {
+											"type": "object",
+											"additionalProperties": false,
+											"properties": {},
+											"description": "No sums to compare."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -648,6 +1281,8 @@
 		},
 		"/v1/import/{collection}": {
 			"post": {
+				"summary": "Import notes (NDJSON)",
+				"description": "collection is notes (404 not_found for another). Send application/x-ndjson, one note per line ({ id, text, email?, createdAt }), at most 1,000 records or 4 MB per call (413 payload_too_large; 415 unsupported_media_type). Each note is written by its id and replaces the stored one, so running it again changes nothing. Nothing is sent.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -665,6 +1300,20 @@
 						}
 					},
 					{
+						"name": "dryRun",
+						"in": "query",
+						"required": false,
+						"description": "Check only: nothing is written.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1",
+								"true"
+							],
+							"description": "Check only: nothing is written."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -678,8 +1327,82 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"description": "What was (or, in a dry run, would be) written.",
+									"required": [
+										"inserted",
+										"updated",
+										"failed",
+										"dryRun"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"inserted": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"updated": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"failed": {
+											"type": "array",
+											"description": "The refused lines, in order.",
+											"items": {
+												"type": "object",
+												"required": [
+													"line",
+													"id",
+													"errors"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"line": {
+														"type": "integer",
+														"minimum": 1
+													},
+													"id": {
+														"type": [
+															"string",
+															"null"
+														],
+														"description": "The note's id (null when the line is not a record)."
+													},
+													"errors": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": [
+																"path",
+																"message"
+															],
+															"additionalProperties": false,
+															"properties": {
+																"path": {
+																	"type": "string",
+																	"description": "A JSON Pointer in the record."
+																},
+																"message": {
+																	"type": "string"
+																}
+															}
+														}
+													}
+												}
+											}
+										},
+										"dryRun": {
+											"type": "boolean"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -726,8 +1449,24 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"value"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"value": {
+											"description": "The saved list, else its default (each product describes its lists)."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -771,9 +1510,41 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"value"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"value": {
+											"description": "The list as saved."
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -790,6 +1561,7 @@
 		},
 		"/v1/notes": {
 			"get": {
+				"summary": "The notes, newest first",
 				"x-ss-auth": "server",
 				"x-ss-feature": "notes",
 				"security": [
@@ -798,6 +1570,27 @@
 					}
 				],
 				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 20
+						}
+					},
 					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
@@ -812,8 +1605,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/NotePage"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -828,6 +1628,8 @@
 				}
 			},
 			"post": {
+				"summary": "Leave a note",
+				"description": "A visitor leaves a note. A text longer than the maxLength setting answers 422 validation_failed.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "notes",
 				"security": [
@@ -843,6 +1645,7 @@
 						"name": "Idempotency-Key",
 						"in": "header",
 						"required": false,
+						"description": "A key of your own per request: the same request again within 24 hours gets the first answer (Idempotent-Replayed: true); another request with it answers 409 duplicate_request.",
 						"schema": {
 							"type": "string",
 							"maxLength": 255
@@ -864,9 +1667,57 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"text"
+								],
+								"properties": {
+									"text": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 2000,
+										"description": "Trimmed; at most the maxLength setting."
+									},
+									"email": {
+										"type": "string",
+										"maxLength": 254,
+										"description": "Optional; '' for none."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"id",
+										"createdAt"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"id": {
+											"type": "string",
+											"pattern": "^note_[0-9a-z]{10,64}$"
+										},
+										"createdAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -883,6 +1734,7 @@
 		},
 		"/v1/notes/count": {
 			"get": {
+				"summary": "Count the notes",
 				"x-ss-auth": "server",
 				"x-ss-feature": "notes",
 				"security": [
@@ -905,8 +1757,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Count"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -945,8 +1804,44 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"permissions"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"permissions": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"feature"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"feature": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -985,8 +1880,71 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"features"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"features": {
+											"type": "array",
+											"description": "Each feature's settings, then the settings several features share.",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"on",
+													"schema",
+													"values"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"name": {
+														"type": "string"
+													},
+													"on": {
+														"type": "boolean"
+													},
+													"schema": {
+														"type": "object",
+														"description": "The settings' JSON Schema (from the manifest)."
+													},
+													"values": {
+														"type": [
+															"object",
+															"null"
+														],
+														"description": "Setting → { value, source }; null while the feature is off.",
+														"additionalProperties": {
+															"type": "object",
+															"required": [
+																"source"
+															],
+															"additionalProperties": false,
+															"properties": {
+																"value": {},
+																"source": {
+																	"$ref": "#/components/schemas/ValueSource"
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1033,8 +1991,29 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"key",
+										"source"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"key": {
+											"type": "string"
+										},
+										"value": {},
+										"source": {
+											"$ref": "#/components/schemas/ValueSource"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1050,6 +2029,7 @@
 			},
 			"put": {
 				"summary": "Save one setting (<feature>.<setting>, { value })",
+				"description": "The feature must be on (else 403 feature_off); an invalid value answers 422 validation_failed with errors.",
 				"x-ss-auth": "server",
 				"security": [
 					{
@@ -1078,9 +2058,48 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {
+										"description": "A value the setting's schema allows (not null: DELETE resets)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"key",
+										"source"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"key": {
+											"type": "string"
+										},
+										"value": {},
+										"source": {
+											"$ref": "#/components/schemas/ValueSource"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1119,8 +2138,27 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"texts"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"texts": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Text"
+											}
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1167,8 +2205,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Text"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1184,6 +2229,7 @@
 			},
 			"put": {
 				"summary": "Save one widget text ({ value })",
+				"description": "1–2000 characters with the same {placeholders} as the English text.",
 				"x-ss-auth": "server",
 				"security": [
 					{
@@ -1212,9 +2258,36 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"value"
+								],
+								"properties": {
+									"value": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 2000
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Text"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1253,8 +2326,15 @@
 					}
 				],
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Theme"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1290,9 +2370,68 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"additionalProperties": false,
+								"description": "The fields to change; null resets a field.",
+								"properties": {
+									"colors": {
+										"type": [
+											"object",
+											"null"
+										]
+									},
+									"fontFamily": {
+										"type": [
+											"string",
+											"null"
+										]
+									},
+									"radius": {
+										"type": [
+											"integer",
+											"null"
+										],
+										"minimum": 0,
+										"maximum": 24
+									},
+									"mode": {
+										"type": [
+											"string",
+											"null"
+										],
+										"enum": [
+											"light",
+											"dark",
+											"auto",
+											null
+										]
+									},
+									"customCss": {
+										"type": [
+											"string",
+											"null"
+										]
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Theme"
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1310,6 +2449,7 @@
 		"/v1/tickets": {
 			"post": {
 				"summary": "Ticket for an admin widget (15 minutes)",
+				"description": "Your server asks for a ticket for the member of your staff who opens an admin widget. Permissions of switched-off features are left out of the ticket.",
 				"x-ss-auth": "server",
 				"security": [
 					{
@@ -1330,9 +2470,84 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"user",
+									"permissions",
+									"origin"
+								],
+								"properties": {
+									"user": {
+										"type": "object",
+										"required": [
+											"id",
+											"name",
+											"email"
+										],
+										"properties": {
+											"id": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 256
+											},
+											"name": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 200
+											},
+											"email": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 320
+											}
+										}
+									},
+									"permissions": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										},
+										"description": "Permissions of this product (GET /v1/permissions)."
+									},
+									"origin": {
+										"type": "string",
+										"description": "The https origin of the page that shows the widget (a local origin while testing)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
-					"2XX": {
-						"description": "Success (JSON)"
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"ticket",
+										"expiresAt"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"ticket": {
+											"type": "string",
+											"description": "Give it to the admin widget (data-ticket)."
+										},
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								}
+							}
+						}
 					},
 					"default": {
 						"description": "Problem (RFC 9457) with a stable code",
@@ -1417,8 +2632,335 @@
 			}
 		},
 		"schemas": {
+			"ActivityEntry": {
+				"type": "object",
+				"required": [
+					"id",
+					"actor",
+					"action",
+					"target",
+					"label",
+					"detail",
+					"at"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"actor": {
+						"$ref": "#/components/schemas/Actor"
+					},
+					"action": {
+						"type": "string",
+						"description": "What was done, for example payment.refunded."
+					},
+					"target": {
+						"type": "string",
+						"description": "The id of what it was done to."
+					},
+					"label": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "A name for the target, for example an order number."
+					},
+					"detail": {
+						"type": [
+							"string",
+							"null"
+						]
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"Actor": {
+				"type": "object",
+				"description": "Who did it: user (the acting user of a server call), staff (a ticket's user) or server.",
+				"required": [
+					"kind",
+					"id"
+				],
+				"properties": {
+					"kind": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"role": {
+						"type": "string"
+					},
+					"email": {
+						"type": "string"
+					}
+				}
+			},
+			"Connection": {
+				"type": "object",
+				"description": "A connection as screens see it: secrets never come back.",
+				"required": [
+					"name",
+					"label",
+					"kind",
+					"neededBy",
+					"state",
+					"last4",
+					"message",
+					"testedAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"database",
+							"storage",
+							"secret",
+							"token"
+						]
+					},
+					"neededBy": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The features that use it."
+					},
+					"state": {
+						"type": "string",
+						"enum": [
+							"connected",
+							"not_connected",
+							"test_failed"
+						]
+					},
+					"last4": {
+						"type": "string",
+						"maxLength": 4,
+						"description": "The last 4 characters of the secret ('' when none)."
+					},
+					"message": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Why the last test failed."
+					},
+					"testedAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time"
+					}
+				}
+			},
+			"Count": {
+				"type": "object",
+				"description": "How many records match the list's filters.",
+				"required": [
+					"count",
+					"capped"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"count": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 100000,
+						"description": "Exact up to 100,000."
+					},
+					"capped": {
+						"type": "boolean",
+						"description": "True when there are more than 100,000 (count is then 100,000)."
+					}
+				}
+			},
+			"Counts": {
+				"type": "object",
+				"description": "The matching records counted by one field.",
+				"required": [
+					"total",
+					"groups"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "All matching records."
+					},
+					"groups": {
+						"type": "object",
+						"maxProperties": 50,
+						"additionalProperties": {
+							"type": "integer",
+							"minimum": 1
+						},
+						"description": "Value → count, the 50 largest groups; a missing value is counted as none."
+					}
+				}
+			},
+			"Format": {
+				"type": "object",
+				"required": [
+					"format",
+					"sources"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"format": {
+						"type": "object",
+						"required": [
+							"locale",
+							"currencyDisplay",
+							"currencySymbol",
+							"wholeUnits",
+							"times"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"locale": {
+								"type": "string",
+								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
+							},
+							"currencyDisplay": {
+								"type": "string",
+								"enum": [
+									"code",
+									"symbol",
+									"custom"
+								]
+							},
+							"currencySymbol": {
+								"type": "string",
+								"maxLength": 8,
+								"description": "With currencyDisplay custom."
+							},
+							"wholeUnits": {
+								"type": "boolean",
+								"description": "Amounts without the minor unit."
+							},
+							"times": {
+								"type": "string",
+								"enum": [
+									"viewer",
+									"business"
+								],
+								"description": "Whose time zone dates use."
+							}
+						}
+					},
+					"sources": {
+						"type": "object",
+						"required": [
+							"locale",
+							"currencyDisplay",
+							"currencySymbol",
+							"wholeUnits",
+							"times"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"locale": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"currencyDisplay": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"currencySymbol": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"wholeUnits": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"times": {
+								"$ref": "#/components/schemas/ValueSource"
+							}
+						}
+					}
+				}
+			},
+			"Note": {
+				"type": "object",
+				"description": "A visitor's note.",
+				"required": [
+					"id",
+					"text",
+					"email",
+					"createdAt"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^note_[0-9a-z]{10,64}$"
+					},
+					"text": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 2000
+					},
+					"email": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "email",
+						"maxLength": 254,
+						"description": "Lower case."
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"NotePage": {
+				"type": "object",
+				"description": "One page of notes, newest first.",
+				"required": [
+					"items",
+					"nextCursor",
+					"hasMore"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Note"
+						}
+					},
+					"nextCursor": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "Pass it as cursor for the next page."
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
 			"Problem": {
 				"type": "object",
+				"description": "An error (RFC 9457, application/problem+json). The last segment of type is a stable code, for example validation_failed.",
 				"required": [
 					"type",
 					"title",
@@ -1426,7 +2968,8 @@
 				],
 				"properties": {
 					"type": {
-						"type": "string"
+						"type": "string",
+						"description": "https://<product>/problems/<code>"
 					},
 					"title": {
 						"type": "string"
@@ -1434,13 +2977,170 @@
 					"status": {
 						"type": "integer"
 					},
-					"code": {
-						"type": "string"
-					},
 					"detail": {
 						"type": "string"
+					},
+					"instance": {
+						"type": "string",
+						"description": "The path of the request."
+					},
+					"requestId": {
+						"type": "string",
+						"description": "Quote it when you contact support."
+					},
+					"reason": {
+						"type": "string",
+						"enum": [
+							"stopped",
+							"suspended",
+							"removed"
+						],
+						"description": "product_unavailable only."
+					},
+					"errors": {
+						"type": "array",
+						"description": "validation_failed: what is wrong, field by field.",
+						"items": {
+							"type": "object",
+							"required": [
+								"path",
+								"message"
+							],
+							"properties": {
+								"path": {
+									"type": "string",
+									"description": "JSON Pointer of the field, for example /amount."
+								},
+								"message": {
+									"type": "string"
+								},
+								"keyword": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
+			},
+			"Text": {
+				"type": "object",
+				"required": [
+					"key",
+					"english",
+					"value",
+					"source"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"english": {
+						"type": "string",
+						"description": "The built-in English text."
+					},
+					"value": {
+						"type": "string",
+						"description": "The text the widgets show."
+					},
+					"source": {
+						"$ref": "#/components/schemas/ValueSource"
+					}
+				}
+			},
+			"Theme": {
+				"type": "object",
+				"required": [
+					"theme",
+					"sources"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"theme": {
+						"type": "object",
+						"required": [
+							"colors",
+							"fontFamily",
+							"radius",
+							"mode",
+							"customCss"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"colors": {
+								"type": "object",
+								"maxProperties": 24,
+								"additionalProperties": {
+									"type": "string",
+									"pattern": "^#[0-9a-fA-F]{6}$"
+								},
+								"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+							},
+							"fontFamily": {
+								"type": "string",
+								"description": "'inherit' or a font name."
+							},
+							"radius": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 24,
+								"description": "Corner radius in px."
+							},
+							"mode": {
+								"type": "string",
+								"enum": [
+									"light",
+									"dark",
+									"auto"
+								]
+							},
+							"customCss": {
+								"type": "string",
+								"description": "At most 20 kB."
+							}
+						}
+					},
+					"sources": {
+						"type": "object",
+						"required": [
+							"colors",
+							"fontFamily",
+							"radius",
+							"mode",
+							"customCss"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"colors": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"fontFamily": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"radius": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"mode": {
+								"$ref": "#/components/schemas/ValueSource"
+							},
+							"customCss": {
+								"$ref": "#/components/schemas/ValueSource"
+							}
+						}
+					}
+				}
+			},
+			"ValueSource": {
+				"type": "string",
+				"enum": [
+					"website",
+					"default",
+					"built-in"
+				],
+				"description": "Where a value comes from: saved for this website, the global default, or built in."
 			}
 		}
 	}

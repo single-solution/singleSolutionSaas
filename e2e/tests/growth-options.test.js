@@ -1,11 +1,11 @@
 /**
- * PLAN 0.8.10 build phase 3, Growth's "done when": the Growth options (G1–G7) pass the jsdom test with the real page
- * script. Growth runs against the REAL Portal; the merchant's server sets every option through the settings API (K1,
- * with an acting user), then a visitor's browser (jsdom, the real `@ss/product-growth/page-script`, the Portal-issued
- * browser token) loads a page: tags without a consent step and GA4 left to Tag Manager (G1), search, contact and
- * variant ids at the pixels (G2), sessions with their journey, live visitors and the event log through a ticket (G3),
- * the AI crawler block and the Yandex tag (G4), the IndexNow key file at its own path (G5), the notice bar closed per
- * page, hidden on pages and read by custom UIs (G6), and Web Vitals to Google Analytics (G7).
+ * Growth's options (PLAN 0.8.10 G1–G7) pass the jsdom test with the real page script. Growth runs against the REAL
+ * Portal; the merchant's server sets every option through the settings API (K1, with an acting user), then a visitor's
+ * browser (jsdom, the real `@ss/product-growth/page-script`, the Portal-issued browser token) loads a page: tags
+ * without a consent step and GA4 left to Tag Manager (G1), search, contact and variant ids at the pixels (G2), sessions
+ * with their journey, live visitors and the event log through a ticket (G3), the AI crawler block and the Yandex tag
+ * (G4), the IndexNow key file at its own path (G5), the notice bar closed per page, hidden on pages and read by custom
+ * UIs (G6), and Web Vitals to Google Analytics (G7).
  */
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -100,7 +100,7 @@ const openPage = (path, { storage = {}, lcp } = {}) => {
 		const res = await sys.call(init.method ?? 'GET', `${url.pathname}${url.search}`, {
 			token: headers.authorization?.replace('Bearer ', ''),
 			origin: PAGE,
-			headers: { 'x-vercel-ip-country': 'PK', 'x-vercel-ip-city': 'Lahore' },
+			headers: { 'x-vercel-ip-country': 'CA', 'x-vercel-ip-city': 'Toronto' },
 			...(typeof init.body === 'string' ? { body: init.body } : {}),
 		});
 		answers.push(`${url.pathname} ${res.status}`);
@@ -162,7 +162,7 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 	});
 
 	it('G1, G2, G3, G6, G7: one visit in a browser, from the first page to leaving the second', async () => {
-		const first = openPage('/shop?q=Blue+case');
+		const first = openPage('/shop?q=Blue+tote');
 		// Ecommerce's product page announces a variant before the page script has its config
 		first.win.dispatchEvent(
 			new first.win.CustomEvent('ss:view_item', {
@@ -189,7 +189,7 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		expect(meta).toEqual(
 			expect.arrayContaining([
 				['ViewContent', expect.objectContaining({ content_ids: ['var_1'] })],
-				['Search', { search_string: 'Blue case' }],
+				['Search', { search_string: 'Blue tote' }],
 				['Contact', { method: 'whatsapp' }],
 				['Search', { search_string: 'chargers' }],
 			]),
@@ -216,7 +216,7 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		expect(session).toMatch(/^[0-9a-f]{32}$/);
 
 		// the second page of the same tab: the notice is back, the session goes on, the page's largest paint goes to GA4
-		const second = openPage('/phones/blue-case', {
+		const second = openPage('/bags/blue-tote', {
 			storage: Object.fromEntries(
 				['ss-growth-session', 'ss-growth-visit'].map((key) => [key, win.sessionStorage.getItem(key)]),
 			),
@@ -245,7 +245,7 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		expect(events.every((event) => event.session === session && event.browser === 'chrome' && event.os === 'android')).toBe(
 			true,
 		);
-		expect(events.every((event) => event.city === 'Lahore')).toBe(true);
+		expect(events.every((event) => event.city === 'Toronto')).toBe(true);
 		const views = events.filter((event) => event.type === 'page_view').map((event) => event.data);
 		expect(views).toEqual([
 			expect.objectContaining({ visit: true, page: 1 }),
@@ -267,12 +267,12 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 			sessions: { count: 1, bounces: 0, bounceRate: 0, pagesPerSession: 2 },
 			browsers: [{ key: 'chrome', count: 1 }],
 			systems: [{ key: 'android', count: 1 }],
-			cities: [{ key: 'Lahore, PK', count: 1 }],
-			live: { visitors: 1, pages: [{ key: '/phones/blue-case', count: 1 }] },
-			vitalPages: [{ path: '/phones/blue-case', averages: { LCP: 4200 } }],
+			cities: [{ key: 'Toronto, CA', count: 1 }],
+			live: { visitors: 1, pages: [{ key: '/bags/blue-tote', count: 1 }] },
+			vitalPages: [{ path: '/bags/blue-tote', averages: { LCP: 4200 } }],
 		});
 		expect(report.json.journeys).toEqual([
-			expect.objectContaining({ session, pages: 2, device: 'desktop', browser: 'chrome', city: 'Lahore', country: 'PK' }),
+			expect.objectContaining({ session, pages: 2, device: 'desktop', browser: 'chrome', city: 'Toronto', country: 'CA' }),
 		]);
 		const log = await sys.call('GET', `/v1/admin/events/counts?by=type&session=${session}`, {
 			token: ticket.json.ticket,
@@ -300,7 +300,7 @@ describe('Growth options with the real page script (PLAN 0.8.10 G1–G7)', () =>
 		expect(tags.json.tags).toContainEqual({ name: 'yandex-verification', content: 'ya-123' });
 		const sent = await sys.call('POST', '/v1/indexnow', {
 			token: tokens.server,
-			body: { urls: [`https://${DOMAIN}/phones/blue-case`] },
+			body: { urls: [`https://${DOMAIN}/bags/blue-tote`] },
 		});
 		expect(sent.json).toEqual({ submitted: 1, status: 202 });
 		expect(indexNow.at(-1)).toMatchObject({ host: DOMAIN, keyLocation: `https://${DOMAIN}/indexnow-key.txt` });

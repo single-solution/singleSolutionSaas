@@ -1,0 +1,4 @@
+{
+	"extends": "@ss/config/tsconfig.base.json",
+	"include": ["core/**/*.js", "server/**/*.js", "adapters/**/*.js", "ui/**/*.js", "app/**/*.js", "tests/**/*.js"]
+}

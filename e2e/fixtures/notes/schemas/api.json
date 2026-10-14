@@ -1,0 +1,266 @@
+{
+	"$schemas": {
+		"Note": {
+			"type": "object",
+			"description": "A visitor's note.",
+			"required": ["id", "text", "email", "createdAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^note_[0-9a-z]{10,64}$"
+				},
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 2000
+				},
+				"email": {
+					"type": ["string", "null"],
+					"format": "email",
+					"maxLength": 254,
+					"description": "Lower case."
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
+		"NotePage": {
+			"type": "object",
+			"description": "One page of notes, newest first.",
+			"required": ["items", "nextCursor", "hasMore"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/Note"
+					}
+				},
+				"nextCursor": {
+					"type": ["string", "null"],
+					"description": "Pass it as cursor for the next page."
+				},
+				"hasMore": {
+					"type": "boolean"
+				}
+			}
+		}
+	},
+	"POST /v1/notes": {
+		"summary": "Leave a note",
+		"description": "A visitor leaves a note. A text longer than the maxLength setting answers 422 validation_failed.",
+		"body": {
+			"type": "object",
+			"required": ["text"],
+			"properties": {
+				"text": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 2000,
+					"description": "Trimmed; at most the maxLength setting."
+				},
+				"email": {
+					"type": "string",
+					"maxLength": 254,
+					"description": "Optional; '' for none."
+				}
+			}
+		},
+		"status": 201,
+		"response": {
+			"type": "object",
+			"required": ["id", "createdAt"],
+			"additionalProperties": false,
+			"properties": {
+				"id": {
+					"type": "string",
+					"pattern": "^note_[0-9a-z]{10,64}$"
+				},
+				"createdAt": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		}
+	},
+	"GET /v1/notes": {
+		"summary": "The notes, newest first",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/NotePage"
+		}
+	},
+	"GET /v1/notes/count": {
+		"summary": "Count the notes",
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"GET /v1/admin/notes": {
+		"summary": "The notes, newest first (inbox widget)",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/NotePage"
+		}
+	},
+	"GET /v1/admin/notes/count": {
+		"summary": "Count the notes (inbox widget)",
+		"response": {
+			"$ref": "#/components/schemas/Count"
+		}
+	},
+	"POST /v1/import/:collection": {
+		"summary": "Import notes (NDJSON)",
+		"description": "collection is notes (404 not_found for another). Send application/x-ndjson, one note per line ({ id, text, email?, createdAt }), at most 1,000 records or 4 MB per call (413 payload_too_large; 415 unsupported_media_type). Each note is written by its id and replaces the stored one, so running it again changes nothing. Nothing is sent.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"dryRun": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Check only: nothing is written."
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"description": "What was (or, in a dry run, would be) written.",
+			"required": ["inserted", "updated", "failed", "dryRun"],
+			"additionalProperties": false,
+			"properties": {
+				"inserted": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"updated": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"failed": {
+					"type": "array",
+					"description": "The refused lines, in order.",
+					"items": {
+						"type": "object",
+						"required": ["line", "id", "errors"],
+						"additionalProperties": false,
+						"properties": {
+							"line": {
+								"type": "integer",
+								"minimum": 1
+							},
+							"id": {
+								"type": ["string", "null"],
+								"description": "The note's id (null when the line is not a record)."
+							},
+							"errors": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": ["path", "message"],
+									"additionalProperties": false,
+									"properties": {
+										"path": {
+											"type": "string",
+											"description": "A JSON Pointer in the record."
+										},
+										"message": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				"dryRun": {
+					"type": "boolean"
+				}
+			}
+		}
+	},
+	"POST /v1/import/finish": {
+		"summary": "Finish an import",
+		"description": "Notes derives nothing from imported notes.",
+		"response": {
+			"type": "object",
+			"required": ["finished"],
+			"additionalProperties": false,
+			"properties": {
+				"finished": {
+					"const": true
+				}
+			}
+		}
+	},
+	"GET /v1/import/status": {
+		"summary": "What the import holds now (ss-import verify)",
+		"response": {
+			"type": "object",
+			"required": ["collections", "imported", "totals"],
+			"additionalProperties": false,
+			"properties": {
+				"collections": {
+					"type": "object",
+					"required": ["notes"],
+					"additionalProperties": false,
+					"properties": {
+						"notes": {
+							"type": "integer",
+							"minimum": 0
+						}
+					},
+					"description": "Notes of the website."
+				},
+				"imported": {
+					"type": "object",
+					"required": ["notes"],
+					"additionalProperties": false,
+					"properties": {
+						"notes": {
+							"type": "integer",
+							"minimum": 0
+						}
+					},
+					"description": "Notes an import wrote."
+				},
+				"totals": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {},
+					"description": "No sums to compare."
+				}
+			}
+		}
+	}
+}

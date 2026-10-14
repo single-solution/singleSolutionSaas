@@ -10,16 +10,18 @@
 	},
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
-		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm validate && pnpm test",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "eslint .",
 		"typecheck": "tsc -p tsconfig.json",
+		"validate": "ss app validate fixtures/notes",
 		"format": "prettier --write .",
 		"format:check": "prettier --check ."
 	},
 	"devDependencies": {
 		"@ss/app-kit": "workspace:^",
+		"@ss/cli": "workspace:^",
 		"@ss/config": "workspace:^",
 		"@ss/contracts": "workspace:^",
 		"@ss/importer": "workspace:^",

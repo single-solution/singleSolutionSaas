@@ -41,7 +41,7 @@ afterAll(async () => {
 /** @param {string | null} [consent] the consent choice this browser kept from an earlier visit */
 const openPage = (consent = null) => {
 	const dom = new JSDOM('<!doctype html><html><head></head><body><h1>Shop</h1></body></html>', {
-		url: `${PAGE}/shop?q=phones`,
+		url: `${PAGE}/shop?q=lamps`,
 		pretendToBeVisual: true,
 	});
 	const win = /** @type {any} */ (dom.window);
@@ -117,7 +117,7 @@ describe('Growth on the real Portal', () => {
 		// Ecommerce's widget announces the product page while the page script loads its config
 		win.dispatchEvent(
 			new win.CustomEvent('ss:view_item', {
-				detail: { currency: 'USD', value: 1250, items: [{ id: 'prod_1', name: 'Case', price: 1250, quantity: 1 }] },
+				detail: { currency: 'USD', value: 1250, items: [{ id: 'prod_1', name: 'Lamp', price: 1250, quantity: 1 }] },
 			}),
 		);
 		await page.ready;
@@ -156,7 +156,7 @@ describe('Growth on the real Portal', () => {
 		const total = (metric, key) => day?.totals?.[metric]?.[`_${key}`];
 		expect(total('visits', '')?.c).toBe(1);
 		expect(total('page', '/shop')?.c).toBe(1);
-		expect(total('search', 'phones')?.c).toBe(1);
+		expect(total('search', 'lamps')?.c).toBe(1);
 		expect(total('funnel', 'purchase')?.c).toBe(1);
 		expect(total('revenue', 'USD')).toMatchObject({ c: 1, s: 2500 });
 
@@ -188,7 +188,7 @@ describe('Growth on the real Portal', () => {
 		expect(report.status).toBe(200);
 		expect(report.json.totals).toEqual({ visits: 2, pageViews: 2 });
 		expect(report.json.funnel.steps.map((/** @type {{ count: number }} */ s) => s.count)).toEqual([1, 1, 0, 1]);
-		expect(report.json.searches).toEqual([{ key: 'phones', count: 2 }]);
+		expect(report.json.searches).toEqual([{ key: 'lamps', count: 2 }]);
 		// the raw events list and its count agree (PLAN 0.8.10 K4)
 		const raw = await sys.call('GET', '/v1/events?limit=100', { token: tokens.server });
 		const count = await sys.call('GET', '/v1/events/count', { token: tokens.server });

@@ -42,17 +42,17 @@ const CHAT = 'https://chat-phase4.test';
 const ACCOUNTS = 'https://accounts.test';
 const NOTIFY = 'https://notifications.test';
 const SHOP = 'https://ecommerce.test';
-const DOMAIN = 'fans.example.com';
+const DOMAIN = 'lamps.example.com';
 const ORIGIN = `https://${DOMAIN}`;
-const ADMIN_ORIGIN = 'https://admin.fans.example.com';
+const ADMIN_ORIGIN = 'https://admin.lamps.example.com';
 const PASSWORD = 'a long enough password';
 /** The page of the product the visitors look at. */
-const PAGE_URL = `${ORIGIN}/products/fan-max`;
+const PAGE_URL = `${ORIGIN}/products/lamp-max`;
 /** The phone of the alert recipients list (WhatsApp) and its digits as Meta gets them. */
 const TEAM_PHONE = '+44 20 7946 0958';
 const TEAM_DIGITS = '442079460958';
 /** Server calls as a named member of staff (K2). */
-const AYESHA = { 'ss-actor-id': 'usr_staff_42', 'ss-actor-name': encodeURIComponent('Ayesha Khan') };
+const STAFF = { 'ss-actor-id': 'usr_staff_42', 'ss-actor-name': encodeURIComponent('Alex Morgan') };
 
 /** E-mails the merchant's provider (Resend) received. @type {any[]} */
 const mails = [];
@@ -200,7 +200,7 @@ const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce', () => {
 	it('sets up the four products: features, databases, providers, templates, people, a product, a deal and the tokens', async () => {
 		for (const base of [CHAT, ACCOUNTS, NOTIFY, SHOP]) await sys.connect({ base });
-		const m = await sys.merchant('fans@shop.test', [DOMAIN]);
+		const m = await sys.merchant('lamps@shop.test', [DOMAIN]);
 		websiteId = m.websiteIds[0] ?? '';
 		for (const id of ['chat', 'accounts', 'notifications', 'ecommerce']) {
 			await sys.addProduct(m.merchantId, websiteId, id);
@@ -237,7 +237,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		expect(
 			(
 				await setUp('notifications', '/connections/email', {
-					value: { provider: 'resend', secret: 're_live_key_0044', from: 'Fans <shop@fans.example.com>' },
+					value: { provider: 'resend', secret: 're_live_key_0044', from: 'Lamps <shop@lamps.example.com>' },
 				})
 			).json,
 		).toMatchObject({ status: 'connected' });
@@ -269,39 +269,39 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 					name: 'Rea Der',
 					email: 'rea@example.com',
 					password: PASSWORD,
-					addresses: [{ line1: '5 Mall Road', city: 'Lahore', area: 'Gulberg' }],
+					addresses: [{ line1: '5 Rue Cler', city: 'Paris', area: '7th arrondissement' }],
 				},
 			],
-			['nadia', { name: 'Nadia Noor', email: 'nadia@example.com', phone: '+923331234567', password: PASSWORD }],
-			['aga', { name: 'Aga Agent', email: 'agent@fans.example.com', role: 'support_staff' }],
+			['nadia', { name: 'Nadia Noor', email: 'nadia@example.com', phone: '+33612345678', password: PASSWORD }],
+			['aga', { name: 'Aga Agent', email: 'agent@lamps.example.com', role: 'support_staff' }],
 		])) {
 			const created = await server('accounts', 'POST', '/v1/users', body);
 			expect(created.status, JSON.stringify(created.json)).toBe(201);
 			users[who] = String(created.json.id);
 		}
 
-		// Ecommerce: the Accounts token (sign-ins), a policy, a fan and a deal with its display fields
+		// Ecommerce: the Accounts token (sign-ins), a policy, a lamp and a deal with its display fields
 		expect((await setUp('ecommerce', '/connections/accounts', { value: tokens.accounts?.server })).json).toMatchObject({
 			status: 'connected',
 		});
-		await configure('ecommerce', { 'checkout.policyShipping': 'We deliver across Pakistan in 2 days.' });
-		const fan = await server('ecommerce', 'POST', '/v1/products', {
-			name: 'Fan Max',
-			slug: 'fan-max',
+		await configure('ecommerce', { 'checkout.policyShipping': 'We deliver nationwide in 2 days.' });
+		const lamp = await server('ecommerce', 'POST', '/v1/products', {
+			name: 'Lamp Max',
+			slug: 'lamp-max',
 			status: 'active',
-			summary: 'A quiet ceiling fan',
+			summary: 'A dimmable desk lamp',
 			price: 1_250_000,
-			sku: 'FAN-MAX',
+			sku: 'LAMP-MAX',
 			stock: 4,
 		});
-		expect(fan.status, JSON.stringify(fan.json)).toBe(201);
-		productId = String(fan.json.id);
+		expect(lamp.status, JSON.stringify(lamp.json)).toBe(201);
+		productId = String(lamp.json.id);
 		const deal = await server('ecommerce', 'POST', '/v1/deals', {
-			name: 'Fan week',
+			name: 'Lamp week',
 			type: 'percent',
 			value: 10,
 			badgeLabel: 'Sale',
-			discountLabel: '10% off fans',
+			discountLabel: '10% off lamps',
 		});
 		expect(deal.status, JSON.stringify(deal.json)).toBe(201);
 
@@ -327,27 +327,27 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		await configure('chat', { 'ai_instructions.instructions': 'Be kind and short.' });
 
 		const guest = device();
-		const page = { url: PAGE_URL, kind: 'product', productId, productName: 'Fan Max' };
-		expect((await guest('POST', '/v1/chat/messages', { text: 'Is this fan quiet?', page })).status).toBe(201);
+		const page = { url: PAGE_URL, kind: 'product', productId, productName: 'Lamp Max' };
+		expect((await guest('POST', '/v1/chat/messages', { text: 'Is this lamp dimmable?', page })).status).toBe(201);
 		let prompt = lastSystemPrompt();
 		expect(prompt).toContain('Be kind and short.');
 		expect(prompt).toContain('Store information (live):');
 		expect(prompt).toContain('live store facts');
-		expect(prompt).toContain('Delivery: We deliver across Pakistan in 2 days.');
+		expect(prompt).toContain('Delivery: We deliver nationwide in 2 days.');
 		expect(prompt).toContain('## Newest products');
-		expect(prompt).toContain('| Fan week (Sale) | 10% off fans |');
+		expect(prompt).toContain('| Lamp week (Sale) | 10% off lamps |');
 		expect(prompt).toContain('## Product the visitor is viewing');
-		expect(prompt).toMatch(/## Product the visitor is viewing\nFan Max \(/);
+		expect(prompt).toMatch(/## Product the visitor is viewing\nLamp Max \(/);
 		expect(prompt).not.toContain('## Signed-in visitor');
 
 		// a policy changed in Ecommerce shows only once the 60 s cache has passed
-		await configure('ecommerce', { 'checkout.policyShipping': 'We deliver across Pakistan in 1 day.' });
-		await guest('POST', '/v1/chat/messages', { text: 'And the colours?' });
+		await configure('ecommerce', { 'checkout.policyShipping': 'We deliver nationwide in 1 day.' });
+		await guest('POST', '/v1/chat/messages', { text: 'And the colors?' });
 		expect(lastSystemPrompt()).toContain('in 2 days.');
 		sys.clock.advance(61_000);
 		await guest('POST', '/v1/chat/messages', { text: 'And the size?' });
 		prompt = lastSystemPrompt();
-		expect(prompt).toContain('Delivery: We deliver across Pakistan in 1 day.');
+		expect(prompt).toContain('Delivery: We deliver nationwide in 1 day.');
 		// the page the later messages came from is still the product's
 		expect(prompt).toContain('## Product the visitor is viewing');
 
@@ -358,29 +358,29 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		prompt = lastSystemPrompt();
 		expect(prompt).toContain('## Signed-in visitor');
 		expect(prompt).toContain('first name Rea');
-		expect(prompt).toContain('city Lahore');
+		expect(prompt).toContain('city Paris');
 	});
 
 	it('C2: AI answers are markdown split into bubbles, with links only on the website; staff replies are markdown', async () => {
 		await configure('chat', { 'ai_replies.bubbles': 2 });
 		aiAnswers.push(
 			[
-				'**Fan Max** is in stock.',
+				'**Lamp Max** is in stock.',
 				'---',
 				'| Size | Price |',
 				'| --- | --- |',
 				'| 56 in | USD 12,500.00 |',
 				'',
-				`[See it](${PAGE_URL}) or [compare](https://elsewhere.example.org/fans).`,
+				`[See it](${PAGE_URL}) or [compare](https://elsewhere.example.org/lamps).`,
 			].join('\n'),
 		);
 		const guest = device();
-		const sent = await guest('POST', '/v1/chat/messages', { text: 'Tell me about Fan Max' });
+		const sent = await guest('POST', '/v1/chat/messages', { text: 'Tell me about Lamp Max' });
 		const state = await guest('GET', '/v1/chat');
 		const answers = state.json.messages.filter((/** @type {any} */ m) => m.author === 'ai');
 		expect(answers).toHaveLength(2);
 		expect(answers.every((/** @type {any} */ m) => m.format === 'markdown')).toBe(true);
-		expect(answers[0].text).toBe('**Fan Max** is in stock.');
+		expect(answers[0].text).toBe('**Lamp Max** is in stock.');
 		expect(answers[1].text).toContain('| 56 in | USD 12,500.00 |');
 		expect(answers[1].text).toContain(`[See it](${PAGE_URL})`);
 		expect(answers[1].text).toContain('or compare.');
@@ -390,12 +390,12 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 			'POST',
 			`/v1/conversations/${sent.json.chat.conversation.id}/messages`,
 			{ text: 'It is **very** quiet.' },
-			AYESHA,
+			STAFF,
 		);
 		expect(replied.status).toBe(201);
 		expect((await guest('GET', '/v1/chat')).json.messages.at(-1)).toMatchObject({
 			author: 'staff',
-			name: 'Ayesha Khan',
+			name: 'Alex Morgan',
 			text: 'It is **very** quiet.',
 			format: 'markdown',
 		});
@@ -418,7 +418,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 			let last = (await guest('GET', '/v1/chat')).json.messages.at(-1);
 			expect(last).toMatchObject({ author: 'ai', format: 'markdown' });
 			expect(last.text).toMatch(
-				/^Our deals:\n\n\| Deal \| Details \| Ends \|\n\| --- \| --- \| --- \|\n\| Fan week \| 10% off fans \|/,
+				/^Our deals:\n\n\| Deal \| Details \| Ends \|\n\| --- \| --- \| --- \|\n\| Lamp week \| 10% off lamps \|/,
 			);
 			await guest('POST', '/v1/chat/messages', { text: 'what are your hours' });
 			expect(authors((await guest('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'We are open 9 to 5.']);
@@ -434,7 +434,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 
 	it('C5: staff alerts go through the kit and the real Notifications to e-mails, a phone and Accounts staff', async () => {
 		await configure('chat', {
-			'staff_alerts.recipients': ['team@fans.example.com', TEAM_PHONE],
+			'staff_alerts.recipients': ['team@lamps.example.com', TEAM_PHONE],
 			'staff_alerts.staffPermission': 'inbox.reply',
 			'staff_alerts.frequency': 'every_message',
 		});
@@ -445,10 +445,10 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		await guest('POST', '/v1/chat/messages', { text: 'two' });
 		const alerts = mails.slice(mailsBefore).filter((mail) => mail.subject === 'New chat message');
 		expect(alerts.map((mail) => mail.to[0]).sort()).toEqual([
-			'agent@fans.example.com',
-			'agent@fans.example.com',
-			'team@fans.example.com',
-			'team@fans.example.com',
+			'agent@lamps.example.com',
+			'agent@lamps.example.com',
+			'team@lamps.example.com',
+			'team@lamps.example.com',
 		]);
 		expect(alerts.at(-1).text).toContain('two');
 		expect(alerts.at(-1).text).toContain(`${ADMIN_ORIGIN}/inbox?conversation=`);
@@ -469,13 +469,13 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		expect(config.json.settings.handoff.showButton).toBe(false);
 		const mailsBefore = mails.length;
 		const whatsappBefore = whatsapp.length;
-		aiAnswers.push('Our fans come with a year of warranty.');
+		aiAnswers.push('Our lamps come with a year of warranty.');
 		const guest = device();
 		const sent = await guest('POST', '/v1/chat/messages', { text: 'warranty? I want to talk to someone' });
 		let state = await guest('GET', '/v1/chat');
 		expect(authors(state.json).slice(0, 2)).toEqual([
 			['visitor', 'warranty? I want to talk to someone'],
-			['ai', 'Our fans come with a year of warranty.'],
+			['ai', 'Our lamps come with a year of warranty.'],
 		]);
 		expect(state.json.conversation.waiting).toBe(true);
 		// no handoff notice (only the contact request a guest without contact details gets)
@@ -484,7 +484,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		);
 		// `Chat needs you` to the same recipients through the real Notifications
 		const needsYou = mails.slice(mailsBefore).filter((mail) => mail.subject === 'Chat needs you');
-		expect(needsYou.map((mail) => mail.to[0]).sort()).toEqual(['agent@fans.example.com', 'team@fans.example.com']);
+		expect(needsYou.map((mail) => mail.to[0]).sort()).toEqual(['agent@lamps.example.com', 'team@lamps.example.com']);
 		expect(needsYou[0].text).toContain(`${ADMIN_ORIGIN}/inbox?conversation=${sent.json.chat.conversation.id}`);
 		const needsYouPhoned = whatsapp
 			.slice(whatsappBefore)
@@ -507,24 +507,24 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 
 	it('C6: a staff reply sends `chat.staff_reply` by WhatsApp to a visitor who left, once until they check again', async () => {
 		const guest = device();
-		const sent = await guest('POST', '/v1/chat/messages', { text: 'call me about Fan Max', page: { url: PAGE_URL } });
-		expect((await guest('POST', '/v1/chat/contact', { name: 'Ann', phone: '+923009876543' })).status, 'contact').toBeLessThan(
+		const sent = await guest('POST', '/v1/chat/messages', { text: 'call me about Lamp Max', page: { url: PAGE_URL } });
+		expect((await guest('POST', '/v1/chat/contact', { name: 'Ann', phone: '+12025550199' })).status, 'contact').toBeLessThan(
 			300,
 		);
 		const path = `/v1/conversations/${sent.json.chat.conversation.id}/messages`;
 		/** WhatsApp messages to the visitor. */
-		const toVisitor = () => whatsapp.filter((message) => message.to === '923009876543');
+		const toVisitor = () => whatsapp.filter((message) => message.to === '12025550199');
 		// still here: no alert
-		await server('chat', 'POST', path, { text: 'Hi Ann' }, AYESHA);
+		await server('chat', 'POST', path, { text: 'Hi Ann' }, STAFF);
 		expect(toVisitor()).toHaveLength(0);
 		sys.clock.advance(61_000);
-		await server('chat', 'POST', path, { text: 'We have **two** colours.' }, AYESHA);
-		await server('chat', 'POST', path, { text: 'Anything else?' }, AYESHA);
-		expect(toVisitor().map((message) => message.text?.body)).toEqual([`Ayesha Khan: We have two colours. ${PAGE_URL}`]);
+		await server('chat', 'POST', path, { text: 'We have **two** colors.' }, STAFF);
+		await server('chat', 'POST', path, { text: 'Anything else?' }, STAFF);
+		expect(toVisitor().map((message) => message.text?.body)).toEqual([`Alex Morgan: We have two colors. ${PAGE_URL}`]);
 		// the visitor checks the chat; away again, the next reply alerts once more
 		await guest('GET', '/v1/chat');
 		sys.clock.advance(61_000);
-		await server('chat', 'POST', path, { text: 'Back?' }, AYESHA);
+		await server('chat', 'POST', path, { text: 'Back?' }, STAFF);
 		expect(toVisitor()).toHaveLength(2);
 	});
 
@@ -559,7 +559,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		// another device left Nadia's phone as a guest: it moves only with claim by phone
 		const phoneGuest = device();
 		await phoneGuest('POST', '/v1/chat/messages', { text: 'from my phone' });
-		await phoneGuest('POST', '/v1/chat/contact', { phone: '+923331234567' });
+		await phoneGuest('POST', '/v1/chat/contact', { phone: '+33612345678' });
 		expect(visitorTexts((await nadia('GET', '/v1/chat')).json)).not.toContain('from my phone');
 		await configure('chat', { 'signed_in_chat.claimByPhone': true });
 		expect(visitorTexts((await nadia('GET', '/v1/chat')).json).at(-1)).toBe('from my phone');
@@ -592,7 +592,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		const fromServer = await server('chat', 'GET', `/v1/conversations/${id}?before=${seqs[n - 1]}&limit=2`);
 		expect(seqsOf(fromServer.json)).toEqual(seqs.slice(n - 3, n - 1));
 		const ticket = await server('chat', 'POST', '/v1/tickets', {
-			user: { id: 'u_7', name: 'Sam Staff', email: 'sam@fans.example.com' },
+			user: { id: 'u_7', name: 'Sam Staff', email: 'sam@lamps.example.com' },
 			permissions: ['inbox.read', 'inbox.reply'],
 			origin: ADMIN_ORIGIN,
 		});
