@@ -886,13 +886,16 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		await configure({ 'checkout.bankTransferVia': 'payments', 'list.order_flow': FLOW });
 	});
 
-	it('moves to refunded before delivery only when something was paid, giving the stock back (E27)', async () => {
+	it('moves to refunded before dispatch as a cancel, giving the stock back; unpaid with no money (E27)', async () => {
 		const sara = await signIn('03001112233');
 		const stock = await stockOf(ids.case.id);
+		// nothing paid: it is canceled with no money (the default of the move's unpaid option)
 		const unpaid = (await place({ lines: [caseLine()], payment: 'cod' }, sara)).json.order;
 		await move(unpaid.id, 'confirmed');
-		const refused = await move(unpaid.id, 'refunded');
-		expect([refused.status, codeOf(refused)]).toEqual([409, 'nothing_paid']);
+		const canceled = await move(unpaid.id, 'refunded');
+		expect(canceled.json).toMatchObject({ status: 'refunded', payment: { refunded: 0 } });
+		expect(canceled.json.refunds).toHaveLength(0);
+		expect(await stockOf(ids.case.id)).toBe(stock);
 
 		const paid = (await place({ lines: [caseLine()], payment: 'cod' }, sara)).json.order;
 		await server(
@@ -901,7 +904,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 			{ method: 'cash', amount: paid.totals.total, confirm: true },
 			{ key: 'pay-before-refund' },
 		);
-		expect(await stockOf(ids.case.id)).toBe(stock - 2);
+		expect(await stockOf(ids.case.id)).toBe(stock - 1);
 		const done = await move(paid.id, 'refunded');
 		expect(done.json).toMatchObject({
 			status: 'refunded',
@@ -909,7 +912,7 @@ describe('Ecommerce phase 4 on the real Portal, Accounts, Payments and Notificat
 		});
 		expect(done.json.refunds).toHaveLength(1);
 		// it acts as a cancel: the stock comes back
-		expect(await stockOf(ids.case.id)).toBe(stock - 1);
+		expect(await stockOf(ids.case.id)).toBe(stock);
 	});
 
 	it('takes a customer return after delivery, restocking or not as the move says (E27)', async () => {
