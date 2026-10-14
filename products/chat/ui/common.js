@@ -1,10 +1,10 @@
 /**
  * Helpers the Chat widgets share: the widget config and its settings with defaults, widget texts, JSON calls that
  * answer `{ ok, status, data }`, problem codes (shown as the widget's own texts, never the server's English detail),
- * labelled fields, small forms and attachments. Text is always set as text, never as HTML.
+ * labeled fields, small forms and attachments. Text is always set as text, never as HTML.
  * @module
  */
-import { formatDate, viewerOf } from '@ss/app-kit/widget';
+import { formatDate, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
 import { element } from './dom.js';
 
 /** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
@@ -166,6 +166,30 @@ export const whenOf = (config, win) => {
 	};
 };
 
+/** No-break spaces the runtime puts in numbers (fr-FR "12 000"), as plain spaces like the kit's formatters. */
+const NO_BREAK_SPACES = new RegExp('[\u00a0\u202f]', 'g');
+
+/**
+ * Numbers as the website's Format says (K7): in its locale, else the viewer's, else en-US ("12,000" in en-US,
+ * "12.000" in de-DE).
+ * @param {{ format?: WidgetConfig['format'] }} config
+ * @param {{ navigator?: { language?: string } } | null | undefined} win the browser window (the viewer)
+ * @returns {(value: number, digits?: number) => string} `digits`: exactly that many decimals
+ */
+export const numbersOf = (config, win) => {
+	const wanted = normaliseFormat(config.format).locale || viewerOf(win).locale || 'en-US';
+	let locale = 'en-US';
+	try {
+		locale = Intl.NumberFormat.supportedLocalesOf(wanted)[0] ?? locale;
+	} catch {
+		// not a language tag: en-US
+	}
+	return (value, digits) =>
+		new Intl.NumberFormat(locale, digits === undefined ? {} : { minimumFractionDigits: digits, maximumFractionDigits: digits })
+			.format(value)
+			.replace(NO_BREAK_SPACES, ' ');
+};
+
 /**
  * A button that does not submit.
  * @param {Document} doc @param {string} text @param {Record<string, string>} [attributes]
@@ -174,7 +198,7 @@ export const buttonOf = (doc, text, attributes = {}) =>
 	/** @type {HTMLButtonElement} */ (element(doc, 'button', { type: 'button', ...attributes }, text));
 
 /**
- * Builders of labelled fields with ids unique inside one widget.
+ * Builders of labeled fields with ids unique inside one widget.
  * @param {Document} doc
  * @param {string} prefix
  */

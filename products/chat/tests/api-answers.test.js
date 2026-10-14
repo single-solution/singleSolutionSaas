@@ -264,7 +264,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		/** A variant as Ecommerce answers it (ChatVariant). */
 		const variant = {
 			id: 'var_black',
-			options: { Colour: 'Black' },
+			options: { Color: 'Black' },
 			price: 4500,
 			priceText: '$45.00',
 			compareAtPrice: null,
@@ -284,7 +284,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				summary: 'A steady light for long evenings.',
 				description: 'Brushed steel.',
 				brand: 'Northlight',
-				options: [{ name: 'Colour', values: ['Black', 'Grey'] }],
+				options: [{ name: 'Color', values: ['Black', 'Gray'] }],
 				priceRange: { min: 3000, max: 4500, minText: '$30.00', maxText: '$45.00' },
 				specs: [{ name: 'Height', value: 42, unit: 'cm' }],
 				variants: [
@@ -292,7 +292,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					{
 						...variant,
 						id: 'var_used',
-						options: { Colour: 'Grey' },
+						options: { Color: 'Gray' },
 						price: 3000,
 						priceText: '$30.00',
 						grade: 'Used',
@@ -382,11 +382,11 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(results[1]).toMatchObject({
 			brand: 'Northlight',
 			specs: ['Height: 42 cm'],
-			options: [{ name: 'Colour', values: ['Black', 'Grey'] }],
+			options: [{ name: 'Color', values: ['Black', 'Gray'] }],
 			variants: [
 				{
 					id: 'var_black',
-					options: 'Colour: Black',
+					options: 'Color: Black',
 					price: '$45.00',
 					grade: 'New',
 					gradeKey: 'new',
@@ -396,7 +396,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				},
 				{
 					id: 'var_used',
-					options: 'Colour: Grey',
+					options: 'Color: Gray',
 					price: '$30.00',
 					grade: 'Used',
 					inStock: false,
@@ -488,7 +488,7 @@ describe('the strict language check, the current page and the website’s own co
 			page: { url: 'https://shop.example.com/lamps/b', kind: 'product', productName: 'Lamp B' },
 		});
 		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Lamp B');
-		// the website's own e-mail and phone are never hidden; others are
+		// the website's own email and phone are never hidden; others are
 		await sys.setting('moderation', 'redact', ['email', 'phone']);
 		sys.responders.set('https://shop.example.com/.well-known/business.json', () => ({
 			status: 200,
@@ -498,6 +498,6 @@ describe('the strict language check, the current page and the website’s own co
 		const sent = await v('POST', '/v1/chat/messages', {
 			text: 'I wrote to hello@shop.example.com and 020 7946 0123, also me@x.com and +1 415 555 0100',
 		});
-		expect(sent.json.message.text).toBe('I wrote to hello@shop.example.com and 020 7946 0123, also [e-mail] and [phone]');
+		expect(sent.json.message.text).toBe('I wrote to hello@shop.example.com and 020 7946 0123, also [email] and [phone]');
 	});
 });

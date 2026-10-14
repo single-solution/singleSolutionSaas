@@ -77,7 +77,7 @@ const ANSWERS = {
 		summary: 'A steady light.',
 		description: 'A long description.',
 		brand: 'Northlight',
-		options: [{ name: 'Colour', values: ['Black', 'White'] }],
+		options: [{ name: 'Color', values: ['Black', 'White'] }],
 		priceRange: { min: 4500, max: 4500, minText: '$45.00', maxText: '$45.00' },
 		specs: [{ name: 'Height', value: 42, unit: 'cm' }],
 		variants: [],
@@ -290,7 +290,7 @@ describe('shop tools', () => {
 		expect(details).toMatchObject({
 			brand: 'Northlight',
 			summary: 'A steady light.',
-			options: [{ name: 'Colour', values: ['Black', 'White'] }],
+			options: [{ name: 'Color', values: ['Black', 'White'] }],
 			specs: ['Height: 42 cm'],
 		});
 		expect(quote).toEqual({

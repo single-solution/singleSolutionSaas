@@ -120,7 +120,7 @@ export const guestLimitReached = (conversation, limit) => limit > 0 && (conversa
 
 /**
  * Where a reply alert (C6) may go, in the merchant's order (the setting "Channels, in order"): each channel once, with
- * the visitor's address on it (an e-mail address for e-mail, a phone for SMS and WhatsApp); a channel the visitor has
+ * the visitor's address on it (an email address for email, a phone for SMS and WhatsApp); a channel the visitor has
  * no address for is left out.
  * @param {unknown} channels the setting's value
  * @param {{ email?: string | null, phone?: string | null }} contact

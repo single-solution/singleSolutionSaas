@@ -111,9 +111,9 @@ export const PAGE_MAX = 50;
 
 /**
  * The Notifications templates Chat sends and the values each one gets (`business` is always added). Staff alerts go
- * by e-mail, WhatsApp or SMS through the kit's staff alerts (K6), `preview` cut to 140 characters on one line and
+ * by email, WhatsApp or SMS through the kit's staff alerts (K6), `preview` cut to 140 characters on one line and
  * `message` up to 500 with its line breaks, `phone` only with the staff alert setting `includePhone` (CH-9); the
- * transcript by e-mail; the reply alert (C6) by the first of the setting "Channels, in order" that the visitor has an
+ * transcript by email; the reply alert (C6) by the first of the setting "Channels, in order" that the visitor has an
  * address for and Notifications takes.
  */
 export const MESSAGE_TEMPLATES = Object.freeze({

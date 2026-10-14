@@ -1,5 +1,5 @@
 /**
- * The widgets' CSS, injected into their shadow roots only. Colours, font and corner radius come from the website's
+ * The widgets' CSS, injected into their shadow roots only. Colors, font and corner radius come from the website's
  * theme (`--ss-color-<name>`, `--ss-font-family`, `--ss-radius`), with fallbacks for light and dark. Usable on phones
  * from 360 px wide; the visitor chat goes full screen on phones when the merchant chose it. Formatted answers (`.rich`)
  * wrap long words and links, and their tables and code scroll inside the bubble.

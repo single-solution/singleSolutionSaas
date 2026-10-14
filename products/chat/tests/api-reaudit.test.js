@@ -211,7 +211,7 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		const resumed = await sys.serverCall('PUT', `/v1/conversations/${first.id}/ai`, { paused: false });
 		expect(resumed.json.conversation).toMatchObject({ waiting: false, waitingSince: null, aiPaused: false });
 		sys.ai({ text: 'Happy to help.' });
-		await v('POST', '/v1/chat/messages', { text: 'what colours?' });
+		await v('POST', '/v1/chat/messages', { text: 'what colors?' });
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Happy to help.']);
 		const activity = (await sys.serverCall('GET', '/v1/activity?action=conversation.ai_paused_changed')).json.items;
 		expect(activity.map((/** @type {any} */ e) => e.detail)).toEqual(['AI resumed (handed back from waiting for a person)']);

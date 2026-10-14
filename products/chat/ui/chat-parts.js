@@ -27,7 +27,7 @@ export const signInPart = ({ doc, t, signInUrl, here }) => {
 };
 
 /**
- * The fields of a contact (name, e-mail, phone, message), labelled.
+ * The fields of a contact (name, email, phone, message), labeled.
  * @param {Kit} kit
  * @param {readonly string[]} names
  */
@@ -76,7 +76,7 @@ export const leadPart = ({ doc, t, make, leads, customFields, send }) => {
 };
 
 /**
- * The contact form (name, e-mail, phone): a name and an e-mail or phone are needed.
+ * The contact form (name, email, phone): a name and an email or phone are needed.
  * @param {Kit & { send: (contact: Record<string, string>) => Promise<string> }} input
  */
 export const contactPart = ({ doc, t, make, send }) => {
@@ -214,7 +214,7 @@ export const cardsPart = ({ doc, win, t, config, cards }) => {
 };
 
 /**
- * The transcript form: the e-mail (prefilled for a signed-in visitor) and Cancel.
+ * The transcript form: the email (prefilled for a signed-in visitor) and Cancel.
  * @param {Kit & { email: string, send: (email: string) => Promise<string>, close: () => void }} input
  */
 export const transcriptPart = ({ doc, t, make, email, send, close }) => {

@@ -1,7 +1,7 @@
 /**
  * Fields (pure): the merchant's custom fields for conversations and leads (label, key, type text, number, yes/no or a
- * choice list), the standard contact fields (name, e-mail, phone) shared by lead capture, guest contact capture and
- * flows, leads with their optional consent, and proactive page rules. Phones are kept as E.164, read by the normaliser
+ * choice list), the standard contact fields (name, email, phone) shared by lead capture, guest contact capture and
+ * flows, leads with their optional consent, and proactive page rules. Phones are kept as E.164, read by the normalizer
  * every product shares (`@ss/contracts/phone`) with the website's default calling code.
  * @module
  */
@@ -100,7 +100,7 @@ export const checkFieldValue = (field, raw, callingCode = '') => {
 };
 
 /**
- * Check a lead: the merchant's chosen fields (at least one contact: e-mail or phone, when asked), custom fields and
+ * Check a lead: the merchant's chosen fields (at least one contact: email or phone, when asked), custom fields and
  * consent.
  * @param {unknown} body `{ fields: { … }, consent? }`
  * @param {{ fields: string[], customKeys: string[], customFields: readonly CustomField[], consentRequired: boolean, callingCode?: string }} rules
@@ -130,7 +130,7 @@ export const checkLead = (body, rules) => {
 		if (name !== 'message' && standard[/** @type {'name' | 'email' | 'phone'} */ (name)] === null)
 			errors.push(`${name} is required.`);
 	if (rules.fields.some((f) => f === 'email' || f === 'phone') && !standard.email && !standard.phone)
-		errors.push('Leave an e-mail address or a phone number.');
+		errors.push('Leave an email address or a phone number.');
 	/** @type {Record<string, string | number | boolean>} */
 	const custom = {};
 	for (const key of rules.customKeys) {
@@ -140,7 +140,7 @@ export const checkLead = (body, rules) => {
 		if (checked.ok) custom[key] = checked.value;
 		else errors.push(`${field.label} is not valid.`);
 	}
-	if (rules.consentRequired && /** @type {any} */ (body)?.consent !== true) errors.push('Tick the consent box.');
+	if (rules.consentRequired && /** @type {any} */ (body)?.consent !== true) errors.push('Check the consent box.');
 	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,

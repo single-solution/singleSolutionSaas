@@ -1,9 +1,9 @@
 /**
  * PLAN 0.8.10 Chat, fixes after the re-audit (pure parts): the language lock tells languages of one script apart by
- * their letters and the merchant's marker words, with the merchant's thresholds, quoted phrases and romanised marker
+ * their letters and the merchant's marker words, with the merchant's thresholds, quoted phrases and romanized marker
  * lines; replies are checked whole or part by part, and a language may be accepted in Latin letters too (CH-16 to
  * CH-19, CH-38, CH-39). The languages here (Urdu, Arabic, Persian, Hindi, Russian, Ukrainian, Bulgarian, Spanish,
- * Tagalog and romanised forms) are only examples: nothing in Chat is about one language. Tables in messages of their
+ * Tagalog and romanized forms) are only examples: nothing in Chat is about one language. Tables in messages of their
  * own (CH-21).
  */
 import { describe, expect, it } from 'vitest';
@@ -48,7 +48,7 @@ describe('the language of a message (CH-16, CH-17, CH-38, CH-39)', () => {
 		expect(detectLanguage('Is this lamp in stock?', { ...today, allowed: ['ur', 'en'] }).language).toBe('en');
 	});
 
-	it('reads marker lines: romanised words under a non-Latin language, phrases, bad lines', () => {
+	it('reads marker lines: romanized words under a non-Latin language, phrases, bad lines', () => {
 		expect(markerSetsOf(['ur: hai kya, mein'])).toEqual([{ language: 'ur-Latn', words: ['hai', 'kya', 'mein'], phrases: [] }]);
 		expect(markerSetsOf(['ur: ہے "کیا"'])).toEqual([{ language: 'ur', words: ['ہے', 'کیا'], phrases: [] }]);
 		expect(markerSetsOf(['hi: hai kya'])).toEqual([{ language: 'hi-Latn', words: ['hai', 'kya'], phrases: [] }]);

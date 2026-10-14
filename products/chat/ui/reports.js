@@ -2,12 +2,12 @@
  * The admin widget `reports` (permission `reports.read`): for a date range (default the last 30 days, in the business
  * time zone like the report itself, K8) the numbers of Chat — conversations per day as a simple bar list (each day in
  * the website's Format, K7), visitor messages, answered only by AI vs handed to a person, median first staff reply,
- * resolved, average rating, leads and AI tokens.
+ * resolved, average rating, leads and AI tokens (numbers in the website's Format too).
  * @module
  */
 import { formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { dayKey } from '../core/time.js';
-import { fieldMaker, isInvalid, textsOf } from './common.js';
+import { fieldMaker, isInvalid, numbersOf, textsOf } from './common.js';
 import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -28,8 +28,9 @@ export const mountReports = ({ host, win, api, config, now }) => {
 	 */
 	const dayText = (day) =>
 		formatDate(`${day}T00:00:00Z`, { ...config.format, times: 'business' }, { timeZone: 'UTC', style: 'date', viewer }) || day;
-	/** @param {unknown} value */
-	const number = (value) => (typeof value === 'number' ? value.toLocaleString() : t('reports.none'));
+	const numberText = numbersOf(config, win);
+	/** A count in the website's Format (K7). @param {unknown} value */
+	const number = (value) => (typeof value === 'number' ? numberText(value) : t('reports.none'));
 	/** @param {unknown} seconds */
 	const duration = (seconds) => {
 		if (typeof seconds !== 'number') return t('reports.none');
@@ -91,7 +92,10 @@ export const mountReports = ({ host, win, api, config, now }) => {
 					[
 						t('reports.rating'),
 						typeof rating.average === 'number'
-							? formatText(t('reports.ratingValue'), { average: rating.average.toFixed(1), count: rating.count })
+							? formatText(t('reports.ratingValue'), {
+									average: numberText(rating.average, 1),
+									count: number(rating.count),
+								})
 							: t('reports.none'),
 					],
 					[t('reports.leads'), number(data.leads)],
@@ -110,7 +114,7 @@ export const mountReports = ({ host, win, api, config, now }) => {
 						item.append(
 							element(doc, 'span', { class: 'date' }, dayText(day.date)),
 							bar,
-							element(doc, 'span', {}, String(day.conversations)),
+							element(doc, 'span', {}, number(day.conversations)),
 						);
 						return item;
 					}),

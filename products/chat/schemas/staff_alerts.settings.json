@@ -17,7 +17,7 @@
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "E-mail addresses and international phone numbers (+ or 00 first; phones get WhatsApp or SMS), up to 20. The assigned person is added."
+			"description": "Email addresses and international phone numbers (+ or 00 first; phones get WhatsApp or SMS), up to 20. The assigned person is added."
 		},
 		"frequency": {
 			"type": "string",

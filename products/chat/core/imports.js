@@ -222,7 +222,7 @@ const reader = (record, allowed) => {
 		email: (value, path) => {
 			if (value === undefined || value === null || value === '') return null;
 			const checked = checkFieldValue({ key: 'email', label: 'email', type: 'email', options: [] }, value);
-			return checked.ok ? String(checked.value) : fail(path, 'Not an e-mail address.');
+			return checked.ok ? String(checked.value) : fail(path, 'Not an email address.');
 		},
 	};
 };

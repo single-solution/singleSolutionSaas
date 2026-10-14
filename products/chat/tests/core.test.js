@@ -279,7 +279,7 @@ describe('conversations, flows and fields', () => {
 		expect(lead.ok ? [] : lead.errors).toEqual([
 			'email is not valid.',
 			'email is required.',
-			'Leave an e-mail address or a phone number.',
+			'Leave an email address or a phone number.',
 			'Size is not valid.',
 		]);
 		expect(checkLead(null, { fields: [], customKeys: [], customFields: [], consentRequired: false })).toMatchObject({

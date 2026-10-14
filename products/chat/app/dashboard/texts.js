@@ -75,7 +75,7 @@ export const TEXTS = Object.freeze({
 		sections: Object.freeze({
 			assistant: Object.freeze({
 				title: 'Assistant',
-				help: 'How the AI answers: behaviour, your instructions, token caps, cost alerts and languages.',
+				help: 'How the AI answers: behavior, your instructions, token caps, cost alerts and languages.',
 			}),
 			tools: Object.freeze({
 				title: 'Tools',
@@ -115,7 +115,7 @@ export const TEXTS = Object.freeze({
 			other: Object.freeze({ title: 'Other settings', help: 'Settings of the other features.' }),
 		}),
 		aiLabelWarning:
-			'AI replies are not labelled. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot. You are responsible for following the law where you operate.',
+			'AI replies are not labeled. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot. You are responsible for following the law where you operate.',
 		transcriptsNote: 'Transcripts are emailed through Notifications: paste its server token in Connections.',
 		texts: 'Widget texts',
 		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
@@ -124,12 +124,12 @@ export const TEXTS = Object.freeze({
 		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
 		fontFamily: 'Font family (inherit, or a font your site loads)',
 		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent colour',
+		accent: 'Accent color',
 		customCss: 'Custom CSS',
 		format: 'Format',
 		formatHelp: 'How money and dates look in the widgets, messages, chat answers and pages.',
 		locale: 'Language and region',
-		localeHelp: "A tag such as en-GB or fr-FR; empty uses each visitor's browser (en in messages).",
+		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US in messages).",
 		currencyDisplay: 'Currency shown as',
 		currencyDisplays: Object.freeze({
 			code: 'Code (USD 12,500.00)',

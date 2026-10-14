@@ -100,7 +100,7 @@ describe('guests and AI replies', () => {
 		await sys.setting('moderation', 'blockedTerms', ['darn']);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'darn, mail me at a@b.co' });
-		expect(sent.json.message.text).toBe('••••, mail me at [e-mail]');
+		expect(sent.json.message.text).toBe('••••, mail me at [email]');
 		await sys.setting('moderation', 'blockedAction', 'reject');
 		const refused = await v('POST', '/v1/chat/messages', { text: 'darn it' });
 		expect(refused.status).toBe(422);
@@ -136,7 +136,7 @@ describe('handoff, office hours and failures', () => {
 			`https://admin.shop.example.com/inbox?conversation=${state.json.conversation.id}`,
 		);
 		// the summary was written right after
-		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Summarise');
+		expect(sys.aiCalls().at(-1).messages[0].content).toContain('Summarize');
 		await v('POST', '/v1/chat/messages', { text: 'hello?' });
 		expect(sys.aiCalls()).toHaveLength(1);
 		// the new-message alert went out once until staff open or reply

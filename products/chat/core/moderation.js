@@ -1,14 +1,14 @@
 /**
  * Moderation (pure): the checks on what visitors and the AI write:
  *
- * - **PII redaction** in and out: payment cards (Luhn-checked), IBANs (mod-97), e-mails, phone numbers (8–15 digits),
+ * - **PII redaction** in and out: payment cards (Luhn-checked), IBANs (mod-97), emails, phone numbers (8–15 digits),
  *   IPv4 addresses — replaced by a label so the conversation stays readable.
  * - **Leak filter** for AI answers: credential shapes (connection strings, API-key formats, bearer tokens, private
  *   keys, environment variable names, `process.env`) and merchant-configured phrases that reveal internals. A hit
  *   replaces the whole answer (never a partial burst).
  * - **Link policy**: markdown links keep their label when the target is not allowed; bare disallowed URLs are removed.
  * - **Blocked terms** (the merchant's own list in any language): masked or rejected.
- * - **The website's own contact** (PLAN 0.8.10 C15, always): the business.json e-mail and phone are never redacted.
+ * - **The website's own contact** (PLAN 0.8.10 C15, always): the business.json email and phone are never redacted.
  *
  * Without the Moderation feature, AI answers still go through the credential check (never switchable).
  * @module
@@ -81,7 +81,7 @@ const samePhone = (a, b) => {
  */
 
 /**
- * Redact the selected PII kinds; the website's own e-mail and phone stay.
+ * Redact the selected PII kinds; the website's own email and phone stay.
  * @param {string} text
  * @param {readonly string[]} kinds
  * @param {Record<string, string>} labels replacement per kind (from the string catalog)
@@ -224,7 +224,7 @@ const tidy = (text, max) =>
 		.join('');
 
 /**
- * Blocked terms: whole-word (normalised) matches.
+ * Blocked terms: whole-word (normalized) matches.
  * @param {string} text
  * @param {readonly string[]} terms
  * @param {'mask' | 'reject'} action

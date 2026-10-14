@@ -26,7 +26,7 @@
 			"title": "Consent text",
 			"default": "",
 			"maxLength": 500,
-			"description": "Shown with a tick box the visitor must tick. Empty = no consent box."
+			"description": "Shown with a checkbox the visitor must check. Empty = no consent box."
 		}
 	}
 }

@@ -6,12 +6,12 @@
  * are markdown split into bubbles with off-site links dropped, and staff replies are markdown too (C2); when the AI
  * fails, the merchant's fallback answer is filled with the deals table from the real Ecommerce, else the on-failure
  * message (C3); the AI answers the message that asks for a person first, with no notice and no button, then stays quiet
- * and reassures after 3 minutes (C4); staff alerts go through the kit and the real Notifications to e-mail addresses,
+ * and reassures after 3 minutes (C4); staff alerts go through the kit and the real Notifications to email addresses,
  * a phone (WhatsApp) and the Accounts staff whose role may reply, on every message and on handoff (C5); a staff reply
  * sends `chat.staff_reply` by WhatsApp to a visitor who left, once until they check again (C6); a store's own guest
  * cookie imported as a hash works as `SS-Guest`, a guest chat merges by time into the account's own conversation at
  * sign-in and guest chats with the verified phone move with `claimByPhone` (C7); older messages page back by sequence
- * for the visitor, the merchant's server and staff (C8). The AI provider (OpenAI), the e-mail provider (Resend) and the
+ * for the visitor, the merchant's server and staff (C8). The AI provider (OpenAI), the email provider (Resend) and the
  * WhatsApp Cloud API (Meta) are fakes in this process; no real network call is made.
  */
 import { createHash } from 'node:crypto';
@@ -54,7 +54,7 @@ const TEAM_DIGITS = '442079460958';
 /** Server calls as a named member of staff (K2). */
 const STAFF = { 'ss-actor-id': 'usr_staff_42', 'ss-actor-name': encodeURIComponent('Alex Morgan') };
 
-/** E-mails the merchant's provider (Resend) received. @type {any[]} */
+/** Emails the merchant's provider (Resend) received. @type {any[]} */
 const mails = [];
 /** WhatsApp messages the merchant's Cloud API (Meta) received. @type {any[]} */
 const whatsapp = [];
@@ -176,7 +176,7 @@ const device = ({ guestKey = '', signIn = '' } = {}) => {
 	};
 };
 
-/** A visitor's Accounts sign-in (e-mail and password, from the website). @param {string} email */
+/** A visitor's Accounts sign-in (email and password, from the website). @param {string} email */
 const signIn = async (email) => {
 	const res = await sys.call('POST', '/v1/sign-in/password', {
 		base: ACCOUNTS,
@@ -233,7 +233,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 			await sys.connectDatabase(cookie, websiteId, BASES[id]);
 		}
 
-		// Notifications: e-mail (Resend) and WhatsApp (Meta), with Chat's templates
+		// Notifications: email (Resend) and WhatsApp (Meta), with Chat's templates
 		expect(
 			(
 				await setUp('notifications', '/connections/email', {
@@ -432,7 +432,7 @@ describe('Chat phase 4 on the real Portal, Accounts, Notifications and Ecommerce
 		}
 	});
 
-	it('C5: staff alerts go through the kit and the real Notifications to e-mails, a phone and Accounts staff', async () => {
+	it('C5: staff alerts go through the kit and the real Notifications to emails, a phone and Accounts staff', async () => {
 		await configure('chat', {
 			'staff_alerts.recipients': ['team@lamps.example.com', TEAM_PHONE],
 			'staff_alerts.staffPermission': 'inbox.reply',

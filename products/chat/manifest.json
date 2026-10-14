@@ -281,8 +281,8 @@
 		},
 		{
 			"key": "transcripts",
-			"name": "Transcripts by e-mail",
-			"description": "Visitors and staff e-mail a copy of a chat, through Notifications.",
+			"name": "Transcripts by email",
+			"description": "Visitors and staff email a copy of a chat, through Notifications.",
 			"dependsOn": ["visitor_chat"],
 			"settings": {
 				"$ref": "schemas/transcripts.settings.json"
@@ -318,7 +318,7 @@
 		{
 			"key": "presence_queue",
 			"name": "Staff presence, max concurrent chats and queue position",
-			"description": "Online, Away or Offline, a limit of open chats per person, and the visitor’s place in the queue.",
+			"description": "Online, Away or Offline, a limit of open chats per person, and the visitor’s place in line.",
 			"dependsOn": ["handoff", "assignment"],
 			"settings": {
 				"$ref": "schemas/presence_queue.settings.json"
@@ -363,7 +363,7 @@
 		{
 			"key": "staff_alerts",
 			"name": "Staff alerts",
-			"description": "Alerts your staff by e-mail, WhatsApp or SMS about new messages and handoffs, through Notifications.",
+			"description": "Alerts your staff by email, WhatsApp or SMS about new messages and handoffs, through Notifications.",
 			"dependsOn": ["inbox"],
 			"settings": {
 				"$ref": "schemas/staff_alerts.settings.json"
@@ -372,7 +372,7 @@
 		{
 			"key": "visitor_alerts",
 			"name": "Reply alerts to visitors",
-			"description": "A visitor who left the chat gets a WhatsApp, an SMS or an e-mail when your staff reply, through Notifications.",
+			"description": "A visitor who left the chat gets a WhatsApp, an SMS or an email when your staff reply, through Notifications.",
 			"dependsOn": ["inbox"],
 			"settings": {
 				"$ref": "schemas/visitor_alerts.settings.json"

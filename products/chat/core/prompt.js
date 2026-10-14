@@ -81,7 +81,7 @@ export const buildSystemPrompt = (input) => {
 			}`,
 		);
 	const contact = [
-		input.business.email && `e-mail ${input.business.email}`,
+		input.business.email && `email ${input.business.email}`,
 		input.business.phone && `phone ${input.business.phone}`,
 		input.business.address && `address ${input.business.address}`,
 	].filter(Boolean);
@@ -129,4 +129,4 @@ export const disclosesBot = (text) => DISCLOSES.test(String(text ?? ''));
 
 /** Instructions for the AI conversation summary. */
 export const SUMMARY_PROMPT =
-	'Summarise this support chat for a member of the team in at most five short lines: what the visitor wants, what was answered, and what is still open. Do not add anything that is not in the chat.';
+	'Summarize this support chat for a member of the team in at most five short lines: what the visitor wants, what was answered, and what is still open. Do not add anything that is not in the chat.';

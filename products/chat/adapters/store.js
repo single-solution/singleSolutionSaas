@@ -131,7 +131,7 @@ export const createStore = (data, { now }) => {
 				),
 			/**
 			 * The inbox's filter (the list and its counts share it): the website, the field filters and a search in the
-			 * visitor's name, e-mail and phone and in visible message texts.
+			 * visitor's name, email and phone and in visible message texts.
 			 * @param {{ filter: Record<string, unknown>, q: string | null }} query
 			 * @returns {Promise<Record<string, unknown>>}
 			 */
@@ -207,7 +207,7 @@ export const createStore = (data, { now }) => {
 					waitingSince: { $lt: c.waitingSince ?? c.handedOffAt },
 				})),
 			/**
-			 * Move a guest's conversations to an account (the same device showed both); the name, e-mail and phone they
+			 * Move a guest's conversations to an account (the same device showed both); the name, email and phone they
 			 * lack come from the sign-in (CH-7).
 			 * @param {string} guestId
 			 * @param {string} userId
@@ -332,7 +332,7 @@ export const createStore = (data, { now }) => {
 						.toArray()
 				),
 			/**
-			 * Guest conversations whose captured phone is this phone (both E.164, read by the shared normaliser; C7 claim
+			 * Guest conversations whose captured phone is this phone (both E.164, read by the shared normalizer; C7 claim
 			 * by phone).
 			 * @param {string} phone
 			 * @returns {Promise<ConversationRecord[]>}

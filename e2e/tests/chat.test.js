@@ -2,7 +2,7 @@
  * PLAN 0.12 step 8: Chat against the REAL Portal, with the real Accounts and Notifications next to it — connect
  * (manifest and price list), price and feature reports, a guest message answered by a faked AI provider through the
  * browser token the Portal issued, a signed-in visitor trusted through the pasted Accounts token, an inbox reply through
- * a ticket, a `Chat needs you` staff alert delivered through the pasted Notifications token (the e-mail provider is a
+ * a ticket, a `Chat needs you` staff alert delivered through the pasted Notifications token (the email provider is a
  * fake in this process), and the hourly charge.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -29,7 +29,7 @@ const DOMAIN = 'talk.example.com';
 const ORIGIN = `https://${DOMAIN}`;
 const ADMIN_ORIGIN = 'https://admin.talk.example.com';
 
-/** E-mails the merchant's provider (Resend) received, faked in process. @type {any[]} */
+/** Emails the merchant's provider (Resend) received, faked in process. @type {any[]} */
 const mails = [];
 /** Requests the merchant's AI provider (OpenAI) received, faked in process. @type {any[]} */
 const prompts = [];

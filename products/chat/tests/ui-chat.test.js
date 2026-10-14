@@ -329,7 +329,7 @@ describe('guest limit', () => {
 	});
 
 	it('offers the lead form with custom fields and consent', async () => {
-		let lead = problem(422, 'validation_failed', { errors: [{ message: 'Bad e-mail' }] });
+		let lead = problem(422, 'validation_failed', { errors: [{ message: 'Bad email' }] });
 		const { $, root, server, type } = await start({
 			features: ['visitor_chat', 'guest_chat', 'leads_flows', 'custom_fields'],
 			settings: {
@@ -446,7 +446,7 @@ describe('flows', () => {
 				'POST /v1/chat/flow': (call) => {
 					if (call.body.answer === 'bad@' && invalid) {
 						invalid = false;
-						return problem(422, 'validation_failed', { errors: [{ message: 'Not an e-mail' }] });
+						return problem(422, 'validation_failed', { errors: [{ message: 'Not an email' }] });
 					}
 					if (call.body.answer === 'bad@') return problem(422, 'other');
 					at += 1;
@@ -544,7 +544,7 @@ describe('conversation tools', () => {
 		expect(shows(root, TEXTS['chat.talkToPerson'])).toBe(true);
 		await click(buttonIn(root, TEXTS['chat.talkToPerson']));
 		expect(shows(root, TEXTS['chat.talkToPerson'])).toBe(false);
-		expect(textsIn(root, '.notices p')[1]).toBe('You are number 2 in the queue.');
+		expect(textsIn(root, '.notices p')[1]).toBe('You are number 2 in line.');
 		expect(textsIn(root, '.notices p')[0]).toContain('Our team is away right now. They are back');
 		await click(buttonIn(root, TEXTS['chat.transcript']));
 		await submit(fieldIn(root, TEXTS['chat.email']));
@@ -716,7 +716,7 @@ describe('attachments', () => {
 		expect(/** @type {HTMLTextAreaElement} */ ($('textarea')).value).toBe('');
 	});
 
-	it('prefills the transcript e-mail of a signed-in visitor and resets on sign-out', async () => {
+	it('prefills the transcript email of a signed-in visitor and resets on sign-out', async () => {
 		const { $, root, server, api } = await start({
 			features: ['visitor_chat', 'signed_in_chat', 'transcripts'],
 			routes: {
@@ -906,7 +906,7 @@ describe('formatted answers (C2)', () => {
 		'- Black',
 		'- White',
 		'',
-		'| Colour | Price |',
+		'| Color | Price |',
 		'| --- | --- |',
 		'| Black | `EUR 10` |',
 		'',
@@ -935,7 +935,7 @@ describe('formatted answers (C2)', () => {
 		const ai = /** @type {HTMLElement} */ (root.querySelector('.msg.ai:not(.welcome) > .rich'));
 		expect(ai.querySelector('p strong')?.textContent).toBe('Desk lamp');
 		expect(textsIn(ai, 'ul li')).toEqual(['Black', 'White']);
-		expect(textsIn(ai, '.table th')).toEqual(['Colour', 'Price']);
+		expect(textsIn(ai, '.table th')).toEqual(['Color', 'Price']);
 		expect(textsIn(ai, '.table td')).toEqual(['Black', 'EUR 10']);
 		expect(ai.querySelector('td code')?.textContent).toBe('EUR 10');
 		const links = [...ai.querySelectorAll('a')];

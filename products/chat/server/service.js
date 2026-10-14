@@ -11,7 +11,7 @@
  *   the queue position and office hours; the context panel's shop info from Ecommerce (pasted token) for a signed-in
  *   visitor.
  * - Messages through Notifications (pasted token): staff alerts and AI cost alerts through the kit's staff alerts (K6:
- *   e-mail, WhatsApp or SMS, C5), transcripts, and reply alerts to a visitor who left the chat (C6).
+ *   email, WhatsApp or SMS, C5), transcripts, and reply alerts to a visitor who left the chat (C6).
  * - AI token counts per day and month window, the caps and the monthly cost alert.
  * @module
  */
@@ -145,7 +145,7 @@ export const createService = (product) => {
 
 	/**
 	 * Move a guest's conversations to an account: merged by time into the account's latest conversation when it has
-	 * one, else moved as they are (C7); the name, e-mail and phone they lack come from the sign-in at once (CH-7).
+	 * one, else moved as they are (C7); the name, email and phone they lack come from the sign-in at once (CH-7).
 	 * @param {Site} s
 	 * @param {ConversationRecord[]} guestConversations
 	 * @param {Visitor & { kind: 'user' }} user
@@ -516,7 +516,7 @@ export const createService = (product) => {
 	 * @param {Site} s
 	 * @param {string} template
 	 * @param {'email' | 'sms' | 'whatsapp'} channel
-	 * @param {{ email: string } | { phone: string }} to an e-mail address for e-mail, a phone for SMS and WhatsApp
+	 * @param {{ email: string } | { phone: string }} to an email address for email, a phone for SMS and WhatsApp
 	 * @param {Record<string, string | number>} values
 	 * @returns {Promise<'sent' | 'not_taken' | 'not_connected' | 'failed'>}
 	 */
@@ -546,7 +546,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A staff alert through the kit's staff alerts (K6; the recipients setting with e-mail addresses and phones, Accounts
+	 * A staff alert through the kit's staff alerts (K6; the recipients setting with email addresses and phones, Accounts
 	 * staff with the permission setting, and the assigned person): `new_message` on a visitor message — with frequency
 	 * `first_unanswered` at most once until staff reply or open it, with `every_message` every time — and `needs_you`
 	 * on handoff. Besides the short `preview`, the values carry the visitor's `name` and latest `message` (up to 500
@@ -584,7 +584,7 @@ export const createService = (product) => {
 
 	/**
 	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor who has not checked the
-	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (WhatsApp, then e-mail,
+	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (WhatsApp, then email,
 	 * by default): the first channel the visitor has an address for that Notifications takes; one it does not take
 	 * passes to the next. Once until the visitor checks again; sent after the answer.
 	 * @param {Site} s
@@ -617,7 +617,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A transcript by e-mail: the most recent part that fits Notifications' value limit.
+	 * A transcript by email: the most recent part that fits Notifications' value limit.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {string} email

@@ -186,7 +186,7 @@ describe('conversation counts (K4)', () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'handoff', 'assignment']);
 		await sys.paste('accounts');
 		const ann = sys.visitor();
-		await ann('POST', '/v1/chat/messages', { text: 'Where is my parcel?' });
+		await ann('POST', '/v1/chat/messages', { text: 'Where is my package?' });
 		await ann('POST', '/v1/chat/handoff');
 		const bob = sys.visitor();
 		const sent = await bob('POST', '/v1/chat/messages', { text: 'Do you sell kettles?' });
@@ -222,7 +222,7 @@ describe('conversation counts (K4)', () => {
 			total: 2,
 			groups: { true: 2 },
 		});
-		const unknown = await server(sys, 'GET', '/v1/conversations/counts?by=colour');
+		const unknown = await server(sys, 'GET', '/v1/conversations/counts?by=color');
 		expect(unknown.status).toBe(422);
 		expect(unknown.json.detail).toBe('by is one of: status, waiting, guest, unread.');
 

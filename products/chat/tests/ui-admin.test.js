@@ -759,6 +759,8 @@ describe('reports', () => {
 		expect(numbers[TEXTS['reports.conversations']]).toBe('6');
 		expect(numbers[TEXTS['reports.firstReply']]).toBe('1 min 35 s');
 		expect(numbers[TEXTS['reports.rating']]).toBe('4.3 from 4 ratings');
+		// counts in the viewer's language when the Format names none (en-US here)
+		expect(numbers[TEXTS['reports.aiTokens']]).toBe('12,000');
 		expect(/** @type {HTMLElement} */ (root.querySelector('.bar')).style.width).toBe('50%');
 		expect(root.textContent).toContain('Days in Europe/Berlin');
 		report = () => answer(200, { days: null, medianFirstReplySeconds: 40, rating: null });
@@ -783,19 +785,30 @@ describe('reports', () => {
 		expect(root.querySelector('[role="status"]')?.textContent).toBe(TEXTS['common.error']);
 	});
 
-	it('asks for business days and shows each day in the website’s Format (K7, K8)', async () => {
+	it('asks for business days and shows each day and number in the website’s Format (K7, K8)', async () => {
 		const { hosts, server } = await startAdmin({
 			features: ['reports'],
 			// 10:00 UTC on 1 October is already 2 October in Kiritimati (UTC+14)
-			look: { format: { locale: 'en-GB' }, timeZone: 'Pacific/Kiritimati' },
+			look: { format: { locale: 'de-DE' }, timeZone: 'Pacific/Kiritimati' },
 			routes: {
 				'GET /v1/admin/reports': () =>
-					answer(200, { timeZone: 'Pacific/Kiritimati', days: [{ date: '2026-10-02', conversations: 1 }] }),
+					answer(200, {
+						timeZone: 'Pacific/Kiritimati',
+						days: [{ date: '2026-10-02', conversations: 1200 }],
+						rating: { average: 4.25, count: 1500 },
+						aiTokens: 12000,
+					}),
 			},
 		});
 		const query = server.last('GET /v1/admin/reports')?.url.searchParams;
 		expect([query?.get('from'), query?.get('to')]).toEqual(['2026-09-03', '2026-10-02']);
-		expect(textsIn(shadow(hosts.reports), '.bars .date')).toEqual(['2 Oct 2026']);
+		const root = shadow(hosts.reports);
+		expect(textsIn(root, '.bars .date')).toEqual(['02.10.2026']);
+		const numbers = Object.fromEntries(textsIn(root, 'dt').map((label, index) => [label, textsIn(root, 'dd')[index]]));
+		expect(numbers[TEXTS['reports.conversations']]).toBe('1.200');
+		expect(numbers[TEXTS['reports.rating']]).toBe('4,3 from 1.500 ratings');
+		expect(numbers[TEXTS['reports.aiTokens']]).toBe('12.000');
+		expect(textsIn(root, '.bars li span:last-child').at(-1)).toBe('1.200');
 	});
 
 	it('shows no access and Signed out', async () => {

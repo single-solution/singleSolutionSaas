@@ -144,7 +144,7 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Whole units of the shop's currency → minor units (prices the AI and fallback budgets give); the currency is learnt
+	 * Whole units of the shop's currency → minor units (prices the AI and fallback budgets give); the currency is learned
 	 * from Ecommerce's answers, else asked once with the newest product.
 	 * @param {Site} s
 	 */
@@ -521,7 +521,7 @@ export const createReply = (product, service) => {
 			if (bookingUrl && call.name === BUILTIN.book) {
 				const a = call.arguments;
 				if (typeof a.slotId !== 'string' || typeof a.name !== 'string' || (!a.email && !a.phone && !signedIn?.email))
-					return { ok: false, content: 'Ask for the slot, the name and an e-mail address or phone number.' };
+					return { ok: false, content: 'Ask for the slot, the name and an email address or phone number.' };
 				const phone = a.phone ? normalisePhone(a.phone, await phoneCodeOf(s)) : null;
 				if (a.phone && !phone) return { ok: false, content: 'Ask for the phone number with its country code.' };
 				return callEndpoint(s, bookingUrl, {

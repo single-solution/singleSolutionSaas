@@ -11,6 +11,7 @@ import {
 	settingsOf,
 	textsOf,
 	uploadFile,
+	numbersOf,
 	webAddress,
 	whenOf,
 } from '../ui/common.js';
@@ -207,7 +208,7 @@ describe('common', () => {
 	it('reads problems and answers', async () => {
 		expect(problemCode(null)).toBe('');
 		expect(problemCode({ type: 'x/y/z' })).toBe('z');
-		// a refused value is only recognised: the widgets show their own text, never the server's English detail
+		// a refused value is only recognized: the widgets show their own text, never the server's English detail
 		expect(isInvalid({ ok: false, status: 422, data: { type: '/validation_failed', errors: [{ message: 'Bad' }] } })).toBe(
 			true,
 		);
@@ -239,6 +240,12 @@ describe('common', () => {
 		const business = whenOf({ format: { locale: 'en-GB', times: 'business' }, timeZone: 'America/New_York' }, window);
 		expect(business('2026-10-01T10:00:00Z')).toBe('1 Oct 2026, 06:00');
 		expect(business('2026-10-01T10:00:00Z', 'date')).toBe('1 Oct 2026');
+		// numbers: the Format's locale, else the viewer's, else en-US (a tag the runtime does not know or a broken one)
+		expect(numbersOf({ format: { locale: 'de-DE' } }, window)(12000.5)).toBe('12.000,5');
+		expect(numbersOf({}, { navigator: { language: 'fr-FR' } })(12000, 1)).toBe('12 000,0');
+		expect(numbersOf({}, { navigator: { language: 'zz' } })(12000)).toBe('12,000');
+		expect(numbersOf({}, { navigator: { language: 'not a tag!' } })(4.25, 1)).toBe('4.3');
+		expect(numbersOf({}, null)(1234)).toBe('1,234');
 		expect(fileProblem({ type: 'image/svg+xml', size: 1 }, ['image/png'], 10)).toBe('type');
 		expect(fileProblem({ type: 'image/png', size: 11 }, ['image/png'], 10)).toBe('size');
 		expect(fileProblem({ type: 'image/png', size: 0 }, ['image/png'], 10)).toBe('size');

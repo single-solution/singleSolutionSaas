@@ -328,7 +328,7 @@ export const createVisitorApi = (product, service, reply) => {
 			if (checked.ok) set[field] = String(checked.value).slice(0, 200);
 			else errors.push(`${field} is not valid.`);
 		}
-		if (errors.length === 0 && !set.email && !set.phone) errors.push('Leave an e-mail address or a phone number.');
+		if (errors.length === 0 && !set.email && !set.phone) errors.push('Leave an email address or a phone number.');
 		if (errors.length > 0) throw invalid(errors);
 		const c = await conversationOf(s, visitor, body.page);
 		const updated = await s.store.conversations.update(c.id, { set });
@@ -443,7 +443,7 @@ export const createVisitorApi = (product, service, reply) => {
 	const transcript = async (ctx) => {
 		const { s, c } = await existing(ctx);
 		const checked = checkFieldValue({ key: 'email', label: 'email', type: 'email', options: [] }, bodyOf(ctx.body).email);
-		if (!checked.ok) throw invalid(['Enter an e-mail address.']);
+		if (!checked.ok) throw invalid(['Enter an email address.']);
 		await service.sendTranscript(s, c, String(checked.value));
 		return new Response(JSON.stringify({ sent: true }), { status: 202, headers: { 'content-type': 'application/json' } });
 	};

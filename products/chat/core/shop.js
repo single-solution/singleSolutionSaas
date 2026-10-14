@@ -7,13 +7,14 @@
  * request: Chat forwards it in the `SS-Sign-In` header and Ecommerce verifies it itself and answers only that user's
  * data. The AI never chooses the user, the website or the token: those tools take no arguments, and whatever the model
  * passes is ignored. Only whitelisted fields are kept, so no street address or phone number ever reaches the AI.
- * Prices and dates in what the AI and the context panel get follow the website's Format and business time zone
- * (PLAN 0.8.10 K7), so the chat answers show them as the website does: Ecommerce's `priceText` when it sends one. The
- * fuller lookups (C13, Ecommerce E37) pass the category, grade, price and stock filters and answer grades, variants,
- * stock left, warranty, quotes per variant and payment method, order lines and the store context (C1).
+ * Prices, dates and deal days and times in what the AI and the context panel get follow the website's Format and
+ * business time zone (PLAN 0.8.10 K7; day names in the Format's language, else en-US), so the chat answers show them
+ * as the website does: Ecommerce's `priceText` when it sends one. The fuller lookups (C13, Ecommerce E37) pass the
+ * category, grade, price and stock filters and answer grades, variants, stock left, warranty, quotes per variant and
+ * payment method, order lines and the store context (C1).
  * @module
  */
-import { formatDate, formatMoney } from '@ss/contracts/format';
+import { formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
 
 /** The shop tool names. */
 const SHOP_TOOLS = Object.freeze({
@@ -111,8 +112,9 @@ export const SHOP_ANSWERS = Object.freeze({
 /** The payment methods a quote takes (Ecommerce's `paymentMethod`). */
 const PAYMENT_METHODS = Object.freeze(['cod', 'online', 'bank_transfer', 'pickup']);
 
-/** Weekday names of a deal's `days` (0 = Sunday). */
-const WEEKDAYS = Object.freeze(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+/** A Sunday (2026-01-04 UTC): a deal's `days` (0 = Sunday) are named from it. */
+const SUNDAY = Date.UTC(2026, 0, 4);
+const DAY_MS = 86_400_000;
 
 /** Tool names the merchant's webhook tools may not take. */
 export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
@@ -529,12 +531,42 @@ const variantOptions = (value) =>
 				.join(', ')
 		: null;
 
-/** A deal's weekdays (`days`, 0 = Sunday) as names. @param {unknown} value */
-const weekdaysOf = (value) =>
-	itemsOf(value)
-		.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
-		.map((day) => WEEKDAYS[day])
-		.join(', ');
+/**
+ * The language of text Chat makes for the website: its Format's, else `en-US`.
+ * @param {Look} look
+ */
+const localeOf = (look) => normaliseFormat(look.format).locale || 'en-US';
+
+/**
+ * A deal's weekdays (`days`, 0 = Sunday) as names in the website's language, listed as that language lists them
+ * ("Friday and Saturday", "vendredi et samedi").
+ * @param {unknown} value
+ * @param {Look} look
+ */
+const weekdaysOf = (value, look) => {
+	const days = itemsOf(value).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+	if (days.length === 0) return '';
+	const locale = localeOf(look);
+	const names = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
+	return new Intl.ListFormat(locale, { type: 'conjunction' }).format(days.map((day) => names.format(SUNDAY + day * DAY_MS)));
+};
+
+/**
+ * A deal's wall-clock time (`HH:MM`, 00:00–24:00 in the business time zone) in the website's Format ("2:30 PM",
+ * "14:30"); any other text as it came.
+ * @param {unknown} value
+ * @param {Look} look
+ */
+const clockText = (value, look) => {
+	const text = textOf(value, 10);
+	const match = text === null ? null : /^(\d{1,2}):([0-5]\d)$/.exec(text);
+	if (!match) return text;
+	const hour = Number(match[1]);
+	const minute = Number(match[2]);
+	if (hour > 24 || (hour === 24 && minute > 0)) return text;
+	const format = { ...look.format, locale: localeOf(look) };
+	return formatDate(Date.UTC(2026, 0, 4, hour, minute), format, { timeZone: 'UTC', style: 'time' });
+};
 
 /**
  * What the AI gets from an Ecommerce answer, and the products that become cards.
@@ -643,8 +675,10 @@ export const shopAnswer = (name, body, look = {}) => {
 			.slice(0, DEALS_LIMIT)
 			.map((d) => {
 				const offer = textOf(d.discountLabel, 200) ?? textOf(d.valueText, 200);
-				const days = weekdaysOf(d.days);
-				const hours = textOf(d.timeFrom, 10) && textOf(d.timeTo, 10) ? `${d.timeFrom}–${d.timeTo}` : '';
+				const days = weekdaysOf(d.days, look);
+				const from = clockText(d.timeFrom, look);
+				const to = clockText(d.timeTo, look);
+				const hours = from && to ? `${from}–${to}` : '';
 				const when = [days, hours].filter(Boolean).join(' ');
 				const badge = textOf(d.badgeLabel, 60);
 				const minQuantity = countOf(d.minQuantity);

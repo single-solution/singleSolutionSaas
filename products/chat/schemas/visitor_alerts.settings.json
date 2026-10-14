@@ -14,7 +14,7 @@
 			"type": "array",
 			"title": "Channels, in order",
 			"default": ["whatsapp", "email"],
-			"description": "Pick them in the order to try. The alert goes by the first one the visitor has an address for (a phone for WhatsApp and SMS, an e-mail address for e-mail); when Notifications does not take it there (that channel is off or has no template), the next one is tried. None: no alerts.",
+			"description": "Pick them in the order to try. The alert goes by the first one the visitor has an address for (a phone for WhatsApp and SMS, an email address for email); when Notifications does not take it there (that channel is off or has no template), the next one is tried. None: no alerts.",
 			"items": {
 				"type": "string",
 				"enum": ["email", "sms", "whatsapp"]

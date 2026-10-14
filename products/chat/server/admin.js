@@ -116,7 +116,7 @@ export const createAdmin = (product, service) => {
 	// ---------------------------------------------------------------------------------------------- data rights
 
 	/**
-	 * One person's conversations: by Accounts user id (guest chats merged into the account included) and by the e-mail
+	 * One person's conversations: by Accounts user id (guest chats merged into the account included) and by the email
 	 * or phone a guest left.
 	 * @param {any} ctx
 	 * @param {{ id?: string, email?: string, phone?: string }} user

@@ -1,8 +1,8 @@
 /**
  * Language handling (pure), a language lock on the server: prompt rules alone drift, so the customer's language is
  * detected from each message and an AI answer in another language is retried once or replaced. Nothing is regional:
- * non-Latin scripts are recognised from Unicode script data, and the languages that share a script are told apart by
- * the letters only some of them use plus the merchant's marker words; Latin-script languages (including romanised ones)
+ * non-Latin scripts are recognized from Unicode script data, and the languages that share a script are told apart by
+ * the letters only some of them use plus the merchant's marker words; Latin-script languages (including romanized ones)
  * are told apart by the marker words, with thresholds the merchant sets (PLAN 0.8.10, the re-audit's CH-16, CH-17). A
  * reply is checked as a whole or part by part (`checkMode`, CH-18), and a language may be accepted in its own script or
  * in Latin letters (`acceptLatinFor`, CH-16).
@@ -57,7 +57,7 @@ const LANGUAGE_SCRIPTS = Object.freeze({
 	zh: 'Han',
 });
 
-/** Scripts recognised in text, in detection order (Japanese kana before Han: Japanese text mixes both). */
+/** Scripts recognized in text, in detection order (Japanese kana before Han: Japanese text mixes both). */
 const SCRIPT_PATTERNS = Object.freeze([
 	['Japanese', /[\p{Script=Hiragana}\p{Script=Katakana}]/gu],
 	['Hangul', /\p{Script=Hangul}/gu],
@@ -291,7 +291,7 @@ const latinOnly = (text) => {
 
 /**
  * Marker word lines (`<language>: word word "two words"`; quoted words count only together) → marker sets. Words in
- * Latin letters under a language written in another script mark its romanised form, `<language>-Latn` (CH-39).
+ * Latin letters under a language written in another script mark its romanized form, `<language>-Latn` (CH-39).
  * @param {readonly string[]} lines
  * @returns {MarkerSet[]}
  */
@@ -500,7 +500,7 @@ export const translationOf = (lines, language) => {
  */
 export const languageName = (tag) => {
 	try {
-		return new Intl.DisplayNames(['en'], { type: 'language' }).of(tag) ?? tag;
+		return new Intl.DisplayNames(['en-US'], { type: 'language' }).of(tag) ?? tag;
 	} catch {
 		return tag;
 	}

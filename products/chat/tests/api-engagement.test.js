@@ -24,7 +24,7 @@ const FLOWS = [
 		steps: [
 			{ kind: 'message', text: 'Happy to help.' },
 			{ kind: 'question', text: 'For home or work?', buttons: ['Home', 'Work'] },
-			{ kind: 'collect', field: 'email', text: 'Your e-mail?' },
+			{ kind: 'collect', field: 'email', text: 'Your email?' },
 			{ kind: 'collect', field: 'custom:budget', text: 'Your budget?' },
 			{ kind: 'handoff' },
 			{ kind: 'end' },
@@ -49,7 +49,7 @@ describe('flows and leads', () => {
 		expect((await v('POST', '/v1/chat/flow', { answer: 'Garden' })).status).toBe(422);
 		const home = await v('POST', '/v1/chat/flow', { answer: 'Home' });
 		expect(home.json.chat.conversation.flow.step).toEqual({ kind: 'collect', field: 'email', type: 'email', options: [] });
-		expect((await v('POST', '/v1/chat/flow', { answer: 'not an e-mail' })).status).toBe(422);
+		expect((await v('POST', '/v1/chat/flow', { answer: 'not an email' })).status).toBe(422);
 		const email = await v('POST', '/v1/chat/flow', { answer: 'ann@example.com' });
 		expect(email.json.chat.conversation.flow.step).toEqual({ kind: 'collect', field: 'budget', type: 'number', options: [] });
 		const done = await v('POST', '/v1/chat/flow', { answer: '250' });
@@ -101,8 +101,8 @@ describe('flows and leads', () => {
 		expect(missing.status).toBe(422);
 		expect(missing.json.errors.map((/** @type {any} */ e) => e.message)).toEqual([
 			'phone is required.',
-			'Leave an e-mail address or a phone number.',
-			'Tick the consent box.',
+			'Leave an email address or a phone number.',
+			'Check the consent box.',
 		]);
 		const saved = await v('POST', '/v1/chat/leads', {
 			fields: { name: 'Bo', phone: '+44 20 7946 0000', message: 'Call me', size: 'M' },

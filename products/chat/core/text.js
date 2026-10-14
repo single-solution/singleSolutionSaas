@@ -1,5 +1,5 @@
 /**
- * Text helpers (pure): Unicode-aware normalisation and tokenisation for retrieval and phrase matching,
+ * Text helpers (pure): Unicode-aware normalization and tokenization for retrieval and phrase matching,
  * truncation on code points and path globs (`*` = one segment, `**` = any).
  * @module
  */
@@ -46,7 +46,7 @@ export const tokenize = (text, { minLength = 2, max = 20_000 } = {}) => {
 };
 
 /**
- * Does the text contain the phrase as whole words (normalised, any script)?
+ * Does the text contain the phrase as whole words (normalized, any script)?
  * @param {string} text
  * @param {string} phrase
  */

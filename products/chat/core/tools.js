@@ -50,7 +50,7 @@ const PARAMETER_TYPES = Object.freeze(['string', 'number', 'boolean']);
  * @property {string} description
  * @property {string} url https
  * @property {ToolParameter[]} parameters
- * @property {boolean} includeVisitor send the signed-in visitor's id and e-mail with each call
+ * @property {boolean} includeVisitor send the signed-in visitor's id and email with each call
  */
 /** @typedef {import('./providers.js').ToolSchema} ToolSchema */
 
@@ -172,7 +172,7 @@ export const builtinSchemas = ({ handoff, booking }) => [
 				{
 					name: BUILTIN.book,
 					description:
-						'Book one free slot (its id from list_free_slots) for the visitor, with their name and an e-mail or phone number.',
+						'Book one free slot (its id from list_free_slots) for the visitor, with their name and an email or phone number.',
 					parameters: {
 						type: 'object',
 						properties: {

@@ -289,7 +289,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		};
 		const variant = {
 			id: 'var_black',
-			options: { Colour: 'Black' },
+			options: { Color: 'Black' },
 			price: 4500,
 			priceText: '€45.00',
 			compareAtPrice: null,
@@ -308,7 +308,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				summary: 'A steady light for long evenings.',
 				description: 'Brushed steel, warm white.',
 				brand: 'Northlight',
-				options: [{ name: 'Colour', values: ['Black', 'White'] }],
+				options: [{ name: 'Color', values: ['Black', 'White'] }],
 				priceRange: { min: 4500, max: 5200, minText: '€45.00', maxText: '€52.00' },
 				specs: [
 					{ name: 'Height', value: 42, unit: 'cm' },
@@ -321,7 +321,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					{
 						...variant,
 						id: 'var_white',
-						options: { Colour: 'White' },
+						options: { Color: 'White' },
 						price: 5200,
 						priceText: '€52.00',
 						grade: null,
@@ -345,12 +345,12 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			brand: 'Northlight',
 			summary: 'A steady light for long evenings.',
 			description: 'Brushed steel, warm white.',
-			options: [{ name: 'Colour', values: ['Black', 'White'] }],
+			options: [{ name: 'Color', values: ['Black', 'White'] }],
 			specs: ['Height: 42 cm', 'Dimmable: yes', 'Bulbs: E27, E14', 'Cable: Fabric'],
 			variants: [
 				{
 					id: 'var_black',
-					options: 'Colour: Black',
+					options: 'Color: Black',
 					price: '€45.00',
 					grade: 'New',
 					gradeKey: 'new',
@@ -358,7 +358,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					stockLeft: 3,
 					warranty: '730 days',
 				},
-				{ id: 'var_white', options: 'Colour: White', price: '€52.00', inStock: false },
+				{ id: 'var_white', options: 'Color: White', price: '€52.00', inStock: false },
 			],
 		});
 		expect(details.products).toEqual([expect.objectContaining({ id: 'prd_lamp', grade: null, variantId: 'var_black' })]);
@@ -576,12 +576,29 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					offer: '10% off',
 					badge: 'Hot',
 					minQuantity: 2,
-					when: 'Friday, Saturday 10:00–12:00',
+					when: 'Friday and Saturday 10:00 AM–12:00 PM',
 					endsAt: 'Oct 9',
 				},
 				{ name: 'Spend more', description: 'Off orders over $50', offer: '$5.00', endsAt: null },
 			],
 		});
+		// day names and times in the website's language and Format (en-US with none); other times stay as they came
+		/** @param {Record<string, unknown>} changes @param {object} [look] */
+		const whenOf = (changes, look) =>
+			/** @type {any} */ (shopAnswer('list_active_deals', { items: [{ ...deal, ...changes }] }, look).content).deals[0].when;
+		const week = { days: [1, 3, 5], timeFrom: '9:30', timeTo: '24:00' };
+		expect(whenOf(week)).toBe('Monday, Wednesday, and Friday 9:30 AM–12:00 AM');
+		expect(whenOf(week, { format: { locale: 'en-US' }, timeZone: 'America/New_York' })).toBe(
+			'Monday, Wednesday, and Friday 9:30 AM–12:00 AM',
+		);
+		expect(whenOf(week, { format: { locale: 'fr-FR' }, timeZone: 'Europe/Paris' })).toBe(
+			'lundi, mercredi et vendredi 09:30–00:00',
+		);
+		expect(whenOf({ days: [0], timeFrom: '18:00', timeTo: '02:00' }, { format: { locale: 'de-DE' } })).toBe(
+			'Sonntag 18:00–02:00',
+		);
+		expect(whenOf({ days: [], timeFrom: 'noon', timeTo: '24:30' })).toBe('noon–24:30');
+		expect(whenOf({ days: [6], timeFrom: '25:00', timeTo: '10:00' })).toBe('Saturday 25:00–10:00 AM');
 		const shipped = shopAnswer(
 			'track_shipment',
 			{

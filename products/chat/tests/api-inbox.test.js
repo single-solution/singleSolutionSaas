@@ -48,7 +48,7 @@ describe('inbox', () => {
 		await sys.list('custom_fields', [{ key: 'tier', label: 'Tier', type: 'choice', options: ['Gold', 'Silver'] }]);
 		const ann = sys.visitor();
 		await ann('POST', '/v1/chat/messages', {
-			text: 'Where is my parcel?',
+			text: 'Where is my package?',
 			page: { url: `${ORIGIN}/orders`, title: 'Orders', kind: 'other' },
 		});
 		sys.advance(1000);
@@ -62,7 +62,7 @@ describe('inbox', () => {
 		expect(list.status).toBe(200);
 		expect(list.json.items.map((/** @type {any} */ c) => c.preview)).toEqual(['Hello from the AI.', 'Hello from the AI.']);
 		expect(list.json.unread).toBe(2);
-		const search = await sys.admin(ticket, 'GET', '/v1/admin/conversations?q=parcel');
+		const search = await sys.admin(ticket, 'GET', '/v1/admin/conversations?q=package');
 		expect(search.json.items).toHaveLength(1);
 		const id = search.json.items[0].id;
 		expect((await sys.admin(ticket, 'GET', '/v1/admin/conversations?status=resolved')).json.items).toEqual([]);
@@ -86,7 +86,7 @@ describe('inbox', () => {
 		const visitorView = await ann('GET', '/v1/chat');
 		expect(visitorView.json.conversation.status).toBe('awaiting_visitor');
 		expect(visitorView.json.messages.map((/** @type {any} */ m) => m.text)).toEqual([
-			'Where is my parcel?',
+			'Where is my package?',
 			'Hello from the AI.',
 			'On its way.',
 		]);
@@ -150,9 +150,9 @@ describe('inbox', () => {
 		expect(later.json.items.map((/** @type {any} */ m) => m.presence)).toEqual(['offline', 'online']);
 
 		// summary, transcript, rating request, resolve
-		sys.ai({ text: 'Parcel question; answered.' });
+		sys.ai({ text: 'Package question; answered.' });
 		expect((await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/summary`)).json).toEqual({
-			summary: 'Parcel question; answered.',
+			summary: 'Package question; answered.',
 		});
 		expect(
 			(await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/transcript`, { email: 'ann@example.com' })).status,
@@ -160,9 +160,9 @@ describe('inbox', () => {
 		expect((await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/rating-request`)).status).toBe(204);
 		expect((await ann('GET', '/v1/chat')).json.conversation.ratingRequested).toBe(true);
 		// the same from the merchant's server
-		sys.ai({ text: 'Asked about a parcel.' });
+		sys.ai({ text: 'Asked about a package.' });
 		expect((await sys.serverCall('POST', `/v1/conversations/${id}/summary`)).json).toEqual({
-			summary: 'Asked about a parcel.',
+			summary: 'Asked about a package.',
 		});
 		const copy = await sys.serverCall('POST', `/v1/conversations/${id}/transcript`, { email: 'ann@example.com' });
 		expect([copy.status, copy.json]).toEqual([202, { sent: true }]);

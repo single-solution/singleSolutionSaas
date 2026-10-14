@@ -211,7 +211,7 @@ export const deviceText = (t, device) => {
 /**
  * The context panel: the visitor, the page the chat started on, the device, their conversations, then the shop info of
  * a signed-in visitor (last orders with status and total, and loyalty points; with the Ecommerce token), the AI
- * summary (with Summarise when ai_summary is on) and the rating.
+ * summary (with Summarize when ai_summary is on) and the rating.
  * @param {PartKit & { summary: boolean }} input
  */
 export const contextPart = ({ doc, t, api, failure, summary }) => {

@@ -71,7 +71,7 @@ describe('handoff options (C4)', () => {
 });
 
 describe('staff alerts and reply alerts (C5, C6)', () => {
-	it('alerts e-mails and phones (WhatsApp or SMS), Accounts staff who can reply, on every message when asked', async () => {
+	it('alerts emails and phones (WhatsApp or SMS), Accounts staff who can reply, on every message when asked', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts', 'assignment']);
 		await sys.paste('notifications');
 		await sys.paste('accounts');
@@ -123,7 +123,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		await sys.admin(ticket, 'POST', path, { text: 'Hi Ann' });
 		expect(sys.messages()).toHaveLength(0);
 		sys.advance(61_000);
-		await sys.admin(ticket, 'POST', path, { text: 'We have **two** colours.' });
+		await sys.admin(ticket, 'POST', path, { text: 'We have **two** colors.' });
 		await sys.admin(ticket, 'POST', path, { text: 'Anything else?' });
 		expect(sys.messages()).toEqual([
 			expect.objectContaining({
@@ -133,7 +133,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 				values: expect.objectContaining({
 					name: 'Ann',
 					staff: 'Sam Staff',
-					preview: 'We have two colours.',
+					preview: 'We have two colors.',
 					link: 'https://shop.example.com/lamps/a',
 				}),
 			}),
@@ -169,7 +169,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	it('a reply alert goes by the channels in the order set: the first the visitor has an address for', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
-		// the default: WhatsApp, then e-mail
+		// the default: WhatsApp, then email
 		expect(await alertOf(sys, both)).toEqual([['whatsapp', { phone: '+447700900123' }]]);
 		expect(await alertOf(sys, { email: 'ann@example.com' })).toEqual([['email', { email: 'ann@example.com' }]]);
 		await sys.setting('visitor_alerts', 'channels', ['email', 'sms']);

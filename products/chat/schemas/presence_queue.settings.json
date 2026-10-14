@@ -12,7 +12,7 @@
 		},
 		"queuePosition": {
 			"type": "boolean",
-			"title": "Show visitors their place in the queue",
+			"title": "Show visitors their place in line",
 			"default": true
 		}
 	}

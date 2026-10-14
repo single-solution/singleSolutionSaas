@@ -499,10 +499,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters).",
+						"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters).",
 						"schema": {
 							"type": "string",
-							"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
 					}
 				],
@@ -638,10 +638,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters).",
+						"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters).",
 						"schema": {
 							"type": "string",
-							"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
 					}
 				],
@@ -793,10 +793,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters).",
+						"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters).",
 						"schema": {
 							"type": "string",
-							"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
 					}
 				],
@@ -1450,7 +1450,7 @@
 		},
 		"/v1/admin/conversations/{id}/transcript": {
 			"post": {
-				"summary": "E-mail a copy of the conversation",
+				"summary": "Email a copy of the conversation",
 				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "transcripts",
@@ -2770,7 +2770,7 @@
 		"/v1/chat/contact": {
 			"post": {
 				"summary": "Save the visitor's contact details",
-				"description": "On the visitor's conversation (made when there is none; a visitor without a key starts a new guest, answered in guestKey), and as a lead with Lead capture on. Phones are kept as E.164 (a number without its country code takes your business.json country's code). 422 validation_failed: a value that is not valid, or neither e-mail nor phone.",
+				"description": "On the visitor's conversation (made when there is none; a visitor without a key starts a new guest, answered in guestKey), and as a lead with Lead capture on. Phones are kept as E.164 (a number without its country code takes your business.json country's code). 422 validation_failed: a value that is not valid, or neither email nor phone.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "guest_chat",
 				"security": [
@@ -3248,7 +3248,7 @@
 		"/v1/chat/leads": {
 			"post": {
 				"summary": "Leave contact details (lead form)",
-				"description": "Each of name, email and phone the lead fields setting lists is required (message never is); the custom fields are those the setting names (with Custom fields on), checked as their type. With a consent text, consent must be true. The visitor's conversation, when there is one, gets the name, e-mail and phone it lacks. 422 validation_failed with every problem. Send an Idempotency-Key so a retried request makes one lead.",
+				"description": "Each of name, email and phone the lead fields setting lists is required (message never is); the custom fields are those the setting names (with Custom fields on), checked as their type. With a consent text, consent must be true. The visitor's conversation, when there is one, gets the name, email and phone it lacks. 422 validation_failed with every problem. Send an Idempotency-Key so a retried request makes one lead.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "leads_flows",
 				"security": [
@@ -3348,7 +3348,7 @@
 									},
 									"consent": {
 										"type": "boolean",
-										"description": "The visitor ticked the consent box."
+										"description": "The visitor checked the consent box."
 									},
 									"page": {
 										"$ref": "#/components/schemas/PageInput"
@@ -3732,7 +3732,7 @@
 		},
 		"/v1/chat/transcript": {
 			"post": {
-				"summary": "E-mail the visitor a copy of the chat",
+				"summary": "Email the visitor a copy of the chat",
 				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "transcripts",
@@ -4477,10 +4477,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters).",
+						"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters).",
 						"schema": {
 							"type": "string",
-							"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
 					},
 					{
@@ -4627,10 +4627,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters).",
+						"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters).",
 						"schema": {
 							"type": "string",
-							"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
 					},
 					{
@@ -4793,10 +4793,10 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters).",
+						"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters).",
 						"schema": {
 							"type": "string",
-							"description": "Search the visitor's name, e-mail and phone and the visible message texts (any case; the first 100 characters)."
+							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
 					},
 					{
@@ -5572,7 +5572,7 @@
 		},
 		"/v1/conversations/{id}/transcript": {
 			"post": {
-				"summary": "E-mail a copy of the conversation",
+				"summary": "Email a copy of the conversation",
 				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the most recent 1,000 characters of the chat. 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "transcripts",
@@ -8459,7 +8459,7 @@
 				"name": "SS-Actor-Email",
 				"in": "header",
 				"required": false,
-				"description": "The acting member's e-mail address.",
+				"description": "The acting member's email address.",
 				"schema": {
 					"type": "string",
 					"maxLength": 320
@@ -8878,7 +8878,7 @@
 					},
 					"contactNeeded": {
 						"type": "boolean",
-						"description": "A guest waiting for a person left no e-mail or phone: ask for them (POST /v1/chat/contact)."
+						"description": "A guest waiting for a person left no email or phone: ask for them (POST /v1/chat/contact)."
 					},
 					"createdAt": {
 						"type": "string",
@@ -9723,7 +9723,7 @@
 						"properties": {
 							"locale": {
 								"type": "string",
-								"description": "A language tag (en, en-GB, fr-FR), or '' for the viewer's."
+								"description": "A language tag such as en-US or fr-FR, or '' for the viewer's (en-US in text the server makes)."
 							},
 							"currencyDisplay": {
 								"type": "string",
@@ -9896,7 +9896,7 @@
 			},
 			"Lead": {
 				"type": "object",
-				"description": "Contact details a visitor left (lead form, contact form, or a flow that collected an e-mail or phone).",
+				"description": "Contact details a visitor left (lead form, contact form, or a flow that collected an email or phone).",
 				"required": [
 					"id",
 					"conversationId",
@@ -10730,7 +10730,7 @@
 									"type": "string",
 									"pattern": "^#[0-9a-fA-F]{6}$"
 								},
-								"description": "Colour name → #rrggbb (the product's CSS supplies the others)."
+								"description": "Color name → #rrggbb (the product's CSS supplies the others)."
 							},
 							"fontFamily": {
 								"type": "string",

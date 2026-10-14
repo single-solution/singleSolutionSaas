@@ -433,11 +433,11 @@ export const createInbox = (product, service, reply) => {
 	const transcript = async (ctx) => {
 		const { s, c, actor } = await found(ctx);
 		const checked = checkFieldValue({ key: 'email', label: 'email', type: 'email', options: [] }, bodyOf(ctx.body).email);
-		if (!checked.ok) throw invalid(['Enter an e-mail address.']);
+		if (!checked.ok) throw invalid(['Enter an email address.']);
 		await service.sendTranscript(s, c, String(checked.value));
 		await service.log(s, actor, 'conversation.transcript_sent', c.id, {
 			label: conversationLabel(c),
-			detail: 'Transcript e-mailed',
+			detail: 'Transcript emailed',
 		});
 		return new Response(JSON.stringify({ sent: true }), { status: 202, headers: { 'content-type': 'application/json' } });
 	};

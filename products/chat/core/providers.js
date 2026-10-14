@@ -1,6 +1,6 @@
 /**
  * AI provider wire formats (pure): OpenAI chat completions (also any OpenAI-compatible endpoint — "compatible"),
- * Anthropic messages and Google Gemini `generateContent`, all normalised to one message / tool / tool-call shape with
+ * Anthropic messages and Google Gemini `generateContent`, all normalized to one message / tool / tool-call shape with
  * token usage. The adapter (adapters/ai.js) only sends the request built here with the merchant's own key (Connections)
  * and parses the answer with the matching parser.
  * @module
