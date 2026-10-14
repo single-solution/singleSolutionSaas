@@ -224,22 +224,22 @@ describe('what a move needs of staff', () => {
 });
 
 describe('the extra moves (E40)', () => {
-	it('a refund of an unpaid order is refused, or cancels it with no money, as the move says', async () => {
+	it('a refund of an unpaid order not dispatched cancels it with no money, or is refused, as the move says', async () => {
 		await withFlow(
 			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'confirmed', to: 'refunded' }] }),
-			async () => {
-				const unpaid = await records.seedOrder({ cod: true });
-				expect(codeOf(await records.moveTo(unpaid.order.id, 'refunded'))).toBe('nothing_paid');
-			},
-		);
-		await withFlow(
-			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'confirmed', to: 'refunded', options: { unpaid: 'cancel' } }] }),
 			async () => {
 				const unpaid = await records.seedOrder({ cod: true });
 				const refunded = await records.moveTo(unpaid.order.id, 'refunded');
 				expect(refunded.status).toBe(200);
 				expect(refunded.json).toMatchObject({ status: 'refunded', payment: { refunded: 0 } });
 				expect(await records.stockOf(unpaid.product.id)).toBe(5);
+			},
+		);
+		await withFlow(
+			(flow) => ({ ...flow, moves: [...flow.moves, { from: 'confirmed', to: 'refunded', options: { unpaid: 'refuse' } }] }),
+			async () => {
+				const unpaid = await records.seedOrder({ cod: true });
+				expect(codeOf(await records.moveTo(unpaid.order.id, 'refunded'))).toBe('nothing_paid');
 			},
 		);
 	});

@@ -8,15 +8,15 @@
  * - exactly one `awaiting_payment` status and at most one `awaiting_confirmation` status: orders start there (a flow
  *   without a confirmation step starts cash-on-delivery, pickup and free orders in an open status, `starts`); an `open`
  *   or `packed` order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
- * - `cancelled` from waiting, open, packed or shipped statuses (a shipped parcel is recalled, E27); `refunded` from
- *   waiting, open or packed statuses when something was paid (E27: it acts as a cancel), and after delivery;
- * - a `shipped` parcel is delivered, comes back (`returned_to_origin`), is recalled or moves to another `shipped`
- *   status;
+ * - `cancelled` from waiting, open or packed statuses; `refunded` from waiting, open or packed statuses (E27: it acts
+ *   as a cancel; with nothing paid only when the move says `unpaid: cancel`, the default), and after delivery;
+ * - a `shipped` parcel is delivered, comes back (`returned_to_origin`) or moves to another `shipped` status: once
+ *   dispatched it is never canceled or refunded as a cancel — it comes back first (owner, 2026-10-14), while money
+ *   paid can still be refunded without a status change (`POST /v1/orders/:id/refunds`);
  * - `delivered` may become `refunded` or `returned` (a customer return, E27); `returned_to_origin` and `returned` only
  *   `refunded`; `returned_to_origin` only from `shipped`;
  * - the extra moves of E40, only when the flow lists them: a cancel after delivery or of a closed order, a refund of a
- *   shipped parcel (a recall, as its cancel) or of a cancelled order, and a move between two closed statuses
- *   (cancelled ↔ refunded, a return → cancelled). What each does follows the facts the order has (`core/transitions.js`),
+ *   cancelled order, and a move between two closed statuses (cancelled ↔ refunded, a return → cancelled). What each does follows the facts the order has (`core/transitions.js`),
  *   so nothing is given back or taken twice.
  *
  * A move says who may make it (`who`: staff; staff and the shopper — a cancel before dispatch —; or only the shop
@@ -92,7 +92,6 @@ const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} *
 		'awaiting_confirmation',
 		'open',
 		'packed',
-		'shipped',
 		'delivered',
 		'cancelled',
 		'returned_to_origin',
@@ -100,13 +99,12 @@ const ALLOWED_FROM = /** @type {Record<StatusRole, ReadonlyArray<StatusRole>>} *
 		'refunded',
 	],
 	returned_to_origin: ['shipped'],
-	// E40: a refund of a shipped parcel (a recall) and of a cancelled order, when listed
+	// E40: a refund of a cancelled order, when listed (a shipped parcel comes back first)
 	refunded: [
 		'awaiting_payment',
 		'awaiting_confirmation',
 		'open',
 		'packed',
-		'shipped',
 		'delivered',
 		'cancelled',
 		'returned_to_origin',
@@ -135,8 +133,8 @@ Object.freeze(ALLOWED_FROM);
  *   from the order; with the shopper among `who`, `shopperPaid`: a paid order the shopper cancels is refused
  *   (`refuse`, the default out of open or packed), cancelled with the refund left due (`flag`, the default out of
  *   waiting) or cancelled and refunded (`refund`);
- * - into refunded before delivery: `unpaid`, an order with nothing paid is refused (`refuse`, the default) or cancelled
- *   with no money (`cancel`, E40);
+ * - into refunded before dispatch: `unpaid`, an order with nothing paid is cancelled with no money (`cancel`, the
+ *   default, owner 2026-10-14) or refused (`refuse`);
  * - into returned to origin or returned: `restock`, the parcel goes back in stock (`yes`, the default), stays out
  *   (`no`) or staff say so with each move (`ask`);
  * - into cancelled or refunded from delivered or a closed status (the items may still be with the customer): `restock`,
@@ -162,7 +160,7 @@ export const moveOptionSpecs = (from, to, who = ['staff']) => {
 		if (who.includes('shopper'))
 			specs.shopperPaid = one(['refuse', 'flag', 'refund'], WAITING_ROLES.includes(from) ? 'flag' : 'refuse');
 	}
-	if (to === 'refunded' && !afterDelivery) specs.unpaid = one(['refuse', 'cancel'], 'refuse');
+	if (to === 'refunded' && !afterDelivery) specs.unpaid = one(['cancel', 'refuse'], 'cancel');
 	if (to === 'returned_to_origin' || to === 'returned') specs.restock = one(['yes', 'no', 'ask'], 'yes');
 	if ((to === 'cancelled' || to === 'refunded') && afterDelivery) specs.restock = one(['no', 'yes', 'ask'], 'no');
 	if (to === 'returned' || ((to === 'cancelled' || to === 'refunded') && afterDelivery))

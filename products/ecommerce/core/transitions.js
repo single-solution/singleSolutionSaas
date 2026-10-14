@@ -30,8 +30,9 @@
  *   counted (not a customer's return); a customer's return gives redeemed points back and takes earned ones back
  *   unless the move keeps them;
  * - into `refunded`: what is left is refunded — the part Payments took through Payments after the transaction (an
- *   external effect, as a staff cancel's), the rest recorded as given back by hand; before delivery it acts as a cancel
- *   and needs something paid, unless the move cancels an unpaid order with no money (`unpaid: cancel`, E40).
+ *   external effect, as a staff cancel's), the rest recorded as given back by hand; before dispatch it acts as a cancel,
+ *   and an order with nothing paid is cancelled with no money unless the move refuses it (`unpaid`, default `cancel`).
+ *   A dispatched parcel is never canceled or refunded as a cancel: it comes back (`returned_to_origin`) first.
  *
  * Refusals: `move_not_allowed` (the flow's moves, who may make them and the role rules; an ended window needs no listed
  * move, and nothing else does: only a waiting order becomes cancelled without one), `flow_changed` (the order's role is not the flow's role of its status any
@@ -261,8 +262,8 @@ export const choicesOf = ({ move, from, to, input }) => {
 };
 
 /**
- * A refund before delivery acts as a cancel, and only when something was paid (E27), unless the move cancels an unpaid
- * order with no money (`unpaid: cancel`, E40).
+ * A refund before delivery acts as a cancel (E27); with nothing paid it is refused when the move says `unpaid: refuse`
+ * (by default it cancels the order with no money).
  * @param {OrderRecord} order @param {StatusRole} stage the stage entered @param {'refuse' | 'cancel'} [unpaid]
  * @returns {Extract<PlanResult, { ok: false }> | null}
  */

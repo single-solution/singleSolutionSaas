@@ -373,8 +373,21 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		expect(online.set['payment.refunded']).toBeUndefined();
 		expect(online.push.refunds).toBeUndefined();
 		expect(online.external).toEqual([expect.objectContaining({ amount: 3000, reason: 'Damaged', note: 'Damaged' })]);
+		// nothing paid: by default it cancels the order with no money; a move that refuses it says so
 		const unpaid = order({ payment: { ...order().payment, paid: 0 } });
-		expect(plan(unpaid, 'refunded', {}, {}, flow)).toMatchObject({ ok: false, code: 'nothing_paid' });
+		const cancelled = planOf(plan(unpaid, 'refunded', {}, {}, flow));
+		expect(cancelled.facts.after).toMatchObject({ stock: 'back' });
+		expect(cancelled.external).toEqual([]);
+		expect(cancelled.refunded).toBe(0);
+		const refusing = {
+			...flow,
+			moves: flow.moves.map((move) =>
+				move.from === 'confirmed' && move.to === 'refunded'
+					? { ...move, options: { unpaid: /** @type {const} */ ('refuse') } }
+					: move,
+			),
+		};
+		expect(plan(unpaid, 'refunded', {}, {}, refusing)).toMatchObject({ ok: false, code: 'nothing_paid' });
 		expect(nothingPaid(unpaid, 'cancelled')).toBeNull();
 
 		const delivered = order({

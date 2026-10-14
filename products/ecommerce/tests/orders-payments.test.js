@@ -23,7 +23,6 @@ const FLOW = {
 		...DEFAULT_FLOW.moves,
 		{ from: 'confirmed', to: 'pending_payment' },
 		{ from: 'packed', to: 'confirmed' },
-		{ from: 'dispatched', to: 'cancelled' },
 		{ from: 'confirmed', to: 'refunded' },
 		{ from: 'pending_payment', to: 'refunded' },
 		{ from: 'delivered', to: 'customer-returned' },
@@ -289,22 +288,38 @@ describe('more moves (E27)', () => {
 		await shop.moveOptions('confirmed', 'pending_payment', {});
 	});
 
-	it('recalls a shipped parcel and gives everything back', async () => {
+	it('never cancels a dispatched parcel: it comes back first, then everything is given back', async () => {
 		await shop.list('couriers', [{ key: 'post', name: 'Post', trackingUrl: 'https://track.example/{tracking}' }]);
 		const { item, order } = await placeOrder({ stock: 3 });
 		await moveTo(order.id, 'confirmed');
 		await moveTo(order.id, 'packed');
 		await moveTo(order.id, 'dispatched', { shipment: { courier: 'post', trackingNumber: 'T1' } });
 		expect(await stockOf(item.id)).toBe(2);
-		const recalled = await moveTo(order.id, 'cancelled');
-		expect(recalled.json.status).toBe('cancelled');
+		// a flow cannot list the cancel of a shipped parcel, nor its refund as a cancel
+		const cookie = await shop.adminSession();
+		for (const to of ['cancelled', 'refunded']) {
+			const saved = await shop.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${shop.websiteId}/lists/order_flow`, {
+				value: { ...FLOW, moves: [...FLOW.moves, { from: 'dispatched', to }] },
+			});
+			expect(saved.status).toBe(422);
+		}
+		expect(codeOf(await moveTo(order.id, 'cancelled'))).toBe('move_not_allowed');
+		const back = await moveTo(order.id, 'returned', { reason: 'rto' });
+		expect(back.json.role).toBe('returned_to_origin');
 		expect(await stockOf(item.id)).toBe(3);
 	});
 
-	it('refunds before delivery only when something was paid, as a cancel', async () => {
+	it('refunds before delivery as a cancel; with nothing paid it cancels with no money unless the move refuses', async () => {
 		const unpaid = await placeOrder({ stock: 2 });
 		await moveTo(unpaid.order.id, 'confirmed');
-		expect(codeOf(await moveTo(unpaid.order.id, 'refunded'))).toBe('nothing_paid');
+		const cancelled = await moveTo(unpaid.order.id, 'refunded');
+		expect(cancelled.json).toMatchObject({ status: 'refunded', payment: { refunded: 0 } });
+		expect(await stockOf(unpaid.item.id)).toBe(2);
+		await shop.moveOptions('confirmed', 'refunded', { unpaid: 'refuse' });
+		const refused = await placeOrder({ stock: 2 });
+		await moveTo(refused.order.id, 'confirmed');
+		expect(codeOf(await moveTo(refused.order.id, 'refunded'))).toBe('nothing_paid');
+		await shop.moveOptions('confirmed', 'refunded', {});
 
 		const paid = await placeOrder({ stock: 2 });
 		await pay(paid.order.id, { method: 'bank_transfer', amount: 1000, confirm: true });

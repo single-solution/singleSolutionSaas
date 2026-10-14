@@ -370,8 +370,7 @@ export const createMoves = (product, service) => {
 				: undefined;
 			const cancelling =
 				(target.role === 'cancelled' || target.role === 'refunded') && BEFORE_DELIVERY_ROLES.includes(order.role);
-			// before shipping or a recalled parcel (E27), or a refund acting as a cancel: its open payment is cancelled at
-			// Payments first (K-13)
+			// a cancel before dispatch, or a refund acting as one: its open payment is cancelled at Payments first (K-13)
 			const step = cancelling
 				? await cancelAtPayments(s, order, input.note || (target.role === 'cancelled' ? 'Order cancelled' : 'Order refunded'))
 				: null;
