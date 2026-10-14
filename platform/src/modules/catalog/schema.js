@@ -1,7 +1,7 @@
 /**
  * Collections of the `catalog` module (PLAN 0.4.12, 0.8.2 Products): connected products, the launches the Portal
- * issued, and notices a product has not taken yet. Control-plane facts only: product addresses, public manifests,
- * public keys and launch ids.
+ * issued, notices a product has not taken yet, and the share links of websites' Setup sheets. Control-plane facts
+ * only: product addresses, public manifests, public keys, launch ids and hashes of share-link keys (never a sheet).
  * @module
  */
 import { defineCollection } from '../../infra/db.js';
@@ -9,6 +9,7 @@ import { defineCollection } from '../../infra/db.js';
 export const PRODUCTS = 'catalog_products';
 export const LAUNCHES = 'catalog_launches';
 export const NOTICES = 'catalog_notices';
+export const SETUP_LINKS = 'catalog_setup_links';
 
 export const collections = Object.freeze([
 	defineCollection({
@@ -31,5 +32,14 @@ export const collections = Object.freeze([
 		description:
 			'Notices a product has not answered 2xx yet (`{ productId, body, queuedAt, attempts }`), retried oldest first right after its next call to the Portal and dropped once delivered.',
 		indexes: [{ keys: { productId: 1, queuedAt: 1, _id: 1 } }],
+	}),
+	defineCollection({
+		module: 'catalog',
+		name: SETUP_LINKS,
+		description:
+			"Share links of websites' Setup sheets (`_id` = `shl_…`): the SHA-256 of the link key (never the key), the website, whether the copy shows settings values and the install details, who made it (admin or merchant), when it expires (removed then) or was revoked, and when it was last opened and how often.",
+		tenant: 'merchant',
+		indexes: [{ keys: { merchantId: 1, websiteId: 1, createdAt: -1, _id: -1 } }, { keys: { keyHash: 1 }, unique: true }],
+		ttl: { field: 'expiresAt', afterSeconds: 0 },
 	}),
 ]);

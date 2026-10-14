@@ -5,12 +5,15 @@
  *   nonce, HMAC-signed answer with its id, public key, manifest and current price list). It pins the Portal's keys
  *   and continues its price list from the Portal's `priceListVersion` when that is higher.
  * - `POST /.well-known/ss-events`: notices, verified with `verifyNotice` against the pinned Portal keys and recorded.
+ * - `GET /v1/blueprint?websiteId=`: its part of a Setup sheet, a Portal call verified with `verifyPortalCall` (the
+ *   `@ss/contracts/testing` product blueprint under its own id and name, unless a test sets another).
  *
- * Behavior can be tampered with per test (the connect answer, the notice status).
+ * Behavior can be tampered with per test (the connect answer, the notice status, the blueprint answer).
  * @module
  */
 import { createServer } from 'node:http';
 import { manifestPriceList } from '@ss/contracts';
+import { productBlueprint } from '@ss/contracts/testing';
 import {
 	createConnectResponse,
 	createJwks,
@@ -20,6 +23,7 @@ import {
 	signAssertion,
 	verifyConnectRequest,
 	verifyNotice,
+	verifyPortalCall,
 } from '@ss/protocol';
 import { createMemoryReplayStore } from '@ss/protocol/testing';
 
@@ -31,6 +35,8 @@ const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
  * @property {'bad_signature' | 'other_nonce' | 'no_secret' | 'status_500' | 'other_id' | 'bad_prices'} [connect]
  * @property {number} [noticeStatus] answer notices with this status (and record nothing)
  * @property {number} [pricesVersion] answer this price-list version
+ * @property {'hang' | 'status_500' | 'refuse' | 'invalid' | 'other_id'} [blueprint] never answer, answer 500 or 403, a
+ *   body that is no blueprint, or another product's blueprint
  */
 
 /**
@@ -52,6 +58,10 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 	/** @type {import('@ss/protocol').KeyResolver | null} */
 	let portalKeys = null;
 	const replayStore = createMemoryReplayStore({ now });
+	/** The websites the Portal asked for blueprints, in order. @type {string[]} */
+	const blueprintCalls = [];
+	/** @type {(websiteId: string) => Record<string, any>} */
+	let blueprintOf = () => ({ ...productBlueprint(), productId: current.id, name: current.name });
 
 	const server = createServer((req, res) => {
 		/** @type {Buffer[]} */
@@ -112,6 +122,30 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 					return answer(401, { code: 'invalid_notice' });
 				}
 			}
+			if (req.method === 'GET' && (req.url ?? '').startsWith('/v1/blueprint')) {
+				if (tamper.blueprint === 'hang') return;
+				if (tamper.blueprint === 'status_500') return answer(500, {});
+				if (tamper.blueprint === 'refuse') return answer(403, { code: 'forbidden' });
+				try {
+					if (!portalKeys) throw new Error('not connected');
+					await verifyPortalCall({
+						headers: /** @type {any} */ (req.headers),
+						audience: current.id,
+						method: 'GET',
+						target: String(req.url),
+						keyResolver: portalKeys,
+						replayStore,
+						now,
+					});
+				} catch {
+					return answer(401, { code: 'unauthorized' });
+				}
+				const websiteId = new URL(String(req.url), 'http://local').searchParams.get('websiteId') ?? '';
+				blueprintCalls.push(websiteId);
+				if (tamper.blueprint === 'invalid') return answer(200, { nope: true });
+				if (tamper.blueprint === 'other_id') return answer(200, { ...blueprintOf(websiteId), productId: 'someone-else' });
+				return answer(200, blueprintOf(websiteId));
+			}
 			answer(404);
 		});
 	});
@@ -130,6 +164,12 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 		},
 		/** A fresh client assertion of this product (`Authorization: Bearer …`). */
 		assertion: () => signAssertion({ signer: createSigner(key.privateJwk), productId: current.id, audience: portalUrl, now }),
+		/** The websites the Portal asked for blueprints, in order. */
+		blueprintCalls,
+		/** Answer another blueprint. @param {(websiteId: string) => Record<string, any>} make */
+		setBlueprint: (make) => {
+			blueprintOf = make;
+		},
 		/** Replace the served manifest. @param {any} m */
 		setManifest: (m) => {
 			current = m;

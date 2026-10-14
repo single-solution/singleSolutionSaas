@@ -1,6 +1,6 @@
 /**
- * Public service of the `catalog` module: connected products (PLAN 0.8.2 Products, 0.4.12 row 1), launches (0.4.3)
- * and notices (0.4.12).
+ * Public service of the `catalog` module: connected products (PLAN 0.8.2 Products, 0.4.12 row 1), launches (0.4.3),
+ * notices (0.4.12) and websites' Setup sheets with their share links (`setup.js`).
  *
  * - **Add product** (Owner): the admin gives the product's URL and its `CONNECT_SECRET`; the Portal calls
  *   `<url>/.well-known/ss-connect` (`@ss/protocol` handshake, HMAC both ways; the secret is never stored) sending
@@ -33,6 +33,7 @@ import { problem } from '../../infra/http.js';
 import { isDuplicateKey } from '../../infra/util.js';
 import { launchUrl } from './core/input.js';
 import { createNotices } from './notices.js';
+import { createSetup } from './setup.js';
 import { LAUNCHES, PRODUCTS } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
@@ -131,6 +132,7 @@ export const createCatalogService = (ctx, options = {}) => {
 	/** @type {SafeFetch} */
 	const safeFetch = options.fetch ?? netFetch;
 	const notices = createNotices({ ctx, policy, fetch: safeFetch });
+	const setup = createSetup({ ctx, policy, fetch: safeFetch });
 	const commerce = () => ctx.service('commerce');
 	const identity = () => ctx.service('identity');
 
@@ -548,6 +550,8 @@ export const createCatalogService = (ctx, options = {}) => {
 		 * @param {string} productId
 		 */
 		isActive: async (productId) => (await products.findOne({ _id: productId }))?.status === 'active',
+		/** Website Setup sheets and their share links (`setup.js`). */
+		setup,
 		notify: notices.notify,
 		notifyAll: notices.notifyAll,
 		deliverNotices: notices.deliver,

@@ -5,12 +5,16 @@
  *           POST /v1/admin/products (Add product) · POST /v1/admin/products/:productId/reconnect ·
  *           POST /v1/admin/products/:productId/status · POST /v1/admin/products/:productId/launch (Open as admin)
  * Merchant: POST /v1/merchants/:merchantId/websites/:websiteId/products/:productId/launch
+ * Setup:    GET /v1/merchants/:merchantId/websites/:websiteId/setup[?fresh=1|download=1] ·
+ *           GET|POST …/setup/links · DELETE …/setup/links/:linkId (merchant: own; Owner, Support) ·
+ *           POST /v1/setup/shared { key } (public, rate-limited, noindex)
  * Product:  POST /v1/product/launch/consume · GET /v1/product/directory/:productId · GET /v1/product/websites
  * @module
  */
 import { defineRoute, ok, created, problem } from '../../infra/http.js';
 import { PERMISSIONS as P } from '../../infra/rbac.js';
 import { parseAdminLaunch, parseConnect, parseConsume, parseStatus } from './core/input.js';
+import { parseShareLink } from './core/setup.js';
 
 /** @typedef {import('./service.js').CatalogService} CatalogService */
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
@@ -32,6 +36,15 @@ const audited = (c) => ({ actor: /** @type {Actor} */ (c.actor), requestId: c.re
 
 /** @param {RequestContext} c */
 const productOf = (c) => /** @type {{ productId: string }} */ (c.product).productId;
+
+/** The merchant and website a Setup sheet route names. @param {RequestContext} c */
+const websiteOf = (c) => ({
+	merchantId: /** @type {string} */ (c.params.merchantId),
+	websiteId: /** @type {string} */ (c.params.websiteId),
+});
+
+/** Answers of a shared Setup sheet: never indexed, never cached, no referrer. */
+const SHARED_HEADERS = Object.freeze({ 'x-robots-tag': 'noindex, nofollow', 'referrer-policy': 'no-referrer' });
 
 /**
  * @param {CatalogService} service
@@ -163,6 +176,70 @@ export const catalogRoutes = (service, commerce) => [
 					...audited(c),
 				}),
 			),
+	}),
+
+	// ---------------------------------------------------------------- Setup sheets (merchant: own; Owner and Support)
+	defineRoute({
+		method: 'GET',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/setup',
+		auth: ['merchant', 'admin'],
+		permission: P.tokensManage,
+		rateLimit: { limit: 60, windowMs: 60_000 },
+		handler: async (c) => {
+			const download = c.query.download === '1';
+			const { sheet, domain } = await service.setup.sheet({
+				...websiteOf(c),
+				fresh: c.query.fresh === '1',
+				download,
+				...audited(c),
+			});
+			return ok(sheet, download ? { headers: { 'content-disposition': `attachment; filename="setup-${domain}.json"` } } : {});
+		},
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/setup/links',
+		auth: ['merchant', 'admin'],
+		permission: P.tokensManage,
+		handler: async (c) => ok(await service.setup.listLinks(websiteOf(c))),
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/setup/links',
+		auth: ['merchant', 'admin'],
+		permission: P.tokensManage,
+		idempotent: 'no-store', // the answer carries the link's key
+		rateLimit: { limit: 20, windowMs: 60_000 },
+		handler: async (c) =>
+			created(await service.setup.createLink({ ...websiteOf(c), ...valid(parseShareLink(c.body ?? {})), ...audited(c) })),
+	}),
+	defineRoute({
+		method: 'DELETE',
+		path: '/v1/merchants/:merchantId/websites/:websiteId/setup/links/:linkId',
+		auth: ['merchant', 'admin'],
+		permission: P.tokensManage,
+		handler: async (c) =>
+			ok({
+				link: await service.setup.revokeLink({
+					...websiteOf(c),
+					linkId: /** @type {string} */ (c.params.linkId),
+					...audited(c),
+				}),
+			}),
+	}),
+	// a shared Setup sheet: the link's key in the body (it is in the address fragment of the page, never in a URL)
+	defineRoute({
+		method: 'POST',
+		path: '/v1/setup/shared',
+		auth: 'public',
+		maxBodyBytes: 1024,
+		rateLimit: { limit: 30, windowMs: 60_000 },
+		handler: async (c) => {
+			const body = /** @type {Record<string, unknown>} */ (typeof c.body === 'object' && c.body !== null ? c.body : {});
+			return ok(await service.setup.shared({ key: body.key, requestId: c.requestId, ip: c.ip }), {
+				headers: { ...SHARED_HEADERS },
+			});
+		},
 	}),
 
 	// ---------------------------------------------------------------- product API (PLAN 0.4.12)
