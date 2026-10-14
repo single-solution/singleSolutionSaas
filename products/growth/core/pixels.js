@@ -230,8 +230,8 @@ export const contactCalls = (method, loaded) => {
 };
 
 /**
- * A Web Vital as a Google Analytics 4 event (PLAN 0.8.10 G7), labeled as web.dev's `web-vitals` guide and the stores'
- * reports have it (SG-26): the event is named after the vital, with `value` (whole milliseconds; CLS × 1000),
+ * A Web Vital as a Google Analytics 4 event (PLAN 0.8.10 G7), labeled as web.dev's `web-vitals` guide does, so the
+ * standard GA4 reports read it (SG-26): the event is named after the vital, with `value` (whole milliseconds; CLS × 1000),
  * `metric_id` (one id per vital of a page load, which GA4 reports group by), `metric_value` (CLS as measured),
  * `metric_rating` (`good`, `needs-improvement`, `poor`), `event_category` `web-vitals`, `event_label` (the metric id
  * again) and `non_interaction`.
