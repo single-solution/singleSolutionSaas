@@ -999,28 +999,28 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   `x-ui.wide` spans the row.
 - **Home cards**: numbers with small 30-day charts; a chart with nothing to draw is one line of text instead.
 - **Visual style (owner decisions 2026-10-14, look "A. Workbench"; replaces the 2026-10-08 "A + B" style)**:
-  - **Floating, never glued to the window edges**: the sidebar and the top bar are panels with space around them (the
-    top bar stays on desktop too: theme switch and account actions on its right; owner: "I loved that header"). The
-    top bar and the page share one width (at most 1200 px, centred beside the sidebar).
-  - **One rhythm**: the same 24 px between all blocks of a page and around the panels; cards side by side in a row have
-    the **same height** (no holes between cards and sections; owner: "spaces between cards and sections, I hate
-    that"). Masonry (below) stays for cards of very different heights.
-  - **Flat at rest**: surfaces have a hairline edge and no shadow; lift or a soft glow appears **only on hover** (owner:
-    "shadows and elevation by default is not premium, but can be on hover"). Only things that sit above the page
-    (menus, dialogs, toasts) carry a shadow.
-  - **Type**: Figtree for text, Bricolage Grotesque for page titles, the brand name and key figures; one short scale
-    (titles 26 px, card titles 15 px, text 14 px, help 12–13 px); labels in sentence case, never all caps.
-  - **Colour**: warm neutrals kept light (canvas `#f7f6f4`; dark: warm plum-black), white surfaces; indigo stays the
-    only accent (colour rule below).
-  - **Controls**: one height for inputs, selects and medium buttons (36 px), 10 px corners for controls and 14 px for
-    cards; kit-drawn checkboxes, radios and switches (the same in every browser); a disabled button turns neutral
-    grey, a busy one keeps its colour with a spinner; long lists of choices (more than 12, e.g. countries) are a
-    searchable picker with chips, countries shown by name.
-  - **Overviews talk**: the admin Overview opens with a greeting and one sentence of what matters now, a **Needs you**
-    list (each item says what happens if it waits and carries its button), a setup checklist while the platform is
-    new, the month's numbers, the first merchants with initials and their balance, the products, and the latest
-    activity as a timeline. The merchant Overview and the product dashboards' overviews follow the same pattern (to
-    do). Same style in light and dark, and in product dashboards.
+   - **Floating, never glued to the window edges**: the sidebar and the top bar are panels with space around them (the
+     top bar stays on desktop too: theme switch and account actions on its right; owner: "I loved that header"). The
+     top bar and the page share one width (at most 1200 px, centred beside the sidebar).
+   - **One rhythm**: the same 24 px between all blocks of a page and around the panels; cards side by side in a row have
+     the **same height** (no holes between cards and sections; owner: "spaces between cards and sections, I hate
+     that"). Masonry (below) stays for cards of very different heights.
+   - **Flat at rest**: surfaces have a hairline edge and no shadow; lift or a soft glow appears **only on hover** (owner:
+     "shadows and elevation by default is not premium, but can be on hover"). Only things that sit above the page
+     (menus, dialogs, toasts) carry a shadow.
+   - **Type**: Figtree for text, Bricolage Grotesque for page titles, the brand name and key figures; one short scale
+     (titles 26 px, card titles 15 px, text 14 px, help 12–13 px); labels in sentence case, never all caps.
+   - **Colour**: warm neutrals kept light (canvas `#f7f6f4`; dark: warm plum-black), white surfaces; indigo stays the
+     only accent (colour rule below).
+   - **Controls**: one height for inputs, selects and medium buttons (36 px), 10 px corners for controls and 14 px for
+     cards; kit-drawn checkboxes, radios and switches (the same in every browser); a disabled button turns neutral
+     grey, a busy one keeps its colour with a spinner; long lists of choices (more than 12, e.g. countries) are a
+     searchable picker with chips, countries shown by name.
+   - **Overviews talk**: the admin Overview opens with a greeting and one sentence of what matters now, a **Needs you**
+     list (each item says what happens if it waits and carries its button), a setup checklist while the platform is
+     new, the month's numbers, the first merchants with initials and their balance, the products, and the latest
+     activity as a timeline. The merchant Overview and the product dashboards' overviews follow the same pattern (to
+     do). Same style in light and dark, and in product dashboards.
 - **Colour rule (owner decision 2026-10-09: one accent, final)**: **indigo is the only accent** — primary buttons,
   links, the active item, icon tiles and badges; surfaces are neutral; **green, amber and red only for status**. No
   screen names a colour for meaning, and the product dashboards follow the same rule.
@@ -1971,6 +1971,7 @@ anything unused or left over (files, folders, exports, settings, texts, generate
 (`audit/seo-audit-2026-10-14.md`, built in phases S1–S12): baseline SEO — product, category and listing answers,
 sitemaps and the new site answer (E49) — is served whenever the catalog is on; the priced `seo` feature is the SEO
 product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
+
 - **SEO S1–S4 built (2026-10-15; 3ea19105, 2ff59f39, 5136a716, f22e29f1, e2e c5947c07; SB mapping mechanical
   9f3272a7, 480aa3c7, cd4cb1c0 — to review when the owner asks):** structured data meets Google's merchant-listing
   rules (variant images and unique ids, no zero-price offers, no Product node without offers, return windows per item,
@@ -1995,6 +1996,7 @@ connections state, widgets with the install snippet, API and docs addresses, sta
 recommends features from a short merchant profile (what they sell, how shoppers pay, delivery, countries, languages …),
 from tags in each product's manifest. Built after the Ecommerce clean pass (kit endpoint, Portal page, share links,
 advisor).
+
 - **Stages 1–3 built (2026-10-14; 444260da, 5ab21a5b, 77f65b92, be8b2f3e, b5553a94, 779896e6, 86a4d35e, a7c46a8e,
   2a77bb8d):** signed Portal → product calls (`ss-call.v1`, packages/protocol); `ss.blueprint/1` in @ss/contracts;
   every product answers `GET /v1/blueprint?websiteId=` through the kit (auth `portal`: features, settings with defaults
