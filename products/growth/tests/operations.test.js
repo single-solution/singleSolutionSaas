@@ -10,7 +10,7 @@ import { ALL, dailyRows, setup } from './helpers.js';
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
 
-const HERE = { 'x-vercel-ip-country': 'PK', 'x-vercel-ip-city': 'Lahore' };
+const HERE = { 'x-vercel-ip-country': 'GB', 'x-vercel-ip-city': 'London' };
 const VISITOR = { session: 'sessionaaaaaaaaaaaaaaaaaaaaaaaaa', browser: 'chrome', os: 'android' };
 
 beforeAll(async () => {
@@ -32,7 +32,7 @@ describe('database operations per page view (RT-2)', () => {
 				[
 					{
 						type: 'page_view',
-						path: '/phones',
+						path: '/lamps',
 						visit: true,
 						device: 'mobile',
 						referrer: 'www.google.com',
@@ -51,9 +51,9 @@ describe('database operations per page view (RT-2)', () => {
 		const next = await env.operationsDuring(() =>
 			env.collect(
 				[
-					{ type: 'page_view', path: '/phones/x', visit: false, page: 2, gap: 20_000, ...VISITOR },
-					{ type: 'view_item', path: '/phones/x', items: [{ id: 'prd_1', quantity: 1 }], ...VISITOR },
-					{ type: 'search', path: '/phones/x', term: 'case', results: 0, ...VISITOR },
+					{ type: 'page_view', path: '/lamps/x', visit: false, page: 2, gap: 20_000, ...VISITOR },
+					{ type: 'view_item', path: '/lamps/x', items: [{ id: 'prd_1', quantity: 1 }], ...VISITOR },
+					{ type: 'search', path: '/lamps/x', term: 'shade', results: 0, ...VISITOR },
 				],
 				HERE,
 			),
@@ -63,7 +63,7 @@ describe('database operations per page view (RT-2)', () => {
 			env.collect(
 				['LCP', 'INP', 'CLS', 'FCP', 'TTFB'].map((name) => ({
 					type: 'vital',
-					path: '/phones',
+					path: '/lamps',
 					name,
 					value: 300,
 					...VISITOR,
@@ -79,16 +79,16 @@ describe('the day’s totals (RT-2)', () => {
 	it('keeps any key, whatever its characters, and reads it back', async () => {
 		env.advance(86_400_000);
 		await env.collect([
-			{ type: 'page_view', path: '/p/case.v2.html', visit: false },
-			{ type: 'search', path: '/s', term: '$100 case 50%2E off', results: 2 },
+			{ type: 'page_view', path: '/p/shade.v2.html', visit: false },
+			{ type: 'search', path: '/s', term: '$100 shade 50%2E off', results: 2 },
 		]);
 		const db = await env.merchantDb();
 		const rows = await dailyRows(db);
-		expect(rows).toContainEqual(expect.objectContaining({ day: '2026-10-02', metric: 'page', key: '/p/case.v2.html' }));
-		expect(rows).toContainEqual(expect.objectContaining({ metric: 'search', key: '$100 case 50%2e off', count: 1 }));
+		expect(rows).toContainEqual(expect.objectContaining({ day: '2026-10-02', metric: 'page', key: '/p/shade.v2.html' }));
+		expect(rows).toContainEqual(expect.objectContaining({ metric: 'search', key: '$100 shade 50%2e off', count: 1 }));
 		const report = await (await env.call('GET', '/v1/analytics?from=2026-10-02&to=2026-10-02', { token: env.server })).json();
-		expect(report.pages).toEqual([{ key: '/p/case.v2.html', count: 1 }]);
-		expect(report.searches).toEqual([{ key: '$100 case 50%2e off', count: 1 }]);
+		expect(report.pages).toEqual([{ key: '/p/shade.v2.html', count: 1 }]);
+		expect(report.searches).toEqual([{ key: '$100 shade 50%2e off', count: 1 }]);
 		expect(report.days).toEqual([{ day: '2026-10-02', visits: 0, pageViews: 1 }]);
 	});
 

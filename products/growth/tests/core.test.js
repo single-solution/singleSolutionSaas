@@ -49,7 +49,7 @@ import { createSnippets } from '../core/snippets.js';
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const DOMAIN = 'shop.example.com';
-const context = { domain: DOMAIN, country: 'PK' };
+const context = { domain: DOMAIN, country: 'GB' };
 
 describe('events', () => {
 	it('keeps only the path, never the query string or fragment', () => {
@@ -140,7 +140,7 @@ describe('events', () => {
 	});
 
 	it('keeps the session facts with the sessions detail only (G3)', () => {
-		const sessions = { ...context, sessions: true, city: 'Lahore' };
+		const sessions = { ...context, sessions: true, city: 'London' };
 		const visit = {
 			type: 'page_view',
 			path: '/',
@@ -152,7 +152,7 @@ describe('events', () => {
 		};
 		expect(checkEvent(visit, context)?.visitor).toBeUndefined();
 		const first = checkEvent(visit, sessions);
-		expect(first?.visitor).toEqual({ session: 'abcdef0123456789', browser: 'chrome', os: 'android', city: 'Lahore' });
+		expect(first?.visitor).toEqual({ session: 'abcdef0123456789', browser: 'chrome', os: 'android', city: 'London' });
 		expect(first?.data).toMatchObject({ visit: true, page: 1 });
 		expect(first?.totals.map((t) => `${t.metric}:${t.key}`)).toEqual([
 			'page_views:',
@@ -160,12 +160,12 @@ describe('events', () => {
 			'visits:',
 			'source:(direct)',
 			'device:desktop',
-			'country:PK',
+			'country:GB',
 			'session_pages:',
 			'sessions:',
 			'browser:chrome',
 			'os:android',
-			'city:Lahore, PK',
+			'city:London, GB',
 		]);
 		const second = checkEvent(
 			{ ...visit, visit: false, page: 2, gap: 42_000, browser: 'netscape' },
@@ -225,8 +225,8 @@ describe('events', () => {
 		/** @param {Record<string, string>} headers */
 		const city = (headers) => cityOf((name) => headers[name] ?? null);
 		expect(city({ 'x-vercel-ip-city': 'S%C3%A3o%20Paulo' })).toBe('São Paulo');
-		expect(city({ 'x-vercel-ip-city': '%E0%A4%A', 'cf-ipcity': 'Lahore' })).toBe('%E0%A4%A');
-		expect(city({ 'cf-ipcity': '12345', 'cloudfront-viewer-city': 'Karachi' })).toBe('Karachi');
+		expect(city({ 'x-vercel-ip-city': '%E0%A4%A', 'cf-ipcity': 'Paris' })).toBe('%E0%A4%A');
+		expect(city({ 'cf-ipcity': '12345', 'cloudfront-viewer-city': 'Tokyo' })).toBe('Tokyo');
 		expect(city({})).toBeNull();
 	});
 });
@@ -246,14 +246,14 @@ describe('analytics report', () => {
 
 	it('counts days in the business time zone (UTC when missing)', () => {
 		const lateEvening = Date.parse('2026-10-08T20:00:00Z');
-		// Karachi is UTC+5: 20:00 UTC is already the next day there; Los Angeles is still on the same day
-		expect(dayOf(lateEvening, 'Asia/Karachi')).toBe('2026-10-09');
+		// Tokyo is UTC+9: 20:00 UTC is already the next day there; Los Angeles is still on the same day
+		expect(dayOf(lateEvening, 'Asia/Tokyo')).toBe('2026-10-09');
 		expect(dayOf(lateEvening, 'America/Los_Angeles')).toBe('2026-10-08');
 		expect(dayOf(lateEvening, null)).toBe('2026-10-08');
 		expect(dayOf(lateEvening, 'Not/AZone')).toBe('2026-10-08');
-		expect(rangeOf({}, lateEvening, 'Asia/Karachi')).toEqual({ ok: true, from: '2026-09-10', to: '2026-10-09' });
+		expect(rangeOf({}, lateEvening, 'Asia/Tokyo')).toEqual({ ok: true, from: '2026-09-10', to: '2026-10-09' });
 		expect(rangeOf({}, Date.parse('2026-10-08T03:00:00Z'), 'America/Los_Angeles')).toMatchObject({ to: '2026-10-07' });
-		expect(new Date(dayStart('2026-10-09', 'Asia/Karachi')).toISOString()).toBe('2026-10-08T19:00:00.000Z');
+		expect(new Date(dayStart('2026-10-09', 'Asia/Tokyo')).toISOString()).toBe('2026-10-08T15:00:00.000Z');
 		expect(dayStart('2026-13-01', 'UTC')).toBeNaN();
 	});
 
@@ -261,7 +261,7 @@ describe('analytics report', () => {
 		const report = buildReport({
 			from: '2026-10-01',
 			to: '2026-10-02',
-			timeZone: 'Asia/Karachi',
+			timeZone: 'Asia/Tokyo',
 			on: ['visitor_analytics', 'web_vitals'],
 			totals: [
 				{ metric: 'page', key: '/b', count: 2, sum: 0 },
@@ -274,7 +274,7 @@ describe('analytics report', () => {
 			{ key: '/a', count: 2 },
 			{ key: '/b', count: 2 },
 		]);
-		expect(report.timeZone).toBe('Asia/Karachi');
+		expect(report.timeZone).toBe('Asia/Tokyo');
 		expect(report.days).toEqual([
 			{ day: '2026-10-01', visits: 0, pageViews: 0 },
 			{ day: '2026-10-02', visits: 4, pageViews: 0 },
@@ -304,7 +304,7 @@ describe('analytics report', () => {
 				{ metric: 'browser', key: 'safari', count: 1, sum: 0 },
 				{ metric: 'browser', key: 'other', count: 1, sum: 0 },
 				{ metric: 'os', key: 'android', count: 4, sum: 0 },
-				{ metric: 'city', key: 'Lahore, PK', count: 2, sum: 0 },
+				{ metric: 'city', key: 'London, GB', count: 2, sum: 0 },
 				{ metric: 'vital_page', key: '/a\nLCP', count: 2, sum: 5000 },
 				{ metric: 'vital_page', key: '/a\nCLS', count: 2, sum: 100 },
 				{ metric: 'vital_page', key: '/b\nLCP', count: 1, sum: 9000 },
@@ -327,7 +327,7 @@ describe('analytics report', () => {
 			{ key: 'other', count: 1 },
 		]);
 		expect(report.systems).toEqual([{ key: 'android', count: 4 }]);
-		expect(report.cities).toEqual([{ key: 'Lahore, PK', count: 2 }]);
+		expect(report.cities).toEqual([{ key: 'London, GB', count: 2 }]);
 		expect(report.vitalPages).toEqual([
 			{ path: '/b', samples: 1, averages: { LCP: 9000, INP: null, CLS: null, FCP: null, TTFB: null } },
 			{ path: '/a', samples: 4, averages: { LCP: 2500, INP: null, CLS: 50, FCP: null, TTFB: null } },
@@ -352,7 +352,7 @@ describe('analytics report', () => {
 		expect([topOf('25'), topOf('0'), topOf('101'), topOf(undefined), topOf('x')]).toEqual([25, 10, 10, 10, 10]);
 		// the dashboard widget's range chips, in the business time zone
 		const late = Date.parse('2026-03-01T20:00:00Z');
-		expect(PRESETS.map((preset) => presetRange(preset, late, 'Asia/Karachi'))).toEqual([
+		expect(PRESETS.map((preset) => presetRange(preset, late, 'Asia/Tokyo'))).toEqual([
 			{ from: '2026-03-02', to: '2026-03-02' },
 			{ from: '2026-02-24', to: '2026-03-02' },
 			{ from: '2026-02-01', to: '2026-03-02' },
@@ -436,8 +436,8 @@ describe('page script settings', () => {
 		expect(at({ text: 'Hi', enabled: true })).toMatchObject({ text: 'Hi' });
 		expect(pathMatches('/', '/')).toBe(true);
 		expect(pathMatches('/', '/shop')).toBe(false);
-		expect(pathMatches('/shop/*', '/shop/phones?x=1')).toBe(true);
-		expect(pathMatches('/shop/*', '/shop/phones/blue')).toBe(false);
+		expect(pathMatches('/shop/*', '/shop/lamps?x=1')).toBe(true);
+		expect(pathMatches('/shop/*', '/shop/lamps/blue')).toBe(false);
 		expect(pathMatches('/**', '/anything/at/all')).toBe(true);
 		expect(pathMatches('/a/**/z', '/a/b/c/z')).toBe(true);
 		expect(pathMatches('shop', '/shop')).toBe(false);

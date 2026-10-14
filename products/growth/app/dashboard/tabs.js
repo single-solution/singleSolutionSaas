@@ -17,6 +17,7 @@ import {
 	ErrorState,
 	FieldGrid,
 	Input,
+	LocalTime,
 	Masonry,
 	SchemaForm,
 	Section,
@@ -31,6 +32,7 @@ import {
 	formatCreditsPerHour,
 	formatDateTime,
 	parseCredits,
+	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { tagsReady } from '../../core/config.js';
@@ -128,7 +130,9 @@ function RecentChanges({ items, titled = true }) {
 					{items.map((item) => (
 						<li key={`${item.at}-${item.detail}`}>
 							<span className="font-semibold">{item.who.name}</span> · {item.detail}{' '}
-							<span className="text-muted">{formatDateTime(item.at)}</span>
+							<span className="text-muted">
+								<LocalTime value={item.at} />
+							</span>
 						</li>
 					))}
 				</ul>
@@ -139,8 +143,9 @@ function RecentChanges({ items, titled = true }) {
 
 /** @param {{ status: { status: string, graceEndsAt: string | null } }} props */
 function StatusBanner({ status }) {
+	const timeZone = useViewerTimeZone();
 	const text = fill(TEXTS.status[/** @type {keyof typeof TEXTS.status} */ (status.status)] ?? status.status, {
-		time: formatDateTime(status.graceEndsAt),
+		time: formatDateTime(status.graceEndsAt, { timeZone }),
 	});
 	const tone = status.status === 'active' ? 'success' : status.status === 'grace' ? 'warning' : 'danger';
 	return <Callout tone={tone}>{text}</Callout>;
@@ -160,6 +165,7 @@ const valuesOf = (data) =>
 
 /** @param {TabProps} props */
 function OverviewTab({ websiteId, domain }) {
+	const timeZone = useViewerTimeZone();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const settings = useLoad(`${base}/settings`);
@@ -209,7 +215,7 @@ function OverviewTab({ websiteId, domain }) {
 						{settings.answer?.ok ? (
 							<AtAGlance
 								values={valuesOf(settings.answer.data)}
-								context={{ on: data.featuresOn, domain, now: Date.now() }}
+								context={{ on: data.featuresOn, domain, now: Date.now(), timeZone }}
 							/>
 						) : null}
 						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
@@ -230,7 +236,7 @@ function OverviewTab({ websiteId, domain }) {
 											badge={
 												data.checklist.widget.installed
 													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt),
+															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
 														})
 													: TEXTS.overview.widgetMissing
 											}
@@ -639,6 +645,7 @@ function FormatForm({ format, save, reload }) {
 
 /** @param {TabProps} props */
 function SettingsTab({ websiteId, domain }) {
+	const timeZone = useViewerTimeZone();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const settings = useLoad(`${base}/settings`);
 	const texts = useLoad(`${base}/texts`);
@@ -662,6 +669,7 @@ function SettingsTab({ websiteId, domain }) {
 										.map((/** @type {Feature} */ f) => f.key),
 									domain,
 									now: Date.now(),
+									timeZone,
 								}}
 							/>
 						)}

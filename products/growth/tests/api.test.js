@@ -12,14 +12,14 @@ const codeOf = async (response) =>
 		.pop();
 
 const HOME = `<!doctype html><html lang="en"><head>
-<title>Shop Example: phones and cases</title>
-<meta name="description" content="Phones, cases and chargers with delivery across the country and easy returns.">
+<title>Shop Example: lamps and shades</title>
+<meta name="description" content="Lamps, shades and bulbs with delivery across the country and easy returns.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta property="og:title" content="Shop"><meta property="og:image" content="https://shop.example.com/og.png">
 <link rel="canonical" href="https://shop.example.com/">
 <meta name="google-site-verification" content="abc123">
 <script type="application/ld+json">{"@type":"Organization"}</script>
-</head><body><h1>Shop</h1><img src="/a.png" alt="A phone"></body></html>`;
+</head><body><h1>Shop</h1><img src="/a.png" alt="A lamp"></body></html>`;
 
 beforeAll(async () => {
 	env = await setup();
@@ -94,7 +94,7 @@ describe('events and totals', () => {
 				{ type: 'nonsense', path: '/' },
 				{ type: 'page_view', path: 'no-slash' },
 			],
-			{ 'x-vercel-ip-country': 'pk' },
+			{ 'x-vercel-ip-country': 'gb' },
 		);
 		expect(answer.status).toBe(202);
 		expect(await answer.json()).toEqual({ accepted: 8 });
@@ -105,7 +105,7 @@ describe('events and totals', () => {
 		expect(first).toMatchObject({
 			websiteId: env.websiteId,
 			path: '/shop',
-			data: { source: 'www.google.com', device: 'mobile', country: 'PK' },
+			data: { source: 'www.google.com', device: 'mobile', country: 'GB' },
 		});
 		expect(JSON.stringify(events)).not.toContain('secret');
 		expect(first?.expiresAt.toISOString()).toBe('2027-11-01T10:00:00.000Z');
@@ -233,7 +233,7 @@ describe('the widget config', () => {
 			(await env.call('GET', `/v1/notice${query}`, init)).json();
 		const notice = { text: 'Free delivery this week', linkText: 'See deals', linkUrl: '/deals', dismissible: true };
 		expect(await read('', { token: env.browser, origin: ORIGIN })).toEqual(notice);
-		expect(await read('?path=/shop/phones', { token: env.server })).toEqual(notice);
+		expect(await read('?path=/shop/lamps', { token: env.server })).toEqual(notice);
 		expect(await read('?path=/', { token: env.browser, origin: ORIGIN })).toBeNull();
 		expect(await read('?path=/checkout/pay', { token: env.server })).toBeNull();
 		const settings = (await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json())
@@ -480,20 +480,20 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 	const VISITOR = '203.0.113.7';
 
 	beforeAll(async () => {
-		// 20:00 UTC on 1 October is already 2 October in Karachi (UTC+5)
+		// 20:00 UTC on 1 October is already 2 October in Tokyo (UTC+9)
 		kit = await setup({ start: Date.parse('2026-10-01T20:00:00Z') });
 		await kit.switchOn(ALL);
 		await kit.connectDatabase();
 		kit.web.pages['/.well-known/business.json'] = {
 			status: 200,
-			body: JSON.stringify({ name: 'Shop', timeZone: 'Asia/Karachi' }),
+			body: JSON.stringify({ name: 'Shop', timeZone: 'Asia/Tokyo' }),
 		};
 		const refreshed = await kit.dashboard(
 			await kit.adminSession(),
 			'POST',
 			`/v1/dashboard/websites/${kit.websiteId}/business/refresh`,
 		);
-		expect((await refreshed.json()).business.timeZone).toBe('Asia/Karachi');
+		expect((await refreshed.json()).business.timeZone).toBe('Asia/Tokyo');
 	});
 	afterAll(async () => {
 		await kit.close();
@@ -510,7 +510,7 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		expect(report).toMatchObject({
 			from: '2026-09-03',
 			to: '2026-10-02',
-			timeZone: 'Asia/Karachi',
+			timeZone: 'Asia/Tokyo',
 			totals: { visits: 1, pageViews: 2 },
 		});
 		expect(report.days.at(-1)).toEqual({ day: '2026-10-02', visits: 1, pageViews: 2 });
@@ -519,7 +519,7 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		const invalid = await kit.call('GET', '/v1/analytics?from=2026-02-30&to=2026-03-02', { token: kit.server });
 		expect(invalid.status).toBe(422);
 		const config = await (await kit.call('GET', '/v1/widget/config', { token: kit.browser, origin: ORIGIN })).json();
-		expect(config.timeZone).toBe('Asia/Karachi');
+		expect(config.timeZone).toBe('Asia/Tokyo');
 	});
 
 	it('takes the page script’s events from the merchant’s server for one visitor (K3)', async () => {
@@ -533,12 +533,12 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		const noIp = await fromServer(null);
 		expect(noIp.status).toBe(400);
 		expect(await codeOf(noIp)).toBe('visitor_ip_required');
-		const sent = await fromServer(VISITOR, [{ type: 'search', path: '/search', term: 'phone case', results: 3 }]);
+		const sent = await fromServer(VISITOR, [{ type: 'search', path: '/search', term: 'desk lamp', results: 3 }]);
 		expect(sent.status).toBe(202);
 		expect(sent.headers.get('access-control-allow-origin')).toBeNull();
 		expect(await sent.json()).toEqual({ accepted: 1 });
 		const db = await kit.merchantDb();
-		expect((await dailyRows(db)).find((row) => row.metric === 'search' && row.key === 'phone case')).toMatchObject({
+		expect((await dailyRows(db)).find((row) => row.metric === 'search' && row.key === 'desk lamp')).toMatchObject({
 			day: '2026-10-02',
 			count: 1,
 		});
@@ -590,25 +590,25 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		expect(await codeOf(bad)).toBe('invalid_actor');
 		const format = await kit.call('PUT', '/v1/format', {
 			token: kit.server,
-			body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Ayesha Khan'), 'ss-actor-role': 'Manager' },
+			body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Alex Morgan'), 'ss-actor-role': 'Manager' },
 		});
 		expect(format.status).toBe(200);
 		const overview = await (
 			await kit.dashboard(await kit.adminSession(), 'GET', `/v1/dashboard/websites/${kit.websiteId}/overview`)
 		).json();
-		expect(overview.recentChanges[0].who).toEqual({ kind: 'user', id: 'u_7', name: 'Ayesha Khan', role: 'Manager' });
+		expect(overview.recentChanges[0].who).toEqual({ kind: 'user', id: 'u_7', name: 'Alex Morgan', role: 'Manager' });
 		const config = await (await kit.call('GET', '/v1/widget/config', { token: kit.browser, origin: ORIGIN })).json();
 		expect(config.format).toEqual({
 			locale: 'en-GB',
 			currencyDisplay: 'custom',
-			currencySymbol: 'Rs',
+			currencySymbol: 'US$',
 			wholeUnits: true,
 			times: 'business',
 		});
 		const ticket = await kit.ticket(['seo.check']);
 		const admin = await (await kit.call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN_ORIGIN })).json();
-		expect(admin).toMatchObject({ timeZone: 'Asia/Karachi', format: { currencySymbol: 'Rs' } });
+		expect(admin).toMatchObject({ timeZone: 'Asia/Tokyo', format: { currencySymbol: 'US$' } });
 		kit.web.pages['/'] = { status: 200, body: HOME };
 		const checked = await kit.call('POST', '/v1/admin/seo/checks', {
 			token: ticket,

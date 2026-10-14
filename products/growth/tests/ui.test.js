@@ -151,7 +151,7 @@ describe('the page script', () => {
 
 	it('asks for consent, then loads the tags of each granted category and records the page view', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'], now: NOW });
-		window.history.replaceState(null, '', '/shop?utm_source=News&q=phones');
+		window.history.replaceState(null, '', '/shop?utm_source=News&q=lamps');
 		serve({
 			[`GET ${CONFIG_PATH}`]: (init) => {
 				expect(init.headers.authorization).toBe('Bearer browser-token');
@@ -224,7 +224,7 @@ describe('the page script', () => {
 				visit: true,
 				campaign: { source: 'News', medium: '', name: '' },
 			}),
-			{ type: 'search', path: '/shop', term: 'phones' },
+			{ type: 'search', path: '/shop', term: 'lamps' },
 			expect.objectContaining({
 				type: 'view_item',
 				value: 1250,
@@ -255,12 +255,12 @@ describe('the page script', () => {
 		]);
 		expect([...w.dataLayer].map((args) => [args[0], args[1]])).toContainEqual(['event', 'conversion']);
 		expect(w.ttq.track).toHaveBeenCalledWith('CompletePayment', expect.objectContaining({ value: 25 }));
-		w[WIDGET_GLOBAL].search('cases', { results: 0 });
+		w[WIDGET_GLOBAL].search('shades', { results: 0 });
 		w[WIDGET_GLOBAL].notFound();
 		await vi.advanceTimersByTimeAsync(1000);
 		expect(collected().slice(-3)).toEqual([
 			expect.objectContaining({ type: 'purchase', orderId: 'o1' }),
-			{ type: 'search', path: '/shop', term: 'cases', results: 0 },
+			{ type: 'search', path: '/shop', term: 'shades', results: 0 },
 			{ type: 'not_found', path: '/shop' },
 		]);
 		// leaving the page sends what waits at once
@@ -400,7 +400,7 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 
 	it('G2: searches and contacts reach the pixels, with variant ids when the merchant picks them', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout'] });
-		window.history.replaceState(null, '', '/search?q=Blue+case');
+		window.history.replaceState(null, '', '/search?q=Blue+shade');
 		serve({
 			[`GET ${CONFIG_PATH}`]: () =>
 				answer(
@@ -418,7 +418,7 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		});
 		const page = startWidget({ window, script: script('t') });
 		// a search the page dispatches before the config is there waits for it
-		window.dispatchEvent(new window.CustomEvent('ss:search', { detail: { term: '  red   phone ', results: 3 } }));
+		window.dispatchEvent(new window.CustomEvent('ss:search', { detail: { term: '  red   lamp ', results: 3 } }));
 		await vi.advanceTimersByTimeAsync(0);
 		await page.ready;
 		w.ttq.track = vi.fn();
@@ -434,8 +434,8 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		const meta = w.fbq.queue.map((/** @type {unknown[]} */ call) => call.slice(1, 3));
 		expect(meta).toEqual(
 			expect.arrayContaining([
-				['Search', { search_string: 'Blue case' }],
-				['Search', { search_string: 'red phone' }],
+				['Search', { search_string: 'Blue shade' }],
+				['Search', { search_string: 'red lamp' }],
 				['Contact', { method: 'whatsapp' }],
 				['Contact', {}],
 				['Search', { search_string: 'cables' }],
@@ -445,7 +445,7 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		const google = [...w.dataLayer].filter((entry) => entry[0] === 'event').map((entry) => [entry[1], entry[2]]);
 		expect(google).toEqual(
 			expect.arrayContaining([
-				['search', { search_term: 'red phone' }],
+				['search', { search_term: 'red lamp' }],
 				['generate_lead', { method: 'whatsapp' }],
 				['view_item', expect.objectContaining({ items: [expect.objectContaining({ item_id: 'var_9' }), expect.anything()] })],
 			]),
@@ -454,8 +454,8 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		expect(w.ttq.track).toHaveBeenCalledWith('Search', { query: 'cables' });
 		await vi.advanceTimersByTimeAsync(1000);
 		expect(collected().filter((event) => event.type === 'search')).toEqual([
-			{ type: 'search', path: '/search', term: 'Blue case' },
-			{ type: 'search', path: '/search', term: 'red phone', results: 3 },
+			{ type: 'search', path: '/search', term: 'Blue shade' },
+			{ type: 'search', path: '/search', term: 'red lamp', results: 3 },
 			{ type: 'search', path: '/search', term: 'cables', results: 0 },
 		]);
 	});
@@ -644,32 +644,32 @@ describe('single-page apps (SG-4)', () => {
 		take['largest-contentful-paint']?.({ getEntries: () => [{ startTime: 2600 }] });
 
 		await vi.advanceTimersByTimeAsync(5000);
-		window.history.pushState({ n: 1 }, '', '/phones');
-		expect(window.location.pathname).toBe('/phones');
+		window.history.pushState({ n: 1 }, '', '/lamps');
+		expect(window.location.pathname).toBe('/lamps');
 		// the same page with other filters, and a fragment, are not pages of their own
-		window.history.replaceState({ n: 2 }, '', '/phones?brand=x');
-		window.history.pushState(null, '', '/phones?brand=x#top');
+		window.history.replaceState({ n: 2 }, '', '/lamps?brand=x');
+		window.history.pushState(null, '', '/lamps?brand=x#top');
 		window.history.pushState(null, '', '/search?q=Case');
 		window.history.pushState(null, '', '/search?q=Case&page=2');
 		const marker = document.createElement('meta');
 		marker.setAttribute('name', 'ss-growth-page');
 		marker.setAttribute('content', 'not_found');
-		window.history.pushState(null, '', '/old-phone');
+		window.history.pushState(null, '', '/old-lamp');
 		document.head.append(marker);
 		// a redirect inside the app replaces the path: a page of its own
 		await vi.advanceTimersByTimeAsync(1000);
 		marker.remove();
-		window.history.replaceState(null, '', '/phones/new');
+		window.history.replaceState(null, '', '/lamps/new');
 		await vi.advanceTimersByTimeAsync(1000);
 
 		const pages = collected().filter((event) => event.type === 'page_view');
 		expect(pages.map((event) => [event.path, event.visit, event.page])).toEqual([
 			['/', true, 1],
-			['/phones', false, 2],
+			['/lamps', false, 2],
 			['/search', false, 3],
 			['/search', false, 4],
-			['/old-phone', false, 5],
-			['/phones/new', false, 6],
+			['/old-lamp', false, 5],
+			['/lamps/new', false, 6],
 		]);
 		expect(pages[0]?.referrer).toBe('www.google.com');
 		expect(pages[1]).toMatchObject({ gap: 5000 });
@@ -677,14 +677,14 @@ describe('single-page apps (SG-4)', () => {
 			expect.objectContaining({ path: '/search', term: 'Case' }),
 		]);
 		expect(collected().filter((event) => event.type === 'not_found')).toEqual([
-			expect.objectContaining({ path: '/old-phone', referrer: '/search' }),
+			expect.objectContaining({ path: '/old-lamp', referrer: '/search' }),
 		]);
 		expect(w.fbq.queue.filter((/** @type {unknown[]} */ call) => call[1] === 'Search')).toEqual([
 			['track', 'Search', { search_string: 'Case' }],
 		]);
 
 		// back: the page before is counted again
-		window.history.replaceState(null, '', '/phones');
+		window.history.replaceState(null, '', '/lamps');
 		window.dispatchEvent(new window.PopStateEvent('popstate'));
 		Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
 		document.dispatchEvent(new window.Event('visibilitychange'));
@@ -692,7 +692,7 @@ describe('single-page apps (SG-4)', () => {
 			collected()
 				.filter((event) => event.type === 'page_view')
 				.at(-1),
-		).toMatchObject({ path: '/phones', page: 7 });
+		).toMatchObject({ path: '/lamps', page: 7 });
 		expect(collected().filter((event) => event.type === 'vital')).toEqual([
 			expect.objectContaining({ path: '/', name: 'LCP', value: 2600 }),
 		]);
@@ -787,7 +787,7 @@ describe('single-page apps (SG-4)', () => {
 		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
 		inside(hostOf('notice_bar'), 'button').click();
 		expect(hostOf('notice_bar')).toBeNull();
-		window.history.pushState(null, '', '/shop/phones');
+		window.history.pushState(null, '', '/shop/lamps');
 		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
 	});
 
@@ -1137,7 +1137,7 @@ describe('admin widgets', () => {
 			],
 			revenue: [{ currency: 'USD', value: 2500, orders: 1 }],
 		},
-		searches: [{ key: 'case', count: 2 }],
+		searches: [{ key: 'shade', count: 2 }],
 		emptySearches: [],
 		notFound: [{ key: '/old', count: 1 }],
 		vitals: [
@@ -1171,7 +1171,7 @@ describe('admin widgets', () => {
 		sessions: { count: 2, bounces: 1, bounceRate: 50, averageDuration: 65, pagesPerSession: 1.5 },
 		browsers: [{ key: 'samsung', count: 2 }],
 		systems: [{ key: 'other', count: 2 }],
-		cities: [{ key: 'Lahore, PK', count: 2 }],
+		cities: [{ key: 'London, GB', count: 2 }],
 		live: { visitors: 1, pages: [{ key: '/shop', count: 1 }] },
 		notFoundFrom: [{ path: '/old', from: '/shop', count: 1 }],
 		vitalPages: [{ path: '/shop', samples: 2, averages: { LCP: 4100, INP: null, CLS: 50, FCP: null, TTFB: null } }],
@@ -1186,12 +1186,12 @@ describe('admin widgets', () => {
 				device: 'mobile',
 				browser: 'chrome',
 				os: 'android',
-				country: 'PK',
-				city: 'Lahore',
+				country: 'GB',
+				city: 'London',
 				source: '(direct)',
 				steps: [
 					{ type: 'page_view', path: '/', at: '2026-10-02T09:00:00.000Z' },
-					{ type: 'search', path: '/shop', at: '2026-10-02T09:00:30.000Z', term: 'cases' },
+					{ type: 'search', path: '/shop', at: '2026-10-02T09:00:30.000Z', term: 'shades' },
 					{ type: 'purchase', path: '/cart', at: '2026-10-02T09:01:05.000Z', value: 2500, currency: 'USD' },
 				],
 			},
@@ -1253,7 +1253,7 @@ describe('admin widgets', () => {
 						session: url.searchParams.get('session') ?? undefined,
 						browser: 'chrome',
 						os: 'android',
-						city: 'Lahore',
+						city: 'London',
 					},
 				],
 				hasMore: !url.searchParams.get('cursor'),
@@ -1354,7 +1354,7 @@ describe('admin widgets', () => {
 		expect(row.textContent).toContain('Viewed a page · /cart');
 		row.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
 		expect(dialog(host).textContent).toContain('evt_1');
-		expect(dialog(host).textContent).toContain('Chrome · Android · Lahore');
+		expect(dialog(host).textContent).toContain('Chrome · Android · London');
 		dialog(host).dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		expect(dialog(host)).toBeNull();
 	});
@@ -1381,12 +1381,12 @@ describe('admin widgets', () => {
 			'1.5',
 			'Samsung Internet',
 			'Other systems',
-			'Lahore, PK',
+			'London, GB',
 			'Slowest pages',
 			'4100 ms',
 			'CLS 0.05',
 			'from /shop',
-			'2 pages · Phones · Chrome · Lahore, PK · Direct',
+			'2 pages · Phones · Chrome · London, GB · Direct',
 		])
 			expect(text).toContain(words);
 		expect(inside(host, '.pulse').classList.contains('idle')).toBe(false);
@@ -1409,11 +1409,11 @@ describe('admin widgets', () => {
 
 	it('the admin widgets follow the website’s Format and business time zone', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
-		// 20:00 UTC on 8 October is 9 October in Karachi (UTC+5)
+		// 20:00 UTC on 8 October is 9 October in Tokyo (UTC+9)
 		vi.setSystemTime(Date.parse('2026-10-08T20:00:00Z'));
 		const look = {
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-			timeZone: 'Asia/Karachi',
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Tokyo',
 		};
 		const dashboard = place('analytics_dashboard');
 		const checklist = place('seo_checklist');
@@ -1424,7 +1424,7 @@ describe('admin widgets', () => {
 			{
 				'GET /v1/admin/analytics': (init, url) => {
 					asked.push(url);
-					return answer(200, { ...REPORT, timeZone: 'Asia/Karachi' });
+					return answer(200, { ...REPORT, timeZone: 'Asia/Tokyo' });
 				},
 				...EVENTS,
 				'POST /v1/admin/seo/checks': () =>
@@ -1440,14 +1440,14 @@ describe('admin widgets', () => {
 		expect(asked[0]?.searchParams.get('from')).toBe('2026-09-10');
 		expect(asked[0]?.searchParams.get('to')).toBe('2026-10-09');
 		const text = dashboard.shadowRoot?.textContent ?? '';
-		expect(text).toContain('Rs 25');
+		expect(text).toContain('US$ 25');
 		expect(text).not.toContain('USD');
-		expect(text).toContain('1 Oct 2026 – 2 Oct 2026 · Days are in the Asia/Karachi time zone.');
+		expect(text).toContain('1 Oct 2026 – 2 Oct 2026 · Days are in the Asia/Tokyo time zone.');
 		const bars = [...(dashboard.shadowRoot?.querySelectorAll('.bars span') ?? [])].map((bar) => bar.getAttribute('title'));
 		expect(bars).toEqual(['1 Oct 2026: 1', '2 Oct 2026: 2']);
 		button(checklist, strings['seo.run']).click();
 		await flush();
-		expect(inside(checklist, '[role="status"]').textContent).toBe('Checked 8 Oct 2026, 17:00');
+		expect(inside(checklist, '[role="status"]').textContent).toBe('Checked 8 Oct 2026, 21:00');
 	});
 
 	it('the analytics dashboard says when nothing was recorded or the ticket is gone', async () => {

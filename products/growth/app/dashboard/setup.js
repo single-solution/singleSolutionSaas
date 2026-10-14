@@ -14,7 +14,10 @@ import { fill } from './api.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, Record<string, unknown>>} Values settings by feature or shared group */
-/** @typedef {{ on: string[], domain: string, now: number }} Context the switched-on features, the domain, the time */
+/**
+ * @typedef {{ on: string[], domain: string, now: number, timeZone?: string | undefined }} Context the switched-on features,
+ *   the domain, the time and the viewer's time zone (UTC without it: on the server and in the first render)
+ */
 
 /** The tag id settings of each tag feature, with the tag they load. @type {Record<string, Array<[string, string]>>} */
 const TAG_FIELDS = {
@@ -48,8 +51,9 @@ const malformedIds = (key, values) => {
  * The notice bar now (G6): showing, turned off (AO-2), waiting for its start, ended, or not shown, and its pages hidden.
  * @param {Record<string, unknown>} values the `notice_bar` settings
  * @param {number} now
+ * @param {string} [timeZone] the viewer's, for the start and end times (UTC without it)
  */
-const noticeState = (values, now) => {
+const noticeState = (values, now, timeZone) => {
 	const notice = noticeOf({ notice_bar: values }, now);
 	if (notice) return { tone: /** @type {const} */ ('success'), text: TEXTS.setup.noticeShowing };
 	if (values.enabled === false) return { tone: /** @type {const} */ ('neutral'), text: TEXTS.setup.noticeOff };
@@ -62,11 +66,11 @@ const noticeState = (values, now) => {
 	if (!Number.isNaN(startsAt) && now < startsAt)
 		return {
 			tone: /** @type {const} */ ('warning'),
-			text: fill(TEXTS.setup.noticeStarts, { time: formatDateTime(String(values.startsAt)) }),
+			text: fill(TEXTS.setup.noticeStarts, { time: formatDateTime(String(values.startsAt), { timeZone }) }),
 		};
 	return {
 		tone: /** @type {const} */ ('neutral'),
-		text: fill(TEXTS.setup.noticeEnded, { time: formatDateTime(String(values.endsAt)) }),
+		text: fill(TEXTS.setup.noticeEnded, { time: formatDateTime(String(values.endsAt), { timeZone }) }),
 	};
 };
 
@@ -137,7 +141,7 @@ export const settingsNotice = (key, values, context) => {
 		);
 	}
 	if (context && key === 'notice_bar') {
-		const state = noticeState(values, context.now);
+		const state = noticeState(values, context.now, context.timeZone);
 		notes.push(
 			<p key="notice" className="flex flex-wrap items-center gap-2 text-sm">
 				<Badge tone={state.tone} dot>
@@ -164,7 +168,7 @@ const flag = (yes, yesText = TEXTS.setup.yes, noText = TEXTS.setup.no) => (
  * @param {{ values: Values, context: Context }} props
  */
 export function AtAGlance({ values, context }) {
-	const { on, domain, now } = context;
+	const { on, domain, now, timeZone } = context;
 	const tags = tagsOf(on, values);
 	const cards = [];
 	const tagFeatures = ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'].filter((key) => on.includes(key));
@@ -296,7 +300,7 @@ export function AtAGlance({ values, context }) {
 	}
 	if (on.includes('notice_bar')) {
 		const notice = values.notice_bar ?? {};
-		const state = noticeState(notice, now);
+		const state = noticeState(notice, now, timeZone);
 		const hidden = Array.isArray(notice.hideOnPages) ? notice.hideOnPages.length : 0;
 		cards.push(
 			<Card key="notice" title={TEXTS.setup.noticeTitle}>

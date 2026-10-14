@@ -3,9 +3,11 @@
  * The dashboard in the browser (jsdom), on a faked dashboard API: Overview's setup at a glance and the Settings notes
  * of the store-conversion options (PLAN 0.8.10 G1, G4–G7): the law warning while tags need no consent, tag ids that are
  * not loaded, Tag Manager missing for GA4, what robots.txt, the verification tags and the IndexNow key file serve, the
- * notice bar now, and Web Vitals to Google Analytics without Google tags. Setup only: no business data.
+ * notice bar now, and Web Vitals to Google Analytics without Google tags. Setup only: no business data. Times are
+ * computed in UTC and shown in the viewer's local time (owner 2026-10-14): UTC on the server and in the first render.
  */
 import { act } from 'react';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@ss/ui/testing';
 import { manifest, SHARED_SETTINGS } from '../adapters/product.js';
@@ -49,8 +51,36 @@ const settingsAnswer = (/** @type {string[]} */ on) => ({
 	})),
 });
 
-/** @param {string[]} on */
-const serve = (on) =>
+/** A grace period, the widget's last visit and a change, at known instants (UTC). */
+const TIMES = {
+	status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' },
+	checklist: { connections: [], widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' }, business: { found: true } },
+	recentChanges: [
+		{
+			who: { kind: 'user', id: 'u_1', name: 'Alex Morgan' },
+			what: 'settings',
+			detail: 'Notice bar',
+			at: '2026-10-06T08:00:00.000Z',
+		},
+	],
+};
+
+/**
+ * The viewer's browser in a time zone (what `Intl.DateTimeFormat().resolvedOptions()` answers there).
+ * @param {string} timeZone
+ */
+const viewerIn = (timeZone) => {
+	const real = Intl.DateTimeFormat.prototype.resolvedOptions;
+	vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(
+		/** @this {Intl.DateTimeFormat} */
+		function () {
+			return { ...real.call(this), timeZone };
+		},
+	);
+};
+
+/** @param {string[]} on @param {object} [overview] parts of the overview answer */
+const serve = (on, overview = {}) =>
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path) => {
@@ -63,6 +93,7 @@ const serve = (on) =>
 							todayMillicredits: 0,
 							checklist: { connections: [], widget: null, business: { found: true } },
 							recentChanges: [],
+							...overview,
 						}
 					: path === `${base}/settings`
 						? settingsAnswer(on)
@@ -100,6 +131,7 @@ const props = {
 
 afterEach(() => {
 	cleanup();
+	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 });
@@ -198,5 +230,51 @@ describe('the dashboard (setup only)', () => {
 		const nowhere = render(<Settings {...props} />);
 		await settle();
 		expect(nowhere.container.textContent).toContain(TEXTS.setup.vitalsNowhere);
+	});
+});
+
+describe("times: computed in UTC, shown in the viewer's local time (owner 2026-10-14)", () => {
+	it("Overview: the grace end, the widget's last visit, the changes and the notice start in the viewer's zone; UTC first", async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(NOW);
+		VALUES.notice_bar = { text: 'Sale', startsAt: '2026-11-01T00:00:00Z' };
+		viewerIn('America/New_York');
+		serve(['notice_bar'], TIMES);
+		const Overview = TABS.overview;
+		const { container } = render(<Overview {...props} />);
+		await settle();
+		const text = container.textContent ?? '';
+		expect(text).toContain('In grace until Oct 4, 2026, 10:30 AM EDT');
+		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
+		// midnight UTC on Nov 1 is still Oct 31 in New York
+		expect(text).toContain('Starts Oct 31, 2026, 8:00 PM EDT');
+		const change = container.querySelector('time');
+		expect([change?.textContent, change?.getAttribute('title'), change?.getAttribute('datetime')]).toEqual([
+			'Oct 6, 2026, 4:00 AM EDT',
+			'Oct 6, 2026, 8:00 AM UTC',
+			'2026-10-06T08:00:00.000Z',
+		]);
+		// the server (and the first render in the browser) print UTC, with the answers this page already loaded
+		const html = renderToString(<Overview {...props} />);
+		for (const words of [
+			'In grace until Oct 4, 2026, 2:30 PM UTC',
+			'Last seen Oct 5, 2026, 11:15 PM UTC',
+			'Starts Nov 1, 2026, 12:00 AM UTC',
+			'>Oct 6, 2026, 8:00 AM UTC</time>',
+		])
+			expect(html).toContain(words);
+	});
+
+	it("Settings: the notice bar's end in the viewer's zone; UTC first", async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(NOW);
+		VALUES.notice_bar = { text: 'Sale', endsAt: '2026-10-01T03:00:00Z' };
+		viewerIn('Asia/Tokyo');
+		serve(['notice_bar']);
+		const Settings = TABS.settings;
+		const { container } = render(<Settings {...props} />);
+		await settle();
+		expect(container.textContent).toContain('Ended Oct 1, 2026, 12:00 PM GMT+9');
+		expect(renderToString(<Settings {...props} />)).toContain('Ended Oct 1, 2026, 3:00 AM UTC');
 	});
 });

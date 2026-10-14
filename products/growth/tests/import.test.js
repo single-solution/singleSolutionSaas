@@ -63,12 +63,12 @@ const dayOf = (day, visits) => ({
 	totals: {
 		visits: { '': { c: visits } },
 		page_views: { '': { c: visits * 3 } },
-		page: { '/phones': { c: visits * 2 }, '/phones/a.b$c': { c: visits } },
+		page: { '/lamps': { c: visits * 2 }, '/lamps/a.b$c': { c: visits } },
 		source: { '(direct)': { c: visits - 1 }, 'www.google.com': { c: 1 } },
 		device: { mobile: { c: visits } },
-		country: { PK: { c: visits } },
+		country: { GB: { c: visits } },
 		funnel: { purchase: { c: 2 } },
-		revenue: { PKR: { c: 2, s: 250_000 } },
+		revenue: { USD: { c: 2, s: 250_000 } },
 		vital: { 'LCP:good': { c: 1 } },
 		vital_value: { LCP: { c: 1, s: 1800 } },
 		search: { case: { c: 1, s: 0 } },
@@ -91,7 +91,7 @@ describe('import of daily totals (K10, G8)', () => {
 						clicks: { '': { c: 1 } },
 						device: { phone: { c: 1 } },
 						page: { '/a': { c: -1 }, '/b': { c: 1, s: 5 }, '/c': 7, '/d': { c: 1, x: 1 } },
-						revenue: { PKR: { c: 1, s: 'many' } },
+						revenue: { USD: { c: 1, s: 'many' } },
 						vital_page: { '/a\nLCP': { c: 1, s: 900 }, '/a\nXYZ': { c: 1 } },
 						not_found_from: { '/gone\nwww.example.com': { c: 1 }, '/gone\n': { c: 1 } },
 					},
@@ -125,7 +125,7 @@ describe('import of daily totals (K10, G8)', () => {
 					{ path: '/totals/page/~1b/s', message: 'page keeps no sum.' },
 					{ path: '/totals/page/~1c', message: 'A total: { c, s }.' },
 					{ path: '/totals/page/~1d/x', message: 'Unknown field x.' },
-					{ path: '/totals/revenue/PKR/s', message: 'The sum: a finite number.' },
+					{ path: '/totals/revenue/USD/s', message: 'The sum: a finite number.' },
 					{ path: '/totals/vital_page/~1a\nXYZ', message: 'A key of vital_page is <path>\\n<vital>.' },
 					{ path: '/totals/not_found_from/~1gone\n', message: 'A key of not_found_from is <path>\\n<where from>.' },
 				],
@@ -148,13 +148,13 @@ describe('import of daily totals (K10, G8)', () => {
 		const stored = await db.collection('ss_growth_totals').findOne({ day: '2024-03-01' }, { projection: { _id: 0 } });
 		expect(stored).toMatchObject({ websiteId: sys.websiteId, day: '2024-03-01', part: 0 });
 		// keys escaped as the live writes escape them, no sum while it is 0
-		expect(stored?.totals.page).toEqual({ '_/phones': { c: 10 }, '_/phones/a%2Eb%24c': { c: 5 } });
+		expect(stored?.totals.page).toEqual({ '_/lamps': { c: 10 }, '_/lamps/a%2Eb%24c': { c: 5 } });
 		expect(stored?.totals.visits).toEqual({ _: { c: 5 } });
 		expect(stored?.totals.search).toEqual({ _case: { c: 1 } });
 		// the live totals of the re-imported day are replaced
 		expect((await dailyRows(db)).filter((row) => row.day === '2026-10-01' && row.metric === 'page')).toEqual([
-			expect.objectContaining({ key: '/phones', count: 4 }),
-			expect.objectContaining({ key: '/phones/a.b$c', count: 2 }),
+			expect.objectContaining({ key: '/lamps', count: 4 }),
+			expect.objectContaining({ key: '/lamps/a.b$c', count: 2 }),
 		]);
 
 		const report = await sys.report('2024-03-01', '2024-03-02');
@@ -164,10 +164,10 @@ describe('import of daily totals (K10, G8)', () => {
 			{ day: '2024-03-02', visits: 7, pageViews: 21 },
 		]);
 		expect(report.pages).toEqual([
-			{ key: '/phones', count: 24 },
-			{ key: '/phones/a.b$c', count: 12 },
+			{ key: '/lamps', count: 24 },
+			{ key: '/lamps/a.b$c', count: 12 },
 		]);
-		expect(report.funnel.revenue).toEqual([{ currency: 'PKR', value: 500_000, orders: 4 }]);
+		expect(report.funnel.revenue).toEqual([{ currency: 'USD', value: 500_000, orders: 4 }]);
 		expect(report.vitals.find((/** @type {any} */ v) => v.name === 'LCP')).toMatchObject({ count: 2, average: 1800, good: 2 });
 
 		// a re-run replaces the day

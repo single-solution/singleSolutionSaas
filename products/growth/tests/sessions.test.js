@@ -11,7 +11,7 @@ let env;
 
 const A = 'sessionaaaaaaaaaaaaaaaaaaaaaaaaa';
 const B = 'sessionbbbbbbbbbbbbbbbbbbbbbbbbb';
-const HERE = { 'x-vercel-ip-country': 'PK', 'x-vercel-ip-city': 'Lahore' };
+const HERE = { 'x-vercel-ip-country': 'GB', 'x-vercel-ip-city': 'London' };
 
 beforeAll(async () => {
 	env = await setup();
@@ -40,7 +40,7 @@ describe('detailed analytics (G3)', () => {
 			[
 				{ type: 'page_view', path: '/', visit: true, session: A, ...visitor, page: 1, device: 'mobile' },
 				{ type: 'page_view', path: '/shop', visit: false, session: A, ...visitor, page: 2, gap: 30_000 },
-				{ type: 'search', path: '/shop', term: 'cases', session: A, ...visitor },
+				{ type: 'search', path: '/shop', term: 'shades', session: A, ...visitor },
 				{
 					type: 'purchase',
 					path: '/cart',
@@ -97,7 +97,7 @@ describe('detailed analytics (G3)', () => {
 		]);
 		expect(report.cities).toEqual([
 			{ key: 'Dubai, AE', count: 1 },
-			{ key: 'Lahore, PK', count: 1 },
+			{ key: 'London, GB', count: 1 },
 		]);
 		expect(report.vitalPages).toEqual([
 			{ path: '/shop', samples: 1, averages: { LCP: 4100, INP: null, CLS: null, FCP: null, TTFB: null } },
@@ -118,8 +118,8 @@ describe('detailed analytics (G3)', () => {
 			device: 'mobile',
 			browser: 'chrome',
 			os: 'android',
-			country: 'PK',
-			city: 'Lahore',
+			country: 'GB',
+			city: 'London',
 			source: '(direct)',
 			duration: 0,
 		});
@@ -130,7 +130,7 @@ describe('detailed analytics (G3)', () => {
 			'purchase',
 			'not_found',
 		]);
-		expect(report.journeys[1].steps[2]).toMatchObject({ term: 'cases' });
+		expect(report.journeys[1].steps[2]).toMatchObject({ term: 'shades' });
 		expect(report.journeys[1].steps[3]).toMatchObject({ value: 2500, currency: 'USD' });
 
 		// live visitors are judged when the report is read: 5 minutes later nobody is live
@@ -146,7 +146,7 @@ describe('detailed analytics (G3)', () => {
 	it('lists and counts one session’s events, with the server token and in the dashboard widget’s event log', async () => {
 		const own = await (await env.call('GET', `/v1/events?session=${A}`, { token: env.server })).json();
 		expect(own.items).toHaveLength(6);
-		expect(own.items.every((/** @type {any} */ item) => item.session === A && item.city === 'Lahore')).toBe(true);
+		expect(own.items.every((/** @type {any} */ item) => item.session === A && item.city === 'London')).toBe(true);
 		expect(await (await env.call('GET', `/v1/events/count?session=${A}`, { token: env.server })).json()).toEqual({
 			count: 6,
 			capped: false,
