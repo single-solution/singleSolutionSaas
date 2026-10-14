@@ -88,7 +88,7 @@ import { createStore } from '../adapters/store.js';
  * Why a product's message on WhatsApp is not sent: the merchant has no WhatsApp template for it (parity P1).
  * @param {string} key @param {string | null} [fallbackKey] the send's `fallbackTemplate`
  */
-export const notSetUpReason = (key, fallbackKey = null) =>
+const notSetUpReason = (key, fallbackKey = null) =>
 	`Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ${key}${fallbackKey ? ` (or ${fallbackKey})` : ''} with its Meta template name in Notifications.`;
 
 /** The skip reason of a product's message the merchant switched off on its channel (parity P1). */

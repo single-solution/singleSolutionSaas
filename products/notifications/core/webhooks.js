@@ -18,7 +18,7 @@ const MAX_URL_EVENTS = 50;
 /** Longest webhook URL. */
 const MAX_URL_LENGTH = 2048;
 /** Largest `data` of a forwarded event, in bytes of JSON. */
-export const EVENT_DATA_MAX_BYTES = 16 * 1024;
+const EVENT_DATA_MAX_BYTES = 16 * 1024;
 /** Longest summary of the list in the website's Setup sheet (the kit's limit for a list summary). */
 const SUMMARY_MAX = 300;
 

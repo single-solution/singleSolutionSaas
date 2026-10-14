@@ -9,6 +9,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
+import { TEMPLATE_KEY } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normaliseEmail, normalisePhone } from '../core/channels.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
@@ -106,7 +107,7 @@ export const createRoutes = (product) => {
 	 */
 	const sendHandler = (channel) => async (/** @type {any} */ ctx) => {
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-		if (typeof body.template !== 'string' || !/^[a-z][a-z0-9_.-]{0,63}$/.test(body.template))
+		if (typeof body.template !== 'string' || !TEMPLATE_KEY.test(body.template))
 			return invalid('template', 'Name the template key.');
 		const to = checkRecipient(body.to);
 		if (!to.ok) return invalid(to.field, 'The recipient is not valid.');
@@ -122,7 +123,7 @@ export const createRoutes = (product) => {
 		if (
 			body.fallbackTemplate !== undefined &&
 			(typeof body.fallbackTemplate !== 'string' ||
-				!/^[a-z][a-z0-9_.-]{0,63}$/.test(body.fallbackTemplate) ||
+				!TEMPLATE_KEY.test(body.fallbackTemplate) ||
 				body.fallbackTemplate === body.template)
 		)
 			return invalid('fallbackTemplate', 'fallbackTemplate is another template key.');
@@ -283,7 +284,7 @@ export const createRoutes = (product) => {
 	 */
 	const switchMessage = async (ctx) => {
 		const { key, channel } = ctx.params;
-		if (!CHANNELS.includes(channel) || !/^[a-z][a-z0-9_.-]{0,63}$/.test(key)) return problem('not_found', 'No such message.');
+		if (!CHANNELS.includes(channel) || !TEMPLATE_KEY.test(key)) return problem('not_found', 'No such message.');
 		if ((await product.defaults.ownerOf(key)) === null)
 			return invalid('key', 'Only the messages of products can be switched off: delete your own template instead.');
 		if (isAccountKey(key))
@@ -579,7 +580,7 @@ export const createRoutes = (product) => {
 				/** @type {Awaited<ReturnType<typeof sending.accept>>} */
 				let result;
 				if (template !== undefined) {
-					if (typeof template !== 'string' || !/^[a-z][a-z0-9_.-]{0,63}$/.test(template))
+					if (typeof template !== 'string' || !TEMPLATE_KEY.test(template))
 						return invalid('template', 'Name the template key.');
 					const values = checkValues(body.values);
 					if (!values.ok)

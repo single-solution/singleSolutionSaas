@@ -5,12 +5,14 @@ import { SMTP_PORTS, createSmtpMessaging, smtpSettingsOf } from '../adapters/smt
 
 const publicResolve = async () => [{ address: '93.184.215.14', family: 4 }];
 const policy = createOutboundPolicy({ resolve: publicResolve });
-/** An SMTP connection value. */
-const PORTAL = {
+/** An SMTP connection value, as the dashboard's form saves it (the password is the sealed secret). */
+const SMTP = {
 	provider: 'smtp',
-	baseUrl: 'smtps://smtp.example.com:465',
-	apiKey: 'smtp-secret-password',
+	host: 'smtp.example.com',
+	port: 465,
+	secure: true,
 	username: 'mailer@example.com',
+	password: 'smtp-secret-password',
 	from: 'shop@example.com',
 };
 
@@ -18,7 +20,7 @@ const PORTAL = {
  * A fake nodemailer transport factory recording what it was given.
  * @param {(mail: Record<string, any>) => any} [answer]
  */
-const fakeTransport = (answer = (mail) => ({ messageId: '<m1@example.com>', accepted: mail.to, rejected: [] })) => {
+const fakeTransport = (answer = () => ({ messageId: '<m1@example.com>' })) => {
 	/** @type {{ options: any[], mails: any[], closed: number }} */
 	const seen = { options: [], mails: [], closed: 0 };
 	/** @type {import('../adapters/smtp.js').CreateSmtpTransport} */
@@ -38,8 +40,8 @@ const fakeTransport = (answer = (mail) => ({ messageId: '<m1@example.com>', acce
 };
 
 describe('SMTP descriptor', () => {
-	it('reads the Portal form (smtps:// / smtp:// URL, apiKey = password) and the explicit form', () => {
-		expect(smtpSettingsOf(PORTAL, policy)).toEqual({
+	it('reads the dashboard form (port 465 implicit TLS, another port STARTTLS)', () => {
+		expect(smtpSettingsOf(SMTP, policy)).toEqual({
 			host: 'smtp.example.com',
 			port: 465,
 			secure: true,
@@ -49,12 +51,7 @@ describe('SMTP descriptor', () => {
 			password: 'smtp-secret-password',
 			from: 'shop@example.com',
 		});
-		expect(smtpSettingsOf({ ...PORTAL, baseUrl: 'smtp://smtp.example.com:587' }, policy)).toMatchObject({
-			port: 587,
-			secure: false,
-		});
-		expect(smtpSettingsOf({ ...PORTAL, baseUrl: 'smtp://smtp.example.com' }, policy).port).toBe(587);
-		expect(smtpSettingsOf({ ...PORTAL, baseUrl: 'smtps://smtp.example.com' }, policy).port).toBe(465);
+		expect(smtpSettingsOf({ ...SMTP, port: 587, secure: false }, policy)).toMatchObject({ port: 587, secure: false });
 		const explicit = { host: 'smtp.example.com', username: 'u', password: 'p' };
 		expect(smtpSettingsOf(explicit, policy)).toMatchObject({ port: 465, secure: true });
 		expect('from' in smtpSettingsOf(explicit, policy)).toBe(false);
@@ -63,20 +60,17 @@ describe('SMTP descriptor', () => {
 		expect(SMTP_PORTS).toEqual([25, 465, 587, 2525]);
 	});
 
-	it('refuses internal hosts, odd ports, credentials in the URL and incomplete descriptors (connection_invalid)', () => {
+	it('refuses internal hosts, odd ports and incomplete descriptors (connection_invalid)', () => {
 		const refused = [
-			{ ...PORTAL, baseUrl: 'smtps://localhost:465' },
-			{ ...PORTAL, baseUrl: 'smtps://10.0.0.5:465' },
-			{ ...PORTAL, baseUrl: 'smtps://169.254.169.254:465' },
-			{ ...PORTAL, baseUrl: 'smtps://mail.internal:465' },
-			{ ...PORTAL, baseUrl: 'smtps://smtp.example.com:22' },
-			{ ...PORTAL, baseUrl: 'smtps://user:pw@smtp.example.com:465' },
-			{ ...PORTAL, baseUrl: 'https://smtp.example.com' },
-			{ ...PORTAL, baseUrl: 'smtps://smtp.example.com/path' },
-			{ ...PORTAL, baseUrl: 'not a url' },
-			{ ...PORTAL, apiKey: '' },
-			{ ...PORTAL, username: undefined },
-			{ ...PORTAL, from: 'not-an-address' },
+			{ ...SMTP, host: 'localhost' },
+			{ ...SMTP, host: '10.0.0.5' },
+			{ ...SMTP, host: '169.254.169.254' },
+			{ ...SMTP, host: 'mail.internal' },
+			{ ...SMTP, port: 22 },
+			{ ...SMTP, port: 70_000 },
+			{ ...SMTP, password: '' },
+			{ ...SMTP, username: undefined },
+			{ ...SMTP, from: 'not-an-address' },
 			{ provider: 'smtp', username: 'u', password: 'p' },
 			{ host: 'smtp.example.com', port: '465', username: 'u', password: 'p' },
 			{ host: 'smtp.example.com', secure: 'yes', username: 'u', password: 'p' },
@@ -88,7 +82,7 @@ describe('SMTP descriptor', () => {
 		}
 		// the development allowlist admits a local server on any port
 		const dev = createOutboundPolicy({ allowHosts: ['localhost'] });
-		expect(smtpSettingsOf({ ...PORTAL, baseUrl: 'smtp://localhost:1025' }, dev)).toMatchObject({
+		expect(smtpSettingsOf({ ...SMTP, host: 'localhost', port: 1025, secure: false }, dev)).toMatchObject({
 			allowlisted: true,
 			port: 1025,
 		});
@@ -98,10 +92,9 @@ describe('SMTP descriptor', () => {
 describe('SMTP messaging adapter', () => {
 	it('connects to the vetted IP with TLS required, the host as servername, and timeouts', async () => {
 		const { seen, createTransport } = fakeTransport();
-		const smtp = createSmtpMessaging({ descriptor: PORTAL, policy, createTransport });
-		expect(smtp).toMatchObject({ kind: 'messaging', provider: 'smtp' });
+		const smtp = createSmtpMessaging({ descriptor: SMTP, policy, createTransport });
 		const result = await smtp.send({ to: 'buyer@example.org', subject: 'Back in stock', text: 'Hello' });
-		expect(result).toEqual({ id: '<m1@example.com>', accepted: ['buyer@example.org'], rejected: [] });
+		expect(result).toEqual({ id: '<m1@example.com>' });
 		expect(seen.options[0]).toEqual({
 			host: '93.184.215.14',
 			port: 465,
@@ -117,7 +110,7 @@ describe('SMTP messaging adapter', () => {
 		});
 		expect(seen.mails[0]).toEqual({
 			from: 'shop@example.com',
-			to: ['buyer@example.org'],
+			to: 'buyer@example.org',
 			subject: 'Back in stock',
 			text: 'Hello',
 			disableFileAccess: true,
@@ -126,23 +119,20 @@ describe('SMTP messaging adapter', () => {
 		expect(seen.closed).toBe(1);
 		const starttls = fakeTransport();
 		await createSmtpMessaging({
-			descriptor: { ...PORTAL, baseUrl: 'smtp://smtp.example.com:587' },
+			descriptor: { ...SMTP, port: 587, secure: false },
 			policy,
 			createTransport: starttls.createTransport,
 			timeouts: { socketMs: 5_000 },
-		}).send({ to: ['a@example.org', 'b@example.org'], subject: 's', html: '<p>x</p>', replyTo: 'Help <help@example.com>' });
+		}).send({ to: 'a@example.org', subject: 's', text: 't', replyTo: 'Help <help@example.com>' });
 		expect(starttls.seen.options[0]).toMatchObject({ port: 587, secure: false, requireTLS: true, socketTimeout: 5_000 });
-		expect(starttls.seen.mails[0]).toMatchObject({
-			to: ['a@example.org', 'b@example.org'],
-			replyTo: 'Help <help@example.com>',
-		});
+		expect(starttls.seen.mails[0]).toMatchObject({ to: 'a@example.org', replyTo: 'Help <help@example.com>' });
 	});
 
 	it('vets every DNS answer at send time (rebinding) and refuses before connecting', async () => {
 		let answer = '93.184.215.14';
 		const rebinding = createOutboundPolicy({ resolve: async () => [{ address: answer, family: 4 }] });
 		const { seen, createTransport } = fakeTransport();
-		const smtp = createSmtpMessaging({ descriptor: PORTAL, policy: rebinding, createTransport });
+		const smtp = createSmtpMessaging({ descriptor: SMTP, policy: rebinding, createTransport });
 		await smtp.send({ to: 'a@example.org', subject: 's', text: 't' });
 		answer = '10.1.2.3';
 		const error = await smtp.send({ to: 'a@example.org', subject: 's', text: 't' }).catch((e) => e);
@@ -151,7 +141,7 @@ describe('SMTP messaging adapter', () => {
 		// an IP literal host is checked up front and used as is (no servername)
 		const literal = fakeTransport();
 		await createSmtpMessaging({
-			descriptor: { ...PORTAL, baseUrl: 'smtps://93.184.215.14:465' },
+			descriptor: { ...SMTP, host: '93.184.215.14' },
 			policy,
 			createTransport: literal.createTransport,
 		}).send({ to: 'a@example.org', subject: 's', text: 't' });
@@ -161,12 +151,11 @@ describe('SMTP messaging adapter', () => {
 
 	it('validates messages against header injection', async () => {
 		const { seen, createTransport } = fakeTransport();
-		const smtp = createSmtpMessaging({ descriptor: { ...PORTAL, from: undefined }, policy, createTransport });
+		const smtp = createSmtpMessaging({ descriptor: { ...SMTP, from: undefined }, policy, createTransport });
 		const bad = [
 			{ to: 'a@example.org\r\nBcc: x@evil.test', subject: 's', text: 't' },
 			{ to: 'Name <a@example.org>', subject: 's', text: 't' },
-			{ to: [], subject: 's', text: 't' },
-			{ to: Array.from({ length: 51 }, (_, i) => `a${i}@example.org`), subject: 's', text: 't' },
+			{ to: ['a@example.org'], subject: 's', text: 't' },
 			{ to: 'a@example.org', subject: 'hi\r\nBcc: x@evil.test', text: 't' },
 			{ to: 'a@example.org', subject: '', text: 't' },
 			{ to: 'a@example.org', subject: 's' },
@@ -199,7 +188,7 @@ describe('SMTP messaging adapter', () => {
 		await smtp.send({ to: 'a@example.org', subject: 's', text: 't' });
 		expect(seen.mails[1].from).toBe('mailer@example.com');
 		const noFrom = createSmtpMessaging({
-			descriptor: { ...PORTAL, from: undefined, username: 'apikey' },
+			descriptor: { ...SMTP, from: undefined, username: 'apikey' },
 			policy,
 			createTransport,
 		});
@@ -215,13 +204,13 @@ describe('SMTP messaging adapter', () => {
 				throw Object.assign(new Error(`535 auth failed for mailer@example.com smtp-secret-password`), fields);
 			});
 		const timeout = failing({ code: 'ETIMEDOUT' });
-		const err1 = await createSmtpMessaging({ descriptor: PORTAL, policy, createTransport: timeout.createTransport })
+		const err1 = await createSmtpMessaging({ descriptor: SMTP, policy, createTransport: timeout.createTransport })
 			.send({ to: 'a@example.org', subject: 's', text: 't' })
 			.catch((e) => e);
 		expect(err1).toMatchObject({ code: 'timeout', details: { reason: 'ETIMEDOUT' } });
 		expect(timeout.seen.closed).toBe(1);
 		const auth = failing({ code: 'EAUTH', responseCode: 535 });
-		const err2 = await createSmtpMessaging({ descriptor: PORTAL, policy, createTransport: auth.createTransport })
+		const err2 = await createSmtpMessaging({ descriptor: SMTP, policy, createTransport: auth.createTransport })
 			.send({ to: 'a@example.org', subject: 's', text: 't' })
 			.catch((e) => e);
 		expect(err2).toMatchObject({ code: 'upstream_error', details: { reason: 'EAUTH', responseCode: 535 } });
@@ -232,7 +221,7 @@ describe('SMTP messaging adapter', () => {
 			},
 		});
 		await expect(
-			createSmtpMessaging({ descriptor: PORTAL, policy: dns, createTransport: auth.createTransport }).send({
+			createSmtpMessaging({ descriptor: SMTP, policy: dns, createTransport: auth.createTransport }).send({
 				to: 'a@example.org',
 				subject: 's',
 				text: 't',
@@ -284,7 +273,7 @@ describe('SMTP over a local server (allowlisted development host, real nodemaile
 				resolve: async () => [{ address: '127.0.0.1', family: 4 }],
 			});
 			const smtp = createSmtpMessaging({
-				descriptor: { ...PORTAL, baseUrl: `smtp://mail.test:${port}` },
+				descriptor: { ...SMTP, host: 'mail.test', port, secure: false },
 				policy: dev,
 				timeouts: { connectionMs: 2_000, greetingMs: 2_000, socketMs: 2_000 },
 			});
@@ -294,8 +283,6 @@ describe('SMTP over a local server (allowlisted development host, real nodemaile
 				text: 'Your item is back.',
 				headers: { 'X-Alert-Id': 'al_1' },
 			});
-			expect(result.accepted).toEqual(['buyer@example.org']);
-			expect(result.rejected).toEqual([]);
 			expect(typeof result.id).toBe('string');
 			expect(commands).toEqual(expect.arrayContaining(['EHLO', 'AUTH', 'MAIL', 'RCPT', 'DATA']));
 			expect(data).toMatch(/Subject: Back in stock/);

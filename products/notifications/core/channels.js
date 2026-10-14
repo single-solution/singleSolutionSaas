@@ -4,11 +4,12 @@
  * @module
  */
 import { normalisePhone as normaliseAnyPhone } from '@ss/contracts/phone';
+import { TEMPLATE_CHANNELS } from '@ss/contracts/templates';
 
-/** @typedef {'email' | 'sms' | 'whatsapp' | 'push' | 'staff_push'} Channel */
+/** @typedef {import('@ss/contracts/templates').TemplateChannel} Channel */
 
-/** Every channel, in the order screens list them. */
-export const CHANNELS = Object.freeze(/** @type {Channel[]} */ (['email', 'sms', 'whatsapp', 'push', 'staff_push']));
+/** Every channel, in the order screens list them (the channels templates are written for). */
+export const CHANNELS = TEMPLATE_CHANNELS;
 
 /** The feature that switches each channel on. */
 export const CHANNEL_FEATURES = Object.freeze({
@@ -42,7 +43,8 @@ const ADDRESS_FIELDS = Object.freeze({
 
 const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.[A-Za-z]{2,63}$/;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
-const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
+/** A language tag (`en`, `fr`, `pt-BR`). */
+export const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
 
 /**
  * An email address in its stored form (lower case), or null.

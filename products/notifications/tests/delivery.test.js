@@ -1,7 +1,7 @@
 /**
- * Notifications after the re-audit (PLAN 0.8.10, owner decisions D7 and D11): the delivery log never keeps a secret,
- * and is kept for the days the merchant sets; required messages ignore opt-outs (PLAN 0.8.5); nothing accepted is
- * lost when an attempt breaks off.
+ * Delivery (PLAN 0.8.5, 0.8.10 D7 and D11): the delivery log never keeps a secret and is kept for the days the merchant
+ * sets; required messages ignore opt-outs; nothing accepted is lost when an attempt breaks off; Accounts' messages are
+ * never held by quiet hours or a delayed send.
  */
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

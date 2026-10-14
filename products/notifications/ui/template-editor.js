@@ -9,7 +9,7 @@
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
-import { fillText, valueNamesOf } from '../core/templates.js';
+import { MAX_BUTTONS, fillText, isTitled, valueNamesOf } from '../core/templates.js';
 import { element } from './dom.js';
 import { problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
@@ -20,9 +20,6 @@ import { adminCall } from './tickets.js';
  * @typedef {{ key: string, channel: string, language: string, subject: string, text: string, required: boolean,
  *   urgent: boolean, sensitive?: boolean, providerTemplate: string, buttons?: ButtonView[] }} TemplateView
  */
-
-/** Most buttons a template at Meta has. */
-const MAX_BUTTONS = 10;
 
 /**
  * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
@@ -135,7 +132,7 @@ export const mountTemplateEditor = ({ host, api, config }) => {
 				atMeta()
 					? buttonFields.map((entry) => ({ index: entry.index.value, type: entry.type.value, value: entry.value.value }))
 					: [];
-			const titled = () => ['email', 'push', 'staff_push'].includes(channel.input.value);
+			const titled = () => isTitled(channel.input.value);
 			/** The samples typed for the values the words use now (a value without one stays as written). */
 			const sampleValues = () =>
 				Object.fromEntries(

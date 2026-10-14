@@ -2,8 +2,8 @@
  * SMTP email adapter (PLAN 0.8.5): sends email through the merchant's own SMTP server
  * with nodemailer, using the merchant's `email` connection.
  *
- * - **Value**: `{ baseUrl: 'smtps://host:465' | 'smtp://host:587', username, apiKey (the password), from? }`. The
- *   explicit form `{ host, port?, secure?, username, password }` is accepted too. `smtps://` (or port 465) means implicit TLS. `smtp://` means STARTTLS, which is required.
+ * - **Value**: the dashboard's form `{ host, port?, secure?, username, password, from? }`. Port 465 (the default) means
+ *   implicit TLS; another port means STARTTLS, which is required.
  * - **TLS** is required (implicit TLS, or `requireTLS` STARTTLS) and certificates are verified against the host name,
  *   TLS 1.2 or later. Only hosts on the development allowlist (the outbound policy's `allowHosts`, emptied by app-kit in
  *   production) may talk plain SMTP.
@@ -24,7 +24,6 @@ import { isObject, providerError as kitError } from './util.js';
 export const SMTP_PORTS = Object.freeze([25, 465, 587, 2525]);
 
 const DEFAULT_TIMEOUTS = Object.freeze({ connectionMs: 10_000, greetingMs: 10_000, socketMs: 30_000 });
-const MAX_RECIPIENTS = 50;
 const MAX_BODY = 1024 * 1024;
 const ADDRESS = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
 const DISPLAY = /^([^<>\r\n"\\]{0,128}?)\s*<([^<>\s]+)>$/;
@@ -65,17 +64,16 @@ const RESERVED_HEADERS = new Set([
  */
 /**
  * A nodemailer-compatible transport (the subset this adapter uses).
- * @typedef {{ sendMail: (mail: Record<string, unknown>) => Promise<{ messageId?: string, accepted?: unknown[], rejected?: unknown[] }>,
+ * @typedef {{ sendMail: (mail: Record<string, unknown>) => Promise<{ messageId?: string }>,
  *   verify?: () => Promise<unknown>, close?: () => void }} SmtpTransport
  */
 /** @typedef {(options: SmtpTransportOptions) => SmtpTransport | Promise<SmtpTransport>} CreateSmtpTransport */
 
 /**
  * @typedef {object} SmtpMessage
- * @property {string | string[]} to one address or up to 50
+ * @property {string} to one address
  * @property {string} subject
- * @property {string} [text]
- * @property {string} [html]
+ * @property {string} text
  * @property {string} [from] `addr@host` or `Name <addr@host>`; default the descriptor's `from`, else the username
  * @property {string} [replyTo]
  * @property {Record<string, string>} [headers] extra headers (no reserved names, no CR/LF)
@@ -111,47 +109,20 @@ const isMailbox = (value) => {
  *   password: string, from?: string }}
  */
 export const smtpSettingsOf = (descriptor, policy) => {
-	/** @type {string | undefined} */
-	let host;
-	/** @type {number | undefined} */
-	let port;
-	/** @type {boolean | undefined} */
-	let secure;
-	const url = descriptor.baseUrl ?? descriptor.url;
-	if (url !== undefined) {
-		/** @type {URL} */
-		let parsed;
-		try {
-			parsed = new URL(String(url));
-		} catch {
-			throw kitError('connection_invalid', 'smtp connection url is not valid');
-		}
-		if (parsed.protocol !== 'smtp:' && parsed.protocol !== 'smtps:')
-			throw kitError('connection_invalid', 'smtp connection url must be smtp:// or smtps://');
-		if (parsed.username !== '' || parsed.password !== '')
-			throw kitError('connection_invalid', 'smtp connection url must not carry credentials');
-		if ((parsed.pathname !== '' && parsed.pathname !== '/') || parsed.search !== '' || parsed.hash !== '')
-			throw kitError('connection_invalid', 'smtp connection url must be plain');
-		host = parsed.hostname.replace(/^\[|\]$/g, '');
-		secure = parsed.protocol === 'smtps:';
-		port = parsed.port === '' ? (secure ? 465 : 587) : Number(parsed.port);
-	} else {
-		if (typeof descriptor.host !== 'string') throw kitError('connection_invalid', 'smtp connection needs a host');
-		host = descriptor.host;
-		if (descriptor.secure !== undefined && typeof descriptor.secure !== 'boolean')
-			throw kitError('connection_invalid', 'smtp connection secure must be a boolean');
-		if (descriptor.port !== undefined && !Number.isInteger(descriptor.port))
-			throw kitError('connection_invalid', 'smtp connection port must be an integer');
-		port = /** @type {number | undefined} */ (descriptor.port);
-		secure = /** @type {boolean | undefined} */ (descriptor.secure) ?? (port === undefined || port === 465);
-		port ??= secure ? 465 : 587;
-	}
+	if (typeof descriptor.host !== 'string') throw kitError('connection_invalid', 'smtp connection needs a host');
+	const host = descriptor.host;
+	if (descriptor.secure !== undefined && typeof descriptor.secure !== 'boolean')
+		throw kitError('connection_invalid', 'smtp connection secure must be a boolean');
+	if (descriptor.port !== undefined && !Number.isInteger(descriptor.port))
+		throw kitError('connection_invalid', 'smtp connection port must be an integer');
+	const given = /** @type {number | undefined} */ (descriptor.port);
+	const secure = /** @type {boolean | undefined} */ (descriptor.secure) ?? (given === undefined || given === 465);
+	const port = given ?? (secure ? 465 : 587);
 	if (!Number.isInteger(port) || port < 1 || port > 65_535) throw kitError('connection_invalid', 'smtp port is not valid');
 	const checked = checkHost(host, policy);
 	if (!checked.ok) throw kitError('connection_invalid', `smtp host refused (${checked.reason})`);
 	if (!checked.allowlisted && !SMTP_PORTS.includes(port)) throw kitError('connection_invalid', 'smtp host refused (port)');
-	const username = descriptor.username ?? descriptor.user;
-	const password = descriptor.password ?? descriptor.apiKey;
+	const { username, password } = descriptor;
 	if (typeof username !== 'string' || username === '' || typeof password !== 'string' || password === '')
 		throw kitError('connection_invalid', 'smtp connection needs username and password');
 	if (descriptor.from !== undefined && !isMailbox(descriptor.from))
@@ -176,20 +147,12 @@ export const smtpSettingsOf = (descriptor, policy) => {
  */
 const mailOf = (message, defaultFrom) => {
 	if (!isObject(message)) throw kitError('invalid_argument', 'message must be an object');
-	const to = Array.isArray(message.to) ? message.to : [message.to];
-	if (to.length === 0 || to.length > MAX_RECIPIENTS || !to.every(isAddress))
-		throw kitError('invalid_argument', `message.to must be 1..${MAX_RECIPIENTS} email addresses`);
-	const { subject, text, html, replyTo, headers } = message;
+	const { to, subject, text, replyTo, headers } = message;
+	if (!isAddress(to)) throw kitError('invalid_argument', 'message.to must be an email address');
 	if (typeof subject !== 'string' || subject.length === 0 || subject.length > 998 || /[\r\n]/.test(subject))
 		throw kitError('invalid_argument', 'message.subject must be 1..998 characters on one line');
-	if (text === undefined && html === undefined) throw kitError('invalid_argument', 'message needs text or html');
-	for (const [name, value] of /** @type {const} */ ([
-		['text', text],
-		['html', html],
-	])) {
-		if (value !== undefined && (typeof value !== 'string' || value.length > MAX_BODY))
-			throw kitError('invalid_argument', `message.${name} must be a string up to 1 MiB`);
-	}
+	if (typeof text !== 'string' || text.length > MAX_BODY)
+		throw kitError('invalid_argument', 'message.text must be a string up to 1 MiB');
 	const from = message.from ?? defaultFrom;
 	if (!isMailbox(from)) throw kitError('invalid_argument', 'message.from must be an email address');
 	if (replyTo !== undefined && !isMailbox(replyTo))
@@ -211,23 +174,13 @@ const mailOf = (message, defaultFrom) => {
 		from,
 		to,
 		subject,
-		...(text === undefined ? {} : { text }),
-		...(html === undefined ? {} : { html }),
+		text,
 		...(replyTo === undefined ? {} : { replyTo }),
 		...(Object.keys(extra).length > 0 ? { headers: extra } : {}),
 		disableFileAccess: true,
 		disableUrlAccess: true,
 	};
 };
-
-/**
- * @param {unknown} list
- * @returns {string[]}
- */
-const addressesOf = (list) =>
-	Array.isArray(list)
-		? list.map((entry) => (typeof entry === 'string' ? entry : String(/** @type {any} */ (entry)?.address ?? '')))
-		: [];
 
 /**
  * @param {{ descriptor: Record<string, unknown>, policy: import('@ss/net').OutboundPolicy,
@@ -295,22 +248,16 @@ export const createSmtpMessaging = ({ descriptor, policy, createTransport = node
 	};
 
 	return Object.freeze({
-		kind: 'messaging',
-		provider: 'smtp',
 		/**
 		 * Send one email.
 		 * @param {SmtpMessage} message
-		 * @returns {Promise<{ id: string | null, accepted: string[], rejected: string[] }>}
+		 * @returns {Promise<{ id: string | null }>}
 		 */
 		send: async (message) => {
 			const mail = mailOf(message, defaultFrom);
 			return withTransport(async (transport) => {
 				const info = await transport.sendMail(mail);
-				return {
-					id: typeof info?.messageId === 'string' ? info.messageId : null,
-					accepted: addressesOf(info?.accepted),
-					rejected: addressesOf(info?.rejected),
-				};
+				return { id: typeof info?.messageId === 'string' ? info.messageId : null };
 			});
 		},
 		/**

@@ -8,7 +8,7 @@
 		"MessageStatus": {
 			"type": "string",
 			"enum": ["queued", "retrying", "sent", "failed", "skipped"],
-			"description": "queued: waiting for its time (a delayed send or quiet hours) or being sent; retrying: an attempt failed and it is tried again on a later use of your website; sent; failed: every attempt failed, the fallback channel's too; skipped: not sent (reason unsubscribed or limited)."
+			"description": "queued: waiting for its time (a delayed send or quiet hours) or being sent; retrying: an attempt failed and it is tried again on a later use of your website; sent; failed: every attempt failed, the fallback channel's too; skipped: not sent (reason unsubscribed, limited or switched_off)."
 		},
 		"Attempt": {
 			"type": "object",
@@ -178,7 +178,7 @@
 		},
 		"Defaults": {
 			"type": "object",
-			"description": "The default words of the message per channel (parity P1): every product adds the ones it declares to each send of its messages. They are used while your website has no template of its own for the channel (its language version, else its default version), and kept for the fallback channel. Checked as a template you save. WhatsApp never has a default: it sends only templates approved at Meta.",
+			"description": "The default words of the message per channel: every product adds the ones it declares to each send of its messages. They are used while your website has no template of its own for the channel (its language version, else its default version), and kept for the fallback channel. Checked as a template you save. WhatsApp never has a default: it sends only templates approved at Meta.",
 			"properties": {
 				"email": {
 					"$ref": "#/components/schemas/DefaultWords"
@@ -337,7 +337,7 @@
 				"key": {
 					"type": "string",
 					"pattern": "^[a-z][a-z0-9_.-]{0,63}$",
-					"description": "Keys of other products' own events start with the product id (accounts., ecommerce., chat., payments., growth.); every other key is yours."
+					"description": "Keys of other products' own messages start with the product id and a dot (for example accounts. or ecommerce.); every other key is yours."
 				},
 				"channel": {
 					"$ref": "#/components/schemas/Channel"

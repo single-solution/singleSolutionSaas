@@ -19,7 +19,6 @@ import { gatewayOutcome } from '../core/gateway.js';
 import { createSmtpMessaging } from './smtp.js';
 import { isObject } from './util.js';
 
-/** @typedef {import('@ss/app-kit').RequestContext} RequestContext */
 /** @typedef {import('../core/gateway.js').SendOutcome} SendOutcome */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
 /** @typedef {Record<string, string | number | boolean>} ProviderValue */

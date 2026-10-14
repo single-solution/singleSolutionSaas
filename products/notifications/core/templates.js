@@ -17,7 +17,7 @@ import {
 	valueNamesOf,
 	wordsProblem,
 } from '@ss/contracts/templates';
-import { CHANNELS } from './channels.js';
+import { CHANNELS, LANGUAGE } from './channels.js';
 
 export { placeholdersOf, sectionProblem, valueNamesOf };
 
@@ -34,14 +34,13 @@ export const DEFAULT_LANGUAGE = '';
 /** Most values of a send. */
 const MAX_VALUES = 50;
 /** What the delivery log keeps instead of a hidden value that is not empty: a link, else any other value. */
-export const HIDDEN = Object.freeze({ link: '[link hidden]', value: '******' });
+const HIDDEN = Object.freeze({ link: '[link hidden]', value: '******' });
 /** A value that is a link: an address with a scheme, or a path. */
 const LINK = /:\/\/|^\//;
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9_]{0,63})\}/g;
 /** A whole optional section (sections of one name never nest, so the first closing tag of its name ends it). */
 const SECTION = /\{\?([A-Za-z][A-Za-z0-9_]{0,63})\}([\s\S]*?)\{\/\1\}/g;
-const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
 
 /** @typedef {import('./channels.js').Channel} Channel */
 /**
@@ -65,12 +64,15 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
  * optional sections, for example `{code}`.
  * @typedef {{ index: number, type: ButtonType, value: string }} Button
  */
+/** Whether a channel's messages have a subject or title (the widgets read it here). */
+export { isTitled };
+
 /** @typedef {'url' | 'copy_code'} ButtonType */
 
 /** Button types (PLAN 0.8.10 N1). */
 export const BUTTON_TYPES = Object.freeze(/** @type {ButtonType[]} */ (['url', 'copy_code']));
 /** Most buttons a template at Meta has. */
-const MAX_BUTTONS = 10;
+export const MAX_BUTTONS = 10;
 /** Longest button value (characters, as written). */
 const BUTTON_VALUE_LIMIT = 2000;
 

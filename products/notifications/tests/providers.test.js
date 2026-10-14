@@ -118,7 +118,7 @@ describe('email providers', () => {
 			createTransport: (options) => ({
 				sendMail: async (mail) => {
 					seen.push({ options, mail });
-					return { messageId: '<1@x>', accepted: [mail.to] };
+					return { messageId: '<1@x>' };
 				},
 			}),
 		});
@@ -135,7 +135,7 @@ describe('email providers', () => {
 			provider: 'smtp',
 		});
 		expect(seen[0].options).toMatchObject({ port: 587, requireTLS: true, auth: { user: 'u', pass: 'p4ss' } });
-		expect(seen[0].mail).toMatchObject({ from: FROM, to: ['ana@example.com'], replyTo: 'r@example.com' });
+		expect(seen[0].mail).toMatchObject({ from: FROM, to: 'ana@example.com', replyTo: 'r@example.com' });
 		expect(await providers.test('email', value)).toEqual({ ok: true });
 		const failing = createProviders({
 			send: fakeSend().send,

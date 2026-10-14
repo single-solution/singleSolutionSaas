@@ -61,7 +61,7 @@ const SETTINGS = {
  * events are kept (`delivery_log.retentionDays`; 0, the default, keeps them forever).
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
-export const SHARED_SETTINGS = {
+const SHARED_SETTINGS = {
 	delivery_log: {
 		name: 'Delivery log',
 		features: ['whatsapp', 'email', 'sms', 'browser_push', 'staff_push', 'webhooks'],

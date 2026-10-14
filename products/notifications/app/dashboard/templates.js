@@ -27,7 +27,9 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
-import { fillText, templateRows, valueNamesOf } from '../../core/templates.js';
+import { isTitled } from '@ss/contracts/templates';
+import { CHANNELS } from '../../core/channels.js';
+import { MAX_BUTTONS, fillText, templateRows, valueNamesOf } from '../../core/templates.js';
 import { call, fill, useLoad } from './api.js';
 import { TEXTS } from './texts.js';
 
@@ -37,7 +39,6 @@ import { TEXTS } from './texts.js';
  *   urgent: boolean, sensitive: boolean, providerTemplate: string, buttons: TemplateButton[] }} Template
  */
 
-const CHANNELS = /** @type {const} */ (['email', 'sms', 'whatsapp', 'push', 'staff_push']);
 /** @type {Template} */
 const EMPTY = {
 	key: '',
@@ -52,8 +53,6 @@ const EMPTY = {
 	buttons: [],
 };
 const T = TEXTS.settings.template;
-/** Most buttons a template at Meta has. */
-const MAX_BUTTONS = 10;
 
 /**
  * The buttons of a WhatsApp template at Meta that take a value, edited in the template's dialog.
@@ -121,7 +120,7 @@ function ButtonsEditor({ buttons, onChange }) {
  */
 function TemplatePreview({ template }) {
 	const [samples, setSamples] = useState(/** @type {Record<string, string>} */ ({}));
-	const titled = template.channel === 'email' || template.channel === 'push' || template.channel === 'staff_push';
+	const titled = isTitled(template.channel);
 	const buttons = template.channel === 'whatsapp' && template.providerTemplate.trim() !== '' ? template.buttons : [];
 	const names = valueNamesOf(
 		[titled ? template.subject : '', template.text, ...buttons.map((button) => button.value)].join('\n'),

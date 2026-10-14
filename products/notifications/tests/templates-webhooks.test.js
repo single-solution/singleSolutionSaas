@@ -1,6 +1,6 @@
 /**
- * Notifications for converting existing stores (PLAN 0.8.10 N1–N5): WhatsApp template buttons, optional sections,
- * the long retry plan, the template routes for the merchant's server and webhook URLs per event.
+ * Templates and webhooks (PLAN 0.8.10 N1–N5): WhatsApp template buttons, optional sections, the long retry plan, the
+ * template routes for the merchant's server, webhook URLs per event and a test send from the template editor.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ADMIN_ORIGIN, setup } from './helpers.js';
