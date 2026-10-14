@@ -77,7 +77,7 @@ const isYesNo = (question) => /** @type {readonly string[]} */ (PROFILE_YES_NO).
  * @param {string} tag
  * @returns {string}
  */
-export const questionOf = (tag) => tag.slice(0, Math.max(0, tag.indexOf('.')));
+const questionOf = (tag) => tag.slice(0, Math.max(0, tag.indexOf('.')));
 
 /**
  * Whether a tag names an answer the profile can give: `<choice>.<option>`, `<choice>.*`, `moving.yes|no`,
