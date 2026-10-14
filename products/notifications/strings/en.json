@@ -45,6 +45,7 @@
 	"log.outcome.failed": "failed",
 	"log.id": "Message id",
 	"log.oneOff": "One-off message",
+	"log.attempt": "{count} attempt",
 	"log.attempts": "{count} attempts",
 	"log.empty": "No messages yet.",
 	"log.more": "Show more",

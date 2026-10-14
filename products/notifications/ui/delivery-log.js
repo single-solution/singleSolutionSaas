@@ -158,7 +158,9 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 							[
 								t(`channel.${message.channel}`),
 								t(`status.${message.status}`),
-								formatText(t('log.attempts'), { count: message.attempts.length }),
+								formatText(t(message.attempts.length === 1 ? 'log.attempt' : 'log.attempts'), {
+									count: message.attempts.length,
+								}),
 								when(message.createdAt),
 								logReason(config.texts, message),
 							]

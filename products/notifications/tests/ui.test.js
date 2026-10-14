@@ -382,7 +382,7 @@ describe('admin widgets', () => {
 		const widget = startWidget({ window, script: script(null) });
 		await widget.admin({ getTicket: async () => TICKET });
 		await flush();
-		expect(inside(host, '.meta').textContent).toBe('Email · Sent · 1 attempts · 1 Oct 2026, 19:00');
+		expect(inside(host, '.meta').textContent).toBe('Email · Sent · 1 attempt · 1 Oct 2026, 19:00');
 	});
 
 	it('the template editor lists, loads, saves and deletes templates', async () => {
