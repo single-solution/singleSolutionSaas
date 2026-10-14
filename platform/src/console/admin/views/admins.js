@@ -24,6 +24,7 @@ import {
 	Icon,
 	Input,
 	KeyValueList,
+	LocalTime,
 	Masonry,
 	PageHeader,
 	Select,
@@ -34,7 +35,6 @@ import {
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { useNavigation } from '../../navigation.js';
 import { adminFetch, useAdminResource } from '../client.js';
-import { LocalTime } from '../../views/billing.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';

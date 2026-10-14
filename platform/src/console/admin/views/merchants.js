@@ -26,6 +26,7 @@ import {
 	Icon,
 	Input,
 	KeyValueList,
+	LocalTime,
 	Masonry,
 	PageHeader,
 	Section,
@@ -40,7 +41,7 @@ import {
 } from '@ss/ui';
 import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
 import { api } from '../../paths.js';
-import { DaysLeft, LocalTime, MerchantStatusBadge } from '../../views/billing.js';
+import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';

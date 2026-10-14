@@ -17,15 +17,16 @@ import {
 	EmptyState,
 	Icon,
 	IconBadge,
+	LocalTime,
 	Masonry,
 	PageHeader,
 	Section,
 	SoftBreaks,
 	Stat,
 	StatGrid,
+	describeProblem,
 	formatCredits,
 	formatDate,
-	describeProblem,
 	isEmptySeries,
 	useToast,
 } from '@ss/ui';
@@ -33,7 +34,7 @@ import { AUTH, BILLING, MERCHANT, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
-import { DaysLeft, LocalTime, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
+import { DaysLeft, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
 import { ListDetail, ListPane, ListRow, ListSearch, NeedItem, NothingNeeded, PageProblem, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';

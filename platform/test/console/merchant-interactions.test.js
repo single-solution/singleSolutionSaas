@@ -15,7 +15,7 @@ import { closeMongoClients } from '../../src/testing.js';
 import * as loaders from '../../src/console/loaders.js';
 import { apiFetch, signInAgain, takeFragmentToken, useResource } from '../../src/console/client.js';
 import { AccountView } from '../../src/console/views/account.js';
-import { LocalTime } from '../../src/console/views/billing.js';
+import { LocalTime } from '@ss/ui';
 import { QrCode } from '../../src/console/views/login-settings.js';
 import {
 	ConfirmEmailView,

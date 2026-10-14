@@ -5,8 +5,7 @@
  * are UTC and labeled so; single timestamps show in the viewer's local time.
  * @module
  */
-import { useSyncExternalStore } from 'react';
-import { Badge, BarChart, Callout, Card, EmptyState, Stat, StatGrid, Table, formatCredits, formatDateTime } from '@ss/ui';
+import { Badge, BarChart, Callout, Card, EmptyState, LocalTime, Stat, StatGrid, Table, formatCredits } from '@ss/ui';
 import { BILLING } from '../../texts/console.js';
 
 /** @typedef {'active' | 'low_balance' | 'grace' | 'stopped' | 'suspended'} MerchantStatus */
@@ -14,29 +13,6 @@ import { BILLING } from '../../texts/console.js';
 
 /** @type {Record<string, Tone>} */
 const MERCHANT_TONES = { active: 'success', low_balance: 'warning', grace: 'warning', stopped: 'danger', suspended: 'danger' };
-
-/** The viewer's time zone never changes while a page is open: nothing to subscribe to. */
-const noSubscription = () => () => {};
-/** The browser's IANA time zone. */
-const viewerZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
-/** No viewer on the server (and in the first render in the browser): UTC, so both render the same text. */
-const noViewerZone = () => undefined;
-
-/**
- * An instant in the viewer's local time, in the one date style of the consoles (`Oct 4, 2026, 2:30 PM EDT`): UTC
- * (`Oct 4, 2026, 2:30 PM UTC`) on the server and in the first render, then the same style in the browser's time zone.
- * @param {{ value: string | null | undefined }} props
- */
-export function LocalTime({ value }) {
-	const timeZone = useSyncExternalStore(noSubscription, viewerZone, noViewerZone);
-	return value ? (
-		<time dateTime={value} title={formatDateTime(value)}>
-			{formatDateTime(value, { timeZone })}
-		</time>
-	) : (
-		<>—</>
-	);
-}
 
 /**
  * Merchant status (Active green, Low balance and In grace amber, Stopped and Suspended red).

@@ -25,6 +25,7 @@ import {
 	Icon,
 	Input,
 	KeyValueList,
+	LocalTime,
 	PageHeader,
 	Section,
 	Select,
@@ -43,7 +44,7 @@ import {
 import { ADMIN, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { LocalTime, ProductStatusBadge } from '../../views/billing.js';
+import { ProductStatusBadge } from '../../views/billing.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
 import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';

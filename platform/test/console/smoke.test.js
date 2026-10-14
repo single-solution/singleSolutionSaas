@@ -11,14 +11,8 @@ import * as loaders from '../../src/console/loaders.js';
 import { routes } from '../../src/console/paths.js';
 import { AccountView } from '../../src/console/views/account.js';
 import { CreditsView } from '../../src/console/views/credits.js';
-import {
-	BillingBanner,
-	DaysLeft,
-	LocalTime,
-	ProductStatusBadge,
-	productStatusLabel,
-	productTone,
-} from '../../src/console/views/billing.js';
+import { BillingBanner, DaysLeft, ProductStatusBadge, productStatusLabel, productTone } from '../../src/console/views/billing.js';
+import { LocalTime } from '@ss/ui';
 import { ConsoleShell, merchantSections } from '../../src/console/views/shell.js';
 import { contactLine, homeOf } from '../../src/console/views/sign-in.js';
 import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
