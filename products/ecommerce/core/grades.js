@@ -5,8 +5,8 @@
  * grade the categories it is for ([] = all), a colour, a condition video, content, whether it is offered, the item
  * condition structured data and feeds use, and its glossary SEO. A grade entry may be the definition for one category
  * (`categoryId`, E45): the same key then exists once per category with its own label, texts, days and SEO, and once
- * without a category for every other one. Variants name a grade by its key; a product's grade is its category's entry
- * first, then the one without a category ({@link gradesFor}). No I/O.
+ * without a category for every other one. Variants name a grade by its key; a product's grade is the entry of its
+ * category or the nearest one above it, then the one without a category ({@link gradesFor}). No I/O.
  * @module
  */
 import { EMPTY_CONTENT, checkContent, checkFaqs } from './catalog-content.js';
@@ -166,8 +166,10 @@ export const gradesByKey = (list) =>
 /**
  * The grades by key for a product or a page of these categories (E45): each key's entry for the first of the categories
  * that has one, else its entry without a category, else (no category given) its first entry. In the order of the list.
+ * Give the categories with those above them, nearest first (`core/catalog-taxonomy.js` `lineageOf`), so a category's
+ * entry also applies to the categories below it.
  * @param {unknown} list
- * @param {ReadonlyArray<string | null | undefined>} categoryIds the product's categories, in their order
+ * @param {ReadonlyArray<string | null | undefined>} categoryIds the categories, nearest first
  * @returns {Map<string, Grade>}
  */
 export const gradesFor = (list, categoryIds) => {

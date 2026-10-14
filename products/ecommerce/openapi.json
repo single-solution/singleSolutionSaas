@@ -25472,7 +25472,7 @@
 		"/v1/seo/attributes/{category}/{slug}": {
 			"get": {
 				"summary": "An attribute's glossary page in a category",
-				"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it.",
+				"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category or the nearest category above it first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"security": [
@@ -25658,7 +25658,7 @@
 		"/v1/seo/grades/{category}/{key}": {
 			"get": {
 				"summary": "A grade's glossary page in a category",
-				"description": ":category is a category's id or slug (an earlier slug too): the grade as that category defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Grades and serials is off, for an unknown or hidden category, or no offered grade with the key for it.",
+				"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Grades and serials is off, for an unknown or hidden category, or no offered grade with the key for it.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"security": [
@@ -31374,7 +31374,7 @@
 							"null"
 						],
 						"maxLength": 64,
-						"description": "The category this attribute is the definition for (E45): the same slug may exist once per category, with its own name, choices, unit, glossary and SEO, and once for every category. null: every category. Products, listings and glossary pages take the product's or page's category's definition first, then the one for every category."
+						"description": "The category this attribute is the definition for (E45): the same slug may exist once per category, with its own name, choices, unit, glossary and SEO, and once for every category. null: every category. Products, listings and glossary pages take the definition of the product's or page's category, or of the nearest category above it, first, then the one for every category."
 					},
 					"categoryIds": {
 						"type": "array",

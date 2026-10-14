@@ -88,6 +88,7 @@ describe('claim windows', () => {
 			claims,
 			products: new Map([['prd_1', { returnDays: null, warrantyDays: null }]]),
 			grades: [{ key: 'a', warrantyDays: 90 }],
+			lineage: (categoryIds) => categoryIds,
 			defaults: { returnDays: 7, warrantyDays: 0 },
 			now: NOW,
 		});
@@ -249,16 +250,16 @@ describe('alerts and compare', () => {
 			{ attributeId: 'att_2', name: 'NFC', unit: '', values: [true, null] },
 		]);
 		const graded = {
+			categoryIds: [],
 			variants: [
 				{ active: true, grade: 'b' },
 				{ active: true, grade: 'a' },
 				{ active: false, grade: 'c' },
 			],
 		};
-		expect(gradeLabels(/** @type {any} */ (graded), [{ key: 'a', label: 'Like new' }, { key: 'b' }, { key: 'c' }])).toEqual([
-			'Like new',
-			'b',
-		]);
+		expect(
+			gradeLabels(/** @type {any} */ (graded), [{ key: 'a', label: 'Like new' }, { key: 'b' }, { key: 'c' }], new Map()),
+		).toEqual(['Like new', 'b']);
 	});
 });
 

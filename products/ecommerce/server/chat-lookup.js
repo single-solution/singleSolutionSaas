@@ -10,10 +10,12 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
+import { categoriesOf } from '../adapters/catalog-store.js';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
+import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
 import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
 import { shipmentLink } from '../core/couriers.js';
@@ -171,13 +173,15 @@ export const createChatLookup = (product, service, media) => {
 			s.values('returns'),
 			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
 		]);
+		const categories =
+			grades.length > 0 ? new Map((await categoriesOf(await s.data())).map((category) => [category.id, category])) : new Map();
 		/** @type {Map<string, Map<string, import('../core/grades.js').Grade>>} the grades of each category list, read once */
 		const known = new Map();
-		/** A product's grades: its category's entries first (E45). @param {ProductRecord} item */
+		/** A product's grades: the entries of its category or the nearest one above it first (E45). @param {ProductRecord} item */
 		const gradesOf = (item) => {
-			const categoryIds = item.categoryIds ?? [];
-			const found = known.get(categoryIds.join(',')) ?? gradesFor(grades, categoryIds);
-			known.set(categoryIds.join(','), found);
+			const lineage = lineageOf(item.categoryIds, categories);
+			const found = known.get(lineage.join(',')) ?? gradesFor(grades, lineage);
+			known.set(lineage.join(','), found);
 			return found;
 		};
 		const stock = { showStock: String(catalog.showStock ?? 'none'), lowStockShown: Number(catalog.lowStockShown ?? 5) };

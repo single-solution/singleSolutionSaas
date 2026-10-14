@@ -165,17 +165,19 @@ export const windowOf = (days, deliveredAt, now) => {
 /**
  * What can still be claimed on each line of a delivered order (only physical items are claimed).
  * @param {{ order: Pick<OrderRecord, 'lines' | 'deliveredAt'>, claims: Array<Pick<ReturnRecord, 'status' | 'kind' | 'refundAmount' | 'lines'>>,
- *   products: Map<string, { returnDays: number | null, warrantyDays: number | null }>, grades: GradeDays[], defaults: WindowDefaults,
- *   now: number }} input
+ *   products: Map<string, { returnDays: number | null, warrantyDays: number | null }>, grades: GradeDays[],
+ *   lineage: (categoryIds: string[]) => string[], defaults: WindowDefaults, now: number }} input `lineage`: a line's
+ *   categories with those above them, nearest first (`core/catalog-taxonomy.js` `lineageOf`), for the grade a line's
+ *   category or one above it defines
  */
-export const returnableLines = ({ order, claims, products, grades, defaults, now }) => {
+export const returnableLines = ({ order, claims, products, grades, lineage, defaults, now }) => {
 	const held = claimedByLine(claims);
 	return order.lines
 		.filter((line) => line.kind === 'physical')
 		.map((line) => {
 			const product = products.get(line.productId) ?? null;
-			// the grade as the line's category defines it, else the entry for every category (E45)
-			const grade = line.grade ? (gradesFor(grades, line.categoryIds ?? []).get(line.grade) ?? null) : null;
+			// the grade as the line's category (or the nearest one above it) defines it, else the entry for every category (E45)
+			const grade = line.grade ? (gradesFor(grades, lineage(line.categoryIds ?? [])).get(line.grade) ?? null) : null;
 			const taken = held.get(line.id);
 			const claimable = Math.max(0, line.quantity - (taken?.quantity ?? 0));
 			return {

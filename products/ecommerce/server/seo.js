@@ -11,6 +11,7 @@
 import { defineRoute, problem } from '@ss/app-kit';
 import { findBySlugHistory } from '../adapters/catalog-store.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
+import { lineageOf } from '../core/catalog-taxonomy.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition, gradesFor } from '../core/grades.js';
 import { absolute } from '../core/links.js';
@@ -125,20 +126,23 @@ export const createSeo = (product, service) => {
 	createAutoSeo(product, service, landings);
 
 	/**
-	 * The condition of a variant for structured data and feeds (E10), from the product's grades (its category's
-	 * entries first, E45).
+	 * The condition of a variant for structured data and feeds (E10), from the product's grades (the entries of its
+	 * category or the nearest one above it first, E45).
 	 * @param {Site} s @param {'used' | 'refurbished' | 'new'} graded
+	 * @param {ReadonlyMap<string, CategoryRecord>} [known] every category by id, when the caller has read them
 	 */
-	const conditionsOf = async (s, graded) => {
+	const conditionsOf = async (s, graded, known) => {
 		const list = s.has('grades_serials') ? await s.list('grades') : [];
+		const categories =
+			known ?? (list.length > 0 ? new Map((await allCategories(await s.data())).map((c) => [c.id, c])) : new Map());
 		/** @type {Map<string, Map<string, import('../core/grades.js').Grade>>} the grades of each category list, read once */
-		const known = new Map();
+		const read = new Map();
 		/** @param {Pick<ProductRecord, 'categoryIds'>} item */
 		const gradesOf = (item) => {
-			const categoryIds = item.categoryIds ?? [];
-			const key = categoryIds.join(',');
-			const found = known.get(key) ?? gradesFor(list, categoryIds);
-			known.set(key, found);
+			const lineage = lineageOf(item.categoryIds, categories);
+			const key = lineage.join(',');
+			const found = read.get(key) ?? gradesFor(list, lineage);
+			read.set(key, found);
 			return found;
 		};
 		return {
@@ -532,7 +536,11 @@ export const createSeo = (product, service) => {
 				.toArray(),
 		]);
 		const byId = new Map(categories.map((category) => [category.id, category]));
-		const conditions = await conditionsOf(s, settings.gradedCondition ?? /** @type {any} */ (seo).gradedCondition ?? 'used');
+		const conditions = await conditionsOf(
+			s,
+			settings.gradedCondition ?? /** @type {any} */ (seo).gradedCondition ?? 'used',
+			byId,
+		);
 		const shipping = await shippingOf(s);
 		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		const withImages = settings.items !== 'all';
@@ -705,6 +713,7 @@ export const createSeo = (product, service) => {
 			shownCategories(s, data),
 		]);
 		const gradeList = s.has('grades_serials') ? await s.list('grades') : [];
+		const byCategoryId = new Map(ordered.map((category) => [category.id, category]));
 		/** @type {Map<string, Array<{ name: string, url: string, price: string }>>} */
 		const byCategory = new Map();
 		const rows = data
@@ -730,8 +739,8 @@ export const createSeo = (product, service) => {
 			ordered.map(async (category) => ({
 				name: category.name,
 				url: await media.categoryUrl(s, category),
-				// the grades as the category defines them (E45)
-				grades: [...gradesFor(gradeList, [category.id]).values()]
+				// the grades as the category (or the nearest one above it) defines them (E45)
+				grades: [...gradesFor(gradeList, lineageOf([category.id], byCategoryId)).values()]
 					.filter(
 						(grade) =>
 							grade.active !== false &&

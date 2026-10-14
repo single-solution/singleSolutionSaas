@@ -24,7 +24,7 @@ import {
 	sortDocument,
 	SORTS,
 } from '../core/catalog-query.js';
-import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
+import { categoryTree, lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import { youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
 import { dealProductsFilter, productDeals } from '../core/deals.js';
@@ -109,6 +109,8 @@ const createCards = (common, service) => {
 		if (products.length === 0) return [];
 		const brands = new Map((await brandsOf(data)).map((brand) => [brand.id, brand]));
 		const gradeList = await common.gradeListOf(s);
+		const categories =
+			gradeList.length > 0 ? new Map((await categoriesOf(data)).map((category) => [category.id, category])) : new Map();
 		const deals = await dealsOf(s, data, products);
 		const attributes = variants ? new Map((await attributesOf(data)).map((attribute) => [attribute.id, attribute])) : null;
 		return Promise.all(
@@ -124,8 +126,8 @@ const createCards = (common, service) => {
 						image: await common.media.mediaUrl(s, main?.sizes?.card ?? main?.key),
 						url,
 						brand: brand ? { id: brand.id, name: brand.name, slug: brand.slug } : null,
-						// each product's grades: its category's entries first (E45)
-						grades: gradesFor(gradeList, item.categoryIds ?? []),
+						// each product's grades: its category's (or the nearest one above it) entries first (E45)
+						grades: gradesFor(gradeList, lineageOf(item.categoryIds, categories)),
 						cardImages: await Promise.all(
 							cardPhotos(item).map(async (file) => ({
 								url: await common.media.mediaUrl(s, file.sizes?.card ?? file.key),
@@ -210,13 +212,14 @@ export const createCatalogShop = (product, service, common) => {
 		]);
 		/** @type {string[] | null} */
 		let categoryIds = null;
-		/** @type {string | null} */
-		let categoryId = null;
+		const byCategory = new Map(categories.map((c) => [c.id, c]));
+		/** the listing's category and those above it, nearest first (E45) @type {string[]} */
+		let lineage = [];
 		if (query.category) {
 			const wanted = query.category.toLowerCase();
 			const found = categories.find((c) => c.id === query.category || c.slug === wanted);
 			categoryIds = found ? withDescendants(found.id, categories) : [];
-			categoryId = found?.id ?? null;
+			lineage = found ? lineageOf([found.id], byCategory) : [];
 		}
 		const brandIds =
 			query.brands.length > 0
@@ -225,7 +228,7 @@ export const createCatalogShop = (product, service, common) => {
 		const byAttribute = new Map(attributes.map((attribute) => [attribute.id, attribute]));
 		const resolved = {
 			categoryIds,
-			categoryId,
+			lineage,
 			brandIds,
 			attributes: byAttribute,
 			hidden,
@@ -235,11 +238,11 @@ export const createCatalogShop = (product, service, common) => {
 		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);
 		const filterable = attributes.filter((attribute) => attribute.filterable && attribute.active !== false);
 		const names = {
-			categories: new Map(categories.map((c) => [c.id, c])),
+			categories: byCategory,
 			brands: new Map(brands.map((b) => [b.id, b])),
 			attributes: new Map(filterable.map((a) => [a.id, a])),
-			// a category's listing names grades as that category defines them (E45)
-			grades: gradesFor(await common.gradeListOf(s), [categoryId]),
+			// a category's listing names grades as that category (or the nearest one above it) defines them (E45)
+			grades: gradesFor(await common.gradeListOf(s), lineage),
 		};
 		const first = page.after === null && (query.page === null || query.page === 1);
 
@@ -344,14 +347,14 @@ export const createCatalogShop = (product, service, common) => {
 	};
 
 	/**
-	 * A product's grades (its category's entries first, E45) with each condition video's address (a YouTube id becomes
-	 * its embed address, a file key its storage address; E10).
-	 * @param {Site} s @param {ProductRecord} item
+	 * A product's grades (the entries of its category or the nearest one above it first, E45) with each condition video's
+	 * address (a YouTube id becomes its embed address, a file key its storage address; E10).
+	 * @param {Site} s @param {ProductRecord} item @param {ReadonlyMap<string, CategoryRecord>} categories by id
 	 */
-	const gradesWithVideos = async (s, item) =>
+	const gradesWithVideos = async (s, item, categories) =>
 		new Map(
 			await Promise.all(
-				[...gradesFor(await common.gradeListOf(s), item.categoryIds ?? []).entries()].map(
+				[...gradesFor(await common.gradeListOf(s), lineageOf(item.categoryIds, categories)).entries()].map(
 					async ([key, grade]) =>
 						/** @type {[string, import('../core/grades.js').Grade]} */ ([
 							key,
@@ -410,7 +413,7 @@ export const createCatalogShop = (product, service, common) => {
 				trail.map(async (c) => ({ id: c.id, slug: c.slug, name: c.name, url: await common.media.categoryUrl(s, c) })),
 			),
 			attributes: byAttribute,
-			grades: await gradesWithVideos(s, item),
+			grades: await gradesWithVideos(s, item, byId),
 			variantMedia: new Map(
 				await Promise.all(
 					active.map(

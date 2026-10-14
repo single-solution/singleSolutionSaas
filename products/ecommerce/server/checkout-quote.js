@@ -19,6 +19,7 @@ import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
 import { feeBaseOf, merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
+import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
 import { roundDown } from '../core/money.js';
@@ -191,8 +192,12 @@ export const createQuoting = (product, service) => {
 		/** @param {string[]} ids */
 		const ancestors = (ids) => [...new Set(ids.flatMap((id) => [...(paths.get(id) ?? []), id]))];
 		const grades = /** @type {import('../core/grades.js').Grade[]} */ (s.has('grades_serials') ? await s.list('grades') : []);
-		/** A grade's label for a product of these categories (E45). @param {string} key @param {string[]} categoryIds */
-		const gradeLabel = (key, categoryIds) => gradesFor(grades, categoryIds).get(key)?.label ?? key;
+		const tree = new Map([...paths].map(([id, path]) => [id, { path }]));
+		/**
+		 * A grade's label for a product of these categories: the entry of its category or the nearest one above it first
+		 * (E45). @param {string} key @param {string[]} categoryIds
+		 */
+		const gradeLabel = (key, categoryIds) => gradesFor(grades, lineageOf(categoryIds, tree)).get(key)?.label ?? key;
 		const licences = await store.availableLicences(
 			[...products.values()].filter((item) => item.kind === 'digital' && item.digital?.licenceKeys).map((item) => item.id),
 		);

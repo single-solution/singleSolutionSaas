@@ -1,12 +1,14 @@
 /**
  * Attributes and grades per category (PLAN E45): the same attribute slug or grade key once per category, with its own
- * name, choices, unit, texts and SEO, and once for every category; products, listings and glossary pages take their
- * category's definition first, then the one for every category; glossary addresses with `{category}`; every active
+ * name, choices, unit, texts and SEO, and once for every category; products, listings and glossary pages take the
+ * definition of their category or the nearest one above it first, then the one for every category; glossary addresses
+ * with `{category}`; every active
  * attribute's page in the sitemap once its address is set (SG-20); the import keeps one attribute per category.
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { attributeOf } from '../core/catalog-query.js';
+import { lineageOf } from '../core/catalog-taxonomy.js';
 import { resolveLines } from '../core/checkout.js';
 import { gradeLabels } from '../core/compare.js';
 import { checkGrades, gradesByKey, gradesFor } from '../core/grades.js';
@@ -15,7 +17,7 @@ import { ORIGIN, readyShop } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
-/** @type {{ dresses: any, shirts: any, fabric: any, dressFabric: any }} */
+/** @type {{ dresses: any, evening: any, shirts: any, fabric: any, dressFabric: any }} */
 const ids = /** @type {any} */ ({});
 
 /** @param {string} method @param {string} path @param {unknown} [body] */
@@ -42,6 +44,7 @@ const variant = (grade) => ({
 beforeAll(async () => {
 	shop = await readyShop();
 	ids.dresses = await api('POST', '/v1/categories', { name: 'Dresses' });
+	ids.evening = await api('POST', '/v1/categories', { name: 'Evening', parentId: ids.dresses.id });
 	ids.shirts = await api('POST', '/v1/categories', { name: 'Shirts' });
 	ids.fabric = await api('POST', '/v1/attributes', { name: 'Fabric', slug: 'fabric', filterable: true });
 	ids.dressFabric = await api('POST', '/v1/attributes', {
@@ -96,14 +99,54 @@ describe('grades per category (E45)', () => {
 		).toMatchObject({ ok: false });
 	});
 
+	it('applies a category definition to the categories below it, the nearest one up the tree winning', () => {
+		// Dresses > Evening > Gala, and Sale at the top
+		const tree = new Map([
+			['cat_d', { path: [] }],
+			['cat_e', { path: ['cat_d'] }],
+			['cat_g', { path: ['cat_d', 'cat_e'] }],
+			['cat_s', { path: [] }],
+		]);
+		expect(lineageOf(['cat_g', 'cat_s'], tree)).toEqual(['cat_g', 'cat_e', 'cat_d', 'cat_s']);
+		expect(lineageOf(['cat_e', 'cat_d', null, '', 'cat_unknown'], tree)).toEqual(['cat_e', 'cat_d', 'cat_unknown']);
+		const list = [
+			{ key: 'a', label: 'Grade A' },
+			{ key: 'a', label: 'Like new', categoryId: 'cat_d' },
+			{ key: 'a', label: 'Evening mint', categoryId: 'cat_e' },
+			{ key: 'a', label: 'Sale A', categoryId: 'cat_s' },
+		];
+		/** @param {string[]} categoryIds */
+		const label = (categoryIds) => gradesFor(list, lineageOf(categoryIds, tree)).get('a')?.label;
+		expect(label(['cat_g'])).toBe('Evening mint');
+		expect(label(['cat_e'])).toBe('Evening mint');
+		expect(label(['cat_d'])).toBe('Like new');
+		// the first category and those above it come before the second category
+		expect(label(['cat_g', 'cat_s'])).toBe('Evening mint');
+		expect(label(['cat_s', 'cat_g'])).toBe('Sale A');
+		expect(label(['cat_unknown'])).toBe('Grade A');
+		const attributes = new Map(
+			/** @type {Array<[string, any]>} */ ([
+				['att_all', { id: 'att_all', slug: 'fabric', categoryId: null }],
+				['att_d', { id: 'att_d', slug: 'fabric', categoryId: 'cat_d' }],
+				['att_e', { id: 'att_e', slug: 'fabric', categoryId: 'cat_e' }],
+			]),
+		);
+		expect(attributeOf(attributes, 'fabric', lineageOf(['cat_g'], tree))?.id).toBe('att_e');
+		expect(attributeOf(attributes, 'fabric', lineageOf(['cat_d'], tree))?.id).toBe('att_d');
+		expect(attributeOf(attributes, 'fabric', lineageOf(['cat_s'], tree))?.id).toBe('att_all');
+	});
+
 	it('takes a product category grade for compare labels, order lines and claim windows', () => {
 		const list = [
 			{ key: 'a', label: 'Grade A', returnDays: 3, warrantyDays: 30 },
 			{ key: 'a', label: 'Like new', categoryId: 'cat_d', returnDays: 10, warrantyDays: 90 },
 		];
 		const product = { categoryIds: ['cat_d'], variants: [{ active: true, grade: 'a' }] };
-		expect(gradeLabels(/** @type {any} */ (product), list)).toEqual(['Like new']);
-		expect(gradeLabels(/** @type {any} */ ({ ...product, categoryIds: [] }), list)).toEqual(['Grade A']);
+		expect(gradeLabels(/** @type {any} */ (product), list, new Map())).toEqual(['Like new']);
+		expect(gradeLabels(/** @type {any} */ ({ ...product, categoryIds: [] }), list, new Map())).toEqual(['Grade A']);
+		// a product of a category below one with its own entry takes that entry
+		const below = new Map([['cat_e', { path: ['cat_d'] }]]);
+		expect(gradeLabels(/** @type {any} */ ({ ...product, categoryIds: ['cat_e'] }), list, below)).toEqual(['Like new']);
 		/** @type {Array<[string, string[]]>} */
 		const asked = [];
 		resolveLines([{ productId: 'prd_1', variantId: 'var_1', quantity: 1, slot: null }], {
@@ -150,6 +193,7 @@ describe('grades per category (E45)', () => {
 			claims: [],
 			products: new Map([['prd_1', { returnDays: null, warrantyDays: null }]]),
 			grades: list,
+			lineage: (categoryIds) => lineageOf(categoryIds, new Map([['cat_e', { path: ['cat_d'] }]])),
 			defaults: { returnDays: 7, warrantyDays: 0 },
 			now: Date.parse('2026-10-05T00:00:00Z'),
 		});
@@ -157,6 +201,16 @@ describe('grades per category (E45)', () => {
 			[10, 90],
 			[3, 30],
 		]);
+		const evening = returnableLines({
+			order: /** @type {any} */ ({ lines: [{ ...line, categoryIds: ['cat_e'] }], deliveredAt: delivered }),
+			claims: [],
+			products: new Map([['prd_1', { returnDays: null, warrantyDays: null }]]),
+			grades: list,
+			lineage: (categoryIds) => lineageOf(categoryIds, new Map([['cat_e', { path: ['cat_d'] }]])),
+			defaults: { returnDays: 7, warrantyDays: 0 },
+			now: Date.parse('2026-10-05T00:00:00Z'),
+		});
+		expect(evening.map((entry) => [entry.return.days, entry.warranty.days])).toEqual([[10, 90]]);
 	});
 
 	it('names a variant grade as its product category defines it', async () => {
@@ -172,6 +226,22 @@ describe('grades per category (E45)', () => {
 		expect(listing.facets.grades).toEqual([{ key: 'a', label: 'Like new', count: 1 }]);
 		const all = (await shop.visitor('GET', '/v1/shop/products')).json;
 		expect(all.facets.grades).toEqual([{ key: 'a', label: 'Grade A', count: 2 }]);
+	});
+
+	it('names a grade as the nearest category above a product defines it (sub-categories)', async () => {
+		const gown = await shop.seedProduct({ name: 'Evening gown', categoryIds: [ids.evening.id], variants: [variant('a')] });
+		expect((await shop.visitor('GET', `/v1/shop/products/${gown.slug}`)).json.variants[0].grade).toMatchObject({
+			label: 'Like new',
+			warrantyDays: 90,
+		});
+		expect((await shop.visitor('GET', '/v1/shop/products?q=gown')).json.items[0].grades).toEqual(['Like new']);
+		const listing = (await shop.visitor('GET', `/v1/shop/products?category=${ids.evening.slug}`)).json;
+		expect(listing.facets.grades).toEqual([{ key: 'a', label: 'Like new', count: 1 }]);
+		expect(await api('GET', `/v1/seo/grades/${ids.evening.slug}/a`)).toMatchObject({
+			label: 'Like new',
+			categoryId: ids.dresses.id,
+			category: { id: ids.evening.id },
+		});
 	});
 
 	it('answers a grade glossary page per category', async () => {
@@ -220,8 +290,8 @@ describe('attributes per category (E45)', () => {
 
 	it('filters a listing by the slug as its category defines it, then the one for every category', async () => {
 		const attributes = new Map([ids.fabric, ids.dressFabric].map((attribute) => [attribute.id, attribute]));
-		expect(attributeOf(attributes, 'fabric', ids.dresses.id)?.id).toBe(ids.dressFabric.id);
-		expect(attributeOf(attributes, 'fabric', ids.shirts.id)?.id).toBe(ids.fabric.id);
+		expect(attributeOf(attributes, 'fabric', [ids.dresses.id])?.id).toBe(ids.dressFabric.id);
+		expect(attributeOf(attributes, 'fabric', [ids.shirts.id])?.id).toBe(ids.fabric.id);
 		expect(attributeOf(attributes, 'fabric')?.id).toBe(ids.fabric.id);
 		expect(attributeOf(new Map([[ids.dressFabric.id, ids.dressFabric]]), 'fabric')?.id).toBe(ids.dressFabric.id);
 		await shop.seedProduct({
@@ -237,6 +307,21 @@ describe('attributes per category (E45)', () => {
 			);
 		expect(await names(ids.dresses.slug)).toEqual(['Fabric silk dress']);
 		expect(await names(ids.shirts.slug)).toEqual(['Fabric silk shirt']);
+	});
+
+	it('takes the nearest category above a listing for its filters and glossary pages (sub-categories)', async () => {
+		await shop.seedProduct({
+			name: 'Fabric silk gown',
+			categoryIds: [ids.evening.id],
+			specs: { [ids.dressFabric.id]: 'silk' },
+		});
+		const found = await shop.visitor('GET', `/v1/shop/products?q=Fabric&category=${ids.evening.slug}&attr.fabric=silk`);
+		expect(found.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Fabric silk gown']);
+		expect(await api('GET', `/v1/seo/attributes/${ids.evening.slug}/fabric`)).toMatchObject({
+			name: 'Dress fabric',
+			categoryId: ids.dresses.id,
+			category: { id: ids.evening.id },
+		});
 	});
 
 	it('answers glossary pages per category, with {category} in the address and the patterns', async () => {

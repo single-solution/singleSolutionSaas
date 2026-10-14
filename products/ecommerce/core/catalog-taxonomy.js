@@ -223,6 +223,26 @@ export const movedPaths = (id, path, categories) =>
 export const withDescendants = (id, categories) => [id, ...categories.filter((c) => c.path.includes(id)).map((c) => c.id)];
 
 /**
+ * Categories with those above them, nearest first, for the definitions of attributes and grades (E45: a category's
+ * definition applies to the categories below it too, the nearest one up the tree winning): each category in its order,
+ * then its parent, its parent's parent … up to the top, each once. A product's first category and those above it come
+ * before its second category.
+ * @param {ReadonlyArray<string | null | undefined>} categoryIds a product's categories in their order, or a page's one
+ * @param {ReadonlyMap<string, Pick<CategoryRecord, 'path'>>} categories every category by id (an unknown one has no parents)
+ * @returns {string[]}
+ */
+export const lineageOf = (categoryIds, categories) => [
+	...new Set(
+		categoryIds
+			.filter((id) => typeof id === 'string' && id !== '')
+			.flatMap((id) => [
+				/** @type {string} */ (id),
+				...[...(categories.get(/** @type {string} */ (id))?.path ?? [])].reverse(),
+			]),
+	),
+];
+
+/**
  * @template {{ sort: number, name: string }} T
  * @param {T} a @param {T} b
  */

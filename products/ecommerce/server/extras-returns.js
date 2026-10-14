@@ -16,8 +16,10 @@
  */
 import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { categoriesOf } from '../adapters/catalog-store.js';
 import { restockClaimLines, takePoints } from '../adapters/ledger.js';
 import { userIdsOf } from '../adapters/extras-store.js';
+import { lineageOf } from '../core/catalog-taxonomy.js';
 import { afterFilter, keyOf, sortOf } from '../core/extras-pages.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
@@ -160,7 +162,9 @@ export const createReturns = (product, service) => {
 				)
 				.toArray()
 		);
-		const grades = order.lines.some((line) => line.grade) ? await s.list('grades') : [];
+		const graded = order.lines.some((line) => line.grade);
+		const [grades, categories] = graded ? await Promise.all([s.list('grades'), categoriesOf(data)]) : [[], []];
+		const byId = new Map(categories.map((category) => [category.id, category]));
 		const settings = await s.values('returns');
 		return returnableLines({
 			order,
@@ -169,6 +173,7 @@ export const createReturns = (product, service) => {
 				products.map((p) => [p.id, { returnDays: p.returnDays ?? null, warrantyDays: p.warrantyDays ?? null }]),
 			),
 			grades: Array.isArray(grades) ? grades : [],
+			lineage: (categoryIds) => lineageOf(categoryIds, byId),
 			defaults: { returnDays: Number(settings.returnDays ?? 0), warrantyDays: Number(settings.warrantyDays ?? 0) },
 			now: service.now(),
 		});

@@ -3,6 +3,7 @@
  * product's value, in the attributes' order. No I/O.
  * @module
  */
+import { lineageOf } from './catalog-taxonomy.js';
 import { gradesFor } from './grades.js';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
@@ -54,13 +55,14 @@ export const compareRows = (products, attributes) =>
 
 /**
  * The grade labels of a product's active variants (in the grades list's order, once each).
- * @param {Pick<ProductRecord, 'variants'> & { categoryIds?: string[] }} product
+ * @param {Pick<ProductRecord, 'variants' | 'categoryIds'>} product
  * @param {Array<{ key: string, label?: string, categoryId?: string | null }>} grades
+ * @param {ReadonlyMap<string, { path: string[] }>} categories every category by id
  */
-export const gradeLabels = (product, grades) => {
+export const gradeLabels = (product, grades, categories) => {
 	const keys = new Set(product.variants.filter((v) => v.active && v.grade).map((v) => v.grade));
-	// the grades as the product's category defines them (E45)
-	return [...gradesFor(grades, product.categoryIds ?? []).values()]
+	// the grades as the product's category (or the nearest one above it) defines them (E45)
+	return [...gradesFor(grades, lineageOf(product.categoryIds, categories)).values()]
 		.filter((grade) => keys.has(grade.key))
 		.map((grade) => grade.label || grade.key);
 };

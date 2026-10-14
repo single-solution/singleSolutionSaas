@@ -6,6 +6,7 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
+import { categoriesOf } from '../adapters/catalog-store.js';
 import { userIdsOf } from '../adapters/extras-store.js';
 import { MAX_COMPARE, compareRows, gradeLabels, parseCompareIds } from '../core/compare.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -149,13 +150,14 @@ export const createShopperLists = (_product, service, cards) => {
 						.toArray()
 		);
 		const graded = products.some((p) => p.variants.some((v) => v.grade));
-		const grades = graded ? await s.list('grades') : [];
+		const [grades, categories] = graded ? await Promise.all([s.list('grades'), categoriesOf(data)]) : [[], []];
+		const byCategory = new Map(categories.map((category) => [category.id, category]));
 		return {
 			products: await Promise.all(
 				products.map(async (item) => ({
 					...(await cards.card(s, item)),
 					brand: brands.find((brand) => brand.id === item.brandId)?.name ?? null,
-					grades: gradeLabels(item, Array.isArray(grades) ? grades : []),
+					grades: gradeLabels(item, Array.isArray(grades) ? grades : [], byCategory),
 				})),
 			),
 			rows: compareRows(products, attributes),

@@ -21,7 +21,7 @@ import { NO_ID, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDupli
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
 import { listOf, shopFilter } from '../core/catalog-query.js';
-import { withDescendants } from '../core/catalog-taxonomy.js';
+import { lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import {
 	NO_STOCK,
 	checkLanding,
@@ -99,17 +99,18 @@ export const createLandings = (product, service, media) => {
 			brandsOf(data),
 			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
 		]);
+		const byCategory = new Map(categories.map((c) => [c.id, c]));
 		return {
 			categories,
-			byCategory: new Map(categories.map((c) => [c.id, c])),
+			byCategory,
 			byBrand: new Map(brands.map((b) => [b.id, b])),
 			/** every grade key (a category's own entries only where no entry is for every category) */
 			grades: /** @type {Map<string, Grade>} */ (gradesByKey(gradeList)),
 			/**
-			 * The grades as a category defines them, then the ones for every category (E45).
+			 * The grades as a category (or the nearest one above it) defines them, then the ones for every category (E45).
 			 * @param {string | null} categoryId
 			 */
-			gradesIn: (categoryId) => /** @type {Map<string, Grade>} */ (gradesFor(gradeList, [categoryId])),
+			gradesIn: (categoryId) => /** @type {Map<string, Grade>} */ (gradesFor(gradeList, lineageOf([categoryId], byCategory))),
 			gradeList: /** @type {Grade[]} */ (gradeList),
 		};
 	};
@@ -683,7 +684,8 @@ export const createLandings = (product, service, media) => {
 
 	/**
 	 * GET /v1/seo/attributes/:slug and /v1/seo/attributes/:category/:slug (E45): with a category, the attribute defined
-	 * for it first, then the one for every category that applies to it; without, the one for every category first.
+	 * for it or the nearest category above it first, then the one for every category that applies to it; without, the
+	 * one for every category first.
 	 * @param {any} ctx
 	 */
 	const attributeGlossary = async (ctx) => {
@@ -693,8 +695,9 @@ export const createLandings = (product, service, media) => {
 		const named = (await attributesOf(data)).filter(
 			(row) => row.active !== false && (row.slug === ref.toLowerCase() || row.id === ref),
 		);
+		const lineage = category ? lineageOf([category.id], new Map([[category.id, category]])) : [];
 		const attribute = category
-			? (named.find((row) => row.categoryId === category.id) ??
+			? (lineage.map((id) => named.find((row) => row.categoryId === id)).find(Boolean) ??
 				named.find((row) => !row.categoryId && appliesTo(row, category)))
 			: (named.find((row) => !row.categoryId) ?? named[0]);
 		if (!attribute) throw problem('not_found', 'There is no such attribute.');
@@ -740,8 +743,8 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * GET /v1/seo/grades/:key and /v1/seo/grades/:category/:key (E45): with a category, the grade as it defines it
-	 * first, then the one for every category that applies to it.
+	 * GET /v1/seo/grades/:key and /v1/seo/grades/:category/:key (E45): with a category, the grade as it or the nearest
+	 * category above it defines it first, then the one for every category that applies to it.
 	 * @param {any} ctx
 	 */
 	const gradeGlossary = async (ctx) => {
@@ -749,8 +752,10 @@ export const createLandings = (product, service, media) => {
 		const list = s.has('grades_serials') ? await s.list('grades') : [];
 		const category = await glossaryCategory(s, data, ctx.params.category);
 		const key = String(ctx.params.key);
-		const grade = category ? gradesFor(list, [category.id]).get(key) : gradesByKey(list).get(key);
-		if (!grade || grade.active === false || (category && grade.categoryId !== category.id && !appliesTo(grade, category)))
+		const lineage = category ? lineageOf([category.id], new Map([[category.id, category]])) : [];
+		const grade = category ? gradesFor(list, lineage).get(key) : gradesByKey(list).get(key);
+		const defined = Boolean(grade?.categoryId && lineage.includes(grade.categoryId));
+		if (!grade || grade.active === false || (category && !defined && !appliesTo(grade, category)))
 			throw problem('not_found', 'There is no such grade.');
 		const page =
 			category ??
