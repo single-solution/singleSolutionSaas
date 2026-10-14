@@ -4,15 +4,10 @@
  * final pass), `verify` the counts and sums. Never deployed.
  * @module
  */
-export { defineMapping, hexOf, legacyId } from './mapping.js';
-export { DEFAULT_KEY, compareKeyTexts, keyPayloadOf, keyTextOf, keyValuesOf } from './keys.js';
-export { chunk, linesOf, toNdjson } from './ndjson.js';
-export { IDMAP_FILE, MANIFEST_FILE, SETTINGS_FILE, read } from './read.js';
-export { applySettings, mergePlans } from './settings.js';
-export { pruneCalls, send } from './send.js';
+export { defineMapping } from './mapping.js';
+export { read } from './read.js';
+export { send } from './send.js';
 export { verify } from './verify.js';
-export { MAPPINGS } from './mappings/index.js';
-export { main, USAGE } from './cli.js';
 
 /** @typedef {import('./mapping.js').Mapping} Mapping */
 /** @typedef {import('./mapping.js').MappingStep} MappingStep */

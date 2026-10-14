@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
-import { MAPPINGS, send, verify } from '../src/index.js';
+import { send, verify } from '../src/index.js';
+import { MAPPINGS } from '../src/mappings/index.js';
 import { SB_IDS, sbHex } from '../src/fixture/index.js';
 import {
 	BY_HAND,

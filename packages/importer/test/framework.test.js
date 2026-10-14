@@ -3,21 +3,13 @@ import path from 'node:path';
 import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { IMPORT_LIMITS } from '@ss/contracts';
-import {
-	SETTINGS_FILE,
-	compareKeyTexts,
-	defineMapping,
-	keyPayloadOf,
-	keyTextOf,
-	keyValuesOf,
-	linesOf,
-	main,
-	mergePlans,
-	pruneCalls,
-	read,
-	send,
-	verify,
-} from '../src/index.js';
+import { defineMapping, read, send, verify } from '../src/index.js';
+import { main } from '../src/cli.js';
+import { compareKeyTexts, keyPayloadOf, keyTextOf, keyValuesOf } from '../src/keys.js';
+import { linesOf } from '../src/ndjson.js';
+import { SETTINGS_FILE } from '../src/read.js';
+import { pruneCalls } from '../src/send.js';
+import { mergePlans } from '../src/settings.js';
 import { fakeProduct, freshDb, removeDir, tempDir } from './helpers.js';
 
 /** @type {Array<() => Promise<unknown>>} */

@@ -3,22 +3,12 @@ import path from 'node:path';
 import { ObjectId } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { IMPORT_LIMITS } from '@ss/contracts';
-import {
-	IDMAP_FILE,
-	MANIFEST_FILE,
-	MAPPINGS,
-	USAGE,
-	chunk,
-	defineMapping,
-	hexOf,
-	legacyId,
-	linesOf,
-	main,
-	read,
-	send,
-	toNdjson,
-	verify,
-} from '../src/index.js';
+import { defineMapping, read, send, verify } from '../src/index.js';
+import { main, USAGE } from '../src/cli.js';
+import { hexOf, legacyId } from '../src/mapping.js';
+import { MAPPINGS } from '../src/mappings/index.js';
+import { chunk, linesOf, toNdjson } from '../src/ndjson.js';
+import { IDMAP_FILE, MANIFEST_FILE } from '../src/read.js';
 import { EXPECTED, FEEDBACK, FIXTURE_MAPPING, seed } from '../src/fixture/index.js';
 import { fakeProduct, freshDb, removeDir, tempDir } from './helpers.js';
 
@@ -141,7 +131,7 @@ describe('ss-import read', () => {
 		expect(records).toEqual([
 			{
 				id: 'note_64b0c0ffee00000000000001',
-				text: 'Love the new autumn range',
+				text: 'Love the new fall collection',
 				email: 'chloe@example.com',
 				createdAt: '2024-01-05T10:00:00.000Z',
 			},

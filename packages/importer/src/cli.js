@@ -29,8 +29,8 @@ export const USAGE = `ss-import — moves a store's records into the products (P
 
 Usage:
   ss-import read --mapping <name> --out <dir> [--source <mongodb uri>]
-        read the store database (read only; default address SS_IMPORT_SOURCE_URI) into NDJSON files, idmap.json and
-        manifest.json in <dir>
+        read the store database (read only; default address SS_IMPORT_SOURCE_URI) into NDJSON files, idmap.json,
+        settings.json and manifest.json in <dir>
   ss-import send --dir <dir> --product <id>=<url> [--product …] [--dry-run] [--prune] [--only <id>.<collection> …]
                  [--settings <file>] [--json]
         write the settings (settings.json, then the per-store table <file>) through PUT <url>/v1/settings, /v1/format

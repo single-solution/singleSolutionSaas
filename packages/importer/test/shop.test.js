@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { IDMAP_FILE, MAPPINGS, SETTINGS_FILE, linesOf, read } from '../src/index.js';
+import { read } from '../src/index.js';
+import { MAPPINGS } from '../src/mappings/index.js';
+import { linesOf } from '../src/ndjson.js';
+import { IDMAP_FILE, SETTINGS_FILE } from '../src/read.js';
 import { SHOP_GUEST_COOKIE, SHOP_IDS, SHOP_MAPPING, seedShop, shopHex, shopSource } from '../src/fixture/index.js';
 import { freshDb, removeDir, tempDir } from './helpers.js';
 

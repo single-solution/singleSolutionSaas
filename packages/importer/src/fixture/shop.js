@@ -136,7 +136,7 @@ export const shopSource = () => ({
 		},
 	],
 	brands: [{ _id: oid(10), slug: 'northwind', name: 'Northwind', categories: ['clothing'] }],
-	attributes: [{ _id: oid(11), slug: 'colour', name: 'Colour', values: ['Red', 'Blue'] }],
+	attributes: [{ _id: oid(11), slug: 'color', name: 'Color', values: ['Red', 'Blue'] }],
 	products: [
 		{
 			_id: oid(12),
@@ -147,8 +147,8 @@ export const shopSource = () => ({
 			brand: 'northwind',
 			images: ['uploads/cotton-tee.webp'],
 			variants: [
-				{ _id: oid(13), sku: 'TEE-RED', colour: 'Red', price: 25, comparePrice: 30, stock: 5 },
-				{ _id: oid(14), sku: 'TEE-BLUE', colour: 'Blue', price: 25, stock: 0 },
+				{ _id: oid(13), sku: 'TEE-RED', color: 'Red', price: 25, comparePrice: 30, stock: 5 },
+				{ _id: oid(14), sku: 'TEE-BLUE', color: 'Blue', price: 25, stock: 0 },
 			],
 			// the old shop's own counts: its orders and reviews move too, so the products count them again
 			sold: 40,
@@ -561,7 +561,7 @@ export const SHOP_MAPPING = defineMapping({
 			prefix: 'prd',
 			lookups: { 'product-slugs': (record) => String(record.slug) },
 			map: (doc, ctx) => {
-				const colour = ctx.lookup('attribute-slugs', 'colour');
+				const color = ctx.lookup('attribute-slugs', 'color');
 				return {
 					id: ctx.id('prd', doc._id),
 					slug: doc.slug,
@@ -577,7 +577,7 @@ export const SHOP_MAPPING = defineMapping({
 						price: cents(variant.price),
 						compareAtPrice: variant.comparePrice ? cents(variant.comparePrice) : null,
 						stock: variant.stock,
-						attributes: variant.colour && colour ? { [colour]: variant.colour.toLowerCase() } : {},
+						attributes: variant.color && color ? { [color]: variant.color.toLowerCase() } : {},
 					})),
 					sold: doc.sold,
 					rating: { average: doc.rating, count: doc.reviews },

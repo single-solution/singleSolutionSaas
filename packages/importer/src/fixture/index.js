@@ -16,7 +16,7 @@ export { SB_IDS, sbHex, sbSource } from './sisters-boutique.js';
 export const FEEDBACK = Object.freeze([
 	{
 		_id: '64b0c0ffee00000000000001',
-		message: 'Love the new autumn range',
+		message: 'Love the new fall collection',
 		email: 'Chloe@Example.com',
 		createdAt: '2024-01-05T10:00:00Z',
 	},
@@ -28,7 +28,7 @@ export const FEEDBACK = Object.freeze([
 	},
 	{
 		_id: '64b0c0ffee00000000000003',
-		message: 'Love the new autumn range',
+		message: 'Love the new fall collection',
 		email: 'chloe@example.com',
 		createdAt: '2024-01-05T10:05:00Z',
 	},

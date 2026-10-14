@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { IDMAP_FILE, SETTINGS_FILE, linesOf, read } from '../src/index.js';
+import { read } from '../src/index.js';
+import { linesOf } from '../src/ndjson.js';
+import { IDMAP_FILE, SETTINGS_FILE } from '../src/read.js';
 import { sbSource } from '../src/fixture/index.js';
 import { SISTERS_BOUTIQUE_MAPPING } from '../src/mappings/sisters-boutique/index.js';
 import { freshDb, removeDir, tempDir } from './helpers.js';
