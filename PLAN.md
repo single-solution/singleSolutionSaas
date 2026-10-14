@@ -1995,6 +1995,21 @@ advisor).
   product:** `hooks.blueprint` (event types, list summaries in its own words), the `openapi` option, `recommendFor`
   tags (a manifest contract change), a "what your website builds" guide section; the CLI template could add the hook
   and option.
+- **Stages 4–5 built (2026-10-14/15; 28ad438e, 49b25ea5, 48fd8a7c, d4064dd5, 4f2f6955, d731dd38, c2e2632d, 3b73cb8b,
+  b02e8393, 406ac0c4, 368f5cfc, 2a8af6bf, 7a063575, c6ba0247, 2050b81a):** a business profile per website
+  (`@ss/contracts/profile`: what it sells, how shoppers pay, delivery, sign-in, who answers chat, messaging channels,
+  marketing, offers, moving from another system, countries, languages; optional, stored in the Portal); manifest
+  `recommendFor` rules (validated tags such as `pays.online+countries.za`; a feature is recommended when one rule
+  matches, "not recommended" only when every rule fails on answered questions); the Setup page shows Business profile
+  and Recommendations ("Recommended, not on" with the reason and one-click Switch on for Owner and Support through a
+  signed `POST /v1/blueprint/features` and the product's feature report; merchants see "ask your account manager";
+  "On, not recommended" as a hint), also in shared links and the JSON (`website.profile`, `recommended`,
+  `notRecommended`). Kit options `openapi` and `build` (each feature's "What your website builds" text, also in
+  `/docs`), product `hooks.blueprint` summaries. Built for Accounts, Notifications, Chat, Payments, Growth, the CLI
+  template and the Notes fixture; bug fixed: `/openapi.json` was missing from every product's Next.js rewrites (404
+  when deployed); Notifications forwarded events only from five named products. **Ecommerce's part is next** (tags,
+  guide `build` texts, `openapi` + `build` options, `hooks.blueprint` with event types and list/route/SEO summaries,
+  `/openapi.json` rewrite, its setup-sheet test, and removing the Ecommerce skip in e2e setup-sheet).
 
 **Ecommerce dynamic model — approved by the owner 2026-10-14 (all 10 decisions as recommended).** The design is
 `audit/design/ecommerce-dynamic-model.md` (binding; this paragraph is its summary). Merchants make **item types** (kind
