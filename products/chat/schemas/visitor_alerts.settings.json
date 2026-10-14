@@ -8,7 +8,14 @@
 			"default": 60,
 			"minimum": 0,
 			"maximum": 3600,
-			"description": "A staff reply alerts the visitor when they have not checked the chat for this long; once until they check again."
+			"description": "A staff reply alerts the visitor when they have not checked the chat for this long (0: also while they are in the chat)."
+		},
+		"frequency": {
+			"type": "string",
+			"title": "How often",
+			"default": "once",
+			"enum": ["once", "every_reply"],
+			"description": "Once: one alert, then none until the visitor checks the chat again. Every reply: each staff reply alerts the visitor while they are away."
 		},
 		"channels": {
 			"type": "array",

@@ -145,6 +145,38 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		expect(sys.messages()).toHaveLength(2);
 	});
 
+	it('with How often every_reply each staff reply alerts a visitor who is away (C16)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		await sys.paste('notifications');
+		await sys.setting('visitor_alerts', 'frequency', 'every_reply');
+		const v = sys.visitor();
+		const sent = await v('POST', '/v1/chat/messages', { text: 'call me' });
+		await v('POST', '/v1/chat/contact', { name: 'Ann', email: 'ann@example.com' });
+		const ticket = await sys.ticket();
+		const path = `/v1/admin/conversations/${sent.json.chat.conversation.id}/messages`;
+		// still here: no alert, whatever the frequency
+		await sys.admin(ticket, 'POST', path, { text: 'Hi Ann' });
+		expect(sys.messages()).toHaveLength(0);
+		sys.advance(61_000);
+		await sys.admin(ticket, 'POST', path, { text: 'We have two colors.' });
+		await sys.admin(ticket, 'POST', path, { text: 'Anything else?' });
+		expect(sys.messages().map((m) => [m.channel, m.values.preview])).toEqual([
+			['email', 'We have two colors.'],
+			['email', 'Anything else?'],
+		]);
+		// back in the chat: none until they are away again
+		sys.advance(1000);
+		await v('GET', '/v1/chat');
+		await sys.admin(ticket, 'POST', path, { text: 'Great!' });
+		expect(sys.messages()).toHaveLength(2);
+		// the setting back to once: one alert until they check again
+		await sys.setting('visitor_alerts', 'frequency', 'once');
+		sys.advance(61_000);
+		await sys.admin(ticket, 'POST', path, { text: 'One more thing' });
+		await sys.admin(ticket, 'POST', path, { text: 'And another' });
+		expect(sys.messages()).toHaveLength(3);
+	});
+
 	/**
 	 * A visitor with these contacts who left the chat, and a staff reply to them: the reply alert's calls to
 	 * Notifications as [channel, to].

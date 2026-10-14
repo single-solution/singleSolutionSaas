@@ -593,24 +593,28 @@ export const createService = (product) => {
 	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor who has not checked the
 	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (WhatsApp, then email,
 	 * by default): the first channel the visitor has an address for that Notifications takes; one it does not take
-	 * passes to the next. Once until the visitor checks again; sent after the answer.
+	 * passes to the next. With the setting How often `once` (the default) one alert until the visitor checks again;
+	 * with `every_reply` each staff reply while they are away (C16). Sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c the conversation after the reply
 	 * @param {{ staff: string, text: string }} reply
 	 */
 	const visitorAlert = async (s, c, reply) => {
 		if (!s.on.includes('visitor_alerts') || (!c.phone && !c.email)) return;
-		const { awaySeconds, channels } = await s.values('visitor_alerts');
+		const { awaySeconds, frequency, channels } = await s.values('visitor_alerts');
 		const routes = alertRoutes(channels, c);
 		if (routes.length === 0) return;
 		const checked = c.visitorCheckedAt ? new Date(c.visitorCheckedAt).getTime() : 0;
 		if (now() - checked < Number(awaySeconds) * 1000) return;
-		if (c.visitorAlertedAt && new Date(c.visitorAlertedAt).getTime() >= checked) return;
-		const claimed = await s.store.conversations.update(c.id, {
-			set: { visitorAlertedAt: new Date(now()) },
-			unless: { visitorAlertedAt: c.visitorAlertedAt ?? null },
-		});
-		if (!claimed) return;
+		if (frequency === 'every_reply') await s.store.conversations.update(c.id, { set: { visitorAlertedAt: new Date(now()) } });
+		else {
+			if (c.visitorAlertedAt && new Date(c.visitorAlertedAt).getTime() >= checked) return;
+			const claimed = await s.store.conversations.update(c.id, {
+				set: { visitorAlertedAt: new Date(now()) },
+				unless: { visitorAlertedAt: c.visitorAlertedAt ?? null },
+			});
+			if (!claimed) return;
+		}
 		const values = {
 			name: c.name ?? '',
 			staff: reply.staff,
