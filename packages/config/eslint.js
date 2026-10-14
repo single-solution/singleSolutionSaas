@@ -10,7 +10,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 /** Output folders no unit lints. */
-export const IGNORES = Object.freeze(['**/node_modules/**', '**/dist/**', '**/.next/**', '**/coverage/**']);
+export const IGNORES = Object.freeze(['**/node_modules/**', '**/.next/**', '**/coverage/**']);
 
 /** Functional style: factories and plain objects only. */
 export const FUNCTIONAL_RULES = /** @type {Readonly<import('eslint').Linter.RulesRecord>} */ ({

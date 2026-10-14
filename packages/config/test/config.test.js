@@ -34,24 +34,21 @@ describe('vitest preset', () => {
 		expect(config.test?.name).toBe('unit');
 		expect(config.test?.include).toEqual(['test/**/*.test.js']);
 		expect(config.test?.globalSetup).toEqual([]);
-		expect(config.test?.coverage).toMatchObject({ provider: 'v8', include: ['src/**'], exclude: [], thresholds: THRESHOLDS });
+		expect(config.test?.coverage).toMatchObject({ provider: 'v8', include: ['src/**'], thresholds: THRESHOLDS });
 		expect(config.esbuild && config.esbuild.include).toEqual([UI_SOURCES]);
 	});
 
 	it('adds JSX folders, the Mongo setup and custom scopes', () => {
 		const config = defineUnitConfig({
 			dir: DIR,
-			name: 'custom',
 			include: ['tests/**/*.test.js'],
 			coverageInclude: ['core/**'],
-			coverageExclude: ['core/gen.js'],
 			jsx: ['src/console'],
 			mongo: true,
-			thresholds: { lines: 1, functions: 1, branches: 1 },
 		});
-		expect(config.test?.name).toBe('custom');
+		expect(config.test?.include).toEqual(['tests/**/*.test.js']);
 		expect(config.test?.globalSetup).toEqual([MONGO_SETUP]);
-		expect(config.test?.coverage).toMatchObject({ include: ['core/**'], exclude: ['core/gen.js'], thresholds: { lines: 1 } });
+		expect(config.test?.coverage).toMatchObject({ include: ['core/**'], thresholds: THRESHOLDS });
 		const include = /** @type {RegExp[]} */ (config.esbuild && config.esbuild.include);
 		expect(include[1]?.test(path.join(DIR, 'src/console/page.js'))).toBe(true);
 		expect(include[1]?.test(path.join(DIR, 'src/other.js'))).toBe(false);

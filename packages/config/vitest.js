@@ -4,7 +4,8 @@
  *   import { defineUnitConfig } from '@ss/config/vitest';
  *   export default defineUnitConfig({ dir: import.meta.dirname, coverageInclude: ['src/**'], mongo: true });
  *
- * Coverage thresholds are the standard (90 % lines and functions, 85 % branches) for every unit.
+ * Coverage thresholds are the standard (90 % lines and functions, 85 % branches) for every unit; the test project is
+ * named after the unit's folder.
  * @module
  */
 import path from 'node:path';
@@ -35,13 +36,10 @@ export const folderPattern = (dir, folders) =>
 /**
  * @typedef {object} UnitOptions
  * @property {string} dir the unit's root (`import.meta.dirname` of its vitest.config.js)
- * @property {string} [name] project name (default: the folder name)
  * @property {string[]} [include] test files (default `test/**\/*.test.js`)
  * @property {string[]} [coverageInclude] files measured for coverage (default `src/**`)
- * @property {string[]} [coverageExclude]
  * @property {string[]} [jsx] folders whose `.js` files contain JSX (relative to `dir`)
  * @property {boolean} [mongo] start the shared MongoMemoryReplSet (`TEST_MONGODB_URI`)
- * @property {{ lines: number, functions: number, branches: number }} [thresholds]
  */
 
 /**
@@ -50,13 +48,10 @@ export const folderPattern = (dir, folders) =>
  */
 export const defineUnitConfig = ({
 	dir,
-	name = path.basename(dir),
 	include = ['test/**/*.test.js'],
 	coverageInclude = ['src/**'],
-	coverageExclude = [],
 	jsx = [],
 	mongo = false,
-	thresholds = THRESHOLDS,
 }) =>
 	defineConfig({
 		root: dir,
@@ -68,7 +63,7 @@ export const defineUnitConfig = ({
 			jsx: 'automatic',
 		},
 		test: {
-			name,
+			name: path.basename(dir),
 			include,
 			environment: 'node',
 			// @ss/ui ships JSX: transform it even when it comes from node_modules
@@ -79,8 +74,7 @@ export const defineUnitConfig = ({
 			coverage: {
 				provider: 'v8',
 				include: coverageInclude,
-				exclude: coverageExclude,
-				thresholds: { ...thresholds },
+				thresholds: { ...THRESHOLDS },
 			},
 		},
 	});
