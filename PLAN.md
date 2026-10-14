@@ -1970,6 +1970,19 @@ anything unused or left over (files, folders, exports, settings, texts, generate
 (`audit/seo-audit-2026-10-14.md`, built in phases S1–S12): baseline SEO — product, category and listing answers,
 sitemaps and the new site answer (E49) — is served whenever the catalog is on; the priced `seo` feature is the SEO
 product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
+- **SEO S1–S4 built (2026-10-15; 3ea19105, 2ff59f39, 5136a716, f22e29f1, e2e c5947c07; SB mapping mechanical
+  9f3272a7, 480aa3c7, cd4cb1c0 — to review when the owner asks):** structured data meets Google's merchant-listing
+  rules (variant images and unique ids, no zero-price offers, no Product node without offers, return windows per item,
+  policy/shipping nodes only when complete — shipping markup waits for S6's delivery days, FAQ markup off by default
+  `seo.faqMarkup`, self canonicals and per-page ItemList on listings, non-canonical pages out of the sitemap); a
+  merchant's own SEO kept as written (`seo.source`, `seo.titleMode`, never the store name twice, own descriptions never
+  cut, pattern copy computed on read with facts {price} {minPrice} {maxPrice} {options} {inStockOptions} {conditions}
+  {topSpecs}, optional [groups], `seo.variantTitle`, a facts default description); stable image addresses in every SEO
+  answer, sitemap and feed (public address, else `catalog.mediaPath` `/media` with `GET /v1/media`; dashboard prompt,
+  health check `images_short_lived`, warning under 500 × 500); one shown price (`shownPrice`) for cards, product page,
+  quotes, JSON-LD (strikethrough, `validFrom`, `priceValidUntil`) and feeds (`sale_price`,
+  `sale_price_effective_date`, Meta CSV). Bug fixed: feeds dropped the imported group id and the specs deal conditions
+  use.
 
 **Owner request, 2026-10-14 ~22:00 — website setup sheet and setup advisor (new SaaS feature, design
 `audit/design/website-blueprint.md`).** "Once it is complete I will add websites and products … there should be
