@@ -27,8 +27,13 @@ const MAX_SAVED_REPLIES = 200;
 /** The longest single note (C11) and pause reason. */
 const NOTE_MAX = 4000;
 const REASON_MAX = 200;
-/** Conversations deleted at a time by delete-all, and how long one call goes on before it answers `more` (C20). */
+/**
+ * Conversations delete-all reads at a time, deletes at a time (the time is checked between groups, so one slow group
+ * — many attachments — is the most a call can overrun, and the next call goes on after it), and how long one call goes
+ * on before it answers `more` (C20).
+ */
 const DELETE_BATCH = 100;
+const DELETE_GROUP = 10;
 const DELETE_BUDGET_MS = 8_000;
 /** Attachments deleted from the website's storage at once. */
 const STORAGE_DELETES_AT_ONCE = 8;
@@ -431,7 +436,7 @@ export const createInbox = (product, service, reply) => {
 
 	/**
 	 * `POST /v1/data/delete-all { scope: 'conversations', confirm }` (server token, C20): every conversation with what
-	 * belongs to it (messages, attachments, guest records and staff alerts still to be sent about it), a batch at a time;
+	 * belongs to it (messages, attachments, guest records and staff alerts still to be sent about it), ten at a time;
 	 * after 8 seconds the answer says `more` and the next call goes on. `confirm` repeats the website's domain. Each call
 	 * writes one activity entry with its counts.
 	 * @param {any} ctx
@@ -446,13 +451,18 @@ export const createInbox = (product, service, reply) => {
 		const s = await service.site(ctx);
 		const started = product.now();
 		const deleted = { conversations: 0, messages: 0, guests: 0, files: 0, alerts: 0 };
+		const overBudget = () => product.now() - started >= DELETE_BUDGET_MS;
 		let more = true;
-		while (more && product.now() - started < DELETE_BUDGET_MS) {
+		while (more && !overBudget()) {
 			const batch = await s.store.conversations.some(DELETE_BATCH);
-			const done = await deleteConversations(product, s, batch);
-			for (const key of /** @type {const} */ (['conversations', 'messages', 'guests', 'files', 'alerts']))
-				deleted[key] += done[key];
-			more = batch.length === DELETE_BATCH;
+			let at = 0;
+			for (; at < batch.length && (at === 0 || !overBudget()); at += DELETE_GROUP) {
+				const done = await deleteConversations(product, s, batch.slice(at, at + DELETE_GROUP));
+				for (const key of /** @type {const} */ (['conversations', 'messages', 'guests', 'files', 'alerts']))
+					deleted[key] += done[key];
+			}
+			// the batch was full, or the time ran out before its last group
+			more = batch.length === DELETE_BATCH || at < batch.length;
 		}
 		await service.log(s, actorOf(ctx), 'data.deleted_all', 'conversations', {
 			label: 'conversations',

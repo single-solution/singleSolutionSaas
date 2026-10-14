@@ -348,13 +348,62 @@ describe('delete every conversation (C20)', () => {
 			return { status: 204 };
 		});
 		const body = { scope: 'conversations', confirm: 'shop.example.com' };
+		// the call stops after the slow group (ten conversations at a time), never redoing it
 		const first = await sys.serverCall('POST', '/v1/data/delete-all', body);
-		expect(first.json).toMatchObject({ deleted: { conversations: 100, messages: 1, files: 1 }, more: true });
-		const next = await sys.serverCall('POST', '/v1/data/delete-all', body);
-		expect(next.json).toMatchObject({ deleted: { conversations: 50, messages: 0, files: 0 }, more: false });
+		expect(first.json).toMatchObject({ deleted: { messages: 1, files: 1 }, more: true });
+		expect(first.json.deleted.conversations % 10).toBe(0);
+		expect(first.json.deleted.conversations).toBeLessThan(100);
+		let total = first.json.deleted.conversations;
+		let calls = 1;
+		for (let answer = first.json; answer.more; calls += 1) {
+			answer = (await sys.serverCall('POST', '/v1/data/delete-all', body)).json;
+			expect(answer.deleted).toMatchObject({ messages: 0, files: 0 });
+			total += answer.deleted.conversations;
+		}
+		expect([total, calls]).toEqual([150, 2]);
 		expect(await data.collection('conversations').countDocuments({ websiteId: sys.websiteId })).toBe(0);
-		const [entry] = (await sys.serverCall('GET', '/v1/activity?action=data.deleted_all&limit=2')).json.items;
-		expect(entry.detail).toBe('50 conversations, 0 messages, 0 files');
+		expect(sys.calls.filter((call) => call.url.startsWith(STORAGE_KEY.endpoint) && call.method === 'DELETE')).toHaveLength(1);
+	});
+
+	it('stops between groups of ten when the attachments are slow, so the next call goes on after them', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
+		await sys.connect('storage', STORAGE_KEY);
+		const data = await sys.product.data.forWebsite(sys.websiteId);
+		const at = new Date(sys.now());
+		await data.collection('conversations').insertMany(
+			Array.from({ length: 30 }, (_, i) => ({
+				id: `conv_slow${String(i).padStart(4, '0')}`,
+				visitor: { kind: 'guest', id: `guest_slow${i}` },
+				guestIds: [],
+				lastMessageAt: at,
+			})),
+		);
+		await data.collection('messages').insertMany(
+			Array.from({ length: 30 }, (_, i) => ({
+				id: `msg_slow${i}`,
+				conversationId: `conv_slow${String(i).padStart(4, '0')}`,
+				seq: 1,
+				author: 'visitor',
+				text: '',
+				internal: false,
+				attachment: { key: `chat/guest-slow${i}/a.jpg`, name: 'a.jpg', type: 'image/jpeg', size: 10 },
+			})),
+		);
+		// every file takes a second: one group of ten is past the eight seconds a call goes on
+		sys.responders.set(STORAGE_KEY.endpoint, (call) => {
+			if (call.method === 'DELETE') sys.advance(1_000);
+			return { status: 204 };
+		});
+		const body = { scope: 'conversations', confirm: 'shop.example.com' };
+		const answers = [];
+		for (let more = true; more;) {
+			const answer = (await sys.serverCall('POST', '/v1/data/delete-all', body)).json;
+			answers.push(answer.deleted.conversations);
+			more = answer.more;
+		}
+		expect(answers).toEqual([10, 10, 10]);
+		// each file deleted once
+		expect(sys.calls.filter((call) => call.url.startsWith(STORAGE_KEY.endpoint) && call.method === 'DELETE')).toHaveLength(30);
 	});
 });
 
