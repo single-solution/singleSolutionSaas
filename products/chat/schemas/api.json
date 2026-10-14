@@ -2536,7 +2536,7 @@
 	},
 	"DELETE /v1/admin/conversations/:id": {
 		"summary": "Delete a conversation for good",
-		"description": "With its messages, attachments (from your storage) and the guest records behind it. 404 not_found.",
+		"description": "With its messages, attachments (from your storage), the guest records behind it and the staff alerts still waiting to be sent about it. 404 not_found.",
 		"status": 204
 	},
 	"POST /v1/admin/conversations/:id/summary": {
@@ -3244,7 +3244,7 @@
 	},
 	"DELETE /v1/conversations/:id": {
 		"summary": "Delete a conversation for good",
-		"description": "With its messages, attachments (from your storage) and the guest records behind it. 404 not_found.",
+		"description": "With its messages, attachments (from your storage), the guest records behind it and the staff alerts still waiting to be sent about it. 404 not_found.",
 		"status": 204
 	},
 	"POST /v1/conversations/:id/summary": {

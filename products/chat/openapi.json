@@ -827,7 +827,7 @@
 		"/v1/admin/conversations/{id}": {
 			"delete": {
 				"summary": "Delete a conversation for good",
-				"description": "With its messages, attachments (from your storage) and the guest records behind it. 404 not_found.",
+				"description": "With its messages, attachments (from your storage), the guest records behind it and the staff alerts still waiting to be sent about it. 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
@@ -4839,7 +4839,7 @@
 		"/v1/conversations/{id}": {
 			"delete": {
 				"summary": "Delete a conversation for good",
-				"description": "With its messages, attachments (from your storage) and the guest records behind it. 404 not_found.",
+				"description": "With its messages, attachments (from your storage), the guest records behind it and the staff alerts still waiting to be sent about it. 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "inbox",
 				"security": [

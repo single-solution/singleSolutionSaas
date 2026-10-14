@@ -453,10 +453,8 @@ export const createInbox = (product, service, reply) => {
 		while (more && product.now() - started < DELETE_BUDGET_MS) {
 			const batch = await s.store.conversations.some(DELETE_BATCH);
 			const done = await deleteConversations(product, s, batch);
-			for (const key of /** @type {const} */ (['conversations', 'messages', 'guests', 'files'])) deleted[key] += done[key];
-			deleted.alerts += await product.staffAlerts.forget(s.ctx, {
-				values: { conversationId: batch.map((c) => c.id) },
-			});
+			for (const key of /** @type {const} */ (['conversations', 'messages', 'guests', 'files', 'alerts']))
+				deleted[key] += done[key];
 			more = batch.length === DELETE_BATCH;
 		}
 		await service.log(s, actorOf(ctx), 'data.deleted_all', 'conversations', {
@@ -698,14 +696,18 @@ const pauseDetail = (paused, c) =>
 
 /**
  * Delete conversations with their messages, attachments (from the website's storage, a few at a time; one storage
- * cannot delete now is left there) and guest records (the API, delete-all and data rights); answers how many of each
- * went.
+ * cannot delete now is left there), guest records and the staff alerts still waiting to be sent about them (they carry
+ * the visitor's name and words, K-17) — for the API, delete-all and data rights; answers how many of each went.
  * @param {import('../adapters/product.js').Product} product
- * @param {Site} s
+ * @param {Pick<Site, 'websiteId' | 'merchantId' | 'store'>} s
  * @param {ConversationRecord[]} conversations
  */
 export const deleteConversations = async (product, s, conversations) => {
 	const ids = conversations.map((c) => c.id);
+	const alerts = await product.staffAlerts.forget(
+		{ websiteId: s.websiteId, merchantId: s.merchantId },
+		{ values: { conversationId: ids } },
+	);
 	const keys = ids.length === 0 ? [] : await s.store.messages.attachmentKeys(ids);
 	const storage = keys.length === 0 ? null : await product.connections.storage(s.websiteId);
 	let files = 0;
@@ -722,5 +724,5 @@ export const deleteConversations = async (product, s, conversations) => {
 			files += done.reduce((sum, one) => sum + one, 0);
 		}
 	const guests = conversations.flatMap((c) => [...c.guestIds, ...(c.visitor.kind === 'guest' ? [c.visitor.id] : [])]);
-	return { ...(await s.store.conversations.remove(ids)), guests: await s.store.guests.remove(guests), files };
+	return { ...(await s.store.conversations.remove(ids)), guests: await s.store.guests.remove(guests), files, alerts };
 };

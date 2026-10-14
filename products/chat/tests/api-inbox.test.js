@@ -304,6 +304,22 @@ describe('delete every conversation (C20)', () => {
 		});
 	});
 
+	it('deleting one conversation also deletes the staff alerts still waiting to be sent about it', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts']);
+		await sys.paste('notifications');
+		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		sys.responders.set('https://notifications.example.dev', () => ({ status: 503, body: {} }));
+		const sent = await sys.visitor()('POST', '/v1/chat/messages', { text: 'Is the lamp in stock?' });
+		await sys.visitor()('POST', '/v1/chat/messages', { text: 'someone else' });
+		const data = await sys.product.data.forWebsite(sys.websiteId);
+		const saved = async () =>
+			(await data.collection('staff_alerts').find({ websiteId: sys.websiteId }).toArray()).map((row) => row.values.message);
+		expect((await saved()).sort()).toEqual(['Is the lamp in stock?', 'someone else']);
+		expect((await sys.serverCall('DELETE', `/v1/conversations/${sent.json.chat.conversation.id}`)).status).toBe(204);
+		// its alert would have carried the deleted words for up to a day
+		expect(await saved()).toEqual(['someone else']);
+	});
+
 	it('answers more when there is more than one call deletes, and the next call goes on', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'attachments']);
 		await sys.connect('storage', STORAGE_KEY);

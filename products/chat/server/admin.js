@@ -14,8 +14,6 @@ import { createStore } from '../adapters/store.js';
 import { deleteConversations } from './inbox.js';
 import { bodyOf, invalid } from './service.js';
 
-/** @typedef {import('./service.js').Site} Site */
-
 /**
  * @param {import('../adapters/product.js').Product} product
  * @param {import('./service.js').Service} service
@@ -164,18 +162,18 @@ export const createAdmin = (product, service) => {
 	/** @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>['deleteUser']} */
 	const deleteUser = async (ctx, user) => {
 		const { store, conversations, leads } = await personOf(ctx, user);
-		const s = /** @type {Site} */ ({ websiteId: String(ctx.websiteId), store });
-		// staff alerts still waiting to be sent about the person's conversations carry their name and words (K-17)
-		const alerts = await product.staffAlerts.forget(
-			{ websiteId: String(ctx.websiteId), merchantId: ctx.merchantId },
-			{
-				addresses: conversations.flatMap((c) => [c.email, c.phone]),
-				values: { conversationId: conversations.map((c) => c.id) },
-			},
-		);
-		const removed = await deleteConversations(product, s, conversations);
+		const site = { websiteId: String(ctx.websiteId), merchantId: ctx.merchantId ?? null };
+		// with the staff alerts still waiting to be sent about them, which carry the person's name and words (K-17)
+		const removed = await deleteConversations(product, { ...site, store }, conversations);
+		// and those to the addresses the person left in a chat
+		const alerts = await product.staffAlerts.forget(site, { addresses: conversations.flatMap((c) => [c.email, c.phone]) });
 		const deleted =
-			alerts + removed.conversations + removed.messages + removed.guests + (await store.leads.remove(leads.map((l) => l.id)));
+			removed.alerts +
+			alerts +
+			removed.conversations +
+			removed.messages +
+			removed.guests +
+			(await store.leads.remove(leads.map((l) => l.id)));
 		return { deleted, anonymised: 0 };
 	};
 
