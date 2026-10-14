@@ -2,7 +2,10 @@
 
 Where our admins (Owner, Support, Finance) manage merchants, their websites, the products on each website and credits,
 and where merchants see their websites, tokens, install code, usage and credits and open each product's dashboard
-(PLAN.md Part 0). It holds control-plane records only; business data lives in each merchant's own database, inside the
+(PLAN.md Part 0). Each website has a **Setup** page (merchant, Owner, Support): its Setup sheet (`ss.blueprint/1`) with
+every product's features, settings, connections state, widgets, install snippets, staff permissions, events, to-dos
+and docs, gathered from the products on request, as a page and as JSON (Download, Copy), and read-only share links for
+a client or a developer (`/shared-setup#key=…`, 1–30 days, revocable, never secrets). It holds control-plane records only; business data lives in each merchant's own database, inside the
 products. Next.js 16, React 19, MongoDB. The modules and their services are described in `src/modules/README.md` and
 `src/modules/INTERFACES.md`.
 

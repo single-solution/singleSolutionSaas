@@ -21,6 +21,8 @@ export const adminRoutes = Object.freeze({
 		`/admin/merchants/${e(id)}${query(q)}`,
 	/** a website card on its merchant's page */
 	website: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}#website-${e(w)}`,
+	/** the Setup sheet of a website */
+	websiteSetup: (/** @type {string} */ m, /** @type {string} */ w) => `/admin/merchants/${e(m)}/websites/${e(w)}/setup`,
 	products: (/** @type {{ status?: string | null }} */ q = {}) => `/admin/products${query(q)}`,
 	product: (/** @type {string} */ id, /** @type {{ status?: string | null }} */ q = {}) => `/admin/products/${e(id)}${query(q)}`,
 	finance: (

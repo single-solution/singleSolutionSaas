@@ -16,8 +16,15 @@ export const query = (params) => {
 	return s ? `?${s}` : '';
 };
 
-/** The public account pages (no console frame): sign-in and the pages of emailed links. */
-export const PUBLIC_PATHS = Object.freeze(['/login', '/forgot-password', '/reset-password', '/set-password', '/confirm-email']);
+/** The public pages (no console frame): sign-in, the pages of emailed links and a shared Setup sheet. */
+export const PUBLIC_PATHS = Object.freeze([
+	'/login',
+	'/forgot-password',
+	'/reset-password',
+	'/set-password',
+	'/confirm-email',
+	'/shared-setup',
+]);
 
 /** Merchant console page URLs. */
 export const routes = Object.freeze({
@@ -28,6 +35,8 @@ export const routes = Object.freeze({
 	websites: () => '/websites',
 	/** the Websites screen with a website selected */
 	website: (/** @type {string} */ id) => `/websites/${e(id)}`,
+	/** the Setup sheet of a website */
+	websiteSetup: (/** @type {string} */ id) => `/websites/${e(id)}/setup`,
 	credits: () => '/credits',
 	account: () => '/account',
 });
@@ -52,6 +61,16 @@ export const api = Object.freeze({
 		`/v1/merchants/${e(m)}/websites/${e(w)}/tokens/${e(p)}/reveal`,
 	regenerate: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ p) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/tokens/${e(p)}/regenerate`,
+	/** the Setup sheet (`ss.blueprint/1`); `fresh` gathers it again, `download` answers it as a file */
+	setup: (/** @type {string} */ m, /** @type {string} */ w, /** @type {{ fresh?: boolean, download?: boolean }} */ q = {}) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/setup${query({ fresh: q.fresh ? '1' : null, download: q.download ? '1' : null })}`,
+	/** share links of the Setup sheet; `POST { days?, values?, install? }` → `{ link, url }` */
+	setupLinks: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/setup/links`,
+	/** `DELETE` revokes a share link */
+	setupLink: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ l) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/setup/links/${e(l)}`,
+	/** a shared Setup sheet: `POST { key }` (public) */
+	sharedSetup: () => '/v1/setup/shared',
 	billing: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/billing`,
 	usage: (
 		/** @type {string} */ m,

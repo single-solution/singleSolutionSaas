@@ -188,3 +188,19 @@ export const loadAccount = async (api, merchantId) => {
 		billing: /** @type {any} */ (orElse(billing, null)),
 	};
 };
+
+/**
+ * The Setup page of a website (both consoles): the sheet and its share links.
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ * @param {string} websiteId
+ */
+export const loadSetup = async (api, merchantId, websiteId) => {
+	const [sheet, links] = await Promise.all([
+		api.get(paths.setup(merchantId, websiteId)),
+		api.get(paths.setupLinks(merchantId, websiteId)),
+	]);
+	const failed = firstFailure(sheet, links);
+	if (failed) return failed;
+	return { ok: /** @type {const} */ (true), sheet: sheet.ok ? sheet.data : null, links: itemsOf(links) };
+};

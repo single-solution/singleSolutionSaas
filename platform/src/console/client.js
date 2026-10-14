@@ -108,14 +108,15 @@ export const useResource = (path, initial, { problem: initialProblem = null } = 
 };
 
 /**
- * Value of `#token=…` in the URL fragment (email links carry tokens there so they never reach servers or logs);
- * removes the fragment from the address bar once read.
+ * Value of `#token=…` (or another name, such as a share link's `#key=…`) in the URL fragment: email and share links
+ * carry their secret there so it never reaches servers or logs. Removes the fragment from the address bar once read.
+ * @param {string} [name]
  * @returns {string | null}
  */
-export const takeFragmentToken = () => {
+export const takeFragmentToken = (name = 'token') => {
 	if (typeof window === 'undefined') return null;
 	const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-	const token = params.get('token');
+	const token = params.get(name);
 	if (token && window.history?.replaceState)
 		window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
 	return token;

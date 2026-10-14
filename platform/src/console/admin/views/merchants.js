@@ -612,6 +612,7 @@ function MerchantDetail({ detail, admin, back }) {
 									cards={row.cards}
 									can={websiteRights}
 									fetcher={adminFetch}
+									setupHref={adminRoutes.websiteSetup(merchantId, String(row.website.websiteId))}
 									addable={detail.addable}
 									launch={(productId) => ({
 										path: api.adminLaunch(productId),

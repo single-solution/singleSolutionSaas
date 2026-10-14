@@ -351,6 +351,7 @@ export function WebsitesView(props) {
 								cards={selected.cards}
 								can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
 								fetcher={apiFetch}
+								setupHref={routes.websiteSetup(shownId)}
 								launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
 							/>
 							<WebsiteSpend
