@@ -4,6 +4,7 @@
  * already passed its JSON Schema.
  * @module
  */
+import { ruleProblem } from './profile.js';
 import { BUILT_IN_VALUES, valueNamesOf, wordsProblem } from './templates.js';
 import { isPathOrServiceUrl, isPlainObject, isServiceUrl, isUtcTimestamp, pointer } from './util.js';
 
@@ -33,6 +34,8 @@ export const RULES = Object.freeze({
 	keyPrefix: 'keyPrefix',
 	templateWords: 'templateWords',
 	unknownValue: 'unknownValue',
+	recommendRule: 'recommendRule',
+	profileAnswer: 'profileAnswer',
 });
 
 /**
@@ -115,8 +118,8 @@ const checkDependencies = (features, out) => {
  * Semantic rules of a manifest (PLAN 0.4.13): unique feature, permission and widget keys; `dependsOn` keys exist with
  * no self-dependency or cycle; every permission and widget names an existing feature (a widget may name several: it works while any is on); `widgetScriptUrl` is null
  * exactly when there are no widgets; `endpoints.base` is an https address (http only on local hosts);
- * `endpoints.dashboard`, `docsUrl` and `widgetScriptUrl` are paths or such addresses. Settings schemas are checked
- * separately.
+ * `endpoints.dashboard`, `docsUrl` and `widgetScriptUrl` are paths or such addresses; every `recommendFor` rule joins
+ * one to four business profile tags (`@ss/contracts/profile`), each once. Settings schemas are checked separately.
  * @param {Manifest} manifest
  * @returns {ValidationProblem[]}
  */
@@ -125,6 +128,11 @@ export const checkManifest = (manifest) => {
 	const out = [];
 	uniqueKeys(manifest.features, 'features', 'feature', out);
 	checkDependencies(manifest.features, out);
+	for (const [index, feature] of manifest.features.entries())
+		for (const [position, rule] of (feature.recommendFor ?? []).entries()) {
+			const wrong = ruleProblem(rule);
+			if (wrong !== null) out.push(at(['features', index, 'recommendFor', position], RULES.recommendRule, wrong));
+		}
 	const features = new Set(manifest.features.map((feature) => feature.key));
 	uniqueKeys(manifest.permissions, 'permissions', 'permission', out);
 	uniqueKeys(manifest.widgets, 'widgets', 'widget', out);

@@ -1,12 +1,14 @@
 /**
  * Product manifest (PLAN 0.4.13): `manifest.json` declares only `id`, `name`, `version`, `endpoints` (base,
- * dashboard), `widgetScriptUrl` (or null), `docsUrl`, `features` (key, name, description, dependsOn, settings schema),
+ * dashboard), `widgetScriptUrl` (or null), `docsUrl`, `features` (key, name, description, dependsOn, settings schema
+ * and, optionally, `recommendFor`: the business profile answers the feature suits, for the Setup sheet's advisor),
  * `permissions` (key, name, feature) and `widgets` (key, feature, visitor or admin). It carries no prices.
  * @module
  */
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 import { commonRef as ref } from './common.js';
+import { recommendForSchema } from './profile.js';
 
 /** Widget kinds. */
 const WIDGET_KINDS = Object.freeze(/** @type {const} */ (['visitor', 'admin']));
@@ -45,6 +47,7 @@ export const manifestSchema = deepFreeze({
 					description: ref('description'),
 					dependsOn: ref('featureKeys'),
 					settings: { $ref: SCHEMA_IDS.settingsSchema },
+					recommendFor: recommendForSchema,
 				},
 			},
 		},

@@ -19,6 +19,7 @@ import {
 	checkSettingsRules,
 	checkStatusResponse,
 } from './semantics.js';
+import { profileProblems } from './profile.js';
 import { escapePointerToken, isPlainObject, pointer } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
@@ -106,6 +107,8 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
  * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
  * @property {(value: unknown) => ValidationResult<import('./types.js').MessageDefaults>} validateMessageDefaults
+ * @property {(value: unknown) => ValidationResult<import('./profile.js').BusinessProfile>} validateBusinessProfile the shape,
+ *   then `none` alone in its answer
  * @property {(value: unknown) => ValidationResult<import('./types.js').ProductBlueprint>} validateProductBlueprint
  * @property {(value: unknown) => ValidationResult<import('./types.js').Blueprint>} validateBlueprint
  */
@@ -275,6 +278,12 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
 		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
 		validateMessageDefaults: validator(SCHEMA_IDS.messageDefaults, checkMessageDefaults),
+		validateBusinessProfile: validator(SCHEMA_IDS.businessProfile, (profile) =>
+			profileProblems(/** @type {import('./profile.js').BusinessProfile} */ (profile)).map((problem) => ({
+				...problem,
+				keyword: RULES.profileAnswer,
+			})),
+		),
 		validateProductBlueprint: /** @type {Validator['validateProductBlueprint']} */ (validator(SCHEMA_IDS.productBlueprint)),
 		validateBlueprint: /** @type {Validator['validateBlueprint']} */ (validator(SCHEMA_IDS.blueprint)),
 	});
@@ -327,6 +336,8 @@ export const validateDataRightsRequest = (value) => getDefaultValidator().valida
 export const validateActivityCopy = (value) => getDefaultValidator().validateActivityCopy(value);
 /** @param {unknown} value */
 export const validateMessageDefaults = (value) => getDefaultValidator().validateMessageDefaults(value);
+/** @param {unknown} value */
+export const validateBusinessProfile = (value) => getDefaultValidator().validateBusinessProfile(value);
 /** @param {unknown} value */
 export const validateProductBlueprint = (value) => getDefaultValidator().validateProductBlueprint(value);
 /** @param {unknown} value */

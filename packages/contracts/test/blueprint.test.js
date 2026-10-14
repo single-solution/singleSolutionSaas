@@ -18,6 +18,7 @@ const sheet = () => ({
 		id: WEBSITE,
 		domain: 'shop.example.com',
 		business: { found: true, name: 'Example Shop', country: 'US', timeZone: 'America/New_York' },
+		profile: { sells: ['physical'], chat: ['people'], countries: ['US', 'CA'] },
 	},
 	access: {
 		allowedOrigins: ['https://shop.example.com'],
@@ -36,6 +37,8 @@ const sheet = () => ({
 				browserToken: 'eyJ.browser.token',
 				snippet: '<script src="https://notes.example.dev/widget.js" data-token="eyJ.browser.token" async></script>',
 			},
+			recommended: [{ feature: 'notes', on: true, because: ['chat.people'], why: 'Your staff answer visitors.' }],
+			notRecommended: [],
 		},
 		{ productId: 'chat', name: 'Chat', reachable: /** @type {const} */ (false), reason: 'timeout' },
 	],
@@ -91,6 +94,17 @@ describe('product blueprint', () => {
 		['a widget of another kind', (b) => (b.widgets[0].kind = 'popup'), '/widgets/0/kind', 'enum'],
 		['an empty summary', (b) => b.summaries.push({ title: 'Flow', text: '' }), '/summaries/0/text', 'minLength'],
 		['a missing checklist', (b) => delete b.checklist, '/checklist', 'required'],
+		['a feature without its tags', (b) => delete b.features[1].recommendFor, '/features/1/recommendFor', 'required'],
+		[
+			'a tag rule of another shape',
+			(b) => (b.features[0].recommendFor = ['pays cod']),
+			'/features/0/recommendFor/0',
+			'pattern',
+		],
+		['no build list', (b) => delete b.build, '/build', 'required'],
+		['a build entry without its text', (b) => (b.build[0].what = ''), '/build/0/what', 'minLength'],
+		['a build entry of another shape', (b) => (b.build[0].for = 'notes'), '/build/0/for', 'additionalProperties'],
+		['advice in a product part', (b) => (b.recommended = []), '/recommended', 'additionalProperties'],
 		['the server token', (b) => (b.serverToken = { issued: true }), '/serverToken', 'additionalProperties'],
 	];
 	it.each(cases)('refuses %s', (_name, mutate, path, keyword) => {
@@ -108,6 +122,7 @@ describe('blueprint (the sheet)', () => {
 
 	it('accepts a sheet with a reachable and a missing product, and a shared copy without values or install', () => {
 		expect(validateBlueprint(sheet()).ok).toBe(true);
+		expect(validateBlueprint({ ...sheet(), website: { ...sheet().website, profile: null } }).ok).toBe(true);
 		const shared = sheet();
 		const product = /** @type {any} */ (shared.products[0]);
 		for (const feature of product.features) for (const one of feature.settings) delete one.value;
@@ -127,6 +142,16 @@ describe('blueprint (the sheet)', () => {
 		['no allowed origin', (b) => (b.access.allowedOrigins = []), '/access/allowedOrigins', 'minItems'],
 		['a domain with a scheme', (b) => (b.website.domain = 'https://shop.example.com'), '/website/domain', 'pattern'],
 		['a share without its expiry', (b) => (b.share = { values: true, install: true }), '/share/expiresAt', 'required'],
+		['a website without its profile', (b) => delete b.website.profile, '/website/profile', 'required'],
+		['a profile answer of another kind', (b) => (b.website.profile.sells = ['cars']), '/website/profile', 'anyOf'],
+		['a reachable product without advice', (b) => delete b.products[0].recommended, '/products/0', 'oneOf'],
+		['advice without a reason', (b) => (b.products[0].recommended[0].because = []), '/products/0', 'oneOf'],
+		[
+			'advice that is not on the feature',
+			(b) => (b.products[0].notRecommended = [{ feature: 'notes' }]),
+			'/products/0',
+			'oneOf',
+		],
 	];
 	it.each(cases)('refuses %s', (_name, mutate, path, keyword) => {
 		const value = sheet();

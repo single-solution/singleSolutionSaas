@@ -60,6 +60,7 @@
  * @property {string} description one line
  * @property {string[]} dependsOn keys of the features it needs
  * @property {SettingsSchema} settings
+ * @property {string[]} [recommendFor] rules of business profile tags the feature suits (`@ss/contracts/profile`)
  */
 
 /** @typedef {{ key: string, name: string, feature: string }} ManifestPermission */
@@ -179,7 +180,8 @@
  * @property {{ scriptUrl: string | null, installed: boolean | null, lastSeenAt: string | null, browserToken?: string,
  *   snippet?: string | null }} install `browserToken` and `snippet` are added by the Portal
  * @property {Array<{ key: string, title: string, description: string, on: boolean, dependsOn: string[],
- *   settings: BlueprintSetting[], lists: BlueprintList[] }>} features settings and lists only while on
+ *   recommendFor: string[], settings: BlueprintSetting[], lists: BlueprintList[] }>} features settings and lists only
+ *   while on
  * @property {Array<{ key: string, title: string, features: string[], settings: BlueprintSetting[] }>} shared shared
  *   settings in use
  * @property {Array<{ key: string, title: string, kind: 'database' | 'storage' | 'secret' | 'token', neededBy: string[],
@@ -189,6 +191,15 @@
  * @property {string[]} events
  * @property {Array<{ key: string, done: boolean, text: string }>} checklist
  * @property {Array<{ title: string, text: string }>} summaries
+ * @property {Array<{ feature: string, what: string, docs: string }>} build what the website builds for each feature
+ *   that is on, with the guide's section
+ */
+/**
+ * The advisor's view of a reachable product in a Setup sheet.
+ * @typedef {object} BlueprintAdvice
+ * @property {Array<{ feature: string, on: boolean, because: string[], why: string }>} recommended
+ * @property {Array<{ feature: string, missing: string[], why: string }>} notRecommended features that are on although
+ *   the profile rules them out
  */
 /**
  * The Setup sheet of a website, `ss.blueprint/1`.
@@ -196,9 +207,9 @@
  * @property {'ss.blueprint/1'} schema
  * @property {string} generatedAt
  * @property {{ id: string, domain: string, business: { found: boolean, name: string | null, country: string | null,
- *   timeZone: string | null } }} website
+ *   timeZone: string | null }, profile: import('./profile.js').BusinessProfile | null }} website
  * @property {{ allowedOrigins: string[], testingOrigins: string[], serverTokens: string }} access
- * @property {Array<(ProductBlueprint & { reachable: true, serverToken: { issued: boolean } })
+ * @property {Array<(ProductBlueprint & BlueprintAdvice & { reachable: true, serverToken: { issued: boolean } })
  *   | { productId: string, name: string, reachable: false, reason: 'timeout' | 'unreachable' | 'refused' | 'invalid' }>} products
  * @property {{ expiresAt: string, values: boolean, install: boolean }} [share] a copy opened from a share link
  */

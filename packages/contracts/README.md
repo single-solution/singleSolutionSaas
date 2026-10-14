@@ -22,7 +22,7 @@ const prices = manifestPriceList(json); // { version: 1, features: [{ key, name,
 ```
 
 `manifest.json` has exactly `id`, `name`, `version` (semver), `endpoints: { base, dashboard }`, `widgetScriptUrl`
-(or `null`), `docsUrl`, `features: [{ key, name, description, dependsOn, settings }]`,
+(or `null`), `docsUrl`, `features: [{ key, name, description, dependsOn, settings, recommendFor? }]`,
 `permissions: [{ key, name, feature }]` and `widgets: [{ key, feature, kind: 'visitor' | 'admin' }]`. Rules:
 
 - `id` matches `^[a-z][a-z0-9-]{1,30}$`.
@@ -32,6 +32,10 @@ const prices = manifestPriceList(json); // { version: 1, features: [{ key, name,
 - `endpoints.base` is an https URL (http only on `localhost`, `*.localhost`, `127.0.0.1`, `[::1]`);
   `endpoints.dashboard`, `docsUrl` and `widgetScriptUrl` are a path (`/docs`) or such a URL.
 - Every feature's `settings` is a valid settings schema (below), defaults included.
+- `recommendFor` (optional, at most 20 rules, each once): the business profile answers the feature suits, for the
+  Setup sheet's advisor (below). A rule is one to four tags joined by `+` (all must hold), each a tag of
+  `@ss/contracts/profile` (`RULES.recommendRule` otherwise), for example `["pays.cod"]` or
+  `["pays.online+countries.za"]`.
 
 ## Settings schemas
 
@@ -96,17 +100,38 @@ permissions, events, checklist and docs, generated on request and never stored.
 
 - `validateProductBlueprint`: a product's part, answered by `@ss/app-kit` at `GET /v1/blueprint?websiteId=` (a signed
   Portal call): `{ productId, name, version, status, docs: { guide, openapi }, business, install, features, shared,
-connections, widgets, staffPermissions, events, checklist, summaries }`. Features carry their settings
-  `{ key, title, value, default }` (`default: true` while the website has not saved its own value) and their lists
-  `{ name, title, summary, count }` only while the feature is on. Connections are `{ key, title, kind, neededBy, needed,
-set, state, testedAt }`: never a value, its last characters or a test message (the schema refuses them).
+connections, widgets, staffPermissions, events, checklist, summaries, build }`. Features carry their `recommendFor`
+  rules and their settings `{ key, title, value, default }` (`default: true` while the website has not saved its own
+  value) and their lists `{ name, title, summary, count }` only while the feature is on. Connections are `{ key, title,
+kind, neededBy, needed, set, state, testedAt }`: never a value, its last characters or a test message (the schema
+  refuses them). `build: [{ feature, what, docs }]`: what the merchant's website builds for each feature that is on
+  (at most `BUILD_TEXT_MAX` characters) and the guide's section of it.
 - `validateBlueprint`: the Portal's sheet `{ schema: 'ss.blueprint/1' (BLUEPRINT_SCHEMA), generatedAt, website: { id,
-domain, business }, access: { allowedOrigins, testingOrigins, serverTokens }, products, share? }`. A product is its
-  blueprint plus `reachable: true`, `serverToken: { issued }` (the token itself is never in a sheet) and, in `install`,
-  the public browser token and the install snippet; one that did not answer in time is `{ productId, name,
-reachable: false, reason }` (`BLUEPRINT_UNREACHABLE_REASONS`: `timeout`, `unreachable`, `refused`, `invalid`). A copy
-  opened from a share link has `share: { expiresAt, values, install }`: without values every setting's `value` is left
-  out, without install the browser token and snippet.
+domain, business, profile }, access: { allowedOrigins, testingOrigins, serverTokens }, products, share? }`. `profile`
+  is the website's business profile (or `null`). A product is its blueprint plus `reachable: true`, `serverToken:
+{ issued }` (the token itself is never in a sheet), in `install` the public browser token and the install snippet,
+  and the advisor's view: `recommended: [{ feature, on, because, why }]` (features the profile calls for, `because`
+  the tags of the rule that holds) and `notRecommended: [{ feature, missing, why }]` (features that are on although
+  the profile rules them out). One that did not answer in time is `{ productId, name, reachable: false, reason }`
+  (`BLUEPRINT_UNREACHABLE_REASONS`: `timeout`, `unreachable`, `refused`, `invalid`). A copy opened from a share link
+  has `share: { expiresAt, values, install }`: without values every setting's `value` is left out, without install
+  the browser token and snippet.
+
+## Business profile and recommendations (`@ss/contracts/profile`, browser-safe)
+
+A website's business profile is a few optional answers kept by the Portal: what it sells, how shoppers pay, how
+orders reach them, how shoppers sign in, who answers the chat, how it messages customers, marketing, what it offers
+shoppers (`PROFILE_CHOICES`, each a list of options; `none` stands alone), whether it is moving from another website
+or system (`moving`, yes or no), and its countries (ISO 3166-1 alpha-2, capitals) and languages (ISO 639, two or three
+small letters). `validateBusinessProfile(value)` checks it (`RULES.profileAnswer` for `none` with other options).
+
+- `profileTags(profile)`: `<question>.<option>` (`pays.cod`, `moving.yes`, `countries.us`, `languages.fr`) and
+  `<question>.many` for two countries or languages or more. A rule's `<choice>.*` holds for any option but `none`.
+- `ruleHolds(rule, tags)`, `isRecommendTag(tag)`, `ruleProblem(rule)`.
+- `featureFit(rules, profile)`: `recommended` (with the tags of the first rule that holds), `ruled_out` (every rule
+  fails on a question the profile answered; `missing` one tag per rule) or `neutral` (no rules, or an open question
+  could still make a rule hold). `adviseFeatures(features, profile)` → `{ recommended, notRecommended }` for a
+  product's features (`notRecommended`: ruled out and on).
 
 ## Message templates (`@ss/contracts/templates`)
 

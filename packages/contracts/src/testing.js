@@ -24,6 +24,7 @@ export const manifest = () => ({
 			name: 'Notes',
 			description: 'Visitors leave short notes.',
 			dependsOn: [],
+			recommendFor: ['chat.people', 'messages.email+signIn.*'],
 			settings: {
 				type: 'object',
 				additionalProperties: false,
@@ -126,6 +127,7 @@ export const productBlueprint = () => ({
 			description: 'Visitors leave short notes.',
 			on: true,
 			dependsOn: [],
+			recommendFor: ['chat.people', 'messages.email+signIn.*'],
 			settings: [
 				{ key: 'maxNotes', title: 'Notes per visitor per day', value: 10, default: false },
 				{ key: 'greeting', title: 'Greeting', value: 'Leave us a note', default: true },
@@ -138,6 +140,7 @@ export const productBlueprint = () => ({
 			description: 'Staff read the notes in their own admin.',
 			on: false,
 			dependsOn: ['notes'],
+			recommendFor: [],
 			settings: [],
 			lists: [],
 		},
@@ -163,4 +166,11 @@ export const productBlueprint = () => ({
 	events: ['notes.settings.changed'],
 	checklist: [{ key: 'widget', done: false, text: 'Add the widget script to every page of your website.' }],
 	summaries: [],
+	build: [
+		{
+			feature: 'notes',
+			what: 'Add the note form widget to the pages where visitors leave notes.',
+			docs: 'https://notes.example.dev/docs#feature-notes',
+		},
+	],
 });

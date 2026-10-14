@@ -3,19 +3,25 @@
  *
  * - **Product blueprint** (each product's `GET /v1/blueprint?websiteId=`, a Portal call answered by `@ss/app-kit`):
  *   the product's part for one website: `{ productId, name, version, status, docs, business, install, features,
- *   shared, connections, widgets, staffPermissions, events, checklist, summaries }`. Features carry their settings
- *   with values (`default: true` while the website has not saved its own) and their lists summarized, but only while
- *   the feature is on. Connections show their state only: `set` and `state`, never a value, its last characters or a
- *   test message.
+ *   shared, connections, widgets, staffPermissions, events, checklist, summaries, build }`. Features carry the
+ *   business profile answers they suit (`recommendFor`, from the manifest) and their settings with values
+ *   (`default: true` while the website has not saved its own) and their lists summarized, but only while the feature
+ *   is on. Connections show their state only: `set` and `state`, never a value, its last characters or a test
+ *   message. `build` says, per feature that is on, what the merchant's website builds for it (pages, routes, script
+ *   tags, server calls) with the guide's section.
  * - **Blueprint** (the Portal's sheet): `{ schema: 'ss.blueprint/1', generatedAt, website, access, products, share? }`.
- *   Each product is its blueprint plus `reachable: true`, the browser token and install snippet in `install`, and
- *   `serverToken: { issued }` (the value is never in a sheet); a product that did not answer in time is
- *   `{ productId, name, reachable: false, reason }`. `share` describes a copy opened from a share link: what it
- *   leaves out (`values: false` drops every setting's `value`, `install: false` the browser token and snippet).
+ *   `website.profile` is the website's business profile (null until someone fills it in). Each product is its
+ *   blueprint plus `reachable: true`, the browser token and install snippet in `install`, `serverToken: { issued }`
+ *   (the value is never in a sheet) and the advisor's view: `recommended` (features the profile calls for, on or not,
+ *   with the tags and why) and `notRecommended` (features that are on although the profile rules them out); a
+ *   product that did not answer in time is `{ productId, name, reachable: false, reason }`. `share` describes a copy
+ *   opened from a share link: what it leaves out (`values: false` drops every setting's `value`, `install: false`
+ *   the browser token and snippet).
  * @module
  */
 import { deepFreeze } from '../util.js';
 import { PATTERNS, commonRef as ref } from './common.js';
+import { RECOMMEND_TAG_PATTERN, recommendForSchema } from './profile.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 
 const draft = 'https://json-schema.org/draft/2020-12/schema';
@@ -27,6 +33,9 @@ export const BLUEPRINT_SCHEMA = 'ss.blueprint/1';
 export const BLUEPRINT_UNREACHABLE_REASONS = Object.freeze(
 	/** @type {const} */ (['timeout', 'unreachable', 'refused', 'invalid']),
 );
+
+/** Longest "what your website builds" text of one feature. */
+export const BUILD_TEXT_MAX = 1000;
 
 /** Connection kinds and states (as the kit keeps them). */
 const CONNECTION_KINDS = Object.freeze(['database', 'storage', 'secret', 'token']);
@@ -102,7 +111,7 @@ const productProperties = {
 		maxItems: 100,
 		items: {
 			type: 'object',
-			required: ['key', 'title', 'description', 'on', 'dependsOn', 'settings', 'lists'],
+			required: ['key', 'title', 'description', 'on', 'dependsOn', 'recommendFor', 'settings', 'lists'],
 			additionalProperties: false,
 			properties: {
 				key: ref('featureKey'),
@@ -110,6 +119,7 @@ const productProperties = {
 				description: ref('description'),
 				on: { type: 'boolean' },
 				dependsOn: ref('featureKeys'),
+				recommendFor: recommendForSchema,
 				settings: { type: 'array', maxItems: 100, items: setting },
 				lists: { type: 'array', maxItems: 50, items: list },
 			},
@@ -208,6 +218,47 @@ const productProperties = {
 			},
 		},
 	},
+	build: {
+		type: 'array',
+		maxItems: 100,
+		items: {
+			type: 'object',
+			required: ['feature', 'what', 'docs'],
+			additionalProperties: false,
+			properties: {
+				feature: ref('featureKey'),
+				what: { type: 'string', minLength: 1, maxLength: BUILD_TEXT_MAX },
+				docs: ref('url'),
+			},
+		},
+	},
+};
+
+/** Tags a piece of advice names (one rule's worth). */
+const adviceTags = { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string', pattern: `^${RECOMMEND_TAG_PATTERN}$` } };
+
+/** The advisor's view of a reachable product in a sheet. */
+const adviceProperties = {
+	recommended: {
+		type: 'array',
+		maxItems: 100,
+		items: {
+			type: 'object',
+			required: ['feature', 'on', 'because', 'why'],
+			additionalProperties: false,
+			properties: { feature: ref('featureKey'), on: { type: 'boolean' }, because: adviceTags, why: text(500) },
+		},
+	},
+	notRecommended: {
+		type: 'array',
+		maxItems: 100,
+		items: {
+			type: 'object',
+			required: ['feature', 'missing', 'why'],
+			additionalProperties: false,
+			properties: { feature: ref('featureKey'), missing: adviceTags, why: text(500) },
+		},
+	},
 };
 
 const PRODUCT_REQUIRED = Object.freeze(Object.keys(productProperties));
@@ -236,11 +287,12 @@ export const blueprintSchema = deepFreeze({
 		generatedAt: ref('timestamp'),
 		website: {
 			type: 'object',
-			required: ['id', 'domain', 'business'],
+			required: ['id', 'domain', 'business', 'profile'],
 			additionalProperties: false,
 			properties: {
 				id: ref('opaqueId'),
 				domain: ref('hostname'),
+				profile: nullable({ $ref: SCHEMA_IDS.businessProfile }),
 				business: {
 					type: 'object',
 					required: ['found', 'name', 'country', 'timeZone'],
@@ -271,7 +323,7 @@ export const blueprintSchema = deepFreeze({
 				oneOf: [
 					{
 						type: 'object',
-						required: ['reachable', 'serverToken', ...PRODUCT_REQUIRED],
+						required: ['reachable', 'serverToken', ...PRODUCT_REQUIRED, ...Object.keys(adviceProperties)],
 						additionalProperties: false,
 						properties: {
 							reachable: { const: true },
@@ -282,6 +334,7 @@ export const blueprintSchema = deepFreeze({
 								properties: { issued: { type: 'boolean' } },
 							},
 							...productProperties,
+							...adviceProperties,
 						},
 					},
 					{

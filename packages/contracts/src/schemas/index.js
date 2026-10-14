@@ -17,6 +17,7 @@ import {
 import { activityCopySchema, dataRightsRequestSchema, messageDefaultsSchema } from './cross-product.js';
 import { problemSchema } from './problem.js';
 import { blueprintSchema, productBlueprintSchema } from './blueprint.js';
+import { businessProfileSchema } from './profile.js';
 import { deepFreeze } from '../util.js';
 
 export * from './schema-ids.js';
@@ -26,6 +27,7 @@ export * from './manifest.js';
 export * from './product-api.js';
 export * from './cross-product.js';
 export * from './problem.js';
+export * from './profile.js';
 export * from './blueprint.js';
 
 /** Every built-in schema, in dependency-free registration order. */
@@ -43,6 +45,7 @@ export const ALL_SCHEMAS = deepFreeze([
 	dataRightsRequestSchema,
 	activityCopySchema,
 	messageDefaultsSchema,
+	businessProfileSchema,
 	productBlueprintSchema,
 	blueprintSchema,
 	problemSchema,

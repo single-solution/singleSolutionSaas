@@ -28,6 +28,7 @@ export const SCHEMA_IDS = Object.freeze({
 	dataRightsRequest: schemaId('data-rights-request'),
 	activityCopy: schemaId('activity-copy'),
 	messageDefaults: schemaId('message-defaults'),
+	businessProfile: schemaId('business-profile'),
 	productBlueprint: schemaId('product-blueprint'),
 	blueprint: schemaId('blueprint'),
 	problem: schemaId('problem'),
