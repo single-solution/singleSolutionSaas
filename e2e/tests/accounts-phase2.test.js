@@ -123,7 +123,7 @@ beforeAll(async () => {
 	]);
 	await sys.connectDatabase(cookie, websiteId);
 	for (const [key, value] of /** @type {const} */ ([
-		['phone.defaultCallingCode', '+92'],
+		['phone.defaultCallingCode', '+44'],
 		['phone.trunkPrefix', '0'],
 		['phone_password.breachedCheck', false],
 		['email_password.breachedCheck', false],
@@ -141,21 +141,33 @@ afterAll(async () => {
 
 describe('Accounts Phase 2 on the real Portal', () => {
 	it('imported bcrypt and PBKDF2 hashes sign in and are re-hashed', async () => {
-		const sb = await server.call('POST', '/v1/users', { name: 'Sara B', email: 'sara@members.example.com' });
-		const im = await server.call('POST', '/v1/users', { name: 'Imran', email: 'imran@members.example.com', role: 'owner' });
-		const col = await users();
-		await col.updateOne({ websiteId, id: sb.json.id }, { $set: { passwordHash: bcrypt.hashSync('old sb password', 10) } });
-		const salt = randomBytes(16);
-		const pbkdf2 = `pbkdf2$100000$${salt.toString('base64')}$${pbkdf2Sync('store-secret:old im password', salt, 100_000, 32, 'sha256').toString('base64')}`;
-		await col.updateOne({ websiteId, id: im.json.id }, { $set: { passwordHash: pbkdf2 } });
-		const cookie = await sys.adminSession(await sys.owner(), websiteId);
-		const pepper = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/imported_password_pepper`, {
-			value: 'store-secret',
+		const bcryptUser = await server.call('POST', '/v1/users', { name: 'Alex Morgan', email: 'alex@members.example.com' });
+		const pbkdf2User = await server.call('POST', '/v1/users', {
+			name: 'Olivia',
+			email: 'olivia@members.example.com',
+			role: 'owner',
 		});
+		const col = await users();
+		await col.updateOne(
+			{ websiteId, id: bcryptUser.json.id },
+			{ $set: { passwordHash: bcrypt.hashSync('old bcrypt password', 10) } },
+		);
+		const salt = randomBytes(16);
+		const pbkdf2 = `pbkdf2$100000$${salt.toString('base64')}$${pbkdf2Sync('source-pepper:old pbkdf2 password', salt, 100_000, 32, 'sha256').toString('base64')}`;
+		await col.updateOne({ websiteId, id: pbkdf2User.json.id }, { $set: { passwordHash: pbkdf2 } });
+		const cookie = await sys.adminSession(await sys.owner(), websiteId);
+		const pepper = await sys.dashboard(
+			cookie,
+			'PUT',
+			`/v1/dashboard/websites/${websiteId}/connections/imported_password_pepper`,
+			{
+				value: 'source-pepper',
+			},
+		);
 		expect(pepper.json).toMatchObject({ status: 'connected' });
 		for (const [email, password, id] of [
-			['sara@members.example.com', 'old sb password', sb.json.id],
-			['imran@members.example.com', 'old im password', im.json.id],
+			['alex@members.example.com', 'old bcrypt password', bcryptUser.json.id],
+			['olivia@members.example.com', 'old pbkdf2 password', pbkdf2User.json.id],
 		]) {
 			const signedIn = await server.call('POST', '/v1/sign-in/password', { email, password }, VISITOR);
 			expect(signedIn.json.status, email).toBe('signed_in');
@@ -171,41 +183,41 @@ describe('Accounts Phase 2 on the real Portal', () => {
 		await settle();
 		button(root, strings['signIn.toSignUp']).click();
 		await settle();
-		field(root, strings['fields.name']).value = 'Nadia';
-		field(root, strings['fields.phone']).value = '0300 7654321';
-		field(root, strings['fields.password']).value = 'nadia pass 1';
+		field(root, strings['fields.name']).value = 'Nora';
+		field(root, strings['fields.phone']).value = '07700 900321';
+		field(root, strings['fields.password']).value = 'nora pass 1';
 		await submit(win, button(root, strings['signUp.submit']));
 		await until(() => widget.user() !== null);
-		expect(widget.user()?.phone).toBe('+923007654321');
+		expect(widget.user()?.phone).toBe('+447700900321');
 		const fromServer = await server.call(
 			'POST',
 			'/v1/sign-in/phone-password',
-			{ phone: '03007654321', password: 'nadia pass 1' },
+			{ phone: '07700900321', password: 'nora pass 1' },
 			VISITOR,
 		);
-		expect(fromServer.json).toMatchObject({ status: 'signed_in', user: { name: 'Nadia' } });
+		expect(fromServer.json).toMatchObject({ status: 'signed_in', user: { name: 'Nora' } });
 		expect(fromServer.json.refreshToken).toMatch(/^ses_/);
-		expect(codeOf(await server.call('POST', '/v1/sign-in/phone-password', { phone: '03007654321', password: 'x' }))).toBe(
+		expect(codeOf(await server.call('POST', '/v1/sign-in/phone-password', { phone: '07700900321', password: 'x' }))).toBe(
 			'visitor_ip_required',
 		);
 	});
 
 	it('a staff sign-in code and a setup link, issued through the server, work in the widget', async () => {
 		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items[0];
-		const actor = { 'ss-actor-id': owner.id, 'ss-actor-name': 'Imran' };
-		const customer = await server.call('POST', '/v1/users', { name: 'Kashif', phone: '0300 1112233' }, actor);
+		const actor = { 'ss-actor-id': owner.id, 'ss-actor-name': 'Olivia' };
+		const customer = await server.call('POST', '/v1/users', { name: 'Kai', phone: '07700 900233' }, actor);
 		const issued = await server.call('POST', `/v1/users/${customer.json.id}/sign-in-code`, undefined, actor);
 		expect(issued.json.code).toMatch(/^\d{6}$/);
 		const { win, root, widget } = await openPage('sign_in');
 		button(root, strings['method.phone_password']).click();
 		await settle();
-		field(root, strings['fields.phone']).value = '03001112233';
+		field(root, strings['fields.phone']).value = '07700900233';
 		field(root, strings['fields.password']).value = issued.json.code;
 		await submit(win, button(root, strings['signIn.submit']));
 		await until(() => widget.user() !== null);
-		expect(widget.user()?.name).toBe('Kashif');
+		expect(widget.user()?.name).toBe('Kai');
 		const logged = await server.call('GET', '/v1/activity?action=user.sign_in_code_issued');
-		expect(logged.json.items[0]).toMatchObject({ actor: { id: owner.id, name: 'Imran' }, label: 'Kashif' });
+		expect(logged.json.items[0]).toMatchObject({ actor: { id: owner.id, name: 'Olivia' }, label: 'Kai' });
 
 		const link = await server.call('POST', `/v1/users/${customer.json.id}/setup-link`, undefined, actor);
 		const url = new URL(link.json.url);
@@ -220,13 +232,13 @@ describe('Accounts Phase 2 on the real Portal', () => {
 
 	it('a role request from the widget is invited by staff and completed with the setup link', async () => {
 		const { win, root } = await openPage('role_request');
-		field(root, strings['fields.name']).value = 'Hina';
-		field(root, strings['fields.phone']).value = '0300 9998887';
+		field(root, strings['fields.name']).value = 'Harper';
+		field(root, strings['fields.phone']).value = '07700 900887';
 		await submit(win, button(root, strings['request.submit']));
 		await until(() => (root.textContent ?? '').includes(strings['request.sent']));
 		expect(root.textContent).toContain(strings['request.sent']);
 		const pending = await server.call('GET', '/v1/role-requests?status=pending');
-		expect(pending.json.items).toMatchObject([{ name: 'Hina', phone: '+923009998887', role: 'member' }]);
+		expect(pending.json.items).toMatchObject([{ name: 'Harper', phone: '+447700900887', role: 'member' }]);
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
 			body: {
@@ -242,7 +254,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 		expect(invited.json.request.status).toBe('invited');
 		const url = new URL(invited.json.setupLink.url);
 		const page = await openPage('sign_in', `${url.pathname}${url.search}`);
-		field(page.root, strings['fields.password']).value = 'hina pass 12';
+		field(page.root, strings['fields.password']).value = 'harper pass 12';
 		await submit(page.win, button(page.root, strings['setup.submit']));
 		await until(() => page.widget.user() !== null);
 		expect(page.widget.user()?.role).toBe('member');
@@ -252,20 +264,20 @@ describe('Accounts Phase 2 on the real Portal', () => {
 	it('the guards refuse through the server and a ticket', async () => {
 		const owner = (await server.call('GET', '/v1/users?roles=owner')).json.items[0];
 		const manager = await server.call('POST', '/v1/users', {
-			name: 'Maha',
-			email: 'maha@members.example.com',
+			name: 'Mia',
+			email: 'mia@members.example.com',
 			role: 'business_manager',
 		});
-		const asManager = { 'ss-actor-id': manager.json.id, 'ss-actor-name': 'Maha' };
+		const asManager = { 'ss-actor-id': manager.json.id, 'ss-actor-name': 'Mia' };
 		expect(codeOf(await server.call('PATCH', `/v1/users/${owner.id}`, { notes: 'x' }, asManager))).toBe('forbidden');
 		expect(codeOf(await server.call('PATCH', `/v1/users/${manager.json.id}`, { role: 'owner' }, asManager))).toBe('forbidden');
-		const asOwner = { 'ss-actor-id': owner.id, 'ss-actor-name': 'Imran' };
+		const asOwner = { 'ss-actor-id': owner.id, 'ss-actor-name': 'Olivia' };
 		const last = await server.call('PATCH', `/v1/users/${owner.id}`, { blocked: true }, asOwner);
 		expect(codeOf(last)).toBe('forbidden');
 		const ticket = await sys.call('POST', '/v1/tickets', {
 			token: tokens.server,
 			body: {
-				user: { id: manager.json.id, name: 'Maha', email: 'maha@members.example.com' },
+				user: { id: manager.json.id, name: 'Mia', email: 'mia@members.example.com' },
 				permissions: ['users.manage'],
 				origin: ADMIN_ORIGIN,
 			},
@@ -287,7 +299,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 		const remembered = await server.call(
 			'POST',
 			'/v1/sign-in/phone-password',
-			{ phone: '03007654321', password: 'nadia pass 1' },
+			{ phone: '07700900321', password: 'nora pass 1' },
 			VISITOR,
 		);
 		expect(remembered.json.remember).toBe(true);
@@ -297,7 +309,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 		expect(paused.root.querySelector('form')).toBeNull();
 		expect(
 			codeOf(
-				await server.call('POST', '/v1/sign-in/phone-password', { phone: '03007654321', password: 'nadia pass 1' }, VISITOR),
+				await server.call('POST', '/v1/sign-in/phone-password', { phone: '07700900321', password: 'nora pass 1' }, VISITOR),
 			),
 		).toBe('sign_in_paused');
 		expect(
@@ -305,7 +317,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 				await server.call(
 					'POST',
 					'/v1/sign-in/password',
-					{ email: 'sara@members.example.com', password: 'old sb password' },
+					{ email: 'alex@members.example.com', password: 'old bcrypt password' },
 					VISITOR,
 				),
 			),
@@ -316,7 +328,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 				await server.call(
 					'POST',
 					'/v1/sign-in/password',
-					{ email: 'imran@members.example.com', password: 'old im password' },
+					{ email: 'olivia@members.example.com', password: 'old pbkdf2 password' },
 					VISITOR,
 				)
 			).json.status,
@@ -350,7 +362,7 @@ describe('Accounts Phase 2 on the real Portal', () => {
 			const first = await server.call(
 				'POST',
 				'/v1/sign-in/password',
-				{ email: 'imran@members.example.com', password: 'old im password' },
+				{ email: 'olivia@members.example.com', password: 'old pbkdf2 password' },
 				VISITOR,
 			);
 			expect(first.json.status).toBe('two_step');

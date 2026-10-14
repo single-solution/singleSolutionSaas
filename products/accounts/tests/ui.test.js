@@ -1122,7 +1122,7 @@ describe('My account', () => {
 							number: 'A-101',
 							status: 'packed',
 							statusLabel: 'Being packed',
-							totalText: 'PKR 1,250.00',
+							totalText: 'EUR 1,250.00',
 							total: 125000,
 						},
 						{ id: 'ord_2', status: 7, total: { amount: 5 } },
@@ -1146,14 +1146,14 @@ describe('My account', () => {
 		const rows = [...orders.querySelectorAll('li')];
 		expect(rows.map((li) => li.firstChild?.textContent)).toEqual(['Order A-100', 'Order A-101', 'Order ord_2', 'Order ']);
 		expect(rows[0]?.querySelector('.meta')?.textContent).toBe(`paid · $10.00 · ${when(at(0))}`);
-		expect(rows[1]?.querySelector('.meta')?.textContent).toBe('Being packed · PKR 1,250.00');
+		expect(rows[1]?.querySelector('.meta')?.textContent).toBe('Being packed · EUR 1,250.00');
 		expect(rows[2]?.querySelector('.meta')?.textContent).toBe('');
 	});
 
 	it('shows dates and order totals in the Format and business time zone of the widget config', async () => {
 		looks = {
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-			timeZone: 'Asia/Karachi',
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Tokyo',
 		};
 		const { host } = await open({
 			'GET /v1/me/sessions': () =>
@@ -1178,18 +1178,18 @@ describe('My account', () => {
 							number: 'A-100',
 							status: 'paid',
 							total: 1250000,
-							totalText: 'PKR 12,500.00',
-							currency: 'PKR',
+							totalText: 'USD 12,500.00',
+							currency: 'USD',
 							createdAt: '2026-10-01T22:30:00Z',
 						},
 					],
 				}),
 		});
-		// 10:01 UTC is 15:01 in Karachi; 22:30 UTC is already the next day there
+		// 10:01 UTC is 19:01 in Tokyo; 22:30 UTC is already the next day there
 		const devices = part(host, strings['account.devices']);
-		expect(devices.querySelector('.meta')?.textContent).toBe('Signed in with Password · Last used 1 Oct 2026, 15:01');
+		expect(devices.querySelector('.meta')?.textContent).toBe('Signed in with Password · Last used 1 Oct 2026, 19:01');
 		const orders = part(host, strings['account.orders']);
-		expect(orders.querySelector('.meta')?.textContent).toBe('paid · Rs 12,500 · 2 Oct 2026, 03:30');
+		expect(orders.querySelector('.meta')?.textContent).toBe('paid · US$ 12,500 · 2 Oct 2026, 07:30');
 		const privacy = part(host, strings['account.privacy']);
 		await click(buttonIn(privacy, strings['account.delete']));
 		await click(buttonIn(privacy, strings['account.deleteYes']));
@@ -1370,7 +1370,7 @@ describe('admin widgets', () => {
 			providers: ['google'],
 			terms: { version: '2', acceptedAt: at(0) },
 			custom: { size: 'M' },
-			addresses: [{ id: 'adr_1', label: 'Home', line1: '1 Main St', area: 'Gulberg', city: 'Lahore', default: true }],
+			addresses: [{ id: 'adr_1', label: 'Home', line1: '1 Main St', area: 'Camden', city: 'London', default: true }],
 			deletion: { requestedAt: at(0), dueAt: at(86_400_000) },
 		};
 		const bo = {
@@ -1438,7 +1438,7 @@ describe('admin widgets', () => {
 		]);
 		expect(detail.textContent).toContain('ana@example.com (verified)');
 		expect(detail.textContent).toContain('On, 3 recovery codes left');
-		expect(detail.textContent).toContain('1 Main St, Gulberg, Lahore');
+		expect(detail.textContent).toContain('1 Main St, Camden, London');
 		expect(detail.textContent).toContain(formatDeletion(at(0)));
 		await click(buttonIn(root, strings['users.more']));
 		expect(asked.at(-1)?.searchParams.get('cursor')).toBe('c1');
@@ -1451,7 +1451,7 @@ describe('admin widgets', () => {
 		expect(asked.at(-1)?.searchParams.get('deletion')).toBe('1');
 		await click(/** @type {HTMLButtonElement} */ (root.querySelectorAll('.chip')[2]));
 		fieldIn(root, strings['users.search']).value = 'none';
-		fieldIn(root, strings['users.phoneDigits']).value = '0300 1234567';
+		fieldIn(root, strings['users.phoneDigits']).value = '07700 900567';
 		const roleSelect = fieldIn(root, strings['users.roles']);
 		roleSelect.options[0].selected = true;
 		roleSelect.options[2].selected = true;
@@ -1461,7 +1461,7 @@ describe('admin widgets', () => {
 		await submit(buttonIn(root, strings['users.searchButton']));
 		expect(Object.fromEntries(asked.at(-1)?.searchParams ?? [])).toEqual({
 			q: 'none',
-			phoneDigits: '0300 1234567',
+			phoneDigits: '07700 900567',
 			roles: 'customer,helper',
 			permission: 'accounts:users.read',
 			createdAfter: '2026-09-01T00:00:00Z',
@@ -1535,8 +1535,8 @@ describe('admin widgets', () => {
 		fieldIn(dialog(), strings['users.newPassword']).value = 'a new password';
 		await click(buttonIn(dialog(), strings['account.addressAdd']));
 		const fieldsets = dialog().querySelectorAll('fieldset');
-		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.line1']).value = '2 Canal Rd';
-		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.city']).value = 'Lahore';
+		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.line1']).value = '2 Park Rd';
+		fieldIn(/** @type {HTMLElement} */ (fieldsets[1]), strings['address.city']).value = 'London';
 		await submit(buttonIn(dialog(), strings['users.save']));
 		expect(server.last('PATCH /v1/admin/users/usr_1')?.body).toEqual({
 			name: 'Ana',
@@ -1551,8 +1551,8 @@ describe('admin widgets', () => {
 					name: '',
 					line1: '1 Main St',
 					line2: '',
-					area: 'Gulberg',
-					city: 'Lahore',
+					area: 'Camden',
+					city: 'London',
 					region: '',
 					postalCode: '',
 					country: '',
@@ -1562,10 +1562,10 @@ describe('admin widgets', () => {
 				{
 					label: '',
 					name: '',
-					line1: '2 Canal Rd',
+					line1: '2 Park Rd',
 					line2: '',
 					area: '',
-					city: 'Lahore',
+					city: 'London',
 					region: '',
 					postalCode: '',
 					country: '',
@@ -1620,7 +1620,7 @@ describe('admin widgets', () => {
 				id: 'rrq_1',
 				role: 'helper',
 				name: 'Nia',
-				phone: '+923001112222',
+				phone: '+447700900222',
 				email: null,
 				note: 'Member please',
 				status: 'pending',
@@ -1640,7 +1640,7 @@ describe('admin widgets', () => {
 				id: 'rrq_3',
 				role: 'helper',
 				name: 'Cy',
-				phone: '+923001113333',
+				phone: '+447700900333',
 				email: null,
 				note: '',
 				status: 'pending',
@@ -1958,7 +1958,7 @@ describe('admin widgets', () => {
 	it('Users admin shows sign-in and deletion times in the Format and business time zone', async () => {
 		looks = {
 			format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'business' },
-			timeZone: 'Asia/Karachi',
+			timeZone: 'Asia/Tokyo',
 		};
 		const host = place('users_admin');
 		const ana = {
@@ -1975,8 +1975,8 @@ describe('admin widgets', () => {
 		});
 		const root = shadow(host);
 		expect(root.querySelector('li .figure')?.textContent).toBe('2 Oct 2026');
-		expect(root.querySelector('.detail-pane')?.textContent).toContain('2 Oct 2026, 03:30');
-		expect(root.querySelector('.detail-pane')?.textContent).toContain('Asked to be deleted on 1 Oct 2026, 15:00.');
+		expect(root.querySelector('.detail-pane')?.textContent).toContain('2 Oct 2026, 07:30');
+		expect(root.querySelector('.detail-pane')?.textContent).toContain('Asked to be deleted on 1 Oct 2026, 19:00.');
 	});
 
 	it('Roles admin sets the rank, remember me, the methods, a paused sign-in and the sign-in log', async () => {
@@ -2028,7 +2028,7 @@ describe('admin widgets', () => {
 			actor: { kind: 'user', id: 'usr_1', name: 'Ana', role: 'Owner' },
 			action: 'order.status_changed',
 			target: 'ord_1',
-			label: 'IM-2026-0043',
+			label: 'SH-2026-0043',
 			detail: 'Confirmed → Shipped',
 			at: at(0),
 		};
@@ -2062,7 +2062,7 @@ describe('admin widgets', () => {
 			'ecommerce4',
 		]);
 		const first = /** @type {HTMLElement} */ (root.querySelector('li'));
-		expect(first.textContent).toContain('IM-2026-0043 · order.status_changed');
+		expect(first.textContent).toContain('SH-2026-0043 · order.status_changed');
 		expect(first.textContent).toContain('Confirmed → Shipped');
 		expect(first.textContent).toContain(`ecommerce · Ana, Owner · ${when(at(0))}`);
 		await click(buttonIn(root, strings['activity.more']));
@@ -2105,14 +2105,14 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		);
 		const root = shadow(host);
 		expect(checkIn(root, strings['signIn.remember']).checked).toBe(true);
-		fieldIn(root, strings['fields.phone']).value = ' 0300 1234567 ';
+		fieldIn(root, strings['fields.phone']).value = ' 07700 900567 ';
 		fieldIn(root, strings['fields.password']).value = 'wrong';
 		await submit(buttonIn(root, strings['signIn.submit']));
 		expect(statusIn(root)).toBe(strings['error.sign_in_failed']);
 		fieldIn(root, strings['fields.password']).value = '123456';
 		await submit(buttonIn(root, strings['signIn.submit']));
 		expect(server.last('POST /v1/sign-in/phone-password')?.body).toMatchObject({
-			phone: '0300 1234567',
+			phone: '07700 900567',
 			password: '123456',
 			remember: true,
 		});
@@ -2121,11 +2121,11 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 
 		// sign up
 		await click(buttonIn(root, strings['signIn.toSignUp']));
-		fieldIn(root, strings['fields.name']).value = 'Sana';
-		fieldIn(root, strings['fields.phone']).value = '+923001234567';
+		fieldIn(root, strings['fields.name']).value = 'Robin';
+		fieldIn(root, strings['fields.phone']).value = '+447700900567';
 		fieldIn(root, strings['fields.password']).value = 'abc123';
 		await submit(buttonIn(root, strings['signUp.submit']));
-		expect(server.last('POST /v1/sign-up/phone-password')?.body).toMatchObject({ name: 'Sana', phone: '+923001234567' });
+		expect(server.last('POST /v1/sign-up/phone-password')?.body).toMatchObject({ name: 'Robin', phone: '+447700900567' });
 		expect(heading(host)).toBe(strings['pending.title']);
 		await click(buttonIn(root, strings['signIn.back']));
 		await click(buttonIn(root, strings['signUp.toSignIn']));
@@ -2136,7 +2136,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		expect(fieldIn(root, strings['fields.phone']).value).toBe('x');
 		await click(buttonIn(root, strings['phoneForgot.send']));
 		expect(statusIn(root)).toBe(strings['error.code_cooldown']);
-		fieldIn(root, strings['fields.phone']).value = '+923001234567';
+		fieldIn(root, strings['fields.phone']).value = '+447700900567';
 		await click(buttonIn(root, strings['phoneForgot.send']));
 		expect(statusIn(root)).toBe(strings['phoneForgot.sent']);
 		fieldIn(root, strings['phoneForgot.code']).value = '1';
@@ -2146,7 +2146,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		fieldIn(root, strings['phoneForgot.code']).value = '123456';
 		await submit(buttonIn(root, strings['phoneForgot.submit']));
 		expect(server.last('POST /v1/password/phone/reset')?.body).toEqual({
-			phone: '+923001234567',
+			phone: '+447700900567',
 			code: '123456',
 			password: 'new123',
 		});
@@ -2163,13 +2163,13 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			{
 				features: ['phone_password'],
 				settings: {
-					phonePassword: { ...PHONE_RULES, signUp: false, selfReset: 'off', forgotUrl: 'https://wa.me/923001234567' },
+					phonePassword: { ...PHONE_RULES, signUp: false, selfReset: 'off', forgotUrl: 'https://wa.me/447700900567' },
 					remember: 'always',
 				},
 			},
 		);
 		const root = shadow(host);
-		expect(root.querySelector('a.link')?.getAttribute('href')).toBe('https://wa.me/923001234567');
+		expect(root.querySelector('a.link')?.getAttribute('href')).toBe('https://wa.me/447700900567');
 		expect(hasButton(root, strings['signIn.forgot'])).toBe(false);
 		expect(hasButton(root, strings['signIn.toSignUp'])).toBe(false);
 		expect(checkIn(root, strings['signIn.remember']).closest('label')?.hidden).toBe(true);
@@ -2189,12 +2189,12 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		const root = shadow(host);
 		await click(buttonIn(root, strings['code.have']));
 		expect(root.querySelector('form')?.textContent).not.toContain(strings['code.code']);
-		fieldIn(root, strings['fields.phone']).value = '+923001234567';
+		fieldIn(root, strings['fields.phone']).value = '+447700900567';
 		await click(buttonIn(root, strings['code.have']));
 		fieldIn(root, strings['code.code']).value = '654321';
 		await submit(buttonIn(root, strings['code.submit']));
 		expect(server.calls.some((c) => c.path === '/v1/sign-in/phone/code')).toBe(false);
-		expect(server.last('POST /v1/sign-in/phone')?.body).toMatchObject({ phone: '+923001234567', code: '654321' });
+		expect(server.last('POST /v1/sign-in/phone')?.body).toMatchObject({ phone: '+447700900567', code: '654321' });
 	});
 
 	it('a setup link (?ss_setup=) sets the password and signs in; the code leaves the address bar', async () => {
@@ -2248,13 +2248,13 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		await submit(buttonIn(root, strings['request.submit']));
 		expect(statusIn(root)).toBe(strings['error.field.name']);
 		fieldIn(root, strings['fields.name']).value = 'Nia';
-		fieldIn(root, strings['fields.phone']).value = '0300 1112222';
+		fieldIn(root, strings['fields.phone']).value = '07700 900222';
 		fieldIn(root, strings['request.note']).value = 'Shop owner';
 		await submit(buttonIn(root, strings['request.submit']));
 		expect(server.last('POST /v1/role-requests')?.body).toEqual({
 			role: 'wholesale',
 			name: 'Nia',
-			phone: '0300 1112222',
+			phone: '07700 900222',
 			note: 'Shop owner',
 		});
 		expect(root.textContent).toContain(strings['request.sent']);
@@ -2266,14 +2266,14 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		const me = {
 			...USER,
 			email: null,
-			phone: '+923001234567',
+			phone: '+447700900567',
 			hasPassword: false,
 			role: 'member',
 			roleName: 'Member',
 			roleSince: at(0),
 			addresses: [
-				{ id: 'adr_000001', label: 'Home', line1: '1 Main St', area: 'Gulberg', city: 'Lahore', default: true },
-				{ id: 'adr_000002', label: 'Work', line1: '9 Mall Rd', area: '', city: 'Lahore', default: false },
+				{ id: 'adr_000001', label: 'Home', line1: '1 Main St', area: 'Camden', city: 'London', default: true },
+				{ id: 'adr_000002', label: 'Work', line1: '9 High St', area: '', city: 'London', default: false },
 			],
 		};
 		/** @type {any[]} */
@@ -2297,7 +2297,7 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		const profile = part(host, strings['account.profile']);
 		expect(profile.textContent).toContain(`Member since ${when(at(0), 'date')}`);
 		const addresses = part(host, strings['account.addresses']);
-		expect(addresses.querySelector('li')?.textContent).toContain('Gulberg');
+		expect(addresses.querySelector('li')?.textContent).toContain('Camden');
 		expect(addresses.querySelector('li .tag')?.textContent).toBe(strings['account.defaultAddress']);
 		expect(hasButton(addresses, strings['account.addressAdd'])).toBe(true);
 		expect(
@@ -2368,24 +2368,24 @@ describe('helpers', () => {
 		expect(webAddress('https://example.com/x')).toBe('https://example.com/x');
 		expect(when('never')).toBe('');
 		expect(when({})).toBe('');
-		expect(moneyText(PLAIN_LOOKS, window, 125000, 'PKR')).toBe('PKR 1,250.00');
-		expect(moneyText(PLAIN_LOOKS, window, '125000', 'PKR')).toBeNull();
-		expect(moneyText(PLAIN_LOOKS, window, 125000, 'rupees')).toBeNull();
+		expect(moneyText(PLAIN_LOOKS, window, 125000, 'EUR')).toBe('EUR 1,250.00');
+		expect(moneyText(PLAIN_LOOKS, window, '125000', 'EUR')).toBeNull();
+		expect(moneyText(PLAIN_LOOKS, window, 125000, 'euros')).toBeNull();
 		expect(moneyText(PLAIN_LOOKS, window, 125000, undefined)).toBeNull();
 	});
 
 	it('show dates and money in the Format and business time zone of the widget config', () => {
 		/** @type {import('../ui/common.js').Looks} */
-		const karachi = {
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Rs', wholeUnits: true, times: 'business' },
-			timeZone: 'Asia/Karachi',
+		const tokyo = {
+			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			timeZone: 'Asia/Tokyo',
 		};
-		const dates = datesOf(karachi, window);
-		expect(dates('2026-10-01T22:30:00Z')).toBe('2 Oct 2026, 03:30');
+		const dates = datesOf(tokyo, window);
+		expect(dates('2026-10-01T22:30:00Z')).toBe('2 Oct 2026, 07:30');
 		expect(dates(Date.parse('2026-10-01T22:30:00Z'), 'date')).toBe('2 Oct 2026');
-		expect(moneyText(karachi, window, 1250000, 'PKR')).toBe('Rs 12,500');
+		expect(moneyText(tokyo, window, 1250000, 'USD')).toBe('US$ 12,500');
 		// no time zone in the config: UTC
-		expect(datesOf({ format: karachi.format }, null)('2026-10-01T22:30:00Z')).toBe('1 Oct 2026, 22:30');
+		expect(datesOf({ format: tokyo.format }, null)('2026-10-01T22:30:00Z')).toBe('1 Oct 2026, 22:30');
 	});
 });
 

@@ -89,7 +89,7 @@ const users = () => [
 	{
 		id: ids.member,
 		name: 'Mina Member',
-		phone: '+923001234567',
+		phone: '+447700900567',
 		phoneVerified: true,
 		role: 'member',
 		roleSince: '2024-02-01T00:00:00Z',
@@ -101,7 +101,7 @@ const users = () => [
 	},
 	{
 		id: ids.customer,
-		phone: '0300 7654321',
+		phone: '07700 900321',
 		blocked: { at: '2024-06-01T00:00:00Z', reason: 'Fake orders' },
 		createdAt: '2024-03-01T00:00:00Z',
 	},
@@ -111,7 +111,7 @@ const requests = [
 		id: 'rrq_65f0000000000000000000b1',
 		role: 'member',
 		name: 'Nora New',
-		phone: '+923001112223',
+		phone: '+447700900223',
 		note: 'Please add me',
 		createdAt: '2024-07-01T00:00:00Z',
 	},
@@ -119,7 +119,7 @@ const requests = [
 		id: 'rrq_65f0000000000000000000b2',
 		role: 'member',
 		name: 'Mina Member',
-		phone: '+923001234567',
+		phone: '+447700900567',
 		status: 'invited',
 		userId: ids.member,
 		invitedBy: { kind: 'user', id: ids.staff, name: 'Sara Staff' },
@@ -152,7 +152,7 @@ beforeAll(async () => {
 	]);
 	await env.connectDatabase();
 	await env.paste('notifications');
-	await env.setting('phone', 'defaultCallingCode', '+92');
+	await env.setting('phone', 'defaultCallingCode', '+44');
 	await env.setting('phone', 'trunkPrefix', '0');
 });
 afterAll(async () => {
@@ -236,7 +236,7 @@ describe('import routes', () => {
 		expect(member).toMatchObject({
 			id: ids.member,
 			name: 'Mina Member',
-			phone: '+923001234567',
+			phone: '+447700900567',
 			phoneVerified: true,
 			email: null,
 			role: 'member',
@@ -254,8 +254,8 @@ describe('import routes', () => {
 		const store = await env.store();
 		const customer = await store.users.get(ids.customer);
 		expect(customer).toMatchObject({
-			phone: '+923007654321',
-			phoneDigits: '3007654321',
+			phone: '+447700900321',
+			phoneDigits: '7700900321',
 			identity: 'phone',
 			role: 'customer',
 			roleSince: new Date('2024-03-01T00:00:00Z'),
@@ -292,7 +292,7 @@ describe('import routes', () => {
 		const stored = await (await env.store()).users.get(ids.member);
 		expect(stored).toMatchObject({ name: 'Mina M.', custom: {}, createdAt: new Date('2023-12-01T00:00:00Z') });
 		// another user's e-mail address or phone number is refused, also when stored
-		const taken = (await send('users', [{ id: usr('0c01'), email: 'omar@example.com', phone: '+923001234567' }])).json;
+		const taken = (await send('users', [{ id: usr('0c01'), email: 'omar@example.com', phone: '+447700900567' }])).json;
 		expect(taken.failed[0].errors.map((/** @type {any} */ e) => e.message)).toEqual([
 			`This e-mail address is already another user’s (${ids.owner}).`,
 			`This phone number is already another user’s (${ids.member}).`,
@@ -306,7 +306,7 @@ describe('import routes', () => {
 		const staff = await env.visitor('POST', '/v1/sign-in/password', { email: 'sara@example.com', password: 'staff secret 1' });
 		expect(staff.json.status).toBe('signed_in');
 		const member = await env.visitor('POST', '/v1/sign-in/phone-password', {
-			phone: '+923001234567',
+			phone: '+447700900567',
 			password: 'member secret 1',
 		});
 		expect(member.json.status).toBe('signed_in');
@@ -416,7 +416,7 @@ describe('import checks', () => {
 	const rules = {
 		roles: new Set(['customer', 'member']),
 		fields: [{ key: 'size', label: 'Size', type: /** @type {const} */ ('choice'), options: ['S'], required: true }],
-		phoneFormat: { defaultCallingCode: '+92', trunkPrefix: '0' },
+		phoneFormat: { defaultCallingCode: '+44', trunkPrefix: '0' },
 		isPasswordHash,
 	};
 	/** @param {{ ok: boolean, errors?: Array<{ path: string }> }} checked */
@@ -445,10 +445,10 @@ describe('import checks', () => {
 			ok: true,
 			value: { role: 'customer', status: 'active', identity: 'email', name: '', twoStep: null, terms: null },
 		});
-		const both = checkImportedUser({ ...user, phone: '+923001110000', identity: 'phone' }, rules);
+		const both = checkImportedUser({ ...user, phone: '+447700900000', identity: 'phone' }, rules);
 		expect(both).toMatchObject({ ok: true, value: { identity: 'phone' } });
-		expect(checkImportedUser({ ...user, phone: '+923001110000' }, rules)).toMatchObject({ ok: true });
-		expect('identity' in /** @type {any} */ (checkImportedUser({ ...user, phone: '+923001110000' }, rules)).value).toBe(false);
+		expect(checkImportedUser({ ...user, phone: '+447700900000' }, rules)).toMatchObject({ ok: true });
+		expect('identity' in /** @type {any} */ (checkImportedUser({ ...user, phone: '+447700900000' }, rules)).value).toBe(false);
 		expect(
 			paths(
 				checkImportedUser(

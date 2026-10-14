@@ -42,38 +42,38 @@ afterAll(async () => {
 describe('A7: phone-code options', () => {
 	it('waits between codes, caps codes per number and per website, and keeps to the allowed countries', async () => {
 		await env.setting('phone_code', 'cooldownSeconds', 60);
-		expect((await askCode('+923001230001')).status).toBe(202);
+		expect((await askCode('+447700900001')).status).toBe(202);
 		env.advance(30_000);
-		const soon = await askCode('+923001230001');
+		const soon = await askCode('+447700900001');
 		expect(code(soon)).toBe('code_cooldown');
 		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(30_000);
 		env.advance(30_000);
-		expect((await askCode('+923001230001')).status).toBe(202);
+		expect((await askCode('+447700900001')).status).toBe(202);
 		await env.setting('phone_code', 'perHour', 2);
 		env.advance(60_000);
-		expect(code(await askCode('+923001230001'))).toBe('code_limit');
+		expect(code(await askCode('+447700900001'))).toBe('code_limit');
 		await env.setting('phone_code', 'websitePerHour', 3);
 		env.advance(3_600_000);
-		expect((await askCode('+923001230002')).status).toBe(202);
-		expect((await askCode('+923001230003')).status).toBe(202);
-		expect((await askCode('+923001230004')).status).toBe(202);
-		expect(code(await askCode('+923001230005'))).toBe('code_limit');
+		expect((await askCode('+447700900002')).status).toBe(202);
+		expect((await askCode('+447700900003')).status).toBe(202);
+		expect((await askCode('+447700900004')).status).toBe(202);
+		expect(code(await askCode('+447700900005'))).toBe('code_limit');
 		await env.setting('phone_code', 'websitePerHour', 0);
-		await env.setting('phone_code', 'countries', ['PK']);
+		await env.setting('phone_code', 'countries', ['GB']);
 		expect(code(await askCode('+14155550100'))).toBe('country_not_allowed');
-		expect((await askCode('+923001230006')).status).toBe(202);
+		expect((await askCode('+447700900006')).status).toBe(202);
 		await env.setting('phone_code', 'countries', []);
 	});
 
 	it('a code lasts the website’s codeMinutes, and the message says so', async () => {
 		await env.setting('phone_code', 'codeMinutes', 5);
 		env.advance(3_600_000);
-		const asked = await askCode('+923001230007');
+		const asked = await askCode('+447700900007');
 		expect(Date.parse(asked.json.expiresAt) - env.now()).toBe(5 * 60_000);
 		const sent = env.messages().at(-1);
 		expect(sent.values.minutes).toBe(5);
 		env.advance(5 * 60_000 + 1000);
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001230007', code: sent.values.code }))).toBe(
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900007', code: sent.values.code }))).toBe(
 			'code_invalid',
 		);
 		await env.setting('phone_code', 'codeMinutes', 10);
@@ -82,13 +82,13 @@ describe('A7: phone-code options', () => {
 	it('names new phone-code users with the website’s template', async () => {
 		await env.setting('phone_code', 'newUserName', 'Customer {last4}');
 		env.advance(3_600_000);
-		await askCode('+923001239876');
+		await askCode('+447700900876');
 		const sent = env.messages().at(-1);
-		const named = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001239876', code: sent.values.code });
-		expect(named.json.user.name).toBe('Customer 9876');
-		await askCode('+923001239877');
+		const named = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900876', code: sent.values.code });
+		expect(named.json.user.name).toBe('Customer 0876');
+		await askCode('+447700900877');
 		const own = await env.visitor('POST', '/v1/sign-in/phone', {
-			phone: '+923001239877',
+			phone: '+447700900877',
 			code: env.messages().at(-1).values.code,
 			name: 'Own Name',
 		});
@@ -145,7 +145,7 @@ describe('A6: per-role sign-in options', () => {
 		const staff = await env.serverCall('POST', '/v1/users', {
 			name: 'Sid Staff',
 			email: 'sid@example.com',
-			phone: '+923001231111',
+			phone: '+447700900111',
 			role: 'support_staff',
 			password: 'correct horse battery',
 		});
@@ -160,7 +160,7 @@ describe('A6: per-role sign-in options', () => {
 		expect((await signIn('sid@example.com')).json.status).toBe('signed_in');
 		env.advance(3_600_000);
 		const before = env.messages().length;
-		expect(code(await askCode('+923001231111'))).toBe('method_refused');
+		expect(code(await askCode('+447700900111'))).toBe('method_refused');
 		expect(env.messages().length).toBe(before);
 		await env.serverCall('PUT', '/v1/roles/support_staff', { ...role, methods: [] });
 	});
@@ -175,7 +175,7 @@ describe('A6: per-role sign-in options', () => {
 		expect(code(await signUp('new-paused@example.com'))).toBe('sign_in_paused');
 		env.advance(3_600_000);
 		const before = env.messages().length;
-		expect(code(await askCode('+923001232222'))).toBe('sign_in_paused');
+		expect(code(await askCode('+447700900222'))).toBe('sign_in_paused');
 		expect(code(await env.visitor('POST', '/v1/sign-in/email/code', { email: 'rem@example.com' }))).toBe('sign_in_paused');
 		expect(env.messages().length).toBe(before);
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.signInPaused).toBe(true);
@@ -309,11 +309,11 @@ describe('A11: profile options', () => {
 		const me = (await signIn('rem@example.com')).json.signIn;
 		const save = (/** @type {unknown[]} */ addresses) => env.visitor('PATCH', '/v1/me', { addresses }, me);
 		const two = await save([
-			{ line1: '1 Mall Road', area: 'Gulberg', city: 'Lahore' },
-			{ line1: '2 Canal Road', city: 'Lahore' },
+			{ line1: '1 High Street', area: 'Camden', city: 'London' },
+			{ line1: '2 Park Road', city: 'London' },
 		]);
 		expect(two.json.addresses).toMatchObject([
-			{ area: 'Gulberg', default: true },
+			{ area: 'Camden', default: true },
 			{ area: '', default: false },
 		]);
 		const moved = await save([
@@ -376,7 +376,7 @@ describe('A12: sign-in from the merchant’s server', () => {
 		expect((await fromServer('/v1/session/sign-out', { refreshToken: renewed.json.refreshToken })).status).toBe(204);
 		expect(code(await fromServer('/v1/session/refresh', { refreshToken: renewed.json.refreshToken }))).toBe('signed_out');
 		env.advance(3_600_000);
-		expect((await fromServer('/v1/sign-in/phone/code', { phone: '+923001239990' })).status).toBe(202);
+		expect((await fromServer('/v1/sign-in/phone/code', { phone: '+447700900990' })).status).toBe(202);
 	});
 });
 

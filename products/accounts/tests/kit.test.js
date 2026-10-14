@@ -54,10 +54,10 @@ beforeAll(async () => {
 	await env.switchOn(['email_password', 'roles', 'approval', 'data_rights', 'activity_copies', 'risk_checks']);
 	await env.connectDatabase();
 	await env.paste('notifications');
-	// the business keeps Karachi time (UTC+5): calendar days are its days (K8)
+	// the business keeps Tokyo time (UTC+9): calendar days are its days (K8)
 	env.responders.set(`${ORIGIN}/.well-known/business.json`, () => ({
 		status: 200,
-		body: { name: 'Shop', timeZone: 'Asia/Karachi' },
+		body: { name: 'Shop', timeZone: 'Asia/Tokyo' },
 	}));
 	await env.refreshBusiness();
 });
@@ -303,7 +303,7 @@ describe('activity-log copies (K9)', () => {
 
 	it('keeps the label, detail and role, filters like the kit’s activity log (business days) and counts', async () => {
 		const copies = [
-			copy('2026-09-30T18:30:00Z', {
+			copy('2026-09-30T14:30:00Z', {
 				productId: 'chat',
 				actor: sam,
 				action: 'conversation.closed',
@@ -311,25 +311,25 @@ describe('activity-log copies (K9)', () => {
 				label: 'Ana B',
 				detail: 'Closed after 3 replies',
 			}),
-			copy('2026-09-30T19:30:00Z', {
+			copy('2026-09-30T15:30:00Z', {
 				productId: 'ecommerce',
 				actor: { kind: 'user', id: 'usr_9', name: 'Zoë', role: 'Owner' },
 				action: 'order.moved',
 				target: 'ord_1',
-				label: 'IM-2026-0043',
+				label: 'SH-2026-0043',
 				detail: 'Status: paid → packed',
 			}),
-			copy('2026-10-01T18:59:00Z', {
+			copy('2026-10-01T14:59:00Z', {
 				productId: 'ecommerce',
 				actor: SERVER_ACTOR,
 				action: 'order.refunded',
 				target: 'ord_1',
-				label: 'IM-2026-0043',
+				label: 'SH-2026-0043',
 			}),
-			copy('2026-10-01T19:00:00Z', { productId: 'notifications', actor: sam, action: 'template.saved', target: 'tpl_1' }),
+			copy('2026-10-01T15:00:00Z', { productId: 'notifications', actor: sam, action: 'template.saved', target: 'tpl_1' }),
 		];
 		for (const body of copies) expect((await fromServer('POST', '/v1/activity-copies', { body })).status).toBe(201);
-		const tooLong = copy('2026-10-01T19:00:00Z', {
+		const tooLong = copy('2026-10-01T15:00:00Z', {
 			productId: 'chat',
 			actor: sam,
 			action: 'x.y',
@@ -356,24 +356,24 @@ describe('activity-log copies (K9)', () => {
 			actor: { kind: 'user', id: 'usr_9', name: 'Zoë', role: 'Owner' },
 			action: 'order.moved',
 			target: 'ord_1',
-			label: 'IM-2026-0043',
+			label: 'SH-2026-0043',
 			detail: 'Status: paid → packed',
-			at: '2026-09-30T19:30:00.000Z',
+			at: '2026-09-30T15:30:00.000Z',
 		});
-		expect(listed[1]).toMatchObject({ label: 'IM-2026-0043', detail: null });
+		expect(listed[1]).toMatchObject({ label: 'SH-2026-0043', detail: null });
 		expect(listed[0]).toMatchObject({ label: null, detail: null, actor: sam });
 
-		// days are the business's days (Karachi, UTC+5): 1 Oct runs from 30 Sep 19:00 to 1 Oct 19:00 UTC
+		// days are the business's days (Tokyo, UTC+9): 1 Oct runs from 30 Sep 15:00 to 1 Oct 15:00 UTC
 		expect(await targets('from=2026-10-01&to=2026-10-01')).toEqual([
-			'order.refunded@2026-10-01T18:59:00.000Z',
-			'order.moved@2026-09-30T19:30:00.000Z',
+			'order.refunded@2026-10-01T14:59:00.000Z',
+			'order.moved@2026-09-30T15:30:00.000Z',
 		]);
-		expect(await targets('to=2026-09-30')).toEqual(['conversation.closed@2026-09-30T18:30:00.000Z']);
-		expect(await targets('from=2026-10-01T19:00:00Z')).toEqual(['template.saved@2026-10-01T19:00:00.000Z']);
+		expect(await targets('to=2026-09-30')).toEqual(['conversation.closed@2026-09-30T14:30:00.000Z']);
+		expect(await targets('from=2026-10-01T15:00:00Z')).toEqual(['template.saved@2026-10-01T15:00:00.000Z']);
 		expect((await targets('actor=u_1')).length).toBe(2);
 		expect((await targets('action=order.moved,order.refunded')).length).toBe(2);
 		expect((await targets('target=ord_1&productId=ecommerce')).length).toBe(2);
-		expect((await targets('q=im-2026')).length).toBe(2);
+		expect((await targets('q=sh-2026')).length).toBe(2);
 		expect((await targets('q=PAID')).length).toBe(1);
 		expect((await targets('q=sam')).length).toBe(2);
 		expect((await targets('q=cnv_')).length).toBe(1);
@@ -429,12 +429,12 @@ describe('Format and time zone (K7, K8) and the docs', () => {
 		const config = await env.visitor('GET', '/v1/widget/config');
 		expect(config.json).toMatchObject({
 			format: { locale: 'en-GB', currencyDisplay: 'code', wholeUnits: false, times: 'business' },
-			timeZone: 'Asia/Karachi',
+			timeZone: 'Asia/Tokyo',
 		});
 		const t = await env.ticket(['users.read']);
 		expect((await env.admin(t, 'GET', '/v1/widget/admin/config')).json).toMatchObject({
 			format: { locale: 'en-GB' },
-			timeZone: 'Asia/Karachi',
+			timeZone: 'Asia/Tokyo',
 		});
 	});
 

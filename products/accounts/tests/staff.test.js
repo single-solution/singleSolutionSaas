@@ -41,7 +41,7 @@ beforeAll(async () => {
 	await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	await env.connectDatabase();
 	await env.paste('notifications');
-	await env.setting('phone', 'defaultCallingCode', '+92');
+	await env.setting('phone', 'defaultCallingCode', '+44');
 	await env.setting('phone', 'trunkPrefix', '0');
 	people.owner = await create({
 		name: 'Olga Owner',
@@ -50,8 +50,8 @@ beforeAll(async () => {
 		password: 'correct horse battery',
 	});
 	people.manager = await create({ name: 'Mo Manager', email: 'mo@example.com', role: 'business_manager' });
-	people.support = await create({ name: 'Sue Support', phone: '0300 5550001', role: 'support_staff' });
-	people.customer = await create({ name: 'Cal Customer', phone: '03005550002' });
+	people.support = await create({ name: 'Sue Support', phone: '07700 900001', role: 'support_staff' });
+	people.customer = await create({ name: 'Cal Customer', phone: '07700900002' });
 });
 afterAll(async () => {
 	await env.product.close();
@@ -62,13 +62,13 @@ describe('A4: staff and customer management', () => {
 		expect(people.customer).toMatchObject({
 			status: 'active',
 			role: 'customer',
-			phone: '+923005550002',
+			phone: '+447700900002',
 			phoneVerified: true,
 			hasPassword: false,
 		});
 		expect(people.owner.hasPassword).toBe(true);
 		expect(env.messages()).toEqual([]);
-		expect(code(await server('POST', '/v1/users', { name: 'Dup', phone: '+923005550002' }))).toBe('already_exists');
+		expect(code(await server('POST', '/v1/users', { name: 'Dup', phone: '+447700900002' }))).toBe('already_exists');
 		expect(code(await server('POST', '/v1/users', { name: 'No contact' }))).toBe('validation_failed');
 		expect(code(await server('POST', '/v1/users', { email: 'x@example.com' }))).toBe('validation_failed');
 		expect(code(await server('POST', '/v1/users', { name: 'X', email: 'x@example.com', role: 'nope' }))).toBe(
@@ -77,18 +77,18 @@ describe('A4: staff and customer management', () => {
 		const withAddress = await server('POST', '/v1/users', {
 			name: 'Ada Address',
 			email: 'ada@example.com',
-			addresses: [{ line1: '5 Main St', city: 'Karachi', area: 'Clifton' }],
+			addresses: [{ line1: '5 Main St', city: 'London', area: 'Camden' }],
 			notes: 'Prefers calls',
 		});
-		expect(withAddress.json.addresses[0]).toMatchObject({ area: 'Clifton', default: true });
+		expect(withAddress.json.addresses[0]).toMatchObject({ area: 'Camden', default: true });
 		expect(withAddress.json.notes).toBe('Prefers calls');
 		people.ada = withAddress.json;
 	});
 
 	it('edits contacts (normalised, unique, verified), the password (signing out) and addresses', async () => {
-		const edited = await server('PATCH', `/v1/users/${people.ada.id}`, { email: 'ADA2@Example.com', phone: '0300 5550003' });
-		expect(edited.json).toMatchObject({ email: 'ada2@example.com', emailVerified: true, phone: '+923005550003' });
-		expect(code(await server('PATCH', `/v1/users/${people.ada.id}`, { phone: '+923005550002' }))).toBe('already_exists');
+		const edited = await server('PATCH', `/v1/users/${people.ada.id}`, { email: 'ADA2@Example.com', phone: '07700 900003' });
+		expect(edited.json).toMatchObject({ email: 'ada2@example.com', emailVerified: true, phone: '+447700900003' });
+		expect(code(await server('PATCH', `/v1/users/${people.ada.id}`, { phone: '+447700900002' }))).toBe('already_exists');
 		expect(code(await server('PATCH', `/v1/users/${people.ada.id}`, { email: 'bad' }))).toBe('validation_failed');
 		expect(code(await server('PATCH', `/v1/users/${people.ada.id}`, { phone: 'bad' }))).toBe('validation_failed');
 		const signedIn = await env.visitor('POST', '/v1/sign-in/password', {
@@ -111,10 +111,10 @@ describe('A4: staff and customer management', () => {
 	it('finds users by phone, the last 10 digits, a permission, several roles and the time they joined', async () => {
 		/** @param {string} query */
 		const ids = async (query) => (await server('GET', `/v1/users?${query}`)).json.items.map((/** @type {any} */ u) => u.id);
-		expect(await ids('phone=03005550001')).toEqual([people.support.id]);
+		expect(await ids('phone=07700900001')).toEqual([people.support.id]);
 		expect(code(await server('GET', '/v1/users?phone=abc'))).toBe('validation_failed');
-		expect(await ids('phoneDigits=923005550002')).toEqual([people.customer.id]);
-		expect(await ids('phoneDigits=3005550002')).toEqual([people.customer.id]);
+		expect(await ids('phoneDigits=447700900002')).toEqual([people.customer.id]);
+		expect(await ids('phoneDigits=7700900002')).toEqual([people.customer.id]);
 		expect(code(await server('GET', '/v1/users?phoneDigits=12'))).toBe('validation_failed');
 		expect((await ids('permission=chat:inbox.reply')).sort()).toEqual(
 			[people.owner.id, people.manager.id, people.support.id].sort(),
@@ -226,31 +226,31 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		expect(env.messages().length).toBe(before);
 		const log = (await server('GET', '/v1/activity?action=user.sign_in_code_issued')).json.items[0];
 		expect(log).toMatchObject({ actor: { id: people.manager.id }, label: 'Cal Customer' });
-		const viaCode = await env.visitor('POST', '/v1/sign-in/phone', { phone: '03005550002', code: issued.json.code });
+		const viaCode = await env.visitor('POST', '/v1/sign-in/phone', { phone: '07700900002', code: issued.json.code });
 		expect(viaCode.json.status).toBe('signed_in');
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '03005550002', code: issued.json.code }))).toBe(
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '07700900002', code: issued.json.code }))).toBe(
 			'code_invalid',
 		);
 		const again = await server('POST', `/v1/users/${people.customer.id}/sign-in-code`);
 		const newer = await server('POST', `/v1/users/${people.customer.id}/sign-in-code`);
 		expect(
-			code(await env.visitor('POST', '/v1/sign-in/phone-password', { phone: '+923005550002', password: again.json.code })),
+			code(await env.visitor('POST', '/v1/sign-in/phone-password', { phone: '+447700900002', password: again.json.code })),
 		).toBe('sign_in_failed');
 		const viaPassword = await env.visitor('POST', '/v1/sign-in/phone-password', {
-			phone: '+923005550002',
+			phone: '+447700900002',
 			password: newer.json.code,
 		});
 		expect(viaPassword.json.status).toBe('signed_in');
 		const ticket = await env.ticket();
 		const fromWidget = await env.admin(ticket, 'POST', `/v1/admin/users/${people.ada.id}/sign-in-code`);
 		expect(fromWidget.json.code).toMatch(/^\d{6}$/);
-		const viaEmailCode = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923005550003', code: fromWidget.json.code });
+		const viaEmailCode = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900003', code: fromWidget.json.code });
 		expect(viaEmailCode.json.status).toBe('signed_in');
 	});
 
 	it('a sign-in code from staff opens its user in the e-mail code screen, but proves no address', async () => {
 		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
-			phone: '0300 5550390',
+			phone: '07700 900390',
 			password: 'own pass 12',
 			name: 'Pat',
 			email: 'pat@example.com',
@@ -283,7 +283,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		expect(accepted.json.status).toBe('signed_in');
 		expect(accepted.json.user.hasPassword).toBe(true);
 		expect(
-			(await env.visitor('POST', '/v1/sign-in/phone-password', { phone: '+923005550001', password: 'support pass 1' })).json
+			(await env.visitor('POST', '/v1/sign-in/phone-password', { phone: '+447700900001', password: 'support pass 1' })).json
 				.status,
 		).toBe('signed_in');
 		await env.setting('staff_links', 'setupPageUrl', `${ORIGIN}/account/setup/{code}`);
@@ -297,7 +297,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 
 	it('a used setup link proves the phone number and signs the other devices out', async () => {
 		const up = await env.visitor('POST', '/v1/sign-up/phone-password', {
-			phone: '0300 5550200',
+			phone: '07700 900200',
 			password: 'own pass 12',
 			name: 'Pia',
 		});
@@ -307,8 +307,8 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 			code: setupCodeOf(link.json.url),
 			password: 'set by link 1',
 		});
-		expect(accepted.json.user).toMatchObject({ phone: '+923005550200', phoneVerified: true });
-		expect(claimsOf(accepted.json.signIn)).toMatchObject({ phone: '+923005550200', phone_verified: true });
+		expect(accepted.json.user).toMatchObject({ phone: '+447700900200', phoneVerified: true });
+		expect(claimsOf(accepted.json.signIn)).toMatchObject({ phone: '+447700900200', phone_verified: true });
 		expect(code(await env.visitor('POST', '/v1/session/refresh', { refreshToken: up.json.refreshToken }))).toBe('signed_out');
 		expect((await env.visitor('POST', '/v1/session/refresh', { refreshToken: accepted.json.refreshToken })).status).toBe(200);
 	});
@@ -317,11 +317,11 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 		await env.switchOn(ALL.filter((key) => !['terms', 'two_step', 'risk_checks'].includes(key)));
 		await env.setting('approval', 'invitePageUrl', `${ORIGIN}/join`);
 		const before = env.messages().length;
-		const invited = await server('POST', '/v1/users/invite', { phone: '+923005550099', name: 'Ivy', deliver: 'return' });
+		const invited = await server('POST', '/v1/users/invite', { phone: '+447700900099', name: 'Ivy', deliver: 'return' });
 		expect(invited.status).toBe(201);
 		expect(invited.json.invite.url).toMatch(/^https:\/\/shop\.example\.com\/join#ss_accounts_invite=cod_/);
 		expect(env.messages().length).toBe(before);
-		expect(code(await server('POST', '/v1/users/invite', { phone: '+923005550098', deliver: 'post' }))).toBe(
+		expect(code(await server('POST', '/v1/users/invite', { phone: '+447700900098', deliver: 'post' }))).toBe(
 			'validation_failed',
 		);
 		await env.setting('approval', 'mode', 'open');
@@ -331,12 +331,12 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 describe('A5: role requests', () => {
 	it('a visitor asks; staff invite with a setup link; the password completes it; decline, reopen and expiry', async () => {
 		await server('PUT', '/v1/roles/member', { name: 'Member', permissions: ['site:discount'] });
-		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+923005550100' }))).toBe(
+		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+447700900100' }))).toBe(
 			'validation_failed',
 		);
 		await env.setting('role_requests', 'requestableRoles', ['member']);
 		await env.setting('role_requests', 'requireNote', true);
-		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+923005550100' }))).toBe(
+		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+447700900100' }))).toBe(
 			'validation_failed',
 		);
 		expect(code(await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', note: 'Hi' }))).toBe(
@@ -345,14 +345,14 @@ describe('A5: role requests', () => {
 		const asked = await env.visitor('POST', '/v1/role-requests', {
 			role: 'member',
 			name: 'Nia',
-			phone: '0300 5550100',
+			phone: '07700 900100',
 			note: 'Hi',
 		});
 		expect(asked.status).toBe(201);
 		expect(asked.json.status).toBe('pending');
 		expect(
 			code(
-				await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+923005550100', note: 'Hi' }),
+				await env.visitor('POST', '/v1/role-requests', { role: 'member', name: 'Nia', phone: '+447700900100', note: 'Hi' }),
 			),
 		).toBe('already_exists');
 		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings.roleRequests;
@@ -360,17 +360,17 @@ describe('A5: role requests', () => {
 
 		const ticket = await env.ticket();
 		const listed = await env.admin(ticket, 'GET', '/v1/admin/role-requests?status=pending');
-		expect(listed.json.items).toMatchObject([{ id: asked.json.id, name: 'Nia', phone: '+923005550100', status: 'pending' }]);
+		expect(listed.json.items).toMatchObject([{ id: asked.json.id, name: 'Nia', phone: '+447700900100', status: 'pending' }]);
 		expect((await env.admin(ticket, 'GET', '/v1/admin/role-requests/count?status=pending')).json.count).toBe(1);
 		const invited = await env.admin(ticket, 'POST', `/v1/admin/role-requests/${asked.json.id}/invite`);
 		expect(invited.json.request).toMatchObject({ status: 'invited', invitedBy: { kind: 'staff', name: 'Sam Staff' } });
-		expect(invited.json.user).toMatchObject({ role: 'member', phone: '+923005550100' });
+		expect(invited.json.user).toMatchObject({ role: 'member', phone: '+447700900100' });
 		const setupCode = new URL(invited.json.setupLink.url).searchParams.get('ss_setup');
 		expect(code(await env.admin(ticket, 'POST', `/v1/admin/role-requests/${asked.json.id}/invite`))).toBe('conflict');
 		const done = await env.visitor('POST', '/v1/setup-links/accept', { code: setupCode, password: 'member pass 1' });
 		expect(done.json.user).toMatchObject({ role: 'member', phoneVerified: true });
 		// other products join the new member's guest orders and points by the verified phone
-		expect(claimsOf(done.json.signIn)).toMatchObject({ phone: '+923005550100', phone_verified: true });
+		expect(claimsOf(done.json.signIn)).toMatchObject({ phone: '+447700900100', phone_verified: true });
 		const completed = await server('GET', '/v1/role-requests?status=completed');
 		expect(completed.json.items[0]).toMatchObject({ id: asked.json.id, status: 'completed' });
 		expect((await server('GET', `/v1/users/${invited.json.user.id}`)).json.roleSince).toBeTruthy();
@@ -379,7 +379,7 @@ describe('A5: role requests', () => {
 		const sue = await env.visitor('POST', '/v1/role-requests', {
 			role: 'member',
 			name: 'Sue',
-			phone: '03005550001',
+			phone: '07700900001',
 			note: 'Me',
 		});
 		const given = await server('POST', `/v1/role-requests/${sue.json.id}/invite`);
@@ -419,11 +419,11 @@ describe('A5: role requests', () => {
 			(await env.visitor('POST', '/v1/role-requests', { role: 'member', name, phone, note: 'Hi' })).json.id;
 		// someone signs up first with Rae's number and a password: the number is not proven
 		const squatter = await env.visitor('POST', '/v1/sign-up/phone-password', {
-			phone: '+923005550300',
+			phone: '+447700900300',
 			password: 'taken pass 1',
 			name: 'Not Rae',
 		});
-		const rae = await ask('Rae', '0300 5550300');
+		const rae = await ask('Rae', '07700 900300');
 		const refused = await server('POST', `/v1/role-requests/${rae}/invite`);
 		expect(refused.status).toBe(409);
 		expect(code(refused)).toBe('contact_unverified');
@@ -444,13 +444,13 @@ describe('A5: role requests', () => {
 
 		// the account is Sol's own: staff confirm the number on the user, and the role is given at once
 		const sol = await env.visitor('POST', '/v1/sign-up/phone-password', {
-			phone: '+923005550301',
+			phone: '+447700900301',
 			password: 'sols pass 12',
 			name: 'Sol',
 		});
-		const solRequest = await ask('Sol', '+923005550301');
+		const solRequest = await ask('Sol', '+447700900301');
 		expect(code(await server('POST', `/v1/role-requests/${solRequest}/invite`))).toBe('contact_unverified');
-		await server('PATCH', `/v1/users/${sol.json.user.id}`, { phone: '+923005550301' });
+		await server('PATCH', `/v1/users/${sol.json.user.id}`, { phone: '+447700900301' });
 		const given = await server('POST', `/v1/role-requests/${solRequest}/invite`);
 		expect(given.json).toMatchObject({ request: { status: 'completed' }, setupLink: null, user: { role: 'member' } });
 	});
@@ -478,7 +478,7 @@ describe('the admin widgets’ reads', () => {
 		expect((await env.admin(ticket, 'GET', '/v1/admin/activity-copies/count')).json.count).toBe(1);
 		expect((await env.admin(ticket, 'GET', '/v1/admin/activity-copies/counts?by=productId')).json.groups).toEqual({ chat: 1 });
 		const member = await env.visitor('POST', '/v1/sign-in/phone-password', {
-			phone: '+923005550100',
+			phone: '+447700900100',
 			password: 'member pass 1',
 		});
 		const me = await env.visitor('GET', '/v1/me', undefined, member.json.signIn);
@@ -490,9 +490,9 @@ describe('the admin widgets’ reads', () => {
 describe('the Users widget’s actions', () => {
 	it('adds a user, gives a setup link, signs them out and removes them; counts, declines and reopens requests', async () => {
 		const ticket = await env.ticket();
-		const added = await env.admin(ticket, 'POST', '/v1/admin/users', { name: 'Wendy Widget', phone: '0300 5550400' });
+		const added = await env.admin(ticket, 'POST', '/v1/admin/users', { name: 'Wendy Widget', phone: '07700 900400' });
 		expect(added.status).toBe(201);
-		expect(added.json).toMatchObject({ name: 'Wendy Widget', phone: '+923005550400', phoneVerified: true, status: 'active' });
+		expect(added.json).toMatchObject({ name: 'Wendy Widget', phone: '+447700900400', phoneVerified: true, status: 'active' });
 		const link = await env.admin(ticket, 'POST', `/v1/admin/users/${added.json.id}/setup-link`);
 		const accepted = await env.visitor('POST', '/v1/setup-links/accept', {
 			code: setupCodeOf(link.json.url),

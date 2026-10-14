@@ -361,54 +361,54 @@ describe('sessions', () => {
 describe('phone code and e-mail code', () => {
 	it('signs up and in with a code sent by SMS or WhatsApp through Notifications', async () => {
 		await env.switchOn(['email_password', 'phone_code', 'email_code']);
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '0300 1234567' }))).toBe('validation_failed');
-		await env.setting('phone', 'defaultCallingCode', '+92');
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '07700 900567' }))).toBe('validation_failed');
+		await env.setting('phone', 'defaultCallingCode', '+44');
 		await env.setting('phone', 'trunkPrefix', '0');
-		const asked = await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '0300 1234567' });
+		const asked = await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '07700 900567' });
 		expect(asked.status).toBe(202);
 		const sent = lastMessage();
-		expect(sent).toMatchObject({ channel: 'sms', template: 'accounts.phone_code', to: { phone: '+923001234567' } });
+		expect(sent).toMatchObject({ channel: 'sms', template: 'accounts.phone_code', to: { phone: '+447700900567' } });
 		expect(String(sent.values.code)).toMatch(/^\d{6}$/);
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923001234567' }))).toBe('code_cooldown');
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900567' }))).toBe('code_cooldown');
 		const wrong = await env.visitor('POST', '/v1/sign-in/phone', {
-			phone: '+923001234567',
+			phone: '+447700900567',
 			code: '000000' === sent.values.code ? '111111' : '000000',
 		});
 		expect(code(wrong)).toBe('code_invalid');
 		// a code asked for one way of typing the number works with another (K-7, SA-3)
 		const ok = await env.visitor('POST', '/v1/sign-in/phone', {
-			phone: '+92 (0)300-1234567',
+			phone: '+44 (0)7700-900567',
 			code: sent.values.code,
 			name: 'Pat',
 		});
-		expect(ok.json).toMatchObject({ status: 'signed_in', user: { phone: '+923001234567', phoneVerified: true, name: 'Pat' } });
+		expect(ok.json).toMatchObject({ status: 'signed_in', user: { phone: '+447700900567', phoneVerified: true, name: 'Pat' } });
 		// a code works once
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001234567', code: sent.values.code }))).toBe(
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900567', code: sent.values.code }))).toBe(
 			'code_invalid',
 		);
 		// WhatsApp, an existing user, and too many wrong tries spend the code
 		await env.setting('phone_code', 'channel', 'whatsapp');
 		env.advance(31_000);
-		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923001234567' });
+		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900567' });
 		const again = lastMessage();
 		expect(again.channel).toBe('whatsapp');
-		for (let i = 0; i < 5; i += 1) await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001234567', code: '12345' });
+		for (let i = 0; i < 5; i += 1) await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900567', code: '12345' });
 		const wrongs = [];
 		for (let i = 0; i < 5; i += 1)
 			wrongs.push(
 				await env.visitor('POST', '/v1/sign-in/phone', {
-					phone: '+923001234567',
+					phone: '+447700900567',
 					code: again.values.code === '999999' ? '888888' : '999999',
 				}),
 			);
-		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001234567', code: again.values.code }))).toBe(
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900567', code: again.values.code }))).toBe(
 			'code_invalid',
 		);
 		env.advance(31_000);
-		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '92 300 1234567' });
-		expect(lastMessage().to).toMatchObject({ phone: '+923001234567' });
+		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '44 7700 900567' });
+		expect(lastMessage().to).toMatchObject({ phone: '+447700900567' });
 		const third = await env.visitor('POST', '/v1/sign-in/phone', {
-			phone: '0092 0300 1234567',
+			phone: '0044 07700 900567',
 			code: lastMessage().values.code,
 		});
 		expect(third.json.status).toBe('signed_in');
@@ -453,14 +453,14 @@ describe('phone code and e-mail code', () => {
 
 	it('an e-mail address typed but never proven is no way in: the e-mail code and the magic link treat it as unknown', async () => {
 		env.advance(31_000);
-		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923009990001' });
+		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900001' });
 		const pam = await env.visitor('POST', '/v1/sign-in/phone', {
-			phone: '+923009990001',
+			phone: '+447700900001',
 			code: lastMessage().values.code,
 			name: 'Pam',
 			email: 'pam@example.com',
 		});
-		expect(pam.json.user).toMatchObject({ phone: '+923009990001', email: 'pam@example.com', emailVerified: false });
+		expect(pam.json.user).toMatchObject({ phone: '+447700900001', email: 'pam@example.com', emailVerified: false });
 		// whoever reads that address asks for a code: the same answer as for an unknown address
 		env.advance(31_000);
 		const asked = await env.visitor('POST', '/v1/sign-in/email/code', {
@@ -480,7 +480,7 @@ describe('phone code and e-mail code', () => {
 		const link = String(sent.values.link).split('#ss_accounts_link=')[1];
 		expect(code(await env.visitor('POST', '/v1/sign-in/email', { link }))).toBe('already_exists');
 		const me = await env.visitor('GET', '/v1/me', undefined, pam.json.signIn);
-		expect(me.json).toMatchObject({ phone: '+923009990001', email: 'pam@example.com', emailVerified: false });
+		expect(me.json).toMatchObject({ phone: '+447700900001', email: 'pam@example.com', emailVerified: false });
 		// an e-mail + password sign-up does not prove its address either: its owner signs in with the password
 		await signUp('una@example.com');
 		env.advance(31_000);
@@ -1114,12 +1114,12 @@ describe('data rights', () => {
 describe('edges', () => {
 	it('refuses what does not apply and reports missing connections', async () => {
 		env.advance(31_000);
-		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+923001234567' });
+		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900567' });
 		// a terms step does not use the code up
-		const asked = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+923001234567', code: lastMessage().values.code });
+		const asked = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900567', code: lastMessage().values.code });
 		expect(code(asked)).toBe('terms_required');
 		const pat = await env.visitor('POST', '/v1/sign-in/phone', {
-			phone: '+923001234567',
+			phone: '+447700900567',
 			code: lastMessage().values.code,
 			acceptTerms: true,
 		});
