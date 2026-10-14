@@ -6,7 +6,7 @@
 
 /** Hard maximum of the `maxLength` setting (a limit is a setting within a maximum fixed in code, PLAN 0.4.2). */
 export const NOTE_MAX_LENGTH = 2000;
-/** Longest e-mail address kept with a note. */
+/** Longest email address kept with a note. */
 export const EMAIL_MAX_LENGTH = 254;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,7 +17,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Check a note a visitor sends: text required and at most `maxLength` characters (never above
- * {@link NOTE_MAX_LENGTH}); e-mail optional.
+ * {@link NOTE_MAX_LENGTH}); email optional.
  * @param {unknown} input
  * @param {{ maxLength: number }} settings
  * @returns {{ ok: true, value: NoteInput } | { ok: false, error: NoteError, field: 'text' | 'email', max: number }}
@@ -48,7 +48,7 @@ export const noteView = ({ id, text, email, createdAt }) => ({
 
 /**
  * Check a note an import sends (PLAN 0.8.10 K10, import mode): the given id, the text within the hard maximum, an
- * optional e-mail and its time (ISO-8601).
+ * optional email and its time (ISO-8601).
  * @param {Record<string, unknown>} record
  * @returns {{ ok: true, value: { id: string, text: string, email: string | null, createdAt: Date } }
  *   | { ok: false, errors: Array<{ path: string, message: string }> }}

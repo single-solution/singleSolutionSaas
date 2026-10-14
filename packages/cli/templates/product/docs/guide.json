@@ -9,7 +9,7 @@
 	"api": "Every route answers JSON; errors are RFC 9457 problems with a stable code. Lists are paged with cursor and limit. Routes of a feature that is off answer 403 feature_off.",
 	"features": {
 		"notes": [
-			"Visitors leave a short note with an optional e-mail address. The longest note is a setting (Settings in the product dashboard).",
+			"Visitors leave a short note with an optional email address. The longest note is a setting (Settings in the product dashboard).",
 			"Your staff read the notes in your admin with the inbox widget (permission notes.read), and your server can read them with GET /v1/notes and the server token."
 		]
 	}

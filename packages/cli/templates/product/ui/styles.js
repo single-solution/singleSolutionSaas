@@ -1,5 +1,5 @@
 /**
- * The widgets' CSS, injected into their shadow roots only. Colours, font and corner radius come from the website's
+ * The widgets' CSS, injected into their shadow roots only. Colors, font and corner radius come from the website's
  * theme (`--ss-color-<name>`, `--ss-font-family`, `--ss-radius`), with fallbacks for light and dark.
  * @module
  */

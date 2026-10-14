@@ -29,7 +29,7 @@ Imports go server → core | adapters, adapters → core, ui → core, never the
   `<div data-ss-notes="note_form"></div>`; on admin pages (no `data-token`) the page calls
   `window.SSNotes.admin({ getTicket })`, which fetches the config with the ticket and mounts the admin widget into
   `<div data-ss-notes="inbox"></div>`. Off features, a stopped product or a missing database render nothing.
-- Data rights: a visitor's notes are exported and deleted by e-mail (`adapters/product.js`).
+- Data rights: a visitor's notes are exported and deleted by email (`adapters/product.js`).
 
 To add a feature: add it to `manifest.json` (key, name, description, dependsOn, settings `$ref`), its settings
 schema to `schemas/`, its routes with `feature: '<key>'` and their entries in `schemas/api.json`, its widget texts to `strings/en.json`, its guide to

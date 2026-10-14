@@ -26,7 +26,7 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 export { strings };
 
 /**
- * Data rights (PLAN 0.4.11): a visitor's notes are found by the e-mail they left.
+ * Data rights (PLAN 0.4.11): a visitor's notes are found by the email they left.
  * @type {NonNullable<import('@ss/app-kit').ProductOptions['hooks']>}
  */
 const dataRights = {

@@ -1,5 +1,5 @@
 /**
- * The visitor widget `note_form`: a visitor writes a note (and an optional e-mail) and sends it with the browser
+ * The visitor widget `note_form`: a visitor writes a note (and an optional email) and sends it with the browser
  * token.
  * @module
  */

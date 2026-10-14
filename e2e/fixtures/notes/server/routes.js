@@ -17,7 +17,7 @@ import { WIDGET_SCRIPT } from './widget-script.js';
 const NOTE_ERRORS = Object.freeze({
 	empty: 'Write a note.',
 	too_long: 'The note is too long.',
-	bad_email: 'The e-mail address is not valid.',
+	bad_email: 'The email address is not valid.',
 });
 
 /**

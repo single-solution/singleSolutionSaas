@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NOTE_MAX_LENGTH, checkNote, noteView } from '../core/notes.js';
 
 describe('checkNote', () => {
-	it('accepts a note, trims it and keeps the e-mail in lower case', () => {
+	it('accepts a note, trims it and keeps the email in lower case', () => {
 		expect(checkNote({ text: '  Hello  ', email: ' Sam@Example.com ' }, { maxLength: 500 })).toEqual({
 			ok: true,
 			value: { text: 'Hello', email: 'sam@example.com' },
@@ -10,7 +10,7 @@ describe('checkNote', () => {
 		expect(checkNote({ text: 'Hi' }, { maxLength: 500 })).toEqual({ ok: true, value: { text: 'Hi', email: null } });
 	});
 
-	it('refuses empty and too long notes and bad e-mail addresses', () => {
+	it('refuses empty and too long notes and bad email addresses', () => {
 		expect(checkNote(null, { maxLength: 500 })).toMatchObject({ ok: false, error: 'empty', field: 'text' });
 		expect(checkNote({ text: 'abcdef' }, { maxLength: 5 })).toMatchObject({ ok: false, error: 'too_long', max: 5 });
 		expect(checkNote({ text: 'x'.repeat(NOTE_MAX_LENGTH + 1) }, { maxLength: 99_999 })).toMatchObject({

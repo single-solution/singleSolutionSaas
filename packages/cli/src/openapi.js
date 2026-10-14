@@ -278,7 +278,7 @@ export const renderOpenapi = ({ manifest, routes, api = {} }) => {
 					name: 'SS-Actor-Email',
 					in: 'header',
 					required: false,
-					description: "The acting member's e-mail address.",
+					description: "The acting member's email address.",
 					schema: { type: 'string', maxLength: 320 },
 				},
 			},
