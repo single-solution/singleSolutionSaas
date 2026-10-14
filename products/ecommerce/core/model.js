@@ -96,11 +96,11 @@ export const ID_PREFIX = Object.freeze({
  * @property {Record<string, number>} locations location id → units (multi_location); its values add up to `stock`
  * @property {string | null} grade a grade key of the `grades` list (grades_serials)
  * @property {boolean} active
- * @property {Record<string, string | number | boolean | Array<string | number>>} [attributes] variant attribute id →
+ * @property {Record<string, string | number | boolean | Array<string | number>>} attributes variant attribute id →
  *   value or values (E7); `options` are derived from them
- * @property {MediaRecord[]} [media] this variant's photos (E6)
- * @property {boolean} [soldOut] shown as sold out without changing stock (E9)
- * @property {number | null} [warrantyDays] null = the product's, then the grade's, then the setting (E12)
+ * @property {MediaRecord[]} media this variant's photos (E6)
+ * @property {boolean} soldOut shown as sold out without changing stock (E9)
+ * @property {number | null} warrantyDays null = the product's, then the grade's, then the setting (E12)
  */
 
 /**
@@ -126,18 +126,18 @@ export const ID_PREFIX = Object.freeze({
  * @property {{ files: MediaRecord[], licenceKeys: boolean, downloadLimit: number } | null} digital digital goods
  * @property {{ durationMinutes: number } | null} booking bookings
  * @property {import('./catalog-content.js').SeoRecord} seo '' = derived from name and summary (E16)
- * @property {boolean} [featured] (E2)
- * @property {'none' | 'out' | 'partial' | 'full'} [stockState] derived on save (E2)
- * @property {string[]} [grades] grade keys of the active variants, derived on save (E2 counts)
- * @property {number} [priceMax] highest active variant price, derived on save (E8)
- * @property {string} [descriptionHtml] cleaned rich description; `description` is derived from it (E3)
- * @property {import('./catalog-content.js').Video | null} [video] (E4)
- * @property {string | null} [sizeChartId] (E5)
- * @property {boolean} [hideSizeGuide] (E5)
+ * @property {boolean} featured (E2)
+ * @property {'none' | 'out' | 'partial' | 'full'} stockState derived on save (E2)
+ * @property {string[]} grades grade keys of the active variants, derived on save (E2 counts)
+ * @property {number} priceMax highest active variant price, derived on save (E8)
+ * @property {string} descriptionHtml cleaned rich description; `description` is derived from it (E3)
+ * @property {import('./catalog-content.js').Video | null} video (E4)
+ * @property {string | null} sizeChartId (E5)
+ * @property {boolean} hideSizeGuide (E5)
  * @property {Array<{ attributeId: string, values: Array<string | number>, customValues: string[],
- *   defaultValue: string | number | null }>} [attributeSetup] (E7)
- * @property {import('./catalog-content.js').Faq[]} [faqs] (E16)
- * @property {string[]} [previousSlugs] (E13)
+ *   defaultValue: string | number | null }>} attributeSetup (E7)
+ * @property {import('./catalog-content.js').Faq[]} faqs (E16)
+ * @property {string[]} previousSlugs (E13)
  * @property {number | null} returnDays this item's return window in days after delivery (null = the grade's, else the
  *   `returns` setting)
  * @property {number | null} warrantyDays this item's warranty in days after delivery (null = the grade's, else the setting)
@@ -178,7 +178,7 @@ export const ID_PREFIX = Object.freeze({
  * @property {MediaRecord | null} logo
  * @property {'active' | 'hidden'} [status] hidden: its products are hidden (E1)
  * @property {string[]} [categoryIds] the categories it belongs to ([] = all) (E1)
- * @property {import('./catalog-content.js').SeoRecord} [seo] (E1, E16)
+ * @property {import('./catalog-content.js').SeoRecord} seo (E1, E16)
  * @property {string | null} [sizeChartId] (E5)
  */
 /** @typedef {{ value: string, label: string }} AttributeChoice */
@@ -338,8 +338,8 @@ export const STATUS_ROLES = Object.freeze([
  *   kind?: 'edited' | 'payment' | 'refund', byKind?: string, code?: import('./orders.js').HistoryNote,
  *   values?: import('./orders.js').NoteValues }>} history `reason` of a move (E27: `rto` | `customer_return`, or a
  *   cancel's `staff` | `shopper` | `expired`); `byKind`: the kind of the actor `by` names (`staff`, `user` or `server`;
- *   missing for `system`, `shopper` and `guest`, and on older entries); `code` and `values`: a note the server wrote
- *   itself (`core/orders.js` `HISTORY_NOTES`; older entries have only the note)
+ *   missing for `system`, `shopper` and `guest`, and on imported entries); `code` and `values`: a note the server
+ *   wrote itself (`core/orders.js` `HISTORY_NOTES`; imported entries have only the note)
  * @property {{ courier: string, trackingNumber: string, trackingUrl: string, booked: boolean, status: string,
  *   checkedAt: Date | null, trackingNote?: string, estimatedDeliveryAt?: Date | null } | null} shipment the courier by
  *   name or key, its link built on read from the `couriers` list (E28)

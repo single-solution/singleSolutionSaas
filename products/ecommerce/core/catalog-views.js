@@ -6,7 +6,6 @@
  * @module
  */
 import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
-import { EMPTY_SEO } from './catalog-content.js';
 import { gradeView } from './grades.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -87,8 +86,8 @@ export const cardVariantsOf = (product, { attributes, variantUrls, url }) =>
 		.filter((variant) => variant.active)
 		.map((variant) => ({
 			id: variant.id,
-			options: variant.options ?? {},
-			attributes: Object.entries(variant.attributes ?? {}).flatMap(([id, value]) => {
+			options: variant.options,
+			attributes: Object.entries(variant.attributes).flatMap(([id, value]) => {
 				const attribute = attributes.get(id);
 				return attribute ? [{ slug: attribute.slug ?? id, name: attribute.name, label: valueLabel(attribute, value) }] : [];
 			}),
@@ -110,7 +109,7 @@ export const cardPhotos = (product) => {
 	/** @type {Array<import('./model.js').MediaRecord>} */
 	const out = [];
 	for (const variant of product.variants) {
-		const first = variant.active ? variant.media?.[0] : undefined;
+		const first = variant.active ? variant.media[0] : undefined;
 		if (first && !out.some((file) => file.key === first.key)) out.push(first);
 		if (out.length === 4) break;
 	}
@@ -127,7 +126,7 @@ export const cardPhotos = (product) => {
  */
 export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }) => {
 	if (!trackStock || showStock === 'none') return null;
-	const left = variant.soldOut === true || !variant.active ? 0 : variant.stock;
+	const left = variant.soldOut || !variant.active ? 0 : variant.stock;
 	return showStock === 'always' || left <= lowStockShown ? left : null;
 };
 
@@ -148,12 +147,12 @@ export const cardOf = (product, { currency, image, url, brand, grades, cardImage
 	image,
 	url,
 	inStock: product.inStock,
-	rating: product.rating ?? { average: 0, count: 0 },
+	rating: product.rating,
 	brand,
 	grades: gradeLabels(product, grades),
 	variantCount: product.variants.filter((variant) => variant.active).length,
 	priceMax: summarize(product.variants, product.trackStock).priceMax,
-	featured: product.featured === true,
+	featured: product.featured,
 	cardImages,
 });
 
@@ -163,7 +162,7 @@ export const cardOf = (product, { currency, image, url, brand, grades, cardImage
  * @param {ReadonlyMap<string, AttributeRecord>} attributes
  */
 export const specsOf = (product, attributes) =>
-	Object.entries(product.specs ?? {})
+	Object.entries(product.specs)
 		.filter(([id]) => attributes.has(id))
 		.map(([id, value]) => ({ attribute: /** @type {AttributeRecord} */ (attributes.get(id)), value }))
 		.sort((a, b) => a.attribute.sort - b.attribute.sort || a.attribute.name.localeCompare(b.attribute.name))
@@ -213,7 +212,7 @@ export const pageOf = (product, context) => {
 				name: variantName(product.options, variant.options),
 				sku: variant.sku,
 				options: variant.options,
-				attributes: Object.entries(variant.attributes ?? {}).flatMap(([id, value]) => {
+				attributes: Object.entries(variant.attributes).flatMap(([id, value]) => {
 					const attribute = attributes.get(id);
 					return attribute
 						? [{ id, slug: attribute.slug ?? id, name: attribute.name, value, label: valueLabel(attribute, value) }]
@@ -223,7 +222,7 @@ export const pageOf = (product, context) => {
 				compareAtPrice:
 					variant.compareAtPrice !== null && variant.compareAtPrice > variant.price ? variant.compareAtPrice : null,
 				inStock: variantInStock(variant, product.trackStock),
-				soldOut: variant.soldOut === true,
+				soldOut: variant.soldOut,
 				stockLeft: stockLeftOf(variant, product.trackStock, stock),
 				grade: grade ? gradeView(grade) : null,
 				warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? grade?.warrantyDays ?? context.warrantyDays ?? null,
@@ -238,13 +237,13 @@ export const pageOf = (product, context) => {
 		kind: product.kind,
 		summary: product.summary,
 		description: product.description,
-		descriptionHtml: product.descriptionHtml ?? '',
+		descriptionHtml: product.descriptionHtml,
 		price: product.price,
 		priceMax: summarize(product.variants, product.trackStock).priceMax,
 		compareAtPrice: compareAtOf(product),
 		currency,
 		inStock: product.inStock,
-		featured: product.featured === true,
+		featured: product.featured,
 		url,
 		media,
 		video: context.video ?? null,
@@ -254,10 +253,10 @@ export const pageOf = (product, context) => {
 		brand,
 		breadcrumb,
 		tags: product.tags,
-		rating: product.rating ?? { average: 0, count: 0 },
+		rating: product.rating,
 		booking: product.kind === 'booking' && product.booking ? { durationMinutes: product.booking.durationMinutes } : null,
 		sizeChart: context.sizeChart ?? null,
-		faqs: product.faqs ?? [],
+		faqs: product.faqs,
 		seo: {
 			title: product.seo.title || product.name,
 			description: product.seo.description || product.summary,
@@ -287,45 +286,27 @@ export const staffRowOf = (product, { image }) => {
 		image,
 		categoryIds: product.categoryIds,
 		brandId: product.brandId,
-		featured: product.featured === true,
-		stockState: product.stockState ?? summarize(product.variants, product.trackStock).stockState,
-		grades: product.grades ?? [],
+		featured: product.featured,
+		stockState: product.stockState,
+		grades: product.grades,
 		mediaCount: product.media.length,
 		updatedAt: product.updatedAt,
 	};
 };
 
-/** What a product saved before a field existed answers for it (E2–E16), so staff always get every field. */
-const STAFF_DEFAULTS = Object.freeze({
-	descriptionHtml: '',
-	video: null,
-	sizeChartId: null,
-	attributeSetup: [],
-	faqs: [],
-	previousSlugs: [],
-});
-
 /**
  * The whole product for staff (read without the database's own fields), with the addresses of its images, its
- * variants' photos and its video file; fields an older record does not hold yet answer their defaults.
+ * variants' photos and its video file.
  * @param {ProductRecord} product
  * @param {{ media: Array<string | null>, variantMedia?: ReadonlyMap<string, Array<string | null>>, video?: string | null }} context
  */
 export const staffProductOf = (product, { media, variantMedia = new Map(), video = null }) => ({
-	...STAFF_DEFAULTS,
 	...product,
 	...summarize(product.variants, product.trackStock),
-	// a change of an older product could store null for these (fixed in `checkProduct`)
-	featured: product.featured === true,
-	hideSizeGuide: product.hideSizeGuide === true,
-	seo: { ...EMPTY_SEO, ...product.seo },
 	media: product.media.map((item, index) => ({ ...item, url: media[index] ?? null })),
 	variants: product.variants.map((variant) => ({
-		attributes: {},
-		soldOut: false,
-		warrantyDays: null,
 		...variant,
-		media: (variant.media ?? []).map((item, index) => ({ ...item, url: variantMedia.get(variant.id)?.[index] ?? null })),
+		media: variant.media.map((item, index) => ({ ...item, url: variantMedia.get(variant.id)?.[index] ?? null })),
 	})),
 	...(product.video?.kind === 'file' ? { video: { ...product.video, url: video } } : {}),
 });

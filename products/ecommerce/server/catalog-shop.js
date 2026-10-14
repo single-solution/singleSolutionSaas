@@ -25,7 +25,7 @@ import {
 	SORTS,
 } from '../core/catalog-query.js';
 import { categoryTree, withDescendants } from '../core/catalog-taxonomy.js';
-import { EMPTY_SEO, youtubeId } from '../core/catalog-content.js';
+import { youtubeId } from '../core/catalog-content.js';
 import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
 import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
@@ -417,7 +417,7 @@ export const createCatalogShop = (product, service, common) => {
 						async (variant) =>
 							/** @type {[string, import('../core/catalog-views.js').MediaView[]]} */ ([
 								variant.id,
-								await Promise.all((variant.media ?? []).map((file) => common.mediaView(s, file, item.name))),
+								await Promise.all(variant.media.map((file) => common.mediaView(s, file, item.name))),
 							]),
 					),
 				),
@@ -451,7 +451,7 @@ export const createCatalogShop = (product, service, common) => {
 		for (const category of shown)
 			extras.set(category.id, {
 				description: category.description,
-				seo: { ...EMPTY_SEO, ...category.seo },
+				seo: category.seo,
 				status: productsHidden.has(category.id) ? 'coming_soon' : 'active',
 				icon: category.icon ?? '',
 				content: category.content ?? { summary: '', bullets: [] },
@@ -518,7 +518,7 @@ export const createCatalogShop = (product, service, common) => {
 					name: brand.name,
 					description: brand.description,
 					categoryIds: brand.categoryIds ?? [],
-					seo: { ...EMPTY_SEO, ...brand.seo },
+					seo: brand.seo,
 					logo: brand.logo ? { url: await common.media.mediaUrl(s, brand.logo.key), alt: brand.logo.alt } : null,
 					count: counts.get(brand.id) ?? 0,
 				})),

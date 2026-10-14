@@ -38,6 +38,7 @@ import {
 } from '../core/catalog-csv.js';
 import { parseCsv, recordsOf, toCsv } from '../core/csv.js';
 import { specsOf } from '../core/catalog-views.js';
+import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderFilters, orderQuery } from '../core/orders.js';
 import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
@@ -416,6 +417,7 @@ export const createCatalogTools = (product, service, common) => {
 					sold: 0,
 					rating: { average: 0, count: 0 },
 					...summarize(fields.variants, fields.trackStock),
+					previousSlugs: [],
 					publishedAt: fields.status === 'active' ? new Date(now()) : null,
 				});
 				written.push(id);
@@ -444,7 +446,9 @@ export const createCatalogTools = (product, service, common) => {
 							exceptId: current.id,
 							fallback: current.id.slice(4).toLowerCase(),
 						}));
-					return { set: { ...checked.value, slug, variants }, result: null };
+					// a changed slug is kept as an earlier one, as an edit keeps it (E13)
+					const previousSlugs = nextPreviousSlugs(current.previousSlugs, current.slug, slug);
+					return { set: { ...checked.value, slug, variants, previousSlugs }, result: null };
 				},
 				{ now: now() },
 			);

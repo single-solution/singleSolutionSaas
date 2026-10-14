@@ -40,6 +40,10 @@ const variant = (input = {}) => ({
 	locations: {},
 	grade: null,
 	active: true,
+	attributes: {},
+	media: [],
+	soldOut: false,
+	warrantyDays: null,
 	...input,
 });
 

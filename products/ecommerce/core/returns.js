@@ -183,7 +183,8 @@ export const returnableLines = ({ order, claims, products, grades, defaults, now
 				claimable,
 				freeSerials: line.serials.filter((serial) => !taken?.serials.has(serial)),
 				return: windowOf(windowDays('return', product, grade, defaults), order.deliveredAt, now),
-				// the warranty kept on the line at placement wins (E12); older orders use the product, grade and setting
+				// the warranty kept on the line at placement wins (E12); a line without one (none was set, or an imported
+				// line) uses the product, grade and setting
 				warranty: windowOf(
 					typeof line.warrantyDays === 'number' ? line.warrantyDays : windowDays('warranty', product, grade, defaults),
 					order.deliveredAt,
@@ -381,7 +382,7 @@ export const pointsToReverse = (order, claim) => {
 export const claimReference = (id, prefix = 'R-') => `${typeof prefix === 'string' ? prefix : 'R-'}${id.slice(-6).toUpperCase()}`;
 
 /**
- * A claim's reference: the one kept when it was made, else (older claims) the default one.
+ * A claim's reference: the one kept when it was made, else (an imported claim without one) the default one.
  * @param {Pick<ReturnRecord, 'id' | 'reference'>} claim
  */
 export const referenceOf = (claim) => claim.reference ?? claimReference(claim.id);

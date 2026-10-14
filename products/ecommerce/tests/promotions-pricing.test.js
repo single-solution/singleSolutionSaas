@@ -237,7 +237,8 @@ describe('deals', () => {
 			id: 'p1',
 			categoryIds: [],
 			brandId: null,
-			variants: [{ id: 'v1', price: 1_000_000, active: true }],
+			specs: {},
+			variants: [{ id: 'v1', price: 1_000_000, active: true, attributes: {} }],
 		});
 		expect(quoteProduct({ product, deals, now: NOW })?.deals).toEqual([{ id: 'deal_b', name: 'Deal' }]);
 		expect(quoteProduct({ product, deals, now: NOW, rules: first })).toMatchObject({
@@ -663,10 +664,11 @@ describe('quoteProduct', () => {
 		id: 'prd_1',
 		categoryIds: ['c1'],
 		brandId: 'b1',
+		specs: {},
 		variants: [
-			{ id: 'v1', price: 2000, active: true },
-			{ id: 'v2', price: 1500, active: true },
-			{ id: 'v3', price: 100, active: false },
+			{ id: 'v1', price: 2000, active: true, attributes: {} },
+			{ id: 'v2', price: 1500, active: true, attributes: {} },
+			{ id: 'v3', price: 100, active: false, attributes: {} },
 		],
 	});
 
@@ -695,7 +697,7 @@ describe('quoteProduct', () => {
 	});
 
 	it('rounds one unit as the cart does (D4)', () => {
-		const phone = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 499_900, active: true }] });
+		const phone = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 499_900, active: true, attributes: {} }] });
 		const deals = [deal({ value: 7 })];
 		expect(quoteProduct({ product: phone, deals, now: NOW, unit: 100 })?.savings).toBe(34_900);
 		const exact = { ...DEAL_RULES, rounding: /** @type {const} */ ('total_half_up') };
@@ -703,7 +705,7 @@ describe('quoteProduct', () => {
 			savings: 35_000,
 			priceAfterDeals: 464_900,
 		});
-		const cheap = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 200, active: true }] });
+		const cheap = /** @type {any} */ ({ ...product, variants: [{ id: 'v1', price: 200, active: true, attributes: {} }] });
 		expect(
 			quoteProduct({ product: cheap, deals: [deal({ type: 'fixed', value: 300 })], now: NOW, rules: exact })?.savings,
 		).toBe(200);

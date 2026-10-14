@@ -597,12 +597,9 @@ describe('product page parts', () => {
 		expect(stockText(t, { ...base, stockLeft: 6 }, 5).tone).toBe('success');
 		const watch = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 		expect(gradeVideoUrl({ videoUrl: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' })).toBe(watch);
-		expect(gradeVideoUrl({ video: 'dQw4w9WgXcQ' })).toBe(watch);
-		expect(gradeVideoUrl({ video: 'grades/a.mp4', videoUrl: 'https://cdn.example.com/a.mp4' })).toBe(
-			'https://cdn.example.com/a.mp4',
-		);
-		expect(gradeVideoUrl({ video: 'grades/a.mp4' })).toBe('');
-		expect(gradeVideoUrl({ video: '', videoUrl: null })).toBe('');
+		expect(gradeVideoUrl({ videoUrl: 'https://cdn.example.com/a.mp4' })).toBe('https://cdn.example.com/a.mp4');
+		// a file the shop has no address for (no storage connected)
+		expect(gradeVideoUrl({ videoUrl: null })).toBe('');
 		expect(gradeVideoUrl({})).toBe('');
 		expect(safeHref(null)).toBe('');
 		expect(safeHref('mailto:a@example.com')).toBe('');

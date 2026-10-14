@@ -507,7 +507,7 @@ export const createLandings = (product, service, media) => {
 		const categoryIndexable =
 			category !== null &&
 			!hidden.categoryIds.includes(category.id) &&
-			category.seo?.noindex !== true &&
+			!category.seo.noindex &&
 			brand === null &&
 			grade === null &&
 			exact;
@@ -520,7 +520,7 @@ export const createLandings = (product, service, media) => {
 					? await media.categoryUrl(s, category)
 					: `https://${s.domain}/`;
 		const canonicalBase =
-			category?.seo?.canonicalUrl && !view && !automatic ? absolute(category.seo.canonicalUrl, s.domain) : pageUrl;
+			category?.seo.canonicalUrl && !view && !automatic ? absolute(category.seo.canonicalUrl, s.domain) : pageUrl;
 		// pages after the first: indexed with their own address, or not indexed with the first page as canonical (SG-21)
 		const pagedOut = page > 1 && settings.pagedListings === 'noindex';
 		const canonical =
@@ -538,7 +538,7 @@ export const createLandings = (product, service, media) => {
 			name:
 				landing?.title ||
 				automatic?.copy.name ||
-				(category && !brand && !grade ? category.seo?.title : '') ||
+				(category && !brand && !grade ? category.seo.title : '') ||
 				(own ? pageName(settings.categoryTitle, patternNames) : '') ||
 				h1,
 			business: storeName,
@@ -546,11 +546,11 @@ export const createLandings = (product, service, media) => {
 		const description = metaDescription(
 			landing?.description,
 			automatic?.copy.description,
-			category?.seo?.description,
+			category?.seo.description,
 			own ? patternText(settings.categoryDescription, patternNames) : '',
 			category?.content?.summary,
 			category?.description,
-			brand?.seo?.description,
+			brand?.seo.description,
 			brand?.description,
 			settings.defaultDescription,
 		);

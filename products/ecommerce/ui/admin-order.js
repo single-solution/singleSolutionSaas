@@ -58,7 +58,7 @@ export const SERVER_KIND = 'server';
 /**
  * Who made a history entry (of an order or a claim): the website's words for the server token, the shop itself, a
  * shopper and a guest, else the staff member's name. Entries keep the kind of actor (`byKind`), so a member of the
- * staff named like one of these keeps their name; older entries have only the name.
+ * staff named like one of these keeps their name; imported entries have only the name.
  * @param {Kit} kit @param {{ by?: string, byKind?: string }} entry
  */
 export const historyBy = (kit, entry) => {
@@ -96,8 +96,8 @@ export const warningsText = (kit, data, money) =>
 
 /**
  * The note of an order's history entry: the website's words for the entries whose note the server writes itself
- * (`ordersAdmin.historyNote.<code>` with its values; older entries by their reason or kind: a shopper's cancel, an order
- * that ended unpaid or unconfirmed, an edit), else the note as staff typed it.
+ * (`ordersAdmin.historyNote.<code>` with its values; imported entries by their reason or kind: a shopper's cancel, an
+ * order that ended unpaid or unconfirmed, an edit), else the note as staff typed it.
  * @param {Kit} kit @param {{ note?: string, reason?: string, kind?: string } & Partial<Coded>} entry
  * @param {(minor: number) => string} money
  */

@@ -59,7 +59,7 @@ export const createAutoSeo = (product, service, landings) => {
 	 * @returns {Promise<Record<string, unknown>>}
 	 */
 	const productCopy = async (s, item) => {
-		const empty = { title: !item.seo?.title, description: !item.seo?.description, faqs: (item.faqs ?? []).length === 0 };
+		const empty = { title: !item.seo.title, description: !item.seo.description, faqs: item.faqs.length === 0 };
 		if (!empty.title && !empty.description && !empty.faqs) return {};
 		const data = await s.data();
 		const [settings, business, primary, brand] = await Promise.all([

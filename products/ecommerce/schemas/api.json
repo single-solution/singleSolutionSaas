@@ -5912,7 +5912,7 @@
 				},
 				"customerId": {
 					"type": "string",
-					"description": "The shop's customer record (cus_…), members and guests alike; '' or missing on older orders."
+					"description": "The shop's customer record (cus_…), members and guests alike."
 				}
 			}
 		},
@@ -6558,7 +6558,7 @@
 				"byKind": {
 					"type": "string",
 					"enum": ["staff", "user", "server"],
-					"description": "The kind of actor by names, on entries a member of the staff or the server made: staff (a ticket's user), user (named by a server call's SS-Actor-* headers) or server (the server token, by Server); missing for shopper, guest and system, and on older entries."
+					"description": "The kind of actor by names, on entries a member of the staff or the server made: staff (a ticket's user), user (named by a server call's SS-Actor-* headers) or server (the server token, by Server); missing for shopper, guest and system, and on imported entries."
 				},
 				"note": {
 					"type": "string",
@@ -6604,7 +6604,7 @@
 		},
 		"OrderLine": {
 			"type": "object",
-			"description": "One order line: what was bought, at the price paid. Older or imported lines may lack downloads, warrantyDays and dealId.",
+			"description": "One order line: what was bought, at the price paid. Imported lines may lack downloads, warrantyDays and dealId.",
 			"required": [
 				"id",
 				"productId",
@@ -9158,7 +9158,7 @@
 				"byKind": {
 					"type": "string",
 					"enum": ["staff", "user", "server"],
-					"description": "The kind of actor by names, on entries a member of the staff or the server made: staff (a ticket's user), user (named by a server call's SS-Actor-* headers) or server (the server token, by Server); missing for shopper and on older entries."
+					"description": "The kind of actor by names, on entries a member of the staff or the server made: staff (a ticket's user), user (named by a server call's SS-Actor-* headers) or server (the server token, by Server); missing for shopper and on imported entries."
 				},
 				"note": {
 					"type": "string",

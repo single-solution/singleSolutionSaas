@@ -964,16 +964,9 @@ describe('reviews, claims, alerts and wishlists', () => {
 describe('finish', () => {
 	it('count a customer’s orders, RTO parcels and last order', () => {
 		expect(rtoKeysOf(DEFAULT_FLOW)).toEqual(['returned']);
-		const early = new Date('2026-01-01T00:00:00Z');
 		const late = new Date('2026-02-01T00:00:00Z');
-		expect(customerCounts([])).toEqual({ orderCount: 0, rtoCount: 0, lastOrderAt: null });
-		expect(
-			customerCounts([
-				{ count: 2, rto: 1, last: late },
-				{ count: 1, rto: 0, last: early },
-				{ count: 0, rto: 0, last: null },
-			]),
-		).toEqual({ orderCount: 3, rtoCount: 1, lastOrderAt: late });
+		expect(customerCounts(undefined)).toEqual({ orderCount: 0, rtoCount: 0, lastOrderAt: null });
+		expect(customerCounts({ count: 3, rto: 1, last: late })).toEqual({ orderCount: 3, rtoCount: 1, lastOrderAt: late });
 	});
 
 	it('mark sold the serials holding orders list, unless they came back', () => {

@@ -34,6 +34,9 @@ beforeAll(async () => {
 });
 afterAll(async () => shop.product.close());
 
+/** The customer record of the test orders (checkout always gives an order one, K-6). */
+const CUSTOMER_ID = createId('cus');
+
 /**
  * An order to place.
  * @param {{ productId: string, variantId: string, quantity: number, kind?: 'physical' | 'digital' | 'booking' }[]} lines
@@ -43,7 +46,7 @@ afterAll(async () => shop.product.close());
  */
 const orderOf = (lines, promotions = {}, key = createId('key')) => ({
 	id: createId('ord'),
-	customer: { userId: 'usr_1', name: 'Sara', email: 'sara@example.com', phone: '' },
+	customer: { userId: 'usr_1', name: 'Sara', email: 'sara@example.com', phone: '', customerId: CUSTOMER_ID },
 	address: null,
 	delivery: { method: 'none', zone: '', fee: 0, locationId: null },
 	lines: lines.map((line) => ({
@@ -279,6 +282,7 @@ describe('placing an order', () => {
 	});
 
 	it('returns to origin and restocks a claim exactly once', async () => {
+		await data.collection(COLLECTIONS.customers).insertOne({ id: CUSTOMER_ID, userId: 'usr_1', rtoCount: 0 });
 		const product = await shop.seedProduct({ stock: 2 });
 		const variantId = /** @type {string} */ (product.variants[0]?.id);
 		const placed = await placeOrder(
@@ -300,7 +304,7 @@ describe('placing an order', () => {
 		expect(await returnToOrigin(data, stored, { update: move })).toBe(false);
 		expect((await stockOf(product.id)).stock).toBe(2);
 		const customer = /** @type {any} */ (
-			await data.collection(COLLECTIONS.customers).findOne({ websiteId: data.websiteId, userId: 'usr_1' })
+			await data.collection(COLLECTIONS.customers).findOne({ websiteId: data.websiteId, id: CUSTOMER_ID })
 		);
 		expect(customer.rtoCount).toBe(1);
 

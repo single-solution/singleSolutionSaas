@@ -53,7 +53,7 @@
 		"itemId": {
 			"type": "string",
 			"title": "Item ids",
-			"description": "Variant ids, or legacy ids (<product>_<variant> from imported records), so shopping catalogues keep their items.",
+			"description": "variant: each variant's own id. legacy: the item ids an import kept from the previous shop (<product>_<variant> of imported records), so shopping catalogues keep the items they already list.",
 			"default": "variant",
 			"enum": ["variant", "legacy"]
 		},

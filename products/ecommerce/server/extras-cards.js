@@ -66,7 +66,7 @@ export const createCards = (product) => {
 			rating: item.rating,
 			// as the grid's cards (PLAN 0.8.10 E2, E6, E8)
 			priceMax: summarize(item.variants, item.trackStock).priceMax,
-			featured: item.featured === true,
+			featured: item.featured,
 			cardImages: await Promise.all(
 				cardPhotos(item).map(async (file) => ({
 					url: await media.mediaUrl(s, file.sizes?.card ?? file.key),

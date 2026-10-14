@@ -283,7 +283,7 @@ export const productDetails = (product, context) => {
 				grade: variant.grade ? (context.grades.get(variant.grade) ?? variant.grade) : null,
 				gradeKey: variant.grade ?? null,
 				inStock: variantInStock(product, variant),
-				soldOut: variant.soldOut === true,
+				soldOut: variant.soldOut,
 				stockLeft: context.stockLeft?.(variant) ?? null,
 				warrantyDays: context.warrantyDays?.(variant) ?? null,
 			})),

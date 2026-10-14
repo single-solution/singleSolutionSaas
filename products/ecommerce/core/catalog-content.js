@@ -21,10 +21,7 @@
  * @property {string} focusKeyword
  */
 
-/**
- * SEO fields as records keep them (records saved before E16 hold only the title and description).
- * @typedef {{ title: string, description: string } & Partial<SeoFields>} SeoRecord
- */
+/** SEO fields as records keep them. @typedef {SeoFields} SeoRecord */
 
 /** @typedef {{ question: string, answer: string }} Faq */
 /** @typedef {{ summary: string, bullets: Array<{ text: string, icon: string }> }} Content */
@@ -110,13 +107,13 @@ export const EMPTY_SEO = Object.freeze({
 /**
  * Check SEO fields given over the existing ones (missing fields keep their value).
  * @param {unknown} value
- * @param {Partial<SeoFields> | null | undefined} existing
+ * @param {SeoFields | null | undefined} existing the record's (none for a new record)
  * @param {string} path
  * @param {FieldError[]} errors
  * @returns {SeoFields}
  */
 export const checkSeo = (value, existing, path, errors) => {
-	const before = { ...EMPTY_SEO, ...(existing ?? {}) };
+	const before = existing ?? EMPTY_SEO;
 	if (value === undefined) return before;
 	if (!isObject(value)) {
 		errors.push({ path, message: 'Give the SEO fields as an object.' });

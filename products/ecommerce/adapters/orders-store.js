@@ -199,12 +199,6 @@ export const createOrdersStore = (data) => {
 				if (/** @type {any} */ (error)?.code !== 11000) throw error;
 				found = await write();
 			}
-			// records made before customer ids (members) get one now
-			if (found && !found.id) {
-				const id = createId(ID_PREFIX.customer);
-				await customers.updateOne({ ...filter, id: { $exists: false } }, { $set: { id } });
-				found = await customers.findOne(filter, NO_ID);
-			}
 			return /** @type {CustomerRecord} */ (found);
 		},
 		/**

@@ -14,7 +14,12 @@ import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, 
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { createProductInstance, manifest } from '../adapters/product.js';
 import { createRoutes } from '../server/routes.js';
+import { summarize } from '../core/catalog.js';
+import { EMPTY_SEO } from '../core/catalog-content.js';
 import { COLLECTIONS } from '../core/model.js';
+
+/** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
+/** What a test may leave out of a variant. @typedef {'attributes' | 'media' | 'soldOut' | 'warrantyDays'} VariantExtras */
 
 const BASE = 'https://ecommerce.example.dev';
 export const ACCOUNTS = 'https://accounts.example.dev';
@@ -341,29 +346,35 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 	const db = () => product.data.forWebsite(websiteId);
 
 	/**
-	 * Write an active product straight into the merchant database (`core/model.js` shape). One variant unless `variants`
-	 * is given; `stock` and `price` fill the single variant.
-	 * @param {Partial<import('../core/model.js').ProductRecord> & { stock?: number, sku?: string }} [input]
+	 * Write an active product straight into the merchant database in the whole shape every write stores
+	 * (`core/model.js`). One variant unless `variants` is given; `stock` and `price` fill the single variant, and a
+	 * variant given without its attributes, photos, sold-out mark or warranty gets none.
+	 * @param {Omit<Partial<import('../core/model.js').ProductRecord>, 'variants'> & { stock?: number, sku?: string,
+	 *   variants?: Array<Omit<VariantRecord, VariantExtras> & Partial<Pick<VariantRecord, VariantExtras>>> }} [input]
 	 * @returns {Promise<import('../core/model.js').ProductRecord>}
 	 */
 	const seedProduct = async (input = {}) => {
 		const id = input.id ?? createId('prd');
-		const { stock = 10, sku = '', ...rest } = input;
-		const variants = input.variants ?? [
-			{
-				id: createId('var'),
-				sku,
-				options: {},
-				price: input.price ?? 1000,
-				compareAtPrice: null,
-				cost: null,
-				stock,
-				locations: {},
-				grade: null,
-				active: true,
-			},
-		];
+		const { stock = 10, sku = '', variants: given, ...rest } = input;
+		/** @type {VariantRecord[]} */
+		const variants = (
+			given ?? [
+				{
+					id: createId('var'),
+					sku,
+					options: {},
+					price: input.price ?? 1000,
+					compareAtPrice: null,
+					cost: null,
+					stock,
+					locations: {},
+					grade: null,
+					active: true,
+				},
+			]
+		).map((variant) => ({ attributes: {}, media: [], soldOut: false, warrantyDays: null, ...variant }));
 		const active = variants.filter((variant) => variant.active);
+		const { stockState, grades, priceMax } = summarize(variants, rest.trackStock ?? true);
 		/** @type {import('../core/model.js').ProductRecord} */
 		const record = {
 			slug: `product-${id.slice(4, 12)}`,
@@ -382,7 +393,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 			serialized: false,
 			digital: null,
 			booking: null,
-			seo: { title: '', description: '' },
+			seo: { ...EMPTY_SEO },
 			sold: 0,
 			rating: { average: 0, count: 0 },
 			publishedAt: new Date(t),
@@ -390,6 +401,17 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z') } = {})
 			updatedAt: new Date(t),
 			returnDays: null,
 			warrantyDays: null,
+			featured: false,
+			stockState,
+			grades,
+			priceMax,
+			descriptionHtml: '',
+			video: null,
+			sizeChartId: null,
+			hideSizeGuide: false,
+			attributeSetup: [],
+			faqs: [],
+			previousSlugs: [],
 			...rest,
 			id,
 			variants,

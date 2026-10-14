@@ -147,8 +147,7 @@ export const variantName = (options, values) =>
  * @param {Pick<VariantRecord, 'active' | 'stock' | 'soldOut'>} variant
  * @param {boolean} trackStock
  */
-export const variantInStock = (variant, trackStock) =>
-	variant.active && variant.soldOut !== true && (!trackStock || variant.stock > 0);
+export const variantInStock = (variant, trackStock) => variant.active && !variant.soldOut && (!trackStock || variant.stock > 0);
 
 /**
  * How much of a product can be sold (E2): `none` when stock is not tracked or nothing is active, `out` when no active
@@ -167,7 +166,7 @@ export const stockStateOf = (variants, trackStock) => {
 /**
  * What a product's listings use, from its variants (as the ledger's `refreshProducts` computes them): the lowest and
  * highest active price, whether something can be sold, the stock state and the grades on sale.
- * @param {Array<Pick<VariantRecord, 'active' | 'price' | 'stock'> & Partial<Pick<VariantRecord, 'soldOut' | 'grade'>>>} variants
+ * @param {Array<Pick<VariantRecord, 'active' | 'price' | 'stock' | 'soldOut' | 'grade'>>} variants
  * @param {boolean} trackStock
  */
 export const summarize = (variants, trackStock) => {
@@ -218,12 +217,12 @@ const NEW_PLACE = Object.freeze({ folder: null, held: NO_KEYS, importing: false 
 /**
  * Every storage key a product holds: its photos and their sizes, its variants' photos and their sizes, and its video
  * file (CA-5: these stay valid whatever their folder).
- * @param {Pick<ProductRecord, 'media' | 'variants'> & Partial<Pick<ProductRecord, 'video'>>} product
+ * @param {Pick<ProductRecord, 'media' | 'variants' | 'video'>} product
  * @returns {Set<string>}
  */
 export const heldKeys = (product) =>
 	new Set([
-		...[...(product.media ?? []), ...(product.variants ?? []).flatMap((variant) => variant.media ?? [])].flatMap((file) => [
+		...[...product.media, ...product.variants.flatMap((variant) => variant.media)].flatMap((file) => [
 			file.key,
 			...Object.values(file.sizes ?? {}),
 		]),
@@ -623,12 +622,12 @@ const variantsOf = (input, existing, given, rules, errors) => {
 
 	if (!rules.variants && variants.length > 1)
 		errors.push({ path: '/variants', message: 'Switch on Variants to sell more than one variant.' });
-	const total = variants.reduce((sum, variant) => sum + (variant.media?.length ?? 0), 0);
+	const total = variants.reduce((sum, variant) => sum + variant.media.length, 0);
 	if (total > LIMITS.allVariantMedia)
 		errors.push({ path: '/variants', message: `A product's variants have at most ${LIMITS.allVariantMedia} photos together.` });
 
 	// variant attributes decide the options (E7); two variants may share options when their grades differ
-	const byAttributes = variants.some((variant) => Object.keys(variant.attributes ?? {}).length > 0);
+	const byAttributes = variants.some((variant) => Object.keys(variant.attributes).length > 0);
 	/** @type {Array<{ name: string, values: string[] }>} */
 	let options = given;
 	if (byAttributes) {
@@ -724,7 +723,7 @@ const setupOf = (input, existing, rules, errors) => {
  * @returns {Array<Record<string, any>> | null} the variants to add, as product input (attributes, price, stock)
  */
 export const missingVariants = (product, attributes, { price, stock }) => {
-	const axes = (product.attributeSetup ?? [])
+	const axes = product.attributeSetup
 		.map((entry) => ({ attribute: attributes.get(entry.attributeId), values: [...entry.values, ...entry.customValues] }))
 		.filter((axis) => axis.attribute?.on === 'variant' && axis.values.length > 0);
 	if (axes.length === 0) return [];
@@ -742,7 +741,7 @@ export const missingVariants = (product, attributes, { price, stock }) => {
 				return Array.isArray(value) && value.length === 1 ? value[0] : (value ?? null);
 			}),
 		);
-	const have = new Set(product.variants.map((variant) => keyOf(variant.attributes ?? {})));
+	const have = new Set(product.variants.map((variant) => keyOf(variant.attributes)));
 	const missing = combos.filter((combo) => !have.has(keyOf(combo)));
 	if (product.variants.length + missing.length > LIMITS.generated) return null;
 	return missing.map((values) => ({ attributes: values, price, ...(stock === null ? {} : { stock }) }));
@@ -766,14 +765,14 @@ export const checkProduct = (body, rules, existing) => {
 	 * @template T
 	 * @param {string} field
 	 * @param {(value: unknown) => T | null | undefined} read null/undefined = invalid
-	 * @param {T} fallback also for a product saved before the field existed (never stored as null)
+	 * @param {T} fallback for a new product
 	 * @param {string} message
 	 * @returns {T}
 	 */
 	const field = (field, read, fallback, message) => {
 		/** @type {Record<string, any> | null} */
 		const before = existing;
-		const kept = before ? (before[field] ?? fallback) : fallback;
+		const kept = before ? before[field] : fallback;
 		if (input[field] === undefined) return kept;
 		const value = read(input[field]);
 		if (value === null || value === undefined) {

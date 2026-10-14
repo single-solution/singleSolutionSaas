@@ -58,8 +58,8 @@ const timeOf = (at) => (at instanceof Date ? at.getTime() : null);
 
 /**
  * Customers' order count, RTO count (parcels moved to a `returned_to_origin` status for another reason than a
- * customer's return, as the ledger counts them) and last order time, from their orders: a customer's by customer id,
- * and a member's older orders without one by user id. A page of customers.
+ * customer's return, as the ledger counts them) and last order time, from their orders (by customer id). A page of
+ * customers.
  * @param {WebsiteData} data @param {string[]} rtoKeys @param {Page} page
  */
 const finishCustomers = async (data, rtoKeys, { after, limit }) => {
@@ -74,14 +74,21 @@ const finishCustomers = async (data, rtoKeys, { after, limit }) => {
 		],
 	};
 	const rto = { $cond: [{ $gt: [{ $size: { $filter: { input: { $ifNull: ['$history', []] }, cond: isRto } } }, 0] }, 1, 0] };
-	/** @param {Record<string, unknown>} match @param {string} by */
-	const sums = async (match, by) =>
+	/** @param {string[]} ids customer ids */
+	const sums = async (ids) =>
 		new Map(
 			(
 				await orders
 					.aggregate([
-						{ $match: { websiteId, ...match } },
-						{ $group: { _id: by, count: { $sum: 1 }, rto: { $sum: rto }, last: { $max: '$placedAt' } } },
+						{ $match: { websiteId, 'customer.customerId': { $in: ids } } },
+						{
+							$group: {
+								_id: '$customer.customerId',
+								count: { $sum: 1 },
+								rto: { $sum: rto },
+								last: { $max: '$placedAt' },
+							},
+						},
 					])
 					.toArray()
 			).map((row) => [String(row._id), { count: Number(row.count), rto: Number(row.rto), last: row.last ?? null }]),
@@ -89,24 +96,14 @@ const finishCustomers = async (data, rtoKeys, { after, limit }) => {
 	const batch = await customers
 		.find(
 			{ websiteId, ...afterId(after) },
-			{ projection: { _id: 1, id: 1, userId: 1, orderCount: 1, rtoCount: 1, lastOrderAt: 1 }, sort: { _id: 1 }, limit },
+			{ projection: { _id: 1, id: 1, orderCount: 1, rtoCount: 1, lastOrderAt: 1 }, sort: { _id: 1 }, limit },
 		)
 		.toArray();
 	let updated = 0;
 	if (batch.length > 0) {
-		const ids = batch.map((customer) => customer.id).filter((id) => typeof id === 'string');
-		const users = batch.map((customer) => customer.userId).filter((id) => typeof id === 'string' && id !== '');
-		const byId = await sums({ 'customer.customerId': { $in: ids } }, '$customer.customerId');
-		const byUser =
-			users.length === 0
-				? new Map()
-				: await sums({ 'customer.userId': { $in: users }, 'customer.customerId': { $in: [null, ''] } }, '$customer.userId');
+		const byId = await sums(batch.map((customer) => String(customer.id)));
 		for (const customer of batch) {
-			const next = customerCounts(
-				[byId.get(String(customer.id)), customer.userId ? byUser.get(String(customer.userId)) : undefined].filter(
-					(row) => row !== undefined,
-				),
-			);
+			const next = customerCounts(byId.get(String(customer.id)));
 			if (
 				customer.orderCount === next.orderCount &&
 				customer.rtoCount === next.rtoCount &&

@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import {
+	EMPTY_SEO,
 	checkContent,
 	checkFaqs,
 	checkHtml,
@@ -55,7 +56,7 @@ describe('content fields', () => {
 	it('checks SEO fields, FAQs and content blocks', () => {
 		/** @type {Array<{ path: string, message: string }>} */
 		const errors = [];
-		expect(checkSeo(undefined, { title: 'T', description: '' }, '/seo', errors)).toMatchObject({ title: 'T', noindex: false });
+		expect(checkSeo(undefined, { ...EMPTY_SEO, title: 'T' }, '/seo', errors)).toMatchObject({ title: 'T', noindex: false });
 		expect(
 			checkSeo({ canonicalUrl: '/p', ogImage: 'https://c.example/i.jpg', noindex: true }, null, '/seo', errors),
 		).toMatchObject({

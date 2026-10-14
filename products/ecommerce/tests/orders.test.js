@@ -7,6 +7,7 @@
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { placeOrder } from '../adapters/ledger.js';
+import { createOrdersStore } from '../adapters/orders-store.js';
 import { createCheckout } from '../server/checkout.js';
 import { createOrders } from '../server/orders.js';
 import { createService } from '../server/service.js';
@@ -68,6 +69,8 @@ const place = async (options = {}) => {
 	} = options;
 	const product = await shop.seedProduct({ stock, price, serialized, sku: 'SKU-1', media: [] });
 	const variant = /** @type {import('../core/model.js').VariantRecord} */ (product.variants[0]);
+	// the order's customer record, as checkout makes it (K-6)
+	const customer = await createOrdersStore(data).ensureCustomer({ userId, name, email, phone }, { at: new Date(shop.now()) });
 	const total = price * quantity;
 	const waiting = method === 'cod' || method === 'pickup';
 	const status = options.status ?? (paid ? 'confirmed' : waiting ? 'awaiting_confirmation' : 'pending_payment');
@@ -78,7 +81,7 @@ const place = async (options = {}) => {
 			numberPrefix: 'T-',
 			order: {
 				id: createId('ord'),
-				customer: { userId, name, email, phone },
+				customer: { userId, name, email, phone, customerId: String(customer.id) },
 				address,
 				delivery: { method: address ? 'delivery' : 'pickup', zone: '', fee: 0, locationId: null },
 				lines: [
@@ -205,17 +208,12 @@ describe('the order list and detail', () => {
 
 	it('shows one order with its next statuses, history names and the customer flags', async () => {
 		const { order } = await place({ userId: 'usr_flagged000001' });
-		await data.collection(COLLECTIONS.customers).insertOne({
-			userId: 'usr_flagged000001',
-			name: 'Sara',
-			email: '',
-			phone: '',
-			blocked: true,
-			blockedReason: 'fraud',
-			rtoCount: 2,
-			orderCount: 3,
-			note: '',
-		});
+		await data
+			.collection(COLLECTIONS.customers)
+			.updateOne(
+				{ websiteId: data.websiteId, userId: 'usr_flagged000001' },
+				{ $set: { blocked: true, blockedReason: 'fraud', rtoCount: 2, orderCount: 3 } },
+			);
 		const detail = await shop.admin(ticket, 'GET', `/v1/admin/orders/${order.id}`);
 		expect(detail.status).toBe(200);
 		expect(detail.json).toMatchObject({
@@ -698,7 +696,7 @@ describe('data rights', () => {
 		const done = await /** @type {NonNullable<typeof area.deleteUser>} */ (area.deleteUser)(s, { email: 'Rights@Example.com' });
 		expect(done).toEqual({ deleted: 1, anonymised: 1 });
 		const after = await orderRecord(order.id);
-		expect(after.customer).toEqual({ userId, name: '', email: '', phone: '' });
+		expect(after.customer).toEqual({ userId, name: '', email: '', phone: '', customerId: expect.stringMatching(/^cus_/) });
 		expect(after.address).toBeNull();
 		expect(after.totals.total).toBe(1000);
 		expect(await /** @type {NonNullable<typeof area.deleteUser>} */ (area.deleteUser)(s, {})).toEqual({

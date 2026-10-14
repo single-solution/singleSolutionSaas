@@ -233,7 +233,7 @@ export const createSeo = (product, service) => {
 			storeName: storeNameOf(settings, business),
 		};
 		const description = metaDescription(
-			item.seo?.description,
+			item.seo.description,
 			patternText(settings.productDescription, names),
 			item.summary,
 			item.description,
@@ -285,17 +285,17 @@ export const createSeo = (product, service) => {
 				at: row.createdAt ?? null,
 			})),
 		});
-		const ogImage = siteAddress(item.seo?.ogImage ?? '');
+		const ogImage = siteAddress(item.seo.ogImage);
 		return {
 			title: fillTitle(String(settings.titleTemplate), {
-				name: item.seo?.title || pageName(settings.productTitle, names),
+				name: item.seo.title || pageName(settings.productTitle, names),
 				business: names.storeName,
 			}),
 			description,
-			canonical: item.seo?.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
+			canonical: item.seo.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
 			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? defaultImageOf(settings, s.domain)),
 			robots: robotsOf(item.seo),
-			focusKeyword: item.seo?.focusKeyword ?? '',
+			focusKeyword: item.seo.focusKeyword,
 			jsonLd: scriptJson(jsonLd),
 		};
 	};
@@ -318,7 +318,7 @@ export const createSeo = (product, service) => {
 		const parent = categories.find((c) => c.id === category.path.at(-1));
 		const names = { name: category.name, category: parent?.name ?? '', storeName: storeNameOf(settings, business) };
 		const description = metaDescription(
-			category.seo?.description,
+			category.seo.description,
 			patternText(settings.categoryDescription, names),
 			category.content?.summary,
 			category.description,
@@ -338,7 +338,7 @@ export const createSeo = (product, service) => {
 					.sort({ publishedAt: -1, id: -1 })
 					.limit(LIST_ITEMS)
 					.toArray();
-		const canonical = category.seo?.canonicalUrl ? absolute(category.seo.canonicalUrl, s.domain) : url;
+		const canonical = category.seo.canonicalUrl ? absolute(category.seo.canonicalUrl, s.domain) : url;
 		const jsonLd = categoryJsonLd({
 			name: category.name,
 			description,
@@ -350,10 +350,10 @@ export const createSeo = (product, service) => {
 			),
 			faqs: category.faqs ?? [],
 		});
-		const ogImage = siteAddress(category.seo?.ogImage ?? '');
+		const ogImage = siteAddress(category.seo.ogImage);
 		return {
 			title: fillTitle(String(settings.titleTemplate), {
-				name: category.seo?.title || pageName(settings.categoryTitle, names),
+				name: category.seo.title || pageName(settings.categoryTitle, names),
 				business: names.storeName,
 			}),
 			description,
@@ -665,7 +665,7 @@ export const createSeo = (product, service) => {
 				ordered.map(async (category) => ({
 					name: category.name,
 					url: await media.categoryUrl(s, category),
-					description: category.seo?.description || category.description,
+					description: category.seo.description || category.description,
 					depth: category.depth,
 				})),
 			),

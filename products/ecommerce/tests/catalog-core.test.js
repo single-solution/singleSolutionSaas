@@ -41,6 +41,7 @@ import {
 	movedPaths,
 	placeCategory,
 } from '../core/catalog-taxonomy.js';
+import { EMPTY_SEO } from '../core/catalog-content.js';
 import { cardOf, compareAtOf, pageOf, specsOf } from '../core/catalog-views.js';
 import { formatCell, parseCsv, recordsOf, toCsv, unescapeFormula } from '../core/csv.js';
 import { checkGrades, gradesByKey } from '../core/grades.js';
@@ -107,7 +108,7 @@ describe('text and slugs', () => {
 		expect(freeSlug('x'.repeat(120), ['x'.repeat(120)])).toHaveLength(120);
 		expect(variantName([{ name: 'Size' }, { name: 'Colour' }], { Colour: 'Red', Size: 'M' })).toBe('M / Red');
 		expect(summarize([], true)).toEqual({ price: 0, priceMax: 0, inStock: false, stockState: 'none', grades: [] });
-		expect(summarize([{ active: true, price: 5, stock: 0 }], false)).toEqual({
+		expect(summarize([{ active: true, price: 5, stock: 0, soldOut: false, grade: null }], false)).toEqual({
 			price: 5,
 			priceMax: 5,
 			inStock: true,
@@ -115,14 +116,14 @@ describe('text and slugs', () => {
 			grades: [],
 		});
 		const mixed = [
-			{ active: true, price: 5, stock: 2, grade: 'a' },
-			{ active: true, price: 9, stock: 0, grade: 'b' },
+			{ active: true, price: 5, stock: 2, soldOut: false, grade: 'a' },
+			{ active: true, price: 9, stock: 0, soldOut: false, grade: 'b' },
 			{ active: true, price: 7, stock: 4, soldOut: true, grade: 'a' },
-			{ active: false, price: 1, stock: 9, grade: 'c' },
+			{ active: false, price: 1, stock: 9, soldOut: false, grade: 'c' },
 		];
 		expect(summarize(mixed, true)).toEqual({ price: 5, priceMax: 9, inStock: true, stockState: 'partial', grades: ['a', 'b'] });
-		expect(summarize([{ active: true, price: 5, stock: 1 }], true).stockState).toBe('full');
-		expect(summarize([{ active: true, price: 5, stock: 1, soldOut: true }], true)).toMatchObject({
+		expect(summarize([{ active: true, price: 5, stock: 1, soldOut: false, grade: null }], true).stockState).toBe('full');
+		expect(summarize([{ active: true, price: 5, stock: 1, soldOut: true, grade: null }], true)).toMatchObject({
 			stockState: 'out',
 			inStock: false,
 		});
@@ -292,7 +293,7 @@ describe('categories, brands, attributes and locations', () => {
 					parentId: null,
 					path: [],
 					description: '',
-					seo: { title: '', description: '' },
+					seo: { ...EMPTY_SEO },
 					image: null,
 					sort: 0,
 				},
@@ -314,7 +315,7 @@ describe('categories, brands, attributes and locations', () => {
 			parentId,
 			path,
 			description: '',
-			seo: { title: '', description: '' },
+			seo: { ...EMPTY_SEO },
 			image: null,
 			sort: 0,
 		});
@@ -526,15 +527,15 @@ describe('views', () => {
 		const product = { ...record({ seo: { title: 'T', description: 'D' }, specs: { att_n: 3 } }), specs: { att_n: 3, gone: 1 } };
 		const grades = gradesByKey([{ key: 'a', label: 'A', description: '' }, { nothing: true }]);
 		expect(compareAtOf({ ...product, variants: [] })).toBeNull();
-		const card = cardOf(/** @type {any} */ ({ ...product, rating: undefined }), {
+		const card = cardOf(product, {
 			currency: 'EUR',
 			image: null,
 			url: 'u',
 			brand: null,
 			grades,
 		});
-		expect(card.rating).toEqual({ average: 0, count: 0 });
-		const page = pageOf(/** @type {any} */ ({ ...product, rating: undefined }), {
+		expect(card.rating).toEqual(product.rating);
+		const page = pageOf(product, {
 			currency: 'EUR',
 			url: 'u',
 			media: [],
@@ -544,9 +545,9 @@ describe('views', () => {
 			grades,
 		});
 		expect(page.seo).toEqual({ title: 'T', description: 'D' });
-		expect(page.rating).toEqual({ average: 0, count: 0 });
+		expect(page.rating).toEqual(product.rating);
 		expect(page.variants[0]).not.toHaveProperty('stock');
-		expect(specsOf(/** @type {any} */ ({ specs: undefined }), new Map())).toEqual([]);
+		expect(specsOf(product, new Map())).toEqual([]);
 	});
 });
 

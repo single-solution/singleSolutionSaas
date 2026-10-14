@@ -490,7 +490,7 @@ export const quoteProduct = ({
 export const attributeValues = (product, variant) => {
 	/** @type {Record<string, string[]>} */
 	const out = {};
-	for (const source of [product.specs ?? {}, variant.attributes ?? {}])
+	for (const source of [product.specs, variant.attributes])
 		for (const [id, value] of Object.entries(source))
 			out[id] = (Array.isArray(value) ? value : [value]).map((item) => String(item));
 	return out;

@@ -20,8 +20,8 @@ import { CLAIM_TONES, historyBy, warningsText } from './admin-order.js';
 const FORWARD = Object.freeze(['approve', 'receive', 'replace', 'repair', 'refund', 'restock', 'close']);
 
 /**
- * The note of a claim's history entry: the website's words for a note the server writes itself (its `code`, or on older
- * entries the code as the note: `ordersAdmin.historyNote.<code>`), else the note as staff typed it.
+ * The note of a claim's history entry: the website's words for a note the server writes itself (its `code`, or on
+ * imported entries the code as the note: `ordersAdmin.historyNote.<code>`), else the note as staff typed it.
  * @param {Kit} kit @param {{ note: string, code?: string }} entry
  */
 const claimNote = (kit, entry) => {

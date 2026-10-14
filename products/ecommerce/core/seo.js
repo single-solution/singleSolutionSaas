@@ -138,7 +138,7 @@ export const metaDescription = (...texts) => {
  * @param {Pick<ProductRecord, 'trackStock'>} product
  * @param {Pick<VariantRecord, 'stock' | 'soldOut'>} variant
  */
-export const variantInStock = (product, variant) => variant.soldOut !== true && (!product.trackStock || variant.stock > 0);
+export const variantInStock = (product, variant) => !variant.soldOut && (!product.trackStock || variant.stock > 0);
 
 /**
  * The condition of a variant: physical goods with a grade take the merchant's setting, other physical goods are new;

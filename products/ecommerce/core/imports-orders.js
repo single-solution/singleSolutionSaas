@@ -1282,17 +1282,15 @@ export const rtoKeysOf = (flow) =>
 	flow.statuses.filter((status) => status.role === 'returned_to_origin').map((status) => status.key);
 
 /**
- * A customer's counts from their orders' sums (`finish`): orders placed, parcels returned to origin, the last order.
- * @param {ReadonlyArray<{ count: number, rto: number, last: Date | null }>} rows
+ * A customer's counts from the sums of their orders (`finish`): orders placed, parcels returned to origin, the last
+ * order.
+ * @param {{ count: number, rto: number, last: Date | null } | undefined} sums undefined: no orders
  * @returns {{ orderCount: number, rtoCount: number, lastOrderAt: Date | null }}
  */
-export const customerCounts = (rows) => ({
-	orderCount: rows.reduce((n, row) => n + row.count, 0),
-	rtoCount: rows.reduce((n, row) => n + row.rto, 0),
-	lastOrderAt: rows.reduce(
-		(/** @type {Date | null} */ last, row) => (row.last && (!last || row.last.getTime() > last.getTime()) ? row.last : last),
-		null,
-	),
+export const customerCounts = (sums) => ({
+	orderCount: sums?.count ?? 0,
+	rtoCount: sums?.rto ?? 0,
+	lastOrderAt: sums?.last ?? null,
 });
 
 /**

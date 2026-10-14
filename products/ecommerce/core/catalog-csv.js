@@ -161,7 +161,7 @@ export const productRows = (products, { currency, categorySlugs, brandSlugs, loc
 				variant.grade ?? '',
 				variant.active,
 				...locationIds.map((id) => variant.locations[id] ?? 0),
-				variant.soldOut === true,
+				variant.soldOut,
 				product.updatedAt ? new Date(product.updatedAt).toISOString() : '',
 			]);
 		}
@@ -722,7 +722,7 @@ export const updatedVariants = (product, rows) => {
 			});
 			continue;
 		}
-		const before = JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut === true]);
+		const before = JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut]);
 		if (row.price !== undefined) variant.price = row.price;
 		if (row.stock !== undefined) variant.stock = row.stock;
 		if (row.locations) {
@@ -730,7 +730,7 @@ export const updatedVariants = (product, rows) => {
 			variant.stock = Object.values(variant.locations).reduce((a, b) => a + b, 0);
 		}
 		if (row.soldOut !== undefined) variant.soldOut = row.soldOut;
-		if (JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut === true]) !== before) changed += 1;
+		if (JSON.stringify([variant.price, variant.stock, variant.locations, variant.soldOut]) !== before) changed += 1;
 	}
 	return { variants, changed, failed };
 };

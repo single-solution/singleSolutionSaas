@@ -72,7 +72,7 @@ const soldOutDetail = (before, after) =>
 	after
 		.flatMap((variant) => {
 			const was = before.find((v) => v.id === variant.id)?.soldOut === true;
-			const now = variant.soldOut === true;
+			const now = variant.soldOut;
 			if (was === now) return [];
 			const name = variant.sku || Object.values(variant.options).join(' / ') || variant.id;
 			return [`${name}: ${now ? 'sold out' : 'for sale'}`];
@@ -103,9 +103,9 @@ export const createCatalogProducts = (product, service, common) => {
 	const checkFiles = async (s, before, fields) => {
 		const known = new Set([
 			...(before?.media ?? []).map((file) => file.key),
-			...(before?.variants ?? []).flatMap((variant) => (variant.media ?? []).map((file) => file.key)),
+			...(before?.variants ?? []).flatMap((variant) => variant.media.map((file) => file.key)),
 		]);
-		const photos = [...new Set(fields.variants.flatMap((v) => (v.media ?? []).map((file) => file.key)))].filter(
+		const photos = [...new Set(fields.variants.flatMap((v) => v.media.map((file) => file.key)))].filter(
 			(key) => !known.has(key),
 		);
 		const { imageMaxBytes, videoMaxBytes } = await s.values('catalog');
@@ -118,7 +118,7 @@ export const createCatalogProducts = (product, service, common) => {
 		const productFacts = new Map((before?.media ?? []).map((file) => [file.key, { type: file.type, size: file.size }]));
 		const variants = fields.variants.map((variant) => ({
 			...variant,
-			media: (variant.media ?? []).map((file) => ({ ...file, ...(facts.get(file.key) ?? productFacts.get(file.key) ?? {}) })),
+			media: variant.media.map((file) => ({ ...file, ...(facts.get(file.key) ?? productFacts.get(file.key) ?? {}) })),
 		}));
 		let video = fields.video;
 		if (video?.kind === 'file' && !video.type) {
@@ -336,14 +336,12 @@ export const createCatalogProducts = (product, service, common) => {
 			async (before, session) => {
 				const checked = checkProduct(body, rules, before);
 				if (!checked.ok) throw refuse(checked.errors);
-				const facts = new Map(
-					[...files.variants.flatMap((v) => v.media ?? []), ...before.media].map((file) => [file.key, file]),
-				);
+				const facts = new Map([...files.variants.flatMap((v) => v.media), ...before.media].map((file) => [file.key, file]));
 				const fields = {
 					...checked.value,
 					variants: checked.value.variants.map((variant) => ({
 						...variant,
-						media: (variant.media ?? []).map((file) => ({
+						media: variant.media.map((file) => ({
 							...file,
 							type: facts.get(file.key)?.type ?? file.type,
 							size: facts.get(file.key)?.size ?? file.size,

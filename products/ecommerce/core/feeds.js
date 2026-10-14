@@ -128,7 +128,7 @@ export const feedRows = (product, context) => {
 	const mode = context.itemId ?? 'variant';
 	const money = (/** @type {number} */ amount) => feedMoney(amount, context.currency, context.wholeUnits === true);
 	const body = product.description || product.summary || product.name;
-	const description = (context.description === 'seo' ? product.seo?.description || body : body)
+	const description = (context.description === 'seo' ? product.seo.description || body : body)
 		.trim()
 		.slice(0, DESCRIPTION_LENGTH);
 	return variants

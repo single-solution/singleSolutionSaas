@@ -162,6 +162,11 @@ describe('CSV', () => {
 		const again = await ok('POST', '/v1/csv/products', { csv: exported, dryRun: false });
 		expect(again).toMatchObject({ created: 0, updated: 2, errors: [] });
 		expect((await ok('GET', '/v1/products/tablet')).description).toBe('=1+1, said "he"');
+		// a product made by CSV has no earlier slugs; a slug changed by CSV is kept as one, as an edit keeps it (E13)
+		expect(tablet.previousSlugs).toEqual([]);
+		const renamed = exported.replace(/,tablet,/g, ',tablet-pro,');
+		expect(await ok('POST', '/v1/csv/products', { csv: renamed, dryRun: false })).toMatchObject({ updated: 2, errors: [] });
+		expect((await ok('GET', '/v1/products/tablet-pro')).previousSlugs).toEqual(['tablet']);
 	});
 
 	it('refuses files it cannot read', async () => {

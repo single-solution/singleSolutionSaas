@@ -26,6 +26,10 @@ const variant = (input = {}) => ({
 	locations: {},
 	grade: null,
 	active: true,
+	attributes: {},
+	media: [],
+	soldOut: false,
+	warrantyDays: null,
 	...input,
 });
 
@@ -113,7 +117,9 @@ describe('patterns, shipping and feed rows', () => {
 			{ ...context, itemId: 'legacy', skuAs: 'mpn', identifierExists: 'no' },
 		);
 		expect(single[0]).toMatchObject({ itemGroupId: '0123456789abcdef01234567', identifierExists: '', mpn: 'X' });
-		expect(feedRows({ ...product, seo: /** @type {any} */ (undefined) }, { ...context, description: 'seo' })[0]).toMatchObject({
+		expect(
+			feedRows({ ...product, seo: { ...product.seo, description: '' } }, { ...context, description: 'seo' })[0],
+		).toMatchObject({
 			description: 'A long description.',
 		});
 		expect(feedGroupId('prd_new', true, 'legacy')).toBe('prd_new');

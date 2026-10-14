@@ -184,11 +184,11 @@ export const photoOf = (doc, media, size, alt) => {
 
 /**
  * The link to a grade's condition video: its YouTube page, or the https address of the file (`videoUrl`, which the
- * shop answer fills in; an older answer's `video` is read the same way); '' without one.
- * @param {Pick<PageGrade, 'video' | 'videoUrl'>} grade
+ * shop answer fills in); '' without one.
+ * @param {Pick<PageGrade, 'videoUrl'>} grade
  */
 export const gradeVideoUrl = (grade) => {
-	const value = grade.videoUrl ?? grade.video;
+	const value = grade.videoUrl;
 	const id = youtubeId(value);
 	if (id) return `https://www.youtube.com/watch?v=${id}`;
 	return typeof value === 'string' && value.startsWith('https://') ? safeHref(value) : '';
