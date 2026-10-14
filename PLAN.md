@@ -961,16 +961,16 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   on the left (search, filters, the main Add action, per row the name, a status dot and one figure) beside an item's
   detail, on one screen. There is no separate plain list page: with nothing in the URL, wide screens open the **first
   item of the list** by default, so the page is never half empty (phones show the list until an item is chosen); the
-  detail side shows a short empty state only when the list is empty. Full width, spacious; fewer levels: actions sit one
+  detail side shows a short empty state only when the list is empty. Spacious, at most 1200 px wide; fewer levels: actions sit one
   level up (in the header or on the card), there are no deep child pages and **no tabs** (a page shows its sections one
   under another; the product dashboards keep their sidebar sections, and a section list too long for one page picks one
   section at a time), and secondary forms open in dialogs.
 - **Header actions**: a detail header keeps its one or two main actions as buttons; any others go in a compact **More**
   menu (⋯), a destructive action last in danger text and still behind its typed confirmation. The actions sit beside
   the title while both fit on one line; otherwise they move together onto their own row under the title.
-- **Masonry**: cards of different heights that sit side by side (settings cards, website cards, feature and connection
-  cards) are laid out as a masonry of 1, 2 or 3 columns by the available width; no card stretches to a taller
-  neighbour.
+- **Masonry**: lists of cards of very different heights (settings cards, website cards, feature and connection cards)
+  are laid out as a masonry of 1, 2 or 3 columns by the available width, so no column leaves a hole. A fixed row of
+  cards (e.g. on an overview) gives them one height.
 - **Merchant menu**: Overview · Websites · Usage and credits · Account.
 - **Admin menu**: Overview · Merchants · Products · Credits and billing · Admins · Settings · Activity, plus My account
   in the user menu. Each role sees only the items it can use (0.2).
@@ -997,12 +997,29 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
   Portal form and every product dashboard's settings form; a settings schema field with a long-text `format` or
   `x-ui.wide` spans the row.
 - **Home cards**: numbers with small 30-day charts; a chart with nothing to draw is one line of text instead.
-- **Visual style (owner pick 2026-10-08, "A + B")**: pages are built from **grid sections**; each section has a clear
-  heading with a lighter one-line description under it. **Summary tiles** are neutral with a rounded indigo-tinted icon
-  badge. The most important number on an overview (merchant: credit balance; admin: credits this month) is a **large
-  hero card**, solid indigo, with a 30-day bar chart inside. Soft rounded surfaces (16–18px radius), **no sharp borders
-  and no heavy shadows**, generous spacing, wide layout. Plain "simple" white-on-white is not acceptable. Same style in
-  light and dark, and in product dashboards.
+- **Visual style (owner decisions 2026-10-14, look "A. Workbench"; replaces the 2026-10-08 "A + B" style)**:
+  - **Floating, never glued to the window edges**: the sidebar and the top bar are panels with space around them (the
+    top bar stays on desktop too: theme switch and account actions on its right; owner: "I loved that header"). The
+    top bar and the page share one width (at most 1200 px, centred beside the sidebar).
+  - **One rhythm**: the same 24 px between all blocks of a page and around the panels; cards side by side in a row have
+    the **same height** (no holes between cards and sections; owner: "spaces between cards and sections, I hate
+    that"). Masonry (below) stays for cards of very different heights.
+  - **Flat at rest**: surfaces have a hairline edge and no shadow; lift or a soft glow appears **only on hover** (owner:
+    "shadows and elevation by default is not premium, but can be on hover"). Only things that sit above the page
+    (menus, dialogs, toasts) carry a shadow.
+  - **Type**: Figtree for text, Bricolage Grotesque for page titles, the brand name and key figures; one short scale
+    (titles 26 px, card titles 15 px, text 14 px, help 12–13 px); labels in sentence case, never all caps.
+  - **Colour**: warm neutrals kept light (canvas `#f7f6f4`; dark: warm plum-black), white surfaces; indigo stays the
+    only accent (colour rule below).
+  - **Controls**: one height for inputs, selects and medium buttons (36 px), 10 px corners for controls and 14 px for
+    cards; kit-drawn checkboxes, radios and switches (the same in every browser); a disabled button turns neutral
+    grey, a busy one keeps its colour with a spinner; long lists of choices (more than 12, e.g. countries) are a
+    searchable picker with chips, countries shown by name.
+  - **Overviews talk**: the admin Overview opens with a greeting and one sentence of what matters now, a **Needs you**
+    list (each item says what happens if it waits and carries its button), a setup checklist while the platform is
+    new, the month's numbers, the first merchants with initials and their balance, the products, and the latest
+    activity as a timeline. The merchant Overview and the product dashboards' overviews follow the same pattern (to
+    do). Same style in light and dark, and in product dashboards.
 - **Colour rule (owner decision 2026-10-09: one accent, final)**: **indigo is the only accent** — primary buttons,
   links, the active item, icon tiles and badges; surfaces are neutral; **green, amber and red only for status**. No
   screen names a colour for meaning, and the product dashboards follow the same rule.
@@ -2875,6 +2892,11 @@ Orders:
   featured, out-of-stock and low-stock variants (E44's level), missing business name or website address, no payment
   method on, badly formed pixel ids (Growth's, when its token is pasted).
 - Data: none.
+- Built (2026-10-14, b4c4b397): `GET /v1/reports/health` (and its ticket twin, `reports.read`) answers
+  `{ checks: [{ key, status, count, link }], attention }`, status `ok` | `attention` | `skipped`; checks
+  `products_without_photos`, `archived_featured`, `variants_out_of_stock`, `variants_low_stock`, `business_name`,
+  `website_address` (not a public address), `payment_methods`, `pixel_ids` (read with Growth's pasted token, else
+  skipped); one aggregation over the products; a Shop health card with Check again above the reports.
 
 **E42. SEO score per record.** (owner, 2026-10-12)
 
@@ -2893,12 +2915,24 @@ Orders:
 - API: E15's landing reads and sitemaps include every eligible combination (no record needed; a stored landing page
   wins); with `autoSeo`, saving a product or attribute writes its SEO title, description and FAQs when empty.
 - Data: none new.
+- Built (2026-10-14, f1f1d1aa): patterns `autoTitle` (default `{category} {brand} {grade}`) and `autoDescription`
+  ({products}, {variants}, {price}, {storeName}); eligible combinations judged on each read, in the listing read
+  (`landing.automatic`) and the sitemaps, a stored page wins; while `auto` is on a stored Automatic page also needs the
+  in-stock variants (SG-10); `autoCopy: ai` keeps one editable page per product save; `autoSeo: on_save` fills empty
+  SEO title, description and FAQs once (AI when on and keyed, else the patterns; the formula writes no FAQs).
+  `category_brand_grade` covers category × brand and category × brand × grade (not category × grade alone). To change
+  (owner 2026-10-14): landing pages by category + brand + any attribute (grade one choice) — in the dynamic Ecommerce
+  design.
 
 **E44. Low-stock level for counts and alerts.** (owner, 2026-10-12)
 
 - Why: dashboards and the bell count low stock by the merchant's level.
 - Key: the `catalog` setting `lowStock` (already there) also drives `products/count?lowStock=1` and E41.
 - Data: none.
+- Built (2026-10-14, 5b219d63): a variant is low when it is offered, not marked sold out and has 1 to `lowStock`
+  units, on a product that tracks stock and is not archived; drives `products?lowStock=1`, its count and E41;
+  `products/counts?by=variantStock` counts variants out, low and in; level 0 means nothing is low. Events to match
+  (low at 1..level, out at 0): in the Ecommerce clean-up (2026-10-14).
 
 **E45. Attributes and grades per category.** (owner, 2026-10-12)
 
@@ -2907,6 +2941,13 @@ Orders:
 - Key: always: attributes and grades may be defined per category (`categoryId`); one without a category applies to
   all; E15 glossary reads take `/{category}/{slug}`; the importer stops merging them by slug.
 - Data: `AttributeRecord.categoryId`, grade entries' `categoryId`; `unit` on attributes.
+- Built (2026-10-14, fc9c301e): slug and key unique per category (index `by_category_slug`); every product read takes
+  its category's definition first, then the shop-wide one (cards, pages, structured data, feeds, llms-full, Chat,
+  compare, quotes, orders, claims, `attr.<slug>` filters); routes `GET /v1/seo/attributes/:category/:slug` and
+  `/v1/seo/grades/:category/:key`; `{category}` in `attributeUrl`, `gradeUrl` and attribute patterns (RW-5, SG-8);
+  every active attribute in the sitemap once `attributeUrl` is set (SG-20); the import takes `categoryId` and no longer
+  merges by slug (CA-23). In the clean-up (2026-10-14): the old unique `by_slug` index is dropped automatically, and
+  the nearest category up the tree wins (sub-categories inherit).
 
 **E46. Customers without an account.** (owner, 2026-10-12)
 
