@@ -2,14 +2,19 @@
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Payments' manifest
  * (each feature's settings schema from `schemas/` inline), its widget and page texts, its Connections (storage for
  * bank-transfer proofs, each gateway's keys, the Notifications token for webhooks and the Accounts token for
- * activity-log copies), the merchant database indexes, the data-rights hooks and the kit's events (PLAN 0.8.10 K5:
- * `payments.<type>`, forwarded through Notifications), and adds the gateway adapters on the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * activity-log copies), the merchant database indexes, the data-rights hooks, the kit's events (PLAN 0.8.10 K5:
+ * `payments.<type>`, forwarded through Notifications) and its part of the website Setup sheet (the OpenAPI document,
+ * the guide's "What your website builds" per feature, and the payment event types and the gateways that are on), and
+ * adds the gateway adapters on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
+ * clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
 import { createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
+import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import bankTransfer from '../schemas/bank_transfer.settings.json' with { type: 'json' };
 import easypaisaSettings from '../schemas/easypaisa.settings.json' with { type: 'json' };
@@ -24,7 +29,8 @@ import rapidSettings from '../schemas/rapid.settings.json' with { type: 'json' }
 import refunds from '../schemas/refunds.settings.json' with { type: 'json' };
 import stripeSettings from '../schemas/stripe.settings.json' with { type: 'json' };
 import subscriptions from '../schemas/subscriptions.settings.json' with { type: 'json' };
-import { paymentView, subscriptionView } from '../core/payments.js';
+import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
+import { EVENT_TYPES, paymentView, subscriptionView } from '../core/payments.js';
 import { createAdapters } from './gateways/index.js';
 import { INDEXES, createStore } from './store.js';
 
@@ -114,7 +120,32 @@ const dataRights = (now) => ({
 });
 
 /**
- * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes' | 'events'>} InstanceOptions
+ * Payments' own part of the website Setup sheet: the payment event types, and the gateways that are on with the
+ * currencies each takes.
+ * @param {{ on: string[] }} website
+ */
+const setupPart = ({ on }) => {
+	const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+	const gateways = GATEWAYS.filter((gateway) => on.includes(GATEWAY_FEATURES[gateway])).map((gateway) => {
+		const currencies = GATEWAY_CURRENCIES[gateway];
+		const taken =
+			currencies === null ? 'any currency' : currencies.length > 3 ? `${currencies.length} currencies` : currencies.join(', ');
+		return `${names.get(GATEWAY_FEATURES[gateway])}: ${taken}.`;
+	});
+	return {
+		events: EVENT_TYPES.map((type) => `payments.${type}`),
+		summaries: [
+			{
+				title: 'Gateways on',
+				text:
+					gateways.length > 0 ? gateways.join(' ') : 'None yet, so payers cannot pay. Switch a gateway on and connect it.',
+			},
+		],
+	};
+};
+
+/**
+ * @typedef {Omit<import('@ss/app-kit').ProductOptions, 'manifest' | 'strings' | 'hooks' | 'connections' | 'data' | 'problemCodes' | 'events' | 'openapi' | 'build'>} InstanceOptions
  */
 
 /**
@@ -174,8 +205,11 @@ export const createProductInstance = (options) => {
 			},
 			accounts: { label: 'Accounts token (activity-log copies)', kind: 'token', productId: 'accounts', neededBy: [] },
 		},
-		hooks: dataRights(now),
+		hooks: { ...dataRights(now), blueprint: async (website) => setupPart(website) },
 		data: { indexes: INDEXES },
+		// the website Setup sheet: the API document and what the merchant's website builds per feature
+		openapi,
+		build: guide.build,
 		// payment events (`payment.paid`, `payment.failed`, `payment.refunded`, `payment.proof_uploaded`,
 		// `subscription.updated`) on the kit's mechanism: stored in `ss_payments_events`, listed by GET /v1/events,
 		// forwarded through Notifications
