@@ -15,7 +15,7 @@ import { BUILT_IN_TYPES, ITEM_KINDS, elementsOf, typeByKey, typeOf, typeTree } f
  * @param {Kit} kit
  * @returns {ItemType[]}
  */
-export const typesOf = (kit) => {
+const typesOf = (kit) => {
 	const list = kit.settings.catalog?.types;
 	return Array.isArray(list) ? list : [];
 };
@@ -24,7 +24,7 @@ export const typesOf = (kit) => {
  * A type's name for people: the merchant's name, a built-in type's by its kind.
  * @param {Kit} kit @param {ItemType} type
  */
-export const typeName = (kit, type) => (type.builtIn ? kit.t(`catalogAdmin.kind.${type.kind}`) : type.name);
+const typeName = (kit, type) => (type.builtIn ? kit.t(`catalogAdmin.kind.${type.kind}`) : type.name);
 
 /**
  * The name of the type a key names, or `inherited` without one (a key no type has any more shows itself).

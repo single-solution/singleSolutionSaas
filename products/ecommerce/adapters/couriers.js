@@ -6,7 +6,8 @@
  * - booking: `POST <bookUrl>` with the JSON body built from `bodyTemplate` (default `core/couriers.js`
  *   `DEFAULT_BODY_TEMPLATE`), whose `{number}`, `{name}`, `{phone}`, `{email}`, `{line1}`, `{line2}`, `{city}`, `{area}`,
  *   `{postalCode}`, `{country}`, `{items}`, `{amount}` (decimal), `{total}` (minor units), `{cod}` (decimal to collect,
- *   0 when prepaid), `{currency}` and `{note}` are filled JSON-escaped; any 2xx answer whose JSON has a tracking
+ *   0 when prepaid), `{currency}`, `{weightG}` (the package's grams: the items' weights from their packages, '' when
+ *   one is not known) and `{note}` are filled JSON-escaped; any 2xx answer whose JSON has a tracking
  *   number at `trackingPath` (default `trackingNumber`) is a booking;
  * - tracking: `GET <trackUrl>` with `{tracking}` filled (URL-encoded); the status text is read at `statusPath`
  *   (default `status`);
@@ -111,9 +112,10 @@ export const courierViolation = (value, policy) => {
 /**
  * The booking values of an order (all text; JSON-escaped when filled in).
  * @param {OrderRecord} order
+ * @param {number | null} weightG the package's weight in grams, null when not known
  * @returns {Record<string, string>}
  */
-export const bookingValues = (order) => {
+export const bookingValues = (order, weightG) => {
 	const address = order.address;
 	const { total, currency } = order.totals;
 	// the cash the courier collects: what is still due, counted the one way (orderMoney)
@@ -134,6 +136,7 @@ export const bookingValues = (order) => {
 		total: String(total),
 		cod: toDecimal(toCollect, currency),
 		currency,
+		weightG: weightG === null ? '' : String(weightG),
 		note: address?.notes || order.note,
 	};
 };
@@ -201,10 +204,11 @@ export const createCouriers = ({ send, policy = createOutboundPolicy() }) => {
 		},
 		/**
 		 * Book a shipment for an order.
-		 * @param {{ order: OrderRecord, value: unknown }} input `value`: the `courier` connection
+		 * @param {{ order: OrderRecord, value: unknown, weightG: number | null }} input `value`: the `courier` connection;
+		 *   `weightG`: the package's weight in grams (null: not known)
 		 * @returns {Promise<{ ok: true, trackingNumber: string } | { ok: false, message: string }>}
 		 */
-		book: async ({ order, value }) => {
+		book: async ({ order, value, weightG }) => {
 			const violation = courierViolation(value, policy);
 			if (violation) return { ok: false, message: violation };
 			const keys = /** @type {CourierKeys} */ (value);
@@ -212,7 +216,7 @@ export const createCouriers = ({ send, policy = createOutboundPolicy() }) => {
 			const answer = await call(keys.bookUrl, {
 				method: 'POST',
 				headers: headers(keys, true),
-				body: fillTemplate(template, bookingValues(order), jsonInner),
+				body: fillTemplate(template, bookingValues(order, weightG), jsonInner),
 			});
 			if (answer.status < 200 || answer.status > 299) return { ok: false, message: failure(answer.status) };
 			const trackingNumber = cleanTracking(readPath(answer.json, keys.trackingPath || 'trackingNumber'));

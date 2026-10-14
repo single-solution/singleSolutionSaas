@@ -261,8 +261,19 @@ describe('core/feeds and core/llms', () => {
 		expect(out).toContain('out_of_stock');
 		// Meta gets the regular price and the sale price in their own columns (G4)
 		expect(metaLine(/** @type {any} */ (row))).toBe(
-			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,Brand,,SKU-A,prd_1,,,,,,,,,,\r\n',
+			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,Brand,,SKU-A,prd_1,,,,,,,,,,,\r\n',
 		);
+		// a variant's package weight goes out as its shipping weight when its item type has packages
+		expect(row?.shippingWeight).toBe('');
+		const parcel = { weightG: 180, lengthMm: null, widthMm: null, heightMm: null };
+		const weighed = {
+			...product,
+			variants: product.variants.map((variant) => ({ ...variant, parcel })),
+		};
+		const [heavy] = feedRows(/** @type {any} */ (weighed), { ...context, parcels: true });
+		expect(googleItem(/** @type {any} */ (heavy))).toContain('<g:shipping_weight>180 g</g:shipping_weight>');
+		expect(metaLine(/** @type {any} */ (heavy))).toContain(',180 g,');
+		expect(feedRows(/** @type {any} */ (weighed), context)[0]?.shippingWeight).toBe('');
 		expect(metaLine(/** @type {any} */ ({ ...row, inStock: false, condition: '', salePrice: '' }))).toContain(
 			'out of stock,new,12.00 USD,,',
 		);
@@ -522,7 +533,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(csv.headers.get('content-type')).toContain('text/csv');
 		const lines = csv.text.trim().split('\r\n');
 		expect(lines[0]).toBe(
-			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,brand,gtin,mpn,item_group_id,color,material,size,pattern,google_product_category,custom_label_0,custom_label_1,custom_label_2,custom_label_3,custom_label_4',
+			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,brand,gtin,mpn,item_group_id,color,material,size,pattern,google_product_category,shipping_weight,custom_label_0,custom_label_1,custom_label_2,custom_label_3,custom_label_4',
 		);
 		expect(lines).toHaveLength(3);
 		expect(lines[2]).toContain('out of stock');

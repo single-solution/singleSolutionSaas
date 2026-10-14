@@ -34,12 +34,13 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { fieldsOn, unitRulesOf } from '../adapters/catalog-store.js';
+import { fieldsOn, productTypes, unitRulesOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
 import { checkUnit, missingOrderFields, sharedKeys } from '../core/fields.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
 import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, triggersOfFlow } from '../core/flow.js';
 import { createId } from '@ss/contracts';
+import { elementsOf } from '../core/item-types.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	checkTransition,
@@ -154,6 +155,40 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
+	 * The weight in grams of an order's package for a courier booking: each physical line's variant weight (its item
+	 * type's `parcel`, while Delivery zones is on) times its quantity; null when one of them is not known.
+	 * @param {Site} s @param {OrderRecord} order
+	 * @returns {Promise<number | null>}
+	 */
+	const parcelWeight = async (s, order) => {
+		const lines = order.lines.filter((line) => line.kind === 'physical');
+		if (lines.length === 0) return null;
+		const data = await s.data();
+		const products = /** @type {import('../core/model.js').ProductRecord[]} */ (
+			/** @type {unknown} */ (
+				await data
+					.collection(COLLECTIONS.products)
+					.find(
+						{ websiteId: s.websiteId, id: { $in: [...new Set(lines.map((line) => line.productId))] } },
+						{ projection: { _id: 0, id: 1, kind: 1, typeKey: 1, categoryIds: 1, 'variants.id': 1, 'variants.parcel': 1 } },
+					)
+					.toArray()
+			)
+		);
+		const types = await productTypes(data, products, await s.list('item_types'));
+		const byId = new Map(products.map((item) => [item.id, item]));
+		let grams = 0;
+		for (const line of lines) {
+			const item = byId.get(line.productId);
+			const type = types.get(line.productId);
+			const weight = item?.variants.find((variant) => variant.id === line.variantId)?.parcel?.weightG;
+			if (!type || !elementsOf(type, s.has).parcel || !weight) return null;
+			grams += weight * line.quantity;
+		}
+		return grams;
+	};
+
+	/**
 	 * The shipment of an order entering a `shipped` status as staff give it, checked; a booking through the courier
 	 * API is only prepared here (`book`), and made after every other check.
 	 * @param {Site} s @param {OrderRecord} order @param {MoveInput['shipment']} input
@@ -180,7 +215,7 @@ export const createMoves = (product, service) => {
 			if (!value) throw problem('courier_failed', 'Connect the courier API keys first.');
 			return {
 				book: async () => {
-					const booked = await product.couriers.book({ order, value });
+					const booked = await product.couriers.book({ order, value, weightG: await parcelWeight(s, order) });
 					if (!booked.ok) throw problem('courier_failed', booked.message);
 					return {
 						courier: courier?.name ?? '',

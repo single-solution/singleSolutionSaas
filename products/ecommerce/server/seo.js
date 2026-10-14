@@ -17,6 +17,7 @@ import { lineageOf } from '../core/catalog-taxonomy.js';
 import { specsOf } from '../core/catalog-views.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition, gradesFor } from '../core/grades.js';
+import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
 import { SORTS, sortDocument } from '../core/catalog-query.js';
@@ -106,6 +107,7 @@ const LISTING_FIELDS = Object.freeze({
 	slug: 1,
 	name: 1,
 	kind: 1,
+	typeKey: 1,
 	summary: 1,
 	description: 1,
 	'seo.description': 1,
@@ -627,6 +629,9 @@ export const createSeo = (product, service) => {
 		]);
 		const fields = new Map(attributes.map((field) => [field.id, field]));
 		const byId = new Map(categories.map((category) => [category.id, category]));
+		// each product's item type: its variants' package weights go out as their shipping weight when it has packages
+		const types = await s.list('item_types');
+		const tree = typeTree(categories);
 		const conditions = await conditionsOf(s, byId);
 		const shipping = await shippingOf(s);
 		// prices after the deals that hold all day (feeds are read at the catalogs' own pace; G4)
@@ -683,6 +688,7 @@ export const createSeo = (product, service) => {
 				title: String(settings.itemTitle ?? ''),
 				description: settings.itemDescription === 'seo' ? 'seo' : 'body',
 				identifierExists: settings.identifierExists === 'no' ? 'no' : 'auto',
+				parcels: elementsOf(typeOf(item, types, tree), s.has).parcel,
 				wholeUnits: format.format.wholeUnits === true,
 				variantLink: (variant) => perVariant.get(variant.id)?.link ?? '',
 				variantImage: (variant) => perVariant.get(variant.id)?.image ?? '',

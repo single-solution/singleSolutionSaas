@@ -164,6 +164,7 @@ export const DEFAULT_BODY_TEMPLATE = JSON.stringify({
 	amount: '{amount}',
 	cod: '{cod}',
 	currency: '{currency}',
+	weightG: '{weightG}',
 	note: '{note}',
 });
 
@@ -184,6 +185,7 @@ const TEMPLATE_FIELDS = Object.freeze([
 	'total',
 	'cod',
 	'currency',
+	'weightG',
 	'note',
 ]);
 

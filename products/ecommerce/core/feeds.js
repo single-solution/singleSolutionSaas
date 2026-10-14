@@ -56,6 +56,7 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {string} [shipping] the delivery fee (`2.50 USD`) for the business's country (E17), 0 from the free-delivery
  *   amount (SG-2)
  * @property {string} [shippingCountry]
+ * @property {string} shippingWeight the variant's package weight (`180 g`) when its item type has packages, else ''
  * @property {'no' | ''} [identifierExists] `no` when the row has no GTIN and no MPN and the setting says so (SG-22)
  */
 
@@ -87,6 +88,8 @@ const DESCRIPTION_LENGTH = 5000;
  * @property {'body' | 'seo'} [description] the product's description (else summary) first, or its SEO description
  *   first (SG-23)
  * @property {'auto' | 'no'} [identifierExists] `no`: rows without GTIN and MPN say so (SG-22)
+ * @property {boolean} [parcels] the product's item type has packages (`parcel`, dynamic model §1): rows send each
+ *   variant's weight as the shipping weight
  */
 
 /**
@@ -160,6 +163,7 @@ export const feedRows = (product, context) => {
 				...fieldColumns(context.gradeLabel?.(variant) ?? '', context.values?.(variant) ?? []),
 				shipping: context.shipping ? money(shippingFee(context.shipping, shown.price)) : '',
 				shippingCountry: context.shipping?.country ?? '',
+				shippingWeight: context.parcels && variant.parcel?.weightG ? `${variant.parcel.weightG} g` : '',
 				identifierExists: context.identifierExists === 'no' && !gtin && !mpn ? 'no' : '',
 			};
 		});
@@ -231,6 +235,7 @@ export const googleItem = (row) => {
 		['g:identifier_exists', row.identifierExists ?? ''],
 		['g:product_type', row.productType],
 		['g:google_product_category', row.googleCategory ?? ''],
+		['g:shipping_weight', row.shippingWeight],
 		...FIELD_COLUMNS.map((name) => /** @type {[string, string]} */ ([`g:${name}`, row[name]])),
 		...row.customLabels.map((label, index) => /** @type {[string, string]} */ ([`g:custom_label_${index}`, label])),
 	];
@@ -266,6 +271,7 @@ const META_COLUMNS = Object.freeze([
 	'size',
 	'pattern',
 	'google_product_category',
+	'shipping_weight',
 	'custom_label_0',
 	'custom_label_1',
 	'custom_label_2',
@@ -307,6 +313,7 @@ export const metaLine = (row) =>
 		row.size,
 		row.pattern,
 		row.googleCategory ?? '',
+		row.shippingWeight,
 		...row.customLabels,
 	]
 		.map(csvCell)

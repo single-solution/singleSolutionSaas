@@ -39,13 +39,35 @@ beforeAll(async () => {
 afterAll(async () => shop.product.close());
 
 /**
- * A packed order ready to ship.
- * @param {{ method?: 'cod' | 'online', name?: string }} [options]
+ * A packed order ready to ship (two of one item; `weightG`: its package weight, 0 = not known).
+ * @param {{ method?: 'cod' | 'online', name?: string, weightG?: number }} [options]
  */
-const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper' } = {}) => {
+const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', weightG = 0 } = {}) => {
 	// the kit closes idle merchant database pools when the clock moves on: take a fresh handle
 	data = await shop.db();
-	const product = await shop.seedProduct({ stock: 5, price: 2500 });
+	const product = await shop.seedProduct({
+		stock: 5,
+		price: 2500,
+		...(weightG
+			? {
+					variants: [
+						{
+							id: createId('var'),
+							sku: '',
+							options: {},
+							price: 2500,
+							compareAtPrice: null,
+							cost: null,
+							stock: 5,
+							locations: {},
+							grade: null,
+							active: true,
+							parcel: { weightG, lengthMm: null, widthMm: null, heightMm: null },
+						},
+					],
+				}
+			: {}),
+	});
 	const variant = /** @type {import('../core/model.js').VariantRecord} */ (product.variants[0]);
 	const placed = await placeOrder(
 		data,
@@ -239,7 +261,11 @@ describe('the generic courier API adapter', () => {
 
 	it('books with the default body and the bearer key, and reads the tracking number', async () => {
 		answer = () => ({ status: 201, body: Buffer.from(JSON.stringify({ trackingNumber: 'TN-1' })) });
-		const booked = await couriers.book({ order, value: { bookUrl: KEYS.bookUrl, trackUrl: KEYS.trackUrl, apiKey: 'k1' } });
+		const booked = await couriers.book({
+			order,
+			value: { bookUrl: KEYS.bookUrl, trackUrl: KEYS.trackUrl, apiKey: 'k1' },
+			weightG: 360,
+		});
 		expect(booked).toEqual({ ok: true, trackingNumber: 'TN-1' });
 		const call = /** @type {{ url: string, init: any }} */ (sent.at(-1));
 		expect(call.init).toMatchObject({ method: 'POST', timeoutMs: 8000, maxBytes: 65536, redirect: 'error' });
@@ -250,6 +276,7 @@ describe('the generic courier API adapter', () => {
 			items: '2',
 			amount: '19.99',
 			cod: '0.00',
+			weightG: '360',
 			note: 'Leave at door',
 		});
 	});
@@ -257,15 +284,18 @@ describe('the generic courier API adapter', () => {
 	it('reports what went wrong', async () => {
 		const value = { ...KEYS };
 		answer = () => ({ status: 500, body: Buffer.from('oops') });
-		expect(await couriers.book({ order, value })).toEqual({ ok: false, message: 'The courier answered 500.' });
+		expect(await couriers.book({ order, value, weightG: null })).toEqual({ ok: false, message: 'The courier answered 500.' });
 		answer = () => netError('timeout', 'deadline', 'too slow');
-		expect(await couriers.book({ order, value })).toEqual({ ok: false, message: 'The courier could not be reached.' });
+		expect(await couriers.book({ order, value, weightG: null })).toEqual({
+			ok: false,
+			message: 'The courier could not be reached.',
+		});
 		answer = () => ({ status: 200, body: Buffer.from('not json') });
-		expect(await couriers.book({ order, value })).toEqual({
+		expect(await couriers.book({ order, value, weightG: null })).toEqual({
 			ok: false,
 			message: 'The courier did not answer a tracking number.',
 		});
-		expect(await couriers.book({ order, value: { ...KEYS, apiKey: '' } })).toMatchObject({ ok: false });
+		expect(await couriers.book({ order, value: { ...KEYS, apiKey: '' }, weightG: null })).toMatchObject({ ok: false });
 		expect(await couriers.track({ trackingNumber: 'X', value: null })).toMatchObject({ ok: false });
 		answer = () => ({ status: 404, body: Buffer.from('{}') });
 		expect(await couriers.track({ trackingNumber: 'X', value })).toEqual({ ok: false, message: 'The courier answered 404.' });
@@ -285,21 +315,24 @@ describe('the generic courier API adapter', () => {
 	});
 
 	it('gives the booking the cash to collect', () => {
-		const values = bookingValues({
-			...order,
-			payment: { method: 'cod', paid: 500 },
-			address: {
-				name: '',
-				phone: '',
-				line1: 'L1',
-				line2: '',
-				city: 'C',
-				area: 'A',
-				postalCode: 'P',
-				country: 'US',
-				notes: '',
+		const values = bookingValues(
+			{
+				...order,
+				payment: { method: 'cod', paid: 500 },
+				address: {
+					name: '',
+					phone: '',
+					line1: 'L1',
+					line2: '',
+					city: 'C',
+					area: 'A',
+					postalCode: 'P',
+					country: 'US',
+					notes: '',
+				},
 			},
-		});
+			null,
+		);
 		expect(values).toMatchObject({
 			cod: '14.99',
 			name: 'Sam',
@@ -307,6 +340,8 @@ describe('the generic courier API adapter', () => {
 			line1: 'L1',
 			note: 'Leave at door',
 			total: '1999',
+			// no weight known: the courier gets none
+			weightG: '',
 		});
 	});
 });
@@ -421,5 +456,20 @@ describe('booking and tracking shipments', () => {
 		const tracks = shop.callsTo(`${COURIER}/track`).length;
 		await shop.api('GET', `/v1/orders/${byHand.id}`);
 		expect(shop.callsTo(`${COURIER}/track`).length).toBe(tracks);
+	});
+
+	it('sends the package weight of items whose item type has packages, none when one is not known', async () => {
+		await shop.connect('courier', { bookUrl: KEYS.bookUrl, trackUrl: KEYS.trackUrl, apiKey: 'k1' });
+		shop.responders.set(`${COURIER}/book`, () => ({ status: 200, body: { trackingNumber: 'W1' } }));
+		/** @param {number} weightG */
+		const bookedWeight = async (weightG) => {
+			const order = await packedOrder({ weightG });
+			const shipped = await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'dispatched', shipment: { book: true } });
+			expect(shipped.status).toBe(200);
+			return JSON.parse(shop.callsTo(`${COURIER}/book`).at(-1)?.body ?? '{}').weightG;
+		};
+		// two of 400 g
+		expect(await bookedWeight(400)).toBe('800');
+		expect(await bookedWeight(0)).toBe('');
 	});
 });

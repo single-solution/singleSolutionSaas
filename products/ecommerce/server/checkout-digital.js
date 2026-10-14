@@ -1,12 +1,14 @@
 /**
  * Digital goods (PLAN 0.8.8: download/licence after payment): the merchant adds license keys and uploads files for a
- * digital product (server routes and the matching admin-widget routes, permission `catalog.edit`); when an order is
+ * digital product whose item type has them (`licenceKeys`, `downloads`; server routes and the matching admin-widget
+ * routes, permission `catalog.edit`); when an order is
  * paid its digital lines get license keys (one per unit, each key given once); the shopper downloads the files of a
  * paid order through 5-minute signed links, counted per order line up to the download limit.
  * @module
  */
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { productTypes } from '../adapters/catalog-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import {
 	DOWNLOAD_SECONDS,
@@ -18,6 +20,7 @@ import {
 	fileNameOf,
 	safeFileName,
 } from '../core/digital.js';
+import { elementsOf } from '../core/item-types.js';
 import { ID_PREFIX } from '../core/model.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -37,11 +40,23 @@ const MEDIA_TYPE = /^[a-z]+\/[a-z0-9.+-]{1,100}$/;
  * @param {Service} service
  */
 export const createDigital = (product, service) => {
-	/** @param {Site} s @param {string} id */
-	const digitalProduct = async (s, id) => {
-		const found = await createOrdersStore(await s.data()).product(id);
+	/**
+	 * A digital product whose item type has the part (`licenceKeys` or `downloads`).
+	 * @param {Site} s @param {string} id @param {'licenceKeys' | 'downloads'} part
+	 */
+	const digitalProduct = async (s, id, part) => {
+		const data = await s.data();
+		const found = await createOrdersStore(data).product(id);
 		if (!found) throw problem('not_found', 'There is no such product.');
 		if (found.kind !== 'digital') throw service.invalid('id', 'Only digital products have license keys and files.');
+		const type = /** @type {import('../core/item-types.js').ItemType} */ (
+			(await productTypes(data, [found], await s.list('item_types'))).get(found.id)
+		);
+		if (!elementsOf(type, s.has)[part])
+			throw service.invalid(
+				'id',
+				part === 'licenceKeys' ? 'Its item type has no license keys.' : 'Its item type has no downloads.',
+			);
 		return found;
 	};
 
@@ -50,7 +65,7 @@ export const createDigital = (product, service) => {
 		const s = await service.site(ctx);
 		const checked = checkLicenceKeys(ctx.body?.keys);
 		if (!checked.ok) throw service.invalid('keys', checked.message);
-		const item = await digitalProduct(s, String(ctx.params.id));
+		const item = await digitalProduct(s, String(ctx.params.id), 'licenceKeys');
 		const store = createOrdersStore(await s.data());
 		const added = await store.addLicences(
 			item.id,
@@ -69,7 +84,7 @@ export const createDigital = (product, service) => {
 		if (typeof body.type !== 'string' || !MEDIA_TYPE.test(body.type)) throw service.invalid('type', 'type is a media type.');
 		if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > MAX_FILE_BYTES)
 			throw service.invalid('size', 'size is the file size in bytes (at most 5 GB).');
-		const item = await digitalProduct(s, String(ctx.params.id));
+		const item = await digitalProduct(s, String(ctx.params.id), 'downloads');
 		const storage = await product.connections.storage(s.websiteId);
 		if (!storage) throw problem('storage_not_connected', 'Connect storage in the product dashboard first.');
 		const key = fileKey(item.id, name);

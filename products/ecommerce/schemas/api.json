@@ -20827,7 +20827,7 @@
 	},
 	"POST /v1/products/:id/licences": {
 		"summary": "Add license keys to a digital product",
-		"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product); 404 not_found.",
+		"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found.",
 		"body": {
 			"type": "object",
 			"required": ["keys"],
@@ -20850,7 +20850,7 @@
 	},
 	"POST /v1/products/:id/files": {
 		"summary": "Add a file to a digital product",
-		"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product); 404 not_found; 503 storage_not_connected.",
+		"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product, or its item type has no downloads); 404 not_found; 503 storage_not_connected.",
 		"body": {
 			"type": "object",
 			"required": ["name", "type", "size"],
@@ -21174,7 +21174,7 @@
 	},
 	"POST /v1/admin/products/:id/licences": {
 		"summary": "Add license keys to a digital product (Catalog admin widget)",
-		"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product); 404 not_found. The ticket needs catalog.edit.",
+		"description": "Keys are trimmed; repeats and keys the product already has are skipped. When an order is paid each unit of a digital line gets one key (each key is given once). 422 validation_failed at /keys or /id (not a digital product, or its item type has no license keys); 404 not_found. The ticket needs catalog.edit.",
 		"body": {
 			"type": "object",
 			"required": ["keys"],
@@ -21197,7 +21197,7 @@
 	},
 	"POST /v1/admin/products/:id/files": {
 		"summary": "Add a file to a digital product (Catalog admin widget)",
-		"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product); 404 not_found; 503 storage_not_connected. The ticket needs catalog.edit.",
+		"description": "Answers a signed upload: PUT the file to upload.url with upload.headers within 15 minutes. The file is listed on the product at once (a file of the same name is replaced); a product has at most 20 files. The name is cleaned to letters, digits, dot, dash and underscore (at most 120 characters). Shoppers download the files of paid orders (GET /v1/shop/orders/{id}/downloads/{lineId}/{file}). 422 validation_failed at /name, /type, /size or /id (not a digital product, or its item type has no downloads); 404 not_found; 503 storage_not_connected. The ticket needs catalog.edit.",
 		"body": {
 			"type": "object",
 			"required": ["name", "type", "size"],
@@ -26213,11 +26213,11 @@
 	},
 	"GET /v1/feeds/products.xml": {
 		"summary": "The Google Merchant Center feed",
-		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, sale_price_effective_date, condition (each grade's standard condition; new without a grade), brand, gtin and mpn (the variant's own, else its SKU as skuAs says), identifier_exists, product_type, google_product_category, custom_label_0 and shipping (empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it. Prices (G4): price is the regular price; on sale (a \"was\" price above the price, or an automatic deal on one unit that holds all day), sale_price is the price shown, and sale_price_effective_date (start/end, ISO 8601) is sent while the deal has an end."
+		"description": "Answers application/xml, not JSON: an RSS 2.0 feed with the g: namespace, one item per active variant priced above 0 of every active product shoppers may see (at most 100,000), with g:id, item_group_id, title, description, link, image_link, availability, price, sale_price, sale_price_effective_date, condition (each grade's standard condition; new without a grade), brand, gtin and mpn (the variant's own, else its SKU as skuAs says), identifier_exists, product_type, google_product_category, custom_label_0, shipping and shipping_weight (the variant's package weight, for items whose item type has packages; empty fields left out). Shaped by the feeds settings: items (with_images or all), includeOutOfStock, itemTitle, itemDescription, skuAs, identifierExists, googleCategory and gradeLabel; shipping from Delivery zones. g:id is the variant id, or the feedId an import kept from the earlier shop's feed; item_group_id is the product's imported feedGroupId on every item, else the product id on products with several variants. The cost is never in it. Prices (G4): price is the regular price; on sale (a \"was\" price above the price, or an automatic deal on one unit that holds all day), sale_price is the price shown, and sale_price_effective_date (start/end, ISO 8601) is sent while the deal has an end."
 	},
 	"GET /v1/feeds/products.csv": {
 		"summary": "The Meta (Facebook) catalog feed",
-		"description": "Answers text/csv, not JSON: a header line, then one line per active variant priced above 0 of every active product shoppers may see (at most 100,000), with the columns id, title, description, availability, condition, price (the regular price), sale_price and sale_price_effective_date (on sale, as in products.xml), link, image_link, brand, gtin, mpn, item_group_id, google_product_category and custom_label_0 (RFC 4180, CRLF line ends). The same feeds settings as products.xml."
+		"description": "Answers text/csv, not JSON: a header line, then one line per active variant priced above 0 of every active product shoppers may see (at most 100,000), with the columns id, title, description, availability, condition, price (the regular price), sale_price and sale_price_effective_date (on sale, as in products.xml), link, image_link, brand, gtin, mpn, item_group_id, color, material, size, pattern, google_product_category, shipping_weight and custom_label_0 to custom_label_4 (RFC 4180, CRLF line ends). The same feeds settings as products.xml."
 	},
 	"GET /v1/llms.txt": {
 		"summary": "llms.txt of the catalog",

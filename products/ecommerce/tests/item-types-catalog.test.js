@@ -206,6 +206,14 @@ describe('the type of a product', () => {
 				}),
 			),
 		).toEqual(['/digital/downloadLimit']);
+		const card = await api('POST', '/v1/products', { name: 'Card', typeKey: 'gift_card', price: 1 });
+		expect((await api('POST', `/v1/products/${card.id}/licences`, { keys: ['KEY-1'] })).added).toBe(1);
+		const file = await shop.api('POST', `/v1/products/${card.id}/files`, {
+			name: 'card.pdf',
+			type: 'application/pdf',
+			size: 10,
+		});
+		expect(pathsOf(file)).toEqual(['/id']);
 		expect(
 			pathsOf(
 				await shop.api('POST', '/v1/products', {
@@ -282,6 +290,23 @@ describe('the parts a type has on its pages', () => {
 		const used = await api('PATCH', `/v1/products/${phone.id}`, { typeKey: 'used_phone' });
 		const page = (await shopper('GET', `/v1/shop/products/${used.slug}`)).json;
 		expect(page).toMatchObject({ type: { key: 'used_phone', kind: 'physical' }, sizeChart: null });
+	});
+});
+
+describe('packages', () => {
+	it('go out as the feeds’ shipping weight', async () => {
+		await shop.setting('feeds', 'items', 'all');
+		await api('POST', '/v1/products', {
+			name: 'Boxed lamp',
+			status: 'active',
+			typeKey: 'physical',
+			price: 2500,
+			stock: 1,
+			parcel: { weightG: 1200, lengthMm: 300, widthMm: 200, heightMm: 200 },
+		});
+		const feed = (await shop.api('GET', '/v1/feeds/products.xml')).text;
+		expect(feed).toContain('<g:shipping_weight>1200 g</g:shipping_weight>');
+		expect((await shop.api('GET', '/v1/feeds/products.csv')).text).toContain(',1200 g,');
 	});
 });
 

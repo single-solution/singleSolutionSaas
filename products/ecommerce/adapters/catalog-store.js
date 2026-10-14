@@ -126,7 +126,7 @@ export const locationsOf = (data) => allOf(data, COLLECTIONS.locations);
  * The categories given and every one above them, as item types read them (`core/item-types.js` `typeTree`).
  * @param {WebsiteData} data @param {string[]} ids
  */
-export const typeTreeOf = async (data, ids) => {
+const typeTreeOf = async (data, ids) => {
 	const categories = data.collection(COLLECTIONS.categories);
 	const projection = { _id: 0, id: 1, path: 1, typeKey: 1 };
 	/** @param {string[]} wanted */

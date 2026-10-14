@@ -23,7 +23,7 @@ export const ELEMENTS = Object.freeze(
 	/** @type {const} */ (['variants', 'grades', 'units', 'chart', 'parcel', 'warranty', 'downloads', 'licenceKeys', 'slots']),
 );
 /** The feature each element needs (an element works only while its feature is on). */
-export const ELEMENT_FEATURES = Object.freeze({
+const ELEMENT_FEATURES = Object.freeze({
 	variants: 'variants',
 	grades: 'grades_serials',
 	units: 'grades_serials',
@@ -44,12 +44,10 @@ const ELEMENT_KINDS = Object.freeze(
 		slots: ['service'],
 	}),
 );
-/** The feature a kind needs to be sold (physical goods need none). */
-export const KIND_FEATURES = Object.freeze({ physical: null, digital: 'digital_goods', service: 'bookings' });
 /** When units get their numbers: picked from units added to stock, or typed when the order is packed (or later). */
 export const UNIT_CAPTURES = Object.freeze(/** @type {const} */ (['stock', 'packing']));
 /** The stage units must have their numbers before: entering packed, or entering shipped (and delivered). */
-export const UNIT_STAGES = Object.freeze(/** @type {const} */ (['packed', 'shipped']));
+const UNIT_STAGES = Object.freeze(/** @type {const} */ (['packed', 'shipped']));
 /** At most this many types, characters in a name, and fields a type names. */
 export const TYPE_LIMITS = Object.freeze({ types: 50, name: 60, fields: 40 });
 
