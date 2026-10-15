@@ -339,6 +339,77 @@ describe('A9: password and lock options', () => {
 		await env.setting('email_password', 'lockMode', 'fixed');
 	});
 
+	it('wrong passwords are forgotten after a quiet day: only recent ones lead to a lock (K-27)', async () => {
+		const HOUR = 3_600_000;
+		const DAY = 24 * HOUR;
+		await env.setting('email_password', 'maxAttempts', 5);
+		for (const name of ['steady', 'quiet', 'slow'])
+			await env.visitor('POST', '/v1/sign-up/password', { email: `${name}@example.com`, password: `${name} password 1` });
+		// just inside the day the earlier wrong passwords still count: the 5th locks (maxAttempts 5)
+		for (let i = 0; i < 4; i += 1) expect(code(await signIn('steady@example.com', 'bad'))).toBe('sign_in_failed');
+		env.advance(DAY - 1);
+		expect(code(await signIn('steady@example.com', 'bad'))).toBe('sign_in_failed');
+		expect(code(await signIn('steady@example.com', 'steady password 1'))).toBe('locked');
+		// a full day with no wrong password: the 4 before are forgotten and the count starts again at the next one
+		for (let i = 0; i < 4; i += 1) expect(code(await signIn('quiet@example.com', 'bad'))).toBe('sign_in_failed');
+		env.advance(DAY);
+		for (let i = 0; i < 5; i += 1) expect(code(await signIn('quiet@example.com', 'bad'))).toBe('sign_in_failed');
+		expect(code(await signIn('quiet@example.com', 'quiet password 1'))).toBe('locked');
+		// the day runs from the last wrong password, not the first: slow guessing still adds up
+		for (let i = 0; i < 4; i += 1) {
+			expect(code(await signIn('slow@example.com', 'bad'))).toBe('sign_in_failed');
+			env.advance(20 * HOUR);
+		}
+		expect(code(await signIn('slow@example.com', 'bad'))).toBe('sign_in_failed');
+		expect(code(await signIn('slow@example.com', 'slow password 1'))).toBe('locked');
+		// a growing lock grows again from its free failures after a quiet day
+		await env.setting('email_password', 'lockMode', 'growing');
+		await env.setting('email_password', 'maxAttempts', 3);
+		await env.visitor('POST', '/v1/sign-up/password', { email: 'regrow@example.com', password: 'regrow password 1' });
+		for (let i = 0; i < 5; i += 1) {
+			expect(code(await signIn('regrow@example.com', 'bad'))).toBe('sign_in_failed');
+			env.advance(HOUR);
+		}
+		env.advance(DAY);
+		for (let i = 0; i < 3; i += 1) expect(code(await signIn('regrow@example.com', 'bad'))).toBe('sign_in_failed');
+		expect((await signIn('regrow@example.com', 'regrow password 1')).json.status).toBe('signed_in');
+		await env.setting('email_password', 'lockMode', 'fixed');
+		await env.setting('email_password', 'maxAttempts', 5);
+	});
+
+	it('the quiet period is a setting of each password method, from 1 to 720 hours (K-27)', async () => {
+		const HOUR = 3_600_000;
+		await env.setting('phone_password', 'maxAttempts', 5);
+		for (const value of [0, 721, 1.5])
+			await expect(env.setting('email_password', 'forgetHours', value)).rejects.toThrow(/setting: 4\d\d/);
+		await expect(env.setting('phone_password', 'forgetHours', 0)).rejects.toThrow(/setting: 4\d\d/);
+		await env.setting('email_password', 'forgetHours', 1);
+		await env.setting('phone_password', 'forgetHours', 2);
+		await env.visitor('POST', '/v1/sign-up/password', { email: 'hourly@example.com', password: 'hourly password 1' });
+		for (let i = 0; i < 4; i += 1) expect(code(await signIn('hourly@example.com', 'bad'))).toBe('sign_in_failed');
+		env.advance(HOUR);
+		for (let i = 0; i < 4; i += 1) expect(code(await signIn('hourly@example.com', 'bad'))).toBe('sign_in_failed');
+		expect((await signIn('hourly@example.com', 'hourly password 1')).json.status).toBe('signed_in');
+		// Phone + password keeps its own: an hour is not its two
+		/** @param {string} phone @param {string} password */
+		const phoneSignIn = (phone, password) => env.visitor('POST', '/v1/sign-in/phone-password', { phone, password });
+		for (const phone of ['+447700900331', '+447700900332'])
+			expect(
+				(await env.visitor('POST', '/v1/sign-up/phone-password', { phone, password: `phone pass ${phone.slice(-3)}` })).json
+					.status,
+			).toBe('signed_in');
+		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900331', 'bad'))).toBe('sign_in_failed');
+		env.advance(HOUR);
+		expect(code(await phoneSignIn('+447700900331', 'bad'))).toBe('sign_in_failed');
+		expect(code(await phoneSignIn('+447700900331', 'phone pass 331'))).toBe('locked');
+		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900332', 'bad'))).toBe('sign_in_failed');
+		env.advance(2 * HOUR);
+		for (let i = 0; i < 4; i += 1) expect(code(await phoneSignIn('+447700900332', 'bad'))).toBe('sign_in_failed');
+		expect((await phoneSignIn('+447700900332', 'phone pass 332')).json.status).toBe('signed_in');
+		await env.setting('email_password', 'forgetHours', 24);
+		await env.setting('phone_password', 'forgetHours', 24);
+	});
+
 	it('letter and digit and a maximum length, for email + password and phone + password (ST-26)', async () => {
 		/** @param {string} email @param {string} password */
 		const tryUp = (email, password) => env.visitor('POST', '/v1/sign-up/password', { email, password });

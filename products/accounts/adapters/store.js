@@ -313,15 +313,32 @@ export const createStore = (data, { now }) => {
 					throw error;
 				}
 			},
-			/** Count a wrong password; returns the new count. @param {string} id */
-			failedLogin: async (id) =>
-				as(
-					await users.findOneAndUpdate(
-						{ websiteId, id },
-						{ $inc: { failedLogins: 1 } },
-						{ returnDocument: 'after', projection: { _id: 0, failedLogins: 1 } },
-					),
-				)?.failedLogins ?? 0,
+			/**
+			 * Count a wrong password or two-step code in one step; returns the new count. Only recent failures count
+			 * (K-27): when the last one is `forgetMs` or more ago (or none is known), the count starts again at this one.
+			 * @param {string} id @param {number} forgetMs
+			 */
+			failedLogin: async (id, forgetMs) => {
+				const when = at();
+				const since = new Date(when.getTime() - forgetMs);
+				const recent = { $gt: [{ $ifNull: ['$lastFailedAt', since] }, since] };
+				return (
+					as(
+						await users.findOneAndUpdate(
+							{ websiteId, id },
+							[
+								{
+									$set: {
+										failedLogins: { $cond: [recent, { $add: [{ $ifNull: ['$failedLogins', 0] }, 1] }, 1] },
+										lastFailedAt: when,
+									},
+								},
+							],
+							{ returnDocument: 'after', projection: { _id: 0, failedLogins: 1 } },
+						),
+					)?.failedLogins ?? 0
+				);
+			},
 			/**
 			 * A page of users, newest first, filtered by text (name, email, phone), role or status.
 			 * @param {{ after: [string, string] | null, limit: number } & UserQuery} query

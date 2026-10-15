@@ -205,9 +205,10 @@ export const createFlows = (product, service) => {
 	const afterSignUp = async (s, user, how) => (user.status === 'pending' ? { status: 'pending' } : service.finish(s, user, how));
 
 	/**
-	 * The password rules of a method (A2, A9, ST-26): each of Email + password and Phone + password has its own lengths,
-	 * letter-and-digit, breached-password and lock settings; the lock mode, the network limit and the personal check
-	 * are Email + password's, for both.
+	 * The password rules of a method (A2, A9, ST-26, K-27): each of Email + password and Phone + password has its own
+	 * lengths, letter-and-digit, breached-password and lock settings (how many failures, how long, and after how many
+	 * quiet hours they are forgotten); the lock mode, the network limit and the personal check are Email + password's,
+	 * for both.
 	 * @param {Site} s @param {string} method
 	 */
 	const passwordRules = async (s, method) => {
@@ -220,6 +221,7 @@ export const createFlows = (product, service) => {
 			breachedCheck: own.breachedCheck === true,
 			maxAttempts: Number(own.maxAttempts),
 			lockMinutes: Number(own.lockMinutes),
+			forgetMs: Number(own.forgetHours) * HOUR_MS,
 			lockMode: String(email.lockMode),
 			networkLimit: Number(email.networkLimit),
 			personalCheck: email.personalCheck === true,
@@ -232,8 +234,9 @@ export const createFlows = (product, service) => {
 	 * @param {Site} s @param {UserRecord} user @param {string} method
 	 */
 	const countFailure = async (s, user, method) => {
-		const failures = await s.store.users.failedLogin(user.id);
-		await s.store.users.update(user.id, { ...lockAfter({ ...(await passwordRules(s, method)), failures, now: now() }) });
+		const rules = await passwordRules(s, method);
+		const failures = await s.store.users.failedLogin(user.id, rules.forgetMs);
+		await s.store.users.update(user.id, { ...lockAfter({ ...rules, failures, now: now() }) });
 	};
 
 	/**
@@ -291,7 +294,7 @@ export const createFlows = (product, service) => {
 		// with Phone + password, a sign-in code from staff works in the password box (A3)
 		const staffCode = !passwordOk && method === 'phone_password' ? await staffCodeOf(s, user, body.password) : null;
 		if (!passwordOk && !staffCode) {
-			const failures = await s.store.users.failedLogin(user.id);
+			const failures = await s.store.users.failedLogin(user.id, rules.forgetMs);
 			await s.store.users.update(user.id, { ...lockAfter({ ...rules, failures, now: now() }) });
 			await service.logSignIn(s, user, 'user.sign_in_failed', 'Wrong password');
 			throw failed();

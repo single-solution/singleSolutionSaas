@@ -221,7 +221,9 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  * @property {string | null} passwordHash
  * @property {{ sealed: string, lastStep: number | null, recovery: Array<{ hash: string, format: 'v1' | 'sha256_prefixed' }>,
  *   enabledAt: Date | null } | null} twoStep recovery codes as hashes with their format (A8)
- * @property {number} failedLogins
+ * @property {number} failedLogins wrong passwords and two-step codes that still count toward the lock (A9, ST-1)
+ * @property {Date} [lastFailedAt] the last of them: after the method's quiet hours with none, the count starts again
+ *   (K-27)
  * @property {Date | null} lockedUntil
  * @property {number} [lockLevel] how far a growing lock has grown (A9)
  * @property {string | null} [phoneDigits] the last 10 digits of the phone (A4)
