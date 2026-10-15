@@ -185,6 +185,8 @@ export const settingsPlan = (values) => {
 				'phone.cooldownSeconds': 30,
 				'phone.perHour': 6,
 				'phone.websitePerHour': 0,
+				// SaaS default (A9; store mapping to review)
+				'phone.codeTries': 5,
 				// addresses: at most 6, name, phone and city needed (`packages/shared/src/customerAddresses.ts`:4, :55-80)
 				'profile.maxAddresses': 6,
 				'profile.keepOneAddress': false,
@@ -225,6 +227,8 @@ export const settingsPlan = (values) => {
 				'staff_links.codeMinutes': 15,
 				'staff_links.setupDays': 7,
 				...(site ? { 'staff_links.setupPageUrl': `${site}/account/setup/{code}` } : {}),
+				// SaaS default (A12; store mapping to review)
+				'roles.maxRoles': 100,
 				'role_requests.requestableRoles': [MEMBER_ROLE],
 				'role_requests.requireNote': false,
 				// SB tells a repeat ask that the number already belongs to a member, "already-member"

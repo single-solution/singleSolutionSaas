@@ -30,7 +30,7 @@ const PRODUCTS = path.resolve(import.meta.dirname, '../../../products');
  */
 const productModule = (file) => import(pathToFileURL(path.join(PRODUCTS, file)).href);
 const accounts = await productModule('accounts/core/imports.js');
-const { READY_ROLES } = await productModule('accounts/core/roles.js');
+const { ROLE_TEMPLATES } = await productModule('accounts/core/roles.js');
 const { checkCouriers } = await productModule('ecommerce/core/couriers.js');
 const { checkZones } = await productModule('ecommerce/core/delivery.js');
 const { checkOrderFlow } = await productModule('ecommerce/core/flow.js');
@@ -128,12 +128,13 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 			trunkPrefix: String(settings.accounts?.settings?.['phone.trunkPrefix']),
 		};
 		const roleKeys = new Set([
-			...READY_ROLES.map((/** @type {{ key: string }} */ role) => role.key),
+			...ROLE_TEMPLATES.map((/** @type {{ key: string }} */ role) => role.key),
 			...roles.map((role) => String(role.key)),
 		]);
 		const users = await records('accounts.users');
 		const rules = {
 			roles: roleKeys,
+			signUpRole: 'customer',
 			fields: [],
 			phoneFormat,
 			isPasswordHash: (/** @type {string} */ hash) => /^\$2[aby]\$\d{2}\$/.test(hash),
