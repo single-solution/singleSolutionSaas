@@ -421,7 +421,7 @@
 		"status": "sent when an order moves into a status whose notify is on (by default confirmed, dispatched, delivered, cancelled and refunded; a cancel at the end of its window too), with the checkout setting statusTemplates one (the default).",
 		"perStatus": "with statusTemplates per_status, the status message uses one template per status key instead (for example ecommerce.order_status.confirmed and ecommerce.order_status.dispatched in the default flow): your template for that status, else your ecommerce.order_status template, else the default words (Your order {number} is now {status}). Write one in Notifications only for the statuses that need their own words."
 	},
-	"orderValuesIntro": "Every order message gets these values, in words from your Texts (Settings → Texts), never codes; a value that does not apply is empty:",
+	"orderValuesIntro": "Every order message gets these values, in words from your Texts (Settings → Texts), never codes; a value that does not apply is empty. It also gets {field_<slug>} for each of the order's, its customer's and its lines' fields with a value (the field's slug with its dashes as underscores, for example {field_gift_message}; a line field joins the lines' values; at most 25; a slug with letters outside a–z cannot be a value name):",
 	"messageValues": {
 		"number": "the order number.",
 		"name": "the shopper's name on the order.",

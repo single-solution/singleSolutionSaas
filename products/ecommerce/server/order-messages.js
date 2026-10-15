@@ -12,12 +12,18 @@
  * canceled: the note for the shopper staff wrote with the move, else the text
  * `messages.cancelReason.<staff | shopper | unpaid | unconfirmed>` — the note staff typed for staff never reaches the
  * shopper; '' for other statuses), `shopperNote` (the note for the shopper staff wrote with a move that is not a cancel,
- * '' without one) and `business`. The merchant edits those words in Texts. Order messages are
+ * '' without one) and `business`, plus `field_<slug>` (the slug's dashes as underscores) for each of the order's, its
+ * customer's and its lines' fields with a value (E28; at most 25, see `core/fields.js` `fieldMessageValues`). The merchant
+ * edits those words in Texts. Order messages are
  * required (sent whatever the shopper opted out of) and saved before they are sent, so a call to Notifications that
  * fails is tried again on the website's next uses (K-17, owner decision D7). A failed or unconnected send never fails
  * the order.
  * @module
  */
+
+import { documentFieldsOf } from '../adapters/catalog-store.js';
+import { fieldMessageValues } from '../core/fields.js';
+import { orderPlaceholders } from '../core/invoice.js';
 
 /** @typedef {import('./service.js').Service} Service */
 /** @typedef {import('./service.js').Site} Site */
@@ -101,7 +107,7 @@ export const createOrderMessages = (service) => {
 					.join(' · ')
 			: '';
 		/** Exactly {@link ORDER_MESSAGE_VALUES} (a missing or extra one fails the type check). @type {Record<OrderMessageValue, string>} */
-		const values = {
+		const known = {
 			number: order.number,
 			name: order.customer.name,
 			firstName: order.customer.name.trim().split(/\s+/)[0] ?? '',
@@ -118,6 +124,9 @@ export const createOrderMessages = (service) => {
 			cancelReason,
 			shopperNote,
 		};
+		// and the order's, its customer's and its lines' fields as `field_<slug>` (E28)
+		const fieldValues = fieldMessageValues(orderPlaceholders(order, await documentFieldsOf(await s.data(), [order])));
+		const values = { ...fieldValues, ...known };
 		return service.notify(
 			s,
 			template,

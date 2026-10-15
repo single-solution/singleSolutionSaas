@@ -110,6 +110,16 @@ describe('order fields', () => {
 		]);
 	});
 
+	it('carries the order’s fields in its messages as field_<slug> (E28)', async () => {
+		await shop.flush();
+		const placed = shop
+			.messages()
+			.filter((message) => message.template === 'ecommerce.order_placed' && message.values.number === ids.order.number);
+		expect(placed.length).toBeGreaterThan(0);
+		expect(placed[0]?.values).toMatchObject({ field_gift_message: 'Happy birthday', field_vat_number: 'GB12345678' });
+		expect(placed[0]?.values).not.toHaveProperty('field_box_size');
+	});
+
 	it('lets staff fill the others, needs the stage’s fields before the move, and prints each where it shows', async () => {
 		const order = ids.order;
 		const detail = await api('GET', `/v1/orders/${order.id}`);

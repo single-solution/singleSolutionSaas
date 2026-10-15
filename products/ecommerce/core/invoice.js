@@ -304,8 +304,45 @@ const filled = (text, values) =>
 	text.replace(/\{([^{}\s]{1,130})\}/gu, (whole, name) => (Object.hasOwn(values, name) ? String(values[name]) : whole));
 
 /**
+ * The `{field.<slug>}` values of an order (E26, E28): its own fields, its customer's, and its lines' — each product or
+ * variant field and each unit field with the lines' values, each once, joined with `, `.
+ * @param {OrderRecord} order @param {DocumentFields} fields
+ * @returns {Record<string, string>}
+ */
+export const orderPlaceholders = (order, fields) => {
+	/** @type {Map<string, Set<string>>} */
+	const lines = new Map();
+	const add = (/** @type {string} */ key, /** @type {string} */ label) => {
+		if (label !== '') lines.set(key, (lines.get(key) ?? new Set()).add(label));
+	};
+	const lineFields = fields.list.filter((field) => field.on === 'product' || field.on === 'variant');
+	const unitFields = fields.list.filter((field) => field.on === 'unit');
+	for (const line of order.lines) {
+		const product = fields.products?.get(line.productId);
+		for (const field of lineFields) {
+			const values = field.on === 'variant' ? product?.variants.get(line.variantId) : product?.specs;
+			add(`field.${field.slug}`, fieldValuesShown(values ?? {}, [field], null)[0]?.label ?? '');
+		}
+		const units = fields.units.get(order.id);
+		for (const field of unitFields)
+			for (const serial of line.serials)
+				for (const value of units?.get(serial)?.[field.id] ?? []) add(`field.${field.slug}`, value);
+	}
+	return {
+		...Object.fromEntries([...lines].map(([key, labels]) => [key, [...labels].join(', ')])),
+		...fieldPlaceholders([
+			{ values: order.fields ?? {}, fields: fields.list.filter((field) => field.on === 'order') },
+			{
+				values: fields.customers.get(order.customer.customerId ?? '') ?? {},
+				fields: fields.list.filter((field) => field.on === 'customer'),
+			},
+		]),
+	};
+};
+
+/**
  * What the seller details and the footer of an order's documents may name (E26): the business's name and contacts,
- * the order number and day, and the order's and its customer's fields.
+ * the order number and day, and the order's, its customer's and its lines' fields ({@link orderPlaceholders}).
  * @param {OrderRecord} order @param {DocumentContext} context
  * @returns {Record<string, string>}
  */
@@ -316,13 +353,7 @@ const documentValues = (order, context) => ({
 	address: context.business.address ?? '',
 	number: order.number,
 	date: placedOn(order, context),
-	...fieldPlaceholders([
-		{ values: order.fields ?? {}, fields: context.fields.list.filter((field) => field.on === 'order') },
-		{
-			values: context.fields.customers.get(order.customer.customerId ?? '') ?? {},
-			fields: context.fields.list.filter((field) => field.on === 'customer'),
-		},
-	]),
+	...orderPlaceholders(order, context.fields),
 });
 
 /**
