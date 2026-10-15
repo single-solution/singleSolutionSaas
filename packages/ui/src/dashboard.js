@@ -10,7 +10,8 @@
  * (refreshed in the background) or its skeleton (PLAN 0.6 motion).
  *
  * A product's `app/dashboard/page.js` renders `<ProductDashboard manifest texts tabs?>` with its manifest, its words
- * (`dashboardTexts`) and the tabs it fills in or adds; its own tabs are built from the pieces exported here.
+ * (`dashboardTexts` from `@ss/ui`) and the tabs it fills in or adds; its own tabs are built from the pieces exported
+ * here.
  * @module
  */
 import { createContext, startTransition, useCallback, useContext, useEffect, useState } from 'react';
@@ -32,7 +33,6 @@ import {
 } from './dashboard-tabs.js';
 
 export { call, fill, useLoad } from './dashboard-api.js';
-export { DASHBOARD_TEXTS, dashboardTexts } from './dashboard-texts.js';
 export {
 	DashboardProvider,
 	FormatForm,

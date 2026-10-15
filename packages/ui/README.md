@@ -105,7 +105,8 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
   (`{ lists: { component, icon, kind, global? } }`, its label in `texts.tabs`). Each tab gets `TabProps`:
   `websiteId`, `domain`, `who`, `support`, `portal` and `open(tab)`.
 - Words: `DASHBOARD_TEXTS` are the shared ones (US English). `dashboardTexts({ title, ...own })` lays the product's
-  title and its own words over them group by group (a product may reword one shared text); `useDashboard()` gives the
+  title and its own words over them group by group (a product may reword one shared text). Both come from `@ss/ui`
+  itself, not from the client-only `@ss/ui/dashboard`, because the product's server `app/layout.js` reads its title; `useDashboard()` gives the
   merged words and `namesOf(keys, max?)` (feature names from the manifest) inside the page or a `DashboardProvider`.
 - Standard tabs, each taking the product's parts as props: `OverviewTab` (`useMore(overview, props)`, a hook that
   returns the product's `needs`, `steps`, `numbers` and `children`), `FeaturesTab` (`warnings(on)`), `SettingsTab`

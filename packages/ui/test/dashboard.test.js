@@ -7,7 +7,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	ConnectionsTab,
-	DASHBOARD_TEXTS,
 	DashboardProvider,
 	DefaultsTab,
 	DevelopersTab,
@@ -24,7 +23,6 @@ import {
 	TextsForm,
 	ThemeForm,
 	call,
-	dashboardTexts,
 	fill,
 	hasSettings,
 	toneOf,
@@ -32,6 +30,7 @@ import {
 	useLoad,
 	withDependents,
 } from '../src/dashboard.js';
+import { DASHBOARD_TEXTS, dashboardTexts } from '../src/index.js';
 import { act, allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 /** @typedef {import('../src/dashboard.js').TabProps} TabProps */
