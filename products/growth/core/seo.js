@@ -85,7 +85,8 @@ export const siteUrlOf = (value, domain) => {
 /**
  * The robots.txt the merchant's site serves: their rules (control characters removed), with `blockAiCrawlers` a group
  * that keeps the AI training crawlers off the whole site (G4), and a `Sitemap:` line per sitemap URL on the website's
- * domain.
+ * domain; with none set, the website's `/sitemap.xml` (where Ecommerce's sitemap route serves it, SEO audit G8), so
+ * search engines find the sitemap.
  * @param {Record<string, unknown>} values the `robots_verification` settings
  * @param {string} domain
  */
@@ -96,7 +97,8 @@ export const robotsTxtOf = (values, domain) => {
 		// eslint-disable-next-line no-control-regex
 		.map((line) => line.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trimEnd())
 		.filter((line) => !/^\s*sitemap\s*:/i.test(line));
-	const sitemaps = (Array.isArray(values.sitemaps) ? values.sitemaps : [])
+	const listed = Array.isArray(values.sitemaps) ? values.sitemaps : [];
+	const sitemaps = (listed.length > 0 ? listed : [`https://${domain}/sitemap.xml`])
 		.map((url) => siteUrlOf(url, domain))
 		.filter((url) => url !== null)
 		.slice(0, 50);
@@ -105,7 +107,9 @@ export const robotsTxtOf = (values, domain) => {
 		values.blockAiCrawlers === true
 			? [...(lines.length > 0 ? [''] : []), ...AI_TRAINING_CRAWLERS.map((name) => `User-agent: ${name}`), 'Disallow: /']
 			: [];
-	return `${[...lines, ...blocked, ...(sitemaps.length > 0 ? ['', ...sitemaps.map((url) => `Sitemap: ${url}`)] : [])].join('\n')}\n`;
+	const before = [...lines, ...blocked];
+	const after = sitemaps.map((url) => `Sitemap: ${url}`);
+	return `${[...before, ...(before.length > 0 && after.length > 0 ? [''] : []), ...after].join('\n')}\n`;
 };
 
 /** @param {unknown} value */

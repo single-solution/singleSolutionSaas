@@ -21,7 +21,7 @@
 		"sitemaps": {
 			"type": "array",
 			"title": "Sitemaps",
-			"description": "https addresses of your sitemaps on this website (Ecommerce serves one).",
+			"description": "https addresses of your sitemaps on this website. Empty: https://<your domain>/sitemap.xml, where Ecommerce's sitemap route serves it.",
 			"default": [],
 			"items": {
 				"type": "string",

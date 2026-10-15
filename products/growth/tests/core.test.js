@@ -638,10 +638,15 @@ describe('pixels and money', () => {
 
 describe('SEO', () => {
 	it('builds robots.txt and the verification tags from the settings', () => {
-		expect(robotsTxtOf({}, DOMAIN)).toBe('\n');
-		expect(robotsTxtOf({ robotsRules: 'User-agent: *\r\nAllow: /\n\n', sitemaps: 'x' }, DOMAIN)).toBe(
-			'User-agent: *\nAllow: /\n',
+		// no sitemap set: the website's /sitemap.xml (Ecommerce's sitemap route serves it), so search engines find it
+		expect(robotsTxtOf({}, DOMAIN)).toBe(`Sitemap: https://${DOMAIN}/sitemap.xml\n`);
+		expect(robotsTxtOf({ robotsRules: 'User-agent: *\r\nAllow: /\n\n', sitemaps: [] }, DOMAIN)).toBe(
+			`User-agent: *\nAllow: /\n\nSitemap: https://${DOMAIN}/sitemap.xml\n`,
 		);
+		// sitemaps set, none of them on the website: no Sitemap line
+		expect(
+			robotsTxtOf({ robotsRules: 'User-agent: *\r\nAllow: /\n\n', sitemaps: ['https://other.example/s.xml'] }, DOMAIN),
+		).toBe('User-agent: *\nAllow: /\n');
 		expect(tokenOf('<meta name="x" content=" t-1 ">')).toBe('t-1');
 		expect(tokenOf('bad token')).toBeNull();
 		expect(tokenOf(3)).toBeNull();
