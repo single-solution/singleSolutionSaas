@@ -341,7 +341,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 		});
 		await write(DEVICES, 'POST', '/v1/landings', {
 			brandId: brand.id,
-			grade: 'a-plus',
+			facet: { field: 'grade', value: 'a-plus' },
 			h1: 'A+ Pixel phones',
 			indexable: 'yes',
 		});
