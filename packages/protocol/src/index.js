@@ -1,7 +1,7 @@
 /**
  * @ss/protocol — signing and verification shared by the Portal and every product: Ed25519 keys and JWKS, browser and
- * server tokens, tickets, launches, client assertions, notices, Portal calls and the connect handshake; and the sealing
- * of stored secrets. See README.md.
+ * server tokens, tickets, launches, client assertions, notices, Portal calls and the connect handshake; the sealing
+ * of stored secrets; timestamped webhook signatures; and the hashing, comparing and random-token helpers. See README.md.
  */
 export { isProtocolError } from './errors.js';
 export { createJwks, createKeyResolver, createSigner, generateSigningKey, signingKeyFromSeed, toPublicJwk } from './keys.js';
@@ -22,6 +22,7 @@ export {
 } from './registration.js';
 export { canonicalJson, constantTimeEqual, hmacSha256Hex, randomToken, sha256Hex } from './encoding.js';
 export { createSealer, legacyV1 } from './sealing.js';
+export { WEBHOOK_TOLERANCE_SECONDS, signWebhook, verifyWebhook } from './webhooks.js';
 
 /** @typedef {import('./keys.js').PublicJwk} PublicJwk */
 /** @typedef {import('./keys.js').PrivateJwk} PrivateJwk */

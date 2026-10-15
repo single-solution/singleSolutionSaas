@@ -13,36 +13,38 @@ tickets, 0.4.12 Product ↔ Portal contract), and the one format of sealed store
 
 What `@ss/protocol` exports, by module:
 
-| Module            | Exports                                                                                                                                                                                                                                               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keys.js`         | `generateSigningKey` (the kid defaults to the key's thumbprint), `signingKeyFromSeed`, `createSigner`, `toPublicJwk`, `createJwks`, `createKeyResolver`                                                                                               |
-| `tokens.js`       | `issueToken`, `verifyToken` (kinds `browser` and `server`), `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`                                                                                                                |
-| `tickets.js`      | `issueTicket`, `verifyTicket` (15 minutes)                                                                                                                                                                                                            |
-| `launch.js`       | `issueLaunch`, `verifyLaunch`                                                                                                                                                                                                                         |
-| `assertion.js`    | `signAssertion`, `verifyAssertion` (and the `ReplayStore` type)                                                                                                                                                                                       |
-| `notices.js`      | `signNotice`, `verifyNotice` (the one check of notice bodies), `NOTICE_PATH`                                                                                                                                                                          |
-| `calls.js`        | `signPortalCall`, `verifyPortalCall`                                                                                                                                                                                                                  |
-| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`                                                           |
-| `errors.js`       | `isProtocolError`                                                                                                                                                                                                                                     |
-| `encoding.js`     | `canonicalJson` (sorted keys, no whitespace; the one deterministic JSON), `sha256Hex`, `hmacSha256Hex`, `constantTimeEqual` (hashes both sides first; anything not text or bytes is never equal), `randomToken(bytes = 32, randomBytes?)` (base64url) |
-| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, at least 32 characters; `reseal`), `legacyV1`                                  |
+| Module            | Exports                                                                                                                                                                                                                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keys.js`         | `generateSigningKey` (the kid defaults to the key's thumbprint), `signingKeyFromSeed`, `createSigner`, `toPublicJwk`, `createJwks`, `createKeyResolver`                                                                                                                                                         |
+| `tokens.js`       | `issueToken`, `verifyToken` (kinds `browser` and `server`), `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`                                                                                                                                                                          |
+| `tickets.js`      | `issueTicket`, `verifyTicket` (15 minutes)                                                                                                                                                                                                                                                                      |
+| `launch.js`       | `issueLaunch`, `verifyLaunch`                                                                                                                                                                                                                                                                                   |
+| `assertion.js`    | `signAssertion`, `verifyAssertion` (and the `ReplayStore` type)                                                                                                                                                                                                                                                 |
+| `notices.js`      | `signNotice`, `verifyNotice` (the one check of notice bodies), `NOTICE_PATH`                                                                                                                                                                                                                                    |
+| `calls.js`        | `signPortalCall`, `verifyPortalCall`                                                                                                                                                                                                                                                                            |
+| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`                                                                                                                     |
+| `errors.js`       | `isProtocolError`                                                                                                                                                                                                                                                                                               |
+| `encoding.js`     | `canonicalJson` (sorted keys, no whitespace; the one deterministic JSON), `sha256Hex`, `hmacSha256Hex`, `constantTimeEqual` (hashes both sides first; anything not text or bytes is never equal), `randomToken(bytes = 32, randomBytes?)` (base64url)                                                           |
+| `sealing.js`      | sealing of stored secrets (`ss2.<keyId>.<iv>.<tag>.<data>`, AES-256-GCM, key id derived from the key): `createSealer` (current and optional previous `ENCRYPTION_KEY`, at least 32 characters; `reseal`), `legacyV1`                                                                                            |
+| `webhooks.js`     | `signWebhook({ body, secret, now? })` → `t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`, `verifyWebhook({ header, body, secret, now?, toleranceSeconds? })` (any `v1`, ± 300 s by default: `WEBHOOK_TOLERANCE_SECONDS`), the signature of every call a product sends to a merchant server, and Stripe's |
 
 ## What is signed
 
 Every signed object has its own JOSE `typ`, and each verifier accepts only its own, so one kind can never be replayed
 as another (a ticket as a token, a launch as an assertion, …).
 
-| Object           | Signed by         | `typ` / label            | Lifetime                    | Replay protection                    |
-| ---------------- | ----------------- | ------------------------ | --------------------------- | ------------------------------------ |
-| Browser token    | Portal            | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
-| Server token     | Portal            | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
-| Ticket           | product (own key) | `ss-ticket+jws`          | exactly 15 min              | bound to origin; ends with its `tid` |
-| Launch           | Portal            | `ss-launch+jwt`          | 60 s default, ≤ 300 s       | `consume(jti)`: single use           |
-| Client assertion | product (its key) | `ss-assertion+jwt`       | ≤ 300 s                     | replay store on `iss\|jti`           |
-| Notice           | Portal            | detached, `ss-notice.v1` | `SS-Timestamp` ± 300 s      | replay store on `timestamp\|sha256`  |
-| Portal call      | Portal            | detached, `ss-call.v1`   | `SS-Timestamp` ± 300 s      | replay store on `SS-Nonce`           |
-| Connect request  | HMAC              | `ss-connect.v1`          | timestamp ± 5 min           | nonce record (product)               |
-| Connect answer   | HMAC              | `ss-connected.v1`        | timestamp ± 5 min           | echoes the Portal's request nonce    |
+| Object           | Signed by          | `typ` / label            | Lifetime                    | Replay protection                    |
+| ---------------- | ------------------ | ------------------------ | --------------------------- | ------------------------------------ |
+| Browser token    | Portal             | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
+| Server token     | Portal             | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
+| Ticket           | product (own key)  | `ss-ticket+jws`          | exactly 15 min              | bound to origin; ends with its `tid` |
+| Launch           | Portal             | `ss-launch+jwt`          | 60 s default, ≤ 300 s       | `consume(jti)`: single use           |
+| Client assertion | product (its key)  | `ss-assertion+jwt`       | ≤ 300 s                     | replay store on `iss\|jti`           |
+| Notice           | Portal             | detached, `ss-notice.v1` | `SS-Timestamp` ± 300 s      | replay store on `timestamp\|sha256`  |
+| Portal call      | Portal             | detached, `ss-call.v1`   | `SS-Timestamp` ± 300 s      | replay store on `SS-Nonce`           |
+| Connect request  | HMAC               | `ss-connect.v1`          | timestamp ± 5 min           | nonce record (product)               |
+| Connect answer   | HMAC               | `ss-connected.v1`        | timestamp ± 5 min           | echoes the Portal's request nonce    |
+| Webhook          | shared secret HMAC | `t=…,v1=…` header        | `t` ± 300 s                 | none (the receiver dedupes by id)    |
 
 Common JWS rules (`jws.js`): the header must be `alg: EdDSA` with a `kid` and the expected `typ`; `jwk`, `jku`, `x5u`,
 `x5c`, `x5t`, `crit`, `b64`, `zip` are refused, so a token can never tell the verifier where to find its key; the
