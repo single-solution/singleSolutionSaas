@@ -1574,6 +1574,43 @@
 				}
 			}
 		},
+		"/v1/admin/knowledge/collections": {
+			"get": {
+				"summary": "Knowledge collections",
+				"description": "The collections the entries use, by name, with how many entries each has (C21).",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "knowledge_editor",
+				"x-ss-permission": "knowledge.edit",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CollectionList"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/knowledge/entries": {
 			"get": {
 				"summary": "Knowledge base entries, last changed first",
@@ -1615,6 +1652,16 @@
 						"schema": {
 							"type": "string",
 							"description": "Search titles and texts (any case; the first 100 characters)."
+						}
+					},
+					{
+						"name": "collection",
+						"in": "query",
+						"required": false,
+						"description": "Only the entries of this collection.",
+						"schema": {
+							"type": "string",
+							"description": "Only the entries of this collection."
 						}
 					}
 				],
@@ -6851,6 +6898,55 @@
 				}
 			}
 		},
+		"/v1/knowledge/collections": {
+			"get": {
+				"summary": "Knowledge collections",
+				"description": "The collections the entries use, by name, with how many entries each has.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "knowledge_base",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CollectionList"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/knowledge/entries": {
 			"get": {
 				"summary": "Knowledge base entries, last changed first",
@@ -6891,6 +6987,16 @@
 						"schema": {
 							"type": "string",
 							"description": "Search titles and texts (any case; the first 100 characters)."
+						}
+					},
+					{
+						"name": "collection",
+						"in": "query",
+						"required": false,
+						"description": "Only the entries of this collection.",
+						"schema": {
+							"type": "string",
+							"description": "Only the entries of this collection."
 						}
 					},
 					{
@@ -9231,6 +9337,37 @@
 					}
 				}
 			},
+			"CollectionList": {
+				"type": "object",
+				"description": "The collections your knowledge entries use, by name.",
+				"required": [
+					"items"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"name",
+								"entries"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"name": {
+									"type": "string",
+									"maxLength": 60
+								},
+								"entries": {
+									"type": "integer",
+									"minimum": 1
+								}
+							}
+						}
+					}
+				}
+			},
 			"Connection": {
 				"type": "object",
 				"description": "A connection as screens see it: secrets never come back.",
@@ -9881,6 +10018,8 @@
 					"kind",
 					"title",
 					"text",
+					"collection",
+					"language",
 					"updatedAt"
 				],
 				"additionalProperties": false,
@@ -9905,6 +10044,15 @@
 						"type": "string",
 						"maxLength": 20000,
 						"description": "The answer or text."
+					},
+					"collection": {
+						"type": "string",
+						"maxLength": 60,
+						"description": "Your own collection ('' = none)."
+					},
+					"language": {
+						"type": "string",
+						"description": "The language the entry answers in, a code such as en or pt-BR ('' = any). With Language lock, the AI uses only entries in the visitor's language or in any language."
 					},
 					"updatedAt": {
 						"type": "string",
@@ -9950,6 +10098,17 @@
 						"minLength": 1,
 						"maxLength": 20000,
 						"description": "The answer or text (trimmed)."
+					},
+					"collection": {
+						"type": "string",
+						"maxLength": 60,
+						"default": "",
+						"description": "Your own collection, such as Shipping or Returns (trimmed; '' = none)."
+					},
+					"language": {
+						"type": "string",
+						"default": "",
+						"description": "A code such as en or pt-BR, or '' for any language."
 					}
 				}
 			},

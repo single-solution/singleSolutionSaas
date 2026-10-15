@@ -25,6 +25,8 @@ const entryView = (e) => ({
 	kind: e.kind,
 	title: e.title,
 	text: e.text,
+	collection: e.collection ?? '',
+	language: e.language ?? '',
 	updatedAt: new Date(e.updatedAt).toISOString(),
 });
 
@@ -68,12 +70,20 @@ export const createKnowledge = (product, service) => {
 		const s = await service.site(ctx);
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const q = typeof ctx.query.q === 'string' && ctx.query.q.trim() ? ctx.query.q.trim().slice(0, 100) : null;
+		const collection = typeof ctx.query.collection === 'string' ? ctx.query.collection.trim().slice(0, 60) : null;
 		const rows = await s.store.knowledge.entries({
 			q,
+			collection,
 			after: /** @type {[string, string] | null} */ (page.after),
 			limit: page.fetchLimit,
 		});
 		return page.respond(rows.map(entryView), (e) => [e.updatedAt, e.id]);
+	};
+
+	/** `GET …/knowledge/collections`: the merchant's collections with their entry counts (C21). @param {any} ctx */
+	const collections = async (ctx) => {
+		const s = await service.site(ctx);
+		return { items: await s.store.knowledge.collections() };
 	};
 
 	/** @param {any} ctx */
@@ -181,5 +191,15 @@ export const createKnowledge = (product, service) => {
 		return noContent();
 	};
 
-	return Object.freeze({ entries, createEntry, updateEntry, deleteEntry, pages, addPage, refetchPage, deletePage });
+	return Object.freeze({
+		entries,
+		collections,
+		createEntry,
+		updateEntry,
+		deleteEntry,
+		pages,
+		addPage,
+		refetchPage,
+		deletePage,
+	});
 };

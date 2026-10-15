@@ -365,6 +365,13 @@ export const createRoutes = (product) => {
 			handler: knowledge.entries,
 		}),
 		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/knowledge/collections',
+			auth: 'ticket',
+			permission: 'knowledge.edit',
+			handler: knowledge.collections,
+		}),
+		defineRoute({
 			method: 'POST',
 			path: '/v1/admin/knowledge/entries',
 			auth: 'ticket',
@@ -518,6 +525,13 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			feature: 'knowledge_base',
 			handler: knowledge.entries,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/knowledge/collections',
+			auth: 'server',
+			feature: 'knowledge_base',
+			handler: knowledge.collections,
 		}),
 		defineRoute({
 			method: 'POST',

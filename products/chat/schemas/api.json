@@ -703,7 +703,7 @@
 		"Entry": {
 			"type": "object",
 			"description": "A knowledge base entry.",
-			"required": ["id", "kind", "title", "text", "updatedAt"],
+			"required": ["id", "kind", "title", "text", "collection", "language", "updatedAt"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -723,6 +723,15 @@
 					"type": "string",
 					"maxLength": 20000,
 					"description": "The answer or text."
+				},
+				"collection": {
+					"type": "string",
+					"maxLength": 60,
+					"description": "Your own collection ('' = none)."
+				},
+				"language": {
+					"type": "string",
+					"description": "The language the entry answers in, a code such as en or pt-BR ('' = any). With Language lock, the AI uses only entries in the visitor's language or in any language."
 				},
 				"updatedAt": {
 					"type": "string",
@@ -759,6 +768,17 @@
 					"minLength": 1,
 					"maxLength": 20000,
 					"description": "The answer or text (trimmed)."
+				},
+				"collection": {
+					"type": "string",
+					"maxLength": 60,
+					"default": "",
+					"description": "Your own collection, such as Shipping or Returns (trimmed; '' = none)."
+				},
+				"language": {
+					"type": "string",
+					"default": "",
+					"description": "A code such as en or pt-BR, or '' for any language."
 				}
 			}
 		},
@@ -1534,6 +1554,32 @@
 						"size": {
 							"type": "integer",
 							"minimum": 1
+						}
+					}
+				}
+			}
+		},
+		"CollectionList": {
+			"type": "object",
+			"description": "The collections your knowledge entries use, by name.",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["name", "entries"],
+						"additionalProperties": false,
+						"properties": {
+							"name": {
+								"type": "string",
+								"maxLength": 60
+							},
+							"entries": {
+								"type": "integer",
+								"minimum": 1
+							}
 						}
 					}
 				}
@@ -2818,11 +2864,22 @@
 				"q": {
 					"type": "string",
 					"description": "Search titles and texts (any case; the first 100 characters)."
+				},
+				"collection": {
+					"type": "string",
+					"description": "Only the entries of this collection."
 				}
 			}
 		},
 		"response": {
 			"$ref": "#/components/schemas/EntryPage"
+		}
+	},
+	"GET /v1/admin/knowledge/collections": {
+		"summary": "Knowledge collections",
+		"description": "The collections the entries use, by name, with how many entries each has (C21).",
+		"response": {
+			"$ref": "#/components/schemas/CollectionList"
 		}
 	},
 	"POST /v1/admin/knowledge/entries": {
@@ -3526,11 +3583,22 @@
 				"q": {
 					"type": "string",
 					"description": "Search titles and texts (any case; the first 100 characters)."
+				},
+				"collection": {
+					"type": "string",
+					"description": "Only the entries of this collection."
 				}
 			}
 		},
 		"response": {
 			"$ref": "#/components/schemas/EntryPage"
+		}
+	},
+	"GET /v1/knowledge/collections": {
+		"summary": "Knowledge collections",
+		"description": "The collections the entries use, by name, with how many entries each has.",
+		"response": {
+			"$ref": "#/components/schemas/CollectionList"
 		}
 	},
 	"POST /v1/knowledge/entries": {

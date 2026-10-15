@@ -795,7 +795,9 @@ describe('inbox', () => {
 describe('knowledge editor', () => {
 	it('searches, adds, changes and deletes entries and website pages', async () => {
 		/** @type {any[]} */
-		let entries = [{ id: 'e1', kind: 'faq', title: 'Returns?', text: '30 days', updatedAt: AT }];
+		let entries = [
+			{ id: 'e1', kind: 'faq', title: 'Returns?', text: '30 days', collection: 'Returns', language: 'en', updatedAt: AT },
+		];
 		let save = () => answer(201, { entry: {} });
 		const pages = [
 			{
@@ -844,6 +846,7 @@ describe('knowledge editor', () => {
 						hasMore: !call.url.searchParams.get('cursor'),
 					}),
 				'POST /v1/admin/knowledge/entries': () => save(),
+				'GET /v1/admin/knowledge/collections': () => answer(200, { items: [{ name: 'Returns', entries: 1 }] }),
 				'PUT /v1/admin/knowledge/entries/e1': () => answer(200, { entry: {} }),
 				'DELETE /v1/admin/knowledge/entries/e1': () => answer(204),
 				'GET /v1/admin/knowledge/pages': () => answer(200, { items: pages }),
@@ -854,6 +857,11 @@ describe('knowledge editor', () => {
 		});
 		const root = shadow(hosts.knowledge);
 		expect(textsIn(root, 'ul:first-of-type > li > .meta')[0]).toContain(TEXTS['knowledge.faq']);
+		// the merchant's collections and the entry's language (C21)
+		expect(textsIn(root, 'ul:first-of-type > li > .meta')[0]).toContain('Returns · en');
+		await change(fieldIn(root, TEXTS['knowledge.collectionFilter']), 'Returns');
+		expect(server.last('GET /v1/admin/knowledge/entries')?.url.searchParams.get('collection')).toBe('Returns');
+		await change(fieldIn(root, TEXTS['knowledge.collectionFilter']), '');
 		await click(buttonIn(root, TEXTS['knowledge.more']));
 		expect(server.last('GET /v1/admin/knowledge/entries')?.url.searchParams.get('cursor')).toBe('k2');
 		fieldIn(root, TEXTS['knowledge.search']).value = 'ret';
@@ -864,6 +872,8 @@ describe('knowledge editor', () => {
 		await change(fieldIn(root, TEXTS['knowledge.kind']), 'article');
 		fieldIn(root, TEXTS['knowledge.entryTitle']).value = 'Shipping';
 		fieldIn(root, TEXTS['knowledge.entryText']).value = 'Two days';
+		fieldIn(root, TEXTS['knowledge.collection']).value = ' Shipping ';
+		fieldIn(root, TEXTS['knowledge.language']).value = 'fr';
 		// a refused value shows the widget's own text, never the server's English detail
 		save = () => problem(422, 'validation_failed', { errors: [{ message: 'Too long' }] });
 		await submit(fieldIn(root, TEXTS['knowledge.entryTitle']));
@@ -875,6 +885,8 @@ describe('knowledge editor', () => {
 			kind: 'article',
 			title: 'Shipping',
 			text: 'Two days',
+			collection: 'Shipping',
+			language: 'fr',
 		});
 		expect(root.textContent).toContain(TEXTS['knowledge.saved']);
 
@@ -890,6 +902,8 @@ describe('knowledge editor', () => {
 			kind: 'faq',
 			title: 'Returns?',
 			text: '60 days',
+			collection: 'Returns',
+			language: 'en',
 		});
 
 		// delete with confirmation

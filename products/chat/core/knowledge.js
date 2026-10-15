@@ -7,7 +7,7 @@
 import { decodeEntities } from '@ss/contracts/text';
 import { tokenize, truncate } from './text.js';
 
-/** @typedef {{ id: string, sourceType: 'entry' | 'page', sourceId: string, title: string, url: string | null, text: string, terms: string[], tf: Record<string, number>, length: number, priority: number }} Chunk */
+/** @typedef {{ id: string, sourceType: 'entry' | 'page', sourceId: string, title: string, url: string | null, text: string, terms: string[], tf: Record<string, number>, length: number, priority: number, language?: string }} Chunk `language`: the entry's ('' or none = any, C21) */
 /** @typedef {Omit<Chunk, 'id'>} ChunkDraft */
 
 /** Chunking and ranking constants (code constants, never settings). */
@@ -141,7 +141,7 @@ export const rank = ({ terms, chunks, stats, k1, b, minMatch, topK }) => {
 /**
  * Chunks of a knowledge entry: an FAQ entry is one chunk (question terms count twice); an article is chunked.
  * FAQ entries rank a little above articles and pages.
- * @param {{ id: string, kind: 'faq' | 'article', title: string, text: string }} entry
+ * @param {{ id: string, kind: 'faq' | 'article', title: string, text: string, language?: string }} entry
  * @returns {ChunkDraft[]}
  */
 export const entryChunks = (entry) => {
@@ -157,6 +157,7 @@ export const entryChunks = (entry) => {
 		text,
 		...termsOf(text, { boost: entry.title }),
 		priority: entry.kind === 'faq' ? 2 : 1,
+		language: entry.language ?? '',
 	}));
 };
 
@@ -191,10 +192,16 @@ export const passages = (ranked, { maxChars }) =>
 		score: Math.round(entry.score * 1000) / 1000,
 	}));
 
+/** The longest collection name (C21). */
+export const COLLECTION_MAX = 60;
+const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
+
 /**
- * Check a knowledge entry (FAQ entry or article).
+ * Check a knowledge entry (FAQ entry or article): its collection is the merchant's own name ('' = none) and its
+ * language a code such as en or pt-BR ('' = any), C21.
  * @param {unknown} body
- * @returns {{ ok: true, value: { kind: 'faq' | 'article', title: string, text: string } } | { ok: false, errors: string[] }}
+ * @returns {{ ok: true, value: { kind: 'faq' | 'article', title: string, text: string, collection: string,
+ *   language: string } } | { ok: false, errors: string[] }}
  */
 export const checkEntry = (body) => {
 	const b = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
@@ -205,7 +212,13 @@ export const checkEntry = (body) => {
 	if (!title || title.length > 300) errors.push('The question or title is 1–300 characters.');
 	const text = typeof b.text === 'string' ? b.text.trim() : '';
 	if (!text || text.length > 20_000) errors.push('The answer or text is 1–20,000 characters.');
+	const collection = typeof b.collection === 'string' ? b.collection.trim() : '';
+	if ((b.collection !== undefined && typeof b.collection !== 'string') || [...collection].length > COLLECTION_MAX)
+		errors.push(`The collection is a name of up to ${COLLECTION_MAX} characters, or empty.`);
+	const language = typeof b.language === 'string' ? b.language.trim() : '';
+	if ((b.language !== undefined && typeof b.language !== 'string') || (language !== '' && !LANGUAGE.test(language)))
+		errors.push('The language is empty (any) or a code such as en or pt-BR.');
 	return errors.length > 0
 		? { ok: false, errors }
-		: { ok: true, value: { kind: /** @type {'faq' | 'article'} */ (b.kind), title, text } };
+		: { ok: true, value: { kind: /** @type {'faq' | 'article'} */ (b.kind), title, text, collection, language } };
 };

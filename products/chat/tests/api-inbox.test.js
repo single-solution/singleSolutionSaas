@@ -526,7 +526,38 @@ describe('knowledge and reports', () => {
 			title: 'How do I wash it?',
 			text: 'Cold.',
 		});
-		expect(changed.json.entry).toMatchObject({ id: eid, kind: 'faq', title: 'How do I wash it?' });
+		expect(changed.json.entry).toMatchObject({
+			id: eid,
+			kind: 'faq',
+			title: 'How do I wash it?',
+			collection: '',
+			language: '',
+		});
+		// the merchant's own collections and a language per entry (C21)
+		expect(
+			(await sys.serverCall('POST', '/v1/knowledge/entries', { kind: 'faq', title: 'a', text: 'b', language: 'french' }))
+				.status,
+		).toBe(422);
+		const shipping = await sys.admin(ticket, 'POST', '/v1/admin/knowledge/entries', {
+			kind: 'faq',
+			title: 'Délais de livraison',
+			text: 'Trois jours.',
+			collection: ' Shipping ',
+			language: 'fr',
+		});
+		expect(shipping.json.entry).toMatchObject({ collection: 'Shipping', language: 'fr' });
+		await sys.serverCall('POST', '/v1/knowledge/entries', {
+			kind: 'faq',
+			title: 'Rates',
+			text: 'Free.',
+			collection: 'Shipping',
+		});
+		expect((await sys.serverCall('GET', '/v1/knowledge/entries?collection=Shipping')).json.items).toHaveLength(2);
+		expect((await sys.admin(ticket, 'GET', '/v1/admin/knowledge/entries?collection=None')).json.items).toEqual([]);
+		expect((await sys.admin(ticket, 'GET', '/v1/admin/knowledge/collections')).json).toEqual({
+			items: [{ name: 'Shipping', entries: 2 }],
+		});
+		expect((await sys.serverCall('GET', '/v1/knowledge/collections')).json.items).toHaveLength(1);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/entries/${eid}`)).status).toBe(204);
 		expect((await sys.admin(ticket, 'DELETE', `/v1/admin/knowledge/entries/${eid}`)).status).toBe(404);
 

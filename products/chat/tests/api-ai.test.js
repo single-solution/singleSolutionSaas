@@ -63,6 +63,23 @@ describe('AI replies', () => {
 		expect((await v('GET', '/v1/chat')).json.messages.at(-1).name).toBe('Lumi');
 	});
 
+	it('uses only the entries in the visitor’s language, or in any language (C21)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'knowledge_base', 'language_lock']);
+		await sys.setting('language_lock', 'allowedLanguages', ['en', 'fr']);
+		for (const entry of [
+			{ kind: 'faq', title: 'Delivery', text: 'Delivery takes three days.', language: 'en' },
+			{ kind: 'faq', title: 'Livraison delivery', text: 'La livraison prend trois jours.', language: 'fr' },
+			{ kind: 'faq', title: 'Delivery area', text: 'We deliver to every country.', language: '' },
+		])
+			expect((await sys.serverCall('POST', '/v1/knowledge/entries', entry)).status).toBe(201);
+		sys.ai({ text: 'Three days.' });
+		await sys.visitor()('POST', '/v1/chat/messages', { text: 'How long does delivery take?' });
+		const prompt = String(sys.aiCalls()[0].messages[0].content);
+		expect(prompt).toContain('Delivery takes three days.');
+		expect(prompt).toContain('We deliver to every country.');
+		expect(prompt).not.toContain('La livraison');
+	});
+
 	it('calls the merchant’s webhook tool, signed with the tool signing secret', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'webhook_tools']);
 		await sys.list('tools', [

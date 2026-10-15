@@ -20,7 +20,10 @@ import { normalisePhone } from '@ss/contracts/phone';
 /** @typedef {{ id: string, name: string, email?: string, presence?: 'online' | 'away' | 'offline', checkedInAt?: Date, maxChats?: number | null }} StaffRecord */
 /** @typedef {{ name?: string | null, email?: string | null, phone?: string | null }} Contact */
 /** @typedef {{ id: string, conversationId: string | null, name: string | null, email: string | null, phone: string | null, message: string | null, custom: Record<string, unknown>, page: unknown, createdAt: Date }} LeadRecord */
-/** @typedef {{ id: string, kind: 'faq' | 'article', title: string, text: string, updatedAt: Date }} EntryRecord */
+/**
+ * @typedef {{ id: string, kind: 'faq' | 'article', title: string, text: string, collection: string, language: string,
+ *   updatedAt: Date }} EntryRecord `collection`: the merchant's own ('' = none); `language`: '' = any (C21)
+ */
 /**
  * A website page as knowledge; a page that could not be fetched keeps why (`reason`, and the status it answered).
  * @typedef {{ id: string, url: string, title: string, text: string, status: 'ok' | 'failed',
@@ -575,10 +578,14 @@ export const createStore = (data, { now }) => {
 		}),
 
 		knowledge: Object.freeze({
-			/** @param {{ q: string | null, after: [string, string] | null, limit: number }} query @returns {Promise<EntryRecord[]>} */
-			entries: async ({ q, after, limit }) => {
+			/**
+			 * @param {{ q: string | null, collection?: string | null, after: [string, string] | null, limit: number }} query
+			 * @returns {Promise<EntryRecord[]>}
+			 */
+			entries: async ({ q, collection = null, after, limit }) => {
 				/** @type {Record<string, unknown>[]} */
 				const and = [];
+				if (collection !== null) and.push({ collection });
 				if (q) {
 					const pattern = new RegExp(escapeRegex(q), 'i');
 					and.push({ $or: [{ title: pattern }, { text: pattern }] });
@@ -593,13 +600,27 @@ export const createStore = (data, { now }) => {
 				);
 			},
 			countEntries: () => entries.countDocuments({ websiteId: w }),
-			/** @param {{ kind: 'faq' | 'article', title: string, text: string }} entry @returns {Promise<EntryRecord>} */
+			/**
+			 * The collections the entries use, by name, with how many entries each has (C21).
+			 * @returns {Promise<Array<{ name: string, entries: number }>>}
+			 */
+			collections: async () =>
+				(
+					await entries
+						.aggregate([
+							{ $match: { websiteId: w, collection: { $nin: ['', null] } } },
+							{ $group: { _id: '$collection', entries: { $sum: 1 } } },
+							{ $sort: { _id: 1 } },
+						])
+						.toArray()
+				).map((row) => ({ name: String(row._id), entries: Number(row.entries) })),
+			/** @param {Omit<EntryRecord, 'id' | 'updatedAt'>} entry @returns {Promise<EntryRecord>} */
 			createEntry: async (entry) => {
 				const doc = { id: createId('kb'), ...entry };
 				await entries.insertOne({ ...doc });
 				return { ...doc, updatedAt: date() };
 			},
-			/** @param {string} id @param {{ kind: 'faq' | 'article', title: string, text: string }} entry */
+			/** @param {string} id @param {Omit<EntryRecord, 'id' | 'updatedAt'>} entry */
 			updateEntry: async (id, entry) =>
 				/** @type {EntryRecord | null} */ (
 					/** @type {unknown} */ (

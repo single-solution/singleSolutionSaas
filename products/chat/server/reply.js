@@ -45,7 +45,7 @@ import {
 	summaryPrompt,
 } from '../core/prompt.js';
 import { RETRIEVAL, passages, queryTerms, rank } from '../core/knowledge.js';
-import { detectLanguage, languageForms, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
+import { detectLanguage, languageForms, markerSetsOf, primary, replyMatchesLanguage, translationOf } from '../core/language.js';
 import { linkAllowed, moderateOutbound } from '../core/moderation.js';
 import {
 	BUILTIN,
@@ -431,18 +431,22 @@ export const createReply = (product, service) => {
 	};
 
 	/**
-	 * Knowledge passages for a question (knowledge base and website pages, when on).
+	 * Knowledge passages for a question (knowledge base and website pages, when on): entries in the visitor's language
+	 * or in any language (C21).
 	 * @param {Site} s
 	 * @param {string} question
+	 * @param {string | null} [language] the visitor's language (language lock), else null: every entry
 	 */
-	const knowledge = async (s, question) => {
+	const knowledge = async (s, question, language = null) => {
 		const entries = s.on.includes('knowledge_base');
 		const pages = s.on.includes('knowledge_pages');
 		if (!entries && !pages) return [];
 		const terms = queryTerms(question);
 		if (terms.length === 0) return [];
 		const found = await s.store.knowledge.search(terms);
-		const chunks = found.chunks.filter((chunk) => (chunk.sourceType === 'entry' ? entries : pages));
+		// an entry in another language than the visitor's is left out; '' is any language (C21)
+		const fits = (/** @type {string | undefined} */ own) => !own || language === null || primary(own) === primary(language);
+		const chunks = found.chunks.filter((chunk) => (chunk.sourceType === 'entry' ? entries && fits(chunk.language) : pages));
 		/** @type {Record<string, number>} */
 		const df = {};
 		for (const chunk of chunks) for (const term of terms) if (chunk.tf[term]) df[term] = (df[term] ?? 0) + 1;
@@ -855,7 +859,7 @@ export const createReply = (product, service) => {
 				dontKnow: String(settings.dontKnow),
 				language,
 				languageAlso: language ? (languageForms(language, check.latinFor ?? [])[1] ?? null) : null,
-				passages: reassure ? [] : await knowledge(s, last.text),
+				passages: reassure ? [] : await knowledge(s, last.text, language),
 				visitor: { signedIn: visitor !== null, name: c.name },
 				page: c.currentPage ?? c.page,
 				handoff: !reassure && s.on.includes('handoff'),

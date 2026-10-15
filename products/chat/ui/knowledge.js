@@ -52,7 +52,10 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 			const box = element(doc, 'section', { class: 'box' });
 			const search = element(doc, 'form', { class: 'row' });
 			const q = make.field('input', t('knowledge.search'), { type: 'search', maxlength: '200' });
-			search.append(q.wrap, element(doc, 'button', { type: 'submit' }, t('knowledge.searchButton')));
+			// the merchant's own collections (C21): a filter, and the names offered while typing one
+			const filter = make.field('select', t('knowledge.collectionFilter'));
+			const known = element(doc, 'datalist', { id: 'ss-knowledge-collections' });
+			search.append(q.wrap, filter.wrap, element(doc, 'button', { type: 'submit' }, t('knowledge.searchButton')), known);
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const list = element(doc, 'ul');
 			const more = buttonOf(doc, t('knowledge.more'), { class: 'secondary', hidden: '' });
@@ -61,6 +64,11 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 			kind.input.append(...Object.entries(kinds).map(([value, label]) => element(doc, 'option', { value }, label)));
 			const title = make.field('input', t('knowledge.entryTitle'), { maxlength: '200', required: '' });
 			const text = make.field('textarea', t('knowledge.entryText'), { rows: '6', maxlength: '20000', required: '' });
+			const collection = make.field('input', t('knowledge.collection'), {
+				maxlength: '60',
+				list: 'ss-knowledge-collections',
+			});
+			const language = make.field('input', t('knowledge.language'), { maxlength: '20' });
 			const heading = element(doc, 'h3', {}, t('knowledge.add'));
 			const cancel = buttonOf(doc, t('knowledge.cancel'), { class: 'secondary', hidden: '' });
 			const reset = () => {
@@ -70,16 +78,22 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 				setHidden(cancel, true);
 			};
 			const form = formPart(doc, {
-				nodes: [heading, kind.wrap, title.wrap, text.wrap, cancel],
+				nodes: [heading, kind.wrap, title.wrap, text.wrap, collection.wrap, language.wrap, cancel],
 				label: t('common.save'),
 				submit: async () => {
-					const body = { kind: kind.input.value, title: title.input.value.trim(), text: text.input.value.trim() };
+					const body = {
+						kind: kind.input.value,
+						title: title.input.value.trim(),
+						text: text.input.value.trim(),
+						collection: collection.input.value.trim(),
+						language: language.input.value.trim(),
+					};
 					const answer = editing
 						? await adminCall(api, 'PUT', `/v1/admin/knowledge/entries/${encodeURIComponent(editing.id)}`, body)
 						: await adminCall(api, 'POST', '/v1/admin/knowledge/entries', body);
 					if (!answer.ok) return failure(answer, 'knowledge.entryInvalid');
 					reset();
-					await load(true);
+					await Promise.all([load(true), loadCollections()]);
 					return t('knowledge.saved');
 				},
 			});
@@ -91,7 +105,14 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 			const entryNode = (entry) => {
 				const item = element(doc, 'li', {}, entry.title);
 				item.append(
-					element(doc, 'span', { class: 'meta' }, [kinds[entry.kind] ?? entry.kind, when(entry.updatedAt)].join(' · ')),
+					element(
+						doc,
+						'span',
+						{ class: 'meta' },
+						[kinds[entry.kind] ?? entry.kind, entry.collection, entry.language, when(entry.updatedAt)]
+							.filter(Boolean)
+							.join(' · '),
+					),
 				);
 				const edit = buttonOf(doc, t('common.edit'), { class: 'secondary small' });
 				const remove = buttonOf(doc, t('common.delete'), { class: 'secondary small' });
@@ -100,6 +121,8 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 					kind.input.value = entry.kind;
 					title.input.value = entry.title;
 					text.input.value = entry.text;
+					collection.input.value = entry.collection ?? '';
+					language.input.value = entry.language ?? '';
 					heading.textContent = t('knowledge.edit');
 					setHidden(cancel, false);
 				});
@@ -111,7 +134,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 					}
 					const answer = await adminCall(api, 'DELETE', `/v1/admin/knowledge/entries/${encodeURIComponent(entry.id)}`);
 					note.textContent = answer.ok ? t('knowledge.deleted') : failure(answer);
-					if (answer.ok) await load(true);
+					if (answer.ok) await Promise.all([load(true), loadCollections()]);
 				});
 				item.append(edit, remove);
 				return item;
@@ -120,6 +143,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 			const load = async (fresh) => {
 				const query = new URLSearchParams();
 				if (q.input.value.trim()) query.set('q', q.input.value.trim());
+				if (filter.input.value) query.set('collection', filter.input.value);
 				if (!fresh && cursor) query.set('cursor', cursor);
 				const answer = await adminCall(api, 'GET', `/v1/admin/knowledge/entries?${query.toString()}`);
 				if (!answer.ok) {
@@ -139,6 +163,19 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 				event.preventDefault();
 				void load(true);
 			});
+			filter.input.addEventListener('change', () => void load(true));
+			const loadCollections = async () => {
+				const answer = await adminCall(api, 'GET', '/v1/admin/knowledge/collections');
+				/** @type {Array<{ name: string }>} */
+				const items = answer.ok ? (answer.data.items ?? []) : [];
+				const chosen = filter.input.value;
+				filter.input.replaceChildren(
+					element(doc, 'option', { value: '' }, t('knowledge.allCollections')),
+					...items.map((each) => element(doc, 'option', { value: each.name }, each.name)),
+				);
+				filter.input.value = items.some((each) => each.name === chosen) ? chosen : '';
+				known.replaceChildren(...items.map((each) => element(doc, 'option', { value: each.name })));
+			};
 			more.addEventListener('click', () => void load(false));
 
 			// website pages
@@ -217,6 +254,7 @@ export const mountKnowledge = ({ host, win, api, config }) => {
 				setHidden(more, true);
 				note.textContent = t('knowledge.signedOut');
 			});
+			void loadCollections();
 			void load(true);
 			return () => void off();
 		},
