@@ -18,7 +18,8 @@ import { isObject } from '@ss/contracts/util';
 import { PRESENCES, STATUSES, USER_ID, messageText, previewOf } from './conversation.js';
 import { checkFieldValue } from './fields.js';
 import { plainOf } from './markdown.js';
-import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, PAGE_KINDS, STAFF_TYPES } from './widgets.js';
+import { OTHER_PAGE, PAGE_TYPE_KEY } from './pages.js';
+import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, STAFF_TYPES } from './widgets.js';
 
 /** @typedef {{ path: string, message: string }} ImportError */
 /** @typedef {{ ok: true, value: Record<string, unknown> } | { ok: false, errors: ImportError[] }} Checked */
@@ -451,10 +452,13 @@ const pageOf = (value, read) => {
 	read.only(value, ['url', 'title', 'kind', 'productId', 'productName'], '/page');
 	const url = read.text(value.url, '/page/url', IMPORT_TEXT_LIMITS.pageUrl) ?? '';
 	if (url !== '' && !/^https?:\/\//.test(url)) read.fail('/page/url', 'An http(s) address.');
+	// a page type key of the website (C6), as the store named its pages
+	const kind = read.text(value.kind, '/page/kind', 40) ?? OTHER_PAGE;
+	if (!PAGE_TYPE_KEY.test(kind)) read.fail('/page/kind', 'A page type key (lower-case letters, digits, - or _), or other.');
 	return {
 		url,
 		title: read.text(value.title, '/page/title', IMPORT_TEXT_LIMITS.pageTitle) ?? '',
-		kind: read.oneOf(value.kind, '/page/kind', PAGE_KINDS, 'other'),
+		kind,
 		productId: read.text(value.productId, '/page/productId', 100),
 		productName: read.text(value.productName, '/page/productName', IMPORT_TEXT_LIMITS.pageTitle),
 	};

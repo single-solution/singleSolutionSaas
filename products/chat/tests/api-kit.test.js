@@ -86,7 +86,10 @@ describe('widgets and docs', () => {
 			'attachments',
 		]);
 		await sys.setting('visitor_chat', 'avatarUrl', 'http://not-https.example.com/a.png');
-		await sys.setting('proactive_idle', 'messageProduct', 'Still deciding on {product}?');
+		await sys.list('page_types', [
+			{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' },
+			{ key: 'menu', name: 'Menu', path: '/menu/**', nudge: '' },
+		]);
 		await sys.setting('proactive_idle', 'oncePer', 'product');
 		await sys.setting('proactive_idle', 'hideOnMobile', true);
 		await sys.setting('visitor_chat', 'pollFocusedSeconds', 5);
@@ -129,11 +132,15 @@ describe('widgets and docs', () => {
 				idleMinutes: 7,
 				dismissDays: 7,
 				pageRules: [{ path: '/products/**', delay: 10, message: 'Need help choosing?' }],
-				// the idle nudge's text per page kind, once per and phones (C14)
-				messages: { product: 'Still deciding on {product}?', category: '', deals: '', cart: '' },
+				// once per and phones (C14)
 				oncePer: 'product',
 				hideOnMobile: true,
 			},
+			// the merchant's page types with their own nudges (C6)
+			pageTypes: [
+				{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' },
+				{ key: 'menu', name: 'Menu', path: '/menu/**', nudge: '' },
+			],
 			flows: [{ id: 'w', name: 'W', start: { kind: 'page', path: '/', delay: 0 } }],
 			attachments: { visitors: 'off', maxBytes: 5 * 1024 * 1024, storage: true },
 			ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: true },

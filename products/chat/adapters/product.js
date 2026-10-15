@@ -181,7 +181,8 @@ const flowsText = (flows) => {
 
 /**
  * Each list in Chat's own words: tools by name (never their addresses), custom fields by label, flows by how they
- * start, page rules and fallback answers counted.
+ * start, page rules and fallback answers counted, office hours by windows and days, exceptions by date, page types by
+ * name.
  * @type {Record<import('./lists.js').ListName, (items: any[]) => string>}
  */
 const LIST_WORDS = {
@@ -197,6 +198,7 @@ const LIST_WORDS = {
 			? 'Always open (no weekly hours).'
 			: `${counted(windows.length, 'window', 'windows')} a week, on ${counted(new Set(windows.map((w) => w.day)).size, 'day', 'days')}.`,
 	office_exceptions: (dates) => namedList('date', 'dates', dates, (entry) => entry.date),
+	page_types: (types) => namedList('page type', 'page types', types, (type) => type.name),
 };
 
 /**

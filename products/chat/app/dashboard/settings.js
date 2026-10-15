@@ -16,6 +16,7 @@ import {
 	OfficeExceptionsEditor,
 	OfficeHoursEditor,
 	PageRulesEditor,
+	PageTypesEditor,
 	RedactionPatternsEditor,
 	TeamsEditor,
 	ToolSecret,
@@ -150,7 +151,13 @@ export function SettingsTab({ websiteId: id }) {
 						</Loaded>
 					),
 					guests: null,
-					proactive: seen('proactive_pages') ? <PageRulesEditor websiteId={websiteId} off={off('proactive_pages')} /> : null,
+					proactive:
+						seen('visitor_chat') || seen('proactive_pages') ? (
+							<>
+								{seen('visitor_chat') ? <PageTypesEditor websiteId={websiteId} off={off('visitor_chat')} /> : null}
+								{seen('proactive_pages') ? <PageRulesEditor websiteId={websiteId} off={off('proactive_pages')} /> : null}
+							</>
+						) : null,
 					flows: seen('leads_flows') ? (
 						<FlowsEditor websiteId={websiteId} off={off('leads_flows')} customFields={seen('custom_fields') !== null} />
 					) : null,

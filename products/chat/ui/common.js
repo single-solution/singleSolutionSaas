@@ -28,9 +28,11 @@ import { CHECKS } from '../core/widgets.js';
  * @property {{ showLabel: boolean }} ai
  * @property {{ showButton: boolean }} handoff whether the window offers Talk to a person (C4)
  * @property {{ idleMinutes: number, dismissDays: number, pageRules: Array<{ path: string, delay: number, message: string }>,
- *   messages: Record<'product' | 'category' | 'deals' | 'cart', string>, oncePer: 'session' | 'product',
- *   hideOnMobile: boolean }} proactive the idle nudge's own text per page kind ('' = the general text), whether it
- *   shows once per session or once per product, and whether phones get none (C14)
+ *   oncePer: 'session' | 'product', hideOnMobile: boolean }} proactive whether the idle nudge shows once per session or
+ *   once per product, and whether phones get none (C14)
+ * @property {Array<{ key: string, name: string, path: string, nudge: string }>} pageTypes the merchant's page types
+ *   (C6): a page is typed by setPage's kind or a path pattern; each may have its own idle nudge ('' = the general
+ *   text)
  * @property {Array<{ id: string, name: string, start: { kind: string, path: string, delay: number } }>} flows
  * @property {{ fields: string[], customFields: string[], consentText: string }} leads
  * @property {CustomField[]} customFields
@@ -75,10 +77,10 @@ const DEFAULTS = {
 		idleMinutes: 7,
 		dismissDays: 7,
 		pageRules: [],
-		messages: { product: '', category: '', deals: '', cart: '' },
 		oncePer: 'session',
 		hideOnMobile: false,
 	},
+	pageTypes: [],
 	flows: [],
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],

@@ -160,7 +160,11 @@ describe('talking', () => {
 		let polls = 0;
 		const { $, root, server, time, api, type } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'typing_receipts'],
-			settings: { ai: { showLabel: true }, guests: { messageLimit: 0 } },
+			settings: {
+				ai: { showLabel: true },
+				guests: { messageLimit: 0 },
+				pageTypes: [{ key: 'product', name: 'Product page', path: '', nudge: '' }],
+			},
 			texts: { 'chat.botName': 'Bo' },
 			routes: {
 				'POST /v1/chat/messages': () =>
@@ -936,11 +940,8 @@ describe('proactive', () => {
 		const { $, time, api } = await start({
 			features: ['visitor_chat', 'guest_chat', 'proactive_idle'],
 			settings: {
-				proactive: {
-					idleMinutes: 1,
-					messages: { product: 'Still deciding on {product}?', category: '', deals: '', cart: '' },
-					oncePer: 'product',
-				},
+				proactive: { idleMinutes: 1, oncePer: 'product' },
+				pageTypes: [{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' }],
 			},
 		});
 		api.setPage({ kind: 'product', productId: 'p1', productName: 'Desk lamp' });

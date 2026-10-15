@@ -103,10 +103,10 @@ export const buildSystemPrompt = (input) => {
 			: 'The visitor is a guest (not signed in).',
 	);
 	if (input.page) {
-		const viewing = input.page.productName
-			? `the ${input.page.kind} page of ${input.page.productName}`
-			: `a ${input.page.kind} page`;
-		lines.push(`The visitor is viewing ${viewing}${input.page.title ? ` titled “${input.page.title}”` : ''}.`);
+		// the kind is the name of the merchant's page type (C6)
+		const viewing = input.page.productName ? `the page of ${input.page.productName}` : 'a page';
+		const type = input.page.kind && input.page.kind !== 'other' ? ` (page type: ${input.page.kind})` : '';
+		lines.push(`The visitor is viewing ${viewing}${input.page.title ? ` titled “${input.page.title}”` : ''}${type}.`);
 	}
 	if (input.context) lines.push('', 'Store information (live):', input.context);
 	if (input.passages.length > 0) {

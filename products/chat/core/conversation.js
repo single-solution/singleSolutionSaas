@@ -8,7 +8,8 @@
 import { LONG_VALUE_LIMIT } from '@ss/contracts/templates';
 import { cardsOf } from './shop.js';
 import { truncate } from './text.js';
-import { MAX_MESSAGE_LENGTH, PAGE_KINDS } from './widgets.js';
+import { pageTypeOf } from './pages.js';
+import { MAX_MESSAGE_LENGTH } from './widgets.js';
 
 export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_visitor', 'resolved']));
 /** Staff presence values. */
@@ -202,18 +203,22 @@ export const messageText = (value, { allowEmpty = false } = {}) => {
 const short = (value, max) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null);
 
 /**
- * The page a visitor message came from (`SSChat.setPage` or the URL and title); unknown fields are dropped.
+ * The page a visitor message came from (`SSChat.setPage` or the URL and title); unknown fields are dropped. Its kind is
+ * one of the website's page types (C6): the one it named, else the first whose path pattern matches its address, else
+ * `other`.
  * @param {unknown} raw
+ * @param {readonly { key: string, path: string }[]} types the website's page types
  * @returns {PageContext | null}
  */
-export const pageContext = (raw) => {
+export const pageContext = (raw, types) => {
 	if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
 	const page = /** @type {Record<string, unknown>} */ (raw);
 	const url = short(page.url, 500);
+	const address = url && /^https?:\/\//.test(url) ? url : '';
 	return {
-		url: url && /^https?:\/\//.test(url) ? url : '',
+		url: address,
 		title: short(page.title, 200) ?? '',
-		kind: PAGE_KINDS.includes(/** @type {any} */ (page.kind)) ? String(page.kind) : 'other',
+		kind: pageTypeOf(types, page.kind, address ? new URL(address).pathname : ''),
 		productId: short(page.productId, 100),
 		productName: short(page.productName, 200),
 	};

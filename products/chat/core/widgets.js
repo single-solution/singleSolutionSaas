@@ -34,9 +34,6 @@ export const PROACTIVE_STORAGE_KEY = 'ss-chat-proactive';
  */
 export const ADD_TO_CART_EVENT = 'ss-ecommerce:add-to-cart';
 
-/** Page kinds `SSChat.setPage({ kind })` accepts. */
-export const PAGE_KINDS = Object.freeze(/** @type {const} */ (['product', 'category', 'deals', 'cart', 'other']));
-
 /** A phone's screen: the chat window goes full screen there (when set), and the idle nudge may stay away (C14). */
 export const PHONE_MEDIA = '(max-width: 480px)';
 

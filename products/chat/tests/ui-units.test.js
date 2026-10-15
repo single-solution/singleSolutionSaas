@@ -363,12 +363,13 @@ describe('proactive', () => {
 	const phoneScreen = (phone) => {
 		window.matchMedia = /** @type {any} */ (vi.fn((query) => ({ matches: phone && query === PHONE_MEDIA })));
 	};
-	const MESSAGES = {
-		product: 'Still deciding on {product}? Ask us.',
-		category: 'Comparing a few? We can help.',
-		deals: '',
-		cart: 'Questions before you check out?',
-	};
+	/** The merchant's page types with their own nudges (C6). */
+	const MESSAGES = [
+		{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}? Ask us.' },
+		{ key: 'category', name: 'Category page', path: '/c/**', nudge: 'Comparing a few? We can help.' },
+		{ key: 'deals', name: 'Deals page', path: '', nudge: '' },
+		{ key: 'cart', name: 'Cart', path: '', nudge: 'Questions before you check out?' },
+	];
 
 	it('nudges after the idle minutes, waiting again while the window is open', async () => {
 		const { time, offer, stop, setProduct } = setup(['proactive_idle'], { proactive: { idleMinutes: 2 } });
@@ -402,7 +403,16 @@ describe('proactive', () => {
 		expect(idleText(MESSAGES, null, t)).toBe(TEXTS['chat.idle']);
 		// a text naming the product needs its name; one that does not, does not
 		expect(idleText(MESSAGES, { kind: 'product' }, t)).toBe(TEXTS['chat.idle']);
-		expect(idleText({ ...MESSAGES, product: 'Need a hand?' }, { kind: 'product' }, t)).toBe('Need a hand?');
+		expect(
+			idleText(
+				MESSAGES.map((type) => (type.key === 'product' ? { ...type, nudge: 'Need a hand?' } : type)),
+				{ kind: 'product' },
+				t,
+			),
+		).toBe('Need a hand?');
+		// a page setPage did not type gets the type of the first path pattern it matches (C6)
+		expect(idleText(MESSAGES, null, t, '/c/lamps')).toBe('Comparing a few? We can help.');
+		expect(idleText(MESSAGES, { kind: 'unknown' }, t, '/c/lamps')).toBe('Comparing a few? We can help.');
 	});
 
 	it('remembers the nudge once per session, or once per product page (C14)', () => {
@@ -411,13 +421,16 @@ describe('proactive', () => {
 		expect(idleOnce('product', lamp)).toBe('idle:p1');
 		expect(idleOnce('product', { kind: 'product', productName: 'Desk lamp' })).toBe('idle:Desk lamp');
 		expect(idleOnce('product', { kind: 'product' })).toBe('idle');
-		expect(idleOnce('product', { kind: 'category', productId: 'p1' })).toBe('idle');
+		// any page that names its product (C6: page types are the merchant's)
+		expect(idleOnce('product', { kind: 'menu', productId: 'p1' })).toBe('idle:p1');
+		expect(idleOnce('product', { kind: 'category' })).toBe('idle');
 		expect(idleOnce('product', null)).toBe('idle');
 	});
 
 	it('once per product: each product the visitor looks at may nudge, with that page’s text (C14)', async () => {
 		const { time, offer, stop, setPage } = setup(['proactive_idle'], {
-			proactive: { idleMinutes: 1, messages: MESSAGES, oncePer: 'product' },
+			proactive: { idleMinutes: 1, oncePer: 'product' },
+			pageTypes: MESSAGES,
 		});
 		setPage({ kind: 'product', productId: 'p1', productName: 'Desk lamp' });
 		await time.advance(60_000);

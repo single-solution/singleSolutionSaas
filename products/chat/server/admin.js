@@ -197,15 +197,11 @@ export const createAdmin = (product, service) => {
 				idleMinutes: idle.idleMinutes,
 				dismissDays: look.proactiveDismissDays,
 				pageRules: on.includes('proactive_pages') ? await product.lists.get(websiteId, 'page_rules') : [],
-				messages: {
-					product: idle.messageProduct,
-					category: idle.messageCategory,
-					deals: idle.messageDeals,
-					cart: idle.messageCart,
-				},
 				oncePer: idle.oncePer,
 				hideOnMobile: idle.hideOnMobile,
 			},
+			// the merchant's page types (C6): how pages are typed, with each type's own idle nudge
+			pageTypes: await product.lists.get(websiteId, 'page_types'),
 			flows: flows.filter((f) => f.start.kind === 'page').map((f) => ({ id: f.id, name: f.name, start: f.start })),
 			leads: { fields: leads.leadFields, customFields: leads.customLeadFields, consentText: leads.consentText },
 			customFields: on.includes('custom_fields') ? await product.lists.get(websiteId, 'custom_fields') : [],

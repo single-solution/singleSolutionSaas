@@ -1074,7 +1074,8 @@
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["product", "category", "deals", "cart", "other"]
+					"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+					"description": "The key of one of your page types (the list page_types), or other."
 				},
 				"productId": {
 					"type": ["string", "null"],
@@ -1100,8 +1101,7 @@
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["product", "category", "deals", "cart", "other"],
-					"description": "Another value is kept as other."
+					"description": "The key of one of your page types (the list page_types). Another value, or none: the first page type whose path pattern matches the url's path, else other."
 				},
 				"productId": {
 					"type": "string",

@@ -491,6 +491,17 @@ export const createReply = (product, service) => {
 	};
 
 	/**
+	 * A page as the AI hears of it: its kind is the name of the merchant's page type (C6), else its key.
+	 * @param {Site} s
+	 * @param {import('../core/conversation.js').PageContext | null} page
+	 */
+	const namedPage = async (s, page) => {
+		if (!page) return null;
+		const type = (await s.list('page_types')).find((each) => each.key === page.kind);
+		return { ...page, kind: type ? String(type.name) : page.kind };
+	};
+
+	/**
 	 * A signed POST to the merchant's own endpoint (webhook tools and booking).
 	 * @param {Site} s
 	 * @param {string} url
@@ -884,7 +895,7 @@ export const createReply = (product, service) => {
 				languageAlso: language ? (languageForms(language, check.latinFor ?? [])[1] ?? null) : null,
 				passages: reassure ? [] : await knowledge(s, last.text, language),
 				visitor: { signedIn: visitor !== null, name: c.name },
-				page: c.currentPage ?? c.page,
+				page: await namedPage(s, c.currentPage ?? c.page),
 				handoff: !reassure && s.on.includes('handoff'),
 				shop: { tools: tools?.shop ?? false, cards: (tools?.shop ?? false) && s.on.includes('product_cards') },
 				neverDisclose: settings.neverDisclose === true,

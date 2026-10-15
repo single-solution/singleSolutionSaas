@@ -778,6 +778,62 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 	);
 }
 
+const T6 = L.pageTypes;
+
+/** @param {EditorProps} props */
+export function PageTypesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="page_types"
+			title={T6.title}
+			help={T6.help}
+			itemLabel={T6.item}
+			max={30}
+			off={off}
+			blank={() => ({ key: '', name: '', path: '', nudge: '' })}
+			clean={(type) => ({
+				key: String(type.key).trim(),
+				name: String(type.name).trim(),
+				path: String(type.path ?? '').trim(),
+				nudge: String(type.nudge ?? '').trim(),
+			})}
+			render={(type, set) => (
+				<>
+					<FieldGrid>
+						<Input
+							label={T6.key}
+							value={type.key}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Input
+							label={T6.name}
+							value={type.name}
+							maxLength={60}
+							onChange={(event) => set({ name: event.target.value })}
+						/>
+						<Input
+							label={T6.path}
+							value={type.path}
+							maxLength={200}
+							onChange={(event) => set({ path: event.target.value })}
+						/>
+					</FieldGrid>
+					<TextArea
+						label={T6.nudge}
+						rows={2}
+						maxLength={300}
+						value={type.nudge}
+						onChange={(event) => set({ nudge: event.target.value })}
+					/>
+				</>
+			)}
+		/>
+	);
+}
+
 const H = L.officeHours;
 const X = L.officeExceptions;
 

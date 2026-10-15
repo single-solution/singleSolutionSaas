@@ -144,7 +144,11 @@ export const createVisitorApi = (product, service, reply) => {
 		const found = await s.store.conversations.current(visitor);
 		if (found) return found;
 		return s.store.conversations.create(
-			newConversation(visitor, { page: pageContext(page), device: deviceOf(s.ctx.headers.get('user-agent')), now: now() }),
+			newConversation(visitor, {
+				page: pageContext(page, await s.list('page_types')),
+				device: deviceOf(s.ctx.headers.get('user-agent')),
+				now: now(),
+			}),
 		);
 	};
 
@@ -245,7 +249,7 @@ export const createVisitorApi = (product, service, reply) => {
 			if (!moderated.ok) throw problem('message_rejected', 'This message cannot be sent.');
 			text = moderated.text;
 		}
-		const page = body.page ? pageContext(body.page) : null;
+		const page = body.page ? pageContext(body.page, await s.list('page_types')) : null;
 		const firstPage = c.visitorMessages === 0 && page ? { page } : {};
 		const appended = await service.append(
 			s,
@@ -377,7 +381,7 @@ export const createVisitorApi = (product, service, reply) => {
 			phone: v.phone,
 			message: v.message,
 			custom: v.custom,
-			page: pageContext(bodyOf(ctx.body).page) ?? c?.page ?? null,
+			page: pageContext(bodyOf(ctx.body).page, await s.list('page_types')) ?? c?.page ?? null,
 		});
 		return created({ lead: { id } });
 	};
@@ -387,7 +391,7 @@ export const createVisitorApi = (product, service, reply) => {
 		const body = bodyOf(ctx.body);
 		const { s, visitor: known } = await who(ctx);
 		const flow = (await s.list('flows')).find((f) => f.id === ctx.params.flowId);
-		const page = pageContext(body.page);
+		const page = pageContext(body.page, await s.list('page_types'));
 		const path = page?.url ? new URL(page.url).pathname : '';
 		if (!flow || !pageFlowMatches(flow, path)) throw problem('not_found', 'No such flow for this page.');
 		const { visitor, guestKey } = await visitorOrGuest(s, known);

@@ -89,6 +89,8 @@ describe('the website Setup sheet', () => {
 			custom_fields: 'No fields yet.',
 			page_rules: 'No page rules yet.',
 			fallback_answers: 'No answers yet.',
+			// seeded (C6)
+			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
 		});
 		expect(whoAnswers(empty)).toBe('The AI answers every visitor.');
 
@@ -126,6 +128,7 @@ describe('the website Setup sheet', () => {
 			custom_fields: '2 fields: Company, Budget.',
 			page_rules: 'No page rules yet.',
 			fallback_answers: '2 answers.',
+			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
 		});
 		// the kit still counts each list; tool addresses never show
 		expect(filled.features.find((/** @type {any} */ f) => f.key === 'leads_flows').lists).toEqual([
@@ -169,6 +172,7 @@ describe('the website Setup sheet', () => {
 			custom_fields: `30 fields: ${labels.slice(0, 3).join(', ')} and 27 more.`,
 			page_rules: '1 page rule.',
 			fallback_answers: '1 answer.',
+			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
 		});
 		expect(one.custom_fields.length).toBeLessThanOrEqual(300);
 
@@ -180,8 +184,8 @@ describe('the website Setup sheet', () => {
 		await env.switchOn(['visitor_chat', 'inbox']);
 		const staff = await partOf(env);
 		expect(whoAnswers(staff)).toBe('Your staff answer in the inbox.');
-		// lists of features that are off are not read
-		expect(listSummaries(staff)).toEqual({});
+		// lists of features that are off are not read (page types are Visitor chat's)
+		expect(listSummaries(staff)).toEqual({ page_types: '4 page types: Product page, Category page, Deals page, Cart.' });
 
 		// the OpenAPI document itself, public
 		const served = await env.call('GET', '/openapi.json');
@@ -205,6 +209,7 @@ describe('the website Setup sheet', () => {
 		expect(listSummaries(await partOf(env))).toEqual({
 			flows: 'Not available right now',
 			custom_fields: '1 field: Company.',
+			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
 		});
 	});
 

@@ -10,7 +10,8 @@
  */
 import { adminCall, createTicketSource, requestJson } from '@ss/app-kit/widget';
 import { pathMatches } from '../core/text.js';
-import { PAGE_KINDS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import { PAGE_TYPE_KEY } from '../core/pages.js';
+import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountChat } from './chat.js';
 import { settingsOf } from './common.js';
 import { mountInbox } from './inbox.js';
@@ -94,7 +95,8 @@ export const startWidget = ({
 	};
 	/** @param {{ kind?: unknown, productId?: unknown, productName?: unknown } | null} context */
 	const setPage = (context) => {
-		const kind = /** @type {readonly unknown[]} */ (PAGE_KINDS).includes(context?.kind) ? String(context?.kind) : 'other';
+		// one of the website's page types (C6); the chat checks it against them (a path pattern may type the page instead)
+		const kind = typeof context?.kind === 'string' && PAGE_TYPE_KEY.test(context.kind) ? context.kind : 'other';
 		pageInfo = {
 			kind,
 			...(typeof context?.productId === 'string' ? { productId: context.productId } : {}),

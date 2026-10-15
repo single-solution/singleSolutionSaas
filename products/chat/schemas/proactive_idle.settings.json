@@ -9,52 +9,12 @@
 			"minimum": 1,
 			"maximum": 120
 		},
-		"messageProduct": {
-			"type": "string",
-			"title": "Nudge on product pages",
-			"default": "",
-			"maxLength": 300,
-			"description": "{product} = the product’s name. Empty = the general nudge text (Texts). Your pages name the page kind with SSChat.setPage.",
-			"x-ui": {
-				"group": "Nudge text per page"
-			}
-		},
-		"messageCategory": {
-			"type": "string",
-			"title": "Nudge on category pages",
-			"default": "",
-			"maxLength": 300,
-			"description": "Empty = the general nudge text.",
-			"x-ui": {
-				"group": "Nudge text per page"
-			}
-		},
-		"messageDeals": {
-			"type": "string",
-			"title": "Nudge on deals pages",
-			"default": "",
-			"maxLength": 300,
-			"description": "Empty = the general nudge text.",
-			"x-ui": {
-				"group": "Nudge text per page"
-			}
-		},
-		"messageCart": {
-			"type": "string",
-			"title": "Nudge on the cart",
-			"default": "",
-			"maxLength": 300,
-			"description": "Empty = the general nudge text.",
-			"x-ui": {
-				"group": "Nudge text per page"
-			}
-		},
 		"oncePer": {
 			"type": "string",
 			"title": "Show the nudge once per",
 			"default": "session",
 			"enum": ["session", "product"],
-			"description": "Session: once per visit. Product: once for each product page the visitor looks at (once per visit on other pages)."
+			"description": "Session: once per visit. Product: once for each product the visitor looks at (a page that names its product with SSChat.setPage), once per visit on other pages. Each page type’s own nudge text is in Settings → Proactive (Page types)."
 		},
 		"hideOnMobile": {
 			"type": "boolean",

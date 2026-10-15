@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The merchant's own lists in Settings (jsdom, on a faked dashboard API): office hours by weekday with minutes and
- * dated exceptions (C9). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
+ * dated exceptions (C9); page types with their nudges, seeded with the four shop ones (C6). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
  * checked as the server checks it.
  */
 import { act } from 'react';
@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import manifest from '../manifest.json' with { type: 'json' };
-import { OfficeExceptionsEditor, OfficeHoursEditor } from '../app/dashboard/lists.js';
+import { OfficeExceptionsEditor, OfficeHoursEditor, PageTypesEditor } from '../app/dashboard/lists.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { LISTS } from '../adapters/lists.js';
 
@@ -158,5 +158,45 @@ describe('office hours and their exceptions (C9)', () => {
 				{ date: '2026-12-24', name: '', hours: [{ start: '09:00', end: '12:30' }] },
 			],
 		]);
+	});
+});
+
+describe('page types (C6)', () => {
+	it('starts with the four shop page types; the merchant renames, adds with a path pattern, moves and removes', async () => {
+		serve();
+		const { container } = render(inDashboard(<PageTypesEditor websiteId={WEBSITE} />));
+		await settle();
+		expect([0, 1, 2, 3].map((index) => field(container, 'Name', index).value)).toEqual([
+			'Product page',
+			'Category page',
+			'Deals page',
+			'Cart',
+		]);
+		type(field(container, 'Name', 3), 'Basket');
+		type(field(container, 'Idle nudge', 0), 'Still deciding on {product}?');
+		click(button(container, 'Add'));
+		type(field(container, 'Key', 4), 'menu');
+		type(field(container, 'Name', 4), 'Menu');
+		type(field(container, 'Path pattern', 4), '/menu/**');
+		// the deals page goes, the menu moves up one
+		click(
+			/** @type {HTMLButtonElement} */ (
+				[...container.querySelectorAll('button')].filter((b) => b.textContent === 'Remove')[2]
+			),
+		);
+		click(/** @type {HTMLButtonElement} */ ([...container.querySelectorAll('button[aria-label="Move up"]')][3]));
+		await save(container);
+		expect(saved.page_types).toEqual([
+			[
+				{ key: 'product', name: 'Product page', path: '', nudge: 'Still deciding on {product}?' },
+				{ key: 'category', name: 'Category page', path: '', nudge: '' },
+				{ key: 'menu', name: 'Menu', path: '/menu/**', nudge: '' },
+				{ key: 'cart', name: 'Basket', path: '', nudge: '' },
+			],
+		]);
+		// other is the type of pages that match none
+		type(field(container, 'Key', 0), 'other');
+		await save(container);
+		expect(container.textContent).toContain('Page type 1: a unique key');
 	});
 });

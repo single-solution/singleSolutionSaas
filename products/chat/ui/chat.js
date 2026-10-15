@@ -10,6 +10,7 @@
  * @module
  */
 import { element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { pageTypeOf } from '../core/pages.js';
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, MAX_MESSAGE_LENGTH, PACE } from '../core/widgets.js';
 import { cardsPart, contactPart, flowPart, leadPart, ratingPart, signInPart, transcriptPart } from './chat-parts.js';
 import {
@@ -193,7 +194,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		return {
 			url: `${win.location.origin}${win.location.pathname}`,
 			title: doc.title,
-			kind: info?.kind ?? 'other',
+			// the merchant's page type (C6): the one setPage named, else the first matching path pattern
+			kind: pageTypeOf(s.pageTypes, info?.kind, win.location.pathname),
 			...(info?.productId ? { productId: info.productId } : {}),
 			...(info?.productName ? { productName: info.productName } : {}),
 		};

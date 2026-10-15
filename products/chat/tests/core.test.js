@@ -197,8 +197,8 @@ describe('conversations, flows and fields', () => {
 		expect(messageText('   ', { allowEmpty: true })).toBe('');
 		expect(messageText(5)).toBeNull();
 		expect(messageText('x'.repeat(4001))).toBeNull();
-		expect(pageContext('x')).toBeNull();
-		expect(pageContext({ url: 'javascript:alert(1)', kind: 'weird' })).toEqual({
+		expect(pageContext('x', [])).toBeNull();
+		expect(pageContext({ url: 'javascript:alert(1)', kind: 'weird' }, [])).toEqual({
 			url: '',
 			title: '',
 			kind: 'other',
@@ -524,7 +524,7 @@ describe('moderation, language, knowledge and the prompt', () => {
 		});
 		expect(prompt).toContain('phone +1 555, address Main St');
 		expect(prompt).toContain('The visitor is signed in.');
-		expect(prompt).toContain('viewing a cart page.');
+		expect(prompt).toContain('viewing a page (page type: cart).');
 		expect(truncate('abc', 2)).toBe('a…');
 	});
 });

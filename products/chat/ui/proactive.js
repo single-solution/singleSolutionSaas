@@ -8,6 +8,7 @@
  * @module
  */
 import { formatText } from '@ss/app-kit/widget';
+import { pageTypeOf } from '../core/pages.js';
 import { pathMatches } from '../core/text.js';
 import { PHONE_MEDIA, PROACTIVE_STORAGE_KEY } from '../core/widgets.js';
 
@@ -92,28 +93,31 @@ export const isDesktop = (win) => !media(win, '(pointer: coarse)') && !media(win
 export const isPhone = (win) => media(win, PHONE_MEDIA);
 
 /**
- * The idle nudge's text on a page (C14): the merchant's text for the page's kind (product, category, deals or cart;
- * `{product}` = the product's name), else the general widget text, which names the product when the page gave one. A
- * text of the merchant that names the product needs the product's name, so without it the general text shows.
- * @param {Proactive['messages']} messages
+ * The idle nudge's text on a page (C14): the nudge of the merchant's page type of the page (C6: the type setPage named,
+ * else the first whose path pattern matches; `{product}` = the product's name), else the general widget text, which
+ * names the product when the page gave one. A text of the merchant that names the product needs the product's name,
+ * so without it the general text shows.
+ * @param {import('./common.js').ChatSettings['pageTypes']} types
  * @param {PageInfo | null} page what `SSChat.setPage()` gave
  * @param {import('./common.js').Texts} t
+ * @param {string} [path] the page's path
  */
-export const idleText = (messages, page, t) => {
+export const idleText = (types, page, t, path = '') => {
 	const product = page?.productName ?? '';
-	const own = page && Object.hasOwn(messages, page.kind) ? messages[/** @type {keyof typeof messages} */ (page.kind)] : '';
+	const key = pageTypeOf(types, page?.kind, path);
+	const own = types.find((type) => type.key === key)?.nudge ?? '';
 	if (own !== '' && (product !== '' || !own.includes('{product}'))) return formatText(own, { product });
 	return product ? formatText(t('chat.idleProduct'), { product }) : t('chat.idle');
 };
 
 /**
- * What the idle nudge is remembered by (C14): once per session (`idle`), or, once per product, the product of a
- * product page (its id, else its name), so each product the visitor looks at may nudge once.
+ * What the idle nudge is remembered by (C14): once per session (`idle`), or, once per product, the product the page
+ * names with setPage (its id, else its name), so each product the visitor looks at may nudge once.
  * @param {Proactive['oncePer']} oncePer
  * @param {PageInfo | null} page
  */
 export const idleOnce = (oncePer, page) => {
-	const product = page?.kind === 'product' ? (page.productId ?? page.productName ?? '') : '';
+	const product = page?.productId ?? page?.productName ?? '';
 	return oncePer === 'product' && product !== '' ? `idle:${product}` : 'idle';
 };
 
@@ -137,7 +141,7 @@ export const startProactive = ({ win, schedule, cancel, now, features, settings,
 	/** @param {() => void} task @param {number} ms */
 	const later = (task, ms) => timers.push(schedule(task, ms));
 
-	const { idleMinutes, messages, oncePer, hideOnMobile } = settings.proactive;
+	const { idleMinutes, oncePer, hideOnMobile } = settings.proactive;
 	if (features.includes('proactive_idle') && idleMinutes > 0 && !(hideOnMobile && isPhone(win))) {
 		const idleMs = idleMinutes * 60_000;
 		let last = now();
@@ -148,7 +152,7 @@ export const startProactive = ({ win, schedule, cancel, now, features, settings,
 			const left = idleMs - (now() - last);
 			if (left > 0) return later(fire, left);
 			const info = page();
-			const offered = offer('idle', idleText(messages, info, t), idleOnce(oncePer, info));
+			const offered = offer('idle', idleText(settings.pageTypes, info, t, path), idleOnce(oncePer, info));
 			// waits again while the window is open; once per product, the next product the visitor looks at may nudge
 			if (!offered || oncePer === 'product') later(fire, idleMs);
 		};

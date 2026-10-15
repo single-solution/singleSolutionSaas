@@ -41,7 +41,7 @@ export const TEXTS = dashboardTexts({
 			guests: { title: 'Guests', help: 'Chatting without signing in, and signing in to chat.' },
 			proactive: {
 				title: 'Proactive',
-				help: 'Messages that open the conversation: after idle time and on chosen pages.',
+				help: 'Your page types with their idle nudges, and messages that open the conversation: after idle time and on chosen pages.',
 			},
 			flows: {
 				title: 'Flows',
@@ -185,6 +185,15 @@ export const TEXTS = dashboardTexts({
 			type: 'Type',
 			types: { text: 'Text', number: 'Number', yes_no: 'Yes or no', choice: 'Choice' },
 			options: 'Options (one per line)',
+		},
+		pageTypes: {
+			title: 'Page types',
+			help: 'The kinds of pages on your website. A page is typed by SSChat.setPage({ kind: key }), else by the first path pattern it matches (* is one segment, ** any). The idle nudge says the type’s own text ({product} = the product the page names; empty = the general text in Texts), and the AI is told the type.',
+			item: 'Page type',
+			key: 'Key (lower-case letters, digits, - or _)',
+			name: 'Name',
+			path: 'Path pattern (optional, for example /products/**)',
+			nudge: 'Idle nudge (optional)',
 		},
 		officeHours: {
 			title: 'Office hours',
