@@ -931,7 +931,7 @@ describe('the report', () => {
 				DOMAIN,
 			),
 		).toHaveLength(20);
-		expect(summaryOf([{ status: 'pass' }, { status: 'warn' }, { status: 'fail' }, { status: 'fail' }])).toEqual({
+		expect(summaryOf([{ status: 'pass' }, { status: 'warn' }, { status: 'fail' }, { status: 'fail' }])).toMatchObject({
 			pass: 1,
 			warn: 1,
 			fail: 2,

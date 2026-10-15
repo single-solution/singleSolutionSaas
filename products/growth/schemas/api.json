@@ -873,7 +873,7 @@
 		"SeoCheck": {
 			"type": "object",
 			"description": "One check, with its title, the reason (what was found) and the fix steps from your widget texts (Settings → Texts: seo.check.<id>.title, seo.check.<id>.<finding> and seo.check.<id>.fix).",
-			"required": ["id", "status", "finding", "page", "detail", "title", "reason", "fix", "test"],
+			"required": ["id", "status", "finding", "page", "detail", "title", "reason", "fix", "test", "ignored"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -1017,6 +1017,16 @@
 							"type": "integer",
 							"minimum": 0,
 							"description": "web_vitals_site: the share of the visits measured with a good value of that vital, in percent."
+						},
+						"min": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "title, description: the shortest good length, in characters (the merchant's setting, G9)."
+						},
+						"max": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "title, description: the longest good length, in characters (the merchant's setting, G9)."
 						}
 					}
 				},
@@ -1035,6 +1045,10 @@
 					"type": ["string", "null"],
 					"format": "uri",
 					"description": "Google's Rich Results Test of the page (checks of a page; null for the site's)."
+				},
+				"ignored": {
+					"type": "boolean",
+					"description": "The merchant ignores this finding (G9: the seo_ignored list, by check and page pattern): shown, but not counted in summary's pass, warn and fail."
 				}
 			}
 		},
@@ -1074,7 +1088,7 @@
 				},
 				"summary": {
 					"type": "object",
-					"required": ["pass", "warn", "fail"],
+					"required": ["pass", "warn", "fail", "ignored"],
 					"additionalProperties": false,
 					"properties": {
 						"pass": {
@@ -1088,6 +1102,11 @@
 						"fail": {
 							"type": "integer",
 							"minimum": 0
+						},
+						"ignored": {
+							"type": "integer",
+							"minimum": 0,
+							"description": "Findings the merchant ignores (not counted in pass, warn or fail)."
 						}
 					}
 				},
@@ -1978,6 +1997,53 @@
 					"type": "null"
 				}
 			]
+		}
+	},
+	"PUT /v1/admin/seo/ignored": {
+		"summary": "Ignore an SEO finding, or show it again",
+		"description": "Adds { check, page } to the website's seo_ignored list (ignored true, the default) or removes it (ignored false); page is a path pattern (* one segment, ** any) or empty for every page and the whole site. The report marks matching findings ignored and counts them apart at once. Answers the whole list. 422 validation_failed for a check id or page that is not valid. Written to the activity log. Needs the seo.check permission.",
+		"body": {
+			"type": "object",
+			"required": ["check"],
+			"additionalProperties": false,
+			"properties": {
+				"check": {
+					"type": "string",
+					"description": "The check's id, for example caching or title."
+				},
+				"page": {
+					"type": "string",
+					"description": "A path pattern, or empty for every page.",
+					"default": ""
+				},
+				"ignored": {
+					"type": "boolean",
+					"default": true
+				}
+			}
+		},
+		"response": {
+			"type": "object",
+			"required": ["value"],
+			"additionalProperties": false,
+			"properties": {
+				"value": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["check", "page"],
+						"additionalProperties": false,
+						"properties": {
+							"check": {
+								"type": "string"
+							},
+							"page": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
 		}
 	},
 	"GET /v1/redirects/match": {

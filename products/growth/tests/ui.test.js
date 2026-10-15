@@ -1726,6 +1726,57 @@ describe('admin widgets', () => {
 		expect(scrolled).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
 	});
 
+	it('the SEO checklist ignores a finding on its page, counts it apart, and shows it again (G9)', async () => {
+		const host = place('seo_checklist');
+		const shop = 'https://shop.example.com/products/blue-lamp';
+		/** @type {any[]} */
+		const ignored = [];
+		serve({
+			[`GET ${ADMIN_CONFIG_PATH}`]: () => answer(200, configOf(['seo_checklist'])),
+			'GET /v1/admin/seo/report': () =>
+				answer(200, {
+					checkedAt: new Date(Date.now() - 60_000).toISOString(),
+					cached: true,
+					summary: { pass: 0, warn: 1, fail: 0, ignored: 0 },
+					pages: [{ url: shop, kind: 'Product', sampled: false }],
+					checks: [
+						{
+							id: 'description',
+							status: 'warn',
+							page: shop,
+							title: 'Meta description',
+							reason: 'None.',
+							fix: 'Write one.',
+						},
+					],
+				}),
+			'PUT /v1/admin/seo/ignored': (init) => {
+				ignored.push(JSON.parse(init.body));
+				return answer(200, { value: [] });
+			},
+		});
+		await startWidget({ window, script: script(null) }).admin({
+			getTicket: async () => ({ ticket: 't', expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() }),
+		});
+		await flush();
+		const button = () =>
+			/** @type {HTMLButtonElement} */ (
+				[...(host.shadowRoot?.querySelectorAll('.checks button') ?? [])].find((node) =>
+					[strings['seo.ignore'], strings['seo.unignore']].includes(String(node.textContent)),
+				)
+			);
+		expect(button().textContent).toBe(strings['seo.ignore']);
+		button().click();
+		await flush();
+		expect(ignored).toEqual([{ check: 'description', page: '/products/blue-lamp', ignored: true }]);
+		expect(host.shadowRoot?.querySelector('.checks .pill')?.textContent).toBe(strings['seo.ignoredBadge']);
+		expect([...(host.shadowRoot?.querySelectorAll('.tile .value') ?? [])].map((v) => v.textContent)).toEqual(['0', '0', '0']);
+		button().click();
+		await flush();
+		expect(ignored.at(-1)).toEqual({ check: 'description', page: '/products/blue-lamp', ignored: false });
+		expect(button().textContent).toBe(strings['seo.ignore']);
+	});
+
 	it('the SEO checklist says when the kept check cannot be read', async () => {
 		const host = place('seo_checklist');
 		serve({

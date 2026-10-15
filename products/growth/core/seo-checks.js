@@ -8,6 +8,7 @@
  */
 import { VITALS, ratingOf } from './events.js';
 import { allNodesOf, numbersIn, robotsAllows, robotsGroupsOf, scanHtml, typesOf } from './seo-scan.js';
+import { pathMatches } from '@ss/contracts/text';
 import { ORGANIZATION_TYPES } from './schema-types.js';
 import { pathOfUrl } from './seo.js';
 
@@ -20,9 +21,35 @@ export const MAX_CANDIDATES = 6;
 /** Most sample pages one full run reads from the sitemap, each of another kind. */
 export const MAX_SAMPLES = 4;
 
-/** Title and description lengths search results show without cutting. */
-const TITLE_LENGTH = Object.freeze({ min: 10, max: 60 });
-const DESCRIPTION_LENGTH = Object.freeze({ min: 50, max: 160 });
+/**
+ * Title and description lengths search results show without cutting: the defaults of the merchant's own (the SEO
+ * checklist settings, G9).
+ */
+export const DEFAULT_LIMITS = Object.freeze({ titleMin: 10, titleMax: 60, descriptionMin: 50, descriptionMax: 160 });
+
+/** @typedef {{ titleMin: number, titleMax: number, descriptionMin: number, descriptionMax: number }} Limits */
+
+/**
+ * The lengths a run judges by (G9): the `seo_checklist` settings when they are whole numbers from 1 to 1,000 and each
+ * least is below its most, else the defaults.
+ * @param {Record<string, unknown>} values
+ * @returns {Limits}
+ */
+export const limitsOf = (values) => {
+	/** @param {keyof Limits} name */
+	const read = (name) => {
+		const value = values[name];
+		return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 1000 ? value : DEFAULT_LIMITS[name];
+	};
+	const title = read('titleMin') < read('titleMax');
+	const description = read('descriptionMin') < read('descriptionMax');
+	return {
+		titleMin: title ? read('titleMin') : DEFAULT_LIMITS.titleMin,
+		titleMax: title ? read('titleMax') : DEFAULT_LIMITS.titleMax,
+		descriptionMin: description ? read('descriptionMin') : DEFAULT_LIMITS.descriptionMin,
+		descriptionMax: description ? read('descriptionMax') : DEFAULT_LIMITS.descriptionMax,
+	};
+};
 
 /** Fewest Web Vitals measurements a judgment is made on. */
 const MIN_VITAL_SAMPLES = 5;
@@ -357,10 +384,13 @@ const priceText = (value) => (Number.isInteger(value * 100) ? value.toFixed(2) :
  * The checks of one page that answered 200.
  * @param {Fetched} page
  * @param {import('./seo-scan.js').Scan} scan
- * @param {{ domain: string, kind: PageKind, listed: boolean }} context `listed`: the sitemap lists the page
+ * @param {{ domain: string, kind: PageKind, listed: boolean, limits: Limits }} context `listed`: the sitemap lists the
+ *   page; `limits`: the title and description lengths (G9)
  * @returns {Check[]}
  */
-const contentChecks = (page, scan, { domain, kind, listed }) => {
+const contentChecks = (page, scan, { domain, kind, listed, limits }) => {
+	const TITLE_LENGTH = { min: limits.titleMin, max: limits.titleMax };
+	const DESCRIPTION_LENGTH = { min: limits.descriptionMin, max: limits.descriptionMax };
 	const at = page.url;
 	const header = (page.headers['x-robots-tag'] ?? '').toLowerCase();
 	const titleLength = scan.title?.length ?? 0;
@@ -371,13 +401,13 @@ const contentChecks = (page, scan, { domain, kind, listed }) => {
 			? check('noindex', 'fail', listed ? 'in_sitemap' : 'noindex', at)
 			: check('noindex', 'pass', 'ok', at),
 		titleLength === 0
-			? check('title', 'fail', 'missing', at, { length: 0 })
+			? check('title', 'fail', 'missing', at, { length: 0, ...TITLE_LENGTH })
 			: check(
 					'title',
 					titleLength < TITLE_LENGTH.min || titleLength > TITLE_LENGTH.max ? 'warn' : 'pass',
 					titleLength < TITLE_LENGTH.min ? 'short' : titleLength > TITLE_LENGTH.max ? 'long' : 'ok',
 					at,
-					{ length: titleLength },
+					{ length: titleLength, ...TITLE_LENGTH },
 				),
 		check(
 			'description',
@@ -390,7 +420,7 @@ const contentChecks = (page, scan, { domain, kind, listed }) => {
 						? 'long'
 						: 'ok',
 			at,
-			{ length: descriptionLength },
+			{ length: descriptionLength, ...DESCRIPTION_LENGTH },
 		),
 		check('h1', scan.h1 === 1 ? 'pass' : 'warn', scan.h1 === 0 ? 'missing' : scan.h1 === 1 ? 'ok' : 'several', at, {
 			count: scan.h1,
@@ -569,10 +599,11 @@ const reachableCheck = (page, listed) => {
  * The checks of one page: whether it answered, then (when it did) its content, its structured data by kind, its speed,
  * and its Web Vitals (pages like it, when measured).
  * @param {Fetched} page
- * @param {{ domain: string, listed: boolean, vitals?: PageVitals | null }} context
+ * @param {{ domain: string, listed: boolean, vitals?: PageVitals | null, limits?: Limits }} context `limits`: the
+ *   merchant's title and description lengths (G9; the defaults without them)
  * @returns {{ kind: PageKind, checks: Check[], scan: import('./seo-scan.js').Scan | null }}
  */
-export const pageChecks = (page, { domain, listed, vitals = null }) => {
+export const pageChecks = (page, { domain, listed, vitals = null, limits = DEFAULT_LIMITS }) => {
 	const reachable = reachableCheck(page, listed);
 	if (page.status !== 200) {
 		const parsed = new URL(page.url);
@@ -585,7 +616,7 @@ export const pageChecks = (page, { domain, listed, vitals = null }) => {
 		scan,
 		checks: [
 			reachable,
-			...contentChecks(page, scan, { domain, kind, listed }),
+			...contentChecks(page, scan, { domain, kind, listed, limits }),
 			...speedChecks(page),
 			...(vitals ? [vitalsCheck(page.url, vitals)] : []),
 		],
@@ -927,11 +958,34 @@ export const verificationCheck = (home, scan) =>
 // --------------------------------------------------------------------------------------------------------- report
 
 /**
- * The counts of a report's checks.
- * @param {ReadonlyArray<{ status: CheckStatus }>} checks
+ * The counts of a report's checks: those the merchant ignores (G9) apart.
+ * @param {ReadonlyArray<{ status: CheckStatus, ignored?: boolean }>} checks
  */
-export const summaryOf = (checks) => ({
-	pass: checks.filter((c) => c.status === 'pass').length,
-	warn: checks.filter((c) => c.status === 'warn').length,
-	fail: checks.filter((c) => c.status === 'fail').length,
-});
+export const summaryOf = (checks) => {
+	const counted = checks.filter((c) => c.ignored !== true);
+	return {
+		pass: counted.filter((c) => c.status === 'pass').length,
+		warn: counted.filter((c) => c.status === 'warn').length,
+		fail: counted.filter((c) => c.status === 'fail').length,
+		ignored: checks.length - counted.length,
+	};
+};
+
+/**
+ * Whether the merchant ignores a check's finding (G9, the `seo_ignored` list): an entry of its check with no page
+ * (every page and the whole site), or with a path pattern its page matches.
+ * @param {{ id: string, status: CheckStatus, page: string | null }} item
+ * @param {ReadonlyArray<{ check: string, page: string }>} ignored
+ */
+export const isIgnored = (item, ignored) =>
+	item.status !== 'pass' &&
+	ignored.some((entry) => {
+		if (entry.check !== item.id) return false;
+		if (entry.page === '') return true;
+		if (item.page === null) return false;
+		try {
+			return pathMatches(entry.page, new URL(item.page).pathname);
+		} catch {
+			return false;
+		}
+	});

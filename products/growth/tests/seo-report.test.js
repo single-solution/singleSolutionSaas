@@ -231,6 +231,7 @@ describe('SEO checklist: the live site', () => {
 			pass: report.checks.filter((/** @type {any} */ c) => c.status === 'pass').length,
 			warn: report.checks.filter((/** @type {any} */ c) => c.status === 'warn').length,
 			fail: report.checks.filter((/** @type {any} */ c) => c.status === 'fail').length,
+			ignored: 0,
 		});
 
 		// kept: one document, read back by GET /v1/seo/report with the texts of now
@@ -286,6 +287,56 @@ describe('SEO checklist: the live site', () => {
 			const refused = await env.call('POST', '/v1/admin/seo/checks', { token: ticket, origin: ADMIN_ORIGIN, body: { paths } });
 			expect(refused.status).toBe(422);
 		}
+	});
+
+	it('ignores a finding per page from the widget, and counts it apart (G9)', async () => {
+		const ticket = await env.ticket(['seo.check']);
+		const before = await (await env.call('GET', '/v1/admin/seo/report', { token: ticket, origin: ADMIN_ORIGIN })).json();
+		// a finding of one page (its Rich Results Test link marks a page check)
+		const caching = before.checks.find((/** @type {any} */ item) => item.status !== 'pass' && item.test !== null);
+		expect(caching).toBeDefined();
+		const id = caching.id;
+		const path = new URL(caching.page).pathname;
+		const ignore = await env.call('PUT', '/v1/admin/seo/ignored', {
+			token: ticket,
+			origin: ADMIN_ORIGIN,
+			body: { check: id, page: path, ignored: true },
+		});
+		expect(ignore.status).toBe(200);
+		expect((await ignore.json()).value).toEqual([{ check: id, page: path }]);
+		const after = await (await env.call('GET', '/v1/admin/seo/report', { token: ticket, origin: ADMIN_ORIGIN })).json();
+		const same = after.checks.find((/** @type {any} */ item) => item.id === id && item.page === caching.page);
+		expect(same.ignored).toBe(true);
+		expect(after.summary.ignored).toBe(1);
+		expect(after.summary[caching.status]).toBe(before.summary[caching.status] - 1);
+		// shown again
+		await env.call('PUT', '/v1/admin/seo/ignored', {
+			token: ticket,
+			origin: ADMIN_ORIGIN,
+			body: { check: id, page: path, ignored: false },
+		});
+		const again = await (await env.call('GET', '/v1/admin/seo/report', { token: ticket, origin: ADMIN_ORIGIN })).json();
+		expect(again.summary).toEqual(before.summary);
+		expect(
+			(await env.call('PUT', '/v1/admin/seo/ignored', { token: ticket, origin: ADMIN_ORIGIN, body: { check: 'Bad id' } }))
+				.status,
+		).toBe(422);
+	});
+
+	it('judges titles and descriptions by the merchant’s lengths (G9)', async () => {
+		await env.setting('seo_checklist', 'titleMax', 20);
+		await env.setting('seo_checklist', 'descriptionMin', 10);
+		env.advance(MIN_INTERVAL_MS + 1000);
+		const report = await (
+			await env.call('POST', '/v1/seo/checks', { token: env.server, body: { paths: ['/products/blue-lamp'] } })
+		).json();
+		const title = report.checks.find(
+			(/** @type {any} */ item) => item.id === 'title' && item.page === `${ORIGIN}/products/blue-lamp`,
+		);
+		expect(title).toMatchObject({ status: 'warn', finding: 'long', detail: { max: 20 } });
+		expect(title.reason).toContain('after about 20');
+		await env.setting('seo_checklist', 'titleMax', 60);
+		await env.setting('seo_checklist', 'descriptionMin', 50);
 	});
 
 	it('says what is wrong when the site does not answer', async () => {

@@ -58,11 +58,11 @@ const indexNowProblems = (answer) => {
 
 /**
  * @typedef {{ id: string, status: 'pass' | 'warn' | 'fail', page: string | null, title: string, reason: string,
- *   fix: string }} Check
+ *   fix: string, ignored?: boolean }} Check
  */
 /** @typedef {{ url: string, kind: string, sampled: boolean }} Page */
 /**
- * @typedef {{ checkedAt: string, cached: boolean, summary: { pass: number, warn: number, fail: number },
+ * @typedef {{ checkedAt: string, cached: boolean, summary: { pass: number, warn: number, fail: number, ignored: number },
  *   checks: Check[], pages: Page[] }} Report
  */
 
@@ -248,7 +248,13 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 						cards.replaceChildren();
 						for (const [url, checks] of groups) {
 							const shown = checks
-								.filter((item) => filter === '' || item.status === filter)
+								.filter((item) =>
+									filter === ''
+										? true
+										: filter === 'ignored'
+											? item.ignored === true
+											: item.status === filter && item.ignored !== true,
+								)
 								.sort((a, b) => ORDER[a.status] - ORDER[b.status]);
 							if (shown.length === 0) continue;
 							const card = h('div', { class: 'card' });
@@ -279,9 +285,47 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 								const row = h('li');
 								const line = h('div');
 								line.append(
-									h('span', { class: `pill ${item.status}` }, t(`seo.status.${item.status}`)),
+									h(
+										'span',
+										{ class: item.ignored ? 'pill' : `pill ${item.status}` },
+										item.ignored ? t('seo.ignoredBadge') : t(`seo.status.${item.status}`),
+									),
 									h('strong', {}, item.title),
 								);
+								// G9: ignore a finding on this page (a check of the whole site: everywhere), or show it again
+								if (item.status !== 'pass') {
+									const site = url === '';
+									const toggle = h(
+										'button',
+										{ type: 'button', class: 'link' },
+										item.ignored ? t('seo.unignore') : t(site ? 'seo.ignoreAll' : 'seo.ignore'),
+									);
+									toggle.addEventListener('click', async () => {
+										toggle.setAttribute('disabled', '');
+										const answer = await adminCall(api, 'PUT', '/v1/admin/seo/ignored', {
+											check: item.id,
+											page: site ? '' : pathOf(url),
+											ignored: item.ignored !== true,
+										});
+										toggle.removeAttribute('disabled');
+										if (!answer.ok) {
+											status.textContent = failure(answer, SEO_PROBLEMS, 'seo.failed');
+											return;
+										}
+										item.ignored = item.ignored !== true;
+										const counted = report.checks.filter((other) => other.ignored !== true);
+										draw({
+											...report,
+											summary: {
+												pass: counted.filter((other) => other.status === 'pass').length,
+												warn: counted.filter((other) => other.status === 'warn').length,
+												fail: counted.filter((other) => other.status === 'fail').length,
+												ignored: report.checks.length - counted.length,
+											},
+										});
+									});
+									line.append(toggle);
+								}
 								row.append(line);
 								if (item.reason) row.append(h('p', { class: 'reason' }, item.reason));
 								if (item.fix) {
@@ -309,6 +353,9 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 							{ value: 'fail', label: t('seo.status.fail'), count: report.summary.fail },
 							{ value: 'warn', label: t('seo.status.warn'), count: report.summary.warn },
 							{ value: 'pass', label: t('seo.status.pass'), count: report.summary.pass },
+							...(report.summary.ignored > 0
+								? [{ value: 'ignored', label: t('seo.ignoredBadge'), count: report.summary.ignored }]
+								: []),
 						],
 						'',
 						fillCards,

@@ -45,6 +45,8 @@ import {
 	soft404Check,
 	suggestionsCheck,
 	summaryOf,
+	isIgnored,
+	limitsOf,
 	verificationCheck,
 } from '../core/seo-checks.js';
 import { scanHtml, sitemapOf, sitemapsIn } from '../core/seo-scan.js';
@@ -199,7 +201,12 @@ export const seoCheckRoutes = (product, { log }) => {
 		const domain = String(ctx.status.domain);
 		const origin = `https://${domain}`;
 		const until = web.deadline(RUN_MS);
-		const on = await product.featuresOn(ctx.websiteId);
+		const [on, checklist] = await Promise.all([
+			product.featuresOn(ctx.websiteId),
+			product.settings.values(ctx.websiteId, 'seo_checklist'),
+		]);
+		// the merchant's title and description lengths (G9)
+		const limits = limitsOf(checklist);
 		const rules = on.includes('redirects')
 			? await createRedirectStore(await ctx.data(), { merchantId: String(ctx.merchantId) }).all()
 			: [];
@@ -243,6 +250,7 @@ export const seoCheckRoutes = (product, { log }) => {
 				domain,
 				listed: listed.has(comparableOf(read.url)),
 				vitals: totals.vitals ? pageVitalsOf(totals.vitals, new URL(read.url).pathname) : null,
+				limits,
 			}),
 		});
 		const own = typedReads.map((read) => checkPage(read, false));
@@ -321,13 +329,18 @@ export const seoCheckRoutes = (product, { log }) => {
 	 * @param {boolean} cached the kept report of an earlier run
 	 */
 	const present = async (ctx, report, cached) => {
-		const texts = await product.settings.texts(ctx.websiteId);
+		const [texts, ignored] = await Promise.all([
+			product.settings.texts(ctx.websiteId),
+			product.lists.get(ctx.websiteId, 'seo_ignored'),
+		]);
+		// the findings the merchant ignores (G9), marked when the report is read, so an ignore counts at once
+		const checks = report.checks.map((item) => ({ ...item, ignored: isIgnored(item, ignored) }));
 		return {
 			checkedAt: report.checkedAt.toISOString(),
 			cached,
-			summary: summaryOf(report.checks),
+			summary: summaryOf(checks),
 			pages: report.pages,
-			checks: report.checks.map((item) => ({
+			checks: checks.map((item) => ({
 				...item,
 				title: texts[`seo.check.${item.id}.title`] ?? item.id,
 				reason: formatText(texts[`seo.check.${item.id}.${item.finding}`] ?? '', item.detail),
@@ -371,6 +384,30 @@ export const seoCheckRoutes = (product, { log }) => {
 		return ok(kept === null ? null : await present(ctx, kept, true));
 	};
 
+	/**
+	 * Ignore a finding, or show it again (G9): `{ check, page, ignored }` adds the entry to the `seo_ignored` list, or
+	 * removes it; the list whole is answered (`{ value }`) and the change goes to the activity log.
+	 * @param {any} ctx
+	 */
+	const ignore = async (ctx) => {
+		const body = ctx.body ?? {};
+		const entry = { check: body.check, page: typeof body.page === 'string' ? body.page : '' };
+		const current = await product.lists.get(ctx.websiteId, 'seo_ignored');
+		const others = current.filter((other) => other.check !== entry.check || other.page !== entry.page);
+		const saved = await product.lists.save(ctx.websiteId, 'seo_ignored', body.ignored === false ? others : [...others, entry]);
+		if (!saved.ok)
+			return problem('validation_failed', saved.errors[0]?.message ?? 'Send { check, page, ignored }.', {
+				errors: saved.errors.map((error) => ({ path: error.path.replace(/^\/value\/\d+/, ''), message: error.message })),
+			});
+		await log(ctx, {
+			action: body.ignored === false ? 'seo.shown' : 'seo.ignored',
+			target: 'seo_checklist',
+			label: String(entry.check),
+			detail: entry.page === '' ? 'Every page' : `Page ${entry.page}`,
+		});
+		return { value: saved.value };
+	};
+
 	return [
 		defineRoute({
 			method: 'POST',
@@ -406,5 +443,13 @@ export const seoCheckRoutes = (product, { log }) => {
 			},
 		}),
 		defineRoute({ method: 'GET', path: '/v1/admin/seo/report', auth: 'ticket', permission: 'seo.check', handler: keptReport }),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/admin/seo/ignored',
+			auth: 'ticket',
+			permission: 'seo.check',
+			database: false,
+			handler: ignore,
+		}),
 	];
 };

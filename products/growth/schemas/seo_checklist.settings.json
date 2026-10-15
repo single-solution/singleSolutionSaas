@@ -7,7 +7,42 @@
 			"title": "Pages to check",
 			"description": "Paths on your website (for example /, /shop, /about); the home page is always checked, at most 20 pages.",
 			"default": ["/"],
-			"items": { "type": "string", "maxLength": 300 }
+			"items": {
+				"type": "string",
+				"maxLength": 300
+			}
+		},
+		"titleMin": {
+			"type": "integer",
+			"title": "Shortest good title (characters)",
+			"description": "A page title shorter than this is flagged to improve.",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"titleMax": {
+			"type": "integer",
+			"title": "Longest good title (characters)",
+			"description": "A page title longer than this is flagged: search results cut long titles (about 60 characters on Google).",
+			"default": 60,
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"descriptionMin": {
+			"type": "integer",
+			"title": "Shortest good meta description (characters)",
+			"description": "A meta description shorter than this is flagged to improve.",
+			"default": 50,
+			"minimum": 1,
+			"maximum": 1000
+		},
+		"descriptionMax": {
+			"type": "integer",
+			"title": "Longest good meta description (characters)",
+			"description": "A meta description longer than this is flagged: search results cut long ones (about 160 characters on Google).",
+			"default": 160,
+			"minimum": 1,
+			"maximum": 1000
 		}
 	}
 }
