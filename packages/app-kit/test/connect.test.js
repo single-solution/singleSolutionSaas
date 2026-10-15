@@ -110,8 +110,9 @@ describe('connect handshake', () => {
 		expect((await call('GET', '/sso?launch=x')).status).toBe(503);
 	});
 
-	it('accepts a local http address outside production', async () => {
+	it('accepts a local http address outside production, and only a local one', async () => {
 		const { portal, handler } = await setup({ connect: false });
+		await expect(portal.connect({ handler, baseUrl: 'http://shop.example.com', secret: SECRET })).rejects.toThrow(/400/);
 		const result = await portal.connect({ handler, baseUrl: 'http://localhost:3000', secret: SECRET });
 		expect(/** @type {any} */ (result.manifest).endpoints.base).toBe('http://localhost:3000');
 	});

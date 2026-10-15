@@ -20,6 +20,7 @@ import {
 	createKeyResolver,
 	createSigner,
 	generateSigningKey,
+	isLocalOrigin,
 	toPublicJwk,
 	verifyConnectRequest,
 } from '@ss/protocol';
@@ -191,9 +192,8 @@ export const createConnection = ({ store, manifest, connectSecret, sealer, fetch
 		}
 		if (await store.seen(`connect|${request.nonce}`, now() + NONCE_TTL_MS))
 			return problem('unauthorized', 'The connect request does not verify.');
-		const { hostname, protocol } = new URL(request.baseUrl);
-		const local = hostname === 'localhost' || hostname.endsWith('.localhost') || /^(127\.0\.0\.1|\[::1\])$/.test(hostname);
-		if (protocol !== 'https:' && (nodeEnv === 'production' || !local))
+		const { origin, protocol } = new URL(request.baseUrl);
+		if (protocol !== 'https:' && (nodeEnv === 'production' || !isLocalOrigin(origin)))
 			return problem('bad_request', 'The product address must use https.');
 		const privateJwk = await productKey();
 		const accepted = await acceptedPrices();
