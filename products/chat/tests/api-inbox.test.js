@@ -234,7 +234,7 @@ describe('inbox', () => {
 		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toHaveLength(1);
 		expect((await sys.serverCall('GET', '/v1/inbox/unread')).json).toEqual({ unread: 1, conversations: 1, open: 1 });
 		const replied = await sys.serverCall('POST', `/v1/conversations/${id}/messages`, { text: 'Nice photo.' });
-		expect(replied.json.message.name).toBe('Team');
+		expect(replied.json.message.name).toBeNull();
 		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: null })).status).toBe(403);
 		const ticket = await sys.ticket(['inbox.read', 'inbox.reply']);
 		await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, { text: 'From Sam.' });

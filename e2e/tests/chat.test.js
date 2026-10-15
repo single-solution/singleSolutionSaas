@@ -237,7 +237,7 @@ describe('Chat on the real Portal', () => {
 			token: chatTokens.server,
 			body: { text: 'Anything else?' },
 		});
-		expect(team.json.message).toMatchObject({ author: 'staff', name: 'Team' });
+		expect(team.json.message).toMatchObject({ author: 'staff', name: null });
 		const activity = await sys.call('GET', `/v1/activity?target=${conversationId}&actor=usr_staff_42`, {
 			token: chatTokens.server,
 		});

@@ -3,7 +3,6 @@
 	"chat.officeClosed": "Our team is away right now. They are back {time}.",
 	"chat.contactAsk": "Please leave your name and how we can reach you, and we will reply.",
 	"transcript.you": "You",
-	"transcript.team": "Team",
 	"transcript.earlier": "This copy has the latest {count} messages; earlier ones are left out.",
 	"redacted.card": "[card number]",
 	"redacted.iban": "[bank account]",

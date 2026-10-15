@@ -146,6 +146,21 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		expect(sys.messages()).toHaveLength(2);
 	});
 
+	it('a reply from the merchant’s server alerts with the staff name of the widget texts (C24)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts', 'transcripts']);
+		await sys.paste('notifications');
+		await sys.text('chat.staff', 'Équipe');
+		const v = sys.visitor();
+		const sent = await v('POST', '/v1/chat/messages', { text: 'call me' });
+		await v('POST', '/v1/chat/contact', { name: 'Ann', email: 'ann@example.com' });
+		sys.advance(61_000);
+		await sys.serverCall('POST', `/v1/conversations/${sent.json.chat.conversation.id}/messages`, { text: 'Bonjour' });
+		expect(sys.messages().map((m) => [m.template, m.values.staff])).toEqual([['chat.staff_reply', 'Équipe']]);
+		// the transcript names the team the same way
+		expect((await v('POST', '/v1/chat/transcript', { email: 'ann@example.com' })).status).toBe(202);
+		expect(sys.messages().at(-1)?.values.transcript).toBe('You: call me\nÉquipe: Bonjour');
+	});
+
 	it('with How often every_reply each staff reply alerts a visitor who is away (C16)', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');

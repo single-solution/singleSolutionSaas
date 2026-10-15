@@ -697,7 +697,8 @@ export const createService = (product) => {
 	 * with `every_reply` each staff reply while they are away (C16). Sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c the conversation after the reply
-	 * @param {{ staff: string, text: string }} reply
+	 * @param {{ staff: string | null, text: string }} reply `staff`: null for the merchant's server (the widget text
+	 *   `chat.staff`, C24)
 	 */
 	const visitorAlert = async (s, c, reply) => {
 		if (!s.on.includes('visitor_alerts') || (!c.phone && !c.email)) return;
@@ -717,7 +718,7 @@ export const createService = (product) => {
 		}
 		const values = {
 			name: c.name ?? '',
-			staff: reply.staff,
+			staff: reply.staff ?? String((await s.texts())['chat.staff']),
 			preview: previewOf(plainOf(reply.text)),
 			link: c.currentPage?.url || c.page?.url || '',
 		};
@@ -744,7 +745,7 @@ export const createService = (product) => {
 				m.author === 'visitor'
 					? texts['transcript.you']
 					: m.author === 'staff'
-						? (m.name ?? texts['transcript.team'])
+						? (m.name ?? texts['chat.staff'])
 						: (m.name ?? botName);
 			return `${who}: ${(m.format === 'markdown' ? plainOf(m.text) : m.text) || m.attachment?.name || ''}`;
 		};

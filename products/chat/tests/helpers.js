@@ -270,6 +270,14 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		if (response.status !== 204) throw new Error(`setting: ${response.status} ${response.text}`);
 	};
 
+	/** Save a widget text (Settings → Texts). @param {string} key @param {string} value */
+	const text = async (key, value) => {
+		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/texts/${key}`, {
+			value,
+		});
+		if (response.status !== 204) throw new Error(`text: ${response.status} ${response.text}`);
+	};
+
 	/** Save a list setting. @param {string} list @param {unknown[]} value */
 	const list = async (list, value) => {
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/${list}`, {
@@ -332,6 +340,7 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		connect,
 		paste,
 		setting,
+		text,
 		list,
 		ticket,
 		admin,

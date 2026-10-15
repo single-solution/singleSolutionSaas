@@ -1000,7 +1000,7 @@
 				},
 				"name": {
 					"type": ["string", "null"],
-					"description": "The staff member's name, or the bot name; null for the visitor."
+					"description": "The staff member's name, or the bot name; null for the visitor and for a reply of your server without SS-Actor headers (show your widget text chat.staff)."
 				},
 				"text": {
 					"type": "string",
@@ -1395,7 +1395,7 @@
 				},
 				"name": {
 					"type": ["string", "null"],
-					"description": "The staff member's name, or the bot name; null for the visitor."
+					"description": "The staff member's name, or the bot name; null for the visitor and for a reply of your server without SS-Actor headers (show your widget text chat.staff)."
 				},
 				"text": {
 					"type": "string",
@@ -3103,7 +3103,7 @@
 	},
 	"POST /v1/conversations/:id/messages": {
 		"summary": "Reply to the visitor",
-		"description": "Markdown, written as the member of staff the SS-Actor headers name (else Team). It ends waiting for a person, moves open to awaiting_visitor, and with Assign automatically set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors, by the first of its Channels, in order, that the visitor has an address for and Notifications takes). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
+		"description": "Markdown, written as the member of staff the SS-Actor headers name (else with no name: the widget shows your widget text chat.staff). It ends waiting for a person, moves open to awaiting_visitor, and with Assign automatically set to first replier assigns an unassigned chat to a member of staff with room; a visitor who left gets a reply alert (Reply alerts to visitors, by the first of its Channels, in order, that the visitor has an address for and Notifications takes). Links stay links when they point to your website, or as Moderation's link policy allows. 422 validation_failed; 403 feature_off (an attachment with Attachments off).",
 		"body": {
 			"type": "object",
 			"properties": {

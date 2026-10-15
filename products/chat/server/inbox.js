@@ -39,19 +39,26 @@ const DELETE_BUDGET_MS = 8_000;
 const LEAD_BATCH = 1000;
 /** Attachments deleted from the website's storage at once. */
 const STORAGE_DELETES_AT_ONCE = 8;
-/** The merchant's server when no member of staff is named: the team. */
-const TEAM = Object.freeze({ kind: 'server', id: 'server', name: 'Team' });
+/** The merchant's server when no member of staff is named (the activity log's name, as in every product). */
+const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
 /**
  * Who acts: the ticket's staff member, else the member of staff a server-token call names with `SS-Actor-*` headers
- * (K2), else the merchant's server (the team).
+ * (K2), else the merchant's server.
  * @param {any} ctx
  * @returns {Actor}
  */
 export const actorOf = (ctx) => {
-	const actor = kitActorOf(ctx, TEAM);
-	return { ...actor, name: actor.name ?? TEAM.name };
+	const actor = kitActorOf(ctx, SERVER);
+	return { ...actor, name: actor.name ?? SERVER.name };
 };
+
+/**
+ * The name a staff message keeps: the member of staff's, none for the merchant's server (the widget, transcripts and
+ * reply alerts then use the widget text `chat.staff`, C24).
+ * @param {Actor} actor
+ */
+const authorName = (actor) => (actor.kind === SERVER.kind ? null : actor.name);
 
 /** A count with its noun (`1 file`, `2 files`). @param {number} count @param {string} noun */
 const counted = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`;
@@ -134,7 +141,7 @@ export const createInbox = (product, service, reply) => {
 		const s = await service.site(ctx);
 		const actor = actorOf(ctx);
 		// the inbox of a member of staff is open: a ticket's user, or the acting user of a server call
-		if (actor.kind !== TEAM.kind) await s.store.staff.checkIn(actor);
+		if (actor.kind !== SERVER.kind) await s.store.staff.checkIn(actor);
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const after = /** @type {[string, string] | null} */ (page.after);
 		const rows = await s.store.conversations.list({ where: await whereOf(ctx, s), after, limit: page.fetchLimit });
@@ -201,14 +208,14 @@ export const createInbox = (product, service, reply) => {
 		const takes =
 			s.on.includes('assignment') &&
 			c.assignedTo === null &&
-			actor.kind !== TEAM.kind &&
+			actor.kind !== SERVER.kind &&
 			(await s.values('assignment')).autoAssign === 'first_replier';
 		if (takes) await s.store.staff.checkIn(/** @type {any} */ (actor));
 		const assign = takes && (await hasRoom(s, actor.id)) ? { assignedTo: actor.id } : {};
 		const { message, conversation } = await service.append(
 			s,
 			c,
-			{ author: 'staff', text, name: actor.name, staffId: actor.id, attachment, format: 'markdown' },
+			{ author: 'staff', text, name: authorName(actor), staffId: actor.id, attachment, format: 'markdown' },
 			{
 				set: {
 					...assign,
@@ -233,7 +240,7 @@ export const createInbox = (product, service, reply) => {
 				label: conversationLabel(conversation),
 				detail: `Assigned to ${actor.name} (first reply)`,
 			});
-		await service.visitorAlert(s, conversation, { staff: actor.name, text: text || attachment?.name || '' });
+		await service.visitorAlert(s, conversation, { staff: authorName(actor), text: text || attachment?.name || '' });
 		const [view] = await service.staffMessages(s, [message]);
 		return created({ message: view });
 	};
@@ -299,7 +306,7 @@ export const createInbox = (product, service, reply) => {
 		const { message } = await service.append(s, c, {
 			author: 'staff',
 			text,
-			name: actor.name,
+			name: authorName(actor),
 			staffId: actor.id,
 			internal: true,
 		});
@@ -516,7 +523,7 @@ export const createInbox = (product, service, reply) => {
 		const open = await s.store.conversations.openByStaff();
 		const defaultMax = presence ? Number((await s.values('presence_queue')).maxChats) || null : null;
 		const actor = actorOf(ctx);
-		const me = actor.kind === TEAM.kind ? null : actor.id;
+		const me = actor.kind === SERVER.kind ? null : actor.id;
 		const seen = await s.store.staff.list();
 		const known = new Set(seen.map((m) => m.id));
 		/** @type {import('../adapters/store.js').StaffRecord[]} */

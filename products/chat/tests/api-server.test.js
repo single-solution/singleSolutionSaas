@@ -95,22 +95,23 @@ describe('the acting member of staff (K2)', () => {
 		expect(named.status).toBe(201);
 		expect(named.json.message).toMatchObject({ author: 'staff', name: 'Zoë Laurent', staffId: 'usr_zoe' });
 		const team = await server(sys, 'POST', `/v1/conversations/${id}/messages`, { body: { text: 'The team again.' } });
-		expect(team.json.message).toMatchObject({ name: 'Team', staffId: 'server' });
+		// the merchant's server writes as the team: no name kept, the widget shows the text chat.staff (C24)
+		expect(team.json.message).toMatchObject({ name: null, staffId: 'server' });
 		// the conversation's messages, for staff and for the visitor
 		const messages = (await server(sys, 'GET', `/v1/conversations/${id}`)).json.messages;
 		expect(messages.filter((/** @type {any} */ m) => m.author === 'staff').map((/** @type {any} */ m) => m.name)).toEqual([
 			'Zoë Laurent',
-			'Team',
+			null,
 		]);
 		expect((await v('GET', '/v1/chat')).json.messages.map((/** @type {any} */ m) => m.name)).toEqual([
 			null,
 			'Zoë Laurent',
-			'Team',
+			null,
 		]);
 		// the activity log, with the role and the visitor's label (never the message)
 		const activity = (await server(sys, 'GET', '/v1/activity?action=conversation.replied')).json.items;
 		expect(activity.map((/** @type {any} */ e) => [e.actor, e.label, e.detail])).toEqual([
-			[{ kind: 'server', id: 'server', name: 'Team' }, 'Guest', 'Reply'],
+			[{ kind: 'server', id: 'server', name: 'Server' }, 'Guest', 'Reply'],
 			[{ kind: 'user', id: 'usr_zoe', name: 'Zoë Laurent', role: 'Support' }, 'Guest', 'Reply'],
 		]);
 		expect(JSON.stringify(activity)).not.toContain('Zoë here');
