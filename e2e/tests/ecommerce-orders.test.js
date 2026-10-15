@@ -1111,7 +1111,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const units = counted.reduce((/** @type {number} */ sum, /** @type {any} */ o) => sum + o.itemCount, 0);
 		expect(summary.json).toMatchObject({ orders: counted.length, total, units });
 		expect(summary.json.fees).toBe(79_600);
-		expect(summary.json.days).toEqual([{ day: '2026-10-01', orders: counted.length, total }]);
+		expect(summary.json.periods).toEqual([{ period: '2026-10-01', orders: counted.length, total }]);
 		// statuses decide what counts as revenue
 		const refunded = orders.filter((/** @type {any} */ o) => o.status === 'refunded');
 		const only = await server('GET', '/v1/reports/summary?from=2026-10-01&to=2026-10-01&statuses=refunded');

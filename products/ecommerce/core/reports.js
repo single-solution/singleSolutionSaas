@@ -18,11 +18,63 @@ const MAX_RANGE_DAYS = 366;
 const DEFAULT_RANGE_DAYS = 30;
 /** Rows of a report, at most. */
 export const MAX_ROWS = 500;
-export const SALES_BY = Object.freeze(/** @type {const} */ (['product', 'category', 'brand', 'city', 'grade', 'payment_method']));
+/**
+ * The built-in groupings of the sales report (E12), in the order the widget offers them: the line's product, category,
+ * brand, item type, product tag and grade; the order's tag, status, payment method, city, region, country, delivery
+ * zone and courier; and its business day, ISO week or month. `field:<id>` groups by any product, variant or order field.
+ */
+export const SALES_GROUPINGS = Object.freeze(
+	/** @type {const} */ ([
+		'product',
+		'category',
+		'brand',
+		'item_type',
+		'tag',
+		'grade',
+		'order_tag',
+		'status',
+		'payment_method',
+		'city',
+		'region',
+		'country',
+		'zone',
+		'courier',
+		'day',
+		'week',
+		'month',
+	]),
+);
+/** The name of each built-in grouping (the widget shows its own words for them). */
+export const GROUPING_LABELS = Object.freeze(
+	/** @type {Readonly<Record<SalesBy, string>>} */ ({
+		product: 'Product',
+		category: 'Category',
+		brand: 'Brand',
+		item_type: 'Item type',
+		tag: 'Product tag',
+		grade: 'Grade',
+		order_tag: 'Order tag',
+		status: 'Status',
+		payment_method: 'Payment method',
+		city: 'City',
+		region: 'Region',
+		country: 'Country',
+		zone: 'Delivery zone',
+		courier: 'Courier',
+		day: 'Day',
+		week: 'Week',
+		month: 'Month',
+	}),
+);
+/** The groupings by time, and the summary's series: their `$dateToString` formats (ISO weeks). */
+const PERIOD_FORMATS = Object.freeze({ day: '%Y-%m-%d', week: '%G-W%V', month: '%Y-%m' });
+/** Groupings read from the products of the lines (their tags and item type), not from the orders. */
+export const PRODUCT_GROUPINGS = Object.freeze(/** @type {const} */ (['tag', 'item_type']));
 /** Most status keys of the summary's `statuses`. */
 const MAX_STATUSES = 50;
 
-/** @typedef {(typeof SALES_BY)[number]} SalesBy */
+/** @typedef {(typeof SALES_GROUPINGS)[number]} SalesBy */
+/** @typedef {keyof typeof PERIOD_FORMATS} Series */
 /** @typedef {{ from: Date, to: Date }} Range `to` is exclusive */
 
 /**
@@ -77,26 +129,6 @@ const ordersMatch = (websiteId, range, currency) => ({
 	},
 });
 
-/** The group key of each way of splitting sales. @type {Readonly<Record<SalesBy, unknown>>} */
-const SALES_KEY = Object.freeze({
-	product: '$lines.productId',
-	category: { $ifNull: ['$lines.categoryIds', ''] },
-	brand: { $ifNull: ['$lines.brandId', ''] },
-	city: { $toLower: { $trim: { input: { $ifNull: ['$address.city', ''] } } } },
-	grade: { $ifNull: ['$lines.grade', ''] },
-	payment_method: '$payment.method',
-});
-
-/** The name shown for each group. @type {Readonly<Record<SalesBy, unknown>>} */
-const SALES_NAME = Object.freeze({
-	product: '$lines.name',
-	category: '$lines.name',
-	brand: '$lines.name',
-	city: { $trim: { input: { $ifNull: ['$address.city', ''] } } },
-	grade: { $ifNull: ['$lines.gradeLabel', ''] },
-	payment_method: '$payment.method',
-});
-
 /**
  * A line's pieces in a pipeline over unwound `$lines` (`core/measure.js` `piecesOf`: a measured line is one).
  */
@@ -120,27 +152,108 @@ const LINE_COST = Object.freeze({
 	],
 });
 
+/** @param {string} path */
+const trimmed = (path) => ({ $trim: { input: { $ifNull: [path, ''] } } });
+
 /**
- * Sales split by product, category (a line counts in each of its categories), brand, city, grade or payment method:
- * units (pieces: a measured line is one), revenue (line totals) and discount, the largest revenue first.
- * @param {string} websiteId @param {Range} range @param {string} currency @param {SalesBy} by
+ * The group key (and the name shown, when it is not the key) of each grouping read from the orders: `unwind` the
+ * line's categories first; a key that is a list (tags, a field with several values) counts in each of its values.
+ * @param {string} by @param {string} timeZone
+ * @returns {{ key: unknown, name?: unknown, unwind?: string, sort?: 'key' } | null}
  */
-export const salesPipeline = (websiteId, range, currency, by) => [
-	ordersMatch(websiteId, range, currency),
-	{ $unwind: '$lines' },
-	...(by === 'category' ? [{ $unwind: { path: '$lines.categoryIds', preserveNullAndEmptyArrays: true } }] : []),
-	{
-		$group: {
-			_id: SALES_KEY[by],
-			name: { $first: SALES_NAME[by] },
-			units: { $sum: LINE_PIECES },
-			revenue: { $sum: '$lines.total' },
-			discount: { $sum: '$lines.discount' },
+const orderKeyOf = (by, timeZone) => {
+	if (by.startsWith('field:')) return { key: { $ifNull: [`$fields.${by.slice('field:'.length)}`, ''] } };
+	if (Object.hasOwn(PERIOD_FORMATS, by))
+		return {
+			key: { $dateToString: { format: PERIOD_FORMATS[/** @type {Series} */ (by)], date: '$placedAt', timezone: timeZone } },
+			sort: 'key',
+		};
+	switch (by) {
+		case 'product':
+			return { key: '$lines.productId', name: '$lines.name' };
+		// a regrouping by variant fields reads the sales of each variant
+		case 'variant':
+			return { key: '$lines.variantId', name: '$lines.name' };
+		case 'category':
+			return { key: { $ifNull: ['$lines.categoryIds', ''] }, unwind: '$lines.categoryIds' };
+		case 'brand':
+			return { key: { $ifNull: ['$lines.brandId', ''] } };
+		case 'grade':
+			return { key: { $ifNull: ['$lines.grade', ''] }, name: { $ifNull: ['$lines.gradeLabel', ''] } };
+		case 'order_tag':
+			return { key: { $ifNull: ['$tags', ''] } };
+		case 'status':
+			return { key: '$status' };
+		case 'payment_method':
+			return { key: '$payment.method' };
+		case 'city':
+		case 'region':
+			return { key: { $toLower: trimmed(`$address.${by}`) }, name: trimmed(`$address.${by}`) };
+		case 'country':
+			return { key: { $toUpper: trimmed('$address.country') } };
+		case 'zone':
+			return { key: { $ifNull: ['$delivery.zone', ''] } };
+		case 'courier':
+			return { key: { $ifNull: ['$shipment.courier', ''] } };
+		default:
+			return null;
+	}
+};
+
+/**
+ * Sales split by a grouping read from the orders (`field:<id>` an order field, or a product field by product with
+ * `productField`): units, revenue (line totals) and discount, the largest revenue first (periods: the oldest first). A
+ * line counts in each of its categories, and in each value of a key that is a list. The name of each group is read
+ * separately where the key is an id (categories, brands, payment methods, statuses).
+ * @param {string} websiteId @param {Range} range @param {string} currency @param {string} by
+ * @param {{ timeZone?: string, limit?: number }} [options] `limit`: most groups (products for a regrouping)
+ */
+export const salesPipeline = (websiteId, range, currency, by, { timeZone = 'UTC', limit = MAX_ROWS } = {}) => {
+	const grouping = orderKeyOf(by, timeZone);
+	if (!grouping) throw new Error(`unknown grouping ${by}`);
+	return [
+		ordersMatch(websiteId, range, currency),
+		{ $unwind: '$lines' },
+		...(grouping.unwind ? [{ $unwind: { path: grouping.unwind, preserveNullAndEmptyArrays: true } }] : []),
+		{ $addFields: { _k: grouping.key, ...(grouping.name ? { _n: grouping.name } : {}) } },
+		// a key that is a list counts in each value (none: '')
+		{ $unwind: { path: '$_k', preserveNullAndEmptyArrays: true } },
+		{
+			$group: {
+				_id: { $ifNull: ['$_k', ''] },
+				name: { $first: grouping.name ? '$_n' : '$_k' },
+				units: { $sum: LINE_PIECES },
+				revenue: { $sum: '$lines.total' },
+				discount: { $sum: '$lines.discount' },
+			},
 		},
-	},
-	{ $sort: { revenue: -1, _id: 1 } },
-	{ $limit: MAX_ROWS },
-];
+		{ $sort: grouping.sort === 'key' ? { _id: 1 } : { revenue: -1, _id: 1 } },
+		{ $limit: limit },
+	];
+};
+
+/**
+ * Sales rows regrouped by values read elsewhere (E12: the products' tags, item types and fields): each row's values
+ * (none: one group with the key ''), the largest revenue first.
+ * @param {ReadonlyArray<{ _id: unknown, units: unknown, revenue: unknown, discount: unknown }>} rows
+ * @param {(id: string) => Array<{ key: string, name: string }>} valuesOf
+ * @returns {Array<{ key: string, name: string, units: number, revenue: number, discount: number }>}
+ */
+export const regroup = (rows, valuesOf) => {
+	/** @type {Map<string, { key: string, name: string, units: number, revenue: number, discount: number }>} */
+	const groups = new Map();
+	for (const row of rows) {
+		const values = valuesOf(String(row._id ?? ''));
+		for (const { key, name } of values.length > 0 ? values : [{ key: '', name: '' }]) {
+			const group = groups.get(key) ?? { key, name, units: 0, revenue: 0, discount: 0 };
+			group.units += Number(row.units);
+			group.revenue += Number(row.revenue);
+			group.discount += Number(row.discount);
+			groups.set(key, group);
+		}
+	}
+	return [...groups.values()].sort((a, b) => b.revenue - a.revenue || a.key.localeCompare(b.key)).slice(0, MAX_ROWS);
+};
 
 /**
  * The totals of the range: orders, units, revenue, discount.
@@ -270,12 +383,13 @@ export const parseStatuses = (value, keys) => {
 };
 
 /**
- * The summary per business day: orders, total, goods (subtotals), delivery, fees, discount, refunded and units of the
- * orders that count (with `statuses`, the orders in those status keys; else the orders not canceled).
+ * The summary per business day, ISO week or month (E12 `series`): orders, total, goods (subtotals), delivery, fees,
+ * discount, refunded and units of the orders that count (with `statuses`, the orders in those status keys; else the
+ * orders not canceled).
  * @param {string} websiteId @param {Range} range @param {string} currency @param {string[] | null} statuses
- * @param {string} timeZone
+ * @param {string} timeZone @param {Series} [series]
  */
-export const summaryPipeline = (websiteId, range, currency, statuses, timeZone) => [
+export const summaryPipeline = (websiteId, range, currency, statuses, timeZone, series = 'day') => [
 	{
 		$match: {
 			websiteId,
@@ -286,7 +400,9 @@ export const summaryPipeline = (websiteId, range, currency, statuses, timeZone) 
 	},
 	{
 		$group: {
-			_id: { $dateToString: { format: '%Y-%m-%d', date: '$placedAt', timezone: timeZone } },
+			_id: {
+				$dateToString: { format: PERIOD_FORMATS[/** @type {Series} */ (series)], date: '$placedAt', timezone: timeZone },
+			},
 			orders: { $sum: 1 },
 			total: { $sum: { $ifNull: ['$totals.total', 0] } },
 			goods: { $sum: { $ifNull: ['$totals.subtotal', 0] } },
@@ -307,31 +423,54 @@ const SUMMARY_FIELDS = Object.freeze(
 /** @typedef {Record<(typeof SUMMARY_FIELDS)[number], number>} SummaryTotals */
 
 /**
- * The summary of the range and every business day of it (days without orders are zero), oldest first.
+ * The ISO week (`2026-W41`) of a day (`YYYY-MM-DD`), as MongoDB's `%G-W%V` writes it.
+ * @param {string} day
+ */
+export const isoWeekOf = (day) => {
+	const date = new Date(`${day}T00:00:00Z`);
+	// the Thursday of its week decides the year
+	const thursday = new Date(date.getTime() + (3 - ((date.getUTCDay() + 6) % 7)) * DAY_MS);
+	const year = thursday.getUTCFullYear();
+	const week = Math.floor((thursday.getTime() - Date.UTC(year, 0, 1)) / DAY_MS / 7) + 1;
+	return `${year}-W${String(week).padStart(2, '0')}`;
+};
+
+/**
+ * The summary of the range and every business day, ISO week or month of it (periods without orders are zero), oldest
+ * first (E12: `series`).
  * @param {Array<Record<string, unknown>>} rows the summary pipeline's result
  * @param {Range} range
  * @param {string} timeZone
- * @returns {{ totals: SummaryTotals, days: Array<SummaryTotals & { day: string }> }}
+ * @param {Series} [series]
+ * @returns {{ totals: SummaryTotals, periods: Array<SummaryTotals & { period: string }> }}
  */
-export const summaryOf = (rows, range, timeZone) => {
+export const summaryOf = (rows, range, timeZone, series = 'day') => {
 	const zero = () => /** @type {SummaryTotals} */ (Object.fromEntries(SUMMARY_FIELDS.map((field) => [field, 0])));
-	const byDay = new Map(rows.map((row) => [String(row._id), row]));
+	const byPeriod = new Map(rows.map((row) => [String(row._id), row]));
+	/** @param {string} day */
+	const periodOf = (day) => (series === 'month' ? day.slice(0, 7) : series === 'week' ? isoWeekOf(day) : day);
 	const totals = zero();
-	/** @type {Array<SummaryTotals & { day: string }>} */
-	const days = [];
+	/** @type {Array<SummaryTotals & { period: string }>} */
+	const periods = [];
 	const last = zonedDay(range.to.getTime() - 1, timeZone);
 	for (let day = zonedDay(range.from, timeZone); day <= last;) {
-		const row = byDay.get(day);
-		const sums = zero();
-		for (const field of SUMMARY_FIELDS) {
-			sums[field] = Number(row?.[field] ?? 0);
-			totals[field] += sums[field];
+		const period = periodOf(day);
+		if (periods.at(-1)?.period !== period) {
+			const row = byPeriod.get(period);
+			const sums = zero();
+			for (const field of SUMMARY_FIELDS) {
+				sums[field] = Number(row?.[field] ?? 0);
+				totals[field] += sums[field];
+			}
+			periods.push({ period, ...sums });
 		}
-		days.push({ day, ...sums });
 		day = new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
 	}
-	return { totals, days };
+	return { totals, periods };
 };
+
+/** @param {unknown} value @returns {value is Series} */
+export const isSeries = (value) => typeof value === 'string' && Object.hasOwn(PERIOD_FORMATS, value);
 
 // ----------------------------------------------------------------------------------- sell-through, oldest stock
 
@@ -411,7 +550,7 @@ export const oldestStockRows = (products, lastSales, now) =>
  */
 export const REPORT_COLUMNS = Object.freeze({
 	summary: [
-		['day', 'day'],
+		['period', 'period'],
 		['orders', 'orders'],
 		['total', 'total', 'money'],
 		['goods', 'goods', 'money'],

@@ -10749,6 +10749,78 @@
 				}
 			}
 		},
+		"/v1/admin/reports/groupings": {
+			"get": {
+				"summary": "What the sales report groups by (Customers admin widget)",
+				"description": "The built-in groupings of the switched-on features (grade with Condition grades, zone with Delivery zones), then every product, variant and order field as field:<id> named by the field. The admin widget offers them. The widget needs the reports.read permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "reports",
+				"x-ss-permission": "reports.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"label",
+													"kind"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string",
+														"description": "The by of GET …/reports/sales."
+													},
+													"label": {
+														"type": "string",
+														"description": "Its name (a field's own name)."
+													},
+													"kind": {
+														"type": "string",
+														"enum": [
+															"built_in",
+															"field"
+														]
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing (Customers admin widget)",
@@ -10987,8 +11059,8 @@
 		},
 		"/v1/admin/reports/sales": {
 			"get": {
-				"summary": "Sales by product, category, brand, city, grade or payment method (Customers admin widget)",
-				"description": "Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. by=category counts a line in each of its categories. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+				"summary": "Sales by any grouping: product, category, brand, item type, tag, grade, order tag, status, payment method, place, zone, courier, period or any field (Customers admin widget)",
+				"description": "Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. by (E12; GET …/reports/groupings lists them): product, category (a line counts in each of its categories), brand, item_type, tag (the product's tags), grade, order_tag, status (named as your order flow names it), payment_method (named as shoppers see it), city, region, country, zone (the delivery zone key), courier, day, week (ISO, 2026-W41) or month (in the business time zone, the oldest first), or field:<id> (a product, variant or order field, its values named as shoppers read them). A line or order with several values counts in each; one with none is in the group with the key ''. An unknown grouping or field answers 422 validation_failed at /by. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -11022,19 +11094,12 @@
 						"name": "by",
 						"in": "query",
 						"required": false,
-						"description": "Another value is product.",
+						"description": "The grouping (GET …/reports/groupings).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"product",
-								"category",
-								"brand",
-								"city",
-								"grade",
-								"payment_method"
-							],
+							"pattern": "^(product|category|brand|item_type|tag|grade|order_tag|status|payment_method|city|region|country|zone|courier|day|week|month|field:[A-Za-z0-9_-]{1,64})$",
 							"default": "product",
-							"description": "Another value is product."
+							"description": "The grouping (GET …/reports/groupings)."
 						}
 					},
 					{
@@ -11205,8 +11270,8 @@
 		},
 		"/v1/admin/reports/summary": {
 			"get": {
-				"summary": "The sales summary with a daily series (Customers admin widget)",
-				"description": "Orders count when placed in the range and in the shop's currency: not canceled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per day with the columns day, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+				"summary": "The sales summary with a series by day, week or month (Customers admin widget)",
+				"description": "Orders count when placed in the range and in the shop's currency: not canceled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day, week or month at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per period with the columns period, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -11250,14 +11315,16 @@
 						"name": "series",
 						"in": "query",
 						"required": false,
-						"description": "The series: per business day.",
+						"description": "The series (E12): per business day, ISO week (2026-W41) or month (2026-10).",
 						"schema": {
 							"type": "string",
 							"enum": [
-								"day"
+								"day",
+								"week",
+								"month"
 							],
 							"default": "day",
-							"description": "The series: per business day."
+							"description": "The series (E12): per business day, ISO week (2026-W41) or month (2026-10)."
 						}
 					},
 					{
@@ -27740,6 +27807,90 @@
 				}
 			}
 		},
+		"/v1/reports/groupings": {
+			"get": {
+				"summary": "What the sales report groups by",
+				"description": "The built-in groupings of the switched-on features (grade with Condition grades, zone with Delivery zones), then every product, variant and order field as field:<id> named by the field. The admin widget offers them.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "reports",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"label",
+													"kind"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string",
+														"description": "The by of GET …/reports/sales."
+													},
+													"label": {
+														"type": "string",
+														"description": "Its name (a field's own name)."
+													},
+													"kind": {
+														"type": "string",
+														"enum": [
+															"built_in",
+															"field"
+														]
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing",
@@ -28023,8 +28174,8 @@
 		},
 		"/v1/reports/sales": {
 			"get": {
-				"summary": "Sales by product, category, brand, city, grade or payment method",
-				"description": "Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. by=category counts a line in each of its categories. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+				"summary": "Sales by any grouping: product, category, brand, item type, tag, grade, order tag, status, payment method, place, zone, courier, period or any field",
+				"description": "Orders count when placed in the range, in the shop's currency and not canceled. Money is minor units of the shop's currency. by (E12; GET …/reports/groupings lists them): product, category (a line counts in each of its categories), brand, item_type, tag (the product's tags), grade, order_tag, status (named as your order flow names it), payment_method (named as shoppers see it), city, region, country, zone (the delivery zone key), courier, day, week (ISO, 2026-W41) or month (in the business time zone, the oldest first), or field:<id> (a product, variant or order field, its values named as shoppers read them). A line or order with several values counts in each; one with none is in the group with the key ''. An unknown grouping or field answers 422 validation_failed at /by. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. With format=csv the answer is text/csv, not JSON: the file sales.csv (the csv setting's delimiter) with the columns key, name, units, revenue, discount; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "reports",
 				"security": [
@@ -28057,19 +28208,12 @@
 						"name": "by",
 						"in": "query",
 						"required": false,
-						"description": "Another value is product.",
+						"description": "The grouping (GET …/reports/groupings).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"product",
-								"category",
-								"brand",
-								"city",
-								"grade",
-								"payment_method"
-							],
+							"pattern": "^(product|category|brand|item_type|tag|grade|order_tag|status|payment_method|city|region|country|zone|courier|day|week|month|field:[A-Za-z0-9_-]{1,64})$",
 							"default": "product",
-							"description": "Another value is product."
+							"description": "The grouping (GET …/reports/groupings)."
 						}
 					},
 					{
@@ -28274,8 +28418,8 @@
 		},
 		"/v1/reports/summary": {
 			"get": {
-				"summary": "The sales summary with a daily series",
-				"description": "Orders count when placed in the range and in the shop's currency: not canceled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per day with the columns day, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
+				"summary": "The sales summary with a series by day, week or month",
+				"description": "Orders count when placed in the range and in the shop's currency: not canceled, or with statuses only those in the status keys named. Money is minor units of the shop's currency. from must be before to, and a report covers at most 366 days; else 422 validation_failed at /from or /to. statuses that are not keys of the order flow (or more than 50) answer 422 validation_failed at /statuses; a series other than day, week or month at /series. With format=csv the answer is text/csv, not JSON: the file summary.csv (the csv setting's delimiter), one row per period with the columns period, orders, total, goods, delivery, fees, discount, refunded, units; money as decimals of the shop's currency. Another format answers 422 validation_failed at /format.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "reports",
 				"security": [
@@ -28318,14 +28462,16 @@
 						"name": "series",
 						"in": "query",
 						"required": false,
-						"description": "The series: per business day.",
+						"description": "The series (E12): per business day, ISO week (2026-W41) or month (2026-10).",
 						"schema": {
 							"type": "string",
 							"enum": [
-								"day"
+								"day",
+								"week",
+								"month"
 							],
 							"default": "day",
-							"description": "The series: per business day."
+							"description": "The series (E12): per business day, ISO week (2026-W41) or month (2026-10)."
 						}
 					},
 					{
@@ -49012,7 +49158,7 @@
 			},
 			"ReportSummary": {
 				"type": "object",
-				"description": "The totals of the counted orders of the range, and the orders and total per day.",
+				"description": "The totals of the counted orders of the range, and the orders and total per period.",
 				"required": [
 					"from",
 					"to",
@@ -49026,7 +49172,8 @@
 					"discount",
 					"refunded",
 					"units",
-					"days"
+					"series",
+					"periods"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -49088,22 +49235,29 @@
 						"type": "integer",
 						"minimum": 0
 					},
-					"days": {
+					"series": {
+						"type": "string",
+						"enum": [
+							"day",
+							"week",
+							"month"
+						]
+					},
+					"periods": {
 						"type": "array",
-						"description": "Every business day of the range, oldest first (days without orders are 0).",
+						"description": "Every business day, ISO week or month of the range, oldest first (periods without orders are 0).",
 						"items": {
 							"type": "object",
 							"required": [
-								"day",
+								"period",
 								"orders",
 								"total"
 							],
 							"additionalProperties": false,
 							"properties": {
-								"day": {
+								"period": {
 									"type": "string",
-									"format": "date",
-									"description": "A day in the business time zone."
+									"description": "A day (2026-10-05), an ISO week (2026-W41) or a month (2026-10) in the business time zone."
 								},
 								"orders": {
 									"type": "integer",
@@ -50398,14 +50552,8 @@
 					},
 					"by": {
 						"type": "string",
-						"enum": [
-							"product",
-							"category",
-							"brand",
-							"city",
-							"grade",
-							"payment_method"
-						]
+						"pattern": "^(product|category|brand|item_type|tag|grade|order_tag|status|payment_method|city|region|country|zone|courier|day|week|month|field:[A-Za-z0-9_-]{1,64})$",
+						"description": "The grouping."
 					},
 					"totals": {
 						"type": "object",

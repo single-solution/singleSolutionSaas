@@ -255,7 +255,7 @@
 		{
 			"key": "reports",
 			"name": "Reports",
-			"description": "Sales by product, category, brand and city, stock age, return rate and margin.",
+			"description": "Sales by any grouping (product, category, brand, tags, place, zone, courier, payment method, period or any field), a summary by day, week or month, stock age, return rate and margin.",
 			"dependsOn": ["checkout"],
 			"settings": {
 				"$ref": "schemas/reports.settings.json"

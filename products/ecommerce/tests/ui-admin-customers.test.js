@@ -476,13 +476,22 @@ describe('customers admin: reviews', () => {
 describe('customers admin: reports and CSV', () => {
 	it('runs reports and downloads them as CSV', async () => {
 		const { root, server, saved } = await start({
+			'GET /v1/admin/reports/groupings': () =>
+				answer(200, {
+					items: [
+						{ key: 'product', label: 'Product', kind: 'built_in' },
+						{ key: 'city', label: 'City', kind: 'built_in' },
+						{ key: 'payment_method', label: 'Payment method', kind: 'built_in' },
+						{ key: 'field:att_1', label: 'Material', kind: 'field' },
+					],
+				}),
 			'GET /v1/admin/reports/sales': (/** @type {any} */ call) =>
-				call.url.searchParams.get('by') === 'city'
+				call.url.searchParams.get('by') === 'field:att_1'
 					? answer(200, {
 							from: AT,
 							to: AT,
 							currency: 'USD',
-							by: 'city',
+							by: 'field:att_1',
 							totals: { orders: 0, units: 0, revenue: 0, discount: 0 },
 							rows: [],
 						})
@@ -532,7 +541,14 @@ describe('customers admin: reports and CSV', () => {
 			'GET /v1/admin/reports/margin': () => problem(403, 'forbidden'),
 		});
 		const panel = await openTab(root, 'reports');
-		await change(fieldIn(panel, 'Report'), 'sales_product');
+		await change(fieldIn(panel, 'Report'), 'sales');
+		// the groupings come from the server: built-in ones in the widget's words, fields by name (E12)
+		expect([...fieldIn(panel, 'Group by').options].map((/** @type {any} */ o) => o.textContent)).toEqual([
+			'Product',
+			'City',
+			'Payment method',
+			'Material',
+		]);
 		await change(fieldIn(panel, 'From'), '2026-09-01');
 		await change(fieldIn(panel, 'To'), '2026-09-30');
 		await click(buttonIn(panel, 'Show'));
@@ -544,10 +560,11 @@ describe('customers admin: reports and CSV', () => {
 		expect(textOf(panel.querySelector('.facts') ?? panel)).toContain('Orders2Units3SalesUSD 3,000.00DiscountUSD 10.00');
 		expect(textOf(panel)).toContain('None');
 		await click(buttonIn(panel, 'Download CSV'));
-		expect(saved[0]?.name).toBe('report-sales_product.csv');
+		expect(saved[0]?.name).toBe('report-sales.csv');
 		expect(saved[0]?.text).toContain('Phone,3,3000.00,10.00');
-		await change(fieldIn(panel, 'Report'), 'sales_city');
+		await change(fieldIn(panel, 'Group by'), 'field:att_1');
 		await click(buttonIn(panel, 'Show'));
+		expect(Object.fromEntries(server.last('GET /v1/admin/reports/sales')?.url.searchParams ?? []).by).toBe('field:att_1');
 		expect(statuses(panel)).toContain('Nothing in this period.');
 		expect(shows(panel, 'Download CSV')).toBe(false);
 		await change(fieldIn(panel, 'Report'), 'stock_age');

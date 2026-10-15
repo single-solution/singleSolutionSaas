@@ -1,21 +1,29 @@
 /**
- * Reports (feature `reports`, PLAN 0.8.8): sales by product, category, brand, city, grade and payment method, stock
- * age, return rate and margin, (E36) the summary with its daily series, sell-through and oldest stock, and (E41) shop
+ * Reports (feature `reports`, PLAN 0.8.8): sales by any grouping (E12: `GET …/reports/groupings` lists them; the
+ * products' tags, item types and fields are read from the products, by product or variant), stock age, return rate and
+ * margin, (E36) the summary by day (E12: week or month), sell-through and oldest stock, and (E41) shop
  * health, for the merchant's server and the admin widget (permission `reports.read`). Every report answers JSON, or
  * with `format=csv` its rows as a CSV file (the `csv` setting's separator); shop health answers JSON only. Each report reads the merchant database with aggregation
- * pipelines that start with a `$match` on the website (`core/reports.js`); names of categories and brands are read
- * separately (no `$lookup`). Money is minor units of the shop's currency; a day in `from` and `to`, and a day of the
+ * pipelines that start with a `$match` on the website (`core/reports.js`); names of categories, brands, statuses and
+ * payment methods (the names shoppers see) are read separately (no `$lookup`). Money is minor units of the shop's currency; a day in `from` and `to`, and a day of the
  * summary's series, is a day in the business time zone (PLAN 0.8.10 K8).
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
 import { measuredScope } from '../adapters/catalog-store.js';
 import { toCsv } from '../core/csv.js';
+import { attributesOf, productTypes } from '../adapters/catalog-store.js';
+import { valueLabel } from '../core/catalog.js';
 import { COLLECTIONS } from '../core/model.js';
+import { statusLabel } from '../core/orders.js';
 import {
+	GROUPING_LABELS,
 	MAX_ROWS,
+	PRODUCT_GROUPINGS,
 	REPORT_COLUMNS,
-	SALES_BY,
+	SALES_GROUPINGS,
+	isSeries,
+	regroup,
 	lastSalePipeline,
 	lastVariantSalePipeline,
 	marginPipeline,
@@ -42,6 +50,10 @@ import { SERVER_LIMITS } from './service.js';
 const SERVER = [...SERVER_LIMITS];
 /** At most this many categories and brands are read for shop health. */
 const MAX_TAXONOMY = 5000;
+/** At most this many products (or variants) a sales report regroups by their tags, item types or fields (E12). */
+const MAX_REGROUPED = 20_000;
+/** The kinds of fields a sales report groups by (E12). */
+const GROUPED_FIELDS = Object.freeze(['product', 'variant', 'order']);
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -108,33 +120,136 @@ export const createReports = (product, service) => {
 		return new Map(found.map((row) => [row.id, row.name]));
 	};
 
-	/** @param {any} ctx @returns {Promise<Built>} */
-	const sales = async (ctx) => {
-		const by = SALES_BY.includes(ctx.query.by) ? /** @type {import('../core/reports.js').SalesBy} */ (ctx.query.by) : 'product';
-		const { s, data, range } = await begin(ctx);
-		const orders = data.collection(COLLECTIONS.orders);
-		const rows = await orders.aggregate(salesPipeline(data.websiteId, range, s.currency, by)).toArray();
-		const [totals] = await orders.aggregate(totalsPipeline(data.websiteId, range, s.currency)).toArray();
-		const keys = rows.map((row) => String(row._id ?? '')).filter(Boolean);
-		const names =
-			by === 'category'
-				? await namesOf(data, COLLECTIONS.categories, keys)
-				: by === 'brand'
-					? await namesOf(data, COLLECTIONS.brands, keys)
-					: by === 'payment_method'
-						? // the payment methods by the names of the website's list (a key it no longer has reads as itself)
-							new Map((await service.methods.methodsOf(s)).map((method) => [method.key, method.name]))
-						: null;
-		const list = rows.map((row) => {
-			const key = String(row._id ?? '');
-			return {
+	/**
+	 * The groupings a site's sales report offers (E12): the built-in ones of its switched-on features, then each product,
+	 * variant and order field (`field:<id>`, named by the field).
+	 * @param {Site} s @param {WebsiteData} data
+	 */
+	const groupingsOf = async (s, data) => {
+		const fields = /** @type {import('../core/model.js').AttributeRecord[]} */ (await attributesOf(data))
+			.filter((field) => GROUPED_FIELDS.includes(field.on))
+			.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name));
+		/** @type {Readonly<Record<string, string>>} the feature each built-in grouping needs */
+		const needs = { grade: 'grades_serials', zone: 'delivery_zones' };
+		return [
+			...SALES_GROUPINGS.filter((key) => !needs[key] || s.has(needs[key])).map((key) => ({
 				key,
-				name: names ? (names.get(key) ?? (by === 'payment_method' ? key : '')) : String(row.name ?? ''),
-				units: Number(row.units),
-				revenue: Number(row.revenue),
-				discount: Number(row.discount),
-			};
-		});
+				label: GROUPING_LABELS[key],
+				kind: 'built_in',
+			})),
+			...fields.map((field) => ({ key: `field:${field.id}`, label: field.name, kind: 'field' })),
+		];
+	};
+
+	/** GET …/reports/groupings: what the sales report groups by (E12). @param {any} ctx */
+	const groupings = async (ctx) => {
+		const s = await service.site(ctx);
+		return { items: await groupingsOf(s, await s.data()) };
+	};
+
+	/**
+	 * GET …/reports/sales?by=: sales split by a grouping (E12; the product when none is given).
+	 * @param {any} ctx @returns {Promise<Built>}
+	 */
+	const sales = async (ctx) => {
+		const by = ctx.query.by === undefined || ctx.query.by === '' ? 'product' : String(ctx.query.by);
+		const { s, data, range, timeZone } = await begin(ctx);
+		/** @type {import('../core/model.js').AttributeRecord | null} */
+		let field = null;
+		if (by.startsWith('field:')) {
+			const all = /** @type {import('../core/model.js').AttributeRecord[]} */ (await attributesOf(data));
+			field = all.find((one) => one.id === by.slice('field:'.length) && GROUPED_FIELDS.includes(one.on)) ?? null;
+			if (!field) throw service.invalid('by', 'There is no such product, variant or order field.');
+		} else if (!(/** @type {readonly string[]} */ (SALES_GROUPINGS).includes(by)))
+			throw service.invalid('by', `by is ${SALES_GROUPINGS.join(', ')} or field:<id> (GET …/reports/groupings).`);
+		const orders = data.collection(COLLECTIONS.orders);
+		/** @param {unknown} value */
+		const keyOf = (value) => (value === null || value === undefined ? '' : String(value));
+		/** @type {Array<{ key: string, name: string, units: number, revenue: number, discount: number }>} */
+		let list;
+		if (/** @type {readonly string[]} */ (PRODUCT_GROUPINGS).includes(by) || (field && field.on !== 'order')) {
+			// read from the lines' products: their tags, item types and fields
+			const perVariant = field?.on === 'variant';
+			const rows = await orders
+				.aggregate(
+					salesPipeline(data.websiteId, range, s.currency, perVariant ? 'variant' : 'product', {
+						timeZone,
+						limit: MAX_REGROUPED,
+					}),
+				)
+				.toArray();
+			const ids = rows.map((row) => String(row._id ?? '')).filter(Boolean);
+			const products = /** @type {Array<import('../core/model.js').ProductRecord>} */ (
+				ids.length === 0
+					? []
+					: await data
+							.collection(COLLECTIONS.products)
+							.find(
+								{ websiteId: data.websiteId, ...(perVariant ? { 'variants.id': { $in: ids } } : { id: { $in: ids } }) },
+								{
+									projection: { _id: 0, id: 1, kind: 1, typeKey: 1, categoryIds: 1, tags: 1, specs: 1, variants: 1 },
+								},
+							)
+							.toArray()
+			);
+			/** @type {Map<string, Array<{ key: string, name: string }>>} values by product id (or variant id) */
+			const values = new Map();
+			/** @param {unknown} value */
+			const fieldValues = (value) =>
+				(Array.isArray(value) ? value : value === undefined || value === null || value === '' ? [] : [value]).map((one) => ({
+					key: keyOf(one),
+					name: valueLabel(/** @type {any} */ (field), one),
+				}));
+			if (by === 'item_type') {
+				const types = await productTypes(data, products, await s.list('item_types'));
+				for (const product of products) {
+					const type = types.get(product.id);
+					values.set(product.id, type ? [{ key: type.key, name: type.name || type.key }] : []);
+				}
+			} else
+				for (const product of products) {
+					if (by === 'tag')
+						values.set(
+							product.id,
+							(product.tags ?? []).map((tag) => ({ key: tag, name: tag })),
+						);
+					else if (perVariant)
+						for (const variant of product.variants)
+							values.set(variant.id, fieldValues(variant.attributes?.[/** @type {any} */ (field).id]));
+					else values.set(product.id, fieldValues(product.specs?.[/** @type {any} */ (field).id]));
+				}
+			list = regroup(/** @type {any[]} */ (rows), (id) => values.get(id) ?? []);
+		} else {
+			const rows = await orders.aggregate(salesPipeline(data.websiteId, range, s.currency, by, { timeZone })).toArray();
+			const keys = rows.map((row) => keyOf(row._id)).filter(Boolean);
+			// names read where the key is an id: categories, brands, payment methods (by the names shoppers see), statuses
+			/** @type {(key: string, row: any) => string} */
+			let nameOf = (key, row) => (row.name === undefined || row.name === null ? key : String(row.name));
+			if (by === 'category' || by === 'brand') {
+				const names = await namesOf(data, by === 'category' ? COLLECTIONS.categories : COLLECTIONS.brands, keys);
+				nameOf = (key) => names.get(key) ?? '';
+			} else if (by === 'payment_method') {
+				// the payment methods by the names of the website's list (a key it no longer has reads as itself)
+				const names = new Map((await service.methods.methodsOf(s)).map((method) => [method.key, method.name]));
+				nameOf = (key) => names.get(key) ?? key;
+			} else if (by === 'status') {
+				const flow = /** @type {import('../core/model.js').OrderFlow} */ (
+					/** @type {unknown} */ (await s.list('order_flow'))
+				);
+				nameOf = (key) => statusLabel(flow, key);
+			} else if (field) nameOf = (key, row) => (key === '' ? '' : valueLabel(field, row._id));
+			list = rows.map((row) => {
+				const key = keyOf(row._id);
+				return {
+					key,
+					name: nameOf(key, row),
+					units: Number(row.units),
+					revenue: Number(row.revenue),
+					discount: Number(row.discount),
+				};
+			});
+		}
+		const [totals] = await orders.aggregate(totalsPipeline(data.websiteId, range, s.currency)).toArray();
 		const body = {
 			...period(range),
 			currency: s.currency,
@@ -240,27 +355,31 @@ export const createReports = (product, service) => {
 		return { s, body: { ...period(range), currency: s.currency, totals, rows }, rows };
 	};
 
-	/** GET …/reports/summary?from=&to=&statuses=&series=day (E36). @param {any} ctx @returns {Promise<Built>} */
+	/**
+	 * GET …/reports/summary?from=&to=&statuses=&series=day|week|month (E36; E12 weeks and months).
+	 * @param {any} ctx @returns {Promise<Built>}
+	 */
 	const summary = async (ctx) => {
-		if (ctx.query.series !== undefined && ctx.query.series !== '' && ctx.query.series !== 'day')
-			throw service.invalid('series', 'The series is day.');
+		const series = ctx.query.series === undefined || ctx.query.series === '' ? 'day' : ctx.query.series;
+		if (!isSeries(series)) throw service.invalid('series', 'The series is day, week or month.');
 		const { s, data, range, timeZone } = await begin(ctx);
 		const flow = /** @type {import('../core/model.js').OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
 		const parsed = parseStatuses(ctx.query.statuses, new Set(flow.statuses.map((status) => status.key)));
 		if (!parsed.ok) throw service.invalid(parsed.field, parsed.message);
 		const rows = await data
 			.collection(COLLECTIONS.orders)
-			.aggregate(summaryPipeline(data.websiteId, range, s.currency, parsed.statuses, timeZone))
+			.aggregate(summaryPipeline(data.websiteId, range, s.currency, parsed.statuses, timeZone, series))
 			.toArray();
-		const { totals, days } = summaryOf(rows, range, timeZone);
+		const { totals, periods } = summaryOf(rows, range, timeZone, series);
 		const body = {
 			...period(range),
 			currency: s.currency,
 			statuses: parsed.statuses,
 			...totals,
-			days: days.map((day) => ({ day: day.day, orders: day.orders, total: day.total })),
+			series,
+			periods: periods.map((entry) => ({ period: entry.period, orders: entry.orders, total: entry.total })),
 		};
-		return { s, body, rows: days };
+		return { s, body, rows: periods };
 	};
 
 	/** GET …/reports/sell-through?from=&to= (E36). @param {any} ctx @returns {Promise<Built>} */
@@ -492,6 +611,23 @@ export const createReports = (product, service) => {
 			permission: 'reports.read',
 			rateLimit: SERVER,
 			handler: health,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/reports/groupings',
+			auth: 'server',
+			feature: 'reports',
+			rateLimit: SERVER,
+			handler: groupings,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/reports/groupings',
+			auth: 'ticket',
+			feature: 'reports',
+			permission: 'reports.read',
+			rateLimit: SERVER,
+			handler: groupings,
 		}),
 		defineRoute({
 			method: 'GET',

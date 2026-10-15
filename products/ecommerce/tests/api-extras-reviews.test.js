@@ -7,7 +7,6 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { SALES_BY } from '../core/reports.js';
 import { COLLECTIONS } from '../core/model.js';
 import { STORAGE, readyShop, storedAttribute, storedBrand, storedCategory } from './helpers.js';
 
@@ -269,7 +268,7 @@ describe('reports', () => {
 				{ key: 'card', name: 'card', units: 1, revenue: 500, discount: 0 },
 			],
 		};
-		for (const by of SALES_BY) {
+		for (const by of /** @type {Array<keyof typeof expected>} */ (Object.keys(expected))) {
 			const report = await shop.api('GET', `/v1/reports/sales?${RANGE}&by=${by}`);
 			expect(report.status).toBe(200);
 			expect(report.json).toMatchObject({
@@ -279,8 +278,9 @@ describe('reports', () => {
 			});
 			expect(report.json.rows).toEqual(expected[by]);
 		}
-		// another way is product; an unknown format is refused
-		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&by=color&format=json`)).json.by).toBe('product');
+		// no grouping is by product; an unknown grouping or format is refused
+		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&format=json`)).json.by).toBe('product');
+		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&by=color`)).status).toBe(422);
 		expect((await shop.api('GET', `/v1/reports/sales?${RANGE}&format=xml`)).status).toBe(422);
 	});
 
@@ -294,7 +294,7 @@ describe('reports', () => {
 		});
 		const summary = await shop.admin(ticket, 'GET', `/v1/admin/reports/summary?${RANGE}&statuses=delivered,confirmed`);
 		expect(summary.json).toMatchObject({ currency: 'USD', statuses: ['delivered', 'confirmed'], orders: 2, total: 3500 });
-		expect(summary.json.days).toContainEqual({ day: '2026-10-01', orders: 2, total: 3500 });
+		expect(summary.json.periods).toContainEqual({ period: '2026-10-01', orders: 2, total: 3500 });
 		const delivered = await shop.api('GET', `/v1/reports/summary?${RANGE}&series=day&statuses=delivered`);
 		expect(delivered.json).toMatchObject({ orders: 1, total: 3000, units: 2 });
 		expect((await shop.api('GET', `/v1/reports/summary?${RANGE}`)).json.statuses).toBeNull();
@@ -342,7 +342,7 @@ describe('reports', () => {
 			'stock-age': 'product_id,name,stock,published_at,last_sold_at,days_listed,days_since_sale',
 			returns: 'product_id,name,sold,claimed,rate',
 			margin: 'product_id,name,units,revenue,cost,margin',
-			summary: 'day,orders,total,goods,delivery,fees,discount,refunded,units',
+			summary: 'period,orders,total,goods,delivery,fees,discount,refunded,units',
 			'sell-through': 'product_id,name,sold,stock,rate',
 			'oldest-stock': 'product_id,variant_id,name,variant,sku,grade,stock,since,days',
 		};

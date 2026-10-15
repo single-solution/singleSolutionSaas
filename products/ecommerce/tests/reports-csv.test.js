@@ -203,22 +203,33 @@ describe('reports', () => {
 			refunded: 300,
 			units: 3,
 		});
-		expect(summary.json.days).toEqual([
-			{ day: '2026-10-03', orders: 0, total: 0 },
-			{ day: '2026-10-04', orders: 0, total: 0 },
-			{ day: '2026-10-05', orders: 2, total: 2500 },
+		expect(summary.json.series).toBe('day');
+		expect(summary.json.periods).toEqual([
+			{ period: '2026-10-03', orders: 0, total: 0 },
+			{ period: '2026-10-04', orders: 0, total: 0 },
+			{ period: '2026-10-05', orders: 2, total: 2500 },
 		]);
 
 		// statuses decide which orders count as revenue
 		const chosen = await shop.api('GET', `/v1/reports/summary?${RANGE}&statuses=delivered,cancelled`);
 		expect(chosen.json).toMatchObject({ statuses: ['delivered', 'cancelled'], orders: 2, total: 6500, units: 7 });
-		expect(chosen.json.days).toEqual([
-			{ day: '2026-10-03', orders: 1, total: 5000 },
-			{ day: '2026-10-04', orders: 0, total: 0 },
-			{ day: '2026-10-05', orders: 1, total: 1500 },
+		expect(chosen.json.periods).toEqual([
+			{ period: '2026-10-03', orders: 1, total: 5000 },
+			{ period: '2026-10-04', orders: 0, total: 0 },
+			{ period: '2026-10-05', orders: 1, total: 1500 },
 		]);
 		expect((await shop.api('GET', `/v1/reports/summary?${RANGE}&statuses=nothing_like_it`)).status).toBe(422);
-		expect((await shop.api('GET', `/v1/reports/summary?${RANGE}&series=week`)).status).toBe(422);
+		// by ISO week and by month (E12)
+		expect(
+			(await shop.api('GET', `/v1/reports/summary?${RANGE}&series=week&statuses=delivered,cancelled`)).json.periods,
+		).toEqual([
+			{ period: '2026-W40', orders: 1, total: 5000 },
+			{ period: '2026-W41', orders: 1, total: 1500 },
+		]);
+		expect((await shop.api('GET', `/v1/reports/summary?${RANGE}&series=month`)).json.periods).toEqual([
+			{ period: '2026-10', orders: 2, total: 2500 },
+		]);
+		expect((await shop.api('GET', `/v1/reports/summary?${RANGE}&series=year`)).status).toBe(422);
 
 		const staff = await shop.ticket(['reports.read']);
 		expect((await shop.admin(staff, 'GET', `/v1/admin/reports/summary?${RANGE}`)).json.total).toBe(2500);
@@ -228,7 +239,7 @@ describe('reports', () => {
 		expect(file.headers.get('content-type')).toBe('text/csv; charset=utf-8');
 		expect(file.headers.get('content-disposition')).toBe('attachment; filename="summary.csv"');
 		expect(linesOf(file)).toEqual([
-			'day,orders,total,goods,delivery,fees,discount,refunded,units',
+			'period,orders,total,goods,delivery,fees,discount,refunded,units',
 			'2026-10-03,0,0.00,0.00,0.00,0.00,0.00,0.00,0',
 			'2026-10-04,0,0.00,0.00,0.00,0.00,0.00,0.00,0',
 			'2026-10-05,2,25.00,23.00,2.00,1.00,1.00,3.00,3',
@@ -247,6 +258,7 @@ describe('reports', () => {
 			'GET',
 			`/v1/admin/reports/sales?by=payment_method&${RANGE}`,
 		);
+		// the payment method by its name, never its key (E12)
 		expect(byMethod.json.rows).toEqual([
 			{ key: 'cod', name: 'Cash on delivery', units: 2, revenue: 1200, discount: 0 },
 			{ key: 'bank_transfer', name: 'Bank transfer', units: 1, revenue: 1000, discount: 100 },
@@ -256,6 +268,113 @@ describe('reports', () => {
 			'cod,Cash on delivery,2,12.00,0.00',
 			'bank_transfer,Bank transfer,1,10.00,1.00',
 		]);
+	});
+
+	it('groups sales by any field, tag, place, zone, courier, status and period, and lists the groupings (E12)', async () => {
+		const material = await shop.api('POST', '/v1/attributes', { name: 'Material', slug: 'material' });
+		const channel = await shop.api('POST', '/v1/attributes', { name: 'Channel', slug: 'channel', on: 'order' });
+		const products = data.collection(COLLECTIONS.products);
+		await products.updateOne(
+			{ websiteId: shop.websiteId, id: sold.id },
+			{ $set: { tags: ['phone'], specs: { [material.json.id]: 'Steel' } } },
+		);
+		await products.updateOne({ websiteId: shop.websiteId, id: gone.id }, { $set: { tags: ['tablet'] } });
+		const orders = data.collection(COLLECTIONS.orders);
+		await orders.updateOne(
+			{ websiteId: shop.websiteId, number: 'R-A' },
+			{
+				$set: {
+					tags: ['gift'],
+					fields: { [channel.json.id]: 'web' },
+					'address.region': 'Kanto',
+					'address.country': 'JP',
+					'delivery.zone': 'city',
+					shipment: { courier: 'FastShip', trackingNumber: '', trackingUrl: '', booked: false, status: '', checkedAt: null },
+				},
+			},
+		);
+		await orders.updateOne(
+			{ websiteId: shop.websiteId, number: 'R-B' },
+			{ $set: { tags: ['gift', 'rush'], 'address.region': 'Kansai', 'address.country': 'JP' } },
+		);
+		/** @param {string} by */
+		const rowsBy = async (by) => {
+			const answer = await shop.api('GET', `/v1/reports/sales?by=${encodeURIComponent(by)}&${RANGE}`);
+			expect(answer.status, `${by}: ${answer.text}`).toBe(200);
+			return answer.json.rows.map((/** @type {any} */ row) => [row.key, row.name, row.units, row.revenue]);
+		};
+		expect(await rowsBy('status')).toEqual([
+			['delivered', 'Delivered', 2, 1200],
+			['confirmed', 'Confirmed', 1, 1000],
+		]);
+		expect(await rowsBy('order_tag')).toEqual([
+			['gift', 'gift', 3, 2200],
+			['rush', 'rush', 1, 1000],
+		]);
+		expect(await rowsBy('tag')).toEqual([
+			['phone', 'phone', 2, 1200],
+			['tablet', 'tablet', 1, 1000],
+		]);
+		expect(await rowsBy(`field:${material.json.id}`)).toEqual([
+			['Steel', 'Steel', 2, 1200],
+			['', '', 1, 1000],
+		]);
+		expect(await rowsBy(`field:${channel.json.id}`)).toEqual([
+			['web', 'web', 2, 1200],
+			['', '', 1, 1000],
+		]);
+		expect(await rowsBy('region')).toEqual([
+			['kanto', 'Kanto', 2, 1200],
+			['kansai', 'Kansai', 1, 1000],
+		]);
+		expect(await rowsBy('country')).toEqual([['JP', 'JP', 3, 2200]]);
+		expect(await rowsBy('zone')).toEqual([
+			['city', 'city', 2, 1200],
+			['', '', 1, 1000],
+		]);
+		expect(await rowsBy('courier')).toEqual([
+			['FastShip', 'FastShip', 2, 1200],
+			['', '', 1, 1000],
+		]);
+		expect(await rowsBy('item_type')).toEqual([['physical', 'physical', 3, 2200]]);
+		// periods in the business time zone, the oldest first
+		expect(await rowsBy('day')).toEqual([['2026-10-05', '2026-10-05', 3, 2200]]);
+		expect(await rowsBy('week')).toEqual([['2026-W41', '2026-W41', 3, 2200]]);
+		expect(await rowsBy('month')).toEqual([['2026-10', '2026-10', 3, 2200]]);
+		expect((await shop.api('GET', `/v1/reports/sales?by=colour&${RANGE}`)).status).toBe(422);
+		expect((await shop.api('GET', `/v1/reports/sales?by=field:att_none&${RANGE}`)).status).toBe(422);
+		// the groupings the widget offers, read from the server
+		const staff = await shop.ticket(['reports.read']);
+		const groupings = await shop.admin(staff, 'GET', '/v1/admin/reports/groupings');
+		const keys = groupings.json.items.map((/** @type {any} */ item) => item.key);
+		expect(keys).toEqual(
+			expect.arrayContaining([
+				'product',
+				'category',
+				'brand',
+				'tag',
+				'order_tag',
+				'region',
+				'zone',
+				'courier',
+				'payment_method',
+				'day',
+				'week',
+				'month',
+			]),
+		);
+		expect(groupings.json.items).toContainEqual({ key: `field:${material.json.id}`, label: 'Material', kind: 'field' });
+		expect(groupings.json.items).toContainEqual({ key: `field:${channel.json.id}`, label: 'Channel', kind: 'field' });
+		await orders.updateMany(
+			{ websiteId: shop.websiteId, number: { $in: ['R-A', 'R-B'] } },
+			{
+				$unset: { tags: '', fields: '', shipment: '' },
+				$set: { 'address.region': '', 'address.country': '', 'delivery.zone': '' },
+			},
+		);
+		await products.updateOne({ websiteId: shop.websiteId, id: sold.id }, { $set: { specs: {} } });
+		for (const field of [material, channel])
+			expect((await shop.api('DELETE', `/v1/attributes/${field.json.id}`)).status).toBeLessThan(300);
 	});
 
 	it('gives sell-through and the oldest stock', async () => {

@@ -95,9 +95,10 @@ describe('customers admin: reports the API has', () => {
 					discount: 1000,
 					refunded: 2000,
 					units: 5,
-					days: [
-						{ day: '2026-09-30', orders: 1, total: 150000 },
-						{ day: '2026-10-01', orders: 2, total: 300000 },
+					series: 'day',
+					periods: [
+						{ period: '2026-09-30', orders: 1, total: 150000 },
+						{ period: '2026-10-01', orders: 2, total: 300000 },
 					],
 				}),
 			'GET /v1/admin/reports/sell-through': () =>
@@ -132,6 +133,12 @@ describe('customers admin: reports the API has', () => {
 		await change(fieldIn(panel, 'From'), '2026-09-30');
 		await click(buttonIn(panel, 'Show'));
 		expect(paramsOf(server, 'GET /v1/admin/reports/summary')).toEqual({ from: '2026-09-30' });
+		// per week or month (E12)
+		await change(fieldIn(panel, 'Per'), 'month');
+		await click(buttonIn(panel, 'Show'));
+		expect(paramsOf(server, 'GET /v1/admin/reports/summary')).toEqual({ from: '2026-09-30', series: 'month' });
+		await change(fieldIn(panel, 'Per'), 'day');
+		await click(buttonIn(panel, 'Show'));
 		expect(textOf(panel.querySelector('.facts') ?? panel)).toBe(
 			'Orders3Units5SalesUSD 4,500.00GoodsUSD 4,200.00DeliveryUSD 300.00FeesUSD 5.00DiscountUSD 10.00RefundedUSD 20.00',
 		);

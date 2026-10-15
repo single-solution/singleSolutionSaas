@@ -1,8 +1,9 @@
 /**
  * Reports and CSV in the customers admin widget (PLAN 0.8.8 Admin tools, 0.6: plain pages of cards and tables): reports
  * (feature `reports`, `reports.read`) — the shop health card (E41: each check with its count and state, read when the
- * section opens and again on request), then the sales summary (its totals and the orders per day), sales by product,
- * category, brand or city, sell-through, stock age, oldest stock (now), return rate and margin over a date range, with
+ * section opens and again on request), then the sales summary (its totals and the orders per day, week or month), sales
+ * by any grouping the server lists (E12: product, category, brand, tags, place, zone, courier, payment method, period
+ * or any field), sell-through, stock age, oldest stock (now), return rate and margin over a date range, with
  * their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature `csv`, `csv.run`) as cards —
  * export products, import products (a dry run lists every problem per row, in the website's words, before anything is
  * written), export orders by date range and status, export customers.
@@ -15,19 +16,18 @@ import { card } from './admin-lists.js';
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {{ label: string, value: (row: any) => string | number | null, money?: boolean }} Column */
 
-/** The reports: their address, for sales the grouping, and whether they cover a date range (else they are now). */
+/** The reports: their address and whether they cover a date range (else they are now). */
 const REPORTS = Object.freeze({
-	summary: { path: '/v1/admin/reports/summary', by: '', range: true },
-	sales_product: { path: '/v1/admin/reports/sales', by: 'product', range: true },
-	sales_category: { path: '/v1/admin/reports/sales', by: 'category', range: true },
-	sales_brand: { path: '/v1/admin/reports/sales', by: 'brand', range: true },
-	sales_city: { path: '/v1/admin/reports/sales', by: 'city', range: true },
-	sell_through: { path: '/v1/admin/reports/sell-through', by: '', range: true },
-	stock_age: { path: '/v1/admin/reports/stock-age', by: '', range: false },
-	oldest_stock: { path: '/v1/admin/reports/oldest-stock', by: '', range: false },
-	return_rate: { path: '/v1/admin/reports/returns', by: '', range: true },
-	margin: { path: '/v1/admin/reports/margin', by: '', range: true },
+	summary: { path: '/v1/admin/reports/summary', range: true },
+	sales: { path: '/v1/admin/reports/sales', range: true },
+	sell_through: { path: '/v1/admin/reports/sell-through', range: true },
+	stock_age: { path: '/v1/admin/reports/stock-age', range: false },
+	oldest_stock: { path: '/v1/admin/reports/oldest-stock', range: false },
+	return_rate: { path: '/v1/admin/reports/returns', range: true },
+	margin: { path: '/v1/admin/reports/margin', range: true },
 });
+/** The summary's series (E12). */
+const SERIES = Object.freeze(['day', 'week', 'month']);
 
 /** @typedef {keyof typeof REPORTS} ReportKey */
 
@@ -42,17 +42,17 @@ const rowProblem = (kit, problem) =>
 		: kit.refusal('validation_failed', [{ path: problem.path }]);
 
 /**
- * The columns of a report.
- * @param {Kit} kit @param {ReportKey} key
+ * The columns of a report (sales: the grouping's name heads its first column).
+ * @param {Kit} kit @param {ReportKey} key @param {string} grouping
  * @returns {Column[]}
  */
-const columnsOf = (kit, key) => {
+const columnsOf = (kit, key, grouping) => {
 	const { t } = kit;
 	/** @param {number | null} rate */
 	const percent = (rate) => (rate === null ? '' : `${Math.round(rate * 1000) / 10} %`);
 	if (key === 'summary')
 		return [
-			{ label: t('customersAdmin.day'), value: (row) => row.day },
+			{ label: t('customersAdmin.periodColumn'), value: (row) => row.period },
 			{ label: t('customersAdmin.orders'), value: (row) => row.orders },
 			{ label: t('customersAdmin.revenue'), value: (row) => row.total, money: true },
 		];
@@ -97,7 +97,7 @@ const columnsOf = (kit, key) => {
 			{ label: t('customersAdmin.margin'), value: (row) => row.margin, money: true },
 		];
 	return [
-		{ label: t(`customersAdmin.by.${REPORTS[key].by}`), value: (row) => row.name || row.key || t('customersAdmin.none') },
+		{ label: grouping, value: (row) => row.name || row.key || t('customersAdmin.none') },
 		{ label: t('customersAdmin.units'), value: (row) => row.units },
 		{ label: t('customersAdmin.revenue'), value: (row) => row.revenue, money: true },
 		{ label: t('customersAdmin.discount'), value: (row) => row.discount, money: true },
@@ -155,9 +155,34 @@ export const reportsTab = (kit, panel) => {
 	const from = kit.input('', { type: 'date' });
 	const to = kit.input('', { type: 'date' });
 	const dates = h('div', { class: 'row' }, [kit.field(t('admin.from'), from), kit.field(t('admin.to'), to)]);
-	report.addEventListener('change', () => {
-		dates.hidden = !REPORTS[/** @type {ReportKey} */ (report.value)].range;
+	// what sales group by, read from the server (E12): the built-in groupings in the widget's words, fields by name
+	const grouping = kit.select([{ value: 'product', label: t('customersAdmin.by.product') }], 'product');
+	void kit.call('GET', '/v1/admin/reports/groupings').then((answer) => {
+		if (!answer.ok) return;
+		/** @type {Array<{ key: string, label: string, kind: string }>} */
+		const items = answer.data.items ?? [];
+		grouping.replaceChildren(
+			...items.map((item) =>
+				kit.h('option', { value: item.key }, [
+					item.kind === 'built_in' && kit.t(`customersAdmin.by.${item.key}`) !== `customersAdmin.by.${item.key}`
+						? kit.t(`customersAdmin.by.${item.key}`)
+						: item.label,
+				]),
+			),
+		);
+		grouping.value = 'product';
 	});
+	const series = kit.select(SERIES.map((key) => ({ value: key, label: t(`customersAdmin.series.${key}`) })));
+	const groupingField = kit.field(t('customersAdmin.groupBy'), grouping);
+	const seriesField = kit.field(t('customersAdmin.seriesLabel'), series);
+	const sync = () => {
+		const key = /** @type {ReportKey} */ (report.value);
+		dates.hidden = !REPORTS[key].range;
+		groupingField.hidden = key !== 'sales';
+		seriesField.hidden = key !== 'summary';
+	};
+	report.addEventListener('change', sync);
+	sync();
 	/** @type {{ key: string, header: string[], rows: Array<Array<string | number>> } | null} */
 	let last = null;
 	const download = kit.button(t('customersAdmin.downloadCsv'), () => {
@@ -168,18 +193,25 @@ export const reportsTab = (kit, panel) => {
 		t('customersAdmin.run'),
 		async () => {
 			const key = /** @type {ReportKey} */ (report.value);
-			const { path, by, range } = REPORTS[key];
-			const answer = await kit.call('GET', `${path}${query({ by, ...(range ? { from: from.value, to: to.value } : {}) })}`);
+			const { path, range } = REPORTS[key];
+			const answer = await kit.call(
+				'GET',
+				`${path}${query({
+					...(key === 'sales' ? { by: grouping.value } : {}),
+					...(key === 'summary' && series.value !== 'day' ? { series: series.value } : {}),
+					...(range ? { from: from.value, to: to.value } : {}),
+				})}`,
+			);
 			result.replaceChildren();
 			download.hidden = true;
 			if (!answer.ok) {
 				kit.fail(line, answer);
 				return answer;
 			}
-			const columns = columnsOf(kit, key);
-			// the summary's rows are its days, its totals the answer itself
+			const columns = columnsOf(kit, key, grouping.selectedOptions[0]?.textContent ?? '');
+			// the summary's rows are its periods, its totals the answer itself
 			/** @type {any[]} */
-			const rows = (key === 'summary' ? answer.data.days : answer.data.rows) ?? [];
+			const rows = (key === 'summary' ? answer.data.periods : answer.data.rows) ?? [];
 			const totals = key === 'summary' ? answer.data : answer.data.totals;
 			kit.say(line, rows.length === 0 ? t('customersAdmin.noRows') : '');
 			kit.put(result, [
@@ -244,7 +276,14 @@ export const reportsTab = (kit, panel) => {
 	);
 	panel.append(
 		healthCard(kit),
-		h('div', { class: 'row inline' }, [kit.field(t('customersAdmin.reportLabel'), report), dates, run, download]),
+		h('div', { class: 'row inline' }, [
+			kit.field(t('customersAdmin.reportLabel'), report),
+			groupingField,
+			seriesField,
+			dates,
+			run,
+			download,
+		]),
 		line,
 		result,
 	);
