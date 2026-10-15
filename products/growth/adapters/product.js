@@ -9,8 +9,7 @@
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { createProduct } from '@ss/app-kit';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
+import { createProduct, createProductBase } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -102,12 +101,8 @@ const PROBLEM_CODES = Object.freeze({
  */
 export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	// the same policy the kit uses for addresses merchants enter
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
-	/** @type {import('./web.js').OutboundSend} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	// the kit's store and outbound send (the policy for addresses merchants enter), shared with createProduct
+	const { store, send } = createProductBase(options);
 	const web = createWeb({ send });
 
 	/**
@@ -174,6 +169,7 @@ export const createProductInstance = (options) => {
 
 	const product = createProduct({
 		...options,
+		store,
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,

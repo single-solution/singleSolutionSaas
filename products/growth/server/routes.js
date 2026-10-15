@@ -16,7 +16,6 @@ import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } fro
 import { zonedDayStart } from '@ss/contracts/format';
 import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
-import { importRoutes } from './imports.js';
 import { redirectRoutes } from './redirects.js';
 import { invalid, robotsInputOf, seoCheckRoutes } from './seo-checks.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
@@ -358,6 +357,5 @@ export const createRoutes = (product) => {
 		...redirectRoutes(product, { log: logAction }),
 
 		// days of daily totals moved in from another system (ss-import, feature `import`, PLAN 0.8.10 K10)
-		...importRoutes(product),
 	];
 };

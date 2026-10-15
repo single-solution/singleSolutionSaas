@@ -10,7 +10,9 @@
  * `contentIds` setting `variant`.
  * @module
  */
-import { isAmount, isCurrency, toMajor } from './money.js';
+import { isAmount, isCurrency } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
+import { toMajor } from './money.js';
 
 /** Each funnel step's name per pixel. */
 const PIXEL_EVENTS = Object.freeze({
@@ -30,9 +32,6 @@ const PIXEL_EVENTS = Object.freeze({
  * container; `ads`, the Google Ads conversion of a purchase.
  * @typedef {{ meta: boolean, google: boolean, gtm: boolean, ads: { id: string, label: string } | null, tiktok: boolean }} Loaded
  */
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** @param {unknown} value @param {number} max */
 const short = (value, max) => (typeof value === 'string' || typeof value === 'number' ? String(value).slice(0, max) : '');
@@ -54,7 +53,8 @@ export const detailOf = (raw) => {
 			variantId: short(item.variantId, 80) || null,
 			name: short(item.name, 200),
 			price: isAmount(item.price) ? item.price : null,
-			quantity: Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
+			quantity:
+				typeof item.quantity === 'number' && Number.isSafeInteger(item.quantity) && item.quantity > 0 ? item.quantity : 1,
 		}))
 		.filter((item) => item.id !== '');
 	return {
@@ -186,7 +186,8 @@ export const searchOf = (raw) => {
 	const detail = isObject(raw) ? raw : {};
 	const term = typeof detail.term === 'string' ? detail.term.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
 	if (term === '') return null;
-	const results = Number.isSafeInteger(detail.results) && detail.results >= 0 ? detail.results : null;
+	const results =
+		typeof detail.results === 'number' && Number.isSafeInteger(detail.results) && detail.results >= 0 ? detail.results : null;
 	return { term, results };
 };
 

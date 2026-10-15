@@ -5,6 +5,7 @@
  * (an index or a list of addresses with their images). Pure: the fetching is done by the caller.
  * @module
  */
+import { decodeEntities } from '@ss/contracts/text';
 import { VERIFICATION_NAMES, robotsDirectiveOf } from './seo.js';
 
 /** Most addresses one sitemap file may list (the sitemap protocol's limit). */
@@ -15,20 +16,6 @@ const MAX_NODES = 2_000;
 const MAX_DEPTH = 12;
 
 // ----------------------------------------------------------------------------------------------------------- text
-
-/** Named character references the reader decodes (others stay as written). @type {Record<string, string>} */
-const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0' };
-
-/**
- * A text with its character references decoded (`&amp;`, `&#36;`, `&#x20B9;` …).
- * @param {string} value
- */
-export const decodeEntities = (value) =>
-	value.replace(/&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|([a-z]+));/gi, (match, decimal, hex, name) => {
-		if (name !== undefined) return NAMED[String(name).toLowerCase()] ?? match;
-		const code = decimal !== undefined ? Number(decimal) : Number.parseInt(String(hex), 16);
-		return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
-	});
 
 /**
  * Text as a person reads it: references decoded, every run of spaces one space.

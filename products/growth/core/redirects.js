@@ -22,7 +22,8 @@
  * time and a crawler its patience). Every change is checked against the whole set ({@link newProblems}).
  * @module
  */
-import { parseCsv, toCsv } from './csv.js';
+import { csvRecords, parseCsv, toCsv } from '@ss/contracts/csv';
+import { isObject } from '@ss/contracts/util';
 
 /** Most rules of one website. */
 export const MAX_RULES = 5000;
@@ -67,9 +68,6 @@ const BASE = 'https://redirect.invalid';
  *   loop or chain: the addresses one request goes through (`steps`, the first is the address asked about; `/…` stands
  *   for any path under a prefix), whether it ends at a removed page (`gone`), and the `from` of the first two rules
  */
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
@@ -565,9 +563,10 @@ export const planImport = ({ csv, existing, domain }) => {
 		}[parsed.code];
 		return refused([{ line: 1, path: '', code: parsed.code, message }]);
 	}
+	const { header, records } = csvRecords(parsed.rows);
 	/** @type {Record<string, string | undefined>} */
 	const columns = Object.fromEntries(
-		Object.entries(COLUMN_NAMES).map(([column, names]) => [column, names.find((name) => parsed.header.includes(name))]),
+		Object.entries(COLUMN_NAMES).map(([column, names]) => [column, names.find((name) => header.includes(name))]),
 	);
 	if (columns.from === undefined)
 		return refused([{ line: 1, path: '', code: 'columns', message: 'The header names no from column.' }]);
@@ -581,7 +580,7 @@ export const planImport = ({ csv, existing, domain }) => {
 	const lines = new Map();
 	/** @type {Map<string, Rule | RuleInput>} */
 	const next = new Map(existing.map((rule) => [rule.from, rule]));
-	for (const { line, values } of parsed.records) {
+	for (const { line, values } of records) {
 		/** @param {keyof typeof COLUMN_NAMES} column */
 		const value = (column) => {
 			const name = columns[column];
@@ -628,7 +627,7 @@ export const planImport = ({ csv, existing, domain }) => {
 		});
 	const refusedLines = new Set(errors.map((error) => error.line));
 	return {
-		rows: parsed.records.length,
+		rows: records.length,
 		changes: changes.filter((change) => !refusedLines.has(change.line)),
 		unchanged,
 		errors: errors.sort((a, b) => a.line - b.line),

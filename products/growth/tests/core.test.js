@@ -26,7 +26,7 @@ import {
 	ratingOf,
 	textOf,
 } from '../core/events.js';
-import { isAmount, toMajor } from '../core/money.js';
+import { toMajor } from '../core/money.js';
 import { contactCalls, contactOf, detailOf, funnelEvent, pixelCalls, searchCalls, searchOf, vitalCalls } from '../core/pixels.js';
 import {
 	checksActivity,
@@ -532,7 +532,6 @@ describe('pixels and money', () => {
 		expect(toMajor(1250, 'USD')).toBe(12.5);
 		expect(toMajor(1250, 'JPY')).toBe(1250);
 		expect(toMajor(1250, 'KWD')).toBe(1.25);
-		expect(isAmount(1.5)).toBe(false);
 	});
 
 	it('names each shop event per pixel', () => {
