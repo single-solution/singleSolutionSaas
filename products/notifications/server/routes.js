@@ -344,7 +344,7 @@ export const createRoutes = (product) => {
 	};
 	/**
 	 * Save a list whole in the dashboard: merchants only while its feature is on (our admins may prepare it), checked, a
-	 * Recent change by the session.
+	 * Recent change and an activity-log entry by the session (as the kit's own settings saves).
 	 * @param {any} ctx
 	 */
 	const saveList = async (ctx) => {
@@ -356,12 +356,15 @@ export const createRoutes = (product) => {
 		const saved = await product.lists.saveWebhookUrls(ctx.websiteId, body.value);
 		if (!saved.ok)
 			return problem('validation_failed', saved.errors[0]?.message ?? 'The list is not valid.', { errors: saved.errors });
-		await product.recentChanges.record({
-			websiteId: ctx.websiteId,
-			who: { kind: session.kind, id: session.subject, name: session.name, ...(session.role ? { role: session.role } : {}) },
-			what: 'settings',
-			detail: `${LISTS[name].title}: changed`,
-		});
+		const who = {
+			kind: session.kind,
+			id: session.subject,
+			name: session.name,
+			...(session.role ? { role: session.role } : {}),
+		};
+		const { title } = LISTS[name];
+		await product.recentChanges.record({ websiteId: ctx.websiteId, who, what: 'settings', detail: `${title}: changed` });
+		await product.settingsChanged(ctx, { what: 'list', key: name, who, label: title, detail: 'changed' });
 		return { value: saved.value };
 	};
 

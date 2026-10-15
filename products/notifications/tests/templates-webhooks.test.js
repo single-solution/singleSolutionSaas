@@ -215,6 +215,14 @@ describe('webhook URLs per event (N5)', () => {
 		const cookie = await env.adminSession();
 		expect(await (await env.dashboard(cookie, 'GET', list())).json()).toEqual({ value });
 		expect((await env.dashboard(cookie, 'GET', `/v1/dashboard/websites/${env.websiteId}/lists/other`)).status).toBe(404);
+		// a save in the dashboard is an activity-log entry by its person, like the server's
+		expect((await env.dashboard(cookie, 'PUT', list(), { value })).status).toBe(200);
+		const log = await (await env.call('GET', '/v1/activity?action=settings.changed', { token: env.server })).json();
+		const saves = log.items.filter((/** @type {any} */ e) => e.target === 'list.webhook_urls');
+		expect(saves.map((/** @type {any} */ e) => [e.actor.kind, e.target, e.label, e.detail])).toEqual([
+			['admin', 'list.webhook_urls', 'Webhook URLs', 'changed'],
+			['server', 'list.webhook_urls', 'Webhook URLs', 'changed'],
+		]);
 	});
 
 	it('sends each event only to the URLs that take it (none named: every event)', async () => {
