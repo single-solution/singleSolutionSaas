@@ -9,6 +9,7 @@ import { sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { createSmtpMailer, mailContextOf } from '../../infra/mailer.js';
 import { normalizeEmail } from '@ss/contracts/email';
+import { SUPPORT_CHANNELS_MAX, supportChannelProblem, supportChannelUrl } from '@ss/contracts/text';
 import { hasControlCharacters } from '../../infra/util.js';
 import { createActivity } from './activity.js';
 
@@ -17,7 +18,6 @@ import { createActivity } from './activity.js';
 /** @typedef {{ path: string, message: string }} FieldError */
 
 const ACCENT = /^#[0-9a-fA-F]{6}$/;
-const PHONE = /^[0-9+()\-.\s]{3,40}$/;
 
 /**
  * @param {FieldError[]} errors
@@ -245,28 +245,37 @@ export const createSystemService = (ctx) => {
 		},
 
 		/**
-		 * Support contact: email, phone and optional WhatsApp.
+		 * Support contact (fixed-choices audit K10): `{ channels: [{ type, label, url }] }`, at most
+		 * `SUPPORT_CHANNELS_MAX`, in the order people see them. `type` is `email`, `phone` or `link`; `url` may be typed
+		 * as people write it (an address, a number with its country code, an https link) and is kept as `mailto:`,
+		 * `tel:+…` or the link; `label` is the operator's own ("WhatsApp", "Help center"). An empty list removes the
+		 * contact.
 		 * @param {{ body: unknown, actor: Actor, requestId: string, ip: string | null }} input
 		 */
 		setSupport: async ({ body, actor, requestId, ip }) => {
 			const input = objectOf(body);
 			/** @type {FieldError[]} */
-			const errors = [];
-			const line = optionalLine(input.email, 254);
-			const email = line.ok && line.value ? normalizeEmail(line.value) : null;
-			if (!line.ok || (line.value && email === null)) errors.push({ path: '/email', message: 'must be an email address' });
-			const phone = optionalLine(input.phone, 40);
-			if (!phone.ok || (phone.value && !PHONE.test(phone.value)))
-				errors.push({ path: '/phone', message: 'must be a phone number with country code' });
-			const whatsapp = optionalLine(input.whatsapp, 40);
-			if (!whatsapp.ok || (whatsapp.value && !PHONE.test(whatsapp.value)))
-				errors.push({ path: '/whatsapp', message: 'must be a phone number with country code' });
+			const errors = Object.keys(input)
+				.filter((key) => key !== 'channels')
+				.map((key) => ({ path: `/${key}`, message: 'is not a support setting' }));
+			const given = Array.isArray(input.channels) ? input.channels : null;
+			if (given === null) errors.push({ path: '/channels', message: 'must be a list' });
+			else if (given.length > SUPPORT_CHANNELS_MAX)
+				errors.push({ path: '/channels', message: `must have at most ${SUPPORT_CHANNELS_MAX} channels` });
+			/** @type {import('@ss/contracts/text').SupportChannel[]} */
+			const channels = [];
+			for (const [index, raw] of (given ?? []).entries()) {
+				const entry = objectOf(raw);
+				const type = typeof entry.type === 'string' ? entry.type : '';
+				const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+				const url = supportChannelUrl(type, typeof entry.url === 'string' ? entry.url : '');
+				const channel = { type, label, url: url ?? String(entry.url ?? '') };
+				const wrong = hasControlCharacters(label) ? 'label must be plain text' : supportChannelProblem(channel);
+				if (wrong) errors.push({ path: `/channels/${index}`, message: wrong });
+				else channels.push(/** @type {import('@ss/contracts/text').SupportChannel} */ (channel));
+			}
 			refuse(errors, 'The support contact is invalid.');
-			const support = {
-				email,
-				phone: phone.ok ? phone.value : null,
-				whatsapp: whatsapp.ok ? whatsapp.value : null,
-			};
+			const support = { channels };
 			await system.update({ support });
 			await record(actor, 'support', { requestId, ip });
 			return settings();

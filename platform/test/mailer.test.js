@@ -67,7 +67,15 @@ const startSmtp = async () => {
 };
 
 describe('mail templates (PLAN 0.5.10)', () => {
-	const CONTEXT = { brand: 'Acme Portal', support: { email: 'help@acme.test', phone: '+1 212 555 0123', whatsapp: null } };
+	const CONTEXT = {
+		brand: 'Acme Portal',
+		support: {
+			channels: [
+				{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@acme.test' },
+				{ type: /** @type {const} */ ('phone'), label: 'Phone', url: 'tel:+12125550123' },
+			],
+		},
+	};
 
 	it('renders every template as text and simple HTML without external assets, with the Branding and support contact', () => {
 		for (const template of /** @type {Array<keyof typeof MAIL_TEXTS>} */ (Object.keys(MAIL_TEXTS))) {
@@ -76,7 +84,7 @@ describe('mail templates (PLAN 0.5.10)', () => {
 			expect(mail.html).not.toMatch(/<img|<link|<script|src=|url\(/i);
 			expect(mail.html).not.toContain('<b>&</b>');
 			expect(mail.text).toContain('Acme Portal');
-			expect(mail.text).toContain('Support: email help@acme.test, phone +1 212 555 0123.');
+			expect(mail.text).toContain('Support: help@acme.test (Email), +12125550123 (Phone).');
 			expect(mail.html).toContain('help@acme.test');
 		}
 		for (const linked of ['merchant_setup', 'admin_invite', 'password_reset', 'email_change_confirm']) {
@@ -258,7 +266,7 @@ describe('platform mailer', () => {
 				settings: {
 					...DEFAULT_SETTINGS,
 					branding: { ...DEFAULT_SETTINGS.branding, name: 'Acme' },
-					support: { email: 'help@acme.test', phone: null, whatsapp: null },
+					support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@acme.test' }] },
 				},
 			},
 			logger,
@@ -266,7 +274,7 @@ describe('platform mailer', () => {
 		});
 		await brandedMailer.send({ to: 'x@example.com', template: 'two_step_off', data: {} });
 		expect(branded[0].subject).toBe('Two-step sign-in was turned off on your Acme account');
-		expect(branded[0].text).toContain('Support: email help@acme.test.');
+		expect(branded[0].text).toContain('Support: help@acme.test (Email).');
 		expect(createLogMailer(logger, DEFAULTS).available).toBe(true);
 		expect(createUnavailableMailer().available).toBe(false);
 	});

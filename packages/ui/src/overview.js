@@ -17,7 +17,7 @@ import { Fragment } from 'react';
 import { Button, ButtonLink } from './Button.js';
 import { cx } from './cx.js';
 import { Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid, StatusBadge } from './display.js';
-import { formatCredits } from './format.js';
+import { formatCredits, supportContact } from './format.js';
 import { Icon } from './icons.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
 import { LocalTime } from './time.js';
@@ -261,10 +261,11 @@ const urgentFirst = (needs) => [
  * `numbers` tiles); the product's own sections (`children`); and Recent changes as a timeline. Times are the viewer's
  * local time.
  * @param {{ data: DashboardOverview, who: { kind: 'merchant' | 'admin', name: string }, product: string,
- *   support: { email: string }, portal: string, namesOf: (keys: string[], max?: number) => string,
+ *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, namesOf: (keys: string[], max?: number) => string,
  *   open: (tab: OverviewTab) => void, recheck: () => Promise<unknown>, needs?: Need[], steps?: SetupStep[],
  *   numbers?: ReactNode, children?: ReactNode }} props
- *   `product`: the product's name; `support`: the support contact (merchants are told to contact it for credits);
+ *   `product`: the product's name; `support`: the support contact (merchants are told to contact it for credits; the
+ *   button opens its first channel);
  *   `portal`: the Portal's address; `namesOf`: feature names of keys, at most `max`; `open`: shows a dashboard section;
  *   `recheck`: reads business.json again and reloads the Overview
  */
@@ -300,13 +301,15 @@ export function ProductOverview({
 			{N.portal}
 		</ButtonLink>
 	);
-	const credits = merchant ? (
-		<ButtonLink size="sm" href={`mailto:${support.email}`}>
+	const channel = support.channels[0];
+	const credits = !merchant ? (
+		toPortal
+	) : channel ? (
+		<ButtonLink size="sm" href={channel.url}>
 			{N.contact}
 		</ButtonLink>
-	) : (
-		toPortal
-	);
+	) : null;
+	const contact = supportContact(support);
 	/** @param {string[]} keys */
 	const featureList = (keys) => namesOf(keys.filter((key) => on.includes(key)));
 
@@ -317,7 +320,7 @@ export function ProductOverview({
 			key: 'status',
 			tone: 'danger',
 			title: fillText(N.stopped.title, { product }),
-			effect: fillText(merchant ? N.stopped.merchant : N.stopped.admin, { contact: support.email }),
+			effect: fillText(merchant ? N.stopped.merchant : N.stopped.admin, { contact }),
 			action: credits,
 		});
 	else if (status === 'suspended')
@@ -327,7 +330,7 @@ export function ProductOverview({
 			key: 'status',
 			tone: 'warning',
 			title: fillText(N.grace.title, { product, time: <LocalTime value={data.status.graceEndsAt} /> }),
-			effect: fillText(merchant ? N.grace.merchant : N.grace.admin, { contact: support.email }),
+			effect: fillText(merchant ? N.grace.merchant : N.grace.admin, { contact }),
 			action: credits,
 		});
 	if (on.length === 0)

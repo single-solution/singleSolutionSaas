@@ -64,7 +64,7 @@ let opened = [];
 const props = {
 	websiteId: WEBSITE,
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Sam' }),
-	support: { email: 'help@example.com', phone: '' },
+	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 	portal: 'https://portal.example.com',
 	open: (/** @type {string} */ tab) => void opened.push(tab),
 };

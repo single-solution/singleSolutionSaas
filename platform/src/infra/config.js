@@ -54,7 +54,8 @@ import { platformError } from './errors.js';
  * @typedef {object} PortalSettings
  * @property {{ sessionHours: number, requireTwoStepForAdmins: boolean }} security
  * @property {{ name: string, accent: string, hasLogo: boolean, logoVersion: number }} branding
- * @property {{ email: string | null, phone: string | null, whatsapp: string | null }} support
+ * @property {{ channels: import('@ss/contracts/text').SupportChannel[] }} support the support contact: a list of channels (email, phone or
+ *   any https link, each with the operator's label)
  * @property {{ graceDays: number, lowBalanceDays: number }} billing
  */
 
@@ -120,7 +121,7 @@ export const logoUrlOf = (portalUrl, branding) =>
 export const DEFAULT_SETTINGS = Object.freeze({
 	security: Object.freeze({ sessionHours: SETTINGS_BOUNDS.sessionHours.default, requireTwoStepForAdmins: false }),
 	branding: Object.freeze({ name: 'Single Solution', accent: '#4f46e5', hasLogo: false, logoVersion: 0 }),
-	support: Object.freeze({ email: null, phone: null, whatsapp: null }),
+	support: Object.freeze({ channels: /** @type {import('@ss/contracts/text').SupportChannel[]} */ ([]) }),
 	billing: Object.freeze({
 		graceDays: SETTINGS_BOUNDS.graceDays.default,
 		lowBalanceDays: SETTINGS_BOUNDS.lowBalanceDays.default,

@@ -8,6 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button, Callout, Form, FormError, Input, Spinner, describeProblem, fieldErrors, problemCode } from '@ss/ui';
+import { supportContactLine } from '@ss/contracts/text';
 import { AUTH } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
 import { Link } from '../link.js';
@@ -15,7 +16,7 @@ import { routes } from '../paths.js';
 import { BrandMark } from './brand.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-/** @typedef {{ name: string, accent: string, logoUrl: string | null, support: { email: string | null, phone: string | null, whatsapp: string | null } }} Branding */
+/** @typedef {{ name: string, accent: string, logoUrl: string | null, support: { channels: import('@ss/contracts/text').SupportChannel[] } }} Branding */
 
 const PASSWORD_MIN = 12;
 
@@ -32,12 +33,10 @@ export const homeOf = (console, next) => {
 };
 
 /**
- * The support contact as one line (`email, phone`), or the fallback word.
+ * The support contact as one line (`help@example.com (Email), +15550100 (Phone)`), or the fallback word.
  * @param {Branding['support'] | null | undefined} support
  */
-export const contactLine = (support) =>
-	[support?.email, support?.phone, support?.whatsapp ? `WhatsApp ${support.whatsapp}` : null].filter(Boolean).join(', ') ||
-	AUTH.supportFallback;
+export const contactLine = (support) => supportContactLine(support?.channels ?? []) || AUTH.supportFallback;
 
 /** @param {string} password */
 const passwordProblem = (password) =>

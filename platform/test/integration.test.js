@@ -666,13 +666,51 @@ describe('Settings (stored in the database, never in the environment; Owner only
 		);
 		expect((await call('GET', '/branding/logo')).status).toBe(404);
 
+		// the support contact is a list of channels, typed as people write them and kept as addresses
 		const supportContact = await call('PUT', '/v1/admin/settings/support', {
 			headers: as(owner),
-			body: { email: 'help@acme.test', phone: '+44 20 7946 0123', whatsapp: '' },
+			body: {
+				channels: [
+					{ type: 'link', label: 'WhatsApp', url: 'https://wa.me/442079460123' },
+					{ type: 'email', label: 'Email', url: 'Help@Acme.test' },
+					{ type: 'phone', label: 'Phone', url: '+44 20 7946 0123' },
+				],
+			},
 		});
-		expect(supportContact.json.support).toEqual({ email: 'help@acme.test', phone: '+44 20 7946 0123', whatsapp: null });
+		expect(supportContact.json.support).toEqual({
+			channels: [
+				{ type: 'link', label: 'WhatsApp', url: 'https://wa.me/442079460123' },
+				{ type: 'email', label: 'Email', url: 'mailto:help@acme.test' },
+				{ type: 'phone', label: 'Phone', url: 'tel:+442079460123' },
+			],
+		});
+		const wrong = await call('PUT', '/v1/admin/settings/support', {
+			headers: as(owner),
+			body: {
+				channels: [
+					{ type: 'email', label: 'Email', url: 'nope' },
+					{ type: 'fax', label: 'Fax', url: '+1' },
+					{ type: 'link', label: '', url: 'https://help.acme.test' },
+					{ type: 'link', label: 'Help', url: 'http://help.acme.test' },
+				],
+				email: 'old shape',
+			},
+		});
+		expect(wrong.status).toBe(422);
+		expect(wrong.json.errors.map((/** @type {any} */ e) => e.path)).toEqual([
+			'/email',
+			'/channels/0',
+			'/channels/1',
+			'/channels/2',
+			'/channels/3',
+		]);
 		expect(
-			(await call('PUT', '/v1/admin/settings/support', { headers: as(owner), body: { email: 'nope', phone: 'x' } })).status,
+			(
+				await call('PUT', '/v1/admin/settings/support', {
+					headers: as(owner),
+					body: { channels: Array.from({ length: 11 }, () => ({ type: 'email', label: 'E', url: 'a@b.co' })) },
+				})
+			).status,
 		).toBe(422);
 
 		const security = await call('PUT', '/v1/admin/settings/security', {
@@ -713,7 +751,7 @@ describe('Settings (stored in the database, never in the environment; Owner only
 			name: 'Single Solution',
 			accent: '#4f46e5',
 			logoUrl: null,
-			support: { email: null, phone: null, whatsapp: null },
+			support: { channels: [] },
 		});
 		expect((await call('GET', '/branding/logo')).status).toBe(404);
 	});

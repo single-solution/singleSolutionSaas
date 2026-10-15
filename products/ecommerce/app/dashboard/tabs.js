@@ -26,6 +26,7 @@ import {
 	Stat,
 	formatCreditsPerHour,
 	parseCredits,
+	supportContact,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { paidByHand } from '../../core/payment-methods.js';
@@ -41,7 +42,8 @@ import { TEXTS } from './texts.js';
 /**
  * What every tab gets: the website, the viewer, the support contact, the Portal's address, and `open`, which shows
  * another section of the dashboard (the Overview's buttons).
- * @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string,
+ * @typedef {{ websiteId: string | null, who: Who, support: { channels: import('@ss/contracts/text').SupportChannel[] },
+ *   portal: string,
  *   open: (tab: import('@ss/ui').OverviewTab) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
@@ -361,7 +363,7 @@ function FeaturesTab({ websiteId, who, support }) {
 				};
 				return (
 					<div className="space-y-4">
-						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
+						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: supportContact(support) })}</Callout>}
 						<Masonry wideAlone>
 							{features.map((feature) => {
 								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));

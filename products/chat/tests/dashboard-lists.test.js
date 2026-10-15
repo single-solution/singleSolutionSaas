@@ -202,7 +202,7 @@ describe('Settings → Assistant', () => {
 					websiteId={WEBSITE}
 					domain="shop.example.com"
 					who={{ kind: 'merchant', id: 'm_1', name: 'Merchant' }}
-					support={{ email: 'help@example.com', phone: '' }}
+					support={{ channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] }}
 					portal="https://portal.example.com"
 					open={() => undefined}
 				/>,

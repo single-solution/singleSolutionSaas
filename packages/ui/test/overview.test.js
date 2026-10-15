@@ -75,7 +75,7 @@ const show = (data, props = {}) => {
 			data={data}
 			who={{ kind: 'merchant', name: 'Acme Store' }}
 			product="Notes"
-			support={{ email: 'help@example.com' }}
+			support={{ channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] }}
 			portal="https://portal.example.com"
 			namesOf={namesOf}
 			open={open}
@@ -180,9 +180,22 @@ describe('a product dashboard Overview', () => {
 		const stopped = show(answer({ status: { status: 'stopped', graceEndsAt: null } }));
 		expect(needTitles(stopped.container)).toEqual(['Notes is stopped because the credits ran out']);
 		expect(stopped.text).toContain('Notes is stopped because the credits ran out.');
-		expect(stopped.text).toContain('It starts again as soon as credits are added: contact help@example.com.');
+		expect(stopped.text).toContain('It starts again as soon as credits are added: contact help@example.com (Email).');
 		expect(byText(stopped.container, 'Contact support', 'a').getAttribute('href')).toBe('mailto:help@example.com');
 		expect(byText(stopped.container, 'Stopped').closest('span')?.className).toContain('bg-danger-soft');
+		cleanup();
+
+		// the support contact is a list of channels: the button opens the first one; with none there is no button
+		const wa = { type: /** @type {const} */ ('link'), label: 'WhatsApp', url: 'https://wa.me/15550100' };
+		const two = show(answer({ status: { status: 'stopped', graceEndsAt: null } }), {
+			support: { channels: [wa, { type: 'phone', label: 'Phone', url: 'tel:+15550101' }] },
+		});
+		expect(two.text).toContain('contact https://wa.me/15550100 (WhatsApp), +15550101 (Phone).');
+		expect(byText(two.container, 'Contact support', 'a').getAttribute('href')).toBe('https://wa.me/15550100');
+		cleanup();
+		const none = show(answer({ status: { status: 'stopped', graceEndsAt: null } }), { support: { channels: [] } });
+		expect(none.text).toContain('contact support.');
+		expect(none.container.querySelector('a[href^="mailto:"]')).toBeNull();
 		cleanup();
 
 		const grace = show(answer({ status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' } }), {
@@ -224,7 +237,7 @@ describe('a product dashboard Overview', () => {
 				data={answer({ status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' } })}
 				who={{ kind: 'merchant', name: 'Acme Store' }}
 				product="Notes"
-				support={{ email: 'help@example.com' }}
+				support={{ channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] }}
 				portal="https://portal.example.com"
 				namesOf={namesOf}
 				open={() => undefined}

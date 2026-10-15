@@ -35,7 +35,7 @@ import { MAIL_TEXTS, supportLine } from '../texts/mail.js';
  * @property {() => Promise<void>} [close] close pooled connections
  *
  * @typedef {{ subject: string, text: string, html: string }} RenderedMail
- * @typedef {{ brand: string, support: { email: string | null, phone: string | null, whatsapp: string | null } }} MailContext
+ * @typedef {{ brand: string, support: { channels: import('@ss/contracts/text').SupportChannel[] } }} MailContext
  *
  * @typedef {{ sendMail: (message: Record<string, unknown>) => Promise<unknown>, close: () => void }} Transport
  * @typedef {(options: Record<string, unknown>) => Transport | Promise<Transport>} TransportFactory

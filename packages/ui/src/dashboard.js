@@ -182,7 +182,7 @@ function DashboardPage({ tabs: own }) {
 			</main>
 		);
 
-	/** @type {{ who: Who, portalUrl: string, branding: { name: string }, support: { email: string, phone: string }, switcher: Array<{ merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
+	/** @type {{ who: Who, portalUrl: string, branding: { name: string }, support: { channels: import('./format.js').SupportChannel[] }, switcher: Array<{ merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
 	const { who, portalUrl, branding, support, switcher } = session.data;
 	const admin = who.kind === 'admin';
 	const owner = admin && who.role === 'owner';

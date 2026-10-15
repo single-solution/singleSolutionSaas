@@ -19,7 +19,12 @@ const ISS = 'https://portal.test';
 const AUD = 'chat';
 const SESSION_END = new Date(T0 + 12 * 3_600_000).toISOString();
 const branding = { name: 'Single Solution', accent: '#4f46e5', logoUrl: 'https://portal.test/branding/logo?v=1' };
-const support = { email: 'help@portal.test', phone: '+1 555 0100', whatsapp: '+1 555 0101' };
+const support = {
+	channels: [
+		{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@portal.test' },
+		{ type: /** @type {const} */ ('link'), label: 'WhatsApp', url: 'https://wa.me/15550101' },
+	],
+};
 const merchant = {
 	id: 'mer_1',
 	name: 'Shop',
@@ -110,7 +115,7 @@ describe('launches', () => {
 			kind: 'admin',
 			merchant: undefined,
 			admin: { ...admin, role: 'owner', websiteId: 'web_9' },
-			support: { email: '', phone: '' },
+			support: { channels: [] },
 			branding: { ...branding, logoUrl: null },
 			jti: 'launch-jti-0001',
 		});
@@ -223,8 +228,13 @@ describe('launch rules', () => {
 		['a logo URL with userinfo', { branding: { ...branding, logoUrl: 'https://u:p@x.test/logo' } }],
 		['a logo URL that is not a URL', { branding: { ...branding, logoUrl: 'not a url' } }],
 		['missing support', { support: null }],
-		['support without phone', { support: { email: 'a@b.c' } }],
-		['support with a bad whatsapp', { support: { ...support, whatsapp: 5 } }],
+		['support without channels', { support: { email: 'a@b.c' } }],
+		['a support channel of an unknown type', { support: { channels: [{ type: 'fax', label: 'Fax', url: 'tel:+15550100' }] } }],
+		['a support link that is not https', { support: { channels: [{ type: 'link', label: 'Help', url: 'http://help.test' }] } }],
+		[
+			'too many support channels',
+			{ support: { channels: Array.from({ length: 11 }, () => support.channels[0]) } },
+		],
 	];
 	it.each(refused)('refuses to issue %s', async (_name, extra) => {
 		const clock = createClock();

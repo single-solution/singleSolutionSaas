@@ -40,7 +40,7 @@ const SESSION = {
 	who: { kind: 'merchant', id: 'mer_1', name: 'Acme' },
 	portalUrl: 'https://portal.example.com',
 	branding: { name: 'Single Solution' },
-	support: { email: 'help@example.com', phone: '' },
+	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 	switcher: [{ merchantName: 'Acme', websites: [{ websiteId: WEBSITE, domain: 'shop.example.com' }] }],
 };
 

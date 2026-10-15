@@ -475,10 +475,12 @@ export const PROFILE = Object.freeze({
 		const [question = '', option = ''] = tag.split('.');
 		if (question === 'countries') {
 			if (option === 'many') return 'you sell in more than one country';
-			if (option === 'eea') return 'you sell in the European Economic Area, the UK or Switzerland, where tracking needs consent';
+			if (option === 'eea')
+				return 'you sell in the European Economic Area, the UK or Switzerland, where tracking needs consent';
 			return `your countries include ${option.toUpperCase()}`;
 		}
-		if (option === 'other') return `you gave your own answer to “${PROFILE.questions[/** @type {'pays'} */ (question)] ?? question}”`;
+		if (option === 'other')
+			return `you gave your own answer to “${PROFILE.questions[/** @type {'pays'} */ (question)] ?? question}”`;
 		if (question === 'languages')
 			return option === 'many' ? 'your website has more than one language' : `your languages include ${option}`;
 		return PROFILE_TAGS[tag] ?? tag;
@@ -804,9 +806,21 @@ export const ADMIN = Object.freeze({
 		logoType: 'Use a PNG, JPEG or WebP file.',
 	}),
 	support: Object.freeze({
-		email: 'Email',
-		phone: 'Phone',
-		whatsapp: 'WhatsApp',
+		channels: 'Contact channels',
+		channelsHelp:
+			'In the order people see them; the first one is the button on product dashboards. A link can be any https address, for example https://wa.me/15550100 or a help center.',
+		type: 'Kind',
+		types: Object.freeze({ email: 'Email', phone: 'Phone', link: 'Link' }),
+		label: 'Label',
+		labelPlaceholder: 'For example WhatsApp',
+		value: Object.freeze({ email: 'Email address', phone: 'Phone number', link: 'Link (https)' }),
+		valuePlaceholder: Object.freeze({
+			email: 'help@example.com',
+			phone: '+1 212 555 0100',
+			link: 'https://wa.me/15550100',
+		}),
+		channel: (/** @type {number} */ n) => `Channel ${n}`,
+		add: 'Add channel',
 	}),
 	security: Object.freeze({
 		sessionHours: 'Session length (hours)',

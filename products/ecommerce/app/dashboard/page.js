@@ -94,7 +94,7 @@ export default function Dashboard() {
 			</main>
 		);
 
-	/** @type {{ who: { kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }, portalUrl: string, branding: { name: string }, support: { email: string, phone: string }, switcher: Array<{ merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
+	/** @type {{ who: { kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }, portalUrl: string, branding: { name: string }, support: { channels: import('@ss/contracts/text').SupportChannel[] }, switcher: Array<{ merchantName: string, websites: Array<{ websiteId: string, domain: string }> }> }} */
 	const { who, portalUrl, branding, support, switcher } = session.data;
 	const admin = who.kind === 'admin';
 	const owner = admin && who.role === 'owner';

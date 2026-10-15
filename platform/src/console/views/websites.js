@@ -43,7 +43,7 @@ import { contactLine } from './sign-in.js';
 import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
 
 /** @typedef {import('./website.js').ProductCard} ProductCard */
-/** @typedef {{ support?: { email: string | null, phone: string | null, whatsapp: string | null } | null }} BrandingSupport */
+/** @typedef {{ support?: { channels: import('@ss/contracts/text').SupportChannel[] } | null }} BrandingSupport */
 
 /**
  * The welcome of a merchant with no websites yet.

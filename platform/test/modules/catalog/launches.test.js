@@ -30,7 +30,13 @@ const setUp = async (name) => {
 		db: mongo.db(name),
 		settings: {
 			branding: { name: 'Acme Portal', accent: '#112233' },
-			support: { email: 'help@acme.test', phone: '+1 212 555 0100', whatsapp: '+1 212 555 0111' },
+			support: {
+				channels: [
+					{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@acme.test' },
+					{ type: /** @type {const} */ ('phone'), label: 'Phone', url: 'tel:+12125550100' },
+					{ type: /** @type {const} */ ('link'), label: 'WhatsApp', url: 'https://wa.me/12125550111' },
+				],
+			},
 		},
 	});
 	cleanups.push(h.close);
@@ -61,7 +67,13 @@ describe('launches (PLAN 0.4.3)', () => {
 			kind: 'merchant',
 			sessionExpiresAt: '2026-10-01T22:00:00.000Z',
 			branding: { name: 'Acme Portal', accent: '#112233', logoUrl: null },
-			support: { email: 'help@acme.test', phone: '+1 212 555 0100', whatsapp: '+1 212 555 0111' },
+			support: {
+				channels: [
+					{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@acme.test' },
+					{ type: /** @type {const} */ ('phone'), label: 'Phone', url: 'tel:+12125550100' },
+					{ type: /** @type {const} */ ('link'), label: 'WhatsApp', url: 'https://wa.me/12125550111' },
+				],
+			},
 			merchant: { id: m.merchantId, name: m.name, websites: [{ websiteId: w1, domain: 'shop.example.com' }], websiteId: w1 },
 		});
 		expect(claims.admin).toBeUndefined();

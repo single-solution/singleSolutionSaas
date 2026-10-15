@@ -22,6 +22,7 @@ export {
 	FieldGrid,
 } from './fields.js';
 export { Form, FormError } from './Form.js';
+export { ListEditor, LIST_EDITOR_TEXTS, moveItem } from './ListEditor.js';
 export {
 	Card,
 	PageHeader,
@@ -56,7 +57,15 @@ export { NeedsList, SetupChecklist, Timeline, RecentChanges, ProductOverview, Ov
 // plain data, not a client module: a product's `texts.js` also gives its server `app/layout.js` the page title
 export { DASHBOARD_TEXTS, dashboardTexts } from './dashboard-texts.js';
 export { SchemaForm } from './SchemaForm.js';
-export { formatCredits, formatCreditsPerHour, formatDate, formatDateTime, humanize, parseCredits } from './format.js';
+export {
+	formatCredits,
+	formatCreditsPerHour,
+	formatDate,
+	formatDateTime,
+	humanize,
+	parseCredits,
+	supportContact,
+} from './format.js';
 export { describeProblem, fieldErrors, problemCode } from './problems.js';
 
 /** @typedef {import('./AppShell.js').NavSection} NavSection */

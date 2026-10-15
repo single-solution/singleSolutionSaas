@@ -105,7 +105,7 @@ const tabProps = (websiteId, parts = {}) => ({
 	websiteId,
 	domain: 'shop.example.com',
 	who: { kind: 'admin', id: 'a1', name: 'Alex Morgan', role: 'owner' },
-	support: { email: 'help@example.com', phone: '+1 555 0100' },
+	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 	portal: 'https://portal.example.com',
 	open: () => undefined,
 	...parts,
@@ -532,7 +532,7 @@ describe('standard tabs', () => {
 			inDashboard(<FeaturesTab {...tabProps(id, { who: { kind: 'merchant', id: 'm1', name: 'Sam' } })} />),
 		);
 		await settle();
-		expect(merchant.container.textContent).toContain('To change features, contact help@example.com.');
+		expect(merchant.container.textContent).toContain('To change features, contact help@example.com (Email).');
 		expect(
 			[...merchant.container.querySelectorAll('input[type="checkbox"]')].every(
 				(box) => /** @type {HTMLInputElement} */ (box).disabled,
@@ -825,7 +825,7 @@ describe('ProductDashboard', () => {
 			who,
 			portalUrl: 'https://portal.example.com',
 			branding: { name: 'Acme' },
-			support: { email: 'help@example.com', phone: '' },
+			support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 			switcher: [
 				{ merchantName: 'Bright Shop', websites: [{ websiteId: 'p1', domain: 'bright.example.com' }] },
 				{ merchantName: 'Other', websites: [{ websiteId: 'p2', domain: 'other.example.com' }] },

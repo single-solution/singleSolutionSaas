@@ -85,7 +85,8 @@ time, that the request Origin equals the ticket's origin, and that `tid` is not 
 `issueLaunch({ signer, issuer, audience, kind, sessionExpiresAt, branding, support, merchant? | admin?, ttlSeconds? })`.
 A merchant launch carries `merchant: { id, name, websites: [{ websiteId, domain }], websiteId }` (the website to open
 must be in the list); an admin launch carries `admin: { id, name, role: 'owner' | 'support', websiteId | null }`. Never
-both. `sub` is the merchant or admin id. `verifyLaunch({ token, keyResolver, audience, issuer, consume })` checks
+both. `support` is `{ channels: [{ type: 'email' | 'phone' | 'link', label, url }] }` (at most 10; `mailto:`, `tel:+…`
+or an https link, checked by `@ss/contracts/text`). `sub` is the merchant or admin id. `verifyLaunch({ token, keyResolver, audience, issuer, consume })` checks
 signature, issuer, audience, time, the launch rules (`invalid_launch`), that `sessionExpiresAt` has not passed, and
 consumes the `jti` once.
 

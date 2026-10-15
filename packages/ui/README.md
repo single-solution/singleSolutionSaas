@@ -132,6 +132,14 @@ by their names. A list without choices is typed one item per line (a list of on/
 product checks every value when it is saved, and its field errors are passed in `errors`. Settings marked in
 `overridden` get a Reset link that calls `onReset(name)`.
 
+## ListEditor (merchant lists)
+
+`<ListEditor legend items onChange newItem renderItem nameOf? max? help? error? texts? />` is the one pattern for
+every list a merchant (or the Owner) owns: rows they add, rename, reorder and remove (payment methods, contact
+channels, claim kinds, units…). `renderItem(item, index, update)` draws a row's fields; the editor adds Move up, Move
+down and Remove on each row (named with the row, `Move up: Email`), Add at the end until `max`, and the empty text.
+`moveItem(list, from, to)` is its pure reorder.
+
 ## StatusBadge
 
 `<StatusBadge status label? />` colors the statuses of PLAN.md 0.5.5: `active` green, `low_balance` and `grace` amber,
@@ -143,6 +151,8 @@ One style for the Portal and every dashboard, in US English: `formatDate` gives 
 gives `Oct 4, 2026, 2:30 PM UTC` (UTC, so the server and the browser render the same text). With
 `formatDateTime(value, { timeZone })` the same style shows another time zone with its short name
 (`Oct 4, 2026, 10:30 AM EDT`), for the viewer's local time once the page runs. `formatCredits` gives `12.5 credits`.
+`supportContact(support)` words the Portal's support contact channels in one line (`help@example.com (Email),
+https://wa.me/15550100 (WhatsApp)`), or `support` without channels.
 `humanize` reads a code as words (`low_balance` → `Low balance`, `api_key` → `API key`): status badges and the choices
 of a settings form use it.
 

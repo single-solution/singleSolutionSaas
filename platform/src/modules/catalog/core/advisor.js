@@ -30,8 +30,7 @@ const tidy = (profile) => {
 		if (own.length > 0) other[question] = own;
 	}
 	if (Object.keys(other).length > 0) out.other = other;
-	for (const question of PROFILE_YES_NO)
-		if (typeof profile[question] === 'boolean') out[question] = profile[question];
+	for (const question of PROFILE_YES_NO) if (typeof profile[question] === 'boolean') out[question] = profile[question];
 	for (const question of /** @type {const} */ (['countries', 'languages']))
 		if ((profile[question] ?? []).length > 0) out[question] = [...(profile[question] ?? [])];
 	return /** @type {BusinessProfile} */ (out);

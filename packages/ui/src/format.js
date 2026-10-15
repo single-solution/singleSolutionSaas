@@ -122,6 +122,21 @@ const WORD_CASE = Object.freeze({
 });
 
 /**
+ * A support contact channel of the Portal (`@ss/contracts/text` support channels).
+ * @typedef {{ type: 'email' | 'phone' | 'link', label: string, url: string }} SupportChannel
+ */
+
+/**
+ * The support contact in one line, each channel as what people read and its label (`help@example.com (Email),
+ * https://wa.me/15550100 (WhatsApp)`), or `fallback` without channels.
+ * @param {{ channels: ReadonlyArray<SupportChannel> }} support
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export const supportContact = (support, fallback = 'support') =>
+	support.channels.map((channel) => `${channel.url.replace(/^(?:mailto|tel):/, '')} (${channel.label})`).join(', ') || fallback;
+
+/**
  * A readable label for a code (a status, a choice's value): `low_balance` → "Low balance", `per_unit_down` → "Per unit
  * down", `sms` → "SMS", `postalCode` → "Postal code", `line1` → "Line 1"; the stored value stays as it is. Values that
  * are not plain words (numbers, mixed case) are shown as they are; nothing (`null`, `undefined`, `''`) is `''`.

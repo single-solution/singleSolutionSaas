@@ -383,11 +383,7 @@ export const createCatalogService = (ctx, options = {}) => {
 				accent: branding.accent,
 				logoUrl: logoUrlOf(ctx.config.portalUrl, branding),
 			},
-			support: {
-				email: support.email ?? '',
-				phone: support.phone ?? '',
-				...(support.whatsapp ? { whatsapp: support.whatsapp } : {}),
-			},
+			support: { channels: support.channels.map((channel) => ({ ...channel })) },
 		};
 	};
 

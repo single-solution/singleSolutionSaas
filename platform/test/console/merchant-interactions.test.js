@@ -68,7 +68,12 @@ const BRANDING = {
 	name: 'Single Solution',
 	accent: '#4f46e5',
 	logoUrl: null,
-	support: { email: 'help@ss.test', phone: '+44 20 7946 0123', whatsapp: null },
+	support: {
+		channels: [
+			{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@ss.test' },
+			{ type: /** @type {const} */ ('phone'), label: 'Phone', url: 'tel:+442079460123' },
+		],
+	},
 };
 
 /** Two-step code of a secret now. @param {string} secret */
@@ -237,7 +242,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		fill('Email', 'owner@shop.test');
 		fill('Password', 'a brand new passphrase');
 		await press('Sign in');
-		await until(() => shows('Your account is suspended. Contact help@ss.test, +44 20 7946 0123.'));
+		await until(() => shows('Your account is suspended. Contact help@ss.test (Email), +442079460123 (Phone).'));
 		cleanup();
 		await world.ownerBrowser.api.post(`/v1/admin/merchants/${merchantId}/resume`, {});
 
@@ -357,7 +362,11 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 					merchantId={beta.merchantId}
 					websites={frame.websites}
 					billing={low}
-					branding={{ name: 'Acme', accent: '#112233', support: { email: 'help@ss.test' } }}>
+					branding={{
+						name: 'Acme',
+						accent: '#112233',
+						support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@ss.test' }] },
+					}}>
 					<p>child</p>
 				</ConsoleShell>
 			</PathnameContext.Provider>,

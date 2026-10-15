@@ -1,9 +1,10 @@
 /**
  * Text helpers every unit shares (`@ss/contracts/text`): HTML escaping and character references, the widget script
- * tag, path patterns and the Luhn check digit. Pure and browser-safe (no Node.js imports), so servers, products'
- * `core/` and widget bundles use the same code.
+ * tag, the support contact channels, path patterns and the Luhn check digit. Pure and browser-safe (no Node.js
+ * imports), so servers, products' `core/` and widget bundles use the same code.
  * @module
  */
+import { normalizeEmail } from './email.js';
 
 // ------------------------------------------------------------------------------------------------------------- HTML
 
@@ -95,6 +96,90 @@ export const decodeEntities = (text) =>
  */
 export const widgetScriptTag = ({ src, token = null, loading = 'async' }) =>
 	`<script src="${escapeHtml(src)}"${token === null ? '' : ` data-token="${escapeHtml(token)}"`}${loading === 'async' ? ' async' : ''}></script>`;
+
+// ------------------------------------------------------------------------------------------------------ support contact
+
+/**
+ * Kinds of a support contact channel (fixed-choices audit K10): an email address (`mailto:`), a phone number in
+ * international form (`tel:+…`), or any https link (a chat app such as `https://wa.me/…`, a help center, a form). The
+ * label is the operator's own ("WhatsApp", "Help center").
+ */
+export const SUPPORT_CHANNEL_TYPES = Object.freeze(/** @type {const} */ (['email', 'phone', 'link']));
+/** The most channels, and the longest label. */
+export const SUPPORT_CHANNELS_MAX = 10;
+export const SUPPORT_LABEL_MAX = 60;
+
+/** @typedef {{ type: 'email' | 'phone' | 'link', label: string, url: string }} SupportChannel */
+
+const TEL = /^tel:\+[1-9]\d{6,14}$/;
+
+/**
+ * The address of a channel from what people type: `mailto:<address>` (the address checked and in small letters),
+ * `tel:+<digits>` (spaces, dots, dashes and brackets dropped), or the https link itself; null when it does not fit
+ * the type. A value that already has its scheme is taken as it is.
+ * @param {string} type
+ * @param {string} value
+ * @returns {string | null}
+ */
+export const supportChannelUrl = (type, value) => {
+	const text = String(value ?? '').trim();
+	if (type === 'email') {
+		const email = normalizeEmail(text.replace(/^mailto:/i, ''));
+		return email === null ? null : `mailto:${email}`;
+	}
+	if (type === 'phone') {
+		const url = `tel:${text.replace(/^tel:/i, '').replace(/[\s().-]/g, '')}`;
+		return TEL.test(url) ? url : null;
+	}
+	if (type === 'link') {
+		if (text.length > 2048) return null;
+		try {
+			const url = new URL(text);
+			return url.protocol === 'https:' && url.username === '' && url.password === '' ? url.href : null;
+		} catch {
+			return null;
+		}
+	}
+	return null;
+};
+
+/**
+ * Why a channel cannot be used (null when it can): an unknown type, an empty or long label, an address that does not
+ * fit the type.
+ * @param {unknown} channel
+ * @returns {string | null}
+ */
+export const supportChannelProblem = (channel) => {
+	if (typeof channel !== 'object' || channel === null) return 'must be an object';
+	const { type, label, url } = /** @type {Record<string, unknown>} */ (channel);
+	if (typeof type !== 'string' || !(/** @type {readonly string[]} */ (SUPPORT_CHANNEL_TYPES).includes(type)))
+		return `type must be ${SUPPORT_CHANNEL_TYPES.join(', ')}`;
+	if (typeof label !== 'string' || label.trim() === '' || label.length > SUPPORT_LABEL_MAX)
+		return `label must be 1 to ${SUPPORT_LABEL_MAX} characters`;
+	if (typeof url !== 'string' || supportChannelUrl(type, url) !== url)
+		return type === 'email'
+			? 'url must be mailto: and an email address'
+			: type === 'phone'
+				? 'url must be tel: and a number with its country code'
+				: 'url must be an https link';
+	return null;
+};
+
+/**
+ * What people read of a channel: the email address, the phone number or the link.
+ * @param {SupportChannel} channel
+ * @returns {string}
+ */
+export const supportChannelValue = (channel) => channel.url.replace(/^(?:mailto|tel):/, '');
+
+/**
+ * The support contact in one line, each channel as what people read and its label (`help@example.com (Email),
+ * https://wa.me/15550100 (WhatsApp)`); '' without channels.
+ * @param {ReadonlyArray<SupportChannel>} channels
+ * @returns {string}
+ */
+export const supportContactLine = (channels) =>
+	channels.map((channel) => `${supportChannelValue(channel)} (${channel.label})`).join(', ');
 
 // -------------------------------------------------------------------------------------------------------- path patterns
 

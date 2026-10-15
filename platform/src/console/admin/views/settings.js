@@ -16,13 +16,16 @@ import {
 	Form,
 	FormError,
 	Input,
+	ListEditor,
 	Masonry,
 	PageHeader,
+	Select,
 	Switch,
 	describeProblem,
 	fieldErrors,
 	useToast,
 } from '@ss/ui';
+import { SUPPORT_CHANNELS_MAX, SUPPORT_CHANNEL_TYPES, supportChannelValue } from '@ss/contracts/text';
 import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../../infra/config.js';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
 import { apiFetch } from '../../client.js';
@@ -250,43 +253,72 @@ function BrandingCard({ settings, onSaved }) {
 	);
 }
 
-/** @param {{ settings: any, onSaved: (s: any) => void }} props */
+/** @typedef {'email' | 'phone' | 'link'} ChannelType */
+/** A channel as the form edits it: its kind, label and what people read (the address, number or link). */
+/** @typedef {{ type: ChannelType, label: string, value: string }} ChannelRow */
+
+/**
+ * The support contact (fixed-choices audit K10): a list of channels the Owner adds, labels, reorders and removes.
+ * @param {{ settings: any, onSaved: (s: any) => void }} props
+ */
 function SupportCard({ settings, onSaved }) {
-	const [form, setForm] = useState({
-		email: settings.support.email ?? '',
-		phone: settings.support.phone ?? '',
-		whatsapp: settings.support.whatsapp ?? '',
-	});
+	const S = ADMIN.support;
+	const [rows, setRows] = useState(
+		/** @type {ChannelRow[]} */ (
+			settings.support.channels.map((/** @type {import('@ss/contracts/text').SupportChannel} */ channel) => ({
+				type: channel.type,
+				label: channel.label,
+				value: supportChannelValue(channel),
+			}))
+		),
+	);
 	const { busy, problem, save } = useSave(onSaved);
-	/** @param {keyof typeof form} key @param {string} value */
-	const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 	const errors = fieldErrors(problem);
 	return (
 		<Card title={ADMIN.settingsSections.support.title} subtitle={ADMIN.settingsSections.support.help}>
 			<Form
-				onSubmit={() => save(adminApi.settingsSupport(), 'PUT', form)}
+				onSubmit={() =>
+					save(adminApi.settingsSupport(), 'PUT', {
+						channels: rows.map((row) => ({ type: row.type, label: row.label, url: row.value })),
+					})
+				}
 				busy={busy}
 				aria-label={ADMIN.settingsSections.support.title}>
-				<Input
-					label={ADMIN.support.email}
-					type="email"
-					value={form.email}
-					onChange={(e) => set('email', e.currentTarget.value)}
-					error={errors.email}
+				<ListEditor
+					legend={S.channels}
+					help={S.channelsHelp}
+					items={rows}
+					onChange={setRows}
+					max={SUPPORT_CHANNELS_MAX}
+					newItem={() => /** @type {ChannelRow} */ ({ type: 'email', label: '', value: '' })}
+					nameOf={(row, index) => row.label || S.channel(index + 1)}
+					texts={{ add: S.add }}
+					error={errors.channels}
+					renderItem={(row, index, update) => (
+						<>
+							<Select
+								label={S.type}
+								value={row.type}
+								options={SUPPORT_CHANNEL_TYPES.map((type) => ({ value: type, label: S.types[type] }))}
+								onChange={(e) => update({ ...row, type: /** @type {ChannelType} */ (e.currentTarget.value) })}
+							/>
+							<Input
+								label={S.label}
+								placeholder={S.labelPlaceholder}
+								value={row.label}
+								onChange={(e) => update({ ...row, label: e.currentTarget.value })}
+							/>
+							<Input
+								label={S.value[row.type]}
+								placeholder={S.valuePlaceholder[row.type]}
+								value={row.value}
+								onChange={(e) => update({ ...row, value: e.currentTarget.value })}
+								error={errors[`channels.${index}`]}
+							/>
+						</>
+					)}
 				/>
-				<Input
-					label={ADMIN.support.phone}
-					value={form.phone}
-					onChange={(e) => set('phone', e.currentTarget.value)}
-					error={errors.phone}
-				/>
-				<Input
-					label={ADMIN.support.whatsapp}
-					value={form.whatsapp}
-					onChange={(e) => set('whatsapp', e.currentTarget.value)}
-					error={errors.whatsapp}
-				/>
-				<FormError problem={problem} fields={['email', 'phone', 'whatsapp']} />
+				<FormError problem={problem} fields={['channels']} />
 				<Button type="submit" loading={busy}>
 					{LOGIN.save}
 				</Button>

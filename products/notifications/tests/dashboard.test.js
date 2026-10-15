@@ -270,7 +270,7 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 		websiteId: `web_o${same ? website : (website += 1)}`,
 		domain: 'shop.example.com',
 		who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
-		support: { email: 'help@example.com', phone: '' },
+		support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
 		portal: 'https://portal.example.com',
 		open: vi.fn(),
 	});

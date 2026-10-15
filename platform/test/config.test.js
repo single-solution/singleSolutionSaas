@@ -244,11 +244,16 @@ describe('system store (secrets generated on first start, settings recorded late
 	it('records the security, branding, support and billing settings and the logo', async () => {
 		const db = mongo.db('system_settings_groups');
 		const store = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
-		await store.update({ security: { sessionHours: 24 }, support: { email: 'help@example.com', phone: undefined } });
+		await store.update({
+			security: { sessionHours: 24 },
+			support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }] },
+		});
 		await store.update({ security: { requireTwoStepForAdmins: true } });
 		const { state } = await store.load();
 		expect(state.settings?.security).toEqual({ sessionHours: 24, requireTwoStepForAdmins: true });
-		expect(state.settings?.support).toEqual({ email: 'help@example.com' });
+		expect(state.settings?.support).toEqual({
+			channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@example.com' }],
+		});
 		expect(await store.logo()).toBeNull();
 		await store.setLogo({ type: 'image/png', data: Buffer.from([1, 2, 3]) });
 		expect(await store.logo()).toEqual({ type: 'image/png', data: Buffer.from([1, 2, 3]) });

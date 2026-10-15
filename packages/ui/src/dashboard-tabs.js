@@ -15,7 +15,7 @@ import { Checkbox, FieldGrid, Input } from './fields.js';
 import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
 import { OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
-import { formatCreditsPerHour, parseCredits } from './format.js';
+import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
 import { call, fill, useLoad } from './dashboard-api.js';
 import {
 	FormatForm,
@@ -38,8 +38,8 @@ import {
 /**
  * What every tab is given: the picked website (null on the Owner's global tabs) and its domain, the viewer, the
  * support contact, the Portal's address, and `open`, which shows another section (the Overview's buttons).
- * @typedef {{ websiteId: string | null, domain: string, who: Who, support: { email: string, phone: string },
- *   portal: string, open: (tab: string) => void }} TabProps
+ * @typedef {{ websiteId: string | null, domain: string, who: Who,
+ *   support: { channels: import('./format.js').SupportChannel[] }, portal: string, open: (tab: string) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 /**
@@ -131,7 +131,7 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 				};
 				return (
 					<div className="space-y-4">
-						{admin ? null : <Callout tone="info">{fill(F.contact, { contact: support.email })}</Callout>}
+						{admin ? null : <Callout tone="info">{fill(F.contact, { contact: supportContact(support) })}</Callout>}
 						{warned.map((warning) => (
 							<Callout key={warning} tone="warning">
 								{warning}

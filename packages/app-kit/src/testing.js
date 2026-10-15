@@ -420,7 +420,7 @@ export const createFakePortal = async ({ url = 'https://portal.test', now = Date
 				kind,
 				sessionExpiresAt: sessionExpiresAt ?? new Date(now() + 8 * 60 * 60_000).toISOString(),
 				branding: { name: 'Single Solution', accent: '#2563eb', logoUrl: null },
-				support: { email: 'support@example.com', phone: '+1 555 0100' },
+				support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:support@example.com' }] },
 				now,
 			};
 			if (kind === 'admin') {

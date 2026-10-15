@@ -30,7 +30,7 @@ import { effectiveStatus } from './status.js';
  * @property {'owner' | 'support'} [role] admins
  * @property {Array<{ websiteId: string, domain: string }>} [websites] merchants: the websites of the launch
  * @property {{ name: string, accent: string, logoUrl: string | null }} branding
- * @property {{ email: string, phone: string, whatsapp?: string }} support
+ * @property {{ channels: import('@ss/contracts/text').SupportChannel[] }} support the Portal's support contact
  * @property {number} expiresAt epoch ms
  */
 

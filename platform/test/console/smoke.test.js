@@ -68,7 +68,7 @@ const BRANDING = {
 	name: 'Single Solution',
 	accent: '#4f46e5',
 	logoUrl: null,
-	support: { email: 'help@ss.test', phone: null, whatsapp: null },
+	support: { channels: [{ type: /** @type {const} */ ('email'), label: 'Email', url: 'mailto:help@ss.test' }] },
 };
 
 describe('merchant console smoke', () => {
@@ -188,7 +188,15 @@ describe('merchant console smoke', () => {
 		expect(homeOf('merchant', '/admin/merchants')).toBe('/overview');
 		expect(homeOf('admin', '/admin/merchants')).toBe('/admin/merchants');
 		expect(homeOf('admin', '/credits')).toBe('/admin');
-		expect(contactLine({ email: 'a@b.co', phone: '+1', whatsapp: '+2' })).toBe('a@b.co, +1, WhatsApp +2');
+		expect(
+			contactLine({
+				channels: [
+					{ type: 'email', label: 'Email', url: 'mailto:a@b.co' },
+					{ type: 'link', label: 'WhatsApp', url: 'https://wa.me/15550100' },
+				],
+			}),
+		).toBe('a@b.co (Email), https://wa.me/15550100 (WhatsApp)');
+		expect(contactLine({ channels: [] })).toBe('support');
 		expect(contactLine(null)).toBe('support');
 		expect(routes.website('web_1')).toBe('/websites/web_1');
 		expect(merchantSections('/websites/web_1')[0]?.items.map((i) => [i.label, i.current])).toEqual([

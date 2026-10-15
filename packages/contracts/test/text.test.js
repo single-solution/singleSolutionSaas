@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { decodeEntities, escapeHtml, luhnValid, pathMatches, widgetScriptTag } from '../src/text.js';
+import {
+	decodeEntities,
+	escapeHtml,
+	luhnValid,
+	pathMatches,
+	supportChannelProblem,
+	supportChannelUrl,
+	supportContactLine,
+	widgetScriptTag,
+} from '../src/text.js';
 
 describe('escapeHtml', () => {
 	it('escapes the five characters HTML gives a meaning, as decimal references', () => {
@@ -134,5 +143,39 @@ describe('luhnValid', () => {
 		expect(luhnValid('٤١١١١١١١١١١١١١١١')).toBe(false);
 		expect(luhnValid(4111111111111111)).toBe(false);
 		expect(luhnValid(null)).toBe(false);
+	});
+});
+
+describe('support contact channels', () => {
+	it('turns what people type into the channel address, or null when it does not fit the type', () => {
+		expect(supportChannelUrl('email', ' Help@Acme.test ')).toBe('mailto:help@acme.test');
+		expect(supportChannelUrl('email', 'mailto:help@acme.test')).toBe('mailto:help@acme.test');
+		expect(supportChannelUrl('email', 'not an address')).toBeNull();
+		expect(supportChannelUrl('phone', '+1 (212) 555-0123')).toBe('tel:+12125550123');
+		expect(supportChannelUrl('phone', '0300 1234567')).toBeNull();
+		expect(supportChannelUrl('link', 'https://wa.me/12125550111')).toBe('https://wa.me/12125550111');
+		expect(supportChannelUrl('link', 'http://help.acme.test')).toBeNull();
+		expect(supportChannelUrl('link', 'https://user:pw@help.acme.test')).toBeNull();
+		expect(supportChannelUrl('fax', '+12125550123')).toBeNull();
+	});
+
+	it('names what is wrong with a channel and words the contact in one line', () => {
+		const email = { type: 'email', label: 'Email', url: 'mailto:help@acme.test' };
+		const whatsapp = { type: 'link', label: 'WhatsApp', url: 'https://wa.me/12125550111' };
+		expect(supportChannelProblem(email)).toBeNull();
+		expect(supportChannelProblem({ ...email, type: 'telegram' })).toBe('type must be email, phone, link');
+		expect(supportChannelProblem({ ...email, label: ' ' })).toBe('label must be 1 to 60 characters');
+		expect(supportChannelProblem({ ...email, url: 'help@acme.test' })).toBe('url must be mailto: and an email address');
+		expect(supportChannelProblem({ type: 'phone', label: 'Phone', url: 'tel:12' })).toBe(
+			'url must be tel: and a number with its country code',
+		);
+		expect(supportChannelProblem(null)).toBe('must be an object');
+		expect(
+			supportContactLine([
+				/** @type {const} */ ({ ...email, type: 'email' }),
+				/** @type {const} */ ({ ...whatsapp, type: 'link' }),
+			]),
+		).toBe('help@acme.test (Email), https://wa.me/12125550111 (WhatsApp)');
+		expect(supportContactLine([])).toBe('');
 	});
 });

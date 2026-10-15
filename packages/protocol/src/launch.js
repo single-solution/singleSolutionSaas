@@ -11,8 +11,10 @@
  *   Defaults). Finance launches are refused.
  *
  * Both carry `sessionExpiresAt` (ISO-8601 UTC, when the launching Portal session ends), the branding and the support
- * contact. `sub` is the merchant id or the admin id.
+ * contact (`support: { channels: [{ type, label, url }] }`, `@ss/contracts/text` support channels). `sub` is the
+ * merchant id or the admin id.
  */
+import { SUPPORT_CHANNELS_MAX, supportChannelProblem } from '@ss/contracts/text';
 import { createProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
 import { checkTimeClaims, isObject, isText, nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
@@ -39,7 +41,7 @@ const ACCENT = /^#[0-9a-fA-F]{6}$/;
 /** @typedef {typeof LAUNCH_KINDS[number]} LaunchKind */
 /** @typedef {typeof LAUNCH_ADMIN_ROLES[number]} LaunchAdminRole */
 /** @typedef {{ name: string, accent: string, logoUrl: string | null }} LaunchBranding */
-/** @typedef {{ email: string, phone: string, whatsapp?: string }} LaunchSupport */
+/** @typedef {{ channels: import('@ss/contracts/text').SupportChannel[] }} LaunchSupport */
 /** @typedef {{ websiteId: string, domain: string }} LaunchWebsite */
 /** @typedef {{ id: string, name: string, websites: LaunchWebsite[], websiteId: string }} LaunchMerchant */
 /** @typedef {{ id: string, name: string, role: LaunchAdminRole, websiteId: string | null }} LaunchAdmin */
@@ -48,13 +50,6 @@ const ACCENT = /^#[0-9a-fA-F]{6}$/;
  *   kind: LaunchKind, sessionExpiresAt: string, branding: LaunchBranding, support: LaunchSupport,
  *   merchant?: LaunchMerchant, admin?: LaunchAdmin }} LaunchClaims
  */
-
-/**
- * @param {unknown} value
- * @param {number} max
- * @returns {boolean}
- */
-const isOptionalText = (value, max) => typeof value === 'string' && value.length <= max;
 
 /**
  * @param {unknown} value
@@ -95,8 +90,13 @@ const brandingViolation = (branding) => {
  */
 const supportViolation = (support) => {
 	if (!isObject(support)) return 'support is required';
-	if (!isOptionalText(support.email, 320) || !isOptionalText(support.phone, 64)) return 'support.email and phone are required';
-	if (support.whatsapp !== undefined && !isOptionalText(support.whatsapp, 64)) return 'support.whatsapp must be a string';
+	const { channels } = support;
+	if (!Array.isArray(channels) || channels.length > SUPPORT_CHANNELS_MAX)
+		return `support.channels must be a list of at most ${SUPPORT_CHANNELS_MAX}`;
+	for (const [index, channel] of channels.entries()) {
+		const problem = supportChannelProblem(channel);
+		if (problem !== null) return `support.channels[${index}]: ${problem}`;
+	}
 	return null;
 };
 

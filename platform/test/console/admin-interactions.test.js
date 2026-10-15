@@ -463,10 +463,28 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('Remove logo'));
 		await press('Remove logo');
 		await until(() => ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
-		fill('Email', 'help@acme.test');
-		fill('Phone', '+1 415 555 0134');
+		// the support contact: a list of channels, each with its kind, label and address
+		await press('Add channel');
+		const supportCard = /** @type {HTMLElement} */ (document.querySelector('section[aria-label="Support contact"]'));
+		type(byLabel(supportCard, 'Label'), 'Email');
+		type(byLabel(supportCard, 'Email address'), 'help@acme.test');
+		await press('Add channel');
+		const rows = supportCard.querySelectorAll('li');
+		type(byLabel(/** @type {HTMLElement} */ (rows[1]), 'Kind'), 'link');
+		type(byLabel(/** @type {HTMLElement} */ (rows[1]), 'Label'), 'WhatsApp');
+		type(byLabel(/** @type {HTMLElement} */ (rows[1]), 'Link (https)'), 'https://wa.me/14155550134');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (supportCard.querySelector('button[aria-label="Move up: WhatsApp"]')).click();
+		});
 		await saveIn('Support contact');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
+		const sent = ownerBrowser.calls.find((c) => c.path === adminApi.settingsSupport() && c.status === 200);
+		expect(sent?.body.support).toEqual({
+			channels: [
+				{ type: 'link', label: 'WhatsApp', url: 'https://wa.me/14155550134' },
+				{ type: 'email', label: 'Email', url: 'mailto:help@acme.test' },
+			],
+		});
 		fill('Session length (hours)', '0');
 		await saveIn('Security');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
