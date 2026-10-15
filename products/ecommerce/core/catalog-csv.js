@@ -291,6 +291,7 @@ export const ORDER_COLUMNS = Object.freeze([
 	'currency',
 	'payment_method',
 	'payment_state',
+	'tags',
 ]);
 
 /**
@@ -324,6 +325,7 @@ export const orderRows = (orders, fields) => {
 				currency,
 				order.payment.method,
 				order.payment.state,
+				(order.tags ?? []).join('|'),
 				...values,
 			]);
 	}
@@ -352,6 +354,7 @@ export const ORDER_TOTAL_COLUMNS = Object.freeze([
 	'payment_state',
 	'paid',
 	'refunded',
+	'tags',
 ]);
 
 /**
@@ -389,6 +392,7 @@ export const orderTotalRows = (orders, fields) => {
 			order.payment.state,
 			money(order.payment.paid),
 			money(order.payment.refunded),
+			(order.tags ?? []).join('|'),
 			...fields.map((column) => columnCell(column, (field) => order.fields?.[field.id])),
 		]);
 	}
@@ -412,6 +416,7 @@ export const CUSTOMER_COLUMNS = Object.freeze([
 	'returned_parcels',
 	'note',
 	'last_order_at',
+	'tags',
 ]);
 
 /**
@@ -445,6 +450,7 @@ export const customerRows = (customers, spent, currency, fields) => {
 			customer.rtoCount ?? 0,
 			customer.note ?? '',
 			customer.lastOrderAt ? new Date(customer.lastOrderAt).toISOString() : '',
+			(customer.tags ?? []).join('|'),
 			...fields.map((column) => columnCell(column, (field) => customer.fields?.[field.id])),
 		]);
 	}

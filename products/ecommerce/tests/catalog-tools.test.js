@@ -238,11 +238,11 @@ describe('CSV', () => {
 		expect([...answer.bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
 		const lines = answer.text.trim().split('\r\n');
 		expect(lines[0]).toBe(
-			'number,placed_at,status,customer,city,region,country,product,variant,sku,quantity,unit_price,discount,total,currency,payment_method,payment_state',
+			'number,placed_at,status,customer,city,region,country,product,variant,sku,quantity,unit_price,discount,total,currency,payment_method,payment_state,tags',
 		);
 		expect(lines.slice(1)).toEqual([
-			'2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,Berlin,DE,Phone,Black,PH-1,2,10.50,1.00,20.00,USD,cod,paid',
-			"2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,Berlin,DE,'@Case,,,1,5.00,0.00,5.00,USD,cod,paid",
+			'2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,Berlin,DE,Phone,Black,PH-1,2,10.50,1.00,20.00,USD,cod,paid,',
+			"2026-000002,2026-10-01T10:00:00.000Z,delivered,Sara,Berlin,Berlin,DE,'@Case,,,1,5.00,0.00,5.00,USD,cod,paid,",
 		]);
 		expect((await shop.api('GET', '/v1/csv/orders?from=yesterday')).status).toBe(422);
 		const staff = await shop.ticket(['csv.run']);

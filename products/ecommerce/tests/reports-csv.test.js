@@ -435,11 +435,11 @@ describe('CSV', () => {
 		const perOrder = await shop.api('GET', '/v1/csv/orders?per=order&paymentMethod=bank_transfer');
 		expect(perOrder.status).toBe(200);
 		expect(linesOf(perOrder)).toEqual([
-			'number,placed_at,status,customer,city,region,country,lines,units,subtotal,discount,delivery,fee,tax,total,currency,payment_method,payment_state,paid,refunded',
-			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Tokyo,,,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00',
+			'number,placed_at,status,customer,city,region,country,lines,units,subtotal,discount,delivery,fee,tax,total,currency,payment_method,payment_state,paid,refunded,tags',
+			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Tokyo,,,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00,',
 		]);
 		expect(linesOf(await shop.api('GET', '/v1/csv/orders?per=order&role=cancelled')).slice(1)).toEqual([
-			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Tokyo,,,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00',
+			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Tokyo,,,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00,',
 		]);
 		const searched = linesOf(await shop.api('GET', '/v1/csv/orders?q=R-A'));
 		expect(searched[0]?.startsWith('number,placed_at,status,customer,city,region,country,product,')).toBe(true);
@@ -469,6 +469,8 @@ describe('CSV', () => {
 				orderCount: 2,
 				note: '',
 				lastOrderAt: new Date('2026-10-04T20:30:00Z'),
+				// the merchant's tags (E11), joined with |
+				tags: ['vip', 'wholesale'],
 			},
 			{
 				id: 'cus_zed',
@@ -499,9 +501,9 @@ describe('CSV', () => {
 		expect(answer.status).toBe(200);
 		expect(answer.headers.get('content-disposition')).toBe('attachment; filename="customers.csv"');
 		expect(linesOf(answer)).toEqual([
-			'user_id,customer_id,name,email,phone,city,guest,orders,spent,currency,blocked,blocked_reason,returned_parcels,note,last_order_at',
-			"usr_ann,,Ann,ann@example.com,'+15550001,Tokyo,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z",
-			",cus_zed,Zed,zed@example.com,,,true,1,7.00,USD,true,Fake orders,0,'=1+1,",
+			'user_id,customer_id,name,email,phone,city,guest,orders,spent,currency,blocked,blocked_reason,returned_parcels,note,last_order_at,tags',
+			"usr_ann,,Ann,ann@example.com,'+15550001,Tokyo,false,2,15.00,USD,false,,1,,2026-10-04T20:30:00.000Z,vip|wholesale",
+			",cus_zed,Zed,zed@example.com,,,true,1,7.00,USD,true,Fake orders,0,'=1+1,,",
 		]);
 		const staff = await shop.ticket(['csv.run']);
 		expect(linesOf(await shop.admin(staff, 'GET', '/v1/admin/csv/customers'))).toHaveLength(3);

@@ -19423,7 +19423,7 @@
 	},
 	"GET /v1/csv/orders": {
 		"summary": "Export orders as CSV",
-		"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters; then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters, its tags (joined with |, E11); then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
 		"status": 200,
 		"query": {
 			"type": "object",
@@ -19495,7 +19495,7 @@
 	},
 	"GET /v1/admin/csv/orders": {
 		"summary": "Export orders as CSV (Orders and Customers admin widgets)",
-		"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters; then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters, its tags (joined with |, E11); then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
 		"status": 200,
 		"query": {
 			"type": "object",
@@ -19567,12 +19567,12 @@
 	},
 	"GET /v1/csv/customers": {
 		"summary": "Export the customers as CSV",
-		"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders and what they spent, then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders, what they spent and their tags (joined with |, E11), then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission.",
 		"status": 200
 	},
 	"GET /v1/admin/csv/customers": {
 		"summary": "Export the customers as CSV (Customers admin widget)",
-		"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders and what they spent, then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders, what they spent and their tags (joined with |, E11), then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission.",
 		"status": 200
 	},
 	"POST /v1/products/bulk": {
