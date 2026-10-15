@@ -64,6 +64,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'tests/ui.test.js',
 			'tests/core.test.js',
 			'tests/next-config.test.js',
+			'tests/dashboard.test.js',
 		])
 			expect(files).toContain(file);
 		for (const file of files) expect(await read(dir, file), file).not.toMatch(/\{\{[A-Za-z]+\}\}/);
@@ -152,7 +153,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		// installed, the kit resolves from the project itself and the bundle is the same
 		expect((await validateProject(dir)).problems).toEqual([]);
 		const stdout = await runOwnTests(dir);
-		for (const file of ['core', 'api', 'ui', 'next-config']) expect(stdout).toContain(`tests/${file}.test.js`);
+		for (const file of ['core', 'api', 'ui', 'next-config', 'dashboard']) expect(stdout).toContain(`tests/${file}.test.js`);
 		expect(stdout).toMatch(/Tests\s+\d+ passed/);
 	}, 120_000);
 

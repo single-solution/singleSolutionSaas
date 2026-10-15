@@ -8,5 +8,7 @@ export default defineUnitConfig({
 	dir: import.meta.dirname,
 	include: ['tests/**/*.test.js', 'fixtures/*/tests/**/*.test.js'],
 	coverageInclude: [],
+	// the test product's dashboard (untranspiled JSX) and its dashboard test
+	jsx: ['fixtures/notes/app', 'fixtures/notes/tests'],
 	mongo: true,
 });
