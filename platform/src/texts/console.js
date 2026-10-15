@@ -131,7 +131,7 @@ export const MERCHANT_FIELDS = Object.freeze({
 	ownerName: 'Owner name',
 	email: 'Owner email (login)',
 	phone: 'Phone',
-	phoneHelp: 'With the country code, for example +44 7700 900123.',
+	phoneHelp: 'With the country code, for example +1 212 555 0123.',
 	address: 'Address',
 	country: 'Country',
 	countryNone: 'Not set',

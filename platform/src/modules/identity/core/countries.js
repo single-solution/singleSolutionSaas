@@ -264,6 +264,21 @@ export const COUNTRY_NAMES = Object.freeze({
 /** @type {ReadonlyArray<string>} */
 export const COUNTRY_CODES = Object.freeze(Object.keys(COUNTRY_NAMES));
 
+/** @param {string} name the name with its accents taken off (`Åland` → `Aland`) */
+const plain = (name) => name.normalize('NFD').replace(/\p{M}/gu, '');
+
+/**
+ * The countries as pickers list them: by name, accents ignored, compared without `Intl` or the locale, so the server
+ * and the browser show the same order.
+ * @type {ReadonlyArray<{ value: string, label: string }>}
+ */
+export const COUNTRY_CHOICES = Object.freeze(
+	COUNTRY_CODES.map((code) => ({ value: code, label: /** @type {string} */ (COUNTRY_NAMES[code]) })).sort((a, b) => {
+		const [x, y] = [plain(a.label), plain(b.label)];
+		return x < y ? -1 : x > y ? 1 : 0;
+	}),
+);
+
 const CODES = new Set(COUNTRY_CODES);
 
 /**

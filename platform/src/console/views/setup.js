@@ -45,7 +45,7 @@ import {
 	describeProblem,
 	useToast,
 } from '@ss/ui';
-import { COUNTRY_CODES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
+import { COUNTRY_CHOICES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
 import { PROFILE, SETUP } from '../../texts/console.js';
 import { apiFetch, takeFragmentToken } from '../client.js';
 import { Link } from '../link.js';
@@ -56,7 +56,6 @@ import { api } from '../paths.js';
 /** @typedef {Extract<SheetProduct, { reachable: true }>} ReachableProduct */
 /** @typedef {import('@ss/contracts').BlueprintSetting} BlueprintSetting */
 /** @typedef {import('@ss/contracts/profile').BusinessProfile} BusinessProfile */
-/** @typedef {import('./common.js').Fetcher} Fetcher */
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
 /**
  * A share link as the Portal lists it.
@@ -66,7 +65,7 @@ import { api } from '../paths.js';
  */
 /**
  * The website the page is about, and the console's API client.
- * @typedef {{ fetcher: Fetcher, merchantId: string, websiteId: string }} Manage
+ * @typedef {{ merchantId: string, websiteId: string }} Manage
  */
 /**
  * @typedef {{ sheet: Blueprint, links: ShareLink[], merchantId: string, websiteId: string,
@@ -80,10 +79,6 @@ import { api } from '../paths.js';
 
 /** Choice questions in the order people see them. */
 const CHOICES = /** @type {Array<keyof typeof PROFILE_CHOICES>} */ (Object.keys(PROFILE_CHOICES));
-/** Countries to pick from, by name. */
-const COUNTRY_OPTIONS = COUNTRY_CODES.map((code) => ({ value: code, label: COUNTRY_NAMES[code] ?? code })).sort((a, b) =>
-	a.label.localeCompare(b.label),
-);
 const LANGUAGE = /^[a-z]{2,3}$/;
 
 /**
@@ -557,7 +552,7 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 		setErrors({});
 		setBusy(true);
 		setProblem(null);
-		const result = await manage.fetcher(api.setupProfile(manage.merchantId, manage.websiteId), {
+		const result = await apiFetch(api.setupProfile(manage.merchantId, manage.websiteId), {
 			method: 'PUT',
 			body: { ...answers, languages: [...new Set(codes)] },
 		});
@@ -600,7 +595,7 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 					/>
 					<ChoicePicker
 						legend={PROFILE.questions.countries}
-						options={COUNTRY_OPTIONS}
+						options={[...COUNTRY_CHOICES]}
 						value={answers.countries ?? []}
 						onChange={(next) => setAnswers({ ...answers, countries: next })}
 						emptyText={PROFILE.notAnswered}
@@ -717,7 +712,7 @@ function CreateLinkDialog({ manage, onClose, onCreated }) {
 		setError(null);
 		setBusy(true);
 		setProblem(null);
-		const result = await manage.fetcher(api.setupLinks(manage.merchantId, manage.websiteId), {
+		const result = await apiFetch(api.setupLinks(manage.merchantId, manage.websiteId), {
 			method: 'POST',
 			body: { days: n, values, install },
 		});
@@ -782,7 +777,7 @@ function ShareLinks({ manage, initial }) {
 	const revoke = async (link) => {
 		setBusy(link.linkId);
 		setProblem(null);
-		const result = await manage.fetcher(api.setupLink(manage.merchantId, manage.websiteId, link.linkId), { method: 'DELETE' });
+		const result = await apiFetch(api.setupLink(manage.merchantId, manage.websiteId, link.linkId), { method: 'DELETE' });
 		setBusy(null);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -853,7 +848,7 @@ function ShareLinks({ manage, initial }) {
  * @param {SetupPageProps} props
  */
 export function MerchantSetupView({ merchantId, websiteId, ...props }) {
-	return <SetupView {...props} manage={{ fetcher: apiFetch, merchantId, websiteId }} canSwitch={false} />;
+	return <SetupView {...props} manage={{ merchantId, websiteId }} canSwitch={false} />;
 }
 
 /**
@@ -871,7 +866,7 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 	/** @param {ReachableProduct} product @param {string} feature */
 	const switchOn = async (product, feature) => {
 		setSwitching(`${product.productId}:${feature}`);
-		const result = await manage.fetcher(api.setupFeatures(manage.merchantId, manage.websiteId), {
+		const result = await apiFetch(api.setupFeatures(manage.merchantId, manage.websiteId), {
 			method: 'POST',
 			body: { productId: product.productId, feature },
 		});
@@ -894,7 +889,7 @@ export function SetupView({ sheet: initial, links, manage, back, canSwitch }) {
 	};
 	const refresh = async () => {
 		setRefreshing(true);
-		const result = await manage.fetcher(api.setup(manage.merchantId, manage.websiteId, { fresh: true }));
+		const result = await apiFetch(api.setup(manage.merchantId, manage.websiteId, { fresh: true }));
 		setRefreshing(false);
 		if (!result.ok) {
 			toast.show({ tone: 'danger', title: describeProblem(result.problem) });

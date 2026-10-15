@@ -12,7 +12,7 @@ import { Link } from '../../link.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { RangeSelect } from '../../views/range.js';
 import { useNavigation } from '../../navigation.js';
-import { usePagedList } from '../client.js';
+import { usePagedList } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem } from './common.js';
 

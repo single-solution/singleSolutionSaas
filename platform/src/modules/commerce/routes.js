@@ -10,6 +10,7 @@
  *   that need attention, and the billing of the merchants on a page.
  * @module
  */
+import { isId } from '@ss/contracts';
 import { defineRoute, ok, created, problem } from '../../infra/http.js';
 import { PERMISSIONS as P } from '../../infra/rbac.js';
 import { checkAddProduct, checkDayRange, checkReceipt } from './core/validate.js';
@@ -177,7 +178,7 @@ export const commerceRoutes = (service, now) => {
 			handler: async (c) => {
 				const ids = String(c.query.ids ?? '')
 					.split(',')
-					.filter((id) => /^mer_[a-z0-9]+$/.test(id));
+					.filter((id) => isId(id, 'mer'));
 				return { items: await service.billingSummaries(ids) };
 			},
 		}),

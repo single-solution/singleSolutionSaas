@@ -63,10 +63,6 @@ const SYSTEM_COLLECTION = COLLECTIONS.system;
  * @property {Date} updatedAt
  */
 
-/** Logo file types (never SVG) and size cap (PLAN 0.8.2 Branding). */
-export const LOGO_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
-export const LOGO_MAX_BYTES = 200 * 1024;
-
 const MAIL_AAD = { purpose: 'platform-mail' };
 
 /**

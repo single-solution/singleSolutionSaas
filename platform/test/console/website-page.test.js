@@ -53,6 +53,22 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+/**
+ * Answer the page's API calls (`fetch`) with `answer`, one API result per call; each call is kept in `seen` as
+ * `[path, { method, body? }]`.
+ * @param {(path: string, init: { method: string, body?: unknown }) => Promise<any>} answer
+ * @param {Array<[string, any]>} [seen]
+ */
+const stubApi = (answer, seen = []) => {
+	vi.stubGlobal('fetch', async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
+		const call = { method: init.method ?? 'GET', ...(init.body === undefined ? {} : { body: JSON.parse(String(init.body)) }) };
+		seen.push([String(path), call]);
+		const result = await answer(String(path), call);
+		return new Response(JSON.stringify(result.ok ? result.data : result.problem), { status: result.status });
+	});
+	return seen;
+};
+
 /** @param {import('react').ReactNode} node */
 const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</ToastProvider>);
 
@@ -381,13 +397,12 @@ describe('website cards (jsdom)', () => {
 	});
 
 	it('shows failed token and usage loads in their dialogs', async () => {
-		const failing = async () => ({ ok: /** @type {const} */ (false), status: 500, problem: { status: 500, title: 'Boom' } });
+		stubApi(async () => ({ ok: false, status: 500, problem: { status: 500, title: 'Boom' } }));
 		withToasts(
 			<WebsiteCard
 				website={{ websiteId: 'web_1', merchantId: 'mer_1', domain: 'shop.com' }}
 				cards={[]}
 				can={{ manage: true, removeWebsite: false, tokens: true, open: false }}
-				fetcher={failing}
 				launch={() => ({ path: '/x' })}
 			/>,
 		);
@@ -416,15 +431,10 @@ describe('website cards (jsdom)', () => {
 			browserToken: 'browser-token',
 			serverToken: { canShow: true },
 		};
-		/** @type {Array<[string, any]>} */
-		const seen = [];
 		/** @type {(path: string, init?: any) => Promise<any>} */
 		let answer = async () => ({ ok: false, status: 409, problem: { status: 409, detail: 'Cannot be shown: regenerate.' } });
-		const fetcher = async (/** @type {string} */ path, /** @type {any} */ init) => {
-			seen.push([path, init]);
-			return answer(path, init);
-		};
-		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" fetcher={fetcher} />);
+		const seen = stubApi((path, init) => answer(path, init));
+		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" />);
 		expect(shows('Widget script tag')).toBe(false); // no widgets
 		expect(document.querySelector('a')).toBeNull(); // no docs
 		await press('Reveal');
@@ -458,13 +468,12 @@ describe('website cards (jsdom)', () => {
 				domain="shop.com"
 				merchantId="mer_1"
 				websiteId="web_1"
-				fetcher={fetcher}
 			/>,
 		);
 		expect(shows('Cannot be shown: regenerate')).toBe(true);
 		cleanup();
 		answer = async () => ({ ok: false, status: 403, problem: { status: 403, detail: 'Not yours.', type: 'forbidden' } });
-		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" fetcher={fetcher} />);
+		withToasts(<InstallBlock entry={entry} domain="shop.com" merchantId="mer_1" websiteId="web_1" />);
 		await press('Copy', /** @type {HTMLElement} */ (button('Regenerate').parentElement));
 		await until(() => shows('Not yours.'));
 		await settle(1);

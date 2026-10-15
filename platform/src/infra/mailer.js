@@ -42,8 +42,13 @@ import { MAIL_TEXTS, supportLine } from '../texts/mail.js';
 const TIMEOUT_MS = 10_000;
 const ADDRESS =
 	/^[^\s@<>()",;:\\[\]]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
-/** @type {MailContext} */
-const DEFAULT_CONTEXT = Object.freeze({ brand: 'Single Solution', support: { email: null, phone: null, whatsapp: null } });
+
+/**
+ * The Branding name and support contact of the Portal's emails.
+ * @param {import('./config.js').PortalSettings} settings
+ * @returns {MailContext}
+ */
+export const mailContextOf = (settings) => ({ brand: settings.branding.name, support: settings.support });
 
 /**
  * @param {string} text
@@ -74,10 +79,10 @@ const checkedLink = (link) => {
  * Render a template (pure).
  * @param {MailTemplate} template
  * @param {Record<string, string | null | undefined>} data
- * @param {MailContext} [context] Branding name and support contact
+ * @param {MailContext} context Branding name and support contact
  * @returns {RenderedMail}
  */
-export const renderMail = (template, data, context = DEFAULT_CONTEXT) => {
+export const renderMail = (template, data, context) => {
 	if (!Object.hasOwn(MAIL_TEXTS, template)) throw new TypeError(`unknown mail template: ${template}`);
 	const spec = /** @type {import('../texts/mail.js').MailText} */ (MAIL_TEXTS[template]);
 	const link = spec.action ? checkedLink(data.link) : null;
@@ -161,7 +166,7 @@ const nodemailerTransport = (options) =>
 /**
  * SMTP mailer (pooled; the transport is created on first send).
  * @param {{ smtp: SmtpConfig, from: string, isProduction: boolean, logger: Logger, createTransport?: TransportFactory,
- *   context?: () => MailContext }} options
+ *   context: MailContext }} options
  * @returns {Mailer}
  */
 export const createSmtpMailer = ({ smtp, from, isProduction, logger, createTransport = nodemailerTransport, context }) => {
@@ -171,7 +176,7 @@ export const createSmtpMailer = ({ smtp, from, isProduction, logger, createTrans
 	return Object.freeze({
 		available: true,
 		send: async ({ to, template, data }) => {
-			const rendered = renderMail(template, data, context?.() ?? DEFAULT_CONTEXT);
+			const rendered = renderMail(template, data, context);
 			const recipient = checkedRecipient(to);
 			transport ??= Promise.resolve(createTransport(options));
 			try {
@@ -193,14 +198,14 @@ export const createSmtpMailer = ({ smtp, from, isProduction, logger, createTrans
 /**
  * Development mailer: logs the rendered text (including its one-time link). Never used in production.
  * @param {Logger} logger
- * @param {() => MailContext} [context]
+ * @param {MailContext} context
  * @returns {Mailer}
  */
 export const createLogMailer = (logger, context) =>
 	Object.freeze({
 		available: true,
 		send: async ({ to, template, data }) => {
-			const rendered = renderMail(template, data, context?.() ?? DEFAULT_CONTEXT);
+			const rendered = renderMail(template, data, context);
 			logger.info('mail (development mailer)', { to: checkedRecipient(to), template, subject: rendered.subject, ...data });
 		},
 	});
@@ -221,17 +226,13 @@ export const createUnavailableMailer = () =>
 /**
  * The Portal's mailer for a configuration: SMTP when configured, else logging (development/test) or unavailable
  * (production and preview).
- * @param {{ config: Pick<import('./config.js').PortalConfig, 'env' | 'isProduction' | 'mail'> & { settings?: import('./config.js').PortalSettings },
- *   logger: Logger, createTransport?: TransportFactory }} options
+ * @param {{ config: Pick<import('./config.js').PortalConfig, 'env' | 'isProduction' | 'mail' | 'settings'>, logger: Logger,
+ *   createTransport?: TransportFactory }} options
  * @returns {Mailer}
  */
 export const createPlatformMailer = ({ config, logger, createTransport }) => {
 	const { smtp, from } = config.mail;
-	/** @returns {MailContext} */
-	const context = () => ({
-		brand: config.settings?.branding.name ?? DEFAULT_CONTEXT.brand,
-		support: config.settings?.support ?? DEFAULT_CONTEXT.support,
-	});
+	const context = mailContextOf(config.settings);
 	if (smtp && from)
 		return createSmtpMailer({
 			smtp,

@@ -11,7 +11,7 @@ import { ADMIN, TWO_STEP } from '../../../texts/console.js';
 import { Link, NavLink } from '../../link.js';
 import { accentStyle } from '../../views/brand.js';
 import { TwoStepSetup } from '../../views/login-settings.js';
-import { adminFetch } from '../client.js';
+import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { RoleBadge, adminCan } from './common.js';
 
@@ -62,19 +62,19 @@ export const adminSections = (admin, pathname) => [
 ];
 
 /**
- * @param {{ admin: any, twoStepRequired?: boolean, branding?: { name: string, accent: string }, children: import('react').ReactNode }} props
+ * @param {{ admin: any, twoStepRequired?: boolean, branding: { name: string, accent: string }, children: import('react').ReactNode }} props
  */
 export function AdminShell({ admin, twoStepRequired = false, branding, children }) {
 	const pathname = usePathname() ?? '';
 	const signOut = async () => {
-		await adminFetch(adminApi.signOut(), { method: 'POST', redirectOn401: false });
+		await apiFetch(adminApi.signOut(), { method: 'POST', redirectOn401: false });
 		window.location.assign(adminRoutes.login());
 	};
 	return (
 		<ToastProvider>
-			<div style={accentStyle(branding?.accent)}>
+			<div style={accentStyle(branding.accent)}>
 				<AppShell
-					brand={{ name: branding?.name ?? 'Single Solution', tagline: ADMIN.consoleTagline }}
+					brand={{ name: branding.name, tagline: ADMIN.consoleTagline }}
 					linkAs={NavLink}
 					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
 					actions={

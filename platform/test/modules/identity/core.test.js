@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as I from '../../../src/modules/identity/core/inputs.js';
 import { linkFor } from '../../../src/modules/identity/core/links.js';
-import { COUNTRY_CODES, isCountryCode } from '../../../src/modules/identity/core/countries.js';
+import { COUNTRY_CHOICES, COUNTRY_CODES, isCountryCode } from '../../../src/modules/identity/core/countries.js';
 import { iso, presentAdmin, presentMerchant, presentWebsite } from '../../../src/modules/identity/core/present.js';
 import {
 	decodeRevocationCursor,
@@ -53,6 +53,13 @@ describe('inputs: fields', () => {
 	});
 	it('countries (ISO 3166-1 alpha-2) and optional texts', () => {
 		expect(COUNTRY_CODES).toHaveLength(249);
+		// the pickers list them by name, accents ignored (Åland Islands among the A's, not after Zimbabwe), the same
+		// order on the server and in the browser
+		const names = COUNTRY_CHOICES.map((c) => c.label);
+		expect(names).toHaveLength(249);
+		expect(names.slice(0, 3)).toEqual(['Afghanistan', 'Åland Islands', 'Albania']);
+		expect(names.at(-1)).toBe('Zimbabwe');
+		expect(names.indexOf('Côte d’Ivoire')).toBe(names.indexOf('Costa Rica') + 1);
 		expect(isCountryCode('US')).toBe(true);
 		expect(isCountryCode('UK')).toBe(false);
 		expect(I.country(' us ')).toEqual({ ok: true, value: 'US' });

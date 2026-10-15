@@ -172,6 +172,9 @@ describe('validation', () => {
 		});
 		for (const query of [
 			{ from: 'yesterday' },
+			// a day the calendar does not have is refused (it never becomes another day)
+			{ from: '2026-02-31' },
+			{ to: '2026-09-31' },
 			{ from: '2026-09-02', to: '2026-09-01' },
 			{ from: '2024-01-01', to: '2026-01-01' },
 			{ websiteId: 'bad' },

@@ -3,6 +3,7 @@
  * `{ ok: false, errors: [{ path, message }] }` and refuses unknown properties.
  * @module
  */
+import { isId } from '@ss/contracts';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 /**
@@ -11,7 +12,6 @@
  */
 
 const JTI = /^[A-Za-z0-9_-]{16,256}$/;
-const ID = /^[a-z]{2,8}_[0-9a-z]{10,64}$/;
 
 /**
  * @param {unknown} body
@@ -77,8 +77,7 @@ export const parseStatus = (body) => {
 export const parseAdminLaunch = (body) => {
 	const { input, errors } = open(body ?? {}, ['websiteId']);
 	const websiteId = input.websiteId ?? null;
-	if (websiteId !== null && (typeof websiteId !== 'string' || !ID.test(websiteId)))
-		errors.push({ path: '/websiteId', message: 'must be a website id or null' });
+	if (websiteId !== null && !isId(websiteId)) errors.push({ path: '/websiteId', message: 'must be a website id or null' });
 	return done(errors, { websiteId: /** @type {string | null} */ (websiteId) });
 };
 

@@ -59,7 +59,7 @@ export const merchantSections = (pathname) => {
 
 /**
  * @param {{ me: any, merchantId: string | null, websites: any[], billing: any, children: import('react').ReactNode,
- *   branding?: { name: string, accent: string, support?: any } }} props
+ *   branding: { name: string, accent: string, support?: any } }} props
  */
 export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, children, branding }) {
 	const pathname = usePathname() ?? '';
@@ -79,12 +79,12 @@ export function ConsoleShell({ me, merchantId, websites, billing: frameBilling, 
 	return (
 		<BillingContext.Provider value={setBilling}>
 			<ToastProvider>
-				<div style={accentStyle(branding?.accent)}>
+				<div style={accentStyle(branding.accent)}>
 					<AppShell
-						brand={{ name: branding?.name ?? 'Single Solution' }}
+						brand={{ name: branding.name }}
 						linkAs={NavLink}
 						sections={merchantSections(pathname)}
-						banner={<BillingBanner summary={billing} contact={contactLine(branding?.support)} />}
+						banner={<BillingBanner summary={billing} contact={contactLine(branding.support)} />}
 						topbar={
 							<>
 								<span

@@ -108,6 +108,43 @@ export const useResource = (path, initial, { problem: initialProblem = null } = 
 };
 
 /**
+ * A cursor-paginated list (`{ items, nextCursor }`): the page loaded on the server, then Load more appends the next.
+ * @param {(cursor: string | null) => string | null} pathOf GET path for a cursor (null = not loadable)
+ * @param {{ items?: any[], nextCursor?: string | null } | null | undefined} initial
+ */
+export const usePagedList = (pathOf, initial) => {
+	const [items, setItems] = useState(/** @type {any[]} */ (initial?.items ?? []));
+	const [cursor, setCursor] = useState(/** @type {string | null} */ (initial?.nextCursor ?? null));
+	const [loading, setLoading] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const ref = useRef(pathOf);
+	ref.current = pathOf;
+	const load = useCallback(async (/** @type {string | null} */ after = null) => {
+		const path = ref.current(after);
+		if (!path) return;
+		setLoading(true);
+		setProblem(null);
+		const result = await apiFetch(path);
+		setLoading(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		const page = /** @type {any} */ (result.data);
+		setItems((list) => (after ? [...list, ...(page?.items ?? [])] : (page?.items ?? [])));
+		setCursor(page?.nextCursor ?? null);
+	}, []);
+	return {
+		items,
+		cursor,
+		loading,
+		problem,
+		reload: () => load(null),
+		more: () => (cursor ? load(cursor) : Promise.resolve()),
+	};
+};
+
+/**
  * Value of `#token=…` (or another name, such as a share link's `#key=…`) in the URL fragment: email and share links
  * carry their secret there so it never reaches servers or logs. Removes the fragment from the address bar once read.
  * @param {string} [name]

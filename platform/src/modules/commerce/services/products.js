@@ -224,10 +224,10 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 				name: await deps.productName(String(doc.productId)),
 				status: productStatusOf({ added: true, merchantStatus: summary.status }),
 				featuresOn: live?.featuresOn ?? [],
-				featuresVersion: Number(doc.featuresVersion ?? 0),
+				featuresVersion: doc.featuresVersion,
 				hourlyCost,
 				dailyCost: 24 * hourlyCost,
-				addedAt: doc.addedAt instanceof Date ? doc.addedAt.toISOString() : null,
+				addedAt: doc.addedAt.toISOString(),
 			});
 		}
 		return out;
@@ -282,7 +282,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		if (!doc) throw problem('website_not_found', 'This website never had this product.');
 		const website = await deps.findWebsite(websiteId);
 		if (!website || website.status !== 'active') throw problem('website_not_found', 'This website was removed.');
-		if (report.version <= Number(doc.featuresVersion ?? 0))
+		if (report.version <= doc.featuresVersion)
 			throw problem('conflict', `Feature report ${report.version} is not higher than ${doc.featuresVersion}.`);
 		const prices = await repo.lastPriceList(productId);
 		/** @type {Map<string, Doc>} */
@@ -306,7 +306,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 		// the switches and their money history in one transaction
 		await ctx.withTransaction(async (session) => {
 			const changed = await repo.productsOf(merchantId).updateOne(
-				{ merchantId, _id: doc._id, featuresVersion: doc.featuresVersion ?? 0 },
+				{ merchantId, _id: doc._id, featuresVersion: doc.featuresVersion },
 				{
 					$set: {
 						on: keys,
@@ -356,7 +356,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 			status,
 			graceEndsAt: graceEnd === null ? null : new Date(graceEnd).toISOString(),
 			todayMillicredits,
-			featuresVersion: Number(doc.featuresVersion ?? 0),
+			featuresVersion: doc.featuresVersion,
 			validUntil: new Date(validUntil).toISOString(),
 		};
 	};

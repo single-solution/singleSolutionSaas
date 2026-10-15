@@ -13,7 +13,8 @@ import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
 import { query } from '../../src/console/paths.js';
 import { AdminShell, adminSections } from '../../src/console/admin/views/shell.js';
 import { MerchantsView } from '../../src/console/admin/views/merchants.js';
-import { OverviewView, dayBars } from '../../src/console/admin/views/overview.js';
+import { OverviewView } from '../../src/console/admin/views/overview.js';
+import { creditDayBars } from '../../src/console/views/billing.js';
 import { ActivityView } from '../../src/console/admin/views/activity.js';
 import { AdminsView } from '../../src/console/admin/views/admins.js';
 import { MyAccountView } from '../../src/console/admin/views/account.js';
@@ -116,7 +117,7 @@ describe('admin console smoke', () => {
 			expect(shell).toContain('child');
 			const pending = text(
 				ssr(
-					<AdminShell admin={owner} twoStepRequired>
+					<AdminShell admin={owner} twoStepRequired branding={{ name: 'Single Solution', accent: '#4f46e5' }}>
 						<p>hidden</p>
 					</AdminShell>,
 				),
@@ -445,8 +446,8 @@ describe('admin console smoke', () => {
 		expect(adminRoutes.products({ status: 'active' })).toBe('/admin/products?status=active');
 		expect(adminApi.productWebsites('notes', 'abc')).toBe('/v1/admin/products/notes/websites?cursor=abc');
 		expect(adminApi.launch('notes')).toBe('/v1/admin/products/notes/launch');
-		expect(dayBars([{ day: '2026-10-01', amount: 1500 }])).toEqual([{ label: '10-01', value: 1.5, hint: '2026-10-01' }]);
-		expect(dayBars(undefined)).toEqual([]);
+		expect(creditDayBars([{ day: '2026-10-01', amount: 1500 }])).toEqual([{ label: '10-01', value: 1.5, hint: '2026-10-01' }]);
+		expect(creditDayBars(undefined)).toEqual([]);
 		const features = [{ key: 'notes', name: 'Notes' }];
 		expect(featureNames(features, ['notes', 'gone'])).toBe('Notes, gone');
 		expect(featureNames(features, [])).toBe('None');

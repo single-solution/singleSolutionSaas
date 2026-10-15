@@ -3,7 +3,8 @@
  * of field errors (`{ path, message }`, JSON-pointer paths). Objects are closed: unknown members are errors.
  * @module
  */
-import { normaliseDomain } from '@ss/contracts';
+import { ADMIN_ROLES, isId, normaliseDomain } from '@ss/contracts';
+import { EMAIL_ADDRESS, hasControlCharacters } from '../../../infra/util.js';
 import { isCountryCode } from './countries.js';
 
 /** @typedef {{ path: string, message: string }} FieldError */
@@ -19,12 +20,9 @@ import { isCountryCode } from './countries.js';
 
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 1024;
-const ADMIN_ROLE_NAMES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
 /** Merchant field lengths (PLAN 0.8.4: chosen by the builder, awaiting owner review). */
 const MERCHANT_FIELD_MAX = Object.freeze({ name: 120, ownerName: 120, phone: 40, address: 300 });
 
-const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]+$/;
-const ID = /^[a-z]{2,8}_[0-9a-z]{10,64}$/;
 const TOKEN = /^[A-Za-z0-9_-]{20,128}$/;
 const OTP = /^\d{6}$/;
 const RECOVERY = /^[a-z2-7]{5}-?[a-z2-7]{5}$/i;
@@ -51,7 +49,7 @@ const bad = (message) => ({ ok: false, message });
 export const email = (value) => {
 	if (typeof value !== 'string') return bad('must be an email address');
 	const v = value.trim().toLowerCase();
-	if (v.length === 0 || v.length > 254 || !EMAIL.test(v)) return bad('must be an email address');
+	if (v.length === 0 || v.length > 254 || !EMAIL_ADDRESS.test(v)) return bad('must be an email address');
 	return okv(v);
 };
 
@@ -82,8 +80,7 @@ export const text = (max) => (value) => {
 	if (typeof value !== 'string') return bad('must be a string');
 	const v = value.trim();
 	if (v.length === 0 || v.length > max) return bad(`must be 1..${max} characters`);
-	if ([...v].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f))
-		return bad('must not contain control characters');
+	if (hasControlCharacters(v)) return bad('must not contain control characters');
 	return okv(v);
 };
 
@@ -92,8 +89,7 @@ export const text = (max) => (value) => {
  * @param {string} prefix
  * @returns {Field<string>}
  */
-export const idOf = (prefix) => (value) =>
-	typeof value === 'string' && ID.test(value) && value.startsWith(`${prefix}_`) ? okv(value) : bad(`must be a ${prefix}_ id`);
+export const idOf = (prefix) => (value) => (isId(value, prefix) ? okv(value) : bad(`must be a ${prefix}_ id`));
 
 /** @type {Field<string>} */
 export const token = (value) => (typeof value === 'string' && TOKEN.test(value) ? okv(value) : bad('is invalid'));
@@ -334,9 +330,9 @@ export const inputs = Object.freeze({
 	),
 	reason: /** @type {(b: unknown) => Parsed<{ reason: string }>} */ ((b) => object(b, { reason: text(500) })),
 	adminInvite: /** @type {(b: unknown) => Parsed<{ email: string, role: 'owner' | 'support' | 'finance', copy?: boolean }>} */ (
-		(b) => object(b, { email, role: oneOf(ADMIN_ROLE_NAMES), copy: { optional: bool } })
+		(b) => object(b, { email, role: oneOf(ADMIN_ROLES), copy: { optional: bool } })
 	),
 	adminUpdate: /** @type {(b: unknown) => Parsed<{ email?: string, role?: 'owner' | 'support' | 'finance' }>} */ (
-		(b) => someOf(b, { email: { optional: email }, role: { optional: oneOf(ADMIN_ROLE_NAMES) } })
+		(b) => someOf(b, { email: { optional: email }, role: { optional: oneOf(ADMIN_ROLES) } })
 	),
 });

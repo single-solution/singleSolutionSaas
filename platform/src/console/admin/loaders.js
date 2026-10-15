@@ -2,12 +2,12 @@
  * Admin Console page loaders: the data each page needs, read through the in-process {@link ConsoleApi} with the
  * admin session cookie (public admin API only — "every UI action is an API call"). A loader resolves to
  * `{ ok: true, ... }` or `{ ok: false, status, problem }` (the first required call that failed); optional reads
- * degrade to empty values (`section(...)` keeps the problem so the page can say why a section is empty). Loaders never
- * throw for API failures. Query-string inputs are validated here; anything malformed is ignored.
+ * degrade to empty values. Loaders never throw for API failures. Query-string inputs are validated here; anything malformed is ignored.
  * @module
  */
+import { isId } from '@ss/contracts';
 import { firstFailure, itemsOf, loadWebsiteRows, orElse } from '../loaders.js';
-import { ID, adminApi as paths, merchantFilter } from './paths.js';
+import { adminApi as paths, merchantFilter } from './paths.js';
 import { adminCan } from './rights.js';
 
 /** @typedef {import('../api.js').ConsoleApi} ConsoleApi */
@@ -33,6 +33,9 @@ const pageOf = (r) => {
  * @returns {string | null}
  */
 const pick = (value, pattern) => (typeof value === 'string' && pattern.test(value) ? value : null);
+
+/** An id of the given prefix from a query string (anything else is ignored). @param {unknown} value @param {string} prefix */
+const idOf = (value, prefix) => (isId(value, prefix) ? value : null);
 
 /** @param {unknown} value @param {readonly string[]} allowed */
 const oneOf = (value, allowed) => (typeof value === 'string' && allowed.includes(value) ? value : null);
@@ -266,7 +269,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * @param {{ merchantId?: string, from?: string, to?: string, method?: string, by?: string }} [filter]
  */
 export const loadBilling = async (api, filter = {}) => {
-	const merchantId = pick(filter.merchantId, ID.merchant);
+	const merchantId = idOf(filter.merchantId, 'mer');
 	const from = pick(filter.from, DAY);
 	const to = pick(filter.to, DAY);
 	const method = pick(filter.method?.trim(), /^[^<>]{1,60}$/);
@@ -299,8 +302,8 @@ export const loadBilling = async (api, filter = {}) => {
 export const loadActivity = async (api, filter = {}, admin = null) => {
 	const day = /^\d{4}-\d{2}-\d{2}$/;
 	const f = {
-		merchantId: pick(filter.merchantId, ID.merchant),
-		adminId: pick(filter.adminId, ID.admin),
+		merchantId: idOf(filter.merchantId, 'mer'),
+		adminId: idOf(filter.adminId, 'adm'),
 		from: pick(filter.from, day),
 		to: pick(filter.to, day),
 	};

@@ -103,6 +103,18 @@ export const SETTINGS_BOUNDS = Object.freeze({
 	lowBalanceDays: Object.freeze({ min: 1, max: 30, default: 3 }),
 });
 
+/** Logo file types (never SVG) and size cap (PLAN 0.8.2 Branding). */
+export const LOGO_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
+export const LOGO_MAX_BYTES = 200 * 1024;
+
+/**
+ * The address of the Branding logo (it changes with each new logo, so caches never show an old one), or null.
+ * @param {string} portalUrl
+ * @param {{ hasLogo: boolean, logoVersion: number }} branding
+ */
+export const logoUrlOf = (portalUrl, branding) =>
+	branding.hasLogo ? `${portalUrl}/branding/logo?v=${branding.logoVersion}` : null;
+
 /** @type {Readonly<PortalSettings>} */
 export const DEFAULT_SETTINGS = Object.freeze({
 	security: Object.freeze({ sessionHours: SETTINGS_BOUNDS.sessionHours.default, requireTwoStepForAdmins: false }),
@@ -121,13 +133,18 @@ const LOCAL_OUTBOUND_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
 export const MAIL_FROM = /^(?:[^<>\r\n]{1,100} <[^\s@<>]{1,64}@[^\s@<>]{1,255}>|[^\s@<>]{1,64}@[^\s@<>]{1,255})$/;
 
 /**
+ * The database named by the URI's path; null when it names none, '' when its escapes are malformed (refused).
  * @param {string} uri
  * @returns {string | null}
  */
 const dbNameFromUri = (uri) => {
 	const match = /^mongodb(?:\+srv)?:\/\/[^/]+\/([^?]*)/.exec(uri);
-	const name = match?.[1] ? decodeURIComponent(match[1]) : '';
-	return name.length > 0 ? name : null;
+	if (!match?.[1]) return null;
+	try {
+		return decodeURIComponent(match[1]);
+	} catch {
+		return '';
+	}
 };
 
 const LOCAL_HOST = /^(?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost|127\.0\.0\.1|\[::1\])$/;

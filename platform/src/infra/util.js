@@ -1,5 +1,5 @@
 /**
- * Small pure helpers shared by the infra layer. No I/O.
+ * Small pure helpers shared by the infra layer and the modules. No I/O.
  * @module
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
@@ -73,6 +73,26 @@ export const stableJson = (value) => {
 			.join(',')}}`;
 	}
 	return JSON.stringify(value) ?? 'null';
+};
+
+/** An email address as the Portal accepts it: one `@`, a dot in the domain, no spaces or quoting characters. */
+export const EMAIL_ADDRESS = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]+$/;
+
+/**
+ * True when the text holds a control character (C0 or DEL).
+ * @param {string} text
+ */
+export const hasControlCharacters = (text) => [...text].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f);
+
+/**
+ * Midnight (UTC, ms) of a day `YYYY-MM-DD` the calendar has, else null (`2026-02-31` never becomes March 3).
+ * @param {unknown} value
+ * @returns {number | null}
+ */
+export const utcDayStart = (value) => {
+	if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+	const ms = Date.parse(`${value}T00:00:00Z`);
+	return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value ? ms : null;
 };
 
 /**

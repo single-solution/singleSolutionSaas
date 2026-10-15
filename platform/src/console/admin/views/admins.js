@@ -34,7 +34,7 @@ import {
 } from '@ss/ui';
 import { ADMIN, MORE, TWO_STEP } from '../../../texts/console.js';
 import { useNavigation } from '../../navigation.js';
-import { adminFetch, useAdminResource } from '../client.js';
+import { apiFetch, useResource } from '../../client.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { adminApi, adminRoutes } from '../paths.js';
@@ -57,7 +57,7 @@ function AdminActivity({ adminId }) {
 	const [result, setResult] = useState(/** @type {import('../../api.js').ApiResult<any> | null} */ (null));
 	useEffect(() => {
 		let live = true;
-		void adminFetch(`${adminApi.activity({ adminId })}&limit=10`).then((r) => {
+		void apiFetch(`${adminApi.activity({ adminId })}&limit=10`).then((r) => {
 			if (live) setResult(r);
 		});
 		return () => {
@@ -90,7 +90,7 @@ function AdminActivity({ adminId }) {
 export function AdminsView(props) {
 	const toast = useToast();
 	const ok = props.ok === true;
-	const { data, reload } = useAdminResource(ok ? adminApi.admins() : null, { items: ok ? props.items : [] });
+	const { data, reload } = useResource(ok ? adminApi.admins() : null, { items: ok ? props.items : [] });
 	const [dialog, setDialog] = useState(
 		/** @type {null | { kind: 'invite' | 'email' | 'role' | 'twoStep' | 'remove', admin?: any }} */ (null),
 	);
@@ -115,7 +115,7 @@ export function AdminsView(props) {
 	const call = async (path, method, body) => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(path, { method, ...(body ? { body } : {}) });
+		const result = await apiFetch(path, { method, ...(body ? { body } : {}) });
 		setBusy(false);
 		if (!result.ok) setProblem(result.problem);
 		return result;

@@ -16,6 +16,13 @@ export const query = (params) => {
 	return s ? `?${s}` : '';
 };
 
+/**
+ * A list path with its page cursor (none for the first page).
+ * @param {string} path
+ * @param {string | null} cursor
+ */
+export const withCursor = (path, cursor) => (cursor ? `${path}${path.includes('?') ? '&' : '?'}cursor=${e(cursor)}` : path);
+
 /** The public pages (no console frame): sign-in, the pages of emailed links and a shared Setup sheet. */
 export const PUBLIC_PATHS = Object.freeze([
 	'/login',

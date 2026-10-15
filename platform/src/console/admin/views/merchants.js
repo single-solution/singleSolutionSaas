@@ -39,15 +39,15 @@ import {
 	useToast,
 } from '@ss/ui';
 import { ADMIN, BILLING, MERCHANT_FIELDS, MORE, TWO_STEP, WEBSITE } from '../../../texts/console.js';
-import { api } from '../../paths.js';
+import { api, withCursor } from '../../paths.js';
 import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { COUNTRY_NAMES } from '../../../modules/identity/core/countries.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch } from '../../views/common.js';
-import { ActivityTable, useActivityPages } from '../../views/login-settings.js';
+import { ActivityTable } from '../../views/login-settings.js';
 import { AddWebsiteDialog, MerchantUsageDialog, WebsiteCard } from '../../views/website.js';
 import { useNavigation } from '../../navigation.js';
-import { adminFetch, usePagedList } from '../client.js';
+import { apiFetch, usePagedList } from '../../client.js';
 import { adminApi, adminRoutes, merchantFilter } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 import { AddCreditsDialog, MerchantCredits } from './finance.js';
@@ -118,7 +118,7 @@ export function AddMerchantDialog({ open, onClose, onCreated }) {
 		const body = { name: form.name.trim(), ownerName: form.ownerName.trim(), email: form.email.trim() };
 		for (const key of /** @type {const} */ (['phone', 'address', 'country']))
 			if (form[key].trim()) body[key] = form[key].trim();
-		const result = await adminFetch(adminApi.createMerchant(), { method: 'POST', body });
+		const result = await apiFetch(adminApi.createMerchant(), { method: 'POST', body });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -234,7 +234,7 @@ function MerchantList({ props, admin, selectedId, autoId = null }) {
 		if (!bulk) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.bulk(), {
+		const result = await apiFetch(adminApi.bulk(), {
 			method: 'POST',
 			body: { action: bulk, merchantIds: [...selected], ...(bulk === 'suspend' ? { reason: reason.trim() } : {}) },
 		});
@@ -432,7 +432,7 @@ function MerchantDetail({ detail, admin, back }) {
 	const billing = detail.billing ?? null;
 	const balance = billing?.balance;
 	const nav = useNavigation();
-	const activity = useActivityPages(adminApi.merchantActivity(merchantId), detail.activity, adminFetch);
+	const activity = usePagedList((cursor) => withCursor(adminApi.merchantActivity(merchantId), cursor), detail.activity);
 
 	/**
 	 * @param {string} path
@@ -442,7 +442,7 @@ function MerchantDetail({ detail, admin, back }) {
 	const act = async (path, body, method = 'POST') => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(path, { method, ...(body ? { body } : {}) });
+		const result = await apiFetch(path, { method, ...(body ? { body } : {}) });
 		setBusy(false);
 		if (!result.ok) setProblem(result.problem);
 		return result;
@@ -606,7 +606,6 @@ function MerchantDetail({ detail, admin, back }) {
 									website={row.website}
 									cards={row.cards}
 									can={websiteRights}
-									fetcher={adminFetch}
 									setupHref={adminRoutes.websiteSetup(merchantId, String(row.website.websiteId))}
 									addable={detail.addable}
 									launch={(productId) => ({
@@ -658,7 +657,6 @@ function MerchantDetail({ detail, admin, back }) {
 						setMerchant(m);
 						setDialog(null);
 					}}
-					fetcher={adminFetch}
 				/>
 			</Dialog>
 			<ConfirmDialog
@@ -711,7 +709,6 @@ function MerchantDetail({ detail, admin, back }) {
 			<AddWebsiteDialog
 				open={dialog === 'addWebsite'}
 				merchantId={merchantId}
-				fetcher={adminFetch}
 				onClose={() => setDialog(null)}
 				onAdded={(website) => {
 					setDialog(null);
@@ -723,7 +720,6 @@ function MerchantDetail({ detail, admin, back }) {
 				<MerchantUsageDialog
 					merchantId={merchantId}
 					title={MORE.usageAllTitle(merchant.name)}
-					fetcher={adminFetch}
 					onClose={() => setDialog(null)}
 				/>
 			) : null}

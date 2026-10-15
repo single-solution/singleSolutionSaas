@@ -4,6 +4,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
+import { utcDayStart } from '../../../infra/util.js';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 /**
@@ -101,8 +102,6 @@ export const checkReceipt = (input) => {
 	}));
 };
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * A range of UTC days (`from`, `to` inclusive, `YYYY-MM-DD`; default the last 30 days) with optional filters
  * (`websiteId`, `merchantId`, `method`).
@@ -118,8 +117,7 @@ export const checkDayRange = (query, now) => {
 	/** @param {string | undefined} value @param {string} name @param {string} fallback */
 	const day = (value, name, fallback) => {
 		if (value === undefined || value === '') return fallback;
-		if (!DAY.test(value) || Number.isNaN(Date.parse(value)))
-			errors.push({ path: `/${name}`, message: `${name} must be a UTC day YYYY-MM-DD` });
+		if (utcDayStart(value) === null) errors.push({ path: `/${name}`, message: `${name} must be a UTC day YYYY-MM-DD` });
 		return value;
 	};
 	const from = day(query.from, 'from', monthAgo);

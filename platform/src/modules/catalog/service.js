@@ -29,6 +29,7 @@ import {
 	issueLaunch as protocolIssueLaunch,
 	verifyConnectResponse,
 } from '@ss/protocol';
+import { logoUrlOf } from '../../infra/config.js';
 import { problem } from '../../infra/http.js';
 import { isDuplicateKey, isObject } from '../../infra/util.js';
 import { launchUrl } from './core/input.js';
@@ -378,7 +379,7 @@ export const createCatalogService = (ctx, options = {}) => {
 			branding: {
 				name: branding.name,
 				accent: branding.accent,
-				logoUrl: branding.hasLogo ? `${ctx.config.portalUrl}/branding/logo?v=${branding.logoVersion}` : null,
+				logoUrl: logoUrlOf(ctx.config.portalUrl, branding),
 			},
 			support: {
 				email: support.email ?? '',

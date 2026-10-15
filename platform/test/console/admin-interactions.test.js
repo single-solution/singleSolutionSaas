@@ -10,14 +10,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/testing.js';
-import { browserOf } from './merchant-harness.js';
+import { browserOf, settle, until } from './merchant-harness.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi } from '../../src/console/admin/paths.js';
-import { adminFetch, adminSignInAgain, useAdminResource } from '../../src/console/admin/client.js';
+import { apiFetch, signInAgain, useResource } from '../../src/console/client.js';
 import { AdminShell } from '../../src/console/admin/views/shell.js';
 import { MyAccountView } from '../../src/console/admin/views/account.js';
 import { ActivityView } from '../../src/console/admin/views/activity.js';
@@ -50,37 +50,6 @@ afterEach(() => {
 	cleanup();
 });
 
-const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Let pending fetches and state updates settle (inside act). */
-const settle = async (rounds = 3) => {
-	for (let i = 0; i < rounds; i += 1)
-		await act(async () => {
-			await sleep(15);
-		});
-};
-
-/**
- * Wait until `check` passes (state updates applied inside act).
- * @param {() => unknown} check
- * @param {number} [timeoutMs]
- */
-const until = async (check, timeoutMs = 10_000) => {
-	const end = Date.now() + timeoutMs;
-	for (;;) {
-		try {
-			const value = check();
-			if (value !== false && value !== null && value !== undefined) return value;
-		} catch (error) {
-			if (Date.now() > end) throw error;
-		}
-		if (Date.now() > end) throw new Error('timed out waiting for the UI');
-		await act(async () => {
-			await sleep(20);
-		});
-	}
-};
-
 /** @param {string} label */
 const button = (label) => {
 	const found = /** @type {HTMLButtonElement[]} */ ([...document.querySelectorAll('button')]).filter(
@@ -93,10 +62,26 @@ const button = (label) => {
 
 /** @param {string} label */
 const press = async (label) => {
+	await until(() => button(label)); // slow to appear under load
 	await act(async () => {
 		button(label).click();
 	});
 	await settle(1);
+};
+
+/**
+ * Press a button of the open dialog once it is there and enabled.
+ * @param {string} label
+ */
+const pressInDialog = async (label) => {
+	const found = () =>
+		/** @type {HTMLButtonElement | undefined} */ (
+			[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === label)
+		);
+	await until(() => found()?.disabled === false);
+	await act(async () => {
+		found()?.click();
+	});
 };
 
 /**
@@ -214,7 +199,7 @@ describe('admin console interactions (jsdom)', () => {
 
 		// ---------------------------------------------------------------- shell and Overview
 		render(
-			<AdminShell admin={me}>
+			<AdminShell admin={me} branding={{ name: 'Single Solution', accent: '#4f46e5' }}>
 				<p>child</p>
 			</AdminShell>,
 		);
@@ -244,22 +229,14 @@ describe('admin console interactions (jsdom)', () => {
 		});
 		await press('Suspend');
 		fillDialog('Reason', 'chargeback');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Suspend')
-			).click();
-		});
+		await pressInDialog('Suspend');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.bulk() && c.status === 200));
 		await until(() => shows('1 done.'));
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Select Else Ltd"]')).click();
 		});
 		await press('Resume');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
-			).click();
-		});
+		await pressInDialog('Resume');
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.bulk() && c.status === 200).length >= 2);
 		await press('Add merchant');
 		fillDialog('Business name', 'Ops Made Ltd');
@@ -269,11 +246,7 @@ describe('admin console interactions (jsdom)', () => {
 		await act(async () => {
 			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Country'), 'GB');
 		});
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Add merchant')
-			).click();
-		});
+		await pressInDialog('Add merchant');
 		const made = /** @type {any} */ (
 			await until(
 				() =>
@@ -308,18 +281,10 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => ownerBrowser.calls.filter((c) => c.path === adminApi.setupLink(madeId) && c.status === 200).length >= 2);
 		await choose('Suspend');
 		fillDialog('Reason', 'unpaid');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Suspend')
-			).click();
-		});
+		await pressInDialog('Suspend');
 		await until(() => shows('Suspended: unpaid'));
 		await choose('Resume');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
-			).click();
-		});
+		await pressInDialog('Resume');
 		await until(() => ownerBrowser.calls.some((c) => c.path === adminApi.resume(madeId) && c.status === 200));
 		// websites: add one (the exact domain); it shows as a card
 		await press('Add website');
@@ -349,11 +314,7 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Edit merchant');
 		fillDialog('Address', 'Industrial area');
 		fillDialog('Owner email (login)', 'olga@made.test');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Save')
-			).click();
-		});
+		await pressInDialog('Save');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
 		);
@@ -383,11 +344,7 @@ describe('admin console interactions (jsdom)', () => {
 		// delete the merchant (no websites left): typed business name
 		await choose('Delete');
 		type(confirmInput(), 'Ops Made Ltd');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Delete')
-			).click();
-		});
+		await pressInDialog('Delete');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.merchant(madeId) && c.status === 204),
 		);
@@ -408,11 +365,7 @@ describe('admin console interactions (jsdom)', () => {
 			</ToastProvider>,
 		);
 		await choose('Turn off two-step');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Turn off two-step')
-			).click();
-		});
+		await pressInDialog('Turn off two-step');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.path === adminApi.merchantTwoStepOff(other.merchantId) && c.status === 200),
 		);
@@ -545,11 +498,7 @@ describe('admin console interactions (jsdom)', () => {
 		await act(async () => {
 			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'support');
 		});
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Invite')
-			).click();
-		});
+		await pressInDialog('Invite');
 		const invited = /** @type {any} */ (
 			await until(
 				() =>
@@ -572,31 +521,19 @@ describe('admin console interactions (jsdom)', () => {
 		await press('Resend invite');
 		await choose('Correct invite email');
 		fillDialog('Email', 'helpdesk@ss.test');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Correct invite email')
-			).click();
-		});
+		await pressInDialog('Correct invite email');
 		await until(() => shows('helpdesk@ss.test'));
 		await choose('Change role');
 		await act(async () => {
 			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'finance');
 		});
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Change role')
-			).click();
-		});
+		await pressInDialog('Change role');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/admins/') && c.status === 200),
 		);
 		await settle(2);
 		await choose('Remove');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Remove')
-			).click();
-		});
+		await pressInDialog('Remove');
 		await until(() =>
 			ownerBrowser.calls.some((c) => c.method === 'DELETE' && c.path.startsWith('/v1/admin/admins/') && c.status === 204),
 		);
@@ -604,7 +541,7 @@ describe('admin console interactions (jsdom)', () => {
 
 		// ---------------------------------------------------------------- client helpers, sign out
 		function Probe() {
-			const r = useAdminResource('/v1/admin/merchants/mer_0000000000000000000000000z', null);
+			const r = useResource('/v1/admin/merchants/mer_0000000000000000000000000z', null);
 			return (
 				<div>
 					<button type="button" onClick={() => void r.reload()}>
@@ -620,11 +557,11 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 		const anonymous = browserOf(portal);
 		vi.stubGlobal('fetch', anonymous.fetch);
-		expect((await adminFetch(adminApi.merchants())).status).toBe(401);
-		adminSignInAgain('/admin/x');
+		expect((await apiFetch(adminApi.merchants())).status).toBe(401);
+		signInAgain('/admin/x');
 		ownerBrowser.use();
 		render(
-			<AdminShell admin={me}>
+			<AdminShell admin={me} branding={{ name: 'Single Solution', accent: '#4f46e5' }}>
 				<p>x</p>
 			</AdminShell>,
 		);

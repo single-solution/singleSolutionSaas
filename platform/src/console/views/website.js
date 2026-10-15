@@ -37,23 +37,23 @@ import {
 } from '@ss/ui';
 import { scriptTag } from '../../modules/catalog/core/install.js';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
+import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api } from '../paths.js';
 import { productTone, ProductStatusBadge, UsageView } from './billing.js';
 import { openDashboard } from './common.js';
 
 /** @typedef {import('@ss/ui/problems').Problem} Problem */
-/** @typedef {import('./common.js').Fetcher} Fetcher */
 /**
  * A product on a website (card).
  * @typedef {{ productId: string, name: string, status: string, featuresOn: string[], dailyCost: number }} ProductCard
  */
 /**
  * Usage of all a merchant's websites, as a dialog: the last 30 UTC days by website, product and feature.
- * @param {{ merchantId: string, title: string, fetcher: Fetcher, onClose: () => void }} props
+ * @param {{ merchantId: string, title: string, onClose: () => void }} props
  */
-export function MerchantUsageDialog({ merchantId, title, fetcher, onClose }) {
-	const result = useOnce(fetcher, api.usage(merchantId));
+export function MerchantUsageDialog({ merchantId, title, onClose }) {
+	const result = useOnce(api.usage(merchantId));
 	return (
 		<Dialog open onClose={onClose} size="lg" title={title}>
 			{!result ? (
@@ -99,9 +99,9 @@ export const websiteDot = (cards) => {
 
 /**
  * Add website (Owner, Support): the exact domain.
- * @param {{ open: boolean, merchantId: string, fetcher: Fetcher, onClose: () => void, onAdded: (website: any) => void }} props
+ * @param {{ open: boolean, merchantId: string, onClose: () => void, onAdded: (website: any) => void }} props
  */
-export function AddWebsiteDialog({ open, merchantId, fetcher, onClose, onAdded }) {
+export function AddWebsiteDialog({ open, merchantId, onClose, onAdded }) {
 	const [domain, setDomain] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState(/** @type {string | null} */ (null));
@@ -112,7 +112,7 @@ export function AddWebsiteDialog({ open, merchantId, fetcher, onClose, onAdded }
 		if (!value) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await fetcher(api.websites(merchantId), { method: 'POST', body: { domain: value } });
+		const result = await apiFetch(api.websites(merchantId), { method: 'POST', body: { domain: value } });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -149,7 +149,6 @@ export function AddWebsiteDialog({ open, merchantId, fetcher, onClose, onAdded }
  * @property {any} website
  * @property {ProductCard[]} cards
  * @property {WebsiteRights} can
- * @property {Fetcher} fetcher
  * @property {(productId: string) => { path: string, body?: unknown }} launch the Open route of a product
  * @property {Array<{ productId: string, name: string }> | null} [addable] active connected products (Add product)
  * @property {(cards: ProductCard[]) => void} [onCardsChange] after a product was added or removed
@@ -162,18 +161,7 @@ export function AddWebsiteDialog({ open, merchantId, fetcher, onClose, onAdded }
  * A website card: domain, daily cost, products, and the dialogs launched from it.
  * @param {WebsiteCardProps} props
  */
-export function WebsiteCard({
-	website,
-	cards: initial,
-	can,
-	fetcher,
-	launch,
-	addable,
-	onCardsChange,
-	onRemoved,
-	headline,
-	setupHref,
-}) {
+export function WebsiteCard({ website, cards: initial, can, launch, addable, onCardsChange, onRemoved, headline, setupHref }) {
 	const toast = useToast();
 	const merchantId = String(website.merchantId);
 	const websiteId = String(website.websiteId);
@@ -194,7 +182,7 @@ export function WebsiteCard({
 	const open = async (card) => {
 		setOpening(card.productId);
 		const { path, body } = launch(card.productId);
-		const result = await openDashboard(fetcher, path, body);
+		const result = await openDashboard(path, body);
 		setOpening(null);
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 	};
@@ -202,7 +190,7 @@ export function WebsiteCard({
 		if (!removing) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await fetcher(api.websiteProduct(merchantId, websiteId, removing.productId), { method: 'DELETE' });
+		const result = await apiFetch(api.websiteProduct(merchantId, websiteId, removing.productId), { method: 'DELETE' });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -215,7 +203,7 @@ export function WebsiteCard({
 	const removeWebsite = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await fetcher(api.website(merchantId, websiteId), { method: 'DELETE', body: { confirm: website.domain } });
+		const result = await apiFetch(api.website(merchantId, websiteId), { method: 'DELETE', body: { confirm: website.domain } });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -384,7 +372,6 @@ export function WebsiteCard({
 				<AddProductDialog
 					merchantId={merchantId}
 					website={website}
-					fetcher={fetcher}
 					products={(addable ?? []).filter((p) => !cards.some((c) => c.productId === p.productId))}
 					onClose={() => setDialog(null)}
 					onAdded={(card) => {
@@ -394,12 +381,8 @@ export function WebsiteCard({
 					}}
 				/>
 			) : null}
-			{dialog === 'tokens' ? (
-				<TokensDialog merchantId={merchantId} website={website} fetcher={fetcher} onClose={() => setDialog(null)} />
-			) : null}
-			{dialog === 'usage' ? (
-				<UsageDialog merchantId={merchantId} website={website} fetcher={fetcher} onClose={() => setDialog(null)} />
-			) : null}
+			{dialog === 'tokens' ? <TokensDialog merchantId={merchantId} website={website} onClose={() => setDialog(null)} /> : null}
+			{dialog === 'usage' ? <UsageDialog merchantId={merchantId} website={website} onClose={() => setDialog(null)} /> : null}
 			<TypedConfirmDialog
 				open={Boolean(removing)}
 				onClose={() => setRemoving(null)}
@@ -430,17 +413,17 @@ export function WebsiteCard({
 
 /**
  * Add product (PLAN 0.5.9): the active connected products not yet on the website.
- * @param {{ merchantId: string, website: any, fetcher: Fetcher, products: Array<{ productId: string, name: string }>,
+ * @param {{ merchantId: string, website: any, products: Array<{ productId: string, name: string }>,
  *   onClose: () => void, onAdded: (card: ProductCard) => void }} props
  */
-function AddProductDialog({ merchantId, website, fetcher, products, onClose, onAdded }) {
+function AddProductDialog({ merchantId, website, products, onClose, onAdded }) {
 	const [busy, setBusy] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	/** @param {string} productId */
 	const add = async (productId) => {
 		setBusy(productId);
 		setProblem(null);
-		const result = await fetcher(api.websiteProducts(merchantId, String(website.websiteId)), {
+		const result = await apiFetch(api.websiteProducts(merchantId, String(website.websiteId)), {
 			method: 'POST',
 			body: { productId },
 		});
@@ -482,30 +465,29 @@ function AddProductDialog({ merchantId, website, fetcher, products, onClose, onA
 
 /**
  * Loads a website's resource once when its dialog opens.
- * @param {Fetcher} fetcher
  * @param {string} path
  */
-const useOnce = (fetcher, path) => {
+const useOnce = (path) => {
 	const [result, setResult] = useState(/** @type {import('./common.js').ApiResult | null} */ (null));
 	useEffect(() => {
 		let live = true;
-		void fetcher(path).then((r) => {
+		void apiFetch(path).then((r) => {
 			if (live) setResult(r);
 		});
 		return () => {
 			live = false;
 		};
-	}, [fetcher, path]);
+	}, [path]);
 	return result;
 };
 
 /**
  * Install and tokens of a website, as a dialog: one install block per product.
- * @param {{ merchantId: string, website: any, fetcher: Fetcher, onClose: () => void }} props
+ * @param {{ merchantId: string, website: any, onClose: () => void }} props
  */
-function TokensDialog({ merchantId, website, fetcher, onClose }) {
+function TokensDialog({ merchantId, website, onClose }) {
 	const websiteId = String(website.websiteId);
-	const result = useOnce(fetcher, api.tokens(merchantId, websiteId));
+	const result = useOnce(api.tokens(merchantId, websiteId));
 	const tokens = /** @type {TokenEntry[]} */ (result?.ok ? (result.data?.items ?? []) : []);
 	return (
 		<Dialog open onClose={onClose} size="lg" title={WEBSITE.tokensOf(website.domain)}>
@@ -524,7 +506,6 @@ function TokensDialog({ merchantId, website, fetcher, onClose }) {
 							domain={website.domain}
 							merchantId={merchantId}
 							websiteId={websiteId}
-							fetcher={fetcher}
 						/>
 					))}
 				</div>
@@ -535,10 +516,10 @@ function TokensDialog({ merchantId, website, fetcher, onClose }) {
 
 /**
  * Usage of a website, as a dialog: the last 30 UTC days by product and feature.
- * @param {{ merchantId: string, website: any, fetcher: Fetcher, onClose: () => void }} props
+ * @param {{ merchantId: string, website: any, onClose: () => void }} props
  */
-function UsageDialog({ merchantId, website, fetcher, onClose }) {
-	const result = useOnce(fetcher, api.usage(merchantId, { websiteId: String(website.websiteId) }));
+function UsageDialog({ merchantId, website, onClose }) {
+	const result = useOnce(api.usage(merchantId, { websiteId: String(website.websiteId) }));
 	return (
 		<Dialog open onClose={onClose} size="lg" title={WEBSITE.usageOf(website.domain)}>
 			{!result ? (
@@ -555,9 +536,9 @@ function UsageDialog({ merchantId, website, fetcher, onClose }) {
 /**
  * One product's install block: the widget script tag (products with widgets), the browser token, the server token
  * (reveal / copy / regenerate with a typed confirmation of the product name) and the docs link (PLAN 0.4.4, 0.8.2).
- * @param {{ entry: TokenEntry, domain: string, merchantId: string, websiteId: string, fetcher: Fetcher }} props
+ * @param {{ entry: TokenEntry, domain: string, merchantId: string, websiteId: string }} props
  */
-export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) {
+export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 	const toast = useToast();
 	const [value, setValue] = useState(/** @type {string | null} */ (null));
 	const [shown, setShown] = useState(false);
@@ -571,7 +552,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 		if (value) return value;
 		setBusy(true);
 		setProblem(null);
-		const result = await fetcher(api.reveal(merchantId, websiteId, entry.productId), { method: 'POST' });
+		const result = await apiFetch(api.reveal(merchantId, websiteId, entry.productId), { method: 'POST' });
 		setBusy(false);
 		if (!result.ok) {
 			if (problemCode(result.problem) === 'conflict' || result.status === 409) setCannot(true);
@@ -597,7 +578,7 @@ export function InstallBlock({ entry, domain, merchantId, websiteId, fetcher }) 
 	const regenerate = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await fetcher(api.regenerate(merchantId, websiteId, entry.productId), {
+		const result = await apiFetch(api.regenerate(merchantId, websiteId, entry.productId), {
 			method: 'POST',
 			body: { kind: 'server' },
 		});

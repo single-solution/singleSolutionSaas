@@ -112,9 +112,3 @@ export const adminApi = Object.freeze({
  */
 export const merchantFilter = (status) =>
 	status === 'setup_pending' ? { setup: /** @type {const} */ ('pending') } : { status: status ?? null };
-
-/** Id shapes accepted from query strings (anything else is ignored). */
-export const ID = Object.freeze({
-	merchant: /^mer_[0-9a-z]{10,64}$/,
-	admin: /^adm_[0-9a-z]{10,64}$/,
-});

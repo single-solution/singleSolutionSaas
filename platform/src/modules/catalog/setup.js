@@ -287,7 +287,7 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 			values: doc.values === true,
 			install: doc.install === true,
 			openedAt: doc.openedAt ? new Date(doc.openedAt).toISOString() : null,
-			opens: Number(doc.opens ?? 0),
+			opens: doc.opens,
 		};
 	};
 

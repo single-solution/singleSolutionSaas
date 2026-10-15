@@ -28,8 +28,9 @@ import {
 	useToast,
 } from '@ss/ui';
 import { AUTH, LOGIN, MORE, TWO_STEP } from '../../texts/console.js';
-import { apiFetch } from '../client.js';
+import { apiFetch, usePagedList } from '../client.js';
 import { Link } from '../link.js';
+import { withCursor } from '../paths.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -601,41 +602,12 @@ export function ActivityTable({
 	);
 }
 
-/** @param {string} path @param {string} cursor */
-const withCursor = (path, cursor) => `${path}${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}`;
-
-/**
- * Activity pages after the first (`{ items, nextCursor }` from `path`): Load more appends the next page.
- * @param {string} path
- * @param {{ items?: any[], nextCursor?: string | null } | null | undefined} initial
- * @param {(path: string) => Promise<import('../client.js').ApiResult<any>>} [fetcher]
- */
-export const useActivityPages = (path, initial, fetcher = apiFetch) => {
-	const [items, setItems] = useState(/** @type {any[]} */ (initial?.items ?? []));
-	const [cursor, setCursor] = useState(/** @type {string | null} */ (initial?.nextCursor ?? null));
-	const [loading, setLoading] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const more = async () => {
-		if (!cursor) return;
-		setLoading(true);
-		const result = await fetcher(withCursor(path, cursor));
-		setLoading(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setItems((list) => [...list, ...(result.data?.items ?? [])]);
-		setCursor(result.data?.nextCursor ?? null);
-	};
-	return { items, cursor, loading, problem, more };
-};
-
 /**
  * The person's own activity, loaded from `path` (`{ items, nextCursor }`), with Load more.
  * @param {{ path: string, initial?: { items: any[], nextCursor?: string | null } }} props
  */
 export function OwnActivity({ path, initial = { items: [], nextCursor: null } }) {
-	const pages = useActivityPages(path, initial);
+	const pages = usePagedList((cursor) => withCursor(path, cursor), initial);
 	return (
 		<Card title={LOGIN.activityTitle}>
 			{pages.problem ? <Callout tone="danger">{describeProblem(pages.problem)}</Callout> : null}

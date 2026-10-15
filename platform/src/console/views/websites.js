@@ -80,7 +80,7 @@ export function OverviewView(props) {
 	const open = async (website, card) => {
 		const key = `${website.websiteId}:${card.productId}`;
 		setOpening(key);
-		const result = await openDashboard(apiFetch, api.launch(props.merchantId, website.websiteId, card.productId));
+		const result = await openDashboard(api.launch(props.merchantId, website.websiteId, card.productId));
 		setOpening(null);
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 	};
@@ -343,7 +343,6 @@ export function WebsitesView(props) {
 								website={selected.website}
 								cards={selected.cards}
 								can={{ manage: false, removeWebsite: false, tokens: true, open: true }}
-								fetcher={apiFetch}
 								setupHref={routes.websiteSetup(shownId)}
 								launch={(productId) => ({ path: api.launch(props.merchantId, shownId, productId) })}
 							/>

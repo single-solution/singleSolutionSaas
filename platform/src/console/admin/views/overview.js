@@ -34,23 +34,13 @@ import {
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
+import { DaysLeft, MerchantStatusBadge, creditDayBars, formatChartCredits } from '../../views/billing.js';
 import { openDashboard } from '../../views/common.js';
 import { ActivityTimeline } from '../../views/login-settings.js';
-import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 import { AddCreditsDialog } from './finance.js';
 import { AddMerchantDialog } from './merchants.js';
-
-/**
- * Credits per UTC day as chart bars.
- * @param {ReadonlyArray<{ day: string, amount: number }> | undefined} days
- */
-export const dayBars = (days) => (days ?? []).map((d) => ({ label: d.day.slice(5), value: d.amount / 1000, hint: d.day }));
-
-/** @param {number} v credits */
-const creditsOf = (v) => formatCredits(Math.round(v * 1000));
 
 /** At most this many merchants are listed under "Needs you"; the rest are one link away. */
 const NEEDS_MERCHANTS = 5;
@@ -88,7 +78,7 @@ export function OverviewView(props) {
 	const inactive = products.filter((p) => p.status !== 'active').length;
 	/** @param {any} p */
 	const openAsAdmin = async (p) => {
-		const result = await openDashboard(adminFetch, adminApi.launch(p.productId), { websiteId: null });
+		const result = await openDashboard(adminApi.launch(p.productId), { websiteId: null });
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 	};
 
@@ -219,7 +209,12 @@ export function OverviewView(props) {
 			<div className="@container">
 				<div className="grid gap-6 @4xl:grid-cols-2">
 					<Card title={ADMIN.creditsChart}>
-						<BarChart label={ADMIN.creditsChart} data={dayBars(totalDays(products))} format={creditsOf} height={132} />
+						<BarChart
+							label={ADMIN.creditsChart}
+							data={creditDayBars(totalDays(products))}
+							format={formatChartCredits}
+							height={132}
+						/>
 					</Card>
 					<Card
 						title={ADMIN.merchantsTitle}
@@ -322,7 +317,12 @@ export function OverviewView(props) {
 												) : null}
 											</span>
 										}>
-										<BarChart label={PRODUCTS.earnedChart} data={dayBars(p.days)} format={creditsOf} height={96} />
+										<BarChart
+											label={PRODUCTS.earnedChart}
+											data={creditDayBars(p.days)}
+											format={formatChartCredits}
+											height={96}
+										/>
 									</Card>
 								</li>
 							))}

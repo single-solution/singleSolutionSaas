@@ -35,7 +35,7 @@ import { FilterForm } from '../../navigation.js';
 import { Link } from '../../link.js';
 import { BillingStats, DaysLeft, MerchantStatusBadge, ReceiptsTable, formatChartCredits } from '../../views/billing.js';
 import { RangeSelect } from '../../views/range.js';
-import { adminFetch } from '../client.js';
+import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
 
@@ -84,7 +84,7 @@ export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 	const save = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.addReceipt(merchant.merchantId), {
+		const result = await apiFetch(adminApi.addReceipt(merchant.merchantId), {
 			method: 'POST',
 			idempotencyKey: key,
 			body: {
@@ -255,7 +255,7 @@ function PickMerchantDialog({ merchants, initial = null, onClose, onPicked }) {
 		if (!merchantId) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.billing(merchantId));
+		const result = await apiFetch(adminApi.billing(merchantId));
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);

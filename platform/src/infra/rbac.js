@@ -30,9 +30,6 @@
  * @typedef {{ merchantId?: string | null, websiteId?: string | null }} Resource
  */
 
-/** Admin roles (PLAN 0.0). */
-export const ADMIN_ROLES = Object.freeze(/** @type {AdminRole[]} */ (['owner', 'support', 'finance']));
-
 /**
  * The permissions, one per row of the rights table (PLAN 0.2) the Portal enforces, plus the read halves the table
  * marks "view".

@@ -4,18 +4,17 @@
  * Overview. Every Settings change is written to Activity.
  * @module
  */
-import { MAIL_FROM, SETTINGS_BOUNDS } from '../../infra/config.js';
+import { LOGO_MAX_BYTES, LOGO_TYPES, MAIL_FROM, SETTINGS_BOUNDS, logoUrlOf } from '../../infra/config.js';
 import { sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
-import { createSmtpMailer } from '../../infra/mailer.js';
-import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../infra/system.js';
+import { createSmtpMailer, mailContextOf } from '../../infra/mailer.js';
+import { EMAIL_ADDRESS, hasControlCharacters } from '../../infra/util.js';
 import { createActivity } from './activity.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
 /** @typedef {{ path: string, message: string }} FieldError */
 
-const EMAIL = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]+$/;
 const ACCENT = /^#[0-9a-fA-F]{6}$/;
 const PHONE = /^[0-9+()\-.\s]{3,40}$/;
 
@@ -45,7 +44,7 @@ const optionalLine = (value, max) => {
 	if (typeof value !== 'string') return { ok: false };
 	const v = value.trim();
 	if (v.length === 0) return { ok: true, value: null };
-	if (v.length > max || [...v].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f)) return { ok: false };
+	if (v.length > max || hasControlCharacters(v)) return { ok: false };
 	return { ok: true, value: v };
 };
 
@@ -144,7 +143,7 @@ export const createSystemService = (ctx) => {
 						: null;
 			if (typeof pass === 'string' && pass.length > 1024) errors.push({ path: '/password', message: 'is too long' });
 			const address = typeof input.senderAddress === 'string' ? input.senderAddress.trim() : '';
-			if (!EMAIL.test(address) || address.length > 254)
+			if (!EMAIL_ADDRESS.test(address) || address.length > 254)
 				errors.push({ path: '/senderAddress', message: 'must be an email address' });
 			const name = optionalLine(input.senderName, 100);
 			if (!name.ok || (name.value ?? '').includes('<'))
@@ -181,7 +180,7 @@ export const createSystemService = (ctx) => {
 				from: state.mail.from,
 				isProduction: ctx.config.isProduction,
 				logger: ctx.logger,
-				context: () => ({ brand: ctx.config.settings.branding.name, support: ctx.config.settings.support }),
+				context: mailContextOf(ctx.config.settings),
 			});
 			try {
 				await mailer.send({ to: admin.email, template: 'test_email', data: {} });
@@ -246,7 +245,7 @@ export const createSystemService = (ctx) => {
 			/** @type {FieldError[]} */
 			const errors = [];
 			const email = optionalLine(input.email, 254);
-			if (!email.ok || (email.value && !EMAIL.test(email.value)))
+			if (!email.ok || (email.value && !EMAIL_ADDRESS.test(email.value)))
 				errors.push({ path: '/email', message: 'must be an email address' });
 			const phone = optionalLine(input.phone, 40);
 			if (!phone.ok || (phone.value && !PHONE.test(phone.value)))
@@ -320,7 +319,7 @@ export const createSystemService = (ctx) => {
 			return {
 				name: branding.name,
 				accent: branding.accent,
-				logoUrl: branding.hasLogo ? `${ctx.config.portalUrl}/branding/logo?v=${branding.logoVersion}` : null,
+				logoUrl: logoUrlOf(ctx.config.portalUrl, branding),
 				support,
 			};
 		},

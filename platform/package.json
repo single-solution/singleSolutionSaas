@@ -18,7 +18,6 @@
 		"build": "next build",
 		"start": "next start -p 4000",
 		"db:memory": "node scripts/dev-mongo.js",
-		"env:dev": "node scripts/dev-env.js",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
 		"test": "vitest run --coverage",
 		"test:watch": "vitest",

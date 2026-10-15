@@ -5,7 +5,6 @@
 import { randomBytes } from 'node:crypto';
 
 const lines = [
-	'NODE_ENV=development',
 	`MONGODB_URI=${process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27999/ss_portal?replicaSet=testset'}`,
 	'PORTAL_URL=http://localhost:4000',
 	`ENCRYPTION_KEY=${randomBytes(32).toString('base64url')}`,

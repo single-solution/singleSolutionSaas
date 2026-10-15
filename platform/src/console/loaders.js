@@ -5,6 +5,7 @@
  * with the admin console (the same `/v1/merchants/…` routes).
  * @module
  */
+import { isId } from '@ss/contracts';
 import { api as paths } from './paths.js';
 
 /** @typedef {import('./api.js').ConsoleApi} ConsoleApi */
@@ -145,8 +146,7 @@ export const loadWebsites = async (api, merchantId, websiteId = null) => {
 export const loadCredits = async (api, merchantId, filter = {}) => {
 	const from = isoDay(filter.from);
 	const to = isoDay(filter.to);
-	const websiteId =
-		typeof filter.websiteId === 'string' && /^web_[0-9a-z]{10,64}$/.test(filter.websiteId) ? filter.websiteId : null;
+	const websiteId = isId(filter.websiteId, 'web') ? filter.websiteId : null;
 	const [billing, usage, receipts, websites] = await Promise.all([
 		api.get(paths.billing(merchantId)),
 		api.get(paths.usage(merchantId, { from, to, websiteId })),

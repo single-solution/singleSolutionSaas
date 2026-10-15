@@ -7,9 +7,8 @@
 import { useState } from 'react';
 import { Button, Card, Form, FormError, Input, Masonry, PageHeader, fieldErrors, useToast } from '@ss/ui';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
-import { useResource } from '../../client.js';
+import { apiFetch, useResource } from '../../client.js';
 import { EmailPanel, OwnActivity, PasswordPanel, TwoStepPanel } from '../../views/login-settings.js';
-import { adminFetch } from '../client.js';
 import { adminApi } from '../paths.js';
 import { AdminProblem, RoleBadge } from './common.js';
 
@@ -24,7 +23,7 @@ function NameCard({ admin, onSaved }) {
 	const submit = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.me(), { method: 'PATCH', body: { name: name.trim() } });
+		const result = await apiFetch(adminApi.me(), { method: 'PATCH', body: { name: name.trim() } });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);

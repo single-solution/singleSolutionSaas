@@ -44,12 +44,11 @@ import {
 import { ADMIN, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
-import { ProductStatusBadge } from '../../views/billing.js';
+import { ProductStatusBadge, creditDayBars, formatChartCredits } from '../../views/billing.js';
 import { HeaderActions, ListDetail, ListPane, ListRow, ListSearch, openDashboard } from '../../views/common.js';
-import { adminFetch } from '../client.js';
+import { apiFetch } from '../../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
-import { dayBars } from './overview.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -64,9 +63,6 @@ function ProductActiveBadge({ status }) {
 		</Badge>
 	);
 }
-
-/** @param {number} v credits */
-const creditsOf = (v) => formatCredits(Math.round(v * 1000));
 
 /**
  * The connect form of Add product and Reconnect: the product URL (optional on Reconnect) and the connect secret.
@@ -88,7 +84,7 @@ function ConnectDialog({ open, title, description, submitLabel, urlRequired, pat
 		if (Object.keys(local).length > 0) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(path, { method: 'POST', body: { ...(url.trim() ? { url: url.trim() } : {}), secret } });
+		const result = await apiFetch(path, { method: 'POST', body: { ...(url.trim() ? { url: url.trim() } : {}), secret } });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -262,18 +258,18 @@ function ProductDetail({ detail, owner }) {
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (detail.websitesProblem));
 	const numbers = product.numbers ?? {};
-	const earned = dayBars(numbers.days);
+	const earned = creditDayBars(numbers.days);
 
 	const openAsAdmin = async () => {
 		setBusy('open');
-		const result = await openDashboard(adminFetch, adminApi.launch(product.productId), { websiteId: null });
+		const result = await openDashboard(adminApi.launch(product.productId), { websiteId: null });
 		setBusy(null);
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 	};
 	const toggle = async () => {
 		const next = product.status === 'active' ? 'inactive' : 'active';
 		setBusy('status');
-		const result = await adminFetch(adminApi.productStatus(product.productId), { method: 'POST', body: { status: next } });
+		const result = await apiFetch(adminApi.productStatus(product.productId), { method: 'POST', body: { status: next } });
 		setBusy(null);
 		if (!result.ok) {
 			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
@@ -289,7 +285,7 @@ function ProductDetail({ detail, owner }) {
 	const features = /** @type {any[]} */ (product.features ?? []);
 	const more = async () => {
 		setLoadingMore(true);
-		const result = await adminFetch(adminApi.productWebsites(product.productId, cursor));
+		const result = await apiFetch(adminApi.productWebsites(product.productId, cursor));
 		setLoadingMore(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -375,7 +371,7 @@ function ProductDetail({ detail, owner }) {
 			</StatGrid>
 			{isEmptySeries(earned) ? null : (
 				<Card title={PRODUCTS.earnedChart}>
-					<BarChart label={PRODUCTS.earnedChart} data={earned} format={creditsOf} />
+					<BarChart label={PRODUCTS.earnedChart} data={earned} format={formatChartCredits} />
 				</Card>
 			)}
 			<Section id="product-websites" title={PRODUCTS.websitesTitle} description={PRODUCTS.websitesIntro}>

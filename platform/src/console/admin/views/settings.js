@@ -23,15 +23,13 @@ import {
 	fieldErrors,
 	useToast,
 } from '@ss/ui';
+import { LOGO_MAX_BYTES, LOGO_TYPES } from '../../../infra/config.js';
 import { ADMIN, LOGIN } from '../../../texts/console.js';
-import { adminFetch } from '../client.js';
+import { apiFetch } from '../../client.js';
 import { adminApi } from '../paths.js';
 import { AdminProblem } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-
-const LOGO_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
-const LOGO_MAX_BYTES = 200 * 1024;
 
 /**
  * Save a settings group and report the outcome.
@@ -49,7 +47,7 @@ const useSave = (onSaved) => {
 	const save = async (path, method, body) => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(path, { method, ...(body === undefined ? {} : { body }) });
+		const result = await apiFetch(path, { method, ...(body === undefined ? {} : { body }) });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
@@ -95,7 +93,7 @@ function MailCard({ settings, onSaved }) {
 	const test = async () => {
 		setTesting(true);
 		setTestProblem(null);
-		const result = await adminFetch(adminApi.settingsMailTest(), { method: 'POST' });
+		const result = await apiFetch(adminApi.settingsMailTest(), { method: 'POST' });
 		setTesting(false);
 		if (result.ok) toast.show({ title: ADMIN.mail.testSent(result.data?.sentTo ?? '') });
 		else setTestProblem(result.problem);
@@ -179,8 +177,8 @@ function MailCard({ settings, onSaved }) {
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
 function BrandingCard({ settings, onSaved }) {
-	const [name, setName] = useState(settings.branding?.name ?? '');
-	const [accent, setAccent] = useState(settings.branding?.accent ?? '#4f46e5');
+	const [name, setName] = useState(settings.branding.name);
+	const [accent, setAccent] = useState(settings.branding.accent);
 	const [logoError, setLogoError] = useState(/** @type {string | null} */ (null));
 	const { busy, problem, save } = useSave(onSaved);
 	/** @param {File} file */
@@ -219,7 +217,7 @@ function BrandingCard({ settings, onSaved }) {
 				<div className="space-y-2">
 					<p className="text-sm font-semibold text-fg">{ADMIN.branding.logo}</p>
 					<p className="text-sm text-muted">{ADMIN.branding.logoHelp}</p>
-					{settings.branding?.hasLogo ? (
+					{settings.branding.hasLogo ? (
 						<img
 							src={`/branding/logo?v=${settings.branding.logoVersion}`}
 							alt=""
@@ -237,7 +235,7 @@ function BrandingCard({ settings, onSaved }) {
 						className="block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-control file:border file:border-solid file:border-line file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-fg hover:file:bg-surface-2"
 					/>
 					{logoError ? <Callout tone="danger">{logoError}</Callout> : null}
-					{settings.branding?.hasLogo ? (
+					{settings.branding.hasLogo ? (
 						<Button variant="ghost" size="sm" onClick={() => save(adminApi.settingsLogo(), 'DELETE')}>
 							{ADMIN.branding.logoRemove}
 						</Button>
@@ -255,9 +253,9 @@ function BrandingCard({ settings, onSaved }) {
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
 function SupportCard({ settings, onSaved }) {
 	const [form, setForm] = useState({
-		email: settings.support?.email ?? '',
-		phone: settings.support?.phone ?? '',
-		whatsapp: settings.support?.whatsapp ?? '',
+		email: settings.support.email ?? '',
+		phone: settings.support.phone ?? '',
+		whatsapp: settings.support.whatsapp ?? '',
 	});
 	const { busy, problem, save } = useSave(onSaved);
 	/** @param {keyof typeof form} key @param {string} value */
@@ -299,9 +297,9 @@ function SupportCard({ settings, onSaved }) {
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
 function SecurityCard({ settings, onSaved }) {
-	const bounds = settings.bounds?.sessionHours ?? { min: 1, max: 336 };
-	const [hours, setHours] = useState(String(settings.security?.sessionHours ?? 12));
-	const [required, setRequired] = useState(Boolean(settings.security?.requireTwoStepForAdmins));
+	const bounds = settings.bounds.sessionHours;
+	const [hours, setHours] = useState(String(settings.security.sessionHours));
+	const [required, setRequired] = useState(settings.security.requireTwoStepForAdmins);
 	const { busy, problem, save } = useSave(onSaved);
 	return (
 		<Card title={ADMIN.settingsSections.security.title} subtitle={ADMIN.settingsSections.security.help}>
@@ -337,10 +335,10 @@ function SecurityCard({ settings, onSaved }) {
 
 /** @param {{ settings: any, onSaved: (s: any) => void }} props */
 function BillingRulesCard({ settings, onSaved }) {
-	const grace = settings.bounds?.graceDays ?? { min: 0, max: 30 };
-	const low = settings.bounds?.lowBalanceDays ?? { min: 1, max: 30 };
-	const [graceDays, setGraceDays] = useState(String(settings.billing?.graceDays ?? 3));
-	const [lowBalanceDays, setLowBalanceDays] = useState(String(settings.billing?.lowBalanceDays ?? 3));
+	const grace = settings.bounds.graceDays;
+	const low = settings.bounds.lowBalanceDays;
+	const [graceDays, setGraceDays] = useState(String(settings.billing.graceDays));
+	const [lowBalanceDays, setLowBalanceDays] = useState(String(settings.billing.lowBalanceDays));
 	const { busy, problem, save } = useSave(onSaved);
 	const errors = fieldErrors(problem);
 	return (
@@ -395,7 +393,7 @@ function EncryptionCard() {
 					onClick={async () => {
 						setBusy(true);
 						setProblem(null);
-						const result = await adminFetch(adminApi.settingsReseal(), { method: 'POST', body: {} });
+						const result = await apiFetch(adminApi.settingsReseal(), { method: 'POST', body: {} });
 						setBusy(false);
 						if (result.ok) setCounts(result.data);
 						else setProblem(result.problem);

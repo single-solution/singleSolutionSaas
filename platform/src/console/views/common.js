@@ -27,6 +27,7 @@ import {
 	problemCode,
 } from '@ss/ui';
 import { CONSOLE } from '../../texts/console.js';
+import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { routes } from '../paths.js';
 import { ScreenContext, listScroll, listWasPlaceholder, rememberList, stripOpen, useScreen } from './screen-memory.js';
@@ -36,14 +37,15 @@ import { ScreenContext, listScroll, listWasPlaceholder, rememberList, stripOpen,
  * @template [T=any]
  * @typedef {import('../client.js').ApiResult<T>} ApiResult
  */
-/** @typedef {(path: string, init?: { method?: string, body?: unknown }) => Promise<ApiResult>} Fetcher */
 
 /**
  * Page-level error: a friendly message, and a way forward (sign in again, go back).
- * @param {{ problem: Problem | null | undefined, title?: string, back?: { href: string, label: string } }} props
+ * @param {{ problem: Problem | null | undefined, title?: string, back?: { href: string, label: string }, admin?: boolean }} props
+ *   `admin`: an Admin Console page (a refusal says the role does not include the area)
  */
-export function PageProblem({ problem, title, back }) {
+export function PageProblem({ problem, title, back, admin = false }) {
 	const code = problemCode(problem);
+	const forbidden = code === 'forbidden';
 	const action =
 		code === 'unauthorized' ? (
 			<ButtonLink as={Link} href={routes.login()} variant="primary">
@@ -56,8 +58,17 @@ export function PageProblem({ problem, title, back }) {
 		);
 	return (
 		<ErrorState
-			title={title ?? (code === 'not_found' ? CONSOLE.notFound : code === 'forbidden' ? CONSOLE.noAccess : CONSOLE.loadFailed)}
-			message={describeProblem(problem)}
+			title={
+				title ??
+				(code === 'not_found'
+					? CONSOLE.notFound
+					: forbidden
+						? admin
+							? CONSOLE.notPermitted
+							: CONSOLE.noAccess
+						: CONSOLE.loadFailed)
+			}
+			message={forbidden && admin ? CONSOLE.forbiddenHint(describeProblem(problem)) : describeProblem(problem)}
 			action={action}
 		/>
 	);
@@ -310,13 +321,12 @@ function BackLink({ href, label }) {
 
 /**
  * Open a product dashboard: make the single-use launch, then open its URL in a new tab.
- * @param {Fetcher} fetcher
  * @param {string} path the launch route
  * @param {unknown} [body]
  * @returns {Promise<ApiResult>}
  */
-export const openDashboard = async (fetcher, path, body) => {
-	const result = await fetcher(path, { method: 'POST', ...(body === undefined ? {} : { body }) });
+export const openDashboard = async (path, body) => {
+	const result = await apiFetch(path, { method: 'POST', ...(body === undefined ? {} : { body }) });
 	if (result.ok && typeof result.data?.url === 'string') window.open(result.data.url, '_blank', 'noopener,noreferrer');
 	return result;
 };

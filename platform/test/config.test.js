@@ -80,6 +80,12 @@ describe('loadEnv: the database, the Portal address and the encryption key (PLAN
 				loadEnv({ NODE_ENV: 'test', MONGODB_URI: 'mongodb://h/bad%20name!', PORTAL_URL: 'https://p.test', ENCRYPTION_KEY }),
 			),
 		).toEqual([expect.stringContaining('invalid database')]);
+		// a malformed escape in the database name is reported the same way, never thrown as it is
+		expect(
+			problemsOf(() =>
+				loadEnv({ NODE_ENV: 'test', MONGODB_URI: 'mongodb://h/shop%zz', PORTAL_URL: 'https://p.test', ENCRYPTION_KEY }),
+			),
+		).toEqual([expect.stringContaining('invalid database')]);
 	});
 
 	it('derives the database name; local products are reachable outside production only', async () => {

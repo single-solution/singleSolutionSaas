@@ -380,7 +380,8 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 					me={beta.me}
 					merchantId={beta.merchantId}
 					websites={[]}
-					billing={{ status: 'stopped', balance: -1000, dailySpend: 24_000, stoppedAt: '2026-10-04T11:00:00.000Z' }}>
+					billing={{ status: 'stopped', balance: -1000, dailySpend: 24_000, stoppedAt: '2026-10-04T11:00:00.000Z' }}
+					branding={BRANDING}>
 					<p>x</p>
 				</ConsoleShell>
 			</PathnameContext.Provider>,

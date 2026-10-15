@@ -6,11 +6,10 @@
  * never written into entries (PLAN 0.5.9).
  * @module
  */
+import { isId } from '@ss/contracts';
+import { utcDayStart } from '../../infra/util.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
-
-const ID = /^[a-z]{2,8}_[0-9a-z]{10,64}$/;
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Validate the Activity filters (`merchantId`, `adminId`, `from`, `to` as UTC days `YYYY-MM-DD`, both included).
@@ -26,14 +25,14 @@ export const parseActivityQuery = (query) => {
 	for (const key of /** @type {const} */ (['merchantId', 'adminId'])) {
 		const v = query[key];
 		if (v === undefined || v === '') continue;
-		if (!ID.test(v)) errors.push({ path: `/${key}`, message: 'must be an id' });
+		if (!isId(v)) errors.push({ path: `/${key}`, message: 'must be an id' });
 		else value[key] = v;
 	}
 	for (const key of /** @type {const} */ (['from', 'to'])) {
 		const v = query[key];
 		if (v === undefined || v === '') continue;
-		const ms = DAY.test(v) ? Date.parse(`${v}T00:00:00Z`) : NaN;
-		if (!Number.isFinite(ms)) errors.push({ path: `/${key}`, message: 'must be a day YYYY-MM-DD' });
+		const ms = utcDayStart(v);
+		if (ms === null) errors.push({ path: `/${key}`, message: 'must be a day YYYY-MM-DD' });
 		else value[key] = new Date(key === 'to' ? ms + 86_400_000 : ms);
 	}
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, value };

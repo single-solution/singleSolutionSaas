@@ -67,7 +67,7 @@ export async function generateMetadata({ params }) {
 	const found = resolve((await params).path ?? []);
 	return found
 		? found.kind !== 'public' && typeof found.metadata.title === 'string'
-			? { ...found.metadata, title: { absolute: `${found.metadata.title} · Admin · Single Solution` } }
+			? { ...found.metadata, title: `${found.metadata.title} · Admin` }
 			: found.metadata
 		: {};
 }

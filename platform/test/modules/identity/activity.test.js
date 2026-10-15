@@ -36,6 +36,8 @@ describe('Activity (PLAN 0.5.12, 0.8.2)', () => {
 		expect(await actions(`?from=${day2}`)).toContain('merchant.suspended');
 		expect((await o.client.get('/v1/admin/activity?merchantId=bad')).status).toBe(422);
 		expect((await o.client.get('/v1/admin/activity?from=2026-13-01')).status).toBe(422);
+		// a day the calendar does not have is refused (it never becomes another day)
+		expect((await o.client.get('/v1/admin/activity?to=2026-02-31')).status).toBe(422);
 
 		// entries name the admin and the merchant; the reason is there for admins
 		const page = (await o.client.get(`/v1/admin/activity?merchantId=${b.merchantId}`)).json;

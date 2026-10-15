@@ -1,14 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ADMIN_ROLES } from '@ss/contracts';
 import { createLogger, isSensitiveKey, noopLogger, redact } from '../src/infra/logger.js';
-import {
-	ADMIN_ROLES,
-	ALL_PERMISSIONS,
-	MERCHANT_PERMISSIONS,
-	PERMISSIONS,
-	ROLE_PERMISSIONS,
-	can,
-	permissionsFor,
-} from '../src/infra/rbac.js';
+import { ALL_PERMISSIONS, MERCHANT_PERMISSIONS, PERMISSIONS, ROLE_PERMISSIONS, can, permissionsFor } from '../src/infra/rbac.js';
 import { MERCHANT, MERCHANT_2, WEBSITE } from './helpers.js';
 import { isPlatformError, platformError } from '../src/infra/errors.js';
 

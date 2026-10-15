@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { Button, Card, Form, FormError, Input, Masonry, PageHeader, Select, fieldErrors, useToast } from '@ss/ui';
-import { COUNTRY_CODES, COUNTRY_NAMES } from '../../modules/identity/core/countries.js';
+import { COUNTRY_CHOICES } from '../../modules/identity/core/countries.js';
 import { LOGIN, MERCHANT, MERCHANT_FIELDS } from '../../texts/console.js';
 import { apiFetch, useResource } from '../client.js';
 import { api } from '../paths.js';
@@ -18,21 +18,15 @@ import { FrameBilling } from './frame-billing.js';
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
- * Country options, shown by their fixed English name and stored as the ISO 3166-1 alpha-2 code. The names and the order
- * are the same on the server and in the browser (no `Intl` or locale comparison), so the page hydrates cleanly.
+ * Country options with a first "none" choice (stored as the ISO 3166-1 alpha-2 code).
  * @param {string} noneLabel
  */
-export const countryOptions = (noneLabel) => [
-	{ value: '', label: noneLabel },
-	...COUNTRY_CODES.map((code) => ({ value: code, label: COUNTRY_NAMES[code] ?? code })).sort((a, b) =>
-		a.label < b.label ? -1 : a.label > b.label ? 1 : 0,
-	),
-];
+export const countryOptions = (noneLabel) => [{ value: '', label: noneLabel }, ...COUNTRY_CHOICES];
 
 /**
  * The merchant fields form (Account and the admin Details tab).
  * @param {{ merchant: Record<string, any>, path: string, method?: string, withEmail?: boolean, emailLocked?: boolean,
- *   emailLockedHelp?: string, readOnly?: boolean, onSaved?: (merchant: any) => void, fetcher?: typeof apiFetch }} props
+ *   emailLockedHelp?: string, readOnly?: boolean, onSaved?: (merchant: any) => void }} props
  */
 export function MerchantFieldsForm({
 	merchant,
@@ -43,7 +37,6 @@ export function MerchantFieldsForm({
 	emailLockedHelp,
 	readOnly = false,
 	onSaved,
-	fetcher = apiFetch,
 }) {
 	const toast = useToast();
 	const [form, setForm] = useState({
@@ -72,7 +65,7 @@ export function MerchantFieldsForm({
 			setBusy(false);
 			return;
 		}
-		const result = await fetcher(path, { method, body });
+		const result = await apiFetch(path, { method, body });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);

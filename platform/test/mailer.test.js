@@ -6,6 +6,7 @@ import {
 	createSmtpMailer,
 	createUnavailableMailer,
 	escapeHtml,
+	mailContextOf,
 	renderMail,
 	smtpTransportOptions,
 } from '../src/infra/mailer.js';
@@ -13,6 +14,9 @@ import { isProblem } from '../src/infra/http.js';
 import { MAIL_TEXTS } from '../src/texts/mail.js';
 import { DEFAULT_SETTINGS } from '../src/infra/config.js';
 import { createTestLogger } from './helpers.js';
+
+/** The default Branding and no support contact. */
+const DEFAULTS = mailContextOf(DEFAULT_SETTINGS);
 
 const LINK = 'https://portal.test/verify?token=abc&x=1';
 const SMTP = { host: 'smtp.example.com', port: 587, secure: false, user: 'u', pass: 'p' };
@@ -88,21 +92,23 @@ describe('mail templates (PLAN 0.5.10)', () => {
 		expect(renderMail('merchant_setup', { link: LINK, merchantName: 'Shop' }, CONTEXT).subject).toBe(
 			'Your Shop account on Acme Portal',
 		);
-		expect(renderMail('admin_invite', { link: LINK, role: 'Support' }).text).toContain('Single Solution as Support');
-		expect(renderMail('email_change_notice', { newEmail: 'new@shop.test' }).text).toContain('new@shop.test');
+		expect(renderMail('admin_invite', { link: LINK, role: 'Support' }, DEFAULTS).text).toContain('Single Solution as Support');
+		expect(renderMail('email_change_notice', { newEmail: 'new@shop.test' }, DEFAULTS).text).toContain('new@shop.test');
 		// without a support contact there is no support line
-		expect(renderMail('two_step_off', {}).text).not.toContain('Support:');
+		expect(renderMail('two_step_off', {}, DEFAULTS).text).not.toContain('Support:');
 		// header injection through data is flattened
-		expect(renderMail('merchant_setup', { link: LINK, merchantName: 'A\r\nBcc: x@y.z' }).subject).not.toMatch(/[\r\n]/);
+		expect(renderMail('merchant_setup', { link: LINK, merchantName: 'A\r\nBcc: x@y.z' }, DEFAULTS).subject).not.toMatch(
+			/[\r\n]/,
+		);
 		expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
 	});
 
 	it('refuses unknown templates and unsafe links', () => {
-		expect(() => renderMail(/** @type {any} */ ('other'), { link: LINK })).toThrow(/unknown mail template/);
-		expect(() => renderMail('admin_invite', {})).toThrow(/link is required/);
-		expect(() => renderMail('admin_invite', { link: 'not a url' })).toThrow(/absolute/);
-		expect(() => renderMail('admin_invite', { link: 'javascript:alert(1)' })).toThrow(/http/);
-		expect(() => renderMail('admin_invite', { link: 'https://u:p@portal.test/x' })).toThrow(/credentials/);
+		expect(() => renderMail(/** @type {any} */ ('other'), { link: LINK }, DEFAULTS)).toThrow(/unknown mail template/);
+		expect(() => renderMail('admin_invite', {}, DEFAULTS)).toThrow(/link is required/);
+		expect(() => renderMail('admin_invite', { link: 'not a url' }, DEFAULTS)).toThrow(/absolute/);
+		expect(() => renderMail('admin_invite', { link: 'javascript:alert(1)' }, DEFAULTS)).toThrow(/http/);
+		expect(() => renderMail('admin_invite', { link: 'https://u:p@portal.test/x' }, DEFAULTS)).toThrow(/credentials/);
 	});
 });
 
@@ -147,6 +153,7 @@ describe('platform mailer', () => {
 			from: 'Portal <no-reply@example.com>',
 			isProduction: true,
 			logger,
+			context: DEFAULTS,
 			createTransport: (options) => {
 				created += 1;
 				expect(options.requireTLS).toBe(true);
@@ -194,6 +201,7 @@ describe('platform mailer', () => {
 			from: 'Portal <no-reply@example.com>',
 			isProduction: false,
 			logger,
+			context: DEFAULTS,
 		});
 		cleanups.unshift(async () => mailer.close?.());
 		await mailer.send({ to: 'owner@example.com', template: 'admin_invite', data: { link: LINK, merchantName: 'Acme' } });
@@ -208,6 +216,7 @@ describe('platform mailer', () => {
 			env: /** @type {const} */ ('production'),
 			isProduction: true,
 			mail: { smtp: SMTP, from: 'a@example.com' },
+			settings: DEFAULT_SETTINGS,
 		};
 		/** @type {any[]} */
 		const sent = [];
@@ -222,7 +231,7 @@ describe('platform mailer', () => {
 
 		for (const env of /** @type {const} */ (['production'])) {
 			const none = createPlatformMailer({
-				config: { env, isProduction: env === 'production', mail: { smtp: null, from: null } },
+				config: { env, isProduction: env === 'production', mail: { smtp: null, from: null }, settings: DEFAULT_SETTINGS },
 				logger,
 			});
 			expect(none.available).toBe(false);
@@ -230,7 +239,7 @@ describe('platform mailer', () => {
 			expect(isProblem(error) && error.code).toBe('unavailable');
 		}
 		const dev = createPlatformMailer({
-			config: { env: 'development', isProduction: false, mail: { smtp: null, from: null } },
+			config: { env: 'development', isProduction: false, mail: { smtp: null, from: null }, settings: DEFAULT_SETTINGS },
 			logger,
 		});
 		await dev.send({ to: 'x@example.com', template: 'admin_invite', data: { link: LINK } });
@@ -257,7 +266,7 @@ describe('platform mailer', () => {
 		await brandedMailer.send({ to: 'x@example.com', template: 'two_step_off', data: {} });
 		expect(branded[0].subject).toBe('Two-step sign-in was turned off on your Acme account');
 		expect(branded[0].text).toContain('Support: email help@acme.test.');
-		expect(createLogMailer(logger).available).toBe(true);
+		expect(createLogMailer(logger, DEFAULTS).available).toBe(true);
 		expect(createUnavailableMailer().available).toBe(false);
 	});
 });
