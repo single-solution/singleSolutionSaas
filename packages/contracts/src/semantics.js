@@ -29,6 +29,7 @@ export const RULES = Object.freeze({
 	settingKeyword: 'settingKeyword',
 	settingRange: 'settingRange',
 	settingItems: 'settingItems',
+	settingPattern: 'settingPattern',
 	settingDefault: 'settingDefault',
 	settingEnum: 'settingEnum',
 	settingsSchema: 'settingsSchema',
@@ -299,6 +300,7 @@ const TYPE_KEYWORDS = Object.freeze({
 	minimum: ['integer', 'number'],
 	maximum: ['integer', 'number'],
 	maxLength: ['string'],
+	pattern: ['string'],
 	format: ['string'],
 	enum: ['string', 'integer', 'number'],
 	items: ['array'],
@@ -317,6 +319,12 @@ const checkNode = (node, path, out) => {
 	}
 	if (typeof node.minimum === 'number' && typeof node.maximum === 'number' && node.minimum > node.maximum)
 		out.push(at([...path, 'minimum'], RULES.settingRange, 'minimum must not exceed maximum'));
+	if (typeof node.pattern === 'string')
+		try {
+			new RegExp(node.pattern, 'u');
+		} catch {
+			out.push(at([...path, 'pattern'], RULES.settingPattern, 'pattern is not a valid regular expression'));
+		}
 	if (node.type === 'array') {
 		if (!('items' in node) || node.items === undefined)
 			out.push(at([...path, 'items'], RULES.settingItems, 'list settings need items'));

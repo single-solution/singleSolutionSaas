@@ -27,7 +27,7 @@ const schema = () => ({
 			type: 'array',
 			title: 'Pages',
 			default: ['/'],
-			items: { type: 'string', maxLength: 100 },
+			items: { type: 'string', maxLength: 100, pattern: '^/' },
 		},
 		sizes: { type: 'array', title: 'Sizes', default: [1], items: { type: 'integer', minimum: 1, maximum: 9, enum: [1, 2, 3] } },
 	},
@@ -80,7 +80,7 @@ describe('checkSettingsSchema', () => {
 		['a setting without default', (s) => delete s.properties.ratio.default, '/properties/ratio/default', 'required'],
 		['a setting without title', (s) => delete s.properties.ratio.title, '/properties/ratio/title', 'required'],
 		['an object setting', (s) => (s.properties.ratio.type = 'object'), '/properties/ratio/type', 'enum'],
-		['a pattern', (s) => (s.properties.greeting.pattern = '^a'), '/properties/greeting/pattern', 'additionalProperties'],
+		['an empty pattern', (s) => (s.properties.greeting.pattern = ''), '/properties/greeting/pattern', 'minLength'],
 		['a minLength', (s) => (s.properties.greeting.minLength = 1), '/properties/greeting/minLength', 'additionalProperties'],
 		['x-plan', (s) => (s.properties.ratio['x-plan'] = {}), '/properties/ratio/x-plan', 'additionalProperties'],
 		['x-kind', (s) => (s.properties.ratio['x-kind'] = 'quota'), '/properties/ratio/x-kind', 'additionalProperties'],
@@ -121,6 +121,13 @@ describe('checkSettingsSchema', () => {
 	/** @type {Array<[string, (s: any) => unknown, string, string]>} */
 	const rules = [
 		['maxLength on a number', (s) => (s.properties.ratio.maxLength = 3), '/properties/ratio/maxLength', RULES.settingKeyword],
+		['pattern on a number', (s) => (s.properties.ratio.pattern = '^1'), '/properties/ratio/pattern', RULES.settingKeyword],
+		[
+			'a pattern that is no regular expression',
+			(s) => (s.properties.greeting.pattern = '(['),
+			'/properties/greeting/pattern',
+			RULES.settingPattern,
+		],
 		['format on a number', (s) => (s.properties.ratio.format = 'email'), '/properties/ratio/format', RULES.settingKeyword],
 		['minimum on a string', (s) => (s.properties.greeting.minimum = 1), '/properties/greeting/minimum', RULES.settingKeyword],
 		[
@@ -178,6 +185,12 @@ describe('checkSettingsSchema', () => {
 			RULES.settingDefault,
 		],
 		[
+			'a default the pattern refuses',
+			(s) => (s.properties.greeting.pattern = '^Hello'),
+			'/properties/greeting/default',
+			RULES.settingDefault,
+		],
+		[
 			'a default not an email',
 			(s) => (s.properties.replyTo.default = 'nope'),
 			'/properties/replyTo/default',
@@ -212,7 +225,9 @@ describe('setting values', () => {
 		expectProblem(validateSettingValue(s, 'dailyLimit', 1.5), '/dailyLimit', 'type');
 		expectProblem(validateSettingValue(s, 'tone', 'rude'), '/tone', 'enum');
 		expectProblem(validateSettingValue(s, 'replyTo', 'x'), '/replyTo', 'format');
-		expectProblem(validateSettingValue(s, 'pages', ['x'.repeat(101)]), '/pages/0', 'maxLength');
+		expectProblem(validateSettingValue(s, 'pages', ['/'.repeat(101)]), '/pages/0', 'maxLength');
+		// a page path starts with /
+		expectProblem(validateSettingValue(s, 'pages', ['/a', 'about']), '/pages/1', 'pattern');
 		expectProblem(validateSettingValue(s, 'missing', 1), '/missing', 'unknownSetting');
 		expectProblem(validateSettingValue(s, 'toString', 1), '/toString', 'unknownSetting');
 		expectProblem(validateSettingValue(/** @type {any} */ ({}), 'dailyLimit', 1), '', RULES.settingsSchema);

@@ -25,6 +25,7 @@
  * @property {number} [minimum]
  * @property {number} [maximum]
  * @property {number} [maxLength]
+ * @property {string} [pattern] a regular expression (Unicode mode) a text must match
  * @property {unknown[]} [enum]
  * @property {string} [format]
  */
@@ -39,6 +40,7 @@
  * @property {number} [minimum]
  * @property {number} [maximum] the hard maximum of a limit
  * @property {number} [maxLength]
+ * @property {string} [pattern] a regular expression (Unicode mode) a text must match
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items]

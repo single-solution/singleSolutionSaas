@@ -4,9 +4,10 @@
  *
  * A settings schema is `{ type: 'object', properties: { <setting>: <node> }, additionalProperties?: false }`. Every
  * setting node has `type`, `title` and `default`, and may add `description`, `minimum` / `maximum` (the hard maximums
- * of limits), `maxLength`, `enum`, `format` (`email`, `uri` or `hostname`), `items` (lists) and `x-ui` (form hints:
- * `widget`, `group`, `placeholder`, `labels`, `wide`). List items have `type` and may add `minimum`, `maximum`,
- * `maxLength`, `enum` and `format`. Nothing else is allowed.
+ * of limits), `maxLength`, `pattern` (a text must match it, for example `^/` for a page path), `enum`, `format`
+ * (`email`, `uri` or `hostname`), `items` (lists) and `x-ui` (form hints: `widget`, `group`, `placeholder`, `labels`,
+ * `wide`). List items have `type` and may add `minimum`, `maximum`, `maxLength`, `pattern`, `enum` and `format`.
+ * Nothing else is allowed.
  * @module
  */
 import { deepFreeze } from '../util.js';
@@ -29,6 +30,8 @@ const limits = {
 	minimum: { type: 'number' },
 	maximum: { type: 'number' },
 	maxLength: { type: 'integer', minimum: 0 },
+	// a regular expression (Unicode mode) a text must match
+	pattern: { type: 'string', minLength: 1, maxLength: 200 },
 	enum: { type: 'array', minItems: 1, maxItems: 500, uniqueItems: true },
 	format: { type: 'string', enum: [...SETTING_FORMATS] },
 };
