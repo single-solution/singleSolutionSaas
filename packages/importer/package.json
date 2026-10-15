@@ -1,6 +1,6 @@
 {
 	"name": "@ss/importer",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "ss-import: reads a store database read-only into NDJSON files and an id map (one source mapping per schema family), sends them to the products' import routes with the server tokens (dry run first), and verifies the counts. Never deployed.",
 	"type": "module",
 	"license": "UNLICENSED",

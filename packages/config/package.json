@@ -1,6 +1,6 @@
 {
 	"name": "@ss/config",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Shared tooling for every Single Solution unit: ESLint (functional rules, JSX variant), TypeScript base config, Prettier config, the Vitest preset and the MongoMemoryReplSet global setup.",
 	"type": "module",
 	"license": "UNLICENSED",

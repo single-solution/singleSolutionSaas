@@ -35,7 +35,8 @@ placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}` a
   `app/dashboard/texts.js`), `strings/en.json`, `schemas/` (the settings schema and `api.json`, below), `tests/` (Vitest
   on the kit's fake Portal and a test MongoDB, coverage 90/90/85; every answer is checked against `schemas/api.json`),
   `docs/guide.json` (with `build`: what the merchant's website builds per feature).
-- `package.json`: private, UNLICENSED, `@ss/*` at `workspace:^` (or `--sdk-version`), scripts `check`, `test`, `lint`,
+- `package.json`: private, UNLICENSED, `@ss/*` at `workspace:^` inside a pnpm workspace, else at `^<this CLI's
+version>` (every `@ss/*` package shares one version; `--sdk-version` sets another range), scripts `check`, `test`, `lint`,
   `typecheck`, `format`, `format:check`, `dev`, `build`, `start`, `validate`, and two entries for system tests:
   `./product` (`createProductInstance(options)`, plus `manifest` and `strings`) and `./routes` (`createRoutes(product)`):
   `product.handler(createRoutes(product), { after })`.

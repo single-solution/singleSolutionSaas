@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { checkInitOptions, fill, globalNameOf, initApp, insideWorkspace } from '../src/init.js';
+import { SDK_RANGE, checkInitOptions, fill, globalNameOf, initApp, insideWorkspace } from '../src/init.js';
 import { validateProject } from '../src/validate/index.js';
 import { exists } from '../src/fsutil.js';
 import { linkTestPackages, removeDir, runOwnTests, tempDir } from './helpers/util.js';
@@ -19,6 +19,21 @@ afterAll(async () => {
 const read = (dir, file) => readFile(path.join(dir, file), 'utf8');
 /** @param {string} dir @param {string} file */
 const json = async (dir, file) => JSON.parse(await read(dir, file));
+
+describe('one version for every @ss package', () => {
+	it('every package of packages/ has the CLI version, so SDK_RANGE fits all of them', async () => {
+		const packages = path.resolve(import.meta.dirname, '../..');
+		const cli = await json(packages, 'cli/package.json');
+		expect(SDK_RANGE).toBe(`^${cli.version}`);
+		const names = (await readdir(packages, { withFileTypes: true })).filter((entry) => entry.isDirectory());
+		expect(names.length).toBeGreaterThan(1);
+		for (const { name } of names) {
+			const own = await json(packages, `${name}/package.json`);
+			expect(own.name, name).toMatch(/^@ss\//);
+			expect(own.version, own.name).toBe(cli.version);
+		}
+	});
+});
 
 describe('ss app init → validate → own tests (integration)', () => {
 	it('generates the 0.4.13 layout that validates and whose own tests pass with the coverage thresholds', async () => {
@@ -140,6 +155,8 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'/v1/texts/{key}',
 			'/v1/theme',
 			'/v1/tickets',
+			'/v1/widget/admin/config',
+			'/v1/widget/config',
 		]);
 		// visitor routes also take the server token with SS-Visitor-IP; server routes take the SS-Actor headers
 		expect(openapi.paths['/v1/notes'].post.security).toEqual([{ browserToken: [] }, { serverToken: [] }]);
@@ -171,6 +188,10 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect((await json(dir, 'manifest.json')).endpoints.base).toBe('https://inner.example.com');
 		const forced = await initApp({ dir: path.join(workspace, 'products', 'own'), id: 'own', name: 'Own', standalone: true });
 		expect(forced.files).toContain('pnpm-workspace.yaml');
+		// a repository of its own never gets workspace:^ (it would not install): the published range of this CLI
+		const own = await json(forced.dir, 'package.json');
+		for (const deps of [own.dependencies, own.devDependencies])
+			for (const [name, range] of Object.entries(deps)) if (name.startsWith('@ss/')) expect(range, name).toBe(SDK_RANGE);
 	}, 60_000);
 
 	it('refuses bad options and non-empty targets', async () => {

@@ -7,7 +7,8 @@
  * Template files and paths may contain `{{id}}`, `{{name}}`, `{{global}}` (the widget's browser global,
  * `SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`. `_gitignore` is written as `.gitignore`. Outside a pnpm workspace
  * `templates/standalone` (the pnpm settings and `.nvmrc` a repository of its own needs) is added; inside one (e.g.
- * `products/` of the monorepo) the workspace's apply. `openapi.json` and `server/widget-script.js` are then generated
+ * `products/` of the monorepo) the workspace's apply, and `@ss/*` dependencies are linked with `workspace:^` (outside,
+ * they take the published range of this CLI's version). `openapi.json` and `server/widget-script.js` are then generated
  * (`ss app assets`), and `.env.local` (git-ignored) gets fresh development secrets.
  * @module
  */
@@ -17,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exists, walk } from './fsutil.js';
 import { writeAssets } from './assets.js';
+import pkg from '../package.json' with { type: 'json' };
 
 /** Root of the bundled templates. */
 const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.url));
@@ -27,13 +29,17 @@ const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
 /** Where a new product's manifest says it lives until its deployment address is set. */
 const DEFAULT_BASE_URL = 'http://localhost:3000';
 
+/** The `@ss/*` range of a product in a repository of its own: all `@ss/*` packages share one version, this CLI's. */
+export const SDK_RANGE = `^${pkg.version}`;
+
 /**
  * @typedef {object} InitOptions
  * @property {string} dir target directory (created; must be empty or absent)
  * @property {string} id product id (manifest `id`)
  * @property {string} name display name (1–80 chars)
  * @property {string} [baseUrl] the product's address for `manifest.endpoints.base` (default {@link DEFAULT_BASE_URL})
- * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default `workspace:^`)
+ * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default: `workspace:^` inside a pnpm
+ *   workspace, else {@link SDK_RANGE}: every `@ss/*` package shares the CLI's version)
  * @property {boolean} [standalone] add the files of a repository of its own (default: when `dir` is not inside a pnpm
  *   workspace)
  */
@@ -119,7 +125,7 @@ const secret = (bytes) => randomBytes(bytes).toString('base64url');
  * @param {InitOptions} options
  * @returns {Promise<{ dir: string, files: string[] }>} files written (relative, sorted)
  */
-export const initApp = async ({ dir, id, name, baseUrl = DEFAULT_BASE_URL, sdkVersion = 'workspace:^', standalone }) => {
+export const initApp = async ({ dir, id, name, baseUrl = DEFAULT_BASE_URL, sdkVersion, standalone }) => {
 	const errors = checkInitOptions({ dir, id, name, baseUrl });
 	if (errors.length > 0) throw Object.assign(new Error(errors.join('; ')), { code: 'invalid_options' });
 	const target = path.resolve(dir);
@@ -129,8 +135,14 @@ export const initApp = async ({ dir, id, name, baseUrl = DEFAULT_BASE_URL, sdkVe
 	} catch (error) {
 		if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') throw error;
 	}
-	const values = { id, name: name.trim(), global: globalNameOf(id), baseUrl, sdkVersion };
 	const own = standalone ?? !(await insideWorkspace(path.dirname(target)));
+	const values = {
+		id,
+		name: name.trim(),
+		global: globalNameOf(id),
+		baseUrl,
+		sdkVersion: sdkVersion ?? (own ? SDK_RANGE : 'workspace:^'),
+	};
 	/** @type {Map<string, string>} destination → source */
 	const plan = new Map();
 	for (const layer of ['product', ...(own ? ['standalone'] : [])]) {

@@ -1,6 +1,6 @@
 {
 	"name": "@ss/ui",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Component library for the Portal and product dashboards: design tokens (light + dark), form controls, data display, overlays, AppShell and a settings form.",
 	"type": "module",
 	"license": "UNLICENSED",

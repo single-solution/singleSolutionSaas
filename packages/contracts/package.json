@@ -1,6 +1,6 @@
 {
 	"name": "@ss/contracts",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the CSV writer and parser (`./csv`, browser-safe), the email address check (`./email`, browser-safe), the Format and time-zone helpers (`./format`, browser-safe), the phone-number normalizer (`./phone`, browser-safe), the business profile of the Setup advisor (`./profile`, browser-safe) the message template rules (`./templates`, browser-safe), the text helpers (`./text`, browser-safe) and the value helpers (`./util`, browser-safe).",
 	"type": "module",
 	"license": "UNLICENSED",
