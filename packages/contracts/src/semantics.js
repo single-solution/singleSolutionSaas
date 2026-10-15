@@ -6,7 +6,8 @@
  */
 import { ruleProblem } from './profile.js';
 import { BUILT_IN_VALUES, longValueProblem, valueNamesOf, wordsProblem } from './templates.js';
-import { isPathOrServiceUrl, isPlainObject, isServiceUrl, isUtcTimestamp, pointer } from './util.js';
+import { isPathOrServiceUrl, isServiceUrl, isUtcTimestamp, pointer } from './internal.js';
+import { isObject } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
 /** @typedef {import('./types.js').Manifest} Manifest */
@@ -335,7 +336,7 @@ export const checkSettingsRules = (schema, path = []) => {
 	/** @type {ValidationProblem[]} */
 	const out = [];
 	for (const [key, node] of Object.entries(schema.properties)) {
-		if (isPlainObject(node)) checkNode(node, [...path, 'properties', key], out);
+		if (isObject(node)) checkNode(node, [...path, 'properties', key], out);
 	}
 	return out;
 };

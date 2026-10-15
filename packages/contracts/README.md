@@ -240,6 +240,14 @@ Pure and browser-safe; servers, products' `core/` and widget bundles share it.
 - `luhnValid(digits)`: true for a string of at least 2 ASCII digits whose last digit is its Luhn check digit (cards,
   IMEIs); callers add their own length rules.
 
+## Value helpers (`@ss/contracts/util`)
+
+Pure and browser-safe.
+
+- `isObject(value)`: true for an object that is neither null nor an array.
+- `deepFreeze(value)`: the value frozen all the way down (same reference); safe on values that refer to themselves;
+  typed arrays and other buffer views are left as they are (they cannot be frozen).
+
 ## Problems (RFC 9457)
 
 ```js

@@ -21,7 +21,8 @@ import {
 	checkStatusResponse,
 } from './semantics.js';
 import { profileProblems } from './profile.js';
-import { escapePointerToken, isPlainObject, pointer } from './util.js';
+import { escapePointerToken, pointer } from './internal.js';
+import { isObject } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
 /**
@@ -229,7 +230,7 @@ export const createValidator = ({ schemas = [] } = {}) => {
 	 * @param {unknown} schema
 	 * @returns {schema is SettingsSchema}
 	 */
-	const usable = (schema) => isPlainObject(schema) && isPlainObject(schema.properties);
+	const usable = (schema) => isObject(schema) && isObject(schema.properties);
 
 	const unusable = Object.freeze([at([], RULES.settingsSchema, 'is not a settings schema')]);
 

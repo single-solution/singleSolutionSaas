@@ -1,16 +1,18 @@
 /**
- * Small pure helpers shared inside @ss/contracts.
+ * Small value helpers every unit shares (`@ss/contracts/util`). Pure and browser-safe (no Node.js imports).
  * @module
  */
 
 /**
- * Recursively freeze a plain JSON-like value and return it (same reference, typed as readonly).
+ * Freeze a value all the way down and return it (the same reference). Objects are frozen before their members, so a
+ * value that refers to itself is frozen once, never endlessly; typed arrays and other buffer views are left as they are
+ * (JavaScript cannot freeze them while they hold elements).
  * @template T
  * @param {T} value
  * @returns {T}
  */
 export const deepFreeze = (value) => {
-	if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+	if (value !== null && typeof value === 'object' && !Object.isFrozen(value) && !ArrayBuffer.isView(value)) {
 		Object.freeze(value);
 		for (const key of Object.keys(value)) deepFreeze(/** @type {Record<string, unknown>} */ (value)[key]);
 	}
@@ -18,79 +20,8 @@ export const deepFreeze = (value) => {
 };
 
 /**
- * Escape one JSON Pointer reference token (RFC 6901).
- * @param {string | number} token
- * @returns {string}
- */
-export const escapePointerToken = (token) => String(token).replace(/~/g, '~0').replace(/\//g, '~1');
-
-/**
- * Build a JSON Pointer from reference tokens.
- * @param {ReadonlyArray<string | number>} tokens
- * @returns {string}
- */
-export const pointer = (tokens) => tokens.map((token) => `/${escapePointerToken(token)}`).join('');
-
-/**
- * True for non-null, non-array objects.
+ * True for an object that is neither null nor an array (a JSON object, a record).
  * @param {unknown} value
  * @returns {value is Record<string, unknown>}
  */
-export const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-
-const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
-
-/**
- * True when `iso` is a real ISO-8601 UTC timestamp (rejects e.g. Feb 30 and non-`Z` offsets).
- * @param {unknown} iso
- * @returns {iso is string}
- */
-export const isUtcTimestamp = (iso) => {
-	if (typeof iso !== 'string' || !UTC_TIMESTAMP.test(iso)) return false;
-	const [date = '', time = ''] = iso.slice(0, -1).split('T');
-	const [y = 0, mo = 0, d = 0] = date.split('-').map(Number);
-	const [h = 0, mi = 0, s = 0] = time.split(':').map((part) => Number.parseInt(part, 10));
-	const parsed = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
-	return (
-		parsed.getUTCFullYear() === y &&
-		parsed.getUTCMonth() === mo - 1 &&
-		parsed.getUTCDate() === d &&
-		parsed.getUTCHours() === h &&
-		parsed.getUTCMinutes() === mi &&
-		s <= 59
-	);
-};
-
-/**
- * @param {string} hostname WHATWG URL hostname
- * @returns {boolean}
- */
-const isLocalHostname = (hostname) =>
-	hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1' || hostname === '[::1]';
-
-/**
- * True for an absolute service address: an `https://` URL, or an `http://` URL on `localhost`, `*.localhost`,
- * `127.0.0.1` or `[::1]` (local development). No userinfo, query or fragment.
- * @param {unknown} value
- * @returns {value is string}
- */
-export const isServiceUrl = (value) => {
-	if (typeof value !== 'string' || value.length > 2048 || /[\s\\]/.test(value)) return false;
-	/** @type {URL} */
-	let url;
-	try {
-		url = new URL(value);
-	} catch {
-		return false;
-	}
-	if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '' || /[?#]/.test(value)) return false;
-	return url.protocol === 'https:' || (url.protocol === 'http:' && isLocalHostname(url.hostname));
-};
-
-/**
- * True for an absolute path (`/docs`) or a service address ({@link isServiceUrl}).
- * @param {unknown} value
- * @returns {value is string}
- */
-export const isPathOrServiceUrl = (value) =>
-	typeof value === 'string' && (/^\/(?!\/)[^\s\\?#]*$/.test(value) || isServiceUrl(value));
+export const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);

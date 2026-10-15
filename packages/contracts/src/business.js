@@ -3,7 +3,7 @@
  * `{ name, logo, email, phone, address, country, timeZone }`. Only `name` is required. Every value is plain text.
  * @module
  */
-import { isPlainObject } from './util.js';
+import { isObject } from './util.js';
 
 /** @typedef {import('./types.js').BusinessInfo} BusinessInfo */
 /**
@@ -100,7 +100,7 @@ const matching = (value, pattern) => (value !== null && pattern.test(value) ? va
  * @returns {ValidationResult<BusinessInfo>}
  */
 export const validateBusinessJson = (value) => {
-	if (!isPlainObject(value))
+	if (!isObject(value))
 		return Object.freeze({ ok: false, problems: Object.freeze([{ path: '', keyword: 'type', message: 'must be an object' }]) });
 	const name = text(value.name, 200);
 	if (name === null)
