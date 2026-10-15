@@ -170,8 +170,13 @@ const stockStateOf = (variants, trackStock) => {
 	return selling === 0 ? 'out' : selling === active.length ? 'full' : 'partial';
 };
 
-/** Product fields a write may set that are not what its page shows (counts and the stamps of writes). */
-const NOT_CONTENT = Object.freeze(new Set(['sold', 'rating', 'publishedAt', 'contentUpdatedAt', 'createdAt', 'updatedAt']));
+/**
+ * Product fields that are not what its page shows: counts, the stamps of writes and the stock state (only whether it
+ * can be bought is shown, `inStock`).
+ */
+const NOT_CONTENT = Object.freeze(
+	new Set(['sold', 'ordered', 'rating', 'publishedAt', 'contentUpdatedAt', 'createdAt', 'updatedAt', 'stockState']),
+);
 
 /**
  * A product's variants without their stock (units and per location), for {@link contentChanged}.

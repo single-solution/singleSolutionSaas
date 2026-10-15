@@ -154,7 +154,7 @@
 		"indexNowOnSave": {
 			"type": "boolean",
 			"title": "Send changes to IndexNow",
-			"description": "When a product or category is saved, its address is sent to search engines through Growth's IndexNow (paste the Growth token in Connections).",
+			"description": "When a save changes a page, its address is sent to search engines through Growth's IndexNow: the product (and its earlier address after a new slug), its categories' listings, a saved category (paste the Growth token in Connections).",
 			"default": false
 		},
 		"autoSeo": {

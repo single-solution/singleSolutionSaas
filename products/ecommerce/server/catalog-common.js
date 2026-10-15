@@ -4,11 +4,12 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
-import { loadRules } from '../adapters/catalog-store.js';
+import { categoriesOf, loadRules } from '../adapters/catalog-store.js';
 import { COLLECTIONS } from '../core/model.js';
-import { isObject } from '../core/catalog.js';
+import { contentChanged, isObject } from '../core/catalog.js';
 import { gradeTypes, gradesByKey } from '../core/grades.js';
 import { createMedia } from './catalog-media.js';
+import { hiddenFor } from './catalog-visibility.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -24,6 +25,9 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 export const STAFF_LIMITS = /** @type {RateLimit[]} */ ([...SERVER_LIMITS]);
 /** Rate limits of the shopper routes. */
 export const SHOP_LIMITS = /** @type {RateLimit[]} */ ([...VISITOR_LIMITS]);
+
+/** Most addresses one IndexNow submission takes. */
+const INDEXNOW_MAX = 10_000;
 
 /** Image types the catalog stores. */
 export const IMAGE_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/avif': 'avif' });
@@ -116,10 +120,10 @@ export const createCatalogCommon = (product, service) => {
 	};
 
 	/**
-	 * Tell the other parts (alerts, stock events) that products may have changed price, stock or status.
+	 * Tell the other parts (alerts, stock events) that products may have changed price, stock or status, and send the
+	 * pages that changed to IndexNow (SG-32).
 	 * @param {Site} s
-	 * @param {Array<Pick<ProductRecord, 'id' | 'price' | 'inStock' | 'variants'>>} before as read before the write
-	 *   (missing = new)
+	 * @param {ProductRecord[]} before as read before the write (missing = new)
 	 * @param {string[]} [ids] the products written (default: those of `before`)
 	 */
 	const changed = async (s, before, ids = before.map((p) => p.id)) => {
@@ -133,6 +137,51 @@ export const createCatalogCommon = (product, service) => {
 				]),
 			),
 		});
+		if (await indexNowOn(s)) await indexNow(s, await changedPages(s, before, [...new Set(ids)]));
+	};
+
+	/**
+	 * The pages a catalog write changed (E16, SG-32): each product new, or whose page changed (what it shows, as the
+	 * sitemap's `lastmod` judges it: never its stock while it can still be bought), shown before or now — its page, its
+	 * earlier address after a change of address, and the pages of the categories it is in or left with those above
+	 * them (their listings show it), as shoppers see them.
+	 * @param {Site} s @param {ProductRecord[]} before @param {string[]} ids
+	 * @returns {Promise<string[]>}
+	 */
+	const changedPages = async (s, before, ids) => {
+		const data = await s.data();
+		const was = new Map(before.map((item) => [item.id, item]));
+		const now = /** @type {ProductRecord[]} */ (
+			await data
+				.collection(COLLECTIONS.products)
+				.find({ websiteId: data.websiteId, id: { $in: ids } }, { projection: { _id: 0, websiteId: 0, merchantId: 0 } })
+				.toArray()
+		);
+		/** @type {string[]} */
+		const urls = [];
+		/** @type {Set<string>} */
+		const touched = new Set();
+		for (const item of now) {
+			const old = was.get(item.id);
+			const shown = item.status === 'active' || old?.status === 'active';
+			if (!shown || (old && !contentChanged(old, item))) continue;
+			const url = await media.productUrl(s, item);
+			urls.push(url);
+			if (old?.status === 'active') {
+				const earlier = await media.productUrl(s, old);
+				if (earlier !== url) urls.push(earlier);
+			}
+			for (const id of [...item.categoryIds, ...(old?.categoryIds ?? [])]) touched.add(id);
+		}
+		if (touched.size === 0) return urls;
+		const hidden = await hiddenFor(s);
+		const categories = await categoriesOf(data);
+		const byId = new Map(categories.map((category) => [category.id, category]));
+		const listed = new Set([...touched].flatMap((id) => [id, ...(byId.get(id)?.path ?? [])]));
+		for (const category of categories)
+			if (listed.has(category.id) && category.status === 'active' && !hidden.categoryIds.includes(category.id))
+				urls.push(await media.categoryUrl(s, category));
+		return urls;
 	};
 
 	/**
@@ -198,18 +247,25 @@ export const createCatalogCommon = (product, service) => {
 	};
 
 	/**
+	 * Whether saves go to IndexNow: the `seo` setting `indexNowOnSave` (E16).
+	 * @param {Site} s
+	 */
+	const indexNowOn = async (s) => s.has('seo') && (await s.values('seo')).indexNowOnSave === true;
+
+	/**
 	 * Send changed page addresses to search engines through Growth's IndexNow, right after the request, when the
-	 * `seo` setting `indexNowOnSave` is on and the Growth token is pasted (E16). Failures are only logged.
+	 * `seo` setting `indexNowOnSave` is on and the Growth token is pasted (E16); each address once, at most
+	 * {@link INDEXNOW_MAX}. Failures are only logged.
 	 * @param {Site} s
 	 * @param {string[]} urls
 	 */
 	const indexNow = async (s, urls) => {
-		if (urls.length === 0 || !s.has('seo') || (await s.values('seo')).indexNowOnSave !== true) return;
+		if (urls.length === 0 || !(await indexNowOn(s))) return;
 		if (typeof s.ctx.after !== 'function') return;
 		s.ctx.after(async () => {
 			const sent = await product.callProduct(s.websiteId, 'growth', '/v1/indexnow', {
 				method: 'POST',
-				body: { urls: [...new Set(urls)] },
+				body: { urls: [...new Set(urls)].slice(0, INDEXNOW_MAX) },
 			});
 			if (!sent.ok) s.ctx.log?.warn?.('indexnow not sent', { reason: sent.reason });
 		});

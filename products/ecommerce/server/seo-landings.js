@@ -843,7 +843,8 @@ export const createLandings = (product, service, media) => {
 		record.categoryIds.length === 0 || record.categoryIds.some((id) => id === category.id || category.path.includes(id));
 
 	/**
-	 * The head of a glossary page: its own SEO copy, else the merchant's patterns (`pattern`, attributes; SG-20).
+	 * The head of a glossary page: its own SEO copy, else the merchant's patterns (`pattern`, attributes and grades;
+	 * SG-20).
 	 * @param {Site} s
 	 * @param {{ name: string, url: string | null, seo: { title: string, description: string, body: string, faqs: Array<{ question: string, answer: string }> } | undefined, fallback: string,
 	 *   pattern?: { title: unknown, description: unknown, values: Record<string, string> } }} page
@@ -964,6 +965,7 @@ export const createLandings = (product, service, media) => {
 							.findOne({ websiteId: data.websiteId, id: grade.categoryId }, NO_ID)) ?? null
 					)
 				: null);
+		const patterns = await s.values('landing_pages');
 		return {
 			key: grade.key,
 			label: grade.label,
@@ -979,6 +981,11 @@ export const createLandings = (product, service, media) => {
 				url: await glossaryUrl(s, 'gradeUrl', { key: grade.key, category: page?.slug ?? '' }),
 				seo: grade.seo,
 				fallback: grade.description,
+				pattern: {
+					title: patterns.gradeTitle,
+					description: patterns.gradeDescription,
+					values: { category: page?.name ?? '' },
+				},
 			})),
 		};
 	};

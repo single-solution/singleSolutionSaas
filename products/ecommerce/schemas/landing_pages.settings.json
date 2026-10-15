@@ -94,6 +94,23 @@
 			"description": "Where a grade's glossary page is on your website, with {key} and {category} (the category's slug), for example /grades/{key} or /grades/{category}/{key}. With {category}, a grade defined for one category has its page there, one for every category a page in each category it names. Empty: there are no grade glossary pages (they are left out of the sitemap).",
 			"default": "",
 			"maxLength": 200
+		},
+		"gradeTitle": {
+			"type": "string",
+			"title": "Grade glossary title",
+			"description": "A grade glossary page's part of the page title when it has no SEO title: {name} is the grade, {category} the page's category, {storeName} the name in titles, for example {name} condition explained.",
+			"default": "{name}",
+			"maxLength": 160
+		},
+		"gradeDescription": {
+			"type": "string",
+			"title": "Grade glossary description",
+			"description": "Used when a grade has no SEO description, text or description of its own, with the same placeholders, for example What {name} means for {category} at {storeName}. Empty: the default description.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
 		}
 	}
 }

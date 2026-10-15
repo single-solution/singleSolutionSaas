@@ -943,14 +943,19 @@ describe('change notices', () => {
 			/** @type {any} */ ({ connections: {} }),
 			/** @type {any} */ ({ emit: async (/** @type {any[]} */ ...args) => emitted.push(args) }),
 		);
-		const s = /** @type {any} */ ({});
+		// SEO off: nothing goes to IndexNow
+		const s = /** @type {any} */ ({ has: () => false });
 		await common.changed(s, []);
 		expect(emitted).toEqual([]);
 		const variants = /** @type {any[]} */ ([
 			{ id: 'var_1', stock: 0 },
 			{ id: 'var_2', stock: 4 },
 		]);
-		await common.changed(s, [{ id: 'prd_1', price: 5, inStock: false, variants }], ['prd_1', 'prd_2', 'prd_1']);
+		await common.changed(
+			s,
+			[/** @type {any} */ ({ id: 'prd_1', price: 5, inStock: false, variants })],
+			['prd_1', 'prd_2', 'prd_1'],
+		);
 		expect(emitted[0][0]).toBe('products.changed');
 		expect(emitted[0][2].productIds).toEqual(['prd_1', 'prd_2']);
 		expect([...emitted[0][2].before.entries()]).toEqual([

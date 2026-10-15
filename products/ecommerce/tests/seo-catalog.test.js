@@ -346,11 +346,29 @@ describe('E16 llms-full.txt and IndexNow', () => {
 		await api('PATCH', `/v1/products/${ids.phone.id}`, { summary: 'Once more' });
 		await api('PATCH', `/v1/categories/${ids.phones.id}`, { description: 'Every phone' });
 		await shop.flush();
-		const sent = shop.callsTo(GROWTH).map((call) => ({ path: call.path, body: JSON.parse(call.body) }));
-		expect(sent).toEqual([
-			{ path: '/v1/indexnow', body: { urls: [`${ORIGIN}/products/acme-one`] } },
+		const sent = () => shop.callsTo(GROWTH).map((call) => ({ path: call.path, body: JSON.parse(call.body) }));
+		// the product's page and its category's listing (SG-32)
+		expect(sent()).toEqual([
+			{ path: '/v1/indexnow', body: { urls: [`${ORIGIN}/products/acme-one`, `${ORIGIN}/categories/phones`] } },
 			{ path: '/v1/indexnow', body: { urls: [`${ORIGIN}/categories/phones`] } },
 		]);
+		// a new address sends the earlier one too; a stock change that leaves it on sale sends nothing
+		shop.calls.length = 0;
+		await api('PATCH', `/v1/products/${ids.phone.id}`, { slug: 'acme-one-phone' });
+		await api('PATCH', `/v1/categories/${ids.phones.id}`, { slug: 'mobiles' });
+		await shop.flush();
+		expect(sent().map((call) => call.body.urls)).toEqual([
+			[`${ORIGIN}/products/acme-one-phone`, `${ORIGIN}/products/acme-one`, `${ORIGIN}/categories/phones`],
+			[`${ORIGIN}/categories/mobiles`, `${ORIGIN}/categories/phones`],
+		]);
+		shop.calls.length = 0;
+		const variant = (await api('GET', `/v1/products/${ids.phone.id}`)).variants[0];
+		await api('POST', `/v1/products/${ids.phone.id}/stock`, { changes: [{ variantId: variant.id, set: 4 }] });
+		await shop.flush();
+		expect(sent()).toEqual([]);
+		await api('PATCH', `/v1/products/${ids.phone.id}`, { slug: 'acme-one' });
+		await api('PATCH', `/v1/categories/${ids.phones.id}`, { slug: 'phones' });
+		await shop.setting('seo', 'indexNowOnSave', false);
 	});
 });
 

@@ -189,14 +189,6 @@ export const createCatalogProducts = (product, service, common) => {
 	};
 
 	/**
-	 * Send an active product's page to IndexNow (E16).
-	 * @param {Site} s @param {ProductRecord} item
-	 */
-	const announce = async (s, item) => {
-		if (item.status === 'active') await common.indexNow(s, [await common.media.productUrl(s, item)]);
-	};
-
-	/**
 	 * The product of a route's `:id` (an id or a slug), or 404.
 	 * @param {WebsiteData} data @param {any} ctx
 	 */
@@ -418,7 +410,6 @@ export const createCatalogProducts = (product, service, common) => {
 		// SEO copy written on save (E43) is answered too
 		let saved = /** @type {ProductRecord} */ (await findProduct(data, id));
 		await service.emit('product.saved', s, { product: saved, replace: (/** @type {ProductRecord} */ next) => (saved = next) });
-		await announce(s, saved);
 		return created(await staffView(s, saved));
 	};
 
@@ -500,7 +491,6 @@ export const createCatalogProducts = (product, service, common) => {
 		// SEO copy written on save (E43) is answered too
 		let saved = done.product;
 		await service.emit('product.saved', s, { product: saved, replace: (/** @type {ProductRecord} */ next) => (saved = next) });
-		await announce(s, saved);
 		return staffView(s, saved);
 	};
 

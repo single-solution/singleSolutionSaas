@@ -145,6 +145,7 @@ export const createCatalogFiles = (product, service, common) => {
 			{ $push: { media: file }, $set: { contentUpdatedAt: new Date(service.now()) } },
 		);
 		await service.log(ctx, 'product.image_added', record.id, { label: String(record.name) });
+		await common.changed(s, [/** @type {any} */ (record)]);
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};
 
@@ -182,6 +183,7 @@ export const createCatalogFiles = (product, service, common) => {
 			.collection(COLLECTIONS.products)
 			.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { media, contentUpdatedAt: new Date(service.now()) } });
 		await service.log(ctx, 'product.images_arranged', record.id, { label: String(record.name) });
+		await common.changed(s, [/** @type {any} */ (record)]);
 		return mediaView(s, media);
 	};
 
@@ -201,6 +203,7 @@ export const createCatalogFiles = (product, service, common) => {
 		const removed = /** @type {MediaRecord} */ (record.media.find((/** @type {MediaRecord} */ file) => file.key === key));
 		for (const sized of [key, ...Object.values(removed.sizes ?? {})]) await deleteFile(s, sized, 'product', record.id);
 		await service.log(ctx, 'product.image_removed', record.id, { label: String(record.name) });
+		await common.changed(s, [/** @type {any} */ (record)]);
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};
 

@@ -507,3 +507,22 @@ describe('one slug, several fields (parity P3-6)', () => {
 		]);
 	});
 });
+
+describe('grade glossary patterns (SG-20)', () => {
+	it('titles and describes a grade page from the patterns when the grade has no copy of its own', async () => {
+		await shop.list('grades', [
+			{ key: 'a', label: 'Grade A', description: 'Light marks.', warrantyDays: 30 },
+			{ key: 'c', label: 'Collector', categoryId: ids.dresses.id },
+		]);
+		await shop.setting('landing_pages', 'gradeTitle', '{name} condition explained');
+		await shop.setting('landing_pages', 'gradeDescription', 'What {name} means for {category}.');
+		const page = await api('GET', `/v1/seo/grades/${ids.evening.slug}/c`);
+		expect(page.title).toContain('Collector condition explained');
+		expect(page.description).toBe('What Collector means for Evening.');
+		// a grade with its own description keeps it
+		expect((await api('GET', '/v1/seo/grades/a')).description).toBe('Light marks.');
+		await shop.setting('landing_pages', 'gradeTitle', '{name}');
+		await shop.setting('landing_pages', 'gradeDescription', '');
+		expect((await api('GET', `/v1/seo/grades/${ids.evening.slug}/c`)).title).not.toContain('explained');
+	});
+});

@@ -10900,11 +10900,11 @@
 				},
 				"title": {
 					"type": "string",
-					"description": "Its SEO title, else its label, inside the seo setting titleTemplate."
+					"description": "Its SEO title, else the landing_pages setting gradeTitle ({name} by default; {name}, {category}, {storeName}), inside the seo setting titleTemplate."
 				},
 				"description": {
 					"type": "string",
-					"description": "Its SEO description, else its text, else its description, else defaultDescription."
+					"description": "Its SEO description, else its text, else its description, else the landing_pages setting gradeDescription (the same placeholders; empty by default), else defaultDescription."
 				},
 				"body": {
 					"type": "string",

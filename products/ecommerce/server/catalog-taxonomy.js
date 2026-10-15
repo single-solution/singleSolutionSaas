@@ -188,11 +188,16 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	};
 
 	/**
-	 * Send an active category's page to IndexNow (E16).
-	 * @param {Site} s @param {CategoryRecord} category
+	 * Send a category's page to IndexNow while it is or was active (E16), with its earlier address after a change of
+	 * address (SG-32).
+	 * @param {Site} s @param {CategoryRecord} category @param {CategoryRecord | null} [before]
 	 */
-	const announce = async (s, category) => {
-		if (category.status === 'active') await common.indexNow(s, [await common.media.categoryUrl(s, category)]);
+	const announce = async (s, category, before = null) => {
+		const urls = [
+			...(category.status === 'active' || before?.status === 'active' ? [await common.media.categoryUrl(s, category)] : []),
+			...(before?.status === 'active' ? [await common.media.categoryUrl(s, before)] : []),
+		];
+		await common.indexNow(s, urls);
 	};
 
 	// ------------------------------------------------------------------------------------------------ categories
@@ -278,7 +283,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			});
 			/** @type {CategoryRecord} */
 			const saved = await one(data, COLLECTIONS.categories, existing.id, 'category');
-			await announce(s, saved);
+			await announce(s, saved, existing);
 			return withImage(s, saved, 'image');
 		},
 		/** @param {any} ctx */
