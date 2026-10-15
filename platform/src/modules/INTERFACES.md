@@ -127,7 +127,8 @@ Settings, the public branding, Activity and the admin Overview (`overview()` →
 receipt of the UTC month, summed in the database), `mailConfigured`, per-product numbers `products: [{ productId, name,
 status, websites, earnedThisMonth, days }]`, recent Activity). Settings →
 Encryption key → Re-seal (`reseal`, Owner) seals every stored secret again with the current `ENCRYPTION_KEY`: the
-system store's signing keys and mail password, and `identity.resealSecrets()` (server tokens, two-step secrets).
+system store's signing keys and mail password, and `identity.resealSecrets()` (server tokens, two-step secrets), each
+counted per part; the answer's `unreadableIn` names the parts with values neither key opens.
 
 ## Product API routes (`/v1/product/*`, `auth: 'product'`)
 

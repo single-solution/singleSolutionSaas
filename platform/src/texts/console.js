@@ -817,9 +817,32 @@ export const ADMIN = Object.freeze({
 	}),
 	encryption: Object.freeze({
 		reseal: 'Re-seal stored secrets',
-		/** @param {{ resealed: number, current: number, unreadable: number }} counts */
-		result: ({ resealed, current, unreadable }) =>
-			`${resealed} re-sealed, ${current} already on the current key, ${unreadable} could not be opened with either key. Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.`,
+		/**
+		 * What Re-seal did: ENCRYPTION_KEY_PREVIOUS can be removed only when nothing failed to open; otherwise what to
+		 * type or make again, part by part.
+		 * @param {{ resealed: number, current: number, unreadable: number,
+		 *   unreadableIn: Partial<Record<'signingKeys' | 'mailPassword' | 'serverTokens' | 'twoStep', number>> }} counts
+		 */
+		result: ({ resealed, current, unreadable, unreadableIn }) => {
+			const counted = `${resealed} re-sealed, ${current} already on the current key, ${unreadable} could not be opened with either key.`;
+			if (unreadable === 0)
+				return `${counted} Every stored secret now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.`;
+			/** @param {number} n @param {string} one @param {string} many */
+			const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+			const todo = [
+				unreadableIn.mailPassword ? 'the email sending password: type it again under Email sending on this page' : null,
+				unreadableIn.serverTokens
+					? `${count(unreadableIn.serverTokens, 'server token', 'server tokens')}: on the website’s Install and tokens page, press Regenerate where it says it cannot be shown, and put the new token on the merchant’s server`
+					: null,
+				unreadableIn.twoStep
+					? `${count(unreadableIn.twoStep, 'two-step sign-in', 'two-step sign-ins')}: an Owner turns that person’s two-step off, and they set it up again`
+					: null,
+				unreadableIn.signingKeys
+					? `${count(unreadableIn.signingKeys, 'signing key', 'signing keys')}: nothing to type, the Portal already signs with a newer key`
+					: null,
+			].filter(Boolean);
+			return `${counted} Keep ENCRYPTION_KEY_PREVIOUS and check that it is the old key. Fix these, then press Re-seal again: ${todo.join('; ')}. Remove ENCRYPTION_KEY_PREVIOUS only when "could not be opened" is 0.`;
+		},
 	}),
 	billingRules: Object.freeze({
 		graceDays: 'Grace period (days)',

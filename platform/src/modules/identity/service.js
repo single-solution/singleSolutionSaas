@@ -166,10 +166,11 @@ export const createIdentityService = (ctx, options = {}) => {
 		ensureTokens: tokens.ensure,
 		/**
 		 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): the server tokens and two-step secrets sealed again
-		 * with the current key.
-		 * @returns {Promise<import('../../infra/crypto.js').ResealCounts[]>}
+		 * with the current key, counted per part.
+		 * @returns {Promise<{ serverTokens: import('../../infra/crypto.js').ResealCounts,
+		 *   twoStep: import('../../infra/crypto.js').ResealCounts }>}
 		 */
-		resealSecrets: async () => [await tokens.reseal(), await accounts.resealTwoStep()],
+		resealSecrets: async () => ({ serverTokens: await tokens.reseal(), twoStep: await accounts.resealTwoStep() }),
 		/**
 		 * 404 unless the product is on the website now (not removed).
 		 * @param {string} websiteId @param {string} productId

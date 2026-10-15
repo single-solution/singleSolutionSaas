@@ -334,17 +334,22 @@ describe('system store (secrets generated on first start, settings recorded late
 		await old.update({ mail: { host: 'smtp.example.com', port: 587, secure: false, user: 'u', pass: 'pw-1', from: 'a@b.co' } });
 		const newKey = 'new-encryption-key-0123456789abcdef-portal';
 		const changing = createSystemStore(db, { encryptionKey: newKey, previousKey: ENCRYPTION_KEY });
-		expect(await changing.reseal()).toEqual({ resealed: 3, current: 0, unreadable: 0 });
-		expect(await changing.reseal()).toEqual({ resealed: 0, current: 3, unreadable: 0 });
+		expect(await changing.reseal()).toEqual({
+			signingKeys: { resealed: 2, current: 0, unreadable: 0 },
+			mailPassword: { resealed: 1, current: 0, unreadable: 0 },
+		});
+		expect(await changing.reseal()).toEqual({
+			signingKeys: { resealed: 0, current: 2, unreadable: 0 },
+			mailPassword: { resealed: 0, current: 1, unreadable: 0 },
+		});
 		const after = createSystemStore(db, { encryptionKey: newKey });
 		const { state } = await after.load();
 		expect(state.signingKeys.map((k) => k.kid)).toEqual(kids);
 		expect(state.publishedOnly).toEqual({ signing: [], token: [] });
 		expect(state.mail?.pass).toBe('pw-1');
 		expect(await createSystemStore(mongo.db('system_reseal_empty'), { encryptionKey: newKey }).reseal()).toEqual({
-			resealed: 0,
-			current: 2,
-			unreadable: 0,
+			signingKeys: { resealed: 0, current: 2, unreadable: 0 },
+			mailPassword: { resealed: 0, current: 0, unreadable: 0 },
 		});
 	});
 

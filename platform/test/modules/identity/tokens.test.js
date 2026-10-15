@@ -2,10 +2,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { manifest as notesManifest } from '@ss/contracts/testing';
 import { createKeyResolver, verifyToken } from '@ss/protocol';
 import { createSecretBox } from '../../../src/infra/crypto.js';
+import { ADMIN } from '../../../src/texts/console.js';
 import { closeMongoClients } from '../../../src/testing.js';
 import { createSystemStore } from '../../../src/infra/system.js';
 import { startMongo } from '../../helpers.js';
-import { PORTAL_URL, bootPortal, codeOf } from '../catalog/boot.js';
+import { PASSWORD, PORTAL_URL, bootPortal, codeOf } from '../catalog/boot.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 180_000 });
 
@@ -228,7 +229,11 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 			resealed: 5,
 			current: 0,
 			unreadable: 0,
+			unreadableIn: {},
 		});
+		expect(ADMIN.encryption.result(first.json)).toBe(
+			'5 re-sealed, 0 already on the current key, 0 could not be opened with either key. Every stored secret now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
+		);
 		// the server token, the mail password, the two-step secret and both signing keys (K-21)
 		expect((await owner2.post('/v1/admin/settings/reseal')).json).toMatchObject({ resealed: 0, current: 5, unreadable: 0 });
 		expect((await changing.activity('settings.changed')).map((e) => e.target.id)).toContain('encryption_key');
@@ -244,5 +249,40 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 		expect(createSystemStore(db, { encryptionKey: NEW_KEY }).passwordReadable(settings.mail.passSealed)).toBe(true);
 		const old = await owner.post(`${site}/tokens/notes/reveal`);
 		expect(codeOf(old)).toEqual([409, 'conflict']);
+
+		// a wrong ENCRYPTION_KEY_PREVIOUS opens nothing: Re-seal names what to type or make again and never says the
+		// previous key can be removed
+		const wrong = await bootPortal({
+			db: mongo.db('tokens_rekey'),
+			env: {
+				ENCRYPTION_KEY: 'third-encryption-key-0123456789abcdef-portal',
+				ENCRYPTION_KEY_PREVIOUS: 'wrong-encryption-key-0123456789abcdef-portal',
+			},
+		});
+		cleanups.push(wrong.close);
+		// a new test client counts its idempotency keys from the start again: sign in with one this database has not seen
+		const signIn = await wrong.api.call('POST', '/v1/auth/sign-in', {
+			body: { email: 'owner@portal.test', password: PASSWORD },
+			idempotencyKey: 'rekey-wrong-sign-in',
+		});
+		expect(signIn.status).toBe(200);
+		const cookie = (signIn.cookies[0] ?? '').split(';')[0];
+		const lost = await wrong.api.call('POST', '/v1/admin/settings/reseal', {
+			body: {},
+			cookie,
+			idempotencyKey: 'rekey-wrong-reseal',
+		});
+		expect(lost.json).toMatchObject({
+			resealed: 0,
+			unreadable: 5,
+			unreadableIn: { signingKeys: 2, mailPassword: 1, serverTokens: 1, twoStep: 1 },
+		});
+		const words = ADMIN.encryption.result(lost.json);
+		expect(words).not.toContain('can be removed.');
+		expect(words).toContain('Keep ENCRYPTION_KEY_PREVIOUS');
+		expect(words).toContain('the email sending password: type it again under Email sending on this page');
+		expect(words).toContain('1 server token: on the website’s Install and tokens page, press Regenerate');
+		expect(words).toContain('1 two-step sign-in: an Owner turns that person’s two-step off');
+		expect(words).toContain('Remove ENCRYPTION_KEY_PREVIOUS only when "could not be opened" is 0.');
 	});
 });

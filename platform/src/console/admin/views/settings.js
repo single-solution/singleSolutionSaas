@@ -384,7 +384,11 @@ function BillingRulesCard({ settings, onSaved }) {
 function EncryptionCard() {
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [counts, setCounts] = useState(/** @type {{ resealed: number, current: number, unreadable: number } | null} */ (null));
+	const [counts, setCounts] = useState(
+		/** @type {{ resealed: number, current: number, unreadable: number, unreadableIn: Record<string, number> } | null} */ (
+			null
+		),
+	);
 	return (
 		<Card title={ADMIN.settingsSections.encryption.title} subtitle={ADMIN.settingsSections.encryption.help}>
 			<div className="space-y-4">
@@ -400,7 +404,9 @@ function EncryptionCard() {
 					}}>
 					{ADMIN.encryption.reseal}
 				</Button>
-				{counts ? <Callout tone="success">{ADMIN.encryption.result(counts)}</Callout> : null}
+				{counts ? (
+					<Callout tone={counts.unreadable === 0 ? 'success' : 'warning'}>{ADMIN.encryption.result(counts)}</Callout>
+				) : null}
 				<FormError problem={problem} fields={[]} />
 			</div>
 		</Card>

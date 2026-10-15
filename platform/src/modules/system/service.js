@@ -106,12 +106,20 @@ export const createSystemService = (ctx) => {
 		 * Settings → Encryption key → Re-seal (PLAN 0.4.8, 0.11; RT-14): after the owner changes `ENCRYPTION_KEY` (the old
 		 * key set as `ENCRYPTION_KEY_PREVIOUS`), every stored secret is sealed again with the current key — the signing
 		 * keys, the SMTP password, server tokens and two-step secrets. Values already on it stay; values neither key opens are counted
-		 * and left alone. Pressing again is safe. Written to Activity.
+		 * and left alone, and `unreadableIn` names the parts they are in (`signingKeys`, `mailPassword`, `serverTokens`,
+		 * `twoStep`) with how many, so the Owner knows what to type or make again. Pressing again is safe. Written to
+		 * Activity.
 		 * @param {{ actor: Actor, requestId: string, ip: string | null }} input
 		 */
 		reseal: async ({ actor, requestId, ip }) => {
-			const counts = sumCounts([await system.reseal(), ...(await ctx.service('identity').resealSecrets())]);
-			const result = { keyId: ctx.secretBox.keyId, previousKeyId: ctx.secretBox.previousKeyId, ...counts };
+			const parts = { ...(await system.reseal()), ...(await ctx.service('identity').resealSecrets()) };
+			const counts = sumCounts(Object.values(parts));
+			const unreadableIn = Object.fromEntries(
+				Object.entries(parts)
+					.filter(([, part]) => part.unreadable > 0)
+					.map(([name, part]) => [name, part.unreadable]),
+			);
+			const result = { keyId: ctx.secretBox.keyId, previousKeyId: ctx.secretBox.previousKeyId, ...counts, unreadableIn };
 			await record(actor, 'encryption_key', { after: { resealed: result }, requestId, ip });
 			return result;
 		},

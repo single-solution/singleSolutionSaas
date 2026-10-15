@@ -338,8 +338,8 @@ export const createSystemStore = (
 
 	/**
 	 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): the signing keys (K-21) and the stored SMTP password
-	 * sealed again with the current key (what changed meanwhile is left as saved).
-	 * @returns {Promise<import('./crypto.js').ResealCounts>}
+	 * sealed again with the current key (what changed meanwhile is left as saved), counted per part.
+	 * @returns {Promise<{ signingKeys: import('./crypto.js').ResealCounts, mailPassword: import('./crypto.js').ResealCounts }>}
 	 */
 	const reseal = async () => {
 		const doc = await secrets();
@@ -377,7 +377,7 @@ export const createSystemStore = (
 					]
 				: [],
 		);
-		return sumCounts([...keys, mail]);
+		return { signingKeys: sumCounts(keys), mailPassword: mail };
 	};
 
 	/** @returns {Promise<string | null>} the schema fingerprint last applied */
