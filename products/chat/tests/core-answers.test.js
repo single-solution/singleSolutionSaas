@@ -452,6 +452,19 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(shopRequest('quote_product_savings', { productId: 'p1', paymentMethod: 'card' })).toMatchObject({
 			path: '/v1/chat/products/p1/quote',
 		});
+		// where it goes, for the delivery zone and tax (Ecommerce's address lengths)
+		expect(
+			shopRequest('quote_product_savings', {
+				productId: 'p1',
+				country: 'US',
+				region: 'California',
+				city: 'San Francisco',
+				postalCode: '94105',
+			}),
+		).toMatchObject({ path: '/v1/chat/products/p1/quote?country=US&region=California&city=San+Francisco&postalCode=94105' });
+		expect(shopRequest('quote_product_savings', { productId: 'p1', postalCode: '1'.repeat(30) })).toMatchObject({
+			path: `/v1/chat/products/p1/quote?postalCode=${'1'.repeat(20)}`,
+		});
 		expect(shopRequest('get_product_details', { productId: 'p.1' })).toEqual({
 			ok: false,
 			content: 'Give the product id from a search result.',
@@ -755,8 +768,18 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				loyaltyPoints: 3,
 				city: 'Manchester',
 				area: 'Didsbury',
+				region: 'England',
+				country: 'GB',
 			}).content,
-		).toEqual({ name: 'Alex Morgan', firstName: 'Alex', loyaltyPoints: 3, city: 'Manchester', area: 'Didsbury' });
+		).toEqual({
+			name: 'Alex Morgan',
+			firstName: 'Alex',
+			loyaltyPoints: 3,
+			city: 'Manchester',
+			area: 'Didsbury',
+			region: 'England',
+			country: 'GB',
+		});
 		const deal = {
 			id: 'deal_1',
 			name: 'Weekend offer',

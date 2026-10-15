@@ -72,7 +72,7 @@ export const SHOP_ENDPOINTS = Object.freeze([
 		feature: 'shop_deals',
 		signIn: false,
 		request:
-			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=cod|online|bank_transfer|pickup&city=<city>',
+			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=cod|online|bank_transfer|pickup&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
 	},
 	{ tool: SHOP_TOOLS.deals, feature: 'shop_deals', signIn: false, request: 'GET /v1/chat/deals?limit=10' },
 	{ tool: SHOP_TOOLS.top, feature: 'shop_top', signIn: false, request: 'GET /v1/chat/products/top?kind=top|new&limit=5' },
@@ -106,7 +106,7 @@ export const SHOP_ANSWERS = Object.freeze({
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
 		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyDays }] }] (the last 5), loyaltyPoints, name',
-	account: 'name, firstName, loyaltyPoints, city, area',
+	account: 'name, firstName, loyaltyPoints, city, area, region, country',
 	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status, trackingNote, expectedAt }]',
 	context:
 		'text (at most 6,000 characters: the policies, the 10 newest products with their shown price per grade and its "was" price, the deals table, the named product and, signed in, first name, city and points), currency',
@@ -351,7 +351,13 @@ const SCHEMAS = {
 				description:
 					'The payment method the visitor asks about (optional): cod (cash on delivery), online, bank_transfer or pickup (paid at the pickup counter).',
 			},
+			country: { type: 'string', description: 'The visitor’s country, for the delivery charge and tax (optional).' },
+			region: {
+				type: 'string',
+				description: 'The visitor’s state, province or region, for the delivery charge and tax (optional).',
+			},
 			city: { type: 'string', description: 'The visitor’s city, for the delivery charge (optional).' },
+			postalCode: { type: 'string', description: 'The visitor’s postal code, for the delivery charge and tax (optional).' },
 		},
 		['productId'],
 	),
@@ -370,7 +376,7 @@ const SCHEMAS = {
 	),
 	[SHOP_TOOLS.account]: schema(
 		SHOP_TOOLS.account,
-		'Get the signed-in visitor’s own name, loyalty points balance, city and area.',
+		'Get the signed-in visitor’s own name, loyalty points balance, city, area, region and country.',
 	),
 	[SHOP_TOOLS.track]: schema(
 		SHOP_TOOLS.track,
@@ -467,8 +473,16 @@ export const shopRequest = (name, args, { limit = SHOP_LIMIT, minor = (amount) =
 		if (Number.isInteger(quantity) && quantity > 0) query.set('quantity', String(Math.min(QUOTE_MAX_QUANTITY, quantity)));
 		const method = typeof args.paymentMethod === 'string' ? args.paymentMethod.trim().toLowerCase() : '';
 		if (PAYMENT_METHODS.includes(method)) query.set('paymentMethod', method);
-		const city = word(args.city, 80);
-		if (city) query.set('city', city);
+		// where it goes (Ecommerce's address lengths), for the delivery zone and tax
+		for (const [field, max] of /** @type {const} */ ([
+			['country', 60],
+			['region', 100],
+			['city', 100],
+			['postalCode', 20],
+		])) {
+			const value = word(args[field], max);
+			if (value) query.set(field, value);
+		}
 		const search = query.toString();
 		return { ok: true, signIn: false, path: `${path}/quote${search ? `?${search}` : ''}` };
 	}
@@ -857,8 +871,10 @@ export const shopAnswer = (name, body, look = {}) => {
 	}
 	if (name === SHOP_TOOLS.account) {
 		const firstName = textOf(b.firstName, 60);
-		const city = textOf(b.city, 80);
-		const area = textOf(b.area, 80);
+		const city = textOf(b.city, 100);
+		const area = textOf(b.area, 100);
+		const region = textOf(b.region, 100);
+		const country = textOf(b.country, 60);
 		return {
 			content: {
 				name: textOf(b.name, 120),
@@ -866,6 +882,8 @@ export const shopAnswer = (name, body, look = {}) => {
 				loyaltyPoints: countOf(b.loyaltyPoints),
 				...(city ? { city } : {}),
 				...(area ? { area } : {}),
+				...(region ? { region } : {}),
+				...(country ? { country } : {}),
 			},
 			products: [],
 		};
