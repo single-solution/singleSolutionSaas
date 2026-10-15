@@ -20,11 +20,12 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
-import { isDatabaseUnavailable } from './db.js';
+import { isDatabaseUnavailable } from '@ss/net';
 import { runInRequestScope } from './request-scope.js';
-import { hmacHex, isObject, sha256Hex } from './util.js';
+import { isObject } from '@ss/contracts/util';
+import { hmacSha256Hex, sha256Hex } from '@ss/protocol';
 
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 /** @typedef {import('./rbac.js').Actor} Actor */
 /** @typedef {import('./rbac.js').Resource} Resource */
 /** @typedef {import('./stores.js').StoredResponse} StoredResponse */
@@ -695,7 +696,7 @@ export const createApiHandler = ({
 					const principal = actor ? `${actor.type}:${actor.id}` : `anon:${ip ?? 'unknown'}`;
 					record = sha256Hex(`${principal}\n${route.id}\n${pathname}\n${key}`);
 					// keyed: bodies may hold passwords or credentials, a plain hash could be brute-forced offline
-					const fingerprint = hmacHex(fingerprintKey, `ss-idem.v1\n${method}\n${pathname}\n${url.search}\n${rawBody}`);
+					const fingerprint = hmacSha256Hex(fingerprintKey, `ss-idem.v1\n${method}\n${pathname}\n${url.search}\n${rawBody}`);
 					const begun = await idempotency.begin(record, fingerprint, now() + IDEMPOTENCY_TTL_MS);
 					if (begun.state === 'mismatch')
 						return fail(problem('idempotency_conflict', 'This Idempotency-Key was used with a different request.'));

@@ -11,10 +11,10 @@
  *    (or rotated a key), and the Portal is rebuilt.
  * @module
  */
-import { createHash } from 'node:crypto';
+import { createLogger } from '@ss/net';
+import { sha256Hex } from '@ss/protocol';
 import { buildConfig, loadEnv } from './infra/config.js';
 import { connectMongoClient } from './infra/db.js';
-import { createLogger } from './infra/logger.js';
 import { createSystemStore } from './infra/system.js';
 import { modules as defaultModules } from './modules/index.js';
 import { createPortal } from './portal.js';
@@ -42,19 +42,13 @@ const shared = () => {
  * @param {import('./portal.js').Portal} portal
  */
 const schemaFingerprint = (portal) =>
-	createHash('sha256')
-		.update(
-			JSON.stringify({
-				collections: portal.registry.all().map((def) => [def.name, def.indexes, def.ttl ?? null]),
-			}),
-		)
-		.digest('hex');
+	sha256Hex(JSON.stringify({ collections: portal.registry.all().map((def) => [def.name, def.indexes, def.ttl ?? null]) }));
 
 /**
  * Apply indexes once per schema version (idempotent).
  * @param {import('./portal.js').Portal} portal
  * @param {import('./infra/system.js').SystemStore} system
- * @param {import('./infra/logger.js').Logger} logger
+ * @param {import('@ss/net').Logger} logger
  */
 const prepareSchema = async (portal, system, logger) => {
 	const fingerprint = schemaFingerprint(portal);

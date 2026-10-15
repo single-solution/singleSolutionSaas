@@ -28,7 +28,7 @@ import { createId, validateProductBlueprint } from '@ss/contracts';
 import { isNetError, textOf } from '@ss/net';
 import { signPortalCall } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
-import { sha256Hex } from '../../infra/util.js';
+import { sha256Hex } from '@ss/protocol';
 import { assembleSheet, productEntry, reasonOfStatus, sharedCopy } from './core/setup.js';
 import { PRODUCTS, SETUP_LINKS, SETUP_PROFILES } from './schema.js';
 

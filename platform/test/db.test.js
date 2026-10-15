@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { DATABASE_DEADLINES } from '@ss/net';
 import {
-	DATABASE_DEADLINES,
 	connectMongoClient,
 	createLocks,
 	createRegistry,
@@ -12,7 +12,6 @@ import {
 	guardPipeline,
 	guardUpdate,
 	indexSpecs,
-	isDatabaseUnavailable,
 } from '../src/infra/db.js';
 import { closeMongoClients } from '../src/testing.js';
 import { isPlatformError } from '../src/infra/errors.js';
@@ -312,13 +311,7 @@ describe('getMongoClient', () => {
 		await closeMongoClients();
 	});
 
-	it('gives every database call deadlines and recognizes a database that cannot be reached (K-16)', async () => {
-		expect(DATABASE_DEADLINES).toEqual({
-			serverSelectionTimeoutMS: 5_000,
-			connectTimeoutMS: 5_000,
-			waitQueueTimeoutMS: 10_000,
-			socketTimeoutMS: 10_000,
-		});
+	it('gives every database call the deadlines of @ss/net (K-16)', async () => {
 		/** @type {any[]} */
 		const seen = [];
 		getMongoClient({
@@ -332,13 +325,6 @@ describe('getMongoClient', () => {
 			{ maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000, ...DATABASE_DEADLINES, appName: 'ss-portal' },
 		]);
 		await closeMongoClients();
-		for (const name of ['MongoServerSelectionError', 'MongoNetworkTimeoutError', 'MongoWaitQueueTimeoutError'])
-			expect(isDatabaseUnavailable(Object.assign(new Error('x'), { name }))).toBe(true);
-		expect(isDatabaseUnavailable(Object.assign(new Error('x'), { code: 50 }))).toBe(true);
-		expect(isDatabaseUnavailable(Object.assign(new Error('dup'), { code: 11000 }))).toBe(false);
-		expect(isDatabaseUnavailable(new Error('db down'))).toBe(false);
-		expect(isDatabaseUnavailable(Object.assign(new Error('querySrv ENOTFOUND'), { code: 'ENOTFOUND' }))).toBe(true);
-		expect(isDatabaseUnavailable(null)).toBe(false);
 	});
 });
 

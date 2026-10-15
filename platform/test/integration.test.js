@@ -13,7 +13,8 @@ import { toNextRoute } from '../src/infra/http.js';
 import { getPortal } from '../src/runtime.js';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { getMongoClient, isDatabaseUnavailable } from '../src/infra/db.js';
+import { isDatabaseUnavailable } from '@ss/net';
+import { getMongoClient } from '../src/infra/db.js';
 import { closeMongoClients } from '../src/testing.js';
 import { createSystemStore } from '../src/infra/system.js';
 import {

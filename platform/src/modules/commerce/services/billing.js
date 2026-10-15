@@ -21,7 +21,7 @@
 import { createId } from '@ss/contracts';
 import { isProblem, problem } from '../../../infra/http.js';
 import { afterResponse, memoize } from '../../../infra/request-scope.js';
-import { sha256Hex } from '../../../infra/util.js';
+import { sha256Hex } from '@ss/protocol';
 import {
 	OPEN_PHASE,
 	billingStateOf,

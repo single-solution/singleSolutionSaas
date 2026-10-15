@@ -15,7 +15,7 @@ import { platformError } from './errors.js';
 /** @typedef {import('./db.js').CollectionDefinition} CollectionDefinition */
 /** @typedef {import('./http.js').RouteDefinition} RouteDefinition */
 /** @typedef {import('./authenticators.js').AuthPorts} AuthPorts */
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 
 /**
  * Shared services every module may use (built once by the composition root).

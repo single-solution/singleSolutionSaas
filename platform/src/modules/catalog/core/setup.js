@@ -6,7 +6,7 @@
  */
 import { BLUEPRINT_SCHEMA, PATTERNS } from '@ss/contracts';
 import { adviceOf } from './advisor.js';
-import { scriptTag } from './install.js';
+import { widgetScriptTag } from '@ss/contracts/text';
 
 /** @typedef {import('@ss/contracts').Blueprint} Blueprint */
 /** @typedef {import('@ss/contracts').ProductBlueprint} ProductBlueprint */
@@ -49,7 +49,7 @@ export const productEntry = (entry, answer) => {
 		install: {
 			...install,
 			browserToken: entry.browserToken,
-			snippet: install.scriptUrl === null ? null : scriptTag(install.scriptUrl, entry.browserToken),
+			snippet: install.scriptUrl === null ? null : widgetScriptTag({ src: install.scriptUrl, token: entry.browserToken }),
 		},
 		serverToken: { issued: true },
 	};

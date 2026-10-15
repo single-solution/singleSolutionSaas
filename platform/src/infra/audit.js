@@ -9,8 +9,9 @@
  */
 import { createId } from '@ss/contracts';
 import { platformError } from './errors.js';
-import { redact } from './logger.js';
-import { defaultRandomBytes, isObject } from './util.js';
+import { redact } from '@ss/net';
+import { isObject } from '@ss/contracts/util';
+import { defaultRandomBytes } from './util.js';
 
 /** @typedef {import('./db.js').ReadOps} ReadOps */
 /** @typedef {import('./rbac.js').Actor} Actor */

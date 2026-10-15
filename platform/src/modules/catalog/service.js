@@ -31,7 +31,8 @@ import {
 } from '@ss/protocol';
 import { logoUrlOf } from '../../infra/config.js';
 import { problem } from '../../infra/http.js';
-import { isDuplicateKey, isObject } from '../../infra/util.js';
+import { isObject } from '@ss/contracts/util';
+import { isDuplicateKey } from '../../infra/util.js';
 import { launchUrl } from './core/input.js';
 import { createNotices } from './notices.js';
 import { createSetup } from './setup.js';

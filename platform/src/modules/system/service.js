@@ -8,7 +8,8 @@ import { LOGO_MAX_BYTES, LOGO_TYPES, MAIL_FROM, SETTINGS_BOUNDS, logoUrlOf } fro
 import { sumCounts } from '../../infra/crypto.js';
 import { problem } from '../../infra/http.js';
 import { createSmtpMailer, mailContextOf } from '../../infra/mailer.js';
-import { EMAIL_ADDRESS, hasControlCharacters } from '../../infra/util.js';
+import { normalizeEmail } from '@ss/contracts/email';
+import { hasControlCharacters } from '../../infra/util.js';
 import { createActivity } from './activity.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
@@ -142,9 +143,8 @@ export const createSystemService = (ctx) => {
 						? input.password
 						: null;
 			if (typeof pass === 'string' && pass.length > 1024) errors.push({ path: '/password', message: 'is too long' });
-			const address = typeof input.senderAddress === 'string' ? input.senderAddress.trim() : '';
-			if (!EMAIL_ADDRESS.test(address) || address.length > 254)
-				errors.push({ path: '/senderAddress', message: 'must be an email address' });
+			const address = normalizeEmail(input.senderAddress) ?? '';
+			if (address === '') errors.push({ path: '/senderAddress', message: 'must be an email address' });
 			const name = optionalLine(input.senderName, 100);
 			if (!name.ok || (name.value ?? '').includes('<'))
 				errors.push({ path: '/senderName', message: 'must be 1..100 characters' });
@@ -244,9 +244,9 @@ export const createSystemService = (ctx) => {
 			const input = objectOf(body);
 			/** @type {FieldError[]} */
 			const errors = [];
-			const email = optionalLine(input.email, 254);
-			if (!email.ok || (email.value && !EMAIL_ADDRESS.test(email.value)))
-				errors.push({ path: '/email', message: 'must be an email address' });
+			const line = optionalLine(input.email, 254);
+			const email = line.ok && line.value ? normalizeEmail(line.value) : null;
+			if (!line.ok || (line.value && email === null)) errors.push({ path: '/email', message: 'must be an email address' });
 			const phone = optionalLine(input.phone, 40);
 			if (!phone.ok || (phone.value && !PHONE.test(phone.value)))
 				errors.push({ path: '/phone', message: 'must be a phone number with country code' });
@@ -255,7 +255,7 @@ export const createSystemService = (ctx) => {
 				errors.push({ path: '/whatsapp', message: 'must be a phone number with country code' });
 			refuse(errors, 'The support contact is invalid.');
 			const support = {
-				email: email.ok ? email.value : null,
+				email,
 				phone: phone.ok ? phone.value : null,
 				whatsapp: whatsapp.ok ? whatsapp.value : null,
 			};

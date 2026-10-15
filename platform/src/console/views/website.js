@@ -35,7 +35,7 @@ import {
 	problemCode,
 	useToast,
 } from '@ss/ui';
-import { scriptTag } from '../../modules/catalog/core/install.js';
+import { widgetScriptTag } from '@ss/contracts/text';
 import { BILLING, MORE, WEBSITE } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
@@ -614,7 +614,10 @@ export function InstallBlock({ entry, domain, merchantId, websiteId }) {
 			</div>
 			{entry.widgetScriptUrl ? (
 				<div className="space-y-1">
-					<CodeBlock label={WEBSITE.scriptTag} code={scriptTag(entry.widgetScriptUrl, entry.browserToken)} />
+					<CodeBlock
+						label={WEBSITE.scriptTag}
+						code={widgetScriptTag({ src: entry.widgetScriptUrl, token: entry.browserToken })}
+					/>
 					<p className="text-xs text-muted">{WEBSITE.scriptTagHelp}</p>
 				</div>
 			) : null}

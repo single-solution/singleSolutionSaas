@@ -9,33 +9,7 @@
  * are worked out live (`core/money.js`).
  * @module
  */
-import { createHash } from 'node:crypto';
-
-/**
- * JSON with object keys sorted recursively (arrays keep their order); `undefined` members are dropped.
- * @param {unknown} value
- * @returns {string}
- */
-const stableStringify = (value) => {
-	if (value === null || typeof value !== 'object') {
-		const json = JSON.stringify(value);
-		return json === undefined ? 'null' : json;
-	}
-	if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-	const record = /** @type {Record<string, unknown>} */ (value);
-	const members = Object.keys(record)
-		.filter((key) => record[key] !== undefined)
-		.sort()
-		.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
-	return `{${members.join(',')}}`;
-};
-
-/**
- * Hex SHA-256 of a UTF-8 string.
- * @param {string} text
- * @returns {string}
- */
-const sha256Hex = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
+import { canonicalJson, sha256Hex } from '@ss/protocol';
 
 const LEDGER_TYPES = Object.freeze(/** @type {const} */ (['receipt', 'day_charge']));
 /** @typedef {typeof LEDGER_TYPES[number]} LedgerType */
@@ -96,7 +70,7 @@ export const ledgerActor = (actor) => (actor ? { type: actor.type, id: actor.id 
  * @returns {string}
  */
 export const canonicalEntry = (entry) =>
-	stableStringify({
+	canonicalJson({
 		merchantId: entry.merchantId,
 		seq: entry.seq,
 		type: entry.type,

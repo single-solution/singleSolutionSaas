@@ -5,11 +5,11 @@ import {
 	createPlatformMailer,
 	createSmtpMailer,
 	createUnavailableMailer,
-	escapeHtml,
 	mailContextOf,
 	renderMail,
 	smtpTransportOptions,
 } from '../src/infra/mailer.js';
+import { escapeHtml } from '@ss/contracts/text';
 import { isProblem } from '../src/infra/http.js';
 import { MAIL_TEXTS } from '../src/texts/mail.js';
 import { DEFAULT_SETTINGS } from '../src/infra/config.js';
@@ -100,7 +100,8 @@ describe('mail templates (PLAN 0.5.10)', () => {
 		expect(renderMail('merchant_setup', { link: LINK, merchantName: 'A\r\nBcc: x@y.z' }, DEFAULTS).subject).not.toMatch(
 			/[\r\n]/,
 		);
-		expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
+		// every value is escaped (the shared escapeHtml)
+		expect(renderMail('email_change_notice', { newEmail: '<b>x</b>@shop.test' }, DEFAULTS).html).toContain('&#60;b&#62;x');
 	});
 
 	it('refuses unknown templates and unsafe links', () => {

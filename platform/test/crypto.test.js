@@ -3,7 +3,8 @@ import { createJwks, createKeyResolver, generateSigningKey, issueToken, verifyTo
 import { createCipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { createPortalKeys, createSecretBox, resealEach, sumCounts } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
-import { API_CSP, createNonce, pageCsp, staticSecurityHeaders } from '../src/infra/security-headers.js';
+import { staticSecurityHeaders } from '@ss/net';
+import { API_CSP, createNonce, pageCsp } from '../src/infra/security-headers.js';
 import { MERCHANT, WEBSITE } from './helpers.js';
 
 const aad = { merchantId: MERCHANT, productId: 'notes' };

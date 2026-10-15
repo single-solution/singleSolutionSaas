@@ -1,80 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ADMIN_ROLES } from '@ss/contracts';
-import { createLogger, isSensitiveKey, noopLogger, redact } from '../src/infra/logger.js';
 import { ALL_PERMISSIONS, MERCHANT_PERMISSIONS, PERMISSIONS, ROLE_PERMISSIONS, can, permissionsFor } from '../src/infra/rbac.js';
 import { MERCHANT, MERCHANT_2, WEBSITE } from './helpers.js';
 import { isPlatformError, platformError } from '../src/infra/errors.js';
 
-describe('logger', () => {
-	it('writes JSON lines with level threshold, child fields and redaction', () => {
-		/** @type {string[]} */
-		const lines = [];
-		const log = createLogger({ level: 'info', write: (line) => lines.push(line), now: () => 0, fields: { service: 'portal' } });
-		log.debug('hidden');
-		log.info('hello', { password: 'p', nested: { apiKey: 'k', ok: 1 }, MONGODB_URI: 'mongodb://u:p@h/db' });
-		log.child({ requestId: 'r1' }).warn('child', { authorization: 'Bearer x' });
-		log.error('boom', { error: Object.assign(new Error('bad'), { code: 'E1' }) });
-		expect(lines).toHaveLength(3);
-		const [first, second, third] = lines.map((line) => JSON.parse(line));
-		expect(first).toMatchObject({
-			level: 'info',
-			msg: 'hello',
-			service: 'portal',
-			password: '[redacted]',
-			nested: { apiKey: '[redacted]', ok: 1 },
-			MONGODB_URI: '[redacted]',
-		});
-		expect(first.time).toBe('1970-01-01T00:00:00.000Z');
-		expect(second).toMatchObject({ requestId: 'r1', authorization: '[redacted]' });
-		expect(third.error).toEqual({ name: 'Error', message: 'bad', code: 'E1' });
-	});
-
-	it('redacts secret-looking values and credentials in URLs', () => {
-		expect(redact('eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJ4In0.c2ln')).toBe('[redacted]');
-		expect(redact('sk_live_abc')).toBe('sk_live_abc');
-		expect(redact('mongodb+srv://user:pass@cluster/db')).toBe('mongodb+srv://[redacted]@cluster/db');
-		expect(redact('https://example.com/path')).toBe('https://example.com/path');
-		expect(redact([{ token: 'x' }, new Date(0)])).toEqual([{ token: '[redacted]' }, '1970-01-01T00:00:00.000Z']);
-		/** @type {any} */
-		let deep = { v: 1 };
-		for (let i = 0; i < 12; i += 1) deep = { deep };
-		expect(JSON.stringify(redact(deep))).toContain('[depth]');
-		expect(redact(new Error('plain'))).toEqual({ name: 'Error', message: 'plain' });
-	});
-
-	it('classifies sensitive keys', () => {
-		for (const key of [
-			'secret',
-			'clientSecret',
-			'session_token',
-			'Password',
-			'cookie',
-			'api-key',
-			'privateJwk',
-			'd',
-			'jwksUri',
-			'kek',
-			'sealed',
-			'credentials',
-		]) {
-			expect(isSensitiveKey(key)).toBe(true);
-		}
-		for (const key of ['idempotencyKey', 'websiteId', 'portalUrl', 'security', 'count'])
-			expect(isSensitiveKey(key)).toBe(false);
-	});
-
-	it('defaults to stdout and ignores unknown levels; noop logger is inert', () => {
-		const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-		createLogger({ level: 'nope' }).info('x');
-		expect(spy).toHaveBeenCalledTimes(1);
-		spy.mockRestore();
-		noopLogger.info('x');
-		noopLogger.debug('x');
-		noopLogger.warn('x');
-		noopLogger.error('x');
-		expect(noopLogger.child({})).toBe(noopLogger);
-	});
-
+// the logger is @ss/net's (tested there)
+describe('platform errors', () => {
 	it('platform errors carry codes', () => {
 		const error = platformError('x_code', 'message', { a: 1 });
 		expect(isPlatformError(error)).toBe(true);

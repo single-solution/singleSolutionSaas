@@ -1,5 +1,6 @@
 /**
- * HTTP security headers (pure). `next.config.js` applies the static set to every response; `proxy.js` adds a
+ * HTTP security headers (pure). `next.config.js` applies the static set (`@ss/net` `staticSecurityHeaders`) to every
+ * response; `proxy.js` adds a
  * per-request nonce-based CSP to HTML pages (Next.js applies the nonce to its own scripts and styles).
  *
  * - Pages: `script-src 'self' 'nonce-…' 'strict-dynamic'` (+ `'unsafe-eval'` in development only, for React
@@ -41,21 +42,3 @@ export const API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'no
  */
 export const createNonce = (randomBytes = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n))) =>
 	Buffer.from(randomBytes(16)).toString('base64');
-
-/**
- * Static headers for every response.
- * @returns {Array<{ key: string, value: string }>}
- */
-export const staticSecurityHeaders = () => [
-	{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-	{ key: 'X-Content-Type-Options', value: 'nosniff' },
-	{ key: 'X-Frame-Options', value: 'DENY' },
-	{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-	{
-		key: 'Permissions-Policy',
-		value: 'accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=(), browsing-topics=()',
-	},
-	{ key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-	{ key: 'X-DNS-Prefetch-Control', value: 'off' },
-	{ key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
-];
