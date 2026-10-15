@@ -76,7 +76,9 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	const make = fieldMaker(doc, 'ss-chat');
 	const botName = t('chat.botName');
 	const fileTypes = s.attachments.types.filter((type) => ATTACHMENT_TYPES.includes(type));
-	const maxBytes = Math.min(s.attachments.maxBytes || MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_BYTES);
+	/** The cap of a file type (C11: each type its own, as the server checks it). @param {string} type */
+	const maxBytesOf = (type) =>
+		Math.min(s.attachments.limits?.[type] ?? s.attachments.maxBytes ?? MAX_ATTACHMENT_BYTES, MAX_ATTACHMENT_BYTES);
 	visitor.rememberFor(s.guests.rememberDays);
 
 	/** @type {any} the Chat view of the API */
@@ -673,6 +675,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		const chosen = file.files?.[0];
 		file.value = '';
 		if (!chosen) return;
+		const maxBytes = maxBytesOf(chosen.type);
 		const problem = fileProblem(chosen, fileTypes, maxBytes);
 		if (problem) {
 			say(

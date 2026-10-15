@@ -28,6 +28,8 @@ import { STANDARD_FIELDS } from '../../core/flows.js';
 import { checkRedactionPatterns } from '../../core/moderation.js';
 import { checkTeams } from '../../core/routing.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
+import { UPLOAD_MAX_MB } from '../../core/uploads.js';
+import { ATTACHMENT_TYPES } from '../../core/widgets.js';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
@@ -829,6 +831,49 @@ export function PageTypesEditor({ websiteId, off }) {
 						onChange={(event) => set({ nudge: event.target.value })}
 					/>
 				</>
+			)}
+		/>
+	);
+}
+
+const U = L.uploadTypes;
+
+/** Each type the merchant may offer, by its name and MIME type. */
+const UPLOAD_OPTIONS = ATTACHMENT_TYPES.map((value) => ({
+	value,
+	label: `${/** @type {Record<string, string>} */ (U.types)[value] ?? value} (${value})`,
+}));
+
+/** @param {EditorProps} props */
+export function UploadTypesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="upload_types"
+			title={U.title}
+			help={U.help}
+			itemLabel={U.item}
+			max={ATTACHMENT_TYPES.length}
+			off={off}
+			blank={() => ({ type: 'video/mp4', maxMb: 20 })}
+			clean={(entry) => ({ type: String(entry.type), maxMb: Number(entry.maxMb) })}
+			render={(entry, set) => (
+				<FieldGrid>
+					<Select
+						label={U.type}
+						value={entry.type}
+						options={UPLOAD_OPTIONS}
+						onChange={(event) => set({ type: event.target.value })}
+					/>
+					<Input
+						label={U.maxMb}
+						type="number"
+						min={1}
+						max={UPLOAD_MAX_MB}
+						value={String(entry.maxMb)}
+						onChange={(event) => set({ maxMb: Number(event.target.value) })}
+					/>
+				</FieldGrid>
 			)}
 		/>
 	);

@@ -66,11 +66,45 @@ export const PACE = Object.freeze({ msPerChar: 10, maxTypingMs: 2500, readingMsP
 /** Longest visitor or staff message (characters). */
 export const MAX_MESSAGE_LENGTH = 4000;
 
-/** File types attachments may ever have (the setting picks among them); never SVG, HTML or executables. */
-export const ATTACHMENT_TYPES = Object.freeze(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']);
+/** Image types every browser shows; other images (HEIC, HEIF) are files to download. */
+const BROWSER_IMAGES = Object.freeze(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
 
-/** The hard cap of a visitor attachment, whatever the setting. */
-export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+/**
+ * File types visitors may ever send (the merchant's upload types pick among them, C11): images (phone photos in HEIC
+ * and HEIF too), PDF, video and audio (voice notes); never SVG, HTML or executables.
+ */
+export const ATTACHMENT_TYPES = Object.freeze([
+	...BROWSER_IMAGES,
+	'image/heic',
+	'image/heif',
+	'application/pdf',
+	'video/mp4',
+	'video/webm',
+	'video/quicktime',
+	'audio/mpeg',
+	'audio/mp4',
+	'audio/x-m4a',
+	'audio/aac',
+	'audio/ogg',
+	'audio/webm',
+	'audio/wav',
+]);
+
+/** The hard cap of a visitor attachment, whatever the merchant's cap per type (C11: videos too). */
+export const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+
+/**
+ * How an attachment shows (C11): `image` inline (the images browsers show), `video` and `audio` as players, anything
+ * else as a file to open or download.
+ * @param {string} type
+ * @returns {'image' | 'video' | 'audio' | 'file'}
+ */
+export const attachmentKind = (type) => {
+	if (BROWSER_IMAGES.includes(type)) return 'image';
+	if (type.startsWith('video/')) return 'video';
+	if (type.startsWith('audio/')) return 'audio';
+	return 'file';
+};
 
 /** File types staff may also send (C12): Word, Excel and plain text, offered as downloads only. */
 const STAFF_ONLY_TYPES = Object.freeze([
@@ -93,7 +127,20 @@ export const EXTENSIONS = Object.freeze({
 	'image/png': 'png',
 	'image/webp': 'webp',
 	'image/gif': 'gif',
+	'image/avif': 'avif',
+	'image/heic': 'heic',
+	'image/heif': 'heif',
 	'application/pdf': 'pdf',
+	'video/mp4': 'mp4',
+	'video/webm': 'webm',
+	'video/quicktime': 'mov',
+	'audio/mpeg': 'mp3',
+	'audio/mp4': 'm4a',
+	'audio/x-m4a': 'm4a',
+	'audio/aac': 'aac',
+	'audio/ogg': 'ogg',
+	'audio/webm': 'weba',
+	'audio/wav': 'wav',
 	'application/msword': 'doc',
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
 	'application/vnd.ms-excel': 'xls',

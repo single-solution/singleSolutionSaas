@@ -7,23 +7,7 @@
 			"title": "Visitors may attach",
 			"default": "off",
 			"enum": ["off", "signed_in", "everyone"],
-			"description": "Staff can always attach."
-		},
-		"allowedTypes": {
-			"type": "array",
-			"title": "Allowed types",
-			"default": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"],
-			"items": {
-				"type": "string",
-				"enum": ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]
-			}
-		},
-		"maxSizeMb": {
-			"type": "integer",
-			"title": "Largest file (MB)",
-			"default": 5,
-			"minimum": 1,
-			"maximum": 10
+			"description": "Staff can always attach. Which file types visitors may send, and how large each may be, is your list of upload types (Settings → Attachments)."
 		},
 		"staffTypes": {
 			"type": "array",
@@ -36,7 +20,20 @@
 					"image/png",
 					"image/webp",
 					"image/gif",
+					"image/avif",
+					"image/heic",
+					"image/heif",
 					"application/pdf",
+					"video/mp4",
+					"video/webm",
+					"video/quicktime",
+					"audio/mpeg",
+					"audio/mp4",
+					"audio/x-m4a",
+					"audio/aac",
+					"audio/ogg",
+					"audio/webm",
+					"audio/wav",
 					"application/msword",
 					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 					"application/vnd.ms-excel",
@@ -44,7 +41,7 @@
 					"text/plain"
 				]
 			},
-			"description": "Word, Excel and text files are offered as downloads only."
+			"description": "Videos and audio play in the chat; HEIC and HEIF photos, Word, Excel and text files are offered as downloads."
 		},
 		"staffMaxSizeMb": {
 			"type": "integer",
@@ -57,7 +54,7 @@
 			"type": "boolean",
 			"title": "Open PDFs in the browser",
 			"default": false,
-			"description": "Off: PDFs are downloads. On: they open in a new tab. Word, Excel and text files are always downloads."
+			"description": "Off: PDFs are downloads. On: they open in a new tab. HEIC photos, Word, Excel and text files are always downloads."
 		}
 	}
 }

@@ -1,8 +1,8 @@
 /**
  * Chat's list settings and the tool signing secret, in the product database (PLAN 0.8.3 Chat data): webhook tools,
  * flows, custom field definitions, proactive page rules, fallback answers (PLAN 0.8.10 C3), redaction patterns (C14),
- * teams (C12), the office hours with their dated exceptions (C9) and the page types (C6, seeded with the four kinds of
- * shop pages) are kept per website in the kit's settings collection (so a removed website's lists go with its
+ * teams (C12), the office hours with their dated exceptions (C9), the page types (C6, seeded with the four kinds of
+ * shop pages) and the visitor upload types with a cap each (C11) are kept per website in the kit's settings collection (so a removed website's lists go with its
  * settings), each checked by its feature's rules and recorded in Recent changes. A list never saved answers its seed
  * (the starting entries every website gets; most lists start empty). The tool signing secret is sealed with
  * `ENCRYPTION_KEY`; it is made on first use and sealed again with the current key by the Owner's Re-seal
@@ -16,6 +16,7 @@ import { checkOfficeExceptions, checkOfficeHours } from '../core/handoff.js';
 import { checkRedactionPatterns } from '../core/moderation.js';
 import { checkTeams } from '../core/routing.js';
 import { PAGE_TYPE_SEED, checkPageTypes } from '../core/pages.js';
+import { UPLOAD_TYPE_SEED, checkUploadTypes } from '../core/uploads.js';
 import { checkTools } from '../core/tools.js';
 import { resealEach } from '@ss/app-kit';
 import { randomToken } from '@ss/protocol';
@@ -35,6 +36,7 @@ export const LISTS = Object.freeze({
 	office_hours: { feature: 'handoff', title: 'Office hours', check: checkOfficeHours, seed: [] },
 	office_exceptions: { feature: 'handoff', title: 'Office hours exceptions', check: checkOfficeExceptions, seed: [] },
 	page_types: { feature: 'visitor_chat', title: 'Page types', check: checkPageTypes, seed: PAGE_TYPE_SEED },
+	upload_types: { feature: 'attachments', title: 'Upload types', check: checkUploadTypes, seed: UPLOAD_TYPE_SEED },
 });
 
 /** @typedef {keyof typeof LISTS} ListName */

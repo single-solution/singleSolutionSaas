@@ -2,7 +2,7 @@
  * Flows, leads, contact capture, ratings, transcripts, ending a chat and attachments.
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { STORAGE_KEY, ready } from './helpers.js';
+import { ORIGIN, STORAGE_KEY, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
@@ -168,6 +168,26 @@ describe('ratings, transcripts and attachments', () => {
 		expect(
 			(await v('POST', '/v1/chat/messages', { attachment: { ...upload.json.attachment, key: 'chat/other/x.png' } })).status,
 		).toBe(422);
+		// the merchant's own types with a cap per type (C11): a video up to 40 MB, a voice note, no more PNGs
+		expect((await v('POST', '/v1/chat/uploads', { name: 'a.mp4', type: 'video/mp4', size: 100 })).status).toBe(422);
+		await sys.list('upload_types', [
+			{ type: 'video/mp4', maxMb: 40 },
+			{ type: 'audio/ogg', maxMb: 2 },
+			{ type: 'image/png', maxMb: 5 },
+		]);
+		const video = await v('POST', '/v1/chat/uploads', { name: 'unboxing.mp4', type: 'video/mp4', size: 30 * 1024 * 1024 });
+		expect(video.status).toBe(200);
+		expect(video.json.attachment.key).toMatch(/\.mp4$/);
+		expect((await v('POST', '/v1/chat/uploads', { name: 'a.ogg', type: 'audio/ogg', size: 3 * 1024 * 1024 })).status).toBe(422);
+		const voice = await v('POST', '/v1/chat/uploads', { name: 'note.ogg', type: 'audio/ogg', size: 1024 });
+		const said = await v('POST', '/v1/chat/messages', { attachment: voice.json.attachment });
+		expect(said.json.message.attachment).toMatchObject({ type: 'audio/ogg', inline: true });
+		const config = await sys.call('GET', '/v1/widget/config', { token: sys.browser, origin: ORIGIN });
+		expect(config.json.settings.attachments).toMatchObject({
+			types: ['video/mp4', 'audio/ogg', 'image/png'],
+			limits: { 'video/mp4': 40 * 1024 * 1024, 'audio/ogg': 2 * 1024 * 1024, 'image/png': 5 * 1024 * 1024 },
+			maxBytes: 40 * 1024 * 1024,
+		});
 		const sent = await v('POST', '/v1/chat/messages', { attachment: upload.json.attachment });
 		expect(sent.status).toBe(201);
 		expect(sent.json.message.attachment).toMatchObject({ name: 'a.png', type: 'image/png', size: 100 });

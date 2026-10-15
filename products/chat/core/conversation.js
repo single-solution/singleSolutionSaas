@@ -9,7 +9,7 @@ import { LONG_VALUE_LIMIT } from '@ss/contracts/templates';
 import { cardsOf } from './shop.js';
 import { truncate } from './text.js';
 import { pageTypeOf } from './pages.js';
-import { MAX_MESSAGE_LENGTH } from './widgets.js';
+import { MAX_MESSAGE_LENGTH, attachmentKind } from './widgets.js';
 
 export const STATUSES = Object.freeze(/** @type {const} */ (['open', 'awaiting_visitor', 'resolved']));
 /** Staff presence values. */
@@ -248,8 +248,8 @@ const iso = (date) => (date ? new Date(date).toISOString() : null);
 
 /**
  * A message as the visitor sees it (never internal notes: callers filter them out). Product cards only while that
- * feature is on. An attachment says whether it opens in the browser (`inline`: images, and PDFs with `pdfInline`,
- * CH-8) or is a download.
+ * feature is on. An attachment says whether it opens in the browser (`inline`: the images browsers show, video and
+ * audio, C11, and PDFs with `pdfInline`, CH-8) or is a download.
  * @param {MessageRecord} m
  * @param {(attachment: Attachment) => string | null} urlOf
  * @param {{ cards?: boolean, pdfInline?: boolean }} [options]
@@ -269,7 +269,7 @@ export const visitorMessageView = (m, urlOf, { cards = false, pdfInline = false 
 					type: m.attachment.type,
 					size: m.attachment.size,
 					url: urlOf(m.attachment),
-					inline: m.attachment.type.startsWith('image/') || (pdfInline && m.attachment.type === 'application/pdf'),
+					inline: attachmentKind(m.attachment.type) !== 'file' || (pdfInline && m.attachment.type === 'application/pdf'),
 				},
 			}
 		: {}),

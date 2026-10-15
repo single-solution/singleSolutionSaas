@@ -172,6 +172,10 @@ export const createAdmin = (product, service) => {
 		const ratings = await values('ratings');
 		const ai = await values('ai_replies');
 		const idle = await values('proactive_idle');
+		const visitorRules = uploadRules(
+			{ ...attachments, uploadTypes: await product.lists.get(websiteId, 'upload_types') },
+			'visitor',
+		);
 		const flows = on.includes('leads_flows') ? await product.lists.get(websiteId, 'flows') : [];
 		return {
 			look: {
@@ -207,8 +211,10 @@ export const createAdmin = (product, service) => {
 			customFields: on.includes('custom_fields') ? await product.lists.get(websiteId, 'custom_fields') : [],
 			attachments: {
 				visitors: attachments.visitorUploads,
-				types: uploadRules(attachments, 'visitor').types,
-				maxBytes: uploadRules(attachments, 'visitor').max,
+				// the merchant's upload types, each with its own cap (C11)
+				types: visitorRules.types,
+				limits: visitorRules.limits,
+				maxBytes: visitorRules.max,
 				staffTypes: uploadRules(attachments, 'staff').types,
 				staffMaxBytes: uploadRules(attachments, 'staff').max,
 				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,

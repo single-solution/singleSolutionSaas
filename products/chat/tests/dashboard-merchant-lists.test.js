@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The merchant's own lists in Settings (jsdom, on a faked dashboard API): office hours by weekday with minutes and
- * dated exceptions (C9); page types with their nudges, seeded with the four shop ones (C6). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
+ * dated exceptions (C9); page types with their nudges, seeded with the four shop ones (C6); the file types visitors may
+ * send with a cap each (C11). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
  * checked as the server checks it.
  */
 import { act } from 'react';
@@ -9,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import manifest from '../manifest.json' with { type: 'json' };
-import { OfficeExceptionsEditor, OfficeHoursEditor, PageTypesEditor } from '../app/dashboard/lists.js';
+import { OfficeExceptionsEditor, OfficeHoursEditor, PageTypesEditor, UploadTypesEditor } from '../app/dashboard/lists.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { LISTS } from '../adapters/lists.js';
 
@@ -198,5 +199,33 @@ describe('page types (C6)', () => {
 		type(field(container, 'Key', 0), 'other');
 		await save(container);
 		expect(container.textContent).toContain('Page type 1: a unique key');
+	});
+});
+
+describe('upload types (C11)', () => {
+	it('starts with today’s five types at 5 MB; adds a video with its own cap and refuses a cap over 100 MB', async () => {
+		serve();
+		const { container } = render(inDashboard(<UploadTypesEditor websiteId={WEBSITE} />));
+		await settle();
+		expect([0, 1, 2, 3, 4].map((index) => field(container, 'Type', index).value)).toEqual([
+			'image/jpeg',
+			'image/png',
+			'image/webp',
+			'image/gif',
+			'application/pdf',
+		]);
+		expect(optionsOf(field(container, 'Type'))).toContain('HEIC photo (image/heic)');
+		expect(optionsOf(field(container, 'Type'))).toContain('Ogg audio (voice notes) (audio/ogg)');
+		click(button(container, 'Add'));
+		type(field(container, 'Type', 5), 'video/quicktime');
+		type(field(container, 'Largest file (MB)', 5), '60');
+		await save(container);
+		expect(saved.upload_types?.[0]?.slice(4)).toEqual([
+			{ type: 'application/pdf', maxMb: 5 },
+			{ type: 'video/quicktime', maxMb: 60 },
+		]);
+		type(field(container, 'Largest file (MB)', 5), '500');
+		await save(container);
+		expect(container.textContent).toContain('File type 6: the largest file as whole MB, 1–100.');
 	});
 });

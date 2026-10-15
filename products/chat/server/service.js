@@ -42,7 +42,7 @@ import { zoneOr } from '../core/time.js';
 import { plainOf } from '../core/markdown.js';
 import { compileRedactionPatterns } from '../core/moderation.js';
 import { ROUTED, inTeam, pickAssignee, teamFor } from '../core/routing.js';
-import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
+import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER, attachmentKind } from '../core/widgets.js';
 import { createStore } from '../adapters/store.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -390,13 +390,13 @@ export const createService = (product) => {
 	// ------------------------------------------------------------------------------------------------- views
 
 	/**
-	 * Whether a file opens in the browser: images, and PDFs with the attachment setting `pdfInline` (CH-8); everything
-	 * else is a download.
+	 * Whether a file opens in the browser: the images browsers show, video and audio (C11), and PDFs with the attachment
+	 * setting `pdfInline` (CH-8); everything else (HEIC photos, office files) is a download.
 	 * @param {string} type
 	 * @param {Record<string, any>} settings the attachment settings
 	 */
 	const opensInline = (type, settings) =>
-		type.startsWith('image/') || (type === 'application/pdf' && settings.pdfInline === true);
+		attachmentKind(type) !== 'file' || (type === 'application/pdf' && settings.pdfInline === true);
 
 	/**
 	 * The link of an attachment, or null without storage: Chat's own stable link, which signs a fresh 10-minute storage

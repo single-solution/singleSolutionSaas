@@ -5,7 +5,7 @@
  * @module
  */
 import { element, formatDate, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
-import { CHECKS } from '../core/widgets.js';
+import { CHECKS, attachmentKind } from '../core/widgets.js';
 
 /** @typedef {(key: string) => string} Texts */
 
@@ -36,9 +36,9 @@ import { CHECKS } from '../core/widgets.js';
  * @property {Array<{ id: string, name: string, start: { kind: string, path: string, delay: number } }>} flows
  * @property {{ fields: string[], customFields: string[], consentText: string }} leads
  * @property {CustomField[]} customFields
- * @property {{ visitors: string, types: string[], maxBytes: number, staffTypes: string[], staffMaxBytes: number,
- *   storage: boolean }} attachments what visitors may send (`types`, `maxBytes`) and staff (`staffTypes`,
- *   `staffMaxBytes`), as the server checks it
+ * @property {{ visitors: string, types: string[], limits?: Record<string, number>, maxBytes: number, staffTypes: string[],
+ *   staffMaxBytes: number, storage: boolean }} attachments what visitors may send (`types`, each type's cap in
+ *   `limits`, C11, the largest in `maxBytes`) and staff (`staffTypes`, `staffMaxBytes`), as the server checks it
  * @property {{ kind: 'csat' | 'nps', labels: string[], askWhen: string, comment: boolean }} ratings csat: the
  *   merchant's labels, lowest first; nps: 0 to 10 (C13)
  * @property {{ focusedSeconds: number, backgroundSeconds: number }} checks how often the widget checks for new messages
@@ -84,7 +84,7 @@ const DEFAULTS = {
 	flows: [],
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],
-	attachments: { visitors: 'off', types: [], maxBytes: 0, staffTypes: [], staffMaxBytes: 0, storage: false },
+	attachments: { visitors: 'off', types: [], limits: {}, maxBytes: 0, staffTypes: [], staffMaxBytes: 0, storage: false },
 	ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: false },
 	checks: { focusedSeconds: CHECKS.activeMs / 1000, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 };
@@ -283,15 +283,25 @@ export const formPart = (doc, { title, nodes, label, submit }) => {
 };
 
 /**
- * An attachment: images inline (linked), a file that opens in the browser (`inline`, PDFs with that setting, CH-8) as a
- * link to a new tab, anything else as a download link.
+ * An attachment: the images browsers show inline (linked), video and audio as players (C11: voice notes too), a file
+ * that opens in the browser (`inline`, PDFs with that setting, CH-8) as a link to a new tab, anything else (HEIC
+ * photos, office files) as a download link.
  * @param {Document} doc
  * @param {{ name: string, type: string, url: string, inline?: boolean }} attachment
  */
 export const attachmentNode = (doc, attachment) => {
 	const url = webAddress(attachment.url);
 	if (!url) return element(doc, 'span', { class: 'meta' }, attachment.name);
-	if (attachment.type.startsWith('image/')) {
+	const kind = attachmentKind(attachment.type);
+	if (kind === 'video' || kind === 'audio')
+		return element(doc, kind, {
+			src: url,
+			controls: '',
+			preload: 'metadata',
+			class: `file ${kind}`,
+			'aria-label': attachment.name,
+		});
+	if (kind === 'image') {
 		const link = element(doc, 'a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: 'file' });
 		link.append(element(doc, 'img', { src: url, alt: attachment.name, loading: 'lazy' }));
 		return link;

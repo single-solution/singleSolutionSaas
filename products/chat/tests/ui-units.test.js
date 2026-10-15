@@ -298,6 +298,13 @@ describe('common', () => {
 		expect([opens.getAttribute('download'), opens.getAttribute('target')]).toEqual([null, '_blank']);
 		const image = attachmentNode(document, { name: 'a.png', type: 'image/png', url: 'https://files.test/a.png' });
 		expect(image.querySelector('img')?.getAttribute('alt')).toBe('a.png');
+		// video and voice notes play in the chat; a HEIC photo, which browsers cannot show, downloads (C11)
+		const video = attachmentNode(document, { name: 'a.mp4', type: 'video/mp4', url: 'https://files.test/a.mp4', inline: true });
+		expect([video.tagName, video.hasAttribute('controls'), video.getAttribute('aria-label')]).toEqual(['VIDEO', true, 'a.mp4']);
+		const voice = attachmentNode(document, { name: 'n.ogg', type: 'audio/ogg', url: 'https://files.test/n.ogg', inline: true });
+		expect(voice.tagName).toBe('AUDIO');
+		const heic = attachmentNode(document, { name: 'p.heic', type: 'image/heic', url: 'https://files.test/p.heic' });
+		expect([heic.tagName, heic.getAttribute('download')]).toEqual(['A', 'p.heic']);
 	});
 
 	it('uploads with exactly the returned headers', async () => {

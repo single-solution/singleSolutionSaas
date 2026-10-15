@@ -199,6 +199,13 @@ const LIST_WORDS = {
 			: `${counted(windows.length, 'window', 'windows')} a week, on ${counted(new Set(windows.map((w) => w.day)).size, 'day', 'days')}.`,
 	office_exceptions: (dates) => namedList('date', 'dates', dates, (entry) => entry.date),
 	page_types: (types) => namedList('page type', 'page types', types, (type) => type.name),
+	upload_types: (types) =>
+		namedList(
+			'file type visitors may send',
+			'file types visitors may send',
+			types,
+			(entry) => `${entry.type} (${entry.maxMb} MB)`,
+		),
 };
 
 /**

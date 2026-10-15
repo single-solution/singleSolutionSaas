@@ -21,6 +21,7 @@ import {
 	TeamsEditor,
 	ToolSecret,
 	ToolsEditor,
+	UploadTypesEditor,
 } from './lists.js';
 import { TEXTS } from './texts.js';
 
@@ -172,7 +173,7 @@ export function SettingsTab({ websiteId: id }) {
 						</>
 					) : null,
 					inbox: seen('assignment') ? <TeamsEditor websiteId={websiteId} off={off('assignment')} /> : null,
-					attachments: null,
+					attachments: seen('attachments') ? <UploadTypesEditor websiteId={websiteId} off={off('attachments')} /> : null,
 					ratings: null,
 					transcripts: seen('transcripts') ? <Callout tone="info">{TEXTS.settings.transcriptsNote}</Callout> : null,
 					moderation: seen('moderation') ? <RedactionPatternsEditor websiteId={websiteId} off={off('moderation')} /> : null,

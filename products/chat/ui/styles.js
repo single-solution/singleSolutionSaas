@@ -76,6 +76,8 @@ p { overflow-wrap: anywhere; }
 .rich table { border-collapse: collapse; overflow-wrap: normal; font-size: 0.9em; }
 .rich th, .rich td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; min-width: 4em; }
 .msg img { max-width: 220px; border-radius: var(--r); margin-top: 4px; }
+.msg video.file { display: block; width: 100%; max-width: 260px; border-radius: var(--r); margin-top: 4px; }
+.msg audio.file { display: block; width: 100%; max-width: 260px; margin-top: 4px; }
 .cards { display: flex; gap: 8px; overflow-x: auto; max-width: 100%; margin-top: 4px; padding-bottom: 4px; }
 .card { flex: 0 0 148px; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line);
   border-radius: var(--r); background: var(--bg); }

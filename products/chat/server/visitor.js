@@ -20,14 +20,8 @@ import {
 import { checkFieldValue, checkLead } from '../core/fields.js';
 import { answerStep, pageFlowMatches } from '../core/flows.js';
 import { moderateInbound } from '../core/moderation.js';
-import {
-	ATTACHMENT_TYPES,
-	EXTENSIONS,
-	MAX_ATTACHMENT_BYTES,
-	MAX_STAFF_ATTACHMENT_BYTES,
-	PAGE_MAX,
-	STAFF_TYPES,
-} from '../core/widgets.js';
+import { uploadLimits } from '../core/uploads.js';
+import { EXTENSIONS, MAX_ATTACHMENT_BYTES, MAX_STAFF_ATTACHMENT_BYTES, PAGE_MAX, STAFF_TYPES } from '../core/widgets.js';
 import { labelsOf } from './reply.js';
 import { bodyOf, invalid, phoneCodeOf } from './service.js';
 
@@ -216,7 +210,7 @@ export const createVisitorApi = (product, service, reply) => {
 		const a = bodyOf(raw);
 		if (typeof a.key !== 'string' || !a.key.startsWith(`chat/${visitor.kind}-${visitor.id}/`))
 			throw invalid(['Upload the file first.']);
-		return checkUpload(a, settings);
+		return checkUpload(a, { ...settings, uploadTypes: await s.list('upload_types') });
 	};
 
 	/** @param {any} ctx */
@@ -470,7 +464,10 @@ export const createVisitorApi = (product, service, reply) => {
 		if (settings.visitorUploads === 'off' || (settings.visitorUploads === 'signed_in' && visitor.kind !== 'user'))
 			throw problem('forbidden', 'Visitors cannot attach files here.');
 		return {
-			...(await presign(product, s, `chat/${visitor.kind}-${visitor.id}`, ctx.body, settings)),
+			...(await presign(product, s, `chat/${visitor.kind}-${visitor.id}`, ctx.body, {
+				...settings,
+				uploadTypes: await s.list('upload_types'),
+			})),
 			...(guestKey ? { guestKey } : {}),
 		};
 	};
@@ -493,21 +490,21 @@ export const createVisitorApi = (product, service, reply) => {
 };
 
 /**
- * What a file may be: the visitor rules (the allowed types and size, at most 10 MB), or the staff rules (C12: the
- * staff types and size, at most 100 MB).
- * @param {Record<string, any>} settings the attachment settings
+ * What a file may be: the visitor rules (C11: the merchant's upload types, each with its own cap, at most 100 MB), or
+ * the staff rules (C12: the staff types and size, at most 100 MB).
+ * @param {Record<string, any>} settings the attachment settings, with the list `uploadTypes` for visitors
  * @param {'visitor' | 'staff'} who
+ * @returns {{ types: string[], max: number, limits: Record<string, number> }}
  */
-export const uploadRules = (settings, who) =>
-	who === 'staff'
-		? {
-				types: STAFF_TYPES.filter((type) => settings.staffTypes.includes(type)),
-				max: Math.min(Number(settings.staffMaxSizeMb) * 1024 * 1024, MAX_STAFF_ATTACHMENT_BYTES),
-			}
-		: {
-				types: ATTACHMENT_TYPES.filter((type) => settings.allowedTypes.includes(type)),
-				max: Math.min(Number(settings.maxSizeMb) * 1024 * 1024, MAX_ATTACHMENT_BYTES),
-			};
+export const uploadRules = (settings, who) => {
+	if (who === 'staff') {
+		const types = STAFF_TYPES.filter((type) => settings.staffTypes.includes(type));
+		const max = Math.min(Number(settings.staffMaxSizeMb) * 1024 * 1024, MAX_STAFF_ATTACHMENT_BYTES);
+		return { types, max, limits: Object.fromEntries(types.map((type) => [type, max])) };
+	}
+	const rules = uploadLimits(Array.isArray(settings.uploadTypes) ? settings.uploadTypes : []);
+	return { ...rules, max: Math.min(rules.max, MAX_ATTACHMENT_BYTES) };
+};
 
 /**
  * Check a file's name, type and size against the attachment settings.
@@ -516,12 +513,14 @@ export const uploadRules = (settings, who) =>
  * @param {'visitor' | 'staff'} [who]
  */
 export const checkUpload = (a, settings, who = 'visitor') => {
-	const { types: allowed, max } = uploadRules(settings, who);
+	const { types: allowed, limits } = uploadRules(settings, who);
 	const name = typeof a.name === 'string' ? a.name.replace(/[\\/\r\n"]/g, '_').slice(0, 120) : '';
 	if (!name || typeof a.type !== 'string' || !allowed.includes(a.type))
 		throw invalid([`Allowed types: ${allowed.join(', ') || 'none'}.`]);
+	// each type's own cap (C11)
+	const max = limits[a.type] ?? 0;
 	if (!Number.isInteger(a.size) || Number(a.size) <= 0 || Number(a.size) > max)
-		throw invalid([`The largest file is ${Math.round(max / 1024 / 1024)} MB.`]);
+		throw invalid([`The largest ${a.type} file is ${Math.round(max / 1024 / 1024)} MB.`]);
 	return { key: typeof a.key === 'string' ? a.key : '', name, type: a.type, size: Number(a.size) };
 };
 

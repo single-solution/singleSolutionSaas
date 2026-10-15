@@ -814,7 +814,16 @@ describe('conversation tools', () => {
 
 describe('attachments', () => {
 	const features = ['visitor_chat', 'guest_chat', 'signed_in_chat', 'attachments'];
-	const settings = { attachments: { visitors: 'signed_in', types: ['image/png', 'image/svg+xml'], maxBytes: 0, storage: true } };
+	const settings = {
+		attachments: {
+			visitors: 'signed_in',
+			types: ['image/png', 'image/svg+xml', 'audio/ogg'],
+			// each type's own cap (C11)
+			limits: { 'image/png': 10 * 1024 * 1024, 'audio/ogg': 2 * 1024 * 1024 },
+			maxBytes: 10 * 1024 * 1024,
+			storage: true,
+		},
+	};
 
 	it('lets signed-in visitors attach checked files', async () => {
 		let uploads = () => problem(403, 'feature_off');
@@ -842,7 +851,7 @@ describe('attachments', () => {
 		expect(server.last('GET /v1/chat')?.headers[SIGN_IN_HEADER]).toBe('sig');
 		expect($('.attach').hidden).toBe(false);
 		const file = /** @type {HTMLInputElement} */ ($('input[type="file"]'));
-		expect(file.getAttribute('accept')).toBe('image/png');
+		expect(file.getAttribute('accept')).toBe('image/png,audio/ogg');
 		const clicked = vi.spyOn(file, 'click').mockImplementation(() => {});
 		await click($('.attach'));
 		expect(clicked).toHaveBeenCalled();
@@ -853,6 +862,11 @@ describe('attachments', () => {
 		Object.defineProperty(big, 'size', { value: 11 * 1024 * 1024 });
 		await choose(file, big);
 		expect($('.window > .status').textContent).toBe('The file is too big (at most 10 MB).');
+		// a voice note has its own cap (C11)
+		const voice = new File(['x'], 'note.ogg', { type: 'audio/ogg' });
+		Object.defineProperty(voice, 'size', { value: 3 * 1024 * 1024 });
+		await choose(file, voice);
+		expect($('.window > .status').textContent).toBe('The file is too big (at most 2 MB).');
 		const small = new File(['abc'], 'a.png', { type: 'image/png' });
 		await choose(file, small);
 		expect($('.window > .status').textContent).toBe(TEXTS['chat.error']);
