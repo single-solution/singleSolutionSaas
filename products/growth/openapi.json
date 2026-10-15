@@ -6057,7 +6057,7 @@
 					"from": {
 						"type": "string",
 						"maxLength": 1000,
-						"description": "The old path, normalized: one leading slash, repeated slashes as one, . and .. resolved, characters outside URLs percent-encoded (upper-case hex), no trailing slash except for /, letter case kept."
+						"description": "The old path, normalized: one leading slash, repeated slashes as one, . and .. resolved, letters in one Unicode form (NFC), characters outside URLs percent-encoded (upper-case hex), no trailing slash except for /, letter case kept."
 					},
 					"match": {
 						"type": "string",

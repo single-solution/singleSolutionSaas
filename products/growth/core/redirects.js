@@ -4,8 +4,9 @@
  *
  * - `from`: a path on the website (an address on the website's own domain, or its www. twin, is read as its path).
  *   Paths are normalized the same way for rules and for the addresses asked about: one leading slash, repeated slashes
- *   as one, `.` and `..` resolved, characters outside URLs percent-encoded with upper-case hex, no trailing slash except
- *   for `/`, letter case kept (`/Old` and `/old` are two paths). Rules match the path only: a `from` with `?` or `#` is
+ *   as one, `.` and `..` resolved, letters in one Unicode form (NFC: `/café` composed or decomposed is one path),
+ *   characters outside URLs percent-encoded with upper-case hex, no trailing slash except for `/`, letter case kept
+ *   (`/Old` and `/old` are two paths). Rules match the path only: a `from` with `?` or `#` is
  *   refused, and the query string of an address asked about is ignored for matching and passed on (below).
  * - `match`: `exact` (the path itself) or `prefix` (the path and every path under it, segment by segment: `/blog`
  *   matches `/blog` and `/blog/news`, never `/blogger`). An exact rule wins; else the longest prefix wins.
@@ -88,6 +89,23 @@ const ownHost = (host, domain) => {
 };
 
 /**
+ * A path's letters in one Unicode form (NFC), so `/café` typed or encoded composed (`é`) or decomposed (`e` and an
+ * accent) is one path: percent-encoded UTF-8 decoded first (encoded ASCII such as `%2F` and bytes that are not UTF-8
+ * are kept as they are).
+ * @param {string} path
+ */
+const unicodeOf = (path) =>
+	path
+		.replace(/(?:%[89a-f][0-9a-f])+/gi, (bytes) => {
+			try {
+				return decodeURIComponent(bytes);
+			} catch {
+				return bytes;
+			}
+		})
+		.normalize('NFC');
+
+/**
  * A path normalized (see the module), with its query string and fragment when they are kept.
  * @param {unknown} raw a path from `/`, or an http(s) address on the website's own domain
  * @param {{ domain?: string, keepQuery?: boolean }} [options] `keepQuery`: keep `?…` and `#…` (a target), else refuse them
@@ -114,8 +132,9 @@ export const normalizePath = (raw, { domain = '', keepQuery = false } = {}) => {
 	const cut = text.search(/[?#]/);
 	const tail = cut === -1 ? '' : text.slice(cut);
 	if (tail !== '' && !keepQuery) return { ok: false, code: 'query' };
-	// backslashes count as slashes, and `//` would name a host: both become one slash before the URL parser sees them
-	const head = (cut === -1 ? text : text.slice(0, cut)).replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+	// backslashes count as slashes, and `//` would name a host: both become one slash before the URL parser sees them;
+	// letters in one Unicode form (NFC), also those percent-encoded, which the URL parser encodes again
+	const head = unicodeOf((cut === -1 ? text : text.slice(0, cut)).replace(/\\/g, '/').replace(/\/{2,}/g, '/'));
 	const url = new URL(`${head}${tail}`, BASE);
 	const path = url.pathname.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toUpperCase()).replace(/\/{2,}/g, '/');
 	return {

@@ -84,6 +84,15 @@ describe('rules', () => {
 		const taken = await create({ from: '/Old-Page/', to: '/other' });
 		expect(taken.status).toBe(409);
 		expect(taken.json).toMatchObject({ type: expect.stringMatching(/redirect_taken$/), from: '/Old-Page' });
+		// one path in one Unicode form (NFC): /café typed composed or decomposed is one rule
+		const composed = await create({ from: '/caf\u00e9', to: '/coffee' });
+		expect(composed.json).toMatchObject({ from: '/caf%C3%A9' });
+		const decomposed = await create({ from: '/cafe\u0301', to: '/tea' });
+		expect(decomposed.status).toBe(409);
+		expect(decomposed.json).toMatchObject({ type: expect.stringMatching(/redirect_taken$/), from: '/caf%C3%A9' });
+		const asked = await server('GET', `/v1/redirects/match?path=${encodeURIComponent('/cafe\u0301?x=1')}`);
+		expect(asked.json).toMatchObject({ from: '/caf%C3%A9', location: '/coffee?x=1' });
+		expect((await server('DELETE', `/v1/redirects/${composed.json.id}`)).status).toBe(204);
 	});
 
 	it('refuses loops and chains, naming the addresses one request would pass', async () => {
@@ -142,7 +151,7 @@ describe('rules', () => {
 		const id = await idOf('/p/x');
 		expect((await server('DELETE', `/v1/redirects/${id}`)).status).toBe(204);
 		expect((await server('DELETE', `/v1/redirects/${id}`)).status).toBe(404);
-		expect((await logged('redirect.deleted')).map((entry) => entry.label)).toEqual(['/q/x', '/p/x']);
+		expect((await logged('redirect.deleted')).map((entry) => entry.label)).toEqual(['/caf%C3%A9', '/q/x', '/p/x']);
 	});
 
 	it('lists the rules newest first, with counts, a search and a filter by answer', async () => {

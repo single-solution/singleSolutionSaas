@@ -32,9 +32,10 @@ The `seo_checklist` feature is the live website's SEO health report (SEO audit Â
 
 The `redirects` feature keeps up to 5,000 rules per website in the merchant database (`ss_growth_redirects`, one per
 old path): `{ from, match: exact | prefix, to, code: 301 | 308 | 410, note }`. Paths are normalized the same way for rules
-and requests (one leading slash, no trailing slash except `/`, percent-encoded, letter case kept); rules match the path
-only and pass the visitor's query string on; a prefix rule keeps the rest of the path. Every change is checked against
-the whole set in one transaction: one rule per path, no loops, no chains (a request never passes two rules).
+and requests (one leading slash, no trailing slash except `/`, letters in one Unicode form (NFC), percent-encoded, letter
+case kept); rules match the path only and pass the visitor's query string on; a prefix rule keeps the rest of the path.
+Every change is checked against the whole set in one transaction: one rule per path, no loops, no chains (a request
+never passes two rules).
 
 - The website's server reads them with the server token: `GET /v1/redirects/match?path=` (the rule and its `location`,
   or 204) or, for edge middleware, `GET /v1/redirects/all` with an ETag and `Cache-Control: private, max-age=300`; a 304

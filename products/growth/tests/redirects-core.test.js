@@ -58,6 +58,13 @@ describe('paths', () => {
 		expect(path('/Old-Page')).toBe('/Old-Page');
 		expect(path('/café ')).toBe('/caf%C3%A9');
 		expect(path('/caf%c3%a9')).toBe('/caf%C3%A9');
+		// one Unicode form (NFC): the same letters typed or encoded composed or decomposed are one path
+		expect(path('/cafe\u0301')).toBe('/caf%C3%A9');
+		expect(path('/cafe%cc%81/')).toBe('/caf%C3%A9');
+		expect(path('/%E2%84%AB')).toBe('/%C3%85');
+		// encoded ASCII and bytes that are not UTF-8 are kept as they are
+		expect(path('/a%2fb%20c')).toBe('/a%2Fb%20c');
+		expect(path('/x%ff')).toBe('/x%FF');
 		expect(path('/a b')).toBe('/a%20b');
 		expect(path('https://shop.example.com/old/')).toBe('/old');
 		expect(path('https://www.shop.example.com/old')).toBe('/old');
@@ -221,6 +228,7 @@ describe('matching', () => {
 	it('reads the address the website asks about', () => {
 		expect(requestOf('/a//x/?utm_source=x&b=2#f')).toEqual({ path: '/a/x', query: 'utm_source=x&b=2' });
 		expect(requestOf('/a')).toEqual({ path: '/a', query: '' });
+		expect(requestOf('/cafe%CC%81?q=1')).toEqual({ path: '/caf%C3%A9', query: 'q=1' });
 		expect(requestOf(`/${'a'.repeat(1200)}`)).toEqual({ path: null, query: '' });
 		expect(requestOf(`/a?${'q'.repeat(2049)}`)).toBe(null);
 		expect(requestOf('a')).toBe(null);
@@ -488,6 +496,8 @@ describe('the docs’ middleware example', () => {
 			'/blog/2019/best/',
 			'/blog/2019/best/more?x=1',
 			'/caf%c3%a9',
+			'/cafe%CC%81',
+			'/cafe\u0301/',
 			'/retired/old-lamp',
 			'/Home',
 			'/home',
