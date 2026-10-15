@@ -27,7 +27,7 @@
 		"autoFacet": {
 			"type": "string",
 			"title": "Automatic facet",
-			"description": "With Category brand facet: the field whose values make automatic pages, grade or the slug of a field shoppers filter by (for example color). Empty, or a field shoppers do not filter by: no facet pages.",
+			"description": "With Category brand facet: the field whose values make automatic pages: the slug of a field shoppers filter by (for example color), or grade for condition grades. Empty, or a field shoppers do not filter by: no facet pages.",
 			"default": "",
 			"maxLength": 64
 		},

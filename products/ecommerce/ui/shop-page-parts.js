@@ -258,7 +258,9 @@ export const gradeDetails = (doc, t, grade) => {
 		typeof grade.returnDays === 'number' && grade.returnDays > 0
 			? h(doc, 'p', { class: 'meta' }, t('page.returnDays', { days: grade.returnDays }))
 			: null,
-		video ? h(doc, 'a', { href: video, target: '_blank', rel: 'noopener' }, t('page.gradeVideo')) : null,
+		video
+			? h(doc, 'a', { href: video, target: '_blank', rel: 'noopener' }, t('page.gradeVideo', { grade: grade.label }))
+			: null,
 	);
 };
 

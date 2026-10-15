@@ -5,6 +5,7 @@
  * delivery, first-order and per-customer limits. No I/O.
  * @module
  */
+import { COUPON_TYPES } from './model.js';
 import { MAX_AMOUNT, allocateUnits, isPrice, percentOf, roundDown } from './money.js';
 import {
 	checkAmount,
@@ -25,7 +26,6 @@ import {
 /** @typedef {import('./promotions-rules.js').Checked} Checked */
 
 /** Coupon types. */
-const COUPON_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
 
 /** A stored code: 3–40 characters A–Z, 0–9, `-` and `_`. */
 const CODE_PATTERN = /^[A-Z0-9_-]{3,40}$/;

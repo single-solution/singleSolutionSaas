@@ -8,7 +8,9 @@ import strings from '../strings/en.json' with { type: 'json' };
 import { SORTS } from '../core/catalog-query.js';
 import { CSV_PROBLEMS } from '../core/catalog-csv.js';
 import { BRAND_STATUSES, CATEGORY_STATUSES } from '../core/catalog-taxonomy.js';
-import { DEAL_TYPES } from '../core/deals.js';
+import { ITEM_KINDS } from '../core/item-types.js';
+import { BUNDLE_TYPES, COUPON_TYPES, DEAL_TYPES, PRODUCT_STATUSES } from '../core/model.js';
+import { FIXED_UNIT_STATES } from '../core/unit-states.js';
 import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ADDRESS_FIELDS } from '../core/address.js';
@@ -29,12 +31,13 @@ const keysOf = (prefix, values) => [...values].map((value) => `${prefix}${value}
 
 describe('widget texts named after a code (PLAN 0.4.10)', () => {
 	it('every value of the codes the widgets show has its text, so no text key ever shows', () => {
-		// lists core keeps to itself, as the code names them
-		const productKinds = ['physical', 'digital', 'service'];
-		const productStatuses = ['draft', 'active', 'archived'];
-		const serialStatuses = ['in_stock', 'sold', 'faulty'];
-		const couponTypes = ['percent', 'fixed', 'free_delivery'];
-		const bundleTypes = ['bundle', 'buy_x_get_y'];
+		// the codes, from core (E43)
+		const productKinds = ITEM_KINDS;
+		const productStatuses = PRODUCT_STATUSES;
+		// the fixed unit states; the merchant's show their own labels (E38)
+		const serialStatuses = FIXED_UNIT_STATES;
+		const couponTypes = COUPON_TYPES;
+		const bundleTypes = BUNDLE_TYPES;
 		const pointKinds = ['earn', 'redeem', 'refund', 'expire', 'adjust', 'reverse'];
 		const offerStates = ['live', 'off', 'ended', 'scheduled', 'usedUp'];
 		// refund and restock have their own words (ordersAdmin.refund, ordersAdmin.restock)

@@ -16,6 +16,7 @@ import { isId } from '@ss/contracts';
 import { isPrice } from './money.js';
 import { checkValue, fieldApplies, gtinOf, valueProblem } from './fields.js';
 import { gradeForType } from './grades.js';
+import { PRODUCT_STATUSES } from './model.js';
 import { categoryTypeKey, typeByKey, typeOf, typeTakes } from './item-types.js';
 import {
 	VIDEO_TYPES,
@@ -72,7 +73,6 @@ export const LIMITS = Object.freeze({
 
 /** Product kinds and statuses. */
 const KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'service']));
-const STATUSES = Object.freeze(/** @type {const} */ (['draft', 'active', 'archived']));
 
 /** Slugs: lowercase letters of any script, digits, single dashes. */
 const SLUG_PATTERN = /^[\p{Ll}\p{Lo}\p{N}]+(?:-[\p{Ll}\p{Lo}\p{N}]+)*$/u;
@@ -1003,7 +1003,7 @@ export const checkProduct = (body, rules, existing) => {
 	}
 	const status = field(
 		'status',
-		(v) => (STATUSES.includes(/** @type {any} */ (v)) ? /** @type {any} */ (v) : null),
+		(v) => (PRODUCT_STATUSES.includes(/** @type {any} */ (v)) ? /** @type {any} */ (v) : null),
 		'draft',
 		'Status is draft, active or archived.',
 	);

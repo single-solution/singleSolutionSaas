@@ -282,6 +282,15 @@ export const ID_PREFIX = Object.freeze({
 
 // -------------------------------------------------------------------------------------------------------- orders
 
+/** Product statuses (core checks and the widgets read them, E43). */
+export const PRODUCT_STATUSES = Object.freeze(/** @type {const} */ (['draft', 'active', 'archived']));
+/** Coupon types. */
+export const COUPON_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
+/** Deal types. */
+export const DEAL_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
+/** Bundle types. */
+export const BUNDLE_TYPES = Object.freeze(/** @type {const} */ (['bundle', 'buy_x_get_y']));
+
 /**
  * What an order-status key does. Merchants name statuses and choose the moves between them (the `order_flow` list,
  * PLAN 0.8.8; the options of each move, PLAN 0.8.10 dynamic model phase 2, `core/flow.js`); the role of a status decides

@@ -32,7 +32,7 @@
 		{
 			"key": "size_charts",
 			"name": "Size charts",
-			"description": "Size charts in inches or centimeters with fit advice, shown on product pages from the product, its brand or its category.",
+			"description": "Size charts and measurement tables in any unit you name, with fit advice, shown on product pages from the product, its brand or its category.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/size_charts.settings.json"
@@ -50,7 +50,7 @@
 		{
 			"key": "grades_serials",
 			"name": "Condition grades and unit numbers",
-			"description": "Condition grades (each with its standard condition, for the item types you choose), and unit numbers for the items whose item type numbers them: picked from units in stock or typed when an order is packed or later, in the formats of the type's unit fields.",
+			"description": "Your own condition grades (each with its standard condition, its own return and warranty times, for the item types you choose), and unit numbers for the items whose item type numbers them: picked from units in stock or typed when an order is packed or later, in the formats of the type's unit fields, with your own unit states.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/grades_serials.settings.json"
@@ -98,7 +98,7 @@
 		{
 			"key": "delivery_zones",
 			"name": "Delivery zones",
-			"description": "Delivery fees by city or area, free delivery over an amount, and store pickup.",
+			"description": "Delivery zones by any place (countries, regions, cities, areas or postcodes) with their fees and days, free delivery over an amount, and store pickup.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["delivers.*", "pays.pickup"],
 			"settings": {
@@ -118,7 +118,7 @@
 		{
 			"key": "taxes",
 			"name": "Taxes",
-			"description": "Simple tax rules: a percentage per category or region, prices shown with or without tax.",
+			"description": "Tax rules by region (country, region, city or postcode) and category, each a percentage; prices shown with or without tax.",
 			"dependsOn": ["checkout"],
 			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
@@ -293,7 +293,7 @@
 		{
 			"key": "landing_pages",
 			"name": "Landing pages",
-			"description": "Category, brand and grade landing pages with their own copy, indexed while enough products are in stock, and glossary pages of attributes and grades.",
+			"description": "Landing pages by category, brand and any field shoppers filter by, with their own copy, indexed while enough products are in stock, and glossary pages of fields and grades.",
 			"dependsOn": ["seo"],
 			"recommendFor": ["marketing.seo"],
 			"settings": {

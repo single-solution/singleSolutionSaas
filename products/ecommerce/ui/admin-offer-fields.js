@@ -5,6 +5,7 @@
  * percentages as numbers, times in the browser's time zone.
  * @module
  */
+import { BUNDLE_TYPES, COUPON_TYPES, DEAL_TYPES } from '../core/model.js';
 import { fromLocal, localInput, wholeOf } from './admin-kit.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
@@ -70,9 +71,6 @@ const commonOf = (kit, offer) => {
 		},
 	};
 };
-
-/** Coupon types. */
-const COUPON_TYPES = Object.freeze(['percent', 'fixed', 'free_delivery']);
 
 /**
  * A coupon's fields (with or without its code: batches draw codes).
@@ -156,19 +154,26 @@ export const dealFields = (kit, searches, names, deal) => {
 	const name = kit.input(deal.name ?? '', { maxlength: '120' });
 	const description = kit.area(deal.description ?? '', { maxlength: '500' });
 	const type = kit.select(
-		['percent', 'fixed'].map((key) => ({ value: key, label: t(`promotionsAdmin.dealType.${key}`) })),
+		DEAL_TYPES.map((key) => ({ value: key, label: t(`promotionsAdmin.dealType.${key}`) })),
 		deal.type ?? 'percent',
 	);
 	const value = kit.input(deal.type === 'fixed' ? kit.decimal(deal.value) : (deal.value ?? ''), { inputmode: 'decimal' });
 	const priority = kit.input(String(deal.priority ?? 0), { type: 'number', step: '1' });
 	const scope = scopeOf(kit, searches, names, t('promotionsAdmin.scope'), deal.scope);
 	const common = commonOf(kit, deal);
+	const valueField = kit.field(t('promotionsAdmin.dealValue', { currency: kit.currency }), value);
+	// a free-delivery deal has no value
+	const showValue = () => {
+		valueField.hidden = type.value === 'free_delivery';
+	};
+	type.addEventListener('change', showValue);
+	showValue();
 	return {
 		nodes: [
 			h('div', { class: 'fields' }, [
 				kit.field(t('promotionsAdmin.name'), name),
 				kit.field(t('promotionsAdmin.type'), type),
-				kit.field(t('promotionsAdmin.dealValue', { currency: kit.currency }), value),
+				valueField,
 				kit.field(t('promotionsAdmin.priority'), priority),
 			]),
 			kit.field(t('promotionsAdmin.description'), description),
@@ -177,7 +182,9 @@ export const dealFields = (kit, searches, names, deal) => {
 		],
 		values: () => {
 			const rest = common.values();
-			const amount = type.value === 'fixed' ? kit.amount(value.value) : Number(value.value);
+			// a free-delivery deal has no value
+			const amount =
+				type.value === 'free_delivery' ? 0 : type.value === 'fixed' ? kit.amount(value.value) : Number(value.value);
 			const rank = wholeOf(priority.value);
 			if (!rest || Number.isNaN(amount) || Number.isNaN(rank)) return null;
 			return {
@@ -272,7 +279,7 @@ export const bundleFields = (kit, searches, names, bundle) => {
 	const { t, h } = kit;
 	const name = kit.input(bundle.name ?? '', { maxlength: '120' });
 	const type = kit.select(
-		['bundle', 'buy_x_get_y'].map((key) => ({ value: key, label: t(`promotionsAdmin.bundleType.${key}`) })),
+		BUNDLE_TYPES.map((key) => ({ value: key, label: t(`promotionsAdmin.bundleType.${key}`) })),
 		bundle.type ?? 'bundle',
 	);
 	const items = itemsOf(kit, searches, bundle.items ?? [], names);

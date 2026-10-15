@@ -18,7 +18,7 @@ import { useState } from 'react';
 import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Select } from '@ss/ui';
 import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
-import { MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
+import { MAX_DECIMALS, MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
 import { fill } from './api.js';
 import { blankType, cleanType, keyOf, loadType, typeProblems } from './drafts.js';
 import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
@@ -128,7 +128,7 @@ function TypeFields({ draft, set, problems, tried }) {
 								label={T.decimals}
 								help={T.decimalsHelp}
 								value={measure.decimals}
-								options={['0', '1', '2', '3'].map((value) => ({ value, label: value }))}
+								options={Array.from({ length: MAX_DECIMALS + 1 }, (_, n) => ({ value: String(n), label: String(n) }))}
 								onChange={(event) => setMeasure({ decimals: event.target.value })}
 							/>
 							<Input

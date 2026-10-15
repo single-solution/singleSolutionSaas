@@ -10,6 +10,7 @@
  * best saving first. Units are counted per line (never expanded), so large quantities stay cheap. No I/O.
  * @module
  */
+import { BUNDLE_TYPES } from './model.js';
 import { allocateUnits, percentOf, roundDown } from './money.js';
 import {
 	checkAmount,
@@ -30,7 +31,6 @@ import {
 /** @typedef {import('./promotions-rules.js').Checked} Checked */
 
 /** Bundle types. */
-const BUNDLE_TYPES = Object.freeze(/** @type {const} */ (['bundle', 'buy_x_get_y']));
 /** Most sets formed for one cart (all bundles together). */
 export const MAX_SETS = 1000;
 /** Most products in one bundle. */

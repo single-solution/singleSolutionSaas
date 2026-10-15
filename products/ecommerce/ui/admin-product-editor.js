@@ -9,6 +9,7 @@
  * downloads, license keys and booked slots. Prices are typed as decimals of the shop currency.
  * @module
  */
+import { PRODUCT_STATUSES } from '../core/model.js';
 import { typeTakes } from '../core/item-types.js';
 import { entriesOf, query, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
@@ -161,7 +162,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			product.typeKey ?? '',
 		);
 		const status = kit.select(
-			['draft', 'active', 'archived'].map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })),
+			PRODUCT_STATUSES.map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })),
 			product.status,
 		);
 		const featured = kit.check(t('catalogAdmin.featuredProduct'), product.featured === true);

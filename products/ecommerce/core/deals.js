@@ -23,6 +23,7 @@
  */
 import { publicPhoto } from './catalog-content.js';
 import { MAX_QUANTITY, lineGross, perMeasure, piecesOf } from './measure.js';
+import { DEAL_TYPES } from './model.js';
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
 import { isMethodKey } from './payment-methods.js';
 import {
@@ -46,7 +47,6 @@ import {
 /** @typedef {import('./promotions-rules.js').Checked} Checked */
 
 /** Deal types. */
-export const DEAL_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
 /** Rule fields of conditions. */
 const RULE_FIELDS = Object.freeze(/** @type {const} */ (['products', 'categories', 'brands', 'grades', 'attribute']));
 /** A condition names at most this many payment methods (the website's `payment_methods` keys). */

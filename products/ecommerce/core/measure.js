@@ -22,6 +22,8 @@ export const MILLI = 1000;
 export const MAX_MEASURED = 1_000_000_000;
 /** The longest unit label. */
 export const MAX_UNIT_LABEL = 20;
+/** The most decimals a shopper may give of a unit. */
+export const MAX_DECIMALS = 3;
 /** The most pieces of one cart line (the system ceiling: the `checkout` setting `maxQuantity` and an item type's
  * quantity rule lower it, E4). */
 export const MAX_QUANTITY = 100_000;
@@ -110,8 +112,8 @@ export const checkMeasure = (raw) => {
 			message: `Name the unit in 1 to ${MAX_UNIT_LABEL} characters (such as m, kg, sq ft, hour or dozen).`,
 		});
 	const decimals = raw.decimals ?? 1;
-	if (!whole(decimals, 0, 3)) errors.push({ path: '/decimals', message: 'decimals is 0, 1, 2 or 3.' });
-	const grain = whole(decimals, 0, 3) ? 10 ** (3 - Number(decimals)) : 1;
+	if (!whole(decimals, 0, MAX_DECIMALS)) errors.push({ path: '/decimals', message: `decimals is 0 to ${MAX_DECIMALS}.` });
+	const grain = whole(decimals, 0, MAX_DECIMALS) ? 10 ** (MAX_DECIMALS - Number(decimals)) : 1;
 	const step = raw.step ?? grain;
 	if (!whole(step, 1, 1_000_000) || Number(step) % grain !== 0)
 		errors.push({

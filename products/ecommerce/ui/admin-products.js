@@ -7,6 +7,7 @@
  * The picked product's detail and editor are in `./admin-product.js` and `./admin-product-editor.js`.
  * @module
  */
+import { PRODUCT_STATUSES } from '../core/model.js';
 import { query, wholeOf } from './admin-kit.js';
 import { checkGroup } from './admin-fields.js';
 import { STATUS_TONES, productDetail } from './admin-product.js';
@@ -345,9 +346,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 	const bulkDialog = () => {
 		if (selected.size === 0) return kit.say(screen.line, t('admin.selectFirst'), true);
 		const action = kit.select(BULK_ACTIONS.map((key) => ({ value: key, label: t(`catalogAdmin.bulk.${key}`) })));
-		const status = kit.select(
-			['draft', 'active', 'archived'].map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })),
-		);
+		const status = kit.select(PRODUCT_STATUSES.map((key) => ({ value: key, label: t(`catalogAdmin.status.${key}`) })));
 		const priceMode = kit.select([
 			{ value: 'percent', label: t('catalogAdmin.byPercent') },
 			{ value: 'fixed', label: t('catalogAdmin.byAmount') },

@@ -75,7 +75,7 @@
 	"page.grade": "Condition: {grade}",
 	"page.condition": "Condition",
 	"page.gradeNone": "Standard",
-	"page.gradeVideo": "Watch the condition video",
+	"page.gradeVideo": "Watch the {grade} video",
 	"page.returnDays": "Returns accepted within {days} days",
 	"page.inStock": "In stock",
 	"page.outOfStock": "Out of stock",
