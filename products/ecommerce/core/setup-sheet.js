@@ -145,6 +145,9 @@ export const LIST_WORDS = Object.freeze({
 		'countries with regions',
 		(/** @type {import('./address.js').AddressRegions} */ entry) => `${nameOf(entry.country)} (${entry.names.length})`,
 	),
+	customer_segments: named('customer segment', 'customer segments', (/** @type {{ name: string }} */ segment) =>
+		nameOf(segment.name),
+	),
 	delivery_zones: named('zone', 'zones', (/** @type {Zone} */ zone) => nameOf(zone.name)),
 	tax_rules: named('tax rule', 'tax rules', (/** @type {TaxRule} */ rule) => `${nameOf(rule.name)} ${rule.percent}%`),
 	grades: gradeWords,

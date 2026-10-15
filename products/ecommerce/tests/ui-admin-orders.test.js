@@ -475,6 +475,7 @@ describe('orders admin: one order', () => {
 			'Move to Dispatched',
 			'Edit delivery address',
 			'Edit staff note',
+			'Edit tags',
 			'Invoice',
 			'Packing slip',
 			'Move to Canceled',
@@ -996,7 +997,7 @@ describe('orders admin: one order', () => {
 		expect(textOf(pane)).not.toContain('Notes');
 		expect(pane.querySelector('a')).toBeNull();
 		expect(pane.querySelector('.detail-head button.secondary:not(.icon)')).toBeNull();
-		expect(menuEntries(pane)).toEqual(['Edit staff note', 'Delete order']);
+		expect(menuEntries(pane)).toEqual(['Edit staff note', 'Edit tags', 'Delete order']);
 		await click(buttonIn(panel, 'Load more'));
 		await openRow(panel, 'ord_2');
 		expect(statuses(pane)).toContain(TEXTS['problem.not_found']);

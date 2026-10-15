@@ -312,3 +312,26 @@ export const detailHead = (kit, title, actions) =>
  * @param {Kit} kit @param {string} title @param {Child[]} children
  */
 export const card = (kit, title, children) => kit.h('section', {}, [kit.text('h4', {}, title), ...children]);
+
+/**
+ * Edit a record's tags (E11): one input, the tags separated by commas; `save` gets them trimmed, each once, and answers
+ * the refusal to show (null: saved).
+ * @param {Kit} kit @param {string[]} tags @param {(tags: string[]) => Promise<string | null>} save
+ */
+export const tagsDialog = (kit, tags, save) => {
+	const input = kit.input(tags.join(', '), { maxlength: '1300', placeholder: kit.t('admin.tagPlaceholder') });
+	kit.dialog({
+		title: kit.t('admin.editTags'),
+		body: [kit.text('p', {}, kit.t('admin.tagsHint')), kit.field(kit.t('admin.tags'), input)],
+		submitLabel: kit.t('admin.save'),
+		onSubmit: () =>
+			save([
+				...new Set(
+					input.value
+						.split(',')
+						.map((tag) => tag.trim())
+						.filter(Boolean),
+				),
+			]),
+	});
+};

@@ -2,10 +2,10 @@
  * Customers, reviews, reports and CSV (admin widget `customers_admin`; PLAN 0.8.8 Admin widgets, 0.6): a section for
  * each switched-on feature — customers (Cart and checkout, `customers.manage`) as a list-and-detail screen: the count
  * of matching customers as a badge, search, Blocked / Not blocked chips with their counts, A to Z or newest first, only
- * the customers this staff member has not opened, Add customer (a customer without an account by phone, with opening
+ * the customers this staff member has not opened, a saved segment and a tag (E11), Add customer (a customer without an account by phone, with opening
  * points, E46), and one customer (marked opened by the staff member) with their figures, staff note, addresses, latest
  * orders and return claims, Block (with a reason) or Unblock and Edit note as buttons, and in the More menu Reset
- * returned packages, Edit fields, Add address, Mark (or unmark) as a loyalty member (E47) and Delete customer (without
+ * returned packages, Edit fields, Add address, Edit tags (E11), Mark (or unmark) as a loyalty member (E47) and Delete customer (without
  * orders); reviews moderation (Reviews, `./admin-reviews.js`); reports (Reports,
  * `reports.read`) and CSV (CSV, `csv.run`) from `./admin-reports.js`.
  * @module
@@ -13,7 +13,7 @@
 import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { mountAdmin, query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
-import { card, chipFilter, detailHead, listScreen } from './admin-lists.js';
+import { card, chipFilter, detailHead, listScreen, tagsDialog } from './admin-lists.js';
 import { CLAIM_TONES } from './admin-order.js';
 import { csvTab, reportsTab } from './admin-reports.js';
 import { reviewsTab } from './admin-reviews.js';
@@ -75,12 +75,27 @@ const customersTab = (kit, panel) => {
 	});
 	const unseen = kit.check(t('customersAdmin.unseenOnly'));
 	unseen.box.addEventListener('change', reload);
+	// the merchant's saved segments (E11), read from the server
+	const segment = kit.select([{ value: '', label: t('customersAdmin.allCustomers') }], '');
+	segment.addEventListener('change', reload);
+	void kit.call('GET', '/v1/admin/customers/segments').then((answer) => {
+		if (!answer.ok) return;
+		for (const saved of /** @type {Array<{ key: string, name: string }>} */ (answer.data.items ?? []))
+			segment.append(kit.h('option', { value: saved.key }, [saved.name]));
+	});
+	const tag = kit.input('', { maxlength: '40', placeholder: t('admin.tagPlaceholder') });
+	/** The list's filters besides blocked. */
+	const filtersNow = () => ({
+		q: search.value.trim(),
+		segment: segment.value,
+		tag: tag.value.trim(),
+		unseen: unseen.box.checked,
+	});
 	const counts = async () => {
-		const q = search.value.trim();
-		const mine = unseen.box.checked;
+		const now = filtersNow();
 		const [total, byBlocked] = await Promise.all([
-			kit.call('GET', `/v1/admin/customers/count${query({ q, blocked: chips.value(), unseen: mine })}`),
-			kit.call('GET', `/v1/admin/customers/counts${query({ q, unseen: mine, by: 'blocked' })}`),
+			kit.call('GET', `/v1/admin/customers/count${query({ ...now, blocked: chips.value() })}`),
+			kit.call('GET', `/v1/admin/customers/counts${query({ ...now, by: 'blocked' })}`),
 		]);
 		screen.count(total);
 		// customers without the flag count as not blocked
@@ -109,6 +124,8 @@ const customersTab = (kit, panel) => {
 	sort.addEventListener('change', reload);
 	const form = h('form', { class: 'row inline' }, [
 		kit.field(t('admin.search'), search),
+		kit.field(t('customersAdmin.segment'), segment),
+		kit.field(t('admin.tag'), tag),
 		kit.field(t('customersAdmin.sort'), sort),
 		kit.text('button', { type: 'submit', class: 'secondary' }, t('admin.searchButton')),
 	]);
@@ -153,7 +170,7 @@ const customersTab = (kit, panel) => {
 	const screen = listScreen(kit, panel, {
 		title: t('customersAdmin.customers'),
 		path: (cursor) =>
-			`/v1/admin/customers${query({ q: search.value.trim(), blocked: chips.value(), unseen: unseen.box.checked, sort: sort.value === 'name' ? '' : sort.value, cursor })}`,
+			`/v1/admin/customers${query({ ...filtersNow(), blocked: chips.value(), sort: sort.value === 'name' ? '' : sort.value, cursor })}`,
 		row: (customer) => ({
 			name: nameOf(customer),
 			figure: kit.money(customer.totalSpent),
@@ -162,6 +179,7 @@ const customersTab = (kit, panel) => {
 				customer.phone,
 				t('customersAdmin.ordersCount', { count: customer.ordersPlaced }),
 				customer.rtoCount > 0 ? t('customersAdmin.rtoCount', { count: customer.rtoCount }) : '',
+				(customer.tags ?? []).join(', '),
 			]
 				.filter(Boolean)
 				.join(' · '),
@@ -235,6 +253,7 @@ const renderCustomer = (kit, customer, detail, message) => {
 			onSubmit: () => change({ note: text.value }, t('admin.saved')),
 		});
 	};
+	const editTags = () => tagsDialog(kit, customer.tags ?? [], (tags) => change({ tags }, t('admin.saved')));
 	const resetRto = () =>
 		kit.dialog({
 			title: t('customersAdmin.resetRto'),
@@ -348,6 +367,7 @@ const renderCustomer = (kit, customer, detail, message) => {
 				kit.moreMenu([
 					customer.rtoCount > 0 ? { label: t('customersAdmin.resetRto'), onSelect: resetRto } : null,
 					{ label: t('customersAdmin.addAddress'), onSelect: addAddress },
+					{ label: t('admin.editTags'), onSelect: editTags },
 					loyaltyOn
 						? {
 								label: t(customer.loyaltyMember ? 'customersAdmin.unmarkMember' : 'customersAdmin.markMember'),
@@ -381,6 +401,7 @@ const renderCustomer = (kit, customer, detail, message) => {
 			[t('customersAdmin.phone'), customer.phone],
 			[t('checkout.field.city'), customer.city ?? ''],
 			[t('customersAdmin.userId'), customer.userId || t('customersAdmin.guest')],
+			[t('admin.tags'), (customer.tags ?? []).join(', ')],
 			...(loyaltyOn
 				? [
 						/** @type {[string, string]} */ ([

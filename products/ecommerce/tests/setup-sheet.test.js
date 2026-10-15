@@ -192,6 +192,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'5 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text), Privacy policy (no text), Terms and conditions (no text).',
 			],
 			['address_regions', 'No countries with regions yet.'],
+			['customer_segments', '3 customer segments: Loyalty members, Active customers, Guests.'],
 		]);
 		expect(listsOf(on, 'delivery_zones')).toEqual([['delivery_zones', '2 zones: Springfield, Rest of the state.']]);
 		expect(listsOf(on, 'taxes')).toEqual([['tax_rules', '1 tax rule: Sales tax 8.25%.']]);
@@ -265,6 +266,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'5 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text), Privacy policy (no text), Terms and conditions (no text).',
 			],
 			['address_regions', 'No countries with regions yet.'],
+			['customer_segments', expect.stringMatching(/^3 customer segments: /)],
 		]);
 	});
 });

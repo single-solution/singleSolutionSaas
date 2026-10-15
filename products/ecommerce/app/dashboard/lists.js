@@ -780,3 +780,219 @@ export function RolePricesEditor({ websiteId, off }) {
 		/>
 	);
 }
+
+const S = L.segments;
+
+/** The fields a segment rule reads, in the order the editor offers them (`core/customer-segments.js`). */
+const SEGMENT_FIELD_KINDS = Object.freeze({
+	tag: 'text',
+	orders: 'number',
+	spent: 'money',
+	last_order: 'days',
+	city: 'text',
+	region: 'text',
+	country: 'text',
+	guest: 'flag',
+	blocked: 'flag',
+	loyalty: 'flag',
+	field: 'value',
+});
+/** The operators of each kind. */
+const SEGMENT_OPS = Object.freeze({
+	text: ['is', 'is_not'],
+	number: ['gte', 'lte'],
+	money: ['gte', 'lte'],
+	days: ['within', 'not_within'],
+	flag: ['is'],
+	value: ['is', 'is_not', 'set', 'not_set'],
+});
+
+/**
+ * A rule's draft from a saved rule: `field` (a customer field is `field` with its id in `fieldId`), `op`, `value` as text.
+ * @param {Item} rule @param {string} currency
+ */
+const ruleDraft = (rule, currency) => {
+	const custom = String(rule.field ?? '').startsWith('field:');
+	const field = custom ? 'field' : String(rule.field ?? 'tag');
+	const value = rule.value;
+	return {
+		field,
+		fieldId: custom ? String(rule.field).slice('field:'.length) : '',
+		op: String(rule.op ?? 'is'),
+		value: field === 'spent' ? decimalOf(value, currency) : value === null || value === undefined ? '' : String(value),
+	};
+};
+
+/**
+ * A rule as saved, from its draft (undefined: the value is not one).
+ * @param {Item} draft @param {string} currency
+ */
+const ruleOf = (draft, currency) => {
+	const kind = SEGMENT_FIELD_KINDS[/** @type {keyof typeof SEGMENT_FIELD_KINDS} */ (draft.field)] ?? 'text';
+	const field = draft.field === 'field' ? `field:${String(draft.fieldId ?? '').trim()}` : draft.field;
+	const text = String(draft.value ?? '').trim();
+	if (kind === 'flag') return { field, op: 'is', value: text !== 'false' };
+	if (kind === 'value' && (draft.op === 'set' || draft.op === 'not_set')) return { field, op: draft.op, value: null };
+	if (kind === 'money') {
+		const amount = amountOf(text, currency, null);
+		return amount === undefined || amount === null ? undefined : { field, op: draft.op, value: amount };
+	}
+	if (kind === 'number' || kind === 'days')
+		return /^\d{1,12}$/.test(text) ? { field, op: draft.op, value: Number(text) } : undefined;
+	return text === '' ? undefined : { field, op: draft.op, value: text };
+};
+
+/**
+ * Saved customer segments (E11, `customer_segments`, feature checkout): each a name, a key, whether every rule or any
+ * one must match, and rules over tags, orders, spend, the last order, place, guest, blocked, loyalty and customer
+ * fields. A website starts with today's three (loyalty, active, guest). The customers widget lists each segment.
+ * @param {EditorProps & { currency: string }} props
+ */
+export function SegmentsEditor({ websiteId, off, currency }) {
+	const step = exponentOf(currency) === 0 ? '1' : String(10 ** -exponentOf(currency));
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="customer_segments"
+			title={S.title}
+			help={S.help}
+			itemLabel={S.item}
+			max={30}
+			off={off}
+			blank={() => ({ key: '', name: '', match: 'all', rules: [{ field: 'tag', fieldId: '', op: 'is', value: '' }] })}
+			load={(segment) => ({
+				key: segment.key ?? '',
+				name: segment.name ?? '',
+				match: segment.match === 'any' ? 'any' : 'all',
+				rules: (Array.isArray(segment.rules) ? segment.rules : []).map((rule) => ruleDraft(rule, currency)),
+			})}
+			clean={(segment) => ({
+				key: keyOf(segment.key, segment.name),
+				name: String(segment.name ?? '').trim(),
+				match: segment.match === 'any' ? 'any' : 'all',
+				rules: /** @type {Item[]} */ (segment.rules).map((rule) => ruleOf(rule, currency) ?? rule),
+			})}
+			check={(segments) =>
+				segments.flatMap((segment, index) =>
+					/** @type {Item[]} */ (segment.rules)
+						.filter((rule) => ruleOf(rule, currency) === undefined)
+						.map(() => fill(S.badRule, { segment: String(segment.name ?? '').trim() || `${S.item} ${index + 1}` })),
+				)
+			}
+			render={(segment, set) => {
+				/** @type {Item[]} */
+				const rules = segment.rules;
+				/** @param {number} at @param {Item} patch */
+				const setRule = (at, patch) =>
+					set({ rules: rules.map((rule, index) => (index === at ? { ...rule, ...patch } : rule)) });
+				return (
+					<div className="space-y-3">
+						<FieldGrid>
+							<Input
+								label={S.name}
+								value={segment.name}
+								maxLength={60}
+								onChange={(event) => set({ name: event.target.value })}
+							/>
+							<Input
+								label={S.key}
+								help={S.keyHelp}
+								value={segment.key}
+								maxLength={40}
+								autoComplete="off"
+								onChange={(event) => set({ key: event.target.value })}
+							/>
+							<Select
+								label={S.match}
+								value={segment.match}
+								options={[
+									{ value: 'all', label: S.matchAll },
+									{ value: 'any', label: S.matchAny },
+								]}
+								onChange={(event) => set({ match: event.target.value })}
+							/>
+						</FieldGrid>
+						{rules.map((rule, at) => {
+							const kind = SEGMENT_FIELD_KINDS[/** @type {keyof typeof SEGMENT_FIELD_KINDS} */ (rule.field)] ?? 'text';
+							const ops = /** @type {readonly string[]} */ (SEGMENT_OPS[kind]);
+							return (
+								<div key={at} data-rule="" className="flex flex-wrap items-end gap-2">
+									<Select
+										label={S.field}
+										value={rule.field}
+										options={Object.keys(SEGMENT_FIELD_KINDS).map((field) => ({
+											value: field,
+											label: S.fields[/** @type {keyof typeof S.fields} */ (field)],
+										}))}
+										onChange={(event) => {
+											const next = event.target.value;
+											const nextKind = SEGMENT_FIELD_KINDS[/** @type {keyof typeof SEGMENT_FIELD_KINDS} */ (next)];
+											setRule(at, {
+												field: next,
+												op: SEGMENT_OPS[nextKind][0],
+												value: nextKind === 'flag' ? 'true' : '',
+											});
+										}}
+									/>
+									{kind === 'value' ? (
+										<Input
+											label={S.fieldId}
+											help={S.fieldIdHelp}
+											value={rule.fieldId}
+											maxLength={64}
+											autoComplete="off"
+											onChange={(event) => setRule(at, { fieldId: event.target.value })}
+										/>
+									) : null}
+									{ops.length > 1 ? (
+										<Select
+											label={S.op}
+											value={rule.op}
+											options={ops.map((op) => ({ value: op, label: S.ops[/** @type {keyof typeof S.ops} */ (op)] }))}
+											onChange={(event) => setRule(at, { op: event.target.value })}
+										/>
+									) : null}
+									{kind === 'flag' ? (
+										<Select
+											label={S.value}
+											value={rule.value === 'false' ? 'false' : 'true'}
+											options={[
+												{ value: 'true', label: S.yes },
+												{ value: 'false', label: S.no },
+											]}
+											onChange={(event) => setRule(at, { value: event.target.value })}
+										/>
+									) : rule.op === 'set' || rule.op === 'not_set' ? null : (
+										<Input
+											label={kind === 'money' ? fill(S.amount, { currency }) : kind === 'days' ? S.days : S.value}
+											value={rule.value}
+											{...(kind === 'money'
+												? { type: 'number', min: 0, step, inputMode: 'decimal' }
+												: kind === 'number' || kind === 'days'
+													? { type: 'number', min: 0, step: '1', inputMode: 'numeric' }
+													: { maxLength: 80 })}
+											onChange={(event) => setRule(at, { value: event.target.value })}
+										/>
+									)}
+									<IconButton
+										label={S.removeRule}
+										disabled={rules.length === 1}
+										onClick={() => set({ rules: rules.filter((_, index) => index !== at) })}>
+										<Icon name="close" size={14} />
+									</IconButton>
+								</div>
+							);
+						})}
+						<Button
+							size="sm"
+							variant="ghost"
+							disabled={rules.length >= 10}
+							onClick={() => set({ rules: [...rules, { field: 'tag', fieldId: '', op: 'is', value: '' }] })}>
+							{S.addRule}
+						</Button>
+					</div>
+				);
+			}}
+		/>
+	);
+}

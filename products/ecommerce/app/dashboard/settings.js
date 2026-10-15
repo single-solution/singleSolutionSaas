@@ -2,7 +2,7 @@
 /**
  * Settings tab (PLAN 0.4.3, 0.8.8): the kit's settings forms of the features the viewer may see, split into sections per
  * area of the shop (picked from an inner list, so no long scroll), with the list editors (order flow, couriers,
- * delivery zones, tax rules, grades, booking hours, role prices), the widget texts, the theme and the Format (PLAN 0.8.10 K7, side
+ * delivery zones, tax rules, grades, booking hours, role prices, customer segments), the widget texts, the theme and the Format (PLAN 0.8.10 K7, side
  * by side in one masonry). Forms are rendered from the schemas the settings API returns; the `checkout` feature's
  * settings are spread over Checkout and payment, Orders and messages, and Policies. A section shows only when it has
  * something for the visible features (merchants: switched-on features; admins: all, off ones marked). Text settings
@@ -22,6 +22,7 @@ import {
 	CouriersEditor,
 	PoliciesEditor,
 	RolePricesEditor,
+	SegmentsEditor,
 	TaxRulesEditor,
 	UnitStatesEditor,
 	ZonesEditor,
@@ -42,6 +43,7 @@ const SECTION_ORDER = /** @type {SectionId[]} */ ([
 	'delivery',
 	'taxes',
 	'orders',
+	'customers',
 	'invoices',
 	'couriers',
 	'promotions',
@@ -296,6 +298,9 @@ export function SettingsTab({ websiteId: id }) {
 							orders: seen('checkout') ? <OrderFlowEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							couriers: seen('checkout') ? <CouriersEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							policies: seen('checkout') ? <PoliciesEditor websiteId={websiteId} off={off('checkout')} /> : null,
+							customers: seen('checkout') ? (
+								<SegmentsEditor websiteId={websiteId} off={off('checkout')} currency={currency} />
+							) : null,
 							rolePrices: seen('role_pricing') ? (
 								<RolePricesEditor websiteId={websiteId} off={off('role_pricing')} />
 							) : null,

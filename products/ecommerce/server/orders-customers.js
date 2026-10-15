@@ -18,6 +18,7 @@ import { checkFieldValues } from '../core/fields.js';
 import { MAX_ADDRESSES, checkNewCustomer, guestRules, phoneDigitsOf, phoneSearchOf } from '../core/guests.js';
 import { expiryFor, loyaltyRules } from '../core/loyalty.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { segmentFilter, segmentNeeds } from '../core/customer-segments.js';
 import { addressRulesOf, phoneRulesOf } from './guests.js';
 import {
 	MAX_SEARCH,
@@ -38,8 +39,10 @@ const RECENT_ORDERS = 10;
 
 /** A customer id (`cus_…`) or an Accounts user id. */
 const CUSTOMER_REF = /^[A-Za-z0-9_-]{1,100}$/;
-/** Customer list segments (E31). */
-const SEGMENTS = Object.freeze(['loyalty', 'active', 'guest']);
+/** Most customers a loyalty or spend rule of a segment names (E11). */
+const MAX_OWNERS = 5000;
+/** Most customers' spend a spend rule reads. */
+const MAX_SPENDERS = 20_000;
 /** Most Accounts users one `userIds` filter names. */
 const MAX_USER_IDS = 100;
 
@@ -58,16 +61,53 @@ export const createCustomers = (service) => {
 	};
 
 	/**
-	 * The list's search and blocked filter (an over-long search is refused, as the list refuses it).
-	 * @param {any} ctx
+	 * The merchant's saved segments (`customer_segments`, E11).
+	 * @param {Site} s
+	 * @returns {Promise<import('../core/customer-segments.js').Segment[]>}
 	 */
-	const queryOf = async (ctx) => {
+	const segmentsOf = async (s) => /** @type {any} */ (await s.list('customer_segments'));
+
+	/**
+	 * A saved segment's filter, with what its loyalty and spend rules need read first (E11).
+	 * @param {Site} s @param {import('../core/customer-segments.js').Segment} segment
+	 */
+	const filterOf = async (s, segment) => {
+		const needs = segmentNeeds(segment);
+		/** @type {Map<number, { userIds: string[], customerIds: string[] }>} */
+		const spent = new Map();
+		for (const rule of needs.spent) spent.set(rule.index, await spenders(s, rule.op === 'gte' ? rule.value : rule.value + 1));
+		return segmentFilter(segment, {
+			now: service.now(),
+			...(needs.loyalty ? { loyalty: await loyaltyOwners(s) } : {}),
+			spent,
+		});
+	};
+
+	/**
+	 * The list's search and filters (an over-long search is refused, as the list refuses it): blocked, a saved segment
+	 * (E11; left out with `bySegment`: the counts of every segment), tags, not opened, created after and given Accounts
+	 * users.
+	 * @param {any} ctx @param {{ bySegment?: boolean }} [options]
+	 */
+	const queryOf = async (ctx, { bySegment = false } = {}) => {
 		const q = typeof ctx.query.q === 'string' ? ctx.query.q.trim() : '';
 		if (q.length > MAX_SEARCH) throw service.invalid('q', `Search for at most ${MAX_SEARCH} characters.`);
 		const blocked = ctx.query.blocked === 'true' ? true : ctx.query.blocked === 'false' ? false : null;
-		const segment = ctx.query.segment === undefined || ctx.query.segment === '' ? null : ctx.query.segment;
-		if (segment !== null && !SEGMENTS.includes(segment))
-			throw service.invalid('segment', 'segment is loyalty, active or guest.');
+		const s = await service.site(ctx);
+		/** @type {Record<string, unknown> | null} */
+		let segment = null;
+		if (!bySegment && ctx.query.segment !== undefined && ctx.query.segment !== '') {
+			const found = (await segmentsOf(s)).find((entry) => entry.key === ctx.query.segment);
+			if (!found) throw service.invalid('segment', 'segment is the key of a saved segment.');
+			segment = await filterOf(s, found);
+		}
+		/** @type {string[] | null} */
+		let tags = null;
+		if (typeof ctx.query.tag === 'string' && ctx.query.tag !== '') {
+			tags = [...new Set(ctx.query.tag.split(',').map((/** @type {string} */ tag) => tag.trim()))].filter(Boolean);
+			if (tags.length > 30 || tags.some((tag) => tag.length > 40))
+				throw service.invalid('tag', 'Name at most 30 tags of up to 40 characters.');
+		}
 		let createdAfter = null;
 		if (typeof ctx.query.createdAfter === 'string' && ctx.query.createdAfter !== '') {
 			const time = Date.parse(ctx.query.createdAfter);
@@ -81,12 +121,11 @@ export const createCustomers = (service) => {
 			if (userIds.length > MAX_USER_IDS || !userIds.every((id) => CUSTOMER_REF.test(id)))
 				throw service.invalid('userIds', `userIds lists at most ${MAX_USER_IDS} Accounts user ids, comma-separated.`);
 		}
-		const loyalty = segment === 'loyalty' ? await loyaltyOwners(ctx) : null;
 		return {
 			q,
 			blocked,
 			segment,
-			loyalty,
+			tags,
 			seenBy: service.actor(ctx).id,
 			unseen: ctx.query.unseen === '1' || ctx.query.unseen === 'true',
 			createdAfter,
@@ -108,13 +147,12 @@ export const createCustomers = (service) => {
 	};
 
 	/**
-	 * Who segment `loyalty` holds (E31): the customers flagged as members while the loyalty setting `memberFlag` is on
-	 * (E47), else who has a loyalty account with points earned or left, at most 5,000.
-	 * @param {any} ctx
+	 * Who a `loyalty` rule holds (E11, E47): the customers flagged as members while the loyalty setting `memberFlag` is
+	 * on, else who has a loyalty account with points earned or left, at most {@link MAX_OWNERS}.
+	 * @param {Site} s
 	 * @returns {Promise<{ userIds: string[], customerIds: string[] } | 'flag'>}
 	 */
-	const loyaltyOwners = async (ctx) => {
-		const s = await service.site(ctx);
+	const loyaltyOwners = async (s) => {
 		if (s.has('loyalty') && loyaltyRules(await s.values('loyalty')).memberFlag !== 'off') return 'flag';
 		const rows = await (
 			await s.data()
@@ -122,7 +160,7 @@ export const createCustomers = (service) => {
 			.collection(COLLECTIONS.loyalty)
 			.find(
 				{ websiteId: s.websiteId, $or: [{ balance: { $gt: 0 } }, { lifetimeEarned: { $gt: 0 } }] },
-				{ projection: { _id: 0, userId: 1, customerId: 1 }, limit: 5000 },
+				{ projection: { _id: 0, userId: 1, customerId: 1 }, limit: MAX_OWNERS },
 			)
 			.toArray();
 		return {
@@ -131,13 +169,112 @@ export const createCustomers = (service) => {
 		};
 	};
 
-	const counts = countHandlers({
+	/**
+	 * The customers who spent at least `least` (paid − refunded, minor units; E11): a member's guest orders count as
+	 * theirs, as the list shows them. At most {@link MAX_OWNERS}.
+	 * @param {Site} s @param {number} least
+	 * @returns {Promise<{ userIds: string[], customerIds: string[] }>}
+	 */
+	const spenders = async (s, least) => {
+		const data = await s.data();
+		const rows = await data
+			.collection(COLLECTIONS.orders)
+			.aggregate(
+				[
+					{ $match: { websiteId: s.websiteId } },
+					{
+						$group: {
+							_id: { u: '$customer.userId', c: '$customer.customerId' },
+							total: { $sum: { $subtract: [{ $ifNull: ['$payment.paid', 0] }, { $ifNull: ['$payment.refunded', 0] }] } },
+						},
+					},
+					{ $limit: MAX_SPENDERS },
+				],
+				{ maxTimeMS: 5000 },
+			)
+			.toArray();
+		/** @type {Map<string, number>} spend by `u:<user id>` or `c:<customer id>` */
+		const totals = new Map();
+		/** @type {Set<string>} customer ids of guest orders */
+		const guestIds = new Set();
+		for (const row of rows) {
+			const userId = typeof row._id?.u === 'string' ? row._id.u : '';
+			const customerId = typeof row._id?.c === 'string' ? row._id.c : '';
+			const key = userId ? `u:${userId}` : customerId ? `c:${customerId}` : '';
+			if (!key) continue;
+			if (!userId) guestIds.add(customerId);
+			totals.set(key, (totals.get(key) ?? 0) + Number(row.total ?? 0));
+		}
+		// the guest orders of a member's record are theirs
+		const members = /** @type {Array<{ id: string, userId: string }>} */ (
+			guestIds.size === 0
+				? []
+				: await data
+						.collection(COLLECTIONS.customers)
+						.find(
+							{ websiteId: s.websiteId, id: { $in: [...guestIds] }, userId: { $type: 'string', $ne: '' } },
+							{ projection: { _id: 0, id: 1, userId: 1 } },
+						)
+						.toArray()
+		);
+		for (const member of members) {
+			const guest = totals.get(`c:${member.id}`) ?? 0;
+			totals.delete(`c:${member.id}`);
+			totals.set(`u:${member.userId}`, (totals.get(`u:${member.userId}`) ?? 0) + guest);
+		}
+		const keys = [...totals]
+			.filter(([, total]) => total >= least)
+			.map(([key]) => key)
+			.slice(0, MAX_OWNERS);
+		return {
+			userIds: keys.filter((key) => key.startsWith('u:')).map((key) => key.slice(2)),
+			customerIds: keys.filter((key) => key.startsWith('c:')).map((key) => key.slice(2)),
+		};
+	};
+
+	const kitCounts = countHandlers({
 		source: async (ctx) => {
 			const query = await queryOf(ctx);
 			const s = await service.site(ctx);
 			return { collection: (await s.data()).collection(COLLECTIONS.customers), filter: customerFilter(s.websiteId, query) };
 		},
-		by: { blocked: 'blocked', segment: { path: 'userId', map: (userId) => (userId ? 'member' : 'guest') } },
+		by: { blocked: 'blocked' },
+	});
+
+	/**
+	 * The list's counts: the kit's (`count`, `counts?by=blocked`), and `counts?by=segment`, how many customers each saved
+	 * segment holds with the list's other filters (E11; a customer counts in each segment they are in, the total once).
+	 */
+	const counts = {
+		count: kitCounts.count,
+		/** @param {any} ctx */
+		counts: async (ctx) => {
+			if (ctx.query.by !== 'segment') return kitCounts.counts(ctx);
+			const query = await queryOf(ctx, { bySegment: true });
+			const s = await service.site(ctx);
+			const customers = (await s.data()).collection(COLLECTIONS.customers);
+			const base = customerFilter(s.websiteId, query);
+			/** @type {Record<string, number>} */
+			const groups = {};
+			for (const segment of await segmentsOf(s)) {
+				const n = await customers.countDocuments(
+					{ ...base, $and: [.../** @type {any[]} */ (base.$and ?? []), await filterOf(s, segment)] },
+					{ maxTimeMS: 3000 },
+				);
+				if (n > 0) groups[segment.key] = n;
+			}
+			return { total: await customers.countDocuments(base, { maxTimeMS: 3000 }), groups };
+		},
+	};
+
+	/** GET …/customers/segments: the saved segments, for the admin widget (E11). @param {any} ctx */
+	const segments = async (ctx) => ({
+		items: (await segmentsOf(await service.site(ctx))).map((segment) => ({
+			key: segment.key,
+			name: segment.name,
+			match: segment.match,
+			rules: segment.rules,
+		})),
 	});
 
 	/** @param {any} ctx */
@@ -229,7 +366,7 @@ export const createCustomers = (service) => {
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const s = await service.site(ctx);
 		const { store, record } = await recordFor(s, ref);
-		const { blocked, blockedReason, note, resetRto, fields, loyaltyMember } = checked.value;
+		const { blocked, blockedReason, note, resetRto, fields, loyaltyMember, tags } = checked.value;
 		/** @type {Record<string, unknown> | null} the customer field values after the edit (null: not changed) */
 		let nextFields = null;
 		if (fields) {
@@ -245,6 +382,7 @@ export const createCustomers = (service) => {
 			...(resetRto ? { rtoCount: 0 } : {}),
 			...(nextFields ? { fields: nextFields } : {}),
 			...(loyaltyMember === undefined ? {} : { loyaltyMember }),
+			...(tags === undefined ? {} : { tags }),
 		});
 		const action =
 			blocked === true && record.blocked !== true
@@ -257,6 +395,7 @@ export const createCustomers = (service) => {
 			...(note === undefined ? [] : ['note changed']),
 			...(resetRto ? ['returned packages reset'] : []),
 			...(fields ? ['fields changed'] : []),
+			...(tags === undefined ? [] : ['tags changed']),
 			...(loyaltyMember === undefined || loyaltyMember === (record.loyaltyMember === true)
 				? []
 				: [loyaltyMember ? 'marked a loyalty member' : 'no longer a loyalty member']),
@@ -397,6 +536,7 @@ export const createCustomers = (service) => {
 		setAddresses,
 		remove,
 		seen,
+		segments,
 		count: counts.count,
 		counts: counts.counts,
 	});

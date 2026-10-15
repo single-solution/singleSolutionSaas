@@ -20,7 +20,7 @@ import { EDITABLE_ROLES } from '../core/orders.js';
 import { OTHER_WAY } from '../core/payment-methods.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
-import { card, detailHead } from './admin-lists.js';
+import { card, detailHead, tagsDialog } from './admin-lists.js';
 import { serialForm, serialLines, shipForm, typedLine, unitsMissing, warrantyOf } from './admin-order-forms.js';
 import { codeOf } from './admin-problems.js';
 import { variantLabel } from './admin-taxonomy.js';
@@ -252,6 +252,16 @@ const renderOrder = (kit, order, detail, message) => {
 				? { label: t('ordersAdmin.replaceVideo'), onSelect: () => videoDialog(kit, order, done) }
 				: null,
 			{ label: t('ordersAdmin.editNote'), onSelect: () => noteDialog(kit, order, done) },
+			{
+				label: t('admin.editTags'),
+				onSelect: () =>
+					tagsDialog(kit, order.tags ?? [], async (tags) => {
+						const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { tags });
+						if (!answer.ok) return kit.reason(answer);
+						done(answer.data, t('admin.saved'));
+						return null;
+					}),
+			},
 			// the order fields staff fill (dynamic model §2)
 			(order.orderFields ?? []).some((/** @type {any} */ field) => field.active)
 				? {
@@ -375,11 +385,12 @@ const renderOrder = (kit, order, detail, message) => {
 			])
 		: null;
 	const notes =
-		order.note || order.staffNote
+		order.note || order.staffNote || (order.tags ?? []).length > 0
 			? card(kit, t('ordersAdmin.notes'), [
 					kit.fieldGrid([
 						[t('ordersAdmin.shopperNote'), order.note ?? ''],
 						[t('ordersAdmin.staffNote'), order.staffNote ?? ''],
+						[t('admin.tags'), (order.tags ?? []).join(', ')],
 					]),
 				])
 			: null;

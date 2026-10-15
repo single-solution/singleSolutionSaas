@@ -51,6 +51,7 @@ import { counterIdOf, counterNameOf, numberFormOf, periodOf } from '../core/orde
 import { createMedia } from './catalog-media.js';
 import { addressRulesOf, phoneRulesOf } from './guests.js';
 import { createCustomers } from './orders-customers.js';
+import { createTagTools } from './tags.js';
 import { createMoves } from './orders-moves.js';
 import { openAtPayments } from './order-payments.js';
 import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
@@ -120,6 +121,20 @@ const flowOf = async (s) => /** @type {any} */ (await s.list('order_flow'));
 export const createOrders = (product, service, { ordering }) => {
 	const moves = createMoves(product, service);
 	const customers = createCustomers(service);
+	const customerTags = createTagTools(service, {
+		collection: COLLECTIONS.customers,
+		what: 'customers',
+		idFilter: (ids) => ({ $or: [{ id: { $in: ids } }, { userId: { $in: ids } }] }),
+		stamp: false,
+		now: product.now,
+	});
+	const orderTags = createTagTools(service, {
+		collection: COLLECTIONS.orders,
+		what: 'orders',
+		idFilter: (ids) => ({ id: { $in: ids } }),
+		stamp: true,
+		now: product.now,
+	});
 	const media = createMedia(product);
 
 	/** @param {Site} s */
@@ -525,12 +540,11 @@ export const createOrders = (product, service, { ordering }) => {
 		if (waiting) {
 			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });
 			delete rest.address;
-			if (rest.staffNote === undefined && !shipment && !serials && !video && !fields) return detailOf(s, order);
+			if (Object.keys(rest).length === 0 && !shipment && !serials && !video && !fields) return detailOf(s, order);
 		}
 		if (serials) {
 			order = await moves.typeSerials(s, ctx, order, serials);
-			if (rest.staffNote === undefined && rest.address === undefined && !shipment && !video && !fields)
-				return detailOf(s, order);
+			if (Object.keys(rest).length === 0 && !shipment && !video && !fields) return detailOf(s, order);
 		}
 		/** @type {Record<string, unknown>} */
 		const set = { ...rest };
@@ -596,6 +610,7 @@ export const createOrders = (product, service, { ordering }) => {
 					...(shipment ? ['Shipment changed'] : []),
 					...(video ? ['Dispatch video replaced'] : []),
 					...(rest.staffNote === undefined ? [] : ['Staff note changed']),
+					...(rest.tags === undefined ? [] : ['Tags changed']),
 					...(fields ? ['Fields changed'] : []),
 				].join(', '),
 			},
@@ -1163,6 +1178,160 @@ export const createOrders = (product, service, { ordering }) => {
 				permission: 'customers.manage',
 				rateLimit: serverLimits,
 				handler: customers.seen,
+			}),
+			// saved segments and tags of customers and orders (E11)
+			defineRoute({
+				method: 'GET',
+				path: '/v1/customers/segments',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.segments,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/customers/segments',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.segments,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/customers/tags',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customerTags.list,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/customers/tags',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customerTags.list,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/customers/tags/rename',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customerTags.rename,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/customers/tags/rename',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customerTags.rename,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/customers/tags/remove',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customerTags.remove,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/customers/tags/remove',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customerTags.remove,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/customers/tags/apply',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customerTags.apply,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/customers/tags/apply',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customerTags.apply,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/orders/tags',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: orderTags.list,
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/admin/orders/tags',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.read',
+				rateLimit: serverLimits,
+				handler: orderTags.list,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/tags/rename',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: orderTags.rename,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/orders/tags/rename',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.manage',
+				rateLimit: serverLimits,
+				handler: orderTags.rename,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/tags/remove',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: orderTags.remove,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/orders/tags/remove',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.manage',
+				rateLimit: serverLimits,
+				handler: orderTags.remove,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/orders/tags/apply',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: orderTags.apply,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/orders/tags/apply',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'orders.manage',
+				rateLimit: serverLimits,
+				handler: orderTags.apply,
 			}),
 		],
 	};

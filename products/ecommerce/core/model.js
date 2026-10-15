@@ -473,6 +473,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {Record<string, import('./fields.js').FieldValue>} [fields] the values of the shop's order fields by field
  *   id (dynamic model §2): the shopper's at checkout, staff's by edit; none when it has no values
  * @property {string} staffNote
+ * @property {string[]} [tags] the merchant's tags (E11); none when it has none
  * @property {Date} placedAt
  * @property {Date | null} deliveredAt
  * @property {Date} createdAt
@@ -502,9 +503,10 @@ export const STATUS_ROLES = Object.freeze([
  *   phone: string, phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
  *   note: string, seenBy: string[], lastOrderAt?: Date | null,
  *   fields?: Record<string, import('./fields.js').FieldValue>, addresses?: import('./checkout.js').Address[],
- *   loyaltyMember?: boolean }} CustomerRecord `fields`: the values of the shop's customer fields by field id, kept by
+ *   loyaltyMember?: boolean, tags?: string[] }} CustomerRecord `fields`: the values of the shop's customer fields by field id, kept by
  *   staff (dynamic model §2); none when it has no values; `addresses`: the addresses staff keep and a guest's orders
- *   delivered to, the newest first, at most 6 (E46); `loyaltyMember`: flagged as a loyalty member (E47)
+ *   delivered to, the newest first, at most 6 (E46); `loyaltyMember`: flagged as a loyalty member (E47); `tags`: the
+ *   merchant's tags (E11)
  */
 
 // ---------------------------------------------------------------------------------------------------- promotions

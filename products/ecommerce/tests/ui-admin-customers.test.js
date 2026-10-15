@@ -166,7 +166,7 @@ describe('customers admin: customers', () => {
 			expect(textOf(pane)).toContain(part);
 		expect(server.last('GET /v1/admin/returns')?.url.searchParams.get('userId')).toBe('u1');
 		expect(textOf(pane)).toContain('R-1 · Order SO-1 · Warranty');
-		expect(menuEntries(pane)).toEqual(['Reset returned packages', 'Add address']);
+		expect(menuEntries(pane)).toEqual(['Reset returned packages', 'Add address', 'Edit tags']);
 		// block with a reason
 		await click(buttonIn(pane, 'Block'));
 		expect(textOf(dialogOf(root))).toContain('A blocked customer cannot order');
@@ -194,7 +194,7 @@ describe('customers admin: customers', () => {
 		expect(textOf(dialogOf(root))).toContain('Set the 2 returned packages back to 0.');
 		await submitDialog(root);
 		expect(statuses(pane)).toContain('Returned packages reset.');
-		expect(menuEntries(pane)).toEqual(['Add address']);
+		expect(menuEntries(pane)).toEqual(['Add address', 'Edit tags']);
 		expect(patches).toEqual([
 			{ blocked: true, blockedReason: '' },
 			{ blocked: true, blockedReason: 'Fraud' },

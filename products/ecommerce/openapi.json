@@ -2819,7 +2819,7 @@
 		"/v1/admin/customers": {
 			"get": {
 				"summary": "The customers, A to Z (Customers admin widget)",
-				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, an unknown segment or sort, a createdAfter that is not a date, or more than 100 or malformed userIds.",
+				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, a segment that is not saved, more than 30 tags or sort, a createdAfter that is not a date, or more than 100 or malformed userIds.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -2879,15 +2879,21 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"loyalty",
-								"active",
-								"guest"
-							],
-							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
+							"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+							"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only customers with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only customers with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -3050,7 +3056,7 @@
 		"/v1/admin/customers/count": {
 			"get": {
 				"summary": "Count the customers (the list’s filters) (Customers admin widget)",
-				"description": "422 validation_failed for a search longer than 120 characters, an unknown segment, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
+				"description": "422 validation_failed for a search longer than 120 characters, a segment that is not saved, more than 30 tags, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -3089,15 +3095,21 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"loyalty",
-								"active",
-								"guest"
-							],
-							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
+							"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+							"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only customers with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only customers with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -3162,8 +3174,8 @@
 		},
 		"/v1/admin/customers/counts": {
 			"get": {
-				"summary": "Count the customers by blocked or segment (Customers admin widget)",
-				"description": "by=blocked counts true and false; by=segment counts member and guest. 422 validation_failed for a search longer than 120 characters, an unknown segment, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
+				"summary": "Count the customers by blocked or by saved segment (Customers admin widget)",
+				"description": "by=blocked counts true and false; by=segment counts the customers of each saved segment (a customer counts in each segment they are in; the total once; segments with none are left out). 422 validation_failed for a search longer than 120 characters, a segment that is not saved, more than 30 tags, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -3214,15 +3226,21 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"loyalty",
-								"active",
-								"guest"
-							],
-							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
+							"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+							"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only customers with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only customers with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -3268,6 +3286,423 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/customers/segments": {
+			"get": {
+				"summary": "The saved customer segments (Customers admin widget)",
+				"description": "The customer_segments list (Settings → Customer segments, or GET and PUT /v1/lists/customer_segments), in its order; GET /v1/customers?segment=<key> lists a segment's customers. The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"match",
+													"rules"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string",
+														"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+													},
+													"name": {
+														"type": "string",
+														"maxLength": 60
+													},
+													"match": {
+														"type": "string",
+														"enum": [
+															"all",
+															"any"
+														],
+														"description": "all: every rule; any: one of them."
+													},
+													"rules": {
+														"type": "array",
+														"minItems": 1,
+														"maxItems": 10,
+														"items": {
+															"type": "object",
+															"required": [
+																"field",
+																"op",
+																"value"
+															],
+															"additionalProperties": false,
+															"properties": {
+																"field": {
+																	"type": "string",
+																	"description": "tag, orders (orders placed), spent (paid − refunded, minor units), last_order (days), city, region, country (ISO 3166-1 alpha-2), guest, blocked, loyalty (the member flag while memberFlag is on, else points) or field:<customer field id>."
+																},
+																"op": {
+																	"type": "string",
+																	"enum": [
+																		"is",
+																		"is_not",
+																		"gte",
+																		"lte",
+																		"within",
+																		"not_within",
+																		"set",
+																		"not_set"
+																	],
+																	"description": "text fields: is, is_not; orders and spent: gte, lte; last_order: within, not_within (days); guest, blocked and loyalty: is; a customer field: is, is_not, set, not_set."
+																},
+																"value": {
+																	"type": [
+																		"string",
+																		"number",
+																		"boolean",
+																		"null"
+																	]
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/customers/tags": {
+			"get": {
+				"summary": "The tags in use on customers, the most used first (Customers admin widget)",
+				"description": "Every tag on customers with how many hold it (at most 500). The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"tag",
+													"count"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"tag": {
+														"type": "string"
+													},
+													"count": {
+														"type": "integer",
+														"minimum": 1
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/customers/tags/apply": {
+			"post": {
+				"summary": "Add and remove tags on many customers at once (Customers admin widget)",
+				"description": "Tags to remove go first; a record keeps at most 30 tags. matched: the records the ids name; changed: those whose tags changed. 422 validation_failed for no ids or more than 500, ids given twice, bad tags or nothing to add or remove. The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"ids"
+								],
+								"properties": {
+									"ids": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 500,
+										"items": {
+											"type": "string"
+										},
+										"description": "Customer ids (cus_…) or Accounts user ids."
+									},
+									"add": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to add."
+									},
+									"remove": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to remove."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"matched",
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"matched": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"changed": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/customers/tags/remove": {
+			"post": {
+				"summary": "Remove a tag from every one of the customers (Customers admin widget)",
+				"description": "The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters. The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"tag"
+								],
+								"properties": {
+									"tag": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The customers changed."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/customers/tags/rename": {
+			"post": {
+				"summary": "Rename a tag on every one of the customers (Customers admin widget)",
+				"description": "A record that has both tags keeps the new one once, where the old one was. The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters. The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"from",
+									"to"
+								],
+								"properties": {
+									"from": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									},
+									"to": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The customers changed."
+										}
+									}
 								}
 							}
 						}
@@ -3368,7 +3803,7 @@
 				}
 			},
 			"patch": {
-				"summary": "Change a customer: block or unblock them, their staff note, returned packages, field values or loyalty member flag (Customers admin widget)",
+				"summary": "Change a customer: block or unblock them, their staff note, returned packages, field values, tags or loyalty member flag (Customers admin widget)",
 				"description": "A blocked shopper cannot order. A member’s record is made when missing (from their latest order, else their Accounts user). 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, loyaltyMember other than true or false, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
@@ -3441,6 +3876,16 @@
 									"loyaltyMember": {
 										"type": "boolean",
 										"description": "Mark or unmark a loyalty member (the loyalty setting memberFlag, E47)."
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "All the customer's tags (E11): trimmed, each once; [] removes them. 422 at /tags for more than 30 or one over 40 characters."
 									}
 								}
 							}
@@ -4686,7 +5131,7 @@
 		"/v1/admin/orders": {
 			"get": {
 				"summary": "The orders, newest first (Orders admin widget)",
-				"description": "unseen is about the acting staff member: the ticket's user, or the one a server call names in its SS-Actor-* headers. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit.",
+				"description": "unseen is about the acting staff member: the ticket's user, or the one a server call names in its SS-Actor-* headers. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.read",
@@ -4804,6 +5249,16 @@
 							"type": "string",
 							"pattern": "^[A-Za-z0-9_-]{1,100}$",
 							"description": "A customer id (cus_…) or an Accounts user id: their orders."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only orders with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only orders with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -5133,7 +5588,7 @@
 		"/v1/admin/orders/count": {
 			"get": {
 				"summary": "Count the orders (the list’s filters) (Orders admin widget)",
-				"description": "422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
+				"description": "422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.read",
@@ -5230,6 +5685,16 @@
 							"type": "string",
 							"pattern": "^[A-Za-z0-9_-]{1,100}$",
 							"description": "A customer id (cus_…) or an Accounts user id: their orders."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only orders with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only orders with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -5332,7 +5797,7 @@
 		"/v1/admin/orders/counts": {
 			"get": {
 				"summary": "Count the orders by status, role, payment method or payment state (Orders admin widget)",
-				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
+				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.read",
@@ -5443,6 +5908,16 @@
 							"type": "string",
 							"pattern": "^[A-Za-z0-9_-]{1,100}$",
 							"description": "A customer id (cus_…) or an Accounts user id: their orders."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only orders with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only orders with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -5734,6 +6209,307 @@
 				}
 			}
 		},
+		"/v1/admin/orders/tags": {
+			"get": {
+				"summary": "The tags in use on orders, the most used first (Orders admin widget)",
+				"description": "Every tag on orders with how many hold it (at most 500). The widget needs the orders.read permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "orders.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"tag",
+													"count"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"tag": {
+														"type": "string"
+													},
+													"count": {
+														"type": "integer",
+														"minimum": 1
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/orders/tags/apply": {
+			"post": {
+				"summary": "Add and remove tags on many orders at once (Orders admin widget)",
+				"description": "Tags to remove go first; a record keeps at most 30 tags. matched: the records the ids name; changed: those whose tags changed. 422 validation_failed for no ids or more than 500, ids given twice, bad tags or nothing to add or remove. The widget needs the orders.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "orders.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"ids"
+								],
+								"properties": {
+									"ids": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 500,
+										"items": {
+											"type": "string"
+										},
+										"description": "Order ids."
+									},
+									"add": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to add."
+									},
+									"remove": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to remove."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"matched",
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"matched": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"changed": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/orders/tags/remove": {
+			"post": {
+				"summary": "Remove a tag from every one of the orders (Orders admin widget)",
+				"description": "The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters. The widget needs the orders.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "orders.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"tag"
+								],
+								"properties": {
+									"tag": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The orders changed."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/orders/tags/rename": {
+			"post": {
+				"summary": "Rename a tag on every one of the orders (Orders admin widget)",
+				"description": "A record that has both tags keeps the new one once, where the old one was. The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters. The widget needs the orders.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "orders.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"from",
+									"to"
+								],
+								"properties": {
+									"from": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									},
+									"to": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The orders changed."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/orders/{id}": {
 			"delete": {
 				"summary": "Delete an order (Orders admin widget)",
@@ -5817,7 +6593,7 @@
 				}
 			},
 			"patch": {
-				"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines (Orders admin widget)",
+				"summary": "Change an order's staff note, tags, address, shipment or serial numbers, or a waiting order's lines (Orders admin widget)",
 				"description": "The address changes only before shipping (422 at /address); serials need Condition grades and unit numbers and lines whose item type has its units typed (unitCapture packing; units picked from stock are refused at /serials/<lineId>). lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
@@ -5848,6 +6624,16 @@
 									"staffNote": {
 										"type": "string",
 										"maxLength": 5000
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "All the order's tags (E11): trimmed, each once; [] removes them. 422 at /tags for more than 30 or one over 40 characters."
 									},
 									"address": {
 										"type": "object",
@@ -16401,7 +17187,7 @@
 		"/v1/customers": {
 			"get": {
 				"summary": "The customers, A to Z",
-				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, an unknown segment or sort, a createdAfter that is not a date, or more than 100 or malformed userIds.",
+				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, a segment that is not saved, more than 30 tags or sort, a createdAfter that is not a date, or more than 100 or malformed userIds.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -16460,15 +17246,21 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"loyalty",
-								"active",
-								"guest"
-							],
-							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
+							"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+							"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only customers with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only customers with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -16655,7 +17447,7 @@
 		"/v1/customers/count": {
 			"get": {
 				"summary": "Count the customers (the list’s filters)",
-				"description": "422 validation_failed for a search longer than 120 characters, an unknown segment, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
+				"description": "422 validation_failed for a search longer than 120 characters, a segment that is not saved, more than 30 tags, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -16693,15 +17485,21 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"loyalty",
-								"active",
-								"guest"
-							],
-							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
+							"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+							"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only customers with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only customers with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -16778,8 +17576,8 @@
 		},
 		"/v1/customers/counts": {
 			"get": {
-				"summary": "Count the customers by blocked or segment",
-				"description": "by=blocked counts true and false; by=segment counts member and guest. 422 validation_failed for a search longer than 120 characters, an unknown segment, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
+				"summary": "Count the customers by blocked or by saved segment",
+				"description": "by=blocked counts true and false; by=segment counts the customers of each saved segment (a customer counts in each segment they are in; the total once; segments with none are left out). 422 validation_failed for a search longer than 120 characters, a segment that is not saved, more than 30 tags, a createdAfter that is not a date, or more than 100 or malformed userIds. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -16829,15 +17627,21 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user).",
 						"schema": {
 							"type": "string",
-							"enum": [
-								"loyalty",
-								"active",
-								"guest"
-							],
-							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
+							"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$",
+							"description": "The key of a saved segment (the customer_segments list, E11; by default loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only customers with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only customers with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -16895,6 +17699,483 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Counts"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/customers/segments": {
+			"get": {
+				"summary": "The saved customer segments",
+				"description": "The customer_segments list (Settings → Customer segments, or GET and PUT /v1/lists/customer_segments), in its order; GET /v1/customers?segment=<key> lists a segment's customers.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"key",
+													"name",
+													"match",
+													"rules"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"key": {
+														"type": "string",
+														"pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+													},
+													"name": {
+														"type": "string",
+														"maxLength": 60
+													},
+													"match": {
+														"type": "string",
+														"enum": [
+															"all",
+															"any"
+														],
+														"description": "all: every rule; any: one of them."
+													},
+													"rules": {
+														"type": "array",
+														"minItems": 1,
+														"maxItems": 10,
+														"items": {
+															"type": "object",
+															"required": [
+																"field",
+																"op",
+																"value"
+															],
+															"additionalProperties": false,
+															"properties": {
+																"field": {
+																	"type": "string",
+																	"description": "tag, orders (orders placed), spent (paid − refunded, minor units), last_order (days), city, region, country (ISO 3166-1 alpha-2), guest, blocked, loyalty (the member flag while memberFlag is on, else points) or field:<customer field id>."
+																},
+																"op": {
+																	"type": "string",
+																	"enum": [
+																		"is",
+																		"is_not",
+																		"gte",
+																		"lte",
+																		"within",
+																		"not_within",
+																		"set",
+																		"not_set"
+																	],
+																	"description": "text fields: is, is_not; orders and spent: gte, lte; last_order: within, not_within (days); guest, blocked and loyalty: is; a customer field: is, is_not, set, not_set."
+																},
+																"value": {
+																	"type": [
+																		"string",
+																		"number",
+																		"boolean",
+																		"null"
+																	]
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/customers/tags": {
+			"get": {
+				"summary": "The tags in use on customers, the most used first",
+				"description": "Every tag on customers with how many hold it (at most 500).",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"tag",
+													"count"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"tag": {
+														"type": "string"
+													},
+													"count": {
+														"type": "integer",
+														"minimum": 1
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/customers/tags/apply": {
+			"post": {
+				"summary": "Add and remove tags on many customers at once",
+				"description": "Tags to remove go first; a record keeps at most 30 tags. matched: the records the ids name; changed: those whose tags changed. 422 validation_failed for no ids or more than 500, ids given twice, bad tags or nothing to add or remove.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"ids"
+								],
+								"properties": {
+									"ids": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 500,
+										"items": {
+											"type": "string"
+										},
+										"description": "Customer ids (cus_…) or Accounts user ids."
+									},
+									"add": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to add."
+									},
+									"remove": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to remove."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"matched",
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"matched": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"changed": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/customers/tags/remove": {
+			"post": {
+				"summary": "Remove a tag from every one of the customers",
+				"description": "The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"tag"
+								],
+								"properties": {
+									"tag": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The customers changed."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/customers/tags/rename": {
+			"post": {
+				"summary": "Rename a tag on every one of the customers",
+				"description": "A record that has both tags keeps the new one once, where the old one was. The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"from",
+									"to"
+								],
+								"properties": {
+									"from": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									},
+									"to": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The customers changed."
+										}
+									}
 								}
 							}
 						}
@@ -17017,7 +18298,7 @@
 				}
 			},
 			"patch": {
-				"summary": "Change a customer: block or unblock them, their staff note, returned packages, field values or loyalty member flag",
+				"summary": "Change a customer: block or unblock them, their staff note, returned packages, field values, tags or loyalty member flag",
 				"description": "A blocked shopper cannot order. A member’s record is made when missing (from their latest order, else their Accounts user). 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, loyaltyMember other than true or false, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
@@ -17101,6 +18382,16 @@
 									"loyaltyMember": {
 										"type": "boolean",
 										"description": "Mark or unmark a loyalty member (the loyalty setting memberFlag, E47)."
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "All the customer's tags (E11): trimmed, each once; [] removes them. 422 at /tags for more than 30 or one over 40 characters."
 									}
 								}
 							}
@@ -20099,7 +21390,7 @@
 		"/v1/orders": {
 			"get": {
 				"summary": "The orders, newest first",
-				"description": "unseen is about the acting staff member: the ticket's user, or the one a server call names in its SS-Actor-* headers. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit.",
+				"description": "unseen is about the acting staff member: the ticket's user, or the one a server call names in its SS-Actor-* headers. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -20216,6 +21507,16 @@
 							"type": "string",
 							"pattern": "^[A-Za-z0-9_-]{1,100}$",
 							"description": "A customer id (cus_…) or an Accounts user id: their orders."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only orders with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only orders with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -20568,7 +21869,7 @@
 		"/v1/orders/count": {
 			"get": {
 				"summary": "Count the orders (the list’s filters)",
-				"description": "422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
+				"description": "422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -20664,6 +21965,16 @@
 							"type": "string",
 							"pattern": "^[A-Za-z0-9_-]{1,100}$",
 							"description": "A customer id (cus_…) or an Accounts user id: their orders."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only orders with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only orders with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -20891,7 +22202,7 @@
 		"/v1/orders/counts": {
 			"get": {
 				"summary": "Count the orders by status, role, payment method or payment state",
-				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
+				"description": "by=status counts by status key; by=role by the role of each status in today's order flow (none: a status the flow no longer has); by=paymentMethod and by=paymentState by the payment's. 422 validation_failed for an unknown status, role, payment state or method, delivery method or customer, more than 30 tags, a date that is not ISO 8601, or a search longer than 120 characters; 400 bad_request for a bad cursor or limit. 503 count_timeout after 3 seconds.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -21001,6 +22312,16 @@
 							"type": "string",
 							"pattern": "^[A-Za-z0-9_-]{1,100}$",
 							"description": "A customer id (cus_…) or an Accounts user id: their orders."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only orders with any of these tags (E11): at most 30, comma-separated.",
+						"schema": {
+							"type": "string",
+							"description": "Only orders with any of these tags (E11): at most 30, comma-separated."
 						}
 					},
 					{
@@ -21337,6 +22658,355 @@
 				}
 			}
 		},
+		"/v1/orders/tags": {
+			"get": {
+				"summary": "The tags in use on orders, the most used first",
+				"description": "Every tag on orders with how many hold it (at most 500).",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"tag",
+													"count"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"tag": {
+														"type": "string"
+													},
+													"count": {
+														"type": "integer",
+														"minimum": 1
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/orders/tags/apply": {
+			"post": {
+				"summary": "Add and remove tags on many orders at once",
+				"description": "Tags to remove go first; a record keeps at most 30 tags. matched: the records the ids name; changed: those whose tags changed. 422 validation_failed for no ids or more than 500, ids given twice, bad tags or nothing to add or remove.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"ids"
+								],
+								"properties": {
+									"ids": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 500,
+										"items": {
+											"type": "string"
+										},
+										"description": "Order ids."
+									},
+									"add": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to add."
+									},
+									"remove": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "Tags to remove."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"matched",
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"matched": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"changed": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/orders/tags/remove": {
+			"post": {
+				"summary": "Remove a tag from every one of the orders",
+				"description": "The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"tag"
+								],
+								"properties": {
+									"tag": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The orders changed."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/orders/tags/rename": {
+			"post": {
+				"summary": "Rename a tag on every one of the orders",
+				"description": "A record that has both tags keeps the new one once, where the old one was. The activity log keeps it. 422 validation_failed for a tag that is empty or over 40 characters.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"from",
+									"to"
+								],
+								"properties": {
+									"from": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									},
+									"to": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 40
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"changed"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"changed": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The orders changed."
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/orders/{id}": {
 			"delete": {
 				"summary": "Delete an order",
@@ -21442,7 +23112,7 @@
 				}
 			},
 			"patch": {
-				"summary": "Change an order's staff note, address, shipment or serial numbers, or a waiting order's lines",
+				"summary": "Change an order's staff note, tags, address, shipment or serial numbers, or a waiting order's lines",
 				"description": "The address changes only before shipping (422 at /address); serials need Condition grades and unit numbers and lines whose item type has its units typed (unitCapture packing; units picked from stock are refused at /serials/<lineId>). lines, paymentMethod and delivery change an order that still waits (awaiting payment or confirmation, nothing paid, physical lines only): it is priced again with the offers it was placed with, its stock holds are swapped, and a Payments payment started for the old total is canceled (409 conflict when it was paid meanwhile; 503 payments_unavailable). 409 conflict when the order changed meanwhile; 422 validation_failed (pointer to the member); 404 not_found. fields sets order field values (active fields on orders; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
@@ -21484,6 +23154,16 @@
 									"staffNote": {
 										"type": "string",
 										"maxLength": 5000
+									},
+									"tags": {
+										"type": "array",
+										"maxItems": 30,
+										"items": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 40
+										},
+										"description": "All the order's tags (E11): trimmed, each once; [] removes them. 422 at /tags for more than 30 or one over 40 characters."
 									},
 									"address": {
 										"type": "object",
@@ -39407,6 +41087,7 @@
 					"orderCount",
 					"note",
 					"loyaltyMember",
+					"tags",
 					"totalSpent",
 					"totalSpentText",
 					"ordersPlaced",
@@ -39472,6 +41153,16 @@
 						"type": "boolean",
 						"description": "Flagged as a loyalty member (the loyalty setting memberFlag, E47; while it is off every customer is one)."
 					},
+					"tags": {
+						"type": "array",
+						"maxItems": 30,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "The merchant's tags (E11)."
+					},
 					"totalSpent": {
 						"type": "integer",
 						"description": "What they paid (paid − refunded) over all their orders, minor units."
@@ -39519,6 +41210,7 @@
 					"orderCount",
 					"note",
 					"loyaltyMember",
+					"tags",
 					"totalSpent",
 					"totalSpentText",
 					"ordersPlaced",
@@ -39587,6 +41279,16 @@
 					"loyaltyMember": {
 						"type": "boolean",
 						"description": "Flagged as a loyalty member (the loyalty setting memberFlag, E47; while it is off every customer is one)."
+					},
+					"tags": {
+						"type": "array",
+						"maxItems": 30,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "The merchant's tags (E11)."
 					},
 					"totalSpent": {
 						"type": "integer",
@@ -42813,6 +44515,7 @@
 					"holdUntil",
 					"note",
 					"staffNote",
+					"tags",
 					"totalText",
 					"placedAt",
 					"deliveredAt",
@@ -42972,6 +44675,16 @@
 					"staffNote": {
 						"type": "string",
 						"maxLength": 5000
+					},
+					"tags": {
+						"type": "array",
+						"maxItems": 30,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "The merchant's tags (E11)."
 					},
 					"totalText": {
 						"type": "string",
@@ -44533,6 +46246,7 @@
 					"holdUntil",
 					"note",
 					"staffNote",
+					"tags",
 					"totalText",
 					"placedAt",
 					"deliveredAt",
@@ -44694,6 +46408,16 @@
 					"staffNote": {
 						"type": "string",
 						"maxLength": 5000
+					},
+					"tags": {
+						"type": "array",
+						"maxItems": 30,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "The merchant's tags (E11)."
 					},
 					"totalText": {
 						"type": "string",
@@ -45500,6 +47224,7 @@
 					"currency",
 					"payment",
 					"shipment",
+					"tags",
 					"placedAt",
 					"createdAt",
 					"updatedAt"
@@ -45606,6 +47331,16 @@
 								"type": "null"
 							}
 						]
+					},
+					"tags": {
+						"type": "array",
+						"maxItems": 30,
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 40
+						},
+						"description": "The merchant's tags (E11)."
 					},
 					"placedAt": {
 						"type": "string",

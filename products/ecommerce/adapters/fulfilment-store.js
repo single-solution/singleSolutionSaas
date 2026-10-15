@@ -81,19 +81,19 @@ const newestPage = (after) => {
 };
 
 /**
- * @typedef {{ q: string, blocked: boolean | null, segment?: 'loyalty' | 'active' | 'guest' | null,
- *   loyalty?: { userIds: string[], customerIds: string[] } | 'flag' | null, seenBy?: string, unseen?: boolean,
- *   createdAfter?: Date | null, userIds?: string[] | null, phoneDigits?: string[] }} CustomerQuery `loyalty`: who
- *   segment `loyalty` holds — the owners of loyalty accounts with points, or `flag`: the customers flagged as members
- *   (the loyalty setting `memberFlag` on, E47); `userIds`: only these Accounts users (a page of the store's own member
- *   list, CU-2); `phoneDigits`: the digit runs of `q` to find in phones, read by the website's phone rules
+ * @typedef {{ q: string, blocked: boolean | null, segment?: Record<string, unknown> | null, tags?: string[] | null,
+ *   seenBy?: string, unseen?: boolean, createdAfter?: Date | null, userIds?: string[] | null,
+ *   phoneDigits?: string[] }} CustomerQuery `segment`: a saved segment's filter (`core/customer-segments.js`
+ *   `segmentFilter`, E11); `tags`: any of these tags; `userIds`: only these Accounts users (a page of the store's own
+ *   member list, CU-2); `phoneDigits`: the digit runs of `q` to find in phones, read by the website's phone rules
  *   (`core/guests.js` `phoneSearchOf`; without them, the digits typed and without leading zeros)
  */
 
 /**
  * The staff customer list's filter: a search (name, start of the email, the user or customer id, 4 or more digits of
- * the phone, found anywhere in its whole number), blocked or not, a segment, not yet opened by the acting staff member,
- * created after a time (E31) and given Accounts users. The list and its counts share it (PLAN 0.8.10 K4).
+ * the phone, found anywhere in its whole number), blocked or not, a saved segment and tags (E11), not yet opened by the
+ * acting staff member, created after a time (E31) and given Accounts users. The list and its counts share it (PLAN
+ * 0.8.10 K4).
  * @param {string} websiteId
  * @param {CustomerQuery} input
  * @returns {Record<string, unknown>}
@@ -104,7 +104,7 @@ export const customerFilter = (
 		q,
 		blocked,
 		segment = null,
-		loyalty = null,
+		tags = null,
 		seenBy = '',
 		unseen = false,
 		createdAfter = null,
@@ -120,16 +120,8 @@ export const customerFilter = (
 	};
 	/** @type {Record<string, unknown>[]} */
 	const and = [];
-	// segments (E31): guests have no Accounts user (every write stores `guest`); active customers ordered at least once;
-	// loyalty customers have points
-	if (segment === 'guest') and.push({ guest: true });
-	if (segment === 'active') and.push({ orderCount: { $gte: 1 } });
-	if (segment === 'loyalty')
-		and.push(
-			loyalty === 'flag'
-				? { loyaltyMember: true }
-				: { $or: [{ userId: { $in: loyalty?.userIds ?? [] } }, { id: { $in: loyalty?.customerIds ?? [] } }] },
-		);
+	if (segment) and.push(segment);
+	if (tags && tags.length > 0) and.push({ tags: { $in: tags } });
 	if (unseen && seenBy) and.push({ seenBy: { $ne: seenBy } });
 	if (createdAfter) and.push({ createdAt: { $gt: createdAfter } });
 	if (q) {

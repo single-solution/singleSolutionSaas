@@ -14,6 +14,7 @@ import { MAX_MEASURED, piecesOf } from './measure.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
+import { TAG_LIMITS, checkTags } from './customer-segments.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
@@ -268,6 +269,7 @@ export const stateAfterRefund = (paid, refunded) => (refunded >= paid ? 'refunde
  * @property {Array<'delivery' | 'pickup' | 'none'>} [deliveryMethods] (`deliveryMethod`, E31)
  * @property {string} [city] the delivery city (E31)
  * @property {string} [customer] a customer's user id or customer id (E31)
+ * @property {string[]} [tags] orders with any of these tags (`tag`, E11)
  * @property {Date} [from] placed at or after
  * @property {Date} [to] placed before
  * @property {Date} [createdAfter] created after (E31)
@@ -353,6 +355,12 @@ export const orderFilters = (query) => {
 		if (!/^[A-Za-z0-9_-]{1,100}$/.test(String(customer))) return refuse('customer', 'Unknown customer.');
 		value.customer = String(customer);
 	}
+	const tag = text('tag');
+	if (tag !== null) {
+		const tags = several(tag, (one) => one.length <= TAG_LIMITS.tag);
+		if (!tags) return refuse('tag', `Name at most 30 tags of up to ${TAG_LIMITS.tag} characters.`);
+		value.tags = tags;
+	}
 	for (const name of /** @type {const} */ (['from', 'to', 'createdAfter'])) {
 		const raw = text(name);
 		if (raw === null) continue;
@@ -389,6 +397,7 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 	if (filters.from || filters.to)
 		query.placedAt = { ...(filters.from ? { $gte: filters.from } : {}), ...(filters.to ? { $lt: filters.to } : {}) };
 	if (filters.createdAfter) query.createdAt = { $gt: filters.createdAfter };
+	if (filters.tags) query.tags = { $in: filters.tags };
 	if (filters.unseen && seenBy) query.seenBy = { $ne: seenBy };
 	// a canceled order whose money is not all given back (orderMoney's refundDue)
 	if (filters.refundDue) Object.assign(query, { role: 'cancelled', $expr: { $gt: ['$payment.paid', '$payment.refunded'] } });
@@ -728,6 +737,12 @@ export const checkEdit = (body, order) => {
 			return refuse('fields', 'Give the field values by field id.');
 		value.fields = objectOf(input.fields);
 	}
+	// the order's tags (E11), all of them
+	if (input.tags !== undefined) {
+		const tags = checkTags(input.tags);
+		if (!tags.ok) return refuse('tags', tags.message);
+		value.tags = tags.value;
+	}
 	if (input.address !== undefined) {
 		if (!order.address && !value.waiting) return refuse('address', 'This order has no delivery address.');
 		if (!EDITABLE_ROLES.includes(order.role)) return refuse('address', 'The address cannot change once the order is shipped.');
@@ -753,7 +768,7 @@ export const checkEdit = (body, order) => {
 		value.video = video;
 	}
 	if (Object.keys(value).length === 0)
-		return refuse('staffNote', 'Send a staff note, an address, a shipment, serial numbers or a video.');
+		return refuse('staffNote', 'Send a staff note, tags, an address, a shipment, serial numbers or a video.');
 	return { ok: true, value };
 };
 
@@ -763,7 +778,8 @@ const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipp
 /**
  * What staff change on an order (`PATCH /v1/orders/:id`): the staff note, the address, the shipment's details at any
  * time (E28), serial numbers and the dispatch video once packed.
- * @typedef {{ staffNote?: string, address?: NonNullable<OrderRecord['address']>, serials?: Record<string, UnitInput[]>,
+ * @typedef {{ staffNote?: string, tags?: string[], address?: NonNullable<OrderRecord['address']>,
+ *   serials?: Record<string, UnitInput[]>,
  *   shipment?: { courier: string, trackingNumber: string, trackingNote: string, estimatedDeliveryAt: Date | null },
  *   waiting?: WaitingEdit, video?: OrderMedia, fields?: Record<string, unknown> }} OrderEdit `waiting`: lines, payment
  *   and delivery changed while the order waits (E29); `video`: the dispatch video that replaces the one taken when
@@ -841,14 +857,14 @@ const waitingEditOf = (input) => {
 
 /**
  * Check a change to a customer record: the block and its reason, the staff note, resetting returned packages,
- * customer field values (checked against the fields by the caller) and the loyalty member flag (E47).
+ * customer field values (checked against the fields by the caller), the loyalty member flag (E47) and the tags (E11).
  * @param {unknown} body
  * @returns {{ ok: true, value: { blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean,
- *   fields?: Record<string, unknown>, loyaltyMember?: boolean } } | Refusal}
+ *   fields?: Record<string, unknown>, loyaltyMember?: boolean, tags?: string[] } } | Refusal}
  */
 export const checkCustomerEdit = (body) => {
 	const input = objectOf(body);
-	/** @type {{ blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean, fields?: Record<string, unknown>, loyaltyMember?: boolean }} */
+	/** @type {{ blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean, fields?: Record<string, unknown>, loyaltyMember?: boolean, tags?: string[] }} */
 	const value = {};
 	if (input.blocked !== undefined) {
 		if (typeof input.blocked !== 'boolean') return refuse('blocked', 'true or false.');
@@ -866,6 +882,12 @@ export const checkCustomerEdit = (body) => {
 	if (input.resetRto !== undefined) {
 		if (input.resetRto !== true) return refuse('resetRto', 'Send true to reset the count.');
 		value.resetRto = true;
+	}
+	// the customer's tags (E11), all of them
+	if (input.tags !== undefined) {
+		const tags = checkTags(input.tags);
+		if (!tags.ok) return refuse('tags', tags.message);
+		value.tags = tags.value;
 	}
 	// the loyalty member flag (E47)
 	if (input.loyaltyMember !== undefined) {
@@ -1030,6 +1052,7 @@ export const orderSummary = (order, flow, money) => ({
 	currency: order.totals.currency,
 	payment: { method: order.payment.method, state: order.payment.state },
 	shipment: order.shipment ? { courier: order.shipment.courier, trackingNumber: order.shipment.trackingNumber } : null,
+	tags: order.tags ?? [],
 	placedAt: wire(order.placedAt),
 	createdAt: wire(order.createdAt),
 	updatedAt: wire(order.updatedAt),
@@ -1082,6 +1105,7 @@ export const orderDetail = (order, flow, { customer, images, money, units, order
 		// Payments a transition asked for
 		facts: factsOf(order),
 		effects: plain.effects ?? [],
+		tags: order.tags ?? [],
 		// its order field values by field id (staff see every one), and the fields staff fill (dynamic model §2)
 		fields: order.fields ?? {},
 		orderFields: orderFields
@@ -1193,6 +1217,7 @@ export const customerView = (customer, spent, currency, money) => ({
 	phone: customer.phone ?? '',
 	city: customer.city ?? '',
 	...customerFlags(customer),
+	tags: customer.tags ?? [],
 	totalSpent: spent.total,
 	totalSpentText: money(spent.total, currency),
 	ordersPlaced: spent.count,

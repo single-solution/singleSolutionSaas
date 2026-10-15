@@ -82,6 +82,8 @@ const ordersTab = (kit, panel) => {
 	);
 	const from = kit.input('', { type: 'date' });
 	const to = kit.input('', { type: 'date' });
+	// orders with a tag (E11)
+	const tag = kit.input('', { maxlength: '40', placeholder: t('admin.tagPlaceholder') });
 	const unseen = kit.check(t('ordersAdmin.unseenOnly'));
 	// canceled orders that still hold the shopper's money: the refunds to make (late money, K-13)
 	const refundDue = kit.check(t('ordersAdmin.refundDueOnly'));
@@ -98,6 +100,7 @@ const ordersTab = (kit, panel) => {
 		paymentMethod: without === 'paymentMethod' ? '' : paymentMethod.node.value,
 		from: dayStart(from.value, kit.timeZone),
 		to: dayEnd(to.value, kit.timeZone),
+		tag: tag.value.trim(),
 		unseen: unseen.box.checked,
 		refundDue: refundDue.box.checked,
 	});
@@ -136,11 +139,12 @@ const ordersTab = (kit, panel) => {
 			kit.field(t('ordersAdmin.paymentMethod'), paymentMethod.node),
 			kit.field(t('admin.from'), from),
 			kit.field(t('admin.to'), to),
+			kit.field(t('admin.tag'), tag),
 			unseen.node,
 			refundDue.node,
 		]),
 	]);
-	for (const control of [stage.node, paymentState.node, paymentMethod.node, from, to, unseen.box, refundDue.box])
+	for (const control of [stage.node, paymentState.node, paymentMethod.node, from, to, tag, unseen.box, refundDue.box])
 		control.addEventListener('change', reload);
 
 	// bulk moves: the selected orders to one status (each move follows the flow; refusals are listed per order)
