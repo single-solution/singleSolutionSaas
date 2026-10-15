@@ -144,6 +144,65 @@ const THREE_DECIMAL = new Set(['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'])
  */
 export const currencyDigits = (currency) => (ZERO_DECIMAL.has(currency) ? 0 : THREE_DECIMAL.has(currency) ? 3 : 2);
 
+/** The largest amount (a price, a payment, a line or a total), in minor units: every sum stays an exact integer. */
+export const MAX_AMOUNT = 1_000_000_000_000;
+
+/**
+ * True for an ISO 4217-shaped currency code (three capital letters).
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export const isCurrency = (value) => typeof value === 'string' && /^[A-Z]{3}$/.test(value);
+
+/**
+ * True for an amount in minor units: a whole number from 0 to {@link MAX_AMOUNT} (0 = free).
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+export const isAmount = (value) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= MAX_AMOUNT;
+
+/**
+ * True for an amount in minor units that is more than nothing: a whole number from 1 to {@link MAX_AMOUNT} (a
+ * payment, a refund).
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+export const isPositiveAmount = (value) => isAmount(value) && Number(value) >= 1;
+
+/**
+ * An amount in minor units as the plain decimal text gateways, files and inputs take (`1050`, `USD` → `10.50`;
+ * `-5`, `USD` → `-0.05`; `1050`, `JPY` → `1050`): no grouping, the currency's own number of decimals.
+ * @param {number} amount integer minor units
+ * @param {string} currency ISO 4217 code
+ * @returns {string}
+ */
+export const toDecimal = (amount, currency) => {
+	const digits = currencyDigits(currency);
+	const sign = amount < 0 ? '-' : '';
+	const text = String(Math.abs(amount));
+	if (digits === 0) return `${sign}${text}`;
+	const padded = text.padStart(digits + 1, '0');
+	return `${sign}${padded.slice(0, -digits)}.${padded.slice(-digits)}`;
+};
+
+/**
+ * A plain decimal (`10.5`, `10.50`, `10`, as text or a number) as minor units, or null when it is not an amount from
+ * 1 minor unit to {@link MAX_AMOUNT} with at most the currency's decimals (trailing zeros past them are fine).
+ * @param {unknown} text
+ * @param {string} currency ISO 4217 code
+ * @returns {number | null}
+ */
+export const fromDecimal = (text, currency) => {
+	const digits = currencyDigits(currency);
+	const value = typeof text === 'number' ? String(text) : typeof text === 'string' ? text.trim() : '';
+	const match = /^(\d{1,13})(?:\.(\d+))?$/.exec(value);
+	if (!match) return null;
+	const fraction = match[2] ?? '';
+	if (/[^0]/.test(fraction.slice(digits))) return null;
+	const minor = Number(`${match[1]}${fraction.slice(0, digits).padEnd(digits, '0')}`);
+	return isPositiveAmount(minor) ? minor : null;
+};
+
 /** No-break spaces the runtime puts between a symbol and the number, as plain spaces (plain text everywhere). */
 const NO_BREAK_SPACES = new RegExp('[\u00a0\u202f]', 'g');
 const plainSpaces = (/** @type {string} */ text) => text.replace(NO_BREAK_SPACES, ' ');

@@ -169,6 +169,11 @@ Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/wi
   widgets use the viewer's unless `times` is `business`.
 - `zonedParts(at, timeZone)`, `zonedDay(at, timeZone)` (`YYYY-MM-DD`) and `zonedDayStart(day, timeZone)` (epoch ms):
   every calendar rule in the business.json time zone, UTC when missing.
+- Money checks (on this path only): `currencyDigits(currency)` (ISO 4217 minor units), `MAX_AMOUNT` (10^12 minor
+  units, so sums stay exact), `isCurrency(value)` (three capital letters), `isAmount(value)` (a whole number 0 to
+  `MAX_AMOUNT`), `isPositiveAmount(value)` (1 to `MAX_AMOUNT`), `toDecimal(amount, currency)` (plain decimal text with
+  the currency's digits, no grouping: `1050 USD` → `10.50`, `-5 USD` → `-0.05`) and `fromDecimal(text, currency)`
+  (`10.5` → `1050`; null unless 1 to `MAX_AMOUNT` minor units with at most the currency's decimals).
 
 ## Phone numbers (`@ss/contracts/phone`)
 

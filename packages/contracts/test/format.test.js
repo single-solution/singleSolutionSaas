@@ -12,7 +12,16 @@ import {
 	zonedParts,
 } from '../src/index.js';
 import * as browserEntry from '../src/format.js';
-import { currencyDigits, normaliseFormat } from '../src/format.js';
+import {
+	MAX_AMOUNT,
+	currencyDigits,
+	fromDecimal,
+	isAmount,
+	isCurrency,
+	isPositiveAmount,
+	normaliseFormat,
+	toDecimal,
+} from '../src/format.js';
 import { WEBSITE } from './fixtures.js';
 
 describe('Format values (K7)', () => {
@@ -86,6 +95,44 @@ describe('formatMoney (K7)', () => {
 		expect(formatMoney(1050, 'XXQ1')).toBe('XXQ1 10.50');
 		expect(formatMoney(Number.NaN, 'USD')).toBe('');
 		expect(formatMoney(/** @type {any} */ ('10'), 'USD')).toBe('');
+	});
+});
+
+describe('money checks (amounts in minor units)', () => {
+	it('checks currency codes and amounts', () => {
+		expect(['USD', 'JPY', 'XYZ'].every(isCurrency)).toBe(true);
+		expect(['usd', 'US', 'USDT', '', null, 840].some(isCurrency)).toBe(false);
+		expect([0, 1, MAX_AMOUNT].every(isAmount)).toBe(true);
+		expect([-1, 1.5, MAX_AMOUNT + 1, Number.NaN, '5', null].some(isAmount)).toBe(false);
+		expect([1, MAX_AMOUNT].every(isPositiveAmount)).toBe(true);
+		expect([0, -1, 2.5, MAX_AMOUNT + 1, '1'].some(isPositiveAmount)).toBe(false);
+	});
+
+	it('writes minor units as plain decimals with the currency digits, negatives too', () => {
+		expect(toDecimal(1050, 'USD')).toBe('10.50');
+		expect(toDecimal(5, 'USD')).toBe('0.05');
+		expect(toDecimal(0, 'EUR')).toBe('0.00');
+		expect(toDecimal(1050, 'JPY')).toBe('1050');
+		expect(toDecimal(1234567, 'KWD')).toBe('1234.567');
+		expect(toDecimal(-5, 'USD')).toBe('-0.05');
+		expect(toDecimal(-1050, 'JPY')).toBe('-1050');
+	});
+
+	it('reads plain decimals as minor units', () => {
+		expect(fromDecimal('10.5', 'USD')).toBe(1050);
+		expect(fromDecimal(' 10.50 ', 'USD')).toBe(1050);
+		expect(fromDecimal('10', 'USD')).toBe(1000);
+		expect(fromDecimal(10.5, 'USD')).toBe(1050);
+		expect(fromDecimal('10.500', 'USD')).toBe(1050);
+		expect(fromDecimal('1050', 'JPY')).toBe(1050);
+		expect(fromDecimal('1.234', 'KWD')).toBe(1234);
+		expect(fromDecimal('10.505', 'USD')).toBeNull();
+		expect(fromDecimal('10.5', 'JPY')).toBeNull();
+		for (const text of ['0', '0.00', '-1', '1,000', '1e3', '.5', '5.', '', '10000000000000', null])
+			expect(fromDecimal(text, 'USD'), String(text)).toBeNull();
+		expect(fromDecimal('10000000000', 'USD')).toBe(MAX_AMOUNT);
+		expect(fromDecimal('10000000000.01', 'USD')).toBeNull();
+		expect(fromDecimal('9999999999999', 'JPY')).toBeNull();
 	});
 });
 
