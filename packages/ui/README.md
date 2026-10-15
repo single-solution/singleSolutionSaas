@@ -8,6 +8,7 @@ Tailwind scans `node_modules/@ss/ui/src` (`@source` in the app's CSS).
 | Entry              | What it is                                                                                                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `@ss/ui`           | every component, `cx`, and the format and problem helpers                                                                  |
+| `@ss/ui/dashboard` | the product dashboard every product shares: the page, its standard tabs, their pieces, words and API helpers               |
 | `@ss/ui/problems`  | RFC 9457 problem → user message and field-error helpers                                                                    |
 | `@ss/ui/theme.css` | the design tokens                                                                                                          |
 | `@ss/ui/testing`   | DOM test helpers on `react-dom/client` + jsdom (`render`, `cleanup`, `click`, `type`, `byLabel`, …) for other units' tests |
@@ -91,6 +92,32 @@ button), a setup checklist, the key numbers and the latest activity as a timelin
   sections (`children`). Red items come first; the sentence names the most urgent one. `open(tab)` shows a dashboard
   section (Features, Settings, Connections or Developers); credits send merchants to support and admins to the Portal.
   `OverviewSkeleton` is its loading state; `RecentChanges` is the timeline card also shown under Defaults and Prices.
+
+## Product dashboard
+
+`@ss/ui/dashboard` (client only) is the dashboard of every product (PLAN.md 0.4.3), one implementation for all: a
+product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} texts={TEXTS} tabs={TABS} />`.
+
+- `ProductDashboard` loads the session, then shows the sidebar (Overview, Features, Settings, Connections, Developers;
+  Defaults and Prices for Owners), the website switcher (merchant names for admins), the `Admin view` banner and Back
+  to Portal; sections and websites switch inside the page and the address follows (Back and Forward work). `tabs`
+  puts a product's own section in a standard tab's place (`{ settings: ChatSettings }`) or adds a tab
+  (`{ lists: { component, icon, kind, global? } }`, its label in `texts.tabs`). Each tab gets `TabProps`:
+  `websiteId`, `domain`, `who`, `support`, `portal` and `open(tab)`.
+- Words: `DASHBOARD_TEXTS` are the shared ones (US English). `dashboardTexts({ title, ...own })` lays the product's
+  title and its own words over them group by group (a product may reword one shared text); `useDashboard()` gives the
+  merged words and `namesOf(keys, max?)` (feature names from the manifest) inside the page or a `DashboardProvider`.
+- Standard tabs, each taking the product's parts as props: `OverviewTab` (`useMore(overview, props)`, a hook that
+  returns the product's `needs`, `steps`, `numbers` and `children`), `FeaturesTab` (`warnings(on)`), `SettingsTab`
+  (`sections` first, `notice(key, values, features)` on a feature's card, `featureCards(features)` beside the forms),
+  `ConnectionsTab` (`form(item, save)` for a connection's own form, `hint(name)`; Remove sits in the card's ⋯ menu
+  and asks first), `DevelopersTab` (`links`, and the product's sections as children instead of the widget script),
+  `DefaultsTab` (`notice`) and `PricesTab` (with the Re-seal card).
+- Pieces for a product's own tabs: `Loaded`, `Outcome`, `SettingsForms`, `TextsForm` (with a box that finds a text),
+  `ThemeForm`, `FormatForm`, `ResealCard`, and `hasSettings`, `toneOf`, `withDependents`.
+- API: `call(method, path, body?)` answers `{ ok: true, data }` or `{ ok: false, problem }` (a product that does not
+  answer is a 503 problem); `useLoad(path | null)` shows a resource's last answer at once and refreshes it, with
+  `reload()`; `fill(text, values)` fills `{name}` placeholders.
 
 ## SchemaForm
 

@@ -6,6 +6,7 @@
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
+		"./dashboard": "./src/dashboard.js",
 		"./problems": "./src/problems.js",
 		"./theme.css": "./src/theme.css",
 		"./testing": "./src/testing.js",
@@ -27,6 +28,10 @@
 			".": {
 				"types": "./types/src/index.d.ts",
 				"default": "./src/index.js"
+			},
+			"./dashboard": {
+				"types": "./types/src/dashboard.d.ts",
+				"default": "./src/dashboard.js"
 			},
 			"./problems": {
 				"types": "./types/src/problems.d.ts",
