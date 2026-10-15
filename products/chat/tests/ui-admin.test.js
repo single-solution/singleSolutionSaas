@@ -648,6 +648,62 @@ describe('inbox', () => {
 		expect(/** @type {HTMLElement} */ (box.closest('form')).hidden).toBe(true);
 	});
 
+	it('filters by and sets the merchant’s tags, topic and priority (C7)', async () => {
+		/** @type {any} */
+		let conversation = full({ tags: ['vip'], topic: null, priority: 'high' });
+		const labels = {
+			tags: [
+				{ key: 'vip', name: 'VIP', description: '' },
+				{ key: 'refund', name: 'Refund', description: '' },
+			],
+			topics: [{ key: 'billing', name: 'Billing', description: '' }],
+			priorities: [
+				{ key: 'high', name: 'High', description: '' },
+				{ key: 'low', name: 'Low', description: '' },
+			],
+		};
+		const { server, hosts } = await startAdmin({
+			features: ['inbox'],
+			settings: { labels },
+			routes: {
+				'GET /v1/admin/conversations': () =>
+					answer(200, { items: [item({ tags: ['vip'], priority: 'high' })], nextCursor: null, hasMore: false, unread: 0 }),
+				'GET /v1/admin/conversations/c1': () => answer(200, { conversation, messages: [message(1, 'visitor')] }),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+				'PATCH /v1/admin/conversations/c1': (call) => {
+					conversation = { ...conversation, ...call.body };
+					return answer(200, { conversation });
+				},
+			},
+		});
+		const root = shadow(hosts.inbox);
+		// the list shows them by name, and filters by one
+		expect(root.querySelector('.conversations li')?.textContent).toContain('High · VIP');
+		const filter = fieldIn(root, TEXTS['inbox.labelFilter']);
+		expect([...filter.querySelectorAll('optgroup')].map((g) => g.getAttribute('label'))).toEqual([
+			TEXTS['inbox.tags'],
+			TEXTS['inbox.topic'],
+			TEXTS['inbox.priority'],
+		]);
+		filter.value = 'topic:billing';
+		await submit(filter);
+		expect(server.last('GET /v1/admin/conversations')?.url.searchParams.get('topic')).toBe('billing');
+		// the open conversation: its topic, priority and tags, saved with one PATCH
+		await click(buttonIn(root, 'Ana'));
+		expect(fieldIn(root, TEXTS['inbox.priority']).value).toBe('high');
+		expect(checkIn(root, 'VIP').checked).toBe(true);
+		fieldIn(root, TEXTS['inbox.topic']).value = 'billing';
+		fieldIn(root, TEXTS['inbox.priority']).value = '';
+		checkIn(root, 'Refund').checked = true;
+		await submit(checkIn(root, 'Refund'));
+		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({
+			topic: 'billing',
+			priority: null,
+			tags: ['vip', 'refund'],
+		});
+		expect(root.textContent).toContain(TEXTS['inbox.saved']);
+	});
+
 	it('lists the leads with Open the chat and Delete (asked twice), a page at a time', async () => {
 		const lead = (/** @type {string} */ id, /** @type {Record<string, unknown>} */ over = {}) => ({
 			id,
@@ -996,6 +1052,13 @@ describe('reports', () => {
 				nps: { score: 40, count: 10 },
 				leads: 1,
 				aiTokens: 12000,
+				// by the merchant's lists (C7): a list shows only when one of its entries has conversations
+				tags: [{ key: 'vip', name: 'VIP', conversations: 0 }],
+				topics: [
+					{ key: 'billing', name: 'Billing', conversations: 3 },
+					{ key: 'delivery', name: 'Delivery', conversations: 1 },
+				],
+				priorities: [],
 			});
 		const { hosts, server } = await startAdmin({
 			features: ['reports'],
@@ -1015,6 +1078,8 @@ describe('reports', () => {
 		expect(numbers[TEXTS['reports.aiTokens']]).toBe('12,000');
 		expect(/** @type {HTMLElement} */ (root.querySelector('.bar')).style.width).toBe('50%');
 		expect(root.textContent).toContain('Days in Europe/Berlin');
+		expect(textsIn(root, '.labelled h3')).toEqual([TEXTS['reports.byTopic']]);
+		expect(numbers.Billing).toBe('3');
 		report = () => answer(200, { days: null, medianFirstReplySeconds: 40, rating: null });
 		fieldIn(root, TEXTS['reports.from']).value = '2026-01-01';
 		await submit(fieldIn(root, TEXTS['reports.from']));

@@ -7,13 +7,14 @@
  */
 import { problem } from '@ss/app-kit';
 import { ratingScale } from '../core/conversation.js';
+import { labelCounts } from '../core/labels.js';
 import { reportRange, summarise } from '../core/reports.js';
 import { dayStart } from '../core/time.js';
 import { aiLabelShown } from '../core/widgets.js';
 import { uploadRules } from './visitor.js';
 import { createStore } from '../adapters/store.js';
 import { deleteConversations } from './inbox.js';
-import { invalid } from './service.js';
+import { invalid, labelListsOf } from './service.js';
 
 /**
  * @param {import('../adapters/product.js').Product} product
@@ -47,6 +48,8 @@ export const createAdmin = (product, service) => {
 			timeZone,
 			...numbers,
 			visitorMessages: await s.store.messages.visitorCountBetween(from, to),
+			// conversations by the merchant's tags, topics and priorities (C7)
+			...labelCounts(rows, await labelListsOf(s)),
 		};
 	};
 
@@ -204,6 +207,16 @@ export const createAdmin = (product, service) => {
 				oncePer: idle.oncePer,
 				hideOnMobile: idle.hideOnMobile,
 			},
+			// the inbox's tags, topics and priorities (C7): admin widgets only, never visitors
+			...(ctx.ticket && on.includes('inbox')
+				? {
+						labels: {
+							tags: await product.lists.get(websiteId, 'tags'),
+							topics: await product.lists.get(websiteId, 'topics'),
+							priorities: await product.lists.get(websiteId, 'priorities'),
+						},
+					}
+				: {}),
 			// the merchant's page types (C6): how pages are typed, with each type's own idle nudge
 			pageTypes: await product.lists.get(websiteId, 'page_types'),
 			flows: flows.filter((f) => f.start.kind === 'page').map((f) => ({ id: f.id, name: f.name, start: f.start })),

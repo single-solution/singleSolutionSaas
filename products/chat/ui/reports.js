@@ -55,8 +55,9 @@ export const mountReports = ({ host, win, api, config, now }) => {
 			const note = element(doc, 'p', { class: 'status', role: 'status' });
 			const numbers = element(doc, 'dl', { class: 'numbers' });
 			const days = element(doc, 'ul', { class: 'bars' });
+			const labelled = element(doc, 'div', { class: 'labelled' });
 			const box = element(doc, 'section', { class: 'box' });
-			box.append(element(doc, 'h2', {}, t('reports.title')), form, note, numbers, days);
+			box.append(element(doc, 'h2', {}, t('reports.title')), form, note, numbers, labelled, days);
 			root.append(box);
 
 			const load = async () => {
@@ -64,6 +65,7 @@ export const mountReports = ({ host, win, api, config, now }) => {
 				const answer = await adminCall(api, 'GET', `/v1/admin/reports?${query.toString()}`);
 				if (!answer.ok) {
 					numbers.replaceChildren();
+					labelled.replaceChildren();
 					days.replaceChildren();
 					note.textContent =
 						answer.status === 0 && !api.tickets.current()
@@ -110,6 +112,27 @@ export const mountReports = ({ host, win, api, config, now }) => {
 					...rows.flatMap(([label, value]) => [element(doc, 'dt', {}, label), element(doc, 'dd', {}, value)]),
 				);
 				const most = Math.max(1, ...perDay.map((day) => day.conversations));
+				// conversations by the merchant's tags, topics and priorities (C7): a list each, when there is one
+				/** @type {Array<[string, Array<{ name: string, conversations: number }>]>} */
+				const grouped = [
+					[t('reports.byTopic'), Array.isArray(data.topics) ? data.topics : []],
+					[t('reports.byTag'), Array.isArray(data.tags) ? data.tags : []],
+					[t('reports.byPriority'), Array.isArray(data.priorities) ? data.priorities : []],
+				];
+				labelled.replaceChildren(
+					...grouped
+						.filter(([, rows]) => rows.some((row) => row.conversations > 0))
+						.flatMap(([title, rows]) => {
+							const list = element(doc, 'dl', { class: 'numbers' });
+							list.append(
+								...rows.flatMap((row) => [
+									element(doc, 'dt', {}, row.name),
+									element(doc, 'dd', {}, number(row.conversations)),
+								]),
+							);
+							return [element(doc, 'h3', {}, title), list];
+						}),
+				);
 				days.replaceChildren(
 					element(doc, 'li', { class: 'meta' }, t('reports.perDay')),
 					...perDay.map((day) => {

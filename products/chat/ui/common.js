@@ -9,6 +9,8 @@ import { CHECKS, attachmentKind } from '../core/widgets.js';
 
 /** @typedef {(key: string) => string} Texts */
 
+/** @typedef {import('../core/labels.js').Label} Label a tag, topic or priority of the merchant (C7) */
+
 /**
  * @typedef {object} CustomField
  * @property {string} key
@@ -30,6 +32,8 @@ import { CHECKS, attachmentKind } from '../core/widgets.js';
  * @property {{ idleMinutes: number, dismissDays: number, pageRules: Array<{ path: string, delay: number, message: string }>,
  *   oncePer: 'session' | 'product', hideOnMobile: boolean }} proactive whether the idle nudge shows once per session or
  *   once per product, and whether phones get none (C14)
+ * @property {{ tags: Label[], topics: Label[], priorities: Label[] }} labels the inbox's tags, topics and priorities
+ *   (C7; admin widgets only)
  * @property {Array<{ key: string, name: string, path: string, nudge: string }>} pageTypes the merchant's page types
  *   (C6): a page is typed by setPage's kind or a path pattern; each may have its own idle nudge ('' = the general
  *   text)
@@ -81,6 +85,7 @@ const DEFAULTS = {
 		hideOnMobile: false,
 	},
 	pageTypes: [],
+	labels: { tags: [], topics: [], priorities: [] },
 	flows: [],
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],

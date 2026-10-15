@@ -28,6 +28,7 @@ import { STANDARD_FIELDS } from '../../core/flows.js';
 import { checkRedactionPatterns } from '../../core/moderation.js';
 import { checkTeams } from '../../core/routing.js';
 import { QUESTION_TYPES } from '../../core/booking.js';
+import { LABEL_LIMITS } from '../../core/labels.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
 import { UPLOAD_MAX_MB } from '../../core/uploads.js';
 import { ATTACHMENT_TYPES } from '../../core/widgets.js';
@@ -830,6 +831,58 @@ export function PageTypesEditor({ websiteId, off }) {
 						maxLength={300}
 						value={type.nudge}
 						onChange={(event) => set({ nudge: event.target.value })}
+					/>
+				</>
+			)}
+		/>
+	);
+}
+
+const LB = L.labels;
+
+/**
+ * Tags, topics or priorities (C7): a key, a name and when it fits.
+ * @param {EditorProps & { list: 'tags' | 'topics' | 'priorities' }} props
+ */
+export function LabelsEditor({ websiteId, off, list }) {
+	const words = LB[list];
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list={list}
+			title={words.title}
+			help={words.help}
+			itemLabel={words.item}
+			max={list === 'priorities' ? LABEL_LIMITS.priorities : LABEL_LIMITS.entries}
+			off={off}
+			blank={() => ({ key: '', name: '', description: '' })}
+			clean={(entry) => ({
+				key: String(entry.key).trim(),
+				name: String(entry.name).trim(),
+				description: String(entry.description ?? '').trim(),
+			})}
+			render={(entry, set) => (
+				<>
+					<FieldGrid>
+						<Input
+							label={LB.key}
+							value={entry.key}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Input
+							label={LB.name}
+							value={entry.name}
+							maxLength={40}
+							onChange={(event) => set({ name: event.target.value })}
+						/>
+					</FieldGrid>
+					<Input
+						label={LB.description}
+						value={entry.description}
+						maxLength={200}
+						onChange={(event) => set({ description: event.target.value })}
 					/>
 				</>
 			)}

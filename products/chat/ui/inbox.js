@@ -114,12 +114,35 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				element(doc, 'option', { value: 'guest' }, t('inbox.guest')),
 				element(doc, 'option', { value: 'user' }, t('inbox.signedIn')),
 			);
+			// the merchant's tags, topics and priorities (C7)
+			const labels = s.labels;
+			/** @param {readonly { key: string, name: string }[]} list @param {string} key */
+			const labelName = (list, key) => list.find((each) => each.key === key)?.name ?? key;
+			const labelFilter = make.field('select', t('inbox.labelFilter'));
+			labelFilter.input.append(
+				element(doc, 'option', { value: '' }, t('inbox.any')),
+				.../** @type {const} */ ([
+					['tag', 'tags', 'inbox.tags'],
+					['topic', 'topics', 'inbox.topic'],
+					['priority', 'priorities', 'inbox.priority'],
+				])
+					.filter(([, list]) => labels[list].length > 0)
+					.map(([member, list, text]) => {
+						const group = element(doc, 'optgroup', { label: t(text) });
+						group.append(
+							...labels[list].map((each) => element(doc, 'option', { value: `${member}:${each.key}` }, each.name)),
+						);
+						return group;
+					}),
+			);
+			const hasLabels = labels.tags.length + labels.topics.length + labels.priorities.length > 0;
 			const waiting = make.check(t('inbox.waitingOnly'));
 			const q = make.field('input', t('inbox.search'), { type: 'search', maxlength: '200' });
 			filters.append(
 				status.wrap,
 				...(on('assignment') ? [assigned.wrap] : []),
 				kind.wrap,
+				...(hasLabels ? [labelFilter.wrap] : []),
 				q.wrap,
 				waiting.wrap,
 				element(doc, 'button', { type: 'submit' }, t('inbox.searchButton')),
@@ -171,6 +194,9 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 							item.waiting ? t('inbox.waiting') : '',
 							item.aiPaused ? t('inbox.aiPaused') : '',
 							item.assignedTo ? formatText(t('inbox.assignedTo'), { name: item.assignedTo.name }) : '',
+							item.priority ? labelName(labels.priorities, item.priority) : '',
+							item.topic ? labelName(labels.topics, item.topic) : '',
+							...(item.tags ?? []).map((/** @type {string} */ tag) => labelName(labels.tags, tag)),
 							when(item.lastMessageAt),
 						]
 							.filter(Boolean)
@@ -186,6 +212,8 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				if (on('assignment') && assigned.input.value !== 'any') query.set('assigned', assigned.input.value);
 				if (waiting.input.checked) query.set('waiting', '1');
 				if (kind.input.value) query.set('visitor', kind.input.value);
+				const [member = '', key = ''] = labelFilter.input.value.split(':');
+				if (member && key) query.set(member, key);
 				if (q.input.value.trim()) query.set('q', q.input.value.trim());
 				if (!reset && cursor) query.set('cursor', cursor);
 				const answer = await adminCall(api, 'GET', `/v1/admin/conversations?${query.toString()}`);
@@ -251,6 +279,42 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					return answer.ok ? t('inbox.saved') : failure(answer, 'inbox.fieldsInvalid');
 				},
 			});
+			// its tags, topic and priority (C7), from the merchant's lists
+			const topicPick = make.field('select', t('inbox.topic'));
+			topicPick.input.append(
+				element(doc, 'option', { value: '' }, t('inbox.noLabel')),
+				...labels.topics.map((each) => element(doc, 'option', { value: each.key }, each.name)),
+			);
+			const priorityPick = make.field('select', t('inbox.priority'));
+			priorityPick.input.append(
+				element(doc, 'option', { value: '' }, t('inbox.noLabel')),
+				...labels.priorities.map((each) => element(doc, 'option', { value: each.key }, each.name)),
+			);
+			const tagChecks = labels.tags.map((each) => ({ key: each.key, ...make.check(each.name) }));
+			const labelsForm = formPart(doc, {
+				title: t('inbox.labels'),
+				nodes: [
+					...(labels.topics.length > 0 ? [topicPick.wrap] : []),
+					...(labels.priorities.length > 0 ? [priorityPick.wrap] : []),
+					...tagChecks.map((each) => each.wrap),
+				],
+				label: t('common.save'),
+				submit: async () => {
+					const answer = await patch(
+						{
+							...(labels.topics.length > 0 ? { topic: topicPick.input.value || null } : {}),
+							...(labels.priorities.length > 0 ? { priority: priorityPick.input.value || null } : {}),
+							...(labels.tags.length > 0
+								? { tags: tagChecks.filter((each) => each.input.checked).map((each) => each.key) }
+								: {}),
+						},
+						'inbox.labelsInvalid',
+					);
+					if (answer.status === 403) deny(labelsForm);
+					if (answer.ok) fillLabels(true);
+					return answer.ok ? t('inbox.saved') : failure(answer, 'inbox.labelsInvalid');
+				},
+			});
 			// one note per chat, when notes are set so (C11)
 			const noteText = make.field('textarea', t('inbox.note'), { rows: '3', maxlength: '4000' });
 			const noteForm = formPart(doc, {
@@ -309,6 +373,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				replyForm,
 				...(on('internal_notes') ? [noteForm] : []),
 				...(fields.length > 0 ? [fieldsForm] : []),
+				...(hasLabels ? [labelsForm] : []),
 				...(on('context_panel') ? [context.part] : []),
 				...(on('transcripts') ? [transcriptForm] : []),
 				...(on('ratings') && s.ratings.askWhen === 'manual' ? [askRating] : []),
@@ -349,6 +414,12 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			/** @param {boolean} always */
 			const fillFields = (always) => {
 				for (const field of fields) refill(field.input, () => field.write(current.fields?.[field.definition.key]), always);
+			};
+			/** @param {boolean} always */
+			const fillLabels = (always) => {
+				refill(topicPick.input, () => void (topicPick.input.value = current.topic ?? ''), always);
+				refill(priorityPick.input, () => void (priorityPick.input.value = current.priority ?? ''), always);
+				if (always) for (const each of tagChecks) each.input.checked = (current.tags ?? []).includes(each.key);
 			};
 			/** @param {boolean} always */
 			const fillNote = (always) => {
@@ -409,6 +480,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				showIf(noteForm, single);
 				showIf(addNote, !single);
 				fillFields(false);
+				fillLabels(false);
 				fillNote(false);
 				context.show(current);
 				for (const each of messages.querySelectorAll('.seen')) each.remove();
@@ -478,6 +550,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				addMessages(answer.data.messages ?? []);
 				setHidden(older, answer.data.earlier !== true);
 				fillFields(true);
+				fillLabels(true);
 				fillNote(true);
 				sync();
 				detail.replaceChildren(conversationPart);

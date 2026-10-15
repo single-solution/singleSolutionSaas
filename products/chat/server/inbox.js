@@ -16,8 +16,9 @@
 import { actorOf as kitActorOf, countHandlers, created, noContent, paginate, problem } from '@ss/app-kit';
 import { PRESENCES, STATUSES, USER_ID, messageText, statusAfter } from '../core/conversation.js';
 import { checkFieldValue } from '../core/fields.js';
+import { LABEL_KEY, checkLabeled, labeledDetail } from '../core/labels.js';
 import { checkUpload, pagingOf, presign } from './visitor.js';
-import { PRESENCE_MS, bodyOf, invalid } from './service.js';
+import { PRESENCE_MS, bodyOf, invalid, labelListsOf } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Actor} Actor */
@@ -115,6 +116,10 @@ export const createInbox = (product, service, reply) => {
 		if (s.on.includes('assignment') && typeof ctx.query.assignee === 'string' && USER_ID.test(ctx.query.assignee))
 			filter.assignedTo = ctx.query.assignee;
 		if (ctx.query.unread === '1') filter.unreadStaff = { $gt: 0 };
+		// the merchant's tags, topics and priorities (C7)
+		if (typeof ctx.query.tag === 'string' && LABEL_KEY.test(ctx.query.tag)) filter.tags = ctx.query.tag;
+		if (typeof ctx.query.topic === 'string' && LABEL_KEY.test(ctx.query.topic)) filter.topic = ctx.query.topic;
+		if (typeof ctx.query.priority === 'string' && LABEL_KEY.test(ctx.query.priority)) filter.priority = ctx.query.priority;
 		// one customer's conversations: an Accounts user id (C11)
 		if (typeof ctx.query.userId === 'string' && USER_ID.test(ctx.query.userId)) {
 			filter['visitor.kind'] = 'user';
@@ -165,6 +170,8 @@ export const createInbox = (product, service, reply) => {
 			waiting: { path: 'waiting', map: (value) => String(value === true) },
 			guest: { path: 'visitor.kind', map: (value) => String(value === 'guest') },
 			unread: { path: 'unreadStaff', map: (value) => String(Number(value) > 0) },
+			topic: { path: 'topic', map: (value) => (typeof value === 'string' ? value : 'none') },
+			priority: { path: 'priority', map: (value) => (typeof value === 'string' ? value : 'none') },
 		},
 	});
 
@@ -402,8 +409,17 @@ export const createInbox = (product, service, reply) => {
 			// the fields' names only: their values may be personal
 			actions.push({ action: 'conversation.fields_changed', detail: `Custom fields: ${changed.join(', ')}` });
 		}
+		if (body.tags !== undefined || body.topic !== undefined || body.priority !== undefined) {
+			const labels = await labelListsOf(s);
+			const checked = checkLabeled(body, labels);
+			if (!checked.ok) throw invalid(checked.errors);
+			Object.assign(set, checked.value);
+			actions.push({ action: 'conversation.labels_changed', detail: labeledDetail(checked.value, labels) });
+		}
 		if (actions.length === 0) throw invalid(['Send what to change.']);
 		const updated = /** @type {ConversationRecord} */ (await s.store.conversations.update(c.id, { set }));
+		// a chat resolved without its labels: the AI picks them, with the setting (C7)
+		if (body.status === 'resolved') s.ctx.after(() => reply.tagWithAi(s, c.id).catch(() => null));
 		for (const { action, detail } of actions)
 			await service.log(s, actor, action, c.id, { label: conversationLabel(updated), detail });
 		return { conversation: await service.inboxView(s, updated, { full: true }) };

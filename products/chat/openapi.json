@@ -504,6 +504,39 @@
 							"type": "string",
 							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this tag (a key of your tags).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this tag (a key of your tags)."
+						}
+					},
+					{
+						"name": "topic",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this topic.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this topic."
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this priority.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this priority."
+						}
 					}
 				],
 				"responses": {
@@ -643,6 +676,39 @@
 							"type": "string",
 							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
 						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this tag (a key of your tags).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this tag (a key of your tags)."
+						}
+					},
+					{
+						"name": "topic",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this topic.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this topic."
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this priority.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this priority."
+						}
 					}
 				],
 				"responses": {
@@ -686,16 +752,18 @@
 						"name": "by",
 						"in": "query",
 						"required": true,
-						"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false).",
+						"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false); topic and priority (a key of your lists, or none).",
 						"schema": {
 							"type": "string",
 							"enum": [
 								"status",
 								"waiting",
 								"guest",
-								"unread"
+								"unread",
+								"topic",
+								"priority"
 							],
-							"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false)."
+							"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false); topic and priority (a key of your lists, or none)."
 						}
 					},
 					{
@@ -797,6 +865,39 @@
 						"schema": {
 							"type": "string",
 							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this tag (a key of your tags).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this tag (a key of your tags)."
+						}
+					},
+					{
+						"name": "topic",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this topic.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this topic."
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this priority.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this priority."
 						}
 					}
 				],
@@ -943,7 +1044,7 @@
 			},
 			"patch": {
 				"summary": "Change status, assignment or custom field values",
-				"description": "Send any of them (at least one; pause or resume the AI with PUT /v1/admin/conversations/:id/ai). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
+				"description": "Send any of them (at least one; pause or resume the AI with PUT /v1/admin/conversations/:id/ai). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off. Tags, topic and priority (C7) take only keys of your lists; each change is an activity-log entry (conversation.labels_changed) in the lists' words.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.manage",
@@ -996,6 +1097,29 @@
 											]
 										},
 										"description": "Custom field values by key, checked as the field's type."
+									},
+									"tags": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"pattern": "^[a-z][a-z0-9_-]{0,39}$"
+										},
+										"maxItems": 10,
+										"description": "The whole set of tags: keys of your tags list ([] clears). Needs the Inbox; an unknown key is refused."
+									},
+									"topic": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "A key of your topics list; null clears."
+									},
+									"priority": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "A key of your priorities list; null clears."
 									}
 								}
 							}
@@ -4639,6 +4763,39 @@
 						}
 					},
 					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this tag (a key of your tags).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this tag (a key of your tags)."
+						}
+					},
+					{
+						"name": "topic",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this topic.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this topic."
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this priority.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this priority."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -4789,6 +4946,39 @@
 						}
 					},
 					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this tag (a key of your tags).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this tag (a key of your tags)."
+						}
+					},
+					{
+						"name": "topic",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this topic.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this topic."
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this priority.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this priority."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -4841,16 +5031,18 @@
 						"name": "by",
 						"in": "query",
 						"required": true,
-						"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false).",
+						"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false); topic and priority (a key of your lists, or none).",
 						"schema": {
 							"type": "string",
 							"enum": [
 								"status",
 								"waiting",
 								"guest",
-								"unread"
+								"unread",
+								"topic",
+								"priority"
 							],
-							"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false)."
+							"description": "status; waiting (true/false); guest (the visitor is a guest: true/false); unread (visitor messages no staff member opened: true/false); topic and priority (a key of your lists, or none)."
 						}
 					},
 					{
@@ -4952,6 +5144,39 @@
 						"schema": {
 							"type": "string",
 							"description": "Search the visitor's name, email and phone and the visible message texts (any case; the first 100 characters)."
+						}
+					},
+					{
+						"name": "tag",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this tag (a key of your tags).",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this tag (a key of your tags)."
+						}
+					},
+					{
+						"name": "topic",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this topic.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this topic."
+						}
+					},
+					{
+						"name": "priority",
+						"in": "query",
+						"required": false,
+						"description": "Only conversations with this priority.",
+						"schema": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+							"description": "Only conversations with this priority."
 						}
 					},
 					{
@@ -5132,7 +5357,7 @@
 			},
 			"patch": {
 				"summary": "Change status, assignment or custom field values",
-				"description": "Send any of them (at least one; pause or resume the AI with PUT /v1/conversations/:id/ai). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
+				"description": "Send any of them (at least one; pause or resume the AI with PUT /v1/conversations/:id/ai). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off. Tags, topic and priority (C7) take only keys of your lists; each change is an activity-log entry (conversation.labels_changed) in the lists' words.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "inbox",
 				"security": [
@@ -5196,6 +5421,29 @@
 											]
 										},
 										"description": "Custom field values by key, checked as the field's type."
+									},
+									"tags": {
+										"type": "array",
+										"items": {
+											"type": "string",
+											"pattern": "^[a-z][a-z0-9_-]{0,39}$"
+										},
+										"maxItems": 10,
+										"description": "The whole set of tags: keys of your tags list ([] clears). Needs the Inbox; an unknown key is refused."
+									},
+									"topic": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "A key of your topics list; null clears."
+									},
+									"priority": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "A key of your priorities list; null clears."
 									}
 								}
 							}
@@ -9535,6 +9783,9 @@
 					"waiting",
 					"aiPaused",
 					"assignedTo",
+					"tags",
+					"topic",
+					"priority",
 					"unread",
 					"preview",
 					"lastMessageAt",
@@ -9635,6 +9886,31 @@
 							}
 						],
 						"description": "The staff member it is assigned to."
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$"
+						},
+						"maxItems": 10,
+						"description": "Keys of your tags (the list tags)."
+					},
+					"topic": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+						"description": "A key of your topics (the list topics), or null."
+					},
+					"priority": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+						"description": "A key of your priorities (the list priorities), or null."
 					},
 					"unread": {
 						"type": "integer",
@@ -9846,6 +10122,9 @@
 					"waiting",
 					"aiPaused",
 					"assignedTo",
+					"tags",
+					"topic",
+					"priority",
 					"unread",
 					"preview",
 					"lastMessageAt",
@@ -9945,6 +10224,31 @@
 							}
 						],
 						"description": "The staff member it is assigned to."
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9_-]{0,39}$"
+						},
+						"maxItems": 10,
+						"description": "Keys of your tags (the list tags)."
+					},
+					"topic": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+						"description": "A key of your topics (the list topics), or null."
+					},
+					"priority": {
+						"type": [
+							"string",
+							"null"
+						],
+						"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+						"description": "A key of your priorities (the list priorities), or null."
 					},
 					"unread": {
 						"type": "integer",
@@ -10921,7 +11225,10 @@
 					"rating",
 					"nps",
 					"leads",
-					"aiTokens"
+					"aiTokens",
+					"tags",
+					"topics",
+					"priorities"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -11042,6 +11349,81 @@
 					"aiTokens": {
 						"type": "integer",
 						"minimum": 0
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"name",
+								"conversations"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"conversations": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						},
+						"description": "Conversations started in the range with each of your tags, in your list's order."
+					},
+					"topics": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"name",
+								"conversations"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"conversations": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						},
+						"description": "Conversations started in the range by topic, in your list's order."
+					},
+					"priorities": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"key",
+								"name",
+								"conversations"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"conversations": {
+									"type": "integer",
+									"minimum": 0
+								}
+							}
+						},
+						"description": "Conversations started in the range by priority, in your list's order."
 					}
 				}
 			},

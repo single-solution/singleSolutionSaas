@@ -2,7 +2,7 @@
 /**
  * The merchant's own lists in Settings (jsdom, on a faked dashboard API): office hours by weekday with minutes and
  * dated exceptions (C9); page types with their nudges, seeded with the four shop ones (C6); the file types visitors may
- * send with a cap each (C11); Book-a-slot's questions and services (C10). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
+ * send with a cap each (C11); Book-a-slot's questions and services (C10); tags, topics and priorities (C7). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
  * checked as the server checks it.
  */
 import { act } from 'react';
@@ -13,6 +13,7 @@ import manifest from '../manifest.json' with { type: 'json' };
 import {
 	BookingQuestionsEditor,
 	BookingServicesEditor,
+	LabelsEditor,
 	OfficeExceptionsEditor,
 	OfficeHoursEditor,
 	PageTypesEditor,
@@ -266,5 +267,24 @@ describe('booking questions and services (C10)', () => {
 		type(field(services, 'Name'), 'Dinner');
 		await save(services);
 		expect(saved.booking_services).toEqual([[{ key: 'dinner', name: 'Dinner', description: '' }]]);
+	});
+});
+
+describe('tags, topics and priorities (C7)', () => {
+	it('priorities start as Urgent, High, Normal and Low; tags start empty and take a key, a name and when it fits', async () => {
+		serve();
+		const priorities = render(inDashboard(<LabelsEditor websiteId={WEBSITE} list="priorities" />)).container;
+		await settle();
+		expect([0, 1, 2, 3].map((index) => field(priorities, 'Name', index).value)).toEqual(['Urgent', 'High', 'Normal', 'Low']);
+		cleanup();
+		const tags = render(inDashboard(<LabelsEditor websiteId={WEBSITE} list="tags" />)).container;
+		await settle();
+		expect(tags.textContent).toContain('Nothing yet.');
+		click(button(tags, 'Add'));
+		type(field(tags, 'Key'), 'vip');
+		type(field(tags, 'Name'), 'VIP');
+		type(field(tags, 'When it fits'), 'A repeat customer');
+		await save(tags);
+		expect(saved.tags).toEqual([[{ key: 'vip', name: 'VIP', description: 'A repeat customer' }]]);
 	});
 });

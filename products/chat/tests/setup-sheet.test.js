@@ -185,7 +185,13 @@ describe('the website Setup sheet', () => {
 		const staff = await partOf(env);
 		expect(whoAnswers(staff)).toBe('Your staff answer in the inbox.');
 		// lists of features that are off are not read (page types are Visitor chat's)
-		expect(listSummaries(staff)).toEqual({ page_types: '4 page types: Product page, Category page, Deals page, Cart.' });
+		expect(listSummaries(staff)).toEqual({
+			page_types: '4 page types: Product page, Category page, Deals page, Cart.',
+			// the inbox's lists (C7): priorities are seeded
+			tags: 'No tags yet.',
+			topics: 'No topics yet.',
+			priorities: '4 priorities: Urgent, High, Normal, Low.',
+		});
 
 		// the OpenAPI document itself, public
 		const served = await env.call('GET', '/openapi.json');

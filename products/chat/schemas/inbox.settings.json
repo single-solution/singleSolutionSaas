@@ -15,6 +15,12 @@
 			"default": "manage",
 			"enum": ["manage", "reply"],
 			"description": "Manage: the ticket permission inbox.manage. Reply: inbox.reply."
+		},
+		"aiTagging": {
+			"type": "boolean",
+			"title": "The AI tags conversations",
+			"default": false,
+			"description": "When a chat is handed to a person, and when it is resolved, the AI picks its topic, tags and priority from your lists (Settings → Inbox), never others, and leaves what your staff already set. Needs AI replies."
 		}
 	}
 }

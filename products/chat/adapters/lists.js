@@ -2,7 +2,7 @@
  * Chat's list settings and the tool signing secret, in the product database (PLAN 0.8.3 Chat data): webhook tools,
  * flows, custom field definitions, proactive page rules, fallback answers (PLAN 0.8.10 C3), redaction patterns (C14),
  * teams (C12), the office hours with their dated exceptions (C9), the page types (C6, seeded with the four kinds of
- * shop pages), the visitor upload types with a cap each (C11), and Book-a-slot's questions and services (C10) are kept per website in the kit's settings collection (so a removed website's lists go with its
+ * shop pages), the visitor upload types with a cap each (C11), Book-a-slot's questions and services (C10), and the conversation tags, topics and priorities (C7) are kept per website in the kit's settings collection (so a removed website's lists go with its
  * settings), each checked by its feature's rules and recorded in Recent changes. A list never saved answers its seed
  * (the starting entries every website gets; most lists start empty). The tool signing secret is sealed with
  * `ENCRYPTION_KEY`; it is made on first use and sealed again with the current key by the Owner's Re-seal
@@ -11,6 +11,7 @@
  */
 import { BOOKING_QUESTION_SEED, checkBookingQuestions, checkBookingServices } from '../core/booking.js';
 import { checkFallbackAnswers } from '../core/fallback.js';
+import { PRIORITY_SEED, checkPriorities, checkTags, checkTopics } from '../core/labels.js';
 import { checkCustomFields, checkPageRules } from '../core/fields.js';
 import { checkFlows } from '../core/flows.js';
 import { checkOfficeExceptions, checkOfficeHours } from '../core/handoff.js';
@@ -45,6 +46,9 @@ export const LISTS = Object.freeze({
 		seed: BOOKING_QUESTION_SEED,
 	},
 	booking_services: { feature: 'book_slot', title: 'Booking services', check: checkBookingServices, seed: [] },
+	tags: { feature: 'inbox', title: 'Tags', check: checkTags, seed: [] },
+	topics: { feature: 'inbox', title: 'Topics', check: checkTopics, seed: [] },
+	priorities: { feature: 'inbox', title: 'Priorities', check: checkPriorities, seed: PRIORITY_SEED },
 });
 
 /** @typedef {keyof typeof LISTS} ListName */

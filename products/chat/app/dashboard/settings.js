@@ -8,6 +8,7 @@
  */
 import { Callout, Masonry, Section } from '@ss/ui';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, call, hasSettings, useLoad } from '@ss/ui/dashboard';
+import { LABEL_LISTS } from '../../core/labels.js';
 import { aiLabelShown } from '../../core/widgets.js';
 import {
 	BookingQuestionsEditor,
@@ -15,6 +16,7 @@ import {
 	CustomFieldsEditor,
 	FallbackAnswersEditor,
 	FlowsEditor,
+	LabelsEditor,
 	OfficeExceptionsEditor,
 	OfficeHoursEditor,
 	PageRulesEditor,
@@ -180,7 +182,17 @@ export function SettingsTab({ websiteId: id }) {
 							<OfficeExceptionsEditor websiteId={websiteId} off={off('handoff')} />
 						</>
 					) : null,
-					inbox: seen('assignment') ? <TeamsEditor websiteId={websiteId} off={off('assignment')} /> : null,
+					inbox:
+						seen('inbox') || seen('assignment') ? (
+							<>
+								{seen('inbox')
+									? LABEL_LISTS.map((list) => (
+											<LabelsEditor key={list} websiteId={websiteId} list={list} off={off('inbox')} />
+										))
+									: null}
+								{seen('assignment') ? <TeamsEditor websiteId={websiteId} off={off('assignment')} /> : null}
+							</>
+						) : null,
 					attachments: seen('attachments') ? <UploadTypesEditor websiteId={websiteId} off={off('attachments')} /> : null,
 					ratings: null,
 					transcripts: seen('transcripts') ? <Callout tone="info">{TEXTS.settings.transcriptsNote}</Callout> : null,

@@ -123,6 +123,17 @@ export const invalid = (errors) =>
 export const phoneCodeOf = async (s) => callingCodeOf((await s.business()).country);
 
 /**
+ * The website's tags, topics and priorities (C7).
+ * @param {Site} s
+ * @returns {Promise<import('../core/labels.js').Labels>}
+ */
+export const labelListsOf = async (s) => ({
+	tags: await s.list('tags'),
+	topics: await s.list('topics'),
+	priorities: await s.list('priorities'),
+});
+
+/**
  * @param {Product} product
  */
 export const createService = (product) => {
@@ -565,6 +576,10 @@ export const createService = (product) => {
 					}
 				: {}),
 			assignedTo: c.assignedTo ? { id: c.assignedTo, name: names.get(c.assignedTo) ?? c.assignedTo } : null,
+			// the merchant's tags, topic and priority (C7)
+			tags: c.tags ?? [],
+			topic: c.topic ?? null,
+			priority: c.priority ?? null,
 			unread: c.unreadStaff,
 			preview: c.preview,
 			lastMessageAt: iso(c.lastMessageAt),

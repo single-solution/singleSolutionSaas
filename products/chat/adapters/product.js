@@ -199,6 +199,9 @@ const LIST_WORDS = {
 			: `${counted(windows.length, 'window', 'windows')} a week, on ${counted(new Set(windows.map((w) => w.day)).size, 'day', 'days')}.`,
 	office_exceptions: (dates) => namedList('date', 'dates', dates, (entry) => entry.date),
 	page_types: (types) => namedList('page type', 'page types', types, (type) => type.name),
+	tags: (tags) => namedList('tag', 'tags', tags, (tag) => tag.name),
+	topics: (topics) => namedList('topic', 'topics', topics, (topic) => topic.name),
+	priorities: (priorities) => namedList('priority', 'priorities', priorities, (priority) => priority.name),
 	booking_questions: (questions) => namedList('question', 'questions', questions, (q) => q.label),
 	booking_services: (services) => namedList('service', 'services', services, (service) => service.name),
 	upload_types: (types) =>

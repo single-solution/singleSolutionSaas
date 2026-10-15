@@ -76,9 +76,10 @@ import { dayKey } from '../core/time.js';
 import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
 import { currencyDigits } from '@ss/contracts/format';
 import { bookingAnswers } from '../core/booking.js';
+import { labeledDetail, parseTagging, taggingPrompt } from '../core/labels.js';
 import { jsonOf } from '@ss/net';
 import { signWebhook } from '@ss/protocol';
-import { phoneCodeOf } from './service.js';
+import { labelListsOf, phoneCodeOf } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Service} Service */
@@ -119,6 +120,9 @@ const timedCache = (ttl, now) => {
 		},
 	};
 };
+
+/** Who the activity log names for what the AI did itself (C7: AI tagging). */
+const AI_ACTOR = Object.freeze({ kind: 'ai', id: 'ai', name: 'AI' });
 
 /**
  * What the AI is told to ask the visitor for when a booking's answers are not complete (C10): question labels, the
@@ -257,6 +261,7 @@ export const createReply = (product, service) => {
 		current = await service.route(s, current, await conversationLanguage(s, current));
 		await service.staffAlert(s, current, 'needs_you');
 		if (s.on.includes('ai_summary')) s.ctx.after(() => summarise(s, current.id).catch(() => null));
+		s.ctx.after(() => tagWithAi(s, current.id).catch(() => null));
 		return current;
 	};
 
@@ -1069,7 +1074,63 @@ export const createReply = (product, service) => {
 		return summary;
 	};
 
-	return Object.freeze({ afterVisitorMessage, handOff, startFlow, runFlow, summarise, answer, resume, linksOf });
+	/**
+	 * AI tagging (C7, the inbox setting `aiTagging`, AI replies on): the AI picks a conversation's topic, tags and
+	 * priority from the merchant's lists only, and fills only what is still empty (staff choices stay). Quietly does
+	 * nothing without lists, an AI key, or under a token cap.
+	 * @param {Site} s
+	 * @param {string} conversationId
+	 */
+	const tagWithAi = async (s, conversationId) => {
+		if (!s.on.includes('inbox') || !s.on.includes('ai_replies') || (await s.values('inbox')).aiTagging !== true) return;
+		const labels = await labelListsOf(s);
+		if (labels.tags.length + labels.topics.length + labels.priorities.length === 0) return;
+		const c = await s.store.conversations.get(conversationId);
+		if (!c || ((c.tags ?? []).length > 0 && c.topic && c.priority)) return;
+		const connections = await connectionsOf(s, { backup: true });
+		if (connections.length === 0 || (await service.capped(s))) return;
+		const messages = await s.store.messages.list(conversationId, { limit: 100, internal: false });
+		const result = await complete(s, connections, {
+			messages: [
+				{ role: 'system', content: taggingPrompt(labels) },
+				{
+					role: 'user',
+					content: messages
+						.map((m) => `${m.author}: ${m.text}`)
+						.join('\n')
+						.slice(-12_000),
+				},
+			],
+			tools: [],
+		});
+		if (!result.ok) return;
+		await service.spend(s, result.value.usage.input + result.value.usage.output);
+		const picked = parseTagging(result.value.text, labels);
+		if (!picked) return;
+		/** @type {Record<string, unknown>} */
+		const set = {};
+		if ((c.tags ?? []).length === 0 && picked.tags.length > 0) set.tags = picked.tags;
+		if (!c.topic && picked.topic) set.topic = picked.topic;
+		if (!c.priority && picked.priority) set.priority = picked.priority;
+		if (Object.keys(set).length === 0) return;
+		await s.store.conversations.update(conversationId, { set });
+		await service.log(s, AI_ACTOR, 'conversation.labels_changed', conversationId, {
+			label: c.name || 'Conversation',
+			detail: labeledDetail(set, labels),
+		});
+	};
+
+	return Object.freeze({
+		afterVisitorMessage,
+		handOff,
+		startFlow,
+		runFlow,
+		summarise,
+		tagWithAi,
+		answer,
+		resume,
+		linksOf,
+	});
 };
 
 /**

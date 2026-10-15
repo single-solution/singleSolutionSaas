@@ -56,7 +56,10 @@ export const TEXTS = dashboardTexts({
 				title: 'Handoff and office hours',
 				help: 'When a chat goes to a person, your office hours, chats per person and the queue position.',
 			},
-			inbox: { title: 'Inbox', help: 'The conversation page alerts link to, and who gets staff alerts.' },
+			inbox: {
+				title: 'Inbox',
+				help: 'The conversation page alerts link to, who gets staff alerts, your tags, topics and priorities, and your teams.',
+			},
 			attachments: { title: 'Attachments', help: 'Who may attach files, which types and how large each may be.' },
 			ratings: { title: 'Ratings', help: 'How visitors rate a conversation and when they are asked.' },
 			transcripts: { title: 'Transcripts', help: 'Conversation copies sent by email.' },
@@ -194,6 +197,26 @@ export const TEXTS = dashboardTexts({
 			name: 'Name',
 			path: 'Path pattern (optional, for example /products/**)',
 			nudge: 'Idle nudge (optional)',
+		},
+		labels: {
+			tags: {
+				title: 'Tags',
+				help: 'Tags your staff (and, with AI tagging, the AI) put on conversations; the inbox filters by them and Reports count them.',
+				item: 'Tag',
+			},
+			topics: {
+				title: 'Topics',
+				help: 'What a conversation is about: one per conversation.',
+				item: 'Topic',
+			},
+			priorities: {
+				title: 'Priorities',
+				help: 'How urgent a conversation is, most urgent first: one per conversation.',
+				item: 'Priority',
+			},
+			key: 'Key (lower-case letters, digits, - or _)',
+			name: 'Name',
+			description: 'When it fits (optional; the AI reads it)',
 		},
 		bookingQuestions: {
 			title: 'Booking questions',
