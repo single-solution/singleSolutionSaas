@@ -7,8 +7,9 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
-import { byText, cleanup, click, render } from '@ss/ui/testing';
+import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import manifest from '../manifest.json' with { type: 'json' };
+import { MethodsEditor } from '../app/dashboard/methods.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 
@@ -173,5 +174,91 @@ describe("Payments's dashboard Overview: manual payment methods (P1, P2)", () =>
 			`/v1/dashboard/websites/web_${website}/overview`,
 		]);
 		expect(container.textContent).not.toContain('Finish your manual payment methods');
+	});
+});
+
+describe('the manual payment methods editor (P1, P2)', () => {
+	/**
+	 * The list answer and every PUT body the editor sends; a PUT answers `reply` (or the saved list).
+	 * @param {unknown[]} methods @param {{ status: number, body: unknown } | null} [reply]
+	 */
+	const serveList = (methods, reply = null) => {
+		/** @type {unknown[]} */
+		const saved = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path, /** @type {RequestInit | undefined} */ init) => {
+				if (path.endsWith('/lists/manual_methods') && init?.method === 'PUT') {
+					const body = JSON.parse(String(init.body));
+					saved.push(body);
+					return reply
+						? new Response(JSON.stringify(reply.body), { status: reply.status })
+						: new Response(JSON.stringify(body), { status: 200 });
+				}
+				if (path.endsWith('/lists/manual_methods')) return new Response(JSON.stringify({ value: methods }), { status: 200 });
+				if (path.endsWith('/connections'))
+					return new Response(JSON.stringify({ connections: [{ name: 'storage', status: 'missing' }] }), { status: 200 });
+				return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
+			}),
+		);
+		return saved;
+	};
+
+	/** @param {string} websiteId @param {boolean} [off] */
+	const Editor = (websiteId, off = false) => (
+		<DashboardProvider manifest={manifest} texts={TEXTS}>
+			<MethodsEditor websiteId={websiteId} off={off} />
+		</DashboardProvider>
+	);
+
+	it('adds a method paid on delivery and an account row, reorders, and saves the whole list', async () => {
+		const saved = serveList([transfer([['Account holder', 'Shop Ltd']])]);
+		const { container } = render(Editor(`web_${(website += 1)}`));
+		await settle();
+		expect(byLabel(container, 'Name payers see').value).toBe('Bank transfer');
+		click(byText(container, 'Add method', 'button'));
+		const names = [...container.querySelectorAll('label')].filter((label) => label.textContent?.startsWith('Name payers see'));
+		expect(names).toHaveLength(2);
+		const second = /** @type {HTMLInputElement} */ (
+			document.getElementById(/** @type {HTMLLabelElement} */ (names[1]).htmlFor)
+		);
+		type(second, 'Cash on delivery');
+		const kinds = /** @type {HTMLSelectElement[]} */ ([...container.querySelectorAll('select')]);
+		type(/** @type {HTMLSelectElement} */ (kinds[1]), 'on_delivery');
+		// a row more on the bank account
+		click(byText(container, 'Add row', 'button'));
+		// the new method first (the last Move up is the second method's)
+		const ups = [...container.querySelectorAll('button')].filter((b) => b.textContent === 'Move up');
+		click(/** @type {HTMLElement} */ (ups.at(-1)));
+		click(byText(container, 'Save', 'button'));
+		await settle();
+		expect(saved).toHaveLength(1);
+		const value = /** @type {{ value: any[] }} */ (saved[0]).value;
+		expect(value.map((method) => [method.key, method.name, method.kind])).toEqual([
+			['method_2', 'Cash on delivery', 'on_delivery'],
+			['bank_transfer', 'Bank transfer', 'pay_first'],
+		]);
+		expect(value[1].accounts[0].rows).toEqual([
+			{ label: 'Account holder', value: 'Shop Ltd' },
+			{ label: '', value: '' },
+		]);
+		expect(container.textContent).toContain('Saved');
+	});
+
+	it('shows the server’s errors with their paths, and warns about Storage only for a method with proofs', async () => {
+		const reply = {
+			status: 422,
+			body: { status: 422, title: 'Validation failed', errors: [{ path: '/value/0/key', message: 'The key is used twice.' }] },
+		};
+		serveList([transfer([['IBAN', 'DE89']], true)], reply);
+		const { container } = render(Editor(`web_${(website += 1)}`));
+		await settle();
+		expect(container.textContent).toContain('Storage is not connected: payers do not see the proof upload');
+		type(byLabel(container, 'Instructions'), 'Quote your order number.');
+		click(byText(container, 'Save', 'button'));
+		await settle();
+		expect(container.textContent).toContain('/value/0/key: The key is used twice.');
+		click(byText(container, 'Proof upload', 'label'));
+		expect(container.textContent).not.toContain('Storage is not connected');
 	});
 });
