@@ -63,6 +63,7 @@ describe('tokens per website × product (PLAN 0.4.4)', () => {
 				productId: 'notes',
 				name: 'Notes',
 				widgetScriptUrl: 'https://notes.example.dev/widget.js',
+				widgetScriptLoading: 'async',
 				docsUrl: `${product.url}/docs`,
 				browserToken: expect.any(String),
 				serverToken: { canShow: true },

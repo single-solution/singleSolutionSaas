@@ -87,6 +87,7 @@ describe('websites (PLAN 0.2 Websites, 0.5.9)', () => {
 				productId: 'notes',
 				name: 'Notes',
 				widgetScriptUrl: 'https://notes.example.dev/widget.js',
+				widgetScriptLoading: 'async',
 				docsUrl: 'https://notes.example.dev/docs',
 				browserToken: expect.any(String),
 				serverToken: { canShow: true },

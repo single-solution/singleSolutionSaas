@@ -334,7 +334,18 @@ describe('overview and business.json', () => {
 		const refresh = `/v1/dashboard/websites/${websiteId}/business/refresh`;
 		expect(await (await dash(cookie, 'POST', refresh)).json()).toEqual({
 			found: false,
-			business: { name: DOMAIN, logo: null, email: null, phone: null, address: null, country: null, timeZone: 'UTC' },
+			business: {
+				name: DOMAIN,
+				logo: null,
+				email: null,
+				phone: null,
+				address: null,
+				country: null,
+				timeZone: 'UTC',
+				currency: null,
+				currencies: [],
+				language: null,
+			},
 		});
 		answer = () => new Response(JSON.stringify(BUSINESS), { status: 200 });
 		expect(await (await dash(cookie, 'POST', refresh)).json()).toMatchObject({
@@ -347,7 +358,10 @@ describe('overview and business.json', () => {
 			business: { name: 'Example Shop' },
 		});
 		expect(await product.business(websiteId)).toMatchObject({ name: 'Example Shop' });
-		answer = () => new Response(JSON.stringify({ name: 'Renamed' }), { status: 200 });
+		answer = () =>
+			new Response(JSON.stringify({ name: 'Renamed', currency: 'gbp', currencies: ['EUR'], language: 'en-gb' }), {
+				status: 200,
+			});
 		clock.advance(25 * 60 * 60_000);
 		await call('GET', '/v1/server/open', { token: server.token });
 		await settle();
@@ -359,6 +373,10 @@ describe('overview and business.json', () => {
 			address: null,
 			country: null,
 			timeZone: 'UTC',
+			// the store currency, the currencies it takes and its default language (K5)
+			currency: 'GBP',
+			currencies: ['GBP', 'EUR'],
+			language: 'en-GB',
 		});
 		await expect(product.business('web_unknown')).rejects.toMatchObject({ code: 'website_not_found' });
 	});
