@@ -82,7 +82,7 @@ export const parseActor = (headers) => {
 
 /**
  * Who does what a request does: the ticket's member of the merchant's staff, else the acting user a server-token call
- * named (K2), else the product's fallback (`Server`, or Chat's `Team`).
+ * named (K2), else the product's fallback (`Server`).
  * @template {Actor} F
  * @param {{ ticket?: { user: { id: string, name: string, email?: string } } | null, actor?: ActingUser | null }} ctx
  * @param {F} fallback
