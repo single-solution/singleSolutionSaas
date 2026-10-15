@@ -191,6 +191,19 @@ Pure and browser-safe; servers, products' `core/` and widget bundles share it.
 
 - `escapeHtml(value)`: text safe in an HTML or XML element and in a quoted attribute (`&`, `<`, `>`, `"`, `'` as
   `&#38;`, `&#60;`, `&#62;`, `&#34;`, `&#39;`); null and undefined become ''.
+- `decodeEntities(text)`: decimal, hexadecimal and named character references decoded (the Latin-1 names and usual
+  punctuation such as `&rsquo;`, `&hellip;`, `&euro;`; case-sensitive; `&nbsp;` is U+00A0). A reference needs its `;`
+  and an unknown name stays as written; 0, surrogates and code points past U+10FFFF become U+FFFD, and U+0080–U+009F
+  are read as windows-1252, as HTML reads them.
+- `widgetScriptTag({ src, token?, async? })`: the install snippet `<script src="…" data-token="…" async></script>`,
+  attribute values escaped; no `data-token` when `token` is null or left out, no `async` when `async` is false.
+- `pathMatches(pattern, path)`: the one path pattern rule ("hide on pages", page rules). A pattern is a path from `/`
+  (else it matches nothing; `/` is the home page); `**` as a whole segment is any number of segments, none included;
+  `*` elsewhere is any characters inside one segment (`/shop/*`, `/sale-*`); the rest matches itself,
+  case-sensitively. Queries, fragments, empty segments and trailing slashes are ignored, and segments are compared
+  decoded (`/café` matches `/caf%C3%A9`).
+- `luhnValid(digits)`: true for a string of at least 2 ASCII digits whose last digit is its Luhn check digit (cards,
+  IMEIs); callers add their own length rules.
 
 ## Problems (RFC 9457)
 
