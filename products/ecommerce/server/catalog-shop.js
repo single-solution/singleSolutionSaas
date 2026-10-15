@@ -228,6 +228,8 @@ export const createListingFilter = (service) => {
 					: null,
 			attributes: new Map(attributes.map((attribute) => [attribute.id, attribute])),
 			hidden,
+			// the brands this category's listing (or one above it) leaves out (parity P3-12)
+			brandsOut: brands.filter((brand) => (brand.hiddenIn ?? []).some((id) => lineage.includes(id))).map((brand) => brand.id),
 			deal: query.deal ? await dealFilter(s, data, query.deal, categories) : null,
 			match: searchMatch === 'phrase' ? /** @type {const} */ ('phrase') : /** @type {const} */ ('words'),
 		};

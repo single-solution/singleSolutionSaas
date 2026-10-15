@@ -202,6 +202,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {MediaRecord | null} logo
  * @property {'active' | 'hidden'} status hidden: its products are hidden (E1)
  * @property {string[]} categoryIds the categories it belongs to ([] = all) (E1)
+ * @property {string[]} hiddenIn the categories whose listings leave its products out, with those below them ([] = none;
+ *   parity P3-12): the products stay on their pages, in search and in other listings
  * @property {import('./catalog-content.js').SeoRecord} seo (E1, E16)
  * @property {string | null} sizeChartId (E5)
  */

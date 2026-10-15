@@ -82,6 +82,8 @@ const SYSTEM_ACTOR = Object.freeze({ kind: 'system', id: 'checkout', name: 'Syst
 const PROOF_TYPES = Object.freeze({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' });
 const PROOF_MAX_BYTES = 10 * 1_048_576;
 const PROOF_SECONDS = 900;
+/** The window `checkout.placeLimit` counts a customer's orders in. */
+const PLACE_WINDOW_MS = 15 * 60_000;
 
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
@@ -867,6 +869,17 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const known = shopper ? await store.customer(shopper.id) : (member ?? guestRecord);
 		if (known?.blocked || guestRecord?.blocked)
 			throw problem('customer_blocked', 'Ordering is not possible for this account. Please contact the shop.');
+		// a burst of orders (by mistake or abuse) stops at checkout.placeLimit in 15 minutes
+		const burst = Number(checkout.placeLimit);
+		if (
+			burst > 0 &&
+			(await store.countPlacedSince(
+				{ userId: shopper?.id ?? null, customerId: known?.id ?? null },
+				new Date(service.now() - PLACE_WINDOW_MS),
+				burst,
+			)) >= burst
+		)
+			throw problem('too_many_orders', 'You placed several orders just now. Please wait a few minutes and try again.');
 		const cap = Number(checkout.openOrderCap);
 		if (
 			cap > 0 &&

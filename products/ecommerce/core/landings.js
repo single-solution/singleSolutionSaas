@@ -123,12 +123,15 @@ const newer = (a, b) => (b instanceof Date && (a === null || b > a) ? b : a);
 /**
  * The stock of every category (with those above it), brand and grade combination at once (E43, SG-10), from rows of
  * the in-stock variants grouped by product and grade (`{ _id: { p, g }, c: categoryIds, b: brandId, n, min, at }`): a
- * product counts once in each combination, its variants of the grade (or all, without one) are added up.
+ * product counts once in each combination, its variants of the grade (or all, without one) are added up; a product of a
+ * brand hidden in a category (`hiddenIn`, parity P3-12) counts in none of that category's combinations, nor of those
+ * below it, as their listings leave it out.
  * @param {ReadonlyArray<any>} rows
  * @param {(categoryId: string) => string[]} above the ids of the categories above one
+ * @param {(brandId: string) => string[]} [hiddenIn] the categories a brand is hidden in
  * @returns {Map<string, ComboStock>}
  */
-export const comboStock = (rows, above) => {
+export const comboStock = (rows, above, hiddenIn = () => []) => {
 	/** @type {Map<string, { products: Set<string>, variants: number, minPrice: number | null, lastmod: Date | null }>} */
 	const table = new Map();
 	for (const row of rows) {
@@ -137,7 +140,9 @@ export const comboStock = (rows, above) => {
 		const categories = [null, ...new Set(own.flatMap((id) => [id, ...above(id)]))];
 		const brands = row.b ? [null, String(row.b)] : [null];
 		const grades = row._id?.g ? [null, String(row._id.g)] : [null];
-		for (const categoryId of categories)
+		const out = row.b ? hiddenIn(String(row.b)) : [];
+		for (const categoryId of categories) {
+			if (categoryId !== null && out.length > 0 && [categoryId, ...above(categoryId)].some((id) => out.includes(id))) continue;
 			for (const brandId of brands)
 				for (const grade of grades) {
 					if (categoryId === null && brandId === null && grade === null) continue;
@@ -150,6 +155,7 @@ export const comboStock = (rows, above) => {
 					if (min !== null && (entry.minPrice === null || min < entry.minPrice)) entry.minPrice = min;
 					table.set(key, entry);
 				}
+		}
 	}
 	return new Map(
 		[...table.entries()].map(([key, entry]) => [

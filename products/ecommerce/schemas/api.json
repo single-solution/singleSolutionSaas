@@ -547,7 +547,7 @@
 		"Brand": {
 			"type": "object",
 			"description": "A brand of the catalog.",
-			"required": ["id", "name", "slug", "description", "status", "categoryIds", "seo", "sizeChartId", "logo"],
+			"required": ["id", "name", "slug", "description", "status", "categoryIds", "hiddenIn", "seo", "sizeChartId", "logo"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -582,6 +582,14 @@
 						"type": "string"
 					},
 					"description": "The categories it belongs to (empty: every category)."
+				},
+				"hiddenIn": {
+					"type": "array",
+					"maxItems": 100,
+					"items": {
+						"type": "string"
+					},
+					"description": "The categories whose listings leave its products out, with those below them ([] = none): its products stay on their own pages, in search and in other listings."
 				},
 				"seo": {
 					"$ref": "#/components/schemas/StaffTaxonomySeo"
@@ -637,6 +645,14 @@
 						"maxLength": 64
 					},
 					"description": "Existing category ids ([] = every category); repeats are dropped."
+				},
+				"hiddenIn": {
+					"type": "array",
+					"maxItems": 100,
+					"items": {
+						"type": "string"
+					},
+					"description": "The categories whose listings leave its products out, with those below them ([] = none): its products stay on their own pages, in search and in other listings."
 				},
 				"seo": {
 					"$ref": "#/components/schemas/TaxonomySeoInput"
@@ -20959,7 +20975,7 @@
 	},
 	"POST /v1/shop/orders": {
 		"summary": "Place an order",
-		"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
+		"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member’s record has links the order to that member’s record (it enters their account when they sign in with that phone verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
 		"body": {
 			"type": "object",
 			"required": ["lines", "payment"],
@@ -21963,7 +21979,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -22052,7 +22068,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -22131,7 +22147,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -22210,7 +22226,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -22294,7 +22310,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},
@@ -22378,7 +22394,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The start of the order number, email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
 				}
 			}
 		},

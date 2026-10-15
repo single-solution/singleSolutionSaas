@@ -389,7 +389,9 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 		const term = escapeRegex(filters.q);
 		const digits = filters.q.replace(/\D/g, '');
 		query.$or = [
-			{ number: { $regex: `^${term}`, $options: 'i' } },
+			// the number: what was typed anywhere in it, and its digits anywhere (3 or more: "1042" finds SO-2026-001042)
+			{ number: { $regex: term, $options: 'i' } },
+			...(digits.length >= 3 && digits !== filters.q ? [{ number: { $regex: escapeRegex(digits) } }] : []),
 			{ 'customer.name': { $regex: term, $options: 'i' } },
 			{ 'customer.email': { $regex: `^${term}`, $options: 'i' } },
 			{ 'address.name': { $regex: term, $options: 'i' } },

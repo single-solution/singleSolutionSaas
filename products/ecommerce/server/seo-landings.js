@@ -241,6 +241,16 @@ export const createLandings = (product, service, media) => {
 				brandIds: brandId ? [brandId] : null,
 				attributes: new Map(),
 				hidden: await hiddenFor(s),
+				// the brands hidden in the category or one above it (parity P3-12)
+				brandsOut: categoryId
+					? [...names.byBrand.values()]
+							.filter((brand) =>
+								[categoryId, ...(names.byCategory.get(categoryId)?.path ?? [])].some((id) =>
+									(brand.hiddenIn ?? []).includes(id),
+								),
+							)
+							.map((brand) => brand.id)
+					: [],
 			},
 		),
 	});
@@ -299,6 +309,7 @@ export const createLandings = (product, service, media) => {
 				)
 				.toArray(),
 			(id) => names.byCategory.get(id)?.path ?? [],
+			(id) => names.byBrand.get(id)?.hiddenIn ?? [],
 		);
 
 	/**

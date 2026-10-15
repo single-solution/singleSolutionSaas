@@ -197,6 +197,8 @@ export const storedValues = (attribute, values) => {
  * @property {ReadonlyMap<string, AttributeRecord>} attributes every attribute by id
  * @property {{ categoryIds: string[], brandIds: string[] }} [hidden] categories and brands whose products shoppers do
  *   not see (E1)
+ * @property {string[]} [brandsOut] brands whose products this listing leaves out: hidden in its category or one above it
+ *   (`hiddenIn`, parity P3-12)
  * @property {Record<string, unknown> | null} [deal] the products a deal applies to (E8)
  * @property {'words' | 'phrase'} [match] how the search's words match (the `catalog` setting `searchMatch`, SF-10)
  */
@@ -236,6 +238,7 @@ export const shopFilter = (query, resolved) => {
 	if (search) and.push(search);
 	and.push(...visibleFilter(resolved.hidden));
 	if (resolved.categoryIds) and.push({ categoryIds: { $in: resolved.categoryIds } });
+	if (resolved.brandsOut && resolved.brandsOut.length > 0) and.push({ brandId: { $nin: resolved.brandsOut } });
 	if (resolved.brandIds) and.push({ brandId: { $in: resolved.brandIds } });
 	if (query.featured) and.push({ featured: true });
 	if (resolved.deal) and.push(resolved.deal);

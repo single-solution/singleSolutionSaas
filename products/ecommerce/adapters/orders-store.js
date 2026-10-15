@@ -276,6 +276,22 @@ export const createOrdersStore = (data) => {
 			});
 		},
 		/**
+		 * Orders a customer placed since a time (`checkout.placeLimit`): a member's by user id, and every order of their
+		 * customer record (a guest's, or one placed as a guest on a member's phone).
+		 * @param {{ userId: string | null, customerId: string | null }} who @param {Date} since @param {number} limit
+		 */
+		countPlacedSince: (who, since, limit) => {
+			const whose = [
+				...(who.userId ? [{ 'customer.userId': who.userId }] : []),
+				...(who.customerId ? [{ 'customer.customerId': who.customerId }] : []),
+			];
+			if (whose.length === 0) return Promise.resolve(0);
+			return orders.countDocuments(
+				{ websiteId, ...(whose.length === 1 ? whose[0] : { $or: whose }), placedAt: { $gt: since } },
+				{ limit },
+			);
+		},
+		/**
 		 * How many orders each status has, with their role (the order flow's save guard).
 		 * @returns {Promise<Array<{ status: string, role: string, count: number }>>}
 		 */

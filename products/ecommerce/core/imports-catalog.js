@@ -102,7 +102,19 @@ const IMPORT_FIELDS = Object.freeze({
 		'previousSlugs',
 		...STAMPS,
 	]),
-	brands: Object.freeze(['id', 'slug', 'name', 'description', 'logo', 'status', 'categoryIds', 'seo', 'sizeChartId', ...STAMPS]),
+	brands: Object.freeze([
+		'id',
+		'slug',
+		'name',
+		'description',
+		'logo',
+		'status',
+		'categoryIds',
+		'hiddenIn',
+		'seo',
+		'sizeChartId',
+		...STAMPS,
+	]),
 	attributes: Object.freeze([
 		'id',
 		'name',
@@ -571,6 +583,7 @@ export const checkImportedBrand = (record, context) => {
 	const checked = valueOf(checkBrand(ownChecked(record, fields), null), errors);
 	if (checked) {
 		mustExist(checked.categoryIds, context.categoryIds, '/categoryIds', 'category', errors);
+		mustExist(checked.hiddenIn, context.categoryIds, '/hiddenIn', 'category', errors);
 		chartExists(checked.sizeChartId, context, errors);
 	}
 	const logo = mediaOrNull(record.logo, '/logo', errors);

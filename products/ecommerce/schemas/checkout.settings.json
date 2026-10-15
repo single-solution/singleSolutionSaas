@@ -124,6 +124,14 @@
 			"minimum": 0,
 			"maximum": 100
 		},
+		"placeLimit": {
+			"type": "integer",
+			"title": "Orders per customer in 15 minutes",
+			"description": "A customer (a signed-in shopper, or a guest by phone) may place at most this many orders in 15 minutes, against bursts of orders by mistake or abuse (0 = no limit; 5 suits most shops).",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100
+		},
 		"addressRequired": {
 			"type": "array",
 			"title": "Required address fields",

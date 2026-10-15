@@ -295,6 +295,8 @@ export const settingsPlan = (values) => {
 				'checkout.paymentWindowMinutes': 0,
 				'checkout.confirmationHours': 0,
 				'checkout.openOrderCap': 0,
+				// the SaaS default (no burst limit; store mapping to review when the owner asks)
+				'checkout.placeLimit': 0,
 				'checkout.addressRequired': ['line1'],
 				// guests order unless the phone is a member's (`apps/web/src/app/api/orders/route.ts`:195-198)
 				'checkout.guests': 'unless_password',

@@ -299,6 +299,7 @@
 	"checkout.problem.cod_not_allowed": "Cash on delivery is not possible for this order. Please choose another way to pay.",
 	"checkout.problem.customer_blocked": "Ordering is not possible for this account. Please contact the shop.",
 	"checkout.problem.too_many_open_orders": "You have orders waiting for payment or confirmation. Finish or cancel them first.",
+	"checkout.problem.too_many_orders": "You placed several orders just now. Please wait a few minutes and try again.",
 	"checkout.problem.validation_failed": "Some details are missing or not valid. Please check the form.",
 	"checkout.problem.duplicate_request": "This order was already sent. See your orders.",
 	"checkout.problem.in_progress": "Your order is still being placed. Wait a moment, then press Place order again.",

@@ -72,6 +72,14 @@ describe('order list filters and seen markers (E31)', () => {
 		]);
 		const byPhone = await shop.api('GET', '/v1/orders?q=07700-900-102');
 		expect(byPhone.json.items.map((/** @type {any} */ o) => o.id)).toEqual([b.order.id]);
+		// the number by any part of it, and by its digits anywhere
+		const number = String(b.order.number);
+		const tail = number.replace(/\D/g, '').slice(-4);
+		for (const q of [tail, `#${tail}`, number.slice(1).toLowerCase()])
+			expect(
+				(await shop.api('GET', `/v1/orders?q=${encodeURIComponent(q)}`)).json.items.map((/** @type {any} */ o) => o.id),
+				q,
+			).toContain(b.order.id);
 		expect((await shop.api('GET', '/v1/orders?deliveryMethod=boat')).status).toBe(422);
 	});
 

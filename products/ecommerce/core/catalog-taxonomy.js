@@ -316,7 +316,7 @@ const idsOf = (v) =>
 /**
  * The editable fields of a brand.
  * @typedef {Pick<BrandRecord, 'name' | 'slug' | 'description'> & { status: 'active' | 'hidden', categoryIds: string[],
- *   seo: import('./catalog-content.js').SeoFields, sizeChartId: string | null }} BrandFields
+ *   hiddenIn: string[], seo: import('./catalog-content.js').SeoFields, sizeChartId: string | null }} BrandFields
  */
 
 /**
@@ -346,6 +346,8 @@ export const checkBrand = (body, existing) => {
 		'Status is active or hidden.',
 	);
 	const categoryIds = read('categoryIds', idsOf, /** @type {string[]} */ ([]), 'Pick existing categories ([] = all).');
+	// the categories whose listings leave its products out (and those below them; parity P3-12)
+	const hiddenIn = read('hiddenIn', idsOf, /** @type {string[]} */ ([]), 'Pick existing categories ([] = none).');
 	const seo = checkSeo(body.seo, existing?.seo, '/seo', errors);
 	const sizeChartId = read(
 		'sizeChartId',
@@ -355,7 +357,10 @@ export const checkBrand = (body, existing) => {
 	);
 	return errors.length > 0
 		? { ok: false, errors }
-		: { ok: true, value: { name, slug, description, status, categoryIds, seo, sizeChartId: sizeChartId || null } };
+		: {
+				ok: true,
+				value: { name, slug, description, status, categoryIds, hiddenIn, seo, sizeChartId: sizeChartId || null },
+			};
 };
 
 /** @param {unknown} v @returns {AttributeChoice[] | null} */

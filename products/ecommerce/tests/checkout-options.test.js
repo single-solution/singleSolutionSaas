@@ -430,6 +430,28 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
+	it('stops a burst of orders at checkout.placeLimit in 15 minutes, per customer', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'placeLimit', 2);
+		try {
+			const item = await shop.seedProduct({ price: 1000, stock: 20 });
+			const guest = (/** @type {string} */ phone) =>
+				place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS, customer: { name: 'Bea Burst', phone } });
+			expect((await guest('+15550007101')).status).toBe(201);
+			expect((await guest('+15550007101')).status).toBe(201);
+			const third = await guest('+1 555 000 7101');
+			expect(third.status).toBe(429);
+			expect(codeOf(third)).toBe('too_many_orders');
+			// another customer is not held up, and the window passes
+			expect((await guest('+15550007102')).status).toBe(201);
+			shop.advance(15 * 60_000 + 1);
+			expect((await guest('+15550007101')).status).toBe(201);
+		} finally {
+			await shop.setting('checkout', 'placeLimit', 0);
+			await shop.setting('checkout', 'guests', 'off');
+		}
+	});
+
 	it('refuses guests while guest checkout is off', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const placed = await place({

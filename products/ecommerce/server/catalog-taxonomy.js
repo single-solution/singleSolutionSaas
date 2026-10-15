@@ -351,6 +351,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const checked = checkBrand(ctx.body, null);
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkCategoryIds(data, checked.value.categoryIds, '/categoryIds');
+			await checkCategoryIds(data, checked.value.hiddenIn, '/hiddenIn');
 			await checkChart(s, data, checked.value.sizeChartId, null);
 			const id = createId(ID_PREFIX.brand);
 			/** @type {BrandRecord} */
@@ -378,6 +379,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const checked = checkBrand(ctx.body, existing);
 			if (!checked.ok) throw refuse(checked.errors);
 			await checkCategoryIds(data, checked.value.categoryIds, '/categoryIds');
+			await checkCategoryIds(data, checked.value.hiddenIn, '/hiddenIn');
 			await checkChart(s, data, checked.value.sizeChartId, existing.sizeChartId);
 			const slug = await slugFor(data, COLLECTIONS.brands, checked.value, existing.id, existing.id, existing.slug);
 			await data
