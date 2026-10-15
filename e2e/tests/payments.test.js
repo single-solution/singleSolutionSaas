@@ -321,7 +321,11 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 		const cookie = await sys.adminSession(support.client, websiteId);
 		const on = ['payment_api', 'payment_links', 'refunds', 'stripe', 'bank_transfer'];
 		expect([...(await sys.switchFeatures(cookie, websiteId, on)).on].sort()).toEqual([...on].sort());
-		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, accountNumber: '' });
+		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({
+			ready: false,
+			missing: ['accountHolder', 'accountNumber'],
+			accountNumber: '',
+		});
 		const details = {
 			accountHolder: 'Shop Ltd',
 			bankName: 'Example Bank',
@@ -335,6 +339,7 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 			expect((await server('PUT', `/v1/settings/bank_transfer.${name}`, { value })).status).toBe(200);
 		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
+			missing: [],
 			routingNumber: '',
 			branchCode: '',
 			...details,
@@ -369,9 +374,13 @@ describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P
 		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
 		await server('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
+		// the instructions are kept from the first test: without them nothing would tell the payer how to pay
+		await server('DELETE', '/v1/settings/bank_transfer.instructions');
+		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, missing: ['instructions'] });
 		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by email.' });
 		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
+			missing: [],
 			accountHolder: '',
 			bankName: '',
 			accountNumber: '',
