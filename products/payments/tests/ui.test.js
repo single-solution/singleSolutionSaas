@@ -9,7 +9,7 @@ import { mountPayButton } from '../ui/pay-button.js';
 import { mountPaymentsAdmin } from '../ui/payments-admin.js';
 import { mountSubscriptionsAdmin } from '../ui/subscriptions-admin.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
-import { PAY_SCRIPT, renderBankPage } from '../server/pages.js';
+import { PAY_SCRIPT, renderManualPage } from '../server/pages.js';
 
 const BASE = 'https://payments.example.dev';
 
@@ -107,6 +107,8 @@ const PAYMENT = {
 	currency: 'USD',
 	refunded: 0,
 	gateway: 'bank_transfer',
+	kind: 'pay_first',
+	methodName: 'Bank transfer',
 	description: 'Order 1',
 	reference: 'o-1',
 	customer: { email: 'ana@example.com' },
@@ -363,7 +365,8 @@ describe('Payments admin widget', () => {
 		expect(options).toContain('All (2)');
 		expect(options).toContain('Paid (1)');
 		expect(options).toContain('Failed (0)');
-		expect(inside(host, 'p.meta').textContent).toBe('Bank transfer 1 · generic 1');
+		// a manual method's key (its name is on each payment), a gateway's name
+		expect(inside(host, 'p.meta').textContent).toBe('bank_transfer 1 · generic 1');
 		button(host, strings['admin.more']).click();
 		await flush();
 		expect(host.shadowRoot?.textContent).toContain('Refunded USD 1.00');
@@ -447,7 +450,7 @@ describe('Payments admin widget', () => {
 			'GET /v1/admin/payments/pay_5/proof': () => answer(200, { url: 'https://bucket/proof' }),
 			'GET /v1/admin/payments/pay_1/proof': () => answer(404),
 		});
-		const config = configOf(['payment_api', 'refunds', 'bank_transfer']);
+		const config = configOf(['payment_api', 'refunds', 'manual_payments']);
 		mountPaymentsAdmin({ host, api: client, config, save: vi.fn(), open, copy });
 		await flush();
 		expect(detailText(host)).toContain('paid · x · Sam');
@@ -528,7 +531,7 @@ describe('Payments admin widget', () => {
 		mountPaymentsAdmin({
 			host,
 			api: client,
-			config: configOf(['payment_api', 'refunds', 'bank_transfer']),
+			config: configOf(['payment_api', 'refunds', 'manual_payments']),
 			save: vi.fn(),
 			open: vi.fn(),
 		});
@@ -557,7 +560,13 @@ describe('Payments admin widget', () => {
 			'GET /v1/admin/payments/pay_6': () => answer(200, pending),
 			'POST /v1/admin/payments/pay_6/confirm': () => answer(409, {}),
 		});
-		mountPaymentsAdmin({ host, api: client, config: configOf(['payment_api', 'bank_transfer']), save: vi.fn(), open: vi.fn() });
+		mountPaymentsAdmin({
+			host,
+			api: client,
+			config: configOf(['payment_api', 'manual_payments']),
+			save: vi.fn(),
+			open: vi.fn(),
+		});
 		await flush();
 		button(host, strings['admin.confirm']).click();
 		await submitDialog(host);
@@ -744,8 +753,9 @@ describe('Payment links admin widget', () => {
 			// a picked link is read again: its paid count is the latest
 			'GET /v1/admin/links/link_2': () => answer(200, { ...OPEN, paidCount: 3 }),
 			'GET /v1/admin/links/link_1': () => answer(200, LINK),
+			'GET /v1/admin/manual-methods': () => answer(200, { methods: [{ key: 'bank_transfer', name: 'Bank transfer' }] }),
 		});
-		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'bank_transfer']), open, copy });
+		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'manual_payments']), open, copy });
 		await flush();
 		expect(rows(host)[0]?.textContent).toContain('Invoice 42');
 		expect(rows(host)[0]?.textContent).toContain('2 paid');
@@ -798,17 +808,22 @@ describe('Payment links admin widget', () => {
 				bodies.push(JSON.parse(init.body));
 				return reply;
 			},
+			'GET /v1/admin/manual-methods': () =>
+				answer(200, { methods: [{ key: 'bank_transfer', name: 'Bank transfer', kind: 'pay_first' }] }),
 		});
-		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'stripe', 'bank_transfer']), open: vi.fn() });
+		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'stripe', 'manual_payments']), open: vi.fn() });
 		await flush();
 		expect(statusText(host)).toBe(strings['links.empty']);
 		button(host, strings['links.new']).click();
+		await flush();
 		const form = /** @type {HTMLFormElement} */ (dialog(host));
 		const set = (/** @type {string} */ name, /** @type {string} */ value) => {
 			/** @type {HTMLInputElement} */ (form.querySelector(`[name="${name}"]`)).value = value;
 		};
 		const boxes = [...form.querySelectorAll('input[type="checkbox"]')].map((box) => /** @type {HTMLInputElement} */ (box));
+		// the gateways, then the merchant's manual payment methods by their names (P1)
 		expect(boxes.map((box) => box.value)).toEqual(['stripe', 'bank_transfer']);
+		expect(form.textContent).toContain('Bank transfer');
 		set('title', ' Donations ');
 		set('currency', 'usd');
 		set('minAmount', 'abc');
@@ -904,33 +919,78 @@ describe('admin widgets through widget.js', () => {
 	});
 });
 
-describe('the hosted bank page and /pay.js', () => {
-	it('uploads the proof straight to storage with the reference the payer typed (P3)', async () => {
-		const html = renderBankPage({
+describe('the hosted manual method page and /pay.js', () => {
+	const money = (/** @type {number} */ amount, /** @type {string} */ currency) => `${currency} ${(amount / 100).toFixed(2)}`;
+	it('shows the method’s words, the accounts’ own rows and the reference, by kind (P1, P2)', () => {
+		const html = renderManualPage({
 			texts: strings,
-			money: (amount, currency) => `${currency} ${(amount / 100).toFixed(2)}`,
+			money,
+			business: 'Shop',
+			amount: 250000,
+			currency: 'EUR',
+			reference: 'INV-9',
+			method: {
+				name: 'SEPA transfer',
+				kind: 'pay_first',
+				details: 'Arrives in one working day.',
+				instructions: 'Write INV-9 as the reference.',
+				accounts: [
+					{
+						label: 'Euro account',
+						currency: 'EUR',
+						rows: [
+							{ label: 'IBAN', value: 'DE89 3704 0044 0532 0130 00' },
+							{ label: '<b>BIC</b>', value: 'COBADEFFXXX' },
+						],
+					},
+				],
+			},
+			proof: null,
+			uploaded: false,
+		});
+		const body = new window.DOMParser().parseFromString(html, 'text/html').body;
+		expect(body.querySelector('h1')?.textContent).toBe('SEPA transfer');
+		expect(body.textContent).toContain('Pay EUR 2500.00 as shown below and quote the reference.');
+		for (const text of ['Euro account', 'IBAN', 'DE89 3704 0044 0532 0130 00', 'COBADEFFXXX', 'INV-9', 'Arrives in one'])
+			expect(body.textContent).toContain(text);
+		// every value is escaped
+		expect(body.querySelector('b')).toBeNull();
+		expect(body.querySelector('form[data-proof]')).toBeNull();
+		for (const kind of /** @type {const} */ (['on_delivery', 'at_pickup'])) {
+			const page = renderManualPage({
+				texts: strings,
+				money,
+				business: 'Shop',
+				amount: 1000,
+				currency: 'USD',
+				reference: 'R-1',
+				method: { name: 'Cash', kind, details: '', instructions: '', accounts: [] },
+				proof: null,
+				uploaded: false,
+			});
+			expect(page).toContain(strings[`manual.intro.${kind}`].replace('{amount}', 'USD 10.00'));
+		}
+	});
+	it('uploads the proof straight to storage with the reference the payer typed (P3)', async () => {
+		const html = renderManualPage({
+			texts: strings,
+			money,
 			business: 'Shop',
 			amount: 250000,
 			currency: 'USD',
 			reference: 'INV-9',
-			bank: {
-				ready: true,
-				missing: [],
-				accountHolder: '',
-				bankName: '',
-				accountNumber: '',
-				routingNumber: '',
-				sortCode: '',
-				branchCode: '',
-				iban: '',
-				bic: '',
+			method: {
+				name: 'Bank transfer',
+				kind: 'pay_first',
+				details: '',
 				instructions: 'We send our details by email.',
+				accounts: [],
 			},
 			proof: { action: 'https://payments.example.dev/pay/web_1/pay_1/proof' },
 			uploaded: false,
 		});
 		document.body.innerHTML = new window.DOMParser().parseFromString(html, 'text/html').body.innerHTML;
-		expect(document.body.textContent).toContain('as explained below');
+		expect(document.body.textContent).toContain('We send our details by email.');
 		/** @type {Array<{ url: string, body: unknown }>} */
 		const calls = [];
 		vi.stubGlobal(
@@ -951,7 +1011,7 @@ describe('the hosted bank page and /pay.js', () => {
 		await flush();
 		expect(calls.map((call) => call.url)).toEqual([form.action, 'https://bucket/p', `${form.action}/done`]);
 		expect(JSON.parse(String(calls[2]?.body))).toEqual({ key: 'k', reference: 'TRX-9' });
-		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['bank.uploaded']);
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['manual.uploaded']);
 		vi.unstubAllGlobals();
 	});
 });

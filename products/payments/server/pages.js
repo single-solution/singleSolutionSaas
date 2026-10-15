@@ -1,7 +1,8 @@
 /**
  * The hosted pages (PLAN 0.8.7), served by Payments with the website's widget texts (every word editable in Settings →
  * Texts), theme, custom CSS and Format (money as Settings → Format says, PLAN 0.8.10 K7): the payment-link page (`/l/<websiteId>/<linkId>`), the pay page of one payment
- * (`/pay/<websiteId>/<paymentId>`: pick a gateway, go on to it, or the bank details with the proof upload) and the
+ * (`/pay/<websiteId>/<paymentId>`: pick a gateway or a manual payment method, go on to the gateway, or the manual
+ * method's details, accounts and instructions with the proof upload) and the
  * result page. Card details are never asked here: every gateway takes them on its own page. Plain HTML; every value is
  * escaped; the only script is `/pay.js` from the same address (it posts a gateway's form on its own and uploads a
  * transfer proof straight to the merchant's storage).
@@ -9,7 +10,6 @@
  */
 import { formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
-import { BANK_DETAILS } from '../core/gateways.js';
 import { PROOF_TYPES } from '../core/widgets.js';
 
 /** Security headers of the hosted pages (forms may post to the gateways' own https pages). */
@@ -23,8 +23,8 @@ export const PAGE_HEADERS = Object.freeze({
 });
 
 /**
- * `/pay.js`: posts a gateway form marked `data-autosubmit`, and uploads a bank-transfer proof (presigned PUT) with the
- * transfer's reference the payer typed (PLAN 0.8.10 P3).
+ * `/pay.js`: posts a gateway form marked `data-autosubmit`, and uploads a payment proof (presigned PUT) with the
+ * payment's reference the payer typed (PLAN 0.8.10 P3).
  */
 export const PAY_SCRIPT = `(() => {
   const auto = document.querySelector('form[data-autosubmit]');
@@ -168,9 +168,10 @@ ${methods}
 };
 
 /**
- * The pay page before a gateway is picked: one button per gateway.
+ * The pay page before a way to pay is picked: one button per gateway and manual payment method (with the method's
+ * details under it).
  * @param {PageLook & { business: string, amount: number, currency: string, description: string,
- *   gateways: Array<{ id: string, name: string }>, action: string }} input
+ *   gateways: Array<{ id: string, name: string, details?: string }>, action: string }} input
  */
 export const renderChoicePage = ({ texts, theme, money, business, amount, currency, description, gateways, action }) => {
 	const t = translator(texts);
@@ -185,7 +186,7 @@ ${
 	gateways.length === 0
 		? `<p>${escape(t('page.noGateway'))}</p>`
 		: `<p>${escape(t('page.choose'))}</p>
-<form method="post" action="${escape(action)}">${gateways.map((g) => `<button type="submit" name="gateway" value="${escape(g.id)}">${escape(g.name)}</button>`).join('\n')}</form>`
+<form method="post" action="${escape(action)}">${gateways.map((g) => `<button type="submit" name="gateway" value="${escape(g.id)}">${escape(g.name)}</button>${g.details ? `<p class="muted">${escape(g.details)}</p>` : ''}`).join('\n')}</form>`
 }`,
 	});
 };
@@ -212,49 +213,57 @@ ${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" val
 	});
 };
 
+/** The introduction of each kind of manual method (`manual.intro.<kind>`). */
+const INTRO = Object.freeze({
+	pay_first: 'manual.intro.pay_first',
+	on_delivery: 'manual.intro.on_delivery',
+	at_pickup: 'manual.intro.at_pickup',
+});
+
 /**
- * Bank-transfer details, with the proof upload when the merchant allows it and storage is connected.
+ * A manual payment method's page (fixed-choices P1, P2): its name, what to do for its kind, the accounts of the
+ * payment's currency (each label/value row the merchant filled in), the payment's reference and the instructions, with
+ * the proof upload when the method takes proofs and storage is connected.
  * @param {PageLook & { business: string, amount: number, currency: string, reference: string,
- *   bank: import('../core/gateways.js').BankTransfer,
- *   proof: { action: string } | null, uploaded: boolean }} input
+ *   method: { name: string, kind: import('../core/methods.js').MethodKind, details: string, instructions: string,
+ *   accounts: import('../core/methods.js').Account[] }, proof: { action: string } | null, uploaded: boolean }} input
  */
-export const renderBankPage = ({ texts, theme, money, business, amount, currency, reference, bank, proof, uploaded }) => {
+export const renderManualPage = ({ texts, theme, money, business, amount, currency, reference, method, proof, uploaded }) => {
 	const t = translator(texts);
-	// only the details the merchant gave, each under its own text (`bank.<name>`), then the payment's reference
-	/** @type {Array<[string, string]>} */
-	const rows = [
-		...BANK_DETAILS.map((name) => /** @type {[string, string]} */ ([`bank.${name}`, bank[name]])),
-		['bank.reference', reference],
-	];
-	// without an account to pay into (Require bank details off, PLAN 0.8.10 P2) the payer follows the instructions
-	const account = bank.accountNumber !== '' || bank.iban !== '';
 	const upload =
 		proof && !uploaded
-			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">
-<label for="proof">${escape(t('bank.proof'))}</label>
+			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('manual.uploading'))}" data-done="${escape(t('manual.uploaded'))}" data-failed="${escape(t('manual.uploadFailed'))}">
+<label for="proof">${escape(t('manual.proof'))}</label>
 <input id="proof" type="file" accept="${Object.keys(PROOF_TYPES).join(',')}" required>
-<label for="proof-reference">${escape(t('bank.proofReference'))}</label>
+<label for="proof-reference">${escape(t('manual.proofReference'))}</label>
 <input id="proof-reference" name="reference" maxlength="120" autocomplete="off">
-<button type="submit">${escape(t('bank.upload'))}</button>
+<button type="submit">${escape(t('manual.upload'))}</button>
 <p class="muted" role="status"></p>
 </form>`
 			: uploaded
-				? `<p>${escape(t('bank.uploaded'))}</p>`
+				? `<p>${escape(t('manual.uploaded'))}</p>`
 				: '';
+	const accounts = method.accounts
+		.map(
+			(account) =>
+				`${account.label ? `<h2>${escape(account.label)}</h2>` : ''}<dl>${account.rows
+					.map((row) => `<dt>${escape(row.label)}</dt><dd>${escape(row.value)}</dd>`)
+					.join('')}</dl>`,
+		)
+		.join('\n');
 	return page({
 		texts,
 		theme,
-		title: t('bank.title'),
+		title: method.name,
 		script: proof !== null && !uploaded,
 		body: `<p class="muted">${escape(business)}</p>
-<h1>${escape(t('bank.title'))}</h1>
-<p>${escape(t(account ? 'bank.intro' : 'bank.introNoDetails', { amount: money(amount, currency) }))}</p>
-<dl>${rows
-			.filter(([, value]) => value !== '')
-			.map(([key, value]) => `<dt>${escape(t(key))}</dt><dd>${escape(value)}</dd>`)
-			.join('')}</dl>
-${bank.instructions ? `<p>${escape(bank.instructions)}</p>` : ''}
-<p class="muted">${escape(t('bank.waiting'))}</p>
+<h1>${escape(method.name)}</h1>
+<p>${escape(t(INTRO[method.kind], { amount: money(amount, currency) }))}</p>
+${method.details ? `<p>${escape(method.details)}</p>` : ''}
+${accounts}
+<dl><dt>${escape(t('manual.reference'))}</dt><dd>${escape(reference)}</dd></dl>
+${method.instructions ? `<p>${escape(method.instructions)}</p>` : ''}
+<p class="muted">${escape(t('manual.waiting'))}</p>
 ${upload}`,
 	});
 };

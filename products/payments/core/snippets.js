@@ -1,7 +1,7 @@
 /**
  * The code snippets the public docs and the dashboard's Developers tab show: the widget script and the pay button, the
  * admin widgets with their ticket function, the ticket request, the payment API (create, verify, refund), payment links,
- * the bank details, subscriptions, the webhook signature check and the addresses merchants register with each gateway. Plain text; no
+ * the manual payment methods, subscriptions, the webhook signature check and the addresses merchants register with each gateway. Plain text; no
  * I/O.
  * @module
  */
@@ -110,14 +110,14 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		"  -H 'Content-Type: application/json' \\",
 		`  -d '${JSON.stringify({ title: 'Donation', currency: 'USD', amount: null, minAmount: 500 })}'`,
 	].join('\n');
-	const bank = [
-		'// your server: the bank details to show at checkout and on order pages, and whether bank transfer is ready',
-		`const response = await fetch('${base}/v1/bank-transfer', {`,
+	const methods = [
+		'// your server: your manual payment methods as payers of a currency see them, for checkout and order pages',
+		`const response = await fetch('${base}/v1/manual-methods?currency=USD', {`,
 		'  headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
 		'});',
-		'// { ready, missing, accountHolder, bankName, accountNumber, routingNumber, sortCode, branchCode, iban, bic,',
-		"// instructions }: each detail is '' when not set, so show only the ones given; missing says what to set until ready",
-		'const bank = await response.json();',
+		'// { methods: [{ key, name, kind, details, instructions, proof, ready, missing, accounts: [{ label, currency,',
+		'// rows: [{ label, value }] }] }] }: show the ready ones; each account has only the rows you filled in',
+		'const { methods } = await response.json();',
 	].join('\n');
 	const subscription = [
 		`curl -X POST '${base}/v1/subscriptions' \\`,
@@ -136,5 +136,5 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'  return parts.v1?.length === expected.length && timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected));',
 		'};',
 	].join('\n');
-	return { visitor, admin, ticketNode, ticketCurl, create, verify, refund, link, bank, subscription, webhook };
+	return { visitor, admin, ticketNode, ticketCurl, create, verify, refund, link, methods, subscription, webhook };
 };

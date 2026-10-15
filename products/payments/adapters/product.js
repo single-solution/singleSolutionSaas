@@ -1,7 +1,7 @@
 /**
  * The product on the kit: `createProductInstance(options)` wires `@ss/app-kit` `createProduct` with Payments' manifest
  * (each feature's settings schema from `schemas/` inline), its widget and page texts, its Connections (storage for
- * bank-transfer proofs, each gateway's keys, the Notifications token for webhooks and the Accounts token for
+ * payment proofs, each gateway's keys, the Notifications token for webhooks and the Accounts token for
  * activity-log copies), the merchant database indexes, the data-rights hooks, the kit's events (PLAN 0.8.10 K5:
  * `payments.<type>`, forwarded through Notifications) and its part of the website Setup sheet (the OpenAPI document,
  * the guide's "What your website builds" per feature, and the payment event types and the gateways that are on), and
@@ -10,16 +10,17 @@
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { createProduct } from '@ss/app-kit';
+import { MongoClient } from 'mongodb';
+import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
-import bankTransfer from '../schemas/bank_transfer.settings.json' with { type: 'json' };
 import easypaisaSettings from '../schemas/easypaisa.settings.json' with { type: 'json' };
 import genericGateway from '../schemas/generic_gateway.settings.json' with { type: 'json' };
 import jazzcashSettings from '../schemas/jazzcash.settings.json' with { type: 'json' };
+import manualPayments from '../schemas/manual_payments.settings.json' with { type: 'json' };
 import payfastSettings from '../schemas/payfast.settings.json' with { type: 'json' };
 import payfastPkSettings from '../schemas/payfast_pk.settings.json' with { type: 'json' };
 import paymentApi from '../schemas/payment_api.settings.json' with { type: 'json' };
@@ -32,6 +33,7 @@ import subscriptions from '../schemas/subscriptions.settings.json' with { type: 
 import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
 import { EVENT_TYPES, paymentView, subscriptionView } from '../core/payments.js';
 import { createAdapters } from './gateways/index.js';
+import { LISTS, createLists } from './lists.js';
 import { INDEXES, createStore } from './store.js';
 
 /** Settings schema of each feature (manifest.json points at them with `$ref`). @type {Record<string, unknown>} */
@@ -43,7 +45,7 @@ const SETTINGS = {
 	jazzcash: jazzcashSettings,
 	easypaisa: easypaisaSettings,
 	rapid: rapidSettings,
-	bank_transfer: bankTransfer,
+	manual_payments: manualPayments,
 	generic_gateway: genericGateway,
 	payment_links: paymentLinks,
 	payment_api: paymentApi,
@@ -119,12 +121,16 @@ const dataRights = (now) => ({
 	},
 });
 
+/** The kinds of manual payment methods in the Setup sheet's words. */
+const KIND_WORDS = Object.freeze({ pay_first: 'paid first', on_delivery: 'paid on delivery', at_pickup: 'paid at pickup' });
+
 /**
- * Payments' own part of the website Setup sheet: the payment event types, and the gateways that are on with the
- * currencies each takes.
- * @param {{ on: string[] }} website
+ * Payments' own part of the website Setup sheet: the payment event types, the gateways that are on with the
+ * currencies each takes, and the manual payment methods in its own words while that feature is on.
+ * @param {{ websiteId: string, on: string[] }} website
+ * @param {import('./lists.js').Lists} lists
  */
-const setupPart = ({ on }) => {
+const setupPart = async ({ websiteId, on }, lists) => {
 	const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
 	const gateways = GATEWAYS.filter((gateway) => on.includes(GATEWAY_FEATURES[gateway])).map((gateway) => {
 		const currencies = GATEWAY_CURRENCIES[gateway];
@@ -132,8 +138,19 @@ const setupPart = ({ on }) => {
 			currencies === null ? 'any currency' : currencies.length > 3 ? `${currencies.length} currencies` : currencies.join(', ');
 		return `${names.get(GATEWAY_FEATURES[gateway])}: ${taken}.`;
 	});
+	const methods = on.includes('manual_payments') ? await lists.get(websiteId, 'manual_methods') : [];
 	return {
 		events: EVENT_TYPES.map((type) => `payments.${type}`),
+		...(on.includes('manual_payments')
+			? {
+					lists: {
+						manual_methods:
+							methods.length > 0
+								? methods.map((method) => `${method.name} (${KIND_WORDS[method.kind]})`).join(', ')
+								: 'None',
+					},
+				}
+			: {}),
 		summaries: [
 			{
 				title: 'Gateways on',
@@ -161,6 +178,14 @@ export const createProductInstance = (options) => {
 	/** @type {import('./util.js').OutboundSend} */
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const gateways = createAdapters(policy);
+	const healthy = (options.problems ?? []).length === 0;
+	// Payments keeps its list settings (manual payment methods) in the product database too, so it owns the store
+	const store =
+		options.store ??
+		(healthy && options.config?.mongodbUri
+			? createMongoStore({ db: new MongoClient(options.config.mongodbUri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
+			: createMemoryStore({ now }));
+	const lists = createLists({ store, now });
 
 	/**
 	 * A gateway connection: checked for its shape, then tested read-only with the gateway where it has such a call.
@@ -184,11 +209,26 @@ export const createProductInstance = (options) => {
 
 	const product = createProduct({
 		...options,
+		store,
 		manifest,
 		strings,
+		// the manual payment methods, served to the merchant's server at `GET|PUT /v1/lists/manual_methods`
+		lists: Object.fromEntries(
+			Object.entries(LISTS).map(([name, list]) => [
+				name,
+				{
+					feature: list.feature,
+					title: list.title,
+					get: (/** @type {string} */ websiteId) => lists.get(websiteId, /** @type {any} */ (name)),
+					save: (/** @type {string} */ websiteId, /** @type {unknown} */ value) =>
+						lists.save(websiteId, /** @type {any} */ (name), value),
+				},
+			]),
+		),
 		problemCodes: PROBLEM_CODES,
 		connections: {
-			storage: { label: 'Storage for transfer proofs (S3-compatible)', kind: 'storage', neededBy: ['bank_transfer'] },
+			// needed only by a manual payment method with proof upload on: the dashboard's Overview says so
+			storage: { label: 'Storage for payment proofs (S3-compatible)', kind: 'storage', neededBy: [] },
 			stripe: gateway('stripe', 'Stripe keys', 'stripe', 'secretKey'),
 			paypal: gateway('paypal', 'PayPal app', 'paypal', 'secret'),
 			payfast: gateway('payfast', 'PayFast (South Africa) account', 'payfast', 'merchantKey'),
@@ -205,7 +245,7 @@ export const createProductInstance = (options) => {
 			},
 			accounts: { label: 'Accounts token (activity-log copies)', kind: 'token', productId: 'accounts', neededBy: [] },
 		},
-		hooks: { ...dataRights(now), blueprint: async (website) => setupPart(website) },
+		hooks: { ...dataRights(now), blueprint: async (website) => setupPart(website, lists) },
 		data: { indexes: INDEXES },
 		// the website Setup sheet: the API document and what the merchant's website builds per feature
 		openapi,
@@ -215,7 +255,7 @@ export const createProductInstance = (options) => {
 		// forwarded through Notifications
 		events: true,
 	});
-	return Object.freeze({ ...product, gateways, now, send });
+	return Object.freeze({ ...product, gateways, lists, now, send });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

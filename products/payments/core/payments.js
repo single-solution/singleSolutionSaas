@@ -4,6 +4,7 @@
  * @module
  */
 import { isGateway, SUBSCRIPTION_GATEWAYS } from './gateways.js';
+import { isMethodKey } from './methods.js';
 import { formatMoney, isAmount, isCurrency, toDecimal } from './money.js';
 
 /**
@@ -112,7 +113,15 @@ export const checkMetadata = (value) => {
 };
 
 /**
- * A new payment from the API: amount (minor units) and currency, optional gateway (else the payer picks one), the
+ * True for what a payment's `gateway` may name: a gateway id or a manual payment method's key.
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export const isPaymentMethod = (value) => isGateway(value) || isMethodKey(value);
+
+/**
+ * A new payment from the API: amount (minor units) and currency, optional gateway or manual method (else the payer
+ * picks one), the
  * description payers see, the merchant's reference (for example the order id), the payer, metadata and the return and
  * cancel addresses (their origins are checked against the website by the caller).
  * @param {unknown} body
@@ -124,8 +133,8 @@ export const checkPaymentInput = (body) => {
 		return { ok: false, field: 'amount', message: 'amount is a whole number of minor units (cents, pence …), at least 1.' };
 	if (!isCurrency(input.currency))
 		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, EUR …).' };
-	if (input.gateway !== undefined && input.gateway !== null && !isGateway(input.gateway))
-		return { ok: false, field: 'gateway', message: 'gateway is not one of the gateways.' };
+	if (input.gateway !== undefined && input.gateway !== null && !isPaymentMethod(input.gateway))
+		return { ok: false, field: 'gateway', message: "gateway is a gateway id or a manual payment method's key." };
 	const description = cleanText(input.description, 200);
 	if (description === null) return { ok: false, field: 'description', message: 'description is at most 200 characters.' };
 	const reference = cleanText(input.reference, 120);
@@ -177,8 +186,8 @@ export const checkLinkInput = (body) => {
 	const minAmount = input.minAmount ?? 1;
 	if (!isAmount(minAmount)) return { ok: false, field: 'minAmount', message: 'minAmount is a whole number of minor units.' };
 	const gateways = input.gateways ?? [];
-	if (!Array.isArray(gateways) || !gateways.every(isGateway))
-		return { ok: false, field: 'gateways', message: 'gateways lists gateway ids.' };
+	if (!Array.isArray(gateways) || gateways.length > 40 || !gateways.every(isPaymentMethod))
+		return { ok: false, field: 'gateways', message: "gateways lists gateway ids and manual payment methods' keys." };
 	if (input.returnUrl !== undefined && (typeof input.returnUrl !== 'string' || input.returnUrl.length > 2048))
 		return { ok: false, field: 'returnUrl', message: 'returnUrl is an address of at most 2048 characters.' };
 	const reference = cleanText(input.reference, 120);
@@ -313,6 +322,8 @@ export const paymentView = (payment, checkoutUrl) => ({
 	amountText: toDecimal(payment.amount, payment.currency),
 	refunded: payment.refunded,
 	gateway: payment.gateway,
+	kind: payment.gateway === null ? null : (payment.manual?.kind ?? 'gateway'),
+	methodName: payment.manual?.name ?? '',
 	description: payment.description,
 	reference: payment.reference,
 	customer: payment.customer,

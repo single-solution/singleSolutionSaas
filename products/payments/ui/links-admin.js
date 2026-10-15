@@ -62,6 +62,21 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 			const shown = new Map();
 			/** @param {any} answer */
 			const failed = (answer) => (answer.status === 0 && !api.tickets.current() ? t('links.signedOut') : t('links.failed'));
+			/**
+			 * The merchant's manual payment methods (fixed-choices P1): offered next to the gateways, and named by their own
+			 * names; read once, when the widget opens.
+			 * @type {Promise<Array<{ key: string, name: string }>>}
+			 */
+			const manual = config.features.includes('manual_payments')
+				? adminCall(api, 'GET', '/v1/admin/manual-methods').then((answer) => (answer.ok ? answer.data.methods : []))
+				: Promise.resolve([]);
+			/** @type {Map<string, string>} */
+			const manualNames = new Map();
+			void manual.then((methods) => {
+				for (const method of methods) manualNames.set(method.key, method.name);
+			});
+			/** A gateway's or a manual method's name. @param {string} id */
+			const nameOf = (id) => manualNames.get(id) ?? formatText(t(`gateway.${id}`), { name: id });
 
 			/** @param {any} link @param {boolean} [pick] */
 			const details = (link, pick = false) => {
@@ -124,7 +139,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						[
 							t('links.field.gateways'),
 							link.gateways.length > 0
-								? link.gateways.map((/** @type {string} */ id) => formatText(t(`gateway.${id}`), { name: id })).join(', ')
+								? link.gateways.map((/** @type {string} */ id) => nameOf(id)).join(', ')
 								: t('links.allGateways'),
 						],
 						[t('links.field.reference'), link.reference],
@@ -188,7 +203,8 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				return item;
 			};
 
-			create.addEventListener('click', () => {
+			create.addEventListener('click', async () => {
+				const methods = await manual;
 				/** @param {string} name @param {Record<string, string>} [extra] */
 				const input = (name, extra = {}) => /** @type {HTMLInputElement} */ (element(doc, 'input', { name, ...extra }));
 				const title = input('title', { maxlength: '120', required: '' });
@@ -203,12 +219,17 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				const choices = GATEWAYS.filter((id) => config.features.includes(GATEWAY_FEATURES[id]));
 				const gateways = element(doc, 'fieldset', { class: 'wide' });
 				gateways.append(element(doc, 'legend', {}, t('links.field.gateways')));
-				for (const id of choices) {
+				/** @type {Array<[string, string]>} */
+				const offered = [
+					...choices.map((id) => /** @type {[string, string]} */ ([id, formatText(t(`gateway.${id}`), { name: id })])),
+					...methods.map((method) => /** @type {[string, string]} */ ([method.key, method.name])),
+				];
+				for (const [id, name] of offered) {
 					const box = /** @type {HTMLInputElement} */ (
 						element(doc, 'input', { type: 'checkbox', name: 'gateway', value: id })
 					);
 					const label = element(doc, 'label', { class: 'check' });
-					label.append(box, formatText(t(`gateway.${id}`), { name: id }));
+					label.append(box, name);
 					gateways.append(label);
 				}
 				const grid = element(doc, 'div', { class: 'grid' });
@@ -263,6 +284,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 
 			/** @param {boolean} fresh */
 			const load = async (fresh) => {
+				await manual;
 				const params = new URLSearchParams({ limit: '25' });
 				if (!fresh && cursor) params.set('cursor', cursor);
 				const answer = await adminCall(api, 'GET', `/v1/admin/links?${params.toString()}`);

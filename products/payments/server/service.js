@@ -1,14 +1,15 @@
 /**
  * The payments service (PLAN 0.8.7): creating payments and links, starting a payment on its gateway, applying what a
- * gateway confirmed (signed notices, returns asked server to server, status checks), refunds, bank-transfer
- * confirmation, the merchant's cancel, subscriptions, and the payment events. There is no background work: an unconfirmed payment is asked
+ * gateway confirmed (signed notices, returns asked server to server, status checks), refunds, the merchant's
+ * confirmation of a manual payment (its manual payment methods, fixed-choices P1), the merchant's cancel, subscriptions, and the payment events. There is no background work: an unconfirmed payment is asked
  * again when the merchant reads it (PLAN 0.8.4), and events are the kit's (PLAN 0.8.10 K5): sent to the merchant
  * through Notifications right after (`after()`) the request that made them, retried on later requests for that website.
  * @module
  */
 import { problem } from '@ss/app-kit';
 import { originAllowed } from '@ss/protocol';
-import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, bankTransfer, gatewaysFor, takesCurrency } from '../core/gateways.js';
+import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import { methodReady } from '../core/methods.js';
 import {
 	mirrorStatus,
 	paymentEventData,
@@ -90,7 +91,7 @@ export const createService = (product) => {
 
 	/**
 	 * A gateway's keys (decrypted), or null.
-	 * @param {Site} s @param {Exclude<Gateway, 'bank_transfer'>} gateway
+	 * @param {Site} s @param {Gateway} gateway
 	 * @returns {Promise<Record<string, any> | null>}
 	 */
 	const keysOf = async (s, gateway) => {
@@ -99,28 +100,42 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The gateways a payer may use now for a currency (switched on, connected, taking the currency).
+	 * The website's manual payment methods while Manual payment methods is on (the saved list, else today's bank transfer).
+	 * @param {Site} s
+	 * @returns {Promise<import('../core/methods.js').ManualMethod[]>}
+	 */
+	const methodsOf = async (s) =>
+		s.on.includes('manual_payments') ? await product.lists.get(s.websiteId, 'manual_methods') : [];
+
+	/**
+	 * A manual payment method of the website by its key (Manual payment methods on), or null.
+	 * @param {Site} s @param {string | null} key
+	 */
+	const methodOf = async (s, key) =>
+		key === null || isGateway(key) ? null : ((await methodsOf(s)).find((method) => method.key === key) ?? null);
+
+	/**
+	 * The ways a payer may pay now for a currency: the gateways switched on, connected and taking the currency, then the
+	 * manual methods that are ready for it (see `methodReady`); `only` narrows them (a payment link's own choice).
 	 * @param {Site} s @param {string} currency @param {readonly string[] | null} [only]
-	 * @returns {Promise<Gateway[]>}
+	 * @returns {Promise<string[]>} gateway ids and manual methods' keys
 	 */
 	const available = async (s, currency, only = null) => {
 		/** @type {Set<string>} */
 		const ready = new Set();
 		/** @type {string[]} */
 		let own = [];
-		// every gateway with keys (bank transfer has none: its details are settings)
-		const keyed = /** @type {Array<Exclude<Gateway, 'bank_transfer'>>} */ (
-			Object.keys(GATEWAY_CONNECTIONS).filter((gateway) => gateway !== 'bank_transfer')
-		);
-		for (const gateway of keyed) {
+		for (const gateway of GATEWAYS) {
 			if (!s.on.includes(GATEWAY_FEATURES[gateway])) continue;
 			const keys = await keysOf(s, gateway);
 			if (keys) ready.add(gateway);
 			if (gateway === 'generic') own = genericCurrencies(keys);
 		}
-		if (s.on.includes('bank_transfer') && bankTransfer(await product.settings.values(s.websiteId, 'bank_transfer')).ready)
-			ready.add('bank_transfer');
-		return gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, own, only });
+		const picked = (/** @type {string} */ id) => only === null || only.length === 0 || only.includes(id);
+		const manual = (await methodsOf(s))
+			.filter((method) => picked(method.key) && methodReady(method, currency).ready)
+			.map((method) => method.key);
+		return [...gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, own, only }), ...manual];
 	};
 
 	/**
@@ -161,7 +176,7 @@ export const createService = (product) => {
 	/**
 	 * Create a payment (API or a payment link).
 	 * @param {Site} s
-	 * @param {{ amount: number, currency: string, gateway: Gateway | null, description: string, reference: string,
+	 * @param {{ amount: number, currency: string, gateway: string | null, description: string, reference: string,
 	 *   customer: import('../core/payments.js').Customer, metadata: Record<string, string>, returnUrl: string | null,
 	 *   cancelUrl: string | null }} input checked by `checkPaymentInput`
 	 * @param {{ source: 'api' | 'link', linkId?: string | null }} from
@@ -169,31 +184,51 @@ export const createService = (product) => {
 	const createPayment = async (s, input, { source, linkId = null }) => {
 		checkReturns(s, input);
 		if (input.gateway !== null) {
-			if (!takesCurrency(input.gateway, input.currency))
+			if (isGateway(input.gateway) && !takesCurrency(input.gateway, input.currency))
 				throw problem('currency_not_supported', `${input.gateway} does not take ${input.currency}.`);
 			if (!(await available(s, input.currency)).includes(input.gateway))
-				throw problem('gateway_not_ready', `${input.gateway} is off or not connected for this website.`);
+				throw problem(
+					'gateway_not_ready',
+					`${input.gateway} is off, not connected or not ready for ${input.currency} on this website.`,
+				);
 		} else if ((await available(s, input.currency)).length === 0)
-			throw problem('gateway_not_ready', `No gateway is ready for ${input.currency}: switch one on and connect it.`);
-		return s.store.payments.add({ ...input, gateway: input.gateway, source, linkId });
+			throw problem(
+				'gateway_not_ready',
+				`No gateway or manual payment method is ready for ${input.currency}: switch one on and set it up.`,
+			);
+		const method = await methodOf(s, input.gateway);
+		return s.store.payments.add({
+			...input,
+			manual: method ? { name: method.name, kind: method.kind } : null,
+			source,
+			linkId,
+		});
 	};
 
 	/**
 	 * Send the payer on to the gateway: a redirect or a form (kept, so reopening the page goes to the same checkout),
-	 * or, for a bank transfer, nothing (its page shows the bank details).
-	 * @param {Site} s @param {PaymentRecord} payment @param {Gateway} gateway
+	 * or, for a manual payment method, nothing (its page shows the method's details, accounts and instructions).
+	 * @param {Site} s @param {PaymentRecord} payment @param {string} gateway a gateway id or a manual method's key
 	 * @returns {Promise<{ ok: true, payment: PaymentRecord } | { ok: false }>}
 	 */
 	const start = async (s, payment, gateway) => {
-		if (payment.gateway === gateway && (payment.checkout || gateway === 'bank_transfer')) return { ok: true, payment };
+		if (payment.gateway === gateway && (payment.checkout || payment.manual)) return { ok: true, payment };
 		// once a gateway has a checkout, the payer goes on there until it fails or the payer cancels
 		if (payment.status === 'pending' && payment.checkout && payment.gateway !== gateway) return { ok: false };
 		if (!(await available(s, payment.currency)).includes(gateway)) return { ok: false };
-		if (gateway === 'bank_transfer') {
+		if (!isGateway(gateway)) {
+			const method = await methodOf(s, gateway);
+			if (!method) return { ok: false };
 			const changed = await s.store.payments.change(
 				payment.id,
 				['pending', 'failed', 'cancelled'],
-				{ gateway, status: 'pending', checkout: null, gatewayRef: null },
+				{
+					gateway,
+					manual: { name: method.name, kind: method.kind },
+					status: 'pending',
+					checkout: null,
+					gatewayRef: null,
+				},
 				{ event: 'started', detail: gateway },
 			);
 			return changed ? { ok: true, payment: changed } : { ok: false };
@@ -211,7 +246,7 @@ export const createService = (product) => {
 		const changed = await s.store.payments.change(
 			payment.id,
 			['pending', 'failed', 'cancelled'],
-			{ gateway, status: 'pending', gatewayRef: started.ref, checkout: /** @type {any} */ (checkout) },
+			{ gateway, manual: null, status: 'pending', gatewayRef: started.ref, checkout: /** @type {any} */ (checkout) },
 			{ event: 'started', detail: gateway },
 		);
 		return changed ? { ok: true, payment: changed } : { ok: false };
@@ -349,8 +384,8 @@ export const createService = (product) => {
 		// it changed meanwhile (paid, or canceled by another call): judged again as it is now
 		if (!voided) return voidPayment(s, /** @type {PaymentRecord} */ (await s.store.payments.get(payment.id)), reason, by);
 		const gateway = payment.gateway;
-		const adapter = gateway && gateway !== 'bank_transfer' && payment.gatewayRef ? gateways[gateway] : null;
-		const keys = adapter?.expire ? await keysOf(s, /** @type {Exclude<Gateway, 'bank_transfer'>} */ (gateway)) : null;
+		const adapter = isGateway(gateway) && payment.gatewayRef ? gateways[gateway] : null;
+		const keys = adapter?.expire ? await keysOf(s, /** @type {Gateway} */ (gateway)) : null;
 		if (!adapter?.expire || !keys) return voided;
 		const stopped = await adapter.expire({ ...payment, websiteId: s.websiteId }, keys, ctx);
 		return (
@@ -375,8 +410,7 @@ export const createService = (product) => {
 	 * @returns {Promise<PaymentRecord>}
 	 */
 	const recheck = async (s, payment) => {
-		if (payment.status !== 'pending' || !payment.gateway || payment.gateway === 'bank_transfer' || !payment.gatewayRef)
-			return payment;
+		if (payment.status !== 'pending' || !isGateway(payment.gateway) || !payment.gatewayRef) return payment;
 		const adapter = gateways[payment.gateway];
 		if (!adapter.status || now() - new Date(payment.updatedAt).getTime() < RECHECK_MS) return payment;
 		const keys = await keysOf(s, payment.gateway);
@@ -389,8 +423,8 @@ export const createService = (product) => {
 
 	/**
 	 * Refund a payment (all of what is left when `amount` is undefined). Gateways with a refund API refund there; the
-	 * others (PayFast Pakistan, JazzCash, Easypaisa, Rapid Gateway, bank transfer, the generic adapter without a refund
-	 * address) are recorded: the merchant returns the money themselves.
+	 * others (PayFast Pakistan, JazzCash, Easypaisa, Rapid Gateway, the generic adapter without a refund address, and
+	 * every manual payment method) are recorded: the merchant returns the money themselves.
 	 * @param {Site} s @param {PaymentRecord} payment @param {{ amount: unknown, reason: unknown }} input @param {Actor} by
 	 * @returns {Promise<PaymentRecord>}
 	 */
@@ -404,10 +438,10 @@ export const createService = (product) => {
 						errors: [{ path: '/amount', message: checked.message, code: 'amount' }],
 					});
 		const refundId = `rfd_${payment.id.slice(4)}_${payment.refunds.length + 1}`;
-		const gateway = /** @type {Gateway} */ (payment.gateway);
+		const gateway = payment.gateway;
 		/** @type {import('../adapters/gateways/types.js').Refunded} */
 		let done = { ok: true, manual: true };
-		if (gateway !== 'bank_transfer') {
+		if (isGateway(gateway)) {
 			const keys = await keysOf(s, gateway);
 			if (!keys) throw problem('gateway_not_ready', `${gateway} is not connected for this website.`);
 			done = await gateways[gateway].refund(
@@ -441,8 +475,8 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The payer's proof of a bank transfer is in the merchant's storage: recorded with the transfer's reference, and
-	 * told to the merchant (`payment.proof_uploaded`, PLAN 0.8.10 P3).
+	 * The payer's proof of a manual payment is in the merchant's storage: recorded with the payment's reference, and told
+	 * to the merchant (`payment.proof_uploaded`, PLAN 0.8.10 P3).
 	 * @param {Site} s @param {PaymentRecord} payment
 	 * @param {{ key: string, type: string, size: number }} proof @param {string} reference
 	 * @returns {Promise<boolean>} false when the payment changed meanwhile
@@ -460,22 +494,22 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The merchant confirms a bank transfer arrived, with the transfer's reference and a note (PLAN 0.8.10 P3). A
-	 * transfer that arrives after the merchant canceled the payment is confirmed too, and is then to be refunded
-	 * (`refundDue`, K-13).
+	 * The merchant confirms the money of a manual payment arrived (a transfer, cash on delivery or at pickup …), with its
+	 * reference and a note (PLAN 0.8.10 P3). Money that arrives after the merchant canceled the payment is confirmed too,
+	 * and is then to be refunded (`refundDue`, K-13).
 	 * @param {Site} s @param {PaymentRecord} payment @param {Actor} by
 	 * @param {{ reference: string, note: string }} input
 	 */
-	const confirmTransfer = async (s, payment, by, { reference, note }) => {
-		if (payment.gateway !== 'bank_transfer' || (payment.status !== 'pending' && payment.status !== 'voided'))
-			throw problem('conflict', 'Only a pending bank transfer can be confirmed.');
+	const confirmManual = async (s, payment, by, { reference, note }) => {
+		if (!payment.manual || (payment.status !== 'pending' && payment.status !== 'voided'))
+			throw problem('conflict', 'Only a pending manual payment can be confirmed.');
 		const paid = await s.store.payments.change(
 			payment.id,
 			['pending', 'voided'],
 			{ status: 'paid', paidAt: new Date(now()) },
 			{
 				event: 'paid',
-				detail: 'transfer confirmed',
+				detail: 'confirmed',
 				by: nameOf(by),
 				...(reference ? { reference } : {}),
 				...(note ? { note } : {}),
@@ -542,6 +576,8 @@ export const createService = (product) => {
 		payUrl,
 		linkUrl,
 		keysOf,
+		methodsOf,
+		methodOf,
 		available,
 		allowedReturn,
 		createPayment,
@@ -552,7 +588,7 @@ export const createService = (product) => {
 		voidPayment,
 		refund,
 		recordProof,
-		confirmTransfer,
+		confirmManual,
 		subscribe,
 		recheckSubscription,
 		cancelSubscription,

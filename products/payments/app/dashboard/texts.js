@@ -8,19 +8,61 @@ import { dashboardTexts } from '@ss/ui';
 export const TEXTS = dashboardTexts({
 	title: 'Payments',
 	overview: {
-		gateways: 'Gateways ready',
+		gateways: 'Ways to pay ready',
 		gatewaysHelp:
-			'Switched-on gateways with their keys connected (bank transfer: the account holder and the account number or IBAN set; with Require bank details off, instructions or an account number or IBAN).',
-		bankStep: 'Finish the bank transfer details',
-		noBank: {
-			title: 'Bank transfer is on, but payers do not see it yet',
+			'Switched-on gateways with their keys connected, and manual payment methods payers see (a method paid first needs an account with details, or instructions).',
+		methodsStep: 'Finish your manual payment methods',
+		noMethods: {
+			title: 'Payers do not see some of your manual payment methods yet',
 			action: 'Open Settings',
 		},
-		bankHelpDetails:
-			'Set {missing} in Settings, or turn off Require bank details and write instructions that tell payers how to pay.',
-		bankHelpInstructions: 'Write instructions in Settings that tell payers how to pay, or set the account number or IBAN.',
-		bankMissing: { accountHolder: 'the account holder name', accountNumber: 'the account number or IBAN' },
-		and: '{first} and {second}',
+		methodsHelp: 'Add an account with its details, or instructions that tell payers how to pay, to: {names}.',
+		noStorage: {
+			title: 'Payers cannot upload payment proofs yet',
+			action: 'Open Connections',
+		},
+		storageHelp: 'Proof upload is on for {names}, but Storage is not connected: connect it, or turn Proof upload off.',
+	},
+	methods: {
+		title: 'Manual payment methods',
+		help: 'Your own ways to pay outside a gateway: a bank transfer, a mobile wallet, cash on delivery, payment at pickup … Payers see them in this order, after the gateways, on payment links and the pay button.',
+		off: 'Manual payment methods is off: you may prepare the list now.',
+		loadFailed: 'The manual payment methods could not be loaded',
+		untitled: 'Method {n}',
+		notReady: 'not shown to payers yet: add an account or instructions',
+		name: 'Name payers see',
+		key: 'Key',
+		keyHelp: 'Stored on payments and used by your server (lowercase letters, digits and _). Keep it once payments use it.',
+		kind: 'Kind',
+		kindHelp:
+			'Paid first: payers pay before (and may upload a proof). On delivery or at pickup: payers pay then; you confirm the money.',
+		kinds: { pay_first: 'Paid first', on_delivery: 'Paid on delivery', at_pickup: 'Paid at pickup' },
+		proof: 'Proof upload',
+		proofHelp: 'Payers may upload a photo or PDF of their payment to your storage (connect Storage in Connections).',
+		noStorage: 'Storage is not connected: payers do not see the proof upload until you connect it in Connections.',
+		details: 'Details',
+		detailsHelp: 'Shown under the method when payers choose how to pay (plain text).',
+		instructions: 'Instructions',
+		instructionsHelp: 'Shown after payers choose it, under the accounts, for example what to write as the payment reference.',
+		accountsHelp:
+			'Accounts to pay into: each one rows of a label and a value (bank details, a wallet number, a payment ID …). With a currency, payers of that currency see it; without one, payers of any other currency.',
+		account: 'Account {n}',
+		accountLabel: 'Account name',
+		accountLabelHelp: 'Optional, shown above its rows (for example the bank or the wallet).',
+		currency: 'Currency',
+		currencyHelp: 'A 3-letter code (EUR, USD …), or empty for any currency.',
+		rowLabel: 'Label',
+		rowValue: 'Value',
+		addRow: 'Add row',
+		removeRow: 'Remove row {label}',
+		addAccount: 'Add account',
+		removeAccount: 'Remove account',
+		addMethod: 'Add method',
+		removeMethod: 'Remove method',
+		remove: 'Remove',
+		up: 'Move up',
+		down: 'Move down',
+		cancel: 'Cancel changes',
 	},
 	settings: {
 		looksHelp:
@@ -73,7 +115,7 @@ export const TEXTS = dashboardTexts({
 			'Paste the Notifications token in Connections and turn on its Outgoing webhooks; check the SS-Signature header of every event.',
 		more: 'Links, refunds and subscriptions',
 		moreHelp:
-			'Payment links for any amount, full and partial refunds, the bank details for your checkout, gateway-managed subscriptions.',
+			'Payment links for any amount, full and partial refunds, your manual payment methods for your checkout, gateway-managed subscriptions.',
 		widgets: 'Widget snippets',
 		widgetsHelp:
 			'The pay button on your website, and the admin widgets in your own admin: payments, payment links and subscriptions.',

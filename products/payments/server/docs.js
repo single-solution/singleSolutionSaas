@@ -1,7 +1,7 @@
 /**
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.7): the payment API, confirming a payment for its exact amount,
  * payment events through Notifications and the webhook signature check, each gateway's setup with the addresses to
- * register, currencies, bank transfer, links, refunds, subscriptions, per-feature routes, widgets and what the website
+ * register, currencies, manual payment methods, links, refunds, subscriptions, per-feature routes, widgets and what the website
  * builds, the widget and ticket snippets, the kit's routes for your server (settings, acting user, visitor calls,
  * counts, activity, Format; PLAN 0.8.10), the business.json template, the localhost note and the API reference from `openapi.json`: every call
  * with its auth, feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json`
@@ -135,9 +135,9 @@ ${block(urls.rapid)}
 <h3>Generic gateway adapter</h3>
 ${para(guide.generic)}
 ${block(urls.generic)}
-<h3>Bank transfer (manual)</h3>
+<h3>Manual payment methods</h3>
 ${para(guide.bank)}
-${block(snippets.bank)}
+${block(snippets.methods)}
 <h2>Currencies</h2>
 ${para(guide.currencies)}
 ${block(currencies)}

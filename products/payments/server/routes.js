@@ -10,7 +10,8 @@
  */
 import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
-import { GATEWAY_FEATURES, bankTransfer, isGateway } from '../core/gateways.js';
+import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
+import { methodView } from '../core/methods.js';
 import { fromDecimal } from '../core/money.js';
 import {
 	PAYMENT_STATUSES,
@@ -22,6 +23,7 @@ import {
 	checkTransferInput,
 	cleanText,
 	isConfirmedFor,
+	isPaymentMethod,
 	isRefundDue,
 	linkView,
 	subscriptionView,
@@ -35,10 +37,10 @@ import {
 	PAGE_HEADERS,
 	PAY_SCRIPT,
 	gatewayName,
-	renderBankPage,
 	renderChoicePage,
 	renderGatewayForm,
 	renderLinkPage,
+	renderManualPage,
 	renderResultPage,
 } from './pages.js';
 import { SERVER_ACTOR, createService } from './service.js';
@@ -166,13 +168,21 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * The gateways a payer may pick, with the names they see.
+	 * The gateways and manual payment methods a payer may pick, with the names they see (a manual method's own name and
+	 * its details).
 	 * @param {Site} s @param {Record<string, string>} texts @param {string} currency @param {readonly string[] | null} [only]
+	 * @returns {Promise<Array<{ id: string, name: string, details: string }>>}
 	 */
 	const choices = async (s, texts, currency, only = null) => {
 		const list = await service.available(s, currency, only);
 		const keys = list.includes('generic') ? await service.keysOf(s, 'generic') : null;
-		return list.map((id) => ({ id, name: gatewayName(texts, id, String(keys?.name ?? '')) }));
+		const methods = new Map((await service.methodsOf(s)).map((method) => [method.key, method]));
+		return list.map((id) => {
+			const method = isGateway(id) ? undefined : methods.get(id);
+			return method
+				? { id, name: method.name, details: method.details }
+				: { id, name: gatewayName(texts, id, String(keys?.name ?? '')), details: '' };
+		});
 	};
 
 	/**
@@ -233,23 +243,23 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * The merchant confirms a bank transfer arrived: `{ reference?, note? }` are kept with the confirmation (PLAN 0.8.10
-	 * P3).
+	 * The merchant confirms the money of a manual payment arrived: `{ reference?, note? }` are kept with the
+	 * confirmation (PLAN 0.8.10 P3).
 	 * @param {any} ctx
 	 */
 	const confirmPayment = async (ctx) => {
 		const checked = checkTransferInput(ctx.body, { note: true });
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		const s = await siteOf(ctx);
-		const paid = await service.confirmTransfer(s, await paymentOf(s, ctx.params.id), who(ctx), checked.value);
+		const paid = await service.confirmManual(s, await paymentOf(s, ctx.params.id), who(ctx), checked.value);
 		const { money } = await product.format(s.websiteId);
 		const { reference } = checked.value;
 		await log(
 			ctx,
-			'payment.transfer_confirmed',
+			'payment.manual_confirmed',
 			paid.id,
 			paid.reference || paid.id,
-			`Bank transfer of ${money(paid.amount, paid.currency)} confirmed${reference ? ` (reference ${reference})` : ''}`,
+			`${paid.manual?.name ?? 'Payment'} of ${money(paid.amount, paid.currency)} confirmed${reference ? ` (reference ${reference})` : ''}`,
 		);
 		return service.view(s, paid);
 	};
@@ -276,7 +286,19 @@ export const createRoutes = (product) => {
 		return service.view(s, voided);
 	};
 
-	/** A presigned link to a bank-transfer proof (5 minutes). @param {any} ctx */
+	/**
+	 * The manual payment methods as payers see them (`?currency=`: only that currency's accounts, and ready for it).
+	 * @param {any} ctx
+	 */
+	const manualMethods = async (ctx) => {
+		const currency = typeof ctx.query.currency === 'string' && ctx.query.currency !== '' ? ctx.query.currency : null;
+		if (currency !== null && !/^[A-Z]{3}$/.test(currency))
+			return invalid('currency', 'currency is an ISO 4217 code (USD, EUR …).');
+		const methods = await product.lists.get(ctx.websiteId, 'manual_methods');
+		return { methods: methods.map((method) => methodView(method, currency)) };
+	};
+
+	/** A presigned link to a payment's proof (5 minutes). @param {any} ctx */
 	const proofLink = async (ctx) => {
 		const s = await siteOf(ctx);
 		const payment = await paymentOf(s, ctx.params.id);
@@ -387,7 +409,7 @@ export const createRoutes = (product) => {
 		const customer = checkCustomer({ name: input.name ?? '', email: input.email ?? '' });
 		if (!customer.ok) return { ok: false, field: 'email', key: 'link.invalidEmail' };
 		const gateways = await service.available(s, link.currency, link.gateways);
-		if (!isGateway(input.gateway) || !gateways.includes(input.gateway))
+		if (!isPaymentMethod(input.gateway) || !gateways.includes(input.gateway))
 			return { ok: false, field: 'gateway', key: 'link.invalidMethod' };
 		const payment = await service.createPayment(
 			s,
@@ -448,17 +470,21 @@ export const createRoutes = (product) => {
 		const started = await service.start(s, payment, payment.gateway);
 		if (!started.ok) return html(renderResultPage({ ...result, state: 'error' }), 502);
 		payment = started.payment;
-		if (payment.gateway === 'bank_transfer') {
-			const bank = await product.settings.values(websiteId, 'bank_transfer');
-			const storage = bank.proofUpload === true ? await product.connections.storage(websiteId) : null;
+		if (payment.manual) {
+			const method = await service.methodOf(s, payment.gateway);
+			// a method removed since: its name only (the merchant tells the payer the rest)
+			const shown = method
+				? methodView(method, payment.currency)
+				: { ...payment.manual, details: '', instructions: '', proof: false, accounts: [] };
+			const storage = shown.proof ? await product.connections.storage(websiteId) : null;
 			return html(
-				renderBankPage({
+				renderManualPage({
 					...look,
 					business,
 					amount: payment.amount,
 					currency: payment.currency,
 					reference: payment.reference || payment.id,
-					bank: bankTransfer(bank),
+					method: shown,
 					proof: storage ? { action: `/pay/${websiteId}/${payment.id}/proof` } : null,
 					uploaded: payment.proof !== null,
 				}),
@@ -498,7 +524,7 @@ export const createRoutes = (product) => {
 				{ status: 'pending', gateway: null, checkout: null },
 				{ event: 'retried' },
 			);
-		else if (isGateway(form.gateway) && payment.status === 'pending' && payment.gateway === null) {
+		else if (isPaymentMethod(form.gateway) && payment.status === 'pending' && payment.gateway === null) {
 			const started = await service.start(s, payment, form.gateway);
 			if (!started.ok)
 				return html(
@@ -544,9 +570,9 @@ export const createRoutes = (product) => {
 				payment.cancelUrl ? withParam(payment.cancelUrl, 'ss_payment', payment.id) : `/pay/${websiteId}/${payment.id}`,
 			);
 		}
-		if (payment.gateway === gateway && gateway !== 'bank_transfer' && isGateway(gateway)) {
-			const adapter = product.gateways[/** @type {Exclude<Gateway, 'bank_transfer'>} */ (gateway)];
-			const keys = await service.keysOf(s, /** @type {Exclude<Gateway, 'bank_transfer'>} */ (gateway));
+		if (payment.gateway === gateway && isGateway(gateway)) {
+			const adapter = product.gateways[gateway];
+			const keys = await service.keysOf(s, gateway);
 			if (keys && adapter.returned) {
 				const url = new URL(ctx.request.url);
 				const answer = await adapter.returned(
@@ -579,7 +605,7 @@ export const createRoutes = (product) => {
 
 	/**
 	 * A gateway's signed notice (webhook, ITN, callback), checked with the website's keys for that gateway.
-	 * @param {Exclude<Gateway, 'bank_transfer' | 'jazzcash' | 'easypaisa'>} gateway
+	 * @param {Exclude<Gateway, 'jazzcash' | 'easypaisa'>} gateway
 	 */
 	const notice = (gateway) => async (/** @type {any} */ ctx) => {
 		const s = await publicSite(ctx, ctx.params.websiteId);
@@ -598,19 +624,19 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * The bank-transfer proof upload of a payer: a presigned PUT into the merchant's storage, then its confirmation,
-	 * which may name the transfer's `reference` (PLAN 0.8.10 P3).
+	 * The proof upload of a payer of a manual payment whose method takes proofs: a presigned PUT into the merchant's
+	 * storage, then its confirmation, which may name the payment's own `reference` (PLAN 0.8.10 P3).
 	 * @param {'presign' | 'done'} step
 	 */
 	const proofUpload = (step) => async (/** @type {any} */ ctx) => {
 		const { websiteId, paymentId } = ctx.params;
 		const s = await publicSite(ctx, websiteId);
 		const payment = s && isId(paymentId, 'pay') ? await s.store.payments.get(paymentId) : null;
-		if (!s || !payment || payment.gateway !== 'bank_transfer' || payment.status !== 'pending' || payment.proof !== null)
+		if (!s || !payment || !payment.manual || payment.status !== 'pending' || payment.proof !== null)
 			return problem('not_found', 'No proof can be uploaded for this payment.');
-		const bank = await product.settings.values(websiteId, 'bank_transfer');
-		const storage =
-			bank.proofUpload === true && s.on.includes('bank_transfer') ? await product.connections.storage(websiteId) : null;
+		const method = await service.methodOf(s, payment.gateway);
+		const { proofMaxMb } = await product.settings.values(websiteId, 'manual_payments');
+		const storage = method?.proof === true ? await product.connections.storage(websiteId) : null;
 		if (!storage) return problem('storage_not_connected', 'Proofs cannot be uploaded for this website.');
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
 		const prefix = `payments/proofs/${payment.id}.`;
@@ -619,9 +645,9 @@ export const createRoutes = (product) => {
 				? PROOF_TYPES[/** @type {keyof typeof PROOF_TYPES} */ (body.type)]
 				: null;
 			if (!extension) return invalid('type', 'Upload a JPEG, PNG or WebP photo or a PDF.');
-			const max = Number(bank.proofMaxMb) * 1_048_576;
+			const max = Number(proofMaxMb) * 1_048_576;
 			if (!Number.isSafeInteger(body.size) || body.size < 1 || body.size > max)
-				return invalid('size', `The largest proof is ${bank.proofMaxMb} MB.`);
+				return invalid('size', `The largest proof is ${proofMaxMb} MB.`);
 			const signed = storage.presignPut({
 				key: `${prefix}${extension}`,
 				contentType: body.type,
@@ -765,28 +791,29 @@ export const createRoutes = (product) => {
 			feature: 'payment_api',
 			handler: (ctx) => product.events.counts(ctx),
 		}),
-		// the bank details for the merchant's server (PLAN 0.8.10 P1): what the bank page shows, and whether bank
-		// transfer is ready; Ecommerce reads it with its pasted Payments token (E24)
+		// the manual payment methods as payers see them, for the merchant's server (fixed-choices P1, P2): each one's
+		// words, whether it is ready and, with ?currency=, the accounts of that currency; Ecommerce reads it with its
+		// pasted Payments token
 		defineRoute({
 			method: 'GET',
-			path: '/v1/bank-transfer',
+			path: '/v1/manual-methods',
 			auth: 'server',
-			feature: 'bank_transfer',
+			feature: 'manual_payments',
 			database: false,
-			handler: async (ctx) => bankTransfer(await product.settings.values(ctx.websiteId, 'bank_transfer')),
+			handler: manualMethods,
 		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/payments/:id/confirm',
 			auth: 'server',
-			feature: 'bank_transfer',
+			feature: 'manual_payments',
 			handler: confirmPayment,
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/payments/:id/proof',
 			auth: 'server',
-			feature: 'bank_transfer',
+			feature: 'manual_payments',
 			handler: proofLink,
 		}),
 		defineRoute({
@@ -976,6 +1003,19 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'links.read',
 			handler: listLinks,
+		}),
+		// the manual payment methods a new link may offer (their keys and names)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/manual-methods',
+			auth: 'ticket',
+			permission: 'links.manage',
+			database: false,
+			handler: async (ctx) => {
+				const on = await product.featuresOn(ctx.websiteId);
+				const methods = on.includes('manual_payments') ? await product.lists.get(ctx.websiteId, 'manual_methods') : [];
+				return { methods: methods.map((method) => ({ key: method.key, name: method.name, kind: method.kind })) };
+			},
 		}),
 		defineRoute({
 			method: 'POST',

@@ -52,8 +52,15 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 	const t = (key) => config.texts[key] ?? key;
 	const can = (/** @type {string} */ feature) => config.features.includes(feature);
 	const { money, date } = formattersOf(config, host);
-	/** @param {string | null} gateway */
-	const gatewayName = (gateway) => (gateway ? formatText(t(`gateway.${gateway}`), { name: gateway }) : '');
+	/**
+	 * A gateway's name in the texts, or a manual payment method's own name (as the payment took it).
+	 * @param {string | null} gateway @param {string} [methodName]
+	 */
+	const gatewayName = (gateway, methodName = '') =>
+		methodName ||
+		(gateway && Object.hasOwn(config.texts, `gateway.${gateway}`)
+			? formatText(t(`gateway.${gateway}`), { name: gateway })
+			: (gateway ?? ''));
 	return mountWidget({
 		host,
 		theme: config.theme,
@@ -185,10 +192,12 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					});
 					buttons.push(refund);
 				}
-				// a transfer that arrives after the payment was canceled is confirmed too, and is then to be refunded
+				// a manual payment (a transfer, cash on delivery …) is confirmed when its money arrives; money that arrives
+				// after the payment was canceled is confirmed too, and is then to be refunded
 				if (
-					can('bank_transfer') &&
-					payment.gateway === 'bank_transfer' &&
+					can('manual_payments') &&
+					payment.kind !== null &&
+					payment.kind !== 'gateway' &&
 					(payment.status === 'pending' || payment.status === 'voided')
 				) {
 					const confirm = element(doc, 'button', { type: 'button' }, t('admin.confirm'));
@@ -229,7 +238,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 				}
 				/** @type {import('@ss/app-kit/widget').MenuItem[]} */
 				const menu = [];
-				if (can('bank_transfer') && payment.proof)
+				if (can('manual_payments') && payment.proof)
 					menu.push({
 						label: t('admin.proof'),
 						onSelect: async () => {
@@ -258,7 +267,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 							.join(' · ')
 					: '';
 				const fields = fieldGrid(doc, [
-					[t('admin.field.gateway'), gatewayName(payment.gateway)],
+					[t('admin.field.gateway'), gatewayName(payment.gateway, payment.methodName)],
 					[t('admin.field.reference'), payment.reference],
 					[t('admin.field.description'), payment.description],
 					[t('admin.field.name'), customer.name],
@@ -332,7 +341,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 						t(`status.${payment.status}`),
 						payment.refundDue ? t('admin.refundDue') : '',
 						date(payment.createdAt),
-						gatewayName(payment.gateway),
+						gatewayName(payment.gateway, payment.methodName),
 						payment.customer?.email ?? '',
 						payment.refunded > 0
 							? formatText(t('admin.refunded'), { amount: money(payment.refunded, payment.currency) })

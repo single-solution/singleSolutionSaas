@@ -1,96 +1,118 @@
 'use client';
 /**
- * Payments' own parts of the shared dashboard tabs (PLAN 0.4.3): the Overview's gateways ready and what Bank transfer
- * still misses, each gateway's key form in Connections, and the payment API, gateway addresses and snippets in
- * Developers. The other tabs are the shared ones as they are.
+ * Payments' own parts of the shared dashboard tabs (PLAN 0.4.3): the Overview's ways to pay ready and the manual
+ * payment methods payers do not see yet, the manual payment methods editor in Settings, each gateway's key form in
+ * Connections, and the payment API, gateway addresses and snippets in Developers. The other tabs are the shared ones as they are.
  * @module
  */
 import { Button, CodeBlock, Section, Stat } from '@ss/ui';
-import { ConnectionsTab, DevelopersTab, OverviewTab, fill, useLoad } from '@ss/ui/dashboard';
+import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS, bankTransfer } from '../../core/gateways.js';
+import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
+import { methodReady } from '../../core/methods.js';
 import { callbackUrls, createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, FORMS } from './forms.js';
+import { MethodsEditor } from './methods.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').Answer} Answer */
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 
 /**
- * Bank transfer as payers and the merchant's server see it (PLAN 0.8.10 P1, P2), from the website's settings; null
- * while they are not loaded or the feature is off.
- * @param {Answer | null} settings
+ * The manual payment methods payers see and those they do not see yet (a method paid first without an account with
+ * details or instructions), and those that take proofs; null while the list is not loaded.
+ * @param {Answer | null} list the `manual_methods` list
+ * @returns {{ ready: string[], waiting: string[], proof: string[] } | null}
  */
-const bankOf = (settings) => {
-	const feature = settings?.ok
-		? settings.data.features.find((/** @type {{ key: string, on: boolean }} */ item) => item.key === 'bank_transfer' && item.on)
-		: undefined;
-	if (!feature) return null;
-	return bankTransfer(
-		Object.fromEntries(
-			Object.entries(feature.values ?? {}).map(([name, entry]) => [name, /** @type {{ value: unknown }} */ (entry).value]),
-		),
-	);
+const methodsOf = (list) => {
+	if (!list?.ok) return null;
+	/** @type {import('../../core/methods.js').ManualMethod[]} */
+	const methods = list.data.value;
+	return {
+		ready: methods.filter((method) => methodReady(method, null).ready).map((method) => method.key),
+		waiting: methods.filter((method) => !methodReady(method, null).ready).map((method) => method.name || method.key),
+		proof: methods.filter((method) => method.proof).map((method) => method.name || method.key),
+	};
 };
 
 /**
- * Why bank transfer is not offered yet, from what it misses (P2): the details to set, or, with Require bank details
- * off, the instructions.
- * @param {import('../../core/gateways.js').BankTransfer} bank
+ * Whether the website's storage (for payment proofs) is connected; null while not known.
+ * @param {Answer | null} connections
  */
-const bankHelp = (bank) => {
-	if (bank.missing.includes('instructions')) return TEXTS.overview.bankHelpInstructions;
-	const [first = '', second] = bank.missing.map((name) => TEXTS.overview.bankMissing[/** @type {'accountHolder'} */ (name)]);
-	return fill(TEXTS.overview.bankHelpDetails, { missing: second ? fill(TEXTS.overview.and, { first, second }) : first });
-};
+const storageConnected = (connections) =>
+	connections?.ok
+		? connections.data.connections.some(
+				(/** @type {{ name: string, status: string }} */ item) => item.name === 'storage' && item.status === 'connected',
+			)
+		: null;
 
 /**
- * Switched-on gateways whose keys are connected; bank transfer, whose details are settings, counts when it is ready
- * (payers are told how to pay: see {@link bankTransfer}).
+ * Switched-on gateways whose keys are connected, plus the manual payment methods payers see.
  * @param {{ featuresOn: string[], checklist: { connections: Array<{ name: string, status: string }> } }} data
- * @param {Answer | null} settings the website's settings
+ * @param {{ ready: string[] } | null} methods
  */
-const gatewaysReady = (data, settings) =>
+const gatewaysReady = (data, methods) =>
 	GATEWAYS.filter((gateway) => {
 		if (!data.featuresOn.includes(GATEWAY_FEATURES[gateway])) return false;
-		if (gateway === 'bank_transfer') return bankOf(settings)?.ready === true;
 		const name = GATEWAY_CONNECTIONS[gateway];
 		return data.checklist.connections.some((item) => item.name === name && item.status === 'connected');
-	}).length;
+	}).length + (methods?.ready.length ?? 0);
 
 /**
- * Payments' part of the Overview (PLAN 0.6 "Overviews talk"): the gateways ready, and, while Bank transfer is on (the
- * website's settings are read only then), what it still misses before payers see it.
+ * Payments' part of the Overview (PLAN 0.6 "Overviews talk"): the ways to pay ready, and, while Manual payment methods
+ * is on (its list is read only then), the methods payers do not see yet, and Storage missing while a method takes
+ * proofs (the connections are read only then).
  * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
 const usePaymentsOverview = (overview, { websiteId, open }) => {
-	const bankOn = overview?.ok === true && overview.data.featuresOn.includes('bank_transfer');
-	const settings = useLoad(bankOn ? `/v1/dashboard/websites/${websiteId}/settings` : null);
+	const manualOn = overview?.ok === true && overview.data.featuresOn.includes('manual_payments');
+	const list = useLoad(manualOn ? `/v1/dashboard/websites/${websiteId}/lists/manual_methods` : null);
+	const methods = manualOn ? methodsOf(list.answer) : null;
+	const proofs = methods !== null && methods.proof.length > 0;
+	const connections = useLoad(proofs ? `/v1/dashboard/websites/${websiteId}/connections` : null);
 	if (!overview?.ok) return {};
-	const bank = bankOf(settings.answer);
+	const waiting = methods !== null && methods.waiting.length > 0;
+	const noStorage = proofs && storageConnected(connections.answer) === false;
 	const O = TEXTS.overview;
 	return {
-		needs:
-			bank && !bank.ready
+		needs: [
+			...(methods && waiting
 				? [
 						{
-							key: 'bank',
-							tone: 'warning',
-							title: O.noBank.title,
-							effect: bankHelp(bank),
+							key: 'methods',
+							tone: /** @type {const} */ ('warning'),
+							title: O.noMethods.title,
+							effect: fill(O.methodsHelp, { names: methods.waiting.join(', ') }),
 							action: (
 								<Button size="sm" variant="secondary" onClick={() => open('settings')}>
-									{O.noBank.action}
+									{O.noMethods.action}
 								</Button>
 							),
 						},
 					]
-				: [],
-		steps: bank ? [{ key: 'bank', label: O.bankStep, done: bank.ready, onSelect: () => open('settings') }] : [],
+				: []),
+			// proofs need the merchant's storage: said only while a method takes them
+			...(methods && noStorage
+				? [
+						{
+							key: 'storage',
+							tone: /** @type {const} */ ('warning'),
+							title: O.noStorage.title,
+							effect: fill(O.storageHelp, { names: methods.proof.join(', ') }),
+							action: (
+								<Button size="sm" variant="secondary" onClick={() => open('connections')}>
+									{O.noStorage.action}
+								</Button>
+							),
+						},
+					]
+				: []),
+		],
+		steps: methods ? [{ key: 'methods', label: O.methodsStep, done: !waiting, onSelect: () => open('settings') }] : [],
 		numbers: (
 			<Stat
 				label={O.gateways}
-				value={gatewaysReady(overview.data, settings.answer)}
+				value={gatewaysReady(overview.data, methods)}
 				hint={O.gatewaysHelp}
 				icon="coins"
 				kind="connection"
@@ -103,6 +125,23 @@ const usePaymentsOverview = (overview, { websiteId, open }) => {
 const PaymentsOverview = (props) => <OverviewTab {...props} useMore={usePaymentsOverview} />;
 
 /**
+ * Settings: the shared one, with the manual payment methods editor beside the features' settings while the feature is
+ * shown (merchants see switched-on features only; Owner and Support may prepare it while it is off).
+ * @param {TabProps} props
+ */
+const PaymentsSettings = (props) => (
+	<SettingsTab
+		{...props}
+		featureCards={(features) => {
+			const manual = features.find((feature) => feature.key === 'manual_payments');
+			return manual && props.websiteId ? (
+				<MethodsEditor websiteId={String(props.websiteId)} off={manual.on === false} />
+			) : null;
+		}}
+	/>
+);
+
+/**
  * Each gateway's keys and the proof storage have their own form; the tokens keep the one value field.
  * @type {NonNullable<Parameters<typeof ConnectionsTab>[0]['form']>}
  */
@@ -112,8 +151,8 @@ const connectionForm = (item, save) => (item.name in FORMS ? <ConnectionForm nam
 const PaymentsConnections = (props) => <ConnectionsTab {...props} form={connectionForm} />;
 
 /**
- * Developers: the payment API, the gateway addresses of this website, webhooks, links, refunds, bank details and
- * subscriptions, the widget snippets and the ticket request.
+ * Developers: the payment API, the gateway addresses of this website, webhooks, links, refunds, manual payment methods
+ * and subscriptions, the widget snippets and the ticket request.
  * @param {TabProps} props
  */
 function PaymentsDevelopers(props) {
@@ -147,7 +186,7 @@ function PaymentsDevelopers(props) {
 			<Section title={D.more} description={D.moreHelp}>
 				<CodeBlock code={snippets.link} />
 				<CodeBlock code={snippets.refund} />
-				<CodeBlock code={snippets.bank} />
+				<CodeBlock code={snippets.methods} />
 				<CodeBlock code={snippets.subscription} />
 			</Section>
 			<Section title={D.widgets} description={D.widgetsHelp}>
@@ -161,9 +200,10 @@ function PaymentsDevelopers(props) {
 	);
 }
 
-/** Payments' sections in place of the shared Overview, Connections and Developers. */
+/** Payments' sections in place of the shared Overview, Settings, Connections and Developers. */
 export const TABS = Object.freeze({
 	overview: PaymentsOverview,
+	settings: PaymentsSettings,
 	connections: PaymentsConnections,
 	developers: PaymentsDevelopers,
 });

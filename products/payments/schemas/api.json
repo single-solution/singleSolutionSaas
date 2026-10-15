@@ -1,70 +1,5 @@
 {
 	"$schemas": {
-		"BankTransfer": {
-			"type": "object",
-			"description": "The bank details payers see, each '' when not set: show only the ones given.",
-			"required": [
-				"ready",
-				"missing",
-				"accountHolder",
-				"bankName",
-				"accountNumber",
-				"routingNumber",
-				"sortCode",
-				"branchCode",
-				"iban",
-				"bic",
-				"instructions"
-			],
-			"additionalProperties": false,
-			"properties": {
-				"ready": {
-					"type": "boolean",
-					"description": "Payers can pick bank transfer, because they are told how to pay: the account holder and the account number or IBAN are set, or, with Require bank details off, the instructions or an account number or IBAN."
-				},
-				"missing": {
-					"type": "array",
-					"description": "What to set before bank transfer is offered (empty when ready): accountHolder; accountNumber (the account number or the IBAN); with Require bank details off, instructions (or an account number or IBAN).",
-					"items": {
-						"type": "string",
-						"enum": ["accountHolder", "accountNumber", "instructions"]
-					}
-				},
-				"accountHolder": {
-					"type": "string",
-					"description": "The name on the bank account."
-				},
-				"bankName": {
-					"type": "string"
-				},
-				"accountNumber": {
-					"type": "string"
-				},
-				"routingNumber": {
-					"type": "string",
-					"description": "Where the country uses one (for example the ABA routing number in the United States)."
-				},
-				"sortCode": {
-					"type": "string",
-					"description": "Where the country uses one (for example in the United Kingdom and Ireland)."
-				},
-				"branchCode": {
-					"type": "string",
-					"description": "A branch or clearing code where the country uses one (for example a BSB, IFSC or transit number)."
-				},
-				"iban": {
-					"type": "string"
-				},
-				"bic": {
-					"type": "string",
-					"description": "The bank's SWIFT/BIC code."
-				},
-				"instructions": {
-					"type": "string",
-					"description": "The merchant's own words shown under the details (plain text)."
-				}
-			}
-		},
 		"Customer": {
 			"type": "object",
 			"description": "The payer; every member is optional (empty once the person's data was deleted).",
@@ -137,8 +72,8 @@
 		},
 		"Gateway": {
 			"type": "string",
-			"enum": ["stripe", "paypal", "payfast", "payfast_pk", "jazzcash", "easypaisa", "rapid", "bank_transfer", "generic"],
-			"description": "payfast is PayFast South Africa, payfast_pk PayFast Pakistan; generic is your own adapter."
+			"enum": ["stripe", "paypal", "payfast", "payfast_pk", "jazzcash", "easypaisa", "rapid", "generic"],
+			"description": "An online gateway: payfast is PayFast South Africa, payfast_pk PayFast Pakistan; generic is your own adapter."
 		},
 		"Link": {
 			"type": "object",
@@ -192,7 +127,7 @@
 				"gateways": {
 					"type": "array",
 					"items": {
-						"$ref": "#/components/schemas/Gateway"
+						"$ref": "#/components/schemas/Method"
 					},
 					"description": "The gateways it offers (empty: every ready one)."
 				},
@@ -340,6 +275,8 @@
 				"amountText",
 				"refunded",
 				"gateway",
+				"kind",
+				"methodName",
 				"description",
 				"reference",
 				"customer",
@@ -395,13 +332,28 @@
 				"gateway": {
 					"oneOf": [
 						{
-							"$ref": "#/components/schemas/Gateway"
+							"$ref": "#/components/schemas/Method"
 						},
 						{
 							"type": "null"
 						}
 					],
-					"description": "null until a gateway is picked."
+					"description": "The gateway or manual payment method picked; null until one is."
+				},
+				"kind": {
+					"oneOf": [
+						{
+							"$ref": "#/components/schemas/MethodKind"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"description": "The kind of the way picked (null until one is)."
+				},
+				"methodName": {
+					"type": "string",
+					"description": "A manual payment method's name as the payment took it ('' for a gateway)."
 				},
 				"description": {
 					"type": "string",
@@ -466,7 +418,7 @@
 							"type": "null"
 						}
 					],
-					"description": "A bank-transfer proof the payer uploaded (GET …/proof gives a link to it)."
+					"description": "The proof of a manual payment the payer uploaded (GET …/proof gives a link to it)."
 				},
 				"refunds": {
 					"type": "array",
@@ -541,7 +493,7 @@
 							},
 							"reference": {
 								"type": "string",
-								"description": "A bank transfer's reference (proof or confirmation)."
+								"description": "The payment's own reference the payer or you gave (proof or confirmation)."
 							},
 							"note": {
 								"type": "string",
@@ -693,11 +645,11 @@
 			"properties": {
 				"what": {
 					"type": "string",
-					"enum": ["settings", "texts", "theme", "format"]
+					"enum": ["settings", "texts", "theme", "format", "list"]
 				},
 				"key": {
 					"type": "string",
-					"description": "The setting (<feature>.<setting>) or text."
+					"description": "The setting (<feature>.<setting>), text or list (manual_methods)."
 				}
 			}
 		},
@@ -809,6 +761,96 @@
 					"type": "boolean"
 				}
 			}
+		},
+		"Method": {
+			"type": "string",
+			"pattern": "^[a-z][a-z0-9_]{0,39}$",
+			"maxLength": 40,
+			"description": "A way to pay: a gateway id (stripe, paypal, payfast, payfast_pk, jazzcash, easypaisa, rapid, generic) or the key of one of your manual payment methods (for example bank_transfer)."
+		},
+		"MethodKind": {
+			"type": "string",
+			"enum": ["gateway", "pay_first", "on_delivery", "at_pickup"],
+			"description": "gateway: an online gateway; pay_first: a manual method paid before (for example a bank transfer), which may take a proof; on_delivery: paid when the order is delivered; at_pickup: paid when it is picked up."
+		},
+		"ManualMethod": {
+			"type": "object",
+			"description": "One of your manual payment methods as payers see it.",
+			"required": ["key", "name", "kind", "details", "instructions", "proof", "ready", "missing", "accounts"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"description": "Stored on payments as their gateway."
+				},
+				"name": {
+					"type": "string",
+					"description": "The name payers see."
+				},
+				"kind": {
+					"type": "string",
+					"enum": ["pay_first", "on_delivery", "at_pickup"]
+				},
+				"details": {
+					"type": "string",
+					"description": "Shown under the method when payers choose how to pay (plain text)."
+				},
+				"instructions": {
+					"type": "string",
+					"description": "Shown after payers choose it, under the accounts (plain text)."
+				},
+				"proof": {
+					"type": "boolean",
+					"description": "Payers may upload a proof (with Storage connected)."
+				},
+				"ready": {
+					"type": "boolean",
+					"description": "Payers can pick it: always for on_delivery and at_pickup; for pay_first, when an account has a value for the currency, or instructions are set."
+				},
+				"missing": {
+					"type": "array",
+					"description": "What to add before it is offered (empty when ready): account (an account with a value for the currency, or instructions).",
+					"items": {
+						"type": "string",
+						"enum": ["account"]
+					}
+				},
+				"accounts": {
+					"type": "array",
+					"description": "The accounts to pay into: of the asked currency, else those for any currency (every account without currency); only the rows with a value.",
+					"items": {
+						"type": "object",
+						"required": ["label", "currency", "rows"],
+						"additionalProperties": false,
+						"properties": {
+							"label": {
+								"type": "string",
+								"description": "The account's name ('' when none)."
+							},
+							"currency": {
+								"type": "string",
+								"description": "Its ISO 4217 currency, '' for any."
+							},
+							"rows": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": ["label", "value"],
+									"additionalProperties": false,
+									"properties": {
+										"label": {
+											"type": "string"
+										},
+										"value": {
+											"type": "string"
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	},
 	"POST /v1/payments": {
@@ -832,7 +874,7 @@
 				"gateway": {
 					"oneOf": [
 						{
-							"$ref": "#/components/schemas/Gateway"
+							"$ref": "#/components/schemas/Method"
 						},
 						{
 							"type": "null"
@@ -1092,22 +1134,43 @@
 			"$ref": "#/components/schemas/Counts"
 		}
 	},
-	"GET /v1/bank-transfer": {
-		"summary": "The bank details, and whether bank transfer is ready",
+	"GET /v1/manual-methods": {
+		"summary": "Your manual payment methods as payers see them",
+		"description": "Each method's words, whether it is offered and its accounts; with currency, readiness and accounts for that currency (else every account with a value). Kept with GET and PUT /v1/lists/manual_methods.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"currency": {
+					"type": "string",
+					"pattern": "^[A-Z]{3}$",
+					"description": "An ISO 4217 code."
+				}
+			}
+		},
 		"response": {
-			"$ref": "#/components/schemas/BankTransfer"
+			"type": "object",
+			"required": ["methods"],
+			"additionalProperties": false,
+			"properties": {
+				"methods": {
+					"type": "array",
+					"items": {
+						"$ref": "#/components/schemas/ManualMethod"
+					}
+				}
+			}
 		}
 	},
 	"POST /v1/payments/:id/confirm": {
-		"summary": "Confirm a bank transfer arrived",
-		"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you canceled is confirmed too, and is then to be refunded (refundDue).",
+		"summary": "Confirm the money of a manual payment arrived",
+		"description": "Only a pending payment of a manual payment method (409 conflict otherwise): a transfer, cash on delivery, payment at pickup. One you canceled is confirmed too, and is then to be refunded (refundDue).",
 		"body": {
 			"type": "object",
 			"properties": {
 				"reference": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The transfer's reference."
+					"description": "The payment's own reference (for example the transfer's)."
 				},
 				"note": {
 					"type": "string",
@@ -1120,7 +1183,7 @@
 		}
 	},
 	"GET /v1/payments/:id/proof": {
-		"summary": "A link to the payer's bank-transfer proof (5 minutes)",
+		"summary": "A link to the payer's proof of a manual payment (5 minutes)",
 		"description": "404 not_found when the payment has no proof; 503 storage_not_connected without Storage.",
 		"response": {
 			"$ref": "#/components/schemas/ProofLink"
@@ -1185,7 +1248,7 @@
 				"gateways": {
 					"type": "array",
 					"items": {
-						"$ref": "#/components/schemas/Gateway"
+						"$ref": "#/components/schemas/Method"
 					},
 					"description": "Offer only these (default: every ready one)."
 				},
@@ -1358,18 +1421,22 @@
 				},
 				"gateways": {
 					"type": "array",
-					"description": "The gateways the payer may pick now, in order.",
+					"description": "The gateways and manual payment methods the payer may pick now, in order.",
 					"items": {
 						"type": "object",
-						"required": ["id", "name"],
+						"required": ["id", "name", "details"],
 						"additionalProperties": false,
 						"properties": {
 							"id": {
-								"$ref": "#/components/schemas/Gateway"
+								"$ref": "#/components/schemas/Method"
 							},
 							"name": {
 								"type": "string",
 								"description": "The name payers see."
+							},
+							"details": {
+								"type": "string",
+								"description": "A manual payment method's details ('' for a gateway)."
 							}
 						}
 					}
@@ -1389,7 +1456,7 @@
 					"description": "Only when the link has no fixed amount: a decimal in the currency's main unit, for example \"10.50\" (not minor units)."
 				},
 				"gateway": {
-					"$ref": "#/components/schemas/Gateway"
+					"$ref": "#/components/schemas/Method"
 				},
 				"customer": {
 					"type": "object",
@@ -1564,15 +1631,15 @@
 		}
 	},
 	"POST /v1/admin/payments/:id/confirm": {
-		"summary": "Confirm a bank transfer arrived (Payments admin widget)",
-		"description": "Only a pending bank-transfer payment (409 conflict otherwise). One you canceled is confirmed too, and is then to be refunded (refundDue).",
+		"summary": "Confirm the money of a manual payment arrived",
+		"description": "Only a pending payment of a manual payment method (409 conflict otherwise): a transfer, cash on delivery, payment at pickup. One you canceled is confirmed too, and is then to be refunded (refundDue).",
 		"body": {
 			"type": "object",
 			"properties": {
 				"reference": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "The transfer's reference."
+					"description": "The payment's own reference (for example the transfer's)."
 				},
 				"note": {
 					"type": "string",
@@ -1585,7 +1652,7 @@
 		}
 	},
 	"GET /v1/admin/payments/:id/proof": {
-		"summary": "A link to the bank-transfer proof (Payments admin widget)",
+		"summary": "A link to the proof of a manual payment (Payments admin widget)",
 		"description": "404 not_found when the payment has no proof; 503 storage_not_connected without Storage.",
 		"response": {
 			"$ref": "#/components/schemas/ProofLink"
@@ -1610,6 +1677,36 @@
 		},
 		"response": {
 			"$ref": "#/components/schemas/LinkPage"
+		}
+	},
+	"GET /v1/admin/manual-methods": {
+		"summary": "The manual payment methods a new link may offer",
+		"response": {
+			"type": "object",
+			"required": ["methods"],
+			"additionalProperties": false,
+			"properties": {
+				"methods": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"required": ["key", "name", "kind"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							},
+							"kind": {
+								"type": "string",
+								"enum": ["pay_first", "on_delivery", "at_pickup"]
+							}
+						}
+					}
+				}
+			}
 		}
 	},
 	"POST /v1/admin/links": {
@@ -1649,7 +1746,7 @@
 				"gateways": {
 					"type": "array",
 					"items": {
-						"$ref": "#/components/schemas/Gateway"
+						"$ref": "#/components/schemas/Method"
 					},
 					"description": "Offer only these (default: every ready one)."
 				},

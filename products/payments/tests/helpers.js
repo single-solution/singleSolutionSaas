@@ -210,6 +210,14 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		if (response.status !== 204) throw new Error(`setting: ${response.status} ${response.text}`);
 	};
 
+	/** Save the manual payment methods (the dashboard's list editor). @param {unknown} value */
+	const methods = async (value) => {
+		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/manual_methods`, {
+			value,
+		});
+		if (response.status !== 200) throw new Error(`methods: ${response.status} ${response.text}`);
+	};
+
 	/** Server-token call. @param {string} method @param {string} path @param {unknown} [body] @param {Record<string, string>} [headers] */
 	const api = (method, path, body, headers) => call(method, path, { token: server, body, ...(headers ? { headers } : {}) });
 
@@ -238,6 +246,7 @@ export const setup = async ({ start = Date.parse('2026-10-01T10:00:00Z') } = {})
 		adminSession,
 		switchOn,
 		connect,
+		methods,
 		setting,
 		ticket,
 		connectDatabase: () => connect('database', merchantDatabase()),

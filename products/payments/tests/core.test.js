@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { BANK_DETAILS, GATEWAYS, bankTransfer, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import { GATEWAYS, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import {
+	BANK_ROW_LABELS,
+	METHOD_KINDS,
+	PAYMENT_KINDS,
+	accountsFor,
+	checkMethods,
+	defaultMethods,
+	isMethodKey,
+	methodReady,
+	methodView,
+} from '../core/methods.js';
 import { MAX_AMOUNT, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
@@ -63,59 +74,138 @@ describe('gateways', () => {
 		expect(takesCurrency('generic', 'USD', [])).toBe(true);
 	});
 	it('offers the switched-on, ready gateways that take the currency, optionally only a link’s own', () => {
-		const on = ['stripe', 'jazzcash', 'bank_transfer', 'generic_gateway'];
+		const on = ['stripe', 'jazzcash', 'manual_payments', 'generic_gateway'];
 		const ready = (/** @type {string} */ g) => g !== 'generic';
-		expect(gatewaysFor({ on, ready, currency: 'PKR' })).toEqual(['stripe', 'jazzcash', 'bank_transfer']);
-		expect(gatewaysFor({ on, ready, currency: 'USD' })).toEqual(['stripe', 'bank_transfer']);
+		expect(gatewaysFor({ on, ready, currency: 'PKR' })).toEqual(['stripe', 'jazzcash']);
+		expect(gatewaysFor({ on, ready, currency: 'USD' })).toEqual(['stripe']);
 		expect(gatewaysFor({ on, ready, currency: 'PKR', only: ['jazzcash'] })).toEqual(['jazzcash']);
+		// a manual payment method is the merchant's, not a gateway
+		expect(isGateway('bank_transfer')).toBe(false);
 	});
-	it('bank transfer: any country’s details, ready with the account holder and the account number or IBAN (P1, P2)', () => {
-		const empty = Object.fromEntries([...BANK_DETAILS, 'instructions'].map((name) => [name, '']));
-		const uk = { accountHolder: 'Northwind Ltd', accountNumber: '31926819', sortCode: '60-16-13' };
-		const us = { accountHolder: 'Northwind Inc.', accountNumber: '000123456789', routingNumber: '110000000' };
-		const ibanOnly = { accountHolder: 'Northwind GmbH', iban: 'DE89 3704 0044 0532 0130 00', bic: 'COBADEFFXXX' };
-		const local = { accountHolder: 'Northwind', bankName: 'Example Bank', accountNumber: '12345678', branchCode: '062-000' };
-		for (const values of [uk, us, ibanOnly, local])
-			expect(bankTransfer({ requireDetails: true, ...values })).toEqual({ ...empty, ...values, ready: true, missing: [] });
-		// the holder alone, or a number without its holder, is not enough to pay
-		expect(bankTransfer({ requireDetails: true, accountHolder: 'Northwind Ltd', sortCode: '60-16-13' }).ready).toBe(false);
-		expect(bankTransfer({ requireDetails: true, accountNumber: '31926819' }).ready).toBe(false);
-		expect(bankTransfer({ requireDetails: true, iban: ibanOnly.iban, bic: ibanOnly.bic }).ready).toBe(false);
-		// Require bank details off: offered without the details, with the instructions
-		expect(bankTransfer({ requireDetails: false, instructions: 'We send our details by email.' })).toEqual({
-			...empty,
-			instructions: 'We send our details by email.',
+});
+
+describe('manual payment methods (P1, P2)', () => {
+	/** @typedef {import('../core/methods.js').ManualMethod} ManualMethod */
+	/** @param {Partial<ManualMethod>} change @returns {ManualMethod} */
+	const method = (change = {}) => ({ .../** @type {ManualMethod} */ (defaultMethods()[0]), ...change });
+	/** @param {Array<[string, string]>} rows @param {string} [currency] */
+	const account = (rows, currency = '') => ({
+		label: '',
+		currency,
+		rows: rows.map(([label, value]) => ({ label, value })),
+	});
+
+	it('has one fixed set of kinds, the same names every unit uses', () => {
+		expect(METHOD_KINDS).toEqual(['pay_first', 'on_delivery', 'at_pickup']);
+		expect(PAYMENT_KINDS).toEqual(['gateway', 'pay_first', 'on_delivery', 'at_pickup']);
+	});
+	it('is seeded with today’s bank transfer: paid first, proof upload off, one account of the eight bank rows', () => {
+		expect(defaultMethods()).toEqual([
+			{
+				key: 'bank_transfer',
+				name: 'Bank transfer',
+				kind: 'pay_first',
+				details: '',
+				instructions: '',
+				proof: false,
+				accounts: [{ label: '', currency: '', rows: BANK_ROW_LABELS.map((label) => ({ label, value: '' })) }],
+			},
+		]);
+		expect(BANK_ROW_LABELS).toHaveLength(8);
+		// a fresh copy each time (the dashboard edits it)
+		expect(defaultMethods()[0]).not.toBe(defaultMethods()[0]);
+	});
+	it('takes keys that are not gateway ids', () => {
+		for (const key of ['bank_transfer', 'cash_on_delivery', 'upi', 'pix', 'wallet_2']) expect(isMethodKey(key)).toBe(true);
+		for (const key of ['stripe', 'generic', 'Bank', '1st', '', 'a-b', 'x'.repeat(41), 5]) expect(isMethodKey(key)).toBe(false);
+	});
+	it('checks the whole list and trims it', () => {
+		const list = [
+			method({ name: ' Bank transfer ', accounts: [account([['IBAN', ' DE89 3704 0044 0532 0130 00 ']], 'EUR')] }),
+			{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+			{ key: 'pickup', name: 'Pay at the counter', kind: 'at_pickup', details: 'Cash or card at our shop.' },
+		];
+		const checked = checkMethods(list);
+		expect(checked.ok).toBe(true);
+		if (!checked.ok) return;
+		expect(checked.value[0]).toMatchObject({
+			name: 'Bank transfer',
+			accounts: [{ currency: 'EUR', rows: [{ label: 'IBAN', value: 'DE89 3704 0044 0532 0130 00' }] }],
+		});
+		expect(checked.value[1]).toEqual({
+			key: 'cod',
+			name: 'Cash on delivery',
+			kind: 'on_delivery',
+			details: '',
+			instructions: '',
+			proof: false,
+			accounts: [],
+		});
+		expect(checkMethods([])).toEqual({ ok: true, value: [] });
+	});
+	it('refuses a bad list with every error and its path', () => {
+		const checked = checkMethods([
+			{ key: 'stripe', name: '', kind: 'cash' },
+			{ key: 'cod', name: 'A', kind: 'on_delivery', proof: 'yes' },
+			{ key: 'cod', name: 'B', kind: 'on_delivery', accounts: [{ currency: 'usd', rows: [{ label: '', value: 'x' }] }] },
+		]);
+		expect(checked.ok).toBe(false);
+		if (checked.ok) return;
+		expect(checked.errors.map((error) => error.path)).toEqual([
+			'/value/0/key',
+			'/value/0/kind',
+			'/value/0/name',
+			'/value/1/proof',
+			'/value/2/key',
+			'/value/2/accounts/0/currency',
+			'/value/2/accounts/0/rows/0/label',
+		]);
+		expect(checkMethods('x')).toMatchObject({ ok: false });
+		expect(checkMethods(Array.from({ length: 21 }, (_, i) => method({ key: `m${i}` })))).toMatchObject({ ok: false });
+	});
+	it('shows payers the accounts of the payment’s currency, else those for any currency, only the rows filled in', () => {
+		const euro = account(
+			[
+				['IBAN', 'DE89'],
+				['BIC', ''],
+			],
+			'EUR',
+		);
+		const any = account([
+			['Account number', '31926819'],
+			['Sort code', '60-16-13'],
+		]);
+		const empty = account([['Wallet', '']]);
+		const wallet = method({ accounts: [euro, any, empty] });
+		expect(accountsFor(wallet, 'EUR')).toEqual([{ ...euro, rows: [{ label: 'IBAN', value: 'DE89' }] }]);
+		expect(accountsFor(wallet, 'GBP')).toEqual([any]);
+		expect(accountsFor(method({ accounts: [euro] }), 'GBP')).toEqual([]);
+	});
+	it('offers a method paid first only when payers are told how to pay; the others always', () => {
+		expect(methodReady(method(), 'USD')).toEqual({ ready: false, missing: ['account'] });
+		expect(methodReady(method({ instructions: 'We send our details by email.' }), 'USD').ready).toBe(true);
+		const euro = method({ accounts: [account([['IBAN', 'DE89']], 'EUR')] });
+		expect(methodReady(euro, 'EUR').ready).toBe(true);
+		expect(methodReady(euro, 'USD').ready).toBe(false);
+		// any currency (the dashboard): an account with a value counts
+		expect(methodReady(euro, null).ready).toBe(true);
+		for (const kind of /** @type {const} */ (['on_delivery', 'at_pickup']))
+			expect(methodReady(method({ kind, accounts: [] }), 'USD')).toEqual({ ready: true, missing: [] });
+	});
+	it('is seen by payers and the merchant’s server with its words, readiness and matching accounts', () => {
+		const euro = account([['IBAN', 'DE89']], 'EUR');
+		expect(methodView(method({ accounts: [euro], details: 'Pay first.', proof: true }), 'EUR')).toEqual({
+			key: 'bank_transfer',
+			name: 'Bank transfer',
+			kind: 'pay_first',
+			details: 'Pay first.',
+			instructions: '',
+			proof: true,
 			ready: true,
 			missing: [],
+			accounts: [euro],
 		});
-		// a value that is not text, or only spaces, reads as not set
-		expect(bankTransfer({ requireDetails: true, accountHolder: 5, accountNumber: null })).toEqual({
-			...empty,
-			ready: false,
-			missing: ['accountHolder', 'accountNumber'],
-		});
-		expect(bankTransfer({ requireDetails: true, accountHolder: '  ', accountNumber: ' 31926819 ' })).toMatchObject({
-			accountHolder: '',
-			accountNumber: '31926819',
-			ready: false,
-			missing: ['accountHolder'],
-		});
-	});
-	it('bank transfer is offered only when payers are told how to pay, and says what is missing (P2)', () => {
-		expect(bankTransfer({ requireDetails: true })).toMatchObject({ ready: false, missing: ['accountHolder', 'accountNumber'] });
-		expect(bankTransfer({ requireDetails: true, accountHolder: 'Northwind Ltd' }).missing).toEqual(['accountNumber']);
-		expect(bankTransfer({ requireDetails: true, iban: 'DE89 3704 0044 0532 0130 00' }).missing).toEqual(['accountHolder']);
-		// the instructions do not stand in for the details while they are required
-		expect(bankTransfer({ requireDetails: true, instructions: 'Ask us for our details.' }).ready).toBe(false);
-		// Require bank details off: nothing tells the payer how to pay without the instructions, or an account number or IBAN
-		for (const values of [
-			{},
-			{ instructions: ' ' },
-			{ accountHolder: 'Northwind Ltd', bankName: 'Example Bank', bic: 'COBADEFFXXX' },
-		])
-			expect(bankTransfer({ requireDetails: false, ...values })).toMatchObject({ ready: false, missing: ['instructions'] });
-		for (const values of [{ accountNumber: '31926819' }, { iban: 'DE89 3704 0044 0532 0130 00' }])
-			expect(bankTransfer({ requireDetails: false, ...values })).toMatchObject({ ready: true, missing: [] });
+		expect(methodView(method({ accounts: [euro] }), null).accounts).toEqual([euro]);
 	});
 });
 
@@ -150,7 +240,9 @@ describe('payments', () => {
 		expect(ok).toMatchObject({ ok: true, value: { amount: 1000, gateway: null, cancelUrl: null } });
 		expect(checkPaymentInput({ amount: 0, currency: 'EUR' })).toMatchObject({ ok: false, field: 'amount' });
 		expect(checkPaymentInput({ amount: 1, currency: 'usd' })).toMatchObject({ ok: false, field: 'currency' });
-		expect(checkPaymentInput({ amount: 1, currency: 'EUR', gateway: 'cash' })).toMatchObject({ ok: false, field: 'gateway' });
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', gateway: 'Cash!' })).toMatchObject({ ok: false, field: 'gateway' });
+		// a manual payment method's key (whether it exists is checked when the payment is made)
+		expect(checkPaymentInput({ amount: 1, currency: 'EUR', gateway: 'cash' })).toMatchObject({ ok: true });
 		expect(checkPaymentInput({ amount: 1, currency: 'EUR', description: 'x'.repeat(201) })).toMatchObject({
 			field: 'description',
 		});
@@ -175,7 +267,8 @@ describe('payments', () => {
 		expect(checkLinkInput({ title: 't', currency: 'us' })).toMatchObject({ field: 'currency' });
 		expect(checkLinkInput({ title: 't', currency: 'USD', amount: -1 })).toMatchObject({ field: 'amount' });
 		expect(checkLinkInput({ title: 't', currency: 'USD', minAmount: 0 })).toMatchObject({ field: 'minAmount' });
-		expect(checkLinkInput({ title: 't', currency: 'USD', gateways: ['cash'] })).toMatchObject({ field: 'gateways' });
+		expect(checkLinkInput({ title: 't', currency: 'USD', gateways: ['Cash!'] })).toMatchObject({ field: 'gateways' });
+		expect(checkLinkInput({ title: 't', currency: 'USD', gateways: ['stripe', 'cash'] })).toMatchObject({ ok: true });
 		expect(checkLinkInput({ title: 't', currency: 'USD', returnUrl: 1 })).toMatchObject({ field: 'returnUrl' });
 		expect(checkLinkInput({ title: 't', currency: 'USD', reference: 'x'.repeat(121) })).toMatchObject({ field: 'reference' });
 	});

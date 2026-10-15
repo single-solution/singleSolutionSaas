@@ -46,17 +46,19 @@ describe('the website Setup sheet', () => {
 			'sells.subscriptions',
 		]);
 
-		await env.switchOn(['stripe', 'paypal', 'jazzcash', 'bank_transfer', 'payment_api']);
+		await env.switchOn(['stripe', 'paypal', 'jazzcash', 'manual_payments', 'payment_api']);
 		const on = await partOf(env);
-		expect(on.summaries[0].text).toBe(
-			'Stripe: any currency. PayPal: 24 currencies. JazzCash (Pakistan): PKR. Bank transfer (manual): any currency.',
-		);
+		expect(on.summaries[0].text).toBe('Stripe: any currency. PayPal: 24 currencies. JazzCash (Pakistan): PKR.');
 		expect(on.build.map((/** @type {any} */ entry) => entry.feature)).toEqual([
 			'stripe',
 			'paypal',
 			'jazzcash',
-			'bank_transfer',
+			'manual_payments',
 			'payment_api',
+		]);
+		// the manual payment methods in Payments' own words (today's bank transfer until the merchant saves a list)
+		expect(on.features.find((/** @type {any} */ f) => f.key === 'manual_payments').lists).toEqual([
+			{ name: 'manual_methods', title: 'Manual payment methods', summary: 'Bank transfer (paid first)', count: 1 },
 		]);
 		expect(on.build[4]).toEqual({
 			feature: 'payment_api',

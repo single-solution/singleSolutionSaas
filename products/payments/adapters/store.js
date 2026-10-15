@@ -32,14 +32,17 @@ import { createId } from '@ss/contracts';
  * @property {Record<string, string>} metadata
  * @property {string | null} returnUrl
  * @property {string | null} cancelUrl
- * @property {import('../core/gateways.js').Gateway | null} gateway
+ * @property {string | null} gateway a gateway id, or a manual payment method's key (then `manual` says which)
+ * @property {{ name: string, kind: import('../core/methods.js').MethodKind } | null} manual the manual payment method
+ *   as it was when the payment took it (its name and kind), null for a gateway or before a method is chosen
  * @property {import('../core/payments.js').PaymentStatus} status
  * @property {string | null} gatewayRef the gateway's session, order or transaction reference
  * @property {string | null} captureRef what refunds name (Stripe payment intent, PayPal capture, PayFast payment id …)
  * @property {{ kind: 'redirect', url: string } | { kind: 'form', action: string, fields: Array<[string, string]> } | null} checkout
  * @property {number} refunded minor units refunded so far
  * @property {Array<{ id: string, amount: number, reason: string, manual: boolean, by: string, at: Date, gatewayRef: string | null }>} refunds
- * @property {{ key: string, type: string, size: number, at: Date } | null} proof bank-transfer proof in the merchant's storage
+ * @property {{ key: string, type: string, size: number, at: Date } | null} proof the payer's proof of a manual payment, in
+ *   the merchant's storage
  * @property {HistoryEntry[]} history
  * @property {Date | null} paidAt
  * @property {Date | null} voidedAt when the merchant canceled it (status `voided`, K-13); kept once it is paid after,

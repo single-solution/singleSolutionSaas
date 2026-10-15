@@ -80,13 +80,13 @@
 			}
 		},
 		{
-			"key": "bank_transfer",
-			"name": "Bank transfer (manual)",
-			"description": "Shows the merchant's bank details; the payer may upload a proof to the merchant's own storage and the merchant confirms receipt.",
+			"key": "manual_payments",
+			"name": "Manual payment methods",
+			"description": "The merchant's own ways to pay outside a gateway (bank transfer, pay on delivery, pay at pickup …): their details, instructions and accounts; payers may upload a proof to the merchant's own storage and the merchant confirms receipt.",
 			"dependsOn": [],
 			"recommendFor": ["pays.bank_transfer"],
 			"settings": {
-				"$ref": "schemas/bank_transfer.settings.json"
+				"$ref": "schemas/manual_payments.settings.json"
 			}
 		},
 		{
@@ -152,8 +152,8 @@
 		},
 		{
 			"key": "payments.confirm",
-			"name": "Confirm bank transfers",
-			"feature": "bank_transfer"
+			"name": "Confirm manual payments",
+			"feature": "manual_payments"
 		},
 		{
 			"key": "links.read",

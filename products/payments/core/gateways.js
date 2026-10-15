@@ -7,17 +7,7 @@
 
 /** Gateway ids, in the order payers see them. */
 export const GATEWAYS = Object.freeze(
-	/** @type {const} */ ([
-		'stripe',
-		'paypal',
-		'payfast',
-		'payfast_pk',
-		'jazzcash',
-		'easypaisa',
-		'rapid',
-		'bank_transfer',
-		'generic',
-	]),
+	/** @type {const} */ (['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic']),
 );
 
 /** @typedef {typeof GATEWAYS[number]} Gateway */
@@ -31,11 +21,10 @@ export const GATEWAY_FEATURES = Object.freeze({
 	jazzcash: 'jazzcash',
 	easypaisa: 'easypaisa',
 	rapid: 'rapid',
-	bank_transfer: 'bank_transfer',
 	generic: 'generic_gateway',
 });
 
-/** The connection holding each gateway's keys (bank transfer has none: its details are settings). */
+/** The connection holding each gateway's keys. */
 export const GATEWAY_CONNECTIONS = Object.freeze({
 	stripe: 'stripe',
 	paypal: 'paypal',
@@ -44,7 +33,6 @@ export const GATEWAY_CONNECTIONS = Object.freeze({
 	jazzcash: 'jazzcash',
 	easypaisa: 'easypaisa',
 	rapid: 'rapid',
-	bank_transfer: null,
 	generic: 'generic',
 });
 
@@ -78,7 +66,7 @@ const PAYPAL_CURRENCIES = Object.freeze([
 
 /**
  * The currencies each gateway takes; `null` = any code (Stripe refuses the few it does not take when the payment
- * starts; bank transfer is the merchant's own account; the generic adapter takes what its connection lists, else any).
+ * starts; the generic adapter takes what its connection lists, else any).
  * @type {Readonly<Record<Gateway, ReadonlyArray<string> | null>>}
  */
 export const GATEWAY_CURRENCIES = Object.freeze({
@@ -89,7 +77,6 @@ export const GATEWAY_CURRENCIES = Object.freeze({
 	jazzcash: Object.freeze(['PKR']),
 	easypaisa: Object.freeze(['PKR']),
 	rapid: Object.freeze(['PKR']),
-	bank_transfer: null,
 	generic: null,
 });
 
@@ -115,8 +102,8 @@ export const takesCurrency = (gateway, currency, own = null) => {
 };
 
 /**
- * The gateways a payer may pick for a payment: switched on, connected (bank transfer: ready, see {@link bankTransfer})
- * and taking the currency, in {@link GATEWAYS} order.
+ * The gateways a payer may pick for a payment: switched on, connected and taking the currency, in {@link GATEWAYS}
+ * order (manual methods are the merchant's list, `./methods.js`).
  * @param {{ on: readonly string[], ready: (gateway: Gateway) => boolean, currency: string, own?: ReadonlyArray<string> | null,
  *   only?: readonly string[] | null }} input `only`: a payment link's own choice of gateways
  * @returns {Gateway[]}
@@ -129,55 +116,3 @@ export const gatewaysFor = ({ on, ready, currency, own = null, only = null }) =>
 			takesCurrency(gateway, currency, own) &&
 			ready(gateway),
 	);
-
-/**
- * The bank details a merchant may give, in the order payers see them: what any country's bank transfer needs (the
- * account holder, the account number or IBAN) and the codes some countries add (routing number, sort code, branch
- * code, SWIFT/BIC). Each is a `bank_transfer` setting and a payer-facing text `bank.<name>`.
- */
-export const BANK_DETAILS = /** @type {const} */ ([
-	'accountHolder',
-	'bankName',
-	'accountNumber',
-	'routingNumber',
-	'sortCode',
-	'branchCode',
-	'iban',
-	'bic',
-]);
-
-/**
- * What a merchant still has to set before bank transfer is offered (P2): `accountHolder`, `accountNumber` (the account
- * number or the IBAN), or, with Require bank details off, `instructions` (or an account number or IBAN).
- * @typedef {'accountHolder' | 'accountNumber' | 'instructions'} BankMissing
- */
-
-/** @typedef {Record<(typeof BANK_DETAILS)[number] | 'instructions', string> & { ready: boolean, missing: BankMissing[] }} BankTransfer */
-
-/**
- * Bank transfer as the payer and the merchant's server see it (PLAN 0.8.10 P1, P2): the bank details from the
- * `bank_transfer` settings ('' when not set or only spaces), whether it is ready, and what is missing when it is not.
- * It is ready only when the payer is told how to pay: the account holder and the account number or IBAN are set, or,
- * with `requireDetails` off, the instructions (for example "we send our details by email") or an account to pay into.
- * @param {Readonly<Record<string, unknown>>} values the resolved `bank_transfer` settings
- * @returns {BankTransfer}
- */
-export const bankTransfer = (values) => {
-	/** @param {string} name */
-	const text = (name) => (typeof values[name] === 'string' ? /** @type {string} */ (values[name]).trim() : '');
-	const details = /** @type {Record<(typeof BANK_DETAILS)[number] | 'instructions', string>} */ (
-		Object.fromEntries([...BANK_DETAILS, 'instructions'].map((name) => [name, text(name)]))
-	);
-	const account = details.accountNumber !== '' || details.iban !== '';
-	/** @type {BankMissing[]} */
-	const missing =
-		values.requireDetails === false
-			? account || details.instructions !== ''
-				? []
-				: ['instructions']
-			: [
-					...(details.accountHolder === '' ? /** @type {const} */ (['accountHolder']) : []),
-					...(account ? [] : /** @type {const} */ (['accountNumber'])),
-				];
-	return { ready: missing.length === 0, missing, ...details };
-};

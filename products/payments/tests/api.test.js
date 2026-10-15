@@ -6,6 +6,41 @@ import { webhookSignature } from '../adapters/gateways/rapid.js';
 import { signTimestamped } from '../adapters/util.js';
 import { ADMIN_ORIGIN, ALL, BASE, BUCKET, DOMAIN, NOTIFY_BASE, ORIGIN, setup } from './helpers.js';
 
+/** Today's bank transfer, filled in: paid first, proof on, one account for any currency. */
+const BANK = [
+	{
+		key: 'bank_transfer',
+		name: 'Bank transfer',
+		kind: 'pay_first',
+		details: '',
+		instructions: '',
+		proof: true,
+		accounts: [
+			{
+				label: '',
+				currency: '',
+				rows: [
+					{ label: 'Account holder', value: 'Shop Ltd' },
+					{ label: 'Bank', value: '' },
+					{ label: 'Account number', value: '0123-456789' },
+				],
+			},
+		],
+	},
+];
+
+/** More of the merchant's own methods: a euro transfer, cash on delivery and payment at the counter. */
+const MORE = [
+	{
+		key: 'sepa',
+		name: 'SEPA transfer',
+		kind: 'pay_first',
+		accounts: [{ label: 'Euro account', currency: 'EUR', rows: [{ label: 'IBAN', value: 'DE89 3704 0044 0532 0130 00' }] }],
+	},
+	{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+	{ key: 'counter', name: 'Pay at the counter', kind: 'at_pickup', details: 'Cash or card at our counter.' },
+];
+
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
 
@@ -130,8 +165,7 @@ describe('before setup', () => {
 		expect(await env.connect('generic', GENERIC)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('storage', STORAGE)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('notifications', env.notificationsToken)).toMatchObject({ status: 'connected' });
-		await env.setting('bank_transfer', 'accountNumber', '0123-456789');
-		await env.setting('bank_transfer', 'accountHolder', 'Shop Ltd');
+		await env.methods(BANK);
 	});
 });
 
@@ -608,8 +642,8 @@ describe('the other gateways', () => {
 	});
 });
 
-describe('bank transfer', () => {
-	it('shows the bank details, takes a proof and is confirmed by the merchant', async () => {
+describe('manual payment methods (P1, P2)', () => {
+	it('shows a method paid first with its account, takes a proof and is confirmed by the merchant', async () => {
 		env.gateways.respond(BUCKET, (c) =>
 			c.method === 'HEAD' && c.path.includes('payments/proofs/')
 				? { status: 200, headers: { 'content-type': 'image/png', 'content-length': '1234' } }
@@ -656,14 +690,21 @@ describe('bank transfer', () => {
 			reference: 'TRX-5501',
 			note: 'Seen in the bank app',
 		});
-		expect(confirmed.json).toMatchObject({ status: 'paid', proof: { type: 'image/png', size: 1234 } });
+		expect(confirmed.json).toMatchObject({
+			status: 'paid',
+			gateway: 'bank_transfer',
+			kind: 'pay_first',
+			methodName: 'Bank transfer',
+			proof: { type: 'image/png', size: 1234 },
+		});
 		expect(confirmed.json.history.at(-1)).toMatchObject({
 			event: 'paid',
 			by: 'Server',
 			reference: 'TRX-5501',
 			note: 'Seen in the bank app',
 		});
-		const logged = await env.api('GET', `/v1/activity?target=${payment.id}&action=payment.transfer_confirmed`);
+		const logged = await env.api('GET', `/v1/activity?target=${payment.id}&action=payment.manual_confirmed`);
+		expect(logged.json.items[0].detail).toContain('Bank transfer of');
 		expect(logged.json.items[0].detail).toContain('(reference TRX-5501)');
 		expect((await env.api('POST', `/v1/payments/${payment.id}/confirm`, {})).status).toBe(409);
 		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, { amount: 100 });
@@ -673,169 +714,128 @@ describe('bank transfer', () => {
 	});
 
 	it('without proof upload the page shows only the details', async () => {
-		await env.setting('bank_transfer', 'proofUpload', false);
+		await env.methods([{ ...BANK[0], proof: false }]);
 		const payment = await createPayment({ gateway: 'bank_transfer' });
 		const details = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(details.text).not.toContain('data-proof');
 		expect(
 			(await env.call('POST', `/pay/${env.websiteId}/${payment.id}/proof`, { body: { type: 'image/png', size: 1 } })).status,
 		).toBe(503);
-		await env.setting('bank_transfer', 'proofUpload', true);
+		await env.methods(BANK);
 	});
 
-	it('serves the bank details to the merchant’s server, kept through the settings API (P1, K1)', async () => {
-		const IBAN = 'GB29 NWBK 6016 1331 9268 19';
-		const read = () => env.api('GET', '/v1/bank-transfer');
-		expect((await read()).json).toEqual({
-			ready: true,
-			missing: [],
-			accountHolder: 'Shop Ltd',
-			bankName: '',
-			accountNumber: '0123-456789',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: '',
-			bic: '',
-			instructions: '',
-		});
-		expect((await env.call('GET', '/v1/bank-transfer', { token: env.browser, origin: ORIGIN })).status).toBe(401);
-		const saved = await env.api('PUT', '/v1/settings/bank_transfer.iban', { value: IBAN });
-		expect(saved.json).toMatchObject({ value: IBAN, source: 'website' });
-		expect((await env.api('PUT', '/v1/settings/bank_transfer.iban', { value: 'x'.repeat(61) })).status).toBe(422);
-		await env.api('DELETE', '/v1/settings/bank_transfer.accountNumber');
-		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '', iban: IBAN });
-		await env.api('DELETE', '/v1/settings/bank_transfer.iban');
-		expect((await read()).json).toMatchObject({ ready: false, missing: ['accountNumber'] });
-		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'bank_transfer' });
+	it('is the merchant’s own list: seeded with today’s bank transfer, kept through the list API and the dashboard', async () => {
+		const cookie = await env.adminSession();
+		const path = `/v1/dashboard/websites/${env.websiteId}/lists/manual_methods`;
+		// before a list is saved: today's bank transfer with its eight empty bank rows (not offered until filled in)
+		const seeded = await env.product.lists.get('web_never_saved', 'manual_methods');
+		// proof upload is off until the merchant turns it on (it needs their storage)
+		expect(seeded.map((m) => [m.key, m.kind, m.proof, m.accounts[0]?.rows.length])).toEqual([
+			['bank_transfer', 'pay_first', false, 8],
+		]);
+		const shown = await env.dashboard(cookie, 'GET', path);
+		const kit = await env.api('GET', '/v1/lists/manual_methods');
+		expect(kit.json.value).toEqual(shown.json.value);
+		expect(kit.json.value.map((/** @type {any} */ m) => [m.key, m.kind])).toEqual([['bank_transfer', 'pay_first']]);
+		// a bad list: every error with its path
+		const bad = await env.dashboard(cookie, 'PUT', path, { value: [{ key: 'stripe', name: '', kind: 'cash' }] });
+		expect(bad.status).toBe(422);
+		expect(bad.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/value/0/key', '/value/0/kind', '/value/0/name']);
+		expect(
+			(await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/lists/nope`, { value: [] })).status,
+		).toBe(404);
+		const saved = await env.dashboard(cookie, 'PUT', path, { value: [...BANK, ...MORE] });
+		expect(saved.status).toBe(200);
+		expect(saved.json.value).toHaveLength(4);
+		const recent = await env.dashboard(cookie, 'GET', `/v1/dashboard/websites/${env.websiteId}/overview`);
+		expect(JSON.stringify(recent.json)).toContain('Manual payment methods: changed');
+		// the merchant's server: as payers of a currency see them
+		const usd = await env.api('GET', '/v1/manual-methods?currency=USD');
+		expect(usd.json.methods.map((/** @type {any} */ m) => [m.key, m.ready])).toEqual([
+			['bank_transfer', true],
+			['sepa', false],
+			['cod', true],
+			['counter', true],
+		]);
+		expect(usd.json.methods[0].accounts).toEqual([
+			{
+				label: '',
+				currency: '',
+				rows: [
+					{ label: 'Account holder', value: 'Shop Ltd' },
+					{ label: 'Account number', value: '0123-456789' },
+				],
+			},
+		]);
+		const eur = await env.api('GET', '/v1/manual-methods?currency=EUR');
+		expect(eur.json.methods[1]).toMatchObject({ key: 'sepa', ready: true, accounts: [{ label: 'Euro account' }] });
+		expect((await env.api('GET', '/v1/manual-methods?currency=eur')).status).toBe(422);
+		expect((await env.call('GET', '/v1/manual-methods', { token: env.browser, origin: ORIGIN })).status).toBe(401);
+		// payers pick from the ready ones after the gateways; a method not ready for the currency is not offered
+		const choice = await createPayment({ currency: 'USD' });
+		const html = (await page(`/pay/${env.websiteId}/${choice.id}`)).text;
+		const offered = [...html.matchAll(/name="gateway" value="([^"]+)"/g)].map(([, id]) => id);
+		expect(offered.slice(-3)).toEqual(['bank_transfer', 'cod', 'counter']);
+		expect(html).toContain('Cash or card at our counter.');
+		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'sepa' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
-		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
-		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '0123-456789' });
-		// the account holder is needed too
-		await env.api('DELETE', '/v1/settings/bank_transfer.accountHolder');
-		expect((await read()).json).toMatchObject({
-			ready: false,
-			missing: ['accountHolder'],
-			accountHolder: '',
-			accountNumber: '0123-456789',
-		});
-		await env.api('PUT', '/v1/settings/bank_transfer.accountHolder', { value: 'Shop Ltd' });
-		expect((await read()).json.ready).toBe(true);
+		const unknown = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'nope' });
+		expect(unknown.json.type).toMatch(/gateway_not_ready$/);
+		// a method paid on delivery: its page says so, takes no proof, and the merchant confirms the cash
+		const cod = await createPayment({ gateway: 'cod', reference: 'ORD-8' });
+		expect(cod).toMatchObject({ gateway: 'cod', kind: 'on_delivery', methodName: 'Cash on delivery' });
+		const codPage = (await page(`/pay/${env.websiteId}/${cod.id}`)).text;
+		expect(codPage).toContain('when your order is delivered');
+		expect(codPage).not.toContain('data-proof');
+		expect(
+			(await env.call('POST', `/pay/${env.websiteId}/${cod.id}/proof`, { body: { type: 'image/png', size: 1 } })).status,
+		).toBe(503);
+		const cash = await env.api('POST', `/v1/payments/${cod.id}/confirm`, { note: 'Paid to the courier' });
+		expect(cash.json).toMatchObject({ status: 'paid', kind: 'on_delivery' });
+		// a gateway's payment is not confirmed by hand
+		const card = await createPayment({ gateway: 'stripe' });
+		expect((await env.api('POST', `/v1/payments/${card.id}/confirm`, {})).status).toBe(409);
+		// a method renamed later: its payments keep the name they were made with
+		await env.methods([{ ...BANK[0], name: 'Wire' }, ...MORE]);
+		expect((await env.api('GET', `/v1/payments/${cod.id}`)).json.methodName).toBe('Cash on delivery');
+		// Manual payment methods off: none offered, the list cannot be changed by the merchant's server
+		await env.switchOn(ALL.filter((key) => key !== 'manual_payments'));
+		expect((await env.api('PUT', '/v1/lists/manual_methods', { value: BANK })).json.type).toMatch(/feature_off$/);
+		const off = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'bank_transfer' });
+		expect(off.json.type).toMatch(/gateway_not_ready$/);
+		await env.switchOn(ALL);
+		await env.methods(BANK);
+		// a new minute: payer pages are limited per visitor and minute, and this test opened several
+		env.advance(61_000);
 	});
 
-	it('shows payers only the bank details the merchant gave, each under its editable text (UK, US, IBAN only, local)', async () => {
-		const set = (/** @type {Record<string, string>} */ values) =>
-			Promise.all(
-				['accountHolder', 'bankName', 'accountNumber', 'routingNumber', 'sortCode', 'branchCode', 'iban', 'bic'].map(
-					(name) =>
-						name in values
-							? env.api('PUT', `/v1/settings/bank_transfer.${name}`, { value: values[name] })
-							: env.api('DELETE', `/v1/settings/bank_transfer.${name}`),
-				),
-			);
-		/** The labels and values of the bank page's details. */
-		const shown = async () => {
+	it('shows payers only the rows the merchant filled in, under the merchant’s own labels, for any country', async () => {
+		/** The labels and values of the method page's details. @param {Array<[string, string]>} rows */
+		const shown = async (rows) => {
+			await env.methods([
+				{ ...BANK[0], accounts: [{ label: '', currency: '', rows: rows.map(([label, value]) => ({ label, value })) }] },
+			]);
 			const payment = await createPayment({ gateway: 'bank_transfer', reference: 'SH-2026-0043' });
 			const html = (await page(`/pay/${env.websiteId}/${payment.id}`)).text;
 			return [...html.matchAll(/<dt>([^<]*)<\/dt><dd>([^<]*)<\/dd>/g)].map(([, label, value]) => `${label}: ${value}`);
 		};
-		await set({ accountHolder: 'Northwind Ltd', bankName: 'Example Bank', accountNumber: '31926819', sortCode: '60-16-13' });
-		expect(await shown()).toEqual([
-			'Account holder: Northwind Ltd',
-			'Bank: Example Bank',
-			'Account number: 31926819',
-			'Sort code: 60-16-13',
-			'Reference: SH-2026-0043',
-		]);
-		await set({ accountHolder: 'Northwind Inc.', accountNumber: '000123456789', routingNumber: '110000000' });
-		expect(await shown()).toEqual([
-			'Account holder: Northwind Inc.',
-			'Account number: 000123456789',
-			'Routing number: 110000000',
-			'Reference: SH-2026-0043',
-		]);
-		await set({ accountHolder: 'Northwind GmbH', iban: 'DE89 3704 0044 0532 0130 00', bic: 'COBADEFFXXX' });
-		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({
-			ready: true,
-			accountNumber: '',
-			iban: 'DE89 3704 0044 0532 0130 00',
-		});
-		expect(await shown()).toEqual([
-			'Account holder: Northwind GmbH',
-			'IBAN: DE89 3704 0044 0532 0130 00',
-			'SWIFT/BIC: COBADEFFXXX',
-			'Reference: SH-2026-0043',
-		]);
-		// a local account with a branch code, its label renamed in Settings → Texts
-		const cookie = await env.adminSession();
-		const renamed = await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/texts/bank.branchCode`, {
-			value: 'BSB',
-		});
-		expect(renamed.status).toBe(204);
-		await set({ accountHolder: 'Northwind Pty Ltd', accountNumber: '12345678', branchCode: '062-000' });
-		expect(await shown()).toEqual([
-			'Account holder: Northwind Pty Ltd',
-			'Account number: 12345678',
-			'BSB: 062-000',
-			'Reference: SH-2026-0043',
-		]);
-		await env.dashboard(cookie, 'DELETE', `/v1/dashboard/websites/${env.websiteId}/texts/bank.branchCode`);
-		await set({ accountHolder: 'Shop Ltd', accountNumber: '0123-456789' });
-	});
-
-	it('is ready without details when they are not required, with only its instructions (P2)', async () => {
-		const settings = await env.api('GET', '/v1/settings');
-		const bank = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'bank_transfer');
-		expect(bank.values.requireDetails).toEqual({ value: true, source: 'built-in' });
-		for (const name of ['accountNumber', 'accountHolder']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
-		expect((await env.api('GET', '/v1/bank-transfer')).json.ready).toBe(false);
-		await env.api('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
-		// with neither instructions nor an account to pay into, nothing tells the payer how to pay: not offered
-		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, missing: ['instructions'] });
-		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'bank_transfer' });
-		expect(refused.json.type).toMatch(/gateway_not_ready$/);
-		const offered = await createPayment({ currency: 'EUR' });
-		expect((await page(`/pay/${env.websiteId}/${offered.id}`)).text).not.toContain('value="bank_transfer"');
-		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by email.' });
-		expect((await env.api('GET', '/v1/bank-transfer')).json).toEqual({
-			ready: true,
-			missing: [],
-			accountHolder: '',
-			bankName: '',
-			accountNumber: '',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: '',
-			bic: '',
-			instructions: 'We send our bank details by email.',
-		});
-		const payment = await createPayment({ gateway: 'bank_transfer', reference: 'ORD-7' });
-		const shown = (await page(`/pay/${env.websiteId}/${payment.id}`)).text;
-		expect(shown).toContain('We send our bank details by email.');
-		expect(shown).toContain('as explained below');
-		expect(shown).toContain('ORD-7');
-		expect(shown).not.toContain('Account number');
-		const choice = await createPayment({ currency: 'EUR' });
-		expect((await page(`/pay/${env.websiteId}/${choice.id}`)).text).toContain('value="bank_transfer"');
-		// a bank name is no account to pay into: the payer still pays as the instructions explain
-		await env.api('PUT', '/v1/settings/bank_transfer.bankName', { value: 'Example Bank' });
-		const named = (await page(`/pay/${env.websiteId}/${(await createPayment({ gateway: 'bank_transfer' })).id}`)).text;
-		expect(named).toContain('as explained below');
-		expect(named).toContain('<dt>Bank</dt><dd>Example Bank</dd>');
-		// an account number alone is enough to pay into
-		await env.api('DELETE', '/v1/settings/bank_transfer.instructions');
-		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
-		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, missing: [] });
-		const numbered = (await page(`/pay/${env.websiteId}/${(await createPayment({ gateway: 'bank_transfer' })).id}`)).text;
-		expect(numbered).toContain('to the account below');
-		for (const name of ['requireDetails', 'instructions', 'bankName'])
-			await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
-		// a new minute: payer pages are limited per visitor and minute, and this test opened several
+		expect(
+			await shown([
+				['Account holder', 'Northwind Ltd'],
+				['Bank', ''],
+				['Account number', '31926819'],
+				['Sort code', '60-16-13'],
+			]),
+		).toEqual(['Account holder: Northwind Ltd', 'Account number: 31926819', 'Sort code: 60-16-13', 'Reference: SH-2026-0043']);
+		expect(
+			await shown([
+				['Name', 'Northwind'],
+				['UPI ID', 'northwind@bank'],
+			]),
+		).toEqual(['Name: Northwind', 'UPI ID: northwind@bank', 'Reference: SH-2026-0043']);
+		expect(await shown([['BSB', '062-000']])).toEqual(['BSB: 062-000', 'Reference: SH-2026-0043']);
+		await env.methods(BANK);
 		env.advance(61_000);
-		await env.setting('bank_transfer', 'accountNumber', '0123-456789');
-		await env.setting('bank_transfer', 'accountHolder', 'Shop Ltd');
-		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, accountHolder: 'Shop Ltd' });
 	});
 });
 
@@ -1322,13 +1322,13 @@ describe('kit features (PLAN 0.8.10)', () => {
 
 		const log = (await env.api('GET', '/v1/activity?actor=staff_7')).json.items;
 		expect(log.map((/** @type {any} */ e) => e.action).sort()).toEqual([
+			'payment.manual_confirmed',
 			'payment.refunded',
-			'payment.transfer_confirmed',
 			'subscription.cancelled',
 		]);
 		for (const entry of log) expect(entry.actor).toEqual({ kind: 'user', id: 'staff_7', name: 'Zoë Martin', role: 'Manager' });
 		const byAction = Object.fromEntries(log.map((/** @type {any} */ e) => [e.action, e]));
-		expect(byAction['payment.transfer_confirmed']).toMatchObject({
+		expect(byAction['payment.manual_confirmed']).toMatchObject({
 			target: transfer.id,
 			label: 'INV-77',
 			detail: 'Bank transfer of USD 2,500.00 confirmed',
@@ -1414,25 +1414,13 @@ describe('kit features (PLAN 0.8.10)', () => {
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('USD 2,500.00');
 	});
 
-	it('serves a store’s payment setup to its server: features, bank settings and gateway keys (K1)', async () => {
+	it('serves a store’s payment setup to its server: features, manual methods and gateway keys (K1)', async () => {
 		const features = await env.api('GET', '/v1/features');
 		expect(features.json.features.map((/** @type {any} */ feature) => feature.key)).toEqual(ALL);
 		const settings = await env.api('GET', '/v1/settings');
-		const bank = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'bank_transfer');
-		expect(Object.keys(bank.values)).toEqual([
-			'accountHolder',
-			'bankName',
-			'accountNumber',
-			'routingNumber',
-			'sortCode',
-			'branchCode',
-			'iban',
-			'bic',
-			'requireDetails',
-			'instructions',
-			'proofUpload',
-			'proofMaxMb',
-		]);
+		const manual = settings.json.features.find((/** @type {any} */ feature) => feature.key === 'manual_payments');
+		expect(Object.keys(manual.values)).toEqual(['proofMaxMb']);
+		expect((await env.api('GET', '/v1/lists/manual_methods')).json.value).toEqual(BANK);
 		const listed = await env.api('GET', '/v1/connections');
 		const byName = Object.fromEntries(listed.json.connections.map((/** @type {any} */ c) => [c.name, c]));
 		for (const name of ['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic', 'storage'])
@@ -1488,7 +1476,7 @@ describe('data rights, statuses and public files', () => {
 			'<td><code>customer</code></td><td><a href="#schema-CustomerInput">CustomerInput</a></td>',
 			'<h4>Answer 201 (JSON)</h4><p><a href="#schema-Payment">Payment</a></p>',
 			'<td><code>refunds[].manual</code></td><td>boolean</td><td>yes</td>',
-			'<td><code>gateway</code></td><td><a href="#schema-Gateway">Gateway</a> or null</td>',
+			'<td><code>gateway</code></td><td><a href="#schema-Method">Method</a> or null</td>',
 			'<td><code>status</code></td><td>query</td><td>&#34;pending&#34; | &#34;paid&#34;',
 			'<td><code>Idempotency-Key</code></td><td>header</td><td>string</td><td>no</td><td>A key of your own per request',
 			'Optional headers: <code>SS-Actor-Id</code>',
