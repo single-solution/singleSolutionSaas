@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { defineRoute } from '../src/index.js';
 import { noopLogger } from '../src/logger.js';
-import { ALERT_KEEP_MS, MAX_RECIPIENTS, RETRY_MS, alertOutcome, createStaffAlerts, recipientOf } from '../src/staff-alerts.js';
+import {
+	ALERT_KEEP_MS,
+	MAX_RECIPIENTS,
+	RETRY_MS,
+	addressOf,
+	alertOutcome,
+	createStaffAlerts,
+	recipientOf,
+} from '../src/staff-alerts.js';
 import { manifest, openDb, productRoutes, setup } from './helpers.js';
 
 /** The sample product with a staff-alerts feature (its settings as K6 names them). */
@@ -24,6 +32,8 @@ const alertsManifest = () => {
 						staffPermission: { type: 'string', title: 'Staff with this permission', default: '', maxLength: 64 },
 						phoneChannel: { type: 'string', title: 'Phones get', default: 'whatsapp', enum: ['whatsapp', 'sms'] },
 						adminUrl: { type: 'string', title: 'Admin link', default: '', maxLength: 500 },
+						staffPush: { type: 'boolean', title: 'Staff push too', default: false },
+						maxRecipients: { type: 'integer', title: 'People per alert', default: 20, minimum: 1, maximum: 200 },
 					},
 				},
 			},
@@ -92,23 +102,68 @@ const start = async () => {
 };
 
 describe('staff alerts (K6)', () => {
-	it('reads addresses as email or phone recipients', () => {
-		expect(recipientOf(' Ops@Shop.Example.com ')).toEqual({
+	it('reads addresses as email or phone addresses', () => {
+		expect(addressOf(' Ops@Shop.Example.com ')).toEqual({
 			key: 'e:ops@shop.example.com',
 			to: { email: 'ops@shop.example.com' },
 		});
-		expect(recipientOf('+44 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
-		expect(recipientOf('0044 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
+		expect(addressOf('+44 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
+		expect(addressOf('0044 7700 900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
 		// the shared normalizer: a trunk 0 after the calling code is dropped, so one number has one key
-		expect(recipientOf('+44 (0)7700-900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
-		expect(recipientOf('+44 020 7946 0018')).toEqual({ key: 'p:442079460018', to: { phone: '+442079460018' } });
-		expect(recipientOf('+999 1234 5678')).toBeNull();
+		expect(addressOf('+44 (0)7700-900123')).toEqual({ key: 'p:447700900123', to: { phone: '+447700900123' } });
+		expect(addressOf('+44 020 7946 0018')).toEqual({ key: 'p:442079460018', to: { phone: '+442079460018' } });
+		expect(addressOf('+999 1234 5678')).toBeNull();
 		// Notifications sends to international numbers only: a local number is left out
-		expect(recipientOf('07700-900123')).toBeNull();
-		expect(recipientOf('+07700 900123')).toBeNull();
-		expect(recipientOf('nope')).toBeNull();
-		expect(recipientOf('12-3')).toBeNull();
-		expect(recipientOf(7)).toBeNull();
+		expect(addressOf('07700-900123')).toBeNull();
+		expect(addressOf('+07700 900123')).toBeNull();
+		expect(addressOf('nope')).toBeNull();
+		expect(addressOf('12-3')).toBeNull();
+		expect(addressOf(7)).toBeNull();
+	});
+
+	it('gives each recipient its channel: named first, else email for an address and phoneChannel for a phone (K8)', () => {
+		expect(recipientOf('ops@shop.example.com')).toEqual({
+			key: 'email|e:ops@shop.example.com',
+			channel: 'email',
+			to: { email: 'ops@shop.example.com' },
+		});
+		expect(recipientOf('+44 7700 900123')).toMatchObject({ channel: 'whatsapp', to: { phone: '+447700900123' } });
+		expect(recipientOf('+44 7700 900123', 'sms')).toMatchObject({ channel: 'sms' });
+		expect(recipientOf('SMS: +44 7700 900123')).toMatchObject({ channel: 'sms', to: { phone: '+447700900123' } });
+		expect(recipientOf('whatsapp:+44 7700 900123', 'sms')).toMatchObject({ channel: 'whatsapp' });
+		expect(recipientOf('email:ops@shop.example.com')).toMatchObject({ channel: 'email' });
+		expect(recipientOf('push:usr_01')).toEqual({
+			key: 'staff_push|u:usr_01',
+			channel: 'staff_push',
+			to: { staffId: 'usr_01' },
+		});
+		// a channel that does not fit the address, an unknown channel or a bad id is left out
+		expect(recipientOf('email:+44 7700 900123')).toBeNull();
+		expect(recipientOf('sms:ops@shop.example.com')).toBeNull();
+		expect(recipientOf('fax:+44 7700 900123')).toBeNull();
+		expect(recipientOf('push:not an id')).toBeNull();
+	});
+
+	it('send each recipient on its own channel, staff push to Accounts staff, and at most the people the setting allows', async () => {
+		const { set, alert, notifications, accounts } = await start();
+		await set('recipients', ['ops@shop.example.com', 'sms:+44 7700 900123', 'whatsapp:+44 7700 900123', 'push:usr_9']);
+		accounts.setUsers([{ id: 'u1', email: 'sana@shop.example.com', permissions: ['notes:notes.read'] }]);
+		await set('staffPermission', 'notes.read');
+		await set('staffPush', true);
+		expect(await alert()).toBe(6);
+		expect(notifications.messages.map((m) => [m.channel, m.body.to])).toEqual([
+			['email', { email: 'ops@shop.example.com' }],
+			['sms', { phone: '+447700900123' }],
+			['whatsapp', { phone: '+447700900123' }],
+			['staff-push', { staffId: 'usr_9' }],
+			['email', { email: 'sana@shop.example.com' }],
+			['staff-push', { staffId: 'u1' }],
+		]);
+		// the limit is a setting
+		notifications.messages.length = 0;
+		await set('maxRecipients', 2);
+		expect(await alert()).toBe(2);
+		expect(notifications.messages.map((m) => m.channel)).toEqual(['email', 'sms']);
 	});
 
 	it('go to the recipients, the staff with the permission and the assignee, once per address', async () => {

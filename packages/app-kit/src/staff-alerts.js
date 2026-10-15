@@ -2,13 +2,16 @@
  * Staff alerts (PLAN 0.8.10 K6): one kit helper for products that alert the merchant's staff through Notifications
  * (the pasted Notifications token).
  *
- * - Recipients: the feature's `recipients` setting (email addresses and phone numbers, at most 20); plus, when its
- *   `staffPermission` setting names a permission, every unblocked Accounts user whose role grants it (through the
- *   pasted Accounts token: `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes) — the value
- *   `all_staff` names the permission the alert gives as `allStaff` (the one every staff member who works with it has,
- *   for example Chat's `inbox.read`); plus the assignee where the product has one.
- * - An email address gets email; an international phone number gets WhatsApp, or SMS with the feature's
- *   `phoneChannel` setting.
+ * - Recipients: the feature's `recipients` setting; plus, when its `staffPermission` setting names a permission, every
+ *   unblocked Accounts user whose role grants it (through the pasted Accounts token:
+ *   `GET /v1/users?permission=<product>:<key>&blocked=false`, cached 5 minutes) — the value `all_staff` names the
+ *   permission the alert gives as `allStaff` (the one every staff member who works with it has, for example Chat's
+ *   `inbox.read`); plus the assignee where the product has one. At most the feature's `maxRecipients` setting (default
+ *   {@link MAX_RECIPIENTS}, at most {@link RECIPIENTS_CAP}) people per alert.
+ * - A channel per recipient (fixed-choices audit K8): a recipient may name it, `email:<address>`, `sms:<phone>`,
+ *   `whatsapp:<phone>` or `push:<Accounts user id>` (staff push, the merchant's own push keys); a plain email address
+ *   gets email and a plain international phone number the feature's `phoneChannel` (WhatsApp unless `sms`). Accounts
+ *   staff get email (or their phone without one), and staff push too with the feature's `staffPush` setting.
  * - Templates `<product>.staff_<event>` (required, not urgent); one message per address per event, sent right after the
  *   request with `required: true` and its own `Idempotency-Key`, carrying the product's default words of the template
  *   (`callProduct`, parity P1); the link is built from the feature's `adminUrl` template (`{placeholders}` filled from
@@ -26,14 +29,14 @@ import { createId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
 import { formatText } from './text.js';
 
-/** @typedef {{ email?: string | null, phone?: string | null }} Assignee */
+/** @typedef {{ email?: string | null, phone?: string | null, id?: string | null }} Assignee */
 /**
  * @typedef {{ websiteId: string, merchantId?: string | null, after: (task: () => Promise<unknown>) => void }} AlertContext
  */
 /**
  * One message of an alert: `id` names it to Notifications (its `Idempotency-Key`) on every try.
- * @typedef {{ id: string, channel: 'email' | 'sms' | 'whatsapp', template: string,
- *   to: { email: string } | { phone: string }, values: Record<string, string | number> }} AlertMessage
+ * @typedef {{ id: string, channel: 'email' | 'sms' | 'whatsapp' | 'staff_push', template: string,
+ *   to: { email: string } | { phone: string } | { staffId: string }, values: Record<string, string | number> }} AlertMessage
  */
 /**
  * A saved message: `tries` so far, `nextAt` when it may be tried again (a try in progress holds it), `firstAt` when it
@@ -43,8 +46,14 @@ import { formatText } from './text.js';
 
 /** The `staffPermission` value that means every staff member who works with the alert (the alert's `allStaff`). */
 export const ALL_STAFF = 'all_staff';
-/** Most recipients a `recipients` setting holds. */
+/** People one alert goes to unless the feature's `maxRecipients` setting says otherwise, and the most it may say. */
 export const MAX_RECIPIENTS = 20;
+export const RECIPIENTS_CAP = 200;
+/** The channels a recipient may name (`push` is staff push). */
+export const RECIPIENT_CHANNELS = Object.freeze(/** @type {const} */ (['email', 'sms', 'whatsapp', 'push']));
+/** The Notifications route of each channel. */
+const CHANNEL_PATHS = Object.freeze({ email: 'email', sms: 'sms', whatsapp: 'whatsapp', staff_push: 'staff-push' });
+const STAFF_ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** Waits before a message Notifications did not take is tried again (as Ecommerce's outbox, E63): 1, 5, 15, 60 minutes, then every 3 hours. */
 export const RETRY_MS = Object.freeze([60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 3 * 3_600_000]);
 /** A message is tried for at most a day after its first try (Notifications keeps an Idempotency-Key that long). */
@@ -97,13 +106,13 @@ const EVENT = /^[a-z][a-z0-9_]{0,40}$/;
 const PERMISSION = /^[a-z][a-z0-9_.]{0,63}$/;
 
 /**
- * An address as a recipient: `{ email }` or `{ phone }` with its dedupe key, or null. Phones are E.164 through the
- * normalizer every product shares (`@ss/contracts/phone`), with their `+` or `00` and calling code, as Notifications
- * sends to them; a local number is left out.
+ * An address: `{ email }` or `{ phone }` with the key that names the person whatever the channel, or null. Phones are
+ * E.164 through the normalizer every product shares (`@ss/contracts/phone`), with their `+` or `00` and calling code,
+ * as Notifications sends to them; a local number is left out.
  * @param {unknown} value
  * @returns {{ key: string, to: { email: string } | { phone: string } } | null}
  */
-export const recipientOf = (value) => {
+export const addressOf = (value) => {
 	if (typeof value !== 'string') return null;
 	const text = value.trim();
 	if (EMAIL.test(text)) return { key: `e:${text.toLowerCase()}`, to: { email: text.toLowerCase() } };
@@ -112,12 +121,36 @@ export const recipientOf = (value) => {
 };
 
 /**
+ * A recipient with its channel (K8), or null: `email:`, `sms:`, `whatsapp:` or `push:` first names the channel (an
+ * address that does not fit it is left out); a plain email address gets email, a plain phone `phoneChannel`. `key`
+ * dedupes one person on one channel.
+ * @param {unknown} value
+ * @param {'whatsapp' | 'sms'} [phoneChannel]
+ * @returns {{ key: string, channel: AlertMessage['channel'], to: AlertMessage['to'] } | null}
+ */
+export const recipientOf = (value, phoneChannel = 'whatsapp') => {
+	if (typeof value !== 'string') return null;
+	const text = value.trim();
+	const named = /^(email|sms|whatsapp|push):\s*(.+)$/i.exec(text);
+	const channel = named ? /** @type {string} */ (named[1]).toLowerCase() : null;
+	const rest = named ? /** @type {string} */ (named[2]).trim() : text;
+	if (channel === 'push')
+		return STAFF_ID.test(rest) ? { key: `staff_push|u:${rest}`, channel: 'staff_push', to: { staffId: rest } } : null;
+	const address = addressOf(rest);
+	if (!address) return null;
+	const email = 'email' in address.to;
+	if (channel === 'email' ? !email : channel !== null && email) return null;
+	const via = email ? 'email' : /** @type {'sms' | 'whatsapp'} */ (channel ?? phoneChannel);
+	return { key: `${via}|${address.key}`, channel: via, to: address.to };
+};
+
+/**
  * @param {{ productId: string, settings: import('./settings.js').Settings,
  *   connections: import('./connections.js').Connections, data: import('./data.js').Data, now: () => number,
  *   logger: import('./logger.js').Logger }} options
  */
 export const createStaffAlerts = ({ productId, settings, connections, data, now, logger }) => {
-	/** @type {Map<string, { at: number, addresses: string[] }>} */
+	/** @type {Map<string, { at: number, people: Array<{ address: string, id: string | null }> }>} */
 	const staffCache = new Map();
 	/** Per instance: when the saved messages of a website were last looked for. @type {Map<string, number>} */
 	const lookedAt = new Map();
@@ -131,7 +164,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 */
 	const post = (websiteId, message) =>
 		connections
-			.callProduct(websiteId, 'notifications', `/v1/messages/${message.channel}`, {
+			.callProduct(websiteId, 'notifications', `/v1/messages/${CHANNEL_PATHS[message.channel]}`, {
 				method: 'POST',
 				body: { template: message.template, to: message.to, values: message.values, required: true },
 				headers: { 'idempotency-key': `${productId}-${message.id}` },
@@ -143,15 +176,16 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		(await data.forWebsite(websiteId, merchantId ? { merchantId } : {})).collection(COLLECTION);
 
 	/**
-	 * The email addresses and phones of unblocked Accounts users whose role grants a permission (cached 5 minutes).
+	 * Unblocked Accounts users whose role grants a permission (cached 5 minutes): each one's email address (or phone
+	 * without one) and user id (staff push).
 	 * @param {string} websiteId
 	 * @param {string} permission `<product>:<key>`
-	 * @returns {Promise<string[]>}
+	 * @returns {Promise<Array<{ address: string, id: string | null }>>}
 	 */
 	const staffWith = async (websiteId, permission) => {
 		const key = `${websiteId}|${permission}`;
 		const cached = staffCache.get(key);
-		if (cached && now() - cached.at < STAFF_CACHE_MS) return cached.addresses;
+		if (cached && now() - cached.at < STAFF_CACHE_MS) return cached.people;
 		const answer = await connections.callProduct(
 			websiteId,
 			'accounts',
@@ -159,21 +193,21 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		);
 		if (!answer.ok) {
 			logger.info('staff with a permission not read from Accounts', { websiteId, reason: answer.reason });
-			return cached?.addresses ?? [];
+			return cached?.people ?? [];
 		}
 		const body = /** @type {{ items?: unknown }} */ (answer.body ?? {});
 		const items = Array.isArray(body.items) ? body.items : [];
-		/** @type {string[]} */
-		const addresses = [];
+		/** @type {Array<{ address: string, id: string | null }>} */
+		const people = [];
 		for (const user of items) {
 			if (typeof user !== 'object' || user === null) continue;
-			const { email, phone, blocked } = /** @type {Record<string, unknown>} */ (user);
+			const { id, email, phone, blocked } = /** @type {Record<string, unknown>} */ (user);
 			if (blocked === true) continue;
-			if (typeof email === 'string' && email !== '') addresses.push(email);
-			else if (typeof phone === 'string' && phone !== '') addresses.push(phone);
+			const address = typeof email === 'string' && email !== '' ? email : typeof phone === 'string' ? phone : '';
+			people.push({ address, id: typeof id === 'string' && STAFF_ID.test(id) ? id : null });
 		}
-		staffCache.set(key, { at: now(), addresses });
-		return addresses;
+		staffCache.set(key, { at: now(), people });
+		return people;
 	};
 
 	/**
@@ -184,19 +218,26 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 * @param {string} [allStaff] the permission `staffPermission: all_staff` stands for (none: only the list)
 	 */
 	const recipientsOf = async (websiteId, values, assignee, allStaff = '') => {
-		const listed = Array.isArray(values.recipients) ? values.recipients.slice(0, MAX_RECIPIENTS) : [];
+		const most = Number.isInteger(values.maxRecipients)
+			? Math.min(Math.max(/** @type {number} */ (values.maxRecipients), 1), RECIPIENTS_CAP)
+			: MAX_RECIPIENTS;
+		const phoneChannel = values.phoneChannel === 'sms' ? 'sms' : 'whatsapp';
+		const push = values.staffPush === true;
+		const listed = Array.isArray(values.recipients) ? values.recipients.slice(0, RECIPIENTS_CAP) : [];
 		const chosen = typeof values.staffPermission === 'string' ? values.staffPermission : '';
 		const permission = chosen === ALL_STAFF ? allStaff : chosen;
 		const staff =
 			permission !== '' && PERMISSION.test(permission) ? await staffWith(websiteId, `${productId}:${permission}`) : [];
-		const assigned = [assignee?.email, assignee?.phone].filter((value) => typeof value === 'string' && value !== '');
-		/** @type {Map<string, { email: string } | { phone: string }>} */
+		/** @param {{ address?: string | null, id?: string | null }} person */
+		const asStaff = ({ address, id }) => [address ?? '', ...(push && id ? [`push:${id}`] : [])];
+		const assigned = assignee ? [assignee.email, assignee.phone, ...(push && assignee.id ? [`push:${assignee.id}`] : [])] : [];
+		/** @type {Map<string, { channel: AlertMessage['channel'], to: AlertMessage['to'] }>} */
 		const out = new Map();
-		for (const value of [...listed, ...staff, ...assigned]) {
-			const found = recipientOf(value);
-			if (found && !out.has(found.key)) out.set(found.key, found.to);
+		for (const value of [...listed, ...staff.flatMap(asStaff), ...assigned]) {
+			const found = recipientOf(value, phoneChannel);
+			if (found && !out.has(found.key)) out.set(found.key, { channel: found.channel, to: found.to });
 		}
-		return [...out.values()];
+		return [...out.values()].slice(0, most);
 	};
 
 	/**
@@ -204,7 +245,8 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 * @param {AlertContext} ctx
 	 * @param {{ feature: string, event: string, values: Record<string, string | number>, assignee?: Assignee | null,
 	 *   allStaff?: string }} alert
-	 *   `feature`: the feature whose settings hold `recipients`, `staffPermission`, `phoneChannel` and `adminUrl`;
+	 *   `feature`: the feature whose settings hold `recipients`, `staffPermission`, `phoneChannel`, `adminUrl` and,
+	 *   when it has them, `staffPush` and `maxRecipients`;
 	 *   `event`: the template is `<product>.staff_<event>`; `values`: the template's values (at most 1,000 characters each);
 	 *   `allStaff`: the permission key the setting's `all_staff` stands for (every staff member who works with the alert)
 	 * @returns {Promise<number>} the messages queued after the request
@@ -217,13 +259,12 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 		const template = `${productId}.staff_${event}`;
 		const adminUrl = typeof own.adminUrl === 'string' ? own.adminUrl : '';
 		const link = adminUrl === '' ? '' : formatText(adminUrl, values);
-		const channelOfPhone = own.phoneChannel === 'sms' ? 'sms' : 'whatsapp';
 		/** @type {AlertMessage[]} */
 		const messages = to.map((recipient) => ({
 			id: createId('sal'),
-			channel: 'email' in recipient ? 'email' : channelOfPhone,
+			channel: recipient.channel,
 			template,
-			to: recipient,
+			to: recipient.to,
 			values: { ...values, ...(link === '' ? {} : { link }) },
 		}));
 		ctx.after(async () => {
@@ -321,7 +362,7 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 	 * @returns {Promise<number>} the messages removed
 	 */
 	const forget = async (ctx, { addresses = [], values = {} }) => {
-		const keys = new Set(addresses.map((value) => recipientOf(value)?.key).filter((key) => key !== undefined));
+		const keys = new Set(addresses.map((value) => addressOf(value)?.key).filter((key) => key !== undefined));
 		const named = new Map(Object.entries(values).map(([name, list]) => [name, new Set(list.map(String))]));
 		if (!sends || (keys.size === 0 && [...named.values()].every((list) => list.size === 0))) return 0;
 		const rows = await savedOf(ctx.websiteId, ctx.merchantId);
@@ -329,11 +370,11 @@ export const createStaffAlerts = ({ productId, settings, connections, data, now,
 			await rows.find({ websiteId: ctx.websiteId }, { projection: { _id: 0, id: 1, to: 1, values: 1 } }).toArray()
 		);
 		/** @param {unknown} value */
-		const isAddress = (value) => keys.has(recipientOf(value)?.key ?? '');
+		const isAddress = (value) => keys.has(addressOf(value)?.key ?? '');
 		const ids = saved
 			.filter(
 				(row) =>
-					isAddress('email' in row.to ? row.to.email : row.to.phone) ||
+					isAddress('email' in row.to ? row.to.email : 'phone' in row.to ? row.to.phone : null) ||
 					Object.entries(row.values ?? {}).some(([name, value]) => isAddress(value) || named.get(name)?.has(String(value))),
 			)
 			.map((row) => row.id);

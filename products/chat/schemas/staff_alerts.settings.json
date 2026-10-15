@@ -17,7 +17,7 @@
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get SMS or WhatsApp), up to 20. The assigned person is added."
+			"description": "Email addresses and international phone numbers (+ or 00 first; phones get the channel below). Name a channel first to choose it for one person: sms:+15550100, whatsapp:+15550100, email:ops@example.com, or push:<Accounts user id> for staff push. The assigned person is added."
 		},
 		"frequency": {
 			"type": "string",
@@ -39,6 +39,20 @@
 			"default": "sms",
 			"enum": ["sms", "whatsapp"],
 			"description": "SMS goes out with Chat's default words; WhatsApp needs your own template approved at Meta (Notifications, Settings → Templates)."
+		},
+		"staffPush": {
+			"type": "boolean",
+			"title": "Staff push too",
+			"default": false,
+			"description": "Accounts staff (and the assigned person) also get a push in their browser (Notifications: Staff push, with your push keys)."
+		},
+		"maxRecipients": {
+			"type": "integer",
+			"title": "People per alert",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 200,
+			"description": "At most this many people get one alert (the list first, then staff and the assigned person)."
 		},
 		"includePhone": {
 			"type": "boolean",

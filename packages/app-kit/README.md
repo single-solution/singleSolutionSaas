@@ -34,7 +34,9 @@ The exact API is in [API.md](./API.md).
   rules.
 - **Events, staff alerts and imports** (K5, K6, K10) — events kept 30 days and forwarded through Notifications; staff
   alerts to recipients, Accounts staff with a permission (or `all_staff`: every staff member with the alert's own
-  permission) and the assignee; checked, idempotent NDJSON import routes, which the kit serves (feature `import`)
+  permission) and the assignee, each on its own channel (`sms:`, `whatsapp:`, `email:` or `push:<user id>` first, else
+  email or the feature's `phoneChannel`; staff push for Accounts staff with `staffPush`), at most `maxRecipients`
+  people (default 20, at most 200); checked, idempotent NDJSON import routes, which the kit serves (feature `import`)
   when the product passes `imports`.
 - **Default message templates** (parity P1) — the product declares the messages it sends through Notifications with
   their US-English default words (`schemas/messages.json`, checked with the contract at start); the kit attaches them
