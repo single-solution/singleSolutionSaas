@@ -3,8 +3,8 @@
  * price list), price and feature reports, a payment link created with the Portal-issued server token, a payer paying it
  * through the hosted page on a faked Stripe (no real network call), the signed Stripe confirmation marking it paid, the
  * server-to-server check for the exact amount, a partial refund, the merchant notified through Notifications' signed
- * webhook, and the hourly charge. Phase 2 of the store conversion (PLAN 0.8.10 P1–P3): the bank details read by the
- * merchant's server, bank transfer ready without details, and a confirmation's reference and note.
+ * webhook, and the hourly charge. Bank transfer (PLAN 0.8.10 P1–P3): the bank details read by the merchant's server,
+ * bank transfer ready without details, and a confirmation's reference and note.
  */
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -310,7 +310,7 @@ describe('Payments on the real Portal', () => {
 	});
 });
 
-describe('Phase 2: bank transfer for the merchant’s server (PLAN 0.8.10 P1–P3)', () => {
+describe('bank transfer for the merchant’s server (PLAN 0.8.10 P1–P3)', () => {
 	/** @param {string} method @param {string} path @param {unknown} [body] */
 	const server = (method, path, body) => sys.call(method, path, { token: payTokens.server, body });
 	let transferId = '';

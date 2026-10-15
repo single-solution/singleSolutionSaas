@@ -2,8 +2,8 @@
  * PLAN 0.12 step 6: Notifications against the REAL Portal — connect (manifest and price list), price and feature
  * reports, a send through the send API with the server token the Portal issued (the email provider is a fake in this
  * process: no real network call), the delivery log through a ticket, and the hourly charge for the switched-on
- * features. PLAN 0.8.10 phase 2: a WhatsApp template with a copy-code button and a per-status template with optional
- * sections, written by the merchant's server, are sent.
+ * features. Message templates (PLAN 0.8.10): a WhatsApp template with a copy-code button and a per-status template
+ * with optional sections, written by the merchant's server, are sent.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createProductInstance, manifest, strings } from '@ss/product-notifications/product';

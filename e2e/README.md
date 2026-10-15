@@ -16,14 +16,15 @@ tickets, dashboard launches, notices, websites and data rights). It is not a wor
 the generated one, and this workspace checks it.
 `pnpm check` here formats and lints it, type-checks its `core/`, `server/`, `adapters/`, `ui/` and `tests/`, runs its
 own tests with the system tests, and runs `ss app validate` on it (which includes `ss app assets --check`). Its
-dashboard (`app/`) is linted but not type-checked here (React, Next.js and `@ss/ui` are not dependencies of this
-workspace), as the CLI does for its product template. After a change to the CLI's template, apply the same change here
-and run `pnpm exec ss app assets fixtures/notes`.
+dashboard (`app/`) is linted but not type-checked here (Next.js is not a dependency of this workspace), as the CLI does
+for its product template. `tests/notes-fixture.test.js` runs the real `ss app init` and fails when the two differ by
+anything but the import feature: after a change to the CLI's template, apply the same change here and run
+`pnpm exec ss app assets fixtures/notes`.
 
 The product tests (`accounts`, `chat`, `ecommerce`, `growth`, `notifications`, `payments`) run each shipped product
 against the Portal and the products it works with.
 
-The migration kit (PLAN 0.8.10, Phase 1) has its own tests: `settings-api` (a settings round trip per product through
+The migration kit (PLAN 0.8.10) has its own tests: `settings-api` (a settings round trip per product through
 the server token, with an acting user), `server-calls` (visitor calls from the merchant's server in their own rate
 window, counts equal to list lengths) and `import` (`ss-import` of the importer's small fixture into Notes, whose
 test-only `import` feature mounts the kit's import routes, and of the example shop into Accounts, Ecommerce, Chat and
