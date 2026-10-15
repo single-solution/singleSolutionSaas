@@ -214,7 +214,7 @@ describe('secrets never reach the delivery log (D11, SE-3)', () => {
 		await use();
 		expect(await read(sent.json.id)).toMatchObject({
 			status: 'failed',
-			reason: 'Its hidden values cannot be read: the encryption key changed.',
+			reason: 'sealed_unreadable',
 		});
 		expect(env.providers.callsTo('https://graph.facebook.com')).toHaveLength(metaCalls);
 		expect(env.providers.callsTo('https://api.twilio.com')).toHaveLength(twilioCalls);
@@ -380,8 +380,8 @@ describe('nothing accepted is lost when an attempt breaks off (D7, K-17)', () =>
 		expect(sent.status).toBe(201);
 		expect(sent.json).toMatchObject({
 			status: 'retrying',
-			reason: 'It could not be sent now (a database or provider was briefly unreachable).',
-			attempts: [{ channel: 'sms', provider: 'none', outcome: 'failed' }],
+			reason: 'interrupted',
+			attempts: [{ channel: 'sms', provider: 'none', outcome: 'failed', reason: 'interrupted' }],
 		});
 		env.failReads();
 		env.advance(MIN + 1000);

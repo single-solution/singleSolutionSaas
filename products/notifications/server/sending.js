@@ -25,6 +25,7 @@
  */
 import { createId } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
+import { isNetError } from '@ss/net';
 import { problem } from '@ss/app-kit';
 import { signWebhook } from '@ss/protocol';
 import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor } from '../core/channels.js';
@@ -54,6 +55,7 @@ import {
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { messageAadOf } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
+import { failed } from '../core/gateway.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('../adapters/store.js').MessageRecord} MessageRecord */
@@ -83,6 +85,7 @@ import { createStore } from '../adapters/store.js';
  * @property {string[]} longValues the values of a product's message that hold long text (`[]`: none)
  */
 /** @typedef {import('../core/templates.js').Template} Template */
+/** @typedef {import('../core/gateway.js').SendOutcome} SendOutcome */
 
 /** Rendered words of a message on one channel. */
 /** @typedef {Pick<MessageRecord, 'subject' | 'text' | 'parameters' | 'providerTemplate' | 'language'> & { buttons: import('../core/templates.js').Button[] }} Words */
@@ -92,11 +95,15 @@ import { createStore } from '../adapters/store.js';
  */
 
 /**
- * Why a product's message on WhatsApp is not sent: the merchant has no WhatsApp template for it (parity P1).
- * @param {string} key @param {string | null} [fallbackKey] the send's `fallbackTemplate`
+ * Why a product's message on WhatsApp is not sent: the merchant has no WhatsApp template for it (parity P1), as the
+ * code `not_set_up` with the template keys to add.
+ * @param {string} key @param {string | null} fallbackKey the send's `fallbackTemplate`
+ * @returns {import('../core/gateway.js').Failure}
  */
-const notSetUpReason = (key, fallbackKey = null) =>
-	`Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ${key}${fallbackKey ? ` (or ${fallbackKey})` : ''} with its Meta template name in Notifications.`;
+const notSetUpFailure = (key, fallbackKey) => ({
+	reason: 'not_set_up',
+	values: { template: key, ...(fallbackKey ? { fallbackTemplate: fallbackKey } : {}) },
+});
 
 /** The skip reason of a product's message the merchant switched off on its channel (parity P1). */
 export const SWITCHED_OFF = 'switched_off';
@@ -123,6 +130,7 @@ export const messageView = (message) => ({
 	to: message.address,
 	status: message.status,
 	reason: message.reason,
+	reasonValues: message.reasonValues ?? {},
 	subject: message.subject,
 	text: message.text,
 	attempts: message.attempts.map((attempt) => ({
@@ -130,7 +138,9 @@ export const messageView = (message) => ({
 		provider: attempt.provider,
 		at: new Date(attempt.at).toISOString(),
 		outcome: attempt.outcome,
-		...(attempt.error ? { error: attempt.error } : {}),
+		...(attempt.reason ? { reason: attempt.reason } : {}),
+		...(attempt.reasonValues ? { reasonValues: attempt.reasonValues } : {}),
+		...(attempt.detail ? { detail: attempt.detail } : {}),
 	})),
 	dueAt: new Date(message.dueAt).toISOString(),
 	sentAt: message.sentAt ? new Date(message.sentAt).toISOString() : null,
@@ -321,6 +331,7 @@ export const createSending = (product) => {
 		to: message.address,
 		status: message.status,
 		reason: message.reason,
+		reasonValues: message.reasonValues ?? {},
 		attempts: message.attempts.length,
 	});
 
@@ -328,15 +339,15 @@ export const createSending = (product) => {
 	 * One attempt on the message's channel.
 	 * @param {Site} s
 	 * @param {MessageRecord} message
-	 * @returns {Promise<{ ok: boolean, provider: string, error?: string, retryable?: boolean }>}
+	 * @returns {Promise<SendOutcome & { provider: string }>}
 	 */
 	const deliver = async (s, message) => {
 		const { channel } = message;
 		if (!s.on.includes(CHANNEL_FEATURES[channel]))
-			return { ok: false, provider: 'none', error: `The ${CHANNEL_FEATURES[channel]} feature is off.`, retryable: false };
+			return { ...failed('feature_off', { values: { feature: CHANNEL_FEATURES[channel] } }), provider: 'none' };
 		const value = await product.connections.value(s.websiteId, CHANNEL_CONNECTIONS[channel]);
 		if (typeof value !== 'object' || value === null)
-			return { ok: false, provider: 'none', error: `Not connected: ${CHANNEL_CONNECTIONS[channel]}.`, retryable: false };
+			return { ...failed('not_connected', { values: { connection: CHANNEL_CONNECTIONS[channel] } }), provider: 'none' };
 		if (channel === 'email' || channel === 'sms' || channel === 'whatsapp') {
 			/** @type {{ replyTo?: string, headers?: Record<string, string> }} */
 			const extra = {};
@@ -369,19 +380,24 @@ export const createSending = (product) => {
 			channel === 'push'
 				? [await s.store.subscriptions.get(message.address)].filter((sub) => sub !== null)
 				: await s.store.subscriptions.ofStaff(message.address);
-		if (subscriptions.length === 0)
-			return { ok: false, provider: 'webpush', error: 'No browser is subscribed for this recipient.', retryable: false };
-		/** @type {Array<{ ok: boolean, error?: string, retryable?: boolean }>} */
+		if (subscriptions.length === 0) return { ...failed('no_subscription'), provider: 'webpush' };
+		/** @type {import('../adapters/webpush.js').PushOutcome[]} */
 		const results = [];
 		for (const subscription of /** @type {import('../adapters/store.js').SubscriptionRecord[]} */ (subscriptions)) {
 			const result = await product.webpush.push(value, subscription, payload);
 			if (!result.ok && result.gone) await s.store.subscriptions.remove(subscription.id);
 			results.push(result);
 		}
-		const failed = results.find((result) => !result.ok);
-		return results.some((result) => result.ok) || !failed
-			? { ok: true, provider: 'webpush' }
-			: { ok: false, provider: 'webpush', error: failed.error, retryable: results.some((result) => result.retryable) };
+		const failure = results.find((result) => !result.ok);
+		if (results.some((result) => result.ok) || !failure || failure.ok) return { ok: true, id: null, provider: 'webpush' };
+		return {
+			...failed(failure.reason, {
+				...(failure.values ? { values: failure.values } : {}),
+				...(failure.detail ? { detail: failure.detail } : {}),
+				retryable: results.some((result) => !result.ok && result.retryable),
+			}),
+			provider: 'webpush',
+		};
 	};
 
 	/**
@@ -452,37 +468,40 @@ export const createSending = (product) => {
 	 * attempt is added to the delivery log; a sent or failed message keeps no sealed words nor defaults. An attempt that
 	 * throws (a read of the connection, the settings or the subscriptions failing) is a failed attempt that may be
 	 * retried. `failure` records a failed attempt without trying (WhatsApp not set up), so the fallback still applies.
+	 * Failures are kept as codes with their values (`core/gateway.js`), the provider's own answer apart as `detail`.
 	 * @param {Site} s
 	 * @param {MessageRecord} message
-	 * @param {{ ok: false, provider: string, error: string } | null} [failure]
+	 * @param {import('../core/gateway.js').Failure | null} [failure]
 	 * @returns {Promise<MessageRecord>}
 	 */
 	const attempt = async (s, message, failure = null) => {
 		const real = reveal(s, message);
+		/** @type {SendOutcome & { provider: string }} */
 		const result = failure
-			? failure
+			? { ...failed(failure.reason, failure.values ? { values: failure.values } : {}), provider: 'none' }
 			: real
-				? await deliver(s, real).catch(() => ({
-						ok: false,
-						provider: 'none',
-						error: 'It could not be sent now (a database or provider was briefly unreachable).',
-						retryable: true,
-					}))
-				: { ok: false, provider: 'none', error: 'Its hidden values cannot be read: the encryption key changed.' };
-		const attempts = [
-			...message.attempts,
-			{
-				channel: message.channel,
-				provider: result.provider,
-				at: new Date(now()),
-				outcome: /** @type {'sent' | 'failed'} */ (result.ok ? 'sent' : 'failed'),
-				...(result.ok ? {} : { error: result.error }),
-			},
-		];
+				? await deliver(s, real).catch(() => ({ ...failed('interrupted', { retryable: true }), provider: 'none' }))
+				: { ...failed('sealed_unreadable'), provider: 'none' };
+		/** @type {import('../adapters/store.js').Attempt} */
+		const tried = {
+			channel: message.channel,
+			provider: result.provider,
+			at: new Date(now()),
+			outcome: result.ok ? 'sent' : 'failed',
+			...(result.ok
+				? {}
+				: {
+						reason: result.reason,
+						...(result.values ? { reasonValues: result.values } : {}),
+						...(result.detail ? { detail: result.detail } : {}),
+					}),
+		};
+		const attempts = [...message.attempts, tried];
 		if (result.ok) {
 			const sent = await s.store.messages.update(message.id, {
 				status: 'sent',
 				reason: null,
+				reasonValues: null,
 				attempts,
 				sentAt: new Date(now()),
 				leaseUntil: null,
@@ -493,15 +512,15 @@ export const createSending = (product) => {
 			await emit(s, 'message.sent', eventData(sent));
 			return sent;
 		}
-		const failed = message.channelAttempts + 1;
-		const next =
-			'retryable' in result && result.retryable ? nextAttemptAt(failed, now(), RETRY_PLANS[message.retryPlan]) : null;
+		const tries = message.channelAttempts + 1;
+		const next = result.retryable ? nextAttemptAt(tries, now(), RETRY_PLANS[message.retryPlan]) : null;
+		const why = { reason: result.reason, reasonValues: result.values ?? null };
 		if (next !== null)
 			return s.store.messages.update(message.id, {
 				status: 'retrying',
-				reason: result.error ?? null,
+				...why,
 				attempts,
-				channelAttempts: failed,
+				channelAttempts: tries,
 				dueAt: new Date(next),
 				leaseUntil: null,
 			});
@@ -516,6 +535,7 @@ export const createSending = (product) => {
 				defaults: null,
 				status: 'queued',
 				reason: null,
+				reasonValues: null,
 				dueAt: new Date(now()),
 				leaseUntil: new Date(now() + LEASE_MS),
 			});
@@ -523,9 +543,9 @@ export const createSending = (product) => {
 		}
 		const final = await s.store.messages.update(message.id, {
 			status: 'failed',
-			reason: result.error ?? null,
+			...why,
 			attempts,
-			channelAttempts: failed,
+			channelAttempts: tries,
 			leaseUntil: null,
 			sealed: null,
 			defaults: null,
@@ -580,6 +600,7 @@ export const createSending = (product) => {
 						urgent: false,
 						status: 'skipped',
 						reason: SWITCHED_OFF,
+						reasonValues: null,
 						attempts: [],
 						channelAttempts: 0,
 						retryPlan: 'short',
@@ -651,6 +672,7 @@ export const createSending = (product) => {
 			urgent: made.urgent,
 			status: 'queued',
 			reason: null,
+			reasonValues: null,
 			attempts: [],
 			channelAttempts: 0,
 			retryPlan: await planOf(s, input.channel),
@@ -666,6 +688,7 @@ export const createSending = (product) => {
 					...base,
 					status: 'skipped',
 					reason: 'unsubscribed',
+					reasonValues: null,
 					sealed: null,
 					defaults: null,
 					expireAt: await expiryOf(s),
@@ -684,6 +707,7 @@ export const createSending = (product) => {
 						...base,
 						status: 'skipped',
 						reason: 'limited',
+						reasonValues: null,
 						sealed: null,
 						defaults: null,
 						expireAt: await expiryOf(s),
@@ -694,11 +718,7 @@ export const createSending = (product) => {
 			const message = await s.store.messages.add({ ...base, leaseUntil: new Date(t + LEASE_MS) });
 			return {
 				ok: true,
-				message: await attempt(s, message, {
-					ok: false,
-					provider: 'none',
-					error: notSetUpReason(/** @type {string} */ (input.template), input.fallbackTemplate),
-				}),
+				message: await attempt(s, message, notSetUpFailure(/** @type {string} */ (input.template), input.fallbackTemplate)),
 			};
 		}
 		// Accounts' messages (sign-in codes and links) go at once: a delayed send never holds them either
@@ -724,9 +744,9 @@ export const createSending = (product) => {
 	 */
 	const deliverEvent = async (s, event) => {
 		const secret = await product.connections.value(s.websiteId, 'webhook_secret');
-		/** @type {string | null} */
+		/** @type {import('../core/gateway.js').Failure | null} */
 		let error = null;
-		if (typeof secret !== 'string') error = 'Not connected: webhook_secret.';
+		if (typeof secret !== 'string') error = { reason: 'not_connected', values: { connection: 'webhook_secret' } };
 		else {
 			try {
 				const response = await product.send(event.url, {
@@ -739,9 +759,10 @@ export const createSending = (product) => {
 					timeoutMs: 10_000,
 					redirect: 'error',
 				});
-				if (response.status < 200 || response.status > 299) error = `The URL answered HTTP ${response.status}.`;
-			} catch {
-				error = 'The URL could not be reached.';
+				if (response.status < 200 || response.status > 299)
+					error = { reason: 'provider_status', values: { status: String(response.status) } };
+			} catch (caught) {
+				error = { reason: 'provider_unreachable', values: { cause: isNetError(caught) ? caught.code : 'network' } };
 			}
 		}
 		if (error === null)
@@ -773,6 +794,7 @@ export const createSending = (product) => {
 				await s.store.messages.update(message.id, {
 					status: 'skipped',
 					reason: 'unsubscribed',
+					reasonValues: null,
 					leaseUntil: null,
 					sealed: null,
 					defaults: null,

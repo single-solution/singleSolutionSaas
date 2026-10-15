@@ -72,9 +72,6 @@ const TEMPLATE_WRITE_LIMITS = [
 /** Fields the delivery log is counted by (`GET /v1/messages/counts?by=`). */
 const MESSAGE_COUNT_FIELDS = Object.freeze({ status: 'status', channel: 'channel', template: 'template', source: 'source' });
 
-/** Channel names in activity details. */
-const CHANNEL_NAMES = Object.freeze({ email: 'email', sms: 'SMS', whatsapp: 'WhatsApp' });
-
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code }] });
@@ -646,11 +643,9 @@ export const createRoutes = (product) => {
 						actor: actorOf(ctx, SERVER),
 						action: 'message.sent',
 						target: result.message.id,
-						label: result.message.id,
-						detail:
-							template === undefined
-								? `One-off ${CHANNEL_NAMES[channel]} message: ${result.message.status}`
-								: `Template ${template} by ${CHANNEL_NAMES[channel]}: ${result.message.status}`,
+						// codes, never sentences (N10): the screens word them; a one-off message has no template key
+						label: template ?? result.message.id,
+						detail: `channel=${channel} status=${result.message.status}`,
 					},
 				);
 				return created(messageView(result.message));

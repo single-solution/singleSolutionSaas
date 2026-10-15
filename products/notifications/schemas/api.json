@@ -10,6 +10,13 @@
 			"enum": ["queued", "retrying", "sent", "failed", "skipped"],
 			"description": "queued: waiting for its time (a delayed send or quiet hours) or being sent; retrying: an attempt failed and it is tried again on a later use of your website; sent; failed: every attempt failed, the fallback channel's too; skipped: not sent (reason unsubscribed, limited or switched_off)."
 		},
+		"ReasonValues": {
+			"type": "object",
+			"description": "The values of a reason code, for example { \"status\": \"503\" } for provider_status or { \"template\": \"chat.staff_new_message\" } for not_set_up. The delivery-log widget words each code with your widget text reason.<code>, filled with these values.",
+			"additionalProperties": {
+				"type": "string"
+			}
+		},
 		"Attempt": {
 			"type": "object",
 			"description": "One attempt at a provider.",
@@ -31,9 +38,17 @@
 					"type": "string",
 					"enum": ["sent", "failed"]
 				},
-				"error": {
+				"reason": {
 					"type": "string",
-					"description": "Why it failed, in English (failed attempts only)."
+					"description": "Why it failed, as a code (failed attempts only): provider_status ({status}), provider_refused, provider_unreachable ({cause}), provider_error ({cause}), connection_unusable ({connection}), feature_off ({feature}), not_connected ({connection}), no_subscription, subscription_gone, interrupted, sealed_unreadable or not_set_up ({template}, {fallbackTemplate}). Never a sentence."
+				},
+				"reasonValues": {
+					"$ref": "#/components/schemas/ReasonValues"
+				},
+				"detail": {
+					"type": "string",
+					"maxLength": 200,
+					"description": "The provider's own answer, as it came (technical, at most 200 characters, secrets removed); failed attempts at a provider only."
 				}
 			}
 		},
@@ -48,6 +63,7 @@
 				"to",
 				"status",
 				"reason",
+				"reasonValues",
 				"subject",
 				"text",
 				"attempts",
@@ -83,7 +99,10 @@
 				},
 				"reason": {
 					"type": ["string", "null"],
-					"description": "skipped: unsubscribed, limited (over a send limit) or switched_off (the product's message is switched off on this channel); retrying and failed: the last error, in English (a product's message on WhatsApp without your WhatsApp template fails as \"Not set up: …\"); else null."
+					"description": "A code, never a sentence. skipped: unsubscribed, limited (over a send limit) or switched_off (the product's message is switched off on this channel); retrying and failed: why the last attempt failed (see Attempt.reason; a product's message on WhatsApp without your WhatsApp template fails as not_set_up); else null."
+				},
+				"reasonValues": {
+					"$ref": "#/components/schemas/ReasonValues"
 				},
 				"subject": {
 					"type": "string",
@@ -626,7 +645,7 @@
 	},
 	"POST /v1/messages/whatsapp": {
 		"summary": "Send a WhatsApp message from a template",
-		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A template with a providerTemplate is sent as that template at Meta, its values as body parameters in the order the text uses them. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). WhatsApp has no defaults: a product's message without your WhatsApp template is answered failed (\"Not set up: …\", in the delivery log) and goes to the fallback channel when one is set. 422 template_not_found when your own key has no WhatsApp template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
+		"description": "The answer is the message as the delivery log keeps it. It is saved before its first attempt and sent at once unless a delayed send or quiet hours hold it; an attempt that fails or breaks off answers retrying and is tried again on later uses of your website, then on the fallback channel. Someone who unsubscribed (by link or STOP reply) gets only required messages (else skipped, reason unsubscribed); send limits skip with reason limited. A template with a providerTemplate is sent as that template at Meta, its values as body parameters in the order the text uses them. A product's message (accounts., chat. …) carries its defaults, used while your website has no template of its own for the channel; one you switched off on the channel is skipped (reason switched_off). WhatsApp has no defaults: a product's message without your WhatsApp template is answered failed (reason not_set_up, in the delivery log) and goes to the fallback channel when one is set. 422 template_not_found when your own key has no WhatsApp template; 422 validation_failed for a field; 403 feature_off for your own keys without Merchant send API (send_api), or sendAt without Delayed send. Send an Idempotency-Key so a retried request sends once.",
 		"body": {
 			"type": "object",
 			"required": ["template", "to"],

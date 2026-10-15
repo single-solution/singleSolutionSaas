@@ -2,8 +2,8 @@
  * The admin widget `delivery_log` (permission `log.read`): the merchant's staff read the delivery log in their own
  * admin, newest first, filtered by status, channel and recipient, page by page, with the number of messages per status
  * (the log's counts, PLAN 0.8.10 K4). Each message opens to its words and every attempt. Times follow the website's
- * Format and business time zone from the widget config (PLAN 0.8.10 K7). A skip's reason shows in the website's words;
- * a failure shows the provider's own error.
+ * Format and business time zone from the widget config (PLAN 0.8.10 K7). A reason (a skip, or why an attempt failed)
+ * is a code shown in the website's words (`reason.<code>`); the provider's own answer shows apart, as it came.
  * @module
  */
 import { adminCall, element, formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
@@ -85,8 +85,10 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 
 			/**
 			 * A message, opened: its words and every attempt.
-			 * @param {{ id: string, source: string, subject: string, text: string, reason: string | null, dueAt: string,
-			 *   sentAt: string | null, attempts: Array<{ channel: string, provider: string, at: string, outcome: string, error?: string }> }} message
+			 * @param {{ id: string, source: string, subject: string, text: string, reason: string | null,
+			 *   reasonValues: Record<string, string>, dueAt: string, sentAt: string | null,
+			 *   attempts: Array<{ channel: string, provider: string, at: string, outcome: string, reason?: string,
+			 *   reasonValues?: Record<string, string>, detail?: string }> }} message
 			 */
 			const detailOf = (message) => {
 				const fields = element(doc, 'dl');
@@ -109,7 +111,8 @@ export const mountDeliveryLog = ({ host, api, config }) => {
 								t(`channel.${attempt.channel}`),
 								attempt.provider,
 								t(`log.outcome.${attempt.outcome}`),
-								attempt.error ?? '',
+								logReason(config.texts, attempt),
+								attempt.detail ? formatText(t('log.detail'), { detail: attempt.detail }) : '',
 							]
 								.filter((part) => part !== '')
 								.join(' · '),

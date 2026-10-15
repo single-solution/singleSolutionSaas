@@ -279,7 +279,13 @@ describe('the send API', () => {
 		// a final error goes to the fallback at once; with no fallback it fails
 		env.providers.respond('https://graph.facebook.com', () => ({ status: 200, body: '{"error":{"message":"bad number"}}' }));
 		const failed = await env.send('whatsapp', { template: 'promo', to: { phone: '+15550004444' }, values: { pct: '5' } });
-		expect(failed.json).toMatchObject({ status: 'failed', reason: '{"message":"bad number"}' });
+		// a code with its values, never a sentence (N10); the provider's own answer apart, as technical detail
+		expect(failed.json).toMatchObject({ status: 'failed', reason: 'provider_refused', reasonValues: {} });
+		expect(failed.json.attempts.at(-1)).toMatchObject({
+			outcome: 'failed',
+			reason: 'provider_refused',
+			detail: '{"message":"bad number"}',
+		});
 		env.providers.reset('https://graph.facebook.com');
 	});
 
@@ -470,9 +476,7 @@ describe('the send API', () => {
 		});
 		env.providers.respond(PUSH_ORIGIN, () => ({ status: 410 }));
 		expect((await env.send('push', { template: 'alert', to: { subscriberId } })).json.status).toBe('failed');
-		expect((await env.send('push', { template: 'alert', to: { subscriberId } })).json.reason).toBe(
-			'No browser is subscribed for this recipient.',
-		);
+		expect((await env.send('push', { template: 'alert', to: { subscriberId } })).json.reason).toBe('no_subscription');
 		env.providers.reset(PUSH_ORIGIN);
 		const again = await env.call('POST', '/v1/push/subscriptions', {
 			token: env.browser,
@@ -762,7 +766,7 @@ describe('the delivery log and the admin widgets (tickets)', () => {
 		expect(sent).toMatchObject({
 			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
 			label: sent.target,
-			detail: 'One-off email message: sent',
+			detail: 'channel=email status=sent',
 		});
 		expect(sent.target).toMatch(/^msg_/);
 		// never an address or the words
@@ -829,7 +833,7 @@ describe('the merchant’s server and the widget config (PLAN 0.8.10)', () => {
 		});
 		expect(removed.status).toBe(204);
 		const pushed = await env.send('push', { template: 'alert', to: { subscriberId } });
-		expect(pushed.json).toMatchObject({ status: 'failed', reason: 'No browser is subscribed for this recipient.' });
+		expect(pushed.json).toMatchObject({ status: 'failed', reason: 'no_subscription' });
 	});
 
 	it('takes the SS-Actor headers on server calls and refuses malformed ones', async () => {

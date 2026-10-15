@@ -188,9 +188,17 @@ describe('default templates of products (parity P1)', () => {
 		expect(failed.json).toMatchObject({
 			status: 'failed',
 			channel: 'whatsapp',
-			reason:
-				'Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template chat.staff_new_message with its Meta template name in Notifications.',
-			attempts: [{ channel: 'whatsapp', provider: 'none', outcome: 'failed' }],
+			reason: 'not_set_up',
+			reasonValues: { template: 'chat.staff_new_message' },
+			attempts: [
+				{
+					channel: 'whatsapp',
+					provider: 'none',
+					outcome: 'failed',
+					reason: 'not_set_up',
+					reasonValues: { template: 'chat.staff_new_message' },
+				},
+			],
 		});
 		expect(env.providers.callsTo('https://graph.facebook.com')).toHaveLength(meta);
 		// with WhatsApp → SMS as the fallback, the SMS default goes
@@ -342,8 +350,8 @@ describe('default templates of products (parity P1)', () => {
 		// WhatsApp names both keys when neither is set up
 		expect((await send('whatsapp')).json).toMatchObject({
 			status: 'failed',
-			reason:
-				'Not set up: WhatsApp sends only templates approved at Meta. Add the WhatsApp template ecommerce.order_status.shipped (or ecommerce.order_status) with its Meta template name in Notifications.',
+			reason: 'not_set_up',
+			reasonValues: { template: 'ecommerce.order_status.shipped', fallbackTemplate: 'ecommerce.order_status' },
 		});
 
 		// a message moved to its fallback channel keeps the chain: the website's general SMS template

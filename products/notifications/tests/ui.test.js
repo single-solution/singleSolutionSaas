@@ -7,6 +7,7 @@ import { SUBSCRIBED_EVENT, SUBSCRIBER_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOB
 import { BUTTON_TYPES } from '../core/templates.js';
 import { CHANNELS } from '../core/channels.js';
 import { STATUSES } from '../core/log.js';
+import { FAILURE_REASONS, SKIP_REASONS } from '../core/gateway.js';
 import { codeOf, logReason, notSentText, problemText } from '../ui/problems.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
@@ -258,7 +259,8 @@ describe('admin widgets', () => {
 			channel: 'sms',
 			to: '+15550001111',
 			status: 'failed',
-			reason: 'bad number',
+			reason: 'provider_status',
+			reasonValues: { status: '400' },
 			attempts: [{}, {}],
 			createdAt: '2026-10-01T10:00:00.000Z',
 		});
@@ -275,6 +277,8 @@ describe('admin widgets', () => {
 		expect(host.shadowRoot?.querySelectorAll('li')).toHaveLength(1);
 		expect(inside(host, 'li').textContent).toContain('+15550001111 · welcome');
 		expect(inside(host, '.meta').textContent).toContain('SMS · Failed · 2 attempts');
+		// a reason is a code shown in the website's words, filled with its values (N10)
+		expect(inside(host, '.meta').textContent).toContain('the provider answered HTTP 400');
 		button(host, strings['log.more']).click();
 		await flush();
 		expect(asked.at(-1)?.searchParams.get('cursor')).toBe('c1');
@@ -307,7 +311,15 @@ describe('admin widgets', () => {
 			subject: '',
 			text: '482913 is your code.',
 			attempts: [
-				{ channel: 'whatsapp', provider: 'meta', at: '2026-10-01T10:00:00.000Z', outcome: 'failed', error: 'HTTP 503' },
+				{
+					channel: 'whatsapp',
+					provider: 'meta',
+					at: '2026-10-01T10:00:00.000Z',
+					outcome: 'failed',
+					reason: 'provider_status',
+					reasonValues: { status: '503' },
+					detail: 'down',
+				},
 				{ channel: 'whatsapp', provider: 'meta', at: '2026-10-01T10:05:00.000Z', outcome: 'sent' },
 			],
 			dueAt: '2026-10-01T10:05:00.000Z',
@@ -352,7 +364,10 @@ describe('admin widgets', () => {
 			[strings['log.text'], '482913 is your code.'],
 			[strings['log.source'], strings['log.source.api']],
 			[strings['log.sentAt'], expect.any(String)],
-			[strings['log.attemptList'], expect.stringContaining('WhatsApp · meta · failed · HTTP 503\n')],
+			[
+				strings['log.attemptList'],
+				expect.stringContaining("WhatsApp · meta · failed · the provider answered HTTP 503 · Provider's answer: down\n"),
+			],
 			[strings['log.id'], 'msg_1'],
 		]);
 		// counts that cannot be read leave the badges as they were and no total
@@ -619,7 +634,7 @@ describe('admin widgets', () => {
 			answer(201, { status: 'sent' }),
 			answer(201, { status: 'queued' }),
 			answer(201, { status: 'skipped', reason: 'limited' }),
-			answer(201, { status: 'failed', reason: 'The provider answered HTTP 401.' }),
+			answer(201, { status: 'failed', reason: 'provider_status', reasonValues: { status: '401' } }),
 			refusal(422, 'validation_failed', 'to'),
 			refusal(429, 'rate_limited'),
 			answer(500, {}),
@@ -726,7 +741,8 @@ describe('admin widget texts (PLAN 0.4.10)', () => {
 			...BUTTON_TYPES.map((type) => `templates.buttonType.${type}`),
 			...['api', 'staff'].map((source) => `log.source.${source}`),
 			...['sent', 'failed'].map((outcome) => `log.outcome.${outcome}`),
-			...['unsubscribed', 'limited', 'switched_off', 'failed'].map((reason) => `reason.${reason}`),
+			...[...SKIP_REASONS, ...FAILURE_REASONS, 'failed'].map((reason) => `reason.${reason}`),
+			'log.detail',
 			// the fields the admin routes refuse (PUT /v1/admin/templates, POST /v1/admin/messages)
 			...['key', 'channel', 'language', 'subject', 'text', 'providerTemplate', 'buttons', 'to', 'template', 'values'].map(
 				(field) => `problem.field.${field}`,
@@ -759,17 +775,20 @@ describe('admin widget texts (PLAN 0.4.10)', () => {
 		expect(codeOf({ status: 403, data: { type: 'https://x.example/problems/forbidden' } })).toBe('forbidden');
 	});
 
-	it('a message that was not sent says why in the website’s words; the log keeps a provider’s error as it came', () => {
+	it('a message that was not sent says why in the website’s words; the log words each reason code with its values', () => {
 		expect(notSentText(strings, { status: 'skipped', reason: 'unsubscribed' })).toBe(strings['reason.unsubscribed']);
-		expect(notSentText(strings, { status: 'failed', reason: 'The provider answered HTTP 401.' })).toBe(
-			strings['reason.failed'],
-		);
+		expect(notSentText(strings, { status: 'failed', reason: 'provider_status' })).toBe(strings['reason.failed']);
 		expect(notSentText({}, { status: 'failed' })).toBe('');
 		expect(logReason(strings, { reason: 'limited' })).toBe(strings['reason.limited']);
 		// a product's message the merchant switched off on its channel (parity P1)
 		expect(notSentText(strings, { status: 'skipped', reason: 'switched_off' })).toBe(strings['reason.switched_off']);
 		expect(logReason(strings, { reason: 'switched_off' })).toBe(strings['reason.switched_off']);
-		expect(logReason(strings, { reason: 'The provider answered HTTP 401.' })).toBe('The provider answered HTTP 401.');
+		expect(logReason(strings, { reason: 'provider_status', reasonValues: { status: '401' } })).toBe(
+			'the provider answered HTTP 401',
+		);
+		expect(logReason(strings, { reason: 'not_set_up', reasonValues: { template: 'chat.alert' } })).toContain(
+			'Add the WhatsApp template chat.alert with',
+		);
 		expect(logReason(strings, { reason: null })).toBe('');
 		expect(logReason({}, { reason: 'unsubscribed' })).toBe('unsubscribed');
 	});

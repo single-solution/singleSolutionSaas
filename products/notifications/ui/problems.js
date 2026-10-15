@@ -6,11 +6,8 @@
  * @module
  */
 
-/**
- * Reasons a message is skipped (`reason.<reason>`; `switched_off`: the merchant switched the product's message off on
- * its channel); any other reason is a provider's error.
- */
-const SKIP_REASONS = Object.freeze(['unsubscribed', 'limited', 'switched_off']);
+import { formatText } from '@ss/app-kit/widget';
+import { SKIP_REASONS } from '../core/gateway.js';
 
 /**
  * The problem code of an answer that is not ok: the last segment of its problem type, `offline` when nothing
@@ -51,13 +48,12 @@ export const notSentText = (texts, message) =>
 	] ?? '';
 
 /**
- * The reason the delivery log shows: the website's words for a skip, else the provider's error as it came ('' for
- * none).
+ * The reason the delivery log shows, in the website's words: the text `reason.<code>` filled with the reason's values
+ * (a skip, or why the last attempt failed), else the code itself ('' for none). Reasons are stored as codes, never as
+ * sentences (`core/gateway.js`).
  * @param {Readonly<Record<string, string>>} texts the widget texts
- * @param {{ reason: string | null }} message
+ * @param {{ reason?: string | null, reasonValues?: Record<string, string> | null }} message a message or an attempt
  * @returns {string}
  */
-export const logReason = (texts, message) =>
-	message.reason !== null && SKIP_REASONS.includes(message.reason)
-		? (texts[`reason.${message.reason}`] ?? message.reason)
-		: (message.reason ?? '');
+export const logReason = (texts, { reason, reasonValues }) =>
+	reason ? formatText(texts[`reason.${reason}`] ?? reason, reasonValues ?? {}) : '';

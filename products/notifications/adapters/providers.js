@@ -16,7 +16,7 @@
  */
 import { isObject } from '@ss/contracts/util';
 import { checkUrl, isNetError, signV4 } from '@ss/net';
-import { gatewayOutcome } from '../core/gateway.js';
+import { detailOf, failed, failureMessage, gatewayOutcome } from '../core/gateway.js';
 import { createSmtpMessaging } from './smtp.js';
 import { isMailbox } from './util.js';
 
@@ -145,8 +145,8 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 			});
 			return gatewayOutcome(response.status, response.body.toString('utf8'));
 		} catch (error) {
-			const reason = isNetError(error) ? error.code : 'network';
-			return { ok: false, error: `The provider could not be reached (${reason}).`, retryable: reason !== 'ssrf_blocked' };
+			const cause = isNetError(error) ? error.code : 'network';
+			return failed('provider_unreachable', { values: { cause }, retryable: cause !== 'ssrf_blocked' });
 		}
 	};
 
@@ -184,11 +184,11 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 				return { ok: true, id: info.id };
 			} catch (error) {
 				const code = /** @type {{ code?: string }} */ (error).code;
-				return {
-					ok: false,
-					error: error instanceof Error ? error.message : 'smtp delivery failed',
+				return failed('provider_error', {
+					values: { cause: typeof code === 'string' ? code : 'smtp' },
+					detail: detailOf(error instanceof Error ? error.message : '', [secret]),
 					retryable: code === 'timeout' || code === 'upstream_error',
-				};
+				});
 			}
 		}
 		if (v.provider === 'resend')
@@ -351,7 +351,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 		const provider = String(value.provider);
 		const violation = providerViolation(channel, value);
 		if (violation)
-			return { ok: false, error: `The ${channel} connection is not usable: ${violation}`, retryable: false, provider };
+			return { ...failed('connection_unusable', { values: { connection: channel }, detail: violation }), provider };
 		/** @type {SendOutcome} */
 		let outcome;
 		if (channel === 'email') outcome = await email(value, message);
@@ -429,7 +429,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 				`https://graph.facebook.com/${META_API_VERSION}/${encodeURIComponent(String(v.phoneNumberId))}?fields=id`,
 				{ method: 'GET', headers: { authorization: `Bearer ${secret}` } },
 			);
-		return outcome.ok ? { ok: true } : { ok: false, message: outcome.error };
+		return outcome.ok ? { ok: true } : { ok: false, message: failureMessage(outcome) };
 	};
 
 	return Object.freeze({ sendMessage, test });

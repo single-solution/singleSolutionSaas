@@ -18,11 +18,12 @@ import {
 } from 'node:crypto';
 import { isNetError } from '@ss/net';
 import { isObject } from '@ss/contracts/util';
+import { detailOf, failed } from '../core/gateway.js';
 
 /** @typedef {import('./providers.js').OutboundSend} OutboundSend */
 /** @typedef {{ endpoint: string, keys: { p256dh: string, auth: string } }} PushSubscription */
 /**
- * @typedef {{ ok: true, id: string | null } | { ok: false, error: string, retryable: boolean, gone?: boolean }} PushOutcome
+ * @typedef {import('../core/gateway.js').SendOutcome & { gone?: boolean }} PushOutcome a failure is a code (`core/gateway.js`)
  */
 
 /** How long a push service keeps an undelivered push (seconds). */
@@ -150,7 +151,7 @@ export const createWebPush = ({ send, now }) => {
 	 */
 	const push = async (keysValue, subscription, message) => {
 		const keys = pushKeysOf(keysValue);
-		if (!keys.ok) return { ok: false, error: `The push keys are not usable: ${keys.message}`, retryable: false };
+		if (!keys.ok) return failed('connection_unusable', { values: { connection: 'push_keys' }, detail: keys.message });
 		const body = encryptPayload({ payload: Buffer.from(JSON.stringify(message)), keys: subscription.keys });
 		try {
 			const response = await send(subscription.endpoint, {
@@ -167,15 +168,15 @@ export const createWebPush = ({ send, now }) => {
 			});
 			if (response.status >= 200 && response.status < 300) return { ok: true, id: response.headers.location ?? null };
 			const gone = response.status === 404 || response.status === 410;
-			return {
-				ok: false,
-				error: gone ? 'The browser is no longer subscribed.' : `The push service answered HTTP ${response.status}.`,
+			if (gone) return { ...failed('subscription_gone'), gone: true };
+			return failed('provider_status', {
+				values: { status: String(response.status) },
+				detail: detailOf(response.body.toString('utf8')),
 				retryable: response.status >= 500 || response.status === 429,
-				...(gone ? { gone: true } : {}),
-			};
+			});
 		} catch (error) {
-			const reason = isNetError(error) ? error.code : 'network';
-			return { ok: false, error: `The push service could not be reached (${reason}).`, retryable: reason !== 'ssrf_blocked' };
+			const cause = isNetError(error) ? error.code : 'network';
+			return failed('provider_unreachable', { values: { cause }, retryable: cause !== 'ssrf_blocked' });
 		}
 	};
 	return Object.freeze({ push });

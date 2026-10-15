@@ -29,7 +29,9 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {string} provider
  * @property {Date} at
  * @property {'sent' | 'failed'} outcome
- * @property {string} [error]
+ * @property {string} [reason] a failed attempt: why, as a code (`core/gateway.js`), never a sentence
+ * @property {Record<string, string>} [reasonValues] the values of its reason (for example `{ status: '503' }`)
+ * @property {string} [detail] the provider's own answer, short technical text (secrets removed)
  */
 /**
  * @typedef {object} MessageRecord
@@ -60,7 +62,9 @@ import { LEASE_MS } from '../core/timing.js';
  * @property {boolean} required
  * @property {boolean} urgent
  * @property {import('../core/log.js').MessageStatus} status
- * @property {string | null} reason why it failed or was skipped
+ * @property {string | null} reason why it failed or was skipped, as a code (`core/gateway.js`), never a sentence
+ * @property {Record<string, string> | null} reasonValues the values of its reason (for example the template keys of
+ *   `not_set_up`)
  * @property {Attempt[]} attempts every attempt, on every channel
  * @property {number} channelAttempts failed attempts on `channel`
  * @property {import('../core/timing.js').RetryPlan} retryPlan the retry plan on `channel`, kept from when the message
@@ -79,7 +83,7 @@ import { LEASE_MS } from '../core/timing.js';
  */
 /**
  * @typedef {{ id: string, type: string, url: string, body: string, attempts: number, status: 'pending' | 'delivered' | 'failed',
- *   lastError: string | null, dueAt: Date, leaseUntil: Date | null, expireAt?: Date | null }} WebhookEventRecord
+ *   lastError: import('../core/gateway.js').Failure | null, dueAt: Date, leaseUntil: Date | null, expireAt?: Date | null }} WebhookEventRecord
  */
 
 const TEMPLATES = 'templates';

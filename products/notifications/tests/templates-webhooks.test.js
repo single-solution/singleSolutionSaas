@@ -378,7 +378,8 @@ describe('a test send of a saved template from the template editor (tickets)', (
 		const activity = await (await env.call('GET', '/v1/activity?action=message.sent', { token: env.server })).json();
 		expect(activity.items[0]).toMatchObject({
 			actor: { kind: 'staff', id: 'u_1', name: 'Sam Staff' },
-			detail: 'Template accounts.code by WhatsApp: sent',
+			label: 'accounts.code',
+			detail: 'channel=whatsapp status=sent',
 		});
 		for (const [body, path] of /** @type {const} */ ([
 			[{ channel: 'whatsapp', to: '+447700900123', template: 'Bad Key' }, '/template'],

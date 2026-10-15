@@ -290,7 +290,8 @@ describe('SMS and WhatsApp providers', () => {
 		expect(await down.sendMessage('email', { provider: 'resend', secret: 'r', from: FROM }, MESSAGE)).toMatchObject({
 			ok: false,
 			retryable: true,
-			error: 'The provider could not be reached (timeout).',
+			reason: 'provider_unreachable',
+			values: { cause: 'timeout' },
 		});
 		const blocked = createProviders({
 			send: fakeSend(() => netError('ssrf_blocked', 'private', 'no')).send,
@@ -302,7 +303,8 @@ describe('SMS and WhatsApp providers', () => {
 		});
 		const plain = createProviders({ send: fakeSend(() => new Error('boom')).send, policy, now: () => NOW });
 		expect(await plain.sendMessage('email', { provider: 'resend', secret: 'r', from: FROM }, MESSAGE)).toMatchObject({
-			error: 'The provider could not be reached (network).',
+			reason: 'provider_unreachable',
+			values: { cause: 'network' },
 		});
 	});
 });
@@ -361,8 +363,8 @@ describe('web push', () => {
 		const subscription = { endpoint: 'https://push.example/s/1', keys };
 		for (const [status, expected] of /** @type {const} */ ([
 			[201, { ok: true }],
-			[410, { ok: false, gone: true, retryable: false }],
-			[429, { ok: false, retryable: true }],
+			[410, { ok: false, reason: 'subscription_gone', gone: true, retryable: false }],
+			[429, { ok: false, reason: 'provider_status', values: { status: '429' }, retryable: true }],
 			[400, { ok: false, retryable: false }],
 		])) {
 			const push = createWebPush({
@@ -374,8 +376,15 @@ describe('web push', () => {
 		const down = createWebPush({ send: fakeSend(() => netError('timeout', 'deadline', 'slow')).send, now: () => NOW });
 		expect(await down.push(vapid, subscription, { title: 't', body: 'b' })).toMatchObject({ ok: false, retryable: true });
 		const bare = createWebPush({ send: fakeSend(() => new Error('x')).send, now: () => NOW });
-		expect(await bare.push(vapid, subscription, { title: 't', body: 'b' })).toMatchObject({ error: /\(network\)/ });
-		expect(await bare.push({}, subscription, { title: 't', body: 'b' })).toMatchObject({ ok: false, error: /not usable/ });
+		expect(await bare.push(vapid, subscription, { title: 't', body: 'b' })).toMatchObject({
+			reason: 'provider_unreachable',
+			values: { cause: 'network' },
+		});
+		expect(await bare.push({}, subscription, { title: 't', body: 'b' })).toMatchObject({
+			ok: false,
+			reason: 'connection_unusable',
+			values: { connection: 'push_keys' },
+		});
 	});
 });
 

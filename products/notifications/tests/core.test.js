@@ -569,10 +569,22 @@ describe('provider answers, replies and webhook URLs', () => {
 		expect(gatewayOutcome(200, '[1]')).toEqual({ ok: true, id: null });
 		expect(gatewayOutcome(200, '{"sid":"SM1"}')).toEqual({ ok: true, id: 'SM1' });
 		expect(gatewayOutcome(200, '{"id":7}')).toEqual({ ok: true, id: '7' });
-		expect(gatewayOutcome(200, '{"error":"no balance"}')).toEqual({ ok: false, error: 'no balance', retryable: false });
-		expect(gatewayOutcome(200, '{"sent":"false","message":"expired"}')).toMatchObject({ error: 'expired' });
-		expect(gatewayOutcome(200, '{"success":false}')).toMatchObject({ error: 'The message was not sent.' });
-		expect(gatewayOutcome(200, '{"status":"Failed"}')).toMatchObject({ error: 'Failed' });
+		expect(gatewayOutcome(200, '{"error":"no balance"}')).toEqual({
+			ok: false,
+			reason: 'provider_refused',
+			detail: 'no balance',
+			retryable: false,
+		});
+		expect(gatewayOutcome(200, '{"sent":"false","message":"expired"}')).toMatchObject({ detail: 'expired' });
+		expect(gatewayOutcome(200, '{"success":false}')).toMatchObject({ reason: 'provider_refused' });
+		expect(gatewayOutcome(200, '{"status":"Failed"}')).toMatchObject({ detail: 'Failed' });
+		expect(gatewayOutcome(503, 'down')).toEqual({
+			ok: false,
+			reason: 'provider_status',
+			values: { status: '503' },
+			detail: 'down',
+			retryable: true,
+		});
 		expect(gatewayOutcome(200, '{"status":"queued"}')).toEqual({ ok: true, id: null });
 	});
 
