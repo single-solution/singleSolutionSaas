@@ -101,6 +101,7 @@ const orderNews = (order, paymentId) => {
 /** @type {GatewayAdapter} */
 export const paypal = {
 	id: 'paypal',
+	addresses: ['notice'],
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the client id, the secret and the webhook id.';
 		for (const name of ['clientId', 'secret', 'webhookId'])

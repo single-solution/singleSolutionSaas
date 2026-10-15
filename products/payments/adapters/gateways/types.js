@@ -41,6 +41,9 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
 /**
  * @typedef {object} GatewayAdapter
  * @property {string} id
+ * @property {ReadonlyArray<'notice' | 'return'>} addresses what the merchant registers in the gateway's own console
+ *   (P12): `notice`, the address of its signed notices (`/v1/gateways/<id>/<websiteId>`); `return`, the payer's return
+ *   address (`/return/<id>/<websiteId>/<paymentId>`)
  * @property {number} [maxExpiryHours] for a gateway whose checkout takes a time limit: the longest it takes, which caps
  *   the merchant's `payment_api.checkoutExpiryHours` (P9)
  * @property {(keys: unknown) => string | null} violation why a connection value is not usable, or null

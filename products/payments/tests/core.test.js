@@ -33,7 +33,7 @@ import {
 	statusAfterRefund,
 	subscriptionView,
 } from '../core/payments.js';
-import { callbackUrls, createSnippets } from '../core/snippets.js';
+import { createSnippets, gatewayAddresses } from '../core/snippets.js';
 
 describe('money', () => {
 	it('checks amounts and currencies', () => {
@@ -439,8 +439,12 @@ describe('payment events', () => {
 
 describe('snippets', () => {
 	it('names the addresses to register and the snippets', () => {
-		expect(callbackUrls('https://p', 'web_1').stripe).toBe('https://p/v1/gateways/stripe/web_1');
-		expect(callbackUrls('https://p').payfast).toContain('<websiteId>');
+		// what each adapter declares, rendered the same way for every gateway (P12)
+		expect(gatewayAddresses('https://p', 'web_1', { stripe: ['notice'], jazzcash: ['return'], payfast: [] })).toEqual([
+			{ gateway: 'stripe', urls: ['https://p/v1/gateways/stripe/web_1'] },
+			{ gateway: 'jazzcash', urls: ['https://p/return/jazzcash/web_1/<paymentId>'] },
+		]);
+		expect(gatewayAddresses('https://p', undefined, { payfast: ['notice'] })[0]?.urls[0]).toContain('<websiteId>');
 		const snippets = createSnippets({
 			base: 'https://p',
 			widgets: [

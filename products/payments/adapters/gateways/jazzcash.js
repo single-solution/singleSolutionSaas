@@ -59,6 +59,7 @@ const plain = (text, max) =>
 /** @type {GatewayAdapter} */
 export const jazzcash = {
 	id: 'jazzcash',
+	addresses: ['return'],
 	// JazzCash names no longest expiry: a week
 	maxExpiryHours: 168,
 	violation: (keys) => {

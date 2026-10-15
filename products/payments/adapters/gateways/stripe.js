@@ -44,6 +44,7 @@ const sessionNews = (session) => ({
 /** @type {GatewayAdapter} */
 export const stripe = {
 	id: 'stripe',
+	addresses: ['notice'],
 	// a Checkout Session lasts at most 24 hours (Stripe's own limit, also its default)
 	maxExpiryHours: 24,
 	violation: (keys) => {

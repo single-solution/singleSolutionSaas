@@ -51,6 +51,7 @@ export const webhookSignature = (body, secret) => hmacHex(secret, body);
 /** @type {GatewayAdapter} */
 export const rapid = {
 	id: 'rapid',
+	addresses: ['notice'],
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the secret key and the webhook secret.';
 		if (typeof keys.secretKey !== 'string' || keys.secretKey.trim().length < 8 || /\s/.test(keys.secretKey))

@@ -1478,6 +1478,25 @@ describe('data rights, statuses and public files', () => {
 		expect((await page('/pay.js')).text).toContain('data-autosubmit');
 		const docs = await page('/docs');
 		expect(docs.text).toContain(`${BASE}/v1/gateways/stripe/&#60;websiteId&#62;`);
+		expect(docs.text).toContain(`${BASE}/return/jazzcash/&#60;websiteId&#62;/&#60;paymentId&#62;`);
+		// the dashboard's Developers tab: each gateway's console addresses, as its adapter declares them (P12)
+		const addresses = await env.dashboard(
+			await env.adminSession(),
+			'GET',
+			`/v1/dashboard/websites/${env.websiteId}/gateway-addresses`,
+		);
+		expect(addresses.status).toBe(200);
+		expect(addresses.json.items).toContainEqual({
+			gateway: 'stripe',
+			name: 'Stripe',
+			urls: [`${BASE}/v1/gateways/stripe/${env.websiteId}`],
+		});
+		expect(addresses.json.items).toContainEqual({
+			gateway: 'easypaisa',
+			name: 'Easypaisa (Pakistan)',
+			urls: [`${BASE}/return/easypaisa/${env.websiteId}/<paymentId>`],
+		});
+		expect((await env.call('GET', `/v1/dashboard/websites/${env.websiteId}/gateway-addresses`)).status).toBe(401);
 		expect(docs.text).toContain('feature-payment_links');
 		// the API reference: what each call takes and answers, from schemas/api.json
 		for (const part of [

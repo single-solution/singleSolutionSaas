@@ -262,3 +262,29 @@ describe('the manual payment methods editor (P1, P2)', () => {
 		expect(container.textContent).not.toContain('Storage is not connected');
 	});
 });
+
+describe("Payments's dashboard Developers tab", () => {
+	it("lists each gateway's console addresses as the server says, with no gateway named in code (P12)", async () => {
+		const items = [
+			{ gateway: 'stripe', name: 'Stripe', urls: ['https://p.example/v1/gateways/stripe/web_9'] },
+			{ gateway: 'jazzcash', name: 'JazzCash (Pakistan)', urls: ['https://p.example/return/jazzcash/web_9/<paymentId>'] },
+		];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path) => {
+				if (path.endsWith('/features')) return new Response(JSON.stringify({ features: [] }), { status: 200 });
+				if (path.endsWith('/gateway-addresses')) return new Response(JSON.stringify({ items }), { status: 200 });
+				return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
+			}),
+		);
+		const tab = props();
+		const { container } = render(
+			<DashboardProvider manifest={manifest} texts={TEXTS}>
+				<TABS.developers {...tab} />
+			</DashboardProvider>,
+		);
+		await settle();
+		expect(container.textContent).toContain('Stripe: https://p.example/v1/gateways/stripe/web_9');
+		expect(container.textContent).toContain('JazzCash (Pakistan): https://p.example/return/jazzcash/web_9/<paymentId>');
+	});
+});

@@ -82,6 +82,7 @@ const api = (keys, ctx, method, path, body = {}) => {
 /** @type {GatewayAdapter} */
 export const payfast = {
 	id: 'payfast',
+	addresses: ['notice'],
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the merchant id, the merchant key and the passphrase.';
 		if (typeof keys.merchantId !== 'string' || !/^\d{4,20}$/.test(keys.merchantId)) return 'The merchant id is a number.';

@@ -12,8 +12,8 @@ import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
-import { GATEWAY_CURRENCIES } from '../core/gateways.js';
-import { callbackUrls, createSnippets } from '../core/snippets.js';
+import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
+import { createSnippets, gatewayAddresses } from '../core/snippets.js';
 import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
 
@@ -54,17 +54,31 @@ const routeTable = (rows) =>
 
 /**
  * The docs page.
- * @param {{ base: string }} input the product's address (snippets point at it)
+ * @param {{ base: string, addresses: Readonly<Record<string, ReadonlyArray<'notice' | 'return'>>> }} input the
+ *   product's address (snippets point at it) and what each gateway's adapter says to register in its console (P12)
  * @returns {string}
  */
-export const renderDocs = ({ base }) => {
+export const renderDocs = ({ base, addresses }) => {
 	const build = /** @type {Record<string, string>} */ (guide.build);
 	const snippets = createSnippets({
 		base,
 		widgets: manifest.widgets,
 		permissions: manifest.permissions.map((permission) => permission.key),
 	});
-	const urls = callbackUrls(base);
+	const urls = new Map(gatewayAddresses(base, undefined, addresses).map((entry) => [entry.gateway, entry.urls]));
+	const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+	// each gateway by its dashboard name, with its guide and the addresses its adapter declares
+	const gatewaySections = GATEWAYS.map((gateway) =>
+		[
+			`<h3>${escape(names.get(GATEWAY_FEATURES[gateway]) ?? gateway)}</h3>`,
+			para(
+				/** @type {Record<string, unknown>} */ (guide)[gateway] === undefined
+					? ''
+					: String(/** @type {Record<string, unknown>} */ (guide)[gateway]),
+			),
+			...(urls.has(gateway) ? [block(/** @type {string[]} */ (urls.get(gateway)).join('\n'))] : []),
+		].join('\n'),
+	).join('\n');
 	const rows = operations();
 	const featureSections = manifest.features.map((feature) => {
 		const widgets = manifest.widgets.filter((widget) => [widget.feature].flat().includes(feature.key));
@@ -111,30 +125,7 @@ ${para(guide.events)}
 ${block(snippets.webhook)}
 <h2>Gateways</h2>
 ${para(guide.gateways)}
-<h3>Stripe</h3>
-${para(guide.stripe)}
-${block(urls.stripe)}
-<h3>PayPal</h3>
-${para(guide.paypal)}
-${block(urls.paypal)}
-<h3>PayFast (South Africa)</h3>
-${para(guide.payfast)}
-${block(urls.payfast)}
-<h3>PayFast (Pakistan)</h3>
-${para(guide.payfast_pk)}
-${block(urls.payfast_pk)}
-<h3>JazzCash (Pakistan)</h3>
-${para(guide.jazzcash)}
-${block(`${urls.jazzcash}/<paymentId>`)}
-<h3>Easypaisa (Pakistan)</h3>
-${para(guide.easypaisa)}
-${block(`${urls.easypaisa}/<paymentId>`)}
-<h3>Rapid Gateway (Pakistan)</h3>
-${para(guide.rapid)}
-${block(urls.rapid)}
-<h3>Generic gateway adapter</h3>
-${para(guide.generic)}
-${block(urls.generic)}
+${gatewaySections}
 <h3>Manual payment methods</h3>
 ${para(guide.bank)}
 ${block(snippets.methods)}

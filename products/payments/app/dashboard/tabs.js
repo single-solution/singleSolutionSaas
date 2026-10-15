@@ -10,7 +10,7 @@ import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad 
 import manifest from '../../manifest.json' with { type: 'json' };
 import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
 import { methodReady } from '../../core/methods.js';
-import { callbackUrls, createSnippets } from '../../core/snippets.js';
+import { createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, FORMS } from './forms.js';
 import { MethodsEditor } from './methods.js';
 import { TEXTS } from './texts.js';
@@ -163,7 +163,10 @@ function PaymentsDevelopers(props) {
 		widgets: manifest.widgets,
 		permissions: manifest.permissions.map((permission) => permission.key),
 	});
-	const urls = callbackUrls(origin, String(props.websiteId));
+	// each gateway's console addresses, as its adapter declares them (P12)
+	const addresses = useLoad(props.websiteId ? `/v1/dashboard/websites/${props.websiteId}/gateway-addresses` : null);
+	/** @type {Array<{ gateway: string, name: string, urls: string[] }>} */
+	const items = addresses.answer?.ok ? addresses.answer.data.items : [];
 	return (
 		<DevelopersTab {...props}>
 			<Section title={D.api} description={D.apiHelp}>
@@ -171,14 +174,7 @@ function PaymentsDevelopers(props) {
 				<CodeBlock code={snippets.verify} />
 			</Section>
 			<Section title={D.callbacks} description={D.callbacksHelp}>
-				<CodeBlock
-					code={Object.entries(urls)
-						.map(
-							([gateway, url]) =>
-								`${gateway}: ${url}${gateway === 'jazzcash' || gateway === 'easypaisa' ? '/<paymentId>' : ''}`,
-						)
-						.join('\n')}
-				/>
+				<CodeBlock code={items.flatMap((item) => item.urls.map((url) => `${item.name}: ${url}`)).join('\n')} />
 			</Section>
 			<Section title={D.events} description={D.eventsHelp}>
 				<CodeBlock code={snippets.webhook} />

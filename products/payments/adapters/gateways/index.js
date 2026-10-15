@@ -1,6 +1,6 @@
 /**
- * The gateway adapters by id (PLAN 0.8.7), behind the common interface of `./types.js`. Bank transfer has no adapter:
- * its page shows the merchant's bank details and the merchant confirms receipt.
+ * The gateway adapters by id (PLAN 0.8.7), behind the common interface of `./types.js`. Manual payment methods have no
+ * adapter: their page shows the merchant's accounts and instructions, and the merchant confirms the money.
  * @module
  */
 import { easypaisa } from './easypaisa.js';
@@ -16,7 +16,7 @@ import { stripe } from './stripe.js';
 
 /**
  * @param {import('@ss/net').OutboundPolicy} [policy] the outbound policy for addresses the merchant enters (generic)
- * @returns {Readonly<Record<Exclude<import('../../core/gateways.js').Gateway, 'bank_transfer'>, GatewayAdapter>>}
+ * @returns {Readonly<Record<import('../../core/gateways.js').Gateway, GatewayAdapter>>}
  */
 export const createAdapters = (policy) =>
 	Object.freeze({

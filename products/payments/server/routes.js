@@ -12,6 +12,7 @@ import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
 import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
 import { methodView } from '../core/methods.js';
+import { gatewayAddresses } from '../core/snippets.js';
 import { amountOf, decimalSignOf, fromDecimal } from '../core/money.js';
 import {
 	PAYMENT_STATUSES,
@@ -29,7 +30,7 @@ import {
 	subscriptionView,
 } from '../core/payments.js';
 import { PROOF_TYPES } from '../core/widgets.js';
-import { strings } from '../adapters/product.js';
+import { manifest, strings } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { formFields } from '../adapters/util.js';
 import { renderDocs } from './docs.js';
@@ -299,6 +300,27 @@ export const createRoutes = (product) => {
 			return invalid('currency', 'currency is an ISO 4217 code (USD, EUR …).');
 		const methods = await product.lists.get(ctx.websiteId, 'manual_methods');
 		return { methods: methods.map((method) => methodView(method, currency)) };
+	};
+
+	/** What each gateway's adapter says the merchant registers in its console (P12). */
+	const declared = Object.freeze(
+		Object.fromEntries(Object.entries(product.gateways).map(([gateway, adapter]) => [gateway, adapter.addresses])),
+	);
+
+	/**
+	 * The dashboard's Developers tab: each gateway's console addresses for this website, by its dashboard name (P12).
+	 * @param {any} ctx
+	 */
+	const gatewayAddressList = (ctx) => {
+		const base = product.address() ?? new URL(ctx.request.url).origin;
+		const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+		return {
+			items: gatewayAddresses(base, String(ctx.params.websiteId), declared).map((entry) => ({
+				gateway: entry.gateway,
+				name: names.get(GATEWAY_FEATURES[/** @type {Gateway} */ (entry.gateway)]) ?? entry.gateway,
+				urls: entry.urls,
+			})),
+		};
 	};
 
 	/** A presigned link to a payment's proof (5 minutes). @param {any} ctx */
@@ -1030,6 +1052,12 @@ export const createRoutes = (product) => {
 			permission: 'links.read',
 			handler: listLinks,
 		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/dashboard/websites/:websiteId/gateway-addresses',
+			auth: 'dashboard',
+			handler: gatewayAddressList,
+		}),
 		// the manual payment methods a new link may offer (their keys and names)
 		defineRoute({
 			method: 'GET',
@@ -1207,7 +1235,7 @@ export const createRoutes = (product) => {
 			path: '/docs',
 			auth: 'none',
 			handler: (ctx) =>
-				new Response(renderDocs({ base: product.address() ?? new URL(ctx.request.url).origin }), {
+				new Response(renderDocs({ base: product.address() ?? new URL(ctx.request.url).origin, addresses: declared }), {
 					headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
 				}),
 		}),

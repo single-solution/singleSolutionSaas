@@ -48,6 +48,7 @@ export const localMobile = (phone) => (phone && /^\+923\d{9}$/.test(phone) ? `0$
 /** @type {GatewayAdapter} */
 export const easypaisa = {
 	id: 'easypaisa',
+	addresses: ['return'],
 	// Easypay names no longest expiry: a week
 	maxExpiryHours: 168,
 	violation: (keys) => {

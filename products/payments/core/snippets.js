@@ -8,20 +8,24 @@
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
- * The addresses a merchant registers with each gateway for one website (`<websiteId>` when not known).
+ * The addresses the merchant registers in each gateway's console, from what each adapter declares (P12): `notice`, its
+ * signed notices; `return`, the payer's return (per payment). Gateways that declare none are left out.
  * @param {string} base the product's address
- * @param {string} [websiteId]
+ * @param {string} [websiteId] the website (`<websiteId>` in the docs)
+ * @param {Readonly<Record<string, ReadonlyArray<'notice' | 'return'>>>} declared each gateway's `addresses`
+ * @returns {Array<{ gateway: string, urls: string[] }>}
  */
-export const callbackUrls = (base, websiteId = '<websiteId>') => ({
-	stripe: `${base}/v1/gateways/stripe/${websiteId}`,
-	paypal: `${base}/v1/gateways/paypal/${websiteId}`,
-	payfast: `${base}/v1/gateways/payfast/${websiteId}`,
-	payfast_pk: `${base}/v1/gateways/payfast_pk/${websiteId}`,
-	jazzcash: `${base}/return/jazzcash/${websiteId}`,
-	easypaisa: `${base}/return/easypaisa/${websiteId}`,
-	rapid: `${base}/v1/gateways/rapid/${websiteId}`,
-	generic: `${base}/v1/gateways/generic/${websiteId}`,
-});
+export const gatewayAddresses = (base, websiteId = '<websiteId>', declared = {}) =>
+	Object.entries(declared)
+		.filter(([, kinds]) => kinds.length > 0)
+		.map(([gateway, kinds]) => ({
+			gateway,
+			urls: kinds.map((kind) =>
+				kind === 'notice'
+					? `${base}/v1/gateways/${gateway}/${websiteId}`
+					: `${base}/return/${gateway}/${websiteId}/<paymentId>`,
+			),
+		}));
 
 /**
  * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[] }} input `base`:

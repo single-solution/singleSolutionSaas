@@ -118,6 +118,7 @@ const confirmation = (data, keys) => {
 /** @type {GatewayAdapter} */
 export const payfastPk = {
 	id: 'payfast_pk',
+	addresses: ['notice'],
 	violation: (keys) => {
 		if (!isObject(keys)) return 'Enter the merchant id, the secured key and the merchant name.';
 		if (typeof keys.merchantId !== 'string' || !/^\d{1,20}$/.test(keys.merchantId)) return 'The merchant id is a number.';

@@ -64,6 +64,7 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 	/** @type {GatewayAdapter} */
 	const generic = {
 		id: 'generic',
+		addresses: ['notice'],
 		violation: (keys) => {
 			if (!isObject(keys)) return 'Enter the name, the checkout address and the secret.';
 			if (typeof keys.name !== 'string' || keys.name.trim() === '' || keys.name.length > 40)
