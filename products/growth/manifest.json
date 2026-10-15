@@ -42,7 +42,7 @@
 		{
 			"key": "custom_scripts",
 			"name": "Custom scripts",
-			"description": "Scripts the merchant pastes, added to the page once the visitor consents to their category (analytics or marketing).",
+			"description": "Scripts the merchant pastes into a consent category (the list Consent categories), added to the page once the visitor consents to it.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/custom_scripts.settings.json"
@@ -51,7 +51,7 @@
 		{
 			"key": "consent_banner",
 			"name": "Consent banner",
-			"description": "A cookie banner with the categories necessary, analytics and marketing; the choice stays in the visitor's browser and feeds Google Consent Mode v2.",
+			"description": "A consent banner with the merchant's categories (necessary, preferences, analytics, marketing and the sale or sharing of personal data to start with), at the bottom, the top, in the middle or in a corner; the choice stays in the visitor's browser and feeds Google Consent Mode v2.",
 			"dependsOn": [],
 			"recommendFor": ["marketing.google", "marketing.meta", "marketing.tiktok"],
 			"settings": {

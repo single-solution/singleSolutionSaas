@@ -34,6 +34,7 @@ import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { createImportOptions } from './imports.js';
 import { createLists, kitLists } from './lists.js';
+import { LISTS } from '../core/lists.js';
 import { REDIRECT_INDEXES, createRedirectStore } from './redirects.js';
 import { SEO_REPORT_INDEXES } from './seo-reports.js';
 import { INDEXES } from './store.js';
@@ -122,6 +123,20 @@ export const createProductInstance = (options) => {
 	};
 
 	/**
+	 * The merchant's lists the page script needs, of the features that are on (each read at most every 30 s per
+	 * instance, `lists.recent`).
+	 * @param {string} websiteId
+	 * @param {ReadonlyArray<string>} on
+	 * @returns {Promise<import('../core/config.js').PageLists>}
+	 */
+	const pageLists = async (websiteId, on) => {
+		/** @type {Array<import('../core/lists.js').ListName>} */
+		const names = ['consent_categories', 'announcements', 'conversion_actions', 'goals', 'funnels'];
+		const wanted = names.filter((name) => [LISTS[name].feature].flat().some((feature) => on.includes(feature)));
+		return Object.fromEntries(await Promise.all(wanted.map(async (name) => [name, await lists.recent(websiteId, name)])));
+	};
+
+	/**
 	 * How many redirect rules a website has (one count in the merchant database), or null when the database is not
 	 * connected or the count fails.
 	 * @param {string} websiteId
@@ -185,7 +200,7 @@ export const createProductInstance = (options) => {
 				const on = await product.featuresOn(websiteId);
 				// the admin widgets (ticket) also get the checklist's pages, the IndexNow key file and the raw events' keep time
 				const admin = ctx.ticket ? { domain: String(ctx.status?.domain ?? '') } : null;
-				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin });
+				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin, lists: await pageLists(websiteId, on) });
 			},
 			blueprint: setupPart,
 		},

@@ -40,6 +40,10 @@ ul { list-style: none; margin: 0; padding: 0; }
   box-shadow: 0 8px 32px rgba(15, 23, 42, 0.18); }
 :host([data-ss-mode='dark']) .banner { background: var(--ss-color-background, #111827); }
 .banner.bottom { bottom: 16px; } .banner.top { top: 16px; }
+.banner.center { top: 50%; transform: translateY(-50%); max-width: 560px; max-height: calc(100vh - 32px); overflow: auto; }
+.banner.bottom_left, .banner.bottom_right { bottom: 16px; max-width: 380px; margin: 0; }
+.banner.bottom_left { right: auto; } .banner.bottom_right { left: auto; }
+.banner-backdrop { position: fixed; inset: 0; z-index: 2147482999; background: rgb(0 0 0 / 0.45); }
 .choices { display: grid; gap: 8px; margin-top: 8px; }
 .choices .help { display: block; font-size: 0.85em; opacity: 0.7; }
 

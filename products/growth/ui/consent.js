@@ -1,13 +1,14 @@
 /**
  * The visitor's consent in the page (PLAN 0.8.9): the choice kept in their own browser (localStorage), whoever made it
  * (the banner, or the merchant's own consent tool through `SSGrowth.consent.set()`), and the consent banner (visitor
- * widget `consent_banner`): necessary, analytics and marketing, Accept all, Only necessary, or Choose and Save. Every
- * word is a widget text.
+ * widget `consent_banner`): the merchant's categories (G3, each with its own name and description), Accept all, Only
+ * necessary, or Choose and Save; at the bottom, the top, in the middle of the page (a dialog over it) or in a corner
+ * (G7). The banner's other words are widget texts.
  * @module
  */
 import { element, mountWidget } from '@ss/app-kit/widget';
-import { CONSENT_STORAGE_KEY } from '../core/widgets.js';
-import { makeChoice, readChoice } from '../core/consent.js';
+import { BANNER_POSITIONS, CONSENT_STORAGE_KEY } from '../core/widgets.js';
+import { grantedOf, makeChoice, readChoice } from '../core/consent.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** @typedef {import('../core/consent.js').Choice} Choice */
@@ -30,39 +31,61 @@ export const storageOf = (win, name) => {
 };
 
 /**
- * The consent state of the page.
+ * The consent state of the page. The merchant's categories come with the widget config (`configure`); until then a
+ * choice the page makes waits for them.
  * @param {{ storage: KeyValue, now: () => number }} input
  */
 export const createConsent = ({ storage, now }) => {
+	/** @type {ReadonlyArray<import('../core/consent.js').Category> | null} */
+	let categories = null;
 	/** @type {Choice | null} */
-	let choice = readChoice(storage.getItem(CONSENT_STORAGE_KEY), now());
+	let choice = null;
+	/** @type {Record<string, unknown> | null} a choice made before the categories were known */
+	let early = null;
 	/** @type {Set<(choice: Choice) => void>} */
 	const listeners = new Set();
+	/** @param {Record<string, unknown>} picked */
+	const keep = (picked) => {
+		choice = makeChoice(picked, now(), categories ?? []);
+		try {
+			storage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(choice));
+		} catch {
+			// the browser refuses storage: the choice holds for this page only
+		}
+		for (const listener of listeners) listener(choice);
+		return choice;
+	};
 	return Object.freeze({
-		/** The choice now, or null before the visitor chose. */
+		/** The choice now, or null before the visitor chose (or before the categories are known). */
 		get: () => choice,
 		/**
-		 * Keep a choice and tell the listeners.
-		 * @param {{ analytics?: unknown, marketing?: unknown }} picked
+		 * Keep a choice and tell the listeners: each category's key, true or false (an opt-out category left out stays on).
+		 * @param {Record<string, unknown>} picked
 		 */
 		set: (picked) => {
-			choice = makeChoice({ analytics: picked?.analytics === true, marketing: picked?.marketing === true }, now());
-			try {
-				storage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(choice));
-			} catch {
-				// the browser refuses storage: the choice holds for this page only
+			const given = typeof picked === 'object' && picked !== null ? picked : {};
+			if (categories === null) {
+				early = given;
+				return null;
 			}
-			for (const listener of listeners) listener(choice);
-			return choice;
+			return keep(given);
 		},
 		/**
-		 * The merchant's months a choice holds (G6, from the widget config): a choice older than that is dropped, so the
-		 * visitor is asked again.
-		 * @param {number} months
+		 * The merchant's categories and months (G3, G6, from the widget config): the kept choice is read with them (asked
+		 * again when it is too old or a category is new), and a choice the page made before is kept now.
+		 * @param {{ months: number, categories: ReadonlyArray<import('../core/consent.js').Category> }} options
 		 */
-		askAgainAfter: (months) => {
-			choice = choice && readChoice(JSON.stringify(choice), now(), months);
+		configure: ({ months, categories: list }) => {
+			categories = list;
+			choice = readChoice(storage.getItem(CONSENT_STORAGE_KEY), now(), months, list);
+			if (early) {
+				const waiting = early;
+				early = null;
+				keep(waiting);
+			}
 		},
+		/** The merchant's categories, once known. */
+		categories: () => categories ?? [],
 		/** @param {(choice: Choice) => void} listener */
 		onChange: (listener) => {
 			listeners.add(listener);
@@ -75,21 +98,26 @@ export const createConsent = ({ storage, now }) => {
 
 /**
  * The consent banner, mounted into `host`; it closes itself once the visitor chose.
- * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, consent: Consent }} input
+ * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, consent: Consent, gpc?: boolean }} input
+ *   `gpc`: the browser sends Global Privacy Control (opt-out categories start off)
  * @returns {{ open: () => void, close: () => void }}
  */
-export const mountConsentBanner = ({ host, config, consent }) => {
+export const mountConsentBanner = ({ host, config, consent, gpc = false }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
 	const settings = config.settings.consent;
+	const categories = settings.categories;
 	/** @type {HTMLElement | null} */
 	let panel = null;
+	/** @type {HTMLElement | null} */
+	let backdrop = null;
 	/** @type {HTMLElement | null} */
 	let main = null;
 	/** @type {HTMLElement | null} */
 	let choose = null;
-	/** @type {Record<'analytics' | 'marketing', HTMLInputElement>} */
-	const boxes = /** @type {any} */ ({});
+	/** @type {Map<string, HTMLInputElement>} */
+	const boxes = new Map();
+	const position = BANNER_POSITIONS.includes(settings.position) ? settings.position : 'bottom';
 	mountWidget({
 		host,
 		theme: config.theme,
@@ -97,10 +125,13 @@ export const mountConsentBanner = ({ host, config, consent }) => {
 		css: WIDGET_CSS,
 		render: (root) => {
 			const doc = root.ownerDocument;
+			// in the middle of the page, the banner is a dialog over a dimmed page (G7)
+			backdrop = position === 'center' ? element(doc, 'div', { class: 'banner-backdrop', hidden: '' }) : null;
 			panel = element(doc, 'section', {
-				class: `banner ${settings.position}`,
+				class: `banner ${position}`,
 				role: 'dialog',
 				'aria-label': t('consent.label'),
+				...(position === 'center' ? { 'aria-modal': 'true' } : {}),
 				hidden: '',
 			});
 			main = element(doc, 'div');
@@ -113,58 +144,62 @@ export const mountConsentBanner = ({ host, config, consent }) => {
 				node.addEventListener('click', act);
 				return node;
 			};
-			/** @param {{ analytics: boolean, marketing: boolean }} picked */
+			/** @param {boolean} on every category on, or only the required ones */
+			const everything = (on) => Object.fromEntries(categories.map((category) => [category.key, on]));
+			/** @param {Record<string, boolean>} picked */
 			const decide = (picked) => {
 				consent.set(picked);
 				close();
 			};
 			const actions = element(doc, 'div', { class: 'actions' });
 			actions.append(
-				button(t('consent.acceptAll'), '', () => decide({ analytics: true, marketing: true })),
-				button(t('consent.rejectAll'), 'secondary', () => decide({ analytics: false, marketing: false })),
+				button(t('consent.acceptAll'), '', () => decide(everything(true))),
+				button(t('consent.rejectAll'), 'secondary', () => decide(everything(false))),
 				button(t('consent.customize'), 'link', () => show('choose')),
 			);
 			main.append(element(doc, 'h2', {}, t('consent.title')), text, actions);
 
 			choose = element(doc, 'div', { hidden: '' });
 			const list = element(doc, 'div', { class: 'choices' });
-			/** @param {'necessary' | 'analytics' | 'marketing'} category */
-			const row = (category) => {
+			for (const category of categories) {
 				const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox' }));
-				if (category === 'necessary') {
+				if (category.mode === 'required') {
 					input.checked = true;
 					input.disabled = true;
-				} else boxes[category] = input;
+				} else boxes.set(category.key, input);
 				const label = element(doc, 'label', { class: 'check' });
-				const words = element(doc, 'span', {}, t(`consent.${category}`));
-				words.append(element(doc, 'span', { class: 'help' }, t(`consent.${category}Help`)));
+				const words = element(doc, 'span', {}, category.name);
+				if (category.description) words.append(element(doc, 'span', { class: 'help' }, category.description));
 				label.append(input, words);
-				return label;
-			};
-			list.append(row('necessary'), row('analytics'), row('marketing'));
+				list.append(label);
+			}
 			const save = element(doc, 'div', { class: 'actions' });
 			save.append(
 				button(t('consent.save'), '', () =>
-					decide({ analytics: boxes.analytics.checked, marketing: boxes.marketing.checked }),
+					decide(Object.fromEntries([...boxes].map(([key, input]) => [key, input.checked]))),
 				),
-				button(t('consent.acceptAll'), 'secondary', () => decide({ analytics: true, marketing: true })),
+				button(t('consent.acceptAll'), 'secondary', () => decide(everything(true))),
 			);
 			choose.append(element(doc, 'h2', {}, t('consent.title')), list, save);
 			panel.append(main, choose);
+			if (backdrop) root.append(backdrop);
 			root.append(panel);
 		},
 	});
 
 	/** @param {'main' | 'choose'} view */
 	const show = (view) => {
-		const current = consent.get();
-		boxes.analytics.checked = current?.analytics === true;
-		boxes.marketing.checked = current?.marketing === true;
+		const current = grantedOf(consent.get(), categories, { consentRequired: true, gpc });
+		for (const [key, input] of boxes) input.checked = current[key] === true;
 		main?.toggleAttribute('hidden', view !== 'main');
 		choose?.toggleAttribute('hidden', view !== 'choose');
+		backdrop?.removeAttribute('hidden');
 		panel?.removeAttribute('hidden');
 	};
-	const close = () => panel?.setAttribute('hidden', '');
+	const close = () => {
+		panel?.setAttribute('hidden', '');
+		backdrop?.setAttribute('hidden', '');
+	};
 	if (consent.get() === null) show('main');
 	return { open: () => show('choose'), close };
 };

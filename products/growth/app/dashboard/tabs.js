@@ -39,10 +39,13 @@ const valuesOf = (data) =>
 const useGrowthOverview = (overview, { websiteId, open }) => {
 	const timeZone = useViewerTimeZone();
 	const settings = useLoad(`/v1/dashboard/websites/${websiteId}/settings`);
+	// custom scripts live in the consent categories (G3): read them only while Custom scripts is on
+	const scripts = overview?.ok === true && overview.data.featuresOn.includes('custom_scripts');
+	const categories = useLoad(scripts ? `/v1/dashboard/websites/${websiteId}/lists/consent_categories` : null);
 	if (!overview?.ok || !settings.answer?.ok) return {};
 	const data = overview.data;
 	const values = valuesOf(settings.answer.data);
-	const tags = tagsReady(data.featuresOn, values);
+	const tags = tagsReady(data.featuresOn, values, categories.answer?.ok ? categories.answer.data.value : []);
 	const missing = tags.total - tags.ready;
 	const O = TEXTS.overview;
 	return {

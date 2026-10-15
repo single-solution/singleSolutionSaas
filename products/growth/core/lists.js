@@ -132,7 +132,11 @@ const DEFAULT_GOALS = Object.freeze([
 	{ key: 'contact', name: 'Contact', kind: 'event', match: 'contact' },
 ]);
 
-/** The consent categories every website starts with (G3). */
+/**
+ * The consent categories every website starts with (G3).
+ * @type {ReadonlyArray<{ key: string, name: string, description: string, mode: 'required' | 'opt_in' | 'opt_out',
+ *   signals: string[], scripts: string }>}
+ */
 export const DEFAULT_CATEGORIES = Object.freeze([
 	{
 		key: 'necessary',

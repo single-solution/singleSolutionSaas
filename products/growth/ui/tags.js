@@ -1,9 +1,10 @@
 /**
- * The merchant's tags in the page (PLAN 0.8.9): Google Consent Mode v2 set to denied before anything else, then each
- * tag loaded only once the visitor consents to its category — Google Analytics 4 and the analytics scripts after
- * analytics; the Meta pixel, the TikTok pixel, Google Ads and the marketing scripts after marketing; the Tag Manager
- * container after either (Consent Mode tells its tags what was granted). Consent changes update Consent Mode. Shop
- * events go to the pixels that are loaded.
+ * The merchant's tags in the page (PLAN 0.8.9, G3): Google Consent Mode v2 set before anything else from the
+ * merchant's consent categories (denied until granted), then each tag loaded only once its signals are granted —
+ * Google Analytics 4 after analytics_storage; the Meta pixel, the TikTok pixel and Google Ads after ad_storage and
+ * ad_user_data; the Tag Manager container once a category beyond the required ones is on (Consent Mode tells its tags
+ * what was granted); each category's own scripts once it is on. Consent changes update Consent Mode. Shop events go to
+ * the pixels that are loaded.
  *
  * Options (PLAN 0.8.10 G1): with `consentRequired` off, Consent Mode starts granted and every tag loads at once until
  * the visitor chooses (a choice they make is followed); with `ga4ViaGtm` on, Google Analytics 4 is left to the Tag
@@ -11,7 +12,7 @@
  * too (G2), items named by the `contentIds` setting, and with `toGa4` the Web Vitals go to Google Analytics (G7).
  * @module
  */
-import { consentMode, granted, tagChoice } from '../core/consent.js';
+import { TAG_SIGNALS, allows, anyChosen, consentMode, grantedOf } from '../core/consent.js';
 import { ratingOf } from '../core/events.js';
 import { contactCalls, pixelCalls, searchCalls, vitalCalls } from '../core/pixels.js';
 
@@ -39,9 +40,10 @@ export const injectScripts = (doc, pasted) => {
 };
 
 /**
- * @param {{ window: Window & typeof globalThis, tags: Tags }} input
+ * @param {{ window: Window & typeof globalThis, tags: Tags, categories: ReadonlyArray<import('../core/consent.js').Category>,
+ *   gpc?: boolean }} input `categories`: the merchant's consent categories; `gpc`: the browser sends Global Privacy Control
  */
-export const createTags = ({ window: win, tags }) => {
+export const createTags = ({ window: win, tags, categories, gpc = false }) => {
 	const doc = win.document;
 	const w = /** @type {any} */ (win);
 	const google = (tags.ga4 !== null && !tags.ga4ViaGtm) || tags.ads !== null || tags.gtm !== null;
@@ -65,7 +67,10 @@ export const createTags = ({ window: win, tags }) => {
 				// gtag.js reads the arguments object itself
 				w.dataLayer.push(arguments);
 			};
-		w.gtag('consent', 'default', { ...consentMode(tagChoice(null, tags.consentRequired)), wait_for_update: 500 });
+		w.gtag('consent', 'default', {
+			...consentMode(grantedOf(null, categories, { consentRequired: tags.consentRequired, gpc }), categories),
+			wait_for_update: 500,
+		});
 	}
 
 	/** @param {string} id */
@@ -119,11 +124,10 @@ export const createTags = ({ window: win, tags }) => {
 	 * @param {Choice | null} chosen the visitor's choice, or null before they chose
 	 */
 	const apply = (chosen) => {
-		const choice = tagChoice(chosen, tags.consentRequired);
-		if (choice === null) return;
-		if (google) w.gtag('consent', 'update', consentMode(choice));
-		const analytics = granted(choice, 'analytics');
-		const marketing = granted(choice, 'marketing');
+		const now = grantedOf(chosen, categories, { consentRequired: tags.consentRequired, gpc });
+		if (google) w.gtag('consent', 'update', consentMode(now, categories));
+		/** @param {ReadonlyArray<string>} signals */
+		const may = (signals) => allows(now, categories, signals);
 		/** @param {string} name @param {boolean} allowed @param {() => void} start */
 		const once = (name, allowed, start) => {
 			if (!allowed || loaded.has(name)) return;
@@ -131,16 +135,17 @@ export const createTags = ({ window: win, tags }) => {
 			start();
 		};
 		if (tags.gtm !== null)
-			once('gtm', analytics || marketing, () => {
+			once('gtm', anyChosen(now, categories, chosen !== null), () => {
 				w.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
 				load(`https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(String(tags.gtm))}`);
 			});
-		if (tags.ga4 !== null && !tags.ga4ViaGtm) once('ga4', analytics, () => loadGtag(String(tags.ga4)));
-		if (tags.ads !== null) once('ads', marketing, () => loadGtag(String(tags.ads)));
-		if (tags.meta !== null) once('meta', marketing, loadMeta);
-		if (tags.tiktok !== null) once('tiktok', marketing, loadTikTok);
-		if (tags.scripts.analytics) once('scripts.analytics', analytics, () => injectScripts(doc, tags.scripts.analytics));
-		if (tags.scripts.marketing) once('scripts.marketing', marketing, () => injectScripts(doc, tags.scripts.marketing));
+		if (tags.ga4 !== null && !tags.ga4ViaGtm) once('ga4', may(TAG_SIGNALS.ga4), () => loadGtag(String(tags.ga4)));
+		if (tags.ads !== null) once('ads', may(TAG_SIGNALS.ads), () => loadGtag(String(tags.ads)));
+		if (tags.meta !== null) once('meta', may(TAG_SIGNALS.meta), loadMeta);
+		if (tags.tiktok !== null) once('tiktok', may(TAG_SIGNALS.tiktok), loadTikTok);
+		// each category's own scripts, once it is on
+		for (const [key, pasted] of Object.entries(tags.scripts))
+			if (pasted) once(`scripts.${key}`, now[key] === true, () => injectScripts(doc, pasted));
 	};
 
 	/** The pixels loaded now. @returns {import('../core/pixels.js').Loaded} */

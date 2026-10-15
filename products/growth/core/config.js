@@ -8,7 +8,9 @@
  */
 import { pathMatches } from '@ss/contracts/text';
 import { consentMonthsOf } from './consent.js';
+import { readList } from './lists.js';
 import { isIndexNowKey, keyLocationOf } from './seo.js';
+import { BANNER_POSITIONS } from './widgets.js';
 
 /** The shape of each tag id. */
 const TAG_IDS = Object.freeze({
@@ -145,8 +147,9 @@ export const noticeAnswer = (values, now, path) => {
  * search found in the page address goes to them (`searchFromUrl`, SG-38: true unless the merchant turns it off).
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
+ * @param {ReadonlyArray<Record<string, unknown>>} [categories] the consent categories (their scripts, G3)
  */
-export const tagsOf = (on, values) => {
+export const tagsOf = (on, values, categories = []) => {
 	const google = on.includes('google_tags');
 	const adsId = google ? idOf(text(values, 'google_tags', 'adsId'), TAG_IDS.ads) : null;
 	return {
@@ -160,12 +163,14 @@ export const tagsOf = (on, values) => {
 		adsPurchaseLabel: adsId ? idOf(text(values, 'google_tags', 'adsPurchaseLabel'), TAG_IDS.adsLabel) : null,
 		gtm: google ? idOf(text(values, 'google_tags', 'gtmId'), TAG_IDS.gtm) : null,
 		tiktok: on.includes('tiktok_pixel') ? idOf(text(values, 'tiktok_pixel', 'pixelId'), TAG_IDS.tiktok) : null,
+		// each consent category's own scripts (G3), while Custom scripts is on
 		scripts: on.includes('custom_scripts')
-			? {
-					analytics: text(values, 'custom_scripts', 'analyticsScripts'),
-					marketing: text(values, 'custom_scripts', 'marketingScripts'),
-				}
-			: { analytics: '', marketing: '' },
+			? Object.fromEntries(
+					categories
+						.filter((category) => typeof category.scripts === 'string' && category.scripts.trim() !== '')
+						.map((category) => [String(category.key), String(category.scripts).trim()]),
+				)
+			: {},
 	};
 };
 
@@ -177,13 +182,13 @@ export const tagsOf = (on, values) => {
  * @param {FeatureValues} values
  * @returns {{ ready: number, total: number }}
  */
-export const tagsReady = (on, values) => {
-	const tags = tagsOf(on, values);
+export const tagsReady = (on, values, categories = readList('consent_categories', undefined)) => {
+	const tags = tagsOf(on, values, categories);
 	const checks = [
 		on.includes('meta_pixel') ? tags.meta !== null : null,
 		on.includes('google_tags') ? (tags.ga4 !== null && !tags.ga4ViaGtm) || tags.ads !== null || tags.gtm !== null : null,
 		on.includes('tiktok_pixel') ? tags.tiktok !== null : null,
-		on.includes('custom_scripts') ? tags.scripts.analytics !== '' || tags.scripts.marketing !== '' : null,
+		on.includes('custom_scripts') ? Object.keys(tags.scripts).length > 0 : null,
 	].filter((check) => check !== null);
 	return { ready: checks.filter(Boolean).length, total: checks.length };
 };
@@ -215,19 +220,31 @@ export const adminSettings = (on, values, domain) => {
 };
 
 /**
- * The page script's settings; with `admin` (the admin widgets' config, PLAN 0.4.5) also {@link adminSettings}.
- * @param {{ on: ReadonlyArray<string>, values: FeatureValues, now: number, admin?: { domain: string } | null }} input
+ * The merchant's lists the page script needs (each as `readList` gives it; a list left out reads as its defaults).
+ * @typedef {{ consent_categories?: any[], announcements?: any[], conversion_actions?: any[], goals?: any[], funnels?: any[] }} PageLists
  */
-export const widgetSettings = ({ on, values, now, admin = null }) => {
+
+/**
+ * The page script's settings; with `admin` (the admin widgets' config, PLAN 0.4.5) also {@link adminSettings}.
+ * @param {{ on: ReadonlyArray<string>, values: FeatureValues, now: number, admin?: { domain: string } | null,
+ *   lists?: PageLists }} input `lists`: the merchant's lists (consent categories …)
+ */
+export const widgetSettings = ({ on, values, now, admin = null, lists = {} }) => {
 	const analytics = values.visitor_analytics ?? {};
+	const categories = lists.consent_categories ?? readList('consent_categories', undefined);
 	return {
 		admin: admin ? adminSettings(on, values, admin.domain) : null,
 		consent: {
 			banner: on.includes('consent_banner'),
-			position: values.consent_banner?.position === 'top' ? 'top' : 'bottom',
+			// G7: a bar at the bottom or top, a dialog in the middle, or a corner box
+			position: BANNER_POSITIONS.includes(String(values.consent_banner?.position))
+				? String(values.consent_banner?.position)
+				: 'bottom',
 			privacyUrl: on.includes('consent_banner') ? linkOf(text(values, 'consent_banner', 'privacyUrl')) : null,
 			// G6: a kept choice is asked again after the merchant's months (also with their own consent tool)
 			askAgainMonths: consentMonthsOf(values.consent_banner?.askAgainMonths),
+			// G3: the merchant's categories (their scripts go with the tags)
+			categories: categories.map(({ key, name, description, mode, signals }) => ({ key, name, description, mode, signals })),
 		},
 		record: {
 			visits: on.includes('visitor_analytics'),
@@ -240,7 +257,7 @@ export const widgetSettings = ({ on, values, now, admin = null }) => {
 			sessions: on.includes('visitor_analytics') && analytics.detail === 'sessions',
 			searchParams: searchParamsOf(text(values, 'searches_404s', 'searchParams')),
 		},
-		tags: tagsOf(on, values),
+		tags: tagsOf(on, values, categories),
 		notice: on.includes('notice_bar') ? noticeOf(values, now) : null,
 	};
 };

@@ -1,4 +1,4 @@
-import { SHOP_FUNNEL, checkList, readList, zonedTimeOf } from '../core/lists.js';
+import { DEFAULT_CATEGORIES, SHOP_FUNNEL, checkList, readList, zonedTimeOf } from '../core/lists.js';
 import { zonedParts } from '@ss/contracts/format';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
@@ -14,7 +14,17 @@ import {
 	tagsReady,
 	widgetSettings,
 } from '../core/config.js';
-import { consentMode, consentMonthsOf, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
+import {
+	ANALYTICS_SIGNALS,
+	TAG_SIGNALS,
+	allows,
+	anyChosen,
+	consentMode,
+	consentMonthsOf,
+	grantedOf,
+	makeChoice,
+	readChoice,
+} from '../core/consent.js';
 import consentSchema from '../schemas/consent_banner.settings.json' with { type: 'json' };
 import {
 	checkBatch,
@@ -374,10 +384,13 @@ describe('page script settings', () => {
 			meta_pixel: { pixelId: '123456789' },
 			google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-123456', adsPurchaseLabel: 'abcDEF12', gtmId: 'GTM-ABC123' },
 			tiktok_pixel: { pixelId: 'CABCDEFGHIJ12' },
-			custom_scripts: { analyticsScripts: '<script>a()</script>', marketingScripts: '' },
 		};
+		const categories = [
+			{ key: 'analytics', scripts: ' <script>a()</script> ' },
+			{ key: 'marketing', scripts: '' },
+		];
 		const all = ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'];
-		expect(tagsOf(all, values)).toEqual({
+		expect(tagsOf(all, values, categories)).toEqual({
 			consentRequired: true,
 			ga4ViaGtm: false,
 			contentIds: 'product',
@@ -388,14 +401,16 @@ describe('page script settings', () => {
 			adsPurchaseLabel: 'abcDEF12',
 			gtm: 'GTM-ABC123',
 			tiktok: 'CABCDEFGHIJ12',
-			scripts: { analytics: '<script>a()</script>', marketing: '' },
+			// each consent category's own scripts (G3)
+			scripts: { analytics: '<script>a()</script>' },
 		});
+		expect(tagsOf(['meta_pixel'], values, categories).scripts).toEqual({});
 		expect(tagsOf([], values)).toMatchObject({ meta: null, ga4: null, ads: null, gtm: null, tiktok: null });
 		expect(
 			tagsOf(['google_tags'], { google_tags: { adsId: 'bad', adsPurchaseLabel: 'abcDEF12' } }).adsPurchaseLabel,
 		).toBeNull();
-		expect(tagsReady(all, values)).toEqual({ ready: 4, total: 4 });
-		expect(tagsReady(all, {})).toEqual({ ready: 0, total: 4 });
+		expect(tagsReady(all, values, categories)).toEqual({ ready: 4, total: 4 });
+		expect(tagsReady(all, {}, [])).toEqual({ ready: 0, total: 4 });
 		expect(tagsReady([], {})).toEqual({ ready: 0, total: 0 });
 		// G1: tags without a consent step; GA4 inside Tag Manager is not loaded by Growth
 		const viaGtm = { tags: { consentRequired: false }, google_tags: { ga4Id: 'G-ABCD12', ga4ViaGtm: true } };
@@ -469,7 +484,19 @@ describe('page script settings', () => {
 			now: NOW,
 		});
 		expect(settings).toMatchObject({
-			consent: { banner: true, position: 'top', privacyUrl: '/privacy', askAgainMonths: 12 },
+			consent: {
+				banner: true,
+				position: 'top',
+				privacyUrl: '/privacy',
+				askAgainMonths: 12,
+				categories: DEFAULT_CATEGORIES.map(({ key, name, description, mode, signals }) => ({
+					key,
+					name,
+					description,
+					mode,
+					signals,
+				})),
+			},
 			record: { visits: true, funnel: false, requireConsent: false },
 			notice: { text: 'Sale' },
 		});
@@ -504,6 +531,29 @@ describe('page script settings', () => {
 			record: { requireConsent: true },
 			notice: null,
 		});
+		// G7: the banner in the middle or a corner; a position it does not know is the bottom
+		for (const position of ['center', 'bottom_left', 'bottom_right'])
+			expect(
+				widgetSettings({ on: ['consent_banner'], values: { consent_banner: { position } }, now: NOW }).consent.position,
+			).toBe(position);
+		expect(
+			widgetSettings({ on: ['consent_banner'], values: { consent_banner: { position: 'side' } }, now: NOW }).consent.position,
+		).toBe('bottom');
+		// G3: the merchant's categories go to the page, their scripts with the tags
+		const own = widgetSettings({
+			on: ['consent_banner', 'custom_scripts'],
+			values: {},
+			now: NOW,
+			lists: {
+				consent_categories: [
+					{ key: 'stats', name: 'Stats', description: '', mode: 'opt_in', signals: ['analytics_storage'], scripts: 'x()' },
+				],
+			},
+		});
+		expect(own.consent.categories).toEqual([
+			{ key: 'stats', name: 'Stats', description: '', mode: 'opt_in', signals: ['analytics_storage'] },
+		]);
+		expect(own.tags.scripts).toEqual({ stats: 'x()' });
 		// G6: the merchant's months, from the banner's settings
 		expect(
 			widgetSettings({ on: ['consent_banner'], values: { consent_banner: { askAgainMonths: 6 } }, now: NOW }).consent,
@@ -512,42 +562,98 @@ describe('page script settings', () => {
 });
 
 describe('consent', () => {
-	it('reads a kept choice until it is a year old', () => {
-		const choice = makeChoice({ analytics: true, marketing: false }, NOW);
-		expect(readChoice(JSON.stringify(choice), NOW + 1000)).toEqual(choice);
-		expect(readChoice(JSON.stringify(choice), NOW + 366 * 86_400_000)).toBeNull();
-		expect(readChoice(JSON.stringify(choice), NOW - 2 * 86_400_000)).toBeNull();
-		expect(readChoice('{', NOW)).toBeNull();
-		expect(readChoice('{"analytics":1}', NOW)).toBeNull();
-		expect(readChoice(null, NOW)).toBeNull();
+	const CATEGORIES = DEFAULT_CATEGORIES.map(({ key, name, description, mode, signals }) => ({
+		key,
+		name,
+		description,
+		mode,
+		signals,
+	}));
+
+	it('reads a kept choice until it is too old or a category is new (G3, G6)', () => {
+		const choice = makeChoice({ analytics: true, marketing: false }, NOW, CATEGORIES);
+		// required on, opt-in only when picked, opt-out unless picked off
+		expect(choice.categories).toEqual({
+			necessary: true,
+			preferences: false,
+			analytics: true,
+			marketing: false,
+			sale_sharing: true,
+		});
+		/** @param {number} at @param {number} [months] */
+		const read = (at, months = 12) => readChoice(JSON.stringify(choice), at, months, CATEGORIES);
+		expect(read(NOW + 1000)).toEqual(choice);
+		expect(read(NOW + 366 * 86_400_000)).toBeNull();
+		expect(read(NOW - 2 * 86_400_000)).toBeNull();
+		expect(readChoice('{', NOW, 12, CATEGORIES)).toBeNull();
+		expect(readChoice('{"analytics":true,"marketing":true,"at":"2026-10-08T12:00:00Z"}', NOW, 12, CATEGORIES)).toBeNull();
+		expect(readChoice(null, NOW, 12, CATEGORIES)).toBeNull();
+		// a category added since the choice: asked again
+		expect(
+			readChoice(JSON.stringify(choice), NOW, 12, [
+				...CATEGORIES,
+				{ .../** @type {(typeof CATEGORIES)[number]} */ (CATEGORIES[1]), key: 'new_one' },
+			]),
+		).toBeNull();
 		// G6: asked again after the merchant's months (12 by default), counted in calendar months
 		/** @param {number} count */
 		const days = (count) => NOW + count * 86_400_000;
-		expect(readChoice(JSON.stringify(choice), days(364))).toEqual(choice);
-		expect(readChoice(JSON.stringify(choice), days(365))).toBeNull();
-		expect(readChoice(JSON.stringify(choice), days(150), 6)).toEqual(choice);
-		expect(readChoice(JSON.stringify(choice), Date.parse('2027-04-08T12:00:00Z'), 6)).toBeNull();
-		expect(readChoice(JSON.stringify(choice), days(700), 24)).toEqual(choice);
-		// the end of a longer month falls on the last day of a shorter one
-		const lastDay = makeChoice({ analytics: true, marketing: true }, Date.parse('2026-01-31T12:00:00Z'));
-		expect(readChoice(JSON.stringify(lastDay), Date.parse('2026-02-28T11:00:00Z'), 1)).toEqual(lastDay);
-		expect(readChoice(JSON.stringify(lastDay), Date.parse('2026-02-28T12:00:00Z'), 1)).toBeNull();
+		expect(read(days(364))).toEqual(choice);
+		expect(read(days(365))).toBeNull();
+		expect(read(days(150), 6)).toEqual(choice);
+		expect(read(Date.parse('2027-04-08T12:00:00Z'), 6)).toBeNull();
+		expect(read(days(700), 24)).toEqual(choice);
+		const lastDay = makeChoice({}, Date.parse('2026-01-31T12:00:00Z'), CATEGORIES);
+		expect(readChoice(JSON.stringify(lastDay), Date.parse('2026-02-28T11:00:00Z'), 1, CATEGORIES)).toEqual(lastDay);
+		expect(readChoice(JSON.stringify(lastDay), Date.parse('2026-02-28T12:00:00Z'), 1, CATEGORIES)).toBeNull();
 		expect(consentSchema.properties.askAgainMonths.default).toBe(12);
 		expect([consentMonthsOf(6), consentMonthsOf(24), consentMonthsOf(0), consentMonthsOf(25)]).toEqual([6, 24, 12, 12]);
 		expect([consentMonthsOf(2.5), consentMonthsOf('6'), consentMonthsOf(undefined)]).toEqual([12, 12, 12]);
-		expect(consentMode(null)).toEqual({
+	});
+
+	it('turns categories into Consent Mode signals: a signal needs every category that lists it (G3)', () => {
+		// nothing chosen, tags wait for consent: the required and opt-out categories only
+		const before = grantedOf(null, CATEGORIES);
+		expect(before).toEqual({ necessary: true, preferences: false, analytics: false, marketing: false, sale_sharing: true });
+		expect(consentMode(before, CATEGORIES)).toEqual({
 			ad_storage: 'denied',
 			ad_user_data: 'denied',
 			ad_personalization: 'denied',
 			analytics_storage: 'denied',
+			functionality_storage: 'denied',
+			personalization_storage: 'denied',
+			security_storage: 'granted',
 		});
-		expect(consentMode(choice).analytics_storage).toBe('granted');
-		expect(granted(null, 'analytics')).toBe(false);
-		expect(granted(choice, 'marketing')).toBe(false);
-		// G1: without a choice, tags that need no consent follow "everything granted"
-		expect(tagChoice(null, true)).toBeNull();
-		expect(tagChoice(null, false)).toEqual({ analytics: true, marketing: true });
-		expect(tagChoice(choice, false)).toBe(choice);
+		// Global Privacy Control turns opt-out categories off
+		expect(grantedOf(null, CATEGORIES, { gpc: true }).sale_sharing).toBe(false);
+		// tags need no consent: everything on until a choice (opt-out still off with GPC)
+		expect(grantedOf(null, CATEGORIES, { consentRequired: false })).toMatchObject({ analytics: true, marketing: true });
+		const all = grantedOf(makeChoice({ analytics: true, marketing: true }, NOW, CATEGORIES), CATEGORIES);
+		expect(allows(all, CATEGORIES, TAG_SIGNALS.meta)).toBe(true);
+		expect(allows(all, CATEGORIES, ANALYTICS_SIGNALS)).toBe(true);
+		// the US opt-out of the sale or sharing of personal data blocks the ad pixels, not analytics
+		const optedOut = grantedOf(
+			makeChoice({ analytics: true, marketing: true, sale_sharing: false }, NOW, CATEGORIES),
+			CATEGORIES,
+		);
+		expect(consentMode(optedOut, CATEGORIES)).toMatchObject({
+			ad_storage: 'granted',
+			ad_user_data: 'denied',
+			ad_personalization: 'denied',
+		});
+		expect(allows(optedOut, CATEGORIES, TAG_SIGNALS.meta)).toBe(false);
+		expect(allows(optedOut, CATEGORIES, TAG_SIGNALS.ga4)).toBe(true);
+		// Tag Manager: not on an opt-out category alone before a choice
+		expect(anyChosen(before, CATEGORIES, false)).toBe(false);
+		expect(anyChosen(all, CATEGORIES, true)).toBe(true);
+		expect(anyChosen(grantedOf(makeChoice({}, NOW, CATEGORIES), CATEGORIES), CATEGORIES, true)).toBe(true);
+		expect(anyChosen(grantedOf(makeChoice({ sale_sharing: false }, NOW, CATEGORIES), CATEGORIES), CATEGORIES, true)).toBe(
+			false,
+		);
+		// a signal no category lists is denied
+		expect(consentMode({ a: true }, [{ key: 'a', name: 'A', description: '', mode: 'opt_in', signals: [] }]).ad_storage).toBe(
+			'denied',
+		);
 	});
 });
 

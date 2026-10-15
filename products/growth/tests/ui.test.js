@@ -8,6 +8,7 @@ import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
 import { CHECKS } from '../core/seo-checks.js';
+import { DEFAULT_CATEGORIES } from '../core/lists.js';
 import {
 	CONSENT_STORAGE_KEY,
 	FUNNEL_STEPS,
@@ -49,7 +50,8 @@ const widgetsOf = (features) =>
  * A widget config as the kit answers it.
  * @param {string[]} features
  * @param {Record<string, Record<string, unknown>>} [values]
- * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look] the website's Format and business time zone
+ * @param {{ format?: Record<string, unknown>, timeZone?: string, lists?: import('../core/config.js').PageLists }} [look] the
+ *   website's Format, business time zone and lists
  */
 const configOf = (features, values = {}, look = {}) => ({
 	texts: { ...strings },
@@ -64,6 +66,7 @@ const configOf = (features, values = {}, look = {}) => ({
 		on: features,
 		values: { searches_404s: { searchParams: searchesSchema.properties.searchParams.default }, ...values },
 		now: NOW,
+		...(look.lists ? { lists: look.lists } : {}),
 	}),
 });
 
@@ -188,9 +191,19 @@ describe('the page script', () => {
 							meta_pixel: { pixelId: '1234567' },
 							google_tags: { ga4Id: 'G-ABCD12', adsId: 'AW-12345', adsPurchaseLabel: 'Label1', gtmId: 'GTM-ABCD1' },
 							tiktok_pixel: { pixelId: 'CABCDEFGHIJ12' },
-							custom_scripts: {
-								analyticsScripts: 'window.ranCustom = 1;',
-								marketingScripts: '<noscript><img src="x"></noscript>',
+						},
+						{
+							// the scripts of the analytics and marketing categories (G3)
+							lists: {
+								consent_categories: DEFAULT_CATEGORIES.map((category) => ({
+									...category,
+									scripts:
+										category.key === 'analytics'
+											? 'window.ranCustom = 1;'
+											: category.key === 'marketing'
+												? '<noscript><img src="x"></noscript>'
+												: '',
+								})),
 							},
 						},
 					),
@@ -213,14 +226,25 @@ describe('the page script', () => {
 		await vi.advanceTimersByTimeAsync(2000);
 		expect(collected()).toEqual([]);
 
-		// Choose: analytics only
+		// Choose: the merchant's categories, each with its name and description (G3); analytics only
 		button(banner, strings['consent.customize']).click();
-		inside(banner, 'input[type="checkbox"]:not([disabled])').click();
+		const boxes = [...(banner.shadowRoot?.querySelectorAll('label.check') ?? [])];
+		expect(boxes.map((label) => label.textContent)).toEqual(
+			DEFAULT_CATEGORIES.map((category) => `${category.name}${category.description}`),
+		);
+		// the opt-out category (sale or sharing) starts on, the opt-in ones off
+		expect(boxes.map((label) => /** @type {HTMLInputElement} */ (label.querySelector('input')).checked)).toEqual([
+			true,
+			false,
+			false,
+			false,
+			true,
+		]);
+		/** @type {HTMLInputElement} */ (/** @type {Element} */ (boxes[2]).querySelector('input')).click();
 		button(banner, strings['consent.save']).click();
 		expect(inside(banner, '[role="dialog"]').hasAttribute('hidden')).toBe(true);
 		expect(JSON.parse(String(window.localStorage.getItem(CONSENT_STORAGE_KEY)))).toMatchObject({
-			analytics: true,
-			marketing: false,
+			categories: { necessary: true, preferences: false, analytics: true, marketing: false, sale_sharing: true },
 		});
 		const sources = () =>
 			[...document.head.querySelectorAll('script[src]')].map((s) => /** @type {HTMLScriptElement} */ (s).src);
@@ -307,11 +331,17 @@ describe('the page script', () => {
 
 	it('G6: asks again once the kept choice is older than the merchant’s months', async () => {
 		const at = new Date(Date.now() - 200 * 86_400_000).toISOString();
-		window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ analytics: true, marketing: false, at }));
+		window.localStorage.setItem(
+			CONSENT_STORAGE_KEY,
+			JSON.stringify({
+				categories: { necessary: true, preferences: false, analytics: true, marketing: false, sale_sharing: true },
+				at,
+			}),
+		);
 		serve({ [`GET ${CONFIG_PATH}`]: () => answer(200, configOf(['consent_banner'])) });
 		await startWidget({ window, script: script('t') }).ready;
 		// 12 months by default: the choice holds and the banner stays closed
-		expect(w[WIDGET_GLOBAL].consent.get()).toMatchObject({ analytics: true, at });
+		expect(w[WIDGET_GLOBAL].consent.get()).toMatchObject({ categories: { analytics: true }, at });
 		expect(inside(hostOf('consent_banner'), '[role="dialog"]').hasAttribute('hidden')).toBe(true);
 		loadDocument('/');
 		serve({
@@ -347,7 +377,7 @@ describe('the page script', () => {
 		expect(collected().map((e) => e.type)).toEqual(['page_view', 'not_found']);
 		expect(w[WIDGET_GLOBAL].consent.get()).toBeNull();
 		w[WIDGET_GLOBAL].consent.set({ analytics: true });
-		expect(w[WIDGET_GLOBAL].consent.get()).toMatchObject({ analytics: true, marketing: false });
+		expect(w[WIDGET_GLOBAL].consent.get()).toMatchObject({ categories: { analytics: true, marketing: false } });
 		expect(document.head.querySelector('script[src*="gtag"]')).not.toBeNull();
 		window.dispatchEvent(new window.CustomEvent('ss:add_to_cart', { detail: null }));
 		expect([...w.dataLayer].map((args) => args[1])).toContain('add_to_cart');
@@ -1877,7 +1907,6 @@ describe('widget texts (OT-3)', () => {
 			...findings.map((finding) => `seo.check.${id}.${finding}`),
 		]);
 		const keys = [
-			...['necessary', 'analytics', 'marketing'].flatMap((category) => [`consent.${category}`, `consent.${category}Help`]),
 			...PRESETS.map((preset) => `analytics.range.${preset}`),
 			...FUNNEL_STEPS.map((step) => `funnel.${step}`),
 			...Object.keys(VITALS).map((name) => `vital.${name}`),

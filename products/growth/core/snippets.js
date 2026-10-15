@@ -28,8 +28,8 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`<button type="button" onclick="${WIDGET_GLOBAL}.consent.open()">Cookie settings</button>`,
 		'<script>',
 		'  // with your own consent tool instead of the banner: pass the visitor’s choice on',
-		`  ${WIDGET_GLOBAL}.consent.set({ analytics: true, marketing: false });`,
-		`  ${WIDGET_GLOBAL}.consent.get(); // { analytics, marketing, at } or null`,
+		`  ${WIDGET_GLOBAL}.consent.set({ analytics: true, marketing: false, sale_sharing: false }); // your category keys`,
+		`  ${WIDGET_GLOBAL}.consent.get(); // { categories: { analytics: true, … }, at } or null`,
 		'</script>',
 	].join('\n');
 	const page = [

@@ -6,12 +6,19 @@
 			"type": "string",
 			"title": "Banner position",
 			"default": "bottom",
-			"enum": ["bottom", "top"]
+			"enum": [
+				"bottom",
+				"top",
+				"center",
+				"bottom_left",
+				"bottom_right"
+			],
+			"description": "Bottom or top: a bar across the page. Center: a dialog in the middle of the page, over it. Bottom left or bottom right: a small box in that corner."
 		},
 		"privacyUrl": {
 			"type": "string",
 			"title": "Privacy policy link",
-			"description": "An https address or a path on your website (for example /privacy). Every word of the banner is in Texts.",
+			"description": "An https address or a path on your website (for example /privacy). The categories and their words are the list Consent categories; the banner's other words are in Texts.",
 			"default": "",
 			"maxLength": 2048
 		},

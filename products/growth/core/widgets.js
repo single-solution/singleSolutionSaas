@@ -57,6 +57,9 @@ export const CONSENT_SIGNALS = Object.freeze([
 	'security_storage',
 ]);
 
+/** The consent banner's places (G7): a bar at the bottom or top, a dialog in the middle of the page, or a corner box. */
+export const BANNER_POSITIONS = Object.freeze(['bottom', 'top', 'center', 'bottom_left', 'bottom_right']);
+
 /** Where the visitor's consent choice is kept (their own browser's localStorage). */
 export const CONSENT_STORAGE_KEY = 'ss-growth-consent';
 

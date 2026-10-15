@@ -14,8 +14,8 @@
  * @module
  */
 import { createTicketSource, viewerOf } from '@ss/app-kit/widget';
-import { noticeHiddenOn } from '../core/config.js';
-import { granted } from '../core/consent.js';
+import { ANALYTICS_SIGNALS, allows, grantedOf } from '../core/consent.js';
+import { pathMatches } from '@ss/contracts/text';
 import { VITALS } from '../core/events.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
 import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
@@ -185,19 +185,22 @@ export const startWidget = ({ window: win, script }) => {
 			schedule: (task, ms) => win.setTimeout(task, ms),
 			...(session ? { stamp: session.stamp } : {}),
 		});
-		const tags = createTags({ window: win, tags: config.settings.tags });
+		// Global Privacy Control: the browser asks not to sell or share (opt-out categories start off, G3)
+		const gpc = /** @type {any} */ (win.navigator).globalPrivacyControl === true;
+		const categories = config.settings.consent.categories;
+		const tags = createTags({ window: win, tags: config.settings.tags, categories, gpc });
 		/** @param {import('../core/consent.js').Choice | null} choice */
 		const follow = (choice) => {
 			tags.apply(choice);
-			collector.allow(!record.requireConsent || granted(choice, 'analytics'));
+			collector.allow(!record.requireConsent || allows(grantedOf(choice, categories, { gpc }), categories, ANALYTICS_SIGNALS));
 		};
-		consent.askAgainAfter(config.settings.consent.askAgainMonths);
+		consent.configure({ months: config.settings.consent.askAgainMonths, categories });
 		follow(consent.get());
 		consent.onChange(follow);
 		current = { config, collector, tags };
 
 		if (config.widgets.includes('consent_banner') && config.settings.consent.banner)
-			banner = mountConsentBanner({ host: hostFor('consent_banner', 'end'), config, consent });
+			banner = mountConsentBanner({ host: hostFor('consent_banner', 'end'), config, consent, gpc });
 
 		/** @type {(() => void) | null} takes the notice bar away while it shows */
 		let shown = null;
@@ -208,7 +211,7 @@ export const startWidget = ({ window: win, script }) => {
 		const showNotice = () => {
 			const notice = config.settings.notice;
 			if (!config.widgets.includes('notice_bar') || !notice) return;
-			if (noticeHiddenOn(notice, path())) {
+			if (notice.hideOnPages.some((pattern) => pathMatches(pattern, path()))) {
 				shown?.();
 				shown = null;
 			} else if (!shown && (notice.dismissFor === 'page' || visits.getItem(NOTICE_STORAGE_KEY) !== notice.text))
@@ -341,7 +344,7 @@ export const startWidget = ({ window: win, script }) => {
 		consent: Object.freeze({
 			/** Open the banner's choices again (when the banner is on). */
 			open: () => banner?.open(),
-			/** @param {{ analytics?: unknown, marketing?: unknown }} picked the choice of the merchant's own consent tool */
+			/** @param {Record<string, unknown>} picked the choice of the merchant's own consent tool: each category's key, true or false */
 			set: (picked) => consent.set(picked),
 			get: () => consent.get(),
 		}),
