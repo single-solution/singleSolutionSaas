@@ -364,9 +364,15 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 					);
 
 				const address = order.address;
+				// a stock location for pickup names itself; the settings' pickup point comes with its address and hours (E22)
+				const point = order.pickupPoint;
 				const deliveryParts =
 					order.delivery.method === 'pickup'
-						? [h(doc, 'p', {}, t('orders.pickupAt', { name: order.delivery.locationName }))]
+						? [
+								h(doc, 'p', {}, t('orders.pickupAt', { name: order.delivery.locationName || point?.name || '' })),
+								point?.address ? h(doc, 'p', { class: 'meta' }, point.address) : null,
+								point?.hours ? h(doc, 'p', { class: 'meta' }, t('checkout.pickupHours', { hours: point.hours })) : null,
+							]
 						: address
 							? [
 									h(
@@ -402,6 +408,15 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							h(doc, 'a', { href: order.shipment.trackingUrl, target: '_blank', rel: 'noopener' }, t('orders.track')),
 						);
 				}
+				// the shop's texts: delivery times, packing, and when a pickup is ready (E22)
+				const method = order.delivery.method;
+				if (method !== 'none')
+					for (const line of [
+						method === 'delivery' ? order.notes?.delivery : '',
+						order.notes?.prep,
+						order.notes?.pickupReady,
+					])
+						if (line) deliveryParts.push(h(doc, 'p', { class: 'meta' }, line));
 
 				const totals = order.totals;
 				/** @type {Array<[string, string]>} */

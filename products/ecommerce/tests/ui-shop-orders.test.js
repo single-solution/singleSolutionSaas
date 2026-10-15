@@ -326,6 +326,47 @@ describe('my orders', () => {
 		expect(textOf(host)).toContain(text('orders.title'));
 	});
 
+	it('shows the shop’s delivery and packing texts, and a pickup point with its address, hours and ready text (E22)', async () => {
+		const notes = {
+			payment: '',
+			delivery: 'Arrives in 2–4 working days.',
+			prep: 'Orders are packed within 24 hours.',
+			pickupReady: 'We message you when it is ready.',
+		};
+		let order = detail({ notes: { ...notes, pickupReady: '' }, pickupPoint: null });
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(order),
+			},
+		});
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		expect(textOf(host)).toContain(notes.delivery);
+		expect(textOf(host)).toContain(notes.prep);
+		// the pickup point of the settings (no stock location): its name, address and hours
+		order = detail({
+			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null, locationName: '' },
+			address: null,
+			shipment: null,
+			notes: { ...notes, delivery: '' },
+			pickupPoint: { name: 'Main shop', address: '1 Market Street', hours: 'Mon–Fri 9–17' },
+		});
+		await click(buttonOf(host, text('orders.back')));
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		const page = textOf(host);
+		for (const part of [
+			text('orders.pickupAt', { name: 'Main shop' }),
+			'1 Market Street',
+			text('checkout.pickupHours', { hours: 'Mon–Fri 9–17' }),
+			notes.pickupReady,
+			notes.prep,
+		])
+			expect(page).toContain(part);
+	});
+
 	it('reviews each delivered item with reviews per item bought (E34)', async () => {
 		/** @type {any} */
 		let post = fail(500, 'internal_error');

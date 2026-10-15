@@ -425,6 +425,38 @@ describe('cart', () => {
 		expect($(host, '#ss-cart-phone').getAttribute('maxlength')).toBe('40');
 	});
 
+	it('shows the shop’s delivery, packing and pickup texts and the pickup point’s address and hours (E22)', async () => {
+		const notes = {
+			cod: '',
+			online: '',
+			bank_transfer: '',
+			pickup: '',
+			delivery: 'Arrives in 2–4 working days.',
+			prep: 'Orders are packed within 24 hours.',
+			pickupReady: 'We message you when it is ready.',
+		};
+		const POINT = { ...PICKUP, locationId: null, address: '1 Market Street', hours: 'Mon–Fri 9–17' };
+		const { timers, host } = await setup({
+			quote: (call) =>
+				ok(
+					quoteOf({
+						delivery: call.body.delivery.method === 'pickup' ? POINT : DELIVERY,
+						deliveryOptions: [DELIVERY, POINT],
+						notes,
+					}),
+				),
+		});
+		let page = textOf(host);
+		for (const part of [notes.delivery, notes.prep, '1 Market Street', text('checkout.pickupHours', { hours: 'Mon–Fri 9–17' })])
+			expect(page).toContain(part);
+		expect(page).not.toContain(notes.pickupReady);
+		await setValue($$(host, 'input[name="ss-cart-delivery"]')[1], true);
+		await timers.run();
+		page = textOf(host);
+		expect(page).not.toContain(notes.delivery);
+		expect(page).toContain(notes.prep);
+	});
+
 	it('switches between delivery and pickup and prices the address city', async () => {
 		const { fake, timers, host } = await setup({
 			quote: (call) => {

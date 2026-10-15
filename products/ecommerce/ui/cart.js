@@ -438,8 +438,16 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							? t('checkout.pickupAt', { name: option.name })
 							: t('checkout.deliver', { fee, zone: option.name || t('checkout.zoneUnknown') }),
 						days ? h(doc, 'span', { class: 'meta' }, days) : null,
+						// the pickup point of the settings: its address and hours (E22)
+						pickup && option.address ? h(doc, 'span', { class: 'meta' }, option.address) : null,
+						pickup && option.hours
+							? h(doc, 'span', { class: 'meta' }, t('checkout.pickupHours', { hours: option.hours }))
+							: null,
 					);
 				});
+				// the shop's texts: delivery times with delivery, how long packing takes (E22)
+				const notes = quote.notes ?? {};
+				const said = [quote.delivery.method === 'delivery' ? notes.delivery : '', notes.prep].filter(Boolean);
 				deliveryBox.replaceChildren(
 					h(
 						doc,
@@ -460,6 +468,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 									),
 								)
 							: null,
+						...said.map((line) => h(doc, 'p', { class: 'meta' }, line)),
 					),
 				);
 			};

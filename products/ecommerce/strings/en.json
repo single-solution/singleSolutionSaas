@@ -259,6 +259,7 @@
 	"checkout.zoneUnknown": "standard rate",
 	"checkout.days": "Arrives in {min}–{max} days",
 	"checkout.pickupAt": "Pick up at {name} (free)",
+	"checkout.pickupHours": "Opening hours: {hours}",
 	"checkout.free": "Free",
 	"checkout.deliveryProblem.choose_pickup_location": "Choose where to pick up your order.",
 	"checkout.deliveryProblem.pickup_unavailable": "Pickup is not available for this order.",
