@@ -26,7 +26,7 @@ import {
 } from '../core/catalog-query.js';
 import { categoryTree, lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import { youtubeId } from '../core/catalog-content.js';
-import { cardOf, cardPhotos, cardVariantsOf, pageOf } from '../core/catalog-views.js';
+import { cardOf, cardPhotos, cardVariantsOf, pageOf, sizeOf } from '../core/catalog-views.js';
 import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
@@ -141,6 +141,7 @@ const createCards = (common, service) => {
 							cardPhotos(item).map(async (file) => ({
 								url: await common.media.mediaUrl(s, file.sizes?.card ?? file.key),
 								alt: file.alt || item.name,
+								...sizeOf(file),
 							})),
 						),
 						shown,

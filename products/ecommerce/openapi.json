@@ -27476,6 +27476,19 @@
 						}
 					},
 					{
+						"name": "html",
+						"in": "query",
+						"required": false,
+						"description": "1: add html, the grid's core as plain HTML for the grid's place (G3); never a filter, never in canonical.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1"
+							],
+							"description": "1: add html, the grid's core as plain HTML for the grid's place (G3); never a filter, never in canonical."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -27537,6 +27550,19 @@
 						"required": true,
 						"schema": {
 							"type": "string"
+						}
+					},
+					{
+						"name": "html",
+						"in": "query",
+						"required": false,
+						"description": "1: add html, the page's core as plain HTML for the widget's place (G3).",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"1"
+							],
+							"description": "1: add html, the page's core as plain HTML for the widget's place (G3)."
 						}
 					},
 					{
@@ -36809,6 +36835,7 @@
 					"slug",
 					"url",
 					"image",
+					"imageSize",
 					"price",
 					"priceText",
 					"compareAtPrice",
@@ -36843,6 +36870,28 @@
 							"null"
 						],
 						"description": "Its first photo (null: none, or no storage connected)."
+					},
+					"imageSize": {
+						"type": [
+							"object",
+							"null"
+						],
+						"required": [
+							"width",
+							"height"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"width": {
+								"type": "integer",
+								"minimum": 1
+							},
+							"height": {
+								"type": "integer",
+								"minimum": 1
+							}
+						},
+						"description": "The size of image's photo in pixels (null: not known), for the img element's width and height so the page does not move while it loads."
 					},
 					"price": {
 						"type": "integer",
@@ -36917,6 +36966,16 @@
 								},
 								"alt": {
 									"type": "string"
+								},
+								"width": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Pixels, when known."
+								},
+								"height": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Pixels, when known."
 								}
 							}
 						}
@@ -39047,6 +39106,7 @@
 					"slug",
 					"url",
 					"image",
+					"imageSize",
 					"price",
 					"priceText",
 					"compareAtPrice",
@@ -39079,6 +39139,28 @@
 							"null"
 						],
 						"description": "Its first photo (null: none, or no storage connected)."
+					},
+					"imageSize": {
+						"type": [
+							"object",
+							"null"
+						],
+						"required": [
+							"width",
+							"height"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"width": {
+								"type": "integer",
+								"minimum": 1
+							},
+							"height": {
+								"type": "integer",
+								"minimum": 1
+							}
+						},
+						"description": "The size of image's photo in pixels (null: not known), for the img element's width and height so the page does not move while it loads."
 					},
 					"price": {
 						"type": "integer",
@@ -39153,6 +39235,16 @@
 								},
 								"alt": {
 									"type": "string"
+								},
+								"width": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Pixels, when known."
+								},
+								"height": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Pixels, when known."
 								}
 							}
 						}
@@ -46738,6 +46830,10 @@
 					"jsonLd": {
 						"type": "string",
 						"description": "The JSON-LD (CollectionPage with an ItemList of the products the page shows, BreadcrumbList, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
+					},
+					"html": {
+						"type": "string",
+						"description": "With html=1: the grid's core as plain HTML — the page's products as links with their first photo (width and height) and the price shown, and links to the previous and next pages (rel prev and next). Only escaped text and https links. Print it into the product_grid widget's place."
 					}
 				}
 			},
@@ -46823,6 +46919,10 @@
 					"jsonLd": {
 						"type": "string",
 						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
+					},
+					"html": {
+						"type": "string",
+						"description": "With html=1: the product page's core as plain HTML, in the website's words and format — the breadcrumb links, the name as the page's h1, the first photo with its width and height, the price shown (or the range) with the struck-through price, availability, rating, the description (its HTML cleaned again), specs and questions. Only escaped text, https links and cleaned description HTML: no script, style or event attribute. Print it into the product_page widget's place: search engines read it before any script runs, and the widget takes the place over."
 					}
 				}
 			},
@@ -49329,6 +49429,7 @@
 					"compareAtPrice",
 					"currency",
 					"image",
+					"imageSize",
 					"url",
 					"inStock",
 					"rating",
@@ -49376,6 +49477,28 @@
 							"null"
 						],
 						"description": "The main image (its card size when there is one)."
+					},
+					"imageSize": {
+						"type": [
+							"object",
+							"null"
+						],
+						"required": [
+							"width",
+							"height"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"width": {
+								"type": "integer",
+								"minimum": 1
+							},
+							"height": {
+								"type": "integer",
+								"minimum": 1
+							}
+						},
+						"description": "The size of image's photo in pixels (null: not known), for the img element's width and height so the page does not move while it loads."
 					},
 					"url": {
 						"type": "string"
@@ -49466,6 +49589,16 @@
 								},
 								"alt": {
 									"type": "string"
+								},
+								"width": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Pixels, when known."
+								},
+								"height": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Pixels, when known."
 								}
 							}
 						},

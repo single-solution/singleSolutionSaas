@@ -7,7 +7,7 @@ export const WIDGET_CSS = `
 .price { font-weight: 600; } .was { text-decoration: line-through; opacity: 0.6; margin-left: 6px; font-weight: 400; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .card { border: 1px solid var(--ss-color-border, #e5e7eb); border-radius: var(--ss-radius, 8px); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-.card img, .gallery img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--ss-radius, 8px); }
+.card img, .gallery img { width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; border-radius: var(--ss-radius, 8px); }
 .muted { opacity: 0.7; font-size: 0.9em; }
 .error { color: var(--ss-color-danger, #b91c1c); }
 table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: 6px; border-top: 1px solid var(--ss-color-border, #e5e7eb); }

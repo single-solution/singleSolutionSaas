@@ -5,7 +5,7 @@
  * @module
  */
 import { categoryTrail } from '../adapters/promotions-store.js';
-import { cardPhotos, shownRange } from '../core/catalog-views.js';
+import { cardPhotos, shownRange, sizeOf } from '../core/catalog-views.js';
 import { COLLECTIONS } from '../core/model.js';
 import { createMedia } from './catalog-media.js';
 import { hiddenFor, visibleMatch } from './catalog-visibility.js';
@@ -62,12 +62,15 @@ export const createCards = (product, service) => {
 		const categoryIds = priced.deals.length > 0 ? await categoryTrail(data, item.categoryIds) : item.categoryIds;
 		// as the grid's cards (PLAN 0.8.10 E2, E6, E8, G4)
 		const { price, compareAtPrice, priceMax } = shownRange(item, priced.of(item, categoryIds));
+		const image = await media.mediaUrl(s, item.media[0]?.key);
 		return {
 			id: item.id,
 			name: item.name,
 			slug: item.slug,
 			url: await media.productUrl(s, item),
-			image: await media.mediaUrl(s, item.media[0]?.key),
+			image,
+			// its photo's size, for the image's width and height (G14)
+			imageSize: image ? sizeOf(item.media[0]) : null,
 			price,
 			priceText: (await s.format()).money(price, s.currency),
 			compareAtPrice,
@@ -80,6 +83,7 @@ export const createCards = (product, service) => {
 				cardPhotos(item).map(async (file) => ({
 					url: await media.mediaUrl(s, file.sizes?.card ?? file.key),
 					alt: file.alt || item.name,
+					...sizeOf(file),
 				})),
 			),
 		};

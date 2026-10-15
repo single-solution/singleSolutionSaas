@@ -79,6 +79,8 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 	const formats = formatsOf(config, win);
 	const { money } = formats;
 	const ref = host.dataset.product ?? '';
+	// the product's name is the page's h1, unless the page has its own (data-heading="h2", G3)
+	const heading = ['h2', 'h3'].includes(host.dataset.heading ?? '') ? String(host.dataset.heading) : 'h1';
 	const saved = savedOf(shop);
 	const alerts = alertsOf(shop);
 
@@ -247,7 +249,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					item.featured
 						? h(doc, 'span', { class: 'tags' }, h(doc, 'span', { class: 'badge accent' }, t('shop.featured')))
 						: null,
-					h(doc, 'h2', { class: 'big' }, item.name),
+					h(doc, heading, { class: 'big' }, item.name),
 					item.brand ? h(doc, 'span', { class: 'meta' }, item.brand.name) : null,
 					rating ? h(doc, 'span', { class: 'meta' }, rating) : null,
 					item.summary ? h(doc, 'p', {}, item.summary) : null,

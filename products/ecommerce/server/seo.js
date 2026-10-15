@@ -14,7 +14,7 @@ import { mediaSignatureOk } from '../adapters/crypto.js';
 import { categoryTrail } from '../adapters/promotions-store.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
-import { specsOf } from '../core/catalog-views.js';
+import { shownRange, specsOf } from '../core/catalog-views.js';
 import { GOOGLE_FOOT, MAX_FEED_ROWS, META_HEADER, feedRows, googleHead, googleItem, metaLine } from '../core/feeds.js';
 import { gradeCondition, gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
@@ -24,6 +24,7 @@ import { SORTS, sortDocument } from '../core/catalog-query.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { windowDays } from '../core/returns.js';
 import { shownName } from '../core/reviews.js';
+import { productHtml, say } from '../core/seo-html.js';
 import {
 	SITEMAP_FOOT,
 	SITEMAP_HEAD,
@@ -325,6 +326,7 @@ export const createSeo = (product, service) => {
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
 		const conditions = await conditionsOf(s);
 		const policies = await storePoliciesOf(s);
+		const trail = await trailOf(s, data, media, primary ?? null, true, business.name);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
 		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
 		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
@@ -379,7 +381,7 @@ export const createSeo = (product, service) => {
 			currency: s.currency,
 			condition: (variant) => conditions.of(item, variant),
 			seller: business.name,
-			trail: await trailOf(s, data, media, primary ?? null, true, business.name),
+			trail,
 			variantName: (variant) =>
 				fillTemplate(String(settings.variantTitle), {
 					name: item.name,
@@ -422,7 +424,56 @@ export const createSeo = (product, service) => {
 			robots: robotsOf(item.seo),
 			focusKeyword: item.seo.focusKeyword,
 			jsonLd: scriptJson(jsonLd),
+			// the page's core as plain HTML for the widget's place, when asked (G3)
+			...(ctx.query.html === '1'
+				? { html: await pageHtml(s, item, { trail, fields, shown, money: (amount) => money(amount, s.currency) }) }
+				: {}),
 		};
+	};
+
+	/**
+	 * The product page's core as plain HTML (G3): what the product page widget shows first, in the website's words and
+	 * format — the name as h1, the breadcrumb links, the first photo with its size, the price shown with the struck-through
+	 * one, availability, rating, description, specs and questions.
+	 * @param {Site} s @param {ProductRecord} item
+	 * @param {{ trail: Array<{ name: string, url: string }>, fields: ReadonlyMap<string, import('../core/model.js').AttributeRecord>,
+	 *   shown: import('../core/catalog-views.js').Shown, money: (amount: number) => string }} context
+	 */
+	const pageHtml = async (s, item, { trail, fields, shown, money }) => {
+		const texts = await s.texts();
+		/** @param {string} key @param {Record<string, string | number>} [values] */
+		const t = (key, values) => say(String(texts[key] ?? ''), values);
+		const range = shownRange(item, shown);
+		const main = item.media[0];
+		const photo = main ? await media.stableUrl(s, main.key) : null;
+		return productHtml({
+			name: item.name,
+			trail,
+			price:
+				range.priceMax > range.price
+					? t('shop.priceRange', { min: money(range.price), max: money(range.priceMax) })
+					: money(range.price),
+			was: range.compareAtPrice !== null && range.priceMax <= range.price ? money(range.compareAtPrice) : '',
+			availability: t(item.inStock ? 'page.inStock' : 'page.outOfStock'),
+			rating:
+				item.rating.count > 0 ? t('shop.rating', { average: item.rating.average.toFixed(1), count: item.rating.count }) : '',
+			image:
+				main && photo
+					? {
+							url: photo,
+							alt: main.alt || item.name,
+							...(main.width && main.height ? { width: main.width, height: main.height } : {}),
+						}
+					: null,
+			descriptionHtml: item.descriptionHtml,
+			description: item.description,
+			specs: specsOf(item, fields).map((spec) => ({
+				name: spec.name,
+				value: `${spec.label}${spec.unit ? ` ${spec.unit}` : ''}`,
+			})),
+			faqs: item.faqs,
+			headings: { description: t('page.description'), specs: t('page.specs'), faqs: t('page.faqs') },
+		});
 	};
 
 	/**

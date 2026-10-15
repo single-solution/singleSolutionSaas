@@ -55,6 +55,8 @@ const gradeLabels = (product, grades) => {
  * @property {number | null} compareAtPrice that variant's struck-through price
  * @property {string} currency
  * @property {string | null} image
+ * @property {{ width: number, height: number } | null} imageSize its photo's size (null: not known), for the image's
+ *   width and height (G14)
  * @property {string} url
  * @property {boolean} inStock
  * @property {{ average: number, count: number }} rating
@@ -63,8 +65,8 @@ const gradeLabels = (product, grades) => {
  * @property {number} variantCount
  * @property {number} priceMax the highest price shown of its active variants (E8)
  * @property {boolean} featured (E2)
- * @property {Array<{ url: string | null, alt: string }>} cardImages the first photo of up to 4 variants that look
- *   different (E6)
+ * @property {Array<{ url: string | null, alt: string, width?: number, height?: number }>} cardImages the first photo
+ *   of up to 4 variants that look different (E6), with its size when known
  * @property {CardVariant[]} [variants] the active variants, when the listing asks for them (SF-6)
  */
 
@@ -140,10 +142,21 @@ export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }) =
 };
 
 /**
+ * A photo's size as pages give it to images (their width and height, so the page does not move while it loads, G14),
+ * or null when it is not known.
+ * @param {Pick<import('./model.js').MediaRecord, 'width' | 'height'> | null | undefined} file
+ * @returns {{ width: number, height: number } | null}
+ */
+export const sizeOf = (file) =>
+	file && Number.isSafeInteger(file.width) && Number.isSafeInteger(file.height)
+		? { width: Number(file.width), height: Number(file.height) }
+		: null;
+
+/**
  * A product card (grid and search results), at its shown prices (G4).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string, slug?: string } | null,
- *   grades: ReadonlyMap<string, Grade>, cardImages?: Array<{ url: string | null, alt: string }>, shown: Shown }} context
+ *   grades: ReadonlyMap<string, Grade>, cardImages?: Card['cardImages'], shown: Shown }} context
  * @returns {Card}
  */
 export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [], shown }) => ({
@@ -153,6 +166,7 @@ export const cardOf = (product, { currency, image, url, brand, grades, cardImage
 	...shownRange(product, shown),
 	currency,
 	image,
+	imageSize: image ? sizeOf(product.media[0]) : null,
 	url,
 	inStock: product.inStock,
 	rating: product.rating,

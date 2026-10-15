@@ -404,7 +404,8 @@ export const paragraphs = (doc, text) =>
  * @param {Texts} t
  * @param {Formats} formats
  * @param {{ id: string, name: string, url: string, image: string | null, price: number, compareAtPrice?: number | null,
- *   priceMax?: number | null, featured?: boolean, cardImages?: Array<{ url: string | null, alt: string }>,
+ *   priceMax?: number | null, featured?: boolean, imageSize?: { width: number, height: number } | null,
+ *   cardImages?: Array<{ url: string | null, alt: string, width?: number, height?: number }>,
  *   currency: string, inStock: boolean, rating?: { average: number, count: number }, brand?: { name: string } | string | null,
  *   grades?: string[] }} card
  * @param {Child[]} [actions]
@@ -414,6 +415,16 @@ export const productCard = (doc, t, formats, card, actions = []) => {
 	const rating = ratingText(t, card.rating);
 	const photos = (card.cardImages ?? []).filter((photo) => typeof photo?.url === 'string' && photo.url);
 	const image = card.image ?? photos[0]?.url ?? null;
+	// each picture's size, so the page does not move while it loads (G14)
+	const size = card.image ? card.imageSize : photos[0];
+	/**
+	 * @param {{ width?: number, height?: number } | null | undefined} of
+	 * @returns {Record<string, string>}
+	 */
+	const sized = (of) =>
+		of && Number.isSafeInteger(of.width) && Number.isSafeInteger(of.height)
+			? { width: String(of.width), height: String(of.height) }
+			: {};
 	const picture =
 		photos.length > 1
 			? h(
@@ -422,10 +433,12 @@ export const productCard = (doc, t, formats, card, actions = []) => {
 					{ class: 'quad' },
 					...photos
 						.slice(0, 4)
-						.map((photo) => h(doc, 'img', { src: String(photo.url), alt: photo.alt || card.name, loading: 'lazy' })),
+						.map((photo) =>
+							h(doc, 'img', { src: String(photo.url), alt: photo.alt || card.name, loading: 'lazy', ...sized(photo) }),
+						),
 				)
 			: image
-				? h(doc, 'img', { src: image, alt: card.name, loading: 'lazy' })
+				? h(doc, 'img', { src: image, alt: card.name, loading: 'lazy', ...sized(size) })
 				: null;
 	const tags = [
 		card.featured ? h(doc, 'span', { class: 'badge accent' }, t('shop.featured')) : null,

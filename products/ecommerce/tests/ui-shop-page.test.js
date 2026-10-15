@@ -237,6 +237,18 @@ describe('product page', () => {
 		expect(fake.all('GET /v1/shop/products/phone')).toHaveLength(1);
 	});
 
+	it('names the product in the page’s h1, or in the heading data-heading asks for (G3)', async () => {
+		const fake = makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products/phone': () => ok(product()) } });
+		const first = await mountPage(fake);
+		expect($(first, 'h1.big').textContent).toBe('Phone One');
+		resetPage();
+		const host = place('product_page', { product: 'phone', heading: 'h2' });
+		await mountProductPage({ host, config: configOf(['catalog'], { currency: 'EUR' }), shop: fake.shop, win: window });
+		await flush();
+		expect($(host, 'h1')).toBeNull();
+		expect($(host, 'h2.big').textContent).toBe('Phone One');
+	});
+
 	it('says when the product is missing or cannot be read', async () => {
 		const missing = await mountPage(makeShop({ features: ['catalog'] }));
 		expect(textOf(missing)).toContain(text('page.notFound'));

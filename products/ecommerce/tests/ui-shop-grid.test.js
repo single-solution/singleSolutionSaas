@@ -165,6 +165,36 @@ const checkOf = (host, label) => {
 };
 
 describe('product grid', () => {
+	it('gives each picture its size, so the page does not move while it loads (G14)', async () => {
+		const pages = listing();
+		pages.queue.push(() =>
+			ok({
+				items: [
+					card('prd_a', { imageSize: { width: 800, height: 600 } }),
+					card('prd_b', {
+						cardImages: [
+							{ url: 'https://cdn.example.com/1.png', alt: 'Red', width: 400, height: 500 },
+							{ url: 'https://cdn.example.com/2.png', alt: 'Blue' },
+						],
+					}),
+					card('prd_c', { imageSize: null }),
+				],
+				nextCursor: null,
+				facets: null,
+			}),
+		);
+		const host = await mountGrid(makeShop({ features: ['catalog'], routes: { 'GET /v1/shop/products': pages.route } }));
+		const sizes = (/** @type {Element} */ card) =>
+			[...card.querySelectorAll('img')].map((img) => [img.getAttribute('width'), img.getAttribute('height')]);
+		const [single, quad, none] = $$(host, 'li.card');
+		expect(sizes(single)).toEqual([['800', '600']]);
+		expect(sizes(quad)).toEqual([
+			['400', '500'],
+			[null, null],
+		]);
+		expect(sizes(none)).toEqual([[null, null]]);
+	});
+
 	it('starts from the data attributes, counts, pages and loads more with the cursor', async () => {
 		const pages = listing();
 		pages.queue.push(

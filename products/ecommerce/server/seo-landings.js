@@ -51,7 +51,11 @@ import {
 	scriptJson,
 } from '../core/seo.js';
 import { gradesByKey, gradesFor } from '../core/grades.js';
+import { shownRange } from '../core/catalog-views.js';
+import { listingHtml, say } from '../core/seo-html.js';
+import { categoryTrail } from '../adapters/promotions-store.js';
 import { createListingFilter } from './catalog-shop.js';
+import { createShownPrices } from './shown-prices.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
 import { seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
@@ -89,11 +93,11 @@ const TOTAL_CAP = 10_000;
 /** At most this many landing pages are remembered as indexed (G7.7). */
 const MAX_REMEMBERED = 10_000;
 /** Listing parameters that are not filters (they keep a category or landing page indexable). */
-const NOT_FILTERS = new Set(['category', 'brand', 'grade', 'page', 'limit', 'cursor']);
+const NOT_FILTERS = new Set(['category', 'brand', 'grade', 'page', 'limit', 'cursor', 'html']);
 /** Listing parameters that narrow nothing: an empty result with only these is a page, not a 404 (G7.4). */
-const NOT_NARROWING = new Set(['category', 'page', 'limit', 'cursor', 'sort']);
+const NOT_NARROWING = new Set(['category', 'page', 'limit', 'cursor', 'sort', 'html']);
 /** Listing parameters a page's own address never carries: the category is the address, the rest only reads (G12). */
-const NOT_IN_ADDRESS = new Set(['category', 'limit', 'cursor']);
+const NOT_IN_ADDRESS = new Set(['category', 'limit', 'cursor', 'html']);
 
 /**
  * A filtered list's own address (G12: such a page is not indexed and names itself as canonical, never the category):
@@ -143,6 +147,7 @@ export const createLandings = (product, service, media) => {
 	};
 
 	const listingFilter = createListingFilter(service);
+	const shownPrices = createShownPrices(service);
 
 	/**
 	 * The landing pages indexed before (G7.7), by combination key: all of them, or those of `keys`.
@@ -538,6 +543,48 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
+	 * The grid's core as plain HTML (G3): the page's products as links with their first photo (with its size) and the
+	 * price shown, as cards show them, and the links to the previous and next pages, in the website's words and format.
+	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord[]} items
+	 * @param {{ prev: string | null, next: string | null }} pages
+	 */
+	const gridHtml = async (s, data, items, pages) => {
+		const [texts, { money }, prices] = await Promise.all([s.texts(), s.format(), shownPrices(s, data)]);
+		/** @param {string} key @param {Record<string, string | number>} [values] */
+		const t = (key, values) => say(String(texts[key] ?? ''), values);
+		/** @param {number} amount */
+		const written = (amount) => money(amount, s.currency);
+		return listingHtml({
+			items: await Promise.all(
+				items.map(async (item) => {
+					const range = shownRange(item, prices.of(item, await categoryTrail(data, item.categoryIds)));
+					const main = item.media[0];
+					const photo = main ? await media.stableUrl(s, main.sizes?.card ?? main.key) : null;
+					return {
+						name: item.name,
+						url: await media.productUrl(s, item),
+						price:
+							range.priceMax > range.price
+								? t('shop.priceRange', { min: written(range.price), max: written(range.priceMax) })
+								: written(range.price),
+						was: range.compareAtPrice !== null && range.priceMax <= range.price ? written(range.compareAtPrice) : '',
+						image:
+							main && photo
+								? {
+										url: photo,
+										alt: main.alt || item.name,
+										...(main.width && main.height ? { width: main.width, height: main.height } : {}),
+									}
+								: null,
+					};
+				}),
+			),
+			...pages,
+			words: { pages: t('grid.pages'), prev: t('grid.prevPage'), next: t('grid.nextPage') },
+		});
+	};
+
+	/**
 	 * GET /v1/seo/listing?category=&brand=&grade=&page=&…: what a listing page puts in its head (E15).
 	 * @param {any} ctx
 	 */
@@ -647,11 +694,14 @@ export const createLandings = (product, service, media) => {
 		// pages after the first keep their own address as canonical, indexed or not (pagedListings; SG-21, G7: Google asks
 		// never to name page 1 as the canonical of page 2); a filtered list names itself (G12)
 		const pagedOut = page > 1 && settings.pagedListings === 'noindex';
-		const canonical = !exact
-			? filteredUrl(pageUrl, ctx.query)
-			: page > 1
-				? withQuery(canonicalBase, `page=${page}`)
-				: canonicalBase;
+		/** The address of a page of this list (page 1: without a page number). @param {number} n */
+		const pageAddress = (n) =>
+			!exact
+				? filteredUrl(pageUrl, { ...ctx.query, page: String(n) })
+				: n > 1
+					? withQuery(canonicalBase, `page=${n}`)
+					: canonicalBase;
+		const canonical = pageAddress(page);
 		const h1 =
 			landing?.h1 ||
 			automatic?.copy.name ||
@@ -681,18 +731,21 @@ export const createLandings = (product, service, media) => {
 		);
 		const intro = landing?.intro || category?.content.summary || category?.description || '';
 		const faqs = landing ? landing.faqs : (category?.faqs ?? []);
-		// the ItemList: the products this page of the grid shows, in its order (G7.8); a list with other filters gives none
-		// (it is not indexed, and its items are the grid's to find)
-		const items =
-			itemsKnown && counted && total > 0
+		// the products this page of the grid shows, in its order: its ItemList (a list with other filters gives none: it is
+		// not indexed, and its items are the grid's to find), and with html=1 the grid's core (G3)
+		const html = ctx.query.html === '1';
+		const shownItems = /** @type {ProductRecord[]} */ (
+			counted && total > 0 && (itemsKnown || html)
 				? await data
 						.collection(COLLECTIONS.products)
-						.find(counted.filter, { projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 } })
+						.find(counted.filter, NO_ID)
 						.sort(sortDocument(sorted ?? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
 						.skip((page - 1) * limit)
 						.limit(limit)
 						.toArray()
-				: [];
+				: []
+		);
+		const items = itemsKnown ? shownItems : [];
 		const image = category?.image ? await media.stableUrl(s, category.image.key) : siteAddress(settings.defaultImage) || null;
 		const jsonLd = categoryJsonLd({
 			name: h1,
@@ -736,6 +789,14 @@ export const createLandings = (product, service, media) => {
 						}
 					: null,
 			jsonLd: scriptJson(jsonLd),
+			...(html
+				? {
+						html: await gridHtml(s, data, shownItems, {
+							prev: page > 1 && !missing ? pageAddress(page - 1) : null,
+							next: page * limit < total ? pageAddress(page + 1) : null,
+						}),
+					}
+				: {}),
 		};
 	};
 

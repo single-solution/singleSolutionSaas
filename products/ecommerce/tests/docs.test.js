@@ -43,7 +43,9 @@ describe('createSnippets', () => {
 		expect(snippets.visitor).toContain(
 			'<div data-ss-ecommerce="product_grid" data-category="accessories" data-brand="acme" data-grade="" data-featured="" data-deal="" data-sort="newest" data-query="" data-limit="24"></div>',
 		);
-		expect(snippets.visitor).toContain('<div data-ss-ecommerce="product_page" data-product="blue-kettle"></div>');
+		expect(snippets.visitor).toContain(
+			'<div data-ss-ecommerce="product_page" data-product="blue-kettle" data-heading="h1"></div>',
+		);
 		expect(snippets.visitor).toContain('<div data-ss-ecommerce="cart"></div>');
 		expect(snippets.visitor).not.toContain('catalog_admin');
 	});
