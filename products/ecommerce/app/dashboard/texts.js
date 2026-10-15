@@ -315,6 +315,13 @@ export const TEXTS = Object.freeze({
 			removeAccount: 'Remove this account',
 			badAmount: '{method}: {value} is not an amount in {currency}.',
 		}),
+		unitStates: Object.freeze({
+			title: 'Unit states',
+			help: 'What a numbered unit can be besides in stock and sold, such as faulty, reserved, demo or in repair. A unit in one of them is not for sale; staff put it back in stock.',
+			item: 'State',
+			key: 'Key (lower-case letters, digits, _ or -)',
+			label: 'Name',
+		}),
 		couriers: Object.freeze({
 			title: 'Couriers',
 			help: 'Staff pick the courier when an order ships. In the tracking link, {tracking} is replaced by the tracking number.',

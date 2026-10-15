@@ -1,7 +1,8 @@
 /**
  * Units (serial numbers) in the catalog admin widget (feature `grades_serials`, PLAN 0.8.8 Condition grades and unit numbers; E11;
  * dynamic model §2) as a list-and-detail screen: search (by the start of the serial) and filter by status, Load more, a
- * detail per unit (its values by unit field, product and variant, location and order), Mark faulty / Back in stock,
+ * detail per unit (its values by unit field, product and variant, location and order), Mark <one of the merchant's
+ * unit states> / Back in stock,
  * Delete (not for sold units), and Add units for a product variant (of an item type that numbers its units): one unit
  * per line — its serial number, or with the type's unit fields its values in the fields' order separated by commas or
  * tabs (as pasted from a spreadsheet), each checked
@@ -20,7 +21,7 @@ import { typeNamed, unitFieldsOfType } from './admin-types.js';
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
 /**
  * @typedef {{ id: string, productId: string, variantId: string, serial: string, values?: Record<string, string[]>,
- *   status: 'in_stock' | 'sold' | 'faulty', orderId: string | null, locationId?: string | null }} Serial
+ *   status: string, orderId: string | null, locationId?: string | null }} Serial
  */
 
 /** @typedef {{ id: string, name: string, variants: any[] }} SerialProduct the product the list is filtered to */
@@ -53,7 +54,8 @@ export const createSerialFilter = () => {
  */
 
 /** Serial statuses and their status colors. */
-const TONES = Object.freeze(/** @type {Record<string, Tone>} */ ({ in_stock: 'success', sold: 'neutral', faulty: 'danger' }));
+/** The fixed states' tones; the merchant's states (E38) show as warnings. */
+const TONES = Object.freeze(/** @type {Record<string, Tone>} */ ({ in_stock: 'success', sold: 'neutral' }));
 
 /**
  * The serials section.
@@ -63,9 +65,14 @@ export const serialsTab = (kit, panel, lookups, links) => {
 	const { t, h } = kit;
 	const filter = links.serialFilter;
 	const search = kit.input('', { type: 'search', placeholder: t('catalogAdmin.searchSerials') });
+	/** @type {Array<{ key: string, label: string }>} the merchant's unit states (E38) */
+	const states = Array.isArray(kit.settings.catalog?.unitStates) ? kit.settings.catalog.unitStates : [];
+	/** A status for people: the fixed ones' words, else the merchant's label (else its key). @param {string} key */
+	const statusLabel = (key) =>
+		key in TONES ? t(`catalogAdmin.serial.${key}`) : (states.find((state) => state.key === key)?.label ?? key);
 	const status = kit.select([
 		{ value: '', label: t('admin.all') },
-		...Object.keys(TONES).map((key) => ({ value: key, label: t(`catalogAdmin.serial.${key}`) })),
+		...[...Object.keys(TONES), ...states.map((state) => state.key)].map((key) => ({ value: key, label: statusLabel(key) })),
 	]);
 	/** @type {string | null} */
 	let cursor = null;
@@ -145,10 +152,10 @@ export const serialsTab = (kit, panel, lookups, links) => {
 			const sold = (found.variants ?? []).find((/** @type {any} */ entry) => entry.id === serial.variantId);
 			if (sold) variantName.replaceChildren(variantLabel(kit, sold));
 		});
-		/** @param {'in_stock' | 'faulty'} to */
+		/** @param {string} to in_stock or a unit state's key */
 		const mark = (to) =>
 			kit.button(
-				t(to === 'faulty' ? 'catalogAdmin.markFaulty' : 'catalogAdmin.markInStock'),
+				to === 'in_stock' ? t('catalogAdmin.markInStock') : t('catalogAdmin.markState', { state: statusLabel(to) }),
 				async () => {
 					const answer = await kit.call('PATCH', `/v1/admin/serials/${serial.id}`, { status: to });
 					if (!answer.ok) return kit.fail(note, answer);
@@ -160,8 +167,14 @@ export const serialsTab = (kit, panel, lookups, links) => {
 		return [
 			detailHead(kit, {
 				title: serial.serial,
-				badges: [kit.badge(t(`catalogAdmin.serial.${serial.status}`), TONES[serial.status])],
-				actions: [serial.status === 'in_stock' ? mark('faulty') : null, serial.status === 'faulty' ? mark('in_stock') : null],
+				badges: [kit.badge(statusLabel(serial.status), TONES[serial.status] ?? 'warning')],
+				// in stock: into one of the merchant's states; in a state: back in stock (a sold unit moves with its order)
+				actions:
+					serial.status === 'in_stock'
+						? states.map((state) => mark(state.key))
+						: serial.status === 'sold'
+							? []
+							: [mark('in_stock')],
 				more: [
 					serial.status === 'sold'
 						? null
@@ -340,9 +353,9 @@ export const serialsTab = (kit, panel, lookups, links) => {
 		idOf: (serial) => serial.id,
 		row: (serial) => ({
 			name: serial.serial,
-			tone: TONES[serial.status],
-			toneLabel: t(`catalogAdmin.serial.${serial.status}`),
-			figure: t(`catalogAdmin.serial.${serial.status}`),
+			tone: TONES[serial.status] ?? 'warning',
+			toneLabel: statusLabel(serial.status),
+			figure: statusLabel(serial.status),
 			meta: [serial.orderId ?? '', serial.locationId ? lookups.nameOf('locations', serial.locationId) : '']
 				.filter(Boolean)
 				.join(' · '),

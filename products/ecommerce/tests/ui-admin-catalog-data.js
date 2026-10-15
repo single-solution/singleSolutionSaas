@@ -374,7 +374,17 @@ export const USED_PHONE = Object.freeze({
 	fieldIds: null,
 });
 
-export const SETTINGS = { catalog: { grades: [{ key: 'a', label: 'Grade A' }], types: [USED_PHONE] } };
+export const SETTINGS = {
+	catalog: {
+		grades: [{ key: 'a', label: 'Grade A' }],
+		types: [USED_PHONE],
+		// the merchant's unit states (E38)
+		unitStates: [
+			{ key: 'faulty', label: 'Faulty' },
+			{ key: 'demo', label: 'Demo unit' },
+		],
+	},
+};
 
 /** @param {readonly string[]} [features] @param {Record<string, any>} [routes] @param {Record<string, any>} [settings] */
 export const start = (features = ALL, routes = {}, settings = SETTINGS) =>

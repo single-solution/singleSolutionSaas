@@ -586,7 +586,7 @@ describe('finish', () => {
 			'stock.units': 3,
 			'serials.in_stock': 1,
 			'serials.sold': 1,
-			'serials.faulty': 0,
+			'serials.held': 0,
 			'deals.used': 37,
 			'bundles.used': 4,
 		});

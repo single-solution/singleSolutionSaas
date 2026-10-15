@@ -5991,7 +5991,7 @@
 						"stock.units",
 						"serials.in_stock",
 						"serials.sold",
-						"serials.faulty",
+						"serials.held",
 						"deals.used",
 						"bundles.used",
 						"customers",
@@ -6035,9 +6035,10 @@
 							"type": "integer",
 							"minimum": 0
 						},
-						"serials.faulty": {
+						"serials.held": {
 							"type": "integer",
-							"minimum": 0
+							"minimum": 0,
+							"description": "Units in one of the merchant's unit states (not for sale)."
 						},
 						"deals.used": {
 							"type": "integer",
@@ -11972,8 +11973,8 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["in_stock", "sold", "faulty"],
-					"description": "sold: captured on an order when it was packed (back in_stock when the order is canceled or returned)."
+					"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+					"description": "in_stock, sold (captured on an order when it was packed; back in_stock when the order is canceled or returned) or a key of the merchant's unit_states list (seeded: faulty)."
 				},
 				"orderId": {
 					"type": ["string", "null"],
@@ -21068,8 +21069,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["in_stock", "sold", "faulty"],
-					"description": "Only units with this status (another value filters nothing)."
+					"description": "Only units with this status: in_stock, sold or a key of the unit_states list (another value filters nothing)."
 				},
 				"cursor": {
 					"type": "string",
@@ -21106,8 +21106,7 @@
 				},
 				"status": {
 					"type": "string",
-					"enum": ["in_stock", "sold", "faulty"],
-					"description": "Only units with this status (another value filters nothing)."
+					"description": "Only units with this status: in_stock, sold or a key of the unit_states list (another value filters nothing)."
 				},
 				"cursor": {
 					"type": "string",
@@ -21280,7 +21279,7 @@
 		}
 	},
 	"PATCH /v1/serials/:id": {
-		"summary": "Mark a unit faulty or back in stock",
+		"summary": "Give a unit one of your unit states, or put it back in stock",
 		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
 		"body": {
 			"type": "object",
@@ -21288,7 +21287,7 @@
 			"properties": {
 				"status": {
 					"type": "string",
-					"enum": ["in_stock", "faulty"]
+					"description": "in_stock, or a key of the unit_states list (E38)."
 				}
 			}
 		},
@@ -21297,7 +21296,7 @@
 		}
 	},
 	"PATCH /v1/admin/serials/:id": {
-		"summary": "Mark a unit faulty or back in stock (Catalog admin widget)",
+		"summary": "Give a unit one of your unit states, or put it back in stock (Catalog admin widget)",
 		"description": "Needs Condition grades and unit numbers (403 feature_off otherwise). 422 validation_failed for another status; 409 conflict for a sold unit (it changes through its order or return); 404 not_found.",
 		"body": {
 			"type": "object",
@@ -21305,7 +21304,7 @@
 			"properties": {
 				"status": {
 					"type": "string",
-					"enum": ["in_stock", "faulty"]
+					"description": "in_stock, or a key of the unit_states list (E38)."
 				}
 			}
 		},

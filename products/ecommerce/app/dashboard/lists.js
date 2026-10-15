@@ -21,6 +21,7 @@ import {
 	describeProblem,
 } from '@ss/ui';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
+import { UNIT_STATE_LIMITS } from '../../core/unit-states.js';
 import { call, fill, useLoad } from './api.js';
 import { cleanLines, keyOf, splitIds, taxRegionLine, taxRegionOf } from './drafts.js';
 import { Loaded } from './parts.js';
@@ -351,6 +352,46 @@ export function CouriersEditor({ websiteId, off }) {
 						type="url"
 						value={courier.trackingUrl ?? ''}
 						onChange={(event) => set({ trackingUrl: event.target.value })}
+					/>
+				</FieldGrid>
+			)}
+		/>
+	);
+}
+
+const US = L.unitStates;
+
+/**
+ * The merchant's unit states (`unit_states`, feature grades_serials, E38): a name and a key; in stock and sold are
+ * fixed.
+ * @param {EditorProps} props
+ */
+export function UnitStatesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="unit_states"
+			title={US.title}
+			help={US.help}
+			itemLabel={US.item}
+			max={UNIT_STATE_LIMITS.states}
+			off={off}
+			blank={() => ({ key: '', label: '' })}
+			clean={(state) => ({ key: keyOf(state.key, state.label), label: String(state.label ?? '').trim() })}
+			render={(state, set) => (
+				<FieldGrid>
+					<Input
+						label={US.label}
+						value={state.label ?? ''}
+						maxLength={UNIT_STATE_LIMITS.label}
+						onChange={(event) => set({ label: event.target.value })}
+					/>
+					<Input
+						label={US.key}
+						value={state.key ?? ''}
+						maxLength={40}
+						autoComplete="off"
+						onChange={(event) => set({ key: event.target.value })}
 					/>
 				</FieldGrid>
 			)}

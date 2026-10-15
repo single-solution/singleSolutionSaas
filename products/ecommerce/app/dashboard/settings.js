@@ -23,6 +23,7 @@ import {
 	PoliciesEditor,
 	RolePricesEditor,
 	TaxRulesEditor,
+	UnitStatesEditor,
 	ZonesEditor,
 } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
@@ -276,7 +277,12 @@ export function SettingsTab({ websiteId: id }) {
 									{seen('bookings') ? <BookingHoursEditor websiteId={websiteId} off={off('bookings')} /> : null}
 								</>
 							),
-							grades: seen('grades_serials') ? <GradesEditor websiteId={websiteId} off={off('grades_serials')} /> : null,
+							grades: seen('grades_serials') ? (
+								<>
+									<GradesEditor websiteId={websiteId} off={off('grades_serials')} />
+									<UnitStatesEditor websiteId={websiteId} off={off('grades_serials')} />
+								</>
+							) : null,
 							checkout: seen('checkout') ? (
 								<>
 									<PaymentMethodsEditor websiteId={websiteId} off={off('checkout')} currency={currency} />

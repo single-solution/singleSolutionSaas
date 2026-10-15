@@ -39,6 +39,7 @@ import { checkSizeChart } from './size-charts.js';
  * @property {ReadonlySet<string>} brandIds
  * @property {ReadonlySet<string>} sizeChartIds
  * @property {ReadonlySet<string>} gradeKeys the `grades` list (empty while Condition grades and unit numbers is off)
+ * @property {ReadonlySet<string>} [unitStates] the keys of the `unit_states` list (E38)
  * @property {ReadonlySet<string>} [fieldSlugs] the slugs of the active product and variant fields shoppers filter by
  *   (landing pages' facets)
  * @property {ReadonlySet<string>} locationIds
@@ -269,7 +270,6 @@ const SKEW_MS = 5 * 60_000;
 /** Most files of a digital product. */
 const MAX_FILES = 20;
 /** Serial statuses. */
-const SERIAL_STATUSES = Object.freeze(['in_stock', 'sold', 'faulty']);
 /** A date as JSON gives it: ISO-8601, the date first. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T|$)/;
 
@@ -786,7 +786,7 @@ export const checkImportedProduct = (record, context) => {
 
 /**
  * A unit of a variant (E11, dynamic model §2): its serial number, or with unit fields its values (`{ <fieldId>: value or
- * [values] }`; a serial alone is the first unit field's value). A unit in stock or faulty belongs to no order (as a
+ * [values] }`; a serial alone is the first unit field's value). A unit in stock or in a unit state belongs to no order (as a
  * return leaves it); a sold one names its order. Whether the variant exists, the values against the product's unit
  * fields and the numbers no other unit has are checked by the caller, which keeps the unit as the shop does (its serial,
  * values and keys).
@@ -804,8 +804,8 @@ export const checkImportedSerial = (record, context) => {
 	if (record.serial !== undefined && typeof record.serial !== 'string')
 		errors.push({ path: '/serial', message: 'A serial number is text.' });
 	const status = String(record.status);
-	if (!SERIAL_STATUSES.includes(status))
-		errors.push({ path: '/status', message: `The status is one of ${SERIAL_STATUSES.join(', ')}.` });
+	if (status !== 'in_stock' && status !== 'sold' && !context.unitStates?.has(status))
+		errors.push({ path: '/status', message: 'The status is in_stock, sold or a key of the unit_states list.' });
 	const sold = status === 'sold';
 	const orderId = refOf(record.orderId, ID_PREFIX.order, '/orderId', errors, 'Give the order id, or null.');
 	const lineId = refOf(record.lineId, ID_PREFIX.line, '/lineId', errors, 'Give the order line id, or null.');

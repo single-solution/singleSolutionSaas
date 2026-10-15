@@ -99,6 +99,9 @@ export const catalogImports = (deps) => {
 			const features = new Set(await deps.featuresOn(websiteId));
 			const grades = features.has('grades_serials') ? await deps.list(websiteId, 'grades') : [];
 			const gradeKeys = [...gradesByKey(grades).keys()];
+			const unitStates = features.has('grades_serials')
+				? /** @type {Array<{ key: string }>} */ (await deps.list(websiteId, 'unit_states')).map((state) => state.key)
+				: [];
 			const types = /** @type {import('../core/item-types.js').ItemType[]} */ (await deps.list(websiteId, 'item_types'));
 			const [categoryIds, brandIds, sizeChartIds, locationIds] = await Promise.all([
 				idsIn(data, COLLECTIONS.categories),
@@ -143,6 +146,7 @@ export const catalogImports = (deps) => {
 					brandIds,
 					sizeChartIds,
 					gradeKeys: new Set(gradeKeys),
+					unitStates: new Set(unitStates),
 					locationIds: /** @type {Set<string>} */ (locationIds),
 					types,
 					...(categories ? { categories } : {}),
@@ -595,7 +599,10 @@ export const catalogImports = (deps) => {
 			'stock.units': Number(catalog?.units ?? 0),
 			'serials.in_stock': units('in_stock'),
 			'serials.sold': units('sold'),
-			'serials.faulty': units('faulty'),
+			// units in one of the merchant's unit states (E38): not for sale
+			'serials.held': serials
+				.filter((row) => row._id !== 'in_stock' && row._id !== 'sold')
+				.reduce((sum, row) => sum + Number(row.count ?? 0), 0),
 			'deals.used': await used(COLLECTIONS.deals),
 			'bundles.used': await used(COLLECTIONS.bundles),
 		};

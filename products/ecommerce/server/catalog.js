@@ -55,6 +55,8 @@ export const createCatalog = (product, service) => {
 					// the units staff type and read package weights and sizes in (E13)
 					weightUnit,
 					sizeUnit,
+					// the merchant's unit states (E38)
+					unitStates: s.has('grades_serials') ? await s.list('unit_states') : [],
 				},
 			};
 		},

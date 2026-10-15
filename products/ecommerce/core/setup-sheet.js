@@ -148,6 +148,7 @@ export const LIST_WORDS = Object.freeze({
 	delivery_zones: named('zone', 'zones', (/** @type {Zone} */ zone) => nameOf(zone.name)),
 	tax_rules: named('tax rule', 'tax rules', (/** @type {TaxRule} */ rule) => `${nameOf(rule.name)} ${rule.percent}%`),
 	grades: gradeWords,
+	unit_states: named('unit state', 'unit states', (/** @type {{ label: string }} */ state) => nameOf(state.label)),
 	item_types: typeWords,
 	booking_hours: hoursWords,
 	role_prices: named(

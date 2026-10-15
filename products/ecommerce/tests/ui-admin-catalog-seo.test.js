@@ -381,12 +381,14 @@ describe('catalog admin: serial numbers', () => {
 		expect(textOf(panel)).toContain('ord_1');
 		const detail = () => textOf(detailOf(panel));
 		for (const part of ['In stock', 'ProductPhone', 'VariantRed', 'LocationShop']) expect(detail()).toContain(part);
-		await click(buttonIn(detailOf(panel), 'Mark faulty'));
+		expect(shows(detailOf(panel), 'Mark Demo unit')).toBe(true);
+		await click(buttonIn(detailOf(panel), 'Mark Faulty'));
 		expect(server.last('PATCH /v1/admin/serials/ser_1')?.body).toEqual({ status: 'faulty' });
 		expect(detail()).toContain('Back in stock');
+		expect(detail()).toContain('Faulty');
 		await pick(panel, 'SN-4');
 		expect(detail()).toContain('Orderord_1');
-		expect(shows(detailOf(panel), 'Mark faulty')).toBe(false);
+		expect(shows(detailOf(panel), 'Mark Faulty')).toBe(false);
 		expect(/** @type {HTMLElement} */ (detailOf(panel).querySelector('.more')).hidden).toBe(true);
 		await pick(panel, 'SN-5');
 		expect(detail()).toContain('Productprd_x');

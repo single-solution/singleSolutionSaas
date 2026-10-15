@@ -197,6 +197,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		expect(listsOf(on, 'taxes')).toEqual([['tax_rules', '1 tax rule: Sales tax 8.25%.']]);
 		expect(listsOf(on, 'grades_serials')).toEqual([
 			['grades', '3 grades: Like new (refurbished), Good (used), Fair (used, not offered).'],
+			['unit_states', '1 unit state: Faulty.'],
 		]);
 		expect(listsOf(on, 'bookings')).toEqual([
 			['booking_hours', 'Bookable 2 days a week: Mon 9:00 AM–12:00 PM and 1:00 PM–5:30 PM, Sat 10:00 AM–2:00 PM.'],

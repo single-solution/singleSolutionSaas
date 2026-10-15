@@ -482,6 +482,16 @@ describe('serials', () => {
 		expect((await api('GET', `/v1/serials?status=faulty&productId=${item.id}&variantId=${variantId}`)).json.items).toHaveLength(
 			1,
 		);
+		// the merchant's own unit states (E38): in_stock and sold stay fixed
+		await shop.list('unit_states', [
+			{ key: 'faulty', label: 'Faulty' },
+			{ key: 'demo', label: 'Demo unit' },
+			{ key: 'in_repair', label: 'In repair' },
+		]);
+		expect((await api('PATCH', `/v1/serials/${target.id}`, { status: 'demo' })).json.status).toBe('demo');
+		expect((await api('PATCH', `/v1/serials/${target.id}`, { status: 'lost' })).status).toBe(422);
+		expect((await api('GET', `/v1/serials?status=demo&productId=${item.id}`)).json.items).toHaveLength(1);
+		expect((await api('PATCH', `/v1/serials/${target.id}`, { status: 'faulty' })).json.status).toBe('faulty');
 		await (
 			await shop.db()
 		)

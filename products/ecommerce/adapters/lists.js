@@ -2,7 +2,7 @@
  * Ecommerce's list settings, in the product database (like Chat's, PLAN 0.8.4 step 8): settings that are lists or
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), the payment methods
  * (fixed-choices E2), delivery zones, couriers, the shop's policies (E27),
- * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
+ * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, unit states (E38), item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
  * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
@@ -21,6 +21,7 @@ import { checkItemTypes } from '../core/item-types.js';
 import { checkPaymentMethods, defaultPaymentMethods } from '../core/payment-methods.js';
 import { checkRolePrices } from '../core/role-pricing.js';
 import { checkTaxRules } from '../core/taxes.js';
+import { DEFAULT_UNIT_STATES, checkUnitStates } from '../core/unit-states.js';
 
 /**
  * @typedef {{ ok: true, value: any } | { ok: false, errors: Array<string | { path: string, message: string, code?: string }> }} ListCheck
@@ -58,6 +59,12 @@ export const LISTS = Object.freeze({
 	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: () => [] },
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },
 	grades: { feature: 'grades_serials', title: 'Condition grades', check: checkGrades, fallback: () => [] },
+	unit_states: {
+		feature: 'grades_serials',
+		title: 'Unit states',
+		check: checkUnitStates,
+		fallback: () => DEFAULT_UNIT_STATES.map((state) => ({ ...state })),
+	},
 	item_types: { feature: 'catalog', title: 'Item types', check: checkItemTypes, fallback: () => [] },
 	booking_hours: { feature: 'bookings', title: 'Booking hours', check: checkBookingHours, fallback: () => [] },
 	role_prices: { feature: 'role_pricing', title: 'Role prices', check: checkRolePrices, fallback: () => [] },

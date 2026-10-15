@@ -42,6 +42,7 @@ import { nextPreviousSlugs } from '../core/links.js';
 import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { brandScore, categoryScore } from '../core/seo-score.js';
+import { unitStatusOf } from '../core/unit-states.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
 import { pageTitlesOf } from './seo-reads.js';
 
@@ -652,7 +653,9 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			const filter = { websiteId: data.websiteId };
 			if (ctx.query.productId) filter.productId = ctx.query.productId;
 			if (ctx.query.variantId) filter.variantId = ctx.query.variantId;
-			if (['in_stock', 'sold', 'faulty'].includes(ctx.query.status)) filter.status = ctx.query.status;
+			// in stock, sold or one of the merchant's unit states (E38)
+			if (typeof ctx.query.status === 'string' && /^[a-z][a-z0-9_-]{0,39}$/.test(ctx.query.status))
+				filter.status = ctx.query.status;
 			const q = cleanText(ctx.query.q ?? '', 64);
 			if (q) filter.serial = { $regex: `^${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, $options: 'i' };
 			if (page.after !== null) {
@@ -743,12 +746,12 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			});
 			return created({ items: records });
 		},
-		/** PATCH `{ status: 'in_stock' | 'faulty' }`. @param {any} ctx */
+		/** PATCH `{ status }`: back `in_stock`, or one of the merchant's unit states (E38). @param {any} ctx */
 		update: async (ctx) => {
-			const status = bodyOf(ctx).status;
-			if (status !== 'in_stock' && status !== 'faulty')
-				throw refuse([{ path: '/status', message: 'Status is in_stock or faulty.' }]);
-			const { data } = await common.open(ctx);
+			const { s, data } = await common.open(ctx);
+			const status = unitStatusOf(bodyOf(ctx).status, await s.list('unit_states'));
+			if (status === null)
+				throw refuse([{ path: '/status', message: 'Status is in_stock or a key of the unit_states list.' }]);
 			/** @type {SerialRecord} */
 			const existing = await one(data, COLLECTIONS.serials, String(ctx.params.id), 'serial number');
 			if (existing.status === 'sold') throw problem('conflict', 'This unit was sold: it changes through its order or return.');
