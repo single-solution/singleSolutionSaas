@@ -35,5 +35,12 @@ export const WIDGET_FEATURES = Object.freeze({
  */
 export const ADD_TO_CART_EVENT = 'ss-ecommerce:add-to-cart';
 
-/** localStorage keys of the shopper's browser (the cart and compare list live in the browser, PLAN 0.8.4). */
-export const STORAGE_KEYS = Object.freeze({ cart: 'ss-ecommerce-cart', compare: 'ss-ecommerce-compare' });
+/**
+ * localStorage keys of the shopper's browser: the cart and compare list live in the browser (PLAN 0.8.4), and so do a
+ * guest's order keys (E21).
+ */
+export const STORAGE_KEYS = Object.freeze({
+	cart: 'ss-ecommerce-cart',
+	compare: 'ss-ecommerce-compare',
+	orderKeys: 'ss-ecommerce-order-keys',
+});

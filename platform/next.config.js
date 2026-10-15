@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { API_CSP, staticSecurityHeaders } from './src/infra/security-headers.js';
+import { staticSecurityHeaders } from '@ss/net';
+import { API_CSP } from './src/infra/security-headers.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 // inside the Single Solution monorepo the workspace packages are linked from its root; extracted, the project is the root

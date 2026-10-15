@@ -4,21 +4,19 @@
  * Pages are fetched when added and by Fetch again, never on a schedule. A part whose route answers 403 hides itself.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { buttonOf, fieldMaker, formPart, isInvalid, setHidden, textsOf, webAddress, whenOf } from './common.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /**
- * @param {{ host: HTMLElement, win: Window, api: import('./tickets.js').AdminApi, config: import('./common.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, win: Window, api: import('@ss/app-kit/widget').AdminApi, config: import('./common.js').WidgetConfig }} input
  */
 export const mountKnowledge = ({ host, win, api, config }) => {
 	const t = textsOf(config);
 	const when = whenOf(config, win);
 	/**
 	 * What to tell staff when a call failed: the widget's own texts, never the server's detail.
-	 * @param {import('./common.js').Answer} answer
+	 * @param {import('@ss/app-kit/widget').Answer} answer
 	 * @param {string} [invalid] the text of a refused value (`validation_failed`) for this action
 	 */
 	const failure = (answer, invalid = 'common.error') => {

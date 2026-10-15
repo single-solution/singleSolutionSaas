@@ -1,8 +1,8 @@
 /**
  * Names the page script, the widgets, the routes and the docs share (PLAN 0.4.10, 0.8.9): the browser global of
  * `widget.js` (`window.SSGrowth`), the attribute of the elements the merchant places
- * (`<div data-ss-growth="analytics_dashboard">`), the feature of each widget, the browser events the page script
- * listens for and the key under which the visitor's consent is kept in their own browser.
+ * (`<div data-ss-growth="analytics_dashboard">`), the browser events the page script listens for and the key under
+ * which the visitor's consent is kept in their own browser.
  * @module
  */
 
@@ -17,15 +17,6 @@ export const WIDGET_ATTRIBUTE = 'data-ss-growth';
 
 /** A page marks itself as a 404 with `<meta name="ss-growth-page" content="not_found">`. */
 export const PAGE_MARKER = 'ss-growth-page';
-
-/** The features of each widget (manifest.json `widgets`): a widget mounts only while one of them is on. */
-export const WIDGET_FEATURES = Object.freeze({
-	consent_banner: Object.freeze(['consent_banner']),
-	notice_bar: Object.freeze(['notice_bar']),
-	analytics_dashboard: Object.freeze(['visitor_analytics']),
-	seo_checklist: Object.freeze(['seo_checklist', 'indexnow']),
-	redirects: Object.freeze(['redirects']),
-});
 
 /**
  * The browser events Growth's page script listens for on `window` (PLAN 0.8.9). Ecommerce's shopper widgets dispatch

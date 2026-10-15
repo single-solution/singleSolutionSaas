@@ -258,12 +258,13 @@ export const checkClaimInput = (body, { maxPhotos, kinds = ['return', 'warranty'
 
 /**
  * The claim's lines if every one is claimable now (its window of this kind open, enough units left; an exchange uses
- * the return window), with the serial numbers of the units claimed (the line's serials not held by other claims, in
- * order).
+ * the return window; a measured line — its quantity in thousandths of its unit — in its steps), with the serial
+ * numbers of the units claimed (the line's serials not held by other claims, in order).
  * @param {ClaimKind} kind
  * @param {ClaimInput['lines']} wanted
  * @param {ReturnableLine[]} returnable
- * @returns {{ ok: true, lines: ReturnRecord['lines'] } | { ok: false, lineId: string, reason: 'unknown' | 'window_closed' | 'quantity' }}
+ * @returns {{ ok: true, lines: ReturnRecord['lines'] } | { ok: false, lineId: string,
+ *   reason: 'unknown' | 'window_closed' | 'quantity' | 'step' }}
  */
 export const planClaim = (kind, wanted, returnable) => {
 	/** @type {ReturnRecord['lines']} */
@@ -274,20 +275,26 @@ export const planClaim = (kind, wanted, returnable) => {
 		if (!found[kind === 'warranty' ? 'warranty' : 'return'].open)
 			return { ok: false, lineId: want.lineId, reason: 'window_closed' };
 		if (want.quantity > found.claimable) return { ok: false, lineId: want.lineId, reason: 'quantity' };
+		const step = found.line.measure?.step ?? 1;
+		if (want.quantity % step !== 0 && want.quantity !== found.claimable)
+			return { ok: false, lineId: want.lineId, reason: 'step' };
 		lines.push({ lineId: want.lineId, quantity: want.quantity, serials: found.freeSerials.slice(0, want.quantity) });
 	}
 	return { ok: true, lines };
 };
 
 /**
- * What a claim's lines were paid: each line's total × the claimed units / the units bought (rounded down).
+ * What a claim's lines were paid: each line's total × the claimed units / the units bought (rounded down; exact in
+ * BigInt, as a measured line counts thousandths of its unit).
  * @param {Pick<OrderRecord, 'lines'>} order
  * @param {Pick<ReturnRecord, 'lines'>} claim
  */
 export const claimValue = (order, claim) =>
 	claim.lines.reduce((sum, claimed) => {
 		const line = order.lines.find((entry) => entry.id === claimed.lineId);
-		return line && line.quantity > 0 ? sum + Math.floor((line.total * claimed.quantity) / line.quantity) : sum;
+		return line && line.quantity > 0
+			? sum + Number((BigInt(line.total) * BigInt(claimed.quantity)) / BigInt(line.quantity))
+			: sum;
 	}, 0);
 
 /**

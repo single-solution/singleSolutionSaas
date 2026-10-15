@@ -13,12 +13,13 @@
  *    free delivery: the first live one in the shoppers' order that applies) comes off what they left; with
  *    `one_exclusive` only when no item deal applied;
  * 2. bundles: sets form on the cart's units; a unit a bundle discounts takes no deal, and a set forms only when it saves
- *    more than those deals (`core/bundles.js`);
+ *    more than those deals (`core/bundles.js`); items sold in a unit of their own are never in a set (v1);
  * 3. the coupon, on what is left of the lines in its scope (`core/coupons.js`); its minimum subtotal is measured after
  *    deals and bundles.
  * Every amount is integer minor units, rounded down to whole units with Format's `wholeUnits` (E25); with the `deals`
  * setting `rounding: total_half_up` the deals are worked out exactly and their total is rounded once, half up, then
- * spread back over the lines (D4); no line ever goes below 0. No I/O.
+ * spread back over the lines (D4); no line ever goes below 0. A measured line (`measure`: its quantity in thousandths of
+ * its unit) comes to its `lineGross` and is one piece for the deals (`core/deals.js`). No I/O.
  * @module
  */
 import { formBundles } from './bundles.js';
@@ -35,6 +36,7 @@ import {
 	holdsAllDay,
 	utcClock,
 } from './deals.js';
+import { lineGross, perMeasure } from './measure.js';
 import { allocateUnits, roundHalfUp } from './money.js';
 
 /** @typedef {import('./model.js').DealRecord} DealRecord */
@@ -47,8 +49,9 @@ import { allocateUnits, roundHalfUp } from './money.js';
  * @property {string} variantId
  * @property {string[]} categoryIds the product's categories and all their ancestors
  * @property {string | null} brandId
- * @property {number} unitPrice minor units
- * @property {number} quantity
+ * @property {number} unitPrice minor units, per piece or per unit of a measured item
+ * @property {number} quantity pieces, or thousandths of the unit of a measured item
+ * @property {unknown} [measure] set for an item sold in a unit of its own (`core/measure.js`)
  * @property {string | null} [grade] the variant's grade (deal conditions)
  * @property {Record<string, string[]>} [attributes] attribute id → values (deal conditions)
  * @property {string | null} [dealId] the deal the shopper picked (`shopperChoice`, E18)
@@ -109,8 +112,19 @@ export const applyPromotions = ({
 }) => {
 	const clock = { ...utcClock(now), ...(cart.weekday === undefined ? {} : { weekday: cart.weekday }) };
 	if (cart.minutes !== undefined) clock.minutes = cart.minutes;
+	/**
+	 * What a line (or `quantity` of it) comes to: `lineGross`.
+	 * @param {PricingLine} line @param {number} [quantity]
+	 */
+	const grossOf = (line, quantity = line.quantity) =>
+		lineGross(Math.max(0, line.unitPrice), Math.max(0, quantity), Boolean(line.measure), unit);
+	/**
+	 * A per-unit amount for `quantity` of a line (a lock's saving): times the pieces, or for the measured quantity.
+	 * @param {number} amount @param {PricingLine} line @param {number} quantity
+	 */
+	const forUnits = (amount, line, quantity) => (line.measure ? perMeasure(amount, quantity) : amount * quantity);
 	const facts = {
-		goods: lines.reduce((sum, line) => sum + Math.max(0, line.unitPrice) * Math.max(0, line.quantity), 0),
+		goods: lines.reduce((sum, line) => sum + grossOf(line), 0),
 		paymentMethod: cart.paymentMethod ?? null,
 		...clock,
 	};
@@ -142,11 +156,8 @@ export const applyPromotions = ({
 		const line = /** @type {PricingLine} */ (lines[index]);
 		if (deal.target !== 'cart' || deal.type !== 'fixed') return dealLineDiscount(deal, line, { unit, rounding });
 		const indexes = covered.get(deal.id) ?? [];
-		const total = indexes.reduce(
-			(sum, i) => sum + /** @type {PricingLine} */ (lines[i]).unitPrice * /** @type {PricingLine} */ (lines[i]).quantity,
-			0,
-		);
-		const share = total > 0 ? (deal.value * line.unitPrice * line.quantity) / total : 0;
+		const total = indexes.reduce((sum, i) => sum + grossOf(/** @type {PricingLine} */ (lines[i])), 0);
+		const share = total > 0 ? (deal.value * grossOf(line)) / total : 0;
 		return dealLineDiscount(deal, line, { unit, share, rounding });
 	};
 	/**
@@ -187,7 +198,7 @@ export const applyPromotions = ({
 		let locked = false;
 		if (line.lock) {
 			const kept = deals.find((deal) => deal.id === line.lock?.dealId);
-			const saving = Math.min(line.unitPrice, Math.max(0, line.lock.perUnit)) * line.quantity;
+			const saving = forUnits(Math.min(line.unitPrice, Math.max(0, line.lock.perUnit)), line, line.quantity);
 			if (kept && saving > (best?.saving ?? 0)) {
 				best = { deal: kept, saving };
 				locked = true;
@@ -202,7 +213,8 @@ export const applyPromotions = ({
 	};
 
 	/**
-	 * The bundles the lines form, against what the given deal picks save per unit.
+	 * The bundles the lines form, against what the given deal picks save per unit; items sold in a unit of their own are
+	 * never in a set (v1).
 	 * @param {Array<{ saving: number }>} picks
 	 */
 	const bundlesWith = (picks) =>
@@ -213,8 +225,8 @@ export const applyPromotions = ({
 				categoryIds: line.categoryIds,
 				brandId: line.brandId,
 				unitPrice: Math.max(0, line.unitPrice),
-				quantity: Math.max(0, line.quantity),
-				dealUnit: line.quantity > 0 ? Math.floor((picks[index]?.saving ?? 0) / line.quantity) : 0,
+				quantity: line.measure ? 0 : Math.max(0, line.quantity),
+				dealUnit: line.quantity > 0 && !line.measure ? Math.floor((picks[index]?.saving ?? 0) / line.quantity) : 0,
 			})),
 			now,
 			unit,
@@ -233,6 +245,8 @@ export const applyPromotions = ({
 			const { bundleUnits, bundleDiscount } = /** @type {{ bundleUnits: number, bundleDiscount: number }} */ (
 				kept.lines[index]
 			);
+			// a measured line is one piece, never bundled: its item deal takes what it saves
+			if (line.measure) return sum + (items[index]?.saving ?? 0);
 			const perUnit = line.quantity > 0 ? Math.floor((items[index]?.saving ?? 0) / line.quantity) : 0;
 			return sum + bundleDiscount + perUnit * Math.max(0, line.quantity - bundleUnits);
 		}, 0);
@@ -251,9 +265,14 @@ export const applyPromotions = ({
 		const { bundleUnits } = /** @type {{ bundleUnits: number }} */ (formed.lines[index]);
 		const units = Math.max(0, line.quantity - bundleUnits);
 		if (!pick.deal || units === 0) return 0;
-		if (pick.locked) return Math.min(line.unitPrice, /** @type {{ perUnit: number }} */ (line.lock).perUnit) * units;
+		if (pick.locked)
+			return forUnits(Math.min(line.unitPrice, /** @type {{ perUnit: number }} */ (line.lock).perUnit), line, units);
 		if (pick.deal.target === 'cart' && pick.deal.type === 'fixed') return -1;
-		return dealLineDiscount(pick.deal, { unitPrice: line.unitPrice, quantity: units }, { unit, rounding });
+		return dealLineDiscount(
+			pick.deal,
+			{ unitPrice: line.unitPrice, quantity: units, measure: line.measure },
+			{ unit, rounding },
+		);
 	});
 	for (const deal of live) {
 		if (deal.target !== 'cart' || deal.type !== 'fixed') continue;
@@ -263,9 +282,7 @@ export const applyPromotions = ({
 		if (takers.length === 0) continue;
 		const amounts = takers.map((index) => {
 			const line = /** @type {PricingLine} */ (lines[index]);
-			return (
-				line.unitPrice * Math.max(0, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits)
-			);
+			return grossOf(line, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits);
 		});
 		const parts = spread(
 			Math.min(
@@ -280,7 +297,7 @@ export const applyPromotions = ({
 	}
 	/** @param {number} index what is left of a line after its bundles */
 	const room = (index) =>
-		/** @type {PricingLine} */ (lines[index]).unitPrice * /** @type {PricingLine} */ (lines[index]).quantity -
+		grossOf(/** @type {PricingLine} */ (lines[index])) -
 		/** @type {{ bundleDiscount: number }} */ (formed.lines[index]).bundleDiscount;
 
 	// the checkout-level deal after the item deals (`cartOffer`; with `one_exclusive` only while no item deal applied):
@@ -349,11 +366,15 @@ export const applyPromotions = ({
 			couponDiscount: 0,
 			eligibleDealIds: pick.eligible,
 			locked: own > 0 && pick.locked,
+			// a measured line's saving per unit of its measure (thousandths are its quantity)
 			perUnit:
 				own > 0 && pick.deal && pick.deal.target === 'items'
-					? Math.floor(
-							own / Math.max(1, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits),
-						)
+					? line.measure
+						? Math.floor((own * 1000) / Math.max(1, line.quantity))
+						: Math.floor(
+								own /
+									Math.max(1, line.quantity - /** @type {{ bundleUnits: number }} */ (formed.lines[index]).bundleUnits),
+							)
 					: 0,
 		};
 	});
@@ -421,7 +442,7 @@ export const applyPromotions = ({
 				productId: line.productId,
 				categoryIds: line.categoryIds,
 				brandId: line.brandId,
-				remaining: Math.max(0, line.unitPrice * line.quantity - dealDiscount - bundleDiscount),
+				remaining: Math.max(0, grossOf(line) - dealDiscount - bundleDiscount),
 			};
 		}),
 		unit,

@@ -3,8 +3,8 @@
  *
  * - `getMongoClient` — one pooled `MongoClient` per URI, cached on `globalThis` so warm serverless invocations
  *   reuse it; importing never needs a database. `connectMongoClient` connects it before use (the Portal before it is
- *   built), and again after a failed connect. Every call has deadlines ({@link DATABASE_DEADLINES}); a database that
- *   cannot be reached or does not answer in time fails fast with an error {@link isDatabaseUnavailable} recognizes,
+ *   built), and again after a failed connect. Every call has deadlines (`@ss/net` `DATABASE_DEADLINES`); a database
+ *   that cannot be reached or does not answer in time fails fast with an error `@ss/net` `isDatabaseUnavailable` recognizes,
  *   which requests answer 503 `database_unavailable`.
  * - `defineCollection` / `createRegistry` — every module declares its collections (indexes, TTL, `appendOnly`,
  *   `tenant: 'merchant'`). Names are global and owned: a module's collections are named `<module>_<name>`.
@@ -25,11 +25,14 @@
  */
 import { MongoClient } from 'mongodb';
 import { platformError } from './errors.js';
-import { isDuplicateKey, isObject, randomToken, sha256Hex, defaultRandomBytes } from './util.js';
+import { isObject } from '@ss/contracts/util';
+import { databaseClientOptions } from '@ss/net';
+import { randomToken, sha256Hex } from '@ss/protocol';
+import { isDuplicateKey, defaultRandomBytes } from './util.js';
 
 /** @typedef {import('mongodb').Db} Db */
 /** @typedef {import('mongodb').Document} Document */
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 
 /**
  * @typedef {object} IndexSpec
@@ -75,41 +78,6 @@ const CROSS_STAGES = new Set([
 // Client
 
 /**
- * Deadlines of every database call, for serverless functions (the same as the products' kit, K-16): finding a server
- * that answers (a database that cannot be reached) and opening a connection 5 s; waiting for a free pooled connection
- * 10 s; each send or receive on a connection 10 s (one operation that hangs).
- */
-export const DATABASE_DEADLINES = Object.freeze({
-	serverSelectionTimeoutMS: 5_000,
-	connectTimeoutMS: 5_000,
-	waitQueueTimeoutMS: 10_000,
-	socketTimeoutMS: 10_000,
-});
-
-/** Driver errors of a database that cannot be reached, or that did not answer within a deadline. */
-const UNAVAILABLE_ERRORS = new Set([
-	'MongoServerSelectionError',
-	'MongoNetworkError',
-	'MongoNetworkTimeoutError',
-	'MongoWaitQueueTimeoutError',
-	'MongoOperationTimeoutError',
-	'MongoPoolClearedError',
-	'MongoTopologyClosedError',
-]);
-
-/** Network errors of a name lookup (a `mongodb+srv` address whose DNS records cannot be read right now). */
-const LOOKUP_ERRORS = new Set(['ENOTFOUND', 'EAI_AGAIN', 'ETIMEOUT', 'ESERVFAIL']);
-
-/**
- * True when the database cannot be reached or did not answer in time (a driver network error or deadline, a failed DNS
- * lookup of its address, or an operation over its `maxTimeMS`).
- * @param {unknown} error
- * @returns {boolean}
- */
-export const isDatabaseUnavailable = (error) =>
-	isObject(error) && (UNAVAILABLE_ERRORS.has(String(error.name)) || error.code === 50 || LOOKUP_ERRORS.has(String(error.code)));
-
-/**
  * Pooled client per URI, cached on `globalThis` (serverless-safe). No connection is made until first use.
  * @param {{ uri: string, maxPoolSize?: number, appName?: string, createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient }} options
  * @returns {MongoClient}
@@ -122,7 +90,7 @@ export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', cr
 	let client = cache.get(key);
 	if (!client) {
 		/** @type {import('mongodb').MongoClientOptions} */
-		const options = { maxPoolSize, minPoolSize: 0, maxIdleTimeMS: 60_000, ...DATABASE_DEADLINES, appName };
+		const options = databaseClientOptions({ maxPoolSize, appName });
 		client = createClient ? createClient(uri, options) : new MongoClient(uri, options);
 		cache.set(key, client);
 	}
@@ -133,7 +101,7 @@ export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', cr
  * The cached client of `uri` (see {@link getMongoClient}), connected. A mongodb 6.x client whose first connect fails (the
  * database cannot be reached while a serverless instance starts) keeps a closed topology, and every later call fails
  * with `MongoTopologyClosedError`, even once the database is back; `client.connect()` opens a new one (within
- * {@link DATABASE_DEADLINES}), so the next request after an outage succeeds on the same warm instance. On a connected
+ * `@ss/net`'s `DATABASE_DEADLINES`), so the next request after an outage succeeds on the same warm instance. On a connected
  * client it returns at once (it finds its database again by itself after an outage); concurrent calls share one attempt.
  * @param {Parameters<typeof getMongoClient>[0]} options
  * @returns {Promise<MongoClient>}
@@ -590,7 +558,7 @@ export const createLocks = (locks, { now = Date.now, randomBytes = defaultRandom
 	 * @returns {Promise<{ token: string, release: () => Promise<void>, extend: (ms: number) => Promise<boolean> } | null>}
 	 */
 	const acquire = async (name, { ttlMs, owner = 'portal' }) => {
-		const token = randomToken(randomBytes, 16);
+		const token = randomToken(16, randomBytes);
 		const expireAt = new Date(now() + ttlMs);
 		try {
 			await locks.insertOne({ _id: name, token, owner, expireAt });

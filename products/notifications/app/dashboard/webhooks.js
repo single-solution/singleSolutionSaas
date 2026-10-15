@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { Button, Callout, Card, Input, Skeleton, TextArea, describeProblem } from '@ss/ui';
-import { call, fill, useLoad } from './api.js';
+import { call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ url: string, events: string }} Row events as typed: one type per line */
@@ -35,7 +35,7 @@ export function WebhookUrlsCard({ websiteId, off }) {
 	const path = `/v1/dashboard/websites/${websiteId}/lists/webhook_urls`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Row[] | null} */ (null));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	if (!answer) return <Skeleton lines={2} label={TEXTS.loading} />;
 	if (!answer.ok) return <Callout tone="danger">{describeProblem(answer.problem)}</Callout>;
 	const rows = draft ?? rowsOf(answer.data.value);

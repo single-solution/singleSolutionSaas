@@ -6,7 +6,7 @@
  * own routes: a test fails when an answer does not fit its description.
  * @module
  */
-import { createECDH, createHmac, timingSafeEqual } from 'node:crypto';
+import { createECDH } from 'node:crypto';
 import { MongoClient } from 'mongodb';
 import { apiChecker, createFakePortal, createMemoryStore, createNetwork } from '@ss/app-kit/testing';
 import apiJson from '../schemas/api.json' with { type: 'json' };
@@ -93,20 +93,6 @@ const createFakeProviders = () => {
 			responders.clear();
 		},
 	};
-};
-
-/**
- * Check an `SS-Signature` header as a receiver does (the check the docs show): `v1` is the hex HMAC-SHA256 of
- * `<t>.<body>` with the signing secret, and `t` is within 5 minutes of `now`.
- * @param {{ body: string, header: string | null, secret: string, now: number }} input
- */
-export const verifySignature = ({ body, header, secret, now }) => {
-	const parts = Object.fromEntries((header ?? '').split(',').map((part) => part.split('=', 2)));
-	const t = Number(parts.t);
-	if (!Number.isInteger(t) || Math.abs(now / 1000 - t) > 300 || typeof parts.v1 !== 'string') return false;
-	const expected = Buffer.from(createHmac('sha256', secret).update(`${t}.${body}`).digest('hex'));
-	const given = Buffer.from(parts.v1);
-	return given.length === expected.length && timingSafeEqual(given, expected);
 };
 
 /** A browser's push subscription (P-256 keys the test keeps to decrypt what was pushed). */

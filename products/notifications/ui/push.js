@@ -6,9 +6,8 @@
  * `ss-notifications:subscribed` event, so the merchant's site can link it to its user; visitors can turn it off again.
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { element, mountWidget } from '@ss/app-kit/widget';
 import { SERVICE_WORKER_PATH, SUBSCRIBED_EVENT, SUBSCRIBER_STORAGE_KEY, keyBytes } from '../core/widgets.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /**

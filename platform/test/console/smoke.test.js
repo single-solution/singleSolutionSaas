@@ -16,7 +16,6 @@ import { LocalTime } from '@ss/ui';
 import { ConsoleShell, merchantSections } from '../../src/console/views/shell.js';
 import { contactLine, homeOf } from '../../src/console/views/sign-in.js';
 import { OverviewView, WebsitesView } from '../../src/console/views/websites.js';
-import { scriptTag } from '../../src/modules/catalog/core/install.js';
 import { dailyCostOf, websiteDot } from '../../src/console/views/website.js';
 import { startMongo } from '../helpers.js';
 import { createWorld } from './merchant-harness.js';
@@ -218,9 +217,6 @@ describe('merchant console smoke', () => {
 		expect(websiteDot([card('active'), card('grace')])).toBe('warning');
 		expect(websiteDot([card('grace'), card('stopped')])).toBe('danger');
 		expect(dailyCostOf([{ productId: 'a', name: 'A', status: 'active', featuresOn: [], dailyCost: 24_000 }])).toBe(24_000);
-		expect(scriptTag('https://p.example/widget.js', 'tok')).toBe(
-			'<script src="https://p.example/widget.js" data-token="tok" async></script>',
-		);
 		// billing banners and days left (PLAN 0.5.4)
 		expect(ssr(<BillingBanner summary={null} contact="x" />)).toBe('');
 		expect(ssr(<BillingBanner summary={{ status: 'active' }} contact="x" />)).toBe('');

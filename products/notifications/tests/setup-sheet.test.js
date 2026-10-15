@@ -84,7 +84,7 @@ describe('the website Setup sheet', () => {
 	it('shows what the website builds in each feature of the docs', async () => {
 		const env = await setup();
 		const docs = await (await env.call('GET', '/docs')).text();
-		expect(docs).toContain('<section id="feature-email"><h3>Email</h3>');
+		expect(docs).toContain('<section id="feature-email"><h3>Email <code>email</code></h3>');
 		// a feature with no route or widget of its own shows no empty table or list
 		expect(docs).not.toContain('<tbody></tbody>');
 		expect(docs).not.toContain('<ul></ul>');

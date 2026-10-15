@@ -7,7 +7,6 @@ import {
 	fileProblem,
 	isInvalid,
 	problemCode,
-	requestJson,
 	settingsOf,
 	textsOf,
 	uploadFile,
@@ -17,7 +16,6 @@ import {
 } from '../ui/common.js';
 import { deviceText } from '../ui/inbox-parts.js';
 import { createMemory, idleOnce, idleText, isDesktop, isPhone, pageFlow, startProactive } from '../ui/proactive.js';
-import { createTicketSource } from '../ui/tickets.js';
 import { createChecks, createUnreadChecks } from '../ui/transport.js';
 import { createVisitor } from '../ui/visitor.js';
 import { BASE, START, TEXTS, answer, clock, flush, problem, resetPage, serve, setHiddenTab } from './ui-helpers.js';
@@ -243,7 +241,7 @@ describe('common', () => {
 		expect(settingsOf({}).flows).toEqual([]);
 	});
 
-	it('reads problems and answers', async () => {
+	it('reads problems', () => {
 		expect(problemCode(null)).toBe('');
 		expect(problemCode({ type: 'x/y/z' })).toBe('z');
 		// a refused value is only recognized: the widgets show their own text, never the server's English detail
@@ -260,10 +258,6 @@ describe('common', () => {
 		expect(deviceText(texts, 'Watch · Safari')).toBe('Watch · Safari');
 		expect(deviceText(texts, 'Phone · Safari · 17')).toBe('Phone · Safari · 17');
 		expect(t('nope')).toBe('nope');
-		vi.spyOn(window, 'fetch').mockRejectedValueOnce(new Error('down')).mockResolvedValueOnce(answer(204));
-		const request = (/** @type {any} */ input, /** @type {any} */ init) => window.fetch(input, init);
-		expect(await requestJson(request, `${BASE}/x`)).toEqual({ ok: false, status: 0, data: null });
-		expect(await requestJson(request, `${BASE}/x`, { method: 'POST' })).toEqual({ ok: true, status: 204, data: null });
 	});
 
 	it('checks addresses, times and files', () => {
@@ -328,32 +322,6 @@ describe('common', () => {
 		expect(await uploadFile(fetch, async () => bare, file)).toEqual({ failed: null });
 		fetch.mockRejectedValueOnce(new Error('down'));
 		expect(await uploadFile(fetch, async () => bare, file)).toEqual({ failed: null });
-	});
-});
-
-describe('tickets', () => {
-	it('renews before expiry and tells when signed out', async () => {
-		const time = clock();
-		const getTicket = vi
-			.fn()
-			.mockResolvedValueOnce({ ticket: 't2', expiresAt: new Date(START + 30 * 60_000).toISOString() })
-			.mockResolvedValueOnce({});
-		const tickets = createTicketSource({
-			first: { ticket: 't1', expiresAt: new Date(START + 15 * 60_000).toISOString() },
-			getTicket,
-			...time,
-		});
-		const seen = vi.fn();
-		const off = tickets.onChange(seen);
-		expect(tickets.current()).toBe('t1');
-		expect(time.pending()).toEqual([14 * 60_000]);
-		await time.advance(14 * 60_000);
-		expect(tickets.current()).toBe('t2');
-		await time.advance(15 * 60_000);
-		expect(tickets.current()).toBeNull();
-		expect(seen.mock.calls).toEqual([[true], [false]]);
-		off();
-		tickets.stop();
 	});
 });
 

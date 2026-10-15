@@ -10,7 +10,9 @@
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DashboardProvider } from '@ss/ui/dashboard';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
+import manifest from '../manifest.json' with { type: 'json' };
 import { TABS } from '../app/dashboard/tabs.js';
 import { TemplatesSection } from '../app/dashboard/templates.js';
 import { TEXTS } from '../app/dashboard/texts.js';
@@ -266,20 +268,29 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 	/** The tab's props for a new website (or the last one's with `same`). */
 	const props = (same = false) => ({
 		websiteId: `web_o${same ? website : (website += 1)}`,
+		domain: 'shop.example.com',
 		who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 		support: { email: 'help@example.com', phone: '' },
 		portal: 'https://portal.example.com',
 		open: vi.fn(),
 	});
+	/**
+	 * Notifications' Overview inside the dashboard's words and feature names, as the dashboard page renders it.
+	 * @param {ReturnType<typeof props>} tab
+	 */
+	const overviewOf = (tab) => (
+		<DashboardProvider manifest={manifest} texts={TEXTS}>
+			<TABS.overview {...tab} />
+		</DashboardProvider>
+	);
 	/** @param {HTMLElement} container the titles of the "Needs you" items */
 	const needs = (container) =>
 		[...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
 
 	it('counts the templates; with Outgoing webhooks on and no URL, asks for one and opens Settings', async () => {
 		serveOverview({ featuresOn: ['email', 'webhooks'] });
-		const Overview = TABS.overview;
 		const tab = props();
-		const { container } = render(<Overview {...tab} />);
+		const { container } = render(overviewOf(tab));
 		await settle();
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
 		expect(needs(container)).toContain('Outgoing webhooks is on, but no URL is added yet');
@@ -291,15 +302,14 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 
 	it('reads no webhook URLs while the feature is off, and asks for none once one is added', async () => {
 		serveOverview({ featuresOn: ['email'] });
-		const Overview = TABS.overview;
-		render(<Overview {...props()} />);
+		render(overviewOf(props()));
 		await settle();
 		expect(vi.mocked(fetch).mock.calls.map(([path]) => String(path))).not.toContain(
 			`/v1/dashboard/websites/web_o${website}/lists/webhook_urls`,
 		);
 		cleanup();
 		serveOverview({ featuresOn: ['webhooks'], urls: ['https://hooks.example.com/ss'] });
-		const added = render(<Overview {...props()} />);
+		const added = render(overviewOf(props()));
 		await settle();
 		expect(needs(added.container)).not.toContain('Outgoing webhooks is on, but no URL is added yet');
 		expect(byText(added.container, 'Add a webhook URL', 'span').className).toContain('line-through');
@@ -308,8 +318,7 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 	it("shows the grace end, the widget's last visit and the changes in the viewer's zone; UTC first", async () => {
 		viewerIn('America/New_York');
 		serveOverview();
-		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props()} />);
+		const { container } = render(overviewOf(props()));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Notifications is in grace until Oct 4, 2026, 10:30 AM EDT');
@@ -321,7 +330,7 @@ describe('Overview (PLAN 0.6 "Overviews talk")', () => {
 			'2026-10-06T08:00:00.000Z',
 		]);
 		// the server (and the first render in the browser) print UTC, with the answer this page already loaded
-		const html = renderToString(<Overview {...props(true)} />);
+		const html = renderToString(overviewOf(props(true)));
 		for (const words of ['Oct 4, 2026, 2:30 PM UTC', 'Oct 5, 2026, 11:15 PM UTC', '>Oct 6, 2026, 8:00 AM UTC</time>'])
 			expect(html).toContain(words);
 		expect(html).not.toContain('EDT');

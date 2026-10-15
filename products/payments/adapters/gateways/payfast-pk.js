@@ -14,8 +14,10 @@
  */
 import { createHash } from 'node:crypto';
 import { isId } from '@ss/contracts';
-import { fromDecimal, toDecimal } from '../../core/money.js';
-import { formBody, formFields, isObject, same } from '../util.js';
+import { fromDecimal, toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
+import { constantTimeEqual, sha256Hex } from '@ss/protocol';
+import { formBody, formFields } from '../util.js';
 import { localMobile } from './easypaisa.js';
 import { pakistanTime } from './jazzcash.js';
 import { call, failure, ok2xx } from './types.js';
@@ -50,7 +52,7 @@ export const payfastAmount = (amount, currency) => toDecimal(amount, currency).r
  * @param {Record<string, any>} keys
  */
 export const validationHash = (basketId, errCode, keys) =>
-	createHash('sha256').update(`${basketId}|${keys.securedKey}|${keys.merchantId}|${errCode}`).digest('hex');
+	sha256Hex(`${basketId}|${keys.securedKey}|${keys.merchantId}|${errCode}`);
 
 /**
  * Ask PayFast for an access token for one basket and amount.
@@ -101,7 +103,7 @@ const confirmation = (data, keys) => {
 	const basket = data.basket_id ?? '';
 	const code = data.err_code ?? '';
 	const given = (data.validation_hash ?? '').toLowerCase();
-	if (!basket || !given || !same(given, validationHash(basket, code, keys))) return null;
+	if (!basket || !given || !constantTimeEqual(given, validationHash(basket, code, keys))) return null;
 	const currency = !data.transaction_currency || data.transaction_currency === '586' ? 'PKR' : data.transaction_currency;
 	const amount = fromDecimal(data.transaction_amount, currency);
 	return {

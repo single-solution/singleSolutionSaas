@@ -271,39 +271,6 @@ export const excerptOf = (text, max = 500) =>
 	);
 
 /**
- * The Notifications templates Chat sends and the values each one gets (`business` is always added). Staff alerts go
- * by email, WhatsApp or SMS through the kit's staff alerts (K6), `preview` cut to 140 characters on one line and
- * `message` up to 500 with its line breaks, `phone` only with the staff alert setting `includePhone` (CH-9); the
- * transcript by email, the whole chat in the long value `transcript` (`transcriptText`); the reply alert (C6) by the
- * first of the setting "Channels, in order" that the visitor has an address for and Notifications takes.
- */
-export const MESSAGE_TEMPLATES = Object.freeze({
-	'chat.staff_new_message': Object.freeze([
-		'visitor',
-		'name',
-		'phone',
-		'preview',
-		'message',
-		'link',
-		'conversationId',
-		'business',
-	]),
-	'chat.staff_needs_you': Object.freeze([
-		'visitor',
-		'name',
-		'phone',
-		'preview',
-		'message',
-		'link',
-		'conversationId',
-		'business',
-	]),
-	'chat.staff_cost_alert': Object.freeze(['used', 'cap', 'percent', 'business']),
-	'chat.transcript': Object.freeze(['transcript', 'date', 'business']),
-	'chat.staff_reply': Object.freeze(['name', 'staff', 'preview', 'link', 'business']),
-});
-
-/**
  * A transcript as the long value `transcript` (up to 50,000 characters, the most Notifications takes): the lines one
  * after the other, never cut silently. When they do not all fit, or `more` older messages were not read, the latest
  * lines that fit go, after the line `earlier(count)` that says how many messages the copy holds.

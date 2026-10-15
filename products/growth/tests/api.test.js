@@ -227,7 +227,15 @@ describe('the widget config', () => {
 	});
 
 	it('answers the notice to custom UIs, with the browser and the server token (G6)', async () => {
-		await env.setting('notice_bar', 'hideOnPages', ['/', '/checkout/**', 'not-a-path']);
+		// a pattern that is not a path would match nothing: refused (X10)
+		const notPath = await env.dashboard(
+			await env.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${env.websiteId}/settings/notice_bar.hideOnPages`,
+			{ value: ['/', 'not-a-path'] },
+		);
+		expect(notPath.status).toBe(422);
+		await env.setting('notice_bar', 'hideOnPages', ['/', '/checkout/**']);
 		await env.setting('notice_bar', 'dismissFor', 'page');
 		const read = async (/** @type {string} */ query, /** @type {any} */ init) =>
 			(await env.call('GET', `/v1/notice${query}`, init)).json();

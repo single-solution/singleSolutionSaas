@@ -83,6 +83,7 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 					line2: '',
 					city: 'Springfield',
 					area: '',
+					region: '',
 					postalCode: '',
 					country: 'US',
 					notes: 'Gate 2',

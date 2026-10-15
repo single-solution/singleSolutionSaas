@@ -13,7 +13,9 @@
  * too. Opening an order marks it opened by the staff member (the list's "not opened by me" filter).
  * @module
  */
+import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { WAITING_ROLES } from '../core/flow.js';
+import { quantityLabel } from '../core/measure.js';
 import { EDITABLE_ROLES, PAYMENT_METHODS, RECORDED_METHODS } from '../core/orders.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
@@ -27,9 +29,6 @@ import { variantLabel } from './admin-taxonomy.js';
 /** @typedef {import('./admin-lists.js').Detail} Detail */
 /** @typedef {import('./admin-order-forms.js').SerialValues} SerialValues */
 /** A code the server wrote, with the values its words take. @typedef {{ code: string, values?: Record<string, string | number> }} Coded */
-
-/** Address fields staff may change before shipping. */
-const ADDRESS_FIELDS = Object.freeze(['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes']);
 
 /** The status dot of each role (green, amber and red only for status). @type {Record<string, Tone>} */
 export const ROLE_TONES = Object.freeze({
@@ -148,6 +147,24 @@ export const orderDetail = async (kit, id, detail) => {
 };
 
 /**
+ * The shopper's transfer proof (E24): when it came, its reference and a link to open it; '' without one.
+ * @param {Kit} kit @param {any} proof
+ */
+const proofOf = (kit, proof) => {
+	if (!proof) return '';
+	const { t, h } = kit;
+	const sent = proof.reference
+		? t('ordersAdmin.proofSentRef', { date: kit.when(proof.at), reference: proof.reference })
+		: t('ordersAdmin.proofSent', { date: kit.when(proof.at) });
+	return h('span', {}, [
+		sent,
+		...(typeof proof.url === 'string' && /^https:\/\//.test(proof.url)
+			? [' ', kit.text('a', { href: proof.url, target: '_blank', rel: 'noopener noreferrer' }, t('ordersAdmin.openProof'))]
+			: []),
+	]);
+};
+
+/**
  * The order in the pane, with a message in its status line.
  * @param {Kit} kit @param {any} order @param {Detail} detail @param {string} message
  */
@@ -258,6 +275,8 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.total'), money(order.totals.total)],
 		[t('ordersAdmin.paymentState'), t(`ordersAdmin.payment.${order.payment.state}`)],
 		[t('ordersAdmin.paymentMethod'), t(`ordersAdmin.method.${order.payment.method}`)],
+		// the shopper's transfer proof: when it came, its reference and a link to open it (E24)
+		[t('ordersAdmin.proof'), proofOf(kit, order.payment.proof)],
 		[t('ordersAdmin.paid'), money(order.payment.paid)],
 		[t('ordersAdmin.balanceDue'), balanceDue > 0 ? money(balanceDue) : ''],
 		[t('ordersAdmin.advance'), order.payment.advance > 0 ? money(order.payment.advance) : ''],
@@ -289,8 +308,9 @@ const renderOrder = (kit, order, detail, message) => {
 		order.lines.map((/** @type {any} */ item) => [
 			[item.name, item.variantName, item.gradeLabel].filter(Boolean).join(' · '),
 			item.sku,
-			String(item.quantity),
-			money(item.unitPrice),
+			// an item sold in a unit of its own: its amount and unit, its price per unit
+			quantityLabel(item.quantity, item.measure),
+			item.measure ? `${money(item.unitPrice)} / ${item.measure.unit}` : money(item.unitPrice),
 			money(item.total),
 			warrantyOf(kit, item),
 			item.serials.length > 0 ? unitsText(item) : typedLine(item) ? kit.badge(t('ordersAdmin.serialsMissing'), 'warning') : '',
@@ -607,7 +627,10 @@ const refundDialog = (kit, order, done) => {
  */
 const addressDialog = (kit, order, done) => {
 	const { t } = kit;
-	const inputs = new Map(ADDRESS_FIELDS.map((key) => [key, kit.input(order.address[key] ?? '')]));
+	// the address fields staff may change before shipping, each at most its length in the one address table
+	const inputs = new Map(
+		ADDRESS_FIELDS.map((key) => [key, kit.input(order.address[key] ?? '', { maxlength: String(ADDRESS_LIMITS[key]) })]),
+	);
 	kit.dialog({
 		title: t('ordersAdmin.addressTitle'),
 		body: [
@@ -860,8 +883,11 @@ const editDialog = (kit, order, done) => {
 					? {
 							delivery: {
 								method: delivery.value,
+								// where it goes, for the zone and taxes (dynamic model §5)
 								city: order.address?.city ?? '',
 								area: order.address?.area ?? '',
+								region: order.address?.region ?? '',
+								postalCode: order.address?.postalCode ?? '',
 								country: order.address?.country ?? '',
 								locationId: delivery.value === 'pickup' && location.value ? location.value : null,
 							},

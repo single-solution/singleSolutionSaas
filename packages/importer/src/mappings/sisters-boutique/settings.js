@@ -300,6 +300,10 @@ export const settingsPlan = (values) => {
 				'checkout.addressRequired': ['line1'],
 				// guests order unless the phone is a member's (`apps/web/src/app/api/orders/route.ts`:195-198)
 				'checkout.guests': 'unless_password',
+				// mechanical defaults (store mapping to review when the owner asks): SB guests order by phone, and every order
+				// gives a phone
+				'checkout.guestIdentity': 'phone',
+				'checkout.phoneRequired': true,
 				'checkout.defaultCallingCode': PHONE_FORMAT.defaultCallingCode,
 				'checkout.trunkPrefix': PHONE_FORMAT.trunkPrefix,
 				'checkout.countries': ['PK'],

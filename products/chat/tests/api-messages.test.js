@@ -7,7 +7,6 @@
 import { validateMessageDefaults } from '@ss/contracts';
 import { afterAll, describe, expect, it } from 'vitest';
 import declaration from '../schemas/messages.json' with { type: 'json' };
-import { MESSAGE_TEMPLATES } from '../core/conversation.js';
 import { ALL_STAFF_PERMISSION } from '../server/service.js';
 import { ready } from './helpers.js';
 
@@ -47,9 +46,6 @@ const defaultsOf = (key) => {
 describe('Chat’s messages and their defaults (parity P1)', () => {
 	it('declares every message it sends, with the values each gets, as the contract wants', async () => {
 		expect(validateMessageDefaults({ productId: 'chat', ...declaration })).toMatchObject({ ok: true });
-		expect(Object.fromEntries(declaration.messages.map((message) => [message.key, message.values]))).toEqual(
-			Object.fromEntries(Object.entries(MESSAGE_TEMPLATES).map(([key, values]) => [key, [...values]])),
-		);
 		// staff alerts go by email, or to phones by WhatsApp or SMS; the transcript by email only
 		for (const message of declaration.messages.filter((m) => m.key.startsWith('chat.staff_')))
 			expect(Object.keys(message.channels)).toEqual(['email', 'sms', 'whatsapp']);
@@ -107,7 +103,9 @@ describe('transcripts as one long value', () => {
 		const sent = async () => {
 			expect((await v('POST', '/v1/chat/transcript', { email: 'me@example.com' })).status).toBe(202);
 			const { values } = sys.messages().at(-1);
-			expect(Object.keys(values).sort()).toEqual([...MESSAGE_TEMPLATES['chat.transcript']].sort());
+			expect(Object.keys(values).sort()).toEqual(
+				[...(declaration.messages.find((m) => m.key === 'chat.transcript')?.values ?? [])].sort(),
+			);
 			expect(String(values.transcript).length).toBeLessThanOrEqual(50_000);
 			return values.transcript;
 		};

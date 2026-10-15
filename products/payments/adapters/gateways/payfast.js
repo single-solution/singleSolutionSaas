@@ -9,8 +9,10 @@
  * @module
  */
 import { createHash } from 'node:crypto';
-import { fromDecimal, toDecimal } from '../../core/money.js';
-import { formBody, formFields, isObject, phpUrlencode, same } from '../util.js';
+import { fromDecimal, toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
+import { constantTimeEqual } from '@ss/protocol';
+import { formBody, formFields, phpUrlencode } from '../util.js';
 import { call, failure, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
@@ -121,7 +123,7 @@ export const payfast = {
 		const data = Object.fromEntries(fields);
 		const given = data.signature ?? '';
 		const expected = formSignature(fields, String(keys.passphrase ?? ''));
-		if (!given || !same(given, expected) || data.merchant_id !== keys.merchantId) return { ok: false };
+		if (!given || !constantTimeEqual(given, expected) || data.merchant_id !== keys.merchantId) return { ok: false };
 		// PayFast confirms the ITN it sent: the same fields (without the signature) posted back to its validate endpoint
 		const checked = await call(ctx, `${siteOf(keys)}/eng/query/validate`, {
 			method: 'POST',

@@ -7,6 +7,7 @@
  */
 import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
 import { gradeView } from './grades.js';
+import { levelOf } from './measure.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -54,6 +55,7 @@ const gradeLabels = (product, grades) => {
  * @property {number} price the lowest price shown (after automatic deals, G4)
  * @property {number | null} compareAtPrice that variant's struck-through price
  * @property {string} currency
+ * @property {import('./measure.js').Measure | null} measure sold in a unit of its own (prices per unit)
  * @property {string | null} image
  * @property {{ width: number, height: number } | null} imageSize its photo's size (null: not known), for the image's
  *   width and height (G14)
@@ -129,16 +131,18 @@ export const cardPhotos = (product) => {
 
 /**
  * How many units shoppers are told are left (E9): never, only at `low` or fewer, or always; 0 for a variant marked sold
- * out; null when not shown or stock is not tracked.
+ * out; null when not shown or stock is not tracked. An item sold in a unit of its own has its stock in
+ * thousandths of its unit, and `low` counts its units (`core/measure.js`).
  * @param {Pick<VariantRecord, 'stock' | 'soldOut' | 'active'>} variant
  * @param {boolean} trackStock
  * @param {{ showStock: string, lowStockShown: number }} settings
+ * @param {unknown} [measure] the item's measure (none: pieces)
  * @returns {number | null}
  */
-export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }) => {
+export const stockLeftOf = (variant, trackStock, { showStock, lowStockShown }, measure = null) => {
 	if (!trackStock || showStock === 'none') return null;
 	const left = variant.soldOut || !variant.active ? 0 : variant.stock;
-	return showStock === 'always' || left <= lowStockShown ? left : null;
+	return showStock === 'always' || left <= levelOf(lowStockShown, measure) ? left : null;
 };
 
 /**
@@ -156,15 +160,18 @@ export const sizeOf = (file) =>
  * A product card (grid and search results), at its shown prices (G4).
  * @param {ProductRecord} product
  * @param {{ currency: string, image: string | null, url: string, brand: { id: string, name: string, slug?: string } | null,
- *   grades: ReadonlyMap<string, Grade>, cardImages?: Card['cardImages'], shown: Shown }} context
+ *   grades: ReadonlyMap<string, Grade>, cardImages?: Card['cardImages'], shown: Shown,
+ *   measure?: import('./measure.js').Measure | null }} context `measure`: its type's, while Sell in any unit is on
  * @returns {Card}
  */
-export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [], shown }) => ({
+export const cardOf = (product, { currency, image, url, brand, grades, cardImages = [], shown, measure = null }) => ({
 	id: product.id,
 	slug: product.slug,
 	name: product.name,
 	...shownRange(product, shown),
 	currency,
+	// sold in a unit of its own: prices are per unit, quantities thousandths of it (`core/measure.js`)
+	measure,
 	image,
 	imageSize: image ? sizeOf(product.media[0]) : null,
 	url,
@@ -224,6 +231,8 @@ export const specsOf = (product, attributes) =>
  * @param {Shown} context.shown each variant's shown price (G4)
  * @param {{ key: string, kind: string }} context.type its item type (dynamic model §1)
  * @param {boolean} context.slots it is booked in time slots (its type's `slots`, while Services and bookings is on)
+ * @param {import('./measure.js').Measure | null} [context.measure] it is sold in a unit of its own (its type's
+ *   `measure`, while Sell in any unit is on)
  */
 export const pageOf = (product, context) => {
 	const { currency, url, media, brand, breadcrumb, attributes, grades, shown } = context;
@@ -251,7 +260,7 @@ export const pageOf = (product, context) => {
 				deal: price.deal ? { ...price.deal, savings: price.savings } : null,
 				inStock: variantInStock(variant, product.trackStock),
 				soldOut: variant.soldOut,
-				stockLeft: stockLeftOf(variant, product.trackStock, stock),
+				stockLeft: stockLeftOf(variant, product.trackStock, stock, context.measure),
 				grade: grade ? gradeView(grade) : null,
 				warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? grade?.warrantyDays ?? context.warrantyDays ?? null,
 				media: context.variantMedia?.get(variant.id) ?? [],
@@ -264,6 +273,8 @@ export const pageOf = (product, context) => {
 		name: product.name,
 		kind: product.kind,
 		type: { key: context.type.key, kind: context.type.kind },
+		// sold in a unit of its own: prices are per unit, quantities and stock thousandths of it
+		measure: context.measure ?? null,
 		summary: product.summary,
 		description: product.description,
 		descriptionHtml: product.descriptionHtml,
@@ -324,15 +335,16 @@ export const staffRowOf = (product, { image }) => {
 
 /**
  * The whole product for staff (read without the database's own fields), with the addresses of its images, its
- * variants' photos and its video file, and its item type (its own, its category's or the built-in one).
+ * variants' photos and its video file, and its item type (its own, its category's or the built-in one) with its
+ * measure (its stock counts thousandths of the unit; null: pieces).
  * @param {ProductRecord} product
  * @param {{ media: Array<string | null>, variantMedia?: ReadonlyMap<string, Array<string | null>>, video?: string | null,
- *   type: { key: string, kind: string } }} context
+ *   type: { key: string, kind: string, elements?: { measure?: import('./measure.js').Measure | null } } }} context
  */
 export const staffProductOf = (product, { media, variantMedia = new Map(), video = null, type }) => ({
 	...product,
 	typeKey: product.typeKey ?? null,
-	type: { key: type.key, kind: type.kind },
+	type: { key: type.key, kind: type.kind, measure: type.elements?.measure ?? null },
 	...summarize(product.variants, product.trackStock),
 	media: product.media.map((item, index) => ({ ...item, url: media[index] ?? null })),
 	variants: product.variants.map((variant) => ({

@@ -30,7 +30,6 @@ import {
 import {
 	allNodesOf,
 	attributesOf,
-	decodeEntities,
 	numbersIn,
 	robotsAllows,
 	robotsGroupsOf,
@@ -122,7 +121,11 @@ describe('reading pages', () => {
 			title: 'A & B',
 			hidden: '',
 		});
-		expect(decodeEntities('&#36;12 &#x20B9;5 &AMP; &nbsp;&bogus; &#0;')).toBe('$12 ₹5 & \u00a0&bogus; &#0;');
+		// references as HTML reads them (@ss/contracts/text): an unknown name stays as written, even one every object has
+		// (`&constructor;`), and a code point that is no character becomes U+FFFD
+		expect(attributesOf('<a title="&#36;12 &#x20B9;5 &AMP; &nbsp;&bogus; &constructor; &#0; &#xD800;">')).toEqual({
+			title: '$12 ₹5 & \u00a0&bogus; &constructor; \uFFFD \uFFFD',
+		});
 		const scan = scanHtml(
 			`<!-- <title>no</title> --><html lang=en><title> A &amp; B&nbsp;&lt;&gt;&quot;&#39; </title>
 <script>var x = "<h1>"</script><style>h1 { color: red }</style><template><h1>later</h1></template>

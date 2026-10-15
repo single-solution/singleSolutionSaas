@@ -1,26 +1,40 @@
 /**
  * Item types (PLAN 0.8.10 dynamic model §1, phase 4): what an item is (its kind: physical, digital or a service) and
  * which parts ("elements") it has — options and variants, a condition grade, numbered units (with the unit fields their
- * numbers take, when the numbers are captured and the stage they are needed before), a measurement table, a package
- * (weight and size), per-item return and warranty days, downloads, license keys and booked time slots. Merchants keep
+ * numbers take, when the numbers are captured and the stage they are needed before), a measurement table, selling in a
+ * unit of the merchant's own in decimal quantities (`measure`, `core/measure.js`), a package (weight and size), per-item return and warranty
+ * days, downloads, license keys and booked time slots. Merchants keep
  * their types as the `item_types` list (feature `catalog`, at most 50); a type may also name the product and variant
  * fields its items take (at most 40; none named: every field their categories take) and names its units' fields (at
  * most 3, one of them with two values).
  *
  * A product's type is its own (`typeKey`), else its first category's (a category without one takes its parent's), else
  * the **built-in type** of its kind. A type of another kind never applies: the product keeps its kind. Built-in types
- * have every element the switched-on features allow (today's behavior, so a shop without types sees no change), except
- * numbered units: units are always a merchant's choice, made with a type that names their fields. An element works only
- * while its feature is on ({@link elementsOf}). No I/O.
+ * have every element the switched-on features allow (so a shop needs no types of its own), except numbered units and
+ * measures: those are always a merchant's choice, made with a type. An element works only while its feature is on
+ * ({@link elementsOf}); a measure keeps giving its items' quantities their meaning when Sell in any unit is off (their
+ * stock is in thousandths of the unit), but they are not sold then. No I/O.
  * @module
  */
 import { FIELD_LIMITS } from './fields.js';
+import { checkMeasure, sameMeaning } from './measure.js';
 
 /** Item kinds (fixed in code): physical goods (delivery or pickup), digital goods (paid before given), services. */
 export const ITEM_KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'service']));
 /** The elements a type switches on. */
 export const ELEMENTS = Object.freeze(
-	/** @type {const} */ (['variants', 'grades', 'units', 'chart', 'parcel', 'warranty', 'downloads', 'licenceKeys', 'slots']),
+	/** @type {const} */ ([
+		'variants',
+		'grades',
+		'units',
+		'chart',
+		'measure',
+		'parcel',
+		'warranty',
+		'downloads',
+		'licenceKeys',
+		'slots',
+	]),
 );
 /** The feature each element needs (an element works only while its feature is on). */
 const ELEMENT_FEATURES = Object.freeze({
@@ -28,6 +42,7 @@ const ELEMENT_FEATURES = Object.freeze({
 	grades: 'grades_serials',
 	units: 'grades_serials',
 	chart: 'size_charts',
+	measure: 'measured_sales',
 	parcel: 'delivery_zones',
 	warranty: 'returns',
 	downloads: 'digital_goods',
@@ -38,6 +53,7 @@ const ELEMENT_FEATURES = Object.freeze({
 const ELEMENT_KINDS = Object.freeze(
 	/** @type {Partial<Record<Element, ReadonlyArray<ItemKind>>>} */ ({
 		units: ['physical'],
+		measure: ['physical'],
 		parcel: ['physical'],
 		downloads: ['digital'],
 		licenceKeys: ['digital'],
@@ -68,9 +84,11 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  * @typedef {{ fieldIds: string[], capture: UnitCapture, requiredBefore: UnitStage | null }} UnitsElement
  */
 /**
- * The elements of a type: each on or off; `units` null when its items have no numbered units.
- * @typedef {{ variants: boolean, grades: boolean, units: UnitsElement | null, chart: boolean, parcel: boolean,
- *   warranty: boolean, downloads: boolean, licenceKeys: boolean, slots: boolean }} Elements
+ * The elements of a type: each on or off; `units` null when its items have no numbered units; `measure` null when its
+ * items are counted in pieces (else sold in a unit of its own, `core/measure.js`).
+ * @typedef {{ variants: boolean, grades: boolean, units: UnitsElement | null, chart: boolean,
+ *   measure: import('./measure.js').Measure | null, parcel: boolean, warranty: boolean, downloads: boolean,
+ *   licenceKeys: boolean, slots: boolean }} Elements
  */
 /**
  * An item type: a merchant's (`item_types` list) or a built-in one (`builtIn`, its key is its kind). `fieldIds`: the
@@ -97,7 +115,7 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 export const elementFor = (element, kind) => ELEMENT_KINDS[element]?.includes(kind) ?? true;
 
 /**
- * The built-in type of a kind: every element its kind takes, but no numbered units.
+ * The built-in type of a kind: every element its kind takes, but no numbered units and no measure.
  * @param {ItemKind} kind
  * @returns {ItemType}
  */
@@ -114,6 +132,7 @@ const builtIn = (kind) =>
 			grades: true,
 			units: null,
 			chart: true,
+			measure: null,
 			parcel: elementFor('parcel', kind),
 			warranty: true,
 			downloads: elementFor('downloads', kind),
@@ -181,6 +200,18 @@ const unitsOf = (raw, path, name, errors) => {
 };
 
 /**
+ * Check the measure element of a type.
+ * @param {unknown} raw @param {string} path @param {string} name @param {TypeProblem[]} errors
+ * @returns {import('./measure.js').Measure | null}
+ */
+const measureOf = (raw, path, name, errors) => {
+	const checked = checkMeasure(raw);
+	if (checked.ok) return checked.value;
+	for (const error of checked.errors) errors.push({ path: `${path}${error.path}`, message: `${name}: ${error.message}` });
+	return null;
+};
+
+/**
  * Check the `item_types` list the merchant saves: each type's key (not a built-in one, each once), name, kind, whether
  * it is offered, its elements (only those of its kind) and the fields it names (none named: every field). Elements left
  * out are off.
@@ -227,8 +258,14 @@ export const checkItemTypes = (value) => {
 		for (const element of ELEMENTS) {
 			const at = `${path}/elements/${element}`;
 			const on =
-				element === 'units' ? unitsOf(raw.units, at, name, errors) : raw[element] === undefined ? false : raw[element];
-			if (element !== 'units' && typeof on !== 'boolean')
+				element === 'units'
+					? unitsOf(raw.units, at, name, errors)
+					: element === 'measure'
+						? measureOf(raw.measure, at, name, errors)
+						: raw[element] === undefined
+							? false
+							: raw[element];
+			if (element !== 'units' && element !== 'measure' && typeof on !== 'boolean')
 				errors.push({ path: at, message: `${name}: ${element} is true or false.` });
 			const kindOk = ITEM_KINDS.includes(kind) ? elementFor(element, kind) : true;
 			if (on && !kindOk)
@@ -236,8 +273,13 @@ export const checkItemTypes = (value) => {
 					path: at,
 					message: `${name}: ${element} is for ${ELEMENT_KINDS[element]?.join(' and ')} items only.`,
 				});
-			elements[element] = element === 'units' ? on : on === true;
+			elements[element] = element === 'units' || element === 'measure' ? on : on === true;
 		}
+		if (elements.measure && elements.units)
+			errors.push({
+				path: `${path}/elements/measure`,
+				message: `${name}: items sold in a unit of their own have no numbered units.`,
+			});
 		const givenFields = entry.fieldIds ?? null;
 		const fieldIds = givenFields === null ? null : fieldIdsOf(givenFields, TYPE_LIMITS.fields);
 		if (givenFields !== null && fieldIds === null)
@@ -321,7 +363,12 @@ export const elementsOf = (type, has) => {
 	const out = {};
 	for (const element of ELEMENTS) {
 		const on = has(ELEMENT_FEATURES[element]) && elementFor(element, type.kind);
-		out[element] = element === 'units' ? (on ? type.elements.units : null) : on && type.elements[element] === true;
+		out[element] =
+			element === 'units' || element === 'measure'
+				? on
+					? (type.elements[element] ?? null)
+					: null
+				: on && type.elements[element] === true;
 	}
 	return /** @type {Elements} */ (out);
 };
@@ -335,16 +382,17 @@ export const typeTakes = (type, fieldId) => type.fieldIds === null || type.field
 /**
  * What saving a merchant's types would break (the guard of the `item_types` list): a field id that is not a product or
  * variant field (`fieldIds`) or not a unit field (`units.fieldIds`), two unit fields of one type with two values, a type
- * products or categories name being removed or given another kind, and the units of a type whose items have units in
- * stock being switched off or given other fields.
+ * products or categories name being removed or given another kind, the units of a type whose items have units in
+ * stock being switched off or given other fields, and the measure of a type whose items have stock given another unit
+ * (or added or removed: their stock would be read in other units).
  * @param {ReadonlyArray<ItemType>} saved the list before
  * @param {ReadonlyArray<ItemType>} next the list checked by {@link checkItemTypes}
  * @param {{ fields: ReadonlyMap<string, { on: string, multiple: boolean }>, named: ReadonlySet<string>,
- *   stocked: ReadonlySet<string> }} data the shop's fields by id, the type keys products and categories name, and the
- *   keys of types whose items have units in stock
+ *   stocked: ReadonlySet<string>, withStock?: ReadonlySet<string> }} data the shop's fields by id, the type keys products
+ *   and categories name, the keys of types whose items have units in stock, and those whose items have any stock
  * @returns {TypeProblem[]}
  */
-export const typeChangeProblems = (saved, next, { fields, named, stocked }) => {
+export const typeChangeProblems = (saved, next, { fields, named, stocked, withStock = new Set() }) => {
 	/** @type {TypeProblem[]} */
 	const problems = [];
 	next.forEach((type, index) => {
@@ -379,6 +427,11 @@ export const typeChangeProblems = (saved, next, { fields, named, stocked }) => {
 			problems.push({
 				path: `${path}/elements/units`,
 				message: `${type.name}: units of its items are in stock, so its units and their fields cannot change.`,
+			});
+		if (!sameMeaning(before.elements.measure, type.elements.measure) && withStock.has(type.key))
+			problems.push({
+				path: `${path}/elements/measure`,
+				message: `${type.name}: its items have stock counted in its unit, so how they are measured cannot change.`,
 			});
 	});
 	for (const type of saved)

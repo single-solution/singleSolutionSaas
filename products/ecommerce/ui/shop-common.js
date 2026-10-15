@@ -8,7 +8,8 @@
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
-import { isCurrency } from '../core/money.js';
+import { GUEST_IDENTITIES } from '../core/guests.js';
+import { fromDecimal, isCurrency, toDecimal } from '../core/money.js';
 import { element } from './dom.js';
 import { SHOP_CSS } from './shop-styles.js';
 import { WIDGET_CSS } from './styles.js';
@@ -33,21 +34,28 @@ export const textsOf =
 export const MAX_PAGE_SIZE = 60;
 
 /**
- * The grades the widget config names (`settings.catalog.grades` while grades_serials is on): a list of `{ key, label }`
- * or labels by key; anything else is left out.
+ * The grades the widget config names (`settings.catalog.grades` while grades_serials is on): a list of `{ key, label }`;
+ * anything else is left out.
  * @param {unknown} value
  * @returns {Array<{ key: string, label: string }>}
  */
-const gradesOf = (value) => {
-	const entries = Array.isArray(value)
-		? value.map((entry) => [entry?.key, entry?.label ?? entry?.key])
-		: value && typeof value === 'object'
-			? Object.entries(value)
-			: [];
-	return entries.flatMap(([key, label]) =>
-		typeof key === 'string' && key && typeof label === 'string' ? [{ key, label: label || key }] : [],
-	);
-};
+const gradesOf = (value) =>
+	(Array.isArray(value) ? value : []).flatMap((entry) => {
+		const key = entry?.key;
+		const label = entry?.label ?? key;
+		return typeof key === 'string' && key && typeof label === 'string' ? [{ key, label: label || key }] : [];
+	});
+
+/**
+ * How guests order (`settings.checkout.guests`): the contact they check out by and whether a phone is needed; null
+ * while shoppers sign in to order.
+ * @param {any} value
+ * @returns {{ identity: import('../core/guests.js').GuestIdentity, phoneRequired: boolean } | null}
+ */
+const guestsOf = (value) =>
+	value && GUEST_IDENTITIES.includes(value.identity)
+		? { identity: value.identity, phoneRequired: value.phoneRequired === true }
+		: null;
 
 /**
  * The settings the shopper widgets read (each part's `widgetSettings`), with defaults while a part is off.
@@ -76,9 +84,19 @@ export const settingsOf = (config) => {
 			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
 			coupons: checkout.coupons === true,
 			loyalty: checkout.loyalty === true,
+			/** how a shopper orders without signing in (E21): the contact guests check out by; null while guests sign in */
+			guests: guestsOf(checkout.guests),
 			address: {
 				required: /** @type {string[]} */ (checkout.address?.required ?? ['name', 'phone', 'line1', 'city']),
-				optional: /** @type {string[]} */ (checkout.address?.optional ?? ['line2', 'area', 'postalCode', 'country', 'notes']),
+				optional: /** @type {string[]} */ (
+					checkout.address?.optional ?? ['line2', 'area', 'region', 'postalCode', 'country', 'notes']
+				),
+				/** the region names offered per country (`address_regions`) */
+				regions: /** @type {Array<{ country: string, names: string[] }>} */ (
+					Array.isArray(checkout.address?.regions) ? checkout.address.regions : []
+				),
+				/** the country of an address without one (business.json) */
+				country: typeof checkout.address?.country === 'string' ? checkout.address.country : '',
 			},
 		},
 		returns: {
@@ -86,6 +104,11 @@ export const settingsOf = (config) => {
 			photoMaxMb: Number(raw.returns?.photoMaxMb ?? 5),
 		},
 		compare: { max: Number(raw.compare?.max) || 4 },
+		/** reviews per product (the product page's form) or per item bought (the order page's, E34), and the page size */
+		reviews: {
+			per: raw.reviews?.per === 'order_line' ? 'order_line' : 'product',
+			pageSize: Number(raw.reviews?.pageSize) || 10,
+		},
 		/** guests set alerts with a phone; a price-drop alert names a price (EN-1) */
 		alerts: { guests: raw.alerts?.guests === true, targetPrice: raw.alerts?.targetPrice === true },
 	};
@@ -119,7 +142,23 @@ export const announce = (win, name, detail) => void win.dispatchEvent(new win.Cu
  *   (and time, unless `time` is false); `zone` shows it in that time zone whatever the Format says (booking slots,
  *   which are the business's own hours)
  * @property {(iso: string | null | undefined, zone?: string) => string} timeText a time of day
+ * @property {string} decimalSign the decimal sign money shows with (`.` or `,` …, by the same language as `money`)
+ * @property {(text: unknown, currency: string) => number | null} amountOf an amount typed with that decimal sign (no
+ *   thousands separators) as minor units, or null
+ * @property {(minor: number, currency: string) => string} amountText minor units as a plain number to type, with that sign
  */
+
+/**
+ * The decimal sign of a language (`.` when the runtime does not know it).
+ * @param {string} locale
+ */
+const decimalSignOf = (locale) => {
+	try {
+		return new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === 'decimal')?.value ?? '.';
+	} catch {
+		return '.';
+	}
+};
 
 /**
  * The formatters of a widget: the website's Format and business time zone (widget config) and the viewer's language
@@ -135,10 +174,19 @@ export const formatsOf = (config, win) => {
 	/** @param {string | null | undefined} iso @param {'date' | 'datetime' | 'time'} style @param {string} [zone] */
 	const at = (iso, style, zone) =>
 		formatDate(iso, zone ? { ...format, times: 'business' } : format, { timeZone: zone ?? timeZone, style, viewer });
+	const decimalSign = decimalSignOf(format.locale || viewer.locale || 'en-US');
 	return Object.freeze({
 		money: (amount, currency) => formatMoney(Math.round(Number(amount) || 0), currency, format, viewer),
 		dateText: (iso, { time = true, zone } = {}) => at(iso, time ? 'datetime' : 'date', zone),
 		timeText: (iso, zone) => at(iso, 'time', zone),
+		decimalSign,
+		// with a decimal comma a dot is the thousands separator: refused, never read as the decimal sign
+		amountOf: (text, currency) => {
+			const value = typeof text === 'string' ? text.trim() : '';
+			if (decimalSign === '.') return fromDecimal(value, currency);
+			return value.includes('.') ? null : fromDecimal(value.replace(decimalSign, '.'), currency);
+		},
+		amountText: (minor, currency) => toDecimal(minor, currency).replace('.', decimalSign),
 	});
 };
 
@@ -255,14 +303,24 @@ export const keepFocus = (root, renderFn) => {
 };
 
 /**
+ * A line's quantity as shoppers read it: pieces, or the measured amount and its unit (`2.5 m`) when the answer gives
+ * the line's `measure { unit, quantityText }`.
+ * @param {Texts} t
+ * @param {{ quantity: number, measure?: { unit: string, quantityText: string } | null }} line
+ */
+export const quantityShown = (t, line) =>
+	line.measure ? t('shop.amount', { quantity: line.measure.quantityText, unit: line.measure.unit }) : String(line.quantity);
+
+/**
  * A price with the "was" price beside it when it is higher; a range ("from – to") when the highest price is higher
- * (E8).
+ * (E8); per unit (`/ m`) for an item sold in a unit of its own.
  * @param {Document} doc
  * @param {Texts} t
  * @param {Formats} formats
- * @param {{ price: number, max?: number | null, was?: number | null, currency: string, big?: boolean }} input
+ * @param {{ price: number, max?: number | null, was?: number | null, currency: string, big?: boolean,
+ *   unit?: string | null }} input `unit`: the unit of measure the price is for
  */
-export const priceNode = (doc, t, { money }, { price, max = null, was = null, currency, big = false }) =>
+export const priceNode = (doc, t, { money }, { price, max = null, was = null, currency, big = false, unit = null }) =>
 	h(
 		doc,
 		'p',
@@ -270,6 +328,7 @@ export const priceNode = (doc, t, { money }, { price, max = null, was = null, cu
 		max !== null && max > price
 			? t('shop.priceRange', { min: money(price, currency), max: money(max, currency) })
 			: money(price, currency),
+		unit ? h(doc, 'span', { class: 'per' }, t('shop.perUnit', { unit })) : null,
 		was !== null && was > price
 			? h(doc, 'span', { class: 'was' }, h(doc, 'span', { class: 'sr-only' }, t('shop.wasLabel')), money(was, currency))
 			: null,
@@ -407,7 +466,7 @@ export const paragraphs = (doc, text) =>
  *   priceMax?: number | null, featured?: boolean, imageSize?: { width: number, height: number } | null,
  *   cardImages?: Array<{ url: string | null, alt: string, width?: number, height?: number }>,
  *   currency: string, inStock: boolean, rating?: { average: number, count: number }, brand?: { name: string } | string | null,
- *   grades?: string[] }} card
+ *   grades?: string[], measure?: { unit: string } | null }} card `measure`: sold in a unit of its own
  * @param {Child[]} [actions]
  */
 export const productCard = (doc, t, formats, card, actions = []) => {
@@ -457,6 +516,7 @@ export const productCard = (doc, t, formats, card, actions = []) => {
 			max: card.priceMax ?? null,
 			was: card.compareAtPrice ?? null,
 			currency: card.currency,
+			unit: card.measure?.unit ?? null,
 		}),
 		rating ? h(doc, 'span', { class: 'meta' }, rating) : null,
 		card.grades && card.grades.length > 0 ? h(doc, 'span', { class: 'meta' }, card.grades.join(' · ')) : null,

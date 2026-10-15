@@ -5,14 +5,12 @@
  * activity-log copies), the merchant database indexes, the data-rights hooks, the kit's events (PLAN 0.8.10 K5:
  * `payments.<type>`, forwarded through Notifications) and its part of the website Setup sheet (the OpenAPI document,
  * the guide's "What your website builds" per feature, and the payment event types and the gateways that are on), and
- * adds the gateway adapters on the same outbound policy. The Next.js route and the tests pass the rest (config, store,
+ * adds the gateway adapters on the kit's store and outbound policy (`createProductBase`). The Next.js route and the tests pass the rest (config, store,
  * clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { MongoClient } from 'mongodb';
-import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
+import { createProduct, createProductBase } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -171,20 +169,10 @@ const setupPart = async ({ websiteId, on }, lists) => {
  */
 export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	// the same policy the kit uses for addresses merchants enter
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
-	/** @type {import('./util.js').OutboundSend} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	// the kit's store, and its outbound policy for addresses merchants enter, shared with the gateway adapters
+	const { store, policy, send } = createProductBase(options);
 	const gateways = createAdapters(policy);
-	const healthy = (options.problems ?? []).length === 0;
-	// Payments keeps its list settings (manual payment methods) in the product database too, so it owns the store
-	const store =
-		options.store ??
-		(healthy && options.config?.mongodbUri
-			? createMongoStore({ db: new MongoClient(options.config.mongodbUri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
-			: createMemoryStore({ now }));
+	// the manual payment methods, a list setting kept in the kit's store
 	const lists = createLists({ store, now });
 
 	/**

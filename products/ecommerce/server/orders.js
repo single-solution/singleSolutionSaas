@@ -16,6 +16,8 @@ import { createFulfilmentStore, markSeenBy } from '../adapters/fulfilment-store.
 import { setOrderCounter } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { createOutbox } from '../adapters/outbox.js';
+import { checkAddress } from '../core/checkout.js';
+import { phoneSearchOf } from '../core/guests.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
 import { checkFieldValues } from '../core/fields.js';
 import { invoiceHtml, invoiceTexts, packingSlipHtml, shopperInvoiceReady } from '../core/invoice.js';
@@ -40,6 +42,7 @@ import { checkRestatus, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
 import { isYearly, numberFormOf } from '../core/order-numbers.js';
 import { createMedia } from './catalog-media.js';
+import { addressRulesOf, phoneRulesOf } from './guests.js';
 import { createCustomers } from './orders-customers.js';
 import { createMoves } from './orders-moves.js';
 import { openAtPayments } from './order-payments.js';
@@ -60,6 +63,8 @@ export const DOCUMENT_HEADERS = Object.freeze({
 });
 
 const ORDER_ID = /^ord_[A-Za-z0-9_-]{1,64}$/;
+/** How long the staff link to a transfer proof works (seconds). */
+const PROOF_LINK_SECONDS = 300;
 const serverLimits = [...SERVER_LIMITS];
 const visitorLimits = [...VISITOR_LIMITS];
 
@@ -124,7 +129,7 @@ export const createOrders = (product, service, { ordering }) => {
 	};
 
 	/**
-	 * The staff view of an order.
+	 * The staff view of an order, the transfer proof with a link to open it.
 	 * @param {Site} s @param {OrderRecord} order
 	 */
 	const detailOf = async (s, order) => {
@@ -144,13 +149,19 @@ export const createOrders = (product, service, { ordering }) => {
 			unitsOfOrders(data, [order.id]),
 			fieldsOn(data, 'order'),
 		]);
-		return orderDetail(order, flow, {
+		const detail = orderDetail(order, flow, {
 			customer,
 			images,
 			money,
 			units: { rules, values: unitValues.get(order.id) ?? new Map() },
 			orderFields,
 		});
+		// the shopper's transfer proof opens with a signed link of 5 minutes (E24)
+		const proof = order.payment.proof;
+		if (!proof) return detail;
+		const storage = await product.connections.storage(s.websiteId);
+		const url = storage ? storage.presignGet({ key: proof.key, expiresIn: PROOF_LINK_SECONDS }).url : null;
+		return { ...detail, payment: { ...detail.payment, proof: { ...detail.payment.proof, url } } };
 	};
 
 	// ------------------------------------------------------------------------------------------------- handlers
@@ -164,7 +175,10 @@ export const createOrders = (product, service, { ordering }) => {
 		const filters = orderFilters(ctx.query);
 		if (!filters.ok) throw service.invalid(filters.field, filters.message);
 		const seenBy = service.actor(ctx).id;
-		return { s: await service.site(ctx), filter: orderQuery(filters.value, { seenBy }) };
+		const s = await service.site(ctx);
+		// a phone typed as shoppers type it (national, with its trunk prefix) is found by its whole number
+		if (filters.value.q) filters.value.phoneDigits = phoneSearchOf(filters.value.q, await phoneRulesOf(s));
+		return { s, filter: orderQuery(filters.value, { seenBy }) };
 	};
 
 	/** The order flow a count read, per request (to group status keys by their role). @type {WeakMap<object, import('../core/model.js').OrderFlow>} */
@@ -451,6 +465,13 @@ export const createOrders = (product, service, { ordering }) => {
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		// serial numbers typed at packing or later (E11)
 		const { serials, shipment, waiting, video, fields, ...rest } = input.value;
+		// a changed address holds what the website requires, as checkout checks it (a waiting order's is checked when it
+		// is priced again)
+		if (rest.address && !waiting) {
+			const checked = checkAddress(rest.address, await addressRulesOf(s));
+			if (!checked.ok) throw service.invalid(checked.field, checked.message);
+			rest.address = checked.value;
+		}
 		// lines, payment and delivery of a waiting order are priced again by checkout (E29)
 		if (waiting) {
 			order = await ordering.editWaiting(s, ctx, order, { ...waiting, ...(rest.address ? { address: rest.address } : {}) });

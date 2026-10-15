@@ -5,8 +5,7 @@
  * the visit (sessionStorage), or, with `dismissFor` `page`, until they open another page (PLAN 0.8.10 G6).
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
-import { element } from './dom.js';
+import { element, mountWidget } from '@ss/app-kit/widget';
 import { WIDGET_CSS } from './styles.js';
 
 /** Where a closed notice is remembered for the visit. */

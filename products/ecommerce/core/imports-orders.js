@@ -14,16 +14,16 @@
  */
 import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
+import { ADDRESS_LIMITS } from './address.js';
 import { ALERT_TRIES, checkAlertInput } from './alerts.js';
 import { LIMITS } from './catalog.js';
 import { derivedFacts } from './facts.js';
 import { statusOf } from './flow.js';
-import { phoneDigitsOf, phoneRules } from './guests.js';
+import { guestKeyOf, guestRules, phoneDigitsOf, phoneRules } from './guests.js';
 import { ID_PREFIX } from './model.js';
 import { MAX_AMOUNT } from './money.js';
 import { describeNumberForm, numberFormOf, numberMatcher } from './order-numbers.js';
 import {
-	ADDRESS_FIELDS,
 	MAX_NOTE,
 	MAX_REFERENCE,
 	MAX_STAFF_NOTE,
@@ -51,10 +51,11 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
  * What the checks of one import call read of the website (the collections' `prepare`): the order flow, the order
  * number's form (`checkout.numberPattern`, `numberPrefix`, `numberDigits`; `core/order-numbers.js`), the shop's
  * currency (`catalog.currency`), its phone rules (as checkout reads phones, K12: `checkout.defaultCallingCode`, else
- * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's), its order and
- * customer fields (imported values are checked as staff's are) and the time of the call.
+ * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's), what guests
+ * are known by (`checkout.guestIdentity`, a guest record's key), its order and customer fields (imported values are
+ * checked as staff's are) and the time of the call.
  * @typedef {{ now: number, flow: OrderFlow, numbers: import('./order-numbers.js').NumberForm, currency: string,
- *   phoneRules: { defaultCallingCode: string, trunkPrefix: string },
+ *   phoneRules: { defaultCallingCode: string, trunkPrefix: string }, guestIdentity: import('./guests.js').GuestIdentity,
  *   fields: { order: ImportField[], customer: ImportField[] } }} ImportRules
  */
 
@@ -383,22 +384,25 @@ export const importRules = ({ flow, checkout, catalog, country, now, fields = { 
 		numbers: numberFormOf(checkout),
 		currency: typeof catalog.currency === 'string' && catalog.currency ? catalog.currency : 'USD',
 		phoneRules: { defaultCallingCode, trunkPrefix },
+		guestIdentity: guestRules(checkout).identity,
 		fields,
 	};
 };
 
 // ----------------------------------------------------------------------------------------------------- customers
 
-/** Fields of a customer (`CustomerRecord`); the counts, `lastOrderAt` and `phoneDigits` are derived and ignored. */
+/** Fields of a customer (`CustomerRecord`); the counts, `lastOrderAt`, `phoneDigits` and `guestKey` are derived and
+ * ignored. */
 const CUSTOMER_FIELDS = fieldList(
-	'id userId guest name email phone phoneDigits city blocked blockedReason note seenBy orderCount rtoCount ' +
+	'id userId guest guestKey name email phone phoneDigits city blocked blockedReason note seenBy orderCount rtoCount ' +
 		'lastOrderAt fields createdAt updatedAt',
 );
 
 /**
- * A customer (`customers`, by `id`): a member (`userId`) or a guest (no `userId`, a phone, E21: one per normalized
- * phone); the phone as E.164; blocked with a reason (as staff block). `orderCount`, `rtoCount` and `lastOrderAt` given
- * are ignored: they are 0 until `finish` counts the customer's orders.
+ * A customer (`customers`, by `id`): a member (`userId`) or a guest (no `userId`; E21, dynamic model §5: one per guest
+ * key, its phone or email address as `checkout.guestIdentity` says); the phone as E.164; blocked with a reason (as staff
+ * block). `orderCount`, `rtoCount` and `lastOrderAt` given are ignored: they are 0 until `finish` counts the customer's
+ * orders.
  * @param {Record<string, unknown>} record
  * @param {ImportRules} rules
  * @returns {ImportCheck}
@@ -413,8 +417,20 @@ export const checkImportedCustomer = (record, rules) => {
 		c.fail('/guest', 'guest is true exactly when the customer has no userId.');
 	const name = c.text(record.name, '/name', MAX_PERSON, { required: guest });
 	const email = c.email(record.email, '/email');
-	const phone = c.phone(record.phone, '/phone', rules.phoneRules, { required: guest, strict: true });
-	const city = c.text(record.city, '/city', ADDRESS_FIELDS.city);
+	const phone = c.phone(record.phone, '/phone', rules.phoneRules, { strict: true });
+	const guestKey = guest ? guestKeyOf({ phone, email }, rules.guestIdentity) : '';
+	// a guest's contact that is there but wrong is refused once, at its own field
+	const keyPath = rules.guestIdentity === 'email' ? '/email' : '/phone';
+	if (guest && !guestKey && !c.errors.some((error) => error.path === keyPath))
+		c.fail(
+			keyPath,
+			rules.guestIdentity === 'phone'
+				? 'A guest has a phone (checkout.guestIdentity is phone).'
+				: rules.guestIdentity === 'email'
+					? 'A guest has an email address (checkout.guestIdentity is email).'
+					: 'A guest has a phone or an email address.',
+		);
+	const city = c.text(record.city, '/city', ADDRESS_LIMITS.city);
 	const flags = checkCustomerEdit({
 		blocked: record.blocked ?? false,
 		blockedReason: record.blockedReason,
@@ -431,6 +447,7 @@ export const checkImportedCustomer = (record, rules) => {
 		email,
 		phone,
 		phoneDigits: phoneDigitsOf(phone),
+		...(guestKey ? { guestKey } : {}),
 		city,
 		blocked: flags.ok ? flags.value.blocked === true : false,
 		blockedReason: flags.ok ? (flags.value.blockedReason ?? '') : '',
@@ -537,10 +554,10 @@ const orderCustomerOf = (c, value, rules) => {
  */
 const addressOf = (c, value, rules) => {
 	if (missing(value)) return null;
-	const input = c.fields(value, '/address', Object.keys(ADDRESS_FIELDS), 'the address') ?? {};
+	const input = c.fields(value, '/address', Object.keys(ADDRESS_LIMITS), 'the address') ?? {};
 	/** @type {Record<string, string>} */
 	const out = {};
-	for (const [field, max] of Object.entries(ADDRESS_FIELDS))
+	for (const [field, max] of Object.entries(ADDRESS_LIMITS))
 		out[field] =
 			field === 'phone'
 				? c.phone(input.phone, '/address/phone', rules.phoneRules)

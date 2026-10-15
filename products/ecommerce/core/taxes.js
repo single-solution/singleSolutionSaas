@@ -1,21 +1,27 @@
 /**
- * Tax rules (PLAN 0.8.8: simple rules, a percentage per category or region; prices shown with or without tax). The
- * merchant keeps them as the `tax_rules` list: `[{ name, percent, categoryIds, regions: [{ country, city }] }]`.
- * A rule applies to a line when it names none of the categories or one of the line's categories (with their
- * ancestors), and when it names no regions or one that fits the delivery address (country, and the city when the
- * region names one). The percents of every applying rule add up. With prices that include tax (the `taxes` setting
+ * Tax rules (PLAN 0.8.8: simple rules, a percentage per category or region; prices shown with or without tax; dynamic
+ * model §5). The merchant keeps them as the `tax_rules` list:
+ * `[{ name, percent, categoryIds, regions: [{ country, region, city, postcode }] }]`. A rule applies to a line when it
+ * names none of the categories or one of the line's categories (with their ancestors), and when it names no regions or
+ * one that fits where the order goes: the same country, and the region, city and postcode start when the entry names
+ * them (a delivery's address, without a country in the business.json country; a pickup order is at the business, in
+ * its country). The percents of every applying rule add up. With prices that include tax (the `taxes` setting
  * `pricesIncludeTax`) the tax is the part of the price it already holds; otherwise it is added on top. No I/O.
  * @module
  */
-import { placeKey } from './delivery.js';
+import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js';
 
-/** @typedef {{ name: string, percent: number, categoryIds: string[], regions: Array<{ country: string, city: string }> }} TaxRule */
+/** @typedef {{ country: string, region: string, city: string, postcode: string }} TaxRegion */
+/** @typedef {{ name: string, percent: number, categoryIds: string[], regions: TaxRegion[] }} TaxRule */
 
 /** At most this many rules. */
 const MAX_RULES = 50;
 
 /** @param {unknown} value */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** @param {unknown} value */
+const textOf = (value) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '');
 
 /**
  * Check the list the merchant saves.
@@ -51,19 +57,29 @@ export const checkTaxRules = (value) => {
 		)
 			errors.push(`${label}: categories are a list of category ids.`);
 		const regions = rule.regions ?? [];
-		/** @type {TaxRule['regions']} */
+		/** @type {TaxRegion[]} */
 		const cleanRegions = [];
 		if (!Array.isArray(regions) || regions.length > 200) errors.push(`${label}: regions are a list of at most 200.`);
 		else
 			for (const region of regions) {
 				const r = isObject(region) ? /** @type {Record<string, unknown>} */ (region) : {};
-				const country = typeof r.country === 'string' ? r.country.trim() : '';
-				const city = typeof r.city === 'string' ? r.city.trim() : '';
-				if (!country || country.length > 60 || city.length > 80) {
-					errors.push(`${label}: every region names a country (and may name a city).`);
+				const entry = {
+					country: textOf(r.country),
+					region: textOf(r.region),
+					city: textOf(r.city),
+					postcode: postcodeKey(r.postcode),
+				};
+				if (
+					!entry.country ||
+					entry.country.length > ADDRESS_LIMITS.country ||
+					entry.region.length > ADDRESS_LIMITS.region ||
+					entry.city.length > ADDRESS_LIMITS.city ||
+					entry.postcode.length > ADDRESS_LIMITS.postalCode
+				) {
+					errors.push(`${label}: every region names a country (and may name a region, a city and a postcode start).`);
 					break;
 				}
-				cleanRegions.push({ country, city });
+				cleanRegions.push(entry);
 			}
 		rules.push({
 			name,
@@ -77,24 +93,28 @@ export const checkTaxRules = (value) => {
 };
 
 /**
+ * Whether a rule's region entry fits a place: the same country, and its region, city and postcode start when it names
+ * them.
+ * @param {TaxRegion} entry @param {import('./address.js').Place} place
+ */
+const fits = (entry, place) =>
+	countryKey(place.country) !== '' &&
+	countryKey(entry.country) === countryKey(place.country) &&
+	(entry.region === '' || placeKey(entry.region) === placeKey(place.region)) &&
+	(entry.city === '' || placeKey(entry.city) === placeKey(place.city)) &&
+	(entry.postcode === '' || postcodeKey(place.postalCode).startsWith(entry.postcode));
+
+/**
  * The percent that applies to a line (the applying rules added up, at most 100).
  * @param {TaxRule[]} rules
- * @param {{ categoryIds: string[], region: { country: string, city: string } | null }} line `region`: the delivery
- *   address (null: no address, then only rules without regions apply)
+ * @param {{ categoryIds: string[], region: import('./address.js').Place | null }} line `region`: where the order goes
+ *   (null: no place, then only rules without regions apply)
  */
 export const taxPercent = (rules, { categoryIds, region }) => {
-	const country = placeKey(region?.country);
-	const city = placeKey(region?.city);
 	let total = 0;
 	for (const rule of rules) {
 		if (rule.categoryIds.length > 0 && !rule.categoryIds.some((id) => categoryIds.includes(id))) continue;
-		if (
-			rule.regions.length > 0 &&
-			!rule.regions.some(
-				(r) => country !== '' && placeKey(r.country) === country && (r.city === '' || placeKey(r.city) === city),
-			)
-		)
-			continue;
+		if (rule.regions.length > 0 && (region === null || !rule.regions.some((entry) => fits(entry, region)))) continue;
 		total += rule.percent;
 	}
 	return Math.min(100, total);

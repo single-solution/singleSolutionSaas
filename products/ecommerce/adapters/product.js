@@ -26,6 +26,7 @@ import multiLocationSettings from '../schemas/multi_location.settings.json' with
 import gradesSerialsSettings from '../schemas/grades_serials.settings.json' with { type: 'json' };
 import digitalGoodsSettings from '../schemas/digital_goods.settings.json' with { type: 'json' };
 import bookingsSettings from '../schemas/bookings.settings.json' with { type: 'json' };
+import measuredSalesSettings from '../schemas/measured_sales.settings.json' with { type: 'json' };
 import checkoutSettings from '../schemas/checkout.settings.json' with { type: 'json' };
 import codSettings from '../schemas/cod.settings.json' with { type: 'json' };
 import deliveryZonesSettings from '../schemas/delivery_zones.settings.json' with { type: 'json' };
@@ -81,6 +82,7 @@ const SETTINGS = {
 	grades_serials: gradesSerialsSettings,
 	digital_goods: digitalGoodsSettings,
 	bookings: bookingsSettings,
+	measured_sales: measuredSalesSettings,
 	checkout: checkoutSettings,
 	cod: codSettings,
 	delivery_zones: deliveryZonesSettings,
@@ -227,10 +229,11 @@ export const createProductInstance = (options) => {
 				return flowChangeProblems(saved, next, counts);
 			},
 			// item types name existing fields of the right kind, and keep what products, categories and units in stock
-			// rely on (a used type stays with its kind; a type with units in stock keeps its units' fields)
+			// rely on (a used type stays with its kind; a type with units in stock keeps its units' fields; a type whose items
+			// have stock keeps its unit of measure)
 			item_types: async (websiteId, saved, next) => {
 				if (!kitProduct || (await kitProduct.connections.value(websiteId, 'database')) === null) return [];
-				return typeChangeProblems(saved, next, await typeUses(await kitProduct.data.forWebsite(websiteId), saved));
+				return typeChangeProblems(saved, next, await typeUses(await kitProduct.data.forWebsite(websiteId), saved, next));
 			},
 		},
 	});

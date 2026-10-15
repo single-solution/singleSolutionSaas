@@ -10,8 +10,21 @@ import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
+import { DashboardProvider } from '@ss/ui/dashboard';
+import manifest from '../manifest.json' with { type: 'json' };
 import { aiLabelNotice } from '../app/dashboard/settings.js';
 import { TABS } from '../app/dashboard/tabs.js';
+import { TEXTS } from '../app/dashboard/texts.js';
+
+/**
+ * A dashboard piece inside the dashboard's provider (its words and feature names), as the page renders it.
+ * @param {import('react').ReactNode} node
+ */
+const inDashboard = (node) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		{node}
+	</DashboardProvider>
+);
 
 /** The dashboard keeps each answer it loaded for the page: each test opens its own website. */
 let website = 0;
@@ -78,6 +91,7 @@ const settle = async () => {
 /** The tab's props for a new website (or the last one's with `same`). */
 const props = (same = false) => ({
 	websiteId: `web_${same ? website : (website += 1)}`,
+	domain: 'shop.example.com',
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { email: 'help@example.com', phone: '' },
 	portal: 'https://portal.example.com',
@@ -99,7 +113,7 @@ describe("Chat's dashboard Overview", () => {
 		serve({ featuresOn: ['visitor_chat', 'book_slot'] });
 		const Overview = TABS.overview;
 		const tab = props();
-		const { container } = render(<Overview {...tab} />);
+		const { container } = render(inDashboard(<Overview {...tab} />));
 		await settle();
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
 		expect(needs(container)).toContain('The Book-a-slot tool is on, but no booking URL is set');
@@ -111,13 +125,13 @@ describe("Chat's dashboard Overview", () => {
 	it('asks for nothing once the URL is set, and reads no settings while the tool is off', async () => {
 		serve({ featuresOn: ['book_slot'], bookingUrl: 'https://book.example.com/api' });
 		const Overview = TABS.overview;
-		const set = render(<Overview {...props()} />);
+		const set = render(inDashboard(<Overview {...props()} />));
 		await settle();
 		expect(needs(set.container)).not.toContain('The Book-a-slot tool is on, but no booking URL is set');
 		expect(byText(set.container, 'Set the booking URL', 'span').className).toContain('line-through');
 		cleanup();
 		serve({ featuresOn: ['visitor_chat'] });
-		const off = render(<Overview {...props()} />);
+		const off = render(inDashboard(<Overview {...props()} />));
 		await settle();
 		expect(vi.mocked(fetch).mock.calls.map(([path]) => String(path))).toEqual([
 			`/v1/dashboard/websites/web_${website}/overview`,
@@ -129,7 +143,7 @@ describe("Chat's dashboard Overview", () => {
 		viewerIn('America/New_York');
 		serve();
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props()} />);
+		const { container } = render(inDashboard(<Overview {...props()} />));
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain('Chat is in grace until Oct 4, 2026, 10:30 AM EDT');
@@ -143,7 +157,7 @@ describe("Chat's dashboard Overview", () => {
 		// a viewer far east: the widget's last visit is already the next day there
 		cleanup();
 		viewerIn('Asia/Tokyo');
-		const tokyo = render(<Overview {...props()} />);
+		const tokyo = render(inDashboard(<Overview {...props()} />));
 		await settle();
 		expect(tokyo.container.textContent).toContain('Last seen Oct 6, 2026, 8:15 AM GMT+9');
 	});
@@ -152,10 +166,10 @@ describe("Chat's dashboard Overview", () => {
 		viewerIn('America/New_York');
 		serve();
 		const Overview = TABS.overview;
-		render(<Overview {...props()} />);
+		render(inDashboard(<Overview {...props()} />));
 		await settle();
 		// the answer this page already loaded shows at once, as the server would print it
-		const html = renderToString(<Overview {...props(true)} />);
+		const html = renderToString(inDashboard(<Overview {...props(true)} />));
 		for (const words of ['Oct 4, 2026, 2:30 PM UTC', 'Oct 5, 2026, 11:15 PM UTC', '>Oct 6, 2026, 8:00 AM UTC</time>'])
 			expect(html).toContain(words);
 		expect(html).not.toContain('EDT');

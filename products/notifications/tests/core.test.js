@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import apiJson from '../schemas/api.json' with { type: 'json' };
-import {
-	addressFor,
-	checkRecipient,
-	normaliseEmail,
-	normaliseLanguage,
-	normalisePhone,
-	normaliseTimeZone,
-} from '../core/channels.js';
+import { addressFor, checkRecipient, normaliseLanguage, normalisePhone, normaliseTimeZone } from '../core/channels.js';
 import { gatewayOutcome } from '../core/gateway.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { STATUSES, logFilters } from '../core/log.js';
@@ -48,9 +41,6 @@ import { keyBytes } from '../core/widgets.js';
 
 describe('channels', () => {
 	it('normalizes addresses without guessing a country', () => {
-		expect(normaliseEmail(' Ana@Example.COM ')).toBe('ana@example.com');
-		expect(normaliseEmail('nope')).toBeNull();
-		expect(normaliseEmail(5)).toBeNull();
 		expect(normalisePhone('+1 (202) 555-0143')).toBe('+12025550143');
 		expect(normalisePhone('0044 7700 900123')).toBe('+447700900123');
 		expect(normalisePhone('07700900123')).toBeNull();
@@ -71,6 +61,13 @@ describe('channels', () => {
 		expect(checkRecipient(null)).toEqual({ ok: false, field: 'to' });
 		expect(checkRecipient({})).toEqual({ ok: false, field: 'to' });
 		expect(checkRecipient({ email: 'x' })).toEqual({ ok: false, field: 'to/email' });
+		// the one email rule of every unit (@ss/contracts/email): a punycode top-level domain is an address, two dots
+		// in a row are not
+		expect(checkRecipient({ email: ' Ana@Example.XN--P1AI ' })).toMatchObject({
+			ok: true,
+			value: { email: 'ana@example.xn--p1ai' },
+		});
+		expect(checkRecipient({ email: 'ana..b@example.com' })).toEqual({ ok: false, field: 'to/email' });
 		expect(checkRecipient({ subscriberId: 'a b' })).toEqual({ ok: false, field: 'to/subscriberId' });
 		expect(checkRecipient({ staffId: 5 })).toEqual({ ok: false, field: 'to/staffId' });
 		const ok = checkRecipient({

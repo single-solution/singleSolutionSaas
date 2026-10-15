@@ -53,10 +53,10 @@ describe('list settings from the merchant’s server (K1)', () => {
 		const saved = await server(sys, 'PUT', '/v1/lists/tools', { body: { value: [tool] }, headers: ZOE });
 		expect(saved.status).toBe(200);
 		expect(saved.json.value).toMatchObject([{ name: 'stock_check' }]);
-		// the dashboard's own list route answers the same list
+		// the dashboard's twin answers the same list
 		const cookie = await sys.adminSession();
 		const dashboard = await sys.dashboard(cookie, 'GET', `/v1/dashboard/websites/${sys.websiteId}/lists/tools`);
-		expect(dashboard.json.items).toEqual(saved.json.value);
+		expect(dashboard.json.value).toEqual(saved.json.value);
 		const rules = await server(sys, 'PUT', '/v1/lists/page_rules', {
 			body: { value: [{ path: '/products/**', delay: 5, message: 'Need help?' }] },
 		});

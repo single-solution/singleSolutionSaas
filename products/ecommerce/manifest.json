@@ -77,6 +77,15 @@
 			}
 		},
 		{
+			"key": "measured_sales",
+			"name": "Sell in any unit",
+			"description": "Sell in decimal quantities of your own unit, in any language: per meter, per kilogram, per square foot, per hour, per dozen, per tola or per carat. An item type names the unit, its decimals and the step, least and most a shopper buys (such as 2.5); prices are per unit, and stock and quantities count thousandths of it. Tie the unit to a standard measure to send unit prices in feeds and structured data.",
+			"dependsOn": ["catalog", "checkout"],
+			"settings": {
+				"$ref": "schemas/measured_sales.settings.json"
+			}
+		},
+		{
 			"key": "checkout",
 			"name": "Cart and checkout",
 			"description": "The cart, checkout, orders with merchant-defined statuses, couriers with tracking links, customer records and the success page.",

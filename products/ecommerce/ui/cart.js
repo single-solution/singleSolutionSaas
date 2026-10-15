@@ -5,7 +5,13 @@
  * so and cannot be ordered), quantities, the coupon, loyalty points, the delivery method (delivery to an address, or
  * pickup), the address, the payment methods the quote allows, the order fields the shop asks (`ui/shop-fields.js`), a note, the shop's policies (filled and only the ones it
  * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
- * totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
+ * totals, with the shop's note for the chosen payment method and a bank transfer's bank details (E22, E24). A line of an
+ * item sold in a unit of its own takes an amount such as 2.5 (converted exactly to thousandths of its unit,
+ * `core/measure.js`) and shows its price per unit. Placing
+ * the order needs the shopper's sign-in, or, while the checkout setting `guests` allows it, a guest's name and the
+ * contact `guestIdentity` and `phoneRequired` ask for (E21, phase 5; the order's key is kept in the browser, so the
+ * success page and My orders open it); the Idempotency-Key is
+ * kept while the same attempt
  * is retried after a lost answer or while the first press still runs (409 `in_progress`, after the runtime's own retries). Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
  * page (`done`), or can start the payment again (`retry`). Coming back from Payments, the page's `ss_order` shows that
  * order's success page (reading it rechecks its payment). Growth's events (PLAN 0.8.9): `ss:begin_checkout` the first
@@ -14,6 +20,7 @@
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail, purchaseDetail } from '../core/growth-events.js';
+import { toThousandths } from '../core/measure.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
@@ -33,8 +40,9 @@ import {
 	settingsOf,
 	textsOf,
 } from './shop-common.js';
-import { addressForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
+import { addressForm, guestForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
 import { checkoutFieldsForm } from './shop-fields.js';
+import { bankDetailsBox } from './shop-payment.js';
 
 /** The pause after a change before the cart is priced again (ms). */
 const QUOTE_DELAY = 300;
@@ -101,10 +109,14 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			const placeBox = h(doc, 'div');
 			const placeStatus = h(doc, 'p', { class: 'status', role: 'status' });
 			const address = addressForm({ doc, t, settings, onPlace: () => requote() });
+			// a shopper who is not signed in orders as a guest while the shop allows it (E21)
+			const guests = settings.checkout.guests;
+			const guest = guests ? guestForm({ doc, t, rules: guests }) : null;
+			const guestOrder = () => guest !== null && !shop.signIn();
 			const note = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '1000', rows: '3' }));
 			// the order fields the shop asks the shopper (the quote's fields)
 			const fields = checkoutFieldsForm({ doc, t });
-			for (const control of [note, fields.node])
+			for (const control of [note, fields.node, ...(guest ? [guest.node] : [])])
 				for (const event of ['input', 'change'])
 					control.addEventListener(event, () => {
 						attemptKey = null;
@@ -127,6 +139,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 				address.node,
 				paymentBox,
 				fields.node,
+				guest?.node ?? null,
 				field(doc, 'ss-cart-note', t('checkout.note'), note),
 				policies.length > 0
 					? h(
@@ -171,6 +184,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						method: delivery.method,
 						city: address.value('city'),
 						area: address.value('area'),
+						region: address.value('region'),
+						postalCode: address.value('postalCode'),
 						country: address.value('country'),
 						locationId: delivery.method === 'pickup' ? delivery.locationId : null,
 					},
@@ -227,7 +242,32 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					const source = cartLineOf(line, index);
 					const name = line.name || t('cart.unknownItem');
 					const controls = [];
-					if (source && !line.slot) {
+					const measure = line.measure ?? null;
+					if (source && measure) {
+						// an amount of the unit, such as 2.5 (thousandths in the cart)
+						const unit = measure.unit;
+						const input = /** @type {HTMLInputElement} */ (
+							h(doc, 'input', {
+								type: 'text',
+								inputmode: 'decimal',
+								size: '6',
+								'aria-label': t('cart.amount', { name, unit }),
+								'data-focus': `qty${index}`,
+							})
+						);
+						input.value = measure.quantityText;
+						input.addEventListener('change', () => {
+							const quantity = toThousandths(input.value);
+							if (quantity === null) {
+								input.setCustomValidity(t('cart.amountInvalid'));
+								input.reportValidity();
+								return;
+							}
+							input.setCustomValidity('');
+							cart.set(source, quantity, true);
+						});
+						controls.push(h(doc, 'div', { class: 'stepper' }, input, h(doc, 'span', { class: 'meta' }, unit)));
+					} else if (source && !line.slot) {
 						const input = /** @type {HTMLInputElement} */ (
 							h(doc, 'input', {
 								type: 'number',
@@ -283,7 +323,14 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							line.gradeLabel ? h(doc, 'span', { class: 'meta' }, t('cart.grade', { grade: line.gradeLabel })) : null,
 							line.slot ? h(doc, 'span', { class: 'meta' }, t('cart.slot', { start: dateText(line.slot.start) })) : null,
 							line.unitPrice > 0
-								? h(doc, 'span', { class: 'meta' }, t('cart.unitPrice', { price: money(line.unitPrice, cur) }))
+								? h(
+										doc,
+										'span',
+										{ class: 'meta' },
+										measure
+											? t('cart.unitPricePer', { price: money(line.unitPrice, cur), unit: measure.unit })
+											: t('cart.unitPrice', { price: money(line.unitPrice, cur) }),
+									)
 								: null,
 							line.discount > 0
 								? h(doc, 'span', { class: 'save' }, t('cart.lineDiscount', { amount: money(line.discount, cur) }))
@@ -434,8 +481,16 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							? t('checkout.pickupAt', { name: option.name })
 							: t('checkout.deliver', { fee, zone: option.name || t('checkout.zoneUnknown') }),
 						days ? h(doc, 'span', { class: 'meta' }, days) : null,
+						// the pickup point of the settings: its address and hours (E22)
+						pickup && option.address ? h(doc, 'span', { class: 'meta' }, option.address) : null,
+						pickup && option.hours
+							? h(doc, 'span', { class: 'meta' }, t('checkout.pickupHours', { hours: option.hours }))
+							: null,
 					);
 				});
+				// the shop's texts: delivery times with delivery, how long packing takes (E22)
+				const notes = quote.notes ?? {};
+				const said = [quote.delivery.method === 'delivery' ? notes.delivery : '', notes.prep].filter(Boolean);
 				deliveryBox.replaceChildren(
 					h(
 						doc,
@@ -456,6 +511,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 									),
 								)
 							: null,
+						...said.map((line) => h(doc, 'p', { class: 'meta' }, line)),
 					),
 				);
 			};
@@ -501,6 +557,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						choices.length > 0
 							? h(doc, 'div', { class: 'choices' }, ...choices)
 							: h(doc, 'p', { class: 'error' }, t('checkout.noPayment')),
+						// the shop's note for the chosen method, and the bank details of a transfer (E22, E24)
+						payment && quote.notes?.[payment] ? h(doc, 'p', { class: 'meta' }, quote.notes[payment]) : null,
+						payment === 'bank_transfer' ? bankDetailsBox(doc, t, quote.bankDetails) : null,
 					),
 				);
 			};
@@ -546,7 +605,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					return;
 				}
 				const notReady = quote.ready ? null : h(doc, 'p', { class: 'error' }, t('cart.notReady'));
-				if (!shop.signIn()) {
+				if (guest) guest.node.hidden = !guestOrder();
+				if (!shop.signIn() && !guestOrder()) {
 					fill(placeBox, notReady, h(doc, 'p', { class: 'hint' }, t('checkout.signIn')), placeStatus);
 					return;
 				}
@@ -591,7 +651,18 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			};
 
 			const placeOrder = async () => {
-				if (placing || !shop.signIn()) return;
+				if (placing || (!shop.signIn() && !guestOrder())) return;
+				const asGuest = guestOrder();
+				const missingGuest = asGuest ? (guest?.missing() ?? null) : null;
+				if (missingGuest) {
+					sayPlace(
+						missingGuest === 'contact'
+							? t('checkout.guest.contactNeeded')
+							: t('checkout.missing', { field: t(`checkout.guest.${missingGuest}`) }),
+					);
+					guest?.focus(missingGuest);
+					return;
+				}
 				if (!checkoutBegun) {
 					checkoutBegun = true;
 					announce(win, GROWTH_EVENTS.beginCheckout, itemsDetail(currency(), quote.lines.map(growthItem)));
@@ -621,6 +692,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						note: note.value.trim(),
 						...(Object.keys(given.value).length > 0 ? { fields: given.value } : {}),
 						...(isDelivery ? { address: address.values() } : {}),
+						...(asGuest && guest ? { customer: guest.values() } : {}),
 						returnUrl: returnUrlOf(shop),
 						// the total the shopper sees: another total is not charged (409 price_changed: the cart is priced again)
 						expectedTotal: quote.totals.total,
@@ -636,16 +708,27 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					announce(win, GROWTH_EVENTS.purchase, purchaseDetail(answer.data.order));
 					sayPlace('');
 					cart.clear();
+					// a guest's order opens with its key, kept in the browser for the success page and My orders (E21)
+					if (typeof answer.data.orderKey === 'string') shop.keepOrderKey(answer.data.order.id, answer.data.orderKey);
 					if (answer.data.next?.kind === 'pay') return shop.go(answer.data.next.url);
 					return showSuccess(answer.data.order);
 				}
 				const path = answer.data?.errors?.[0]?.path;
+				const invalid = code === 'validation_failed' && typeof path === 'string' ? path : '';
 				sayPlace(
-					code === 'validation_failed' && typeof path === 'string' && path.startsWith('/address')
+					invalid.startsWith('/address')
 						? t('checkout.problem.address')
-						: code === 'validation_failed' && typeof path === 'string' && path.startsWith('/fields')
+						: invalid.startsWith('/fields')
 							? t('checkout.problem.fields')
-							: problemText(config, 'checkout.problem.', code, 'checkout.problem.failed'),
+							: invalid.startsWith('/customer')
+								? t('checkout.problem.guest')
+								: asGuest && code === 'sign_in_required'
+									? t(
+											answer.data?.signIn === 'member_email'
+												? 'checkout.guest.member_email'
+												: 'checkout.guest.member_phone',
+										)
+									: problemText(config, 'checkout.problem.', code, 'checkout.problem.failed'),
 				);
 				renderPlace();
 				if (REQUOTE.includes(code)) void priceNow();
@@ -657,7 +740,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			const loadOrder = async (id) => {
 				view = 'success';
 				cartBox.hidden = true;
-				waitingForSignIn = !shop.signIn();
+				// a guest's order opens with the key the browser keeps (E21)
+				waitingForSignIn = !shop.signIn() && !shop.guestOrders().includes(id);
 				if (waitingForSignIn) {
 					successBox.replaceChildren(h(doc, 'p', { class: 'hint' }, t('success.signIn')));
 					return;

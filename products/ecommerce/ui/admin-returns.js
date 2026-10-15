@@ -9,6 +9,7 @@
  * behind its typed confirmation (it needs a note for the shopper).
  * @module
  */
+import { quantityLabel } from '../core/measure.js';
 import { CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { query } from './admin-kit.js';
 import { card, chipFilter, detailHead, listScreen, scopeChip } from './admin-lists.js';
@@ -199,7 +200,12 @@ const renderClaim = (kit, claim, detail, list, message) => {
 			claim.lines.map((/** @type {any} */ item) => [
 				[item.name, item.variantName].filter(Boolean).join(' · '),
 				item.sku,
-				t('ordersAdmin.claimedOf', { claimed: item.quantity, bought: item.bought }),
+				item.measure
+					? t('ordersAdmin.claimedOf', {
+							claimed: quantityLabel(item.quantity, item.measure),
+							bought: quantityLabel(item.bought, item.measure),
+						})
+					: t('ordersAdmin.claimedOf', { claimed: item.quantity, bought: item.bought }),
 				(item.serials ?? []).join(', '),
 			]),
 		),

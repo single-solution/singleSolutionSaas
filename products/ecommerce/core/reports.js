@@ -98,8 +98,31 @@ const SALES_NAME = Object.freeze({
 });
 
 /**
+ * A line's pieces in a pipeline over unwound `$lines` (`core/measure.js` `piecesOf`: a measured line is one).
+ */
+const LINE_PIECES = Object.freeze({ $cond: [{ $eq: [{ $type: '$lines.measure' }, 'object'] }, 1, '$lines.quantity'] });
+/** The pieces of an order's lines, summed (the lines not unwound). */
+const ORDER_PIECES = Object.freeze({
+	$sum: {
+		$map: {
+			input: '$lines',
+			as: 'line',
+			in: { $cond: [{ $eq: [{ $type: '$$line.measure' }, 'object'] }, 1, '$$line.quantity'] },
+		},
+	},
+});
+/** What a line's units cost (unit cost × pieces; a measured line's cost is per unit of its thousandths). */
+const LINE_COST = Object.freeze({
+	$cond: [
+		{ $eq: [{ $type: '$lines.measure' }, 'object'] },
+		{ $round: [{ $divide: [{ $multiply: ['$lines.cost', '$lines.quantity'] }, 1000] }, 0] },
+		{ $multiply: ['$lines.cost', '$lines.quantity'] },
+	],
+});
+
+/**
  * Sales split by product, category (a line counts in each of its categories), brand, city, grade or payment method:
- * units, revenue (line totals) and discount, the largest revenue first.
+ * units (pieces: a measured line is one), revenue (line totals) and discount, the largest revenue first.
  * @param {string} websiteId @param {Range} range @param {string} currency @param {SalesBy} by
  */
 export const salesPipeline = (websiteId, range, currency, by) => [
@@ -110,7 +133,7 @@ export const salesPipeline = (websiteId, range, currency, by) => [
 		$group: {
 			_id: SALES_KEY[by],
 			name: { $first: SALES_NAME[by] },
-			units: { $sum: '$lines.quantity' },
+			units: { $sum: LINE_PIECES },
 			revenue: { $sum: '$lines.total' },
 			discount: { $sum: '$lines.discount' },
 		},
@@ -129,7 +152,7 @@ export const totalsPipeline = (websiteId, range, currency) => [
 		$group: {
 			_id: null,
 			orders: { $sum: 1 },
-			units: { $sum: { $sum: '$lines.quantity' } },
+			units: { $sum: ORDER_PIECES },
 			revenue: { $sum: { $sum: '$lines.total' } },
 			discount: { $sum: { $sum: '$lines.discount' } },
 		},
@@ -148,9 +171,9 @@ export const marginPipeline = (websiteId, range, currency) => [
 		$group: {
 			_id: '$lines.productId',
 			name: { $first: '$lines.name' },
-			units: { $sum: '$lines.quantity' },
+			units: { $sum: LINE_PIECES },
 			revenue: { $sum: '$lines.total' },
-			cost: { $sum: { $multiply: ['$lines.cost', '$lines.quantity'] } },
+			cost: { $sum: LINE_COST },
 		},
 	},
 	{ $sort: { revenue: -1, _id: 1 } },
@@ -200,7 +223,8 @@ export const stockAgeRows = (products, lastSales, now) =>
  * Return rate per product: units claimed (claims made in the range, not rejected) over units sold in the range.
  * @param {Array<{ _id: string, name: string, units: number }>} sold sales by product
  * @param {Array<{ orderId: string, lines: Array<{ lineId: string, quantity: number }> }>} claims
- * @param {Map<string, { productId: string, name: string }>} lineProducts order line id → its product
+ * @param {Map<string, { productId: string, name: string, measure?: unknown }>} lineProducts order line id → its
+ *   product (a measured line's claim counts one piece, as its sale does)
  */
 export const returnRateRows = (sold, claims, lineProducts) => {
 	/** @type {Map<string, { productId: string, name: string, sold: number, claimed: number }>} */
@@ -210,7 +234,7 @@ export const returnRateRows = (sold, claims, lineProducts) => {
 			const product = lineProducts.get(line.lineId);
 			if (!product) continue;
 			const row = rows.get(product.productId) ?? { productId: product.productId, name: product.name, sold: 0, claimed: 0 };
-			row.claimed += line.quantity;
+			row.claimed += product.measure ? 1 : line.quantity;
 			rows.set(product.productId, row);
 		}
 	return [...rows.values()]
@@ -270,7 +294,7 @@ export const summaryPipeline = (websiteId, range, currency, statuses, timeZone) 
 			fees: { $sum: { $ifNull: ['$totals.fee', 0] } },
 			discount: { $sum: { $ifNull: ['$totals.discount', 0] } },
 			refunded: { $sum: { $ifNull: ['$payment.refunded', 0] } },
-			units: { $sum: { $sum: '$lines.quantity' } },
+			units: { $sum: ORDER_PIECES },
 		},
 	},
 ];

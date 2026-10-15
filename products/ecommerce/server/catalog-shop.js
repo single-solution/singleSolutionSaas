@@ -10,7 +10,15 @@
  * @module
  */
 import { defineRoute, paginate, problem } from '@ss/app-kit';
-import { NO_ID, attributesOf, brandsOf, categoriesOf, categoryGroups, findBySlugHistory } from '../adapters/catalog-store.js';
+import {
+	NO_ID,
+	attributesOf,
+	brandsOf,
+	categoriesOf,
+	categoryGroups,
+	findBySlugHistory,
+	productTypes,
+} from '../adapters/catalog-store.js';
 import { dealsLiveNow } from '../adapters/promotions-store.js';
 import {
 	afterFilter,
@@ -118,6 +126,9 @@ const createCards = (common, service) => {
 			gradeList.length > 0 ? new Map((await categoriesOf(data)).map((category) => [category.id, category])) : new Map();
 		const offers = await offersOf(s, data, products);
 		const attributes = variants ? new Map((await attributesOf(data)).map((attribute) => [attribute.id, attribute])) : null;
+		// items sold in a unit of their own show their unit (their type's measure, while Sell in any unit is on)
+		const types = s.has('measured_sales') ? await s.list('item_types') : [];
+		const typed = types.some((type) => type.elements.measure) ? await productTypes(data, products, types) : null;
 		return Promise.all(
 			products.map(async (item) => {
 				const brand = item.brandId ? brands.get(item.brandId) : undefined;
@@ -144,6 +155,7 @@ const createCards = (common, service) => {
 							})),
 						),
 						shown,
+						measure: typed?.get(item.id)?.elements.measure ?? null,
 					}),
 					...(attributes ? { variants: await variantsOf(s, item, url, attributes, shown) } : {}),
 					dealCount: covering.length,
@@ -450,6 +462,7 @@ export const createCatalogShop = (product, service, common) => {
 			shown,
 			type,
 			slots: elements.slots,
+			measure: elements.measure,
 			currency: s.currency,
 			url,
 			media: await Promise.all(item.media.map((file) => common.mediaView(s, file, item.name))),

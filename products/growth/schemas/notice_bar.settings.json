@@ -58,11 +58,12 @@
 		"hideOnPages": {
 			"type": "array",
 			"title": "Hide on pages",
-			"description": "Path patterns where the bar is not shown: an exact path (/ is the home page), * = one segment, ** = any (for example /checkout/**). At most 50.",
+			"description": "Path patterns where the bar is not shown, each starting with / (/ is the home page): * is any characters inside one segment, ** any number of segments (for example /checkout/** or /sale-*). At most 50.",
 			"default": [],
 			"items": {
 				"type": "string",
-				"maxLength": 200
+				"maxLength": 200,
+				"pattern": "^/"
 			}
 		}
 	}

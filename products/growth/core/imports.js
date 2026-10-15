@@ -6,9 +6,10 @@
  * unknown fields are refused by name. The adapter escapes the keys as the day's document stores them.
  * @module
  */
+import { isCurrency } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { isDay } from './analytics.js';
 import { BROWSERS, DEVICES, DIRECT, SYSTEMS, VITALS, pathOf } from './events.js';
-import { isCurrency } from './money.js';
 import { FUNNEL_STEPS } from './widgets.js';
 
 /** @typedef {{ path: string, message: string }} ImportError */
@@ -18,9 +19,6 @@ import { FUNNEL_STEPS } from './widgets.js';
 const MAX_TEXT_KEY = 300;
 const RATINGS = Object.freeze(['good', 'needs_improvement', 'poor']);
 const VITAL_NAMES = Object.freeze(Object.keys(VITALS));
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** The key of a metric without keys. @param {string} key */
 const isEmpty = (key) => key === '';

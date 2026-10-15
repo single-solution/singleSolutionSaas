@@ -7,13 +7,12 @@
  * @module
  */
 import { Callout, Masonry, Section } from '@ss/ui';
+import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, call, hasSettings, useLoad } from '@ss/ui/dashboard';
 import { aiLabelShown } from '../../core/widgets.js';
-import { call, useLoad } from './api.js';
 import { CustomFieldsEditor, FallbackAnswersEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
-import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
-/** @typedef {import('./parts.js').FeatureSettings} FeatureSettings */
+/** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
 /** @typedef {keyof typeof TEXTS.settings.sections} SectionId */
 
 /**
@@ -53,7 +52,7 @@ export const aiLabelNotice = (key, values) =>
 		</Callout>
 	) : null;
 
-/** @param {import('./tabs.js').TabProps} props */
+/** @param {import('@ss/ui/dashboard').TabProps} props */
 export function SettingsTab({ websiteId: id }) {
 	const websiteId = /** @type {string} */ (id);
 	const base = `/v1/dashboard/websites/${websiteId}`;

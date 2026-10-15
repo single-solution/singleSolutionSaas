@@ -5,14 +5,12 @@
  * sent shows the website's words for why, never the server's English.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { element } from './dom.js';
+import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { notSentText, problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig }} input
  */
 export const mountSendMessage = ({ host, api, config }) => {
 	/** @param {string} key */

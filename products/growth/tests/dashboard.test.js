@@ -4,12 +4,14 @@
  * tags ready, the tag features with no id asked for, the setup at a glance) and the Settings notes
  * of the store-conversion options (PLAN 0.8.10 G1, G4–G7): the law warning while tags need no consent, tag ids that are
  * not loaded, Tag Manager missing for GA4, what robots.txt, the verification tags and the IndexNow key file serve, the
- * notice bar now, and Web Vitals to Google Analytics without Google tags. Setup only: no business data. Times are
- * computed in UTC and shown in the viewer's local time (owner 2026-10-14): UTC on the server and in the first render.
+ * notice bar now, and Web Vitals to Google Analytics without Google tags (on Defaults, only what the values say).
+ * Setup only: no business data. Times are computed in UTC and shown in the viewer's local time (owner 2026-10-14): UTC on
+ * the server and in the first render. The tabs render inside the shared dashboard's provider (`@ss/ui/dashboard`).
  */
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DashboardProvider } from '@ss/ui/dashboard';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
 import { manifest, SHARED_SETTINGS } from '../adapters/product.js';
 import { TABS } from '../app/dashboard/tabs.js';
@@ -53,20 +55,6 @@ const settingsAnswer = (/** @type {string[]} */ on) => ({
 	})),
 });
 
-/** A grace period, the widget's last visit and a change, at known instants (UTC). */
-const TIMES = {
-	status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' },
-	checklist: { connections: [], widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' }, business: { found: true } },
-	recentChanges: [
-		{
-			who: { kind: 'user', id: 'u_1', name: 'Alex Morgan' },
-			what: 'settings',
-			detail: 'Notice bar',
-			at: '2026-10-06T08:00:00.000Z',
-		},
-	],
-};
-
 /**
  * The viewer's browser in a time zone (what `Intl.DateTimeFormat().resolvedOptions()` answers there).
  * @param {string} timeZone
@@ -81,40 +69,36 @@ const viewerIn = (timeZone) => {
 	);
 };
 
-/** @param {string[]} on @param {object} [overview] parts of the overview answer */
-const serve = (on, overview = {}) =>
+const THEME = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
+const FORMAT = { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
+
+/** @param {string[]} on */
+const serve = (on) =>
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path) => {
 			const base = `/v1/dashboard/websites/${WEBSITE}`;
 			const body =
-				path === `${base}/overview`
-					? {
-							website: { websiteId: WEBSITE, domain: DOMAIN, merchantId: 'm_1', merchantName: 'Merchant' },
-							status: { status: 'active', graceEndsAt: null },
-							featuresOn: on,
-							todayMillicredits: 0,
-							checklist: { connections: [], widget: null, business: { found: true } },
-							recentChanges: [],
-							...overview,
-						}
-					: path === `${base}/settings`
-						? settingsAnswer(on)
-						: path === `${base}/texts`
-							? { texts: [] }
-							: path === `${base}/theme`
-								? { theme: { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' } }
-								: path === `${base}/format`
-									? {
-											format: {
-												locale: '',
-												currencyDisplay: 'code',
-												currencySymbol: '',
-												wholeUnits: false,
-												times: 'viewer',
-											},
-										}
-									: null;
+				path === '/v1/dashboard/defaults'
+					? { ...settingsAnswer(on), texts: [], theme: { theme: THEME }, format: { format: FORMAT }, recentChanges: [] }
+					: path === `${base}/overview`
+						? {
+								website: { websiteId: WEBSITE, domain: DOMAIN, merchantId: 'm_1', merchantName: 'Merchant' },
+								status: { status: 'active', graceEndsAt: null },
+								featuresOn: on,
+								todayMillicredits: 0,
+								checklist: { connections: [], widget: null, business: { found: true } },
+								recentChanges: [],
+							}
+						: path === `${base}/settings`
+							? settingsAnswer(on)
+							: path === `${base}/texts`
+								? { texts: [] }
+								: path === `${base}/theme`
+									? { theme: THEME }
+									: path === `${base}/format`
+										? { format: FORMAT }
+										: null;
 			return new Response(JSON.stringify(body), { status: body ? 200 : 404 });
 		}),
 	);
@@ -133,6 +117,25 @@ const props = {
 	open: vi.fn(),
 };
 
+/** Growth's tabs with the dashboard's words and feature names around them. @param {typeof props} tab */
+const Overview = (tab) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		<TABS.overview {...tab} />
+	</DashboardProvider>
+);
+/** @param {typeof props} tab */
+const Settings = (tab) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		<TABS.settings {...tab} />
+	</DashboardProvider>
+);
+/** @param {typeof props} tab */
+const Defaults = (tab) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		<TABS.defaults {...tab} />
+	</DashboardProvider>
+);
+
 afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
@@ -145,7 +148,6 @@ describe('the dashboard (setup only)', () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(NOW);
 		serve(ON);
-		const Overview = TABS.overview;
 		const { container } = render(<Overview {...props} />);
 		await settle();
 		const text = container.textContent ?? '';
@@ -174,7 +176,6 @@ describe('the dashboard (setup only)', () => {
 		const saved = VALUES.robots_verification ?? {};
 		const glance = async () => {
 			serve(['robots_verification']);
-			const Overview = TABS.overview;
 			const { container } = render(<Overview {...props} />);
 			await settle();
 			const text = container.textContent ?? '';
@@ -198,7 +199,6 @@ describe('the dashboard (setup only)', () => {
 			VALUES.meta_pixel = { pixelId: '' };
 			VALUES.google_tags = { ga4Id: '' };
 			serve(['meta_pixel', 'google_tags']);
-			const Overview = TABS.overview;
 			props.open.mockClear();
 			const { container } = render(<Overview {...props} />);
 			await settle();
@@ -223,7 +223,6 @@ describe('the dashboard (setup only)', () => {
 
 	it('Overview leaves out what is off', async () => {
 		serve([]);
-		const Overview = TABS.overview;
 		const { container } = render(<Overview {...props} />);
 		await settle();
 		expect(container.textContent).not.toContain(TEXTS.setup.title);
@@ -233,7 +232,6 @@ describe('the dashboard (setup only)', () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(NOW);
 		serve(ON.filter((key) => key !== 'google_tags'));
-		const Settings = TABS.settings;
 		const { container } = render(<Settings {...props} />);
 		await settle();
 		const text = container.textContent ?? '';
@@ -257,7 +255,6 @@ describe('the dashboard (setup only)', () => {
 		VALUES.robots_verification = {};
 		VALUES.tags = {};
 		serve(['indexnow', 'notice_bar', 'robots_verification']);
-		const Settings = TABS.settings;
 		const { container } = render(<Settings {...props} />);
 		await settle();
 		const text = container.textContent ?? '';
@@ -270,7 +267,6 @@ describe('the dashboard (setup only)', () => {
 	it('Settings say when the merchant turned the notice bar off (AO-2)', async () => {
 		VALUES.notice_bar = { text: 'Sale', enabled: false };
 		serve(['notice_bar']);
-		const Settings = TABS.settings;
 		const { container } = render(<Settings {...props} />);
 		await settle();
 		expect(container.textContent).toContain(TEXTS.setup.noticeOff);
@@ -279,7 +275,6 @@ describe('the dashboard (setup only)', () => {
 	it('Settings say where Web Vitals go while Visitor analytics is off (SG-27)', async () => {
 		VALUES.web_vitals = { toGa4: true };
 		serve(['web_vitals', 'google_tags']);
-		const Settings = TABS.settings;
 		const ga4 = render(<Settings {...props} />);
 		await settle();
 		expect(ga4.container.textContent).toContain(TEXTS.setup.vitalsGa4Only);
@@ -289,39 +284,33 @@ describe('the dashboard (setup only)', () => {
 		await settle();
 		expect(nowhere.container.textContent).toContain(TEXTS.setup.vitalsNowhere);
 	});
+
+	it('Defaults say what the values alone tell (no website: no robots.txt or key file address)', async () => {
+		VALUES.tags = { consentRequired: false };
+		VALUES.indexnow = { key: 'abcdefgh', keyPath: 'nope' };
+		serve(['indexnow', 'robots_verification']);
+		const { container } = render(<Defaults {...props} />);
+		await settle();
+		const text = container.textContent ?? '';
+		expect(text).toContain(TEXTS.settings.consentWarning);
+		expect(text).not.toContain(TEXTS.setup.keyPathBad);
+		expect(text).not.toContain('(GET /v1/robots.txt)');
+	});
 });
 
 describe("times: computed in UTC, shown in the viewer's local time (owner 2026-10-14)", () => {
-	it("Overview: the grace end, the widget's last visit, the changes and the notice start in the viewer's zone; UTC first", async () => {
+	it("Overview: the notice start in the viewer's zone; UTC first", async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(NOW);
 		VALUES.notice_bar = { text: 'Sale', startsAt: '2026-11-01T00:00:00Z' };
 		viewerIn('America/New_York');
-		serve(['notice_bar'], TIMES);
-		const Overview = TABS.overview;
+		serve(['notice_bar']);
 		const { container } = render(<Overview {...props} />);
 		await settle();
-		const text = container.textContent ?? '';
-		expect(text).toContain('Growth is in grace until Oct 4, 2026, 10:30 AM EDT');
-		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
 		// midnight UTC on Nov 1 is still Oct 31 in New York
-		expect(text).toContain('Starts Oct 31, 2026, 8:00 PM EDT');
-		const change = container.querySelector('ol time');
-		expect([change?.textContent, change?.getAttribute('title'), change?.getAttribute('datetime')]).toEqual([
-			'Oct 6, 2026, 4:00 AM EDT',
-			'Oct 6, 2026, 8:00 AM UTC',
-			'2026-10-06T08:00:00.000Z',
-		]);
+		expect(container.textContent).toContain('Starts Oct 31, 2026, 8:00 PM EDT');
 		// the server (and the first render in the browser) print UTC, with the answers this page already loaded
-		const html = renderToString(<Overview {...props} />);
-		for (const words of [
-			' is in grace until ',
-			'Oct 4, 2026, 2:30 PM UTC',
-			'Oct 5, 2026, 11:15 PM UTC',
-			'Starts Nov 1, 2026, 12:00 AM UTC',
-			'>Oct 6, 2026, 8:00 AM UTC</time>',
-		])
-			expect(html).toContain(words);
+		expect(renderToString(<Overview {...props} />)).toContain('Starts Nov 1, 2026, 12:00 AM UTC');
 	});
 
 	it("Settings: the notice bar's end in the viewer's zone; UTC first", async () => {
@@ -330,7 +319,6 @@ describe("times: computed in UTC, shown in the viewer's local time (owner 2026-1
 		VALUES.notice_bar = { text: 'Sale', endsAt: '2026-10-01T03:00:00Z' };
 		viewerIn('Asia/Tokyo');
 		serve(['notice_bar']);
-		const Settings = TABS.settings;
 		const { container } = render(<Settings {...props} />);
 		await settle();
 		expect(container.textContent).toContain('Ended Oct 1, 2026, 12:00 PM GMT+9');

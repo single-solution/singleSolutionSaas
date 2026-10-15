@@ -15,7 +15,8 @@ import {
 	resolveLines,
 } from '../core/checkout.js';
 import { codAdvance, codDecision, isRtoFlagged } from '../core/cod.js';
-import { checkZones, matchZone, placeKey, zoneCities, zoneFee } from '../core/delivery.js';
+import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
+import { checkZones, matchZone, zoneCities, zoneFee } from '../core/delivery.js';
 import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
 import { MAX_AMOUNT } from '../core/money.js';
 import { checkTaxRules, taxOf, taxPercent } from '../core/taxes.js';
@@ -93,7 +94,15 @@ describe('cart checks', () => {
 			},
 		]);
 		expect(checked.value.coupon).toBe('SAVE10');
-		expect(checked.value.delivery).toEqual({ method: 'pickup', city: 'X', area: '', country: '', locationId: 'loc_1' });
+		expect(checked.value.delivery).toEqual({
+			method: 'pickup',
+			city: 'X',
+			area: '',
+			region: '',
+			postalCode: '',
+			country: '',
+			locationId: 'loc_1',
+		});
 	});
 
 	it.each([
@@ -106,8 +115,8 @@ describe('cart checks', () => {
 		[
 			{
 				lines: [
-					{ productId: 'p', quantity: 60 },
-					{ productId: 'p', quantity: 60 },
+					{ productId: 'p', quantity: 600_000_000 },
+					{ productId: 'p', quantity: 600_000_000 },
 				],
 			},
 			'lines/1/quantity',
@@ -116,7 +125,7 @@ describe('cart checks', () => {
 		[{ lines: [{ productId: 'p' }], coupon: 5 }, 'coupon'],
 		[{ lines: [{ productId: 'p' }], points: -1 }, 'points'],
 		[{ lines: [{ productId: 'p' }], delivery: { method: 'drone' } }, 'delivery/method'],
-		[{ lines: [{ productId: 'p' }], delivery: { city: 'x'.repeat(81) } }, 'delivery'],
+		[{ lines: [{ productId: 'p' }], delivery: { city: 'x'.repeat(101) } }, 'delivery/city'],
 		[{ lines: [{ productId: 'p' }], delivery: { locationId: 'a b' } }, 'delivery/locationId'],
 		[{ lines: [{ productId: 'p' }], payment: 'cheque' }, 'payment'],
 	])('refuses %j', (body, field) => {
@@ -125,28 +134,103 @@ describe('cart checks', () => {
 		if (!checked.ok) expect(checked.field).toBe(field);
 	});
 
+	/**
+	 * A website's address rules.
+	 * @param {Partial<import('../core/checkout.js').AddressRules>} [over]
+	 * @returns {import('../core/checkout.js').AddressRules}
+	 */
+	const addressRules = (over = {}) => ({
+		required: [],
+		phoneRequired: true,
+		phoneRules: { defaultCallingCode: '', trunkPrefix: '' },
+		regions: [],
+		homeCountry: '',
+		...over,
+	});
+
 	it('checks addresses, with the phone as E.164 when the website can read it (K12), else as typed', () => {
-		const rules = { defaultCallingCode: '', trunkPrefix: '' };
+		const rules = addressRules();
 		const good = { name: 'Sara', phone: '+1 555 000 1111', line1: '1 Main St', city: 'Town', notes: 'Ring' };
-		expect(checkAddress(good, [], rules)).toMatchObject({
+		expect(checkAddress(good, rules)).toMatchObject({
 			ok: true,
-			value: { name: 'Sara', phone: '+15550001111', area: '', country: '' },
+			value: { name: 'Sara', phone: '+15550001111', area: '', region: '', country: '' },
 		});
-		expect(checkAddress(null, [], rules)).toMatchObject({ ok: false, field: 'address' });
-		expect(checkAddress({ ...good, name: '' }, [], rules)).toMatchObject({ ok: false, field: 'address/name' });
-		expect(checkAddress({ ...good, line1: 'x'.repeat(201) }, [], rules)).toMatchObject({ ok: false, field: 'address/line1' });
-		expect(checkAddress(good, ['postalCode'], rules)).toMatchObject({ ok: false, field: 'address/postalCode' });
-		expect(checkAddress({ ...good, phone: 'call me' }, [], rules)).toMatchObject({ ok: false, field: 'address/phone' });
+		expect(checkAddress(null, rules)).toMatchObject({ ok: false, field: 'address' });
+		expect(checkAddress({ ...good, name: '' }, rules)).toMatchObject({ ok: false, field: 'address/name' });
+		expect(checkAddress({ ...good, line1: 'x'.repeat(201) }, rules)).toMatchObject({ ok: false, field: 'address/line1' });
+		expect(checkAddress(good, addressRules({ required: ['postalCode'] }))).toMatchObject({
+			ok: false,
+			field: 'address/postalCode',
+		});
+		expect(checkAddress({ ...good, phone: 'call me' }, rules)).toMatchObject({ ok: false, field: 'address/phone' });
 		// with no calling code a national number is kept as typed (the courier calls it)
-		expect(checkAddress({ ...good, phone: '07700 900123' }, [], rules)).toMatchObject({
+		expect(checkAddress({ ...good, phone: '07700 900123' }, rules)).toMatchObject({
 			ok: true,
 			value: { phone: '07700 900123' },
 		});
-		const gb = { defaultCallingCode: '+44', trunkPrefix: '' };
+		const gb = addressRules({ phoneRules: { defaultCallingCode: '+44', trunkPrefix: '' } });
 		for (const phone of ['447700900123', '+44 07700 900456', '07700900123', '07700-900123'])
-			expect(checkAddress({ ...good, phone }, [], gb)).toMatchObject({ ok: true });
-		expect(checkAddress({ ...good, phone: '+44 07700 900456' }, [], gb)).toMatchObject({ value: { phone: '+447700900456' } });
-		expect(checkAddress({ ...good, phone: '447700900123' }, [], gb)).toMatchObject({ value: { phone: '+447700900123' } });
+			expect(checkAddress({ ...good, phone }, gb)).toMatchObject({ ok: true });
+		expect(checkAddress({ ...good, phone: '+44 07700 900456' }, gb)).toMatchObject({ value: { phone: '+447700900456' } });
+		expect(checkAddress({ ...good, phone: '447700900123' }, gb)).toMatchObject({ value: { phone: '+447700900123' } });
+	});
+
+	it('takes every address field up to its length in the one address table (checkout, widget, staff, imports)', () => {
+		const rules = addressRules();
+		const base = { name: 'Sara', phone: '+15550001111' };
+		for (const [field, max] of Object.entries(ADDRESS_LIMITS)) {
+			if (field === 'phone') continue;
+			expect(checkAddress({ ...base, [field]: 'x'.repeat(max) }, rules), field).toMatchObject({ ok: true });
+			expect(checkAddress({ ...base, [field]: 'x'.repeat(max + 1) }, rules), field).toMatchObject({
+				ok: false,
+				field: `address/${field}`,
+			});
+		}
+		// a city or area of 100 characters, as staff edits and imports always took
+		expect(ADDRESS_LIMITS).toMatchObject({ city: 100, area: 100, region: 100, phone: 40, postalCode: 20 });
+		expect(
+			checkCart({ lines: [{ productId: 'p' }], delivery: { city: 'x'.repeat(100), region: 'y'.repeat(100) } }),
+		).toMatchObject({
+			ok: true,
+			value: { delivery: { city: 'x'.repeat(100), region: 'y'.repeat(100), postalCode: '' } },
+		});
+		expect(checkCart({ lines: [{ productId: 'p' }], delivery: { postalCode: '1'.repeat(21) } })).toMatchObject({
+			ok: false,
+			field: 'delivery/postalCode',
+		});
+	});
+
+	it('needs a phone only while phoneRequired is on, and requires the region when the merchant does', () => {
+		const good = { name: 'Sara', line1: '1 Main St', city: 'Town' };
+		expect(checkAddress(good, addressRules())).toMatchObject({ ok: false, field: 'address/phone' });
+		expect(checkAddress(good, addressRules({ phoneRequired: false }))).toMatchObject({ ok: true, value: { phone: '' } });
+		expect(checkAddress(good, addressRules({ phoneRequired: false, required: ['region'] }))).toMatchObject({
+			ok: false,
+			field: 'address/region',
+		});
+	});
+
+	it('takes a region of the address_regions list in a listed country, as the list spells it', () => {
+		const regions = [{ country: 'US', names: ['California', 'New York'] }];
+		const good = { name: 'Sara', phone: '+15550001111', line1: '1 Main St', city: 'Town' };
+		// the country by code or English name; an address without a country is in the business.json country
+		expect(checkAddress({ ...good, country: 'United States', region: ' new  york ' }, addressRules({ regions }))).toMatchObject(
+			{
+				ok: true,
+				value: { region: 'New York' },
+			},
+		);
+		expect(checkAddress({ ...good, region: 'california' }, addressRules({ regions, homeCountry: 'US' }))).toMatchObject({
+			ok: true,
+			value: { region: 'California' },
+		});
+		expect(checkAddress({ ...good, country: 'us', region: 'Ontario' }, addressRules({ regions }))).toMatchObject({
+			ok: false,
+			field: 'address/region',
+		});
+		// another country's region is free text; an empty region stays allowed unless required
+		expect(checkAddress({ ...good, country: 'CA', region: 'Ontario' }, addressRules({ regions }))).toMatchObject({ ok: true });
+		expect(checkAddress({ ...good, country: 'US' }, addressRules({ regions }))).toMatchObject({ ok: true });
 	});
 
 	it('checks what placing adds', () => {
@@ -307,8 +391,10 @@ describe('pricing', () => {
 			promotions: null,
 			delivery: 300,
 			pointsValue: 500,
-			taxRules: [{ name: 'VAT', percent: 10, categoryIds: [], regions: [{ country: 'US', city: '' }] }],
-			region: { country: 'us', city: 'Town' },
+			taxRules: [
+				{ name: 'VAT', percent: 10, categoryIds: [], regions: [{ country: 'US', region: '', city: '', postcode: '' }] },
+			],
+			region: placeAt({ country: 'us', city: 'Town' }),
 			taxIncluded: false,
 		});
 		expect(priced.lines.map((line) => [line.points, line.tax, line.total])).toEqual([
@@ -425,26 +511,115 @@ describe('COD safety', () => {
 	});
 });
 
+/**
+ * A place.
+ * @param {Partial<import('../core/address.js').Place>} [over]
+ * @returns {import('../core/address.js').Place}
+ */
+const placeAt = (over = {}) => ({ country: '', region: '', city: '', area: '', postalCode: '', ...over });
+
+describe('addresses', () => {
+	it('compares places, postcodes and countries', () => {
+		expect(placeKey('  New   York ')).toBe('new york');
+		expect(placeKey(5)).toBe('');
+		expect(postcodeKey(' sw1a 1aa ')).toBe('SW1A1AA');
+		expect(countryKey('pk')).toBe('PK');
+		expect(countryKey('Pakistan')).toBe('PK');
+		expect(countryKey(' united  states ')).toBe('US');
+		expect(countryKey('Atlantis')).toBe('atlantis');
+		expect(countryKey('')).toBe('');
+	});
+
+	it('checks the address_regions list and finds a country’s regions', () => {
+		const checked = checkAddressRegions([{ country: 'US', names: [' California ', 'california', 'Texas'] }]);
+		expect(checked).toEqual({ ok: true, value: [{ country: 'US', names: ['California', 'Texas'] }] });
+		if (!checked.ok) return;
+		expect(regionsFor(checked.value, 'United States')).toEqual(['California', 'Texas']);
+		expect(regionsFor(checked.value, 'CA')).toBeNull();
+		expect(regionsFor(checked.value, '')).toBeNull();
+		const errors = (/** @type {unknown} */ value) => {
+			const found = checkAddressRegions(value);
+			return found.ok ? '' : found.errors.join(' ');
+		};
+		expect(errors('x')).toContain('list');
+		expect(errors([{ country: '', names: ['A'] }])).toContain('country');
+		expect(errors([{ country: 'US', names: [] }])).toContain('region names');
+		expect(errors([{ country: 'US', names: ['x'.repeat(101)] }])).toContain('1–100');
+		expect(
+			errors([
+				{ country: 'US', names: ['A'] },
+				{ country: 'United States', names: ['B'] },
+			]),
+		).toContain('twice');
+	});
+});
+
 describe('delivery zones', () => {
 	const zones = [
 		{ key: 'everywhere', name: 'Everywhere', fee: 900 },
-		{ key: 'city', name: 'City', cities: ['Springfield', ' springfield '], fee: 300, freeOver: 5000, minDays: 1, maxDays: 2 },
-		{ key: 'centre', name: 'Centre', cities: ['Springfield'], areas: ['Downtown'], fee: 100 },
+		{
+			key: 'city',
+			name: 'City',
+			match: { cities: ['Springfield', ' springfield '] },
+			fee: 300,
+			freeOver: 5000,
+			minDays: 1,
+			maxDays: 2,
+		},
+		{ key: 'centre', name: 'Centre', match: { cities: ['Springfield'], areas: ['Downtown'] }, fee: 100 },
 	];
 
 	it('checks and matches the most specific zone', () => {
 		const checked = checkZones(zones);
 		expect(checked.ok).toBe(true);
 		if (!checked.ok) return;
-		expect(checked.value[1]?.cities).toEqual(['Springfield']);
-		expect(matchZone(checked.value, { city: 'SPRINGFIELD', area: 'downtown' })?.key).toBe('centre');
-		expect(matchZone(checked.value, { city: 'Springfield' })?.key).toBe('city');
-		expect(matchZone(checked.value, { city: 'Shelbyville' })?.key).toBe('everywhere');
-		expect(matchZone(checked.value.slice(1), {})).toBeNull();
+		expect(checked.value[1]?.match).toEqual({
+			countries: [],
+			regions: [],
+			cities: ['Springfield'],
+			areas: [],
+			postcodes: [],
+		});
+		expect(matchZone(checked.value, placeAt({ city: 'SPRINGFIELD', area: 'downtown' }))?.key).toBe('centre');
+		expect(matchZone(checked.value, placeAt({ city: 'Springfield' }))?.key).toBe('city');
+		expect(matchZone(checked.value, placeAt({ city: 'Shelbyville' }))?.key).toBe('everywhere');
+		expect(matchZone(checked.value.slice(1), placeAt())).toBeNull();
 		expect(zoneFee({ fee: 300, freeOver: 5000 }, 5000)).toBe(0);
 		expect(zoneFee({ fee: 300, freeOver: 0 }, 99_999)).toBe(300);
 		expect(zoneCities(checked.value)).toEqual(['Springfield']);
-		expect(placeKey(5)).toBe('');
+	});
+
+	it('wins by the longest postcode start, then area, city, region, country, then the catch-all', () => {
+		const checked = checkZones([
+			{ key: 'all', name: 'All', fee: 1 },
+			{ key: 'gb', name: 'UK', match: { countries: ['United Kingdom'] }, fee: 2 },
+			{ key: 'england', name: 'England', match: { countries: ['GB'], regions: ['England'] }, fee: 3 },
+			{ key: 'london', name: 'London', match: { cities: ['London'] }, fee: 4 },
+			{ key: 'soho', name: 'Soho', match: { cities: ['London'], areas: ['Soho'] }, fee: 5 },
+			{ key: 'sw', name: 'SW', match: { postcodes: ['sw'] }, fee: 6 },
+			{ key: 'sw1', name: 'SW1', match: { postcodes: ['SW1 '] }, fee: 7 },
+			{ key: 'sw1_us', name: 'SW1 abroad', match: { countries: ['US'], postcodes: ['SW1A'] }, fee: 8 },
+		]);
+		expect(checked.ok).toBe(true);
+		if (!checked.ok) return;
+		const zone = (/** @type {Partial<import('../core/address.js').Place>} */ over) =>
+			matchZone(checked.value, placeAt(over))?.key;
+		// the postcodes compare upper-cased without spaces; the longest start the postcode has wins
+		expect(zone({ country: 'GB', city: 'London', area: 'Soho', postalCode: 'sw1a 1aa' })).toBe('sw1');
+		expect(zone({ country: 'GB', city: 'London', area: 'Soho', postalCode: 'SW9 1AA' })).toBe('sw');
+		// a zone fits only when the address is in every kind of place it lists (SW1A abroad is in the US only)
+		expect(zone({ country: 'US', postalCode: 'SW1A1AA' })).toBe('sw1_us');
+		expect(zone({ country: 'GB', city: 'London', area: 'Soho', postalCode: 'W1D 3QF' })).toBe('soho');
+		expect(zone({ country: 'GB', region: 'England', city: 'London', area: 'Camden' })).toBe('london');
+		expect(zone({ country: 'gb', region: 'england', city: 'Leeds' })).toBe('england');
+		expect(zone({ country: 'United Kingdom', region: 'Scotland' })).toBe('gb');
+		expect(zone({ country: 'FR', city: 'Paris' })).toBe('all');
+		// equals: the first in the list
+		const twins = checkZones([
+			{ key: 'first', name: 'A', match: { cities: ['Lyon'] }, fee: 1 },
+			{ key: 'second', name: 'B', match: { cities: ['lyon'] }, fee: 2 },
+		]);
+		expect(twins.ok && matchZone(twins.value, placeAt({ city: 'LYON' }))?.key).toBe('first');
 	});
 
 	it.each([
@@ -459,8 +634,11 @@ describe('delivery zones', () => {
 			'twice',
 		],
 		[[{ key: 'zz', name: '' }], 'name'],
-		[[{ key: 'zz', name: 'A', cities: 'x' }], 'cities'],
-		[[{ key: 'zz', name: 'A', areas: [''] }], 'areas'],
+		[[{ key: 'zz', name: 'A', match: { cities: 'x' } }], 'cities'],
+		[[{ key: 'zz', name: 'A', match: { areas: [''] } }], 'areas'],
+		[[{ key: 'zz', name: 'A', match: { postcodes: ['1'.repeat(21)] } }], 'postcodes'],
+		[[{ key: 'zz', name: 'A', match: { towns: ['x'] } }], 'match takes'],
+		[[{ key: 'zz', name: 'A', match: 'x' }], 'match lists'],
 		[[{ key: 'zz', name: 'A', fee: -1 }], 'fee'],
 		[[{ key: 'zz', name: 'A', freeOver: 1.5 }], 'free over'],
 		[[{ key: 'zz', name: 'A', minDays: 3, maxDays: 1 }], 'days'],
@@ -477,6 +655,12 @@ describe('taxes', () => {
 			ok: true,
 			value: [{ name: 'VAT', percent: 7.5, categoryIds: [], regions: [] }],
 		});
+		expect(checkTaxRules([{ name: 'VAT', percent: 7.5, regions: [{ country: ' GB ', postcode: 'sw1 a' }] }])).toEqual({
+			ok: true,
+			value: [
+				{ name: 'VAT', percent: 7.5, categoryIds: [], regions: [{ country: 'GB', region: '', city: '', postcode: 'SW1A' }] },
+			],
+		});
 		expect(checkTaxRules('x')).toMatchObject({ ok: false });
 		const errors = (/** @type {unknown} */ value) => {
 			const checked = checkTaxRules(value);
@@ -488,18 +672,44 @@ describe('taxes', () => {
 		expect(errors([{ name: 'T', percent: 1, categoryIds: [5] }])).toContain('categories');
 		expect(errors([{ name: 'T', percent: 1, regions: 'x' }])).toContain('regions');
 		expect(errors([{ name: 'T', percent: 1, regions: [{ city: 'X' }] }])).toContain('country');
+		expect(errors([{ name: 'T', percent: 1, regions: [{ country: 'US', region: 'x'.repeat(101) }] }])).toContain('country');
 	});
 
-	it('adds up the rules that apply', () => {
+	it('adds up the rules that apply, by country, region, city and postcode start', () => {
+		const at = (/** @type {Partial<import('../core/address.js').Place>} */ over) => placeAt(over);
+		const entry = (/** @type {Partial<import('../core/taxes.js').TaxRegion>} */ over) => ({
+			country: '',
+			region: '',
+			city: '',
+			postcode: '',
+			...over,
+		});
 		const rules = [
 			{ name: 'A', percent: 10, categoryIds: [], regions: [] },
 			{ name: 'B', percent: 5, categoryIds: ['cat_1'], regions: [] },
-			{ name: 'C', percent: 2, categoryIds: [], regions: [{ country: 'US', city: 'Town' }] },
-			{ name: 'D', percent: 90, categoryIds: [], regions: [{ country: 'US', city: '' }] },
+			{ name: 'C', percent: 2, categoryIds: [], regions: [entry({ country: 'US', city: 'Town' })] },
+			{ name: 'D', percent: 60, categoryIds: [], regions: [entry({ country: 'US' })] },
+			{ name: 'E', percent: 7, categoryIds: [], regions: [entry({ country: 'United States', region: 'California' })] },
+			{ name: 'F', percent: 1, categoryIds: [], regions: [entry({ country: 'US', postcode: '941' })] },
 		];
-		expect(taxPercent(rules, { categoryIds: ['cat_1'], region: { country: 'us', city: 'town' } })).toBe(100);
-		expect(taxPercent(rules, { categoryIds: [], region: { country: 'FR', city: 'Town' } })).toBe(10);
+		expect(taxPercent(rules, { categoryIds: ['cat_1'], region: at({ country: 'us', city: 'town' }) })).toBe(77);
+		expect(
+			taxPercent(rules, { categoryIds: [], region: at({ country: 'US', region: 'california', postalCode: '94105' }) }),
+		).toBe(78);
+		expect(taxPercent(rules, { categoryIds: [], region: at({ country: 'US', region: 'Texas', postalCode: '75001' }) })).toBe(
+			70,
+		);
+		expect(taxPercent(rules, { categoryIds: [], region: at({ country: 'FR', city: 'Town' }) })).toBe(10);
+		// no place: only the rules without regions; a place without a country: none of the regional rules
 		expect(taxPercent(rules, { categoryIds: ['cat_1'], region: null })).toBe(15);
+		expect(taxPercent(rules, { categoryIds: [], region: at({ city: 'Town' }) })).toBe(10);
+		// at most 100
+		expect(
+			taxPercent([...rules, { name: 'G', percent: 50, categoryIds: [], regions: [] }], {
+				categoryIds: [],
+				region: at({ country: 'US' }),
+			}),
+		).toBe(100);
 		expect(taxOf(1100, 10, true)).toBe(100);
 		expect(taxOf(1000, 10, false)).toBe(100);
 		expect(taxOf(0, 10, false)).toBe(0);

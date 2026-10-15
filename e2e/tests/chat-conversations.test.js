@@ -475,7 +475,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 	it('C3: when the AI fails, the merchant’s fallback answer is filled with the real deals; else the on-failure message', async () => {
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
 		const list = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/lists/fallback_answers`, {
-			items: [
+			value: [
 				{ intent: 'deals', language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' },
 				{ intent: 'other', language: '', keywords: ['hours'], text: 'We are open 9 to 5.' },
 			],
@@ -493,7 +493,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 			await guest('POST', '/v1/chat/messages', { text: 'what are your hours' });
 			expect(authors((await guest('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'We are open 9 to 5.']);
 			// nothing matches: the on-failure message
-			await guest('POST', '/v1/chat/messages', { text: 'can you ship to Quetta?' });
+			await guest('POST', '/v1/chat/messages', { text: 'can you ship to my city?' });
 			last = (await guest('GET', '/v1/chat')).json.messages.at(-1);
 			expect(last.author).toBe('system');
 			expect(last.text).toBe(strings['chat.aiUnavailable']);

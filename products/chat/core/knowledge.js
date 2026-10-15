@@ -4,6 +4,7 @@
  * scores them with BM25 (+ a per-source priority boost) and keeps passages covering a minimum share of the query.
  * @module
  */
+import { decodeEntities } from '@ss/contracts/text';
 import { tokenize, truncate } from './text.js';
 
 /** @typedef {{ id: string, sourceType: 'entry' | 'page', sourceId: string, title: string, url: string | null, text: string, terms: string[], tf: Record<string, number>, length: number, priority: number }} Chunk */
@@ -15,24 +16,6 @@ export const RETRIEVAL = Object.freeze({ size: 900, overlap: 120, maxChunks: 200
 /** Most knowledge entries and pages a website has. */
 export const MAX_ENTRIES = 2000;
 export const MAX_PAGES = 200;
-
-const ENTITIES = Object.freeze(
-	/** @type {Record<string, string>} */ ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }),
-);
-
-/**
- * Decode the common HTML entities and numeric references.
- * @param {string} text
- */
-export const decodeEntities = (text) =>
-	text.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (match, ref) => {
-		const name = String(ref).toLowerCase();
-		if (name.startsWith('#x') || name.startsWith('#')) {
-			const code = name.startsWith('#x') ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
-			return code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff) ? String.fromCodePoint(code) : ' ';
-		}
-		return ENTITIES[name] ?? match;
-	});
 
 /**
  * Visible text and title of an HTML page (scripts, styles, navigation chrome and comments removed; blocks become

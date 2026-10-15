@@ -14,7 +14,7 @@
  * conversation a staff alert links to (`?conversation=<id>` in the page address) opens on start.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, PAGE_MAX, STAFF_TYPES } from '../core/widgets.js';
 import {
 	attachmentNode,
@@ -31,15 +31,13 @@ import {
 	uploadFile,
 	whenOf,
 } from './common.js';
-import { element } from './dom.js';
 import { contextPart, leadsPart, savedReplies, staffPart } from './inbox-parts.js';
 import { messageBody } from './rich.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 import { createChecks } from './transport.js';
 
 /**
- * @param {{ host: HTMLElement, win: Window, api: import('./tickets.js').AdminApi,
+ * @param {{ host: HTMLElement, win: Window, api: import('@ss/app-kit/widget').AdminApi,
  *   config: import('./common.js').WidgetConfig, clock: Omit<import('./transport.js').Clock, 'win'>,
  *   onUnread: (count: number) => void }} input
  */
@@ -59,7 +57,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 	};
 	/**
 	 * What to tell staff when a call failed: the widget's own texts for each problem, never the server's detail.
-	 * @param {import('./common.js').Answer} answer
+	 * @param {import('@ss/app-kit/widget').Answer} answer
 	 * @param {string} [invalid] the text of a refused value (`validation_failed`) for this action
 	 */
 	const failure = (answer, invalid = 'common.error') => {

@@ -13,7 +13,7 @@ import {
 	methodReady,
 	methodView,
 } from '../core/methods.js';
-import { MAX_AMOUNT, amountOf, amountText, decimalSignOf, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
+import { amountOf, amountText, decimalSignOf } from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
 	checkCustomer,
@@ -38,28 +38,6 @@ import {
 import { createSnippets, gatewayAddresses } from '../core/snippets.js';
 
 describe('money', () => {
-	it('checks amounts and currencies', () => {
-		expect(isCurrency('EUR')).toBe(true);
-		expect(isCurrency('eur')).toBe(false);
-		expect(isAmount(1)).toBe(true);
-		expect(isAmount(0)).toBe(false);
-		expect(isAmount(1.5)).toBe(false);
-		expect(isAmount(MAX_AMOUNT + 1)).toBe(false);
-	});
-	it('turns minor units into decimals and back, by the currency exponent', () => {
-		expect(toDecimal(1050, 'EUR')).toBe('10.50');
-		expect(toDecimal(5, 'USD')).toBe('0.05');
-		expect(toDecimal(500, 'JPY')).toBe('500');
-		expect(toDecimal(1234, 'KWD')).toBe('1.234');
-		expect(fromDecimal('10.5', 'EUR')).toBe(1050);
-		expect(fromDecimal('10.500', 'EUR')).toBe(1050);
-		expect(fromDecimal(10, 'USD')).toBe(1000);
-		expect(fromDecimal('500', 'JPY')).toBe(500);
-		expect(fromDecimal('10.505', 'EUR')).toBeNull();
-		expect(fromDecimal('abc', 'EUR')).toBeNull();
-		expect(fromDecimal('0', 'EUR')).toBeNull();
-		expect(fromDecimal(undefined, 'EUR')).toBeNull();
-	});
 	it('reads amounts typed with the website’s decimal sign, never misreading a thousands separator (P6)', () => {
 		expect(decimalSignOf('en-US')).toBe('.');
 		expect(decimalSignOf('de-DE')).toBe(',');
@@ -342,6 +320,10 @@ describe('payments', () => {
 		expect(checkCustomer({ id: 'x'.repeat(200) })).toMatchObject({ ok: false, field: 'customer/id' });
 		expect(checkCustomer({ name: 'x'.repeat(200) })).toMatchObject({ ok: false, field: 'customer/name' });
 		expect(checkCustomer({ email: 'nope' })).toMatchObject({ ok: false, field: 'customer/email' });
+		// an address no sending path can deliver to is refused; a Unicode domain is kept in punycode (@ss/contracts/email)
+		for (const email of ['ana@example.c', 'ana..x@example.com', 'ana@exa_mple.com'])
+			expect(checkCustomer({ email })).toMatchObject({ ok: false, field: 'customer/email' });
+		expect(checkCustomer({ email: 'Ana@Bücher.Example' })).toEqual({ ok: true, value: { email: 'ana@xn--bcher-kva.example' } });
 		expect(checkCustomer({ phone: '0123' })).toMatchObject({ ok: false, field: 'customer/phone' });
 	});
 	it('checks metadata', () => {

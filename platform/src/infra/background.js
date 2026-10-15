@@ -15,7 +15,7 @@
  */
 import { runInRequestScope } from './request-scope.js';
 
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 /** @typedef {import('./http.js').AfterResponse} AfterResponse */
 /** @typedef {import('./http.js').AfterScheduler} AfterScheduler */
 

@@ -13,12 +13,12 @@
  * off or the merchant database is not connected.
  * @module
  */
-import { viewerOf } from '@ss/app-kit/widget';
+import { createTicketSource, viewerOf } from '@ss/app-kit/widget';
+import { noticeHiddenOn } from '../core/config.js';
 import { granted } from '../core/consent.js';
 import { VITALS } from '../core/events.js';
-import { pathMatches } from '../core/paths.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
-import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAnalyticsDashboard } from './analytics-dashboard.js';
 import {
 	cameFrom,
@@ -36,7 +36,6 @@ import { NOTICE_STORAGE_KEY, mountNoticeBar } from './notice-bar.js';
 import { mountRedirects } from './redirects.js';
 import { mountSeoChecklist } from './seo-checklist.js';
 import { createTags } from './tags.js';
-import { createTicketSource } from './tickets.js';
 
 /** After a single-page app's navigation, the new page's 404 marker is read this much later (once it is drawn). */
 const NOT_FOUND_DELAY_MS = 1000;
@@ -54,6 +53,7 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @property {Partial<import('@ss/contracts/format').Format>} format how money and dates look (PLAN 0.8.10 K7)
  * @property {string} timeZone the business.json time zone (UTC without it; K8)
  * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {import('../core/config.js').WidgetSettings} settings what the page script needs
  */
 
@@ -82,15 +82,13 @@ export const startWidget = ({ window: win, script }) => {
 	const base = new URL(script?.src ?? win.location.href).origin;
 	const token = script?.dataset.token;
 	const now = () => Date.now();
-	/** @param {keyof typeof WIDGET_FEATURES} key */
+	/** @param {string} key */
 	const hosts = (key) => /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)]);
 	/** @type {typeof globalThis.fetch} */
 	const request = (input, init) => win.fetch(input, init);
-	/** @param {WidgetConfig} config @param {keyof typeof WIDGET_FEATURES} key */
-	const on = (config, key) => WIDGET_FEATURES[key].some((feature) => config.features.includes(feature));
 	/**
 	 * A host element for a visitor widget: the one the merchant placed, else a new one.
-	 * @param {keyof typeof WIDGET_FEATURES} key @param {'start' | 'end'} where
+	 * @param {string} key @param {'start' | 'end'} where
 	 */
 	const hostFor = (key, where) => {
 		const placed = hosts(key)[0];
@@ -198,7 +196,7 @@ export const startWidget = ({ window: win, script }) => {
 		consent.onChange(follow);
 		current = { config, collector, tags };
 
-		if (on(config, 'consent_banner') && config.settings.consent.banner)
+		if (config.widgets.includes('consent_banner') && config.settings.consent.banner)
 			banner = mountConsentBanner({ host: hostFor('consent_banner', 'end'), config, consent });
 
 		/** @type {(() => void) | null} takes the notice bar away while it shows */
@@ -209,8 +207,8 @@ export const startWidget = ({ window: win, script }) => {
 		 */
 		const showNotice = () => {
 			const notice = config.settings.notice;
-			if (!on(config, 'notice_bar') || !notice) return;
-			if (notice.hideOnPages.some((pattern) => pathMatches(pattern, path()))) {
+			if (!config.widgets.includes('notice_bar') || !notice) return;
+			if (noticeHiddenOn(notice, path())) {
 				shown?.();
 				shown = null;
 			} else if (!shown && (notice.dismissFor === 'page' || visits.getItem(NOTICE_STORAGE_KEY) !== notice.text))
@@ -293,9 +291,9 @@ export const startWidget = ({ window: win, script }) => {
 		for (const task of waiting) task(current);
 	})();
 
-	/** @param {{ getTicket: import('./tickets.js').GetTicket }} options */
+	/** @param {{ getTicket: import('@ss/app-kit/widget').GetTicket }} options */
 	const admin = async ({ getTicket }) => {
-		/** @type {import('./tickets.js').Ticket} */
+		/** @type {import('@ss/app-kit/widget').Ticket} */
 		let first;
 		try {
 			first = await getTicket();
@@ -314,12 +312,12 @@ export const startWidget = ({ window: win, script }) => {
 		});
 		const api = { base, tickets, fetch: request };
 		const viewer = viewerOf(win);
-		if (on(config, 'analytics_dashboard'))
+		if (config.widgets.includes('analytics_dashboard'))
 			for (const host of hosts('analytics_dashboard')) mountAnalyticsDashboard({ host, api, config, viewer, now });
-		if (on(config, 'seo_checklist'))
+		if (config.widgets.includes('seo_checklist'))
 			for (const host of hosts('seo_checklist'))
 				mountSeoChecklist({ host, api, config, viewer, now, open: (url) => void win.open(url, '_blank', 'noopener') });
-		if (on(config, 'redirects'))
+		if (config.widgets.includes('redirects'))
 			for (const host of hosts('redirects')) mountRedirects({ host, api, config, viewer, download: save });
 	};
 

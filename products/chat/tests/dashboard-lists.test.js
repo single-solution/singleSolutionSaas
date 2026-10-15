@@ -8,14 +8,27 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render, type } from '@ss/ui/testing';
+import { DashboardProvider } from '@ss/ui/dashboard';
+import manifest from '../manifest.json' with { type: 'json' };
 import { FallbackAnswersEditor } from '../app/dashboard/lists.js';
 import { TABS } from '../app/dashboard/tabs.js';
+import { TEXTS } from '../app/dashboard/texts.js';
 import { checkFallbackAnswers } from '../core/fallback.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
 const LIST = `${BASE}/lists/fallback_answers`;
 const DEALS = { intent: 'deals', language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' };
+
+/**
+ * A dashboard piece inside the dashboard's provider (its words and feature names), as the page renders it.
+ * @param {import('react').ReactNode} node
+ */
+const inDashboard = (node) => (
+	<DashboardProvider manifest={manifest} texts={TEXTS}>
+		{node}
+	</DashboardProvider>
+);
 
 /** The lists the editor saved. @type {any[]} */
 let saved = [];
@@ -34,12 +47,13 @@ const serve = (more = {}) => {
 			if (path === LIST) {
 				if (init.method === 'PUT') {
 					const body = JSON.parse(String(init.body));
-					saved.push(body.items);
-					const checked = checkFallbackAnswers(body.items);
-					if (!checked.ok) return new Response(JSON.stringify({ status: 422, errors: checked.errors }), { status: 422 });
+					saved.push(body.value);
+					const checked = checkFallbackAnswers(body.value);
+					const errors = checked.ok ? [] : checked.errors.map((message) => ({ path: '/value', message }));
+					if (!checked.ok) return new Response(JSON.stringify({ status: 422, errors }), { status: 422 });
 					items = checked.value;
 				}
-				return new Response(JSON.stringify({ items }), { status: 200 });
+				return new Response(JSON.stringify({ value: items }), { status: 200 });
 			}
 			if (Object.hasOwn(more, path)) return new Response(JSON.stringify(more[path]), { status: 200 });
 			return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
@@ -80,7 +94,7 @@ describe('the fallback answers editor (C3)', () => {
 	it('adds an answer, refuses what the server would, and saves the list with one PUT', async () => {
 		serve();
 		const { container } = render(
-			<FallbackAnswersEditor websiteId={WEBSITE} languages={['en', 'fr']} on={(key) => key === 'shop_deals'} />,
+			inDashboard(<FallbackAnswersEditor websiteId={WEBSITE} languages={['en', 'fr']} on={(key) => key === 'shop_deals'} />),
 		);
 		await settle();
 		// the saved answer
@@ -133,7 +147,7 @@ describe('the fallback answers editor (C3)', () => {
 
 	it('a comparison answer needs the words between the two products (C18)', async () => {
 		serve();
-		const { container } = render(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />);
+		const { container } = render(inDashboard(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />));
 		await settle();
 		click(button(container, 'Add'));
 		type(field(container, 'For', 1), 'compare');
@@ -151,7 +165,7 @@ describe('the fallback answers editor (C3)', () => {
 
 	it('keeps a saved language Language lock no longer lists; moves and removes answers', async () => {
 		serve();
-		const { container } = render(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />);
+		const { container } = render(inDashboard(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />));
 		await settle();
 		click(button(container, 'Add'));
 		type(field(container, 'Answer', 1), 'Hello!');
@@ -167,9 +181,9 @@ describe('the fallback answers editor (C3)', () => {
 		cleanup();
 		serve();
 		vi.mocked(fetch).mockImplementationOnce(
-			async () => new Response(JSON.stringify({ items: [{ ...DEALS, language: 'ur-Latn' }] }), { status: 200 }),
+			async () => new Response(JSON.stringify({ value: [{ ...DEALS, language: 'ur-Latn' }] }), { status: 200 }),
 		);
-		const again = render(<FallbackAnswersEditor websiteId="web_2" languages={['en']} on={() => true} />);
+		const again = render(inDashboard(<FallbackAnswersEditor websiteId="web_2" languages={['en']} on={() => true} />));
 		await settle();
 		expect(field(again.container, 'Language').value).toBe('ur-Latn');
 		expect(optionsOf(field(again.container, 'Language'))).toContain('English (en)');
@@ -199,13 +213,16 @@ describe('Settings → Assistant', () => {
 		});
 		const Settings = TABS.settings;
 		const { container } = render(
-			<Settings
-				websiteId={WEBSITE}
-				who={{ kind: 'merchant', id: 'm_1', name: 'Merchant' }}
-				support={{ email: 'help@example.com', phone: '' }}
-				portal="https://portal.example.com"
-				open={() => undefined}
-			/>,
+			inDashboard(
+				<Settings
+					websiteId={WEBSITE}
+					domain="shop.example.com"
+					who={{ kind: 'merchant', id: 'm_1', name: 'Merchant' }}
+					support={{ email: 'help@example.com', phone: '' }}
+					portal="https://portal.example.com"
+					open={() => undefined}
+				/>,
+			),
 		);
 		await settle();
 		expect(container.textContent).toContain('Fallback answers');

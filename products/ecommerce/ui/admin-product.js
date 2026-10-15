@@ -8,13 +8,12 @@
  * `./admin-product-editor.js`.
  * @module
  */
-import { wholeOf } from './admin-kit.js';
 import { faqsEditor, paragraphsOf, richNodes, seoChecks, seoFacts } from './admin-fields.js';
 import { digitalCard, photosDialog, videoDialog, videoText } from './admin-media.js';
 import { card, deleteEntry, detailHead, masonryOf, yesNo } from './admin-screen.js';
 import { variantLabel } from './admin-taxonomy.js';
 import { partsOf, showsTypes, typeLabel, typeNamed } from './admin-types.js';
-import { generateDialog, stockText } from './admin-variants.js';
+import { generateDialog, stockAmount, stockText } from './admin-variants.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
@@ -45,6 +44,8 @@ const stockDialog = (kit, product, context) => {
 	const { locations } = context.lookups.state;
 	/** @type {any[]} */
 	const variants = product.variants;
+	// sold in a unit of its own: typed in its unit (thousandths in the API)
+	const measure = product.type?.measure ?? null;
 	const rows = variants.map((variant) => {
 		const label = variantLabel(kit, variant);
 		const mode = kit.select(
@@ -55,7 +56,9 @@ const stockDialog = (kit, product, context) => {
 			'adjust',
 			{ 'aria-label': t('catalogAdmin.howOf', { variant: label }) },
 		);
-		const units = kit.input('', { type: 'number', step: '1', 'aria-label': t('catalogAdmin.unitsOf', { variant: label }) });
+		const units = measure
+			? kit.input('', { inputmode: 'decimal', 'aria-label': t('catalogAdmin.unitsOf', { variant: label }) })
+			: kit.input('', { type: 'number', step: '1', 'aria-label': t('catalogAdmin.unitsOf', { variant: label }) });
 		const location = kit.select(
 			locations.map((item) => ({ value: item.id, label: item.name })),
 			'',
@@ -81,7 +84,7 @@ const stockDialog = (kit, product, context) => {
 				],
 				rows.map((row) => [
 					row.label,
-					stockText(kit, row.variant, locations),
+					stockText(kit, row.variant, locations, measure),
 					row.mode,
 					row.units,
 					...(has('multi_location') ? [row.location] : []),
@@ -94,7 +97,7 @@ const stockDialog = (kit, product, context) => {
 			/** @type {Array<Record<string, unknown>>} */
 			const changes = [];
 			for (const row of rows) {
-				const value = wholeOf(row.units.value);
+				const value = stockAmount(row.units.value, measure);
 				if (Number.isNaN(value)) return t('admin.checkNumbers');
 				const soldOut = row.soldOut.checked !== (row.variant.soldOut === true);
 				if (value === null && !soldOut) continue;
@@ -276,6 +279,7 @@ export const productDetail = (kit, product, context, message = '') => {
 								generateDialog(kit, {
 									productId: product.id,
 									done: (next, added) => context.show(next, t('catalogAdmin.generated', { added })),
+									measure: product.type?.measure ?? null,
 								}),
 						}
 					: null,
@@ -351,7 +355,7 @@ export const productDetail = (kit, product, context, message = '') => {
 						variant.compareAtPrice
 							? `${kit.money(variant.price)} (${kit.money(variant.compareAtPrice)})`
 							: kit.money(variant.price),
-						stockText(kit, variant, lookups.state.locations),
+						stockText(kit, variant, lookups.state.locations, product.type?.measure ?? null),
 						...(has('grades_serials') ? [variant.grade ? (grades.get(variant.grade) ?? variant.grade) : ''] : []),
 						!variant.active
 							? kit.badge(t('catalogAdmin.offSale'))

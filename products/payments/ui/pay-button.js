@@ -8,7 +8,7 @@
  * @module
  */
 import { element, formatText, mountWidget } from '@ss/app-kit/widget';
-import { toDecimal } from '../core/money.js';
+import { toDecimal } from '../core/payments.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 

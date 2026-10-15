@@ -15,9 +15,9 @@
  * cities, Web Vitals per page and 404 referrers.
  * @module
  */
-import { zonedDay } from '@ss/contracts/format';
+import { isAmount, isCurrency, zonedDay } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { FUNNEL_STEPS, VISIT_IDLE_MS } from './widgets.js';
-import { isAmount, isCurrency } from './money.js';
 
 /** The feature each event type belongs to. */
 export const EVENT_FEATURES = Object.freeze({
@@ -75,9 +75,6 @@ export const UNKNOWN = '(unknown)';
  * @property {{ session: string, browser: string | null, os: string | null, city: string | null }} [visitor] the session
  *   facts kept with the raw event (G3)
  */
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A page path: the path only (no query string or fragment), at most 300 characters, or null.
@@ -226,6 +223,16 @@ export const ratingOf = (name, value) => {
 };
 
 /**
+ * A whole number from `min` to `max`, else null.
+ * @param {unknown} value
+ * @param {number} min
+ * @param {number} max
+ * @returns {number | null}
+ */
+const wholeIn = (value, min, max) =>
+	typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max ? value : null;
+
+/**
  * The items of a funnel event: ids and quantities only.
  * @param {unknown} value
  */
@@ -236,7 +243,7 @@ const itemsOf = (value) =>
 		.map((item) => ({
 			id: textOf(item.id, 80),
 			variantId: textOf(item.variantId, 80) || null,
-			quantity: Number.isSafeInteger(item.quantity) && item.quantity > 0 && item.quantity <= 10_000 ? item.quantity : 1,
+			quantity: wholeIn(item.quantity, 1, 10_000) ?? 1,
 		}))
 		.filter((item) => item.id !== '');
 
@@ -267,7 +274,7 @@ export const checkEvent = (raw, context) => {
 		more.push({ metric: 'not_found_from', key: `${kept.path}\n${from ?? DIRECT}`, count: 1, sum: 0 });
 	}
 	if (visitor !== null && kept.type === 'page_view') {
-		const page = Number.isSafeInteger(raw.page) && raw.page > 0 && raw.page <= 10_000 ? Number(raw.page) : null;
+		const page = wholeIn(raw.page, 1, 10_000);
 		const gap =
 			typeof raw.gap === 'number' && Number.isFinite(raw.gap) && raw.gap >= 0 && raw.gap <= VISIT_IDLE_MS
 				? Math.round(raw.gap)
@@ -303,7 +310,7 @@ const checkBase = (raw, { domain, country }) => {
 	if (path === null) return null;
 	if (type === 'page_view') {
 		const visit = raw.visit === true;
-		const device = DEVICES.includes(raw.device) ? String(raw.device) : 'desktop';
+		const device = typeof raw.device === 'string' && DEVICES.includes(raw.device) ? raw.device : 'desktop';
 		const referrer = hostOf(raw.referrer);
 		const external = referrer !== null && referrer !== domain && referrer !== `www.${domain}` && `www.${referrer}` !== domain;
 		const campaign = isObject(raw.campaign) ? raw.campaign : {};
@@ -349,7 +356,7 @@ const checkBase = (raw, { domain, country }) => {
 	if (type === 'search') {
 		const term = textOf(raw.term, 100).toLowerCase();
 		if (term === '') return null;
-		const results = Number.isSafeInteger(raw.results) && raw.results >= 0 ? raw.results : null;
+		const results = wholeIn(raw.results, 0, Number.MAX_SAFE_INTEGER);
 		return {
 			type,
 			path,

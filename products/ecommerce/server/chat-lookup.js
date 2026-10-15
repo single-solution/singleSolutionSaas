@@ -11,7 +11,8 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
-import { categoriesOf } from '../adapters/catalog-store.js';
+import { categoriesOf, locationsOf, productTypes } from '../adapters/catalog-store.js';
+import { ADDRESS_LIMITS } from '../core/address.js';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
@@ -19,7 +20,8 @@ import { htmlToText } from '../core/catalog-content.js';
 import { topField } from '../core/catalog-query.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
-import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
+import { CONTEXT_BASICS, CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
+import { paymentOptions } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { byShowOrder } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
@@ -42,6 +44,7 @@ import {
 	variantFilter,
 	warrantyOf,
 } from '../core/lookup.js';
+import { measureView, toThousandths } from '../core/measure.js';
 import { COLLECTIONS } from '../core/model.js';
 import { PAYMENT_METHODS, customerOwner, isCustomerId } from '../core/orders.js';
 import { isLoyaltyMember } from '../core/loyalty.js';
@@ -76,28 +79,47 @@ const firstNameOf = (name) =>
 		.split(/\s+/)[0] ?? '';
 
 /**
- * Read a Chat quote's query (E37): `variantId`, `quantity` (1–5), `paymentMethod` and `city`.
+ * Read a Chat quote's query (E37): `variantId`, `quantity` (1–5 pieces; for an item sold in a unit of its own a
+ * number of its units with at most three decimals, such as `2.5`, converted exactly to thousandths — its least when
+ * left out), `paymentMethod` and where it goes (`country`, `region`, `city`, `area`, `postalCode`; dynamic model §5).
  * @param {Record<string, unknown>} query
+ * @param {import('../core/measure.js').Measure | null} measure the item's measure (none: pieces)
  * @returns {{ variantId: string | null, quantity: number, paymentMethod: import('../core/model.js').PaymentMethod | null,
- *   city: string }}
+ *   place: Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string> }}
  */
-const quoteQuery = (query) => {
+const quoteQuery = (query, measure) => {
 	const variantId = query.variantId === undefined || query.variantId === '' ? null : query.variantId;
 	if (variantId !== null && (typeof variantId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(variantId)))
 		throw invalidQuery('variantId', 'variantId is a variant id.');
-	const quantity = query.quantity === undefined || query.quantity === '' ? 1 : Number(query.quantity);
-	if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUOTE_QUANTITY || !/^\d+$/.test(String(query.quantity ?? 1)))
-		throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUOTE_QUANTITY}.`);
+	const given = query.quantity === undefined || query.quantity === '' ? null : query.quantity;
+	/** @type {number} */
+	let quantity;
+	if (measure) {
+		const read = given === null ? measure.min : toThousandths(given);
+		if (read === null)
+			throw invalidQuery('quantity', `quantity is a number of ${measure.unit} with at most three decimals, such as 2.5.`);
+		quantity = read;
+	} else {
+		quantity = given === null ? 1 : Number(given);
+		if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUOTE_QUANTITY || !/^\d+$/.test(String(given ?? 1)))
+			throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUOTE_QUANTITY}.`);
+	}
 	const method = query.paymentMethod === undefined || query.paymentMethod === '' ? null : query.paymentMethod;
 	if (method !== null && !PAYMENT_METHODS.includes(/** @type {any} */ (method)))
 		throw invalidQuery('paymentMethod', `paymentMethod is one of ${PAYMENT_METHODS.join(', ')}.`);
-	const city = typeof query.city === 'string' ? query.city.trim() : '';
-	if (city.length > 80) throw invalidQuery('city', 'city is at most 80 characters.');
+	/** @type {Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string>} */
+	const place = { country: '', region: '', city: '', area: '', postalCode: '' };
+	for (const field of /** @type {Array<keyof typeof place>} */ (Object.keys(place))) {
+		const value = typeof query[field] === 'string' ? String(query[field]).trim() : '';
+		if (value.length > ADDRESS_LIMITS[field])
+			throw invalidQuery(field, `${field} is at most ${ADDRESS_LIMITS[field]} characters.`);
+		place[field] = value;
+	}
 	return {
 		variantId: /** @type {string | null} */ (variantId),
 		quantity,
 		paymentMethod: /** @type {import('../core/model.js').PaymentMethod | null} */ (method),
-		city,
+		place,
 	};
 };
 
@@ -122,6 +144,7 @@ const CARD_FIELDS = Object.freeze({
 	slug: 1,
 	name: 1,
 	kind: 1,
+	typeKey: 1,
 	media: 1,
 	variants: 1,
 	trackStock: 1,
@@ -207,13 +230,29 @@ export const createChatLookup = (product, service, media) => {
 			date,
 			/** @param {ProductRecord} item */
 			labels: (item) => gradeLabels([...gradesOf(item).values()]),
-			/** @param {ProductRecord} item */
-			stockLeft: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
-				stockLeftOf(variant, item.trackStock, stock),
+			/** @param {ProductRecord} item @param {import('../core/measure.js').Measure | null} [measure] */
+			stockLeft:
+				(item, measure = null) =>
+				(/** @type {import('../core/model.js').VariantRecord} */ variant) =>
+					stockLeftOf(variant, item.trackStock, stock, measure),
 			/** @param {ProductRecord} item */
 			warranty: (item) => (/** @type {import('../core/model.js').VariantRecord} */ variant) =>
 				warrantyOf(item, variant, { grades: gradesOf(item), fallback: Number(returns.warrantyDays ?? 0) }),
 		};
+	};
+
+	/**
+	 * How the products given are measured (their type's `measure`, while Sell in any unit is on), by id; none: pieces.
+	 * @param {Site} s @param {WebsiteData} data @param {ProductRecord[]} items
+	 * @returns {Promise<Map<string, import('../core/measure.js').Measure>>}
+	 */
+	const measuresOf = async (s, data, items) => {
+		const types = s.has('measured_sales') ? await s.list('item_types') : [];
+		if (!types.some((/** @type {any} */ type) => type.elements.measure)) return new Map();
+		const typed = await productTypes(data, items, types);
+		return new Map(
+			[...typed].flatMap(([id, type]) => (type.elements.measure ? [/** @type {const} */ ([id, type.elements.measure])] : [])),
+		);
 	};
 
 	/**
@@ -224,10 +263,11 @@ export const createChatLookup = (product, service, media) => {
 	 * @param {import('../core/lookup.js').ChatFilters | null} [filters]
 	 */
 	const cards = async (s, data, items, filters = null) => {
-		const [rules, shownOf] = await Promise.all([cardRules(s), pricesFor(s, data)]);
+		const [rules, shownOf, measures] = await Promise.all([cardRules(s), pricesFor(s, data), measuresOf(s, data, items)]);
 		return Promise.all(
 			items.map(async (item) => {
 				const shown = await shownOf(item);
+				const measure = measures.get(item.id) ?? null;
 				return productCard(
 					item,
 					{
@@ -237,7 +277,8 @@ export const createChatLookup = (product, service, media) => {
 						money: rules.money,
 						shown,
 						grades: rules.labels(item),
-						stockLeft: rules.stockLeft(item),
+						stockLeft: rules.stockLeft(item, measure),
+						measure,
 					},
 					filters ? matchingVariant(item, filters, shown) : null,
 				);
@@ -419,7 +460,7 @@ export const createChatLookup = (product, service, media) => {
 	 */
 	const detailsOf = async (s, data, item, shown) => {
 		const specIds = Object.keys(item.specs ?? {});
-		const [brands, attributes, rules] = await Promise.all([
+		const [brands, attributes, rules, measures] = await Promise.all([
 			brandNames(data, [item.brandId]),
 			specIds.length === 0
 				? []
@@ -432,7 +473,9 @@ export const createChatLookup = (product, service, media) => {
 						)
 						.toArray(),
 			cardRules(s),
+			measuresOf(s, data, [item]),
 		]);
+		const measure = measures.get(item.id) ?? null;
 		return productDetails(item, {
 			currency: s.currency,
 			image: await media.mediaUrl(s, item.media?.[0]?.key),
@@ -442,7 +485,8 @@ export const createChatLookup = (product, service, media) => {
 			brand: item.brandId ? (brands.get(item.brandId) ?? null) : null,
 			attributes: new Map(attributes.map((row) => [String(row.id), { name: String(row.name), unit: String(row.unit) }])),
 			grades: rules.labels(item),
-			stockLeft: rules.stockLeft(item),
+			stockLeft: rules.stockLeft(item, measure),
+			measure,
 			warrantyDays: rules.warranty(item),
 		});
 	};
@@ -456,17 +500,20 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (1–5), priced
-	 * exactly as the cart prices it for the payment method asked (deals, fees, delivery to `city` and its free-delivery
-	 * threshold; a forwarded sign-in adds role pricing) (E37), with the variant's own "was" price struck through on the
-	 * product page.
+	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (1–5, or a
+	 * decimal number of the units of an item sold in a unit of its own), priced exactly as the cart prices it for the
+	 * payment method asked (deals, fees, delivery to the place asked — `country`, `region`, `city`, `area`, `postalCode`
+	 * — with its zone's free-delivery threshold and taxes; a forwarded sign-in adds role pricing) (E37), with the
+	 * variant's own "was" price struck through on the product page. A measured item's prices and savings are per unit,
+	 * its `quantity` thousandths of the unit (`measure.quantityText` in units).
 	 * @param {any} ctx
 	 */
 	const quote = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const item = await shownProduct(s, data, ctx.params.id);
-		const { variantId, quantity, paymentMethod, city } = quoteQuery(ctx.query);
+		const measure = (await measuresOf(s, data, [item])).get(item.id) ?? null;
+		const { variantId, quantity, paymentMethod, place } = quoteQuery(ctx.query, measure);
 		const variant = variantId
 			? item.variants.find((candidate) => candidate.id === variantId && candidate.active)
 			: cardVariant(item, await (await pricesFor(s, data))(item));
@@ -478,7 +525,7 @@ export const createChatLookup = (product, service, media) => {
 				lines: [{ productId: item.id, variantId: variant.id, quantity, slot: null }],
 				coupon: '',
 				points: 0,
-				delivery: { method: paymentMethod === 'pickup' ? 'pickup' : null, city, area: '', country: '', locationId: null },
+				delivery: { method: paymentMethod === 'pickup' ? 'pickup' : null, ...place, locationId: null },
 				payment: paymentMethod,
 			},
 			shopper,
@@ -490,8 +537,9 @@ export const createChatLookup = (product, service, media) => {
 		const priced = q.prices[0];
 		const unitPrice = variant.price;
 		const was = listShown(variant).was;
-		const dealOff = Math.min(unitPrice * quantity, priced?.promotions ?? 0);
-		const savings = Math.floor(dealOff / quantity);
+		const dealOff = Math.min(priced?.gross ?? 0, priced?.promotions ?? 0);
+		// what the deals take off one piece, or one unit of a measured item
+		const savings = measure ? Math.floor((dealOff * 1000) / quantity) : Math.floor(dealOff / quantity);
 		const offers = q.promotions?.applied.filter((entry) => entry.kind === 'deal') ?? [];
 		const deals = s.has('deals') ? (await loadOffers(data, { now: service.now(), deals: true })).deals : [];
 		const { date } = await s.format();
@@ -502,6 +550,7 @@ export const createChatLookup = (product, service, media) => {
 			productId: item.id,
 			variantId: variant.id,
 			quantity,
+			measure: measureView(quantity, measure),
 			price: unitPrice,
 			priceText: text(unitPrice),
 			compareAtPrice: was,
@@ -647,6 +696,8 @@ export const createChatLookup = (product, service, media) => {
 			loyaltyPoints: points ?? 0,
 			city: await cityOf(data, shopper.id, profile),
 			area: profile?.area ?? '',
+			region: profile?.region ?? '',
+			country: profile?.country ?? '',
 		};
 	};
 
@@ -665,7 +716,99 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * GET /v1/chat/context?productId=: the live store context of Chat's AI replies (E37, C1): the policies, the 10
+	 * The shop basics of the context (parity P5-17): the payment methods offered (in the merchant's order, as a cart
+	 * with delivery lists them) with the merchant's notes, the cash handling fee, the delivery fee where no zone matches
+	 * and each zone's (with its free-delivery amount), the pickup points, the loyalty earn rate, the top categories
+	 * shoppers see, the return window and the warranty. Each part is there only while its feature is on.
+	 * @param {Site} s @param {WebsiteData} data
+	 * @returns {Promise<import('../core/chat-context.js').ShopBasics>}
+	 */
+	const basicsOf = async (s, data) => {
+		const checkoutOn = s.has('checkout');
+		const zonesOn = checkoutOn && s.has('delivery_zones');
+		const [checkout, cod, zones, zoneList, locations, loyalty, returns, categories, payments, { money }] = await Promise.all([
+			checkoutOn ? s.values('checkout') : Promise.resolve(null),
+			checkoutOn && s.has('cod') ? s.values('cod') : Promise.resolve(null),
+			zonesOn ? s.values('delivery_zones') : Promise.resolve(null),
+			zonesOn ? s.list('delivery_zones') : Promise.resolve([]),
+			zonesOn && s.has('multi_location') ? locationsOf(data) : Promise.resolve([]),
+			s.has('loyalty') ? s.values('loyalty') : Promise.resolve(null),
+			s.has('returns') ? s.values('returns') : Promise.resolve(null),
+			data
+				.collection(COLLECTIONS.categories)
+				.find(
+					{ websiteId: data.websiteId, parentId: null, status: { $ne: 'hidden' } },
+					{ projection: { _id: 0, name: 1 }, sort: { sort: 1, name: 1 }, limit: CONTEXT_BASICS },
+				)
+				.toArray(),
+			checkoutOn ? product.connections.value(s.websiteId, 'payments') : Promise.resolve(null),
+			s.format(),
+		]);
+		/** @param {number} amount */
+		const text = (amount) => money(amount, s.currency);
+		/** @param {unknown} fee @param {unknown} freeOver */
+		const feeOf = (fee, freeOver) => ({
+			fee: Number(fee) || 0,
+			feeText: text(Number(fee) || 0),
+			freeOver: Number(freeOver) || 0,
+			freeOverText: text(Number(freeOver) || 0),
+		});
+		// one pickup point of the settings while stock has no locations, else the stock locations that take pickups (E22)
+		const pickup = s.has('multi_location')
+			? /** @type {import('../core/model.js').LocationRecord[]} */ (locations)
+					.filter((location) => location.pickup)
+					.sort((a, b) => a.sort - b.sort)
+					.map((location) => ({ name: location.name, address: '', hours: '' }))
+			: zones?.pickupEnabled === true
+				? [
+						{
+							name: String(zones.pickupName ?? ''),
+							address: String(zones.pickupAddress ?? ''),
+							hours: String(zones.pickupHours ?? ''),
+						},
+					]
+				: [];
+		/** @type {Record<string, unknown>} */
+		const notes = checkout
+			? {
+					cod: checkout.noteCod,
+					online: checkout.noteOnline,
+					bank_transfer: checkout.noteBankTransfer,
+					pickup: checkout.notePickup,
+				}
+			: {};
+		const codOn = cod !== null && cod.enabled !== false;
+		const methods = checkout
+			? paymentOptions({
+					offered: checkout.paymentMethods,
+					order: checkout.paymentOrder,
+					paymentsConnected: payments !== null,
+					bankManual: checkout.bankTransferVia === 'manual',
+					cod: { on: codOn, settings: /** @type {any} */ (cod ?? {}) },
+					pickupPossible: pickup.length > 0,
+					deliveryMethod: 'delivery',
+					digital: false,
+					total: 0,
+					rtoCount: 0,
+				}).map((option) => ({ method: option.method, note: String(notes[option.method] ?? '') }))
+			: [];
+		return {
+			payments: methods,
+			codFeePercent: codOn ? Number(cod?.feePercent) || 0 : 0,
+			delivery: zones ? feeOf(zones.defaultFee, zones.defaultFreeOver) : null,
+			zones: /** @type {Array<{ name: string, fee: number, freeOver: number }>} */ (zoneList)
+				.slice(0, CONTEXT_BASICS)
+				.map((zone) => ({ name: String(zone.name), ...feeOf(zone.fee, zone.freeOver) })),
+			pickup,
+			earnPercent: loyalty ? Number(loyalty.earnPercent) || 0 : null,
+			categories: categories.map((category) => String(category.name)),
+			returnDays: returns ? Number(returns.returnDays) || 0 : null,
+			warrantyDays: returns ? Number(returns.warrantyDays) || 0 : null,
+		};
+	};
+
+	/**
+	 * GET /v1/chat/context?productId=: the live store context of Chat's AI replies (E37, C1): the shop basics, the policies, the 10
 	 * newest products with their shown price per grade, the deals table, the product named (id or slug) and, with a forwarded
 	 * sign-in, the visitor's first name, city and points; `text` (at most 6,000 characters) holds all of it for the AI's
 	 * instructions. Each part is there only while its feature is on.
@@ -678,7 +821,7 @@ export const createChatLookup = (product, service, media) => {
 		const ref = typeof ctx.query.productId === 'string' && ctx.query.productId ? ctx.query.productId : null;
 		if (ref !== null && !/^[A-Za-z0-9_-]{1,120}$/.test(ref))
 			throw service.invalid('productId', 'productId is a product id or slug.');
-		const [business, rules, shownOf, filled, newest, dealList, viewed, shopper] = await Promise.all([
+		const [business, rules, shownOf, filled, newest, dealList, viewed, shopper, basics] = await Promise.all([
 			s.business(),
 			cardRules(s),
 			pricesFor(s, data),
@@ -692,6 +835,7 @@ export const createChatLookup = (product, service, media) => {
 			s.has('deals') ? dealRows(s, data, CONTEXT_DEALS) : Promise.resolve([]),
 			ref === null ? Promise.resolve(null) : shownProduct(s, data, ref).catch(() => null),
 			service.shopper(s),
+			basicsOf(s, data),
 		]);
 		const product = viewed ? await detailsOf(s, data, viewed, await shownOf(viewed)) : null;
 		/** @param {number} amount */
@@ -712,6 +856,10 @@ export const createChatLookup = (product, service, media) => {
 				})),
 			})),
 		);
+		// prices per unit of the products sold in a unit of their own
+		const units = new Map(
+			[...(await measuresOf(s, data, /** @type {ProductRecord[]} */ (newest)))].map(([id, measure]) => [id, measure.unit]),
+		);
 		const policies = filled
 			? Object.entries(filled.policies).map(([key, value]) => ({
 					key,
@@ -725,9 +873,10 @@ export const createChatLookup = (product, service, media) => {
 			visitor = { firstName: firstNameOf(shopper.name), city: await cityOf(data, shopper.id, profile), points };
 		}
 		return {
-			text: contextText({ business: business.name, policies, products, deals: dealList, product, visitor }),
+			text: contextText({ business: business.name, basics, policies, products, deals: dealList, product, visitor, units }),
 			business: business.name,
 			currency: s.currency,
+			basics,
 			policies,
 			products,
 			deals: dealList,

@@ -12,14 +12,6 @@ export const WIDGET_GLOBAL = 'SSChat';
 /** Admin widgets mount only into elements with this attribute; its value is the widget key from manifest.json. */
 export const WIDGET_ATTRIBUTE = 'data-ss-chat';
 
-/** The feature each widget belongs to (manifest.json `widgets`). */
-export const WIDGET_FEATURES = Object.freeze({
-	chat: 'visitor_chat',
-	inbox: 'inbox',
-	knowledge_editor: 'knowledge_editor',
-	reports: 'reports',
-});
-
 /** A visitor's Accounts sign-in (the kit's CORS headers allow it). */
 export const SIGN_IN_HEADER = 'ss-sign-in';
 

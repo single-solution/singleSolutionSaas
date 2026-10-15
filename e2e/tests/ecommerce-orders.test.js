@@ -428,7 +428,7 @@ beforeAll(async () => {
 		'loyalty.expiryDays': 12,
 		'list.order_flow': FLOW,
 		'list.delivery_zones': [
-			{ key: 'london', name: 'London', cities: ['London'], fee: DELIVERY, freeOver: 0, minDays: 1, maxDays: 2 },
+			{ key: 'london', name: 'London', match: { cities: ['London'] }, fee: DELIVERY, freeOver: 0, minDays: 1, maxDays: 2 },
 		],
 		'list.grades': [
 			{ key: 'a-plus', label: 'A+', condition: 'refurbished', warrantyDays: 90 },

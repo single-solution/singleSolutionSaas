@@ -2,10 +2,12 @@
  * The shopper's orders (visitor widget `my_orders`, feature checkout; PLAN 0.8.8 "my orders + tracking + invoices +
  * returns"). Signed in, the shopper sees their orders (newest first, more with Load more) and each order's lines,
  * status history, payment (and the way to pay while it waits), delivery and tracking link, totals, the invoice
- * (`invoices`), downloads and license keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
- * E11, E12), Cancel while the order allows it, and return or warranty claims (`returns`) with their own list. Above the
+ * (`invoices`), for a bank transfer its bank details and the transfer proof (E24), downloads and license keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
+ * E11, E12), Cancel while the order allows it, return or warranty claims (`returns`) with their own list and, with
+ * reviews per order line, a review of each delivered item (`reviews`, E34; the line's `canReview`). Above the
  * orders, the loyalty points balance with the points expiring soon and the points history (`loyalty`,
- * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows.
+ * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows, under the guest orders this browser keeps the keys of (E21),
+ * which open with their key (paying, canceling, the transfer proof, the invoice, downloads and reviews of items).
  * @module
  */
 import {
@@ -18,12 +20,15 @@ import {
 	keepFocus,
 	mountShop,
 	problemText,
+	quantityShown,
 	settingsOf,
 	textsOf,
 	warrantyText,
 } from './shop-common.js';
 import { returnUrlOf } from './shop-checkout.js';
 import { renderClaimForm, renderClaims } from './shop-returns.js';
+import { transferParts } from './shop-payment.js';
+import { reviewForm } from './shop-reviews.js';
 
 const PAGE = 10;
 /** Roles of an order whose items can be claimed. */
@@ -143,9 +148,9 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				claimsBox.hidden = false;
 				pointsBox.hidden = false;
 				if (!shop.signIn()) {
-					listBox.replaceChildren(h(doc, 'p', { class: 'hint' }, t('orders.signIn')));
 					claimsBox.replaceChildren();
 					pointsBox.replaceChildren();
+					await showGuestOrders(mine);
 					return;
 				}
 				if (shop.has('loyalty')) void showPoints(mine);
@@ -171,6 +176,39 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				};
 				await page();
 				if (shop.has('returns') && mine === seq) await renderClaims({ box: claimsBox, t, shop, config, settings, win });
+			};
+
+			/**
+			 * Signed out: the guest orders whose keys this browser keeps (E21), each read with its key, and the sign-in hint.
+			 * @param {number} mine
+			 */
+			const showGuestOrders = async (mine) => {
+				const ids = shop.guestOrders().slice(0, PAGE);
+				const hint = h(doc, 'p', { class: 'hint' }, t('orders.signIn'));
+				if (ids.length === 0) {
+					listBox.replaceChildren(hint);
+					return;
+				}
+				const list = h(doc, 'ul', { 'aria-label': t('orders.guestTitle') });
+				listBox.replaceChildren(h(doc, 'h2', {}, t('orders.guestTitle')), list, hint);
+				const found = await Promise.all(ids.map((id) => shop.call(`/v1/shop/orders/${encodeURIComponent(id)}`)));
+				if (mine !== seq) return;
+				for (const answer of found)
+					if (answer.ok)
+						list.append(
+							rowOf({
+								id: answer.data.id,
+								number: answer.data.number,
+								placedAt: answer.data.placedAt,
+								statusLabel: answer.data.statusLabel,
+								total: answer.data.totals.total,
+								currency: answer.data.totals.currency,
+								itemCount: answer.data.lines.reduce(
+									(/** @type {number} */ sum, /** @type {any} */ line) => sum + line.quantity,
+									0,
+								),
+							}),
+						);
 			};
 
 			/** @param {any} order */
@@ -216,6 +254,39 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				renderOrder(answer.data);
 			};
 
+			/**
+			 * The review of one delivered item (reviews per order line, E34): a button that opens the form.
+			 * @param {any} order @param {any} line @param {string} name
+			 */
+			const reviewBox = (order, line, name) => {
+				const box = h(doc, 'div');
+				/** @param {string} text */
+				const done = (text) => box.replaceChildren(h(doc, 'p', { class: 'hint', role: 'status' }, text));
+				const open = () =>
+					box.replaceChildren(
+						reviewForm({
+							doc,
+							t,
+							shop,
+							config,
+							target: { orderId: order.id, lineId: line.id },
+							idPrefix: `ss-review-${line.id}`,
+							heading: t('reviews.writeItem', { name }),
+							onDone: (state) => done(t(state === 'approved' ? 'reviews.thanks' : 'reviews.pending')),
+							onRefused: (code) =>
+								done(
+									code === 'already_reviewed'
+										? t('reviews.itemReviewed')
+										: problemText(config, 'reviews.problem.', code, 'reviews.failed'),
+								),
+						}),
+					);
+				box.replaceChildren(
+					button(doc, t('orders.review'), open, { class: 'secondary', 'aria-label': t('orders.reviewLabel', { name }) }),
+				);
+				return box;
+			};
+
 			/** @param {any} order */
 			const renderOrder = (order) => {
 				const currency = currencyOf(settings, order.totals?.currency);
@@ -242,11 +313,12 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 						),
 					);
 					const warranty = warrantyText(t, line.warrantyDays);
+					const lineName = line.variantName ? `${line.name} (${line.variantName})` : line.name;
 					return h(
 						doc,
 						'li',
 						{},
-						h(doc, 'strong', {}, line.variantName ? `${line.name} (${line.variantName})` : line.name),
+						h(doc, 'strong', {}, lineName),
 						line.gradeLabel ? h(doc, 'span', { class: 'meta' }, t('cart.grade', { grade: line.gradeLabel })) : null,
 						Array.isArray(line.serials) && line.serials.length > 0
 							? h(doc, 'span', { class: 'meta' }, t('orders.serials', { serials: line.serials.join(', ') }))
@@ -266,7 +338,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							'span',
 							{ class: 'meta' },
 							t('orders.lineAmount', {
-								quantity: line.quantity,
+								quantity: quantityShown(t, line),
 								price: money(line.unitPrice, currency),
 								total: money(line.total, currency),
 							}),
@@ -287,6 +359,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 									...line.licenceKeys.map((/** @type {string} */ key) => h(doc, 'p', {}, h(doc, 'code', {}, key))),
 								)
 							: null,
+						line.canReview === true && shop.has('reviews') ? reviewBox(order, line, lineName) : null,
 					);
 				});
 
@@ -318,15 +391,23 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							say(problemText(config, 'checkout.problem.', codeOf(answer), 'checkout.problem.failed'));
 						}),
 					);
+				// a bank transfer: the bank details, the shop's note, the proof sent and the proof form (E24)
+				paymentParts.push(...transferParts({ doc, t, shop, config, win, order, onOrder: renderOrder }));
 				if (payment.refunded > 0)
 					paymentParts.push(
 						h(doc, 'p', { class: 'meta' }, t('orders.refunded', { amount: money(payment.refunded, currency) })),
 					);
 
 				const address = order.address;
+				// a stock location for pickup names itself; the settings' pickup point comes with its address and hours (E22)
+				const point = order.pickupPoint;
 				const deliveryParts =
 					order.delivery.method === 'pickup'
-						? [h(doc, 'p', {}, t('orders.pickupAt', { name: order.delivery.locationName }))]
+						? [
+								h(doc, 'p', {}, t('orders.pickupAt', { name: order.delivery.locationName || point?.name || '' })),
+								point?.address ? h(doc, 'p', { class: 'meta' }, point.address) : null,
+								point?.hours ? h(doc, 'p', { class: 'meta' }, t('checkout.pickupHours', { hours: point.hours })) : null,
+							]
 						: address
 							? [
 									h(
@@ -339,6 +420,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 											address.line2,
 											address.area,
 											address.city,
+											address.region,
 											address.postalCode,
 											address.country,
 										]
@@ -361,6 +443,15 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							h(doc, 'a', { href: order.shipment.trackingUrl, target: '_blank', rel: 'noopener' }, t('orders.track')),
 						);
 				}
+				// the shop's texts: delivery times, packing, and when a pickup is ready (E22)
+				const method = order.delivery.method;
+				if (method !== 'none')
+					for (const line of [
+						method === 'delivery' ? order.notes?.delivery : '',
+						order.notes?.prep,
+						order.notes?.pickupReady,
+					])
+						if (line) deliveryParts.push(h(doc, 'p', { class: 'meta' }, line));
 
 				const totals = order.totals;
 				/** @type {Array<[string, string]>} */
@@ -418,7 +509,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							{ class: 'secondary' },
 						),
 					);
-				if (shop.has('returns') && CLAIMABLE_ROLES.includes(order.role))
+				// claims need a sign-in (E21)
+				if (shop.has('returns') && shop.signIn() && CLAIMABLE_ROLES.includes(order.role))
 					actions.push(
 						button(
 							doc,

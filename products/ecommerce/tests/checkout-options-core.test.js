@@ -7,7 +7,16 @@ import { codAdvance, codFee } from '../core/cod.js';
 import { feeBaseOf, paymentOptions, priceLines, roleDiscountOf } from '../core/checkout.js';
 import { conditionsHold, DEAL_RULES, dealLineDiscount, dealRulesOf, dealUnitDiscount, inWindow } from '../core/deals.js';
 import { keyOpens, newOrderKey, orderKeyHash, readLock, signLock } from '../adapters/crypto.js';
-import { checkGuest, ORDER_KEY_LENGTH, phoneAllowed, phoneDigitsOf, phoneRules } from '../core/guests.js';
+import {
+	checkGuest,
+	guestKeyOf,
+	guestRules,
+	ORDER_KEY_LENGTH,
+	phoneAllowed,
+	phoneDigitsOf,
+	phoneRules,
+	phoneSearchOf,
+} from '../core/guests.js';
 import { expiryFor, lotsByRule, pointsToEarn, pointsToRedeem, takesPart } from '../core/loyalty.js';
 import { allocateUnits, roundDown, roundHalfUp, unitOf } from '../core/money.js';
 import { checkRolePrices } from '../core/role-pricing.js';
@@ -275,15 +284,51 @@ describe('guests and order keys (E21)', () => {
 		});
 		expect(phoneRules({}, null)).toEqual({ defaultCallingCode: '', trunkPrefix: '', countries: [] });
 		expect(phoneRules({ countries: ['GB', 7] }, 'GB').countries).toEqual(['GB']);
-		expect(phoneDigitsOf('+447700900123')).toBe('7700900123');
+		// the whole number (before, the last 10 digits: a national number typed with its trunk 0 was never found)
+		expect(phoneDigitsOf('+447700900123')).toBe('447700900123');
 		expect(phoneDigitsOf(null)).toBe('');
+		const fr = phoneRules({}, 'FR');
+		expect(phoneSearchOf('06 12 34 56 78', fr)).toEqual(['0612345678', '612345678', '33612345678']);
+		expect(phoneSearchOf('0000001', null)).toEqual(['0000001']);
+		expect(phoneSearchOf('12 3', fr)).toEqual([]);
+		expect(phoneSearchOf('+33 6 12 34 56 78', fr)).toEqual(['33612345678']);
+	});
+
+	it('checks a guest by what checkout.guestIdentity asks, with a phone while phoneRequired is on (dynamic model §5)', () => {
+		const rules = phoneRules({}, 'US');
+		const email = guestRules({ guestIdentity: 'email', phoneRequired: false });
+		const either = guestRules({ guestIdentity: 'either', phoneRequired: false });
+		expect(guestRules({})).toEqual({ identity: 'phone', phoneRequired: true });
+		expect(guestRules({ guestIdentity: 'fax', phoneRequired: 'no' })).toEqual({ identity: 'phone', phoneRequired: true });
+		expect(checkGuest({ name: 'Ella', email: ' Ella@Example.com ' }, rules, email)).toEqual({
+			ok: true,
+			value: { name: 'Ella', phone: '', email: 'ella@example.com', guestKey: 'e:ella@example.com' },
+		});
+		expect(checkGuest({ name: 'Ella', phone: '555 000 1234' }, rules, email)).toMatchObject({ field: 'customer/email' });
+		// by email with a phone needed: both
+		expect(checkGuest({ name: 'Ella', email: 'e@example.com' }, rules, { ...email, phoneRequired: true })).toMatchObject({
+			field: 'customer/phone',
+		});
+		expect(checkGuest({ name: 'Ann', phone: '555 000 1234', email: 'a@example.com' }, rules, either)).toMatchObject({
+			value: { guestKey: 'p:+15550001234' },
+		});
+		expect(checkGuest({ name: 'Ann', email: 'a@example.com' }, rules, either)).toMatchObject({
+			value: { guestKey: 'e:a@example.com' },
+		});
+		expect(checkGuest({ name: 'Ann' }, rules, either)).toMatchObject({ field: 'customer/phone' });
+		// a phone typed is read and checked whatever the identity
+		expect(checkGuest({ name: 'Ann', phone: 'call me', email: 'a@example.com' }, rules, either)).toMatchObject({
+			field: 'customer/phone',
+		});
+		expect(guestKeyOf({ phone: '', email: '' }, 'either')).toBe('');
+		expect(guestKeyOf({ phone: '+15550001234', email: 'a@example.com' }, 'email')).toBe('e:a@example.com');
 	});
 
 	it('checks a guest', () => {
 		const rules = phoneRules({}, 'GB');
 		expect(checkGuest({ name: ' Chloé ', phone: '07700900123', email: 'Chloe@Example.co.uk' }, rules)).toEqual({
 			ok: true,
-			value: { name: 'Chloé', phone: '+447700900123', email: 'chloe@example.co.uk' },
+			value: { name: 'Chloé', phone: '+447700900123', email: 'chloe@example.co.uk', guestKey: 'p:+447700900123' },
 		});
 		// already international without the +, and a trunk 0 after the code: one number, no second code
 		for (const [typed, phone] of [

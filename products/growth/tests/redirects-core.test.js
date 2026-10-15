@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { parseCsv, toCsv } from '../core/csv.js';
 import { createSnippets } from '../core/snippets.js';
 import {
 	MAX_RULES,
@@ -307,52 +306,6 @@ describe('loops and chains', () => {
 });
 
 describe('CSV files', () => {
-	it('writes RFC 4180 with a byte order mark and a formula guard, and reads it back', () => {
-		const text = toCsv(
-			['from', 'note'],
-			[
-				['/a', '=SUM(A1)'],
-				['/b,c', 'say "hi"\nthere'],
-				['/d', 5],
-				['/e', null],
-			],
-		);
-		expect(text.startsWith('﻿from,note\r\n')).toBe(true);
-		expect(text).toContain(`"/b,c","say ""hi""\nthere"`);
-		expect(text).toContain("/a,'=SUM(A1)");
-		const parsed = parseCsv(text, { maxRows: 10 });
-		expect(parsed).toMatchObject({
-			ok: true,
-			header: ['from', 'note'],
-			records: [
-				{ line: 2, values: { from: '/a', note: '=SUM(A1)' } },
-				{ line: 3, values: { from: '/b,c', note: 'say "hi"\nthere' } },
-				{ line: 4, values: { from: '/d', note: '5' } },
-				{ line: 5, values: { from: '/e', note: '' } },
-			],
-		});
-	});
-
-	it('reads semicolons, tabs, CR line ends, blank lines and short rows', () => {
-		expect(parseCsv('From;To\r\n\r\n/a;/b\r', { maxRows: 5 })).toMatchObject({
-			ok: true,
-			records: [{ line: 2, values: { from: '/a', to: '/b' } }],
-		});
-		expect(parseCsv('from\tto\n/a\t/b\n/c', { maxRows: 5 })).toMatchObject({
-			ok: true,
-			records: [{ values: { from: '/a', to: '/b' } }, { values: { from: '/c', to: '' } }],
-		});
-		expect(parseCsv('from,,from\r/a,x,/b', { maxRows: 5 })).toMatchObject({ ok: true, records: [{ values: { from: '/a' } }] });
-		// a header of many empty columns costs no time per record
-		const started = performance.now();
-		expect(parseCsv(`from${','.repeat(200_000)}\n${'/a\n'.repeat(5000)}`, { maxRows: 5000 })).toMatchObject({ ok: true });
-		expect(performance.now() - started).toBeLessThan(1000);
-		expect(parseCsv('', { maxRows: 5 })).toEqual({ ok: false, code: 'empty' });
-		expect(parseCsv('from\n"/a', { maxRows: 5 })).toEqual({ ok: false, code: 'unterminated_quote' });
-		expect(parseCsv('from\n/a\n/b\n/c\n', { maxRows: 2 })).toEqual({ ok: false, code: 'too_many_rows' });
-		expect(parseCsv('from\n/a\n/b\n/c', { maxRows: 2 })).toEqual({ ok: false, code: 'too_many_rows' });
-	});
-
 	it('exports the rules A to Z', () => {
 		const text = csvOf([rule('/b', null, { match: 'prefix', note: 'old shop' }), rule('/a', '/new')]);
 		expect(text).toBe('﻿from,match,to,code,note\r\n/a,exact,/new,301,\r\n/b,prefix,,410,old shop\r\n');

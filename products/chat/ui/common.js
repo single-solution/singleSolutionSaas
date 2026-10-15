@@ -1,14 +1,12 @@
 /**
- * Helpers the Chat widgets share: the widget config and its settings with defaults, widget texts, JSON calls that
- * answer `{ ok, status, data }`, problem codes (shown as the widget's own texts, never the server's English detail),
- * labeled fields, small forms and attachments. Text is always set as text, never as HTML.
+ * Helpers the Chat widgets share: the widget config and its settings with defaults, widget texts, problem codes (shown
+ * as the widget's own texts, never the server's English detail), labeled fields, small forms and attachments. Text is
+ * always set as text, never as HTML.
  * @module
  */
-import { formatDate, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
+import { element, formatDate, normaliseFormat, viewerOf } from '@ss/app-kit/widget';
 import { CHECKS } from '../core/widgets.js';
-import { element } from './dom.js';
 
-/** @typedef {{ ok: boolean, status: number, data: any }} Answer status 0 when signed out or unreachable */
 /** @typedef {(key: string) => string} Texts */
 
 /**
@@ -52,7 +50,8 @@ import { element } from './dom.js';
  * @property {string} customCss
  * @property {Partial<import('@ss/contracts/format').Format>} [format] how money and dates look (K7)
  * @property {string} [timeZone] the business.json time zone (UTC when missing)
- * @property {string[]} features
+ * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {ChatSettings} settings
  */
 
@@ -121,30 +120,9 @@ export const problemCode = (data) => {
 /**
  * Whether the server refused what was sent (`validation_failed`). Widgets then show their own text for that action:
  * never the server's English detail, so every word stays editable (PLAN 0.4.10).
- * @param {Answer} answer
+ * @param {import('@ss/app-kit/widget').Answer} answer
  */
 export const isInvalid = (answer) => problemCode(answer.data) === 'validation_failed';
-
-/**
- * A JSON call; never throws.
- * @param {typeof globalThis.fetch} fetch
- * @param {string} url
- * @param {{ method?: string, headers?: Record<string, string>, body?: unknown }} [init]
- * @returns {Promise<Answer>}
- */
-export const requestJson = async (fetch, url, { method = 'GET', headers = {}, body } = {}) => {
-	try {
-		const response = await fetch(url, {
-			method,
-			headers: { ...headers, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-			...(body === undefined ? {} : { body: JSON.stringify(body) }),
-		});
-		const data = response.status === 204 ? null : await response.json().catch(() => null);
-		return { ok: response.ok, status: response.status, data };
-	} catch {
-		return { ok: false, status: 0, data: null };
-	}
-};
 
 /**
  * An http(s) address, or null (addresses from answers are only ever used as links when they are web pages).
@@ -335,9 +313,10 @@ export const fileProblem = (file, types, maxBytes) =>
  * Upload a file: ask for the presigned PUT, send the file with exactly the returned headers, and answer the attachment
  * for the message.
  * @param {typeof globalThis.fetch} fetch
- * @param {(body: unknown) => Promise<Answer>} ask the uploads route
+ * @param {(body: unknown) => Promise<import('@ss/app-kit/widget').Answer>} ask the uploads route
  * @param {File} file
- * @returns {Promise<{ attachment: { key: string, name: string, type: string, size: number } } | { failed: Answer | null }>}
+ * @returns {Promise<{ attachment: { key: string, name: string, type: string, size: number } } |
+ *   { failed: import('@ss/app-kit/widget').Answer | null }>}
  */
 export const uploadFile = async (fetch, ask, file) => {
 	const answer = await ask({ name: file.name, type: file.type, size: file.size });

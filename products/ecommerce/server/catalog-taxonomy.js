@@ -39,6 +39,7 @@ import {
 	withoutStamps,
 } from '../core/catalog-taxonomy.js';
 import { nextPreviousSlugs } from '../core/links.js';
+import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { brandScore, categoryScore } from '../core/seo-score.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
@@ -165,35 +166,60 @@ export const createCatalogTaxonomy = (product, service, common) => {
 
 	/**
 	 * Refuse a category change that would give products with units in stock another item type (a product without its
-	 * own type has its first category's, or the nearest one above it): their units are numbered by their type.
+	 * own type has its first category's, or the nearest one above it): their units are numbered by their type; and one
+	 * that would measure products with stock in another unit (their stock is counted in their type's unit).
 	 * @param {Site} s @param {WebsiteData} data @param {CategoryRecord[]} all every category as it is
 	 * @param {CategoryRecord[]} next every category as the change leaves them
 	 * @param {string} id the category changed
 	 */
 	const keepStockedTypes = async (s, data, all, next, id) => {
+		/** @type {import('../core/item-types.js').ItemType[]} */
 		const types = await s.list('item_types');
-		if (!types.some((type) => type.elements.units)) return;
+		const units = types.some((type) => type.elements.units);
+		const measures = types.some((type) => type.elements.measure);
+		if (!units && !measures) return;
 		const products = await data
 			.collection(COLLECTIONS.products)
 			.find(
 				{ websiteId: data.websiteId, typeKey: null, 'categoryIds.0': { $in: withDescendants(id, all) } },
-				{ projection: { _id: 0, id: 1, kind: 1, categoryIds: 1 } },
+				{ projection: { _id: 0, id: 1, kind: 1, categoryIds: 1, 'variants.stock': 1 } },
 			)
 			.toArray();
-		const stocked = await stockedUnits(
-			data,
-			products.map((row) => String(row.id)),
-		);
+		const stocked = units
+			? await stockedUnits(
+					data,
+					products.map((row) => String(row.id)),
+				)
+			: new Set();
 		const [before, after] = [typeTree(all), typeTree(next)];
+		/**
+		 * A product's type before and after the change.
+		 * @param {Record<string, any>} row
+		 * @returns {[import('../core/item-types.js').ItemType, import('../core/item-types.js').ItemType]}
+		 */
+		const typesOf = (row) => {
+			const product = { kind: String(row.kind), typeKey: null, categoryIds: (row.categoryIds ?? []).map(String) };
+			return [typeOf(product, types, before), typeOf(product, types, after)];
+		};
 		const moved = products.some((row) => {
 			if (!stocked.has(String(row.id))) return false;
-			const product = { kind: String(row.kind), typeKey: null, categoryIds: (row.categoryIds ?? []).map(String) };
-			return typeOf(product, types, before).key !== typeOf(product, types, after).key;
+			const [was, will] = typesOf(row);
+			return was.key !== will.key;
 		});
 		if (moved)
 			throw problem(
 				'conflict',
 				'Products of this category have units in stock: this change would give them another item type.',
+			);
+		const remeasured = products.some((row) => {
+			if (!(row.variants ?? []).some((/** @type {any} */ variant) => Number(variant.stock) > 0)) return false;
+			const [was, will] = typesOf(row);
+			return !sameMeaning(was.elements.measure, will.elements.measure);
+		});
+		if (remeasured)
+			throw problem(
+				'conflict',
+				'Products of this category have stock counted in their unit of measure: this change would measure them in another unit.',
 			);
 	};
 

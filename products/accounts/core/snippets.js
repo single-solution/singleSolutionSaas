@@ -4,6 +4,7 @@
  * merchant's server, the public keys address and the social sign-in return addresses. Plain text; no I/O.
  * @module
  */
+import { widgetScriptTag } from '@ss/contracts/text';
 import { PROVIDERS, SIGN_IN_HEADER, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
@@ -15,7 +16,7 @@ export const createSnippets = ({ base, widgets, permissions, websiteId = '<websi
 	const places = (kind) =>
 		widgets.filter((widget) => widget.kind === kind).map((widget) => `<div ${WIDGET_ATTRIBUTE}="${widget.key}"></div>`);
 	const visitor = [
-		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, token: 'YOUR_BROWSER_TOKEN' }),
 		...places('visitor'),
 		'<script>',
 		"  window.addEventListener('ss-accounts:signed-in', async (event) => {",
@@ -27,7 +28,8 @@ export const createSnippets = ({ base, widgets, permissions, websiteId = '<websi
 		'</script>',
 	].join('\n');
 	const admin = [
-		`<script src="${base}/widget.js"></script>`,
+		// no async: the admin() call below needs window.SSAccounts
+		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

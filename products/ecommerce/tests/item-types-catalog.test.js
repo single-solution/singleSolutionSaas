@@ -140,7 +140,7 @@ describe('the type of a product', () => {
 			price: 100,
 			categoryIds: [ids.phones.id],
 		});
-		expect(plain.type).toEqual({ key: 'physical', kind: 'physical' });
+		expect(plain.type).toEqual({ key: 'physical', kind: 'physical', measure: null });
 		// a type no longer offered stays on what has it, but is not given to more
 		await shop.list(
 			'item_types',

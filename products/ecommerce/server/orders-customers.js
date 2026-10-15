@@ -15,10 +15,10 @@ import { givePoints } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { checkAddress } from '../core/checkout.js';
 import { checkFieldValues } from '../core/fields.js';
-import { MAX_ADDRESSES, checkNewCustomer, phoneDigitsOf } from '../core/guests.js';
+import { MAX_ADDRESSES, checkNewCustomer, phoneDigitsOf, phoneSearchOf } from '../core/guests.js';
 import { expiryFor, loyaltyRules } from '../core/loyalty.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { phoneRulesOf } from './guests.js';
+import { addressRulesOf, phoneRulesOf } from './guests.js';
 import {
 	MAX_SEARCH,
 	checkCustomerEdit,
@@ -91,6 +91,8 @@ export const createCustomers = (service) => {
 			unseen: ctx.query.unseen === '1' || ctx.query.unseen === 'true',
 			createdAfter,
 			userIds,
+			// a phone typed as shoppers type it (national, with its trunk prefix) is found by its whole number
+			...(q ? { phoneDigits: phoneSearchOf(q, await phoneRulesOf(await service.site(ctx))) } : {}),
 		};
 	};
 
@@ -283,6 +285,8 @@ export const createCustomers = (service) => {
 			id: createId(ID_PREFIX.customer),
 			userId: null,
 			guest: true,
+			// staff add a customer by phone: the key a phone guest has (dynamic model §5)
+			guestKey: `p:${who.phone}`,
 			name: who.name,
 			email: who.email,
 			phone: who.phone,
@@ -332,12 +336,9 @@ export const createCustomers = (service) => {
 		if (!Array.isArray(given) || given.length > MAX_ADDRESSES)
 			throw service.invalid('addresses', `addresses is a list of at most ${MAX_ADDRESSES} addresses.`);
 		const s = await service.site(ctx);
-		const checkout = await s.values('checkout');
-		/** @type {string[]} */
-		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
-		const rules = await phoneRulesOf(s);
+		const rules = await addressRulesOf(s);
 		const addresses = given.map((entry, index) => {
-			const checked = checkAddress(entry, required, rules);
+			const checked = checkAddress(entry, rules);
 			if (!checked.ok)
 				throw service.invalid(
 					`addresses/${index}${checked.field.replace(/^address/, '')}`,

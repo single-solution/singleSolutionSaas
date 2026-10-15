@@ -11,6 +11,7 @@
  */
 import { countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { isObject } from '@ss/contracts/util';
 import {
 	CODES,
 	MAX_RULES,
@@ -54,9 +55,6 @@ const KEPT = Object.freeze({ websites: 200, rules: 20_000 });
 const IMPORT_BYTES = 4 * 1024 * 1024 + 64 * 1024;
 /** Suggestions read the 404 log of this many days by default (at most a year). */
 const SUGGESTION_DAYS = 90;
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A 422 `validation_failed` with each field's problem (the first one's words as the detail).

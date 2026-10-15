@@ -7,6 +7,7 @@
  * tapping a button ends the flow.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { containsPhrase, pathMatches } from './text.js';
 import { checkFieldValue } from './fields.js';
 
@@ -25,8 +26,6 @@ export const STANDARD_FIELDS = Object.freeze(/** @type {const} */ (['name', 'ema
  * @typedef {import('./fields.js').CustomField} CustomField
  */
 
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 /** @param {unknown} value @param {number} max */
 const text = (value, max) => (typeof value === 'string' && value.trim() && value.length <= max ? value.trim() : null);
 

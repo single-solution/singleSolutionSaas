@@ -1,50 +1,68 @@
 /**
- * Delivery zones and fees (PLAN 0.8.8: zones and fees by city/area, free over an amount, store pickup). The merchant
- * keeps the zones as the `delivery_zones` list: `[{ key, name, cities, areas, fee, freeOver, minDays, maxDays }]`.
- * A zone matches an address by city (no cities = every city) and, when it lists areas, by area; the most specific
- * matching zone wins (area, then city, then a zone for every city). No match: the `delivery_zones` settings
- * `defaultFee` and `defaultFreeOver`. Money is minor units; `freeOver` 0 = never free. Names are compared without
- * case and surrounding spaces. No I/O.
+ * Delivery zones and fees (PLAN 0.8.8: zones and fees by place, free over an amount, store pickup; dynamic model §5).
+ * The merchant keeps the zones as the `delivery_zones` list:
+ * `[{ key, name, match: { countries, regions, cities, areas, postcodes }, fee, freeOver, minDays, maxDays }]`.
+ * A zone fits an address when the address is in every kind of place the zone lists (one of its countries, regions,
+ * cities and areas; its postcode starts with one of the postcodes); a zone that lists nothing fits every address. The
+ * most specific fitting zone wins: the longest postcode start, then a zone listing areas, cities, regions, countries,
+ * then the catch-all; between equals, the first in the list. No match: the `delivery_zones` settings `defaultFee` and
+ * `defaultFreeOver`. An address without a country is in the business.json country. Money is minor units; `freeOver`
+ * 0 = never free. Names compare without letter case and extra spaces, countries by code or English name, postcodes
+ * upper-cased without spaces (`core/address.js`). No I/O.
  * @module
  */
+import { ADDRESS_LIMITS, countryKey, placeKey, postcodeKey } from './address.js';
 import { isPrice } from './money.js';
 
 /**
- * @typedef {{ key: string, name: string, cities: string[], areas: string[], fee: number, freeOver: number,
- *   minDays: number, maxDays: number }} Zone
+ * Where a zone delivers ([] = any).
+ * @typedef {{ countries: string[], regions: string[], cities: string[], areas: string[], postcodes: string[] }} ZoneMatch
+ */
+/**
+ * @typedef {{ key: string, name: string, match: ZoneMatch, fee: number, freeOver: number, minDays: number,
+ *   maxDays: number }} Zone
  */
 
-/** At most this many zones, and this many cities or areas in one zone. */
+/** At most this many zones, and this many places of one kind in one zone. */
 const MAX_ZONES = 100;
 const MAX_PLACES = 500;
 /** A zone key. */
 const KEY = /^[a-z][a-z0-9_]{1,39}$/;
+/** The kinds of place a zone may list, with the longest name of each. */
+const PLACE_KINDS = Object.freeze(
+	/** @type {Array<[keyof ZoneMatch, number, (value: unknown) => string]>} */ ([
+		['countries', ADDRESS_LIMITS.country, countryKey],
+		['regions', ADDRESS_LIMITS.region, placeKey],
+		['cities', ADDRESS_LIMITS.city, placeKey],
+		['areas', ADDRESS_LIMITS.area, placeKey],
+		['postcodes', ADDRESS_LIMITS.postalCode, postcodeKey],
+	]),
+);
 
 /** @param {unknown} value */
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** A place name as compared. @param {unknown} value */
-export const placeKey = (value) => (typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').toLowerCase() : '');
-
 /**
- * @param {unknown} value @param {string} label @param {string[]} errors
+ * @param {unknown} value @param {string} label @param {number} max @param {(value: unknown) => string} keyOf
+ * @param {boolean} postcode postcodes are kept upper-cased without spaces
+ * @param {string[]} errors
  * @returns {string[]}
  */
-const places = (value, label, errors) => {
+const places = (value, label, max, keyOf, postcode, errors) => {
 	if (value === undefined) return [];
 	if (!Array.isArray(value) || value.length > MAX_PLACES) {
-		errors.push(`${label} is a list of at most ${MAX_PLACES} names.`);
+		errors.push(`${label} is a list of at most ${MAX_PLACES}.`);
 		return [];
 	}
 	/** @type {string[]} */
 	const out = [];
 	for (const item of value) {
-		const name = typeof item === 'string' ? item.trim().replace(/\s+/g, ' ') : '';
-		if (!name || name.length > 80) {
-			errors.push(`${label}: every name has 1–80 characters.`);
+		const name = typeof item !== 'string' ? '' : postcode ? postcodeKey(item) : item.trim().replace(/\s+/g, ' ');
+		if (!name || name.length > max) {
+			errors.push(`${label}: every entry has 1–${max} characters.`);
 			return [];
 		}
-		if (!out.some((known) => placeKey(known) === placeKey(name))) out.push(name);
+		if (!out.some((known) => keyOf(known) === keyOf(name))) out.push(name);
 	}
 	return out;
 };
@@ -73,8 +91,15 @@ export const checkZones = (value) => {
 		keys.add(key);
 		const name = typeof zone.name === 'string' ? zone.name.trim() : '';
 		if (!name || name.length > 60) errors.push(`Zone '${key}' needs a name of at most 60 characters.`);
-		const cities = places(zone.cities, `Zone '${key}' cities`, errors);
-		const areas = places(zone.areas, `Zone '${key}' areas`, errors);
+		const given = zone.match ?? {};
+		if (!isObject(given)) errors.push(`Zone '${key}': match lists countries, regions, cities, areas and postcodes.`);
+		const match = /** @type {Record<string, unknown>} */ (isObject(given) ? given : {});
+		const unknown = Object.keys(match).filter((kind) => !PLACE_KINDS.some(([known]) => known === kind));
+		if (unknown.length > 0) errors.push(`Zone '${key}': match takes countries, regions, cities, areas and postcodes.`);
+		/** @type {ZoneMatch} */
+		const clean = { countries: [], regions: [], cities: [], areas: [], postcodes: [] };
+		for (const [kind, max, keyOf] of PLACE_KINDS)
+			clean[kind] = places(match[kind], `Zone '${key}' ${kind}`, max, keyOf, kind === 'postcodes', errors);
 		const fee = zone.fee ?? 0;
 		const freeOver = zone.freeOver ?? 0;
 		if (!isPrice(fee)) errors.push(`Zone '${key}': the fee is a whole amount in minor units.`);
@@ -87,8 +112,7 @@ export const checkZones = (value) => {
 		zones.push({
 			key,
 			name,
-			cities,
-			areas,
+			match: clean,
 			fee: Number(fee),
 			freeOver: Number(freeOver),
 			minDays: Number(minDays),
@@ -100,21 +124,52 @@ export const checkZones = (value) => {
 };
 
 /**
- * The zone of an address: area match, then city match, then a zone for every city; null when none matches.
+ * How specific a zone is for a place, or null when it does not fit: the length of its longest postcode start the
+ * postcode has, then whether it lists areas, cities, regions and countries (compared in that order).
+ * @param {Zone} zone @param {import('./address.js').Place} place
+ * @returns {number[] | null}
+ */
+const specificity = (zone, place) => {
+	const { match } = zone;
+	/** @param {string[]} names @param {string} value @param {(value: unknown) => string} keyOf */
+	const listed = (names, value, keyOf) =>
+		names.length === 0 || (keyOf(value) !== '' && names.some((name) => keyOf(name) === keyOf(value)));
+	if (!listed(match.countries, place.country, countryKey)) return null;
+	if (!listed(match.regions, place.region, placeKey)) return null;
+	if (!listed(match.cities, place.city, placeKey)) return null;
+	if (!listed(match.areas, place.area, placeKey)) return null;
+	const postcode = postcodeKey(place.postalCode);
+	const starts = match.postcodes.filter((start) => postcode !== '' && postcode.startsWith(start));
+	if (match.postcodes.length > 0 && starts.length === 0) return null;
+	return [
+		Math.max(0, ...starts.map((start) => start.length)),
+		match.areas.length > 0 ? 1 : 0,
+		match.cities.length > 0 ? 1 : 0,
+		match.regions.length > 0 ? 1 : 0,
+		match.countries.length > 0 ? 1 : 0,
+	];
+};
+
+/** @param {number[]} a @param {number[]} b a positive number when `a` is more specific */
+const compare = (a, b) => {
+	for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return Number(a[index]) - Number(b[index]);
+	return 0;
+};
+
+/**
+ * The zone of a place: the most specific fitting zone, the first of equals; null when none fits.
  * @param {Zone[]} zones
- * @param {{ city?: string, area?: string }} where
+ * @param {import('./address.js').Place} place
  * @returns {Zone | null}
  */
-export const matchZone = (zones, { city = '', area = '' }) => {
-	const c = placeKey(city);
-	const a = placeKey(area);
-	/** @param {Zone} zone */
-	const cityFits = (zone) => zone.cities.length === 0 || (c !== '' && zone.cities.some((name) => placeKey(name) === c));
-	/** @param {Zone} zone */
-	const areaFits = (zone) => zone.areas.length === 0 || (a !== '' && zone.areas.some((name) => placeKey(name) === a));
-	const fitting = zones.filter((zone) => cityFits(zone) && areaFits(zone));
-	const score = (/** @type {Zone} */ zone) => (zone.areas.length > 0 ? 2 : 0) + (zone.cities.length > 0 ? 1 : 0);
-	return fitting.reduce((/** @type {Zone | null} */ best, zone) => (best && score(best) >= score(zone) ? best : zone), null);
+export const matchZone = (zones, place) => {
+	/** @type {{ zone: Zone, rank: number[] } | null} */
+	let best = null;
+	for (const zone of zones) {
+		const rank = specificity(zone, place);
+		if (rank && (!best || compare(rank, best.rank) > 0)) best = { zone, rank };
+	}
+	return best?.zone ?? null;
 };
 
 /**
@@ -131,6 +186,6 @@ export const zoneFee = (zone, merchandise) => (zone.freeOver > 0 && merchandise 
 export const zoneCities = (zones) => {
 	/** @type {Map<string, string>} */
 	const seen = new Map();
-	for (const zone of zones) for (const city of zone.cities) if (!seen.has(placeKey(city))) seen.set(placeKey(city), city);
+	for (const zone of zones) for (const city of zone.match.cities) if (!seen.has(placeKey(city))) seen.set(placeKey(city), city);
 	return [...seen.values()];
 };

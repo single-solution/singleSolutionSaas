@@ -1,58 +1,23 @@
 /**
- * The public docs at `/docs` (PLAN 0.4.10, 0.8.5): the send API and template keys, retries and fallback, timing,
- * languages, providers (with a worked example for a gateway with an HTTP API), unsubscribe keywords, browser and staff
- * push (with the service worker), the webhook signature check and other products' events, the delivery log and its
- * counts, per-feature routes and widgets (a feature with none shows no table or list) and what the website builds (the
- * guide's `build`), the widget snippets, the ticket server snippet (Node.js fetch and cURL), the kit's routes for your
- * server (settings, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the
- * localhost note and the API reference from `openapi.json`: every call with its auth, feature, parameters, request
- * fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's own descriptions). Plain HTML;
- * every value is escaped.
+ * The public docs at `/docs` (PLAN 0.4.10, 0.8.5), on the kit's docs page (`renderDocsPage`: the title, intro and
+ * localhost note, the kit's routes for your server, business.json and the API reference from `openapi.json`) with
+ * Notifications' own sections: the send API and template keys, retries and fallback, timing, languages, providers (with
+ * a worked example for a gateway with an HTTP API), unsubscribe keywords, browser and staff push (with the service
+ * worker), the webhook signature check and other products' events, the delivery log, one section per feature
+ * (`docsFeatureSections`: its routes, widgets and what the website builds), the widget snippets and the ticket server
+ * snippet (Node.js fetch and cURL). Plain HTML; every value is escaped.
  * @module
  */
-import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
-import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
+import { docsBlock, docsFeatureSections, docsOperations, docsParagraph, renderDocsPage } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
 import { createSnippets } from '../core/snippets.js';
-import { SERVICE_WORKER_PATH, SERVICE_WORKER_SOURCE, WIDGET_ATTRIBUTE } from '../core/widgets.js';
+import { SERVICE_WORKER_PATH, SERVICE_WORKER_SOURCE } from '../core/widgets.js';
 import { SIGNATURE_HEADER, WEBHOOK_EVENTS } from '../core/webhooks.js';
 import { manifest } from '../adapters/product.js';
 
-/** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
-let reference = null;
-
-/** @param {unknown} value */
-const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
-
-/** @param {string} code */
-const block = (code) => `<pre><code>${escape(code)}</code></pre>`;
-
-/** @param {string} text */
-const para = (text) => `<p>${escape(text)}</p>`;
-
-/** @typedef {{ 'x-ss-auth'?: string, 'x-ss-feature'?: string | string[], 'x-ss-permission'?: string, summary?: string }} Operation */
-
-/** Every documented operation: `[method, path, operation]`. */
-const operations = () =>
-	Object.entries(/** @type {Record<string, Record<string, Operation>>} */ (/** @type {unknown} */ (openapi.paths))).flatMap(
-		([path, methods]) =>
-			Object.entries(methods).map(([method, operation]) => /** @type {const} */ ([method.toUpperCase(), path, operation])),
-	);
-
-/** The features a route belongs to (the template routes belong to every channel's). @param {Operation} operation */
-const featuresOf = (operation) => [operation['x-ss-feature'] ?? []].flat();
-
-/** @param {ReturnType<typeof operations>} rows */
-const routeTable = (rows) =>
-	`<table><thead><tr><th>Route</th><th>Auth</th><th>Feature</th></tr></thead><tbody>${rows
-		.map(
-			([method, path, operation]) =>
-				`<tr><td><a href="#${escape(apiAnchor(method, path))}"><code>${escape(`${method} ${path}`)}</code></a>${operation.summary ? ` ${escape(operation.summary)}` : ''}</td><td>${escape(
-					`${operation['x-ss-auth'] ?? ''}${operation['x-ss-permission'] ? ` (${operation['x-ss-permission']})` : ''}`,
-				)}</td><td>${escape(featuresOf(operation).join(', ') || 'always')}</td></tr>`,
-		)
-		.join('')}</tbody></table>`;
+/** Every documented operation (the feature sections list each feature's routes). */
+const ROWS = docsOperations(openapi);
 
 /**
  * The docs page.
@@ -60,7 +25,6 @@ const routeTable = (rows) =>
  * @returns {string}
  */
 export const renderDocs = ({ base }) => {
-	const build = /** @type {Record<string, string>} */ (guide.build);
 	const {
 		visitor: visitorSnippet,
 		admin: adminSnippet,
@@ -76,88 +40,46 @@ export const renderDocs = ({ base }) => {
 		widgets: manifest.widgets,
 		permissions: manifest.permissions.map((permission) => permission.key),
 	});
-	const rows = operations();
-	const featureSections = manifest.features.map((feature) => {
-		const widgets = manifest.widgets.filter((widget) => widget.feature === feature.key);
-		const routes = rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key));
-		return [
-			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
-			para(feature.description),
-			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
-			widgets.length > 0
-				? `<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`
-				: '',
-			routes.length > 0 ? routeTable(routes) : '',
-			'</section>',
-		].join('');
-	});
-	return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escape(guide.title)}</title>
-<style>
-body { font: 16px/1.6 system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; color: CanvasText; background: Canvas; }
-pre { overflow-x: auto; padding: 12px; border: 1px solid GrayText; border-radius: 8px; }
-table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid GrayText; }
-.ss-api-op { margin-top: 32px; } .ss-api-op h3 code, .ss-api-schema h4 { overflow-wrap: anywhere; }
-</style>
-</head>
-<body>
-<h1>${escape(guide.title)}</h1>
-${para(guide.intro)}
-<p><strong>Local testing.</strong> ${escape(guide.localhost)}</p>
-<h2>Send a message</h2>
-${para(guide.send)}
-${block(sendSnippet)}
-${block(sendCurl)}
+	const body = `<h2>Send a message</h2>
+${docsParagraph(guide.send)}
+${docsBlock(sendSnippet)}
+${docsBlock(sendCurl)}
 <h2>Templates and template keys</h2>
-${para(guide.templates)}
+${docsParagraph(guide.templates)}
 <h2>Default templates of products</h2>
-${para(guide.defaults)}
+${docsParagraph(guide.defaults)}
 <h2>Retries and fallback</h2>
-${para(guide.retries)}
+${docsParagraph(guide.retries)}
 <h2>Quiet hours, send limits and delayed send</h2>
-${para(guide.timing)}
+${docsParagraph(guide.timing)}
 <h2>Languages</h2>
-${para(guide.languages)}
+${docsParagraph(guide.languages)}
 <h2>Providers</h2>
-${para(guide.providers)}
+${docsParagraph(guide.providers)}
 <h2>Unsubscribe keywords</h2>
-${para(guide.keywords)}
-${block(inbound)}
+${docsParagraph(guide.keywords)}
+${docsBlock(inbound)}
 <h2>Browser and staff push</h2>
-${para(guide.push)}
-${block(`${SERVICE_WORKER_PATH}\n\n${SERVICE_WORKER_SOURCE}`)}
-${block(pushSnippet)}
+${docsParagraph(guide.push)}
+${docsBlock(`${SERVICE_WORKER_PATH}\n\n${SERVICE_WORKER_SOURCE}`)}
+${docsBlock(pushSnippet)}
 <h2>Outgoing webhooks</h2>
-${para(guide.webhooks)}
-${para(`Events: ${WEBHOOK_EVENTS.join(', ')}. Header: ${SIGNATURE_HEADER}.`)}
-${block(webhookSnippet)}
-${para(guide.events)}
+${docsParagraph(guide.webhooks)}
+${docsParagraph(`Events: ${WEBHOOK_EVENTS.join(', ')}. Header: ${SIGNATURE_HEADER}.`)}
+${docsBlock(webhookSnippet)}
+${docsParagraph(guide.events)}
 <h2>Delivery log</h2>
-${para(guide.log)}
+${docsParagraph(guide.log)}
 <h2>Features</h2>
-${featureSections.join('\n')}
+${docsFeatureSections({ manifest, rows: ROWS, guide })}
 <h2>Install the widgets</h2>
-${para(guide.install)}
-${block(visitorSnippet)}
+${docsParagraph(guide.install)}
+${docsBlock(visitorSnippet)}
 <h2>Admin widgets and tickets</h2>
-${para(guide.admin)}
-${block(adminSnippet)}
-${para(guide.tickets)}
-${block(nodeSnippet)}
-${block(curlSnippet)}
-${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
-<h2>business.json</h2>
-${para(guide.business)}
-${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
-<h2>API reference</h2>
-${para(guide.api)}
-${routeTable(rows)}
-${(reference ??= renderApiReference(openapi))}
-</body>
-</html>
-`;
+${docsParagraph(guide.admin)}
+${docsBlock(adminSnippet)}
+${docsParagraph(guide.tickets)}
+${docsBlock(nodeSnippet)}
+${docsBlock(curlSnippet)}`;
+	return renderDocsPage({ guide, openapi, body });
 };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { verifyIdentityToken } from '@ss/app-kit';
 import {
 	createSealer,
 	generateSigningKey,
@@ -6,13 +7,12 @@ import {
 	matchRecoveryCode,
 	signJwt,
 	totpCode,
-	verifyJwt,
 	verifyPassword,
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { appleClientSecret, createProviders, pkceChallenge } from '../adapters/providers.js';
 import { PHONE_COUNTRIES } from '@ss/contracts/phone';
-import { emailDomain, normaliseEmail } from '../core/identifiers.js';
+import { emailDomain } from '../core/identifiers.js';
 import {
 	checkAddresses,
 	checkCustomValues,
@@ -40,10 +40,7 @@ import { appleKey, idToken } from './helpers.js';
 import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 
 describe('identifiers', () => {
-	it('normalizes email addresses and masks addresses', () => {
-		expect(normaliseEmail(' Ana@Example.COM ')).toBe('ana@example.com');
-		for (const bad of [5, 'a@b', 'a@@b.com', '.a@b.com', 'a..b@b.com', 'a@b.123', 'a@-b.com', `${'a'.repeat(65)}@b.com`])
-			expect(normaliseEmail(bad)).toBeNull();
+	it('the domain of an address', () => {
 		expect(emailDomain('a@shop.example.com')).toBe('shop.example.com');
 	});
 
@@ -232,16 +229,20 @@ describe('crypto', () => {
 		expect(await verifyPassword('pässword', hash)).toBe(true);
 		expect(await verifyPassword('pässword', 'bcrypt$x$y')).toBe(false);
 		const { privateJwk, publicJwk } = generateSigningKey('k1');
-		const token = signJwt(privateJwk, { sub: 'u' });
-		expect(verifyJwt(token, [publicJwk])).toEqual({ sub: 'u' });
-		expect(verifyJwt(token, [{ ...publicJwk, kid: 'other' }])).toBeNull();
-		expect(verifyJwt(`${token}x`, [publicJwk])).toBeNull();
-		expect(verifyJwt('a.b', [publicJwk])).toBeNull();
-		expect(verifyJwt(5, [publicJwk])).toBeNull();
-		const b64 = (/** @type {unknown} */ v) => Buffer.from(JSON.stringify(v)).toString('base64url');
-		expect(verifyJwt(`${b64({ alg: 'none', kid: 'k1' })}.${b64({})}.sig`, [publicJwk])).toBeNull();
-		expect(verifyJwt(`${b64({ alg: 'EdDSA', kid: 'k1' })}.${b64([1])}.sig`, [publicJwk])).toBeNull();
-		expect(verifyJwt('e30.bm90IGpzb24.sig', [publicJwk])).toBeNull();
+		// a sign-in Accounts signs is what the kit's checker (every product's) takes, with the key Accounts publishes
+		const issued = Math.floor(Date.parse('2026-10-01T10:00:00Z') / 1000);
+		const issuer = { issuer: 'https://accounts.example.dev', jwks: [publicJwk], audience: 'web_1' };
+		const token = signJwt(privateJwk, { iss: issuer.issuer, aud: 'web_1', sub: 'u', iat: issued, exp: issued + 900 });
+		expect(verifyIdentityToken(token, issuer, { now: () => issued * 1000 })).toMatchObject({
+			ok: true,
+			identity: { subject: 'u' },
+		});
+		expect(
+			verifyIdentityToken(token, { ...issuer, jwks: [{ ...publicJwk, kid: 'other' }] }, { now: () => issued * 1000 }),
+		).toEqual({
+			ok: false,
+			code: 'unknown_key',
+		});
 		const secret = 'JBSWY3DPEHPK3PXP';
 		const at = Date.parse('2026-10-01T10:00:00Z');
 		const code = totpCode(secret, at);

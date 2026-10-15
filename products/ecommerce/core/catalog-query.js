@@ -7,6 +7,7 @@
  * @module
  */
 import { isObject, valueLabel } from './catalog.js';
+import { levelOf } from './measure.js';
 import { MAX_AMOUNT } from './money.js';
 
 /** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
@@ -544,6 +545,42 @@ export const facetsOf = (raw, names) => {
 const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
 
 /**
+ * The products sold in a unit of their own (their stock counts thousandths of their unit, `core/measure.js`):
+ * physical products whose own type is a measured one, or with no type of their own whose first category's type is.
+ * @typedef {{ keys: string[], categoryIds: string[] }} MeasuredScope
+ */
+
+/**
+ * A match of the products of a {@link MeasuredScope}.
+ * @param {MeasuredScope} scope
+ */
+export const measuredMatch = (scope) => ({
+	kind: 'physical',
+	$or: [{ typeKey: { $in: scope.keys } }, { typeKey: { $in: [null, ''] }, 'categoryIds.0': { $in: scope.categoryIds } }],
+});
+
+/**
+ * The same as an aggregation expression over a product.
+ * @param {MeasuredScope} scope
+ */
+const measuredExpr = (scope) => ({
+	$and: [
+		{ $eq: ['$kind', 'physical'] },
+		{
+			$or: [
+				{ $in: [{ $ifNull: ['$typeKey', ''] }, scope.keys] },
+				{
+					$and: [
+						{ $eq: [{ $ifNull: ['$typeKey', ''] }, ''] },
+						{ $in: [{ $arrayElemAt: [{ $ifNull: ['$categoryIds', []] }, 0] }, scope.categoryIds] },
+					],
+				},
+			],
+		},
+	],
+});
+
+/**
  * A variant low on stock (E44, EN-18, PL-14), as a variant match: offered (active), not marked sold out, with more than
  * 0 and at most `level` units. Level 0: no variant is low.
  * @param {number} level the `catalog` setting `lowStock`
@@ -551,13 +588,22 @@ const STOCK_STATES = Object.freeze(['none', 'out', 'partial', 'full']);
 const lowVariantMatch = (level) => ({ active: true, soldOut: { $ne: true }, stock: { $gt: 0, $lte: level } });
 
 /**
- * Products with a variant low on stock (E44): products that track stock and are not archived.
+ * Products with a variant low on stock (E44): products that track stock and are not archived. The level counts units:
+ * a measured product's stock is compared in thousandths of its unit.
  * @param {number} level the `catalog` setting `lowStock`
+ * @param {MeasuredScope | null} [scope] the measured products (null: none)
  */
-const lowStockFilter = (level) => ({
+const lowStockFilter = (level, scope = null) => ({
 	trackStock: true,
 	status: { $ne: 'archived' },
-	variants: { $elemMatch: lowVariantMatch(level) },
+	...(scope
+		? {
+				$or: [
+					{ $and: [measuredMatch(scope), { variants: { $elemMatch: lowVariantMatch(levelOf(level, true)) } }] },
+					{ $and: [{ $nor: [measuredMatch(scope)] }, { variants: { $elemMatch: lowVariantMatch(level) } }] },
+				],
+			}
+		: { variants: { $elemMatch: lowVariantMatch(level) } }),
 });
 
 /**
@@ -588,12 +634,14 @@ const VARIANT_STOCK = Object.freeze(/** @type {const} */ (['out', 'low', 'in']))
 
 /**
  * The stages that count variants by stock (E44), after a `$match` on the website: the offered variants of products
- * that track stock and are not archived, `out` (no units, or marked sold out), `low` (1 to `level` units) or `in`
- * (more).
+ * that track stock and are not archived, `out` (no units, or marked sold out), `low` (1 to `level` units; a measured
+ * product's in thousandths of its unit) or `in` (more).
  * @param {number} level the `catalog` setting `lowStock`
+ * @param {MeasuredScope | null} [scope] the measured products (null: none)
  */
-export const variantStockStages = (level) => [
+export const variantStockStages = (level, scope = null) => [
 	{ $match: { trackStock: true, status: { $ne: 'archived' } } },
+	{ $addFields: { lowLevel: scope ? { $cond: [measuredExpr(scope), levelOf(level, true), level] } : level } },
 	{ $unwind: '$variants' },
 	{ $match: { 'variants.active': true } },
 	{
@@ -605,7 +653,7 @@ export const variantStockStages = (level) => [
 							case: { $or: [{ $eq: ['$variants.soldOut', true] }, { $lte: [{ $ifNull: ['$variants.stock', 0] }, 0] }] },
 							then: 'out',
 						},
-						{ case: { $lte: ['$variants.stock', level] }, then: 'low' },
+						{ case: { $lte: ['$variants.stock', '$lowLevel'] }, then: 'low' },
 					],
 					default: 'in',
 				},
@@ -620,10 +668,11 @@ export const variantStockStages = (level) => [
  * @param {string} websiteId
  * @param {Record<string, unknown>} match the products to look at (a list's filter, without `websiteId`)
  * @param {number} level the `catalog` setting `lowStock`
+ * @param {MeasuredScope | null} [scope] the measured products (null: none)
  */
-export const variantStockPipeline = (websiteId, match, level) => [
+export const variantStockPipeline = (websiteId, match, level, scope = null) => [
 	{ $match: { websiteId, $and: [match] } },
-	...variantStockStages(level),
+	...variantStockStages(level, scope),
 ];
 
 /**
@@ -643,7 +692,8 @@ export const variantStockCounts = (rows) => {
  * The staff's product list filter (the caller adds `websiteId`).
  * @param {Record<string, string>} query `q`, `status`, `kind`, `lowStock`, `featured`, `stockState` (one or several),
  *   `hasMedia`, `grade` (one or several), `ids` (product ids, at most 20)
- * @param {{ categoryIds: string[] | null, brandIds: string[] | null, lowStock: number }} resolved
+ * @param {{ categoryIds: string[] | null, brandIds: string[] | null, lowStock: number,
+ *   measured?: MeasuredScope | null }} resolved `measured`: the products sold in a unit of their own
  * @returns {Record<string, unknown>}
  */
 export const staffFilter = (query, resolved) => {
@@ -655,7 +705,7 @@ export const staffFilter = (query, resolved) => {
 	if (['physical', 'digital', 'service'].includes(query.kind ?? '')) and.push({ kind: query.kind });
 	if (resolved.categoryIds) and.push({ categoryIds: { $in: resolved.categoryIds } });
 	if (resolved.brandIds) and.push({ brandId: { $in: resolved.brandIds } });
-	if (query.lowStock === 'true' || query.lowStock === '1') and.push(lowStockFilter(resolved.lowStock));
+	if (query.lowStock === 'true' || query.lowStock === '1') and.push(lowStockFilter(resolved.lowStock, resolved.measured));
 	if (query.featured === 'true' || query.featured === '1') and.push({ featured: true });
 	if (query.featured === 'false' || query.featured === '0') and.push({ featured: { $ne: true } });
 	const states = listOf(query.stockState).filter((state) => STOCK_STATES.includes(state));

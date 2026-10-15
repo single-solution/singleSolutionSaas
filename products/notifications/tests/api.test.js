@@ -1,17 +1,8 @@
 import { createDecipheriv, createHmac } from 'node:crypto';
 import { createId } from '@ss/contracts';
+import { verifyWebhook } from '@ss/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-	ADMIN_ORIGIN,
-	GATEWAY_URL,
-	HOOK_URL,
-	ORIGIN,
-	PUSH_ORIGIN,
-	browserSubscription,
-	pushKeys,
-	setup,
-	verifySignature,
-} from './helpers.js';
+import { ADMIN_ORIGIN, GATEWAY_URL, HOOK_URL, ORIGIN, PUSH_ORIGIN, browserSubscription, pushKeys, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
 let env;
@@ -40,6 +31,13 @@ const META = {
 	verifyToken: 'verify-me',
 };
 const WEBHOOK_SECRET = 'whsec-0123456789abcdefghijklmnop';
+
+/**
+ * Whether a webhook call carries a right `SS-Signature` (checked as a receiver does, within 5 minutes).
+ * @param {import('./helpers.js').ProviderCall} call
+ */
+const signedRight = (call) =>
+	verifyWebhook({ body: call.body, header: call.headers['ss-signature'], secret: WEBHOOK_SECRET, now: env.now });
 
 /**
  * Decrypt an aes128gcm push body with the browser's keys (what the browser does).
@@ -510,14 +508,7 @@ describe('the send API', () => {
 		const calls = env.providers.callsTo('https://hooks.example.org');
 		expect(calls).toHaveLength(2);
 		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
-		expect(
-			verifySignature({
-				body: last.body,
-				header: last.headers['ss-signature'] ?? null,
-				secret: WEBHOOK_SECRET,
-				now: env.now(),
-			}),
-		).toBe(true);
+		expect(signedRight(last)).toBe(true);
 		expect(JSON.parse(last.body)).toMatchObject({
 			type: 'message.sent',
 			websiteId: env.websiteId,
@@ -539,14 +530,7 @@ describe('the send API', () => {
 		const calls = env.providers.callsTo('https://hooks.example.org');
 		expect(calls).toHaveLength(before + 1);
 		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
-		expect(
-			verifySignature({
-				body: last.body,
-				header: last.headers['ss-signature'] ?? null,
-				secret: WEBHOOK_SECRET,
-				now: env.now(),
-			}),
-		).toBe(true);
+		expect(signedRight(last)).toBe(true);
 		expect(JSON.parse(last.body)).toMatchObject({
 			type: 'payments.payment.paid',
 			websiteId: env.websiteId,
@@ -577,14 +561,7 @@ describe('the send API', () => {
 		const calls = env.providers.callsTo('https://hooks.example.org');
 		expect(calls).toHaveLength(before + 1);
 		const last = /** @type {import('./helpers.js').ProviderCall} */ (calls.at(-1));
-		expect(
-			verifySignature({
-				body: last.body,
-				header: last.headers['ss-signature'] ?? null,
-				secret: WEBHOOK_SECRET,
-				now: env.now(),
-			}),
-		).toBe(true);
+		expect(signedRight(last)).toBe(true);
 		expect(JSON.parse(last.body)).toEqual({
 			id,
 			type: 'ecommerce.order.placed',

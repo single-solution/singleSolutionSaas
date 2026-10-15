@@ -1,61 +1,98 @@
 /**
  * Parts of the cart widget's checkout (PLAN 0.8.8: cart + checkout + success page): the delivery address form (the
- * fields the merchant requires, from the `checkout` settings), the success page of a placed order (its number,
+ * fields the merchant requires, from the `checkout` settings), a guest's details (E21: their name and the contact the
+ * shop checks guests out by), the success page of a placed order (its number,
  * status, totals and, while it waits for a payment, the way to pay) and paying an order again.
  * @module
  */
-import { button, codeOf, currencyOf, field, formatsOf, h, problemText } from './shop-common.js';
+import { ADDRESS_FIELDS, ADDRESS_LIMITS, regionsFor } from '../core/address.js';
+import { button, codeOf, currencyOf, field, formatsOf, h, problemText, quantityShown, select } from './shop-common.js';
+import { transferParts } from './shop-payment.js';
+
+/** @typedef {import('../core/address.js').AddressField} AddressField */
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./shop-common.js').ShopSettings} ShopSettings */
 /** @typedef {import('./widget.js').Shop} Shop */
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
-/** The address fields in order, with their longest text and the browser's autofill name. */
-const ADDRESS_FIELDS = Object.freeze(
-	/** @type {Array<[string, number, string]>} */ ([
-		['name', 120, 'name'],
-		['phone', 30, 'tel'],
-		['line1', 200, 'address-line1'],
-		['line2', 200, 'address-line2'],
-		['city', 80, 'address-level2'],
-		['area', 80, 'address-level3'],
-		['postalCode', 20, 'postal-code'],
-		['country', 60, 'country-name'],
-		['notes', 500, 'off'],
-	]),
-);
+/** The browser's autofill name of each address field. */
+const AUTOFILL = Object.freeze({
+	name: 'name',
+	phone: 'tel',
+	line1: 'address-line1',
+	line2: 'address-line2',
+	city: 'address-level2',
+	area: 'address-level3',
+	region: 'address-level1',
+	postalCode: 'postal-code',
+	country: 'country-name',
+	notes: 'off',
+});
 
 /**
- * The delivery address form. `onPlace` runs when the city, area or country changes (the delivery fee may change).
+ * The delivery address form: the fields the merchant asks for (the `checkout` settings), each at most its length in
+ * the one address table (`core/address.js`); the region is a list to pick from in a country `address_regions` names
+ * (the business.json country while the country is left empty). `onPlace` runs when a field the delivery fee and taxes
+ * depend on changes.
  * @param {{ doc: Document, t: Texts, settings: ShopSettings, onPlace: () => void }} input
  */
 export const addressForm = ({ doc, t, settings, onPlace }) => {
-	const { required, optional } = settings.checkout.address;
-	/** @type {Map<string, HTMLInputElement | HTMLTextAreaElement>} */
+	const { required, optional, regions, country: homeCountry } = settings.checkout.address;
+	/** @type {Map<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>} */
 	const inputs = new Map();
-	const fields = ADDRESS_FIELDS.filter(([name]) => required.includes(name) || optional.includes(name)).map(
-		([name, max, autocomplete]) => {
-			const needed = required.includes(name);
-			const control = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (
-				h(doc, name === 'notes' ? 'textarea' : 'input', {
-					maxlength: String(max),
-					autocomplete,
-					...(name === 'phone' ? { type: 'tel', inputmode: 'tel' } : {}),
-					...(name === 'city' && settings.checkout.cities.length > 0 ? { list: 'ss-cart-cities' } : {}),
-					...(needed ? { required: '', 'aria-required': 'true' } : {}),
-				})
-			);
-			if (['city', 'area', 'country'].includes(name)) control.addEventListener('change', onPlace);
-			inputs.set(name, control);
-			return field(
-				doc,
-				`ss-cart-${name}`,
-				t(needed ? `checkout.field.${name}` : 'checkout.optional', { field: t(`checkout.field.${name}`) }),
-				control,
-			);
-		},
-	);
+	/** @param {string} name */
+	const value = (name) => inputs.get(name)?.value.trim() ?? '';
+	/** The region names offered where the address is, or null. */
+	const regionNames = () => regionsFor(regions, value('country') || homeCountry);
+	/** @param {AddressField} name @param {boolean} needed */
+	const control = (name, needed) => {
+		const names = name === 'region' ? regionNames() : null;
+		const node = names
+			? select(
+					doc,
+					[['', t('checkout.region.choose')], ...names.map((entry) => /** @type {[string, string]} */ ([entry, entry]))],
+					'',
+					{
+						autocomplete: AUTOFILL.region,
+					},
+				)
+			: /** @type {HTMLInputElement | HTMLTextAreaElement} */ (
+					h(doc, name === 'notes' ? 'textarea' : 'input', {
+						maxlength: String(ADDRESS_LIMITS[name]),
+						autocomplete: AUTOFILL[name],
+						...(name === 'phone' ? { type: 'tel', inputmode: 'tel' } : {}),
+						...(name === 'city' && settings.checkout.cities.length > 0 ? { list: 'ss-cart-cities' } : {}),
+					})
+				);
+		if (needed) {
+			node.setAttribute('required', '');
+			node.setAttribute('aria-required', 'true');
+		}
+		if (['city', 'area', 'region', 'postalCode', 'country'].includes(name)) node.addEventListener('change', onPlace);
+		inputs.set(name, node);
+		return node;
+	};
+	const fields = ADDRESS_FIELDS.filter((name) => required.includes(name) || optional.includes(name)).map((name) => {
+		const needed = required.includes(name);
+		return field(
+			doc,
+			`ss-cart-${name}`,
+			t(needed ? `checkout.field.${name}` : 'checkout.optional', { field: t(`checkout.field.${name}`) }),
+			control(name, needed),
+		);
+	});
+	// a new country may offer its own regions: the region field follows (a typed region is kept where it can be)
+	inputs.get('country')?.addEventListener('change', () => {
+		const old = inputs.get('region');
+		if (!old) return;
+		const kept = old.value;
+		const next = control('region', required.includes('region'));
+		next.setAttribute('id', 'ss-cart-region');
+		old.replaceWith(next);
+		const options = next.tagName === 'SELECT' ? [.../** @type {HTMLSelectElement} */ (next).options] : null;
+		if (!options || options.some((option) => option.value === kept)) next.value = kept;
+	});
 	const cities =
 		settings.checkout.cities.length > 0
 			? h(
@@ -67,17 +104,82 @@ export const addressForm = ({ doc, t, settings, onPlace }) => {
 			: null;
 	const node = h(doc, 'fieldset', { class: 'box' }, h(doc, 'legend', {}, t('checkout.address')), ...fields, cities);
 
-	/** @param {string} name */
-	const value = (name) => inputs.get(name)?.value.trim() ?? '';
 	return {
 		node,
 		value,
 		/** The address as the order takes it. */
-		values: () => Object.fromEntries(ADDRESS_FIELDS.map(([name]) => [name, value(name)])),
+		values: () => Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, value(name)])),
 		/** The first required field left empty, or null. */
 		missing: () => required.find((name) => inputs.has(name) && value(name) === '') ?? null,
 		/** @param {string} name */
 		focus: (name) => inputs.get(name)?.focus(),
+	};
+};
+
+/** A guest's details: their longest text, the input type and the browser's autofill name. */
+const GUEST_FIELDS = Object.freeze({
+	name: /** @type {const} */ ([ADDRESS_LIMITS.name, 'text', 'name']),
+	phone: /** @type {const} */ ([ADDRESS_LIMITS.phone, 'tel', 'tel']),
+	email: /** @type {const} */ ([254, 'email', 'email']),
+});
+
+/**
+ * A guest's details (E21): the name, and the contact the shop checks guests out by (`guestIdentity`, phase 5) first —
+ * the phone (needed while `phoneRequired` is on too), the email address, or either one of them; a contact not needed
+ * is optional.
+ * @param {{ doc: Document, t: Texts, rules: { identity: import('../core/guests.js').GuestIdentity, phoneRequired: boolean } }} input
+ */
+export const guestForm = ({ doc, t, rules }) => {
+	/** @type {Record<keyof typeof GUEST_FIELDS, boolean>} */
+	const needed = { name: true, phone: rules.identity === 'phone' || rules.phoneRequired, email: rules.identity === 'email' };
+	// under either, with no phone needed, one of the two is enough
+	const eitherOne = !needed.phone && !needed.email;
+	const order = /** @type {Array<keyof typeof GUEST_FIELDS>} */ (
+		rules.identity === 'email' ? ['name', 'email', 'phone'] : ['name', 'phone', 'email']
+	);
+	/** @type {Map<string, HTMLInputElement>} */
+	const inputs = new Map();
+	const fields = order.map((name) => {
+		const [max, type, autocomplete] = GUEST_FIELDS[name];
+		const control = /** @type {HTMLInputElement} */ (
+			h(doc, 'input', {
+				type,
+				maxlength: String(max),
+				autocomplete,
+				...(type === 'tel' ? { inputmode: 'tel' } : {}),
+				...(needed[name] ? { required: '', 'aria-required': 'true' } : {}),
+			})
+		);
+		inputs.set(name, control);
+		const label = t(`checkout.guest.${name}`);
+		return field(
+			doc,
+			`ss-cart-guest-${name}`,
+			needed[name] || eitherOne ? label : t('checkout.optional', { field: label }),
+			control,
+		);
+	});
+	const node = h(
+		doc,
+		'fieldset',
+		{ class: 'box' },
+		h(doc, 'legend', {}, t('checkout.guest.title')),
+		h(doc, 'p', { class: 'hint' }, t('checkout.guest.signIn')),
+		eitherOne ? h(doc, 'p', { class: 'hint' }, t('checkout.guest.either')) : null,
+		...fields,
+	);
+	/** @param {string} name */
+	const value = (name) => inputs.get(name)?.value.trim() ?? '';
+	return {
+		node,
+		/** The guest as the order takes it (`customer`). */
+		values: () => ({ name: value('name'), phone: value('phone'), email: value('email') }),
+		/** The first needed detail left empty (`contact`: neither the phone nor the email address under either), or null. */
+		missing: () =>
+			order.find((name) => needed[name] && value(name) === '') ??
+			(eitherOne && !value('phone') && !value('email') ? 'contact' : null),
+		/** @param {string} name */
+		focus: (name) => inputs.get(name === 'contact' ? 'phone' : name)?.focus(),
 	};
 };
 
@@ -94,7 +196,8 @@ export const returnUrlOf = (shop) => {
 
 /**
  * Show a placed order: its number, status, lines and totals, and, while it waits for a payment, the payment page link
- * or the button that starts the payment again.
+ * or the button that starts the payment again; for a bank transfer, the bank details, the shop's note and the transfer
+ * proof (E24).
  * @param {{ box: HTMLElement, t: Texts, shop: Shop, config: WidgetConfig, settings: ShopSettings, order: any }} input
  */
 export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
@@ -118,7 +221,7 @@ export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
 					{},
 					t('success.line', {
 						name: line.variantName ? `${line.name} (${line.variantName})` : line.name,
-						quantity: line.quantity,
+						quantity: quantityShown(t, line),
 					}),
 					h(doc, 'span', { class: 'meta' }, money(line.total, currency)),
 				),
@@ -148,5 +251,16 @@ export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
 				}),
 			);
 	} else if (order.role === 'awaiting_confirmation') parts.push(h(doc, 'p', { class: 'meta' }, t('success.confirming')));
+	parts.push(
+		...transferParts({
+			doc,
+			t,
+			shop,
+			config,
+			win: /** @type {Window & typeof globalThis} */ (doc.defaultView),
+			order,
+			onOrder: (next) => renderSuccess({ box, t, shop, config, settings, order: next }),
+		}),
+	);
 	box.replaceChildren(h(doc, 'div', { class: 'box' }, ...parts, status));
 };

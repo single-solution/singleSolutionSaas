@@ -6,6 +6,7 @@
  * The shop tools are in shop.js.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { SHOP_TOOL_NAMES } from './shop.js';
 import { isHttpsUrl } from './text.js';
 
@@ -55,9 +56,6 @@ export const PARAMETER_TYPES = Object.freeze(/** @type {const} */ (['string', 'n
  */
 /** @typedef {import('./providers.js').ToolSchema} ToolSchema */
 
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /** @param {unknown} value @param {number} max */
 const text = (value, max) => (typeof value === 'string' && value.trim().length > 0 && value.length <= max ? value.trim() : null);
 
@@ -77,7 +75,12 @@ export const checkTools = (items) => {
 		const at = `Tool ${index + 1}`;
 		if (!isObject(item)) return void errors.push(`${at}: not a tool.`);
 		const name = typeof item.name === 'string' && TOOL_NAME.test(item.name) ? item.name : null;
-		if (!name || Object.values(BUILTIN).includes(name) || SHOP_TOOL_NAMES.includes(name) || names.has(name))
+		if (
+			!name ||
+			/** @type {string[]} */ (Object.values(BUILTIN)).includes(name) ||
+			/** @type {readonly string[]} */ (SHOP_TOOL_NAMES).includes(name) ||
+			names.has(name)
+		)
 			return void errors.push(`${at}: the name is 2–41 lower-case letters, digits or _, unique and not a built-in tool.`);
 		names.add(name);
 		const description = text(item.description, 500);
@@ -227,13 +230,6 @@ export const slotRange = (args, { today, daysAhead }) => {
 	const end = to > last ? last : to;
 	return start <= end ? { from: start, to: end } : null;
 };
-
-/**
- * The text the signature covers: `<unix seconds>.<raw body>`.
- * @param {number} timestamp unix seconds
- * @param {string} body
- */
-export const signatureBase = (timestamp, body) => `${timestamp}.${body}`;
 
 /**
  * A tool answer as the AI gets it (text, capped).

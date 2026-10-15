@@ -11,8 +11,9 @@
  * Connection `rapid`: `{ secretKey, webhookSecret, sandbox? }`.
  * @module
  */
-import { fromDecimal, toDecimal } from '../../core/money.js';
-import { hmacHex, isObject, same } from '../util.js';
+import { fromDecimal, toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
+import { constantTimeEqual, hmacSha256Hex } from '@ss/protocol';
 import { call, failure, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
@@ -46,7 +47,7 @@ export const wholeUnits = (amount, currency) => {
  * @param {string} body
  * @param {string} secret
  */
-export const webhookSignature = (body, secret) => hmacHex(secret, body);
+export const webhookSignature = (body, secret) => hmacSha256Hex(secret, body);
 
 /** @type {GatewayAdapter} */
 export const rapid = {
@@ -97,7 +98,8 @@ export const rapid = {
 	},
 	notice: async (incoming, keys) => {
 		const given = (incoming.headers.get(SIGNATURE_HEADER) ?? '').trim().toLowerCase();
-		if (!given || !same(given, webhookSignature(incoming.rawBody, String(keys.webhookSecret)))) return { ok: false };
+		if (!given || !constantTimeEqual(given, webhookSignature(incoming.rawBody, String(keys.webhookSecret))))
+			return { ok: false };
 		/** @type {any} */
 		let body;
 		try {
@@ -115,7 +117,8 @@ export const rapid = {
 			news: [
 				{
 					kind: 'payment',
-					paymentId: typeof body.metadata?.ss_payment === 'string' ? body.metadata.ss_payment : null,
+					paymentId:
+						isObject(body.metadata) && typeof body.metadata.ss_payment === 'string' ? body.metadata.ss_payment : null,
 					ref,
 					outcome: PAID.has(status)
 						? 'paid'

@@ -35,6 +35,7 @@ const orderOf = (patch = {}) => ({
 		line2: '',
 		city: 'Springfield',
 		area: 'North',
+		region: '',
 		postalCode: '12345',
 		country: 'US',
 		notes: '',

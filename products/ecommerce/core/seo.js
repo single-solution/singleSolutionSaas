@@ -232,7 +232,7 @@ export const variantInStock = (product, variant) => !variant.soldOut && (!produc
 export const activeVariants = (product) => product.variants.filter((variant) => variant.active);
 
 /**
- * Option values of a variant as one label (`Red / 128 GB`).
+ * Option values of a variant as one label (`Blue / Large`).
  * @param {Pick<VariantRecord, 'options'>} variant
  */
 export const variantLabel = (variant) => Object.values(variant.options ?? {}).join(' / ');
@@ -329,6 +329,9 @@ export const daysRange = (list) => {
  * @property {MemberPrice[]} [memberPrices] member prices (role pricing on, G17): each offer adds its price for each
  *   tier of the site's member program
  * @property {string} [timeZone] the business time zone, whose days a sale's last day is (UTC without one)
+ * @property {import('./measure.js').Measure | null} [measure] sold in a unit of its own (its type's `measure`, while
+ *   the feature is on): each price is for one unit, said with a `UnitPriceSpecification` when the unit is tied to a
+ *   standard measure
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
  *   variant shows the product's photos
@@ -434,37 +437,52 @@ const specifications = (list) => (list.length === 0 ? null : list.length === 1 ?
  * The price of an offer (G4): the shown price; the struck-through price beside it (`StrikethroughPrice`, never on the
  * active price); member prices (G17); and for a sale that holds all day with an end, when it started (`validFrom`)
  * and its last day (`priceValidUntil`, the day before an end at midnight, a day in the business time zone; Google may
- * drop a listing whose date is past).
+ * drop a listing whose date is past). An item sold in a unit of its own tied to a standard measure says what each
+ * price is for (`referenceQuantity`: the amount and its UN/CEFACT code), the shown price as a `UnitPriceSpecification`
+ * too; without a standard measure nothing is said of the unit.
  * @param {import('./promotions.js').ShownPrice} shown
  * @param {string} currency
  * @param {MemberPrice[]} members
  * @param {string} timeZone
+ * @param {import('./measure.js').Measure | null} [measure]
  */
-const offerPrice = (shown, currency, members, timeZone) => ({
-	price: toDecimal(shown.price, currency),
-	priceCurrency: currency,
-	priceSpecification: specifications([
-		...(shown.was === null
-			? []
-			: [
-					{
-						'@type': 'UnitPriceSpecification',
-						priceType: `${SCHEMA}/StrikethroughPrice`,
-						price: toDecimal(shown.was, currency),
-						priceCurrency: currency,
-					},
-				]),
-		// a member's price for each tier (G17): never with a priceType
-		...members.map((member) => ({
-			'@type': 'UnitPriceSpecification',
-			price: toDecimal(memberPriceOf(shown.price, member), currency),
-			priceCurrency: currency,
-			validForMemberTier: { '@id': member.tierId },
-		})),
-	]),
-	validFrom: shown.sale?.until && shown.sale.from ? new Date(shown.sale.from).toISOString() : null,
-	priceValidUntil: shown.sale?.until ? zonedDay(new Date(new Date(shown.sale.until).getTime() - 1), timeZone) : null,
-});
+const offerPrice = (shown, currency, members, timeZone, measure = null) => {
+	// only a unit tied to a standard measure says what each price is for (never guessed)
+	const standard = measure?.standard ?? null;
+	const per = standard
+		? { referenceQuantity: { '@type': 'QuantitativeValue', value: standard.amount, unitCode: standard.code } }
+		: {};
+	return {
+		price: toDecimal(shown.price, currency),
+		priceCurrency: currency,
+		priceSpecification: specifications([
+			...(standard
+				? [{ '@type': 'UnitPriceSpecification', price: toDecimal(shown.price, currency), priceCurrency: currency, ...per }]
+				: []),
+			...(shown.was === null
+				? []
+				: [
+						{
+							'@type': 'UnitPriceSpecification',
+							priceType: `${SCHEMA}/StrikethroughPrice`,
+							price: toDecimal(shown.was, currency),
+							priceCurrency: currency,
+							...per,
+						},
+					]),
+			// a member's price for each tier (G17): never with a priceType
+			...members.map((member) => ({
+				'@type': 'UnitPriceSpecification',
+				price: toDecimal(memberPriceOf(shown.price, member), currency),
+				priceCurrency: currency,
+				validForMemberTier: { '@id': member.tierId },
+				...per,
+			})),
+		]),
+		validFrom: shown.sale?.until && shown.sale.from ? new Date(shown.sale.from).toISOString() : null,
+		priceValidUntil: shown.sale?.until ? zonedDay(new Date(new Date(shown.sale.until).getTime() - 1), timeZone) : null,
+	};
+};
 
 /** How items come back → schema.org `ReturnMethodEnumeration`. */
 const RETURN_METHODS = Object.freeze({
@@ -645,7 +663,7 @@ export const productJsonLd = (page) => {
 		compact({
 			'@type': 'Offer',
 			url: page.variantUrl?.(variant) ?? url,
-			...offerPrice(page.shown(variant), currency, page.memberPrices ?? [], page.timeZone ?? 'UTC'),
+			...offerPrice(page.shown(variant), currency, page.memberPrices ?? [], page.timeZone ?? 'UTC', page.measure ?? null),
 			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
 			itemCondition: (() => {
 				const condition = page.condition(variant);

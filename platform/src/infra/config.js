@@ -14,6 +14,7 @@
  * `buildConfig(env, system)` joins them into the {@link PortalConfig} every module reads.
  * @module
  */
+import { mongoDatabaseName } from '@ss/net';
 import { platformError } from './errors.js';
 
 /** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
@@ -132,21 +133,6 @@ const LOCAL_OUTBOUND_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
 /** `Name <address>` or `address`. */
 export const MAIL_FROM = /^(?:[^<>\r\n]{1,100} <[^\s@<>]{1,64}@[^\s@<>]{1,255}>|[^\s@<>]{1,64}@[^\s@<>]{1,255})$/;
 
-/**
- * The database named by the URI's path; null when it names none, '' when its escapes are malformed (refused).
- * @param {string} uri
- * @returns {string | null}
- */
-const dbNameFromUri = (uri) => {
-	const match = /^mongodb(?:\+srv)?:\/\/[^/]+\/([^?]*)/.exec(uri);
-	if (!match?.[1]) return null;
-	try {
-		return decodeURIComponent(match[1]);
-	} catch {
-		return '';
-	}
-};
-
 const LOCAL_HOST = /^(?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost|127\.0\.0\.1|\[::1\])$/;
 
 /**
@@ -208,7 +194,7 @@ export const loadEnv = (env = process.env) => {
 	const mongoUri = read('MONGODB_URI') ?? '';
 	if (!mongoUri) problems.push('MONGODB_URI is required');
 	else if (!/^mongodb(\+srv)?:\/\//.test(mongoUri)) problems.push('MONGODB_URI must be a mongodb:// or mongodb+srv:// URI');
-	const dbName = (mongoUri ? dbNameFromUri(mongoUri) : null) ?? 'ss_portal';
+	const dbName = (mongoUri ? mongoDatabaseName(mongoUri) : null) ?? 'ss_portal';
 	if (!/^[A-Za-z0-9_-]{1,63}$/.test(dbName)) problems.push('MONGODB_URI names an invalid database');
 
 	// The Portal's address and the key of stored secrets (PLAN 0.11)

@@ -3,9 +3,10 @@
  * E18–E25, E30).
  *
  * - Placing: the cart is priced again on the server; a signed-in shopper (Accounts) or, while `guests` allows, a
- *   guest with a name and phone (E21: normalized, one customer record per phone; `unless_password` sends members to
- *   sign in; a phone a member's record already has links the order to that member's record, K-6, and into their account
- *   at their sign-in with that phone verified) places it; COD safety, the
+ *   guest with a name and the contact `guestIdentity` asks for (E21, dynamic model §5: normalized, one customer record
+ *   per guest key, a phone or an email address; `unless_password` sends members to sign in; a phone or email address a
+ *   member's record already has links the order to that member's record, K-6, and into their account at their sign-in
+ *   with it verified) places it; COD safety, the
  *   blocklist and the open-order cap apply per customer; the ledger places the
  *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
  *   the business year and the yearly counter (E30). Online, bank-transfer and COD-advance orders start awaiting
@@ -48,16 +49,17 @@ import {
 	triggersOfFlow,
 } from '../core/flow.js';
 import { shopperInvoiceReady } from '../core/invoice.js';
-import { checkGuest, phoneDigitsOf, savedAddresses } from '../core/guests.js';
+import { checkGuest, guestRules, phoneDigitsOf, savedAddresses } from '../core/guests.js';
 import { earnsAsMember, loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
+import { lineMeasureOf, measureView, piecesOf } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { byActor, orderMoney, serverNote } from '../core/orders.js';
 import { ORDER_NUMBER } from '../core/order-numbers.js';
 import { checkTransition, planTransition } from '../core/transitions.js';
 import { createMedia } from './catalog-media.js';
-import { createGuests, phoneRulesOf } from './guests.js';
+import { addressRulesOf, createGuests, phoneRulesOf } from './guests.js';
 import { DROPPED, RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
 import { createMoves } from './orders-moves.js';
 import { createTransitions, rulesOf } from './transitions.js';
@@ -351,6 +353,22 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		order.role === 'awaiting_payment' && order.payment.via === 'manual' && order.payment.state !== 'paid';
 
 	/**
+	 * The lines of a delivered order already reviewed, while reviews are per order line (E34); null when its items are
+	 * not reviewed from the order (reviews off or per product, or the order not delivered).
+	 * @param {Site} s @param {OrderRecord} order
+	 * @returns {Promise<Set<string> | null>}
+	 */
+	const reviewedLines = async (s, order) => {
+		if (!order.deliveredAt || !s.has('reviews') || (await s.values('reviews')).per !== 'order_line') return null;
+		const data = await s.data();
+		const rows = await data
+			.collection(COLLECTIONS.reviews)
+			.find({ websiteId: data.websiteId, orderId: order.id }, { projection: { _id: 0, lineId: 1 } })
+			.toArray();
+		return new Set(rows.map((row) => String(row.lineId)));
+	};
+
+	/**
 	 * What the shopper sees of an order (never staff notes or who moved or paid it).
 	 * @param {Site} s @param {OrderRecord} order @param {OrderFlow} flow
 	 */
@@ -369,7 +387,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		// the units' numbers the shopper may see: plain serial numbers and the unit fields shown to shoppers
 		const units = order.lines.some((line) => (line.serials ?? []).length > 0);
 		const filled = Object.keys(order.fields ?? {}).length > 0;
-		const [checkout, zones, couriers, invoices, unitValues, unitFields, orderFields] = await Promise.all([
+		const [checkout, zones, couriers, invoices, unitValues, unitFields, orderFields, reviewed] = await Promise.all([
 			s.values('checkout'),
 			s.has('delivery_zones') ? s.values('delivery_zones') : Promise.resolve(null),
 			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
@@ -377,6 +395,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			units ? s.data().then((data) => unitsOfOrders(data, [order.id])) : Promise.resolve(new Map()),
 			units ? s.data().then((data) => fieldsOn(data, 'unit')) : Promise.resolve([]),
 			filled ? s.data().then((data) => fieldsOn(data, 'order')) : Promise.resolve([]),
+			reviewedLines(s, order),
 		]);
 		// paid, refunded and due counted the one way (a refund never makes a debt, CK-5)
 		const sums = orderMoney(order);
@@ -416,6 +435,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						image: await media.mediaUrl(s, line.image),
 						unitPrice: line.unitPrice,
 						quantity: line.quantity,
+						measure: measureView(line.quantity, line.measure),
 						discount: line.discount,
 						tax: line.tax,
 						total: line.total,
@@ -423,6 +443,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						downloads: extra?.files ?? [],
 						downloadsLeft: extra?.downloadsLeft ?? null,
 						licenceKeys: extra?.licenceKeys ?? [],
+						// with reviews per order line: delivered and not reviewed yet (E34)
+						canReview: reviewed !== null && !reviewed.has(line.id),
 					};
 				}),
 			),
@@ -554,7 +576,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	/**
 	 * Who places an order: the signed-in shopper, else a guest while `guests` allows (E21).
 	 * @param {Site} s @param {any} ctx @param {Record<string, any>} checkout
-	 * @returns {Promise<{ shopper: Shopper | null, guest: { name: string, phone: string, email: string } | null }>}
+	 * @returns {Promise<{ shopper: Shopper | null,
+	 *   guest: { name: string, phone: string, email: string, guestKey: string } | null }>}
 	 */
 	const buyerOf = async (s, ctx, checkout) => {
 		const shopper = await service.shopper(s);
@@ -565,13 +588,18 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const mode = String(checkout.guests ?? 'off');
 		if (mode === 'off') throw problem('sign_in_required', 'Sign in to continue.');
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-		const guest = checkGuest(body.customer, await phoneRulesOf(s));
+		const guest = checkGuest(body.customer, await phoneRulesOf(s), guestRules(checkout));
 		if (!guest.ok) throw service.invalid(guest.field, guest.message, guest.code);
-		if (mode === 'unless_password' && (await guests.memberWithPassword(s, guest.value.phone)))
-			throw problem('sign_in_required', 'This phone number has an account: sign in to order.', {
+		const taken = mode === 'unless_password' ? await guests.memberWithPassword(s, guest.value) : null;
+		if (taken)
+			throw problem(
+				'sign_in_required',
+				taken === 'phone'
+					? 'This phone number has an account: sign in to order.'
+					: 'This email address has an account: sign in to order.',
 				// `reason` is the kit's own extension; this one says why a sign-in is needed
-				extensions: { signIn: 'member_phone' },
-			});
+				{ extensions: { signIn: taken === 'phone' ? 'member_phone' : 'member_email' } },
+			);
 		return { shopper: null, guest: guest.value };
 	};
 
@@ -620,6 +648,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				image: line.image,
 				unitPrice: line.unitPrice,
 				quantity: line.quantity,
+				// how its item was measured at placement (none: pieces)
+				...(line.measure
+					? { measure: /** @type {import('../core/measure.js').LineMeasure} */ (lineMeasureOf(line.measure)) }
+					: {}),
 				discount: price.discount,
 				tax: price.tax,
 				total: price.total,
@@ -707,13 +739,13 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			method: order.delivery.method === 'none' ? null : order.delivery.method,
 			city: order.address?.city ?? '',
 			area: order.address?.area ?? '',
+			region: order.address?.region ?? '',
+			postalCode: order.address?.postalCode ?? '',
 			country: order.address?.country ?? '',
 			locationId: order.delivery.locationId,
 		};
 		const given = input.address ?? order.address;
-		/** @type {string[]} */
-		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
-		const checkedAddress = given ? checkAddress(given, required, await phoneRulesOf(s)) : null;
+		const checkedAddress = given ? checkAddress(given, await addressRulesOf(s)) : null;
 		if (checkedAddress && !checkedAddress.ok) throw service.invalid(checkedAddress.field, checkedAddress.message);
 		const address = checkedAddress?.ok ? checkedAddress.value : null;
 		const q = await quoting.quote(
@@ -736,7 +768,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			null,
 			address,
 			{
-				customer: order.customer.customerId ? await store.guestCustomer(order.customer.phone) : null,
+				customer: order.customer.customerId ? await store.customerById(order.customer.customerId) : null,
 				edit: {
 					prices,
 					deals: kept,
@@ -801,7 +833,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			lines: lines
 				.filter((line) => line.kind === 'physical')
 				.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity, locationId: null })),
-			ordered: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+			ordered: lines.map((line) => ({ productId: line.productId, quantity: piecesOf(line) })),
 			update: async (session) => {
 				// it holds its new lines' stock now, also an imported order that held none (its facts say so: a cancel gives
 				// it back), only while its facts are as read
@@ -846,10 +878,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const s = await service.site(ctx);
 		const checkout = await s.values('checkout');
 		const { shopper, guest } = await buyerOf(s, ctx, checkout);
-		const cart = checkCart(ctx.body, {
-			maxLines: Number(checkout.maxLines ?? 50),
-			maxQuantity: Number(checkout.maxQuantity ?? 99),
-		});
+		const cart = checkCart(ctx.body, { maxLines: Number(checkout.maxLines ?? 50) });
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		const extras = checkOrderExtras(ctx.body);
 		if (!extras.ok) throw service.invalid(extras.field, extras.message);
@@ -860,12 +889,13 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const store = createOrdersStore(data);
 		const buyer = shopper
 			? { userId: shopper.id, name: shopper.name, email: shopper.email, phone: shopper.phone }
-			: { userId: null, .../** @type {{ name: string, phone: string, email: string }} */ (guest) };
-		// a returning customer who orders as a guest is the customer their phone names (K-6): a member's record (its
-		// points, the block, the cap and the coupon uses are that member's; the order moves into their account only at a
-		// sign-in that proves the phone, owner 2026-10-14 (2)), else their own guest record (E21)
-		const guestRecord = shopper ? null : await store.guestCustomer(buyer.phone);
-		const member = shopper ? null : await store.memberByPhone(buyer.phone);
+			: { userId: null, .../** @type {{ name: string, phone: string, email: string, guestKey: string }} */ (guest) };
+		// a returning customer who orders as a guest is the customer their phone or email address names (K-6): a member's
+		// record (its points, the block, the cap and the coupon uses are that member's; the order moves into their account
+		// only at a sign-in that proves that phone or email address, owner 2026-10-14 (2)), else their own guest record
+		// (E21, `guestKey`)
+		const guestRecord = guest ? await store.guestCustomer(guest.guestKey) : null;
+		const member = guest ? await store.memberByKey(guest.guestKey) : null;
 		const known = shopper ? await store.customer(shopper.id) : (member ?? guestRecord);
 		if (known?.blocked || guestRecord?.blocked)
 			throw problem('customer_blocked', 'Ordering is not possible for this account. Please contact the shop.');
@@ -890,12 +920,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				'You have orders waiting for payment or confirmation. Finish or cancel them first.',
 			);
 
-		/** @type {string[]} */
-		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
 		const address =
 			extras.value.address === undefined || extras.value.address === null
 				? null
-				: checkAddress(extras.value.address, required, await phoneRulesOf(s));
+				: checkAddress(extras.value.address, await addressRulesOf(s));
 		const q = await quoting.quote(s, { ...cart.value, payment: method }, shopper, address?.ok ? address.value : null, {
 			customer: known,
 		});
@@ -1151,7 +1179,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				total: order.totals.total,
 				currency: order.totals.currency,
 				placedAt: iso(order.placedAt),
-				itemCount: order.lines.reduce((n, line) => n + line.quantity, 0),
+				itemCount: order.lines.reduce((n, line) => n + piecesOf(line), 0),
 				image: await media.mediaUrl(s, order.lines[0]?.image),
 			})),
 		);
@@ -1288,10 +1316,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const quoteCart = async (ctx) => {
 		const s = await service.site(ctx);
 		const checkout = await s.values('checkout');
-		const cart = checkCart(ctx.body, {
-			maxLines: Number(checkout.maxLines ?? 50),
-			maxQuantity: Number(checkout.maxQuantity ?? 99),
-		});
+		const cart = checkCart(ctx.body, { maxLines: Number(checkout.maxLines ?? 50) });
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		return quoting.view(s, await quoting.quote(s, cart.value, await service.shopper(s)));
 	};

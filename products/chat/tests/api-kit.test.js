@@ -184,7 +184,7 @@ describe('dashboard', () => {
 		const sys = await start(['visitor_chat', 'webhook_tools', 'ai_replies']);
 		const owner = await sys.adminSession();
 		const base = `/v1/dashboard/websites/${sys.websiteId}`;
-		const bad = await sys.dashboard(owner, 'PUT', `${base}/lists/tools`, { items: [{ name: 'Bad Name', url: 'http://x' }] });
+		const bad = await sys.dashboard(owner, 'PUT', `${base}/lists/tools`, { value: [{ name: 'Bad Name', url: 'http://x' }] });
 		expect(bad.status).toBe(422);
 		expect(bad.json.errors.length).toBeGreaterThan(0);
 		expect((await sys.dashboard(owner, 'GET', `${base}/lists/nope`)).status).toBe(404);
@@ -192,19 +192,19 @@ describe('dashboard', () => {
 		expect(
 			(
 				await sys.dashboard(owner, 'PUT', `${base}/lists/custom_fields`, {
-					items: [{ key: 'size', label: 'Size', type: 'text' }],
+					value: [{ key: 'size', label: 'Size', type: 'text' }],
 				})
 			).status,
 		).toBe(200);
 		const merchant = await sys.merchantSession();
-		expect((await sys.dashboard(merchant, 'PUT', `${base}/lists/custom_fields`, { items: [] })).status).toBe(403);
-		expect((await sys.dashboard(merchant, 'GET', `${base}/lists/custom_fields`)).json.items).toEqual([
+		expect((await sys.dashboard(merchant, 'PUT', `${base}/lists/custom_fields`, { value: [] })).status).toBe(403);
+		expect((await sys.dashboard(merchant, 'GET', `${base}/lists/custom_fields`)).json.value).toEqual([
 			{ key: 'size', label: 'Size', type: 'text', options: [] },
 		]);
 		const saved = await sys.dashboard(merchant, 'PUT', `${base}/lists/tools`, {
-			items: [{ name: 'lookup', description: 'Looks up', url: 'https://tools.example.dev/x', parameters: [] }],
+			value: [{ name: 'lookup', description: 'Looks up', url: 'https://tools.example.dev/x', parameters: [] }],
 		});
-		expect(saved.json.items[0]).toMatchObject({ name: 'lookup', includeVisitor: false });
+		expect(saved.json.value[0]).toMatchObject({ name: 'lookup', includeVisitor: false });
 		const overview = await sys.dashboard(merchant, 'GET', `${base}/overview`);
 		expect(overview.json.recentChanges.map((/** @type {any} */ c) => c.detail)).toContain('Webhook tools: changed');
 		// each save is an activity-log entry by who saved it, as the kit's own settings saves are
@@ -213,6 +213,14 @@ describe('dashboard', () => {
 			['merchant', 'list.tools', 'Webhook tools', 'changed'],
 			['admin', 'list.custom_fields', 'Custom fields', 'changed'],
 		]);
+	});
+
+	it('refuses a page to hide the chat on that is not a path from /', async () => {
+		const sys = await start(['visitor_chat']);
+		const owner = await sys.adminSession();
+		const path = `/v1/dashboard/websites/${sys.websiteId}/settings/visitor_chat.hideOnPages`;
+		expect((await sys.dashboard(owner, 'PUT', path, { value: ['checkout/**'] })).status).toBe(422);
+		expect((await sys.dashboard(owner, 'PUT', path, { value: ['/checkout/**'] })).status).toBe(204);
 	});
 
 	it('reveals and regenerates the tool signing secret (sealed with ENCRYPTION_KEY)', async () => {

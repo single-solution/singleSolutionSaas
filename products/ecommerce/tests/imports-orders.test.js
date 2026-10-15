@@ -462,7 +462,7 @@ describe('import of shoppers and orders (K10)', () => {
 			guest: false,
 			email: 'sara@example.com',
 			phone: '+15550001111',
-			phoneDigits: '5550001111',
+			phoneDigits: '15550001111',
 			orderCount: 0,
 		});
 		const guest = (await all(COLLECTIONS.customers)).find((c) => c.id === CUS_GUEST);
@@ -478,7 +478,7 @@ describe('import of shoppers and orders (K10)', () => {
 			number: '2026-000002',
 			role: 'delivered',
 			idempotencyKey: `import:${DELIVERED}`,
-			phoneDigits: '5550001111',
+			phoneDigits: '15550001111',
 			placedAt: new Date('2026-03-01T09:00:00Z'),
 			createdAt: new Date('2026-03-01T09:00:00Z'),
 			deliveredAt: new Date('2026-03-04T12:00:00Z'),
@@ -709,7 +709,7 @@ describe('import of shoppers and orders (K10)', () => {
 		expect((await send('customers', [guest])).json).toMatchObject({ inserted: 1, failed: [] });
 		expect((await all(COLLECTIONS.customers)).find((c) => c.id === guest.id)).toMatchObject({
 			phone: '+15550005555',
-			phoneDigits: '5550005555',
+			phoneDigits: '15550005555',
 		});
 	});
 });

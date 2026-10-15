@@ -13,8 +13,11 @@ import {
 	keyOf,
 	loadGrade,
 	splitIds,
+	taxRegionLine,
+	taxRegionOf,
 	videoOf,
 } from '../app/dashboard/drafts.js';
+import { checkTaxRules } from '../core/taxes.js';
 import { DEFAULT_FLOW, canMove, checkOrderFlow } from '../core/flow.js';
 import { MAX_GRADES, checkGrades } from '../core/grades.js';
 
@@ -55,6 +58,22 @@ describe('list helpers', () => {
 		expect(daysOf('')).toBeNull();
 		expect(daysOf(' 30 ')).toBe(30);
 		expect(daysOf(undefined)).toBeNull();
+	});
+
+	it('writes a tax rule’s region as one line, Country, Region, City, Postcode start, and reads it back', () => {
+		expect(taxRegionLine({ country: 'US', region: '', city: '', postcode: '' })).toBe('US');
+		expect(taxRegionLine({ country: 'US', region: 'California', city: '', postcode: '' })).toBe('US, California');
+		expect(taxRegionLine({ country: 'GB', region: '', city: '', postcode: 'SW1' })).toBe('GB, , , SW1');
+		expect(taxRegionOf('GB, , , SW1')).toEqual({ country: 'GB', region: '', city: '', postcode: 'SW1' });
+		expect(taxRegionOf(' US ,California')).toEqual({ country: 'US', region: 'California', city: '', postcode: '' });
+		for (const line of ['US', 'US, California', 'US, California, San Francisco, 941', 'GB, , London'])
+			expect(taxRegionLine(taxRegionOf(line))).toBe(line);
+		// the editor's lines save as the server checks them
+		const saved = checkTaxRules([{ name: 'T', percent: 1, regions: ['US, California', 'GB, , , sw1'].map(taxRegionOf) }]);
+		expect(saved.ok && saved.value[0]?.regions).toEqual([
+			{ country: 'US', region: 'California', city: '', postcode: '' },
+			{ country: 'GB', region: '', city: '', postcode: 'SW1' },
+		]);
 	});
 
 	it('splits pasted ids on commas, spaces and lines, without repeats', () => {

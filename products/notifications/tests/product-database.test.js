@@ -1,7 +1,7 @@
 /**
- * Notifications opens its product database itself (it owns the store): the client has the kit's pool and deadlines
- * (K-16), so a database that cannot be reached answers 503 `database_unavailable` within the deadline, never 500 or a
- * request that waits for the driver's 30 s.
+ * Notifications' product database (which its list setting shares) comes from the kit's start-up pieces
+ * (`createProductBase`): the client has the kit's pool and deadlines (K-16), so a database that cannot be reached answers
+ * 503 `database_unavailable` within the deadline, never 500 or a request that waits for the driver's 30 s.
  */
 import { PRODUCT_DATABASE_OPTIONS } from '@ss/app-kit';
 import { afterAll, expect, it, vi } from 'vitest';

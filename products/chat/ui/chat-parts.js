@@ -4,10 +4,9 @@
  * product cards under an AI answer.
  * @module
  */
-import { formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
+import { element, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
 import { ADD_TO_CART_EVENT } from '../core/widgets.js';
 import { buttonOf, customInput, formPart, webAddress } from './common.js';
-import { element } from './dom.js';
 
 /** @typedef {{ doc: Document, t: import('./common.js').Texts, make: import('./common.js').FieldMaker }} Kit */
 

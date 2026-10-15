@@ -140,7 +140,7 @@ const isCount = (value, max) => Number.isSafeInteger(value) && Number(value) >= 
 const isDays = (value) => value === null || isCount(value, LIMITS.days);
 
 /**
- * The variant's display name: its option values in the product's axis order (`Red / 128 GB`), '' without options.
+ * The variant's display name: its option values in the product's axis order (`Blue / Large`), '' without options.
  * @param {Array<{ name: string }>} options
  * @param {Record<string, string>} values
  */

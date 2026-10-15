@@ -34,12 +34,13 @@ export const INDEXES = [
 		unique: true,
 		partialFilterExpression: { id: { $type: 'string' } },
 	},
+	// one record per guest: by `p:<phone>` or `e:<email>` (dynamic model §5)
 	{
 		collection: COLLECTIONS.customers,
-		keys: { websiteId: 1, phone: 1 },
-		name: 'one_guest_per_phone',
+		keys: { websiteId: 1, guestKey: 1 },
+		name: 'one_guest_per_key',
 		unique: true,
-		partialFilterExpression: { guest: true },
+		partialFilterExpression: { guestKey: { $type: 'string' } },
 	},
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'payment.paymentId': 1 }, name: 'by_payment' },
 	// orders per status and role (the order flow's save guard counts them from the index alone, one $group; restatus)
@@ -143,32 +144,49 @@ export const createOrdersStore = (data) => {
 			/** @type {CustomerRecord | null} */ (
 				await data.collection(COLLECTIONS.customers).findOne({ websiteId, userId }, NO_ID)
 			),
-		/** A guest's record by their normalized phone (E21). @param {string} phone @returns {Promise<CustomerRecord | null>} */
-		guestCustomer: async (phone) =>
-			/** @type {CustomerRecord | null} */ (
-				await data.collection(COLLECTIONS.customers).findOne({ websiteId, guest: true, phone }, NO_ID)
-			),
+		/** A customer record by its id. @param {string} id @returns {Promise<CustomerRecord | null>} */
+		customerById: async (id) =>
+			/** @type {CustomerRecord | null} */ (await data.collection(COLLECTIONS.customers).findOne({ websiteId, id }, NO_ID)),
 		/**
-		 * A member's record with this normalized phone (a returning customer ordering as a guest, K-6).
-		 * @param {string} phone @returns {Promise<CustomerRecord | null>}
+		 * A guest's record by its key (`p:<E.164>` or `e:<email>`, E21, dynamic model §5).
+		 * @param {string} guestKey @returns {Promise<CustomerRecord | null>}
 		 */
-		memberByPhone: async (phone) =>
-			/** @type {CustomerRecord | null} */ (
+		guestCustomer: async (guestKey) =>
+			guestKey
+				? /** @type {CustomerRecord | null} */ (
+						await data.collection(COLLECTIONS.customers).findOne({ websiteId, guestKey }, NO_ID)
+					)
+				: null,
+		/**
+		 * The member's record a guest key names: the member with that normalized phone or email address (a returning
+		 * customer ordering as a guest, K-6), the latest to order first.
+		 * @param {string} guestKey @returns {Promise<CustomerRecord | null>}
+		 */
+		memberByKey: async (guestKey) => {
+			const contact = guestKey.startsWith('p:')
+				? { phone: guestKey.slice(2) }
+				: guestKey.startsWith('e:')
+					? { email: guestKey.slice(2) }
+					: null;
+			if (!contact) return null;
+			return /** @type {CustomerRecord | null} */ (
 				await data
 					.collection(COLLECTIONS.customers)
-					.findOne({ websiteId, phone, userId: { $type: 'string', $ne: '' } }, { ...NO_ID, sort: { lastOrderAt: -1 } })
-			),
+					.findOne({ websiteId, ...contact, userId: { $type: 'string', $ne: '' } }, { ...NO_ID, sort: { lastOrderAt: -1 } })
+			);
+		},
 		/**
 		 * The customer record of a member or a guest, made when missing (its `cus_` id is kept for good, and when it was
 		 * made, CU-4), with their latest details (`refresh: false`: only when it is made). A member is found by user id, a
-		 * guest by normalized phone (E21).
-		 * @param {{ userId: string | null, name: string, email: string, phone: string }} who
+		 * guest by its key (E21, `guestKey`).
+		 * @param {{ userId: string | null, name: string, email: string, phone: string, guestKey?: string }} who
 		 * @param {{ at: Date, refresh?: boolean }} when `at`: the record's `createdAt` when it is made
 		 * @returns {Promise<CustomerRecord>}
 		 */
 		ensureCustomer: async (who, { at, refresh = true }) => {
 			const customers = data.collection(COLLECTIONS.customers);
-			const filter = who.userId ? { websiteId, userId: who.userId } : { websiteId, guest: true, phone: who.phone };
+			if (!who.userId && !who.guestKey) throw new Error('A guest customer record needs its key.');
+			const filter = who.userId ? { websiteId, userId: who.userId } : { websiteId, guestKey: who.guestKey };
 			const set = {
 				name: who.name,
 				...(who.email || who.userId ? { email: who.email } : {}),
@@ -187,6 +205,7 @@ export const createOrdersStore = (data) => {
 				city: '',
 				seenBy: [],
 				...(who.email || who.userId ? {} : { email: '' }),
+				...(who.userId ? {} : { guestKey: who.guestKey }),
 				createdAt: at,
 			};
 			/** @returns {Promise<any>} */

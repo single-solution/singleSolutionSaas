@@ -186,6 +186,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 								return answer.ok ? null : kit.reason(answer);
 							},
 							done: (next, added) => saved(next, false, t('catalogAdmin.generated', { added })),
+							measure: product.type?.measure ?? null,
 						}),
 					)
 				: null;

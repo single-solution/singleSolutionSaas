@@ -10,15 +10,6 @@ export const WIDGET_GLOBAL = 'SSNotifications';
 /** Widgets mount only into elements with this attribute; its value is the widget key from manifest.json. */
 export const WIDGET_ATTRIBUTE = 'data-ss-notifications';
 
-/** The feature each widget belongs to (manifest.json `widgets`): a widget mounts only while its feature is on. */
-export const WIDGET_FEATURES = Object.freeze({
-	push_permission: 'browser_push',
-	staff_push_permission: 'staff_push',
-	delivery_log: 'send_api',
-	template_editor: 'send_api',
-	send_message: 'send_api',
-});
-
 /** Where the browser keeps the visitor's push subscriber id (so the merchant's site can read it back). */
 export const SUBSCRIBER_STORAGE_KEY = 'ss-notifications-subscriber';
 

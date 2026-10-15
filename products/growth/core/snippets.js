@@ -5,6 +5,7 @@
  * the analytics API. Plain text; no I/O.
  * @module
  */
+import { widgetScriptTag } from '@ss/contracts/text';
 import { PAGE_MARKER, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
@@ -17,7 +18,8 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		widgets.filter((widget) => widget.kind === kind).map((widget) => `<div ${WIDGET_ATTRIBUTE}="${widget.key}"></div>`);
 	const pageScript = [
 		'<!-- in the <head> of every page, before the other products’ scripts (so it hears their shop events) -->',
-		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN"></script>`,
+		// never async: it runs in page order, so it listens before the other products send their events
+		widgetScriptTag({ src: `${base}/widget.js`, token: 'YOUR_BROWSER_TOKEN', async: false }),
 		'<!-- optional: where the notice bar goes (else it is placed at the top of the page) -->',
 		`<div ${WIDGET_ATTRIBUTE}="notice_bar"></div>`,
 	].join('\n');
@@ -55,7 +57,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		"  orderId: '1042', currency: 'USD', value: 2500, items: [{ id: 'sku-1', price: 1250, quantity: 2 }] } }));",
 	].join('\n');
 	const admin = [
-		`<script src="${base}/widget.js"></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

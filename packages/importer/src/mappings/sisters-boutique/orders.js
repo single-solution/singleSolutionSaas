@@ -332,6 +332,7 @@ export const orderStep = {
 						line2: '',
 						city: text(address.city),
 						area: text(address.area),
+						region: '',
 						postalCode: text(address.postalCode),
 						country: '',
 						notes: '',

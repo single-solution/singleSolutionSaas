@@ -8,7 +8,9 @@
  * Connection `stripe`: `{ secretKey: sk_… | rk_…, webhookSecret: whsec_… }`. API version pinned with `Stripe-Version`.
  * @module
  */
-import { formBody, isObject, verifyTimestamped } from '../util.js';
+import { isObject } from '@ss/contracts/util';
+import { verifyWebhook } from '@ss/protocol';
+import { formBody } from '../util.js';
 import { call, failure, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
@@ -85,11 +87,11 @@ export const stripe = {
 		return { kind: 'redirect', url: answer.json.url, ref: String(answer.json.id) };
 	},
 	notice: async (incoming, keys, ctx) => {
-		const signed = verifyTimestamped({
+		const signed = verifyWebhook({
 			header: incoming.headers.get('stripe-signature'),
 			body: incoming.rawBody,
 			secret: String(keys.webhookSecret),
-			now: ctx.now(),
+			now: ctx.now,
 		});
 		if (!signed) return { ok: false };
 		/** @type {any} */
@@ -202,7 +204,12 @@ export const stripe = {
 		if (!ok2xx(answer.status) || !isObject(answer.json)) return null;
 		const sub = ref.startsWith('cs_') ? answer.json.subscription : answer.json;
 		if (!isObject(sub)) return null;
-		return { kind: 'subscription', subscriptionId: subscription.id, ref: String(sub.id), status: sub.status ?? null };
+		return {
+			kind: 'subscription',
+			subscriptionId: subscription.id,
+			ref: String(sub.id),
+			status: typeof sub.status === 'string' ? sub.status : null,
+		};
 	},
 	cancelSubscription: async (subscription, keys, ctx) => {
 		if (!subscription.gatewayRef?.startsWith('sub_')) return { ok: false, message: 'Stripe has not started it yet.' };

@@ -4,6 +4,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
+import { isObject } from '@ss/contracts/util';
 import { utcDayStart } from '../../../infra/util.js';
 
 /** @typedef {{ path: string, message: string }} FieldError */
@@ -11,12 +12,6 @@ import { utcDayStart } from '../../../infra/util.js';
  * @template T
  * @typedef {{ ok: true, value: T } | { ok: false, errors: FieldError[] }} Checked
  */
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * @param {Record<string, unknown>} body

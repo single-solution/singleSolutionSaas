@@ -143,6 +143,32 @@ describe('my orders', () => {
 		expect(buttonOf(host, text('orders.more')).hidden).toBe(true);
 	});
 
+	it('lists a guest’s orders kept in this browser, each opened with its key, and asks to sign in for the rest (E21)', async () => {
+		const fake = makeShop({
+			features: ['checkout'],
+			guestOrders: ['ord_2', 'ord_1', 'ord_gone'],
+			routes: {
+				'GET /v1/shop/orders/ord_1': () => ok(detail()),
+				'GET /v1/shop/orders/ord_2': () => ok(detail({ id: 'ord_2', number: 'SO-2', canCancel: false })),
+				'GET /v1/shop/orders/ord_gone': () => fail(404, 'not_found'),
+			},
+		});
+		const host = await mountOrders(fake);
+		expect(textOf(host)).toContain(text('orders.guestTitle'));
+		expect(textOf(host)).toContain(text('orders.signIn'));
+		const opens = $$(host, 'li button').map((node) => node.textContent);
+		expect(opens).toEqual([text('orders.open', { number: 'SO-2' }), text('orders.open', { number: 'SO-1' })]);
+		expect(textOf(host)).toContain(
+			text('orders.row', { date: 'Oct 1, 2026', status: 'Placed', total: 'GBP 2,200.00', count: 3 }),
+		);
+		expect(fake.all('GET /v1/shop/orders')).toHaveLength(0);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		expect(textOf(host)).toContain(text('orders.number', { number: 'SO-1' }));
+		expect(textOf(host)).toContain(text('orders.cancel'));
+		await click(buttonOf(host, text('orders.back')));
+		expect(textOf(host)).toContain(text('orders.guestTitle'));
+	});
+
 	it('shows each line’s serial numbers, the unit fields shown to shoppers, the order fields and warranty', async () => {
 		const fake = makeShop({
 			signIn: 's1',
@@ -324,6 +350,215 @@ describe('my orders', () => {
 		expect(() => buttonOf(host, text('orders.cancel'))).toThrow();
 		await click(buttonOf(host, text('orders.back')));
 		expect(textOf(host)).toContain(text('orders.title'));
+	});
+
+	it('shows the shop’s delivery and packing texts, and a pickup point with its address, hours and ready text (E22)', async () => {
+		const notes = {
+			payment: '',
+			delivery: 'Arrives in 2–4 working days.',
+			prep: 'Orders are packed within 24 hours.',
+			pickupReady: 'We message you when it is ready.',
+		};
+		let order = detail({ notes: { ...notes, pickupReady: '' }, pickupPoint: null });
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(order),
+			},
+		});
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		expect(textOf(host)).toContain(notes.delivery);
+		expect(textOf(host)).toContain(notes.prep);
+		// the pickup point of the settings (no stock location): its name, address and hours
+		order = detail({
+			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null, locationName: '' },
+			address: null,
+			shipment: null,
+			notes: { ...notes, delivery: '' },
+			pickupPoint: { name: 'Main shop', address: '1 Market Street', hours: 'Mon–Fri 9–17' },
+		});
+		await click(buttonOf(host, text('orders.back')));
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		const page = textOf(host);
+		for (const part of [
+			text('orders.pickupAt', { name: 'Main shop' }),
+			'1 Market Street',
+			text('checkout.pickupHours', { hours: 'Mon–Fri 9–17' }),
+			notes.pickupReady,
+			notes.prep,
+		])
+			expect(page).toContain(part);
+	});
+
+	it('reviews each delivered item with reviews per item bought (E34)', async () => {
+		/** @type {any} */
+		let post = fail(500, 'internal_error');
+		const lines = detail().lines;
+		const delivered = detail({
+			role: 'delivered',
+			canCancel: false,
+			lines: [
+				{ ...lines[0], canReview: true },
+				{ ...lines[1], canReview: false },
+			],
+		});
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout', 'reviews'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(delivered),
+				'POST /v1/shop/reviews': () => post,
+			},
+		});
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		// only the item that can still be reviewed has the button
+		expect(() => buttonOf(host, text('orders.reviewLabel', { name: 'E-book' }))).toThrow();
+		await click(buttonOf(host, text('orders.reviewLabel', { name: 'Phone (Blue)' })));
+		const form = () => $(host, 'form.review-form');
+		expect(form()).not.toBeNull();
+		$(host, '#ss-review-oln_1-rating').value = '4';
+		$(host, '#ss-review-oln_1-title').value = ' Solid ';
+		$(host, '#ss-review-oln_1-body').value = 'Works well ';
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.failed'));
+		expect(fake.last('POST /v1/shop/reviews')?.body).toEqual({
+			orderId: 'ord_1',
+			lineId: 'oln_1',
+			rating: 4,
+			title: 'Solid',
+			body: 'Works well',
+		});
+		const firstKey = fake.last('POST /v1/shop/reviews')?.key;
+		expect(firstKey).toBeTruthy();
+		post = ok({ id: 'rev_1', status: 'pending' }, 201);
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.pending'));
+		expect(form()).toBeNull();
+		expect(() => buttonOf(host, text('orders.reviewLabel', { name: 'Phone (Blue)' }))).toThrow();
+
+		// a second look: the item was reviewed meanwhile
+		await click(buttonOf(host, text('orders.back')));
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		post = fail(409, 'already_reviewed');
+		await click(buttonOf(host, text('orders.reviewLabel', { name: 'Phone (Blue)' })));
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.itemReviewed'));
+		expect(form()).toBeNull();
+
+		// with reviews off the order page has no review button
+		resetPage();
+		const off = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(delivered),
+			},
+		});
+		const other = await mountOrders(off);
+		await click(buttonOf(other, text('orders.open', { number: 'SO-1' })));
+		expect(() => buttonOf(other, text('orders.reviewLabel', { name: 'Phone (Blue)' }))).toThrow();
+	});
+
+	it('shows the bank details, the shop’s payment note and the proof sent, and takes a transfer proof (E24)', async () => {
+		const BANK = {
+			ready: true,
+			accountHolder: 'Example Store LLC',
+			bankName: '',
+			accountNumber: '',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
+			iban: 'XX00 TEST 0000',
+			bic: 'TESTXX00',
+			instructions: '',
+		};
+		const waiting = detail({
+			role: 'awaiting_payment',
+			canCancel: false,
+			payment: {
+				method: 'bank_transfer',
+				state: 'unpaid',
+				via: 'manual',
+				advance: 0,
+				paid: 0,
+				refunded: 0,
+				payUrl: null,
+				payBy: null,
+				proof: null,
+			},
+			bankDetails: BANK,
+			canSendProof: true,
+			notes: { payment: 'Orders ship once the money arrives.', delivery: '', prep: '', pickupReady: '' },
+		});
+		const sent = {
+			...waiting,
+			payment: { ...waiting.payment, proof: { reference: '', at: '2026-10-02T10:00:00.000Z' } },
+		};
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(waiting),
+				'POST /v1/shop/orders/ord_1/proof/upload': () =>
+					ok(
+						{
+							upload: { method: 'PUT', url: 'https://storage.example.com/up', headers: {} },
+							key: 'ecommerce/proofs/ord_1/prf_1.pdf',
+							expiresAt: '',
+						},
+						201,
+					),
+				'POST /v1/shop/orders/ord_1/proof': () => ok({ order: sent }),
+			},
+		});
+		vi.spyOn(window, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		const page = textOf(host);
+		for (const part of [
+			text('checkout.bank.title'),
+			text('checkout.bank.bic'),
+			'TESTXX00',
+			'XX00 TEST 0000',
+			'Orders ship once the money arrives.',
+		])
+			expect(page).toContain(part);
+		// only the details given, in Payments' order
+		expect($$(host, '.bank-details dt').map((node) => node.textContent)).toEqual([
+			text('checkout.bank.accountHolder'),
+			text('checkout.bank.iban'),
+			text('checkout.bank.bic'),
+		]);
+		const input = $(host, 'form.proof-form input[type="file"]');
+		Object.defineProperty(input, 'files', { value: [new window.File(['%PDF'], 'proof.pdf', { type: 'application/pdf' })] });
+		await submit($(host, 'form.proof-form'));
+		expect(fake.last('POST /v1/shop/orders/ord_1/proof')?.body).toEqual({
+			key: 'ecommerce/proofs/ord_1/prf_1.pdf',
+			reference: '',
+		});
+		for (const part of text('checkout.bank.proofSent').split('{date}')) expect($(host, 'p.save')?.textContent).toContain(part);
+		expect($(host, 'form.proof-form')?.textContent).toContain(text('checkout.bank.proofAgain'));
+		// paid: no details, no proof form
+		resetPage();
+		const paid = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok({ ...waiting, bankDetails: null, canSendProof: false, notes: undefined }),
+			},
+		});
+		const other = await mountOrders(paid);
+		await click(buttonOf(other, text('orders.open', { number: 'SO-1' })));
+		expect($(other, 'form.proof-form')).toBeNull();
+		expect(textOf(other)).not.toContain(text('checkout.bank.title'));
 	});
 
 	it('shows a failed invoice, a pickup order and a waiting payment', async () => {

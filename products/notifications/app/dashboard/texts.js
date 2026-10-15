@@ -1,60 +1,28 @@
 /**
- * The dashboard's texts (English, kept in this file; the dashboard is not translated, PLAN 0.6).
+ * The dashboard's own texts (US English, kept in this file; the dashboard is not translated, PLAN 0.6), laid over the
+ * words every product dashboard shares (`@ss/ui` `DASHBOARD_TEXTS`).
  * @module
  */
-export const TEXTS = Object.freeze({
+import { dashboardTexts } from '@ss/ui';
+
+export const TEXTS = dashboardTexts({
 	title: 'Notifications',
-	loading: 'Loading…',
-	signedOut: 'Open this dashboard from the Portal.',
-	failed: 'This could not be loaded.',
-	backToPortal: 'Back to Portal',
-	pickWebsite: 'Pick a website',
-	website: 'Website',
-	adminView: 'Admin view: {merchant} / {domain}',
-	saved: 'Saved',
-	save: 'Save',
-	reset: 'Reset to default',
-	cancel: 'Cancel',
-	andMore: '{names} and {count} more',
-	tabs: Object.freeze({
-		overview: 'Overview',
-		features: 'Features',
-		settings: 'Settings',
-		connections: 'Connections',
-		developers: 'Developers',
-		defaults: 'Defaults',
-		prices: 'Prices',
-	}),
-	overview: Object.freeze({
+	overview: {
 		templates: 'Templates',
 		templatesNone: 'Connect the database first',
 		webhookUrlStep: 'Add a webhook URL',
-		noWebhookUrls: Object.freeze({
+		noWebhookUrls: {
 			title: 'Outgoing webhooks is on, but no URL is added yet',
 			effect: 'It is charged, but no event is sent until a URL is added in Settings.',
 			action: 'Add a URL',
-		}),
-	}),
-	features: Object.freeze({
-		price: 'Price: {price}',
-		on: 'On',
-		needs: 'Needs: {features}',
-		contact: 'To change features, contact {contact}.',
-		confirmTitle: 'Save features?',
-		confirmCost: 'New hourly cost: {cost}',
-		alsoOff: 'Also turned off: {features}',
-		docs: 'Docs',
-		notWorking: 'Not working: connect {connection}',
-	}),
-	settings: Object.freeze({
+		},
+	},
+	settings: {
 		templatesTitle: 'Templates',
 		templatesHelp:
 			'Every message your products send is listed with its channel: it goes out with the product’s default words until you edit it. One template per key, channel and language. Write {name} where a value goes, and {?name}…{/name} around text shown only when name has a value; optional messages can use {unsubscribeUrl}. Keys of other products start with their id and a dot (for example chat.).',
-		featuresTitle: 'Feature settings',
-		featuresHelp: 'How each feature behaves on this website.',
-		looksTitle: 'Words and look',
 		looksHelp: 'Every word of the widgets and the unsubscribe page, their theme, and how dates look.',
-		template: Object.freeze({
+		template: {
 			key: 'Template key',
 			channel: 'Channel',
 			language: 'Language code (empty for the default version)',
@@ -69,7 +37,7 @@ export const TEXTS = Object.freeze({
 				'The buttons of the template at Meta that take a value, by their place in it (the first button is 0). A copy-code button copies its value, for example {code}; a URL button adds its value to the end of its address.',
 			buttonIndex: 'Place (0–9)',
 			buttonType: 'Type',
-			buttonTypes: Object.freeze({ copy_code: 'Copy code', url: 'URL' }),
+			buttonTypes: { copy_code: 'Copy code', url: 'URL' },
 			buttonValue: 'Value',
 			addButton: 'Add button',
 			removeButton: 'Remove button',
@@ -92,12 +60,12 @@ export const TEXTS = Object.freeze({
 			switchOn: 'Switch on again',
 			setUp: 'Set up',
 			notSetUpHelp: 'WhatsApp needs a template approved at Meta: add its name here.',
-			states: Object.freeze({
+			states: {
 				default: 'Default words',
 				edited: 'Edited',
 				off: 'Switched off',
 				not_set_up: 'Not set up',
-			}),
+			},
 			unavailable:
 				'The messages of {products} cannot be listed right now. Their sends still use their default words; open this page again later.',
 			fixed: 'Template {key} by {channel}, in the default language.',
@@ -119,8 +87,8 @@ export const TEXTS = Object.freeze({
 			urgent_badge: 'Urgent',
 			sensitive_badge: 'Sensitive',
 			needsDatabase: 'Templates live in your database: connect it in Connections first.',
-		}),
-		webhooks: Object.freeze({
+		},
+		webhooks: {
 			title: 'Webhook URLs',
 			help: 'Up to {max} https addresses that receive the signed events, each with the events it takes.',
 			none: 'No webhook URLs yet.',
@@ -130,45 +98,20 @@ export const TEXTS = Object.freeze({
 			add: 'Add URL',
 			remove: 'Remove URL',
 			error: 'URL {n}: {message}',
-		}),
-		channels: Object.freeze({
+		},
+		channels: {
 			email: 'Email',
 			sms: 'SMS',
 			whatsapp: 'WhatsApp',
 			push: 'Browser push',
 			staff_push: 'Staff push',
-		}),
-		texts: 'Widget texts',
-		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
-		theme: 'Theme',
-		mode: 'Light or dark',
-		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
-		fontFamily: 'Font family (inherit, or a font your site loads)',
-		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent color',
-		customCss: 'Custom CSS',
-		format: 'Format',
+		},
 		formatHelp: 'How dates, times and amounts look in the widgets; the delivery log shows its times this way.',
-		locale: 'Language and region',
 		localeHelp: "A tag such as en-US or fr-FR; empty uses each viewer's browser.",
-		currencyDisplay: 'Currency shown as',
-		currencyDisplays: Object.freeze({
-			code: 'Code (USD 12,500.00)',
-			symbol: 'Symbol ($12,500.00)',
-			custom: 'Your own symbol',
-		}),
-		currencySymbol: 'Your own symbol (up to 8 characters)',
-		times: 'Dates and times in',
-		timesOptions: Object.freeze({
-			viewer: "Each visitor's time zone",
-			business: 'Your business time zone (business.json)',
-		}),
-		wholeUnits: 'Whole amounts only (no minor units)',
-		off: 'This feature is off.',
-	}),
-	connections: Object.freeze({
+	},
+	connections: {
 		provider: 'Provider',
-		providers: Object.freeze({
+		providers: {
 			smtp: 'SMTP',
 			resend: 'Resend',
 			sendgrid: 'SendGrid',
@@ -177,8 +120,8 @@ export const TEXTS = Object.freeze({
 			twilio: 'Twilio',
 			meta: 'Meta WhatsApp Cloud API',
 			http: 'Any SMS or WhatsApp gateway with an HTTP API',
-		}),
-		fields: Object.freeze({
+		},
+		fields: {
 			host: 'SMTP host',
 			port: 'Port (465 or 587)',
 			secure: 'Implicit TLS (port 465)',
@@ -199,20 +142,9 @@ export const TEXTS = Object.freeze({
 			publicKey: 'Public key (base64url)',
 			privateKey: 'Private key (base64url)',
 			subject: 'Contact (mailto: or https)',
-		}),
-		save: 'Save and test',
-		neededBy: 'Needed by: {features}',
-		neededByNone: 'Optional',
-		connected: 'Connected',
-		not_connected: 'Not connected',
-		test_failed: 'Test failed',
-		value: 'New value',
-		token: 'Server token of that product for this website',
-		test: 'Test',
-		remove: 'Remove',
-		none: 'No connections.',
-	}),
-	developers: Object.freeze({
+		},
+	},
+	developers: {
 		send: 'Send API',
 		sendHelp: 'Your server and other products send a template to a recipient with the server token.',
 		keys: 'Template keys',
@@ -226,24 +158,5 @@ export const TEXTS = Object.freeze({
 		webhookHelp: 'Check the SS-Signature header of every event before trusting it.',
 		replies: 'Reply addresses',
 		repliesHelp: "Point your provider's incoming-message webhook here for unsubscribe keywords.",
-		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
-		openDocs: 'Open the docs',
-		manageTokens: 'Manage tokens in the Portal',
-		off: 'off',
-	}),
-	defaults: Object.freeze({
-		intro: 'Global defaults apply to every website that has not saved its own value.',
-	}),
-	prices: Object.freeze({
-		intro: 'One hourly price per feature, in credits, for every merchant and website.',
-		perHour: 'Credits per hour',
-	}),
-	reseal: Object.freeze({
-		title: 'Encryption key',
-		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
-		button: 'Re-seal stored secrets',
-		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
-		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
-	}),
+	},
 });

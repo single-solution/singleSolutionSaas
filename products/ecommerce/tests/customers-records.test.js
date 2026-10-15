@@ -79,6 +79,7 @@ describe('customers without an account (E46)', () => {
 			id: expect.stringMatching(/^cus_/),
 			userId: '',
 			guest: true,
+			guestKey: 'p:+15550003001',
 			name: 'Olive Opening',
 			phone: '+15550003001',
 			city: 'Springfield',
@@ -111,10 +112,13 @@ describe('customers without an account (E46)', () => {
 	it('keeps the addresses staff set, and those a guest’s orders go to, the newest first', async () => {
 		const made = await api('POST', '/v1/customers', { name: 'Gina Guest', phone: '+15550004001' });
 		const set = await shop.api('PUT', `/v1/customers/${made.id}/addresses`, {
-			addresses: [{ ...ADDRESS, line1: '9 Old Road' }],
+			addresses: [{ ...ADDRESS, line1: '9 Old Road', region: ' Ohio ', postalCode: '43004' }],
 		});
 		expect(set.status).toBe(200);
-		expect(set.json.addresses).toEqual([expect.objectContaining({ line1: '9 Old Road', phone: '+15550004001' })]);
+		// a kept address carries its region, as checkout checks it (dynamic model §5)
+		expect(set.json.addresses).toEqual([
+			expect.objectContaining({ line1: '9 Old Road', phone: '+15550004001', region: 'Ohio', postalCode: '43004' }),
+		]);
 		expect(
 			(await shop.api('PUT', `/v1/customers/${made.id}/addresses`, { addresses: [{ ...ADDRESS, line1: '' }] })).json.errors[0]
 				.path,

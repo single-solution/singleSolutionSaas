@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 /* global document, window */
+import { DEFAULT_FORMAT } from '@ss/app-kit/widget';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { STORAGE_KEYS } from '../core/widgets.js';
 import { mountProductGrid, pageNumbers } from '../ui/product-grid.js';
@@ -360,7 +361,7 @@ describe('product grid', () => {
 		const count = asked.length;
 		await setValue(prices()[1], 'abc');
 		expect(asked).toHaveLength(count);
-		expect($(host, '[role="status"]').textContent).toBe(text('grid.priceInvalid'));
+		expect($(host, '[role="status"]').textContent).toBe(text('grid.priceInvalid', { example: '1500.50' }));
 		await submit($(host, 'form'));
 		expect(asked).toHaveLength(count);
 		await setValue(prices()[1], '1500.5');
@@ -402,6 +403,39 @@ describe('product grid', () => {
 		expect(toggle.textContent).toBe(text('grid.filters'));
 	});
 
+	it('takes prices with the decimal sign money is shown with, and names it in the hint', async () => {
+		/** @type {any[]} */
+		const asked = [];
+		const fake = makeShop({
+			features: ['catalog'],
+			routes: {
+				'GET /v1/shop/products': (call) => {
+					asked.push(call.query);
+					return ok({ items: [card('prd_a')], nextCursor: null, total: 1, facets: FACETS });
+				},
+				'GET /v1/shop/categories': () => ok(TREE),
+				'GET /v1/shop/brands': () => ok(BRANDS),
+			},
+		});
+		const host = place('product_grid');
+		await mountProductGrid({
+			host,
+			config: { ...configOf(['catalog']), format: { ...DEFAULT_FORMAT, locale: 'de-DE' } },
+			shop: fake.shop,
+			win: window,
+		});
+		await flush();
+		const prices = () => $$(host, '.filter-panel input[inputmode="decimal"]');
+		expect(prices()[0].placeholder).toBe('500,00');
+		await setValue(prices()[1], '1500,5');
+		expect(asked.at(-1).maxPrice).toBe('150050');
+		const count = asked.length;
+		// a dot is this locale's thousands separator: refused, never read as a decimal
+		await setValue(prices()[1], '1.500');
+		expect(asked).toHaveLength(count);
+		expect($(host, '[role="status"]').textContent).toBe(text('grid.priceInvalid', { example: '1500,50' }));
+	});
+
 	it('keeps chosen values the facets no longer list, and shows no filters without facets', async () => {
 		const pages = listing();
 		pages.queue.push(() =>
@@ -415,7 +449,7 @@ describe('product grid', () => {
 		const host = await mountGrid(
 			fake,
 			{ category: 'cat_9', brand: 'brd_9', grade: 'z' },
-			{ catalog: { grades: { a: 'Like new' } } },
+			{ catalog: { grades: [{ key: 'a', label: 'Like new' }] } },
 		);
 		expect($(host, '#ss-grid-category').value).toBe('cat_9');
 		expect(checkOf(host, 'brd_9').checked).toBe(true);
@@ -776,6 +810,8 @@ describe('shared helpers', () => {
 		});
 		expect(settings.checkout.policyFormat).toBe('html');
 		expect(settingsOf(configOf([], { catalog: { grades: 'a' } })).catalog.grades).toEqual([]);
+		// the server sends a list of grades, never labels by key
+		expect(settingsOf(configOf([], { catalog: { grades: { a: 'Like new' } } })).catalog.grades).toEqual([]);
 		expect(settingsOf(configOf([])).checkout.policyFormat).toBe('text');
 		const t = textsOf(configOf([]));
 		expect(warrantyText(t, null)).toBe('');
@@ -823,6 +859,7 @@ describe('shared helpers', () => {
 			facets: { attributes: [{ id: 'atr_2', name: 'Fit', type: 'text' }] },
 			known,
 			currency: 'USD',
+			amountText: formatsOf(configOf([]), window).amountText,
 			expanded: new Set(),
 			onChange: (event, patch) => changes.push([event, patch]),
 		});

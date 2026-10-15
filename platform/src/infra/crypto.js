@@ -15,7 +15,9 @@
 import { createDecipheriv, hkdfSync } from 'node:crypto';
 import { createJwks, createSealer, createSigner, toPublicJwk } from '@ss/protocol';
 import { platformError } from './errors.js';
-import { defaultRandomBytes, isObject, stableJson } from './util.js';
+import { isObject } from '@ss/contracts/util';
+import { canonicalJson } from '@ss/protocol';
+import { defaultRandomBytes } from './util.js';
 
 /** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
 /** @typedef {import('@ss/protocol').Signer} Signer */
@@ -58,7 +60,7 @@ export const createPortalKeys = (signingKeys, tokenSigningKeys, publishedOnly = 
 /** @typedef {ReturnType<typeof createPortalKeys>} PortalKeys */
 
 /**
- * The text a sealed value is bound to: the caller's AAD object (non-empty strings) as stable JSON.
+ * The text a sealed value is bound to: the caller's AAD object (non-empty strings) as canonical JSON.
  * @param {unknown} aad
  * @returns {string}
  */
@@ -68,7 +70,7 @@ const aadText = (aad) => {
 		if (typeof value !== 'string' || value.length === 0)
 			throw platformError('invalid_argument', `aad.${key} must be a non-empty string`);
 	}
-	return `ss-data.v1|${stableJson(aad)}`;
+	return `ss-data.v1|${canonicalJson(aad)}`;
 };
 
 /**

@@ -53,6 +53,7 @@ const DELIVERY = {
 		line2: '',
 		city: 'Springfield',
 		area: '',
+		region: '',
 		postalCode: '',
 		country: 'US',
 		notes: '',

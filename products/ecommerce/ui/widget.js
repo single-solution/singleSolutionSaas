@@ -5,7 +5,9 @@
  * and offers `window.SSEcommerce`:
  *
  * - `identify(signIn | null)`: the shopper's Accounts sign-in (PLAN 0.4.6), sent in `SS-Sign-In` on visitor calls;
- * - `addToCart({ productId, variantId?, quantity? })`: adds to the cart kept in the browser;
+ *   a guest's order keys (E21) are kept in the browser and each goes in `SS-Order-Key` with the calls about its order;
+ * - `addToCart({ productId, variantId?, quantity?, measured? })`: adds to the cart kept in the browser (an item sold in
+ *   a unit of its own: `quantity` in thousandths of its unit with `measured: true`);
  * - `cart.count()`, `cart.onChange(listener)`: the cart for the merchant's own header;
  * - `admin({ getTicket })`: on the merchant's admin pages (no `data-token`), mounts the admin widgets with tickets.
  *
@@ -24,7 +26,7 @@ import { isCurrency } from '../core/money.js';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAlertsStop } from './alerts-stop.js';
 import { mountCart } from './cart.js';
-import { MAX_QUANTITY, createCartStore } from './cart-store.js';
+import { MAX_MEASURED, MAX_QUANTITY, createCartStore } from './cart-store.js';
 import { mountCatalogAdmin } from './catalog-admin.js';
 import { mountCompare } from './compare.js';
 import { mountCustomersAdmin } from './customers-admin.js';
@@ -34,6 +36,7 @@ import { mountProductGrid } from './product-grid.js';
 import { mountProductPage } from './product-page.js';
 import { mountPromotionsAdmin } from './promotions-admin.js';
 import { announce } from './shop-common.js';
+import { createOrderKeys } from './order-keys.js';
 import { createTicketSource } from './tickets.js';
 import { mountWishlist } from './wishlist.js';
 
@@ -84,6 +87,8 @@ const retryAfterSeconds = (header) => {
  * @property {() => string} newKey a fresh Idempotency-Key
  * @property {(path: string) => Promise<{ ok: boolean, status: number, text: string }>} document a visitor route that
  *   answers a document (the invoice's HTML), with the same headers as `call`; status 0 when unreachable
+ * @property {(orderId: string, key: string) => void} keepOrderKey keep a guest order's key (its answer's `orderKey`, E21)
+ * @property {() => string[]} guestOrders the ids of the guest orders whose keys this browser keeps, the newest first
  */
 
 /**
@@ -163,6 +168,19 @@ export const startWidget = ({ window: win, script }) => {
 		);
 
 	const cart = createCartStore({ storage: storageOf(win) });
+	const orderKeys = createOrderKeys({ storage: storageOf(win) });
+	/**
+	 * The `SS-Order-Key` header of a call about a guest order whose key the browser keeps: its path names the order
+	 * (`/v1/shop/orders/<id>…`) or its body does (`orderId`, a review of an item).
+	 * @param {string} path @param {unknown} [body]
+	 * @returns {Record<string, string>}
+	 */
+	const orderKeyHeader = (path, body) => {
+		const named = /^\/v1\/shop\/orders\/(ord_[A-Za-z0-9_-]{1,64})(?:[/?]|$)/.exec(path)?.[1];
+		const id = named ?? (typeof (/** @type {any} */ (body)?.orderId) === 'string' ? /** @type {any} */ (body).orderId : null);
+		const key = id ? orderKeys.keyOf(id) : null;
+		return key ? { 'ss-order-key': key } : {};
+	};
 	/** @type {string | null} */
 	let signIn = null;
 	/** @type {Set<(signIn: string | null) => void>} */
@@ -182,6 +200,7 @@ export const startWidget = ({ window: win, script }) => {
 					headers: {
 						authorization: `Bearer ${token}`,
 						...(signIn ? { 'ss-sign-in': signIn } : {}),
+						...orderKeyHeader(path, init.body),
 						...(init.idempotencyKey ? { 'idempotency-key': init.idempotencyKey } : {}),
 						...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
 					},
@@ -205,7 +224,11 @@ export const startWidget = ({ window: win, script }) => {
 	const fetchDocument = async (path) => {
 		try {
 			const response = await request(`${base}${path}`, {
-				headers: { authorization: `Bearer ${token}`, ...(signIn ? { 'ss-sign-in': signIn } : {}) },
+				headers: {
+					authorization: `Bearer ${token}`,
+					...(signIn ? { 'ss-sign-in': signIn } : {}),
+					...orderKeyHeader(path),
+				},
 			});
 			return { ok: response.ok, status: response.status, text: await response.text() };
 		} catch {
@@ -227,18 +250,26 @@ export const startWidget = ({ window: win, script }) => {
 			win,
 			GROWTH_EVENTS.addToCart,
 			itemsDetail(isCurrency(product?.currency) ? product.currency : fallback, [
-				growthItem({ ...line, name: product?.name, price: variant?.price ?? product?.price }),
+				growthItem({ ...line, name: product?.name, price: variant?.price ?? product?.price, measure: product?.measure }),
 			]),
 		);
 	};
 
-	/** @param {{ productId?: unknown, variantId?: unknown, quantity?: unknown }} item @returns {boolean} added */
+	/**
+	 * @param {{ productId?: unknown, variantId?: unknown, quantity?: unknown, measured?: unknown }} item `measured`: an
+	 *   item sold in a unit of its own, its quantity in thousandths of the unit
+	 * @returns {boolean} added
+	 */
 	const addToCart = (item) => {
 		if (!visitorConfig?.features.includes('checkout') || typeof item?.productId !== 'string') return false;
+		const measured = item.measured === true;
 		const line = {
 			productId: item.productId,
 			variantId: typeof item.variantId === 'string' ? item.variantId : null,
-			quantity: Number.isSafeInteger(item.quantity) ? Math.max(1, Math.min(MAX_QUANTITY, Number(item.quantity))) : 1,
+			quantity: Number.isSafeInteger(item.quantity)
+				? Math.max(1, Math.min(measured ? MAX_MEASURED : MAX_QUANTITY, Number(item.quantity)))
+				: 1,
+			...(measured ? { measured: true } : {}),
 		};
 		cart.add(line);
 		void tellAdded(line, String(visitorConfig.settings?.currency ?? ''));
@@ -265,6 +296,8 @@ export const startWidget = ({ window: win, script }) => {
 			location: () => new URL(win.location.href),
 			newKey: () =>
 				typeof win.crypto?.randomUUID === 'function' ? win.crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+			keepOrderKey: orderKeys.keep,
+			guestOrders: orderKeys.ids,
 		};
 		win.addEventListener(ADD_TO_CART_EVENT, (event) => {
 			const detail = /** @type {CustomEvent} */ (event).detail;

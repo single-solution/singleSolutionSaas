@@ -10,10 +10,11 @@
  */
 import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
+import { fromDecimal } from '@ss/contracts/format';
 import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
 import { methodView } from '../core/methods.js';
 import { gatewayAddresses } from '../core/snippets.js';
-import { amountOf, decimalSignOf, fromDecimal } from '../core/money.js';
+import { amountOf, decimalSignOf } from '../core/money.js';
 import {
 	PAYMENT_STATUSES,
 	SUBSCRIPTION_STATUSES,

@@ -8,7 +8,6 @@
  * Show all button.
  * @module
  */
-import { toDecimal } from '../core/money.js';
 import { button, field, h, select } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
@@ -155,13 +154,15 @@ const focusKey = (value) => value.replace(/[^\w.:-]/g, '_');
  * @param {any} input.facets the latest facets (null before the first answer)
  * @param {Known} input.known
  * @param {string} input.currency
+ * @param {(minor: number, currency: string) => string} input.amountText an amount as a plain number to type (the price
+ *   boxes' hints, with the decimal sign money shows with)
  * @param {Set<string>} input.expanded lists showing all their values (kept across renders)
  * @param {(event: 'load' | 'category' | 'price' | 'render', patch?: Partial<Filters>) => void} input.onChange the
  *   filters change by `patch`; `category` reloads the brands too; `price` checks the typed prices first; `render` only
  *   draws the filters again (Show all)
  * @returns {HTMLElement[]}
  */
-export const filterControls = ({ doc, t, filters, facets, known, currency, expanded, onChange }) => {
+export const filterControls = ({ doc, t, filters, facets, known, currency, amountText, expanded, onChange }) => {
 	/** @type {HTMLElement[]} */
 	const parts = [];
 
@@ -278,7 +279,7 @@ export const filterControls = ({ doc, t, filters, facets, known, currency, expan
 				h(doc, 'input', {
 					inputmode: 'decimal',
 					'data-focus': key,
-					placeholder: bound === undefined ? '' : toDecimal(bound, currency),
+					placeholder: bound === undefined ? '' : amountText(bound, currency),
 				})
 			);
 			input.value = filters[key];

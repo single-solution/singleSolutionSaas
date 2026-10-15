@@ -17,7 +17,17 @@ import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
-import { feeBaseOf, merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
+import {
+	MAX_QUANTITY,
+	feeBaseOf,
+	grossOf,
+	merchandiseOf,
+	paymentOptions,
+	priceLines,
+	resolveLines,
+	roleDiscountOf,
+} from '../core/checkout.js';
+import { placeOf } from '../core/address.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
 import { checkoutFields } from '../core/fields.js';
@@ -34,6 +44,7 @@ import {
 	pointsValue,
 	takesPart,
 } from '../core/loyalty.js';
+import { grossFits, measureView } from '../core/measure.js';
 import { roundDown } from '../core/money.js';
 import { applyPromotions, attributeValues } from '../core/promotions.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -230,8 +241,10 @@ export const createQuoting = (product, service) => {
 		const licences = await store.availableLicences(
 			[...products.values()].filter((item) => item.kind === 'digital' && item.digital?.licenceKeys).map((item) => item.id),
 		);
-		// services booked in time slots: their item type's `slots` (dynamic model §1)
+		// services booked in time slots: their item type's `slots`; items sold in a unit of their own: its `measure`
+		// (dynamic model §1, §4)
 		const typed = await productTypes(data, [...products.values()], await s.list('item_types'));
+		const checkout = await s.values('checkout');
 		/** @param {import('../core/model.js').ProductRecord} item */
 		const slots = (item) => {
 			const type = typed.get(item.id);
@@ -254,8 +267,13 @@ export const createQuoting = (product, service) => {
 			products,
 			ancestors,
 			gradeLabel,
-			features: { digital: s.has('digital_goods'), bookings: s.has('bookings') },
+			features: { digital: s.has('digital_goods'), bookings: s.has('bookings'), measured: s.has('measured_sales') },
 			slots,
+			// a measured item's stock is counted in its unit whatever the feature: its type's measure
+			measureOf: (item) => typed.get(item.id)?.elements.measure ?? null,
+			// staff editing an order are held to the most of one item, not the shop's own limit (E29)
+			maxQuantity: edit ? MAX_QUANTITY : Number(checkout.maxQuantity ?? MAX_QUANTITY),
+			unit,
 			licences,
 			booked,
 			// called only for booking lines with a slot, so the rules were read
@@ -266,16 +284,21 @@ export const createQuoting = (product, service) => {
 				return slotAt({ hours, durationMinutes, start, timeZone });
 			},
 		});
-		// staff may set a line's unit price when editing an order (E29)
-		const priced = lines
-			.filter((line) => line.priced)
-			.map((line) =>
-				edit?.prices.has(line.variantId)
-					? { ...line, unitPrice: /** @type {number} */ (edit.prices.get(line.variantId)) }
-					: line,
-			);
+		// staff may set a line's unit price when editing an order (E29), within what a line may come to
+		/** @type {ResolvedLine[]} */
+		const priced = [];
+		for (const line of lines) {
+			if (!line.priced) continue;
+			const unitPrice = edit?.prices.get(line.variantId);
+			if (unitPrice === undefined) priced.push(line);
+			else if (grossFits(unitPrice, line.quantity, line.measure !== null, unit)) priced.push({ ...line, unitPrice });
+			else {
+				line.priced = false;
+				line.problems.push({ code: 'too_large', message: 'This line comes to more than an order can take.' });
+			}
+		}
 		const customer = options.customer ?? (shopper ? await store.customer(shopper.id) : null);
-		const [checkout, codSettings] = await Promise.all([s.values('checkout'), s.values('cod')]);
+		const codSettings = await s.values('cod');
 		// staff switch cash on delivery off for new orders themselves (`cod.enabled`, AO-2); an order staff edit keeps it
 		const codOn = s.has('cod') && (codSettings.enabled !== false || edit !== null);
 		const zonesOn = s.has('delivery_zones');
@@ -344,6 +367,7 @@ export const createQuoting = (product, service) => {
 								brandId: line.brandId,
 								unitPrice: line.unitPrice,
 								quantity: line.quantity,
+								measure: line.measure,
 								grade: line.grade,
 								attributes: item && variant ? attributeValues(item, variant) : {},
 								dealId: input?.dealId ?? null,
@@ -386,11 +410,11 @@ export const createQuoting = (product, service) => {
 					}
 				: null;
 		const pickupPossible = pickups.length > 0 || pickupPoint !== null;
-		const where = {
-			city: address?.city ?? cart.delivery.city,
-			area: address?.area ?? cart.delivery.area,
-			country: address?.country ?? cart.delivery.country,
-		};
+		// where a delivery goes (an address without a country is in the business.json country); a pickup or undelivered
+		// order is at the business, in its country (taxes)
+		const homeCountry = (await s.business()).country ?? '';
+		const where = placeOf(address ?? cart.delivery, homeCountry);
+		const atBusiness = placeOf(null, homeCountry);
 		const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
 		const wantedMethod = cart.delivery.method ?? (zoneSettings?.defaultMethod === 'pickup' && pickupPossible ? 'pickup' : null);
 		const taxesOn = s.has('taxes');
@@ -498,7 +522,7 @@ export const createQuoting = (product, service) => {
 				points = { balance: 0, max: edit.points.used, used: edit.points.used, value: Math.min(goods, edit.points.value) };
 			} else if (account && loyaltySettings) {
 				const settings = loyaltySettings;
-				const subtotal = priced.reduce((n, line) => n + line.unitPrice * line.quantity, 0);
+				const subtotal = priced.reduce((n, line) => n + grossOf(line, unit), 0);
 				const payable = loyaltyRules(settings).capBase === 'goods' ? subtotal : goods;
 				const max = promotions?.pointsBlocked ? 0 : maxRedeemable({ balance: account.balance, payable }, settings);
 				const used = pointsToRedeem(cart.points, max, settings, unit);
@@ -510,8 +534,7 @@ export const createQuoting = (product, service) => {
 				};
 			}
 
-			const region =
-				delivery.method === 'delivery' && (where.country || where.city) ? { country: where.country, city: where.city } : null;
+			const region = delivery.method === 'delivery' ? where : atBusiness;
 			const base = {
 				lines: priced,
 				promotions,
@@ -681,6 +704,8 @@ export const createQuoting = (product, service) => {
 						: null,
 					unitPrice: line.unitPrice,
 					quantity: line.quantity,
+					// an item sold in a unit of its own: its unit and the quantity in units (`quantity` is thousandths)
+					measure: measureView(line.quantity, line.measure),
 					discount: price?.discount ?? 0,
 					dealDiscount: promo?.dealDiscount ?? 0,
 					tax: price?.tax ?? 0,

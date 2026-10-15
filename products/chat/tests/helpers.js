@@ -270,10 +270,10 @@ export const setup = async ({ start = Date.parse('2026-10-05T10:00:00Z'), store 
 		if (response.status !== 204) throw new Error(`setting: ${response.status} ${response.text}`);
 	};
 
-	/** Save a list setting. @param {string} list @param {unknown[]} items */
-	const list = async (list, items) => {
+	/** Save a list setting. @param {string} list @param {unknown[]} value */
+	const list = async (list, value) => {
 		const response = await dashboard(await adminSession(), 'PUT', `/v1/dashboard/websites/${websiteId}/lists/${list}`, {
-			items,
+			value,
 		});
 		if (response.status !== 200) throw new Error(`list: ${response.status} ${response.text}`);
 		return response.json;

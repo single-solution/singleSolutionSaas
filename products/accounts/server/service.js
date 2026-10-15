@@ -12,9 +12,10 @@
  *   again right after later requests; the data-rights fan-out to every connected product and the export.
  * @module
  */
-import { problem } from '@ss/app-kit';
+import { problem, verifyIdentityToken } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { normalisePhone, websiteCallingCode } from '@ss/contracts/phone';
+import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { detailOf, labelOf } from '../core/activity.js';
 import { DEFAULT_ROLE, READY_ROLES, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { checkAddresses, selfView } from '../core/profile.js';
@@ -29,12 +30,8 @@ import {
 	generateTotpSecret,
 	hashPassword,
 	isImportedHash,
-	randomSecret,
-	safeEqual,
-	sha256,
 	signJwt,
 	totpUri,
-	verifyJwt,
 	verifyPassword,
 } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
@@ -114,7 +111,7 @@ export const createService = (product) => {
 		let entry;
 		if (stored && opened) entry = { key: JSON.parse(opened), publicJwk: stored.publicJwk };
 		else {
-			const kid = `acc-${randomSecret(9)}`;
+			const kid = `acc-${randomToken(9)}`;
 			const { privateJwk, publicJwk } = generateSigningKey(kid);
 			const record = { kid, sealed: sealer.seal(JSON.stringify(privateJwk), keyAad(s.websiteId, kid)), publicJwk };
 			if (stored) await s.store.keys.replace(record);
@@ -225,11 +222,11 @@ export const createService = (product) => {
 		// said; `never` never remembers (the session ends with the browser, within the role's longer length)
 		const role = s.on.includes('roles') ? stored : { ...stored, remember: /** @type {const} */ ('ask') };
 		const remember = remembered(role, asked);
-		const secret = randomSecret(32);
+		const secret = randomToken(32);
 		const expiresAt = new Date(sessionEnd({ now: now(), remember, role }));
 		const session = await s.store.sessions.create({
 			userId: user.id,
-			refreshHash: sha256(secret),
+			refreshHash: sha256Hex(secret),
 			previousHashes: [],
 			method,
 			device,
@@ -353,9 +350,9 @@ export const createService = (product) => {
 	 * @param {Site} s @param {string} userId @param {Record<string, unknown>} data
 	 */
 	const step = async (s, userId, data) => {
-		const secret = randomSecret(32);
+		const secret = randomToken(32);
 		const expireAt = new Date(now() + STEP_MS);
-		const id = await s.store.codes.add({ kind: 'step', target: userId, hash: sha256(secret), expireAt, data });
+		const id = await s.store.codes.add({ kind: 'step', target: userId, hash: sha256Hex(secret), expireAt, data });
 		return { challenge: `${id}.${secret}`, expiresAt: expireAt.toISOString() };
 	};
 
@@ -369,7 +366,8 @@ export const createService = (product) => {
 		if (!parsed) return null;
 		const record = await s.store.codes.get(parsed.id);
 		const stored = field === 'hash' ? record?.hash : record?.data?.linkHash;
-		if (!record || record.kind !== kind || typeof stored !== 'string' || !safeEqual(stored, sha256(parsed.secret))) return null;
+		if (!record || record.kind !== kind || typeof stored !== 'string' || !constantTimeEqual(stored, sha256Hex(parsed.secret)))
+			return null;
 		if (!keep && !(await s.store.codes.consume(record.id))) return null;
 		return record;
 	};
@@ -399,17 +397,15 @@ export const createService = (product) => {
 	const signedIn = async (ctx) => {
 		const s = await site(ctx);
 		const { publicJwk } = await signingKey(s);
-		const claims = verifyJwt(ctx.headers.get(SIGN_IN_HEADER), [publicJwk]);
-		const fresh =
-			claims !== null &&
-			claims.aud === s.websiteId &&
-			typeof claims.exp === 'number' &&
-			claims.exp * 1000 > now() &&
-			typeof claims.sub === 'string' &&
-			typeof claims.sid === 'string';
-		if (!fresh) throw problem('signed_out', 'Sign in again.');
-		const session = await s.store.sessions.get(String(claims.sid));
-		const user = await s.store.users.get(String(claims.sub));
+		const checked = verifyIdentityToken(
+			ctx.headers.get(SIGN_IN_HEADER),
+			{ issuer: s.base, jwks: [publicJwk], audience: s.websiteId },
+			{ now },
+		);
+		const sid = checked.ok ? checked.identity.claims.sid : undefined;
+		if (!checked.ok || typeof sid !== 'string') throw problem('signed_out', 'Sign in again.');
+		const session = await s.store.sessions.get(sid);
+		const user = await s.store.users.get(checked.identity.subject);
 		if (!session || session.revokedAt || session.expiresAt.getTime() <= now() || !user || user.blocked)
 			throw problem('signed_out', 'Sign in again.');
 		return { s, user, session };
@@ -646,12 +642,12 @@ export const createService = (product) => {
 			});
 			records[id] = answer.ok ? (bodyOf(answer.body).records ?? {}) : { unavailable: true };
 		}
-		const secret = randomSecret(32);
+		const secret = randomToken(32);
 		const expireAt = new Date(now() + EXPORT_MS);
 		const id = await s.store.codes.add({
 			kind: 'export',
 			target: user.id,
-			hash: sha256(secret),
+			hash: sha256Hex(secret),
 			expireAt,
 			data: { json: JSON.stringify({ exportedAt: new Date(now()).toISOString(), records }) },
 			replace: true,

@@ -14,6 +14,7 @@
  */
 import { isId } from '@ss/contracts';
 import { normalisePhone } from '@ss/contracts/phone';
+import { isObject } from '@ss/contracts/util';
 import { PRESENCES, STATUSES, USER_ID, messageText, previewOf } from './conversation.js';
 import { checkFieldValue } from './fields.js';
 import { plainOf } from './markdown.js';
@@ -109,9 +110,6 @@ export const PROVISIONAL_SEQ = 2 ** 21;
 const SEQ_EPOCH = Date.UTC(2000, 0, 1);
 /** The last second a provisional number keeps apart (the year 2136); later times share it. */
 const MAX_SEQ_SECONDS = 2 ** 32 - 2;
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * A time given as ISO 8601 text with its zone (`2024-05-01T10:00:00Z`), or null when it is not a real time.

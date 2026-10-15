@@ -172,6 +172,8 @@ describe('core/lookup', () => {
 			variantId: 'var_in',
 			grade: 'a',
 			stockLeft: null,
+			stockLeftText: null,
+			measure: null,
 		});
 		expect(productCard({ ...product, variants: [] }, context)).toMatchObject({
 			price: 500,
@@ -370,6 +372,8 @@ describe('Chat lookups', () => {
 			variantId: phone.variants[0]?.id,
 			grade: 'a',
 			stockLeft: null,
+			stockLeftText: null,
+			measure: null,
 		});
 		const galaxy = await shop.api('GET', '/v1/chat/products?q=galaxy&limit=5');
 		expect(galaxy.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Galaxy S24', 'Old Galaxy']);
@@ -451,7 +455,15 @@ describe('Chat lookups', () => {
 		expect(orders.text).not.toContain('+1555');
 		expect((await shop.api('GET', '/v1/chat/me/orders?limit=1', undefined, headers)).json.items).toHaveLength(1);
 		const account = await shop.api('GET', '/v1/chat/me/account', undefined, headers);
-		expect(account.json).toEqual({ name: 'Sara Shopper', firstName: 'Sara', loyaltyPoints: 120, city: 'Town', area: '' });
+		expect(account.json).toEqual({
+			name: 'Sara Shopper',
+			firstName: 'Sara',
+			loyaltyPoints: 120,
+			city: 'Town',
+			area: '',
+			region: '',
+			country: '',
+		});
 		const shipments = await shop.api('GET', '/v1/chat/me/shipments', undefined, headers);
 		expect(shipments.json).toEqual({
 			items: [

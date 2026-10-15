@@ -8,6 +8,7 @@
  * @module
  */
 import { shopperLabelOf } from './flow.js';
+import { measureView, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
 import { activeVariants, variantInStock } from './seo.js';
 
@@ -242,6 +243,8 @@ const shownParts = (price, text) => ({
  * @property {Shown} shown each variant's shown price
  * @property {Map<string, string>} [grades] grade key → label
  * @property {(variant: VariantRecord) => number | null} [stockLeft] units shoppers are told are left (E9)
+ * @property {import('./measure.js').Measure | null} [measure] sold in a unit of its own (its type's `measure`,
+ *   while Sell in any unit is on): prices per unit, quantities and stock in thousandths of it
  */
 
 /**
@@ -274,9 +277,34 @@ export const productCard = (product, context, chosen = null) => {
 		inStock: product.inStock,
 		variantId: variant ? variant.id : null,
 		grade: variant?.grade ? (context.grades?.get(variant.grade) ?? variant.grade) : null,
-		stockLeft: variant ? (context.stockLeft?.(variant) ?? null) : null,
+		...stockParts(variant ? (context.stockLeft?.(variant) ?? null) : null, context.measure ?? null),
+		measure: measureInfo(context.measure ?? null),
 	};
 };
+
+/**
+ * Stock left as Chat tells it: the number (pieces, or thousandths of a measured item's unit) and its text (`2.5 m`).
+ * @param {number | null} left @param {import('./measure.js').Measure | null} measure
+ */
+const stockParts = (left, measure) => ({
+	stockLeft: left,
+	stockLeftText: left === null ? null : quantityLabel(left, measure),
+});
+
+/**
+ * A measure as Chat tells it: the unit label, its decimals and standard measure, and the step, least and most
+ * (thousandths, with their texts).
+ * @param {import('./measure.js').Measure | null} measure
+ */
+const measureInfo = (measure) =>
+	measure
+		? {
+				...measure,
+				stepText: quantityLabel(measure.step, measure),
+				minText: quantityLabel(measure.min, measure),
+				maxText: measure.max === null ? null : quantityLabel(measure.max, measure),
+			}
+		: null;
 
 /**
  * A product's details for Chat (`get_product_details`): every active variant (at most 20) with its grade, shown price
@@ -321,7 +349,7 @@ export const productDetails = (product, context) => {
 					gradeKey: variant.grade ?? null,
 					inStock: variantInStock(product, variant),
 					soldOut: variant.soldOut,
-					stockLeft: context.stockLeft?.(variant) ?? null,
+					...stockParts(context.stockLeft?.(variant) ?? null, context.measure ?? null),
 					warrantyDays: context.warrantyDays?.(variant) ?? null,
 				};
 			}),
@@ -430,6 +458,8 @@ export const orderSummary = (order, flow, money, extras = {}) => {
 			variantName: line.variantName,
 			gradeLabel: line.gradeLabel,
 			quantity: line.quantity,
+			// an item sold in a unit of its own: its unit and the quantity in units (`quantity` is thousandths)
+			measure: measureView(line.quantity, line.measure),
 			unitPrice: line.unitPrice,
 			unitPriceText: text(line.unitPrice),
 			total: line.total,

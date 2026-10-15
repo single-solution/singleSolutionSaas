@@ -22,6 +22,7 @@ import { formatText, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { callingCodeOf } from '@ss/contracts/phone';
 import { LONG_VALUE_LIMIT } from '@ss/contracts/templates';
+import { randomToken, sha256Hex } from '@ss/protocol';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import {
@@ -40,7 +41,6 @@ import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
 import { plainOf } from '../core/markdown.js';
 import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
-import { randomSecret, sha256 } from '../adapters/crypto.js';
 import { createStore } from '../adapters/store.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -289,7 +289,7 @@ export const createService = (product) => {
 				}
 			: null;
 		const key = s.ctx.headers.get(GUEST_HEADER);
-		const guest = key && GUEST_KEY.test(key) ? await s.store.guests.byKey(sha256(key)) : null;
+		const guest = key && GUEST_KEY.test(key) ? await s.store.guests.byKey(sha256Hex(key)) : null;
 		if (user && guest) await claim(s, await s.store.conversations.ofGuest(guest.id), user);
 		if (user && byPhone && user.phone && (await s.values('signed_in_chat')).claimByPhone)
 			await claim(s, await s.store.conversations.guestsByPhone(user.phone), user);
@@ -311,8 +311,8 @@ export const createService = (product) => {
 			const { count } = await product.counters.hit(`chat-guest|${s.websiteId}|${ip}`, NEW_GUESTS_WINDOW_MS, now());
 			if (count > limit) throw problem('rate_limited', 'Too many new chats from this network. Try again in a few minutes.');
 		}
-		const key = `g_${randomSecret(24)}`;
-		const { id } = await s.store.guests.create(sha256(key), new Date(now() + Number(rememberDays) * 86_400_000));
+		const key = `g_${randomToken(24)}`;
+		const { id } = await s.store.guests.create(sha256Hex(key), new Date(now() + Number(rememberDays) * 86_400_000));
 		return { key, visitor: /** @type {Visitor} */ ({ kind: 'guest', id, name: null, email: null, phone: null }) };
 	};
 

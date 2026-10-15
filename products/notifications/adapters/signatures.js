@@ -1,21 +1,11 @@
 /**
- * Signatures (PLAN 0.8.5): outgoing webhooks are signed with the merchant's signing secret as
- * `SS-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">` (the docs' check snippet verifies it);
- * replies forwarded by Twilio (`X-Twilio-Signature`, the auth token) and the WhatsApp Cloud API
- * (`X-Hub-Signature-256`, the app secret) are checked before they unsubscribe anyone.
+ * Signatures (PLAN 0.8.5): replies forwarded by Twilio (`X-Twilio-Signature`, the auth token) and the WhatsApp Cloud
+ * API (`X-Hub-Signature-256`, the app secret) are checked before they unsubscribe anyone. Outgoing webhooks are signed
+ * with `@ss/protocol`'s `signWebhook` (`SS-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`).
  * @module
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
-/**
- * @param {string} a
- * @param {string} b
- */
-const same = (a, b) => {
-	const left = Buffer.from(a);
-	const right = Buffer.from(b);
-	return left.length === right.length && timingSafeEqual(left, right);
-};
+import { createHmac } from 'node:crypto';
+import { constantTimeEqual, hmacSha256Hex } from '@ss/protocol';
 
 /**
  * Check Twilio's signature: base64 HMAC-SHA1 of the full URL followed by every form field (sorted by name) as
@@ -25,7 +15,7 @@ const same = (a, b) => {
 export const verifyTwilio = ({ url, params, signature, authToken }) => {
 	if (!signature) return false;
 	const data = [...params.keys()].sort().reduce((text, name) => `${text}${name}${params.getAll(name).join('')}`, url);
-	return same(createHmac('sha1', authToken).update(data).digest('base64'), signature);
+	return constantTimeEqual(createHmac('sha1', authToken).update(data).digest('base64'), signature);
 };
 
 /**
@@ -33,15 +23,4 @@ export const verifyTwilio = ({ url, params, signature, authToken }) => {
  * @param {{ body: string, signature: string | null, appSecret: string }} input
  */
 export const verifyMeta = ({ body, signature, appSecret }) =>
-	signature !== null && same(`sha256=${createHmac('sha256', appSecret).update(body).digest('hex')}`, signature);
-
-/**
- * The signature header value of a body.
- * @param {string} body the exact JSON text sent
- * @param {string} secret
- * @param {number} now epoch ms
- */
-export const signWebhook = (body, secret, now) => {
-	const t = Math.floor(now / 1000);
-	return `t=${t},v1=${createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
-};
+	signature !== null && constantTimeEqual(`sha256=${hmacSha256Hex(appSecret, body)}`, signature);

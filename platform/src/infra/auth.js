@@ -18,7 +18,8 @@
 import { createHmac, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { platformError } from './errors.js';
-import { defaultRandomBytes, hmacHex, randomToken, safeEqual } from './util.js';
+import { constantTimeEqual, hmacSha256Hex, randomToken } from '@ss/protocol';
+import { defaultRandomBytes } from './util.js';
 
 /** @typedef {import('./db.js').MutableOps} MutableOps */
 /** @typedef {import('./rbac.js').Actor} Actor */
@@ -87,7 +88,7 @@ let dummyHash = /** @type {Promise<string> | undefined} */ (undefined);
 export const verifyPassword = async (password, stored) => {
 	const parsed = typeof stored === 'string' ? parsePasswordHash(stored) : null;
 	const usable = typeof password === 'string' && password.length > 0 && password.length <= MAX_PASSWORD_LENGTH;
-	const target = parsed ?? parsePasswordHash(await (dummyHash ??= hashPassword(randomToken(defaultRandomBytes, 24))));
+	const target = parsed ?? parsePasswordHash(await (dummyHash ??= hashPassword(randomToken(24, defaultRandomBytes))));
 	const { N, r, p, salt, key } = /** @type {NonNullable<ReturnType<typeof parsePasswordHash>>} */ (target);
 	const candidate = await scrypt(usable ? password.normalize('NFKC') : 'x', salt, key.length, {
 		N,
@@ -216,7 +217,7 @@ export const verifyTotp = (
 	for (let delta = -window; delta <= window; delta += 1) {
 		const counter = current + delta;
 		// compare every candidate (no early exit) so timing does not reveal which step matched
-		if (safeEqual(hotp(key, counter, { digits, algorithm }), code.trim()) && matched === null) matched = counter;
+		if (constantTimeEqual(hotp(key, counter, { digits, algorithm }), code.trim()) && matched === null) matched = counter;
 	}
 	if (matched === null || (lastStep !== null && matched <= lastStep)) return { ok: false };
 	return { ok: true, step: matched };
@@ -236,7 +237,7 @@ export const totpUri = ({ secret, issuer, account, digits = 6, step = 30 }) => {
  * @param {string} code
  * @param {Uint8Array} secret
  */
-const hashRecoveryCode = (code, secret) => hmacHex(secret, `ss-recovery.v1|${code.toLowerCase().replace(/[\s-]/g, '')}`);
+const hashRecoveryCode = (code, secret) => hmacSha256Hex(secret, `ss-recovery.v1|${code.toLowerCase().replace(/[\s-]/g, '')}`);
 
 /**
  * Recovery codes: `count` codes of 10 base32 characters (50 bits) formatted `xxxxx-xxxxx`; return the plaintext
@@ -264,7 +265,7 @@ export const findRecoveryCode = (code, hashes, secret) => {
 	const candidate = hashRecoveryCode(code, secret);
 	let found = -1;
 	hashes.forEach((hash, index) => {
-		if (safeEqual(candidate, hash) && found === -1) found = index;
+		if (constantTimeEqual(candidate, hash) && found === -1) found = index;
 	});
 	return found;
 };
@@ -315,7 +316,7 @@ const toSession = (doc) =>
 export const createSessions = ({ repo, secret, lifetimeMs, now = Date.now, randomBytes = defaultRandomBytes }) => {
 	if (!secret || secret.length < 32) throw platformError('config_invalid', 'the session secret must be at least 32 bytes');
 	/** @param {string} token */
-	const idOf = (token) => hmacHex(secret, `ss-session.v1|${token}`);
+	const idOf = (token) => hmacSha256Hex(secret, `ss-session.v1|${token}`);
 	/** @param {unknown} token */
 	const validToken = (token) => typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token);
 
@@ -328,7 +329,7 @@ export const createSessions = ({ repo, secret, lifetimeMs, now = Date.now, rando
 		if (typeof input.subject !== 'string' || input.subject.length === 0)
 			throw platformError('invalid_argument', 'subject is required');
 		const t = now();
-		const token = randomToken(randomBytes, 32);
+		const token = randomToken(32, randomBytes);
 		const doc = {
 			_id: idOf(token),
 			kind: input.kind,
@@ -491,12 +492,12 @@ const DEFAULT_THROTTLE = Object.freeze({
 export const createLoginThrottle = ({ repo, secret, policy = {}, now = Date.now }) => {
 	const p = { ...DEFAULT_THROTTLE, ...policy };
 	/** @param {string} account */
-	const accountId = (account) => `a:${hmacHex(secret, `ss-throttle.v1|${account.trim().toLowerCase()}`)}`;
+	const accountId = (account) => `a:${hmacSha256Hex(secret, `ss-throttle.v1|${account.trim().toLowerCase()}`)}`;
 	/**
 	 * @param {string} ip
 	 * @param {number} t
 	 */
-	const ipId = (ip, t) => `i:${hmacHex(secret, `ss-throttle.v1|${ip}`)}|${Math.floor(t / p.ipWindowMs)}`;
+	const ipId = (ip, t) => `i:${hmacSha256Hex(secret, `ss-throttle.v1|${ip}`)}|${Math.floor(t / p.ipWindowMs)}`;
 	const retention = () => new Date(now() + p.maxLockMs + 24 * 60 * 60_000);
 
 	return Object.freeze({

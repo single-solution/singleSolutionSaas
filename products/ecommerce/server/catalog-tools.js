@@ -41,8 +41,10 @@ import { specsOf } from '../core/catalog-views.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { orderFilters, orderQuery } from '../core/orders.js';
+import { phoneSearchOf } from '../core/guests.js';
 import { createFulfilmentStore } from '../adapters/fulfilment-store.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { phoneRulesOf } from './guests.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -130,6 +132,7 @@ export const createCatalogTools = (product, service, common) => {
 		const filters = orderFilters(ctx.query);
 		if (!filters.ok) throw refuse([{ path: `/${filters.field}`, message: filters.message }]);
 		const { s, data } = await common.open(ctx);
+		if (filters.value.q) filters.value.phoneDigits = phoneSearchOf(filters.value.q, await phoneRulesOf(s));
 		const filter = { websiteId: data.websiteId, ...orderQuery(filters.value) };
 		const orders = data.collection(COLLECTIONS.orders);
 		if ((await orders.countDocuments(filter, { limit: MAX_EXPORT_ORDERS + 1 })) > MAX_EXPORT_ORDERS)

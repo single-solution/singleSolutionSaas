@@ -236,7 +236,8 @@ export const createAlerts = (_product, service, cards) => {
 		const phone = normalisePhone(body.phone, rules);
 		if (!phone) throw service.invalid('phone', 'Give your phone number with its country code.');
 		if (!phoneAllowed(phone, rules)) throw service.invalid('phone', COUNTRY_REFUSED.message, COUNTRY_REFUSED.code);
-		const customer = await store.guestCustomer(phone);
+		// the guest's customer record by this phone (`p:` key: a phone guest; an email guest's record keeps its own key)
+		const customer = await store.guestCustomer(`p:${phone}`);
 		return { userId: '', email: '', phone, customerId: customer?.id ?? null };
 	};
 

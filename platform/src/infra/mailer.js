@@ -13,10 +13,12 @@
  *   shows a warning. Development and test log instead (the link is logged — never in production).
  * @module
  */
+import { normalizeEmail } from '@ss/contracts/email';
+import { escapeHtml } from '@ss/contracts/text';
 import { problem } from './http.js';
 import { MAIL_TEXTS, supportLine } from '../texts/mail.js';
 
-/** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 /** @typedef {import('./config.js').SmtpConfig} SmtpConfig */
 
 /**
@@ -40,8 +42,6 @@ import { MAIL_TEXTS, supportLine } from '../texts/mail.js';
  */
 
 const TIMEOUT_MS = 10_000;
-const ADDRESS =
-	/^[^\s@<>()",;:\\[\]]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 
 /**
  * The Branding name and support contact of the Portal's emails.
@@ -49,13 +49,6 @@ const ADDRESS =
  * @returns {MailContext}
  */
 export const mailContextOf = (settings) => ({ brand: settings.branding.name, support: settings.support });
-
-/**
- * @param {string} text
- * @returns {string}
- */
-export const escapeHtml = (text) =>
-	text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /**
  * @param {unknown} link
@@ -129,8 +122,9 @@ export const renderMail = (template, data, context) => {
  * @returns {string}
  */
 const checkedRecipient = (to) => {
-	if (typeof to !== 'string' || to.length > 254 || !ADDRESS.test(to)) throw new TypeError('mail recipient is invalid');
-	return to;
+	const address = normalizeEmail(to);
+	if (address === null) throw new TypeError('mail recipient is invalid');
+	return address;
 };
 
 /**

@@ -9,6 +9,7 @@
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
+import { measuredScope } from '../adapters/catalog-store.js';
 import { toCsv } from '../core/csv.js';
 import { COLLECTIONS } from '../core/model.js';
 import {
@@ -187,19 +188,21 @@ export const createReports = (product, service) => {
 				.toArray()
 		);
 		const orderIds = [...new Set(claims.map((claim) => claim.orderId))];
-		const orders = /** @type {Array<{ lines: Array<{ id: string, productId: string, name: string }> }>} */ (
+		const orders = /** @type {Array<{ lines: Array<{ id: string, productId: string, name: string, measure?: unknown }> }>} */ (
 			orderIds.length === 0
 				? []
 				: await data
 						.collection(COLLECTIONS.orders)
 						.find(
 							{ websiteId: data.websiteId, id: { $in: orderIds } },
-							{ projection: { _id: 0, 'lines.id': 1, 'lines.productId': 1, 'lines.name': 1 } },
+							{ projection: { _id: 0, 'lines.id': 1, 'lines.productId': 1, 'lines.name': 1, 'lines.measure': 1 } },
 						)
 						.toArray()
 		);
 		const lineProducts = new Map(
-			orders.flatMap((order) => order.lines.map((line) => [line.id, { productId: line.productId, name: line.name }])),
+			orders.flatMap((order) =>
+				order.lines.map((line) => [line.id, { productId: line.productId, name: line.name, measure: line.measure }]),
+			),
 		);
 		const rows = returnRateRows(sold, claims, lineProducts);
 		return { s, body: { ...period(range), rows }, rows };
@@ -427,7 +430,14 @@ export const createReports = (product, service) => {
 		const [[facets], business, methods, tags, storage, bank, alerts, glossary, taxonomy] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
-				.aggregate(healthPipeline(data.websiteId, Number(lowStock), { domain: s.domain, skuAs, hiddenBrandIds }))
+				.aggregate(
+					healthPipeline(data.websiteId, Number(lowStock), {
+						domain: s.domain,
+						skuAs,
+						hiddenBrandIds,
+						measured: await measuredScope(data, await s.list('item_types')),
+					}),
+				)
 				.toArray(),
 			s.business(),
 			paymentMethods(s, data),

@@ -18,6 +18,7 @@ import {
 	variantInStock,
 	variantLabel,
 } from './seo.js';
+import { feedMeasureOf } from './measure.js';
 import { toDecimal } from './money.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -85,6 +86,8 @@ const APPAREL = Object.freeze({
  * @property {string} [shippingCountry]
  * @property {DeliveryTime | null} [deliveryTime] the handling and transit days sent with shipping
  * @property {string} shippingWeight the variant's package weight (`180 g`) when its item type has packages, else ''
+ * @property {string} [unitPricing] an item sold in its own unit tied to a standard measure: what its price is for in
+ *   that measure (`1 m`, `11.664 g`), sent as `unit_pricing_measure` and `unit_pricing_base_measure`; '' otherwise
  * @property {'no' | ''} [identifierExists] `no` when the row has no GTIN and no MPN and the setting says so (SG-22)
  */
 
@@ -133,6 +136,8 @@ const APPAREL = Object.freeze({
  * @property {'auto' | 'no'} [identifierExists] `no`: rows without GTIN and MPN say so (SG-22)
  * @property {boolean} [parcels] the product's item type has packages (`parcel`, dynamic model §1): rows send each
  *   variant's weight as the shipping weight
+ * @property {import('./measure.js').Measure | null} [measure] it is sold in a unit of its own (its type's `measure`,
+ *   while the feature is on): its price is per one unit
  */
 
 /**
@@ -227,6 +232,8 @@ export const feedRows = (product, context) => {
 				shippingCountry: shipping?.country ?? '',
 				deliveryTime: shipping?.deliveryTime ?? null,
 				shippingWeight: physical && context.parcels && variant.parcel?.weightG ? `${variant.parcel.weightG} g` : '',
+				// only a unit tied to a standard measure has unit pricing (never guessed)
+				unitPricing: context.measure ? (feedMeasureOf(context.measure) ?? '') : '',
 				identifierExists: context.identifierExists === 'no' && !gtin && !mpn ? 'no' : '',
 			};
 		});
@@ -331,6 +338,8 @@ export const googleItem = (row) => {
 		['g:product_type', row.productType],
 		['g:google_product_category', row.googleCategory ?? ''],
 		['g:shipping_weight', row.shippingWeight],
+		['g:unit_pricing_measure', row.unitPricing ?? ''],
+		['g:unit_pricing_base_measure', row.unitPricing ?? ''],
 		...FIELD_COLUMNS.map((name) => /** @type {[string, string]} */ ([`g:${name}`, row[name]])),
 		['g:gender', row.gender],
 		['g:age_group', row.ageGroup],

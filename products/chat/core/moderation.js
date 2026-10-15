@@ -13,6 +13,7 @@
  * Without the Moderation feature, AI answers still go through the credential check (never switchable).
  * @module
  */
+import { luhnValid } from '@ss/contracts/text';
 import { MARKDOWN_LINK } from './markdown.js';
 import { normalise } from './text.js';
 
@@ -25,23 +26,10 @@ const PHONE_CANDIDATE = /(?<![\w.])\+?\d[\d ()./-]{6,20}\d(?![\w])/g;
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
 
 /**
- * Luhn checksum.
+ * A payment card number: 13 to 19 digits that pass the Luhn check.
  * @param {string} digits
  */
-const luhn = (digits) => {
-	let sum = 0;
-	let double = false;
-	for (let i = digits.length - 1; i >= 0; i -= 1) {
-		let d = Number(digits[i]);
-		if (double) {
-			d *= 2;
-			if (d > 9) d -= 9;
-		}
-		sum += d;
-		double = !double;
-	}
-	return digits.length >= 13 && sum % 10 === 0;
-};
+const isCard = (digits) => digits.length >= 13 && luhnValid(digits);
 
 /**
  * IBAN mod-97 check.
@@ -101,7 +89,7 @@ export const redact = (text, kinds, labels, own = {}) => {
 	};
 	const want = new Set(kinds);
 	// order matters: cards and IBANs before phones (long digit runs)
-	if (want.has('card')) out = out.replace(CARD_CANDIDATE, (match) => (luhn(match.replace(/\D/g, '')) ? hit('card') : match));
+	if (want.has('card')) out = out.replace(CARD_CANDIDATE, (match) => (isCard(match.replace(/\D/g, '')) ? hit('card') : match));
 	if (want.has('iban')) out = out.replace(IBAN_CANDIDATE, (match) => (ibanValid(match) ? hit('iban') : match));
 	if (want.has('email'))
 		out = out.replace(EMAIL, (match) => (ownEmail !== '' && match.toLowerCase() === ownEmail ? match : hit('email')));

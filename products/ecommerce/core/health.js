@@ -104,10 +104,12 @@ const sharedStages = (field) => [
  * products still featured, and the variants by stock (E44).
  * @param {string} websiteId
  * @param {number} level the `catalog` setting `lowStock`
- * @param {{ domain: string, skuAs: 'none' | 'gtin' | 'mpn', hiddenBrandIds: string[] }} site the website's address;
- *   what the feeds send the SKU as for variants without their own GTIN or MPN; the brands shoppers do not see
+ * @param {{ domain: string, skuAs: 'none' | 'gtin' | 'mpn', hiddenBrandIds: string[],
+ *   measured?: import('./catalog-query.js').MeasuredScope | null }} site the website's address; what the feeds send the
+ *   SKU as for variants without their own GTIN or MPN; the brands shoppers do not see; the products sold by length,
+ *   weight or volume (their low stock counts units)
  */
-export const healthPipeline = (websiteId, level, { domain, skuAs, hiddenBrandIds }) => {
+export const healthPipeline = (websiteId, level, { domain, skuAs, hiddenBrandIds, measured = null }) => {
 	const active = { $match: { status: 'active' } };
 	// the products the feeds send: active, with an offered variant priced above 0
 	const listed = { status: 'active', variants: { $elemMatch: { active: true, price: { $gt: 0 } } } };
@@ -188,7 +190,7 @@ export const healthPipeline = (websiteId, level, { domain, skuAs, hiddenBrandIds
 					{ $group: { _id: '$categoryIds' } },
 				],
 				archivedFeatured: [{ $match: { status: 'archived', featured: true } }, { $count: 'n' }],
-				variants: variantStockStages(level),
+				variants: variantStockStages(level, measured),
 			},
 		},
 	];

@@ -156,6 +156,8 @@ describe('SMTP messaging adapter', () => {
 			{ to: 'a@example.org\r\nBcc: x@evil.test', subject: 's', text: 't' },
 			{ to: 'Name <a@example.org>', subject: 's', text: 't' },
 			{ to: ['a@example.org'], subject: 's', text: 't' },
+			{ to: 'ana..b@example.org', subject: 's', text: 't', from: FROM },
+			{ to: 'a@example.org', subject: 's', text: 't', from: 'Shop <shop..x@example.com>' },
 			{ to: 'a@example.org', subject: 'hi\r\nBcc: x@evil.test', text: 't' },
 			{ to: 'a@example.org', subject: '', text: 't' },
 			{ to: 'a@example.org', subject: 's' },
@@ -173,15 +175,16 @@ describe('SMTP messaging adapter', () => {
 			});
 		}
 		expect(seen.options).toHaveLength(0);
-		// the sender as given; extra headers pass through
+		// the sender as given; extra headers pass through; a punycode top-level domain is an address
 		await smtp.send({
-			to: 'a@example.org',
+			to: 'ana@example.xn--p1ai',
 			subject: 's',
 			text: 't',
 			from: 'Shop <shop@example.com>',
 			headers: { 'List-Unsubscribe': '<https://example.com/u>' },
 		});
 		expect(seen.mails[0]).toMatchObject({
+			to: 'ana@example.xn--p1ai',
 			from: 'Shop <shop@example.com>',
 			headers: { 'List-Unsubscribe': '<https://example.com/u>' },
 		});

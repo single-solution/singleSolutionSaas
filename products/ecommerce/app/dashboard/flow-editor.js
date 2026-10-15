@@ -6,7 +6,7 @@
  * needs, what staff give with it and its options where its kind of step leaves a choice; then the moves the shop makes
  * by itself (triggers) and where orders that need no payment first start. Moves the role rules do not allow are not
  * offered; the server checks the whole flow again (`core/flow.js` `checkOrderFlow`) and fills what is left out with
- * today's behavior. Saving keeps every field (`drafts.js` `flowToSave`).
+ * the defaults. Saving keeps every field (`drafts.js` `flowToSave`).
  * @module
  */
 import { useState } from 'react';

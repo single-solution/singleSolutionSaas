@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+/* global window */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountCart } from '../ui/cart.js';
 import { returnUrlOf } from '../ui/shop-checkout.js';
 import {
@@ -22,7 +23,10 @@ import {
 } from './ui-shop-helpers.js';
 
 beforeEach(resetPage);
-afterEach(resetPage);
+afterEach(() => {
+	resetPage();
+	vi.restoreAllMocks();
+});
 
 /** @param {Record<string, unknown>} [over] */
 const line = (over = {}) => ({
@@ -85,6 +89,9 @@ const ORDER = {
 	payment: { method: 'cod', state: 'unpaid', advance: 0, paid: 0, refunded: 0, payUrl: null, payBy: null },
 };
 
+/** The labels of the guest's details, in order. @param {HTMLElement} host */
+const labelsOf = (host) => $$(host, 'label[for^="ss-cart-guest-"]').map((node) => node.textContent);
+
 const SETTINGS = {
 	currency: 'EUR',
 	checkout: {
@@ -99,13 +106,22 @@ const SETTINGS = {
 
 /**
  * @param {{ quote?: (call: any) => any, routes?: Record<string, any>, signIn?: string | null, url?: string,
- *   settings?: Record<string, any>, lines?: any[] }} [options]
+ *   settings?: Record<string, any>, lines?: any[], guestOrders?: string[] }} [options]
  */
-const setup = async ({ quote = () => ok(quoteOf()), routes = {}, signIn = null, url, settings = SETTINGS, lines } = {}) => {
+const setup = async ({
+	quote = () => ok(quoteOf()),
+	routes = {},
+	signIn = null,
+	url,
+	settings = SETTINGS,
+	lines,
+	guestOrders = [],
+} = {}) => {
 	const fake = makeShop({
 		features: ['checkout'],
 		signIn,
 		routes: { 'POST /v1/shop/cart/quote': quote, ...routes },
+		guestOrders,
 		...(url ? { url } : {}),
 	});
 	for (const entry of lines ?? [{ productId: 'prd_1', variantId: 'var_1', quantity: 2 }]) fake.cart.add(entry);
@@ -132,7 +148,7 @@ describe('cart', () => {
 			lines: [{ productId: 'prd_1', variantId: 'var_1', quantity: 2 }],
 			coupon: '',
 			points: 0,
-			delivery: { method: 'delivery', city: '', area: '', country: '', locationId: null },
+			delivery: { method: 'delivery', city: '', area: '', region: '', postalCode: '', country: '', locationId: null },
 			payment: null,
 		});
 		const page = textOf(host);
@@ -176,6 +192,75 @@ describe('cart', () => {
 		await click(buttonOf(host, text('cart.removeLabel', { name: 'Phone' })));
 		await timers.run();
 		expect(textOf(host)).toContain(text('cart.empty'));
+	});
+
+	it('takes an amount of a measured item, shows its price per unit and keeps thousandths in the cart', async () => {
+		const measured = (/** @type {number} */ quantity) =>
+			line({
+				key: 'prd_fabric|var_f',
+				productId: 'prd_fabric',
+				variantId: 'var_f',
+				name: 'Linen',
+				variantName: '',
+				gradeLabel: '',
+				unitPrice: 1000,
+				quantity,
+				discount: 0,
+				total: quantity,
+				measure: { unit: 'sq ft', quantityText: String(quantity / 1000) },
+				problems: quantity % 500 === 0 ? [] : [{ code: 'measure_step', message: '' }],
+			});
+		const { fake, timers, host } = await setup({
+			lines: [{ productId: 'prd_fabric', variantId: 'var_f', quantity: 2500, measured: true }],
+			quote: (call) => ok(quoteOf({ lines: [measured(call.body.lines[0]?.quantity ?? 0)] })),
+		});
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.lines[0]).toEqual({
+			productId: 'prd_fabric',
+			variantId: 'var_f',
+			quantity: 2500,
+		});
+		expect(fake.cart.count()).toBe(1);
+		const page = textOf(host);
+		expect(page).toContain(text('cart.unitPricePer', { price: 'EUR 10.00', unit: 'sq ft' }));
+		const amount = /** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]'));
+		expect(amount.value).toBe('2.5');
+		expect(amount.getAttribute('aria-label')).toBe(text('cart.amount', { name: 'Linen', unit: 'sq ft' }));
+		expect(() => buttonOf(host, text('cart.more', { name: 'Linen' }))).toThrow();
+		// typed exactly to thousandths; a number with more decimals is refused and the cart kept
+		await setValue(amount, '3.75');
+		await timers.run();
+		expect(fake.cart.state().lines[0]?.quantity).toBe(3750);
+		expect(textOf(host)).toContain(text('cart.problem.measure_step'));
+		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '3.7501');
+		expect(fake.cart.state().lines[0]?.quantity).toBe(3750);
+		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '4');
+		await timers.run();
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.lines[0].quantity).toBe(4000);
+	});
+
+	it('learns a line is measured from its quote when it was added in pieces (a wishlist, another script)', async () => {
+		const { fake, timers, host } = await setup({
+			lines: [{ productId: 'prd_fabric', variantId: 'var_f', quantity: 1 }],
+			quote: (call) =>
+				ok(
+					quoteOf({
+						lines: [
+							line({
+								key: 'prd_fabric|var_f',
+								productId: 'prd_fabric',
+								variantId: 'var_f',
+								name: 'Linen',
+								quantity: call.body.lines[0]?.quantity ?? 0,
+								measure: { unit: 'tola', quantityText: String((call.body.lines[0]?.quantity ?? 0) / 1000) },
+							}),
+						],
+					}),
+				),
+		});
+		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '120');
+		await timers.run();
+		expect(fake.cart.state().lines[0]).toMatchObject({ quantity: 120_000, measured: true });
+		expect(fake.cart.count()).toBe(1);
 	});
 
 	it('shows line problems, bookings, unknown items and merged lines', async () => {
@@ -260,7 +345,7 @@ describe('cart', () => {
 								productId: 'prd_2',
 								name: 'Case',
 								url: 'javascript:alert(1)',
-								problems: [{ code: 'sold_out', message: '' }],
+								problems: [{ code: 'not_enough_stock', message: '' }],
 							}),
 						],
 						ready: false,
@@ -272,7 +357,7 @@ describe('cart', () => {
 		expect(items[0].querySelector('strong a').getAttribute('href')).toBe('https://shop.example.com/products/phone?color=blue');
 		expect(items[1].querySelector('strong a')).toBeNull();
 		expect(textOf(host)).toContain(text('cart.problem.out_of_stock'));
-		expect(textOf(host)).toContain(text('cart.problem.sold_out'));
+		expect(textOf(host)).toContain(text('cart.problem.not_enough_stock'));
 		expect(textOf(host)).toContain(text('cart.notReady'));
 	});
 
@@ -383,6 +468,76 @@ describe('cart', () => {
 		expect(textOf(none.host)).toContain(text('cart.points.balance', { balance: 0 }));
 	});
 
+	it('offers the regions of the address_regions list for the address’s country, and prices the place', async () => {
+		const settings = {
+			...SETTINGS,
+			checkout: {
+				...SETTINGS.checkout,
+				address: {
+					required: ['name', 'phone', 'line1', 'region'],
+					optional: ['city', 'postalCode', 'country', 'notes'],
+					regions: [{ country: 'US', names: ['California', 'Texas'] }],
+					country: 'US',
+				},
+			},
+		};
+		const { fake, timers, host } = await setup({ settings });
+		// without a country the address is in the business.json country: its regions are a list to pick from
+		const picker = /** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region'));
+		expect(picker.tagName).toBe('SELECT');
+		expect([...picker.options].map((option) => option.value)).toEqual(['', 'California', 'Texas']);
+		expect($(host, 'label[for="ss-cart-region"]').textContent).toBe(text('checkout.field.region'));
+		await setValue(picker, 'Texas');
+		await setValue($(host, '#ss-cart-postalCode'), '73301');
+		await timers.run();
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery).toMatchObject({ region: 'Texas', postalCode: '73301' });
+		// another country: the region is typed (what was picked stays)
+		await setValue($(host, '#ss-cart-country'), 'Canada');
+		const typed = /** @type {HTMLInputElement} */ ($(host, '#ss-cart-region'));
+		expect(typed.tagName).toBe('INPUT');
+		expect(typed.value).toBe('Texas');
+		expect(typed.getAttribute('maxlength')).toBe('100');
+		await setValue(typed, 'Ontario');
+		await setValue($(host, '#ss-cart-country'), 'United States');
+		expect($(host, '#ss-cart-region').tagName).toBe('SELECT');
+		expect(/** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region')).value).toBe('');
+		// each field at most its length in the one address table
+		expect($(host, '#ss-cart-city').getAttribute('maxlength')).toBe('100');
+		expect($(host, '#ss-cart-phone').getAttribute('maxlength')).toBe('40');
+	});
+
+	it('shows the shop’s delivery, packing and pickup texts and the pickup point’s address and hours (E22)', async () => {
+		const notes = {
+			cod: '',
+			online: '',
+			bank_transfer: '',
+			pickup: '',
+			delivery: 'Arrives in 2–4 working days.',
+			prep: 'Orders are packed within 24 hours.',
+			pickupReady: 'We message you when it is ready.',
+		};
+		const POINT = { ...PICKUP, locationId: null, address: '1 Market Street', hours: 'Mon–Fri 9–17' };
+		const { timers, host } = await setup({
+			quote: (call) =>
+				ok(
+					quoteOf({
+						delivery: call.body.delivery.method === 'pickup' ? POINT : DELIVERY,
+						deliveryOptions: [DELIVERY, POINT],
+						notes,
+					}),
+				),
+		});
+		let page = textOf(host);
+		for (const part of [notes.delivery, notes.prep, '1 Market Street', text('checkout.pickupHours', { hours: 'Mon–Fri 9–17' })])
+			expect(page).toContain(part);
+		expect(page).not.toContain(notes.pickupReady);
+		await setValue($$(host, 'input[name="ss-cart-delivery"]')[1], true);
+		await timers.run();
+		page = textOf(host);
+		expect(page).not.toContain(notes.delivery);
+		expect(page).toContain(notes.prep);
+	});
+
 	it('switches between delivery and pickup and prices the address city', async () => {
 		const { fake, timers, host } = await setup({
 			quote: (call) => {
@@ -415,6 +570,8 @@ describe('cart', () => {
 			method: 'pickup',
 			city: 'Paris',
 			area: '',
+			region: '',
+			postalCode: '',
 			country: '',
 			locationId: 'loc_1',
 		});
@@ -555,6 +712,271 @@ describe('checkout', () => {
 		await timers.run();
 		expect(textOf(host)).toContain(text('cart.title'));
 		expect($(host, '.box h2').closest('[hidden]')).not.toBeNull();
+	});
+
+	it('lets a guest order with their name and contact while the shop allows it, keeping the order key (E21)', async () => {
+		/** @type {any} */
+		let answerOf = fail(403, 'sign_in_required', { signIn: 'member_phone' });
+		const pickupOnly = () =>
+			ok(
+				quoteOf({
+					deliveryOptions: [PICKUP],
+					delivery: PICKUP,
+					paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+				}),
+			);
+		const { fake, host } = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'phone', phoneRequired: true } } },
+			quote: pickupOnly,
+			routes: { 'POST /v1/shop/orders': () => answerOf },
+		});
+		expect($(host, '#ss-cart-guest-name').closest('fieldset').hidden).toBe(false);
+		expect(textOf(host)).toContain(text('checkout.guest.title'));
+		expect(textOf(host)).toContain(text('checkout.guest.signIn'));
+		expect(textOf(host)).not.toContain(text('checkout.signIn'));
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.name') }));
+		expect(fake.all('POST /v1/shop/orders')).toHaveLength(0);
+		$(host, '#ss-cart-guest-name').value = ' Gina Guest ';
+		// guests check out by phone: it is needed, the email address is not
+		expect(labelsOf(host)).toEqual([
+			text('checkout.guest.name'),
+			text('checkout.guest.phone'),
+			text('checkout.optional', { field: text('checkout.guest.email') }),
+		]);
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.phone') }));
+		expect(fake.all('POST /v1/shop/orders')).toHaveLength(0);
+		$(host, '#ss-cart-guest-phone').value = '555 000 7777';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.body.customer).toEqual({ name: 'Gina Guest', phone: '555 000 7777', email: '' });
+		// a contact of a member with a password signs in instead
+		expect(textOf(host)).toContain(text('checkout.guest.member_phone'));
+		answerOf = fail(422, 'validation_failed', { errors: [{ path: '/customer/phone', message: 'Give your phone number.' }] });
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.problem.guest'));
+		// a lost answer keeps the attempt's key; other details make a new attempt
+		answerOf = fail(500, 'internal_error');
+		await click(buttonOf(host, text('checkout.place')));
+		const lost = fake.last('POST /v1/shop/orders')?.key;
+		answerOf = ok({ order: ORDER, next: { kind: 'done' }, orderKey: 'k'.repeat(32) }, 201);
+		await setValue($(host, '#ss-cart-guest-email'), 'gina@example.com', 'input');
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.key).not.toBe(lost);
+		expect(fake.last('POST /v1/shop/orders')?.body.customer.email).toBe('gina@example.com');
+		expect(fake.kept).toEqual([['ord_1', 'k'.repeat(32)]]);
+		expect(textOf(host)).toContain(text('success.title'));
+
+		// signed in: no guest details
+		resetPage();
+		const member = await setup({
+			signIn: 's1',
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'phone', phoneRequired: true } } },
+			quote: pickupOnly,
+		});
+		expect($(member.host, '#ss-cart-guest-name').closest('fieldset').hidden).toBe(true);
+		expect(buttonOf(member.host, text('checkout.place'))).toBeTruthy();
+	});
+
+	it('asks guests the contact guestIdentity and phoneRequired name: email, or either one (E21, phase 5)', async () => {
+		/** @type {any} */
+		let answerOf = fail(403, 'sign_in_required', { signIn: 'member_email' });
+		const pickupOnly = () =>
+			ok(
+				quoteOf({
+					deliveryOptions: [PICKUP],
+					delivery: PICKUP,
+					paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+				}),
+			);
+		const byEmail = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'email', phoneRequired: false } } },
+			quote: pickupOnly,
+			routes: { 'POST /v1/shop/orders': () => answerOf },
+		});
+		let host = byEmail.host;
+		// the email address comes first and is needed; the phone may be left out
+		expect(labelsOf(host)).toEqual([
+			text('checkout.guest.name'),
+			text('checkout.guest.email'),
+			text('checkout.optional', { field: text('checkout.guest.phone') }),
+		]);
+		$(host, '#ss-cart-guest-name').value = 'Ella Guest';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.email') }));
+		$(host, '#ss-cart-guest-email').value = 'ella@example.com';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(byEmail.fake.last('POST /v1/shop/orders')?.body.customer).toEqual({
+			name: 'Ella Guest',
+			phone: '',
+			email: 'ella@example.com',
+		});
+		expect(textOf(host)).toContain(text('checkout.guest.member_email'));
+
+		// either one: neither given is refused before sending, one is enough
+		resetPage();
+		answerOf = ok({ order: ORDER, next: { kind: 'done' }, orderKey: 'k'.repeat(32) }, 201);
+		const either = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'either', phoneRequired: false } } },
+			quote: pickupOnly,
+			routes: { 'POST /v1/shop/orders': () => answerOf },
+		});
+		host = either.host;
+		expect(labelsOf(host)).toEqual([text('checkout.guest.name'), text('checkout.guest.phone'), text('checkout.guest.email')]);
+		expect(textOf(host)).toContain(text('checkout.guest.either'));
+		$(host, '#ss-cart-guest-name').value = 'Eve Guest';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.guest.contactNeeded'));
+		expect(either.fake.all('POST /v1/shop/orders')).toHaveLength(0);
+		$(host, '#ss-cart-guest-email').value = 'eve@example.com';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(either.fake.last('POST /v1/shop/orders')?.body.customer).toEqual({
+			name: 'Eve Guest',
+			phone: '',
+			email: 'eve@example.com',
+		});
+		expect(either.fake.kept).toEqual([['ord_1', 'k'.repeat(32)]]);
+
+		// either one with a phone needed: the phone is asked, the email address is not
+		resetPage();
+		const phoneToo = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'either', phoneRequired: true } } },
+			quote: pickupOnly,
+		});
+		expect(labelsOf(phoneToo.host)).toEqual([
+			text('checkout.guest.name'),
+			text('checkout.guest.phone'),
+			text('checkout.optional', { field: text('checkout.guest.email') }),
+		]);
+		expect(textOf(phoneToo.host)).not.toContain(text('checkout.guest.either'));
+	});
+
+	it('reads a guest’s order back from Payments with the key kept in the browser (E21)', async () => {
+		const { fake, host } = await setup({
+			url: 'https://shop.example.com/cart?ss_order=ord_1',
+			routes: { 'GET /v1/shop/orders/ord_1': () => ok(ORDER) },
+			guestOrders: ['ord_1'],
+		});
+		expect(fake.last('GET /v1/shop/orders/ord_1')).toBeTruthy();
+		expect(textOf(host)).toContain(text('success.number', { number: 'SO2026-1' }));
+	});
+
+	it('shows the bank details of a transfer, then takes the transfer proof on the success page (E24)', async () => {
+		const BANK = {
+			ready: true,
+			accountHolder: 'Example Store LLC',
+			bankName: 'First Bank',
+			accountNumber: '12345678',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
+			iban: 'XX00 TEST 0000',
+			bic: '',
+			instructions: 'Put your order number in the reference.',
+		};
+		const NOTE = 'Orders ship once the money arrives.';
+		const notes = { cod: '', online: '', bank_transfer: NOTE, pickup: '', delivery: '', prep: '', pickupReady: '' };
+		const waiting = {
+			...ORDER,
+			role: 'awaiting_payment',
+			payment: {
+				method: 'bank_transfer',
+				state: 'unpaid',
+				via: 'manual',
+				advance: 0,
+				paid: 0,
+				refunded: 0,
+				payUrl: null,
+				payBy: null,
+				proof: null,
+			},
+			bankDetails: BANK,
+			canSendProof: true,
+			notes: { payment: NOTE, delivery: '', prep: '', pickupReady: '' },
+		};
+		/** @type {any} */
+		let upload = fail(503, 'storage_not_connected');
+		/** @type {any} */
+		let proof = fail(409, 'nothing_to_pay');
+		const { fake, host } = await setup({
+			signIn: 's1',
+			quote: () =>
+				ok(
+					quoteOf({
+						deliveryOptions: [PICKUP],
+						delivery: PICKUP,
+						paymentMethods: [{ method: 'bank_transfer', available: true, reason: null, advance: 0 }],
+						bankDetails: BANK,
+						notes,
+					}),
+				),
+			routes: {
+				'POST /v1/shop/orders': () =>
+					ok({ order: waiting, next: { kind: 'proof', url: 'https://shop.example.com/thanks' } }, 201),
+				'POST /v1/shop/orders/ord_1/proof/upload': () => upload,
+				'POST /v1/shop/orders/ord_1/proof': () => proof,
+			},
+		});
+		// before placing: the details given (never empty ones) and the shop's note for the method
+		let page = textOf(host);
+		for (const part of [
+			text('checkout.bank.title'),
+			text('checkout.bank.accountHolder'),
+			'Example Store LLC',
+			'XX00 TEST 0000',
+			'Put your order number in the reference.',
+			NOTE,
+		])
+			expect(page).toContain(part);
+		expect(page).not.toContain(text('checkout.bank.routingNumber'));
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.went).toEqual([]);
+		page = textOf(host);
+		expect(page).toContain(text('success.title'));
+		expect(page).toContain('XX00 TEST 0000');
+		expect(page).toContain(NOTE);
+		expect(page).not.toContain(text('success.retry'));
+
+		const form = () => $(host, 'form.proof-form');
+		expect(form()?.textContent).toContain(text('checkout.bank.proofTitle'));
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.proofNeeded'));
+		const input = $(host, 'form.proof-form input[type="file"]');
+		const choose = (/** @type {File} */ file) => Object.defineProperty(input, 'files', { value: [file], configurable: true });
+		choose(new window.File(['x'], 'proof.gif', { type: 'image/gif' }));
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.proofInvalid'));
+		choose(new window.File(['receipt'], 'proof.png', { type: 'image/png' }));
+		$(host, 'form.proof-form input[maxlength="120"]').value = ' TX-99 ';
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.problem.storage_not_connected'));
+		expect(fake.last('POST /v1/shop/orders/ord_1/proof/upload')?.body).toEqual({ type: 'image/png', size: 7 });
+		upload = ok(
+			{
+				upload: { method: 'PUT', url: 'https://storage.example.com/up', headers: { 'content-type': 'image/png' } },
+				key: 'ecommerce/proofs/ord_1/prf_1.png',
+				expiresAt: '',
+			},
+			201,
+		);
+		const put = vi.spyOn(window, 'fetch').mockResolvedValueOnce(new Response(null, { status: 500 }));
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.proofFailed'));
+		put.mockResolvedValue(new Response(null, { status: 200 }));
+		await submit(form());
+		expect(put).toHaveBeenLastCalledWith('https://storage.example.com/up', expect.objectContaining({ method: 'PUT' }));
+		expect(textOf(host)).toContain(text('checkout.bank.problem.nothing_to_pay'));
+		expect(fake.last('POST /v1/shop/orders/ord_1/proof')?.body).toEqual({
+			key: 'ecommerce/proofs/ord_1/prf_1.png',
+			reference: 'TX-99',
+		});
+		proof = ok({
+			order: { ...waiting, payment: { ...waiting.payment, proof: { reference: 'TX-99', at: '2026-10-02T10:00:00.000Z' } } },
+		});
+		await submit(form());
+		expect($(host, 'p.save')?.textContent).toContain('TX-99');
+		// another proof may still follow while staff have not recorded the payment
+		expect(form()?.textContent).toContain(text('checkout.bank.proofAgain'));
 	});
 
 	it('asks the order fields the quote names, checks them as the server does and sends them', async () => {

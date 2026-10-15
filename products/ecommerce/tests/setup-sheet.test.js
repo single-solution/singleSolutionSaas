@@ -141,8 +141,16 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		await env.switchOn(ALL);
 		await env.list('couriers', [{ key: 'fastship', name: 'FastShip', trackingUrl: 'https://track.example/{tracking}' }]);
 		await env.list('delivery_zones', [
-			{ key: 'city', name: 'Springfield', cities: ['Springfield'], fee: 300, freeOver: 0, minDays: 1, maxDays: 2 },
-			{ key: 'state', name: 'Rest of the state', cities: ['Shelbyville'], fee: 900, freeOver: 0, minDays: 2, maxDays: 4 },
+			{ key: 'city', name: 'Springfield', match: { cities: ['Springfield'] }, fee: 300, freeOver: 0, minDays: 1, maxDays: 2 },
+			{
+				key: 'state',
+				name: 'Rest of the state',
+				match: { cities: ['Shelbyville'] },
+				fee: 900,
+				freeOver: 0,
+				minDays: 2,
+				maxDays: 4,
+			},
 		]);
 		await env.list('tax_rules', [
 			{ name: 'Sales tax', percent: 8.25, categoryIds: [], regions: [{ country: 'US', city: '' }] },
@@ -177,6 +185,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'9 statuses: Awaiting payment, Awaiting confirmation, Confirmed, Packed, Dispatched, Delivered, Canceled, Returned to origin, Refunded; 14 moves; 5 statuses message the shopper.',
 			],
 			['couriers', '1 courier: FastShip.'],
+			['address_regions', 'No countries with regions yet.'],
 		]);
 		expect(listsOf(on, 'delivery_zones')).toEqual([['delivery_zones', '2 zones: Springfield, Rest of the state.']]);
 		expect(listsOf(on, 'taxes')).toEqual([['tax_rules', '1 tax rule: Sales tax 8.25%.']]);
@@ -243,6 +252,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		expect(listsOf(part, 'checkout')).toEqual([
 			['order_flow', expect.stringMatching(/^9 statuses: /)],
 			['couriers', 'Not available right now'],
+			['address_regions', 'No countries with regions yet.'],
 		]);
 	});
 });

@@ -68,8 +68,9 @@ export const actorHeaders = (who) => {
 
 /**
  * A shopper: the Accounts user of a verified sign-in (PLAN 0.4.6), with their role (role pricing, loyalty roles) and
- * whether Accounts verified their phone (guest orders move to them, E21).
- * @typedef {{ id: string, name: string, email: string, phone: string, role?: string, phoneVerified?: boolean }} Shopper
+ * whether Accounts verified their phone and email address (guest orders on them move to them, E21).
+ * @typedef {{ id: string, name: string, email: string, phone: string, role?: string, phoneVerified?: boolean,
+ *   emailVerified?: boolean }} Shopper
  */
 
 /**
@@ -295,6 +296,7 @@ export const createService = (product) => {
 			phone: user.phone ?? '',
 			role: user.role ?? '',
 			phoneVerified: Boolean(user.phone) && claimsOf(token).phone_verified === true,
+			emailVerified: Boolean(user.email) && claimsOf(token).email_verified === true,
 		};
 		recordShopper(s, found);
 		return found;
@@ -372,10 +374,10 @@ export const createService = (product) => {
 
 	/**
 	 * The signed-in shopper's own Accounts profile (`GET /v1/me` with the forwarded sign-in, through the pasted
-	 * Accounts token, K3): their name and default address's city and area. Null without a sign-in or when Accounts does
-	 * not answer.
+	 * Accounts token, K3): their name and default address's city, area, region and country. Null without a sign-in or
+	 * when Accounts does not answer.
 	 * @param {Site} s
-	 * @returns {Promise<{ name: string, city: string, area: string } | null>}
+	 * @returns {Promise<{ name: string, city: string, area: string, region: string, country: string } | null>}
 	 */
 	const accountProfile = async (s) => {
 		const token = s.ctx.headers?.get?.(SIGN_IN_HEADER);
@@ -391,6 +393,8 @@ export const createService = (product) => {
 			name: typeof body.name === 'string' ? body.name : '',
 			city: typeof home?.city === 'string' ? home.city : '',
 			area: typeof home?.area === 'string' ? home.area : '',
+			region: typeof home?.region === 'string' ? home.region : '',
+			country: typeof home?.country === 'string' ? home.country : '',
 		};
 	};
 

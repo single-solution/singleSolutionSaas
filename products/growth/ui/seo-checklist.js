@@ -11,12 +11,10 @@
  * text; the time of a run follows the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { formatDate, formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, element, formatDate, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
 import { SITE_CHECKS, richResultsTestOf } from '../core/seo-checks.js';
 import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
-import { PROBLEM_TEXTS, chipGroup, moreMenu, openDialog, problemKey } from './admin-kit.js';
-import { adminCall } from './tickets.js';
-import { element } from './dom.js';
+import { PROBLEM_TEXTS, chipGroup, problemKey } from './admin-kit.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** Order of the statuses in a card: what to fix first. */
@@ -81,7 +79,7 @@ const pathOf = (url) => {
 };
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
  *   viewer: import('./widget.js').Viewer, open?: (url: string) => void, now?: () => number }} input `viewer`: the
  *   browser's language and time zone; `open`: open a page in a new tab
  */

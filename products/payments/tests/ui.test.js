@@ -410,7 +410,7 @@ describe('Payments admin widget', () => {
 		expect(save).toHaveBeenCalledTimes(1);
 		const [name, csv] = save.mock.calls[0] ?? [];
 		expect(name).toBe('payments.csv');
-		expect(csv.split('\r\n')).toHaveLength(3);
+		expect(csv.trimEnd().split('\r\n')).toHaveLength(3);
 		expect(queries.at(-1)).toContain('limit=100');
 	});
 

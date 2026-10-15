@@ -2,19 +2,23 @@
  * Pricing a cart (PLAN 0.8.8; the cart lives in the shopper's browser and is priced by the server on every quote and
  * again when the order is placed). The pipeline, all in integer minor units of the shop's currency:
  *
- * 1. lines — the product and variant from the catalog (only active ones), quantity limits, stock shortfalls reported
- *    per line (never the exact stock), booked slots and license keys;
+ * 1. lines — the product and variant from the catalog (only active ones), quantity limits (pieces, or the steps and
+ *    limits of items sold in a unit of their own: their quantities are thousandths of the unit, `core/measure.js`),
+ *    stock shortfalls reported per line (never the exact stock), booked slots and license keys;
  * 2. promotions — deals, bundles and the coupon take their part off each line (`core/promotions.js`);
  * 3. delivery — the fee of the delivery zone (or store pickup) after promotions, waived by a free-delivery coupon;
  * 4. loyalty points — their value spread over the lines in proportion (`allocate`);
  * 5. taxes — per line, included in the price or added on top;
  * 6. totals.
  *
- * Also the checks of the visitor's input and which payment methods a cart may use. Pure functions, no I/O.
+ * What a line comes to is `lineGross` (`core/measure.js`). Also the checks of the visitor's input and which payment
+ * methods a cart may use. Pure functions, no I/O.
  * @module
  */
 import { normalisePhone } from '@ss/contracts/phone';
+import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
 import { codDecision, codFee } from './cod.js';
+import { MAX_MEASURED, grossFits, lineGross, measureProblem, piecesOf } from './measure.js';
 import { allocateUnits, isPrice, roundHalfUp } from './money.js';
 import { taxOf, taxPercent } from './taxes.js';
 
@@ -26,16 +30,15 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./cod.js').CodSettings} CodSettings */
 /** @typedef {import('./guests.js').PhoneRules} PhoneRules */
 
-/** At most this many lines in a cart, and this many of one line (the `checkout` settings `maxLines` and `maxQuantity`
- * lower them, E22; the cart widget keeps the same limits). */
+/** At most this many lines in a cart, and this many pieces of one line (the `checkout` settings `maxLines` and
+ * `maxQuantity` lower them, E22; the cart widget keeps the same limits). A measured line is one piece: its quantity
+ * (thousandths of its unit) is checked against its item type's step, least and most. */
 export const MAX_LINES = 50;
 export const MAX_QUANTITY = 99;
 /** Payment methods, in their default order (`checkout.paymentOrder`, E22). @type {ReadonlyArray<PaymentMethod>} */
 export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['online', 'bank_transfer', 'cod', 'pickup']));
 /** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
-/** Address fields a merchant may make required (`checkout.addressRequired`, E22; name and phone always are). */
-export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line1', 'line2', 'area', 'city', 'postalCode', 'country']);
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** A phone as typed: digits, spaces, + ( ) - (kept when the website's phone rules cannot read it as E.164). */
@@ -47,12 +50,13 @@ const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
  *   lock the last quote gave (E18 `lockMinutes`)
  */
 /**
- * @typedef {{ method: 'delivery' | 'pickup' | null, city: string, area: string, country: string, locationId: string | null }} DeliveryInput
+ * @typedef {{ method: 'delivery' | 'pickup' | null, city: string, area: string, region: string, postalCode: string,
+ *   country: string, locationId: string | null }} DeliveryInput
  */
 /** @typedef {{ lines: CartLineInput[], coupon: string, points: number, delivery: DeliveryInput, payment: PaymentMethod | null }} CartInput */
 /**
- * @typedef {{ name: string, phone: string, line1: string, line2: string, city: string, area: string, postalCode: string,
- *   country: string, notes: string }} Address
+ * @typedef {{ name: string, phone: string, line1: string, line2: string, city: string, area: string, region: string,
+ *   postalCode: string, country: string, notes: string }} Address
  */
 /** @typedef {{ ok: false, field: string, message: string }} InputError */
 
@@ -72,14 +76,15 @@ const text = (value, max) => {
 
 /**
  * Check a cart sent by the visitor (`POST /v1/shop/cart/quote`, and the cart part of placing an order). Lines of the
- * same product, variant and slot are merged.
+ * same product, variant and slot are merged. A quantity is a whole number: pieces, or thousandths of the unit of an
+ * item sold in a unit of its own; the most of one item is checked when the lines are read against the catalog
+ * ({@link resolveLines}, which knows which items are measured).
  * @param {unknown} body
- * @param {{ maxLines?: number, maxQuantity?: number }} [limits] the `checkout` settings (E22)
+ * @param {{ maxLines?: number }} [limits] the `checkout` settings (E22)
  * @returns {{ ok: true, value: CartInput } | InputError}
  */
-export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTITY } = {}) => {
+export const checkCart = (body, { maxLines = MAX_LINES } = {}) => {
 	const lineCap = Math.min(MAX_LINES, Math.max(1, maxLines));
-	const quantityCap = Math.min(MAX_QUANTITY, Math.max(1, maxQuantity));
 	const input = isObject(body) ? /** @type {Record<string, unknown>} */ (body) : {};
 	const lines = input.lines;
 	if (!Array.isArray(lines) || lines.length === 0 || lines.length > lineCap)
@@ -94,11 +99,11 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 		if (variantId !== null && (typeof variantId !== 'string' || !ID.test(variantId)))
 			return { ok: false, field: `lines/${index}/variantId`, message: 'variantId is a variant id.' };
 		const quantity = line.quantity ?? 1;
-		if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > quantityCap)
+		if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > MAX_MEASURED)
 			return {
 				ok: false,
 				field: `lines/${index}/quantity`,
-				message: `quantity is a whole number from 1 to ${quantityCap}.`,
+				message: 'quantity is a whole number from 1: pieces, or thousandths of the unit of a measured item.',
 			};
 		const dealId = line.dealId ?? null;
 		if (dealId !== null && (typeof dealId !== 'string' || !ID.test(dealId)))
@@ -116,8 +121,8 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 		const key = `${line.productId}|${variantId ?? ''}|${slot ?? ''}`;
 		const found = merged.get(key);
 		const total = (found?.quantity ?? 0) + Number(quantity);
-		if (total > quantityCap)
-			return { ok: false, field: `lines/${index}/quantity`, message: `At most ${quantityCap} of one item.` };
+		if (total > MAX_MEASURED)
+			return { ok: false, field: `lines/${index}/quantity`, message: `At most ${MAX_MEASURED} of one item.` };
 		merged.set(key, {
 			productId: line.productId,
 			variantId: /** @type {string | null} */ (variantId),
@@ -136,11 +141,18 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 	const method = delivery.method ?? null;
 	if (method !== null && method !== 'delivery' && method !== 'pickup')
 		return { ok: false, field: 'delivery/method', message: 'delivery.method is delivery or pickup.' };
-	const city = text(delivery.city, 80);
-	const area = text(delivery.area, 80);
-	const country = text(delivery.country, 60);
-	if (city === null || area === null || country === null)
-		return { ok: false, field: 'delivery', message: 'delivery names a city, area and country of at most 80 characters.' };
+	/** @type {Record<'city' | 'area' | 'region' | 'postalCode' | 'country', string>} */
+	const place = { city: '', area: '', region: '', postalCode: '', country: '' };
+	for (const field of /** @type {Array<keyof typeof place>} */ (['city', 'area', 'region', 'postalCode', 'country'])) {
+		const value = text(delivery[field], ADDRESS_LIMITS[field]);
+		if (value === null)
+			return {
+				ok: false,
+				field: `delivery/${field}`,
+				message: `delivery.${field} is at most ${ADDRESS_LIMITS[field]} characters.`,
+			};
+		place[field] = value;
+	}
 	const locationId = delivery.locationId ?? null;
 	if (locationId !== null && (typeof locationId !== 'string' || !ID.test(locationId)))
 		return { ok: false, field: 'delivery/locationId', message: 'delivery.locationId is a pickup location id.' };
@@ -153,46 +165,54 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 			lines: [...merged.values()],
 			coupon: coupon.toUpperCase(),
 			points: Number(points),
-			delivery: { method, city, area, country, locationId: /** @type {string | null} */ (locationId) },
+			delivery: { method, ...place, locationId: /** @type {string | null} */ (locationId) },
 			payment: /** @type {PaymentMethod | null} */ (payment),
 		},
 	};
 };
 
 /**
- * Check a delivery address; its phone (the one the courier calls) is kept as E.164 when the website's phone rules can
- * read it (K12), else as typed, so a website with no calling code still takes national numbers.
+ * What a delivery address must hold on a website: the fields the merchant requires besides the name
+ * (`checkout.addressRequired`), whether the phone is needed (`checkout.phoneRequired`), how phones are read (K12),
+ * the region names offered per country (`address_regions`) and the business.json country (an address without a country
+ * is there).
+ * @typedef {{ required: ReadonlyArray<string>, phoneRequired: boolean,
+ *   phoneRules: Pick<PhoneRules, 'defaultCallingCode' | 'trunkPrefix'>,
+ *   regions: ReadonlyArray<import('./address.js').AddressRegions>, homeCountry: string }} AddressRules
+ */
+
+/**
+ * Check a delivery address (every field at most its {@link ADDRESS_LIMITS} length). Its phone (the one the courier
+ * calls) is kept as E.164 when the website's phone rules can read it (K12), else as typed, so a website with no calling
+ * code still takes national numbers. In a country `address_regions` lists, the region is one of its names, kept as the
+ * list spells it.
  * @param {unknown} body
- * @param {ReadonlyArray<string>} required the fields the merchant requires besides name and phone
- *   (`OPTIONAL_ADDRESS_FIELDS`)
- * @param {Pick<PhoneRules, 'defaultCallingCode' | 'trunkPrefix'>} phoneRules (any country: a courier calls it)
+ * @param {AddressRules} rules
  * @returns {{ ok: true, value: Address } | InputError}
  */
-export const checkAddress = (body, required, phoneRules) => {
+export const checkAddress = (body, rules) => {
 	if (!isObject(body)) return { ok: false, field: 'address', message: 'A delivery address is required.' };
 	const input = /** @type {Record<string, unknown>} */ (body);
-	/** @type {Array<[keyof Address, number, boolean]>} */
-	const fields = [
-		['name', 120, true],
-		['phone', 30, true],
-		['line1', 200, required.includes('line1')],
-		['line2', 200, required.includes('line2')],
-		['city', 80, required.includes('city')],
-		['area', 80, required.includes('area')],
-		['postalCode', 20, required.includes('postalCode')],
-		['country', 60, required.includes('country')],
-		['notes', 500, false],
-	];
 	/** @type {Record<string, string>} */
 	const out = {};
-	for (const [field, max, needed] of fields) {
+	for (const [field, max] of Object.entries(ADDRESS_LIMITS)) {
 		const value = text(input[field], max);
 		if (value === null)
 			return { ok: false, field: `address/${field}`, message: `address.${field} is at most ${max} characters.` };
+		const needed =
+			field === 'name' || (field === 'phone' ? rules.phoneRequired : field !== 'notes' && rules.required.includes(field));
 		if (needed && value === '') return { ok: false, field: `address/${field}`, message: `address.${field} is required.` };
 		out[field] = value;
 	}
-	const phone = normalisePhone(out.phone, phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
+	const names = regionsFor(rules.regions, out.country || rules.homeCountry);
+	if (names && out.region !== '') {
+		const named = names.find((name) => placeKey(name) === placeKey(out.region));
+		if (!named)
+			return { ok: false, field: 'address/region', message: 'address.region is one of the regions listed for its country.' };
+		out.region = named;
+	}
+	if (out.phone === '') return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ (out)) };
+	const phone = normalisePhone(out.phone, rules.phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
 	if (!phone)
 		return { ok: false, field: 'address/phone', message: 'address.phone is a phone number (digits, spaces, + ( ) -).' };
 	return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ ({ ...out, phone })) };
@@ -249,8 +269,10 @@ export const checkOrderExtras = (body) => {
  * @property {number | null} [warrantyDays] the variant's warranty, else the product's (E12; the grade's and the setting
  *   are added at placement)
  * @property {string | null} image storage key of the main image
- * @property {number} unitPrice
- * @property {number} quantity
+ * @property {number} unitPrice per piece, or per unit of a measured item
+ * @property {number} quantity pieces, or thousandths of the unit of a measured item
+ * @property {import('./measure.js').Measure | null} measure how the item is measured (its item type's `measure`,
+ *   `core/measure.js`); null: counted in pieces
  * @property {number | null} cost
  * @property {string[]} categoryIds the product's own
  * @property {string[]} allCategoryIds with their ancestors (promotions and taxes match these)
@@ -274,7 +296,14 @@ const PROBLEM_TEXT = {
 	slot_unavailable: 'This time cannot be booked.',
 	slot_taken: 'This time is already booked.',
 	one_per_slot: 'A time can be booked once per order.',
+	too_large: 'This line comes to more than an order can take.',
+	measure_step: 'This quantity is not one of the steps this item is sold in.',
+	measure_min: 'This quantity is less than the least this item is sold in.',
+	measure_max: 'This quantity is more than the most this item is sold in.',
 };
+
+/** The problems a cart line can have (each has its widget text `cart.problem.<code>`). */
+export const LINE_PROBLEMS = Object.freeze(Object.keys(PROBLEM_TEXT));
 
 /** @param {string} code @returns {LineProblem} */
 const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
@@ -287,16 +316,36 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  * @param {(categoryIds: string[]) => string[]} context.ancestors the ids with their ancestors
  * @param {(grade: string, categoryIds: string[]) => string} context.gradeLabel a grade's label for a product of these
  *   categories (its category's entry first, E45)
- * @param {{ digital: boolean, bookings: boolean }} context.features
+ * @param {{ digital: boolean, bookings: boolean, measured?: boolean }} context.features `measured`: Sell in any unit is on
  * @param {(product: ProductRecord) => boolean} context.slots whether a service is booked in time slots (its item type's
  *   `slots`, dynamic model §1): one per slot, a slot needed
  * @param {Map<string, number>} context.licences available license keys by product id
  * @param {(product: ProductRecord, start: number) => { start: number, end: number } | null} context.slotOf the slot
  *   starting then (inside the hours, the lead time and the days ahead), or null
  * @param {Set<string>} context.booked `<productId>|<start ms>` of booked slots
+ * @param {(product: ProductRecord) => import('./measure.js').Measure | null} [context.measureOf] how an item is measured
+ *   (its item type's `measure`, whatever the feature: its stock is counted in it); none: in pieces
+ * @param {number} [context.maxQuantity] the most pieces of one item (the `checkout` setting `maxQuantity`, E22)
+ * @param {number} [context.unit] whole units (E25): what a measured line comes to rounds to them
  * @returns {ResolvedLine[]}
  */
-export const resolveLines = (inputs, { products, ancestors, gradeLabel, features, slots, licences, slotOf, booked }) => {
+export const resolveLines = (
+	inputs,
+	{
+		products,
+		ancestors,
+		gradeLabel,
+		features,
+		slots,
+		licences,
+		slotOf,
+		booked,
+		measureOf = () => null,
+		maxQuantity = MAX_QUANTITY,
+		unit = 1,
+	},
+) => {
+	const pieceCap = Math.min(MAX_QUANTITY, Math.max(1, maxQuantity));
 	/** @type {ResolvedLine[]} */
 	const out = [];
 	for (const input of inputs) {
@@ -315,6 +364,7 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			image: product?.media?.[0]?.key ?? null,
 			unitPrice: 0,
 			quantity: input.quantity,
+			measure: null,
 			cost: null,
 			categoryIds: product?.categoryIds ?? [],
 			allCategoryIds: ancestors(product?.categoryIds ?? []),
@@ -325,10 +375,13 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			problems: [],
 		};
 		const slotted = product?.kind === 'service' && slots(product);
+		const measure = product ? measureOf(product) : null;
+		// an item measured by its type is sold only while Sell in any unit is on
 		const sold =
 			product &&
 			product.status === 'active' &&
 			(product.kind !== 'digital' || features.digital) &&
+			(measure === null || features.measured === true) &&
 			(product.kind !== 'service' || (features.bookings && (!slotted || (product.booking?.durationMinutes ?? 0) > 0)));
 		if (!product || !sold) {
 			out.push({ ...line, problems: [problemOf('unavailable')] });
@@ -360,6 +413,7 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			gradeLabel: variant.grade ? gradeLabel(variant.grade, product.categoryIds) : '',
 			warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? null,
 			unitPrice: variant.price,
+			measure,
 			cost: variant.cost ?? null,
 			priced: true,
 		};
@@ -381,6 +435,20 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 			continue;
 		}
 		out.push(resolved);
+	}
+	// the most of one item (pieces; a measured line is one piece), a measured line's steps and limits, and a line too
+	// large to price
+	for (const line of out) {
+		if (!line.priced) continue;
+		if (piecesOf(line) > pieceCap) line.problems.push({ code: 'too_many', message: `At most ${pieceCap} of one item.` });
+		if (line.measure) {
+			const problem = measureProblem(line.quantity, line.measure);
+			if (problem) line.problems.push(problemOf(problem));
+		}
+		if (!grossFits(line.unitPrice, line.quantity, line.measure !== null, unit)) {
+			line.problems.push(problemOf('too_large'));
+			line.priced = false;
+		}
 	}
 	// shortfalls are checked on the whole cart (two lines of one variant share its stock)
 	for (const line of out) {
@@ -415,9 +483,15 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
 // -------------------------------------------------------------------------------------------------------- pricing
 
 /**
+ * What a cart line comes to before discounts (`lineGross`: whole units with Format's `wholeUnits` for a measured line).
+ * @param {Pick<ResolvedLine, 'unitPrice' | 'quantity' | 'measure'>} line @param {number} [unit]
+ */
+export const grossOf = (line, unit = 1) => lineGross(line.unitPrice, line.quantity, Boolean(line.measure), unit);
+
+/**
  * @typedef {object} PricedLine
  * @property {string} key
- * @property {number} gross unitPrice × quantity
+ * @property {number} gross what the line comes to before discounts ({@link grossOf})
  * @property {number} promotions deals, bundles and coupon
  * @property {number} role the role discount spread on this line (E19)
  * @property {number} points the points' value spread on this line
@@ -436,13 +510,14 @@ export const resolveLines = (inputs, { products, ancestors, gradeLabel, features
  * What promotions take off each line, clamped to the line.
  * @param {ResolvedLine[]} lines priced lines
  * @param {PromotionsResult | null} promotions
+ * @param {number} [unit]
  * @returns {number[]}
  */
-export const promotionDiscounts = (lines, promotions) =>
+export const promotionDiscounts = (lines, promotions, unit = 1) =>
 	lines.map((line) => {
 		const found = promotions?.lines.find((entry) => entry.key === line.key);
 		const off = found ? found.dealDiscount + found.bundleDiscount + found.couponDiscount : 0;
-		return Math.min(line.unitPrice * line.quantity, Math.max(0, Math.floor(off)));
+		return Math.min(grossOf(line, unit), Math.max(0, Math.floor(off)));
 	});
 
 /**
@@ -451,7 +526,7 @@ export const promotionDiscounts = (lines, promotions) =>
  * @param {ResolvedLine[]} lines @param {number} amount @param {number} [unit]
  */
 const fixedDiscounts = (lines, amount, unit = 1) => {
-	const gross = lines.map((line) => line.unitPrice * line.quantity);
+	const gross = lines.map((line) => grossOf(line, unit));
 	const total = gross.reduce((sum, value) => sum + value, 0);
 	return allocateUnits(Math.max(0, Math.min(amount, total)), gross, unit);
 };
@@ -476,7 +551,8 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
  * @param {number} input.delivery the delivery fee
  * @param {number} input.pointsValue what the redeemed points take off, minor units
  * @param {TaxRule[]} input.taxRules [] without the `taxes` feature
- * @param {{ country: string, city: string } | null} input.region
+ * @param {import('./address.js').Place | null} input.region where the order goes (a pickup order: the business.json
+ *   country; null: no place, then only tax rules without regions apply)
  * @param {boolean} input.taxIncluded
  * @param {number} [input.rolePercent] the shopper's role discount (E19)
  * @param {number} [input.feePercent] the payment method's fee (E23)
@@ -504,8 +580,8 @@ export const priceLines = ({
 	const promo =
 		fixed && typeof fixed.promotions === 'number'
 			? fixedDiscounts(lines, fixed.promotions, unit)
-			: promotionDiscounts(lines, promotions);
-	const after = lines.map((line, index) => line.unitPrice * line.quantity - (promo[index] ?? 0));
+			: promotionDiscounts(lines, promotions, unit);
+	const after = lines.map((line, index) => grossOf(line, unit) - (promo[index] ?? 0));
 	const merchandise = after.reduce((a, b) => a + b, 0);
 	const roleTotal = roleDiscountOf(merchandise, rolePercent, unit);
 	const role = allocateUnits(roleTotal, after, unit);
@@ -513,7 +589,7 @@ export const priceLines = ({
 	const points = allocateUnits(Math.min(Math.max(0, pointsValue), merchandise - roleTotal), left, unit);
 	/** @type {PricedLine[]} */
 	const priced = lines.map((line, index) => {
-		const gross = line.unitPrice * line.quantity;
+		const gross = grossOf(line, unit);
 		const lineDiscount = (promo[index] ?? 0) + (role[index] ?? 0) + (points[index] ?? 0);
 		const net = gross - lineDiscount;
 		const tax = roundHalfUp(taxOf(net, taxPercent(taxRules, { categoryIds: line.allCategoryIds, region }), taxIncluded), unit);
@@ -569,8 +645,8 @@ export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
  * @param {number} [unit]
  */
 export const merchandiseOf = (lines, promotions, kept = null, unit = 1) => {
-	const promo = kept === null ? promotionDiscounts(lines, promotions) : fixedDiscounts(lines, kept, unit);
-	return lines.reduce((n, line, index) => n + line.unitPrice * line.quantity - (promo[index] ?? 0), 0);
+	const promo = kept === null ? promotionDiscounts(lines, promotions, unit) : fixedDiscounts(lines, kept, unit);
+	return lines.reduce((n, line, index) => n + grossOf(line, unit) - (promo[index] ?? 0), 0);
 };
 
 // -------------------------------------------------------------------------------------------------- payment methods

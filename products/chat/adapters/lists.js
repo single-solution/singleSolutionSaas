@@ -11,7 +11,7 @@ import { checkCustomFields, checkPageRules } from '../core/fields.js';
 import { checkFlows } from '../core/flows.js';
 import { checkTools } from '../core/tools.js';
 import { resealEach } from '@ss/app-kit';
-import { randomSecret } from './crypto.js';
+import { randomToken } from '@ss/protocol';
 
 /** Each list: the feature it belongs to, its name on screens, and its check. */
 export const LISTS = Object.freeze({
@@ -75,7 +75,7 @@ export const createLists = ({ store, sealer, now }) => {
 			const aad = toolSecretAad(websiteId);
 			const opened = regenerate ? null : sealer.open((await store.get('settings', id))?.value, aad);
 			if (opened) return opened;
-			const secret = `whsec_${randomSecret(32)}`;
+			const secret = `whsec_${randomToken(32)}`;
 			await store.put('settings', id, {
 				websiteId,
 				kind: 'chat',

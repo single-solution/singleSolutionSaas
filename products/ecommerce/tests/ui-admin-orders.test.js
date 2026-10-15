@@ -108,7 +108,8 @@ const detail = (over = {}) => ({
 		line2: '',
 		city: 'Tokyo',
 		area: '',
-		postalCode: '',
+		region: 'Tokyo',
+		postalCode: '100-0001',
 		country: 'JP',
 		notes: '',
 	},
@@ -893,6 +894,40 @@ describe('orders admin: one order', () => {
 		host.remove();
 	});
 
+	it('shows the shopper’s transfer proof with its reference and a link to open it (E24)', async () => {
+		const proof = {
+			key: 'ecommerce/proofs/ord_1/prf_1.png',
+			reference: 'TX-99',
+			at: AT,
+			url: 'https://storage.example/prf_1.png?sig=1',
+		};
+		const { root } = await start({
+			'GET /v1/admin/orders/ord_1': () =>
+				answer(
+					200,
+					detail({
+						role: 'awaiting_payment',
+						shipment: null,
+						payment: {
+							method: 'bank_transfer',
+							state: 'unpaid',
+							via: 'manual',
+							paid: 0,
+							refunded: 0,
+							refundable: 0,
+							proof,
+						},
+					}),
+				),
+		});
+		const pane = detailOf(panelOf(root, 'orders'));
+		expect(textOf(pane)).toContain(TEXTS['ordersAdmin.proof']);
+		expect(textOf(pane)).toContain('TX-99');
+		const link = pane.querySelector('a[href="https://storage.example/prf_1.png?sig=1"]');
+		expect(link?.textContent).toBe(TEXTS['ordersAdmin.openProof']);
+		expect(link?.getAttribute('target')).toBe('_blank');
+	});
+
 	it('shows a delivered order without moves, and a missing order', async () => {
 		const { root, server } = await start(
 			{
@@ -925,7 +960,7 @@ describe('orders admin: one order', () => {
 		);
 		const panel = panelOf(root, 'orders');
 		const pane = detailOf(panel);
-		expect(textOf(pane)).toContain('Street 1, Tokyo, JP');
+		expect(textOf(pane)).toContain('Street 1, Tokyo, Tokyo, 100-0001, JP');
 		expect(textOf(pane)).toContain('USD 10.00');
 		expect(textOf(pane)).not.toContain('Notes');
 		expect(pane.querySelector('a')).toBeNull();
@@ -1546,7 +1581,15 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 				{ variantId: 'var_9', quantity: 2 },
 			],
 			paymentMethod: 'cod',
-			delivery: { method: 'pickup', city: 'Tokyo', area: '', country: 'JP', locationId: 'loc_1' },
+			delivery: {
+				method: 'pickup',
+				city: 'Tokyo',
+				area: '',
+				region: 'Tokyo',
+				postalCode: '100-0001',
+				country: 'JP',
+				locationId: 'loc_1',
+			},
 		});
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.lines']);
 		// every item out: refused before asking

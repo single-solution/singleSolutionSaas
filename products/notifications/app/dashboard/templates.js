@@ -30,7 +30,7 @@ import {
 import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
 import { CHANNELS } from '../../core/channels.js';
 import { MAX_BUTTONS, fillText, templateRows, valueNamesOf } from '../../core/templates.js';
-import { call, fill, useLoad } from './api.js';
+import { call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ index: number, type: string, value: string }} TemplateButton */
@@ -198,7 +198,7 @@ export function TemplatesSection({ websiteId }) {
 	const { answer, reload } = useLoad(base);
 	const { answer: catalog, reload: reloadCatalog } = useLoad(messagesBase);
 	const [draft, setDraft] = useState(/** @type {Draft | null} */ (null));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {any} */ (null));
 	const [search, setSearch] = useState('');
 	const [channel, setChannel] = useState('');

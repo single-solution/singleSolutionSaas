@@ -16,7 +16,8 @@
  * warranty, quotes per variant and payment method, order lines and the store context (C1).
  * @module
  */
-import { formatDate, formatMoney, normaliseFormat } from '@ss/contracts/format';
+import { formatDate, formatMoney, isAmount, isCurrency, normaliseFormat } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { isHttpsUrl } from './text.js';
 
 /** The shop tool names. */
@@ -71,7 +72,7 @@ export const SHOP_ENDPOINTS = Object.freeze([
 		feature: 'shop_deals',
 		signIn: false,
 		request:
-			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=cod|online|bank_transfer|pickup&city=<city>',
+			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=cod|online|bank_transfer|pickup&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
 	},
 	{ tool: SHOP_TOOLS.deals, feature: 'shop_deals', signIn: false, request: 'GET /v1/chat/deals?limit=10' },
 	{ tool: SHOP_TOOLS.top, feature: 'shop_top', signIn: false, request: 'GET /v1/chat/products/top?kind=top|new&limit=5' },
@@ -105,7 +106,7 @@ export const SHOP_ANSWERS = Object.freeze({
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
 		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyDays }] }] (the last 5), loyaltyPoints, name',
-	account: 'name, firstName, loyaltyPoints, city, area',
+	account: 'name, firstName, loyaltyPoints, city, area, region, country',
 	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status, trackingNote, expectedAt }]',
 	context:
 		'text (at most 6,000 characters: the policies, the 10 newest products with their shown price per grade and its "was" price, the deals table, the named product and, signed in, first name, city and points), currency',
@@ -168,9 +169,6 @@ export const SHOP_TOOL_NAMES = Object.freeze(Object.values(SHOP_TOOLS));
  * @typedef {{ orders: Array<{ number: string, status: string, total: string, createdAt: string | null }>, loyaltyPoints: number | null }} ShopInfo
  */
 
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /** @param {unknown} value @param {number} max */
 const textOf = (value, max) => {
 	if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -178,12 +176,6 @@ const textOf = (value, max) => {
 	const trimmed = value.trim();
 	return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
 };
-
-/** @param {unknown} value */
-const isMinor = (value) => Number.isSafeInteger(value) && Number(value) >= 0;
-
-/** @param {unknown} value @returns {value is string} */
-const isCurrency = (value) => typeof value === 'string' && /^[A-Z]{3}$/.test(value);
 
 /** An http(s) page address, else null. @param {unknown} value */
 const pageUrl = (value) =>
@@ -197,7 +189,7 @@ const countOf = (value) => (Number.isSafeInteger(value) ? Number(value) : null);
  * @param {Record<string, any>} b a product, variant or quote as Ecommerce answers it
  */
 const wasOf = (b) =>
-	isMinor(b.compareAtPrice) && isMinor(b.price) && b.compareAtPrice > b.price ? Number(b.compareAtPrice) : null;
+	isAmount(b.compareAtPrice) && isAmount(b.price) && b.compareAtPrice > b.price ? Number(b.compareAtPrice) : null;
 
 /**
  * The deal in a shown price (`{ name, savings, savingsText }`), else null.
@@ -207,7 +199,7 @@ const wasOf = (b) =>
 const dealOf = (raw) => {
 	if (!isObject(raw)) return null;
 	const name = textOf(raw.name, 120);
-	return name && isMinor(raw.savings) && raw.savings > 0
+	return name && isAmount(raw.savings) && raw.savings > 0
 		? { name, savings: Number(raw.savings), savingsText: textOf(raw.savingsText, 60) }
 		: null;
 };
@@ -260,7 +252,7 @@ const productOf = (raw) => {
 	if (!isObject(raw)) return null;
 	const id = textOf(raw.id, 100);
 	const name = textOf(raw.name, 200);
-	if (!id || !name || !isMinor(raw.price) || !isCurrency(raw.currency)) return null;
+	if (!id || !name || !isAmount(raw.price) || !isCurrency(raw.currency)) return null;
 	return {
 		id,
 		name,
@@ -272,7 +264,7 @@ const productOf = (raw) => {
 		inStock: raw.inStock === true,
 		variantId: textOf(raw.variantId, 100),
 		priceText: textOf(raw.priceText, 60),
-		priceMaxText: isMinor(raw.priceMax) && Number(raw.priceMax) > Number(raw.price) ? textOf(raw.priceMaxText, 60) : null,
+		priceMaxText: isAmount(raw.priceMax) && Number(raw.priceMax) > Number(raw.price) ? textOf(raw.priceMaxText, 60) : null,
 		grade: textOf(raw.grade, 60),
 		stockLeft: countOf(raw.stockLeft),
 	};
@@ -359,7 +351,13 @@ const SCHEMAS = {
 				description:
 					'The payment method the visitor asks about (optional): cod (cash on delivery), online, bank_transfer or pickup (paid at the pickup counter).',
 			},
+			country: { type: 'string', description: 'The visitor’s country, for the delivery charge and tax (optional).' },
+			region: {
+				type: 'string',
+				description: 'The visitor’s state, province or region, for the delivery charge and tax (optional).',
+			},
 			city: { type: 'string', description: 'The visitor’s city, for the delivery charge (optional).' },
+			postalCode: { type: 'string', description: 'The visitor’s postal code, for the delivery charge and tax (optional).' },
 		},
 		['productId'],
 	),
@@ -378,7 +376,7 @@ const SCHEMAS = {
 	),
 	[SHOP_TOOLS.account]: schema(
 		SHOP_TOOLS.account,
-		'Get the signed-in visitor’s own name, loyalty points balance, city and area.',
+		'Get the signed-in visitor’s own name, loyalty points balance, city, area, region and country.',
 	),
 	[SHOP_TOOLS.track]: schema(
 		SHOP_TOOLS.track,
@@ -475,8 +473,16 @@ export const shopRequest = (name, args, { limit = SHOP_LIMIT, minor = (amount) =
 		if (Number.isInteger(quantity) && quantity > 0) query.set('quantity', String(Math.min(QUOTE_MAX_QUANTITY, quantity)));
 		const method = typeof args.paymentMethod === 'string' ? args.paymentMethod.trim().toLowerCase() : '';
 		if (PAYMENT_METHODS.includes(method)) query.set('paymentMethod', method);
-		const city = word(args.city, 80);
-		if (city) query.set('city', city);
+		// where it goes (Ecommerce's address lengths), for the delivery zone and tax
+		for (const [field, max] of /** @type {const} */ ([
+			['country', 60],
+			['region', 100],
+			['city', 100],
+			['postalCode', 20],
+		])) {
+			const value = word(args[field], max);
+			if (value) query.set(field, value);
+		}
 		const search = query.toString();
 		return { ok: true, signIn: false, path: `${path}/quote${search ? `?${search}` : ''}` };
 	}
@@ -521,7 +527,7 @@ export const contextText = (body) => {
 const priceOf = (b, key, look) => {
 	const text = textOf(b[`${key}Text`], 60);
 	if (text) return text;
-	return isMinor(b[key]) && isCurrency(b.currency) ? moneyText(Number(b[key]), b.currency, look) : null;
+	return isAmount(b[key]) && isCurrency(b.currency) ? moneyText(Number(b[key]), b.currency, look) : null;
 };
 
 /**
@@ -736,7 +742,7 @@ export const shopAnswer = (name, body, look = {}) => {
 		};
 	}
 	if (name === SHOP_TOOLS.quote) {
-		if (!isCurrency(b.currency) || !isMinor(b.price) || !isMinor(b.priceAfterDeals))
+		if (!isCurrency(b.currency) || !isAmount(b.price) || !isAmount(b.priceAfterDeals))
 			return { content: 'No quote for this product. Do not invent prices.', products: [] };
 		/** @type {Record<string, unknown>} */
 		const content = {
@@ -765,7 +771,7 @@ export const shopAnswer = (name, body, look = {}) => {
 		if (b.inStock === false) content.inStock = false;
 		// the payment methods in the merchant's order: whether each can pay for it (why not), its advance and its fee
 		const methods = itemsOf(b.paymentMethods)
-			.filter((m) => isObject(m) && PAYMENT_METHODS.includes(m.method))
+			.filter((m) => isObject(m) && /** @type {readonly unknown[]} */ (PAYMENT_METHODS).includes(m.method))
 			.slice(0, PAYMENT_METHODS.length)
 			.map((m) => {
 				const available = m.available === true;
@@ -865,8 +871,10 @@ export const shopAnswer = (name, body, look = {}) => {
 	}
 	if (name === SHOP_TOOLS.account) {
 		const firstName = textOf(b.firstName, 60);
-		const city = textOf(b.city, 80);
-		const area = textOf(b.area, 80);
+		const city = textOf(b.city, 100);
+		const area = textOf(b.area, 100);
+		const region = textOf(b.region, 100);
+		const country = textOf(b.country, 60);
 		return {
 			content: {
 				name: textOf(b.name, 120),
@@ -874,6 +882,8 @@ export const shopAnswer = (name, body, look = {}) => {
 				loyaltyPoints: countOf(b.loyaltyPoints),
 				...(city ? { city } : {}),
 				...(area ? { area } : {}),
+				...(region ? { region } : {}),
+				...(country ? { country } : {}),
 			},
 			products: [],
 		};
@@ -916,7 +926,7 @@ export const shopInfoOf = (body, look = {}) => {
 				status: textOf(o.statusLabel, 60) ?? textOf(o.status, 60) ?? '',
 				total:
 					textOf(o.totalText, 40) ??
-					(isMinor(o.total) && isCurrency(o.currency) ? moneyText(Number(o.total), o.currency, look) : ''),
+					(isAmount(o.total) && isCurrency(o.currency) ? moneyText(Number(o.total), o.currency, look) : ''),
 				createdAt: textOf(o.createdAt, 40),
 			})),
 		loyaltyPoints: countOf(b.loyaltyPoints),

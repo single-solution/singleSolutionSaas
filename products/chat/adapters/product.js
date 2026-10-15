@@ -5,13 +5,11 @@
  * data-rights hooks, the widget settings, what the `import` feature takes (`imports.js`) and its part of the website
  * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, its lists in its own words and
  * who answers visitors), and adds the AI providers, the list settings and the tool signing secret (product database) on
- * the same outbound policy. The Next.js route and the tests pass the rest (config, store, clock, network).
+ * the kit's start-up pieces (`createProductBase`: the store and the outbound `send`). The Next.js route and the tests pass the rest (config, store, clock, network).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
-import { MongoClient } from 'mongodb';
+import { createProduct, createProductBase } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -248,20 +246,9 @@ const setupPart = async (lists, { websiteId, on }) => {
  */
 export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
 	const healthy = (options.problems ?? []).length === 0;
-	const uri = options.config?.mongodbUri;
-	// Chat keeps its list settings and visitor counters in the product database too, so it owns the store; its client
-	// has the kit's pool and deadlines, so a database that cannot be reached answers 503 database_unavailable (K-16)
-	const store =
-		options.store ??
-		(healthy && uri
-			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
-			: createMemoryStore({ now }));
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
-	/** @type {import('./ai.js').Send} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	// Chat keeps its list settings and visitor counters in the product database too: the kit's store, shared with it
+	const { store, send } = createProductBase(options);
 	const keys = healthy ? options.config : undefined;
 	const sealer = createSealer(keys?.encryptionKey ?? UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);
 	const files = createFileSigner(keys?.encryptionKey ?? UNCONFIGURED_KEY, keys?.previousEncryptionKey ?? null);

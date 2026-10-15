@@ -1,5 +1,5 @@
 /**
- * Reports (widget and server API), the dashboard's own routes (list settings and the tool signing secret), the
+ * Reports (widget and server API), the dashboard's own routes (the tool signing secret; the kit serves the lists), the
  * data-rights hooks (export and delete one person's conversations, messages, attachments and leads) and the widget
  * settings the kit's widget config routes answer. Our admins see setup only: nothing here returns business data to a
  * dashboard session.
@@ -10,10 +10,9 @@ import { reportRange, summarise } from '../core/reports.js';
 import { dayStart } from '../core/time.js';
 import { aiLabelShown } from '../core/widgets.js';
 import { uploadRules } from './visitor.js';
-import { LISTS } from '../adapters/lists.js';
 import { createStore } from '../adapters/store.js';
 import { deleteConversations } from './inbox.js';
-import { bodyOf, invalid } from './service.js';
+import { invalid } from './service.js';
 
 /**
  * @param {import('../adapters/product.js').Product} product
@@ -53,16 +52,6 @@ export const createAdmin = (product, service) => {
 	// ------------------------------------------------------------------------------------------------ dashboard
 
 	/** @param {any} ctx */
-	const listName = (ctx) => {
-		const name = String(ctx.params.list);
-		if (!Object.hasOwn(LISTS, name)) throw problem('not_found', 'No such list.');
-		return /** @type {import('../adapters/lists.js').ListName} */ (name);
-	};
-
-	/** @param {any} ctx */
-	const getList = async (ctx) => ({ items: await product.lists.get(String(ctx.params.websiteId), listName(ctx)) });
-
-	/** @param {any} ctx */
 	const who = (ctx) => ({
 		kind: ctx.session.kind,
 		id: ctx.session.subject,
@@ -79,22 +68,6 @@ export const createAdmin = (product, service) => {
 		const on = await product.featuresOn(String(ctx.params.websiteId));
 		if (ctx.session.kind === 'merchant' && !features.some((f) => on.includes(f)))
 			throw problem('feature_off', 'This feature is off.');
-	};
-
-	/**
-	 * Save a list whole: a Recent change and an activity-log entry by the session, as the kit's own settings saves.
-	 * @param {any} ctx
-	 */
-	const putList = async (ctx) => {
-		const name = listName(ctx);
-		const websiteId = String(ctx.params.websiteId);
-		await editable(ctx, [LISTS[name].feature]);
-		const saved = await product.lists.save(websiteId, name, bodyOf(ctx.body).items);
-		if (!saved.ok) throw invalid(saved.errors);
-		const { title } = LISTS[name];
-		await product.recentChanges.record({ websiteId, who: who(ctx), what: 'settings', detail: `${title}: changed` });
-		await product.settingsChanged(ctx, { what: 'list', key: name, who: who(ctx), label: title, detail: 'changed' });
-		return { items: saved.value };
 	};
 
 	/** @param {any} ctx */
@@ -250,5 +223,5 @@ export const createAdmin = (product, service) => {
 		};
 	};
 
-	return Object.freeze({ report, getList, putList, getSecret, regenerateSecret, exportUser, deleteUser, widgetConfig });
+	return Object.freeze({ report, getSecret, regenerateSecret, exportUser, deleteUser, widgetConfig });
 };

@@ -127,6 +127,7 @@ const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) =>
 					line2: '',
 					city: 'X',
 					area: '',
+					region: '',
 					postalCode: '',
 					country: 'XX',
 					notes: '',

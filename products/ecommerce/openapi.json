@@ -548,7 +548,7 @@
 										"type": "integer",
 										"minimum": 2,
 										"maximum": 20,
-										"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+										"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
 									},
 									"format": {
 										"type": [
@@ -1419,7 +1419,7 @@
 			},
 			"post": {
 				"summary": "Create a bundle (Promotions admin widget)",
-				"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). Send an Idempotency-Key so a retried request makes one bundle.",
+				"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown); items sold in a unit of their own named in items or a scope answer 422 at /items (code measured): sets are counted in pieces, and a scope by category or brand leaves them out. Send an Idempotency-Key so a retried request makes one bundle.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "bundles",
 				"x-ss-permission": "bundles.edit",
@@ -2703,7 +2703,7 @@
 		"/v1/admin/csv/products": {
 			"get": {
 				"summary": "Export the products as CSV (Customers admin widget)",
-				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does); prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "csv",
 				"x-ss-permission": "csv.run",
@@ -2851,11 +2851,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -3062,11 +3062,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -3187,11 +3187,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -3508,31 +3508,46 @@
 											"type": "object",
 											"properties": {
 												"name": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 120
 												},
 												"phone": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 40
 												},
 												"line1": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 200
 												},
 												"line2": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 200
 												},
 												"city": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 100
 												},
 												"area": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 100
+												},
+												"region": {
+													"type": "string",
+													"maxLength": 100,
+													"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 												},
 												"postalCode": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 20,
+													"description": "Zones and tax rules compare it upper-cased without spaces."
 												},
 												"country": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 60
 												},
 												"notes": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 500
 												}
 											}
 										}
@@ -4840,11 +4855,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -5266,11 +5281,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -5479,11 +5494,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -5860,9 +5875,15 @@
 												"type": "string",
 												"maxLength": 100
 											},
+											"region": {
+												"type": "string",
+												"maxLength": 100,
+												"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+											},
 											"postalCode": {
 												"type": "string",
-												"maxLength": 20
+												"maxLength": 20,
+												"description": "Zones and tax rules compare it upper-cased without spaces."
 											},
 											"country": {
 												"type": "string",
@@ -5976,7 +5997,8 @@
 												"quantity": {
 													"type": "integer",
 													"minimum": 1,
-													"maximum": 99
+													"maximum": 1000000000,
+													"description": "Pieces (at most 99), or thousandths of the unit of an item sold in a unit of its own, in its steps."
 												},
 												"unitPrice": {
 													"type": [
@@ -6025,9 +6047,17 @@
 												"type": "string",
 												"maxLength": 100
 											},
-											"country": {
+											"region": {
 												"type": "string",
 												"maxLength": 100
+											},
+											"postalCode": {
+												"type": "string",
+												"maxLength": 20
+											},
+											"country": {
+												"type": "string",
+												"maxLength": 60
 											},
 											"locationId": {
 												"type": [
@@ -9701,7 +9731,7 @@
 		"/v1/admin/products/{id}/stock": {
 			"post": {
 				"summary": "Set or adjust a product's stock, or mark variants sold out (Catalog admin widget)",
-				"description": "Each change sets or adjusts one variant’s units, and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
+				"description": "Each change sets or adjusts one variant’s units (thousandths of the unit for an item sold in a unit of its own), and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -12728,7 +12758,7 @@
 										"type": "integer",
 										"minimum": 2,
 										"maximum": 20,
-										"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+										"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
 									},
 									"format": {
 										"type": [
@@ -13710,7 +13740,7 @@
 			},
 			"post": {
 				"summary": "Create a bundle",
-				"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). Send an Idempotency-Key so a retried request makes one bundle.",
+				"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown); items sold in a unit of their own named in items or a scope answer 422 at /items (code measured): sets are counted in pieces, and a scope by category or brand leaves them out. Send an Idempotency-Key so a retried request makes one bundle.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "bundles",
 				"security": [
@@ -14591,7 +14621,7 @@
 		"/v1/chat/context": {
 			"get": {
 				"summary": "Chat’s live store context",
-				"description": "What Chat’s AI replies add to their instructions: the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. 422 validation_failed at /productId.",
+				"description": "What Chat’s AI replies add to their instructions: the shop basics (payment methods and notes, delivery fees and free-delivery amounts, pickup points, the cash handling fee, the loyalty earn rate, top categories, the return window and warranty), the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. 422 validation_failed at /productId.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -15237,7 +15267,7 @@
 		"/v1/chat/products/{id}/quote": {
 			"get": {
 				"summary": "Price a product for Chat",
-				"description": "One variant (variantId, else the card variant) times quantity, priced exactly as the cart prices it for the payment method asked: deals, the payment method’s fee, delivery to city with its free-delivery threshold, taxes. A forwarded Accounts sign-in in SS-Sign-In adds the shopper’s role price. Needs the deals feature. 404 not_found (product or variant); 422 validation_failed at /variantId, /quantity, /paymentMethod or /city.",
+				"description": "One variant (variantId, else the card variant) times quantity (an item sold in a unit of its own: a decimal number of its units such as 2.5, its least when left out; the answer's quantity counts thousandths, measure gives the unit and the amount, and price, savings and priceAfterDeals are per unit), priced exactly as the cart prices it for the payment method asked: deals, the payment method’s fee, delivery to city with its free-delivery threshold, taxes. A forwarded Accounts sign-in in SS-Sign-In adds the shopper’s role price. Needs the deals feature. 404 not_found (product or variant); 422 validation_failed at /variantId, /quantity, /paymentMethod or /city.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "deals",
 				"security": [
@@ -15267,11 +15297,11 @@
 						"name": "quantity",
 						"in": "query",
 						"required": false,
+						"description": "1–5 pieces (default 1); for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least).",
 						"schema": {
-							"type": "integer",
-							"minimum": 1,
-							"maximum": 5,
-							"default": 1
+							"type": "string",
+							"pattern": "^\\d{1,7}(\\.\\d{1,12})?$",
+							"description": "1–5 pieces (default 1); for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least)."
 						}
 					},
 					{
@@ -15289,14 +15319,50 @@
 						}
 					},
 					{
+						"name": "country",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 60
+						}
+					},
+					{
+						"name": "region",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 100
+						}
+					},
+					{
 						"name": "city",
 						"in": "query",
 						"required": false,
-						"description": "For the delivery zone.",
+						"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business.json country).",
 						"schema": {
 							"type": "string",
-							"maxLength": 80,
-							"description": "For the delivery zone."
+							"maxLength": 100,
+							"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business.json country)."
+						}
+					},
+					{
+						"name": "area",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 100
+						}
+					},
+					{
+						"name": "postalCode",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 20
 						}
 					},
 					{
@@ -16212,7 +16278,7 @@
 		"/v1/csv/products": {
 			"get": {
 				"summary": "Export the products as CSV",
-				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does); prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "csv",
 				"security": [
@@ -16382,11 +16448,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -16616,11 +16682,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -16752,11 +16818,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -17129,31 +17195,46 @@
 											"type": "object",
 											"properties": {
 												"name": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 120
 												},
 												"phone": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 40
 												},
 												"line1": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 200
 												},
 												"line2": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 200
 												},
 												"city": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 100
 												},
 												"area": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 100
+												},
+												"region": {
+													"type": "string",
+													"maxLength": 100,
+													"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 												},
 												"postalCode": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 20,
+													"description": "Zones and tax rules compare it upper-cased without spaces."
 												},
 												"country": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 60
 												},
 												"notes": {
-													"type": "string"
+													"type": "string",
+													"maxLength": 500
 												}
 											}
 										}
@@ -20202,11 +20283,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -20650,11 +20731,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -20973,11 +21054,11 @@
 						"name": "q",
 						"in": "query",
 						"required": false,
-						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits).",
+						"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number).",
 						"schema": {
 							"type": "string",
 							"maxLength": 120,
-							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+							"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 						}
 					},
 					{
@@ -21432,9 +21513,15 @@
 												"type": "string",
 												"maxLength": 100
 											},
+											"region": {
+												"type": "string",
+												"maxLength": 100,
+												"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+											},
 											"postalCode": {
 												"type": "string",
-												"maxLength": 20
+												"maxLength": 20,
+												"description": "Zones and tax rules compare it upper-cased without spaces."
 											},
 											"country": {
 												"type": "string",
@@ -21548,7 +21635,8 @@
 												"quantity": {
 													"type": "integer",
 													"minimum": 1,
-													"maximum": 99
+													"maximum": 1000000000,
+													"description": "Pieces (at most 99), or thousandths of the unit of an item sold in a unit of its own, in its steps."
 												},
 												"unitPrice": {
 													"type": [
@@ -21597,9 +21685,17 @@
 												"type": "string",
 												"maxLength": 100
 											},
-											"country": {
+											"region": {
 												"type": "string",
 												"maxLength": 100
+											},
+											"postalCode": {
+												"type": "string",
+												"maxLength": 20
+											},
+											"country": {
+												"type": "string",
+												"maxLength": 60
 											},
 											"locationId": {
 												"type": [
@@ -25653,7 +25749,7 @@
 		"/v1/products/{id}/stock": {
 			"post": {
 				"summary": "Set or adjust a product's stock, or mark variants sold out",
-				"description": "Each change sets or adjusts one variant’s units, and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
+				"description": "Each change sets or adjusts one variant’s units (thousandths of the unit for an item sold in a unit of its own), and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -29936,9 +30032,9 @@
 												"quantity": {
 													"type": "integer",
 													"minimum": 1,
-													"maximum": 99,
+													"maximum": 1000000000,
 													"default": 1,
-													"description": "At most checkout.maxQuantity (≤ 99) of one item."
+													"description": "Pieces: at most checkout.maxQuantity (≤ 99) of one item. For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 												},
 												"slot": {
 													"type": [
@@ -29987,7 +30083,7 @@
 									},
 									"delivery": {
 										"type": "object",
-										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address’s city, area and country win).",
+										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business.json country; a pickup order is taxed at the business.",
 										"properties": {
 											"method": {
 												"type": [
@@ -30003,11 +30099,19 @@
 											},
 											"city": {
 												"type": "string",
-												"maxLength": 80
+												"maxLength": 100
 											},
 											"area": {
 												"type": "string",
-												"maxLength": 80
+												"maxLength": 100
+											},
+											"region": {
+												"type": "string",
+												"maxLength": 100
+											},
+											"postalCode": {
+												"type": "string",
+												"maxLength": 20
 											},
 											"country": {
 												"type": "string",
@@ -30529,7 +30633,7 @@
 			},
 			"post": {
 				"summary": "Place an order",
-				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member’s record has links the order to that member’s record (it enters their account when they sign in with that phone verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. Order numbers come from a counter of their form; should the counter ever be behind the numbers already used (set back, or orders imported before it moved on), the placement moves it past the highest one and is placed again, never stopping checkout. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
+				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone?, email? } (what checkout.guestIdentity and checkout.phoneRequired ask for) while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone or email address belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone or member_email); a phone or email address a member’s record has links the order to that member’s record (it enters their account when they sign in with it verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. Order numbers come from a counter of their form; should the counter ever be behind the numbers already used (set back, or orders imported before it moved on), the placement moves it past the highest one and is placed again, never stopping checkout. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -30611,9 +30715,9 @@
 												"quantity": {
 													"type": "integer",
 													"minimum": 1,
-													"maximum": 99,
+													"maximum": 1000000000,
 													"default": 1,
-													"description": "At most checkout.maxQuantity (≤ 99) of one item."
+													"description": "Pieces: at most checkout.maxQuantity (≤ 99) of one item. For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 												},
 												"slot": {
 													"type": [
@@ -30662,7 +30766,7 @@
 									},
 									"delivery": {
 										"type": "object",
-										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address’s city, area and country win).",
+										"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business.json country; a pickup order is taxed at the business.",
 										"properties": {
 											"method": {
 												"type": [
@@ -30678,11 +30782,19 @@
 											},
 											"city": {
 												"type": "string",
-												"maxLength": 80
+												"maxLength": 100
 											},
 											"area": {
 												"type": "string",
-												"maxLength": 80
+												"maxLength": 100
+											},
+											"region": {
+												"type": "string",
+												"maxLength": 100
+											},
+											"postalCode": {
+												"type": "string",
+												"maxLength": 20
 											},
 											"country": {
 												"type": "string",
@@ -30710,10 +30822,9 @@
 									},
 									"address": {
 										"type": "object",
-										"description": "Required when the order is delivered: name and phone always, and the fields checkout.addressRequired lists (of line1, line2, area, city, postalCode, country).",
+										"description": "Required when the order is delivered: the name always, the phone while checkout.phoneRequired is on, and the fields checkout.addressRequired lists (of line1, line2, area, city, region, postalCode, country). In a country the address_regions list names, region is one of its names (422 at /address/region otherwise).",
 										"required": [
-											"name",
-											"phone"
+											"name"
 										],
 										"properties": {
 											"name": {
@@ -30722,7 +30833,7 @@
 											},
 											"phone": {
 												"type": "string",
-												"maxLength": 30,
+												"maxLength": 40,
 												"description": "Kept as E.164 when the website’s phone rules read it."
 											},
 											"line1": {
@@ -30735,15 +30846,21 @@
 											},
 											"city": {
 												"type": "string",
-												"maxLength": 80
+												"maxLength": 100
 											},
 											"area": {
 												"type": "string",
-												"maxLength": 80
+												"maxLength": 100
+											},
+											"region": {
+												"type": "string",
+												"maxLength": 100,
+												"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 											},
 											"postalCode": {
 												"type": "string",
-												"maxLength": 20
+												"maxLength": 20,
+												"description": "Zones and tax rules compare it upper-cased without spaces."
 											},
 											"country": {
 												"type": "string",
@@ -30757,10 +30874,9 @@
 									},
 									"customer": {
 										"type": "object",
-										"description": "A guest’s details (without a sign-in, while checkout.guests allows guests).",
+										"description": "A guest’s details (without a sign-in, while checkout.guests allows guests): the phone when checkout.guestIdentity is phone or checkout.phoneRequired is on, the email address when guestIdentity is email, at least one of them under either. One customer record per guest key: the phone (p:+E.164) or the email address (e:…; under either the phone when given).",
 										"required": [
-											"name",
-											"phone"
+											"name"
 										],
 										"properties": {
 											"name": {
@@ -30769,15 +30885,18 @@
 												"maxLength": 120
 											},
 											"phone": {
-												"type": "string",
-												"description": "Read by the website’s phone rules (checkout.defaultCallingCode …); of a country in checkout.countries."
+												"type": [
+													"string",
+													"null"
+												],
+												"description": "Read by the website’s phone rules (checkout.defaultCallingCode …); of a country in checkout.countries. '' or missing for none where it is not needed."
 											},
 											"email": {
 												"type": [
 													"string",
 													"null"
 												],
-												"description": "An email address, or '' or null for none."
+												"description": "An email address (kept in lower case), or '' or null for none where it is not needed."
 											}
 										}
 									},
@@ -32422,7 +32541,7 @@
 			},
 			"post": {
 				"summary": "Make a return, exchange or warranty claim",
-				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). Only on the shopper's own delivered order (404 not_found; 422 not_returnable before delivery). Each line must be in its window (an exchange uses the return window) with enough units left, else 422 not_returnable with errors[0].code unknown, window_closed or quantity (also when another claim took the units at the same moment). kind is one of the returns setting kinds (default return and warranty); with the reasons setting, reason is one of those texts. photos are keys from POST /v1/shop/returns/photos, uploaded already (422 validation_failed at /photos otherwise), at most the maxPhotos setting (503 storage_not_connected). 422 validation_failed names the field (/orderId, /kind, /lines/<i>/lineId, /lines/<i>/quantity, /reason, /photos). The claim starts requested: the shopper gets the ecommerce.return_status message and the return.requested hook runs. Send an Idempotency-Key so a retried request makes one claim.",
+				"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). Only on the shopper's own delivered order (404 not_found; 422 not_returnable before delivery). Each line must be in its window (an exchange uses the return window) with enough units left, else 422 not_returnable with errors[0].code unknown, window_closed, quantity or step (a line sold in a unit of its own is claimed in thousandths of its unit, a multiple of its step, or all that is left of it) (also when another claim took the units at the same moment). kind is one of the returns setting kinds (default return and warranty); with the reasons setting, reason is one of those texts. photos are keys from POST /v1/shop/returns/photos, uploaded already (422 validation_failed at /photos otherwise), at most the maxPhotos setting (503 storage_not_connected). 422 validation_failed names the field (/orderId, /kind, /lines/<i>/lineId, /lines/<i>/quantity, /reason, /photos). The claim starts requested: the shopper gets the ecommerce.return_status message and the return.requested hook runs. Send an Idempotency-Key so a retried request makes one claim.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "returns",
 				"security": [
@@ -33999,6 +34118,95 @@
 					}
 				}
 			}
+		},
+		"/v1/widget/admin/config": {
+			"get": {
+				"summary": "Widget config (admin widgets)",
+				"description": "The same for the admin widgets, with a ticket from POST /v1/tickets, from the origin it names.",
+				"x-ss-auth": "ticket",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WidgetConfig"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/widget/config": {
+			"get": {
+				"summary": "Widget config (visitor widgets)",
+				"description": "With the browser token from the website (an Origin is required; the server token is refused): what the visitor widgets need. No feature of its own: it answers while the product serves the website and its merchant database is connected.",
+				"x-ss-auth": "browser",
+				"security": [
+					{
+						"browserToken": []
+					},
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSVisitorIp"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/WidgetConfig"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	},
 	"components": {
@@ -34219,7 +34427,7 @@
 					"unit": {
 						"type": "string",
 						"maxLength": 20,
-						"description": "Shown after its values, for example GB or mAh ('' for yes/no and date fields)."
+						"description": "Shown after its values, for example cm or kg ('' for yes/no and date fields)."
 					},
 					"min": {
 						"type": [
@@ -34488,7 +34696,7 @@
 						"type": "integer",
 						"minimum": 2,
 						"maximum": 20,
-						"description": "With multiple: 2 to 20 (a unit field 2, for two numbers of one unit such as a dual-SIM phone's); default the most."
+						"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
 					},
 					"format": {
 						"type": [
@@ -35584,8 +35792,14 @@
 							"slot_required",
 							"slot_unavailable",
 							"slot_taken",
-							"one_per_slot"
-						]
+							"one_per_slot",
+							"too_many",
+							"too_large",
+							"measure_step",
+							"measure_min",
+							"measure_max"
+						],
+						"description": "too_many: more pieces than checkout.maxQuantity; too_large: the line comes to more than an order can take; measure_step, measure_min, measure_max: a measured quantity not in the item's steps, below its least or above its most."
 					},
 					"message": {
 						"type": "string",
@@ -35945,6 +36159,7 @@
 				"type": "object",
 				"description": "A cart line as priced.",
 				"required": [
+					"measure",
 					"key",
 					"productId",
 					"variantId",
@@ -35968,6 +36183,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/MeasureQuantity"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+					},
 					"key": {
 						"type": "string",
 						"description": "<productId>|<variantId> (and |<slot start> for a booking)."
@@ -35995,7 +36221,7 @@
 					},
 					"variantName": {
 						"type": "string",
-						"description": "The option values, e.g. Red / 128 GB."
+						"description": "The option values, e.g. Blue / Large."
 					},
 					"gradeLabel": {
 						"type": "string"
@@ -36030,7 +36256,8 @@
 					},
 					"quantity": {
 						"type": "integer",
-						"minimum": 1
+						"minimum": 1,
+						"description": "Pieces, or thousandths of the unit of a measured item (measure)."
 					},
 					"discount": {
 						"type": "integer",
@@ -36442,7 +36669,9 @@
 					"firstName",
 					"loyaltyPoints",
 					"city",
-					"area"
+					"area",
+					"region",
+					"country"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -36462,6 +36691,14 @@
 					},
 					"area": {
 						"type": "string"
+					},
+					"region": {
+						"type": "string",
+						"description": "The default address’s region in Accounts."
+					},
+					"country": {
+						"type": "string",
+						"description": "The default address’s country in Accounts."
 					}
 				}
 			},
@@ -36472,6 +36709,7 @@
 					"text",
 					"business",
 					"currency",
+					"basics",
 					"policies",
 					"products",
 					"deals",
@@ -36490,6 +36728,172 @@
 					},
 					"currency": {
 						"type": "string"
+					},
+					"basics": {
+						"type": "object",
+						"description": "The shop basics: each part empty or null while its feature is off.",
+						"required": [
+							"payments",
+							"codFeePercent",
+							"delivery",
+							"zones",
+							"pickup",
+							"earnPercent",
+							"categories",
+							"returnDays",
+							"warrantyDays"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"payments": {
+								"type": "array",
+								"description": "The payment methods offered, in your order, with your note for each (checkout).",
+								"items": {
+									"type": "object",
+									"required": [
+										"method",
+										"note"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"method": {
+											"type": "string",
+											"enum": [
+												"cod",
+												"online",
+												"bank_transfer",
+												"pickup"
+											]
+										},
+										"note": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"codFeePercent": {
+								"type": "number",
+								"description": "Cash on delivery's cash handling fee (0 = none)."
+							},
+							"delivery": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": [
+											"fee",
+											"feeText",
+											"freeOver",
+											"freeOverText"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"fee": {
+												"type": "integer",
+												"description": "Minor units."
+											},
+											"feeText": {
+												"type": "string"
+											},
+											"freeOver": {
+												"type": "integer",
+												"description": "Delivery is free over it (0 = never). Minor units."
+											},
+											"freeOverText": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "null"
+									}
+								],
+								"description": "The fee where no zone matches (delivery_zones)."
+							},
+							"zones": {
+								"type": "array",
+								"description": "The delivery zones (at most 20), each with its fee.",
+								"items": {
+									"type": "object",
+									"required": [
+										"name",
+										"fee",
+										"feeText",
+										"freeOver",
+										"freeOverText"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"fee": {
+											"type": "integer"
+										},
+										"feeText": {
+											"type": "string"
+										},
+										"freeOver": {
+											"type": "integer"
+										},
+										"freeOverText": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"pickup": {
+								"type": "array",
+								"description": "The pickup points: the delivery_zones pickup point, or the stock locations that take pickups (multi_location).",
+								"items": {
+									"type": "object",
+									"required": [
+										"name",
+										"address",
+										"hours"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"address": {
+											"type": "string"
+										},
+										"hours": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"earnPercent": {
+								"type": [
+									"number",
+									"null"
+								],
+								"description": "Loyalty points earned, as a percent back (null without loyalty)."
+							},
+							"categories": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "The top categories shoppers see (at most 20)."
+							},
+							"returnDays": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"description": "The return window (0 = no returns; null without returns)."
+							},
+							"warrantyDays": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"description": "The store's warranty in days (0 = none; null without returns); the text says whole months when the days make them."
+							}
+						}
 					},
 					"policies": {
 						"type": "array",
@@ -36740,6 +37144,112 @@
 					}
 				}
 			},
+			"ChatMeasure": {
+				"type": "object",
+				"description": "An item sold in a unit of its own as Chat tells it: the measure (quantities in thousandths of the unit) and its step, least and most as text with the unit label.",
+				"required": [
+					"unit",
+					"decimals",
+					"step",
+					"min",
+					"max",
+					"standard",
+					"stepText",
+					"minText",
+					"maxText"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"unit": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 20,
+						"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+					},
+					"decimals": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3
+					},
+					"step": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"min": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"max": {
+						"type": [
+							"integer",
+							"null"
+						]
+					},
+					"standard": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"code",
+									"amount"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"code": {
+										"type": "string",
+										"enum": [
+											"MMT",
+											"CMT",
+											"MTR",
+											"INH",
+											"FOT",
+											"YRD",
+											"MTK",
+											"FTK",
+											"MGM",
+											"GRM",
+											"KGM",
+											"ONZ",
+											"LBR",
+											"MLT",
+											"CLT",
+											"LTR",
+											"MTQ",
+											"OZA",
+											"GLL",
+											"C62"
+										],
+										"description": "A UN/CEFACT common code."
+									},
+									"amount": {
+										"type": "number",
+										"minimum": 0.000001,
+										"maximum": 1000000,
+										"description": "How many of that standard unit one unit is (at most six decimals)."
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Only for shopping feeds (unit_pricing_measure) and structured data (UnitPriceSpecification): what one unit is in a standard unit. null: none, and they send no unit price."
+					},
+					"stepText": {
+						"type": "string",
+						"description": "e.g. 0.5 sq ft"
+					},
+					"minText": {
+						"type": "string"
+					},
+					"maxText": {
+						"type": [
+							"string",
+							"null"
+						]
+					}
+				}
+			},
 			"ChatOrder": {
 				"type": "object",
 				"description": "An order for Chat (never the address or phone).",
@@ -36862,6 +37372,7 @@
 			"ChatOrderLine": {
 				"type": "object",
 				"required": [
+					"measure",
 					"name",
 					"variantName",
 					"gradeLabel",
@@ -36874,6 +37385,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/MeasureQuantity"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+					},
 					"name": {
 						"type": "string"
 					},
@@ -36967,6 +37489,8 @@
 				"type": "object",
 				"description": "A product card for Chat.",
 				"required": [
+					"stockLeftText",
+					"measure",
 					"id",
 					"name",
 					"price",
@@ -36986,6 +37510,24 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"stockLeftText": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "stockLeft as text: pieces, or the units of a measured item with its unit symbol (2.5 m)."
+					},
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ChatMeasure"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Sold in a unit of its own (null: pieces)."
+					},
 					"id": {
 						"type": "string"
 					},
@@ -37096,6 +37638,8 @@
 				"type": "object",
 				"description": "A product’s details for Chat: the card with its active variants (at most 20).",
 				"required": [
+					"stockLeftText",
+					"measure",
 					"id",
 					"name",
 					"price",
@@ -37122,6 +37666,24 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"stockLeftText": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "stockLeft as text: pieces, or the units of a measured item with its unit symbol (2.5 m)."
+					},
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ChatMeasure"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Sold in a unit of its own (null: pieces)."
+					},
 					"id": {
 						"type": "string"
 					},
@@ -37345,6 +37907,7 @@
 				"type": "object",
 				"description": "One variant priced as the cart prices it.",
 				"required": [
+					"measure",
 					"productId",
 					"variantId",
 					"quantity",
@@ -37381,6 +37944,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/MeasureQuantity"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+					},
 					"productId": {
 						"type": "string"
 					},
@@ -37390,7 +37964,7 @@
 					"quantity": {
 						"type": "integer",
 						"minimum": 1,
-						"maximum": 5
+						"description": "Pieces (1–5), or thousandths of the unit of an item sold in a unit of its own (measure.quantityText in units); price, savings and priceAfterDeals are then per unit."
 					},
 					"price": {
 						"type": "integer",
@@ -37705,6 +38279,7 @@
 			"ChatVariant": {
 				"type": "object",
 				"required": [
+					"stockLeftText",
 					"id",
 					"options",
 					"price",
@@ -37721,6 +38296,13 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"stockLeftText": {
+						"type": [
+							"string",
+							"null"
+						],
+						"description": "stockLeft as text: pieces, or the units of a measured item with its unit symbol (2.5 m)."
+					},
 					"id": {
 						"type": "string"
 					},
@@ -38837,6 +39419,7 @@
 					"id",
 					"userId",
 					"guest",
+					"guestKey",
 					"name",
 					"email",
 					"phone",
@@ -38866,6 +39449,10 @@
 					"guest": {
 						"type": "boolean",
 						"description": "No Accounts user."
+					},
+					"guestKey": {
+						"type": "string",
+						"description": "What a guest is known by: p:<E.164 phone> or e:<email address> (checkout.guestIdentity); '' for a member."
 					},
 					"name": {
 						"type": "string"
@@ -38944,6 +39531,7 @@
 					"id",
 					"userId",
 					"guest",
+					"guestKey",
 					"name",
 					"email",
 					"phone",
@@ -38977,6 +39565,10 @@
 					"guest": {
 						"type": "boolean",
 						"description": "No Accounts user."
+					},
+					"guestKey": {
+						"type": "string",
+						"description": "What a guest is known by: p:<E.164 phone> or e:<email address> (checkout.guestIdentity); '' for a member."
 					},
 					"name": {
 						"type": "string"
@@ -41641,6 +42233,35 @@
 					}
 				}
 			},
+			"LineMeasure": {
+				"type": "object",
+				"description": "How an order line's item was sold in a unit of its own at placement: its quantities (quantity, returned and claimed quantities) count thousandths of the unit, in steps of step.",
+				"required": [
+					"unit",
+					"decimals",
+					"step"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"unit": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 20,
+						"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+					},
+					"decimals": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3
+					},
+					"step": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 1000000,
+						"description": "Thousandths of the unit."
+					}
+				}
+			},
 			"Location": {
 				"type": "object",
 				"description": "A stock location (warehouse, shop).",
@@ -41985,6 +42606,123 @@
 					}
 				}
 			},
+			"Measure": {
+				"type": "object",
+				"description": "An item sold in decimal quantities of a unit of the merchant's own (its item type's measure, feature measured_sales): prices are per one unit; stock and quantities count thousandths of the unit (2.5 = 2500), a multiple of step from min to max.",
+				"required": [
+					"unit",
+					"decimals",
+					"step",
+					"min",
+					"max",
+					"standard"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"unit": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 20,
+						"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+					},
+					"decimals": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 3,
+						"description": "How many decimals a shopper may give."
+					},
+					"step": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 1000000,
+						"description": "Thousandths of the unit."
+					},
+					"min": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "The least quantity, in thousandths."
+					},
+					"max": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"description": "The most quantity, in thousandths (null: no most)."
+					},
+					"standard": {
+						"oneOf": [
+							{
+								"type": "object",
+								"required": [
+									"code",
+									"amount"
+								],
+								"additionalProperties": false,
+								"properties": {
+									"code": {
+										"type": "string",
+										"enum": [
+											"MMT",
+											"CMT",
+											"MTR",
+											"INH",
+											"FOT",
+											"YRD",
+											"MTK",
+											"FTK",
+											"MGM",
+											"GRM",
+											"KGM",
+											"ONZ",
+											"LBR",
+											"MLT",
+											"CLT",
+											"LTR",
+											"MTQ",
+											"OZA",
+											"GLL",
+											"C62"
+										],
+										"description": "A UN/CEFACT common code."
+									},
+									"amount": {
+										"type": "number",
+										"minimum": 0.000001,
+										"maximum": 1000000,
+										"description": "How many of that standard unit one unit is (at most six decimals)."
+									}
+								}
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Only for shopping feeds (unit_pricing_measure) and structured data (UnitPriceSpecification): what one unit is in a standard unit. null: none, and they send no unit price."
+					}
+				}
+			},
+			"MeasureQuantity": {
+				"type": "object",
+				"description": "A quantity of an item sold in a unit of its own: the merchant's unit label and the quantity in units as decimal text (quantity itself counts thousandths of the unit: 2.5 = 2500).",
+				"required": [
+					"unit",
+					"quantityText"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"unit": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 20,
+						"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+					},
+					"quantityText": {
+						"type": "string",
+						"description": "The quantity in units, e.g. 2.5."
+					}
+				}
+			},
 			"OldestStockReport": {
 				"type": "object",
 				"description": "Active variants with stock, by how long they have waited.",
@@ -42296,6 +43034,7 @@
 					"line2",
 					"city",
 					"area",
+					"region",
 					"postalCode",
 					"country",
 					"notes"
@@ -42326,9 +43065,15 @@
 						"type": "string",
 						"maxLength": 100
 					},
+					"region": {
+						"type": "string",
+						"maxLength": 100,
+						"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+					},
 					"postalCode": {
 						"type": "string",
-						"maxLength": 20
+						"maxLength": 20,
+						"description": "Zones and tax rules compare it upper-cased without spaces."
 					},
 					"country": {
 						"type": "string",
@@ -43513,6 +44258,9 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"$ref": "#/components/schemas/LineMeasure"
+					},
 					"id": {
 						"type": "string",
 						"pattern": "^oln_"
@@ -43537,7 +44285,7 @@
 					},
 					"variantName": {
 						"type": "string",
-						"description": "For example 'Red / 128 GB' ('' without options)."
+						"description": "For example 'Blue / Large' ('' without options)."
 					},
 					"sku": {
 						"type": "string"
@@ -43573,7 +44321,8 @@
 					},
 					"quantity": {
 						"type": "integer",
-						"minimum": 1
+						"minimum": 1,
+						"description": "Pieces, or thousandths of the unit of a measured item (measure)."
 					},
 					"discount": {
 						"type": "integer",
@@ -44404,7 +45153,8 @@
 								"required": [
 									"key",
 									"reference",
-									"at"
+									"at",
+									"url"
 								],
 								"additionalProperties": false,
 								"properties": {
@@ -44418,6 +45168,13 @@
 									"at": {
 										"type": "string",
 										"format": "date-time"
+									},
+									"url": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "A signed link that opens the file for 5 minutes (null while storage is not connected)."
 									}
 								}
 							},
@@ -45132,7 +45889,8 @@
 						"type": "object",
 						"required": [
 							"key",
-							"kind"
+							"kind",
+							"measure"
 						],
 						"additionalProperties": false,
 						"properties": {
@@ -45147,6 +45905,17 @@
 									"digital",
 									"service"
 								]
+							},
+							"measure": {
+								"oneOf": [
+									{
+										"$ref": "#/components/schemas/Measure"
+									},
+									{
+										"type": "null"
+									}
+								],
+								"description": "Its type's measure (whatever the measured_sales switch): its variants' stock counts thousandths of the unit; null: pieces."
 							}
 						},
 						"description": "Its item type: its own, else its first category's (or the nearest one above it), else the built-in type of its kind; its elements decide the parts the product has."
@@ -46532,6 +47301,7 @@
 				"type": "object",
 				"description": "A physical line of the order and what can still be claimed on it.",
 				"required": [
+					"measure",
 					"lineId",
 					"productId",
 					"name",
@@ -46544,6 +47314,16 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/ReturnableMeasure"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
 					"lineId": {
 						"type": "string",
 						"description": "The order line (oln_…): name it in the claim."
@@ -46583,6 +47363,32 @@
 					"warranty": {
 						"$ref": "#/components/schemas/ReturnWindow",
 						"description": "For warranty claims."
+					}
+				}
+			},
+			"ReturnableMeasure": {
+				"type": "object",
+				"description": "A line sold in a unit of its own: claim it in thousandths of the unit, a multiple of step (or all that is left).",
+				"required": [
+					"unit",
+					"step",
+					"quantityText"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"unit": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 20,
+						"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+					},
+					"step": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"quantityText": {
+						"type": "string",
+						"description": "What can still be claimed, in units."
 					}
 				}
 			},
@@ -46812,6 +47618,7 @@
 				"type": "object",
 				"description": "A claimed line with the order line as bought.",
 				"required": [
+					"measure",
 					"lineId",
 					"quantity",
 					"serials",
@@ -46827,6 +47634,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/MeasureQuantity"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+					},
 					"lineId": {
 						"type": "string"
 					},
@@ -50189,6 +51007,7 @@
 					"line2",
 					"city",
 					"area",
+					"region",
 					"postalCode",
 					"country",
 					"notes"
@@ -50196,32 +51015,47 @@
 				"additionalProperties": false,
 				"properties": {
 					"name": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 120
 					},
 					"phone": {
 						"type": "string",
-						"description": "E.164 when the website’s phone rules read it, else as typed."
+						"description": "E.164 when the website’s phone rules read it, else as typed.",
+						"maxLength": 40
 					},
 					"line1": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 200
 					},
 					"line2": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 200
 					},
 					"city": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 100
 					},
 					"area": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 100
+					},
+					"region": {
+						"type": "string",
+						"maxLength": 100,
+						"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 					},
 					"postalCode": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 20,
+						"description": "Zones and tax rules compare it upper-cased without spaces."
 					},
 					"country": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 60
 					},
 					"notes": {
-						"type": "string"
+						"type": "string",
+						"maxLength": 500
 					}
 				}
 			},
@@ -50229,6 +51063,7 @@
 				"type": "object",
 				"description": "An order line at the price paid.",
 				"required": [
+					"measure",
 					"id",
 					"productId",
 					"variantId",
@@ -50248,10 +51083,22 @@
 					"booking",
 					"downloads",
 					"downloadsLeft",
-					"licenceKeys"
+					"licenceKeys",
+					"canReview"
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/MeasureQuantity"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+					},
 					"id": {
 						"type": "string"
 					},
@@ -50327,7 +51174,8 @@
 					},
 					"quantity": {
 						"type": "integer",
-						"minimum": 1
+						"minimum": 1,
+						"description": "Pieces, or thousandths of the unit of a measured item (measure)."
 					},
 					"discount": {
 						"type": "integer",
@@ -50371,6 +51219,10 @@
 							"type": "string"
 						},
 						"description": "Given when the order is paid."
+					},
+					"canReview": {
+						"type": "boolean",
+						"description": "With the reviews setting per order_line: the order was delivered and this item has no review yet; review it with POST /v1/shop/reviews { orderId, lineId, rating, title?, body? }."
 					}
 				}
 			},
@@ -50578,6 +51430,7 @@
 			"ShopProduct": {
 				"type": "object",
 				"required": [
+					"measure",
 					"id",
 					"slug",
 					"name",
@@ -50609,6 +51462,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Measure"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Sold in a unit of its own (its item type’s measure, while measured_sales is on); null: pieces."
+					},
 					"id": {
 						"type": "string",
 						"pattern": "^prd_"
@@ -50993,6 +51857,7 @@
 			"ShopProductCard": {
 				"type": "object",
 				"required": [
+					"measure",
 					"id",
 					"slug",
 					"name",
@@ -51015,6 +51880,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"measure": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Measure"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "Sold in a unit of its own (its item type’s measure, while measured_sales is on); null: pieces."
+					},
 					"id": {
 						"type": "string",
 						"pattern": "^prd_"
@@ -51687,7 +52563,7 @@
 					},
 					"name": {
 						"type": "string",
-						"description": "Its option values in the options' order (Red / 128 GB), '' without options."
+						"description": "Its option values in the options' order (Blue / Large), '' without options."
 					},
 					"sku": {
 						"type": "string"
@@ -52834,7 +53710,7 @@
 					"stock": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Units available to sell now (all locations together)."
+						"description": "Units available to sell now (all locations together); thousandths of the unit for an item sold in a unit of its own (its type’s measure)."
 					},
 					"locations": {
 						"type": "object",
@@ -53026,6 +53902,137 @@
 					}
 				},
 				"description": "Per product: the variants added, or why none."
+			},
+			"WidgetConfig": {
+				"type": "object",
+				"description": "What the product's widget.js needs for a website.",
+				"required": [
+					"texts",
+					"theme",
+					"customCss",
+					"format",
+					"timeZone",
+					"features",
+					"widgets",
+					"settings"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"texts": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						},
+						"description": "Widget texts by key, in the website's words (else the product's English defaults); fill their {placeholders} as text, never as HTML."
+					},
+					"theme": {
+						"type": "object",
+						"required": [
+							"colors",
+							"fontFamily",
+							"radius",
+							"mode"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"colors": {
+								"type": "object",
+								"maxProperties": 24,
+								"additionalProperties": {
+									"type": "string",
+									"pattern": "^#[0-9a-fA-F]{6}$"
+								},
+								"description": "Color name → #rrggbb (the product's CSS supplies the others)."
+							},
+							"fontFamily": {
+								"type": "string",
+								"description": "'inherit' or a font name."
+							},
+							"radius": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 24,
+								"description": "Corner radius in px."
+							},
+							"mode": {
+								"type": "string",
+								"enum": [
+									"light",
+									"dark",
+									"auto"
+								]
+							}
+						}
+					},
+					"customCss": {
+						"type": "string",
+						"description": "The merchant's own CSS for the widgets (at most 20 kB)."
+					},
+					"format": {
+						"type": "object",
+						"required": [
+							"locale",
+							"currencyDisplay",
+							"currencySymbol",
+							"wholeUnits",
+							"times"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"locale": {
+								"type": "string",
+								"description": "A language tag such as en-US or fr-FR, or '' for the viewer's."
+							},
+							"currencyDisplay": {
+								"type": "string",
+								"enum": [
+									"code",
+									"symbol",
+									"custom"
+								]
+							},
+							"currencySymbol": {
+								"type": "string",
+								"maxLength": 8,
+								"description": "With currencyDisplay custom."
+							},
+							"wholeUnits": {
+								"type": "boolean",
+								"description": "Amounts without the minor unit."
+							},
+							"times": {
+								"type": "string",
+								"enum": [
+									"viewer",
+									"business"
+								],
+								"description": "Whose time zone dates use."
+							}
+						}
+					},
+					"timeZone": {
+						"type": "string",
+						"description": "The business time zone (business.json), default UTC."
+					},
+					"features": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The switched-on features."
+					},
+					"widgets": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "The keys of the widgets whose feature (one, or any of a list) is on: a widget not listed renders nothing."
+					},
+					"settings": {
+						"type": "object",
+						"description": "The product's own widget settings (never secrets)."
+					}
+				}
 			},
 			"Wishlist": {
 				"type": "object",

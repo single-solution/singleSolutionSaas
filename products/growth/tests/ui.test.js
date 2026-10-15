@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import searchesSchema from '../schemas/searches_404s.settings.json' with { type: 'json' };
 import { PRESETS } from '../core/analytics.js';
@@ -38,6 +39,13 @@ const BASE = 'https://growth.example.dev';
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 
 /**
+ * The widgets whose feature is on, as the kit's widget config names them.
+ * @param {string[]} features
+ */
+const widgetsOf = (features) =>
+	manifest.widgets.filter((widget) => [widget.feature].flat().some((key) => features.includes(key))).map((widget) => widget.key);
+
+/**
  * A widget config as the kit answers it.
  * @param {string[]} features
  * @param {Record<string, Record<string, unknown>>} [values]
@@ -50,6 +58,7 @@ const configOf = (features, values = {}, look = {}) => ({
 	format: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer', ...look.format },
 	timeZone: look.timeZone ?? 'UTC',
 	features,
+	widgets: widgetsOf(features),
 	// the kit fills a switched-on feature's settings with their defaults (here the search parameters q, s, search, query)
 	settings: widgetSettings({
 		on: features,

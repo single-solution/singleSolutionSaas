@@ -5,17 +5,15 @@
  * resolved, average rating, leads and AI tokens (numbers in the website's Format too).
  * @module
  */
-import { formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { adminCall, element, formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
 import { dayKey } from '../core/time.js';
 import { fieldMaker, isInvalid, numbersOf, textsOf } from './common.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 const DAY_MS = 86_400_000;
 
 /**
- * @param {{ host: HTMLElement, win: Window, api: import('./tickets.js').AdminApi,
+ * @param {{ host: HTMLElement, win: Window, api: import('@ss/app-kit/widget').AdminApi,
  *   config: import('./common.js').WidgetConfig, now: () => number }} input
  */
 export const mountReports = ({ host, win, api, config, now }) => {

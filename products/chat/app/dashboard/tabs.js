@@ -1,142 +1,52 @@
 'use client';
 /**
- * The dashboard's tabs (PLAN 0.4.3, 0.8.3 Chat dashboard), each on the kit's dashboard API and Chat's list and
- * tool-secret routes. Rights are the kit's: merchants see features read-only and only the settings of switched-on
- * features; Owners and Support switch features; Owners alone edit Defaults and Prices.
+ * Chat's parts of the dashboard tabs (PLAN 0.4.3, 0.8.3 Chat dashboard), on the shared tabs of `@ss/ui/dashboard`: the
+ * Overview's booking URL while the Book-a-slot tool is on, the rules between features, Chat's settings sections, the
+ * AI and storage connection forms with each connection's hint, the developer snippets, and the AI label warning in
+ * Defaults.
  * @module
  */
-import { useState } from 'react';
-import {
-	Badge,
-	Button,
-	Callout,
-	Card,
-	Checkbox,
-	CodeBlock,
-	ConfirmDialog,
-	FieldGrid,
-	Input,
-	Masonry,
-	OverviewSkeleton,
-	ProductOverview,
-	RecentChanges,
-	Section,
-	formatCreditsPerHour,
-	parseCredits,
-} from '@ss/ui';
+import { Button, CodeBlock, Section } from '@ss/ui';
+import { ConnectionsTab, DefaultsTab, DevelopersTab, FeaturesTab, OverviewTab, useLoad } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
-import { call, fill, useLoad } from './api.js';
 import { AiForm, FORMS, StorageForm } from './forms.js';
-import { FormatForm, Loaded, Outcome, SettingsForms, TextsForm, ThemeForm } from './parts.js';
 import { SettingsTab, aiLabelNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
-/** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
-/**
- * `open` shows another section of the dashboard (the Overview's buttons).
- * @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string,
- *   open: (tab: import('@ss/ui').OverviewTab) => void }} TabProps
- */
-/** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
-/** @typedef {{ name: string, label: string, neededBy: string[], status: string, message?: string, last4?: string | null }} Connection */
-
-/** Feature names by key (manifest.json). */
-const NAMES = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+/** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
 
 /**
- * The names of features, at most `max` of them and how many more (a long list would make its tile or card tall).
- * @param {string[]} keys
- * @param {number} [max]
+ * Chat's part of the Overview (PLAN 0.6 "Overviews talk"): while the Book-a-slot tool is on (the website's settings
+ * are read only then), its booking URL to set while there is none.
+ * @type {import('@ss/ui/dashboard').UseOverviewMore}
  */
-const namesOf = (keys, max = Infinity) => {
-	const names = keys.map((key) => NAMES.get(key) ?? key);
-	return names.length > max
-		? fill(TEXTS.andMore, { names: names.slice(0, max).join(', '), count: names.length - max })
-		: names.join(', ');
-};
-
-/** @param {string} status */
-const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
-
-/**
- * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview from `@ss/ui`, with Chat's own part while the
- * Book-a-slot tool is on (the website's settings are read only then): its booking URL to set while there is none.
- * @param {TabProps} props
- */
-function OverviewTab({ websiteId, who, support, portal, open }) {
-	const base = `/v1/dashboard/websites/${websiteId}`;
-	const { answer, reload } = useLoad(`${base}/overview`);
-	const booking = answer?.ok === true && answer.data.featuresOn.includes('book_slot');
-	const settings = useLoad(booking ? `${base}/settings` : null);
+const useBooking = (overview, { websiteId, open }) => {
+	const booking = overview?.ok === true && overview.data.featuresOn.includes('book_slot');
+	const settings = useLoad(booking ? `/v1/dashboard/websites/${websiteId}/settings` : null);
+	if (!settings.answer?.ok) return {};
 	/** @type {Array<{ key: string, values: Record<string, { value: unknown }> }>} */
-	const features = settings.answer?.ok ? settings.answer.data.features : [];
-	/** Whether the booking URL is set, once the settings are read (null: not read). */
-	const bookingSet = settings.answer?.ok
-		? Boolean(features.find((feature) => feature.key === 'book_slot')?.values.bookingUrl?.value)
-		: null;
+	const features = settings.answer.data.features;
+	const set = Boolean(features.find((feature) => feature.key === 'book_slot')?.values.bookingUrl?.value);
 	const O = TEXTS.overview;
-	return (
-		<Loaded answer={answer} skeleton={<OverviewSkeleton />}>
-			{(data) => (
-				<ProductOverview
-					data={data}
-					who={who}
-					product={TEXTS.title}
-					support={support}
-					portal={portal}
-					namesOf={namesOf}
-					open={open}
-					recheck={async () => {
-						await call('POST', `${base}/business/refresh`);
-						reload();
-					}}
-					needs={
-						bookingSet === false
-							? [
-									{
-										key: 'booking',
-										tone: 'warning',
-										title: O.noBooking.title,
-										effect: O.noBooking.effect,
-										action: (
-											<Button size="sm" variant="secondary" onClick={() => open('settings')}>
-												{O.noBooking.action}
-											</Button>
-										),
-									},
-								]
-							: []
-					}
-					steps={
-						bookingSet === null
-							? []
-							: [{ key: 'booking', label: O.bookingStep, done: bookingSet, onSelect: () => open('settings') }]
-					}
-				/>
-			)}
-		</Loaded>
-	);
-}
-
-/**
- * Keys switched off together with `key`: the features that need it, directly or through others.
- * @param {Feature[]} features
- * @param {string[]} on
- * @param {string} key
- */
-const withDependents = (features, on, key) => {
-	const off = new Set([key]);
-	let grew = true;
-	while (grew) {
-		grew = false;
-		for (const feature of features)
-			if (on.includes(feature.key) && !off.has(feature.key) && feature.dependsOn.some((dep) => off.has(dep))) {
-				off.add(feature.key);
-				grew = true;
-			}
-	}
-	return off;
+	return {
+		needs: set
+			? []
+			: [
+					{
+						key: 'booking',
+						tone: 'warning',
+						title: O.noBooking.title,
+						effect: O.noBooking.effect,
+						action: (
+							<Button size="sm" variant="secondary" onClick={() => open('settings')}>
+								{O.noBooking.action}
+							</Button>
+						),
+					},
+				],
+		steps: [{ key: 'booking', label: O.bookingStep, done: set, onSelect: () => open('settings') }],
+	};
 };
 
 /**
@@ -151,213 +61,37 @@ const ruleWarnings = (on) =>
 			]
 		: [];
 
-/** @param {TabProps} props */
-function FeaturesTab({ websiteId, who, support }) {
-	const base = `/v1/dashboard/websites/${websiteId}`;
-	const { answer, reload } = useLoad(`${base}/features`);
-	const connections = useLoad(`${base}/connections`);
-	const [picked, setPicked] = useState(/** @type {string[] | null} */ (null));
-	const [confirming, setConfirming] = useState(false);
-	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
-	const admin = who.kind === 'admin';
-	return (
-		<Loaded answer={answer}>
-			{(data) => {
-				/** @type {Feature[]} */
-				const features = data.features;
-				const saved = features.filter((feature) => feature.on).map((feature) => feature.key);
-				const on = picked ?? saved;
-				const turnedOff = saved.filter((key) => !on.includes(key));
-				const cost = features.reduce((sum, feature) => sum + (on.includes(feature.key) ? feature.millicreditsPerHour : 0), 0);
-				/** @type {Connection[]} */
-				const links = connections.answer?.ok ? connections.answer.data.connections : [];
-				const warnings = ruleWarnings(on);
-				/** @param {Feature} feature @param {boolean} checked */
-				const toggle = (feature, checked) => {
-					const off = withDependents(features, on, feature.key);
-					setPicked(checked ? [...on, feature.key] : on.filter((key) => !off.has(key)));
-				};
-				return (
-					<div className="space-y-4">
-						{admin ? null : <Callout tone="info">{fill(TEXTS.features.contact, { contact: support.email })}</Callout>}
-						{warnings.map((warning) => (
-							<Callout key={warning} tone="warning">
-								{warning}
-							</Callout>
-						))}
-						<Masonry wideAlone>
-							{features.map((feature) => {
-								const missing = feature.dependsOn.filter((dep) => !on.includes(dep));
-								const broken = links.filter((link) => link.neededBy.includes(feature.key) && link.status !== 'connected');
-								return (
-									<Card
-										key={feature.key}
-										bodyClassName="space-y-3"
-										title={feature.name}
-										subtitle={fill(TEXTS.features.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
-										actions={
-											<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-												{TEXTS.features.docs}
-											</a>
-										}>
-										<p className="text-sm">{feature.description}</p>
-										{feature.dependsOn.length > 0 ? (
-											<p className="text-sm text-muted">
-												{fill(TEXTS.features.needs, { features: namesOf(feature.dependsOn) })}
-											</p>
-										) : null}
-										{feature.on
-											? broken.map((link) => (
-													<p key={link.name} className="text-sm text-danger">
-														{fill(TEXTS.features.notWorking, { connection: link.label })}
-													</p>
-												))
-											: null}
-										<Checkbox
-											label={TEXTS.features.on}
-											checked={on.includes(feature.key)}
-											disabled={!admin || (missing.length > 0 && !on.includes(feature.key))}
-											onChange={(event) => toggle(feature, event.target.checked)}
-										/>
-									</Card>
-								);
-							})}
-						</Masonry>
-						{admin ? (
-							<Button disabled={picked === null} onClick={() => setConfirming(true)}>
-								{TEXTS.save}
-							</Button>
-						) : null}
-						<Outcome result={result} />
-						<ConfirmDialog
-							open={confirming}
-							busy={busy}
-							title={TEXTS.features.confirmTitle}
-							confirmLabel={TEXTS.save}
-							cancelLabel={TEXTS.cancel}
-							onClose={() => setConfirming(false)}
-							onConfirm={async () => {
-								setBusy(true);
-								const next = await call('PUT', `${base}/features`, { on });
-								setBusy(false);
-								setConfirming(false);
-								setResult(next);
-								if (next.ok) {
-									setPicked(null);
-									reload();
-								}
-							}}>
-							<p>{fill(TEXTS.features.confirmCost, { cost: formatCreditsPerHour(cost) })}</p>
-							{turnedOff.length > 0 ? <p>{fill(TEXTS.features.alsoOff, { features: namesOf(turnedOff) })}</p> : null}
-							{warnings.map((warning) => (
-								<p key={warning}>{warning}</p>
-							))}
-						</ConfirmDialog>
-					</div>
-				);
-			}}
-		</Loaded>
-	);
-}
-
 /**
  * The one-line help under a connection: what to paste or enter.
  * @param {string} name
  */
 const connectionHint = (name) => TEXTS.connections.hints[/** @type {keyof typeof TEXTS.connections.hints} */ (name)] ?? null;
 
+/**
+ * The structured value of the AI providers and the storage (the other connections take one value).
+ * @param {import('@ss/ui/dashboard').Connection} item
+ * @param {(value: unknown) => Promise<void>} save
+ */
+const connectionForm = (item, save) =>
+	item.name === 'storage' ? <StorageForm onSave={save} /> : FORMS.includes(item.name) ? <AiForm onSave={save} /> : null;
+
 /** @param {TabProps} props */
-function ConnectionsTab({ websiteId }) {
-	const base = `/v1/dashboard/websites/${websiteId}/connections`;
-	const { answer, reload } = useLoad(base);
-	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
-	/** @param {Promise<import('./api.js').Answer>} pending */
-	const act = async (pending) => {
-		setResult(await pending);
-		reload();
-	};
-	return (
-		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					{data.connections.length === 0 ? <p className="text-sm text-muted">{TEXTS.connections.none}</p> : null}
-					<Masonry wideAlone>
-						{data.connections.map((/** @type {Connection} */ item) => {
-							const hint = connectionHint(item.name);
-							/** @param {object} value */
-							const save = (value) => act(call('PUT', `${base}/${item.name}`, { value }));
-							return (
-								<Card
-									key={item.name}
-									title={item.label}
-									subtitle={
-										item.neededBy.length > 0
-											? fill(TEXTS.connections.neededBy, { features: namesOf(item.neededBy, 4) })
-											: TEXTS.connections.neededByNone
-									}>
-									<p className="flex flex-wrap items-center gap-2 text-sm">
-										<Badge tone={toneOf(item.status)} dot>
-											{TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-										</Badge>
-										{item.last4 ? <code>••••{item.last4}</code> : null}
-										{item.message ? <span className="text-muted">{item.message}</span> : null}
-									</p>
-									{hint ? <p className="mt-2 text-sm text-muted">{hint}</p> : null}
-									{item.name === 'storage' ? (
-										<StorageForm onSave={save} />
-									) : FORMS.includes(item.name) ? (
-										<AiForm onSave={save} />
-									) : (
-										<div className="mt-3 flex flex-wrap items-end gap-2">
-											<Input
-												fieldClassName="min-w-0 flex-1 basis-64"
-												label={TEXTS.connections.value}
-												type="password"
-												autoComplete="off"
-												value={values[item.name] ?? ''}
-												onChange={(event) => setValues({ ...values, [item.name]: event.target.value })}
-											/>
-											<Button
-												size="sm"
-												disabled={!values[item.name]?.trim()}
-												onClick={() => {
-													const done = act(
-														call('PUT', `${base}/${item.name}`, { value: values[item.name]?.trim() }),
-													);
-													setValues({ ...values, [item.name]: '' });
-													return done;
-												}}>
-												{TEXTS.connections.save}
-											</Button>
-										</div>
-									)}
-									<div className="mt-3 flex flex-wrap gap-2">
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={() => act(call('POST', `${base}/${item.name}/test`))}>
-											{TEXTS.connections.test}
-										</Button>
-										<Button size="sm" variant="ghost" onClick={() => act(call('DELETE', `${base}/${item.name}`))}>
-											{TEXTS.connections.remove}
-										</Button>
-									</div>
-								</Card>
-							);
-						})}
-					</Masonry>
-					<Outcome result={result} />
-				</div>
-			)}
-		</Loaded>
-	);
+function Overview(props) {
+	return <OverviewTab {...props} useMore={useBooking} />;
 }
 
 /** @param {TabProps} props */
-function DevelopersTab({ websiteId, portal }) {
-	const { answer } = useLoad(`/v1/dashboard/websites/${websiteId}/features`);
+function Features(props) {
+	return <FeaturesTab {...props} warnings={ruleWarnings} />;
+}
+
+/** @param {TabProps} props */
+function Connections(props) {
+	return <ConnectionsTab {...props} hint={connectionHint} form={connectionForm} />;
+}
+
+/** The widget scripts, the ticket request and the tool signature check, pointing at this Chat. @param {TabProps} props */
+function Developers(props) {
 	const origin = typeof window === 'undefined' ? '' : window.location.origin;
 	const snippets = createSnippets({
 		base: origin,
@@ -366,188 +100,35 @@ function DevelopersTab({ websiteId, portal }) {
 	});
 	const D = TEXTS.developers;
 	return (
-		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-6">
-					<Card title={TEXTS.tabs.developers}>
-						<p className="text-sm">{D.intro}</p>
-						<ul className="mt-3 flex flex-wrap gap-2 text-sm">
-							{data.features.map((/** @type {Feature} */ feature) => (
-								<li key={feature.key}>
-									<a className="font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
-										{feature.name}
-									</a>
-									{feature.on ? '' : ` (${D.off})`}
-								</li>
-							))}
-						</ul>
-						<p className="mt-3 flex flex-wrap gap-4">
-							<a className="text-sm font-semibold text-primary" href="/docs">
-								{D.openDocs}
-							</a>
-							<a className="text-sm font-semibold text-primary" href={portal}>
-								{D.manageTokens}
-							</a>
-						</p>
-					</Card>
-					<Section title={D.visitor} description={D.visitorHelp}>
-						<CodeBlock code={snippets.visitor} />
-					</Section>
-					<Section title={D.admin} description={D.adminHelp}>
-						<CodeBlock code={snippets.admin} />
-					</Section>
-					<Section title={D.ticket} description={D.ticketHelp}>
-						<CodeBlock code={snippets.ticketNode} />
-						<CodeBlock code={snippets.ticketCurl} />
-					</Section>
-					<Section title={D.tools} description={D.toolsHelp}>
-						<CodeBlock code={snippets.toolCheck} />
-					</Section>
-				</div>
-			)}
-		</Loaded>
+		<DevelopersTab {...props}>
+			<Section title={D.visitor} description={D.visitorHelp}>
+				<CodeBlock code={snippets.visitor} />
+			</Section>
+			<Section title={D.admin} description={D.adminHelp}>
+				<CodeBlock code={snippets.admin} />
+			</Section>
+			<Section title={D.ticket} description={D.ticketHelp}>
+				<CodeBlock code={snippets.ticketNode} />
+				<CodeBlock code={snippets.ticketCurl} />
+			</Section>
+			<Section title={D.tools} description={D.toolsHelp}>
+				<CodeBlock code={snippets.toolCheck} />
+			</Section>
+		</DevelopersTab>
 	);
 }
 
-function DefaultsTab() {
-	const { answer, reload } = useLoad('/v1/dashboard/defaults');
-	/** @param {string} key */
-	const saveUrl = (key) => `/v1/dashboard/defaults/${encodeURIComponent(key)}`;
-	return (
-		<Loaded answer={answer}>
-			{(data) => (
-				<div className="space-y-4">
-					<Callout tone="info">{TEXTS.defaults.intro}</Callout>
-					<Masonry wideAlone>
-						<SettingsForms
-							features={data.features}
-							saveUrl={saveUrl}
-							resetBody
-							savedSource="default"
-							reload={reload}
-							notice={aiLabelNotice}
-						/>
-						<TextsForm
-							texts={data.texts}
-							saveUrl={(key) => saveUrl(`text.${key}`)}
-							resetBody
-							savedSource="default"
-							reload={reload}
-						/>
-						<ThemeForm
-							theme={data.theme.theme}
-							save={(next) => call('PUT', saveUrl('theme'), { value: next })}
-							reload={reload}
-						/>
-						<FormatForm
-							format={data.format.format}
-							save={(next) => call('PUT', saveUrl('format'), { value: next })}
-							reload={reload}
-						/>
-					</Masonry>
-					<RecentChanges items={data.recentChanges} />
-				</div>
-			)}
-		</Loaded>
-	);
+/** @param {TabProps} props */
+function Defaults(props) {
+	return <DefaultsTab {...props} notice={aiLabelNotice} />;
 }
 
-/**
- * The Owner's Re-seal (PLAN 0.4.8): after `ENCRYPTION_KEY` is changed (the old key set as `ENCRYPTION_KEY_PREVIOUS`),
- * every stored secret is sealed again with the new key; pressing again is safe.
- */
-function ResealCard() {
-	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
-	const done = result?.ok ? result.data : null;
-	return (
-		<Card title={TEXTS.reseal.title} subtitle={TEXTS.reseal.intro}>
-			<div className="space-y-4">
-				<Button
-					disabled={busy}
-					onClick={async () => {
-						setBusy(true);
-						setResult(await call('POST', '/v1/dashboard/reseal'));
-						setBusy(false);
-					}}>
-					{TEXTS.reseal.button}
-				</Button>
-				{done ? (
-					<Callout tone={done.failedWebsites.length === 0 ? 'success' : 'warning'}>
-						{fill(TEXTS.reseal.result, done)}{' '}
-						{done.failedWebsites.length === 0
-							? TEXTS.reseal.finished
-							: fill(TEXTS.reseal.again, { failed: done.failedWebsites.length })}
-					</Callout>
-				) : null}
-				{result && !result.ok ? <Outcome result={result} /> : null}
-			</div>
-		</Card>
-	);
-}
-
-function PricesTab() {
-	const { answer, reload } = useLoad('/v1/dashboard/prices');
-	const [draft, setDraft] = useState(/** @type {Record<string, string>} */ ({}));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
-	return (
-		<Loaded answer={answer}>
-			{(data) => {
-				/** @type {Feature[]} */
-				const features = data.features;
-				const parsed = features.map((feature) => {
-					const text = draft[feature.key] ?? String(feature.millicreditsPerHour / 1000);
-					return { feature, text, credits: parseCredits(text) };
-				});
-				return (
-					<div className="space-y-4">
-						<Callout tone="info">{TEXTS.prices.intro}</Callout>
-						<Card>
-							<FieldGrid>
-								{parsed.map(({ feature, text, credits }) => (
-									<Input
-										key={feature.key}
-										label={feature.name}
-										help={TEXTS.prices.perHour}
-										inputMode="decimal"
-										value={text}
-										error={credits.ok ? undefined : credits.message}
-										onChange={(event) => setDraft({ ...draft, [feature.key]: event.target.value })}
-									/>
-								))}
-							</FieldGrid>
-							<Button
-								className="mt-4"
-								disabled={parsed.some((entry) => !entry.credits.ok)}
-								onClick={async () => {
-									const prices = Object.fromEntries(
-										parsed.map(({ feature, credits }) => [feature.key, credits.ok ? credits.value : 0]),
-									);
-									const next = await call('PUT', '/v1/dashboard/prices', { prices });
-									setResult(next);
-									if (next.ok) setDraft({});
-									reload();
-								}}>
-								{TEXTS.save}
-							</Button>
-						</Card>
-						<Outcome result={result} />
-						<ResealCard />
-						<RecentChanges items={data.recentChanges} />
-					</div>
-				);
-			}}
-		</Loaded>
-	);
-}
-
-/** Sidebar order: the five tabs of every dashboard, then the Owner tabs. */
+/** Chat's tabs in place of the standard ones (Prices is the standard tab). */
 export const TABS = Object.freeze({
-	overview: OverviewTab,
-	features: FeaturesTab,
+	overview: Overview,
+	features: Features,
 	settings: SettingsTab,
-	connections: ConnectionsTab,
-	developers: DevelopersTab,
-	defaults: DefaultsTab,
-	prices: PricesTab,
+	connections: Connections,
+	developers: Developers,
+	defaults: Defaults,
 });

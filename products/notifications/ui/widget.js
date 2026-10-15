@@ -8,12 +8,12 @@
  * product is stopped, their feature is off or the merchant database is not connected.
  * @module
  */
-import { WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { adminCall, createTicketSource, requestJson } from '@ss/app-kit/widget';
+import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountDeliveryLog } from './delivery-log.js';
 import { mountPushPermission } from './push.js';
 import { mountSendMessage } from './send-message.js';
 import { mountTemplateEditor } from './template-editor.js';
-import { adminCall, createTicketSource } from './tickets.js';
 
 /** The kit's widget config routes (browser token; ticket). */
 export const CONFIG_PATH = '/v1/widget/config';
@@ -29,6 +29,7 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  *   website's Format, PLAN 0.8.10 K7)
  * @property {string} [timeZone] the business.json time zone (UTC when missing)
  * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the keys of the widgets whose feature is on
  * @property {{ pushPublicKey: string | null }} settings the merchant's public push key (`hooks.widgetConfig`)
  */
 
@@ -39,24 +40,21 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @returns {Promise<WidgetConfig | null>} null when the product says no (stopped, database not connected …)
  */
 const loadConfig = async (request, url, credential) => {
-	try {
-		const response = await request(url, { headers: { authorization: `Bearer ${credential}` } });
-		return response.ok ? /** @type {WidgetConfig} */ (await response.json()) : null;
-	} catch {
-		return null;
-	}
+	const answer = await requestJson(request, url, { headers: { authorization: `Bearer ${credential}` } });
+	return answer.ok && answer.data ? /** @type {WidgetConfig} */ (answer.data) : null;
 };
 
 /**
  * @param {{ window: Window & typeof globalThis, script: HTMLScriptElement | null }} input
- * @returns {{ admin: (options: { getTicket: import('./tickets.js').GetTicket }) => Promise<void>, ready: Promise<void> }}
+ * @returns {{ admin: (options: { getTicket: import('@ss/app-kit/widget').GetTicket }) => Promise<void>,
+ *   ready: Promise<void> }}
  *   `admin` is the page's API (`window.SSNotifications.admin`); `ready` settles once the visitor widgets are mounted
  */
 export const startWidget = ({ window: win, script }) => {
 	const doc = win.document;
 	const base = new URL(script?.src ?? win.location.href).origin;
 	const token = script?.dataset.token;
-	/** @param {keyof typeof WIDGET_FEATURES} key */
+	/** @param {string} key */
 	const hosts = (key) => /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)]);
 	/** @type {typeof globalThis.fetch} */
 	const request = (input, init) => win.fetch(input, init);
@@ -64,14 +62,8 @@ export const startWidget = ({ window: win, script }) => {
 	const ready = (async () => {
 		if (!token) return;
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
-		if (!config?.features.includes(WIDGET_FEATURES.push_permission)) return;
-		/** @param {string} path @param {unknown} body */
-		const post = (path, body) =>
-			request(`${base}${path}`, {
-				method: 'POST',
-				headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-				body: JSON.stringify(body),
-			});
+		if (!config?.widgets.includes('push_permission')) return;
+		const authorization = `Bearer ${token}`;
 		for (const host of hosts('push_permission'))
 			mountPushPermission({
 				host,
@@ -79,18 +71,26 @@ export const startWidget = ({ window: win, script }) => {
 				kind: 'visitor',
 				config,
 				save: async (subscription) => {
-					const response = await post('/v1/push/subscriptions', { subscription });
-					return response.ok ? /** @type {{ subscriberId: string }} */ (await response.json()).subscriberId : null;
+					const answer = await requestJson(request, `${base}/v1/push/subscriptions`, {
+						method: 'POST',
+						headers: { authorization },
+						body: { subscription },
+					});
+					return answer.ok && typeof answer.data?.subscriberId === 'string' ? answer.data.subscriberId : null;
 				},
 				remove: async (subscriberId, endpoint) => {
-					await post('/v1/push/subscriptions/remove', { subscriberId, endpoint });
+					await requestJson(request, `${base}/v1/push/subscriptions/remove`, {
+						method: 'POST',
+						headers: { authorization },
+						body: { subscriberId, endpoint },
+					});
 				},
 			});
 	})();
 
-	/** @param {{ getTicket: import('./tickets.js').GetTicket }} options */
+	/** @param {{ getTicket: import('@ss/app-kit/widget').GetTicket }} options */
 	const admin = async ({ getTicket }) => {
-		/** @type {import('./tickets.js').Ticket} */
+		/** @type {import('@ss/app-kit/widget').Ticket} */
 		let first;
 		try {
 			first = await getTicket();
@@ -108,8 +108,8 @@ export const startWidget = ({ window: win, script }) => {
 			now: () => Date.now(),
 		});
 		const api = { base, tickets, fetch: request };
-		/** @param {keyof typeof WIDGET_FEATURES} key */
-		const on = (key) => config.features.includes(WIDGET_FEATURES[key]);
+		/** @param {string} key */
+		const on = (key) => config.widgets.includes(key);
 		if (on('delivery_log')) for (const host of hosts('delivery_log')) mountDeliveryLog({ host, api, config });
 		if (on('template_editor')) for (const host of hosts('template_editor')) mountTemplateEditor({ host, api, config });
 		if (on('send_message')) for (const host of hosts('send_message')) mountSendMessage({ host, api, config });

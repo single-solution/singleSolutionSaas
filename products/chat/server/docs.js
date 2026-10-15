@@ -1,60 +1,26 @@
 /**
- * The public docs at `/docs` (PLAN 0.4.10, 0.8.3): the visitor API with guests and signed-in visitors, AI, knowledge,
- * webhook tools and their signature check, the booking endpoint's two requests, handoff, flows, the Notifications
- * templates, attachments and the bucket's CORS rule, data rights and the activity log, the shop tools with the
- * Ecommerce routes they call, product cards and their add-to-cart event, the context panel's shop info, per-feature
- * routes (a feature with none shows no table), widgets and what the website builds (the guide's `build`), the widget
- * snippets, the ticket server snippet (Node.js fetch and cURL), the kit's routes for your server (settings and Chat's
- * lists, acting user, visitor calls, counts, activity, Format; PLAN 0.8.10), the import feature, the business.json
- * template, the localhost note and the API reference from `openapi.json`: every call with its auth, feature,
- * parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json` and the kit's own
- * descriptions). Plain HTML; every value is escaped.
+ * The public docs at `/docs` (PLAN 0.4.10, 0.8.3), on the kit's docs toolkit (`renderDocsPage`, which adds the title,
+ * the intro and localhost note, the kit's sections for the merchant's server with Chat's lists and counts after them,
+ * business.json and the API reference from `openapi.json`). Chat's own sections: the widget snippet, the visitor API
+ * with guests and signed-in visitors, AI, knowledge, webhook tools and their signature check, the booking endpoint's
+ * two requests, handoff, flows, the Notifications messages and their values (`schemas/messages.json`), attachments and
+ * the bucket's CORS rule, data rights and the activity log, the shop tools with the Ecommerce routes they call, product
+ * cards and their add-to-cart event, the context panel's shop info, one section per feature (`docsFeatureSections`),
+ * admin widgets with the ticket server snippet (Node.js fetch and cURL) and the import feature. Plain HTML; every value
+ * is escaped.
  * @module
  */
-import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
-import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
+import { docsBlock, docsFeatureSections, docsList, docsOperations, docsParagraph, renderDocsPage } from '@ss/app-kit';
+import { escapeHtml } from '@ss/contracts/text';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
-import { MESSAGE_TEMPLATES } from '../core/conversation.js';
+import declaration from '../schemas/messages.json' with { type: 'json' };
 import { CONTEXT_ENDPOINT, SHOP_ANSWERS, SHOP_ENDPOINTS, STORE_CONTEXT_ENDPOINT } from '../core/shop.js';
 import { createSnippets } from '../core/snippets.js';
-import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
 
-/** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
-let reference = null;
-
-/** @param {unknown} value */
-const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
-
-/** @param {string} code */
-const block = (code) => `<pre><code>${escape(code)}</code></pre>`;
-
-/** @param {string} text */
-const para = (text) => `<p>${escape(text)}</p>`;
-
-/** @typedef {{ 'x-ss-auth'?: string, 'x-ss-feature'?: string | string[], 'x-ss-permission'?: string, summary?: string }} Operation */
-
-/** Every documented operation: `[method, path, operation]`. */
-const operations = () =>
-	Object.entries(/** @type {Record<string, Record<string, Operation>>} */ (/** @type {unknown} */ (openapi.paths))).flatMap(
-		([path, methods]) =>
-			Object.entries(methods).map(([method, operation]) => /** @type {const} */ ([method.toUpperCase(), path, operation])),
-	);
-
-/** @param {Operation} operation */
-const featuresOf = (operation) => [operation['x-ss-feature'] ?? []].flat();
-
-/** @param {ReturnType<typeof operations>} rows */
-const routeTable = (rows) =>
-	`<table><thead><tr><th>Route</th><th>Auth</th><th>Feature</th></tr></thead><tbody>${rows
-		.map(
-			([method, path, operation]) =>
-				`<tr><td><a href="#${escape(apiAnchor(method, path))}"><code>${escape(`${method} ${path}`)}</code></a>${operation.summary ? ` ${escape(operation.summary)}` : ''}</td><td>${escape(
-					`${operation['x-ss-auth'] ?? ''}${operation['x-ss-permission'] ? ` (${operation['x-ss-permission']})` : ''}`,
-				)}</td><td>${escape(featuresOf(operation).length > 0 ? featuresOf(operation).join(' or ') : 'always')}</td></tr>`,
-		)
-		.join('')}</tbody></table>`;
+/** Every documented operation, read once. */
+const rows = docsOperations(openapi);
 
 /**
  * The docs page.
@@ -62,112 +28,64 @@ const routeTable = (rows) =>
  * @returns {string}
  */
 export const renderDocs = ({ base }) => {
-	const build = /** @type {Record<string, string>} */ (guide.build);
 	const snippets = createSnippets({
 		base,
 		widgets: manifest.widgets,
 		permissions: manifest.permissions.map((permission) => permission.key),
 	});
-	const rows = operations();
-	const featureSections = manifest.features.map((feature) => {
-		const widgets = manifest.widgets.filter((widget) => [widget.feature].flat().includes(feature.key));
-		const routes = rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key));
-		return [
-			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
-			para(feature.description),
-			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
-			widgets.length > 0
-				? `<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`
-				: '',
-			routes.length > 0 ? routeTable(routes) : '',
-			'</section>',
-		].join('');
-	});
-	const templates = Object.entries(MESSAGE_TEMPLATES)
-		.map(
-			([key, values]) =>
-				`<li><code>${escape(key)}</code>: ${values.map((value) => `<code>{${escape(value)}}</code>`).join(', ')}</li>`,
-		)
-		.join('');
+	const messages = declaration.messages.map(
+		(message) =>
+			`<code>${escapeHtml(message.key)}</code>: ${message.values.map((value) => `<code>{${escapeHtml(value)}}</code>`).join(', ')}`,
+	);
 	const shop = [
 		...SHOP_ENDPOINTS.map(
-			(row) => `<li><code>${escape(row.tool)}</code> (${escape(row.feature)}): <code>${escape(row.request)}</code></li>`,
+			(row) => `<code>${escapeHtml(row.tool)}</code> (${escapeHtml(row.feature)}): <code>${escapeHtml(row.request)}</code>`,
 		),
-		`<li>store context (${escape(STORE_CONTEXT_ENDPOINT.feature)}): <code>${escape(STORE_CONTEXT_ENDPOINT.request)}</code></li>`,
-		`<li>context panel (${escape(CONTEXT_ENDPOINT.feature)}): <code>${escape(CONTEXT_ENDPOINT.request)}</code></li>`,
-	].join('');
-	const answers = Object.entries(SHOP_ANSWERS)
-		.map(([name, fields]) => `<li>${escape(name)}: ${escape(fields)}</li>`)
-		.join('');
-	return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escape(guide.title)}</title>
-<style>
-body { font: 16px/1.6 system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; color: CanvasText; background: Canvas; }
-pre { overflow-x: auto; padding: 12px; border: 1px solid GrayText; border-radius: 8px; }
-table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid GrayText; }
-.ss-api-op { margin-top: 32px; } .ss-api-op h3 code, .ss-api-schema h4 { overflow-wrap: anywhere; }
-</style>
-</head>
-<body>
-<h1>${escape(guide.title)}</h1>
-${para(guide.intro)}
-<p><strong>Local testing.</strong> ${escape(guide.localhost)}</p>
-<h2>Install the widget</h2>
-${para(guide.install)}
-${block(snippets.visitor)}
+		`store context (${escapeHtml(STORE_CONTEXT_ENDPOINT.feature)}): <code>${escapeHtml(STORE_CONTEXT_ENDPOINT.request)}</code>`,
+		`context panel (${escapeHtml(CONTEXT_ENDPOINT.feature)}): <code>${escapeHtml(CONTEXT_ENDPOINT.request)}</code>`,
+	];
+	const answers = Object.entries(SHOP_ANSWERS).map(([name, fields]) => `${escapeHtml(name)}: ${escapeHtml(fields)}`);
+	const body = `<h2>Install the widget</h2>
+${docsParagraph(guide.install)}
+${docsBlock(snippets.visitor)}
 <h2>Your own chat screens (visitor API)</h2>
-${para(guide.visitorApi)}
+${docsParagraph(guide.visitorApi)}
 <h2>Guests and signed-in visitors</h2>
-${para(guide.guests)}
-${para(guide.signedIn)}
+${docsParagraph(guide.guests)}
+${docsParagraph(guide.signedIn)}
 <h2>AI</h2>
-${para(guide.ai)}
-${para(guide.knowledge)}
+${docsParagraph(guide.ai)}
+${docsParagraph(guide.knowledge)}
 <h2>Webhook tools and booking</h2>
-${para(guide.tools)}
-${block(snippets.toolCheck)}
-${para(guide.booking)}
+${docsParagraph(guide.tools)}
+${docsBlock(snippets.toolCheck)}
+${docsParagraph(guide.booking)}
 <h2>Handoff and flows</h2>
-${para(guide.handoff)}
-${para(guide.flows)}
+${docsParagraph(guide.handoff)}
+${docsParagraph(guide.flows)}
 <h2>Staff alerts, transcripts and cost alerts</h2>
-${para(guide.alerts)}
-<ul>${templates}</ul>
+${docsParagraph(guide.alerts)}
+${docsList(messages)}
 <h2>Attachments</h2>
-${para(guide.attachments)}
+${docsParagraph(guide.attachments)}
 <h2>Data rights and the activity log</h2>
-${para(guide.dataRights)}
-${para(guide.activity)}
+${docsParagraph(guide.dataRights)}
+${docsParagraph(guide.activity)}
 <h2>Shop tools (with Ecommerce)</h2>
-${para(guide.shop)}
-<ul>${shop}</ul>
-<ul>${answers}</ul>
-${para(guide.cards)}
-${para(guide.contextPanel)}
+${docsParagraph(guide.shop)}
+${docsList(shop)}
+${docsList(answers)}
+${docsParagraph(guide.cards)}
+${docsParagraph(guide.contextPanel)}
 <h2>Features</h2>
-${featureSections.join('\n')}
+${docsFeatureSections({ manifest, rows, guide })}
 <h2>Admin widgets and tickets</h2>
-${para(guide.admin)}
-${block(snippets.admin)}
-${para(guide.tickets)}
-${block(snippets.ticketNode)}
-${block(snippets.ticketCurl)}
-${KIT_GUIDE.map((section) => `<h2 id="${escape(section.id)}">${escape(section.title)}</h2>\n${section.paragraphs.map(para).join('\n')}`).join('\n')}
-${para(guide.serverApi)}
+${docsParagraph(guide.admin)}
+${docsBlock(snippets.admin)}
+${docsParagraph(guide.tickets)}
+${docsBlock(snippets.ticketNode)}
+${docsBlock(snippets.ticketCurl)}
 <h2 id="import">Import</h2>
-${para(guide.import)}
-<h2>business.json</h2>
-${para(guide.business)}
-${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
-<h2>API reference</h2>
-${para(guide.api)}
-${routeTable(rows)}
-${(reference ??= renderApiReference(openapi))}
-</body>
-</html>
-`;
+${docsParagraph(guide.import)}`;
+	return renderDocsPage({ guide, openapi, body });
 };

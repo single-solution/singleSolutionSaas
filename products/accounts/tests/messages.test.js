@@ -6,7 +6,6 @@
 import { validateMessageDefaults } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import declaration from '../schemas/messages.json' with { type: 'json' };
-import { MESSAGE_TEMPLATES } from '../core/widgets.js';
 import { ALL, ORIGIN, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -39,9 +38,6 @@ afterAll(async () => {
 describe('Accounts’ messages and their defaults (parity P1)', () => {
 	it('declares every message it sends, with the values each gets, as the contract wants', async () => {
 		expect(validateMessageDefaults({ productId: 'accounts', ...declaration })).toMatchObject({ ok: true });
-		expect(Object.fromEntries(declaration.messages.map((message) => [message.key, message.values]))).toEqual(
-			Object.fromEntries(Object.entries(MESSAGE_TEMPLATES).map(([key, values]) => [key, [...values]])),
-		);
 		// sign-in messages are required, urgent and sensitive; WhatsApp never has a default
 		for (const message of declaration.messages) {
 			expect(message).toMatchObject({ required: true, urgent: true, sensitive: true });

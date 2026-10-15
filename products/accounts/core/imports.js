@@ -11,8 +11,9 @@
  * @module
  */
 import { isId, validateActivityCopy } from '@ss/contracts';
+import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
-import { normaliseEmail } from './identifiers.js';
+import { isObject } from '@ss/contracts/util';
 import { MAX_ADDRESSES, checkAddresses, checkCustomValues, checkFieldDefinition, checkName } from './profile.js';
 import { DEFAULT_ROLE, READY_ROLES, checkRole } from './roles.js';
 import { PROVIDERS } from './widgets.js';
@@ -128,9 +129,6 @@ const ACTOR_KIND = /^[a-z][a-z_]{0,31}$/;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f]/;
 
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /** @param {unknown} value */
 const absent = (value) => value === undefined || value === null;
 
@@ -220,7 +218,7 @@ const textOf = (record, name, max, errors, at = '') => {
  * @param {ImportError[]} errors
  */
 const contactsOf = (record, phoneFormat, errors) => {
-	const email = absent(record.email) ? null : normaliseEmail(record.email);
+	const email = absent(record.email) ? null : normalizeEmail(record.email);
 	if (email === null && !absent(record.email)) errors.push({ path: '/email', message: 'Not a valid email address.' });
 	const phone = absent(record.phone) ? null : normalisePhone(record.phone, phoneFormat);
 	if (phone === null && !absent(record.phone))

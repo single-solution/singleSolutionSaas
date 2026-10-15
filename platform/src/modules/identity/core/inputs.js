@@ -4,7 +4,8 @@
  * @module
  */
 import { ADMIN_ROLES, isId, normaliseDomain } from '@ss/contracts';
-import { EMAIL_ADDRESS, hasControlCharacters } from '../../../infra/util.js';
+import { normalizeEmail } from '@ss/contracts/email';
+import { hasControlCharacters } from '../../../infra/util.js';
 import { isCountryCode } from './countries.js';
 
 /** @typedef {{ path: string, message: string }} FieldError */
@@ -43,14 +44,13 @@ const bad = (message) => ({ ok: false, message });
 // Fields
 
 /**
- * Lower-cased, trimmed email address (≤ 254 chars, one `@`, a dot in the domain).
+ * An email address by the one rule of the SaaS (`@ss/contracts/email`): trimmed, lower-cased, a Unicode domain as
+ * punycode.
  * @type {Field<string>}
  */
 export const email = (value) => {
-	if (typeof value !== 'string') return bad('must be an email address');
-	const v = value.trim().toLowerCase();
-	if (v.length === 0 || v.length > 254 || !EMAIL_ADDRESS.test(v)) return bad('must be an email address');
-	return okv(v);
+	const address = normalizeEmail(value);
+	return address === null ? bad('must be an email address') : okv(address);
 };
 
 /**

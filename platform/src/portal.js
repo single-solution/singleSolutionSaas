@@ -28,7 +28,7 @@ import { defaultRandomBytes } from './infra/util.js';
 
 /** @typedef {import('./infra/modules.js').ModuleDefinition} ModuleDefinition */
 /** @typedef {import('./infra/modules.js').SharedContext} SharedContext */
-/** @typedef {import('./infra/logger.js').Logger} Logger */
+/** @typedef {import('@ss/net').Logger} Logger */
 
 /**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,

@@ -5,10 +5,9 @@
  * word is a widget text.
  * @module
  */
-import { mountWidget } from '@ss/app-kit/widget';
+import { element, mountWidget } from '@ss/app-kit/widget';
 import { CONSENT_STORAGE_KEY } from '../core/widgets.js';
 import { makeChoice, readChoice } from '../core/consent.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** @typedef {import('../core/consent.js').Choice} Choice */

@@ -1,9 +1,9 @@
+import { signWebhook } from '@ss/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { formSignature } from '../adapters/gateways/payfast.js';
 import { pakistanTime, secureHash } from '../adapters/gateways/jazzcash.js';
 import { validationHash } from '../adapters/gateways/payfast-pk.js';
 import { webhookSignature } from '../adapters/gateways/rapid.js';
-import { signTimestamped } from '../adapters/util.js';
 import { ADMIN_ORIGIN, ALL, BASE, BUCKET, DOMAIN, NOTIFY_BASE, ORIGIN, setup } from './helpers.js';
 
 /** Today's bank transfer, filled in: paid first, proof on, one account for any currency. */
@@ -88,7 +88,7 @@ const stripeHook = (event) => {
 	const body = JSON.stringify(event);
 	return env.call('POST', `/v1/gateways/stripe/${env.websiteId}`, {
 		body,
-		headers: { 'stripe-signature': signTimestamped(body, STRIPE.webhookSecret, env.now()) },
+		headers: { 'stripe-signature': signWebhook({ body, secret: STRIPE.webhookSecret, now: env.now }) },
 	});
 };
 
@@ -614,7 +614,7 @@ describe('the other gateways', () => {
 		const body = JSON.stringify({ paymentId: payment.id, status: 'paid', amount: 900, currency: 'USD', reference: 'G-1' });
 		const res = await env.call('POST', `/v1/gateways/generic/${env.websiteId}`, {
 			body,
-			headers: { 'ss-signature': signTimestamped(body, GENERIC.secret, env.now()) },
+			headers: { 'ss-signature': signWebhook({ body, secret: GENERIC.secret, now: env.now }) },
 		});
 		expect(res.json).toEqual({ received: true });
 		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, {});
