@@ -8,9 +8,9 @@
  * @module
  */
 import { Badge, Callout, Card, CodeBlock, KeyValueList, Masonry, Section, formatDateTime } from '@ss/ui';
+import { fill } from '@ss/ui/dashboard';
 import { noticeOf, tagsOf } from '../../core/config.js';
 import { keyLocationOf, robotsTxtOf, sitemapUrlsOf, verificationOf } from '../../core/seo.js';
-import { fill } from './api.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, Record<string, unknown>>} Values settings by feature or shared group */

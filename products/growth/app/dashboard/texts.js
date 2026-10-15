@@ -1,104 +1,35 @@
 /**
- * The dashboard's texts (English, kept in this file; the dashboard is not translated, PLAN 0.6).
+ * The dashboard's words (US English, kept in this file; the dashboard is not translated, PLAN 0.6): Growth's title and
+ * its own words over the words every product dashboard shares (`@ss/ui`).
  * @module
  */
-export const TEXTS = Object.freeze({
+import { dashboardTexts } from '@ss/ui';
+
+export const TEXTS = dashboardTexts({
 	title: 'Growth',
-	loading: 'Loading…',
-	signedOut: 'Open this dashboard from the Portal.',
-	failed: 'This could not be loaded.',
-	backToPortal: 'Back to Portal',
-	pickWebsite: 'Pick a website',
-	website: 'Website',
-	adminView: 'Admin view: {merchant} / {domain}',
-	saved: 'Saved',
-	save: 'Save',
-	reset: 'Reset to default',
-	cancel: 'Cancel',
-	andMore: '{names} and {count} more',
-	tabs: Object.freeze({
-		overview: 'Overview',
-		features: 'Features',
-		settings: 'Settings',
-		connections: 'Connections',
-		developers: 'Developers',
-		defaults: 'Defaults',
-		prices: 'Prices',
-	}),
-	overview: Object.freeze({
+	overview: {
 		tags: 'Tags ready',
 		tagsHelp: 'Switched-on tag features with a well-formed id or a script set (Settings).',
 		ofTotal: '{count} of {total}',
 		tagsStep: 'Set the ids of the tag features',
-		noTag: Object.freeze({
+		noTag: {
 			one: 'A tag feature has no id or script yet',
 			many: '{count} tag features have no id or script yet',
 			effect: 'They are charged, but load nothing on your pages until a well-formed id or a script is set in Settings.',
 			action: 'Open Settings',
-		}),
-	}),
-	features: Object.freeze({
-		price: 'Price: {price}',
-		on: 'On',
-		needs: 'Needs: {features}',
-		contact: 'To change features, contact {contact}.',
-		confirmTitle: 'Save features?',
-		confirmCost: 'New hourly cost: {cost}',
-		alsoOff: 'Also turned off: {features}',
-		docs: 'Docs',
-		notWorking: 'Not working: connect {connection}',
-	}),
-	settings: Object.freeze({
-		featuresTitle: 'Feature settings',
-		featuresHelp: 'How each feature behaves on this website.',
-		looksTitle: 'Words and look',
+		},
+	},
+	settings: {
 		looksHelp:
 			'Every word of the consent banner, the notice bar and the admin widgets (the consent words included), their theme, and how money and dates look.',
-		texts: 'Widget texts',
-		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
-		theme: 'Theme',
-		mode: 'Light or dark',
-		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
-		fontFamily: 'Font family (inherit, or a font your site loads)',
-		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent color',
-		customCss: 'Custom CSS',
-		format: 'Format',
 		formatHelp: 'How money and dates look in the widgets (revenue and days in the analytics dashboard).',
-		locale: 'Language and region',
 		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser.",
-		currencyDisplay: 'Currency shown as',
-		currencyDisplays: Object.freeze({
-			code: 'Code (USD 12,500.00)',
-			symbol: 'Symbol ($12,500.00)',
-			custom: 'Your own symbol',
-		}),
-		currencySymbol: 'Your own symbol (up to 8 characters)',
-		times: 'Dates and times in',
-		timesOptions: Object.freeze({
-			viewer: "Each visitor's time zone",
-			business: 'Your business time zone (business.json)',
-		}),
-		wholeUnits: 'Whole amounts only (no minor units)',
-		off: 'This feature is off.',
 		consentWarning:
 			'Tags load without waiting for consent. Laws in many places (for example the EU’s GDPR and ePrivacy rules and the UK’s PECR) require a visitor’s consent before tracking; you are responsible for following the law where you operate.',
 		gtmMissing:
 			'Google Analytics 4 is left to Tag Manager, but no well-formed Tag Manager container id is set, so Google Analytics gets nothing.',
-	}),
-	connections: Object.freeze({
-		token: 'Server token of that product for this website',
-		neededByNone: 'Optional',
-		save: 'Save and test',
-		neededBy: 'Needed by: {features}',
-		connected: 'Connected',
-		not_connected: 'Not connected',
-		test_failed: 'Test failed',
-		value: 'New value',
-		test: 'Test',
-		remove: 'Remove',
-	}),
-	developers: Object.freeze({
+	},
+	developers: {
 		script: 'Page script',
 		scriptHelp:
 			'Add it to the head of every page, before the other products’ scripts; it shows the consent banner and the notice bar, loads your tags after consent and records analytics.',
@@ -112,13 +43,8 @@ export const TEXTS = Object.freeze({
 		widgetsHelp: 'The analytics dashboard, the SEO checklist and the redirects in your own admin.',
 		ticket: 'Ticket snippet',
 		ticketHelp: 'Your server asks for a ticket for the admin widgets after checking its user.',
-		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
-		openDocs: 'Open the docs',
-		websiteId: 'This website’s id: {id}',
-		manageTokens: 'Manage tokens in the Portal',
-		off: 'off',
-	}),
-	setup: Object.freeze({
+	},
+	setup: {
 		title: 'Setup at a glance',
 		help: 'How the switched-on features are set up for this website, from their settings.',
 		tagsTitle: 'Tags and consent',
@@ -132,7 +58,7 @@ export const TEXTS = Object.freeze({
 		notSet: 'Not set',
 		viaGtm: 'Inside Tag Manager',
 		itemIds: 'Item ids sent',
-		ids: Object.freeze({ product: 'Product ids', variant: 'Variant ids' }),
+		ids: { product: 'Product ids', variant: 'Variant ids' },
 		analyticsTitle: 'Visitor analytics',
 		detail: 'Detail',
 		anonymous: 'Anonymous',
@@ -143,11 +69,11 @@ export const TEXTS = Object.freeze({
 		months: '{months} months',
 		recorded: 'Also recorded',
 		visitsOnly: 'Visits and pages only',
-		parts: Object.freeze({
+		parts: {
 			conversion_funnel: 'Conversion funnel',
 			searches_404s: 'Searches and 404s',
 			web_vitals: 'Web Vitals',
-		}),
+		},
 		vitalsToGa4: 'Web Vitals to Google Analytics',
 		seoTitle: 'Search engines',
 		aiCrawlers: 'AI training crawlers',
@@ -162,7 +88,7 @@ export const TEXTS = Object.freeze({
 		noticeTitle: 'Notice bar',
 		now: 'Now',
 		closes: 'Visitors can close it',
-		closeFor: Object.freeze({ visit: 'Yes, for the visit', page: 'Yes, for the page' }),
+		closeFor: { visit: 'Yes, for the visit', page: 'Yes, for the page' },
 		hiddenOn: 'Hidden on',
 		none: 'None',
 		yes: 'Yes',
@@ -186,20 +112,5 @@ export const TEXTS = Object.freeze({
 		yourKey: '(your key)',
 		keyPathBad:
 			'The key file address is not a path on your website (for example /indexnow-key.txt): submissions are refused until it is.',
-	}),
-	defaults: Object.freeze({
-		intro: 'Global defaults apply to every website that has not saved its own value.',
-	}),
-	prices: Object.freeze({
-		intro: 'One hourly price per feature, in credits, for every merchant and website.',
-		perHour: 'Credits per hour',
-	}),
-	reseal: Object.freeze({
-		title: 'Encryption key',
-		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
-		button: 'Re-seal stored secrets',
-		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
-		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
-	}),
+	},
 });
