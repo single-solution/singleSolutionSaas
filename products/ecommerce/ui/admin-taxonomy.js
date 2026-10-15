@@ -514,6 +514,13 @@ export const brandsTab = (kit, panel, lookups) => {
 			categoryChoices(lookups.state.categories),
 			item?.categoryIds ?? [],
 		);
+		// the categories whose listings leave the brand's products out (with those below them)
+		const hidden = checkGroup(
+			kit,
+			t('catalogAdmin.brandHiddenIn'),
+			categoryChoices(lookups.state.categories),
+			item?.hiddenIn ?? [],
+		);
 		const seo = seoEditor(kit, item?.seo);
 		saveDialog(kit, {
 			title: item ? t('admin.editing', { name: item.name }) : t('catalogAdmin.newBrand'),
@@ -529,6 +536,7 @@ export const brandsTab = (kit, panel, lookups) => {
 				]),
 				kit.field(t('catalogAdmin.description'), description),
 				categories.node,
+				hidden.node,
 				seo.node,
 			],
 			value: () => ({
@@ -537,6 +545,7 @@ export const brandsTab = (kit, panel, lookups) => {
 				status: state.value,
 				description: description.value,
 				categoryIds: categories.value(),
+				hiddenIn: hidden.value(),
 				seo: seo.value(),
 				...(has('size_charts') ? { sizeChartId: chart.value || null } : {}),
 			}),
@@ -566,6 +575,10 @@ export const brandsTab = (kit, panel, lookups) => {
 						: scope.map((id) => lookups.nameOf('categories', id)).join(', '),
 				],
 				[t('catalogAdmin.sizeChart'), has('size_charts') ? lookups.nameOf('charts', item.sizeChartId) : ''],
+				[
+					t('catalogAdmin.brandHiddenInShort'),
+					(item.hiddenIn ?? []).map((/** @type {string} */ id) => lookups.nameOf('categories', id)).join(', '),
+				],
 			]),
 			kit.masonry([
 				imageCard(kit, { path, for: 'brand', field: 'logo', item, changed: (file) => keep(item.id, file) }),

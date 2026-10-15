@@ -1427,14 +1427,25 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 		expect(dialogStatus(root)).toBe(TEXTS['problem.move_not_allowed']);
 	});
 
-	it('shows only the orders this staff member has not opened', async () => {
-		const { root, server } = await start();
+	it('shows only the orders this staff member has not opened, or the refunds to make, and exports what the list shows', async () => {
+		const { root, server } = await start({
+			'GET /v1/admin/csv/orders': () => new Response('number\r\n', { status: 200 }),
+		});
 		const panel = panelOf(root, 'orders');
 		await tick(checkIn(panel, 'Only orders I have not opened'), true);
 		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({ unseen: 'true' });
 		expect(paramsOf(server, 'GET /v1/admin/orders/count')).toEqual({ unseen: 'true' });
 		await tick(checkIn(panel, 'Only orders I have not opened'), false);
 		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({});
+		// canceled orders that still hold the shopper's money
+		await tick(checkIn(panel, 'Only canceled orders with money to refund'), true);
+		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({ refundDue: 'true' });
+		expect(paramsOf(server, 'GET /v1/admin/orders/count')).toEqual({ refundDue: 'true' });
+		// the CSV takes the list's filters (not "not opened by me")
+		await tick(checkIn(panel, 'Only orders I have not opened'), true);
+		await change(fieldIn(panel, 'Paid by'), 'online');
+		await pickMenu(panel, 'Export these orders (CSV)');
+		expect(paramsOf(server, 'GET /v1/admin/csv/orders')).toEqual({ paymentMethod: 'online', refundDue: 'true' });
 	});
 
 	it('deletes an order behind its number typed, in the website’s words when it is refused', async () => {

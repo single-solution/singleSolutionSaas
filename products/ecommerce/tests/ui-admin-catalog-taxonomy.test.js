@@ -309,6 +309,13 @@ describe('catalog admin: brands and locations', () => {
 		const dialog = dialogOf(root);
 		await change(fieldIn(dialog, 'Status'), 'active');
 		await tick(checkIn(dialog, 'Audio'), true);
+		// the categories whose listings leave the brand out
+		const hiddenIn = /** @type {HTMLElement} */ (
+			[...dialog.querySelectorAll('fieldset')].find((set) => set.querySelector('legend')?.textContent?.startsWith('Hidden in'))
+		);
+		expect(checkIn(hiddenIn, 'Phones').checked).toBe(true);
+		await tick(checkIn(hiddenIn, 'Phones'), false);
+		await tick(checkIn(hiddenIn, 'Audio'), true);
 		await change(fieldIn(dialog, 'Size chart'), '');
 		type(fieldIn(dialog, 'Social sharing image'), 'https://cdn.example/s.png');
 		await submitDialog(root);
@@ -318,6 +325,7 @@ describe('catalog admin: brands and locations', () => {
 			status: 'active',
 			description: '',
 			categoryIds: ['cat_a', 'cat_b'],
+			hiddenIn: ['cat_a'],
 			seo: {
 				title: 'Zed phones',
 				description: '',
@@ -333,7 +341,12 @@ describe('catalog admin: brands and locations', () => {
 		await click(buttonIn(panel, 'New brand'));
 		type(fieldIn(dialogOf(root), 'Name'), 'Nova');
 		await submitDialog(root);
-		expect(server.last('POST /v1/admin/brands')?.body).toMatchObject({ name: 'Nova', status: 'active', categoryIds: [] });
+		expect(server.last('POST /v1/admin/brands')?.body).toMatchObject({
+			name: 'Nova',
+			status: 'active',
+			categoryIds: [],
+			hiddenIn: [],
+		});
 		expect(server.last('POST /v1/admin/brands')?.body.sizeChartId).toBeNull();
 		resetPage();
 		const plain = await start(['catalog'], {

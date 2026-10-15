@@ -3,7 +3,7 @@
  * `orders.delete`, `bulk.run`, `csv.run` and `returns.manage`; PLAN 0.8.8 Orders, 0.6): the orders as a
  * list-and-detail screen — the count of matching orders as a badge, search, status chips with their counts, more
  * filters (stage, payment state and method with their counts, placed between two days, only the orders this staff
- * member has not opened), a checkbox on each row with Move selected (Bulk actions) and the packing slips and pick list
+ * member has not opened, only canceled orders with money to refund), a checkbox on each row with Move selected (Bulk actions) and the packing slips and pick list
  * of the selected orders (Invoices), and in the list's More menu Export these orders as CSV (CSV) and Move all orders
  * of a status (to another status of the same kind, before a status is removed or renamed in the order flow) — beside
  * one order (`./admin-order.js`); and the return and warranty claims (Returns, `./admin-returns.js`). What the ticket
@@ -83,6 +83,8 @@ const ordersTab = (kit, panel) => {
 	const from = kit.input('', { type: 'date' });
 	const to = kit.input('', { type: 'date' });
 	const unseen = kit.check(t('ordersAdmin.unseenOnly'));
+	// canceled orders that still hold the shopper's money: the refunds to make (late money, K-13)
+	const refundDue = kit.check(t('ordersAdmin.refundDueOnly'));
 
 	/**
 	 * The list's filters; a count by a field leaves out that field's own filter.
@@ -97,6 +99,7 @@ const ordersTab = (kit, panel) => {
 		from: dayStart(from.value, kit.timeZone),
 		to: dayEnd(to.value, kit.timeZone),
 		unseen: unseen.box.checked,
+		refundDue: refundDue.box.checked,
 	});
 	/** @param {string} by */
 	const countsBy = (by) => kit.call('GET', `/v1/admin/orders/counts${query({ ...filters(by), by })}`);
@@ -134,9 +137,10 @@ const ordersTab = (kit, panel) => {
 			kit.field(t('admin.from'), from),
 			kit.field(t('admin.to'), to),
 			unseen.node,
+			refundDue.node,
 		]),
 	]);
-	for (const control of [stage.node, paymentState.node, paymentMethod.node, from, to, unseen.box])
+	for (const control of [stage.node, paymentState.node, paymentMethod.node, from, to, unseen.box, refundDue.box])
 		control.addEventListener('change', reload);
 
 	// bulk moves: the selected orders to one status (each move follows the flow; refusals are listed per order)
@@ -245,11 +249,9 @@ const ordersTab = (kit, panel) => {
 		});
 	};
 
-	// CSV: the orders the filters match (by status and days; the CSV takes no other filter)
+	// CSV: the orders the list's filters match (the CSV has no "not opened by me")
 	const exportCsv = async () => {
-		const answer = await kit.fetchText(
-			`/v1/admin/csv/orders${query({ status: chips.value(), from: filters().from, to: filters().to })}`,
-		);
+		const answer = await kit.fetchText(`/v1/admin/csv/orders${query({ ...filters(), unseen: false })}`);
 		if (!answer.ok) return kit.fail(screen.line, answer);
 		kit.save('orders.csv', answer.text);
 		kit.say(screen.line, t('ordersAdmin.exported', { name: 'orders.csv' }));

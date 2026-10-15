@@ -93,6 +93,7 @@ export const BRANDS = [
 		logo: { key: 'l', url: 'https://cdn.example/l.png', alt: 'Zed' },
 		status: 'hidden',
 		categoryIds: ['cat_b'],
+		hiddenIn: ['cat_b'],
 		sizeChartId: 'szc_1',
 		seo: { title: 'Zed phones' },
 	},
