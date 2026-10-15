@@ -14,7 +14,7 @@
  * `buildConfig(env, system)` joins them into the {@link PortalConfig} every module reads.
  * @module
  */
-import { mongoDatabaseName } from '@ss/net';
+import { LOCAL_HOSTS, mongoDatabaseName } from '@ss/net';
 import { platformError } from './errors.js';
 
 /** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
@@ -129,8 +129,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
-/** Hosts outbound calls may reach over loopback and plain http outside production (products run locally). */
-const LOCAL_OUTBOUND_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
 /** `Name <address>` or `address`. */
 export const MAIL_FROM = /^(?:[^<>\r\n]{1,100} <[^\s@<>]{1,64}@[^\s@<>]{1,255}>|[^\s@<>]{1,64}@[^\s@<>]{1,255})$/;
 
@@ -223,7 +221,8 @@ export const loadEnv = (env = process.env) => {
 		mongo: Object.freeze({ uri: mongoUri, dbName, maxPoolSize: MONGO_POOL_SIZE }),
 		logLevel,
 		maxBodyBytes: MAX_BODY_BYTES,
-		outbound: Object.freeze({ allowHosts: portalEnv === 'production' ? Object.freeze([]) : LOCAL_OUTBOUND_HOSTS }),
+		// outside production the Portal reaches products on this machine over plain http (`@ss/net` LOCAL_HOSTS)
+		outbound: Object.freeze({ allowHosts: portalEnv === 'production' ? Object.freeze([]) : LOCAL_HOSTS }),
 	});
 };
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { SDK_RANGE, checkInitOptions, fill, globalNameOf, initApp, insideWorkspace } from '../src/init.js';
+import { SDK_RANGE, checkInitOptions, devPortOf, fill, globalNameOf, initApp, insideWorkspace } from '../src/init.js';
 import { validateProject } from '../src/validate/index.js';
 import { exists } from '../src/fsutil.js';
 import { linkTestPackages, removeDir, runOwnTests, tempDir } from './helpers/util.js';
@@ -91,7 +91,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(manifest).toMatchObject({
 			id: 'order-notes',
 			name: 'Order Notes',
-			endpoints: { base: 'http://localhost:3000', dashboard: '/dashboard' },
+			endpoints: { base: 'http://localhost:3007', dashboard: '/dashboard' },
 			widgetScriptUrl: '/widget.js',
 			docsUrl: '/docs',
 			permissions: [{ key: 'notes.read', feature: 'notes' }],
@@ -108,6 +108,9 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(Object.keys(pkg.scripts).sort()).toEqual(
 			['build', 'check', 'dev', 'format', 'format:check', 'lint', 'start', 'test', 'typecheck', 'validate'].sort(),
 		);
+		// its own local port, beside the Portal (3000) and the six products (3001–3006)
+		expect(pkg.scripts.dev).toBe('ss app assets . && next dev --port 3007');
+		expect(pkg.scripts.start).toBe('next start --port 3007');
 		expect(pkg.dependencies).toMatchObject({ '@ss/app-kit': '^0.2.0', '@ss/ui': '^0.2.0' });
 		expect(pkg.devDependencies).toMatchObject({ '@ss/cli': '^0.2.0', '@ss/config': '^0.2.0' });
 
@@ -218,5 +221,8 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(fill('{{id}} {{unknown}}', { id: 's' })).toBe('s {{unknown}}');
 		expect(globalNameOf('chat')).toBe('SSChat');
 		expect(globalNameOf('order--notes')).toBe('SSOrderNotes');
+		expect(devPortOf('http://localhost:3011')).toBe('3011');
+		expect(devPortOf('https://notes.example.com')).toBe('3007');
+		expect(devPortOf('not a url')).toBe('3007');
 	});
 });

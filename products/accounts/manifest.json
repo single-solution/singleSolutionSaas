@@ -3,7 +3,7 @@
 	"name": "Accounts",
 	"version": "0.1.0",
 	"endpoints": {
-		"base": "http://localhost:3000",
+		"base": "http://localhost:3001",
 		"dashboard": "/dashboard"
 	},
 	"widgetScriptUrl": "/widget.js",

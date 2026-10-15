@@ -5,7 +5,7 @@
  * (a visitor widget, an admin widget with a ticket permission, one setting, widget texts and public docs).
  *
  * Template files and paths may contain `{{id}}`, `{{name}}`, `{{global}}` (the widget's browser global,
- * `SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`. `_gitignore` is written as `.gitignore`. Outside a pnpm workspace
+ * `SS<Product>`), `{{baseUrl}}`, `{{port}}` (the local development port, {@link devPortOf}) and `{{sdkVersion}}`. `_gitignore` is written as `.gitignore`. Outside a pnpm workspace
  * `templates/standalone` (the pnpm settings and `.nvmrc` a repository of its own needs) is added; inside one (e.g.
  * `products/` of the monorepo) the workspace's apply, and `@ss/*` dependencies are linked with `workspace:^` (outside,
  * they take the published range of this CLI's version). `openapi.json` and `server/widget-script.js` are then generated
@@ -27,7 +27,26 @@ const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.url));
 const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
 
 /** Where a new product's manifest says it lives until its deployment address is set. */
-const DEFAULT_BASE_URL = 'http://localhost:3000';
+const DEFAULT_BASE_URL = 'http://localhost:3007';
+/**
+ * Local development ports (each deployable its own, so all run at once): the Portal 3000, Accounts 3001,
+ * Notifications 3002, Chat 3003, Payments 3004, Ecommerce 3005, Growth 3006; a new product takes 3007 unless its
+ * base URL names another port.
+ */
+const DEFAULT_DEV_PORT = '3007';
+
+/**
+ * The port `next dev` and `next start` use: the base URL's own port, else {@link DEFAULT_DEV_PORT}.
+ * @param {string} baseUrl
+ * @returns {string}
+ */
+export const devPortOf = (baseUrl) => {
+	try {
+		return new URL(baseUrl).port || DEFAULT_DEV_PORT;
+	} catch {
+		return DEFAULT_DEV_PORT;
+	}
+};
 
 /** The `@ss/*` range of a product in a repository of its own: all `@ss/*` packages share one version, this CLI's. */
 export const SDK_RANGE = `^${pkg.version}`;
@@ -141,6 +160,7 @@ export const initApp = async ({ dir, id, name, baseUrl = DEFAULT_BASE_URL, sdkVe
 		name: name.trim(),
 		global: globalNameOf(id),
 		baseUrl,
+		port: devPortOf(baseUrl),
 		sdkVersion: sdkVersion ?? (own ? SDK_RANGE : 'workspace:^'),
 	};
 	/** @type {Map<string, string>} destination → source */

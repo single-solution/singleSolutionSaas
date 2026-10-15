@@ -10,7 +10,7 @@
  */
 import { BUILD_TEXT_MAX, checkSettingsSchema, createProblemFactory, validateManifest } from '@ss/contracts';
 import { formatDate, formatMoney } from '@ss/contracts/format';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
+import { allowHostsFor, createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { isObject } from '@ss/contracts/util';
 import { ACTIVITY_INDEXES, createActivity } from './activity.js';
@@ -66,7 +66,7 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./logger.js').Logger} [logger]
  * @property {string} [nodeEnv] default `process.env.NODE_ENV`
  * @property {import('@ss/net').OutboundPolicyOptions} [outbound] policy of calls to addresses merchants enter
- *   (`allowHosts` is ignored in production)
+ *   (`allowHostsFor`: this machine too under `next dev`; `allowHosts` is ignored in production)
  * @property {OutboundSend} [outboundSend] replaces `@ss/net` `safeFetch` for those calls (tests)
  * @property {Record<string, { status: number, title: string }>} [problemCodes] the product's own problem codes
  * @property {import('./kit-routes.js').ProductHooks} [hooks]
@@ -141,7 +141,9 @@ const KIT_PROBLEM_CODES = Object.freeze({
  * - `store`: `options.store`, else MongoDB on `config.mongodbUri` with the kit's pool and deadlines
  *   (`PRODUCT_DATABASE_OPTIONS`, so a database that cannot be reached answers 503 `database_unavailable`), else in
  *   memory (development only: a warning is logged). Only a healthy configuration (no `problems`) opens MongoDB.
- * - `policy`: the `@ss/net` outbound policy of `options.outbound` (`allowHosts` is ignored in production).
+ * - `policy`: the `@ss/net` outbound policy of `options.outbound`, its hosts by `allowHostsFor`: under `next dev`
+ *   this machine too (the other products and a local MongoDB on localhost), in production none (`allowHosts` is
+ *   ignored).
  * - `send`: `options.outboundSend`, else `safeFetch` on that policy.
  *
  * Pass `store` on to `createProduct` (with the same `outbound` and `outboundSend`), so the kit and the product share it.
@@ -157,9 +159,11 @@ export const createProductBase = (options) => {
 			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
 			: createMemoryStore({ now }));
 	if (!options.store && !uri) logger.warn('using the in-memory store: development only');
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
+	const policy = createOutboundPolicy({
+		...outboundRest,
+		allowHosts: allowHostsFor(options.nodeEnv ?? process.env.NODE_ENV, allowHosts),
+	});
 	/** @type {OutboundSend} */
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	return { store, policy, send };

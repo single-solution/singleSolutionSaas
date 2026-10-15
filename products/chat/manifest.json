@@ -3,7 +3,7 @@
 	"name": "Chat",
 	"version": "0.1.0",
 	"endpoints": {
-		"base": "http://localhost:3000",
+		"base": "http://localhost:3003",
 		"dashboard": "/dashboard"
 	},
 	"widgetScriptUrl": "/widget.js",

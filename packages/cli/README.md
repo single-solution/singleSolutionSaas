@@ -12,7 +12,8 @@ widget entry, bundled when a product has not installed it yet) and esbuild (the 
 
 `ss help` (or `--help`, `-h`, or no command) prints the usage; `ss --version` (or `-v`) prints the CLI's version.
 Exit codes: `0` ok, `1` failed validation or command error, `2` usage error. `--base-url` defaults to
-`http://localhost:3000` (the manifest's `endpoints.base` until the product has its address).
+`http://localhost:3007` (the manifest's `endpoints.base` until the product has its address); its port is the one
+`pnpm dev` and `pnpm start` use (3007 when it names none: the Portal has 3000 and the six products 3001–3006).
 
 ## The generated product
 

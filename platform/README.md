@@ -43,10 +43,16 @@ Indexes are applied on the first request after a deploy; there is nothing to sch
 ## Local development
 
 ```bash
-pnpm --filter @ss/platform db:memory      # terminal 1: in-memory MongoDB replica set on port 27999
+pnpm --filter @ss/platform db:local       # terminal 1: MongoDB replica set on port 27999, data kept in platform/.mongo-data
+                                          # (or db:memory: in memory, lost on stop)
 cd platform && node scripts/dev-env.js > .env.local  # MONGODB_URI, PORTAL_URL, ENCRYPTION_KEY
-pnpm dev                                  # http://localhost:4000, then open /login and create the first admin
+pnpm dev                                  # http://localhost:3000, then open /login and create the first admin
 ```
+
+Every deployable has its own port, so all run at once: the Portal 3000, Accounts 3001, Notifications 3002, Chat 3003,
+Payments 3004, Ecommerce 3005, Growth 3006 (each product's README has its own "Local development" part). The products
+use the same MongoDB with their own database names. Under `next dev` the products may call each other on `localhost`
+and use a local merchant database; in production none of that is ever allowed.
 
 `pnpm check` runs format, lint, typecheck and tests with coverage; `pnpm build` runs `next build`. System tests that run
 the products against this Portal live in `e2e/` and use `@ss/platform/testing`.

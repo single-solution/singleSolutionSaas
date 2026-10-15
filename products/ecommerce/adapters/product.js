@@ -13,7 +13,7 @@
  * @module
  */
 import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
+import { allowHostsFor, createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
@@ -197,7 +197,6 @@ const UNCONFIGURED_KEY = 'unconfigured-ecommerce-encryption-key-00000';
  */
 export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
 	const healthy = (options.problems ?? []).length === 0;
 	const uri = options.config?.mongodbUri ?? UNCONFIGURED;
 	// Ecommerce keeps its list settings in the product database too, so it owns the store; its client has the kit's
@@ -208,8 +207,11 @@ export const createProductInstance = (options) => {
 			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
 			: createMemoryStore({ now }));
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	// the same policy the kit uses for addresses merchants enter
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
+	// the same policy the kit uses for addresses merchants enter (this machine too under next dev, never in production)
+	const policy = createOutboundPolicy({
+		...outboundRest,
+		allowHosts: allowHostsFor(options.nodeEnv ?? process.env.NODE_ENV, allowHosts),
+	});
 	/** @type {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} */
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const couriers = createCouriers({ send });

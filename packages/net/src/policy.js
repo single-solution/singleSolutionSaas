@@ -11,6 +11,8 @@
  *
  * Allowlisted hosts (exact host names or IP literals — meant for development) may use `http:`, any port, and private
  * addresses. An allowlisted IP literal also admits that address when a non-allowlisted name resolves to it.
+ * `allowHostsFor(nodeEnv, asked)` is the one rule every deployable applies: under `next dev` (`NODE_ENV=development`)
+ * this machine (`LOCAL_HOSTS`: the other products, a local MongoDB) is allowed; in production nothing ever is.
  *
  * `safeFetch` follows at most 3 redirects, each to the same scheme, host and port; one call has 10 seconds and a 1 MiB
  * body unless the call sets its own `timeoutMs` and `maxBytes`.
@@ -39,6 +41,23 @@ import { classifyAddress } from './address.js';
  * @typedef {{ ok: true, url: URL, host: string, port: number, ip: boolean, allowlisted: boolean }
  *   | { ok: false, code: 'bad_url' | 'ssrf_blocked', reason: string }} UrlCheck
  */
+
+/** This machine's own names: what local development may reach over http and on loopback addresses. */
+export const LOCAL_HOSTS = Object.freeze(['localhost', '127.0.0.1', '::1']);
+
+/**
+ * The allowlist of an environment: none in production, whatever is asked (no development switch can reach a deployed
+ * product); this machine plus what is asked under `next dev` (`development`, so products call each other and a local
+ * MongoDB on localhost); only what is asked otherwise (tests).
+ * @param {string | undefined} nodeEnv `NODE_ENV`
+ * @param {ReadonlyArray<string>} [asked]
+ * @returns {string[]}
+ */
+export const allowHostsFor = (nodeEnv, asked = []) => {
+	if (nodeEnv === 'production') return [];
+	if (nodeEnv === 'development') return [...new Set([...LOCAL_HOSTS, ...asked])];
+	return [...asked];
+};
 
 /** Ports allowed for hosts not on the allowlist. */
 const PORTS = new Set([443, 8443]);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkHost, checkUrl, createOutboundPolicy } from '../src/index.js';
+import { LOCAL_HOSTS, allowHostsFor, checkHost, checkUrl, createOutboundPolicy } from '../src/index.js';
 import { isAllowlisted, normaliseHost, sameOrigin } from '../src/policy.js';
 
 const policy = createOutboundPolicy();
@@ -131,5 +131,24 @@ describe('checkUrl', () => {
 		expect(sameOrigin(new URL('https://a.example.com/'), new URL('http://a.example.com/'))).toBe(false);
 		expect(sameOrigin(new URL('https://a.example.com/'), new URL('https://a.example.com:8443/'))).toBe(false);
 		expect(normaliseHost(' [FE80::1] ')).toBe('fe80::1');
+	});
+});
+
+describe('allowHostsFor (local development)', () => {
+	it('lets `next dev` reach this machine, never production, and tests only what they ask', () => {
+		expect(LOCAL_HOSTS).toEqual(['localhost', '127.0.0.1', '::1']);
+		expect(allowHostsFor('development')).toEqual(['localhost', '127.0.0.1', '::1']);
+		expect(allowHostsFor('development', ['127.0.0.1', 'mongo.test'])).toEqual(['localhost', '127.0.0.1', '::1', 'mongo.test']);
+		// production refuses the machine's own addresses, even when asked
+		expect(allowHostsFor('production', ['127.0.0.1'])).toEqual([]);
+		expect(allowHostsFor('test', ['127.0.0.1'])).toEqual(['127.0.0.1']);
+		expect(allowHostsFor(undefined)).toEqual([]);
+		const production = createOutboundPolicy({ allowHosts: allowHostsFor('production', ['localhost']) });
+		expect(checkUrl('http://localhost:3001/v1/x', production)).toMatchObject({ ok: false });
+		const development = createOutboundPolicy({ allowHosts: allowHostsFor('development') });
+		expect(checkUrl('http://localhost:3001/v1/x', development)).toMatchObject({ ok: true, allowlisted: true });
+		expect(checkUrl('http://127.0.0.1:27999', development)).toMatchObject({ ok: true });
+		// any other private address stays refused under development
+		expect(checkUrl('http://10.0.0.5/', development)).toMatchObject({ ok: false });
 	});
 });

@@ -16,9 +16,9 @@
 	},
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
-		"dev": "ss app assets . && next dev --port 3000",
+		"dev": "ss app assets . && next dev --port 3001",
 		"build": "ss app assets . && next build",
-		"start": "next start --port 3000",
+		"start": "next start --port 3001",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
 		"test": "vitest run --coverage",
 		"lint": "eslint .",

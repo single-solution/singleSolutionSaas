@@ -4,7 +4,7 @@
  * signing, the structured logger with redaction and the static security headers. See README.md.
  */
 export { isNetError, netError } from './errors.js';
-export { checkHost, checkUrl, createOutboundPolicy } from './policy.js';
+export { LOCAL_HOSTS, allowHostsFor, checkHost, checkUrl, createOutboundPolicy } from './policy.js';
 export { guardedLookup, resolveVetted } from './lookup.js';
 export { jsonOf, safeFetch, textOf } from './fetch.js';
 export { isSafeMongoUri, mongoDatabaseName } from './mongo.js';

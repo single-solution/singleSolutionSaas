@@ -7,3 +7,4 @@ coverage/
 next-env.d.ts
 *.tsbuildinfo
 .DS_Store
+.mongo-data/

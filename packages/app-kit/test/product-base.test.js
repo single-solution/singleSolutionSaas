@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { KIT_IMPORT_ROUTES, KIT_ROUTES } from '../src/api.js';
 import { createImports } from '../src/imports.js';
+import { checkUrl, isSafeMongoUri } from '@ss/net';
 import { activityFilter, createProductBase, verifyIdentityToken } from '../src/index.js';
 import { createKitRoutes } from '../src/kit-routes.js';
 import { createServerApi } from '../src/server-api.js';
@@ -36,6 +37,18 @@ describe('the start-up pieces a product shares with the kit', () => {
 		await expect(createProductBase({ nodeEnv: 'production' }).send('http://127.0.0.1/x')).rejects.toMatchObject({
 			code: 'ssrf_blocked',
 		});
+	});
+
+	it('under next dev reaches this machine (the other products, a local MongoDB); production still refuses', () => {
+		const development = createProductBase({ nodeEnv: 'development' }).policy;
+		expect([...development.allowHosts]).toEqual(['localhost', '127.0.0.1', '::1']);
+		expect(isSafeMongoUri('mongodb://127.0.0.1:27999/shop_1?replicaSet=testset', development)).toMatchObject({ ok: true });
+		expect(checkUrl('http://localhost:3002/v1/send', development)).toMatchObject({ ok: true });
+		const production = createProductBase({ nodeEnv: 'production', outbound: { allowHosts: ['127.0.0.1'] } }).policy;
+		expect(isSafeMongoUri('mongodb://127.0.0.1:27999/shop_1?replicaSet=testset', production)).toMatchObject({
+			ok: false,
+		});
+		expect(checkUrl('http://localhost:3002/v1/send', production)).toMatchObject({ ok: false });
 	});
 });
 

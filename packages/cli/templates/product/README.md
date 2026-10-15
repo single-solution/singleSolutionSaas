@@ -55,6 +55,14 @@ Three variables (`.env.example`): `MONGODB_URI` (this product's own database), `
 key, removed after the Owner's Re-seal on the dashboard). `ss app init` wrote development values to `.env.local`
 (git-ignored). Then connect the product in the Portal: Products → Add product, with its address and `CONNECT_SECRET`.
 
+## Local development
+
+`pnpm dev` runs the product on http://localhost:{{port}} (the Portal uses 3000 and the six products 3001–3006, so
+all run at once). Use the local MongoDB of the Portal (`pnpm --filter @ss/platform db:local`, port 27999) with a
+database of the product's own in `MONGODB_URI`, then add `http://localhost:{{port}}` in the local Portal's Products.
+Under `next dev` (`NODE_ENV=development`) the product may call `localhost` and `127.0.0.1` and use a MongoDB there; in
+production it never does.
+
 ## Scripts
 
 `pnpm dev` / `pnpm build` (both regenerate `openapi.json` and `server/widget-script.js` first) / `pnpm start`,
