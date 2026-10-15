@@ -7,6 +7,9 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { AI_KEY, ORIGIN, ready } from './helpers.js';
 
+/** Monday to Friday (ISO weekday numbers). */
+const WEEKDAYS = [1, 2, 3, 4, 5];
+
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
 afterAll(async () => {
@@ -300,7 +303,10 @@ describe('Format and business time zone (K7, K8)', () => {
 		expect(admin.json).toMatchObject({ format: { locale: 'en-GB' }, timeZone: 'Asia/Tokyo' });
 
 		// office hours in Tokyo: 09:00–10:00 on weekdays; it is Monday 19:00 there
-		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
+		await sys.list(
+			'office_hours',
+			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
+		);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const asked = await v('POST', '/v1/chat/handoff');

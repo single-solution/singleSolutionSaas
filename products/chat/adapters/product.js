@@ -192,6 +192,11 @@ const LIST_WORDS = {
 	fallback_answers: (answers) => countedList('answer', 'answers', answers),
 	redaction_patterns: (patterns) => namedList('pattern', 'patterns', patterns, (pattern) => pattern.name),
 	teams: (teams) => namedList('team', 'teams', teams, (team) => team.name),
+	office_hours: (windows) =>
+		windows.length === 0
+			? 'Always open (no weekly hours).'
+			: `${counted(windows.length, 'window', 'windows')} a week, on ${counted(new Set(windows.map((w) => w.day)).size, 'day', 'days')}.`,
+	office_exceptions: (dates) => namedList('date', 'dates', dates, (entry) => entry.date),
 };
 
 /**

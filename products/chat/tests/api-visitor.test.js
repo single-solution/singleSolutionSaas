@@ -6,6 +6,9 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { ACCOUNTS, AI_KEY, ORIGIN, ready } from './helpers.js';
 
+/** Monday to Friday (ISO weekday numbers). */
+const WEEKDAYS = [1, 2, 3, 4, 5];
+
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
 const systems = [];
 afterAll(async () => {
@@ -215,7 +218,10 @@ describe('handoff, office hours and failures', () => {
 
 	it('outside office hours the visitor is told when staff are back', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff']);
-		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
+		await sys.list(
+			'office_hours',
+			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
+		);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'hi' });
 		const asked = await v('POST', '/v1/chat/handoff');
@@ -225,18 +231,49 @@ describe('handoff, office hours and failures', () => {
 		expect(state.json.messages[1].text).toBe('Our team is away right now. They are back Oct 6, 2026, 9:00 AM.');
 	});
 
+	it('a dated exception (a holiday) moves when staff are back; the lists are in the server API too (C9)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff']);
+		// never saved: no hours, no exceptions (always open)
+		expect((await sys.serverCall('GET', '/v1/lists/office_hours')).json).toEqual({ value: [] });
+		await sys.list(
+			'office_hours',
+			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
+		);
+		const saved = await sys.serverCall('PUT', '/v1/lists/office_exceptions', {
+			value: [{ date: '2026-10-06', name: 'Holiday', hours: [] }],
+		});
+		expect(saved.status).toBe(200);
+		expect(
+			(await sys.serverCall('PUT', '/v1/lists/office_hours', { value: [{ day: 'mon', start: '09:00', end: '10:00' }] }))
+				.status,
+		).toBe(422);
+		const v = sys.visitor();
+		await v('POST', '/v1/chat/messages', { text: 'hi' });
+		const asked = await v('POST', '/v1/chat/handoff');
+		expect(asked.json.chat.conversation.officeHours).toEqual({ open: false, backAt: '2026-10-07T09:00:00.000Z' });
+	});
+
 	it('outside office hours a guest who left no contact is offered the lead form, not only after a handoff', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'leads_flows']);
-		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
+		await sys.list(
+			'office_hours',
+			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
+		);
 		const v = sys.visitor();
 		const sent = await v('POST', '/v1/chat/messages', { text: 'hi' });
 		expect(sent.json.chat).toMatchObject({ leadOffered: true, conversation: { waiting: false } });
 		// a guest key without a conversation yet is offered it too
 		expect((await sys.visitor({ guestKey: 'k'.repeat(20) })('GET', '/v1/chat')).json.leadOffered).toBe(true);
 		// while staff are in, no
-		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-17:00']);
+		await sys.list(
+			'office_hours',
+			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '17:00' })),
+		);
 		expect((await v('GET', '/v1/chat')).json.leadOffered).toBe(false);
-		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
+		await sys.list(
+			'office_hours',
+			WEEKDAYS.map((day) => ({ day, start: '09:00', end: '10:00' })),
+		);
 		// once the guest left an email or phone, no
 		expect((await v('POST', '/v1/chat/leads', { fields: { name: 'Ann', email: 'ann@example.com' } })).status).toBe(201);
 		expect((await v('GET', '/v1/chat')).json.leadOffered).toBe(false);

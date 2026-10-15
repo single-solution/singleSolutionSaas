@@ -37,7 +37,7 @@ import {
 	visitorMessageView,
 } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
-import { officeState, parseOfficeHours } from '../core/handoff.js';
+import { officeState } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
 import { plainOf } from '../core/markdown.js';
 import { compileRedactionPatterns } from '../core/moderation.js';
@@ -447,9 +447,9 @@ export const createService = (product) => {
 	 */
 	const officeHours = async (s) => {
 		if (!s.on.includes('handoff')) return null;
-		const { officeHours: lines } = await s.values('handoff');
+		const hours = { weekly: await s.list('office_hours'), exceptions: await s.list('office_exceptions') };
 		const { timeZone } = await s.business();
-		const state = officeState(parseOfficeHours(lines), now(), timeZone);
+		const state = officeState(hours, now(), timeZone);
 		return {
 			open: state.open,
 			backAt: state.backAt === null ? null : iso(new Date(state.backAt)),

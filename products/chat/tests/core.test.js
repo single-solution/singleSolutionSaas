@@ -8,7 +8,7 @@ import { alertCrossed, capReached, windowKeys } from '../core/caps.js';
 import { alertRoutes, deviceOf, limitNext, messageText, pageContext, statusAfter, transcriptText } from '../core/conversation.js';
 import { checkCustomFields, checkFieldValue, checkLead, checkPageRules } from '../core/fields.js';
 import { advance, answerStep, checkFlows, waitingView } from '../core/flows.js';
-import { handoffReason, officeState, parseOfficeHours } from '../core/handoff.js';
+import { handoffReason } from '../core/handoff.js';
 import { checkEntry, chunkText, htmlToText } from '../core/knowledge.js';
 import { detectLanguage, isLanguageNeutral, replyMatchesLanguage } from '../core/language.js';
 import { checkAiConnection } from '../core/models.js';
@@ -27,7 +27,7 @@ import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
 import { reportRange, summarise } from '../core/reports.js';
 import { cardsOf, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
 import { truncate } from '../core/text.js';
-import { dayKey, dayStart, isOpenAt, monthKey, nextOpenAt, zoneOr } from '../core/time.js';
+import { dayKey, dayStart, monthKey, zoneOr } from '../core/time.js';
 import { checkArguments, checkTools, slotRange, toolOutput } from '../core/tools.js';
 import { endpointOf } from '../adapters/ai.js';
 
@@ -350,16 +350,10 @@ describe('conversations, flows and fields', () => {
 });
 
 describe('handoff, time, caps and reports', () => {
-	it('handoff reasons, office hours and their next opening', () => {
+	it('handoff reasons and time zones (office hours: core-hours.test.js)', () => {
 		expect(handoffReason('connect me to an agent', { askPhrases: ['agent'], keywords: [] })).toBe('asked');
 		expect(handoffReason('refund please', { askPhrases: [], keywords: ['refund'] })).toBe('keyword');
 		expect(handoffReason('hello', { askPhrases: [], keywords: [] })).toBeNull();
-		const windows = parseOfficeHours(['sat-mon 22:00-02:00', 'bad line', 'xyz 09:00-10:00']);
-		expect(windows).toEqual([{ days: ['sat', 'sun', 'mon'], start: '22:00', end: '02:00' }]);
-		const sundayLate = Date.parse('2026-10-04T23:00:00Z');
-		expect(officeState(windows, sundayLate, 'UTC')).toEqual({ open: true, backAt: null });
-		expect(isOpenAt(windows, Date.parse('2026-10-05T01:00:00Z'), 'UTC')).toBe(true);
-		expect(nextOpenAt([{ days: [], start: '09:00', end: '10:00' }], 0, 'UTC')).toBeNull();
 		expect(zoneOr('Not/AZone', 'Also/Bad')).toBe('UTC');
 		expect(new Date(dayStart('2026-07-01', 'America/New_York')).toISOString()).toBe('2026-07-01T04:00:00.000Z');
 	});

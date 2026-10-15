@@ -13,6 +13,8 @@ import {
 	CustomFieldsEditor,
 	FallbackAnswersEditor,
 	FlowsEditor,
+	OfficeExceptionsEditor,
+	OfficeHoursEditor,
 	PageRulesEditor,
 	RedactionPatternsEditor,
 	TeamsEditor,
@@ -156,7 +158,12 @@ export function SettingsTab({ websiteId: id }) {
 					customFields: seen('custom_fields') ? (
 						<CustomFieldsEditor websiteId={websiteId} off={off('custom_fields')} />
 					) : null,
-					handoff: null,
+					handoff: seen('handoff') ? (
+						<>
+							<OfficeHoursEditor websiteId={websiteId} off={off('handoff')} />
+							<OfficeExceptionsEditor websiteId={websiteId} off={off('handoff')} />
+						</>
+					) : null,
 					inbox: seen('assignment') ? <TeamsEditor websiteId={websiteId} off={off('assignment')} /> : null,
 					attachments: null,
 					ratings: null,

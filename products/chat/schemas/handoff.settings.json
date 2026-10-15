@@ -30,16 +30,6 @@
 			"maximum": 10,
 			"description": "0 = never."
 		},
-		"officeHours": {
-			"type": "array",
-			"title": "Office hours",
-			"default": [],
-			"items": {
-				"type": "string",
-				"maxLength": 40
-			},
-			"description": "One line per window in the time zone of business.json, for example `mon-fri 09:00-17:00`. Empty = always open."
-		},
 		"answerFirst": {
 			"type": "boolean",
 			"title": "The AI answers the message that asked for a person",

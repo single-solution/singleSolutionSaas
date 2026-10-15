@@ -1,7 +1,7 @@
 'use client';
 /**
- * Settings list editors (PLAN 0.8.3): webhook tools, page rules, flows, custom fields and fallback answers (PLAN 0.8.10
- * C3), each saved whole with the kit's `PUT /v1/dashboard/websites/:websiteId/lists/:list { value }` (a 422 lists its
+ * Settings list editors (PLAN 0.8.3): webhook tools, page rules, flows, custom fields, fallback answers (PLAN 0.8.10
+ * C3), teams, redaction patterns, and office hours with their holidays and special hours (C9), each saved whole with the kit's `PUT /v1/dashboard/websites/:websiteId/lists/:list { value }` (a 422 lists its
  * `errors`), and the tool signing secret (Chat's own route: reveal, copy, regenerate). The fallback answers
  * editor checks each answer with the server's own rules before it saves.
  * @module
@@ -771,6 +771,129 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 						{offTools.length > 0 ? (
 							<Callout tone="warning">{fill(A.needsOff, { features: offTools.join(', ') })}</Callout>
 						) : null}
+					</>
+				);
+			}}
+		/>
+	);
+}
+
+const H = L.officeHours;
+const X = L.officeExceptions;
+
+/** Weekday names in the dashboard's language from `Intl` (1 = Monday … 7 = Sunday; 2024-01-01 was a Monday). */
+const WEEKDAY_NAMES = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' });
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7].map((day) => ({
+	value: String(day),
+	label: WEEKDAY_NAMES.format(new Date(Date.UTC(2024, 0, day))),
+}));
+
+/**
+ * Opening and closing time inputs (`HH:MM`; 24:00 typed as text is kept).
+ * @param {{ range: Item, set: (patch: Item) => void }} props
+ */
+function TimeRange({ range, set }) {
+	return (
+		<>
+			<Input label={H.start} type="time" value={range.start} onChange={(event) => set({ start: event.target.value })} />
+			<Input
+				label={H.end}
+				value={range.end}
+				inputMode="numeric"
+				placeholder="17:00"
+				maxLength={5}
+				onChange={(event) => set({ end: event.target.value })}
+			/>
+		</>
+	);
+}
+
+/** @param {EditorProps} props */
+export function OfficeHoursEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="office_hours"
+			title={H.title}
+			help={H.help}
+			itemLabel={H.item}
+			max={50}
+			off={off}
+			blank={() => ({ day: 1, start: '09:00', end: '17:00' })}
+			clean={(slot) => ({ day: Number(slot.day), start: String(slot.start).trim(), end: String(slot.end).trim() })}
+			render={(slot, set) => (
+				<FieldGrid>
+					<Select
+						label={H.day}
+						value={String(slot.day)}
+						options={WEEKDAYS}
+						onChange={(event) => set({ day: Number(event.target.value) })}
+					/>
+					<TimeRange range={slot} set={set} />
+				</FieldGrid>
+			)}
+		/>
+	);
+}
+
+/** @param {EditorProps} props */
+export function OfficeExceptionsEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="office_exceptions"
+			title={X.title}
+			help={X.help}
+			itemLabel={X.item}
+			max={200}
+			off={off}
+			blank={() => ({ date: '', name: '', hours: [] })}
+			clean={(entry) => ({
+				date: String(entry.date).trim(),
+				name: String(entry.name ?? '').trim(),
+				hours: (entry.hours ?? []).map((/** @type {Item} */ range) => ({
+					start: String(range.start).trim(),
+					end: String(range.end).trim(),
+				})),
+			})}
+			render={(entry, set) => {
+				/** @type {Item[]} */
+				const hours = entry.hours ?? [];
+				return (
+					<>
+						<FieldGrid>
+							<Input
+								label={X.date}
+								type="date"
+								value={entry.date}
+								onChange={(event) => set({ date: event.target.value })}
+							/>
+							<Input
+								label={X.name}
+								value={entry.name}
+								maxLength={80}
+								onChange={(event) => set({ name: event.target.value })}
+							/>
+						</FieldGrid>
+						{hours.length === 0 ? <p className="text-sm text-muted">{X.closed}</p> : null}
+						{hours.map((range, index) => (
+							<FieldGrid key={index}>
+								<TimeRange
+									range={range}
+									set={(patch) => set({ hours: hours.map((each, at) => (at === index ? { ...each, ...patch } : each)) })}
+								/>
+								<Button size="sm" variant="ghost" onClick={() => set({ hours: hours.filter((_, at) => at !== index) })}>
+									{X.removeWindow}
+								</Button>
+							</FieldGrid>
+						))}
+						<Button
+							size="sm"
+							variant="ghost"
+							disabled={hours.length >= 6}
+							onClick={() => set({ hours: [...hours, { start: '09:00', end: '17:00' }] })}>
+							{X.addWindow}
+						</Button>
 					</>
 				);
 			}}
