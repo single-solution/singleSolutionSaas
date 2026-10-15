@@ -572,7 +572,7 @@ export const TEXTS = Object.freeze({
 			stages: Object.freeze({ packed: 'Packed', shipped: 'Shipped (and delivered)', never: 'Never: they may be left out' }),
 			unitFields: 'Unit fields',
 			unitFieldsHelp:
-				'Ids of unit fields (att_…, Catalog admin → Fields, on units), in order: at most 3, one of them with two values. None: a plain serial number.',
+				'Ids of unit fields (att_…, Catalog admin → Fields, on units), in order: at most {max}; each takes the number of values you give it. None: a plain serial number.',
 			plainSerials: 'A plain serial number',
 			fields: 'Fields',
 			fieldsNamed: 'Only the fields named here',

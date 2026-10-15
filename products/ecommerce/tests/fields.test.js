@@ -7,7 +7,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkAttribute } from '../core/catalog-taxonomy.js';
 import {
+	CHECK_DIGITS,
 	FIELD_LIMITS,
+	checkFormat,
 	checkShow,
 	checkUnit,
 	sharedKeys,
@@ -20,6 +22,9 @@ import {
 import { ALL, readyShop } from './helpers.js';
 
 /** @typedef {import('../core/fields.js').ValueRules} ValueRules */
+
+/** A format that lets anything through but its check digit. */
+const PLAIN = { chars: 'any', minLength: 1, maxLength: 200, startsWith: [], mask: '', ignoreSpaces: true, upperCase: true };
 
 /** @param {unknown} body */
 const paths = (body) => {
@@ -81,7 +86,10 @@ describe('field definitions', () => {
 			requiredAt: null,
 			show: { shopper: true, invoice: true, packingSlip: true, page: false, chat: false },
 		});
-		expect(paths({ name: 'A', on: 'unit', multiple: true, maxValues: 3 })).toEqual(['/maxValues']);
+		// the merchant sets how many values a unit field takes, up to the system's cap (E21)
+		expect(paths({ name: 'A', on: 'unit', multiple: true, maxValues: 3 })).toEqual([]);
+		expect(paths({ name: 'A', on: 'unit', multiple: true, maxValues: FIELD_LIMITS.unitValues })).toEqual([]);
+		expect(paths({ name: 'A', on: 'unit', multiple: true, maxValues: FIELD_LIMITS.unitValues + 1 })).toEqual(['/maxValues']);
 		expect(
 			field({ name: 'Gift note', on: 'order', required: true, requiredAt: 'checkout', show: { shopper: true } }),
 		).toMatchObject({
@@ -223,7 +231,29 @@ describe('field scope', () => {
 		expect(paths({ name: 'IMEI', on: 'unit', categoryIds: ['cat_phones'] })).toEqual(['/categoryIds']);
 		expect(paths({ name: 'IMEI', on: 'unit', categoryId: 'cat_phones' })).toEqual(['/categoryIds']);
 		expect(paths({ name: 'IMEI', on: 'unit' })).toEqual([]);
-		expect(FIELD_LIMITS.unitFields).toBe(3);
+		expect(FIELD_LIMITS.unitFields).toBe(10);
+		expect(FIELD_LIMITS.unitValues).toBe(10);
+	});
+
+	it('checks GTIN, ISBN and VIN check digits, or the pattern only (E21)', () => {
+		/** @param {string} value @param {string} checkDigit @param {Record<string, unknown>} [over] */
+		const check = (value, checkDigit, over = {}) =>
+			checkFormat(value, /** @type {any} */ ({ ...PLAIN, checkDigit, ...over })).ok;
+		expect(check('4006381333931', 'gtin')).toBe(true);
+		expect(check('4006381333932', 'gtin')).toBe(false);
+		expect(check('012345678905', 'gtin')).toBe(true);
+		expect(check('9780306406157', 'isbn')).toBe(true);
+		expect(check('9780306406158', 'isbn')).toBe(false);
+		expect(check('0306406152', 'isbn')).toBe(true);
+		expect(check('080442957X', 'isbn')).toBe(true);
+		expect(check('0306406153', 'isbn')).toBe(false);
+		expect(check('1M8GDM9AXKP042788', 'vin')).toBe(true);
+		expect(check('1M8GDM9A1KP042788', 'vin')).toBe(false);
+		expect(check('1M8GDM9AXKP04278', 'vin')).toBe(false);
+		expect(check('anything', 'none')).toBe(true);
+		expect(CHECK_DIGITS).toEqual(['none', 'luhn', 'gtin', 'isbn', 'vin']);
+		expect(paths({ name: 'Barcode', format: { chars: 'letters', checkDigit: 'gtin' } })).toEqual(['/format/checkDigit']);
+		expect(paths({ name: 'Book', format: { chars: 'letters_digits', checkDigit: 'isbn' } })).toEqual([]);
 	});
 });
 
@@ -483,7 +513,7 @@ describe('fields through the API', () => {
 
 	it('limits unit fields per item type and refuses changes records cannot take', async () => {
 		const units = [];
-		for (const name of ['Serial', 'Service tag', 'Model code', 'Fourth'])
+		for (const name of ['Serial', 'Service tag', 'Model code', ...Array.from({ length: 8 }, (_, n) => `Code ${n + 4}`)])
 			units.push((await api('POST', '/v1/attributes', { name, on: 'unit' })).id);
 		// a unit field applies through the item types that name it, never by category
 		const scoped = await shop.api('POST', '/v1/attributes', { name: 'Case code', on: 'unit', categoryIds: [ids.cases.id] });
@@ -491,6 +521,7 @@ describe('fields through the API', () => {
 		expect(scoped.json.errors[0].path).toBe('/categoryIds');
 		/** @param {string[]} fieldIds */
 		const typeWith = (fieldIds) => ({ key: 'tool', name: 'Tool', elements: { units: { fieldIds } } });
+		// at most FIELD_LIMITS.unitFields (10) per item type
 		const four = await shop.dashboard(
 			await shop.adminSession(),
 			'PUT',

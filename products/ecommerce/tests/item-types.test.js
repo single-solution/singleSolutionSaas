@@ -95,7 +95,13 @@ describe('the item types list', () => {
 			'/value/0/elements/chart',
 		]);
 		expect(
-			problems([{ key: 'a', name: 'A', elements: { units: { fieldIds: ['x', 'y', 'z', 'w'], capture: 'later' } } }]),
+			problems([
+				{
+					key: 'a',
+					name: 'A',
+					elements: { units: { fieldIds: Array.from({ length: 11 }, (_, n) => `att_${n}`), capture: 'later' } },
+				},
+			]),
 		).toEqual(['/value/0/elements/units/fieldIds', '/value/0/elements/units/capture']);
 		expect(problems([{ key: 'a', name: 'A', elements: { units: { capture: 'stock', requiredBefore: 'shipped' } } }])).toEqual([
 			'/value/0/elements/units/requiredBefore',
@@ -180,16 +186,16 @@ describe('the type of a product', () => {
 
 describe('saving the item types list', () => {
 	const fields = new Map([
-		['att_battery', { on: 'product', multiple: false }],
-		['att_color', { on: 'variant', multiple: false }],
-		['att_imei', { on: 'unit', multiple: true }],
-		['att_esn', { on: 'unit', multiple: true }],
-		['att_note', { on: 'order', multiple: false }],
+		['att_battery', { on: 'product' }],
+		['att_color', { on: 'variant' }],
+		['att_imei', { on: 'unit' }],
+		['att_esn', { on: 'unit' }],
+		['att_note', { on: 'order' }],
 	]);
 	const none = { fields, named: new Set(), stocked: new Set() };
 	const [phone] = types([PHONE]);
 
-	it('refuses fields of the wrong kind and two unit fields with two values', () => {
+	it('refuses fields of the wrong kind, and takes several unit fields with several values (E21)', () => {
 		expect(typeChangeProblems([], [phone], none)).toEqual([]);
 		const wrong = types([
 			{
@@ -202,8 +208,13 @@ describe('saving the item types list', () => {
 			'/value/0/fieldIds/1',
 			'/value/0/fieldIds/2',
 			'/value/0/elements/units/fieldIds/2',
-			'/value/0/elements/units/fieldIds',
 		]);
+		const many = types([{ ...PHONE, elements: { units: { fieldIds: ['att_imei', 'att_esn'] } } }]);
+		expect(typeChangeProblems([], many, none)).toEqual([]);
+		const tooMany = checkItemTypes([
+			{ ...PHONE, elements: { units: { fieldIds: Array.from({ length: 11 }, (_, i) => `att_u${i}`) } } },
+		]);
+		expect(tooMany.ok).toBe(false);
 	});
 
 	it('keeps a used type and its kind, and the units of a type with units in stock', () => {

@@ -6,7 +6,7 @@
  * of items counted in pieces (`quantity`, E4), a package (weight and size), per-item return and warranty times, downloads, license keys and booked time slots. Merchants keep
  * their types as the `item_types` list (feature `catalog`, at most 50); a type may also name the product and variant
  * fields its items take (at most 40; none named: every field their categories take) and names its units' fields (at
- * most 3, one of them with two values).
+ * most {@link FIELD_LIMITS.unitFields}, each with the number of values the merchant gives it).
  *
  * A product's type is its own (`typeKey`), else its first category's (a category without one takes its parent's), else
  * the **built-in type** of its kind. A type of another kind never applies: the product keeps its kind. Built-in types
@@ -406,13 +406,13 @@ export const typeTakes = (type, fieldId) => type.fieldIds === null || type.field
 
 /**
  * What saving a merchant's types would break (the guard of the `item_types` list): a field id that is not a product or
- * variant field (`fieldIds`) or not a unit field (`units.fieldIds`), two unit fields of one type with two values, a type
+ * variant field (`fieldIds`) or not a unit field (`units.fieldIds`), a type
  * products or categories name being removed or given another kind, the units of a type whose items have units in
  * stock being switched off or given other fields, and the measure of a type whose items have stock given another unit
  * (or added or removed: their stock would be read in other units).
  * @param {ReadonlyArray<ItemType>} saved the list before
  * @param {ReadonlyArray<ItemType>} next the list checked by {@link checkItemTypes}
- * @param {{ fields: ReadonlyMap<string, { on: string, multiple: boolean }>, named: ReadonlySet<string>,
+ * @param {{ fields: ReadonlyMap<string, { on: string }>, named: ReadonlySet<string>,
  *   stocked: ReadonlySet<string>, withStock?: ReadonlySet<string> }} data the shop's fields by id, the type keys products
  *   and categories name, the keys of types whose items have units in stock, and those whose items have any stock
  * @returns {TypeProblem[]}
@@ -432,11 +432,6 @@ export const typeChangeProblems = (saved, next, { fields, named, stocked, withSt
 			if (fields.get(id)?.on !== 'unit')
 				problems.push({ path: `${path}/elements/units/fieldIds/${at}`, message: `${type.name}: ${id} is not a unit field.` });
 		});
-		if ((units?.fieldIds ?? []).filter((id) => fields.get(id)?.multiple === true).length > 1)
-			problems.push({
-				path: `${path}/elements/units/fieldIds`,
-				message: `${type.name}: at most one unit field takes two values.`,
-			});
 		const before = saved.find((entry) => entry.key === type.key);
 		if (!before) return;
 		if (before.kind !== type.kind && named.has(type.key))

@@ -16,6 +16,7 @@
  */
 import { useState } from 'react';
 import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Select } from '@ss/ui';
+import { FIELD_LIMITS } from '../../core/fields.js';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
 import { MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
 import { fill } from './api.js';
@@ -254,9 +255,9 @@ function TypeFields({ draft, set, problems, tried }) {
 							/>
 							<IdTags
 								label={T.unitFields}
-								help={T.unitFieldsHelp}
+								help={fill(T.unitFieldsHelp, { max: FIELD_LIMITS.unitFields })}
 								values={draft.units.fieldIds}
-								max={3}
+								max={FIELD_LIMITS.unitFields}
 								none={T.plainSerials}
 								onChange={(fieldIds) => set({ units: { ...draft.units, fieldIds } })}
 							/>

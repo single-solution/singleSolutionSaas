@@ -348,7 +348,7 @@ export const documentFieldsOf = async (data, orders) => {
 
 /**
  * What saving the item types list must keep (`core/item-types.js` `typeChangeProblems`): the shop's fields by id (where
- * their values live, whether they take two values), the type keys its products and categories name, the keys of the
+ * their values live), the type keys its products and categories name, the keys of the
  * types (as saved) whose items have units in stock and, when the save changes how a type's items are measured, the
  * keys of the types whose items have any stock.
  * @param {WebsiteData} data
@@ -365,7 +365,7 @@ export const typeUses = async (data, saved, next = saved) => {
 	const [fields, productKeys, categoryKeys, categories, stockedIds, withStock] = await Promise.all([
 		data
 			.collection(COLLECTIONS.attributes)
-			.find({ websiteId }, { projection: { _id: 0, id: 1, on: 1, multiple: 1 } })
+			.find({ websiteId }, { projection: { _id: 0, id: 1, on: 1 } })
 			.toArray(),
 		data.collection(COLLECTIONS.products).distinct('typeKey', named),
 		data.collection(COLLECTIONS.categories).distinct('typeKey', named),
@@ -408,7 +408,7 @@ export const typeUses = async (data, saved, next = saved) => {
 			),
 		);
 	return {
-		fields: new Map(fields.map((row) => [String(row.id), { on: String(row.on), multiple: row.multiple === true }])),
+		fields: new Map(fields.map((row) => [String(row.id), { on: String(row.on) }])),
 		named: new Set([...productKeys, ...categoryKeys].map(String)),
 		stocked: keysOf(stocked),
 		withStock: keysOf(withStock),

@@ -495,8 +495,8 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	};
 
 	/**
-	 * Refuse a field more than a shop takes ({@link FIELD_LIMITS.fields}; an item type names at most 3 unit fields, one
-	 * of them with two values: `core/item-types.js`).
+	 * Refuse a field more than a shop takes ({@link FIELD_LIMITS.fields}; an item type names at most
+	 * {@link FIELD_LIMITS.unitFields} unit fields: `core/item-types.js`).
 	 * @param {WebsiteData} data @param {AttributeRecord} next the field as it would be saved
 	 */
 	const checkFieldLimits = async (data, next) => {

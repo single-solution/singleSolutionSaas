@@ -407,7 +407,7 @@
 			},
 			"post": {
 				"summary": "Create a field (Catalog admin widget)",
-				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug, or the shop already has 200 fields. Send an Idempotency-Key so a retried request makes one field. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or an eleventh unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug, or the shop already has 200 fields. Send an Idempotency-Key so a retried request makes one field. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -548,7 +548,7 @@
 										"type": "integer",
 										"minimum": 2,
 										"maximum": 20,
-										"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
+										"description": "With multiple: 2 to 20 (a unit field 2 to 10, for a unit that carries several numbers); default the most (a unit field 2)."
 									},
 									"format": {
 										"type": [
@@ -598,9 +598,12 @@
 												"type": "string",
 												"enum": [
 													"none",
-													"luhn"
+													"luhn",
+													"gtin",
+													"isbn",
+													"vin"
 												],
-												"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+												"description": "none: the pattern only; luhn: the last digit is the Luhn check digit; gtin: a GTIN-8/12/13/14 with its GS1 mod-10 check digit (both need chars digits); isbn: an ISBN-10 (last X for 10) or ISBN-13; vin: a 17-character vehicle identification number with its check digit in the ninth place."
 											},
 											"ignoreSpaces": {
 												"type": "boolean",
@@ -883,7 +886,7 @@
 			},
 			"patch": {
 				"summary": "Change a field (Catalog admin widget)",
-				"description": "Only the members sent change. 409 conflict when records hold values of it (products and variants, units, orders or customers, as its values live) and the change is to its type, where its values live (on) or to fewer values; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"description": "Only the members sent change. 409 conflict when records hold values of it (products and variants, units, orders or customers, as its values live) and the change is to its type, where its values live (on) or to fewer values; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or an eleventh unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "catalog",
 				"x-ss-permission": "catalog.edit",
@@ -12588,7 +12591,7 @@
 			},
 			"post": {
 				"summary": "Create a field",
-				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug, or the shop already has 200 fields. Send an Idempotency-Key so a retried request makes one field. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"description": "422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or an eleventh unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug, or the shop already has 200 fields. Send an Idempotency-Key so a retried request makes one field. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -12740,7 +12743,7 @@
 										"type": "integer",
 										"minimum": 2,
 										"maximum": 20,
-										"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
+										"description": "With multiple: 2 to 20 (a unit field 2 to 10, for a unit that carries several numbers); default the most (a unit field 2)."
 									},
 									"format": {
 										"type": [
@@ -12790,9 +12793,12 @@
 												"type": "string",
 												"enum": [
 													"none",
-													"luhn"
+													"luhn",
+													"gtin",
+													"isbn",
+													"vin"
 												],
-												"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+												"description": "none: the pattern only; luhn: the last digit is the Luhn check digit; gtin: a GTIN-8/12/13/14 with its GS1 mod-10 check digit (both need chars digits); isbn: an ISBN-10 (last X for 10) or ISBN-13; vin: a 17-character vehicle identification number with its check digit in the ninth place."
 											},
 											"ignoreSpaces": {
 												"type": "boolean",
@@ -13086,7 +13092,7 @@
 			},
 			"patch": {
 				"summary": "Change a field",
-				"description": "Only the members sent change. 409 conflict when records hold values of it (products and variants, units, orders or customers, as its values live) and the change is to its type, where its values live (on) or to fewer values; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or a fourth unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
+				"description": "Only the members sent change. 409 conflict when records hold values of it (products and variants, units, orders or customers, as its values live) and the change is to its type, where its values live (on) or to fewer values; 404 not_found; 422 validation_failed lists every field problem (e.g. /choices: a choice field without choices, /type, /multiple, /maxValues, /format/<part>, /requiredAt, /show/<place>, /on, /categoryId, /categoryIds: a category that does not exist or an eleventh unit field for one category, /visibility/ids: brands that do not exist or grades not in the grades list, /visibility/attributeId); 409 conflict when another field for the same category (or for every category) has the slug. With the seo setting autoSeo on_save and Landing pages on, your AI provider writes its empty glossary title, description and FAQs when it is saved (E43), while AI copy is on and its key is in Connections; the answer has them. Without AI nothing is written: the landing_pages patterns attributeTitle and attributeDescription fill its page on every read.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -34446,7 +34452,7 @@
 						"type": "integer",
 						"minimum": 1,
 						"maximum": 20,
-						"description": "The most values (1 unless it takes several; a unit field at most 2)."
+						"description": "The most values (1 unless it takes several; a unit field at most 10)."
 					},
 					"format": {
 						"$ref": "#/components/schemas/FieldFormat"
@@ -34676,7 +34682,7 @@
 						"type": "integer",
 						"minimum": 2,
 						"maximum": 20,
-						"description": "With multiple: 2 to 20 (a unit field 2, for a unit that carries two numbers); default the most."
+						"description": "With multiple: 2 to 20 (a unit field 2 to 10, for a unit that carries several numbers); default the most (a unit field 2)."
 					},
 					"format": {
 						"type": [
@@ -34726,9 +34732,12 @@
 								"type": "string",
 								"enum": [
 									"none",
-									"luhn"
+									"luhn",
+									"gtin",
+									"isbn",
+									"vin"
 								],
-								"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+								"description": "none: the pattern only; luhn: the last digit is the Luhn check digit; gtin: a GTIN-8/12/13/14 with its GS1 mod-10 check digit (both need chars digits); isbn: an ISBN-10 (last X for 10) or ISBN-13; vin: a 17-character vehicle identification number with its check digit in the ninth place."
 							},
 							"ignoreSpaces": {
 								"type": "boolean",
@@ -41111,9 +41120,12 @@
 						"type": "string",
 						"enum": [
 							"none",
-							"luhn"
+							"luhn",
+							"gtin",
+							"isbn",
+							"vin"
 						],
-						"description": "luhn: the last digit is the Luhn check digit (needs chars digits)."
+						"description": "none: the pattern only; luhn: the last digit is the Luhn check digit; gtin: a GTIN-8/12/13/14 with its GS1 mod-10 check digit (both need chars digits); isbn: an ISBN-10 (last X for 10) or ISBN-13; vin: a 17-character vehicle identification number with its check digit in the ninth place."
 					},
 					"ignoreSpaces": {
 						"type": "boolean",

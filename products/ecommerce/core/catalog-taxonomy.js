@@ -505,19 +505,20 @@ export const checkAttribute = (body, existing) => {
 	if (multiple && type !== 'choice' && type !== 'text')
 		errors.push({ path: '/multiple', message: 'Only text and choice fields take several values.' });
 	const valuesCap = on === 'unit' ? FIELD_LIMITS.unitValues : FIELD_LIMITS.values;
+	const valuesDefault = on === 'unit' ? FIELD_LIMITS.unitValuesDefault : FIELD_LIMITS.values;
 	const maxValues = read(
 		'maxValues',
 		(v) => (Number.isSafeInteger(v) && Number(v) >= 1 && Number(v) <= FIELD_LIMITS.values ? Number(v) : null),
-		multiple ? valuesCap : 1,
+		multiple ? valuesDefault : 1,
 		`A field takes 1 to ${FIELD_LIMITS.values} values.`,
 	);
-	const values = multiple ? (body.maxValues === undefined && !existing?.multiple ? valuesCap : maxValues) : 1;
+	const values = multiple ? (body.maxValues === undefined && !existing?.multiple ? valuesDefault : maxValues) : 1;
 	if (multiple && (values < 2 || values > valuesCap))
 		errors.push({
 			path: '/maxValues',
 			message:
 				on === 'unit'
-					? 'A unit field takes up to 2 values (two numbers of one unit).'
+					? `A unit field takes 2 to ${valuesCap} values (numbers of one unit).`
 					: `Several values are 2 to ${valuesCap}.`,
 		});
 	const format = (() => {

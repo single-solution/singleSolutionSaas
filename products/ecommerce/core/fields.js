@@ -2,7 +2,9 @@
  * Merchant fields (PLAN 0.8.10 dynamic model §2): the format a text field's values must have, checked by one pure
  * function, {@link checkFormat}, that walks each value once, character by character. No regular expression is ever
  * built from what a merchant types, so a format can never make a check slow (no ReDoS), whatever the value's length.
- * Also the check digits values use: Luhn ({@link luhnValid}) and the GS1 check digit of a GTIN ({@link gtinOf}). No I/O.
+ * Also the check digits values use (E21): Luhn ({@link luhnValid}), the GS1 mod-10 check digit of a GTIN
+ * ({@link gtinOf}), ISBN-10 and ISBN-13 ({@link isbnValid}) and the VIN's ({@link vinValid}); `none` checks the pattern
+ * only. No I/O.
  * @module
  */
 
@@ -10,8 +12,10 @@
 export const FORMAT_CHARS = Object.freeze(
 	/** @type {const} */ (['any', 'digits', 'letters', 'letters_digits', 'letters_digits_dash']),
 );
-/** The check digits a format can ask for. */
-export const CHECK_DIGITS = Object.freeze(/** @type {const} */ (['none', 'luhn']));
+/** The check digits a format can ask for (`none`: the pattern only). */
+export const CHECK_DIGITS = Object.freeze(/** @type {const} */ (['none', 'luhn', 'gtin', 'isbn', 'vin']));
+/** The check digits that need values of digits only. */
+const DIGITS_ONLY = Object.freeze(['luhn', 'gtin']);
 /**
  * Why a value does not match its format: the wrong characters, the wrong length, not one of the starts, not the mask's
  * pattern, or a wrong check digit.
@@ -95,6 +99,59 @@ const luhnValid = (digits) => {
 };
 
 /**
+ * Whether a value is an ISBN with its check digit: ISBN-10 (nine digits and a digit or X, mod 11) or ISBN-13 (a GTIN-13
+ * starting 978 or 979); hyphens and spaces are passed over.
+ * @param {string} value
+ */
+export const isbnValid = (value) => {
+	const plain = value.replace(/[-\s]/g, '').toUpperCase();
+	if (plain.length === 13) return /^97[89]/.test(plain) && gtinOf(plain) !== null;
+	if (!/^\d{9}[\dX]$/.test(plain)) return false;
+	let sum = 0;
+	for (let index = 0; index < 10; index += 1) {
+		const char = plain[index] ?? '';
+		sum += (char === 'X' ? 10 : char.charCodeAt(0) - 48) * (10 - index);
+	}
+	return sum % 11 === 0;
+};
+
+/** The value of each VIN letter in its check digit (I, O and Q are never used). */
+const VIN_LETTERS = 'A1B2C3D4E5F6G7H8J1K2L3M4N5P7R9S2T3U4V5W6X7Y8Z9';
+/** The weight of each VIN position. */
+const VIN_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+
+/**
+ * Whether a value is a 17-character vehicle identification number whose ninth character is its check digit (mod 11, X
+ * for 10), as North America and some other markets use it.
+ * @param {string} value
+ */
+export const vinValid = (value) => {
+	const plain = value.toUpperCase();
+	if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(plain)) return false;
+	let sum = 0;
+	for (let index = 0; index < 17; index += 1) {
+		const char = plain[index] ?? '';
+		const at = VIN_LETTERS.indexOf(char);
+		const digit = isDigit(char) ? char.charCodeAt(0) - 48 : Number(VIN_LETTERS[at + 1]);
+		sum += digit * (VIN_WEIGHTS[index] ?? 0);
+	}
+	const check = sum % 11;
+	return plain[8] === (check === 10 ? 'X' : String(check));
+};
+
+/**
+ * Whether a value passes a format's check digit.
+ * @param {string} value @param {Format['checkDigit']} checkDigit
+ */
+const checkDigitValid = (value, checkDigit) => {
+	if (checkDigit === 'luhn') return luhnValid(value);
+	if (checkDigit === 'gtin') return gtinOf(value) !== null;
+	if (checkDigit === 'isbn') return isbnValid(value);
+	if (checkDigit === 'vin') return vinValid(value);
+	return true;
+};
+
+/**
  * A value as its format keeps it: spaces dropped and letters upper-cased when the format says so.
  * @param {string} value @param {Pick<Format, 'ignoreSpaces' | 'upperCase'>} format
  */
@@ -127,7 +184,7 @@ export const checkFormat = (value, format) => {
 		if (mask.length !== chars.length || !chars.every((char, index) => fitsMask(char, mask[index] ?? '')))
 			return { ok: false, code: 'mask' };
 	}
-	if (format.checkDigit === 'luhn' && !luhnValid(kept)) return { ok: false, code: 'check_digit' };
+	if (!checkDigitValid(kept, format.checkDigit)) return { ok: false, code: 'check_digit' };
 	return { ok: true, value: kept };
 };
 
@@ -194,8 +251,10 @@ export const checkFormatRule = (raw) => {
 	const checkDigit = raw.checkDigit ?? 'none';
 	if (!CHECK_DIGITS.includes(checkDigit))
 		errors.push({ path: '/format/checkDigit', message: `The check digit is one of ${CHECK_DIGITS.join(', ')}.` });
-	else if (checkDigit === 'luhn' && chars !== 'digits')
-		errors.push({ path: '/format/checkDigit', message: 'A Luhn check digit needs digits only.' });
+	else if (DIGITS_ONLY.includes(checkDigit) && chars !== 'digits')
+		errors.push({ path: '/format/checkDigit', message: `A ${checkDigit} check digit needs digits only.` });
+	else if ((checkDigit === 'isbn' || checkDigit === 'vin') && chars === 'letters')
+		errors.push({ path: '/format/checkDigit', message: `An ${checkDigit} has digits.` });
 	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,
@@ -287,8 +346,18 @@ export const SHOW_PLACES = Object.freeze({
 	order: Object.freeze(['shopper', 'invoice', 'packingSlip']),
 	customer: Object.freeze(['invoice', 'packingSlip']),
 });
-/** The limits of fields: per shop, values of a field, unit fields of one item type, values of a unit field. */
-export const FIELD_LIMITS = Object.freeze({ fields: 200, values: 20, unitFields: 3, unitValues: 2, number: 1e12 });
+/**
+ * The limits of fields: per shop, values of a field, unit fields of one item type, values of a unit field (the
+ * merchant sets each field's own, E21; a unit field taking several values takes 2 unless it says), the largest number.
+ */
+export const FIELD_LIMITS = Object.freeze({
+	fields: 200,
+	values: 20,
+	unitFields: 10,
+	unitValues: 10,
+	unitValuesDefault: 2,
+	number: 1e12,
+});
 
 /** @typedef {typeof FIELD_ON[number]} FieldOn */
 /** @typedef {typeof FIELD_TYPES[number]} FieldType */
