@@ -185,6 +185,13 @@ Pure and browser-safe; every product normalizes phones with it, so one person ha
   business.json `country`; `callingCodeOf(country)`.
 - `PHONE_COUNTRIES` (ISO codes a setting may name) and `phoneInCountries(phone, countries)` (`[]` = any).
 
+## Text (`@ss/contracts/text`)
+
+Pure and browser-safe; servers, products' `core/` and widget bundles share it.
+
+- `escapeHtml(value)`: text safe in an HTML or XML element and in a quoted attribute (`&`, `<`, `>`, `"`, `'` as
+  `&#38;`, `&#60;`, `&#62;`, `&#34;`, `&#39;`); null and undefined become ''.
+
 ## Problems (RFC 9457)
 
 ```js

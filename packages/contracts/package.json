@@ -1,7 +1,7 @@
 {
 	"name": "@ss/contracts",
 	"version": "0.1.0",
-	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the Format and time-zone helpers (`./format`, browser-safe), the phone-number normalizer (`./phone`, browser-safe), the business profile of the Setup advisor (`./profile`, browser-safe) and the message template rules (`./templates`, browser-safe).",
+	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the Format and time-zone helpers (`./format`, browser-safe), the phone-number normalizer (`./phone`, browser-safe), the business profile of the Setup advisor (`./profile`, browser-safe) the message template rules (`./templates`, browser-safe) and the text helpers (`./text`, browser-safe).",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
@@ -10,6 +10,7 @@
 		"./phone": "./src/phone.js",
 		"./profile": "./src/profile.js",
 		"./templates": "./src/templates.js",
+		"./text": "./src/text.js",
 		"./testing": "./src/testing.js",
 		"./package.json": "./package.json"
 	},
@@ -42,6 +43,10 @@
 			"./templates": {
 				"types": "./types/src/templates.d.ts",
 				"default": "./src/templates.js"
+			},
+			"./text": {
+				"types": "./types/src/text.d.ts",
+				"default": "./src/text.js"
 			},
 			"./testing": {
 				"types": "./types/src/testing.d.ts",
