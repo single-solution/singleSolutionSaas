@@ -77,7 +77,7 @@ const newDeal = async (input) => {
 beforeAll(async () => {
 	shop = await readyShop();
 	await shop.list('delivery_zones', [
-		{ key: 'city', name: 'Springfield', cities: ['Springfield'], fee: 300, freeOver: 0, minDays: 1, maxDays: 2 },
+		{ key: 'city', name: 'Springfield', match: { cities: ['Springfield'] }, fee: 300, freeOver: 0, minDays: 1, maxDays: 2 },
 	]);
 });
 afterAll(async () => shop.product.close());
@@ -450,6 +450,142 @@ describe('guest checkout and order keys (E21)', () => {
 			await shop.setting('checkout', 'placeLimit', 0);
 			await shop.setting('checkout', 'guests', 'off');
 		}
+	});
+
+	it('takes guests by email (guestIdentity email, phoneRequired off): one record per email address, no phone needed', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'guestIdentity', 'email');
+		await shop.setting('checkout', 'phoneRequired', false);
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const noPhone = { name: 'Ella Guest', line1: '1 Main Street', city: 'Springfield', country: 'US' };
+		/** @param {Record<string, unknown>} customer */
+		const asGuest = (customer) =>
+			place({
+				lines: [{ productId: item.id }],
+				payment: 'cod',
+				address: noPhone,
+				customer: { name: 'Ella Guest', ...customer },
+			});
+		// the email address is the guest's identity: a phone alone is not enough
+		const phoneOnly = await asGuest({ phone: '+15550003333' });
+		expect(phoneOnly.status).toBe(422);
+		expect(phoneOnly.json.errors[0].path).toBe('/customer/email');
+		const first = await asGuest({ email: 'Ella@Example.com' });
+		expect(first.status).toBe(201);
+		const second = await asGuest({ email: 'ella@example.com', phone: '+15550003333' });
+		expect(second.status).toBe(201);
+		const db = await shop.db();
+		const records = await db
+			.collection(COLLECTIONS.customers)
+			.find({ websiteId: shop.websiteId, guestKey: 'e:ella@example.com' })
+			.toArray();
+		expect(records).toHaveLength(1);
+		expect(records[0]).toMatchObject({ guest: true, email: 'ella@example.com', orderCount: 2, phone: '+15550003333' });
+		expect((await orderRecord(first.json.order.id)).address).toMatchObject({ phone: '', region: '' });
+		// another email guest without a phone is another record (no clash on the empty phone, as the phone-only index had)
+		const other = await asGuest({ email: 'otto@example.com' });
+		expect(other.status).toBe(201);
+		expect(
+			await db.collection(COLLECTIONS.customers).countDocuments({ websiteId: shop.websiteId, guest: true, phone: '' }),
+		).toBeGreaterThanOrEqual(1);
+		const staff = await shop.api('GET', `/v1/customers/${records[0]?.id}`);
+		expect(staff.json).toMatchObject({ guest: true, guestKey: 'e:ella@example.com' });
+
+		// a member who signs in with that email address verified gets the guest's orders and record
+		const member = await newShopper({ email: 'ella@example.com', phone: '+15550009991' });
+		const mine = await visit('GET', '/v1/shop/orders', { signIn: member.token });
+		expect(mine.json.items.map((/** @type {any} */ o) => o.id)).toEqual(
+			expect.arrayContaining([first.json.order.id, second.json.order.id]),
+		);
+		expect((await shop.api('GET', `/v1/customers/${records[0]?.id}`)).status).toBe(404);
+		for (const id of [first.json.order.id, second.json.order.id, other.json.order.id])
+			await shop.api('DELETE', `/v1/orders/${id}`);
+		await shop.setting('checkout', 'phoneRequired', true);
+		await shop.setting('checkout', 'guestIdentity', 'phone');
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
+	it('moves an email guest’s orders only at a sign-in whose email Accounts verified', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'guestIdentity', 'email');
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const placed = await place({
+			lines: [{ productId: item.id }],
+			payment: 'cod',
+			address: ADDRESS,
+			customer: { name: 'Vera Guest', email: 'vera@example.com', phone: '+15550002222' },
+		});
+		expect(placed.status).toBe(201);
+		const unverified = await newShopper({ email: 'vera@example.com', email_verified: false, phone: '+15550009992' });
+		const notYet = await visit('GET', '/v1/shop/orders', { signIn: unverified.token });
+		expect(notYet.json.items.map((/** @type {any} */ o) => o.id)).not.toContain(placed.json.order.id);
+		expect((await orderRecord(placed.json.order.id)).customer.userId).toBe('');
+		await shop.api('DELETE', `/v1/orders/${placed.json.order.id}`);
+		await shop.setting('checkout', 'guestIdentity', 'phone');
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
+	it('knows a guest by the phone when given, else the email address (guestIdentity either)', async () => {
+		await shop.setting('checkout', 'guests', 'on');
+		await shop.setting('checkout', 'guestIdentity', 'either');
+		await shop.setting('checkout', 'phoneRequired', false);
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const noPhone = { name: 'Ann Guest', line1: '1 Main Street', city: 'Springfield' };
+		/** @param {Record<string, unknown>} customer */
+		const asGuest = (customer) =>
+			place({
+				lines: [{ productId: item.id }],
+				payment: 'cod',
+				address: noPhone,
+				customer: { name: 'Ann Guest', ...customer },
+			});
+		const neither = await asGuest({});
+		expect(neither.status).toBe(422);
+		expect(neither.json.errors[0].path).toBe('/customer/phone');
+		const byPhone = await asGuest({ phone: '+15550001234', email: 'ann@example.com' });
+		const byEmail = await asGuest({ email: 'ann@example.com' });
+		expect([byPhone.status, byEmail.status]).toEqual([201, 201]);
+		const db = await shop.db();
+		const recordOf = async (/** @type {string} */ id) =>
+			db
+				.collection(COLLECTIONS.customers)
+				.findOne({ websiteId: shop.websiteId, id: (await orderRecord(id)).customer.customerId });
+		expect((await recordOf(byPhone.json.order.id))?.guestKey).toBe('p:+15550001234');
+		expect((await recordOf(byEmail.json.order.id))?.guestKey).toBe('e:ann@example.com');
+		for (const id of [byPhone.json.order.id, byEmail.json.order.id]) await shop.api('DELETE', `/v1/orders/${id}`);
+		await shop.setting('checkout', 'phoneRequired', true);
+		await shop.setting('checkout', 'guestIdentity', 'phone');
+		await shop.setting('checkout', 'guests', 'off');
+	});
+
+	it('asks a guest whose email address has an account with a password to sign in', async () => {
+		await shop.setting('checkout', 'guests', 'unless_password');
+		await shop.setting('checkout', 'guestIdentity', 'either');
+		/** @type {string[]} */
+		const asked = [];
+		shop.responders.set(`${ACCOUNTS}/v1/users`, (call) => {
+			asked.push(call.url);
+			return {
+				status: 200,
+				body: {
+					items: [{ id: 'usr_member', email: 'Mo@Example.com', phone: '+15550006667', hasPassword: true }],
+					hasMore: false,
+				},
+			};
+		});
+		const item = await shop.seedProduct({ price: 1000, stock: 10 });
+		const refused = await place({
+			lines: [{ productId: item.id }],
+			payment: 'cod',
+			address: ADDRESS,
+			customer: { name: 'Mo Member', email: 'mo@example.com', phone: '+15550004321' },
+		});
+		shop.responders.delete(`${ACCOUNTS}/v1/users`);
+		expect(refused.status).toBe(403);
+		expect(refused.json).toMatchObject({ signIn: 'member_email' });
+		expect(asked.some((url) => url.includes('q=mo%40example.com'))).toBe(true);
+		await shop.setting('checkout', 'guestIdentity', 'phone');
+		await shop.setting('checkout', 'guests', 'off');
 	});
 
 	it('refuses guests while guest checkout is off', async () => {

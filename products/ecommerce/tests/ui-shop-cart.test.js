@@ -132,7 +132,7 @@ describe('cart', () => {
 			lines: [{ productId: 'prd_1', variantId: 'var_1', quantity: 2 }],
 			coupon: '',
 			points: 0,
-			delivery: { method: 'delivery', city: '', area: '', country: '', locationId: null },
+			delivery: { method: 'delivery', city: '', area: '', region: '', postalCode: '', country: '', locationId: null },
 			payment: null,
 		});
 		const page = textOf(host);
@@ -383,6 +383,44 @@ describe('cart', () => {
 		expect(textOf(none.host)).toContain(text('cart.points.balance', { balance: 0 }));
 	});
 
+	it('offers the regions of the address_regions list for the address’s country, and prices the place', async () => {
+		const settings = {
+			...SETTINGS,
+			checkout: {
+				...SETTINGS.checkout,
+				address: {
+					required: ['name', 'phone', 'line1', 'region'],
+					optional: ['city', 'postalCode', 'country', 'notes'],
+					regions: [{ country: 'US', names: ['California', 'Texas'] }],
+					country: 'US',
+				},
+			},
+		};
+		const { fake, timers, host } = await setup({ settings });
+		// without a country the address is in the business.json country: its regions are a list to pick from
+		const picker = /** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region'));
+		expect(picker.tagName).toBe('SELECT');
+		expect([...picker.options].map((option) => option.value)).toEqual(['', 'California', 'Texas']);
+		expect($(host, 'label[for="ss-cart-region"]').textContent).toBe(text('checkout.field.region'));
+		await setValue(picker, 'Texas');
+		await setValue($(host, '#ss-cart-postalCode'), '73301');
+		await timers.run();
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.delivery).toMatchObject({ region: 'Texas', postalCode: '73301' });
+		// another country: the region is typed (what was picked stays)
+		await setValue($(host, '#ss-cart-country'), 'Canada');
+		const typed = /** @type {HTMLInputElement} */ ($(host, '#ss-cart-region'));
+		expect(typed.tagName).toBe('INPUT');
+		expect(typed.value).toBe('Texas');
+		expect(typed.getAttribute('maxlength')).toBe('100');
+		await setValue(typed, 'Ontario');
+		await setValue($(host, '#ss-cart-country'), 'United States');
+		expect($(host, '#ss-cart-region').tagName).toBe('SELECT');
+		expect(/** @type {HTMLSelectElement} */ ($(host, '#ss-cart-region')).value).toBe('');
+		// each field at most its length in the one address table
+		expect($(host, '#ss-cart-city').getAttribute('maxlength')).toBe('100');
+		expect($(host, '#ss-cart-phone').getAttribute('maxlength')).toBe('40');
+	});
+
 	it('switches between delivery and pickup and prices the address city', async () => {
 		const { fake, timers, host } = await setup({
 			quote: (call) => {
@@ -415,6 +453,8 @@ describe('cart', () => {
 			method: 'pickup',
 			city: 'Paris',
 			area: '',
+			region: '',
+			postalCode: '',
 			country: '',
 			locationId: 'loc_1',
 		});

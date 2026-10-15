@@ -267,6 +267,7 @@ describe('customers admin: customers', () => {
 						line2: '',
 						city: 'Springfield',
 						area: '',
+						region: '',
 						postalCode: '',
 						country: '',
 						notes: '',

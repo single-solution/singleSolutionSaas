@@ -192,7 +192,8 @@ const addressLines = (address) =>
 		address.line1,
 		address.line2,
 		[address.area, address.city].filter(Boolean).join(', '),
-		[address.postalCode, address.country].filter(Boolean).join(' '),
+		[address.region, address.postalCode].filter(Boolean).join(' '),
+		address.country,
 	]
 		.filter(Boolean)
 		.map((line) => `<p>${esc(line)}</p>`)

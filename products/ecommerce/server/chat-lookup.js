@@ -12,6 +12,7 @@
  */
 import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
+import { ADDRESS_LIMITS } from '../core/address.js';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
@@ -76,10 +77,11 @@ const firstNameOf = (name) =>
 		.split(/\s+/)[0] ?? '';
 
 /**
- * Read a Chat quote's query (E37): `variantId`, `quantity` (1–5), `paymentMethod` and `city`.
+ * Read a Chat quote's query (E37): `variantId`, `quantity` (1–5), `paymentMethod` and where it goes (`country`,
+ * `region`, `city`, `area`, `postalCode`; dynamic model §5).
  * @param {Record<string, unknown>} query
  * @returns {{ variantId: string | null, quantity: number, paymentMethod: import('../core/model.js').PaymentMethod | null,
- *   city: string }}
+ *   place: Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string> }}
  */
 const quoteQuery = (query) => {
 	const variantId = query.variantId === undefined || query.variantId === '' ? null : query.variantId;
@@ -91,13 +93,19 @@ const quoteQuery = (query) => {
 	const method = query.paymentMethod === undefined || query.paymentMethod === '' ? null : query.paymentMethod;
 	if (method !== null && !PAYMENT_METHODS.includes(/** @type {any} */ (method)))
 		throw invalidQuery('paymentMethod', `paymentMethod is one of ${PAYMENT_METHODS.join(', ')}.`);
-	const city = typeof query.city === 'string' ? query.city.trim() : '';
-	if (city.length > 80) throw invalidQuery('city', 'city is at most 80 characters.');
+	/** @type {Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string>} */
+	const place = { country: '', region: '', city: '', area: '', postalCode: '' };
+	for (const field of /** @type {Array<keyof typeof place>} */ (Object.keys(place))) {
+		const value = typeof query[field] === 'string' ? String(query[field]).trim() : '';
+		if (value.length > ADDRESS_LIMITS[field])
+			throw invalidQuery(field, `${field} is at most ${ADDRESS_LIMITS[field]} characters.`);
+		place[field] = value;
+	}
 	return {
 		variantId: /** @type {string | null} */ (variantId),
 		quantity,
 		paymentMethod: /** @type {import('../core/model.js').PaymentMethod | null} */ (method),
-		city,
+		place,
 	};
 };
 
@@ -457,16 +465,16 @@ export const createChatLookup = (product, service, media) => {
 
 	/**
 	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (1–5), priced
-	 * exactly as the cart prices it for the payment method asked (deals, fees, delivery to `city` and its free-delivery
-	 * threshold; a forwarded sign-in adds role pricing) (E37), with the variant's own "was" price struck through on the
-	 * product page.
+	 * exactly as the cart prices it for the payment method asked (deals, fees, delivery to the place asked — `country`,
+	 * `region`, `city`, `area`, `postalCode` — with its zone's free-delivery threshold and taxes; a forwarded sign-in adds
+	 * role pricing) (E37), with the variant's own "was" price struck through on the product page.
 	 * @param {any} ctx
 	 */
 	const quote = async (ctx) => {
 		const s = await service.site(ctx);
 		const data = await s.data();
 		const item = await shownProduct(s, data, ctx.params.id);
-		const { variantId, quantity, paymentMethod, city } = quoteQuery(ctx.query);
+		const { variantId, quantity, paymentMethod, place } = quoteQuery(ctx.query);
 		const variant = variantId
 			? item.variants.find((candidate) => candidate.id === variantId && candidate.active)
 			: cardVariant(item, await (await pricesFor(s, data))(item));
@@ -478,7 +486,7 @@ export const createChatLookup = (product, service, media) => {
 				lines: [{ productId: item.id, variantId: variant.id, quantity, slot: null }],
 				coupon: '',
 				points: 0,
-				delivery: { method: paymentMethod === 'pickup' ? 'pickup' : null, city, area: '', country: '', locationId: null },
+				delivery: { method: paymentMethod === 'pickup' ? 'pickup' : null, ...place, locationId: null },
 				payment: paymentMethod,
 			},
 			shopper,
@@ -647,6 +655,8 @@ export const createChatLookup = (product, service, media) => {
 			loyaltyPoints: points ?? 0,
 			city: await cityOf(data, shopper.id, profile),
 			area: profile?.area ?? '',
+			region: profile?.region ?? '',
+			country: profile?.country ?? '',
 		};
 	};
 

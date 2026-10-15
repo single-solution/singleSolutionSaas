@@ -137,11 +137,35 @@ describe('customers', () => {
 		expect(guest).toMatchObject({
 			userId: null,
 			guest: true,
+			guestKey: 'p:+15550002222',
 			phone: '+15550002222',
-			phoneDigits: '5550002222',
+			phoneDigits: '15550002222',
 			note: 'Calls first',
 		});
 		expect(guest.createdAt).toEqual(new Date('2025-01-01T00:00:00Z'));
+		expect(member).not.toHaveProperty('guestKey');
+	});
+
+	it('key guests as checkout.guestIdentity says: an email guest needs no phone (dynamic model §5)', () => {
+		/** @param {string} guestIdentity */
+		const rulesFor = (guestIdentity) =>
+			importRules({ flow: DEFAULT_FLOW, checkout: { guestIdentity }, catalog: {}, country: 'US', now: NOW });
+		const byEmail = { id: idOf('cus', 5), guest: true, name: 'Ella', email: 'Ella@Example.com' };
+		expect(valueOf(checkImportedCustomer(byEmail, rulesFor('email')))).toMatchObject({
+			guestKey: 'e:ella@example.com',
+			phone: '',
+			phoneDigits: '',
+		});
+		expect(valueOf(checkImportedCustomer({ ...byEmail, phone: '555 000 2222' }, rulesFor('either')))).toMatchObject({
+			guestKey: 'p:+15550002222',
+		});
+		expect(valueOf(checkImportedCustomer(byEmail, rulesFor('either')))).toMatchObject({ guestKey: 'e:ella@example.com' });
+		expect(pathsOf(checkImportedCustomer(byEmail, rulesFor('phone')))).toEqual(['/phone']);
+		expect(pathsOf(checkImportedCustomer({ ...byEmail, email: '' }, rulesFor('email')))).toEqual(['/email']);
+		// a guestKey given is derived again, never taken
+		expect(valueOf(checkImportedCustomer({ ...byEmail, guestKey: 'e:other@example.com' }, rulesFor('email')))).toMatchObject({
+			guestKey: 'e:ella@example.com',
+		});
 	});
 
 	it('refuse what does not fit, field by field', () => {
@@ -163,7 +187,7 @@ describe('customers', () => {
 				),
 			),
 		).toEqual(['/merchantId', '/id', '/userId', '/name', '/email', '/phone', '/city', '/createdAt', '/seenBy']);
-		// a guest needs a name and a phone; a block needs its reason
+		// a guest needs a name and a phone (guestIdentity phone, the default); a block needs its reason
 		expect(pathsOf(checkImportedCustomer({ id: idOf('cus', 3), guest: false, phone: 'abc', blocked: true }, RULES))).toEqual([
 			'/guest',
 			'/name',
@@ -239,7 +263,7 @@ describe('orders', () => {
 			payment: { state: 'paid', paid: 2100, refunded: 0, advance: 0, checkoutUrl: '', proof: null },
 			payments: [{ by: { kind: 'server', id: 'server', name: 'Server' }, reference: '', proofKey: null }],
 			lines: [{ kind: 'physical', serials: [], booking: null, licences: [], returnedQuantity: 0, grade: null, image: null }],
-			phoneDigits: '5550001111',
+			phoneDigits: '15550001111',
 			shipment: null,
 			media: [],
 			holdUntil: null,
@@ -350,7 +374,7 @@ describe('orders', () => {
 			media: [{ key: 'ecommerce/videos/o1.mp4', by: 'Sam' }, { url: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ' }],
 			promotions: { pointsReversed: 20, role: { key: 'member' } },
 			idempotencyKey: 'checkout-1',
-			phoneDigits: '5550001111',
+			phoneDigits: '15550001111',
 			returnRestocked: true,
 		});
 		expect(value.lines[0].booking.start).toEqual(new Date('2027-01-01T10:00:00Z'));

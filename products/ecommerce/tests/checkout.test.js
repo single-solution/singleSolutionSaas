@@ -70,7 +70,15 @@ const nextUse = async () => {
 beforeAll(async () => {
 	shop = await readyShop();
 	await shop.list('delivery_zones', [
-		{ key: 'city', name: 'Springfield', cities: ['Springfield'], fee: 300, freeOver: 50_000, minDays: 1, maxDays: 2 },
+		{
+			key: 'city',
+			name: 'Springfield',
+			match: { cities: ['Springfield'] },
+			fee: 300,
+			freeOver: 50_000,
+			minDays: 1,
+			maxDays: 2,
+		},
 	]);
 	await shop.setting('delivery_zones', 'defaultFee', 900);
 });

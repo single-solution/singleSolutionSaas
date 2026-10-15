@@ -31,7 +31,7 @@ Three variables, and one optional while the encryption key is changed (`.env.exa
 
 Every route is in `openapi.json` and in `/docs`. Besides the shop's own routes, the merchant's server reaches the kit's
 settings API (features, settings, texts, theme, Format, connections, and the lists `order_flow`, `couriers`,
-`delivery_zones`, `tax_rules`, `grades`, `item_types`, `booking_hours` and `role_prices` at `/v1/lists/:list`), the activity log
+`address_regions`, `delivery_zones`, `tax_rules`, `grades`, `item_types`, `booking_hours` and `role_prices` at `/v1/lists/:list`), the activity log
 (`/v1/activity`) and counts of the main lists (`/v1/orders`, `/v1/products`, `/v1/customers`, `/v1/reviews` and
 `/v1/returns`, each with `/count` and `/counts?by=`, and ticket twins under `/v1/admin/`). Server-token calls may name
 the acting staff member with the `SS-Actor-*` headers, and the shopper routes (`/v1/shop/…`) also take the server token
@@ -125,8 +125,9 @@ The checks are the product's own, in import mode (`core/imports-orders.js`): ids
 given; fields the record type does not have (with `websiteId` and `merchantId`) and text over a limit are refused by
 path (never cut). Customers: phones as E.164, or national numbers with the website's calling code (the
 `checkout.defaultCallingCode` setting, else the business.json country's; refused when there is neither), a guest has a
-name and a phone (one guest per phone), a block has its reason; `orderCount`, `rtoCount`, `lastOrderAt` and
-`phoneDigits` are ignored (0 until finish). Orders: `number` in the website's form (`checkout.numberPattern`:
+name and the contact `checkout.guestIdentity` keys them by (a phone, an email address, or either; one guest per key), a
+block has its reason; `orderCount`, `rtoCount`, `lastOrderAt`, `phoneDigits` and `guestKey` are derived (given ones
+are ignored; the counts are 0 until finish). Orders: `number` in the website's form (`checkout.numberPattern`:
 `<numberPrefix><at least numberDigits digits>`, or `<numberPrefix><year>-<at least numberDigits digits>`); `status` a key of the `order_flow` list, `role` the flow's (derived; a different one is
 refused); the last history entry moves to `status`; `deliveredAt` given for delivered and returned orders, refused on
 ones never delivered; each line's `total` is unit price × quantity − discount (+ tax when prices exclude tax) and the

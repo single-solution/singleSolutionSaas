@@ -108,7 +108,8 @@ const detail = (over = {}) => ({
 		line2: '',
 		city: 'Tokyo',
 		area: '',
-		postalCode: '',
+		region: 'Tokyo',
+		postalCode: '100-0001',
 		country: 'JP',
 		notes: '',
 	},
@@ -925,7 +926,7 @@ describe('orders admin: one order', () => {
 		);
 		const panel = panelOf(root, 'orders');
 		const pane = detailOf(panel);
-		expect(textOf(pane)).toContain('Street 1, Tokyo, JP');
+		expect(textOf(pane)).toContain('Street 1, Tokyo, Tokyo, 100-0001, JP');
 		expect(textOf(pane)).toContain('USD 10.00');
 		expect(textOf(pane)).not.toContain('Notes');
 		expect(pane.querySelector('a')).toBeNull();
@@ -1546,7 +1547,15 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 				{ variantId: 'var_9', quantity: 2 },
 			],
 			paymentMethod: 'cod',
-			delivery: { method: 'pickup', city: 'Tokyo', area: '', country: 'JP', locationId: 'loc_1' },
+			delivery: {
+				method: 'pickup',
+				city: 'Tokyo',
+				area: '',
+				region: 'Tokyo',
+				postalCode: '100-0001',
+				country: 'JP',
+				locationId: 'loc_1',
+			},
 		});
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.lines']);
 		// every item out: refused before asking

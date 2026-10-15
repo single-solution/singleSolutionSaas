@@ -72,3 +72,48 @@ describe('a merchant database made before E45', () => {
 		}
 	});
 });
+
+describe('a merchant database made before guests by email (dynamic model §5)', () => {
+	it('drops the phone-only guest index for one guest per key, so guests without a phone never clash', async () => {
+		const uri = freshUri();
+		const db = await open(uri);
+		const shop = await setup();
+		try {
+			await db
+				.collection(`${PREFIX}customers`)
+				.createIndex(
+					{ websiteId: 1, phone: 1 },
+					{ name: 'one_guest_per_phone', unique: true, partialFilterExpression: { guest: true } },
+				);
+			await shop.switchOn(ALL);
+			await shop.connect('database', uri);
+			await shop.setting('checkout', 'guests', 'on');
+			await shop.setting('checkout', 'guestIdentity', 'email');
+			await shop.setting('checkout', 'phoneRequired', false);
+			const item = await shop.seedProduct({ price: 1000, stock: 10 });
+			/** @param {string} email */
+			const order = (email) =>
+				shop.visitor('POST', '/v1/shop/orders', {
+					body: {
+						lines: [{ productId: item.id }],
+						payment: 'cod',
+						address: { name: 'Guest', line1: '1 Main Street', city: 'Springfield' },
+						customer: { name: 'Guest', email },
+					},
+					key: `idx-${email}`,
+				});
+			const placed = [await order('one@example.com'), await order('two@example.com')];
+			expect(placed.map((answer) => answer.status)).toEqual([201, 201]);
+			const names = await indexNames(db, 'customers');
+			expect(names).toContain('one_guest_per_key');
+			expect(names).not.toContain('one_guest_per_phone');
+			const guests = await db.collection(`${PREFIX}customers`).find({ guest: true }).toArray();
+			expect(guests.map((guest) => [guest.guestKey, guest.phone]).sort()).toEqual([
+				['e:one@example.com', ''],
+				['e:two@example.com', ''],
+			]);
+		} finally {
+			await shop.product.close();
+		}
+	});
+});

@@ -131,6 +131,11 @@ const named = (one, many, name) => (items) =>
 export const LIST_WORDS = Object.freeze({
 	order_flow: flowWords,
 	couriers: named('courier', 'couriers', (/** @type {Courier} */ courier) => nameOf(courier.name)),
+	address_regions: named(
+		'country with regions',
+		'countries with regions',
+		(/** @type {import('./address.js').AddressRegions} */ entry) => `${nameOf(entry.country)} (${entry.names.length})`,
+	),
 	delivery_zones: named('zone', 'zones', (/** @type {Zone} */ zone) => nameOf(zone.name)),
 	tax_rules: named('tax rule', 'tax rules', (/** @type {TaxRule} */ rule) => `${nameOf(rule.name)} ${rule.percent}%`),
 	grades: gradeWords,

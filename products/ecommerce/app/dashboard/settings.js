@@ -16,7 +16,14 @@ import { call, fill, useLoad } from './api.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
-import { BookingHoursEditor, CouriersEditor, RolePricesEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
+import {
+	AddressRegionsEditor,
+	BookingHoursEditor,
+	CouriersEditor,
+	RolePricesEditor,
+	TaxRulesEditor,
+	ZonesEditor,
+} from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -269,6 +276,7 @@ export function SettingsTab({ websiteId: id }) {
 								</>
 							),
 							grades: seen('grades_serials') ? <GradesEditor websiteId={websiteId} off={off('grades_serials')} /> : null,
+							checkout: seen('checkout') ? <AddressRegionsEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							delivery: seen('delivery_zones') ? (
 								<ZonesEditor websiteId={websiteId} off={off('delivery_zones')} currency={currency} />
 							) : null,

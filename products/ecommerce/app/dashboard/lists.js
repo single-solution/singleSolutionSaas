@@ -22,7 +22,7 @@ import {
 } from '@ss/ui';
 import { exponentOf, fromDecimal, toDecimal } from '../../core/money.js';
 import { call, fill, useLoad } from './api.js';
-import { cleanLines, keyOf, splitIds } from './drafts.js';
+import { cleanLines, keyOf, splitIds, taxRegionLine, taxRegionOf } from './drafts.js';
 import { Loaded } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -345,11 +345,55 @@ export function CouriersEditor({ websiteId, off }) {
 	);
 }
 
-const Z = L.zones;
+const AR = L.addressRegions;
 
 /**
- * Delivery zones: cities and areas, the fee and free-over amount (typed as decimals in the shop currency, saved as minor
- * units) and the delivery days (`delivery_zones`).
+ * The region names checkout offers per country (`address_regions`): a country and its regions, one per line; an
+ * address in a listed country picks one of them (exact names, so zones and tax rules match them).
+ * @param {EditorProps} props
+ */
+export function AddressRegionsEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="address_regions"
+			title={AR.title}
+			help={AR.help}
+			itemLabel={AR.item}
+			max={50}
+			off={off}
+			blank={() => ({ country: '', names: [] })}
+			load={(entry) => ({ country: entry.country ?? '', names: Array.isArray(entry.names) ? entry.names : [] })}
+			clean={(entry) => ({ country: String(entry.country ?? '').trim(), names: cleanLines(entry.names) })}
+			render={(entry, set) => (
+				<FieldGrid>
+					<Input
+						label={AR.country}
+						value={entry.country}
+						maxLength={60}
+						onChange={(event) => set({ country: event.target.value })}
+					/>
+					<TextArea
+						label={AR.names}
+						rows={4}
+						value={entry.names.join('\n')}
+						onChange={(event) => set({ names: event.target.value.split('\n') })}
+					/>
+				</FieldGrid>
+			)}
+		/>
+	);
+}
+
+const Z = L.zones;
+
+/** The kinds of place a zone may list (`match`), in the editor's order. */
+const PLACE_KINDS = Object.freeze(/** @type {const} */ (['countries', 'regions', 'cities', 'areas', 'postcodes']));
+
+/**
+ * Delivery zones: the places each delivers to (countries, regions, cities, areas, postcode starts; one per line), the
+ * fee and free-over amount (typed as decimals in the shop currency, saved as minor units) and the delivery days
+ * (`delivery_zones`).
  * @param {EditorProps & { currency: string }} props
  */
 export function ZonesEditor({ websiteId, off, currency }) {
@@ -363,11 +407,18 @@ export function ZonesEditor({ websiteId, off, currency }) {
 			itemLabel={Z.item}
 			max={100}
 			off={off}
-			blank={() => ({ key: '', name: '', cities: [], areas: [], fee: '', freeOver: '', minDays: '1', maxDays: '3' })}
+			blank={() => ({
+				key: '',
+				name: '',
+				...Object.fromEntries(PLACE_KINDS.map((kind) => [kind, []])),
+				fee: '',
+				freeOver: '',
+				minDays: '1',
+				maxDays: '3',
+			})}
 			load={(zone) => ({
 				...zone,
-				cities: Array.isArray(zone.cities) ? zone.cities : [],
-				areas: Array.isArray(zone.areas) ? zone.areas : [],
+				...Object.fromEntries(PLACE_KINDS.map((kind) => [kind, Array.isArray(zone.match?.[kind]) ? zone.match[kind] : []])),
 				fee: decimalOf(zone.fee, currency),
 				freeOver: zone.freeOver ? decimalOf(zone.freeOver, currency) : '',
 				minDays: String(zone.minDays ?? ''),
@@ -388,8 +439,7 @@ export function ZonesEditor({ websiteId, off, currency }) {
 			clean={(zone) => ({
 				key: keyOf(zone.key, zone.name),
 				name: String(zone.name ?? '').trim(),
-				cities: cleanLines(zone.cities),
-				areas: cleanLines(zone.areas),
+				match: Object.fromEntries(PLACE_KINDS.map((kind) => [kind, cleanLines(zone[kind])])),
 				fee: amountOf(zone.fee, currency, 0),
 				freeOver: amountOf(zone.freeOver, currency, 0),
 				minDays: Number(String(zone.minDays).trim() || 0),
@@ -437,18 +487,15 @@ export function ZonesEditor({ websiteId, off, currency }) {
 						value={zone.maxDays}
 						onChange={(event) => set({ maxDays: event.target.value })}
 					/>
-					<TextArea
-						label={Z.cities}
-						rows={3}
-						value={zone.cities.join('\n')}
-						onChange={(event) => set({ cities: event.target.value.split('\n') })}
-					/>
-					<TextArea
-						label={Z.areas}
-						rows={3}
-						value={zone.areas.join('\n')}
-						onChange={(event) => set({ areas: event.target.value.split('\n') })}
-					/>
+					{PLACE_KINDS.map((kind) => (
+						<TextArea
+							key={kind}
+							label={Z[kind]}
+							rows={3}
+							value={zone[kind].join('\n')}
+							onChange={(event) => set({ [kind]: event.target.value.split('\n') })}
+						/>
+					))}
 				</FieldGrid>
 			)}
 		/>
@@ -494,8 +541,8 @@ export function BookingHoursEditor({ websiteId, off }) {
 const X = L.taxRules;
 
 /**
- * Tax rules: a name, a percent, the category ids it applies to and the regions (`Country` or `Country, City` per
- * line); empty lists apply everywhere (`tax_rules`, `core/taxes.js`).
+ * Tax rules: a name, a percent, the category ids it applies to and the regions (`Country, Region, City, Postcode
+ * start` per line, the parts after the country optional); empty lists apply everywhere (`tax_rules`, `core/taxes.js`).
  * @param {EditorProps} props
  */
 export function TaxRulesEditor({ websiteId, off }) {
@@ -513,9 +560,7 @@ export function TaxRulesEditor({ websiteId, off }) {
 				name: rule.name ?? '',
 				percent: String(rule.percent ?? ''),
 				categoryIds: Array.isArray(rule.categoryIds) ? rule.categoryIds : [],
-				regions: (Array.isArray(rule.regions) ? rule.regions : []).map((/** @type {Item} */ region) =>
-					region.city ? `${region.country}, ${region.city}` : String(region.country ?? ''),
-				),
+				regions: (Array.isArray(rule.regions) ? rule.regions : []).map((/** @type {Item} */ region) => taxRegionLine(region)),
 			})}
 			clean={(rule) => {
 				const percent = String(rule.percent).trim();
@@ -523,12 +568,7 @@ export function TaxRulesEditor({ websiteId, off }) {
 					name: String(rule.name ?? '').trim(),
 					percent: percent === '' ? Number.NaN : Number(percent),
 					categoryIds: cleanLines(rule.categoryIds),
-					regions: cleanLines(rule.regions).map((line) => {
-						const comma = line.indexOf(',');
-						return comma < 0
-							? { country: line, city: '' }
-							: { country: line.slice(0, comma).trim(), city: line.slice(comma + 1).trim() };
-					}),
+					regions: cleanLines(rule.regions).map(taxRegionOf),
 				};
 			}}
 			check={(rules) =>

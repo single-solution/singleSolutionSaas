@@ -4,58 +4,93 @@
  * status, totals and, while it waits for a payment, the way to pay) and paying an order again.
  * @module
  */
-import { button, codeOf, currencyOf, field, formatsOf, h, problemText } from './shop-common.js';
+import { ADDRESS_FIELDS, ADDRESS_LIMITS, regionsFor } from '../core/address.js';
+import { button, codeOf, currencyOf, field, formatsOf, h, problemText, select } from './shop-common.js';
+
+/** @typedef {import('../core/address.js').AddressField} AddressField */
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./shop-common.js').ShopSettings} ShopSettings */
 /** @typedef {import('./widget.js').Shop} Shop */
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
-/** The address fields in order, with their longest text and the browser's autofill name. */
-const ADDRESS_FIELDS = Object.freeze(
-	/** @type {Array<[string, number, string]>} */ ([
-		['name', 120, 'name'],
-		['phone', 30, 'tel'],
-		['line1', 200, 'address-line1'],
-		['line2', 200, 'address-line2'],
-		['city', 80, 'address-level2'],
-		['area', 80, 'address-level3'],
-		['postalCode', 20, 'postal-code'],
-		['country', 60, 'country-name'],
-		['notes', 500, 'off'],
-	]),
-);
+/** The browser's autofill name of each address field. */
+const AUTOFILL = Object.freeze({
+	name: 'name',
+	phone: 'tel',
+	line1: 'address-line1',
+	line2: 'address-line2',
+	city: 'address-level2',
+	area: 'address-level3',
+	region: 'address-level1',
+	postalCode: 'postal-code',
+	country: 'country-name',
+	notes: 'off',
+});
 
 /**
- * The delivery address form. `onPlace` runs when the city, area or country changes (the delivery fee may change).
+ * The delivery address form: the fields the merchant asks for (the `checkout` settings), each at most its length in
+ * the one address table (`core/address.js`); the region is a list to pick from in a country `address_regions` names
+ * (the business.json country while the country is left empty). `onPlace` runs when a field the delivery fee and taxes
+ * depend on changes.
  * @param {{ doc: Document, t: Texts, settings: ShopSettings, onPlace: () => void }} input
  */
 export const addressForm = ({ doc, t, settings, onPlace }) => {
-	const { required, optional } = settings.checkout.address;
-	/** @type {Map<string, HTMLInputElement | HTMLTextAreaElement>} */
+	const { required, optional, regions, country: homeCountry } = settings.checkout.address;
+	/** @type {Map<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>} */
 	const inputs = new Map();
-	const fields = ADDRESS_FIELDS.filter(([name]) => required.includes(name) || optional.includes(name)).map(
-		([name, max, autocomplete]) => {
-			const needed = required.includes(name);
-			const control = /** @type {HTMLInputElement | HTMLTextAreaElement} */ (
-				h(doc, name === 'notes' ? 'textarea' : 'input', {
-					maxlength: String(max),
-					autocomplete,
-					...(name === 'phone' ? { type: 'tel', inputmode: 'tel' } : {}),
-					...(name === 'city' && settings.checkout.cities.length > 0 ? { list: 'ss-cart-cities' } : {}),
-					...(needed ? { required: '', 'aria-required': 'true' } : {}),
-				})
-			);
-			if (['city', 'area', 'country'].includes(name)) control.addEventListener('change', onPlace);
-			inputs.set(name, control);
-			return field(
-				doc,
-				`ss-cart-${name}`,
-				t(needed ? `checkout.field.${name}` : 'checkout.optional', { field: t(`checkout.field.${name}`) }),
-				control,
-			);
-		},
-	);
+	/** @param {string} name */
+	const value = (name) => inputs.get(name)?.value.trim() ?? '';
+	/** The region names offered where the address is, or null. */
+	const regionNames = () => regionsFor(regions, value('country') || homeCountry);
+	/** @param {AddressField} name @param {boolean} needed */
+	const control = (name, needed) => {
+		const names = name === 'region' ? regionNames() : null;
+		const node = names
+			? select(
+					doc,
+					[['', t('checkout.region.choose')], ...names.map((entry) => /** @type {[string, string]} */ ([entry, entry]))],
+					'',
+					{
+						autocomplete: AUTOFILL.region,
+					},
+				)
+			: /** @type {HTMLInputElement | HTMLTextAreaElement} */ (
+					h(doc, name === 'notes' ? 'textarea' : 'input', {
+						maxlength: String(ADDRESS_LIMITS[name]),
+						autocomplete: AUTOFILL[name],
+						...(name === 'phone' ? { type: 'tel', inputmode: 'tel' } : {}),
+						...(name === 'city' && settings.checkout.cities.length > 0 ? { list: 'ss-cart-cities' } : {}),
+					})
+				);
+		if (needed) {
+			node.setAttribute('required', '');
+			node.setAttribute('aria-required', 'true');
+		}
+		if (['city', 'area', 'region', 'postalCode', 'country'].includes(name)) node.addEventListener('change', onPlace);
+		inputs.set(name, node);
+		return node;
+	};
+	const fields = ADDRESS_FIELDS.filter((name) => required.includes(name) || optional.includes(name)).map((name) => {
+		const needed = required.includes(name);
+		return field(
+			doc,
+			`ss-cart-${name}`,
+			t(needed ? `checkout.field.${name}` : 'checkout.optional', { field: t(`checkout.field.${name}`) }),
+			control(name, needed),
+		);
+	});
+	// a new country may offer its own regions: the region field follows (a typed region is kept where it can be)
+	inputs.get('country')?.addEventListener('change', () => {
+		const old = inputs.get('region');
+		if (!old) return;
+		const kept = old.value;
+		const next = control('region', required.includes('region'));
+		next.setAttribute('id', 'ss-cart-region');
+		old.replaceWith(next);
+		const options = next.tagName === 'SELECT' ? [.../** @type {HTMLSelectElement} */ (next).options] : null;
+		if (!options || options.some((option) => option.value === kept)) next.value = kept;
+	});
 	const cities =
 		settings.checkout.cities.length > 0
 			? h(
@@ -67,13 +102,11 @@ export const addressForm = ({ doc, t, settings, onPlace }) => {
 			: null;
 	const node = h(doc, 'fieldset', { class: 'box' }, h(doc, 'legend', {}, t('checkout.address')), ...fields, cities);
 
-	/** @param {string} name */
-	const value = (name) => inputs.get(name)?.value.trim() ?? '';
 	return {
 		node,
 		value,
 		/** The address as the order takes it. */
-		values: () => Object.fromEntries(ADDRESS_FIELDS.map(([name]) => [name, value(name)])),
+		values: () => Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, value(name)])),
 		/** The first required field left empty, or null. */
 		missing: () => required.find((name) => inputs.has(name) && value(name) === '') ?? null,
 		/** @param {string} name */

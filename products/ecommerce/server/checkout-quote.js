@@ -18,6 +18,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
 import { feeBaseOf, merchandiseOf, paymentOptions, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
+import { placeOf } from '../core/address.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
 import { checkoutFields } from '../core/fields.js';
@@ -386,11 +387,11 @@ export const createQuoting = (product, service) => {
 					}
 				: null;
 		const pickupPossible = pickups.length > 0 || pickupPoint !== null;
-		const where = {
-			city: address?.city ?? cart.delivery.city,
-			area: address?.area ?? cart.delivery.area,
-			country: address?.country ?? cart.delivery.country,
-		};
+		// where a delivery goes (an address without a country is in the business.json country); a pickup or undelivered
+		// order is at the business, in its country (taxes)
+		const homeCountry = (await s.business()).country ?? '';
+		const where = placeOf(address ?? cart.delivery, homeCountry);
+		const atBusiness = placeOf(null, homeCountry);
 		const zones = zonesOn ? /** @type {import('../core/delivery.js').Zone[]} */ (await s.list('delivery_zones')) : [];
 		const wantedMethod = cart.delivery.method ?? (zoneSettings?.defaultMethod === 'pickup' && pickupPossible ? 'pickup' : null);
 		const taxesOn = s.has('taxes');
@@ -510,8 +511,7 @@ export const createQuoting = (product, service) => {
 				};
 			}
 
-			const region =
-				delivery.method === 'delivery' && (where.country || where.city) ? { country: where.country, city: where.city } : null;
+			const region = delivery.method === 'delivery' ? where : atBusiness;
 			const base = {
 				lines: priced,
 				promotions,

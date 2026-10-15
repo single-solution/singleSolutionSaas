@@ -5,7 +5,7 @@
  *
  * - booking: `POST <bookUrl>` with the JSON body built from `bodyTemplate` (default `core/couriers.js`
  *   `DEFAULT_BODY_TEMPLATE`), whose `{number}`, `{name}`, `{phone}`, `{email}`, `{line1}`, `{line2}`, `{city}`, `{area}`,
- *   `{postalCode}`, `{country}`, `{items}`, `{amount}` (decimal), `{total}` (minor units), `{cod}` (decimal to collect,
+ *   `{region}`, `{postalCode}`, `{country}`, `{items}`, `{amount}` (decimal), `{total}` (minor units), `{cod}` (decimal to collect,
  *   0 when prepaid), `{currency}`, `{weightG}` (the package's grams: the items' weights from their packages, '' when
  *   one is not known) and `{note}` are filled JSON-escaped; any 2xx answer whose JSON has a tracking
  *   number at `trackingPath` (default `trackingNumber`) is a booking;
@@ -129,6 +129,7 @@ export const bookingValues = (order, weightG) => {
 		line2: address?.line2 ?? '',
 		city: address?.city ?? '',
 		area: address?.area ?? '',
+		region: address?.region ?? '',
 		postalCode: address?.postalCode ?? '',
 		country: address?.country ?? '',
 		items: String(order.lines.filter((line) => line.kind === 'physical').reduce((sum, line) => sum + line.quantity, 0)),

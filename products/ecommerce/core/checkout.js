@@ -14,6 +14,7 @@
  * @module
  */
 import { normalisePhone } from '@ss/contracts/phone';
+import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
 import { codDecision, codFee } from './cod.js';
 import { allocateUnits, isPrice, roundHalfUp } from './money.js';
 import { taxOf, taxPercent } from './taxes.js';
@@ -34,8 +35,6 @@ export const MAX_QUANTITY = 99;
 export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['online', 'bank_transfer', 'cod', 'pickup']));
 /** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
-/** Address fields a merchant may make required (`checkout.addressRequired`, E22; name and phone always are). */
-export const OPTIONAL_ADDRESS_FIELDS = Object.freeze(['line1', 'line2', 'area', 'city', 'postalCode', 'country']);
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** A phone as typed: digits, spaces, + ( ) - (kept when the website's phone rules cannot read it as E.164). */
@@ -47,12 +46,13 @@ const PHONE = /^\+?[0-9][0-9 ()-]{5,22}$/;
  *   lock the last quote gave (E18 `lockMinutes`)
  */
 /**
- * @typedef {{ method: 'delivery' | 'pickup' | null, city: string, area: string, country: string, locationId: string | null }} DeliveryInput
+ * @typedef {{ method: 'delivery' | 'pickup' | null, city: string, area: string, region: string, postalCode: string,
+ *   country: string, locationId: string | null }} DeliveryInput
  */
 /** @typedef {{ lines: CartLineInput[], coupon: string, points: number, delivery: DeliveryInput, payment: PaymentMethod | null }} CartInput */
 /**
- * @typedef {{ name: string, phone: string, line1: string, line2: string, city: string, area: string, postalCode: string,
- *   country: string, notes: string }} Address
+ * @typedef {{ name: string, phone: string, line1: string, line2: string, city: string, area: string, region: string,
+ *   postalCode: string, country: string, notes: string }} Address
  */
 /** @typedef {{ ok: false, field: string, message: string }} InputError */
 
@@ -136,11 +136,18 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 	const method = delivery.method ?? null;
 	if (method !== null && method !== 'delivery' && method !== 'pickup')
 		return { ok: false, field: 'delivery/method', message: 'delivery.method is delivery or pickup.' };
-	const city = text(delivery.city, 80);
-	const area = text(delivery.area, 80);
-	const country = text(delivery.country, 60);
-	if (city === null || area === null || country === null)
-		return { ok: false, field: 'delivery', message: 'delivery names a city, area and country of at most 80 characters.' };
+	/** @type {Record<'city' | 'area' | 'region' | 'postalCode' | 'country', string>} */
+	const place = { city: '', area: '', region: '', postalCode: '', country: '' };
+	for (const field of /** @type {Array<keyof typeof place>} */ (['city', 'area', 'region', 'postalCode', 'country'])) {
+		const value = text(delivery[field], ADDRESS_LIMITS[field]);
+		if (value === null)
+			return {
+				ok: false,
+				field: `delivery/${field}`,
+				message: `delivery.${field} is at most ${ADDRESS_LIMITS[field]} characters.`,
+			};
+		place[field] = value;
+	}
 	const locationId = delivery.locationId ?? null;
 	if (locationId !== null && (typeof locationId !== 'string' || !ID.test(locationId)))
 		return { ok: false, field: 'delivery/locationId', message: 'delivery.locationId is a pickup location id.' };
@@ -153,46 +160,54 @@ export const checkCart = (body, { maxLines = MAX_LINES, maxQuantity = MAX_QUANTI
 			lines: [...merged.values()],
 			coupon: coupon.toUpperCase(),
 			points: Number(points),
-			delivery: { method, city, area, country, locationId: /** @type {string | null} */ (locationId) },
+			delivery: { method, ...place, locationId: /** @type {string | null} */ (locationId) },
 			payment: /** @type {PaymentMethod | null} */ (payment),
 		},
 	};
 };
 
 /**
- * Check a delivery address; its phone (the one the courier calls) is kept as E.164 when the website's phone rules can
- * read it (K12), else as typed, so a website with no calling code still takes national numbers.
+ * What a delivery address must hold on a website: the fields the merchant requires besides the name
+ * (`checkout.addressRequired`), whether the phone is needed (`checkout.phoneRequired`), how phones are read (K12),
+ * the region names offered per country (`address_regions`) and the business.json country (an address without a country
+ * is there).
+ * @typedef {{ required: ReadonlyArray<string>, phoneRequired: boolean,
+ *   phoneRules: Pick<PhoneRules, 'defaultCallingCode' | 'trunkPrefix'>,
+ *   regions: ReadonlyArray<import('./address.js').AddressRegions>, homeCountry: string }} AddressRules
+ */
+
+/**
+ * Check a delivery address (every field at most its {@link ADDRESS_LIMITS} length). Its phone (the one the courier
+ * calls) is kept as E.164 when the website's phone rules can read it (K12), else as typed, so a website with no calling
+ * code still takes national numbers. In a country `address_regions` lists, the region is one of its names, kept as the
+ * list spells it.
  * @param {unknown} body
- * @param {ReadonlyArray<string>} required the fields the merchant requires besides name and phone
- *   (`OPTIONAL_ADDRESS_FIELDS`)
- * @param {Pick<PhoneRules, 'defaultCallingCode' | 'trunkPrefix'>} phoneRules (any country: a courier calls it)
+ * @param {AddressRules} rules
  * @returns {{ ok: true, value: Address } | InputError}
  */
-export const checkAddress = (body, required, phoneRules) => {
+export const checkAddress = (body, rules) => {
 	if (!isObject(body)) return { ok: false, field: 'address', message: 'A delivery address is required.' };
 	const input = /** @type {Record<string, unknown>} */ (body);
-	/** @type {Array<[keyof Address, number, boolean]>} */
-	const fields = [
-		['name', 120, true],
-		['phone', 30, true],
-		['line1', 200, required.includes('line1')],
-		['line2', 200, required.includes('line2')],
-		['city', 80, required.includes('city')],
-		['area', 80, required.includes('area')],
-		['postalCode', 20, required.includes('postalCode')],
-		['country', 60, required.includes('country')],
-		['notes', 500, false],
-	];
 	/** @type {Record<string, string>} */
 	const out = {};
-	for (const [field, max, needed] of fields) {
+	for (const [field, max] of Object.entries(ADDRESS_LIMITS)) {
 		const value = text(input[field], max);
 		if (value === null)
 			return { ok: false, field: `address/${field}`, message: `address.${field} is at most ${max} characters.` };
+		const needed =
+			field === 'name' || (field === 'phone' ? rules.phoneRequired : field !== 'notes' && rules.required.includes(field));
 		if (needed && value === '') return { ok: false, field: `address/${field}`, message: `address.${field} is required.` };
 		out[field] = value;
 	}
-	const phone = normalisePhone(out.phone, phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
+	const names = regionsFor(rules.regions, out.country || rules.homeCountry);
+	if (names && out.region !== '') {
+		const named = names.find((name) => placeKey(name) === placeKey(out.region));
+		if (!named)
+			return { ok: false, field: 'address/region', message: 'address.region is one of the regions listed for its country.' };
+		out.region = named;
+	}
+	if (out.phone === '') return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ (out)) };
+	const phone = normalisePhone(out.phone, rules.phoneRules) ?? (PHONE.test(String(out.phone)) ? String(out.phone) : null);
 	if (!phone)
 		return { ok: false, field: 'address/phone', message: 'address.phone is a phone number (digits, spaces, + ( ) -).' };
 	return { ok: true, value: /** @type {Address} */ (/** @type {unknown} */ ({ ...out, phone })) };
@@ -476,7 +491,8 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
  * @param {number} input.delivery the delivery fee
  * @param {number} input.pointsValue what the redeemed points take off, minor units
  * @param {TaxRule[]} input.taxRules [] without the `taxes` feature
- * @param {{ country: string, city: string } | null} input.region
+ * @param {import('./address.js').Place | null} input.region where the order goes (a pickup order: the business.json
+ *   country; null: no place, then only tax rules without regions apply)
  * @param {boolean} input.taxIncluded
  * @param {number} [input.rolePercent] the shopper's role discount (E19)
  * @param {number} [input.feePercent] the payment method's fee (E23)

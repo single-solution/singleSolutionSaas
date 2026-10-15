@@ -78,7 +78,15 @@ export const settingsOf = (config) => {
 			loyalty: checkout.loyalty === true,
 			address: {
 				required: /** @type {string[]} */ (checkout.address?.required ?? ['name', 'phone', 'line1', 'city']),
-				optional: /** @type {string[]} */ (checkout.address?.optional ?? ['line2', 'area', 'postalCode', 'country', 'notes']),
+				optional: /** @type {string[]} */ (
+					checkout.address?.optional ?? ['line2', 'area', 'region', 'postalCode', 'country', 'notes']
+				),
+				/** the region names offered per country (`address_regions`) */
+				regions: /** @type {Array<{ country: string, names: string[] }>} */ (
+					Array.isArray(checkout.address?.regions) ? checkout.address.regions : []
+				),
+				/** the country of an address without one (business.json) */
+				country: typeof checkout.address?.country === 'string' ? checkout.address.country : '',
 			},
 		},
 		returns: {

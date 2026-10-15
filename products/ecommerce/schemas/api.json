@@ -1900,7 +1900,7 @@
 		},
 		"ChatAccount": {
 			"type": "object",
-			"required": ["name", "firstName", "loyaltyPoints", "city", "area"],
+			"required": ["name", "firstName", "loyaltyPoints", "city", "area", "region", "country"],
 			"additionalProperties": false,
 			"properties": {
 				"name": {
@@ -1919,6 +1919,14 @@
 				},
 				"area": {
 					"type": "string"
+				},
+				"region": {
+					"type": "string",
+					"description": "The default address’s region in Accounts."
+				},
+				"country": {
+					"type": "string",
+					"description": "The default address’s country in Accounts."
 				}
 			}
 		},
@@ -3781,6 +3789,7 @@
 				"id",
 				"userId",
 				"guest",
+				"guestKey",
 				"name",
 				"email",
 				"phone",
@@ -3810,6 +3819,10 @@
 				"guest": {
 					"type": "boolean",
 					"description": "No Accounts user."
+				},
+				"guestKey": {
+					"type": "string",
+					"description": "What a guest is known by: p:<E.164 phone> or e:<email address> (checkout.guestIdentity); '' for a member."
 				},
 				"name": {
 					"type": "string"
@@ -3882,6 +3895,7 @@
 				"id",
 				"userId",
 				"guest",
+				"guestKey",
 				"name",
 				"email",
 				"phone",
@@ -3915,6 +3929,10 @@
 				"guest": {
 					"type": "boolean",
 					"description": "No Accounts user."
+				},
+				"guestKey": {
+					"type": "string",
+					"description": "What a guest is known by: p:<E.164 phone> or e:<email address> (checkout.guestIdentity); '' for a member."
 				},
 				"name": {
 					"type": "string"
@@ -6434,7 +6452,7 @@
 		"OrderAddress": {
 			"type": "object",
 			"description": "The delivery address. phone is the one the courier calls (E.164 when the website's phone rules read it).",
-			"required": ["name", "phone", "line1", "line2", "city", "area", "postalCode", "country", "notes"],
+			"required": ["name", "phone", "line1", "line2", "city", "area", "region", "postalCode", "country", "notes"],
 			"additionalProperties": false,
 			"properties": {
 				"name": {
@@ -6461,9 +6479,15 @@
 					"type": "string",
 					"maxLength": 100
 				},
+				"region": {
+					"type": "string",
+					"maxLength": 100,
+					"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+				},
 				"postalCode": {
 					"type": "string",
-					"maxLength": 20
+					"maxLength": 20,
+					"description": "Zones and tax rules compare it upper-cased without spaces."
 				},
 				"country": {
 					"type": "string",
@@ -12766,36 +12790,51 @@
 		"ShopOrderAddress": {
 			"type": "object",
 			"description": "A delivery address.",
-			"required": ["name", "phone", "line1", "line2", "city", "area", "postalCode", "country", "notes"],
+			"required": ["name", "phone", "line1", "line2", "city", "area", "region", "postalCode", "country", "notes"],
 			"additionalProperties": false,
 			"properties": {
 				"name": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 120
 				},
 				"phone": {
 					"type": "string",
-					"description": "E.164 when the website’s phone rules read it, else as typed."
+					"description": "E.164 when the website’s phone rules read it, else as typed.",
+					"maxLength": 40
 				},
 				"line1": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 200
 				},
 				"line2": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 200
 				},
 				"city": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 100
 				},
 				"area": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 100
+				},
+				"region": {
+					"type": "string",
+					"maxLength": 100,
+					"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 				},
 				"postalCode": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 20,
+					"description": "Zones and tax rules compare it upper-cased without spaces."
 				},
 				"country": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 60
 				},
 				"notes": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 500
 				}
 			}
 		},
@@ -21120,7 +21159,7 @@
 				},
 				"delivery": {
 					"type": "object",
-					"description": "Where it goes, for the delivery zone and taxes (placing an order: the address’s city, area and country win).",
+					"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business.json country; a pickup order is taxed at the business.",
 					"properties": {
 						"method": {
 							"type": ["string", "null"],
@@ -21129,11 +21168,19 @@
 						},
 						"city": {
 							"type": "string",
-							"maxLength": 80
+							"maxLength": 100
 						},
 						"area": {
 							"type": "string",
-							"maxLength": 80
+							"maxLength": 100
+						},
+						"region": {
+							"type": "string",
+							"maxLength": 100
+						},
+						"postalCode": {
+							"type": "string",
+							"maxLength": 20
 						},
 						"country": {
 							"type": "string",
@@ -21168,7 +21215,7 @@
 	},
 	"POST /v1/shop/orders": {
 		"summary": "Place an order",
-		"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member’s record has links the order to that member’s record (it enters their account when they sign in with that phone verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. Order numbers come from a counter of their form; should the counter ever be behind the numbers already used (set back, or orders imported before it moved on), the placement moves it past the highest one and is placed again, never stopping checkout. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
+		"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone?, email? } (what checkout.guestIdentity and checkout.phoneRequired ask for) while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone or email address belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone or member_email); a phone or email address a member’s record has links the order to that member’s record (it enters their account when they sign in with it verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. Order numbers come from a counter of their form; should the counter ever be behind the numbers already used (set back, or orders imported before it moved on), the placement moves it past the highest one and is placed again, never stopping checkout. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
 		"body": {
 			"type": "object",
 			"required": ["lines", "payment"],
@@ -21230,7 +21277,7 @@
 				},
 				"delivery": {
 					"type": "object",
-					"description": "Where it goes, for the delivery zone and taxes (placing an order: the address’s city, area and country win).",
+					"description": "Where it goes, for the delivery zone and taxes (placing an order: the address wins). Without a country it is in the business.json country; a pickup order is taxed at the business.",
 					"properties": {
 						"method": {
 							"type": ["string", "null"],
@@ -21239,11 +21286,19 @@
 						},
 						"city": {
 							"type": "string",
-							"maxLength": 80
+							"maxLength": 100
 						},
 						"area": {
 							"type": "string",
-							"maxLength": 80
+							"maxLength": 100
+						},
+						"region": {
+							"type": "string",
+							"maxLength": 100
+						},
+						"postalCode": {
+							"type": "string",
+							"maxLength": 20
 						},
 						"country": {
 							"type": "string",
@@ -21263,8 +21318,8 @@
 				},
 				"address": {
 					"type": "object",
-					"description": "Required when the order is delivered: name and phone always, and the fields checkout.addressRequired lists (of line1, line2, area, city, postalCode, country).",
-					"required": ["name", "phone"],
+					"description": "Required when the order is delivered: the name always, the phone while checkout.phoneRequired is on, and the fields checkout.addressRequired lists (of line1, line2, area, city, region, postalCode, country). In a country the address_regions list names, region is one of its names (422 at /address/region otherwise).",
+					"required": ["name"],
 					"properties": {
 						"name": {
 							"type": "string",
@@ -21272,7 +21327,7 @@
 						},
 						"phone": {
 							"type": "string",
-							"maxLength": 30,
+							"maxLength": 40,
 							"description": "Kept as E.164 when the website’s phone rules read it."
 						},
 						"line1": {
@@ -21285,15 +21340,21 @@
 						},
 						"city": {
 							"type": "string",
-							"maxLength": 80
+							"maxLength": 100
 						},
 						"area": {
 							"type": "string",
-							"maxLength": 80
+							"maxLength": 100
+						},
+						"region": {
+							"type": "string",
+							"maxLength": 100,
+							"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 						},
 						"postalCode": {
 							"type": "string",
-							"maxLength": 20
+							"maxLength": 20,
+							"description": "Zones and tax rules compare it upper-cased without spaces."
 						},
 						"country": {
 							"type": "string",
@@ -21307,8 +21368,8 @@
 				},
 				"customer": {
 					"type": "object",
-					"description": "A guest’s details (without a sign-in, while checkout.guests allows guests).",
-					"required": ["name", "phone"],
+					"description": "A guest’s details (without a sign-in, while checkout.guests allows guests): the phone when checkout.guestIdentity is phone or checkout.phoneRequired is on, the email address when guestIdentity is email, at least one of them under either. One customer record per guest key: the phone (p:+E.164) or the email address (e:…; under either the phone when given).",
+					"required": ["name"],
 					"properties": {
 						"name": {
 							"type": "string",
@@ -21316,12 +21377,12 @@
 							"maxLength": 120
 						},
 						"phone": {
-							"type": "string",
-							"description": "Read by the website’s phone rules (checkout.defaultCallingCode …); of a country in checkout.countries."
+							"type": ["string", "null"],
+							"description": "Read by the website’s phone rules (checkout.defaultCallingCode …); of a country in checkout.countries. '' or missing for none where it is not needed."
 						},
 						"email": {
 							"type": ["string", "null"],
-							"description": "An email address, or '' or null for none."
+							"description": "An email address (kept in lower case), or '' or null for none where it is not needed."
 						}
 					}
 				},
@@ -21843,10 +21904,26 @@
 					"type": "string",
 					"enum": ["cod", "online", "bank_transfer", "pickup"]
 				},
+				"country": {
+					"type": "string",
+					"maxLength": 60
+				},
+				"region": {
+					"type": "string",
+					"maxLength": 100
+				},
 				"city": {
 					"type": "string",
-					"maxLength": 80,
-					"description": "For the delivery zone."
+					"maxLength": 100,
+					"description": "For the delivery zone and taxes, with country, region, area and postalCode (a place without a country is in the business.json country)."
+				},
+				"area": {
+					"type": "string",
+					"maxLength": 100
+				},
+				"postalCode": {
+					"type": "string",
+					"maxLength": 20
 				}
 			}
 		},
@@ -22232,7 +22309,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"refundDue": {
 					"type": "string",
@@ -22326,7 +22403,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"refundDue": {
 					"type": "string",
@@ -22410,7 +22487,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"refundDue": {
 					"type": "string",
@@ -22494,7 +22571,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"refundDue": {
 					"type": "string",
@@ -22583,7 +22660,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"refundDue": {
 					"type": "string",
@@ -22672,7 +22749,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"refundDue": {
 					"type": "string",
@@ -22738,9 +22815,15 @@
 							"type": "string",
 							"maxLength": 100
 						},
+						"region": {
+							"type": "string",
+							"maxLength": 100,
+							"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+						},
 						"postalCode": {
 							"type": "string",
-							"maxLength": 20
+							"maxLength": 20,
+							"description": "Zones and tax rules compare it upper-cased without spaces."
 						},
 						"country": {
 							"type": "string",
@@ -22874,9 +22957,17 @@
 							"type": "string",
 							"maxLength": 100
 						},
-						"country": {
+						"region": {
 							"type": "string",
 							"maxLength": 100
+						},
+						"postalCode": {
+							"type": "string",
+							"maxLength": 20
+						},
+						"country": {
+							"type": "string",
+							"maxLength": 60
 						},
 						"locationId": {
 							"type": ["string", "null"],
@@ -22951,9 +23042,15 @@
 							"type": "string",
 							"maxLength": 100
 						},
+						"region": {
+							"type": "string",
+							"maxLength": 100,
+							"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
+						},
 						"postalCode": {
 							"type": "string",
-							"maxLength": 20
+							"maxLength": 20,
+							"description": "Zones and tax rules compare it upper-cased without spaces."
 						},
 						"country": {
 							"type": "string",
@@ -23087,9 +23184,17 @@
 							"type": "string",
 							"maxLength": 100
 						},
-						"country": {
+						"region": {
 							"type": "string",
 							"maxLength": 100
+						},
+						"postalCode": {
+							"type": "string",
+							"maxLength": 20
+						},
+						"country": {
+							"type": "string",
+							"maxLength": 60
 						},
 						"locationId": {
 							"type": ["string", "null"],
@@ -24170,7 +24275,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"blocked": {
 					"type": "string",
@@ -24227,7 +24332,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"blocked": {
 					"type": "string",
@@ -24274,7 +24379,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"blocked": {
 					"type": "string",
@@ -24315,7 +24420,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"blocked": {
 					"type": "string",
@@ -24361,7 +24466,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"blocked": {
 					"type": "string",
@@ -24407,7 +24512,7 @@
 				"q": {
 					"type": "string",
 					"maxLength": 120,
-					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (matched on its last digits)."
+					"description": "Part of the name, the start of the email, a user or customer id, or 4 or more digits of a phone (found anywhere in its whole number; a national number typed with its trunk prefix finds the number)."
 				},
 				"blocked": {
 					"type": "string",
@@ -27468,31 +27573,46 @@
 						"type": "object",
 						"properties": {
 							"name": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 120
 							},
 							"phone": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 40
 							},
 							"line1": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 200
 							},
 							"line2": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 200
 							},
 							"city": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 100
 							},
 							"area": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 100
+							},
+							"region": {
+								"type": "string",
+								"maxLength": 100,
+								"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 							},
 							"postalCode": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 20,
+								"description": "Zones and tax rules compare it upper-cased without spaces."
 							},
 							"country": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 60
 							},
 							"notes": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 500
 							}
 						}
 					}
@@ -27517,31 +27637,46 @@
 						"type": "object",
 						"properties": {
 							"name": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 120
 							},
 							"phone": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 40
 							},
 							"line1": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 200
 							},
 							"line2": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 200
 							},
 							"city": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 100
 							},
 							"area": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 100
+							},
+							"region": {
+								"type": "string",
+								"maxLength": 100,
+								"description": "The state, province or region: one of the address_regions names in a country that list names (kept as listed)."
 							},
 							"postalCode": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 20,
+								"description": "Zones and tax rules compare it upper-cased without spaces."
 							},
 							"country": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 60
 							},
 							"notes": {
-								"type": "string"
+								"type": "string",
+								"maxLength": 500
 							}
 						}
 					}

@@ -339,6 +339,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 											address.line2,
 											address.area,
 											address.city,
+											address.region,
 											address.postalCode,
 											address.country,
 										]

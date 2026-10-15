@@ -342,7 +342,8 @@ describe('Chat lookups (E37)', () => {
 			deal({ id: 'deal_gone', name: 'Over', active: false }),
 		]);
 		await shop.list('delivery_zones', [
-			{ key: 'bos', name: 'Boston', cities: ['Boston'], areas: [], fee: 25000, freeOver: 500000, minDays: 1, maxDays: 2 },
+			{ key: 'bos', name: 'Boston', match: { cities: ['Boston'] }, fee: 25000, freeOver: 500000, minDays: 1, maxDays: 2 },
+			{ key: 'bos_center', name: 'Boston center', match: { postcodes: ['021'] }, fee: 20000, minDays: 1, maxDays: 1 },
 		]);
 		await shop.setting('delivery_zones', 'defaultFee', 30000);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
@@ -506,7 +507,15 @@ describe('Chat lookups (E37)', () => {
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?paymentMethod=card')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?variantId=var_nope')).status).toBe(404);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?variantId=a%20b')).status).toBe(422);
-		expect((await shop.api('GET', `/v1/chat/products/iphone-13/quote?city=${'x'.repeat(81)}`)).status).toBe(422);
+		// the place a Chat quote asks for picks the most specific zone (a postcode start over the city)
+		expect(
+			(await shop.api('GET', '/v1/chat/products/iphone-13/quote?city=Boston&country=US&postalCode=021%2015')).json.delivery,
+		).toMatchObject({ name: 'Boston center', fee: 20000 });
+		// each part of the place at most its length in the one address table
+		expect((await shop.api('GET', `/v1/chat/products/iphone-13/quote?city=${'x'.repeat(100)}`)).status).toBe(200);
+		expect((await shop.api('GET', `/v1/chat/products/iphone-13/quote?city=${'x'.repeat(101)}`)).status).toBe(422);
+		expect((await shop.api('GET', `/v1/chat/products/iphone-13/quote?postalCode=${'1'.repeat(21)}`)).status).toBe(422);
+		expect((await shop.api('GET', `/v1/chat/products/iphone-13/quote?region=${'x'.repeat(101)}`)).status).toBe(422);
 	});
 
 	it('lists deals with their display fields', async () => {
@@ -602,7 +611,7 @@ describe('Chat lookups (E37)', () => {
 							name: 'Sara Shopper',
 							addresses: [
 								{ city: 'Chicago', area: 'Loop', default: false },
-								{ city: 'Seattle', area: 'Downtown', default: true },
+								{ city: 'Seattle', area: 'Downtown', region: 'Washington', country: 'US', default: true },
 							],
 						},
 					}
@@ -614,6 +623,8 @@ describe('Chat lookups (E37)', () => {
 			loyaltyPoints: 0,
 			city: 'Seattle',
 			area: 'Downtown',
+			region: 'Washington',
+			country: 'US',
 		});
 		shop.responders.delete(`${ACCOUNTS}/v1/me`);
 	});

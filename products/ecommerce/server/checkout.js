@@ -9,7 +9,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { productTypes } from '../adapters/catalog-store.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { elementsOf } from '../core/item-types.js';
-import { OPTIONAL_ADDRESS_FIELDS } from '../core/checkout.js';
+import { OPTIONAL_ADDRESS_FIELDS } from '../core/address.js';
 import { zoneCities } from '../core/delivery.js';
 import { createDigital } from './checkout-digital.js';
 import { createOrdering } from './checkout-orders.js';
@@ -89,6 +89,7 @@ export const createCheckout = (product, service) => {
 		const cod = codSettings?.enabled === false ? null : codSettings;
 		/** @type {string[]} */
 		const required = checkout.addressRequired;
+		const phoneNeeded = checkout.phoneRequired !== false;
 		return {
 			checkout: {
 				paymentMethods: [
@@ -118,8 +119,19 @@ export const createCheckout = (product, service) => {
 				coupons: s.has('coupons'),
 				loyalty: s.has('loyalty'),
 				address: {
-					required: ['name', 'phone', ...OPTIONAL_ADDRESS_FIELDS.filter((f) => required.includes(f))],
-					optional: [...OPTIONAL_ADDRESS_FIELDS.filter((f) => !required.includes(f)), 'notes'],
+					required: [
+						'name',
+						...(phoneNeeded ? ['phone'] : []),
+						...OPTIONAL_ADDRESS_FIELDS.filter((f) => required.includes(f)),
+					],
+					optional: [
+						...(phoneNeeded ? [] : ['phone']),
+						...OPTIONAL_ADDRESS_FIELDS.filter((f) => !required.includes(f)),
+						'notes',
+					],
+					// the region names offered per country (`address_regions`), and the country of an address without one
+					regions: await s.list('address_regions'),
+					country: (await s.business()).country ?? '',
 				},
 				paymentWindowMinutes: checkout.paymentWindowMinutes,
 			},

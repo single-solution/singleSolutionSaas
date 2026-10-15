@@ -397,8 +397,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string} number human number, unique per website (`<prefix><year>-<sequence>`)
  * @property {{ userId: string, name: string, email: string, phone: string, customerId?: string }} customer from the
  *   Accounts sign-in, or the guest's details (`userId` '' for guests, E21); `customerId` the shop's customer record
- * @property {{ name: string, phone: string, line1: string, line2: string, city: string, area: string, postalCode: string,
- *   country: string, notes: string } | null} address null for pickup, digital and booking-only orders
+ * @property {import('./checkout.js').Address | null} address null for pickup, digital and booking-only orders
  * @property {{ method: 'delivery' | 'pickup' | 'none', zone: string, fee: number, locationId: string | null }} delivery
  * @property {OrderLineRecord[]} lines
  * @property {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, currency: string,
@@ -436,7 +435,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {Array<{ kind: 'dispatch_video', key?: string | null, url?: string | null, at?: Date, by?: string }>} [media]
  *   the dispatch video: an upload key, or a YouTube or https address (E28)
  * @property {string[]} [seenBy] staff ids who opened it (E31, at most 50)
- * @property {string} [phoneDigits] the last 10 digits of the customer's phone (E31)
+ * @property {string} [phoneDigits] the digits of the customer's phone, its whole number (E31)
  * @property {string | null} [accessKeyHash] the hash of a guest order's key (E21)
  * @property {boolean} stockHeld stock (and booked slots) are held by this order; false after cancel or RTO
  * @property {import('./facts.js').OrderFacts} [facts] what the order holds or gave back (the order engine's facts, PLAN
@@ -474,9 +473,10 @@ export const STATUS_ROLES = Object.freeze([
 
 /**
  * Shop records about one shopper (PLAN 0.8.8: only shop records, linked to the Accounts user id; E21: guests too,
- * unique by normalized phone): a guest has no user id (`userId: null`, `guest: true`).
- * @typedef {{ id: string, userId: string | null, guest: boolean, name: string, email: string, phone: string,
- *   phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
+ * unique by their key): a guest has no user id (`userId: null`, `guest: true`) and a `guestKey`, `p:<E.164>` or
+ * `e:<email>` (`checkout.guestIdentity`, dynamic model §5).
+ * @typedef {{ id: string, userId: string | null, guest: boolean, guestKey?: string, name: string, email: string,
+ *   phone: string, phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
  *   note: string, seenBy: string[], lastOrderAt?: Date | null,
  *   fields?: Record<string, import('./fields.js').FieldValue>, addresses?: import('./checkout.js').Address[],
  *   loyaltyMember?: boolean }} CustomerRecord `fields`: the values of the shop's customer fields by field id, kept by

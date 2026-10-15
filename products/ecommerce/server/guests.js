@@ -1,12 +1,12 @@
 /**
- * Guests becoming members (PLAN 0.8.10 E21): when a signed-in shopper's phone, verified by Accounts, is a guest's
- * phone, the guest's orders, loyalty points and alerts move to the member on that request, and the guest's customer
- * record is folded into the member's (order and RTO counts added, a block kept, the staff note and the customer field
- * values the member's record lacks taken over). Guest orders placed on a member's phone are linked to the member's
- * record but stay out of their account until such a sign-in (owner, 2026-10-14 (2)): then they move in too. Also the
- * check of `unless_password`:
- * whether a phone belongs to an Accounts user with a password (through the pasted Accounts token), and the website's
- * phone rules (K12).
+ * Guests becoming members (PLAN 0.8.10 E21; dynamic model §5): when a signed-in shopper's phone or email address,
+ * verified by Accounts (`phone_verified`, `email_verified` in the sign-in), is a guest's key, the guest's orders,
+ * loyalty points and alerts move to the member on that request, and the guest's customer record is folded into the
+ * member's (order and RTO counts added, a block kept, the staff note and the customer field values the member's record
+ * lacks taken over). Guest orders placed on a member's phone or email address are linked to the member's record but
+ * stay out of their account until such a sign-in (owner, 2026-10-14 (2)): then they move in too. Also the check of
+ * `unless_password`: whether a guest's phone or email address belongs to an Accounts user with a password (through the
+ * pasted Accounts token), and the website's phone and address rules (K12).
  * @module
  */
 import { mergeLoyalty } from '../adapters/ledger.js';
@@ -26,29 +26,47 @@ import { MAX_STAFF_NOTE } from '../core/orders.js';
 export const phoneRulesOf = async (s) => phoneRules(await s.values('checkout'), (await s.business()).country);
 
 /**
+ * What a delivery address must hold on the website (`core/checkout.js` `checkAddress`): the `checkout` settings
+ * `addressRequired` and `phoneRequired`, its phone rules, the `address_regions` list and the business.json country.
+ * @param {Site} s
+ * @returns {Promise<import('../core/checkout.js').AddressRules>}
+ */
+export const addressRulesOf = async (s) => {
+	const [checkout, business, regions] = await Promise.all([s.values('checkout'), s.business(), s.list('address_regions')]);
+	return {
+		required: /** @type {string[]} */ (checkout.addressRequired),
+		phoneRequired: checkout.phoneRequired !== false,
+		phoneRules: phoneRules(checkout, business.country),
+		regions,
+		homeCountry: business.country ?? '',
+	};
+};
+
+/**
  * @param {Product} product
  */
 export const createGuests = (product) => {
 	/**
-	 * Move a guest's records to the signed-in shopper whose verified phone is the guest's. Never throws.
+	 * Move the records of the guest a verified contact names to the signed-in shopper. Never throws.
 	 * @param {Site} s
-	 * @param {Shopper | null} shopper
+	 * @param {Shopper} shopper
+	 * @param {{ guestKey: string, field: 'customer.phone' | 'customer.email', value: string }} proven the guest key the
+	 *   contact makes, and the order field that holds it
 	 * @returns {Promise<number>} the guest orders moved
 	 */
-	const claim = async (s, shopper) => {
-		if (!shopper?.phoneVerified || !shopper.phone) return 0;
+	const claimKey = async (s, shopper, proven) => {
 		try {
 			const data = await s.data();
 			const store = createOrdersStore(data);
-			const guest = await store.guestCustomer(shopper.phone);
+			const guest = await store.guestCustomer(proven.guestKey);
 			const own = await store.customer(shopper.id);
-			// the guest orders placed on this phone that are linked to the member's own record
+			// the guest orders placed on this phone or email address that are linked to the member's own record
 			const linked = own?.id
 				? {
 						websiteId: data.websiteId,
 						'customer.customerId': own.id,
 						'customer.userId': '',
-						'customer.phone': shopper.phone,
+						[proven.field]: proven.value,
 					}
 				: null;
 			if (!guest?.id) {
@@ -123,18 +141,56 @@ export const createGuests = (product) => {
 	};
 
 	/**
-	 * Whether a phone belongs to an Accounts user with a password (`unless_password`). False when Accounts cannot say:
-	 * the guest orders and the order moves to the member when they sign in.
+	 * Move a guest's records to the signed-in shopper whose verified phone or email address is the guest's (both, when
+	 * both are verified). Never throws.
 	 * @param {Site} s
-	 * @param {string} phone E.164
+	 * @param {Shopper | null} shopper
+	 * @returns {Promise<number>} the guest orders moved
 	 */
-	const memberWithPassword = async (s, phone) => {
-		const answer = await product
-			.callProduct(s.websiteId, 'accounts', `/v1/users?phone=${encodeURIComponent(phone)}&limit=1`, { method: 'GET' })
-			.catch(() => /** @type {const} */ ({ ok: false }));
-		if (!answer.ok || answer.status !== 200) return false;
-		const items = /** @type {any} */ (answer.body)?.items;
-		return Array.isArray(items) && items.some((user) => user?.phone === phone && user?.hasPassword === true);
+	const claim = async (s, shopper) => {
+		if (!shopper) return 0;
+		const email = shopper.email.trim().toLowerCase();
+		/** @type {Array<{ guestKey: string, field: 'customer.phone' | 'customer.email', value: string }>} */
+		const proven = [
+			...(shopper.phoneVerified && shopper.phone
+				? [{ guestKey: `p:${shopper.phone}`, field: /** @type {const} */ ('customer.phone'), value: shopper.phone }]
+				: []),
+			...(shopper.emailVerified && email
+				? [{ guestKey: `e:${email}`, field: /** @type {const} */ ('customer.email'), value: email }]
+				: []),
+		];
+		let moved = 0;
+		for (const contact of proven) moved += await claimKey(s, shopper, contact);
+		return moved;
+	};
+
+	/**
+	 * Whether a guest's phone or email address belongs to an Accounts user with a password (`unless_password`): which of
+	 * them does, or null. Null when Accounts cannot say: the guest orders and the order moves to the member when they
+	 * sign in.
+	 * @param {Site} s
+	 * @param {{ phone: string, email: string }} guest the phone as E.164, the email address in lower case ('' = none)
+	 * @returns {Promise<'phone' | 'email' | null>}
+	 */
+	const memberWithPassword = async (s, { phone, email }) => {
+		/** @param {'phone' | 'email'} field @param {string} value */
+		const has = async (field, value) => {
+			// a phone is looked up exactly; an email address through the search (name, email or phone), then compared whole
+			const query =
+				field === 'phone' ? `phone=${encodeURIComponent(value)}&limit=1` : `q=${encodeURIComponent(value)}&limit=10`;
+			const answer = await product
+				.callProduct(s.websiteId, 'accounts', `/v1/users?${query}`, { method: 'GET' })
+				.catch(() => /** @type {const} */ ({ ok: false }));
+			if (!answer.ok || answer.status !== 200) return false;
+			const items = /** @type {any} */ (answer.body)?.items;
+			return (
+				Array.isArray(items) &&
+				items.some((user) => String(user?.[field] ?? '').toLowerCase() === value.toLowerCase() && user?.hasPassword === true)
+			);
+		};
+		if (phone && (await has('phone', phone))) return 'phone';
+		if (email && (await has('email', email))) return 'email';
+		return null;
 	};
 
 	return Object.freeze({ claim, memberWithPassword });

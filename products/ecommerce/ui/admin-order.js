@@ -13,6 +13,7 @@
  * too. Opening an order marks it opened by the staff member (the list's "not opened by me" filter).
  * @module
  */
+import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { WAITING_ROLES } from '../core/flow.js';
 import { EDITABLE_ROLES, PAYMENT_METHODS, RECORDED_METHODS } from '../core/orders.js';
 import { query } from './admin-kit.js';
@@ -27,9 +28,6 @@ import { variantLabel } from './admin-taxonomy.js';
 /** @typedef {import('./admin-lists.js').Detail} Detail */
 /** @typedef {import('./admin-order-forms.js').SerialValues} SerialValues */
 /** A code the server wrote, with the values its words take. @typedef {{ code: string, values?: Record<string, string | number> }} Coded */
-
-/** Address fields staff may change before shipping. */
-const ADDRESS_FIELDS = Object.freeze(['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes']);
 
 /** The status dot of each role (green, amber and red only for status). @type {Record<string, Tone>} */
 export const ROLE_TONES = Object.freeze({
@@ -607,7 +605,10 @@ const refundDialog = (kit, order, done) => {
  */
 const addressDialog = (kit, order, done) => {
 	const { t } = kit;
-	const inputs = new Map(ADDRESS_FIELDS.map((key) => [key, kit.input(order.address[key] ?? '')]));
+	// the address fields staff may change before shipping, each at most its length in the one address table
+	const inputs = new Map(
+		ADDRESS_FIELDS.map((key) => [key, kit.input(order.address[key] ?? '', { maxlength: String(ADDRESS_LIMITS[key]) })]),
+	);
 	kit.dialog({
 		title: t('ordersAdmin.addressTitle'),
 		body: [
@@ -860,8 +861,11 @@ const editDialog = (kit, order, done) => {
 					? {
 							delivery: {
 								method: delivery.value,
+								// where it goes, for the zone and taxes (dynamic model §5)
 								city: order.address?.city ?? '',
 								area: order.address?.area ?? '',
+								region: order.address?.region ?? '',
+								postalCode: order.address?.postalCode ?? '',
 								country: order.address?.country ?? '',
 								locationId: delivery.value === 'pickup' && location.value ? location.value : null,
 							},

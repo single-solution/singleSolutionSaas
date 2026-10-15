@@ -451,7 +451,15 @@ describe('Chat lookups', () => {
 		expect(orders.text).not.toContain('+1555');
 		expect((await shop.api('GET', '/v1/chat/me/orders?limit=1', undefined, headers)).json.items).toHaveLength(1);
 		const account = await shop.api('GET', '/v1/chat/me/account', undefined, headers);
-		expect(account.json).toEqual({ name: 'Sara Shopper', firstName: 'Sara', loyaltyPoints: 120, city: 'Town', area: '' });
+		expect(account.json).toEqual({
+			name: 'Sara Shopper',
+			firstName: 'Sara',
+			loyaltyPoints: 120,
+			city: 'Town',
+			area: '',
+			region: '',
+			country: '',
+		});
 		const shipments = await shop.api('GET', '/v1/chat/me/shipments', undefined, headers);
 		expect(shipments.json).toEqual({
 			items: [

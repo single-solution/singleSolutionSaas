@@ -316,14 +316,14 @@ describe('CSV', () => {
 		const perOrder = await shop.api('GET', '/v1/csv/orders?per=order&paymentMethod=bank_transfer');
 		expect(perOrder.status).toBe(200);
 		expect(linesOf(perOrder)).toEqual([
-			'number,placed_at,status,customer,city,lines,units,subtotal,discount,delivery,fee,tax,total,currency,payment_method,payment_state,paid,refunded',
-			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Tokyo,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00',
+			'number,placed_at,status,customer,city,region,country,lines,units,subtotal,discount,delivery,fee,tax,total,currency,payment_method,payment_state,paid,refunded',
+			'R-B,2026-10-05T05:00:00.000Z,confirmed,Bea,Tokyo,,,1,1,11.00,1.00,0.00,0.00,0.00,10.00,USD,bank_transfer,partially_refunded,10.00,3.00',
 		]);
 		expect(linesOf(await shop.api('GET', '/v1/csv/orders?per=order&role=cancelled')).slice(1)).toEqual([
-			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Tokyo,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00',
+			'R-C,2026-10-03T10:00:00.000Z,cancelled,Ann,Tokyo,,,1,5,50.00,0.00,0.00,0.00,0.00,50.00,USD,cod,unpaid,0.00,0.00',
 		]);
 		const searched = linesOf(await shop.api('GET', '/v1/csv/orders?q=R-A'));
-		expect(searched[0]?.startsWith('number,placed_at,status,customer,city,product,')).toBe(true);
+		expect(searched[0]?.startsWith('number,placed_at,status,customer,city,region,country,product,')).toBe(true);
 		expect(searched.slice(1).map((line) => line.split(',')[0])).toEqual(['R-A']);
 		expect((await shop.api('GET', '/v1/csv/orders?per=week')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/csv/orders?paymentMethod=cheque')).status).toBe(422);

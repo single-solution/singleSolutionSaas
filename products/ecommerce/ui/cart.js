@@ -171,6 +171,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						method: delivery.method,
 						city: address.value('city'),
 						area: address.value('area'),
+						region: address.value('region'),
+						postalCode: address.value('postalCode'),
 						country: address.value('country'),
 						locationId: delivery.method === 'pickup' ? delivery.locationId : null,
 					},

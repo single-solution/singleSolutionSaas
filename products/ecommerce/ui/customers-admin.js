@@ -10,6 +10,7 @@
  * `reports.read`) and CSV (CSV, `csv.run`) from `./admin-reports.js`.
  * @module
  */
+import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { mountAdmin, query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, chipFilter, detailHead, listScreen } from './admin-lists.js';
@@ -249,11 +250,12 @@ const renderCustomer = (kit, customer, detail, message) => {
 		renderCustomer(kit, answer.data, detail, text);
 		return null;
 	};
-	const ADDRESS_FIELDS = ['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes'];
 	const addAddress = () => {
+		// the address fields, each at most its length in the one address table (core/address.js)
 		const inputs = ADDRESS_FIELDS.map((field) => ({
 			field,
 			control: kit.input(field === 'name' ? customer.name : field === 'phone' ? customer.phone : '', {
+				maxlength: String(ADDRESS_LIMITS[field]),
 				...(field === 'phone' ? { type: 'tel' } : {}),
 			}),
 		}));
@@ -270,7 +272,8 @@ const renderCustomer = (kit, customer, detail, message) => {
 	};
 	/** @param {any} address */
 	const addressText = (address) =>
-		[address.name, address.phone, address.line1, address.line2, address.area, address.city, address.postalCode, address.country]
+		ADDRESS_FIELDS.filter((field) => field !== 'notes')
+			.map((field) => address[field])
 			.filter(Boolean)
 			.join(', ');
 	const loyaltyOn = has('loyalty');

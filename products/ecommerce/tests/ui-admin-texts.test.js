@@ -12,14 +12,8 @@ import { PAYMENT_METHODS as CHECKOUT_METHODS } from '../core/checkout.js';
 import { DEAL_TYPES } from '../core/deals.js';
 import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
-import {
-	ADDRESS_FIELDS,
-	HISTORY_NOTES,
-	MOVE_WARNINGS,
-	PAYMENT_METHODS,
-	PAYMENT_STATES,
-	RECORDED_METHODS,
-} from '../core/orders.js';
+import { ADDRESS_FIELDS } from '../core/address.js';
+import { HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_METHODS, PAYMENT_STATES, RECORDED_METHODS } from '../core/orders.js';
 import { POLICY_SETTINGS } from '../core/policies.js';
 import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
@@ -61,8 +55,8 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			...keysOf('returns.status.', CLAIM_STATUSES),
 			...keysOf('ordersAdmin.claimAction.', claimMoves),
 			...keysOf('ordersAdmin.claimDone.', claimMoves),
-			...keysOf('ordersAdmin.address.', Object.keys(ADDRESS_FIELDS)),
-			...keysOf('checkout.field.', Object.keys(ADDRESS_FIELDS)),
+			...keysOf('ordersAdmin.address.', [...ADDRESS_FIELDS]),
+			...keysOf('checkout.field.', [...ADDRESS_FIELDS]),
 			...keysOf('ordersAdmin.by.', [...HISTORY_ACTORS, SERVER_KIND]),
 			// what the server writes itself, and `expired` of entries written before the codes
 			...keysOf('ordersAdmin.historyNote.', [...HISTORY_NOTES, ...CLAIM_NOTES, 'expired']),

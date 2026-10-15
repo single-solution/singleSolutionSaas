@@ -77,6 +77,35 @@ export const keyOf = (key, name) => {
 export const cleanLines = (lines) =>
 	(Array.isArray(lines) ? lines : []).map((line) => String(line).trim()).filter((line) => line !== '');
 
+/** The parts of a tax rule's region line, in order. */
+const TAX_REGION_PARTS = Object.freeze(/** @type {const} */ (['country', 'region', 'city', 'postcode']));
+
+/**
+ * A tax rule's region as its editor line: `Country, Region, City, Postcode start` (parts it leaves empty stay empty,
+ * the empty ones at the end are left out).
+ * @param {Partial<Record<'country' | 'region' | 'city' | 'postcode', unknown>>} region
+ */
+export const taxRegionLine = (region) => {
+	const parts = TAX_REGION_PARTS.map((part) => String(region[part] ?? '').trim());
+	while (parts.length > 1 && parts.at(-1) === '') parts.pop();
+	return parts.join(', ');
+};
+
+/**
+ * A tax rule's region from its editor line (see {@link taxRegionLine}).
+ * @param {string} line
+ * @returns {{ country: string, region: string, city: string, postcode: string }}
+ */
+export const taxRegionOf = (line) => {
+	const parts = line.split(',').map((part) => part.trim());
+	return {
+		country: parts[0] ?? '',
+		region: parts[1] ?? '',
+		city: parts[2] ?? '',
+		postcode: parts.slice(3).join(',').trim(),
+	};
+};
+
 /**
  * Whole days typed, or null when left empty (the feature's own default applies).
  * @param {unknown} text

@@ -5,7 +5,9 @@
  * amounts stay minor units, with a text (`totalText` …) made by the website's Format (PLAN 0.8.10 K7). No I/O.
  * @module
  */
+import { ADDRESS_LIMITS } from './address.js';
 import { factsOf } from './facts.js';
+import { phoneSearchOf } from './guests.js';
 import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { isAmount } from './money.js';
@@ -274,7 +276,9 @@ export const stateAfterRefund = (paid, refunded) => (refunded >= paid ? 'refunde
  * @property {boolean} [refundDue] only canceled orders that still hold the shopper's money (`refundDue=1`: paid before
  *   or after the cancel, not all refunded)
  * @property {boolean} [unseen] not yet opened by the acting staff member (E31; the server adds who)
- * @property {string} [q] number, name, phone (its last digits), email or city
+ * @property {string} [q] number, name, phone (its digits anywhere), email or city
+ * @property {string[]} [phoneDigits] the digit runs of `q` to find in phones, read by the website's phone rules (the
+ *   server adds them, `core/guests.js` `phoneSearchOf`; without them, the digits typed without leading zeros)
  */
 
 /** @param {unknown} value */
@@ -393,6 +397,7 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 	if (filters.q) {
 		const term = escapeRegex(filters.q);
 		const digits = filters.q.replace(/\D/g, '');
+		const phones = filters.phoneDigits ?? phoneSearchOf(filters.q, null);
 		query.$or = [
 			// the number: what was typed anywhere in it, and its digits anywhere (3 or more: "1042" finds SO-2026-001042)
 			{ number: { $regex: term, $options: 'i' } },
@@ -401,14 +406,12 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 			{ 'customer.email': { $regex: `^${term}`, $options: 'i' } },
 			{ 'address.name': { $regex: term, $options: 'i' } },
 			{ 'address.city': { $regex: `^${term}`, $options: 'i' } },
-			...(digits.length >= 4
-				? [
-						// the last digits of a phone, whatever its format (E31)
-						{ phoneDigits: { $regex: `${escapeRegex(digits.slice(-10))}$` } },
-						{ 'customer.phone': { $regex: escapeRegex(digits) } },
-						{ 'address.phone': { $regex: escapeRegex(digits) } },
-					]
-				: []),
+			// the phone's digits anywhere in its whole number, whatever its format (E31)
+			...phones.flatMap((run) => [
+				{ phoneDigits: { $regex: escapeRegex(run) } },
+				{ 'customer.phone': { $regex: escapeRegex(run) } },
+				{ 'address.phone': { $regex: escapeRegex(run) } },
+			]),
 		];
 	}
 	return query;
@@ -652,19 +655,6 @@ export const paymentStateOf = ({ total, paid, refunded, state }) => {
 	return state;
 };
 
-/** Address fields and their longest length (staff edits; imported orders, K10). */
-export const ADDRESS_FIELDS = Object.freeze({
-	name: 120,
-	phone: 40,
-	line1: 200,
-	line2: 200,
-	city: 100,
-	area: 100,
-	postalCode: 20,
-	country: 60,
-	notes: 500,
-});
-
 /**
  * A unit staff give for an order line: its serial number (registered units are picked by it), or, typed with unit
  * fields, its values by unit field (`core/fields.js` `checkUnit` checks them against the line's product).
@@ -741,14 +731,13 @@ export const checkEdit = (body, order) => {
 		const raw = objectOf(input.address);
 		/** @type {Record<string, string>} */
 		const address = { ...(order.address ?? {}) };
-		for (const [field, max] of Object.entries(ADDRESS_FIELDS)) {
+		for (const [field, max] of Object.entries(ADDRESS_LIMITS)) {
 			if (raw[field] === undefined) continue;
 			if (typeof raw[field] !== 'string' || String(raw[field]).length > max)
 				return refuse(`address/${field}`, `At most ${max} characters.`);
 			address[field] = String(raw[field]).trim();
 		}
-		for (const field of ['name', 'phone', 'line1', 'city'])
-			if (!address[field]) return refuse(`address/${field}`, 'This field is required.');
+		// the fields the website requires are checked by the server as checkout checks them (`checkAddress`)
 		value.address = /** @type {NonNullable<OrderRecord['address']>} */ (/** @type {unknown} */ (address));
 	}
 	if (input.video !== undefined && input.video !== null) {
@@ -782,7 +771,7 @@ const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipp
  * What staff change on an order that still waits (E29).
  * @typedef {{ lines?: Array<{ variantId: string, quantity: number, unitPrice?: number }>,
  *   paymentMethod?: import('./model.js').PaymentMethod,
- *   delivery?: { method: 'delivery' | 'pickup' | null, city: string, area: string, country: string, locationId: string | null },
+ *   delivery?: import('./checkout.js').DeliveryInput,
  *   address?: NonNullable<OrderRecord['address']> }} WaitingEdit
  */
 
@@ -830,13 +819,15 @@ const waitingEditOf = (input) => {
 	if (input.delivery !== undefined) {
 		const raw = objectOf(input.delivery);
 		const method = raw.method === 'delivery' || raw.method === 'pickup' ? raw.method : null;
-		/** @param {unknown} v */
-		const text = (v) => (typeof v === 'string' ? v.trim().slice(0, 100) : '');
+		/** @param {'city' | 'area' | 'region' | 'postalCode' | 'country'} field */
+		const text = (field) => (typeof raw[field] === 'string' ? String(raw[field]).trim().slice(0, ADDRESS_LIMITS[field]) : '');
 		value.delivery = {
 			method,
-			city: text(raw.city),
-			area: text(raw.area),
-			country: text(raw.country),
+			city: text('city'),
+			area: text('area'),
+			region: text('region'),
+			postalCode: text('postalCode'),
+			country: text('country'),
 			locationId: typeof raw.locationId === 'string' && raw.locationId ? raw.locationId.slice(0, 64) : null,
 		};
 	}
@@ -1180,7 +1171,8 @@ export const spentKey = (customer) => (customer.userId ? `u:${customer.userId}` 
 
 /**
  * A customer as staff see it: `id` is the customer id (`cus_…`) the staff routes take for members and guests alike
- * (K-6), `guest` whether they have no Accounts user.
+ * (K-6), `guest` whether they have no Accounts user, `guestKey` what a guest is known by (`p:<E.164>` or `e:<email>`;
+ * '' for a member).
  * @param {Partial<CustomerRecord> & { createdAt?: Date, updatedAt?: Date }} customer
  * @param {{ total: number, count: number }} spent what they paid (paid − refunded) over all their orders, and how many
  * @param {string} currency
@@ -1190,6 +1182,7 @@ export const customerView = (customer, spent, currency, money) => ({
 	id: customer.id ?? '',
 	userId: customer.userId ?? '',
 	guest: !customer.userId,
+	guestKey: customer.userId ? '' : (customer.guestKey ?? ''),
 	name: customer.name ?? '',
 	email: customer.email ?? '',
 	phone: customer.phone ?? '',

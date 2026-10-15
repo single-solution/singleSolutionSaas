@@ -1,7 +1,7 @@
 /**
  * Ecommerce's list settings, in the product database (like Chat's, PLAN 0.8.4 step 8): settings that are lists or
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), delivery zones, couriers,
- * tax rules, condition grades, item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
+ * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
  * defaults; an unsaved list reads as its code default. A list may also be checked against the merchant's data before
@@ -9,6 +9,7 @@
  * products, categories and units in stock rely on).
  * @module
  */
+import { checkAddressRegions } from '../core/address.js';
 import { checkBookingHours } from '../core/bookings.js';
 import { checkCouriers } from '../core/couriers.js';
 import { checkZones } from '../core/delivery.js';
@@ -38,6 +39,7 @@ export const LISTS = Object.freeze({
 		read: readOrderFlow,
 	},
 	couriers: { feature: 'checkout', title: 'Couriers', check: checkCouriers, fallback: () => [] },
+	address_regions: { feature: 'checkout', title: 'Address regions', check: checkAddressRegions, fallback: () => [] },
 	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: () => [] },
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },
 	grades: { feature: 'grades_serials', title: 'Condition grades', check: checkGrades, fallback: () => [] },
