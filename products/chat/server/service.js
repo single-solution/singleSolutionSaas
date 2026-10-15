@@ -29,6 +29,9 @@ import {
 	pendingStale,
 	previewOf,
 	staffMessageView,
+	TRANSCRIPT_VALUES,
+	VALUE_MAX,
+	transcriptValues,
 	visitorMessageView,
 } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
@@ -75,8 +78,8 @@ const LINK_SECONDS = 600;
 export const PRESENCE_MS = 5 * 60_000;
 /** The window of the new-guest limit per network address (CH-15). */
 const NEW_GUESTS_WINDOW_MS = 15 * 60_000;
-/** Longest transcript value Notifications accepts (characters). */
-const TRANSCRIPT_MAX = 1000;
+/** Messages a transcript reads at a time, newest first. */
+const TRANSCRIPT_PAGE = 500;
 /** Accounts' role of shoppers and new sign-ups, whose sign-in may be paused there (A6). */
 const CUSTOMER_ROLE = 'customer';
 /** How long Accounts' answer whether the Customer role's sign-in is paused is kept per website (C17). */
@@ -670,7 +673,9 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A transcript by email: the most recent part that fits Notifications' value limit.
+	 * A transcript by email: the whole chat in the parts Notifications takes (45,000 characters); a longer chat sends its
+	 * latest messages after a line that says how many (widget text `transcript.earlier`), never cut silently. Messages
+	 * are read newest first, a page at a time, until more than fits was read.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {string} email
@@ -678,8 +683,8 @@ export const createService = (product) => {
 	const sendTranscript = async (s, c, email) => {
 		const texts = await s.texts();
 		const { botName } = await s.values('visitor_chat');
-		const messages = await s.store.messages.list(c.id, { limit: 500, internal: false });
-		const lines = messages.map((m) => {
+		/** @param {MessageRecord} m */
+		const lineOf = (m) => {
 			const who =
 				m.author === 'visitor'
 					? texts['transcript.you']
@@ -687,11 +692,30 @@ export const createService = (product) => {
 						? (m.name ?? texts['transcript.team'])
 						: (m.name ?? botName);
 			return `${who}: ${(m.format === 'markdown' ? plainOf(m.text) : m.text) || m.attachment?.name || ''}`;
-		});
-		let transcript = lines.join('\n');
-		if (transcript.length > TRANSCRIPT_MAX) transcript = `…${transcript.slice(-(TRANSCRIPT_MAX - 1))}`;
+		};
+		/** @type {string[]} */
+		let lines = [];
+		let size = 0;
+		let more = true;
+		/** @type {number | null} */
+		let before = null;
+		while (more && size <= VALUE_MAX * TRANSCRIPT_VALUES.length) {
+			const page = await s.store.messages.list(c.id, { before, limit: TRANSCRIPT_PAGE, internal: false });
+			const read = page.map(lineOf);
+			lines = [...read, ...lines];
+			size += read.reduce((sum, line) => sum + line.length + 1, 0);
+			more = page.length === TRANSCRIPT_PAGE;
+			before = page[0]?.seq ?? null;
+		}
+		const earlier = (/** @type {number} */ count) => formatText(texts['transcript.earlier'] ?? '', { count });
 		const date = (await s.format()).date(c.createdAt, 'date');
-		const outcome = await notify(s, 'chat.transcript', 'email', { email }, { transcript, date });
+		const outcome = await notify(
+			s,
+			'chat.transcript',
+			'email',
+			{ email },
+			{ ...transcriptValues(lines, { more, earlier }), date },
+		);
 		if (outcome === 'not_connected')
 			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');
 		if (outcome !== 'sent') throw problem('not_sent', 'The transcript could not be sent. Try again later.');

@@ -1,12 +1,13 @@
 /**
  * Chat's messages and their default templates, and the staff alert option all_staff (parity P1): every message Chat
  * sends through Notifications is declared in `schemas/messages.json` with US-English default words and every send
- * carries them; `staffPermission: all_staff` alerts every unblocked Accounts user whose role may see the inbox.
+ * carries them; `staffPermission: all_staff` alerts every unblocked Accounts user whose role may see the inbox; a
+ * transcript goes whole in the parts Notifications takes.
  */
 import { validateMessageDefaults } from '@ss/contracts';
 import { afterAll, describe, expect, it } from 'vitest';
 import declaration from '../schemas/messages.json' with { type: 'json' };
-import { MESSAGE_TEMPLATES } from '../core/widgets.js';
+import { MESSAGE_TEMPLATES, TRANSCRIPT_VALUES } from '../core/conversation.js';
 import { ALL_STAFF_PERMISSION } from '../server/service.js';
 import { ready } from './helpers.js';
 
@@ -90,5 +91,37 @@ describe('Chat’s messages and their defaults (parity P1)', () => {
 			template: 'chat.transcript',
 			defaults: defaultsOf('chat.transcript'),
 		});
+	});
+});
+
+describe('transcripts in parts', () => {
+	it('send the whole chat within Notifications’ value limit; a longer chat sends its latest messages and says so', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'transcripts']);
+		await sys.paste('notifications');
+		await sys.setting('guest_chat', 'messageLimit', 0);
+		const v = sys.visitor();
+		const texts = Array.from({ length: 12 }, (_, i) => `${String.fromCharCode(65 + i)}${'x'.repeat(3999)}`);
+		for (const text of texts.slice(0, 3)) await v('POST', '/v1/chat/messages', { text });
+		/** The transcript of the last send, with what Notifications got. */
+		const sent = async () => {
+			expect((await v('POST', '/v1/chat/transcript', { email: 'me@example.com' })).status).toBe(202);
+			const { values } = sys.messages().at(-1);
+			expect(Object.keys(values)).toHaveLength(MESSAGE_TEMPLATES['chat.transcript'].length);
+			expect(Object.values(values).every((value) => String(value).length <= 1000)).toBe(true);
+			return TRANSCRIPT_VALUES.map((name) => values[name]).join('');
+		};
+		expect(await sent()).toBe(
+			texts
+				.slice(0, 3)
+				.map((text) => `You: ${text}`)
+				.join('\n'),
+		);
+		for (const text of texts.slice(3)) await v('POST', '/v1/chat/messages', { text });
+		expect(await sent()).toBe(
+			[
+				'This copy has the latest 11 messages; earlier ones are left out.',
+				...texts.slice(1).map((text) => `You: ${text}`),
+			].join('\n'),
+		);
 	});
 });

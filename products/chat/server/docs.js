@@ -14,9 +14,10 @@ import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
 import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
 import guide from '../docs/guide.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
+import { MESSAGE_TEMPLATES } from '../core/conversation.js';
 import { CONTEXT_ENDPOINT, SHOP_ANSWERS, SHOP_ENDPOINTS, STORE_CONTEXT_ENDPOINT } from '../core/shop.js';
 import { createSnippets } from '../core/snippets.js';
-import { MESSAGE_TEMPLATES, WIDGET_ATTRIBUTE } from '../core/widgets.js';
+import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
 import { manifest } from '../adapters/product.js';
 
 /** The API reference, rendered on the first docs request (it is the same for every request). @type {string | null} */
