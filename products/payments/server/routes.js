@@ -9,7 +9,7 @@
  * @module
  */
 import { isId } from '@ss/contracts';
-import { actorOf, countHandlers, created, defineRoute, formatMoney, formatText, paginate, problem } from '@ss/app-kit';
+import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
 import { GATEWAY_FEATURES, bankTransfer, isGateway } from '../core/gateways.js';
 import { fromDecimal } from '../core/money.js';
 import {
@@ -60,15 +60,8 @@ const NOTICE_LIMITS = [{ limit: 600, windowSeconds: 60, per: /** @type {const} *
 /** A presigned proof upload or download lasts this long. */
 const PROOF_SECONDS = 300;
 
-/**
- * The look of a page for a website that cannot be served: the English texts, no theme, the default Format.
- * @type {{ texts: Record<string, string>, theme: undefined, money: (amount: number, currency: string) => string }}
- */
-const DEFAULT_LOOK = Object.freeze({
-	texts: strings,
-	theme: undefined,
-	money: (amount, currency) => formatMoney(amount, currency),
-});
+/** The look of a page for a website that cannot be served: the English texts, no theme (it shows no amount). */
+const NO_SITE_LOOK = Object.freeze({ texts: strings });
 
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
@@ -421,8 +414,8 @@ export const createRoutes = (product) => {
 	const payPage = async (ctx) => {
 		const { websiteId, paymentId } = ctx.params;
 		const s = await publicSite(ctx, websiteId);
-		const look = s ? await lookOf(websiteId) : DEFAULT_LOOK;
-		if (!s) return html(renderResultPage({ ...look, state: 'unavailable' }), 404);
+		if (!s) return html(renderResultPage({ ...NO_SITE_LOOK, state: 'unavailable' }), 404);
+		const look = await lookOf(websiteId);
 		const found = isId(paymentId, 'pay') ? await s.store.payments.get(paymentId) : null;
 		if (!found) return html(renderResultPage({ ...look, state: 'notFound' }), 404);
 		let payment = await service.recheck(s, found);
@@ -660,9 +653,10 @@ export const createRoutes = (product) => {
 	const linkPage = (step) => async (/** @type {any} */ ctx) => {
 		const { websiteId, linkId } = ctx.params;
 		const s = await publicSite(ctx, websiteId);
-		const look = s ? await lookOf(websiteId) : DEFAULT_LOOK;
-		const link = s ? await activeLink(s, linkId) : null;
-		if (!s || !link) return html(renderResultPage({ ...look, state: 'notFound' }), 404);
+		if (!s) return html(renderResultPage({ ...NO_SITE_LOOK, state: 'notFound' }), 404);
+		const look = await lookOf(websiteId);
+		const link = await activeLink(s, linkId);
+		if (!link) return html(renderResultPage({ ...look, state: 'notFound' }), 404);
 		const business = (await product.business(websiteId)).name;
 		const gateways = await choices(s, look.texts, link.currency, link.gateways);
 		const action = `/l/${websiteId}/${link.id}`;

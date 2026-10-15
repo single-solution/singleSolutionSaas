@@ -319,9 +319,9 @@ export const paymentView = (payment, checkoutUrl) => ({
 	metadata: payment.metadata,
 	source: payment.source,
 	linkId: payment.linkId,
-	gatewayReference: payment.gatewayRef ?? null,
+	gatewayReference: payment.gatewayRef,
 	proof: payment.proof ? { type: payment.proof.type, size: payment.proof.size, uploadedAt: iso(payment.proof.at) } : null,
-	refunds: (payment.refunds ?? []).map((/** @type {any} */ refund) => ({
+	refunds: payment.refunds.map((/** @type {any} */ refund) => ({
 		id: refund.id,
 		amount: refund.amount,
 		reason: refund.reason,
@@ -329,7 +329,7 @@ export const paymentView = (payment, checkoutUrl) => ({
 		by: refund.by,
 		createdAt: iso(refund.at),
 	})),
-	history: (payment.history ?? []).map((/** @type {any} */ entry) => ({
+	history: payment.history.map((/** @type {any} */ entry) => ({
 		at: iso(entry.at),
 		event: entry.event,
 		...(entry.detail ? { detail: entry.detail } : {}),
@@ -389,8 +389,8 @@ export const subscriptionView = (subscription) => ({
 	plan: subscription.plan,
 	reference: subscription.reference,
 	customer: subscription.customer,
-	gatewayReference: subscription.gatewayRef ?? null,
-	history: (subscription.history ?? []).map((/** @type {any} */ entry) => ({
+	gatewayReference: subscription.gatewayRef,
+	history: subscription.history.map((/** @type {any} */ entry) => ({
 		at: iso(entry.at),
 		event: entry.event,
 		...(entry.detail ? { detail: entry.detail } : {}),
@@ -442,13 +442,18 @@ const csvCell = (value) => {
 	return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 };
 
+/** The byte order mark that tells spreadsheet apps a CSV file is UTF-8 (names in any language read right). */
+const CSV_BOM = '\uFEFF';
+
 /**
- * Payments as CSV (the Payments admin widget's export): one row per payment with the given column titles.
+ * Payments as CSV (the Payments admin widget's export): a byte order mark, then one row per payment with the given
+ * column titles.
  * @param {ReadonlyArray<any>} payments views
  * @param {{ id: string, date: string, status: string, amount: string, refunded: string, gateway: string, reference: string,
  *   email: string, description: string }} titles
  */
 export const paymentsCsv = (payments, titles) =>
+	CSV_BOM +
 	[
 		[
 			titles.id,

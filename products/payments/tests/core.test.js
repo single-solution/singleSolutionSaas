@@ -253,9 +253,7 @@ describe('payments', () => {
 			voidedAt: null,
 		});
 		expect(paymentView({ ...record, voidedAt: at }, '')).toMatchObject({ refundDue: true, voidedAt: at.toISOString() });
-		expect(paymentView({ ...record, proof: null, refunds: undefined, history: undefined, paidAt: null }, '').refunds).toEqual(
-			[],
-		);
+		expect(paymentView({ ...record, proof: null, refunds: [], history: [], paidAt: null }, '').refunds).toEqual([]);
 		expect(linkView({ id: 'link_1', createdAt: at }, 'u')).toMatchObject({ url: 'u', createdAt: at.toISOString() });
 		expect(
 			subscriptionView({
@@ -265,7 +263,7 @@ describe('payments', () => {
 				updatedAt: at,
 			}).history,
 		).toHaveLength(1);
-		expect(subscriptionView({ id: 'sub_1', createdAt: at, updatedAt: at }).history).toEqual([]);
+		expect(subscriptionView({ id: 'sub_1', history: [], createdAt: at, updatedAt: at }).history).toEqual([]);
 		expect(mirrorStatus('stripe', 'trialing')).toBe('active');
 		expect(mirrorStatus('paypal', 'SUSPENDED')).toBe('paused');
 		expect(mirrorStatus('paypal', 'NOPE')).toBeNull();
@@ -280,6 +278,8 @@ describe('payments', () => {
 			email: 'Email',
 			description: 'Description',
 		});
+		// a byte order mark first: spreadsheet apps then read names in any language right (UTF-8)
+		expect(csv.startsWith('\uFEFFPayment,Date,')).toBe(true);
 		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,EUR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
 		expect(paymentsCsv([{ ...view, gateway: null, customer: {} }], /** @type {any} */ ({})).split('\r\n')[1]).toContain(',,');
 	});
@@ -288,7 +288,16 @@ describe('payments', () => {
 describe('payment events', () => {
 	it('carry the payment as the API answers it, without metadata and history when that is too large', () => {
 		const at = new Date('2026-10-01T10:00:00Z');
-		const base = { id: 'pay_1', status: 'paid', amount: 100, currency: 'EUR', refunded: 0, createdAt: at, updatedAt: at };
+		const base = {
+			id: 'pay_1',
+			status: 'paid',
+			amount: 100,
+			currency: 'EUR',
+			refunded: 0,
+			refunds: [],
+			createdAt: at,
+			updatedAt: at,
+		};
 		const small = paymentView({ ...base, metadata: { order: '7' }, history: [{ at, event: 'paid' }] }, 'https://p/pay/1');
 		expect(paymentEventData(small, { refund: { id: 'rfd_1', amount: 5 } })).toEqual({
 			payment: small,

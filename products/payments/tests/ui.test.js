@@ -106,7 +106,9 @@ const PAYMENT = {
 	description: 'Order 1',
 	reference: 'o-1',
 	customer: { email: 'ana@example.com' },
+	metadata: {},
 	proof: { type: 'image/png', size: 10 },
+	refunds: [],
 	history: [
 		{ at: '2026-10-01T10:00:00.000Z', event: 'created' },
 		{ at: '2026-10-01T10:00:00.000Z', event: 'paid', detail: 'x', by: 'Sam' },
@@ -735,6 +737,9 @@ describe('Payment links admin widget', () => {
 				switches.push(body);
 				return switchReply(body);
 			},
+			// a picked link is read again: its paid count is the latest
+			'GET /v1/admin/links/link_2': () => answer(200, { ...OPEN, paidCount: 3 }),
+			'GET /v1/admin/links/link_1': () => answer(200, LINK),
 		});
 		mountLinksAdmin({ host, api: client, config: configOf(['payment_links', 'bank_transfer']), open, copy });
 		await flush();
@@ -768,10 +773,13 @@ describe('Payment links admin widget', () => {
 		await flush();
 		expect(rows(host)).toHaveLength(2);
 		rows(host)[1]?.click();
+		await flush();
 		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
 		expect(detailText(host)).toContain('Payer enters it (at least USD 5.00)');
 		expect(detailText(host)).toContain(strings['links.allGateways']);
+		expect(rows(host)[1]?.textContent).toContain('3 paid');
 		rows(host)[0]?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+		await flush();
 		expect(detailText(host)).toContain('Invoice 42');
 	});
 
@@ -908,6 +916,7 @@ describe('the hosted bank page and /pay.js', () => {
 	it('uploads the proof straight to storage with the reference the payer typed (P3)', async () => {
 		const html = renderBankPage({
 			texts: strings,
+			money: (amount, currency) => `${currency} ${(amount / 100).toFixed(2)}`,
 			business: 'Shop',
 			amount: 250000,
 			currency: 'USD',

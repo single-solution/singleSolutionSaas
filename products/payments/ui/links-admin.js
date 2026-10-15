@@ -2,8 +2,8 @@
  * The Payment links admin widget (admin widget, ticket; PLAN 0.8.7, 0.6): a list-and-detail screen of the website's
  * payment links, newest first (`links.read`). New link is the main action (a dialog: title, description, a fixed
  * amount or one the payer enters with its minimum, the currency, the gateways it offers, the return address and a
- * reference; `links.manage`). The detail shows every field with Copy link as its button, and Open link page, Copy link
- * id and, last, Turn off (or Turn on) in its More menu. Amounts and times follow the website's Format and time zone.
+ * reference; `links.manage`). A picked link is read again (its paid count is the latest); the detail shows every field
+ * with Copy link as its button, and Open link page, Copy link id and, last, Turn off (or Turn on) in its More menu. Amounts and times follow the website's Format and time zone.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -110,7 +110,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					fieldGrid(doc, [
 						[t('links.field.url'), link.url],
 						[t('links.field.amount'), amountOf(link)],
-						[t('links.field.paid'), String(link.paidCount ?? 0)],
+						[t('links.field.paid'), String(link.paidCount)],
 						[t('links.field.currency'), link.currency],
 						[
 							t('links.field.gateways'),
@@ -146,11 +146,22 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						{ class: 'meta' },
 						[
 							t(link.active ? 'links.active' : 'links.off'),
-							formatText(t('links.paidCount'), { count: String(link.paidCount ?? 0) }),
+							formatText(t('links.paidCount'), { count: String(link.paidCount) }),
 							date(link.createdAt),
 						].join(' · '),
 					),
 				);
+			};
+
+			/** Read a picked link again (its paid count is the latest) and show it. @param {string} id */
+			const select = async (id) => {
+				const answer = await adminCall(api, 'GET', `/v1/admin/links/${id}`);
+				if (!answer.ok) {
+					status.textContent = failed(answer);
+					return;
+				}
+				put(answer.data);
+				details(answer.data, true);
 			};
 
 			/** Show a link in the list (a new one first). @param {any} link */
@@ -160,7 +171,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				if (found) return row(link, /** @type {HTMLElement} */ (found));
 				const item = element(doc, 'li', { class: 'item', tabindex: '0', 'data-id': link.id });
 				row(link, item);
-				const pick = () => details(shown.get(link.id), true);
+				const pick = () => void select(link.id);
 				item.addEventListener('click', pick);
 				item.addEventListener('keydown', (event) => {
 					if (event.key === 'Enter' || event.key === ' ') pick();

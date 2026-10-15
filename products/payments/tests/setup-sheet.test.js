@@ -72,6 +72,9 @@ describe('the website Setup sheet', () => {
 		const env = await setup();
 		const docs = await env.call('GET', '/docs');
 		expect(docs.text).toContain('<p><strong>What your website builds.</strong> Create links with POST /v1/links');
+		// a feature with no route or widget of its own (8 of the 13) shows no empty table or list
+		expect(docs.text).not.toContain('<tbody></tbody>');
+		expect(docs.text).not.toContain('<ul></ul>');
 	});
 
 	it('reaches the docs and the OpenAPI document through the Next.js rewrites', async () => {

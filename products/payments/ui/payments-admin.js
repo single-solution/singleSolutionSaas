@@ -266,7 +266,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					[t('admin.field.voided'), payment.voidedAt ? date(payment.voidedAt) : ''],
 					[t('admin.field.updated'), payment.updatedAt ? date(payment.updatedAt) : ''],
 					[t('admin.field.id'), payment.id],
-					...Object.entries(/** @type {Record<string, string>} */ (payment.metadata ?? {})).map(
+					...Object.entries(/** @type {Record<string, string>} */ (payment.metadata)).map(
 						([name, value]) => /** @type {[string, string]} */ ([name, value]),
 					),
 				]);
@@ -274,7 +274,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					listSection(
 						doc,
 						t('admin.refunds'),
-						(payment.refunds ?? []).map((/** @type {any} */ refund) =>
+						payment.refunds.map((/** @type {any} */ refund) =>
 							[
 								date(refund.createdAt),
 								money(refund.amount, payment.currency),

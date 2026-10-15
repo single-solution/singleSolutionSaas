@@ -58,7 +58,6 @@ const routeTable = (rows) =>
  * @returns {string}
  */
 export const renderDocs = ({ base }) => {
-	const features = /** @type {Record<string, string[]>} */ (/** @type {unknown} */ (guide.features));
 	const build = /** @type {Record<string, string>} */ (guide.build);
 	const snippets = createSnippets({
 		base,
@@ -69,13 +68,15 @@ export const renderDocs = ({ base }) => {
 	const rows = operations();
 	const featureSections = manifest.features.map((feature) => {
 		const widgets = manifest.widgets.filter((widget) => [widget.feature].flat().includes(feature.key));
+		const routes = rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key));
 		return [
 			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
 			para(feature.description),
-			...(features[feature.key] ?? []).map(para),
 			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
-			`<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`,
-			routeTable(rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key))),
+			widgets.length > 0
+				? `<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`
+				: '',
+			routes.length > 0 ? routeTable(routes) : '',
 			'</section>',
 		].join('');
 	});

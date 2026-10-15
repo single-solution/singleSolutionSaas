@@ -7,7 +7,7 @@
  * transfer proof straight to the merchant's storage).
  * @module
  */
-import { formatMoney, formatText } from '@ss/app-kit';
+import { formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
 import { BANK_DETAILS } from '../core/gateways.js';
 import { PROOF_TYPES } from '../core/widgets.js';
@@ -80,17 +80,15 @@ a { color: inherit; }
 /**
  * @typedef {object} PageLook
  * @property {Record<string, string>} texts the website's widget texts
- * @property {(import('@ss/app-kit/widget').WidgetTheme & { customCss?: string }) | undefined} [theme]
- * @property {(amount: number, currency: string) => string} [money] the website's Format for money
- *   (`product.format(websiteId).money`); the default Format without it
+ * @property {(import('@ss/app-kit/widget').WidgetTheme & { customCss?: string }) | undefined} [theme] the website's
+ *   theme (none on a page for a website that cannot be served)
+ * @property {(amount: number, currency: string) => string} money the website's Format for money
+ *   (`product.format(websiteId).money`)
  */
-
-/** Money in the default Format (a page for a website that cannot be served). @param {number} amount @param {string} currency */
-const defaultMoney = (amount, currency) => formatMoney(amount, currency);
 
 /**
  * A whole page around `body`.
- * @param {PageLook & { title: string, body: string, script?: boolean }} input
+ * @param {Omit<PageLook, 'money'> & { title: string, body: string, script?: boolean }} input
  */
 const page = ({ theme, title, body, script = false }) => {
 	const mode = theme?.mode === 'dark' || theme?.mode === 'light' ? `:root { color-scheme: ${theme.mode}; }` : '';
@@ -136,17 +134,7 @@ export const gatewayName = (texts, gateway, genericName = '') =>
  *   currency: string }, gateways: Array<{ id: string, name: string }>, action: string, error?: string,
  *   values?: Record<string, string> }} input
  */
-export const renderLinkPage = ({
-	texts,
-	theme,
-	money = defaultMoney,
-	business,
-	link,
-	gateways,
-	action,
-	error = '',
-	values = {},
-}) => {
+export const renderLinkPage = ({ texts, theme, money, business, link, gateways, action, error = '', values = {} }) => {
 	const t = translator(texts);
 	const amount =
 		link.amount === null
@@ -184,17 +172,7 @@ ${methods}
  * @param {PageLook & { business: string, amount: number, currency: string, description: string,
  *   gateways: Array<{ id: string, name: string }>, action: string }} input
  */
-export const renderChoicePage = ({
-	texts,
-	theme,
-	money = defaultMoney,
-	business,
-	amount,
-	currency,
-	description,
-	gateways,
-	action,
-}) => {
+export const renderChoicePage = ({ texts, theme, money, business, amount, currency, description, gateways, action }) => {
 	const t = translator(texts);
 	return page({
 		texts,
@@ -217,17 +195,7 @@ ${
  * @param {PageLook & { business: string, amount: number, currency: string, gateway: string, action: string,
  *   fields: Array<[string, string]> }} input
  */
-export const renderGatewayForm = ({
-	texts,
-	theme,
-	money = defaultMoney,
-	business,
-	amount,
-	currency,
-	gateway,
-	action,
-	fields,
-}) => {
+export const renderGatewayForm = ({ texts, theme, money, business, amount, currency, gateway, action, fields }) => {
 	const t = translator(texts);
 	return page({
 		texts,
@@ -250,18 +218,7 @@ ${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" val
  *   bank: import('../core/gateways.js').BankTransfer,
  *   proof: { action: string } | null, uploaded: boolean }} input
  */
-export const renderBankPage = ({
-	texts,
-	theme,
-	money = defaultMoney,
-	business,
-	amount,
-	currency,
-	reference,
-	bank,
-	proof,
-	uploaded,
-}) => {
+export const renderBankPage = ({ texts, theme, money, business, amount, currency, reference, bank, proof, uploaded }) => {
 	const t = translator(texts);
 	// only the details the merchant gave, each under its own text (`bank.<name>`), then the payment's reference
 	/** @type {Array<[string, string]>} */
@@ -304,13 +261,15 @@ ${upload}`,
 
 /**
  * The result page (or a page that says the payment cannot be shown).
- * @param {PageLook & { state: 'paid' | 'failed' | 'cancelled' | 'voided' | 'refundDue' | 'refunded' | 'unavailable' | 'notFound' | 'error',
- *   business?: string, amount?: number, currency?: string, backUrl?: string | null, retry?: string | null }} input
+ * @param {Omit<PageLook, 'money'> & Partial<Pick<PageLook, 'money'>> & { state: 'paid' | 'failed' | 'cancelled' |
+ *   'voided' | 'refundDue' | 'refunded' | 'unavailable' | 'notFound' | 'error', business?: string, amount?: number,
+ *   currency?: string, backUrl?: string | null, retry?: string | null }} input `money` with `amount` (a page for a
+ *   website that cannot be served has neither)
  */
 export const renderResultPage = ({
 	texts,
 	theme,
-	money = defaultMoney,
+	money,
 	state,
 	business = '',
 	amount,
@@ -324,7 +283,7 @@ export const renderResultPage = ({
 		theme,
 		title: t('page.title'),
 		body: `${business ? `<p class="muted">${escape(business)}</p>` : ''}
-${amount !== undefined && currency ? `<p class="amount">${escape(money(amount, currency))}</p>` : ''}
+${amount !== undefined && currency && money ? `<p class="amount">${escape(money(amount, currency))}</p>` : ''}
 <h1>${escape(t(`page.${state}`))}</h1>
 ${retry ? `<form method="post" action="${escape(retry)}"><button type="submit" name="retry" value="1">${escape(t('page.tryAgain'))}</button></form>` : ''}
 ${backUrl ? `<p><a href="${escape(backUrl)}">${escape(t('page.back', { business }))}</a></p>` : ''}`,
