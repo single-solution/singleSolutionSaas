@@ -378,7 +378,6 @@ function ProductDetail({ detail, owner }) {
 				{problem ? <p className="text-sm text-danger">{describeProblem(problem)}</p> : null}
 				<Table
 					caption={PRODUCTS.websitesTitle}
-					captionHidden
 					rows={rows}
 					rowKey={(w) => w.websiteId}
 					empty={<EmptyState compact icon="globe" kind="website" title={PRODUCTS.noWebsites} />}
@@ -440,7 +439,6 @@ function ProductDetail({ detail, owner }) {
 			<Section id="product-features" title={MORE.featuresTitle} description={MORE.featuresIntro}>
 				<Table
 					caption={MORE.featuresTitle}
-					captionHidden
 					rows={features}
 					rowKey={(f) => f.key}
 					empty={<EmptyState compact icon="sliders" kind="product" title={MORE.noFeatures} />}

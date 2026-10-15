@@ -203,7 +203,6 @@ function AttentionTable({ rows, onAdd = null }) {
 	return (
 		<Table
 			caption={BILLING.billingSections.attention.title}
-			captionHidden
 			rows={rows}
 			rowKey={(m) => m.merchantId}
 			empty={<EmptyState compact icon="check" kind="merchant" title={BILLING.noAttention} />}

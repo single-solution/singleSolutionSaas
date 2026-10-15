@@ -323,14 +323,7 @@ describe('Table', () => {
 	});
 	it('shows the empty message', () => {
 		const { container } = render(
-			<Table
-				caption="None"
-				rows={[]}
-				rowKey={() => 'x'}
-				columns={[{ key: 'a', header: 'A' }]}
-				empty="Nothing here"
-				captionHidden={false}
-			/>,
+			<Table caption="None" rows={[]} rowKey={() => 'x'} columns={[{ key: 'a', header: 'A' }]} empty="Nothing here" />,
 		);
 		expect(container.textContent).toContain('Nothing here');
 		const other = render(

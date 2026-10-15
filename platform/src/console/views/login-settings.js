@@ -539,7 +539,6 @@ export function ActivityTable({
 	return (
 		<Table
 			caption={title}
-			captionHidden
 			rows={items}
 			rowKey={(e) => e.activityId}
 			empty={<EmptyState compact icon="activity" kind="activity" title={empty} />}

@@ -1,11 +1,11 @@
 'use client';
 /**
- * Data table: semantic `<table>` with a caption, client-side sorting of the loaded rows (`aria-sort` on headers,
- * sort buttons are keyboard operable) and cursor pagination (`hasMore` + `onLoadMore`, the Portal's
- * `nextCursor`). Cells keep their text on one line, so a column is never squeezed into a word per line; a table wider
- * than its card (a narrow pane, a phone) scrolls horizontally inside the card. A column of longer text (`wrap`) wraps
- * on whole words within a readable minimum width instead. With no rows the table is just its empty message, as wide
- * as the card (no header row to scroll past).
+ * Data table: semantic `<table>` with a caption (for screen readers: the card or section around it shows the title),
+ * client-side sorting of the loaded rows (`aria-sort` on headers, sort buttons are keyboard operable) and cursor
+ * pagination (`hasMore` + `onLoadMore`, the Portal's `nextCursor`). Cells keep their text on one line, so a column is
+ * never squeezed into a word per line; a table wider than its card (a narrow pane, a phone) scrolls horizontally inside
+ * the card. A column of longer text (`wrap`) wraps on whole words within a readable minimum width instead. With no rows
+ * the table is just its empty message, as wide as the card (no header row to scroll past).
  * @module
  */
 import { useMemo, useState } from 'react';
@@ -38,7 +38,7 @@ const cell = (row, key) => /** @type {Record<string, unknown>} */ (row)[key];
 
 /**
  * @template T
- * @param {{ columns: Column<T>[], rows: T[], rowKey: (row: T) => string, caption: string, captionHidden?: boolean,
+ * @param {{ columns: Column<T>[], rows: T[], rowKey: (row: T) => string, caption: string,
  *   empty?: import('react').ReactNode, hasMore?: boolean, loadingMore?: boolean, onLoadMore?: () => void,
  *   defaultSort?: { key: string, direction: 'asc' | 'desc' }, className?: string }} props
  */
@@ -47,7 +47,6 @@ export function Table({
 	rows,
 	rowKey,
 	caption,
-	captionHidden = true,
 	empty,
 	hasMore = false,
 	loadingMore = false,
@@ -78,9 +77,7 @@ export function Table({
 			{/* framed on the page; inside a card (which frames it already) no second frame */}
 			<div className="overflow-x-auto rounded-card border border-line-soft bg-surface in-[.rounded-card]:rounded-none in-[.rounded-card]:border-0">
 				<table className={cx('w-full border-collapse text-sm', sorted.length > 0 && 'min-w-[32rem]')}>
-					<caption className={cx(captionHidden ? 'sr-only' : 'px-5 pb-1 pt-4 text-left text-sm font-semibold text-fg')}>
-						{caption}
-					</caption>
+					<caption className="sr-only">{caption}</caption>
 					<thead className={cx(sorted.length === 0 && 'hidden')}>
 						<tr>
 							{columns.map((column) => {
