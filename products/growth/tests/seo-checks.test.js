@@ -575,7 +575,9 @@ Disallow: /été`;
 			`User-agent: *\n${Array.from({ length: 40_000 }, (_, i) => `Disallow: /p${i}/*/x`).join('\n')}`,
 		);
 		for (let i = 0; i < 30; i += 1) robotsAllows(many, ['googlebot-image', 'googlebot'], `/media/${i}.jpg`);
-		expect(performance.now() - started).toBeLessThan(1000);
+		// a run's addresses against the largest file Google reads: minutes with a matcher that tries every split, about
+		// 0.2 s here (up to 2 s with coverage on a busy machine)
+		expect(performance.now() - started).toBeLessThan(5000);
 	});
 
 	it('tells the pages the robots presets keep out on purpose (G12), as Google reads them', () => {
