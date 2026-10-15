@@ -11,6 +11,7 @@
 import { formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
 import { escapeHtml } from '@ss/contracts/text';
+import { isCustomGateway } from '../core/gateways.js';
 import { PROOF_TYPES } from '../core/widgets.js';
 
 /** Security headers of the hosted pages (forms may post to the gateways' own https pages). */
@@ -124,7 +125,9 @@ const translator = (texts) => (key, values) => formatText(texts[key] ?? key, val
  * @param {Record<string, string>} texts @param {string} gateway @param {string} [genericName]
  */
 export const gatewayName = (texts, gateway, genericName = '') =>
-	translator(texts)(`gateway.${gateway}`, gateway === 'generic' ? { name: genericName } : {});
+	isCustomGateway(gateway)
+		? translator(texts)('gateway.generic', { name: genericName })
+		: translator(texts)(`gateway.${gateway}`, {});
 
 /**
  * The payment-link page: amount (when the link has none), the payer's name and email, the phone and the questions the

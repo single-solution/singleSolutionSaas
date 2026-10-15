@@ -8,7 +8,7 @@
 import { Button, CodeBlock, Section, Stat } from '@ss/ui';
 import { ConnectionsTab, DevelopersTab, OverviewTab, SettingsTab, fill, useLoad } from '@ss/ui/dashboard';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
+import { CUSTOM_GATEWAY_CONNECTIONS, GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS } from '../../core/gateways.js';
 import { methodReady } from '../../core/methods.js';
 import { createSnippets } from '../../core/snippets.js';
 import { ConnectionForm, FORMS } from './forms.js';
@@ -52,11 +52,12 @@ const storageConnected = (connections) =>
  * @param {{ ready: string[] } | null} methods
  */
 const gatewaysReady = (data, methods) =>
-	GATEWAYS.filter((gateway) => {
-		if (!data.featuresOn.includes(GATEWAY_FEATURES[gateway])) return false;
-		const name = GATEWAY_CONNECTIONS[gateway];
-		return data.checklist.connections.some((item) => item.name === name && item.status === 'connected');
-	}).length + (methods?.ready.length ?? 0);
+	GATEWAYS.reduce((count, gateway) => {
+		if (!data.featuresOn.includes(GATEWAY_FEATURES[gateway])) return count;
+		// the custom gateways count one each (P4)
+		const names = gateway === 'generic' ? CUSTOM_GATEWAY_CONNECTIONS : [GATEWAY_CONNECTIONS[gateway]];
+		return count + data.checklist.connections.filter((item) => names.includes(item.name) && item.status === 'connected').length;
+	}, 0) + (methods?.ready.length ?? 0);
 
 /**
  * Payments' part of the Overview (PLAN 0.6 "Overviews talk"): the ways to pay ready, and, while Manual payment methods

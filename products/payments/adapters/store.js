@@ -36,6 +36,7 @@ import { createId } from '@ss/contracts';
  * @property {string | null} gateway a gateway id, or a manual payment method's key (then `manual` says which)
  * @property {{ name: string, kind: import('../core/methods.js').MethodKind } | null} manual the manual payment method
  *   as it was when the payment took it (its name and kind), null for a gateway or before a method is chosen
+ * @property {string | null} gatewayName a custom gateway's own name as the payment took it (P4), else null
  * @property {import('../core/payments.js').PaymentStatus} status
  * @property {string | null} gatewayRef the gateway's session, order or transaction reference
  * @property {string | null} captureRef what refunds name (Stripe payment intent, PayPal capture, PayFast payment id …)

@@ -1,11 +1,13 @@
 /**
  * The gateways (PLAN 0.8.7): their ids (`payfast` is PayFast South Africa, `payfast_pk` PayFast Pakistan), the feature
  * that switches each on, the connection holding the merchant's keys, the currencies each one takes and how it refunds.
- * Every gateway is a redirect to the gateway's own page or form: card details never reach Payments. No I/O.
+ * Every gateway is a redirect to the gateway's own page or form: card details never reach Payments. The merchant's own
+ * custom gateways (P4) run on the generic adapter, each in a connection of its own (`generic_1` … `generic_5`) and
+ * named by its own key: `generic:<key>`. No I/O.
  * @module
  */
 
-/** Gateway ids, in the order payers see them. */
+/** The adapters' ids, in the order payers see them (`generic`: the adapter of the merchant's custom gateways). */
 export const GATEWAYS = Object.freeze(
 	/** @type {const} */ (['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic']),
 );
@@ -24,7 +26,7 @@ export const GATEWAY_FEATURES = Object.freeze({
 	generic: 'generic_gateway',
 });
 
-/** The connection holding each gateway's keys. */
+/** The connection holding each gateway's keys (custom gateways: {@link CUSTOM_GATEWAY_CONNECTIONS}). */
 export const GATEWAY_CONNECTIONS = Object.freeze({
 	stripe: 'stripe',
 	paypal: 'paypal',
@@ -33,8 +35,29 @@ export const GATEWAY_CONNECTIONS = Object.freeze({
 	jazzcash: 'jazzcash',
 	easypaisa: 'easypaisa',
 	rapid: 'rapid',
-	generic: 'generic',
+	generic: null,
 });
+
+/** The connections of the merchant's custom gateways, one each (P4; an engine cap of 5). */
+export const CUSTOM_GATEWAY_CONNECTIONS = Object.freeze(['generic_1', 'generic_2', 'generic_3', 'generic_4', 'generic_5']);
+
+/** A custom gateway's own key: lowercase letters, digits and `-`. */
+export const CUSTOM_KEY = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/**
+ * True for a custom gateway's id, `generic:<key>` (P4).
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+export const isCustomGateway = (value) =>
+	typeof value === 'string' && value.startsWith('generic:') && CUSTOM_KEY.test(value.slice('generic:'.length));
+
+/**
+ * The adapter a gateway id runs on: a custom gateway's is `generic`.
+ * @param {string} id
+ * @returns {Gateway}
+ */
+export const adapterOf = (id) => /** @type {Gateway} */ (isCustomGateway(id) ? 'generic' : id);
 
 /** PayPal's currencies for checkout (its REST API list). */
 const PAYPAL_CURRENCIES = Object.freeze([
@@ -84,20 +107,23 @@ export const GATEWAY_CURRENCIES = Object.freeze({
 export const SUBSCRIPTION_GATEWAYS = Object.freeze(/** @type {const} */ (['stripe', 'paypal']));
 
 /**
- * True when `value` is a gateway id.
+ * True when `value` is a gateway a payment may name: a built-in gateway's id or a custom gateway's `generic:<key>`.
  * @param {unknown} value
- * @returns {value is Gateway}
+ * @returns {value is string}
  */
-export const isGateway = (value) => typeof value === 'string' && /** @type {readonly string[]} */ (GATEWAYS).includes(value);
+export const isGateway = (value) =>
+	isCustomGateway(value) ||
+	(typeof value === 'string' && value !== 'generic' && /** @type {readonly string[]} */ (GATEWAYS).includes(value));
 
 /**
  * Whether a gateway takes a currency.
- * @param {Gateway} gateway
+ * @param {string} gateway a gateway's id (a custom gateway's `generic:<key>`)
  * @param {string} currency
- * @param {ReadonlyArray<string> | null} [own] the generic adapter's own list from its connection
+ * @param {ReadonlyArray<string> | null} [own] a custom gateway's own list from its connection
  */
 export const takesCurrency = (gateway, currency, own = null) => {
-	const list = gateway === 'generic' && own && own.length > 0 ? own : GATEWAY_CURRENCIES[gateway];
+	const adapter = adapterOf(gateway);
+	const list = adapter === 'generic' && own && own.length > 0 ? own : GATEWAY_CURRENCIES[adapter];
 	return list === null || list.includes(currency);
 };
 

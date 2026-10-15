@@ -1150,6 +1150,7 @@ describe('Rapid Gateway', () => {
 
 describe('generic adapter', () => {
 	const keys = {
+		slug: 'paynow',
 		name: 'PayNow',
 		url: 'https://gateway.example.org/checkout',
 		secret: 's'.repeat(24),
@@ -1159,9 +1160,12 @@ describe('generic adapter', () => {
 	const generic = adapters.generic;
 	it('checks the connection', async () => {
 		expect(generic.violation(null)).toMatch(/name/);
-		expect(generic.violation({ name: '' })).toMatch(/name/);
-		expect(generic.violation({ name: 'x', url: 'http://gateway.example.org' })).toMatch(/https/);
-		expect(generic.violation({ name: 'x', url: keys.url, secret: 'short' })).toMatch(/24/);
+		expect(generic.violation({ slug: 'paynow', name: '' })).toMatch(/name/);
+		// its own key in gateway ids (generic:<slug>, P4)
+		expect(generic.violation({ ...keys, slug: 'Pay Now' })).toMatch(/key/);
+		expect(generic.violation({ ...keys, slug: undefined })).toMatch(/key/);
+		expect(generic.violation({ slug: 'paynow', name: 'x', url: 'http://gateway.example.org' })).toMatch(/https/);
+		expect(generic.violation({ slug: 'paynow', name: 'x', url: keys.url, secret: 'short' })).toMatch(/24/);
 		expect(generic.violation({ ...keys, refundUrl: 'ftp://x' })).toMatch(/refund/);
 		expect(generic.violation({ ...keys, currencies: 5 })).toMatch(/Currencies/);
 		expect(generic.violation({ ...keys, refundUrl: '' })).toBeNull();

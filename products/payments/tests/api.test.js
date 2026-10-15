@@ -58,7 +58,15 @@ const EASYPAISA = {
 };
 const PAYFAST_PK = { merchantId: '102', securedKey: 'secured-key-0123', merchantName: 'Shop Ltd', sandbox: false };
 const RAPID = { secretKey: 'rg_sk_live_0123', webhookSecret: 'rg_whsec_4567', sandbox: false };
-const GENERIC = { name: 'PayNow', url: 'https://gateway.example.org/checkout', secret: 'g'.repeat(32) };
+const GENERIC = { slug: 'paynow', name: 'PayNow', url: 'https://gateway.example.org/checkout', secret: 'g'.repeat(32) };
+/** A second custom gateway of the merchant's own, in its own connection (P4). */
+const BRIDGE = {
+	slug: 'bridge',
+	name: 'Bank bridge',
+	url: 'https://bridge.example.org/pay',
+	secret: 'b'.repeat(32),
+	currencies: 'EUR',
+};
 const STORAGE = {
 	endpoint: BUCKET,
 	region: 'auto',
@@ -162,7 +170,8 @@ describe('before setup', () => {
 		expect(await env.connect('payfast', PAYFAST)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('jazzcash', JAZZCASH)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('easypaisa', EASYPAISA)).toMatchObject({ status: 'connected' });
-		expect(await env.connect('generic', GENERIC)).toMatchObject({ status: 'connected' });
+		expect(await env.connect('generic_1', GENERIC)).toMatchObject({ status: 'connected' });
+		expect(await env.connect('generic_2', BRIDGE)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('storage', STORAGE)).toMatchObject({ status: 'connected' });
 		expect(await env.connect('notifications', env.notificationsToken)).toMatchObject({ status: 'connected' });
 		await env.methods(BANK);
@@ -607,25 +616,46 @@ describe('the other gateways', () => {
 		expect(refund.json).toMatchObject({ status: 'refunded', refunds: [{ manual: true, amount: 250000 }] });
 	});
 
-	it('the generic adapter: signed checkout fields, signed notice, refunds recorded', async () => {
-		const payment = await createPayment({ amount: 900, currency: 'USD', gateway: 'generic' });
+	it('custom gateways: each named, in its own connection; signed checkout fields, signed notice, refunds recorded (P4)', async () => {
+		const payment = await createPayment({ amount: 900, currency: 'USD', gateway: 'generic:paynow' });
+		expect(payment).toMatchObject({ gateway: 'generic:paynow', methodName: 'PayNow' });
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain('Continue to PayNow');
+		expect(form.text).toContain(`/v1/gateways/generic/paynow/${env.websiteId}`);
 		const body = JSON.stringify({ paymentId: payment.id, status: 'paid', amount: 900, currency: 'USD', reference: 'G-1' });
-		const res = await env.call('POST', `/v1/gateways/generic/${env.websiteId}`, {
+		// the other custom gateway's secret does not sign for this one
+		const forged = await env.call('POST', `/v1/gateways/generic/bridge/${env.websiteId}`, {
+			body,
+			headers: { 'ss-signature': signWebhook({ body, secret: BRIDGE.secret, now: env.now }) },
+		});
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json.status).toBe('pending');
+		expect(forged.status).toBeLessThan(500);
+		const res = await env.call('POST', `/v1/gateways/generic/paynow/${env.websiteId}`, {
 			body,
 			headers: { 'ss-signature': signWebhook({ body, secret: GENERIC.secret, now: env.now }) },
 		});
 		expect(res.json).toEqual({ received: true });
+		expect((await env.api('GET', `/v1/payments/${payment.id}`)).json.status).toBe('paid');
 		const refund = await env.api('POST', `/v1/payments/${payment.id}/refunds`, {});
 		expect(refund.json.refunds[0].manual).toBe(true);
+		// each takes its own currencies; payers see each by its own name
+		expect(
+			(await env.api('POST', '/v1/payments', { amount: 900, currency: 'USD', gateway: 'generic:bridge' })).json.type,
+		).toMatch(/currency_not_supported$|gateway_not_ready$/);
+		const euro = await createPayment({ amount: 900, currency: 'EUR' });
+		const choice = (await page(`/pay/${env.websiteId}/${euro.id}`)).text;
+		expect(choice).toContain('value="generic:bridge"');
+		expect(choice).toContain('Bank bridge');
+		expect(
+			(await env.api('POST', '/v1/payments', { amount: 900, currency: 'USD', gateway: 'generic:nope' })).json.type,
+		).toMatch(/gateway_not_ready$/);
 	});
 
 	it('refuses notices for unknown websites and gateways that are not set up', async () => {
 		expect((await env.call('POST', '/v1/gateways/stripe/web_nope', { body: '{}' })).status).toBe(404);
-		await env.dashboard(await env.adminSession(), 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/generic`);
-		expect((await env.call('POST', `/v1/gateways/generic/${env.websiteId}`, { body: '{}' })).status).toBe(404);
-		await env.connect('generic', GENERIC);
+		await env.dashboard(await env.adminSession(), 'DELETE', `/v1/dashboard/websites/${env.websiteId}/connections/generic_1`);
+		expect((await env.call('POST', `/v1/gateways/generic/paynow/${env.websiteId}`, { body: '{}' })).status).toBe(404);
+		await env.connect('generic_1', GENERIC);
 	});
 
 	it('cancel on the gateway: back to the pay page, then try again', async () => {
@@ -1502,7 +1532,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 		expect((await env.api('GET', '/v1/lists/manual_methods')).json.value).toEqual(BANK);
 		const listed = await env.api('GET', '/v1/connections');
 		const byName = Object.fromEntries(listed.json.connections.map((/** @type {any} */ c) => [c.name, c]));
-		for (const name of ['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic', 'storage'])
+		for (const name of ['stripe', 'paypal', 'payfast', 'payfast_pk', 'jazzcash', 'easypaisa', 'rapid', 'generic_1', 'storage'])
 			expect(byName[name]).toMatchObject({ state: 'connected' });
 		expect(byName.payfast_pk).toMatchObject({ kind: 'secret', neededBy: ['payfast_pk'], last4: '0123' });
 		expect(listed.text).not.toContain(PAYFAST_PK.securedKey);
@@ -1564,6 +1594,13 @@ describe('data rights, statuses and public files', () => {
 			name: 'Easypaisa (Pakistan)',
 			urls: [`${BASE}/return/easypaisa/${env.websiteId}/<paymentId>`],
 		});
+		// each custom gateway of the website by its own name (P4)
+		expect(addresses.json.items).toContainEqual({
+			gateway: 'generic:paynow',
+			name: 'PayNow',
+			urls: [`${BASE}/v1/gateways/generic/paynow/${env.websiteId}`],
+		});
+		expect(docs.text).toContain(`${BASE}/v1/gateways/generic/&#60;key&#62;/&#60;websiteId&#62;`);
 		expect((await env.call('GET', `/v1/dashboard/websites/${env.websiteId}/gateway-addresses`)).status).toBe(401);
 		expect(docs.text).toContain('feature-payment_links');
 		// the API reference: what each call takes and answers, from schemas/api.json

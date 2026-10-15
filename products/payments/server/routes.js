@@ -11,7 +11,7 @@
 import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
 import { fromDecimal } from '@ss/contracts/format';
-import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
+import { CUSTOM_GATEWAY_CONNECTIONS, GATEWAY_FEATURES, adapterOf, isCustomGateway, isGateway } from '../core/gateways.js';
 import { methodView } from '../core/methods.js';
 import { gatewayAddresses } from '../core/snippets.js';
 import { amountOf, decimalSignOf } from '../core/money.js';
@@ -186,14 +186,16 @@ export const createRoutes = (product) => {
 	 */
 	const choices = async (s, texts, currency, only = null) => {
 		const list = await service.available(s, currency, only);
-		const keys = list.includes('generic') ? await service.keysOf(s, 'generic') : null;
 		const methods = new Map((await service.methodsOf(s)).map((method) => [method.key, method]));
-		return list.map((id) => {
-			const method = isGateway(id) ? undefined : methods.get(id);
-			return method
-				? { id, name: method.name, details: method.details }
-				: { id, name: gatewayName(texts, id, String(keys?.name ?? '')), details: '' };
-		});
+		return Promise.all(
+			list.map(async (id) => {
+				const method = isGateway(id) ? undefined : methods.get(id);
+				if (method) return { id, name: method.name, details: method.details };
+				// a custom gateway by its own name (P4)
+				const keys = isCustomGateway(id) ? await service.keysOf(s, id) : null;
+				return { id, name: gatewayName(texts, id, String(keys?.name ?? '')), details: '' };
+			}),
+		);
 	};
 
 	/**
@@ -307,20 +309,38 @@ export const createRoutes = (product) => {
 
 	/** What each gateway's adapter says the merchant registers in its console (P12). */
 	const declared = Object.freeze(
-		Object.fromEntries(Object.entries(product.gateways).map(([gateway, adapter]) => [gateway, adapter.addresses])),
+		Object.fromEntries(
+			Object.entries(product.gateways).map(([gateway, adapter]) => [
+				// custom gateways run on the generic adapter, each by its own key (P4)
+				gateway === 'generic' ? 'generic:<key>' : gateway,
+				adapter.addresses,
+			]),
+		),
 	);
 
 	/**
 	 * The dashboard's Developers tab: each gateway's console addresses for this website, by its dashboard name (P12).
 	 * @param {any} ctx
 	 */
-	const gatewayAddressList = (ctx) => {
+	const gatewayAddressList = async (ctx) => {
+		const websiteId = String(ctx.params.websiteId);
 		const base = product.address() ?? new URL(ctx.request.url).origin;
 		const names = new Map(manifest.features.map((feature) => [feature.key, feature.name]));
+		// the website's custom gateways (P4), each by its own key and name
+		/** @type {Record<string, ReadonlyArray<'notice' | 'return'>>} */
+		const own = { ...declared };
+		delete own['generic:<key>'];
+		for (const connection of CUSTOM_GATEWAY_CONNECTIONS) {
+			const value = await product.connections.value(websiteId, connection);
+			if (typeof value !== 'object' || value === null || product.gateways.generic.violation(value) !== null) continue;
+			const keys = /** @type {Record<string, any>} */ (value);
+			own[`generic:${keys.slug}`] = product.gateways.generic.addresses;
+			names.set(`generic:${keys.slug}`, String(keys.name));
+		}
 		return {
-			items: gatewayAddresses(base, String(ctx.params.websiteId), declared).map((entry) => ({
+			items: gatewayAddresses(base, websiteId, own).map((entry) => ({
 				gateway: entry.gateway,
-				name: names.get(GATEWAY_FEATURES[/** @type {Gateway} */ (entry.gateway)]) ?? entry.gateway,
+				name: names.get(entry.gateway) ?? names.get(GATEWAY_FEATURES[adapterOf(entry.gateway)]) ?? entry.gateway,
 				urls: entry.urls,
 			})),
 		};
@@ -551,7 +571,7 @@ export const createRoutes = (product) => {
 		}
 		const checkout = /** @type {NonNullable<typeof payment.checkout>} */ (payment.checkout);
 		if (checkout.kind === 'redirect') return seeOther(checkout.url);
-		const keys = payment.gateway === 'generic' ? await service.keysOf(s, 'generic') : null;
+		const keys = isCustomGateway(payment.gateway) ? await service.keysOf(s, payment.gateway) : null;
 		return html(
 			renderGatewayForm({
 				...look,
@@ -630,7 +650,7 @@ export const createRoutes = (product) => {
 			);
 		}
 		if (payment.gateway === gateway && isGateway(gateway)) {
-			const adapter = product.gateways[gateway];
+			const adapter = product.gateways[adapterOf(gateway)];
 			const keys = await service.keysOf(s, gateway);
 			if (keys && adapter.returned) {
 				const url = new URL(ctx.request.url);
@@ -654,7 +674,7 @@ export const createRoutes = (product) => {
 						}),
 					);
 				}
-				if (answer.news) await service.applyPayment(s, /** @type {Gateway} */ (gateway), answer.news, 'payer returned');
+				if (answer.news) await service.applyPayment(s, gateway, answer.news, 'payer returned');
 			}
 		}
 		const after = /** @type {import('../adapters/store.js').PaymentRecord} */ (await s.store.payments.get(payment.id));
@@ -663,15 +683,18 @@ export const createRoutes = (product) => {
 	};
 
 	/**
-	 * A gateway's signed notice (webhook, ITN, callback), checked with the website's keys for that gateway.
-	 * @param {Exclude<Gateway, 'jazzcash' | 'easypaisa'>} gateway
+	 * A gateway's signed notice (webhook, ITN, callback), checked with the website's keys for that gateway; a custom
+	 * gateway's (`/v1/gateways/generic/:slug/…`) with its own connection's (P4).
+	 * @param {Exclude<Gateway, 'jazzcash' | 'easypaisa' | 'generic'> | ((ctx: any) => string)} which the gateway, or how
+	 *   to read it from the request
 	 */
-	const notice = (gateway) => async (/** @type {any} */ ctx) => {
+	const notice = (which) => async (/** @type {any} */ ctx) => {
+		const gateway = typeof which === 'function' ? which(ctx) : which;
 		const s = await publicSite(ctx, ctx.params.websiteId);
-		if (!s || !s.on.includes(GATEWAY_FEATURES[gateway]))
+		if (!s || !isGateway(gateway) || !s.on.includes(GATEWAY_FEATURES[adapterOf(gateway)]))
 			return problem('not_found', 'Notices are not received for this website.');
 		const keys = await service.keysOf(s, gateway);
-		const adapter = product.gateways[gateway];
+		const adapter = product.gateways[adapterOf(gateway)];
 		if (!keys || !adapter.notice) return problem('not_found', 'Notices are not received for this website.');
 		const checked = await adapter.notice({ rawBody: ctx.rawBody, headers: ctx.headers, query: ctx.query }, keys, {
 			send: product.send,
@@ -1252,11 +1275,11 @@ export const createRoutes = (product) => {
 		}),
 		defineRoute({
 			method: 'POST',
-			path: '/v1/gateways/generic/:websiteId',
+			path: '/v1/gateways/generic/:slug/:websiteId',
 			auth: 'none',
 			rawBody: true,
 			rateLimit: NOTICE_LIMITS,
-			handler: notice('generic'),
+			handler: notice((ctx) => `generic:${ctx.params.slug}`),
 		}),
 
 		// public docs: no sign-in, no tokens

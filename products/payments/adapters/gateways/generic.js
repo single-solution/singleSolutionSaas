@@ -12,10 +12,12 @@
  * - Refund: `POST <refundUrl>` with JSON `{ refundId, paymentId, reference, amount, currency, reason }`, signed the same
  *   way; any 2xx answer is a refund (its JSON `reference`, if any, is kept).
  *
- * Connection `generic`: `{ name, url, secret, refundUrl?, currencies? }` (`currencies`: comma-separated codes).
+ * Connections `generic_1` … `generic_5`, one per custom gateway of the merchant (P4): `{ slug, name, url, secret,
+ * refundUrl?, currencies? }` (`slug`: its own key, so its id is `generic:<slug>`; `currencies`: comma-separated codes).
  * @module
  */
 import { checkUrl, createOutboundPolicy } from '@ss/net';
+import { CUSTOM_KEY } from '../../core/gateways.js';
 import { isCurrency, isPositiveAmount } from '@ss/contracts/format';
 import { isObject } from '@ss/contracts/util';
 import { hmacSha256Hex, signWebhook, verifyWebhook } from '@ss/protocol';
@@ -67,7 +69,9 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 		id: 'generic',
 		addresses: ['notice'],
 		violation: (keys) => {
-			if (!isObject(keys)) return 'Enter the name, the checkout address and the secret.';
+			if (!isObject(keys)) return 'Enter the key, the name, the checkout address and the secret.';
+			if (typeof keys.slug !== 'string' || !CUSTOM_KEY.test(keys.slug))
+				return 'The key is lowercase letters, digits and - (at most 40): payments name this gateway generic:<key>.';
 			if (typeof keys.name !== 'string' || keys.name.trim() === '' || keys.name.length > 40)
 				return 'The name payers see is required (at most 40 characters).';
 			if (!httpsAddress(keys.url, policy)) return 'The checkout address must be a public https address.';

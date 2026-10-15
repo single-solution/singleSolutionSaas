@@ -28,7 +28,7 @@ import rapidSettings from '../schemas/rapid.settings.json' with { type: 'json' }
 import refunds from '../schemas/refunds.settings.json' with { type: 'json' };
 import stripeSettings from '../schemas/stripe.settings.json' with { type: 'json' };
 import subscriptions from '../schemas/subscriptions.settings.json' with { type: 'json' };
-import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
+import { CUSTOM_GATEWAY_CONNECTIONS, GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
 import { EVENT_TYPES, paymentView, subscriptionView } from '../core/payments.js';
 import { createAdapters } from './gateways/index.js';
 import { LISTS, createLists } from './lists.js';
@@ -224,7 +224,17 @@ export const createProductInstance = (options) => {
 			jazzcash: gateway('jazzcash', 'JazzCash account', 'jazzcash', 'integritySalt'),
 			easypaisa: gateway('easypaisa', 'Easypaisa store', 'easypaisa', 'hashKey'),
 			rapid: gateway('rapid', 'Rapid Gateway account', 'rapid', 'secretKey'),
-			generic: gateway('generic', 'Generic gateway', 'generic_gateway', 'secret'),
+			// the merchant's custom gateways on the generic adapter, each in a connection of its own (P4): the feature
+			// needs the first; the others are there for more
+			...Object.fromEntries(
+				CUSTOM_GATEWAY_CONNECTIONS.map((connection, index) => [
+					connection,
+					{
+						...gateway('generic', `Custom gateway ${index + 1}`, 'generic_gateway', 'secret'),
+						...(index === 0 ? {} : { neededBy: [] }),
+					},
+				]),
+			),
 			notifications: {
 				label: 'Notifications token (signed webhooks to your server)',
 				kind: 'token',

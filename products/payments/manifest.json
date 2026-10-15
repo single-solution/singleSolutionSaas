@@ -91,8 +91,8 @@
 		},
 		{
 			"key": "generic_gateway",
-			"name": "Generic gateway adapter",
-			"description": "Any other gateway: the payer is sent to its checkout address with signed fields and it confirms with a signed notice.",
+			"name": "Custom gateways",
+			"description": "Up to 5 gateways of the merchant's own (generic:<key>), each in its own connection: the payer is sent to its checkout address with signed fields and it confirms with a signed notice.",
 			"dependsOn": [],
 			"settings": {
 				"$ref": "schemas/generic_gateway.settings.json"

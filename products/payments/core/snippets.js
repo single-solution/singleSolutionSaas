@@ -23,7 +23,8 @@ export const gatewayAddresses = (base, websiteId = '<websiteId>', declared = {})
 			gateway,
 			urls: kinds.map((kind) =>
 				kind === 'notice'
-					? `${base}/v1/gateways/${gateway}/${websiteId}`
+					? // an id's parts are the path's segments (a custom gateway's generic:<key> → generic/<key>)
+						`${base}/v1/gateways/${gateway.replace(':', '/')}/${websiteId}`
 					: `${base}/return/${gateway}/${websiteId}/<paymentId>`,
 			),
 		}));

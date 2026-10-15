@@ -9,10 +9,13 @@
 import { problem } from '@ss/app-kit';
 import { originAllowed } from '@ss/protocol';
 import {
+	CUSTOM_GATEWAY_CONNECTIONS,
 	GATEWAY_CONNECTIONS,
 	GATEWAY_FEATURES,
 	GATEWAYS,
 	gatewaysFor,
+	adapterOf,
+	isCustomGateway,
 	isGateway,
 	orderedWays,
 	takesCurrency,
@@ -94,17 +97,41 @@ export const createService = (product) => {
 	const urlsOf = (s, gateway, id) => ({
 		return: `${s.base}/return/${gateway}/${s.websiteId}/${id}`,
 		cancel: `${s.base}/return/cancel/${s.websiteId}/${id}`,
-		notify: `${s.base}/v1/gateways/${gateway}/${s.websiteId}`,
+		// an id's parts are the path's segments (a custom gateway's generic:<key> → generic/<key>)
+		notify: `${s.base}/v1/gateways/${gateway.replace(':', '/')}/${s.websiteId}`,
 	});
 
 	/**
-	 * A gateway's keys (decrypted), or null.
-	 * @param {Site} s @param {Gateway} gateway
+	 * The website's custom gateways (P4): each connection `generic_1` … `generic_5` that holds a usable value, by its id
+	 * `generic:<key>` (a key used twice counts once, the first).
+	 * @param {Site} s
+	 * @returns {Promise<Array<{ id: string, keys: Record<string, any> }>>}
+	 */
+	const customsOf = async (s) => {
+		/** @type {Array<{ id: string, keys: Record<string, any> }>} */
+		const found = [];
+		for (const name of CUSTOM_GATEWAY_CONNECTIONS) {
+			const value = await product.connections.value(s.websiteId, name);
+			if (typeof value !== 'object' || value === null || gateways.generic.violation(value) !== null) continue;
+			const keys = /** @type {Record<string, any>} */ (value);
+			const id = `generic:${keys.slug}`;
+			if (!found.some((entry) => entry.id === id)) found.push({ id, keys });
+		}
+		return found;
+	};
+
+	/**
+	 * A gateway's keys (decrypted), or null; a custom gateway's are its own connection's.
+	 * @param {Site} s @param {string} gateway
 	 * @returns {Promise<Record<string, any> | null>}
 	 */
 	const keysOf = async (s, gateway) => {
-		const value = await product.connections.value(s.websiteId, /** @type {string} */ (GATEWAY_CONNECTIONS[gateway]));
-		return typeof value === 'object' && value !== null && gateways[gateway].violation(value) === null ? value : null;
+		if (isCustomGateway(gateway)) return (await customsOf(s)).find((entry) => entry.id === gateway)?.keys ?? null;
+		const adapter = adapterOf(gateway);
+		const connection = GATEWAY_CONNECTIONS[adapter];
+		if (connection === null) return null;
+		const value = await product.connections.value(s.websiteId, connection);
+		return typeof value === 'object' && value !== null && gateways[adapter].violation(value) === null ? value : null;
 	};
 
 	/**
@@ -132,23 +159,28 @@ export const createService = (product) => {
 	const available = async (s, currency, only = null) => {
 		/** @type {Set<string>} */
 		const ready = new Set();
-		/** @type {string[]} */
-		let own = [];
 		for (const gateway of GATEWAYS) {
-			if (!s.on.includes(GATEWAY_FEATURES[gateway])) continue;
-			const keys = await keysOf(s, gateway);
-			if (keys) ready.add(gateway);
-			if (gateway === 'generic') own = genericCurrencies(keys);
+			if (gateway === 'generic' || !s.on.includes(GATEWAY_FEATURES[gateway])) continue;
+			if (await keysOf(s, gateway)) ready.add(gateway);
 		}
 		const picked = (/** @type {string} */ id) => only === null || only.length === 0 || only.includes(id);
+		// the merchant's custom gateways, each with its own currencies (P4)
+		const customs = s.on.includes(GATEWAY_FEATURES.generic)
+			? (await customsOf(s))
+					.filter((entry) => picked(entry.id) && takesCurrency(entry.id, currency, genericCurrencies(entry.keys)))
+					.map((entry) => entry.id)
+			: [];
 		const manual = (await methodsOf(s))
 			.filter((method) => picked(method.key) && methodReady(method, currency).ready)
 			.map((method) => method.key);
 		const { methodOrder, preferredMethod } = await product.settings.values(s.websiteId, 'payment_api');
-		return orderedWays([...gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, own, only }), ...manual], {
-			order: Array.isArray(methodOrder) ? methodOrder : [],
-			preferred: preferredMethod,
-		});
+		return orderedWays(
+			[...gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, only }), ...customs, ...manual],
+			{
+				order: Array.isArray(methodOrder) ? methodOrder : [],
+				preferred: preferredMethod,
+			},
+		);
 	};
 
 	/**
@@ -198,7 +230,7 @@ export const createService = (product) => {
 	const createPayment = async (s, input, { source, linkId = null }) => {
 		checkReturns(s, input);
 		if (input.gateway !== null) {
-			if (isGateway(input.gateway) && !takesCurrency(input.gateway, input.currency))
+			if (isGateway(input.gateway) && !isCustomGateway(input.gateway) && !takesCurrency(input.gateway, input.currency))
 				throw problem('currency_not_supported', `${input.gateway} does not take ${input.currency}.`);
 			if (!(await available(s, input.currency)).includes(input.gateway))
 				throw problem(
@@ -211,9 +243,11 @@ export const createService = (product) => {
 				`No gateway or manual payment method is ready for ${input.currency}: switch one on and set it up.`,
 			);
 		const method = await methodOf(s, input.gateway);
+		const custom = isCustomGateway(input.gateway) ? await keysOf(s, input.gateway) : null;
 		return s.store.payments.add({
 			...input,
 			manual: method ? { name: method.name, kind: method.kind } : null,
+			gatewayName: custom ? String(custom.name) : null,
 			source,
 			linkId,
 		});
@@ -248,10 +282,11 @@ export const createService = (product) => {
 			return changed ? { ok: true, payment: changed } : { ok: false };
 		}
 		const keys = /** @type {Record<string, any>} */ (await keysOf(s, gateway));
+		const adapter = gateways[adapterOf(gateway)];
 		// an unpaid checkout ends when the merchant says, within the gateway's own longest (P9)
 		const { checkoutExpiryHours } = await product.settings.values(s.websiteId, 'payment_api');
-		const hours = Math.min(Number(checkoutExpiryHours), gateways[gateway].maxExpiryHours ?? Number.POSITIVE_INFINITY);
-		const started = await gateways[gateway].start(
+		const hours = Math.min(Number(checkoutExpiryHours), adapter.maxExpiryHours ?? Number.POSITIVE_INFINITY);
+		const started = await adapter.start(
 			{
 				payment: { ...payment, websiteId: s.websiteId },
 				keys,
@@ -268,7 +303,14 @@ export const createService = (product) => {
 		const changed = await s.store.payments.change(
 			payment.id,
 			['pending', 'failed', 'cancelled'],
-			{ gateway, manual: null, status: 'pending', gatewayRef: started.ref, checkout: /** @type {any} */ (checkout) },
+			{
+				gateway,
+				manual: null,
+				gatewayName: isCustomGateway(gateway) ? String(keys.name) : null,
+				status: 'pending',
+				gatewayRef: started.ref,
+				checkout: /** @type {any} */ (checkout),
+			},
 			{ event: 'started', detail: gateway },
 		);
 		return changed ? { ok: true, payment: changed } : { ok: false };
@@ -299,7 +341,7 @@ export const createService = (product) => {
 	 * currency (a mismatch is recorded and changes nothing); a confirmation that arrives twice changes nothing. Money for
 	 * a payment the merchant canceled is recorded too (the payer paid), with a history entry saying it is to be refunded:
 	 * the payment answers `refundDue: true`, also in its `payment.paid` event, and never verifies an order (K-13).
-	 * @param {Site} s @param {Gateway} gateway @param {import('../adapters/gateways/types.js').PaymentNews} news @param {string} via
+	 * @param {Site} s @param {string} gateway @param {import('../adapters/gateways/types.js').PaymentNews} news @param {string} via
 	 * @returns {Promise<PaymentRecord | null>} the payment after it, or null when it is not this website's
 	 */
 	const applyPayment = async (s, gateway, news, via) => {
@@ -374,7 +416,7 @@ export const createService = (product) => {
 
 	/**
 	 * Apply everything a notice said.
-	 * @param {Site} s @param {Gateway} gateway @param {News[]} news @param {string} via
+	 * @param {Site} s @param {string} gateway @param {News[]} news @param {string} via
 	 */
 	const apply = async (s, gateway, news, via) => {
 		for (const item of news)
@@ -406,8 +448,8 @@ export const createService = (product) => {
 		// it changed meanwhile (paid, or canceled by another call): judged again as it is now
 		if (!voided) return voidPayment(s, /** @type {PaymentRecord} */ (await s.store.payments.get(payment.id)), reason, by);
 		const gateway = payment.gateway;
-		const adapter = isGateway(gateway) && payment.gatewayRef ? gateways[gateway] : null;
-		const keys = adapter?.expire ? await keysOf(s, /** @type {Gateway} */ (gateway)) : null;
+		const adapter = isGateway(gateway) && payment.gatewayRef ? gateways[adapterOf(gateway)] : null;
+		const keys = adapter?.expire ? await keysOf(s, /** @type {string} */ (gateway)) : null;
 		if (!adapter?.expire || !keys) return voided;
 		const stopped = await adapter.expire({ ...payment, websiteId: s.websiteId }, keys, ctx);
 		return (
@@ -433,7 +475,7 @@ export const createService = (product) => {
 	 */
 	const recheck = async (s, payment) => {
 		if (payment.status !== 'pending' || !isGateway(payment.gateway) || !payment.gatewayRef) return payment;
-		const adapter = gateways[payment.gateway];
+		const adapter = gateways[adapterOf(payment.gateway)];
 		if (!adapter.status || now() - new Date(payment.updatedAt).getTime() < RECHECK_MS) return payment;
 		const keys = await keysOf(s, payment.gateway);
 		if (!keys) return payment;
@@ -466,7 +508,7 @@ export const createService = (product) => {
 		if (isGateway(gateway)) {
 			const keys = await keysOf(s, gateway);
 			if (!keys) throw problem('gateway_not_ready', `${gateway} is not connected for this website.`);
-			done = await gateways[gateway].refund(
+			done = await gateways[adapterOf(gateway)].refund(
 				{ payment: { ...payment, websiteId: s.websiteId }, amount: checked.amount, reason, refundId },
 				keys,
 				ctx,

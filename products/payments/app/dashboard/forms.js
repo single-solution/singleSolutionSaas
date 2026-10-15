@@ -6,6 +6,7 @@
  */
 import { useState } from 'react';
 import { Button, Checkbox, FieldGrid, Input } from '@ss/ui';
+import { CUSTOM_GATEWAY_CONNECTIONS } from '../../core/gateways.js';
 import { TEXTS } from './texts.js';
 
 /**
@@ -47,13 +48,20 @@ export const FORMS = Object.freeze({
 		{ name: 'webhookSecret', secret: true, text: 'rapidWebhookSecret' },
 		SANDBOX,
 	],
-	generic: [
-		{ name: 'name' },
-		{ name: 'url' },
-		{ name: 'secret', secret: true },
-		{ name: 'refundUrl', optional: true },
-		{ name: 'currencies', optional: true },
-	],
+	// the merchant's custom gateways (P4), each in a connection of its own
+	...Object.fromEntries(
+		CUSTOM_GATEWAY_CONNECTIONS.map((connection) => [
+			connection,
+			[
+				{ name: 'slug' },
+				{ name: 'name' },
+				{ name: 'url' },
+				{ name: 'secret', secret: true },
+				{ name: 'refundUrl', optional: true },
+				{ name: 'currencies', optional: true },
+			],
+		]),
+	),
 });
 
 /**

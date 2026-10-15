@@ -5702,10 +5702,9 @@
 					"payfast_pk",
 					"jazzcash",
 					"easypaisa",
-					"rapid",
-					"generic"
+					"rapid"
 				],
-				"description": "An online gateway: payfast is PayFast South Africa, payfast_pk PayFast Pakistan; generic is your own adapter."
+				"description": "A built-in online gateway: payfast is PayFast South Africa, payfast_pk PayFast Pakistan. Your custom gateways are generic:<key>."
 			},
 			"Link": {
 				"type": "object",
@@ -5994,9 +5993,9 @@
 			},
 			"Method": {
 				"type": "string",
-				"pattern": "^[a-z][a-z0-9_]{0,39}$",
-				"maxLength": 40,
-				"description": "A way to pay: a gateway id (stripe, paypal, payfast, payfast_pk, jazzcash, easypaisa, rapid, generic) or the key of one of your manual payment methods (for example bank_transfer)."
+				"pattern": "^[a-z][a-z0-9_]{0,39}(:[a-z0-9][a-z0-9-]{0,39})?$",
+				"maxLength": 81,
+				"description": "A way to pay: a gateway id (stripe, paypal, payfast, payfast_pk, jazzcash, easypaisa, rapid), one of your custom gateways (generic:<key>, P4) or the key of one of your manual payment methods (for example bank_transfer)."
 			},
 			"MethodKind": {
 				"type": "string",
@@ -6216,7 +6215,7 @@
 					},
 					"methodName": {
 						"type": "string",
-						"description": "A manual payment method's name as the payment took it ('' for a gateway)."
+						"description": "A manual payment method's or a custom gateway's own name as the payment took it ('' for a built-in gateway)."
 					},
 					"description": {
 						"type": "string",

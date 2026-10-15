@@ -41,7 +41,10 @@ export const renderDocs = ({ base, addresses }) => {
 	const gateways = GATEWAYS.flatMap((gateway) => [
 		`<h3>${escapeHtml(names.get(GATEWAY_FEATURES[gateway]) ?? gateway)}</h3>`,
 		docsParagraph(String(/** @type {Record<string, unknown>} */ (guide)[gateway] ?? '')),
-		...(urls.has(gateway) ? [docsBlock(/** @type {string[]} */ (urls.get(gateway)).join('\n'))] : []),
+		// its own addresses, or those of the gateways that run on it (custom gateways, generic:<key>)
+		...[...urls.entries()]
+			.filter(([id]) => id === gateway || id.startsWith(`${gateway}:`))
+			.map(([, list]) => docsBlock(list.join('\n'))),
 	]);
 	const body = [
 		...section('Create a payment', guide.payments, snippets.create),

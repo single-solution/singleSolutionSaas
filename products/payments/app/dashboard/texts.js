@@ -98,6 +98,7 @@ export const TEXTS = dashboardTexts({
 			hashKey: 'Hash key (16 characters)',
 			username: 'API user name',
 			accountNum: 'Account number',
+			slug: 'Key (payments name it generic:<key>; lowercase letters, digits and -)',
 			name: 'Name payers see',
 			url: 'Checkout address (https)',
 			refundUrl: 'Refund address (https, optional)',

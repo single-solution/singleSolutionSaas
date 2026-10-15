@@ -407,7 +407,7 @@ export const paymentView = (payment, checkoutUrl) => ({
 	refunded: payment.refunded,
 	gateway: payment.gateway,
 	kind: payment.gateway === null ? null : (payment.manual?.kind ?? 'gateway'),
-	methodName: payment.manual?.name ?? '',
+	methodName: payment.manual?.name ?? payment.gatewayName ?? '',
 	answers: payment.answers,
 	description: payment.description,
 	reference: payment.reference,
