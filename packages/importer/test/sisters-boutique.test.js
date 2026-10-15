@@ -519,7 +519,11 @@ describe('the Sisters Boutique mapping', () => {
 			'robots_verification.sitemaps': ['https://shop.example.com/sitemap.xml'],
 			'robots_verification.googleVerification': 'sample-verification',
 		});
-		expect(settings.payments?.settings).toMatchObject({ 'bank_transfer.accountNumber': '0000-0000000000' });
+		const methods = /** @type {any} */ (settings.payments?.lists)?.manual_methods;
+		expect(methods[0].accounts[0].rows).toContainEqual({
+			label: 'Account number',
+			value: '0000-0000000000',
+		});
 		// every product gets SB's Format; a secret row is never read
 		expect(settings.ecommerce?.format).toEqual({
 			wholeUnits: true,

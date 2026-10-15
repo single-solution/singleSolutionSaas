@@ -478,22 +478,32 @@ export const settingsPlan = (values) => {
 		},
 		payments: {
 			format,
-			settings: {
-				// SB's account title is the account holder's name; it keeps no routing number, sort code, branch code or BIC
-				'bank_transfer.accountHolder': store.bankAccountTitle,
-				'bank_transfer.bankName': store.bankName,
-				'bank_transfer.accountNumber': store.bankAccountNumber,
-				'bank_transfer.routingNumber': '',
-				'bank_transfer.sortCode': '',
-				'bank_transfer.branchCode': '',
-				'bank_transfer.iban': store.bankIban,
-				'bank_transfer.bic': '',
-				// SB offers a transfer only with an account number or IBAN (`packages/shared/src/storeSettings.ts`:142-144)
-				'bank_transfer.requireDetails': true,
-				'bank_transfer.instructions': '',
-				// the proof comes on WhatsApp, not as an upload
-				'bank_transfer.proofUpload': false,
-				'bank_transfer.proofMaxMb': 5,
+			settings: { 'manual_payments.proofMaxMb': 5 },
+			lists: {
+				// Payments' manual payment method bank_transfer (paid first) with SB's one account as label/value rows: SB's
+				// account title is the account holder's name; the proof comes on WhatsApp, not as an upload
+				manual_methods: [
+					{
+						key: 'bank_transfer',
+						name: 'Bank transfer',
+						kind: 'pay_first',
+						details: '',
+						instructions: '',
+						proof: false,
+						accounts: [
+							{
+								label: '',
+								currency: '',
+								rows: [
+									{ label: 'Account holder', value: store.bankAccountTitle },
+									{ label: 'Bank', value: store.bankName },
+									{ label: 'Account number', value: store.bankAccountNumber },
+									{ label: 'IBAN', value: store.bankIban },
+								],
+							},
+						],
+					},
+				],
 			},
 		},
 		growth: {
