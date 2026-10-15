@@ -102,6 +102,7 @@ function MoveSettings({ flow, move, onChange }) {
 							label={F.permission}
 							value={rules.permission}
 							options={MOVE_PERMISSIONS.map((permission) => ({ value: permission, label: F.permissions[permission] }))}
+							{...(to === 'cancelled' ? { help: F.refundPermission } : {})}
 							onChange={(event) => set({ permission: /** @type {OrderMove['permission']} */ (event.target.value) })}
 						/>
 					)}

@@ -211,6 +211,7 @@ export const TEXTS = Object.freeze({
 				system: 'Only the shop itself (triggers)',
 			}),
 			permission: 'Permission staff need',
+			refundPermission: 'A cancel that gives back money paid also needs Refund orders.',
 			permissions: Object.freeze({
 				'orders.manage': 'Manage orders',
 				'orders.refund': 'Refund orders',

@@ -54,6 +54,8 @@ describe('the order flow editor', () => {
 		await settle();
 		// the saved flow: every status with its staff name
 		for (const status of DEFAULT_FLOW.statuses) expect(container.textContent).toContain(status.label);
+		// a cancel says it also needs the refund permission when it gives money back (review H2)
+		expect(container.textContent).toContain('A cancel that gives back money paid also needs Refund orders.');
 		// the move into packed asks for the dispatch video; into dispatched the tracking number is optional
 		type(byLabel(container, 'Dispatch video'), 'required');
 		type(byLabel(container, 'Tracking number'), 'optional');
