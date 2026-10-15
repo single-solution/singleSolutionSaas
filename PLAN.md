@@ -2598,8 +2598,15 @@ Follow-ups (2026-10-13; commits 02e4be21, dba86054, abd05719, 90ad7bb8, 41202b3e
 - **A12 +** `email_password.resetHosts` ([]): more merchant hosts (https, default port) that Forgot password's
   `returnTo` may name, for an admin on its own host (K-27).
 
-Not built from K-27: staff and customer on one phone (phone is unique per user and a user has one role; a data-model
-decision); forgetting failed passwords after a quiet day.
+Rest of K-27, built 2026-10-15 (20a10ca6, 79e242de, 09ae9ded, 8c153f70): wrong passwords and two-step codes are
+forgotten after a quiet period, `email_password.forgetHours` and `phone_password.forgetHours` (24; 1–720): a failure
+counts toward the lock only while the one before it came within that many hours (fixed and growing locks). Staff and
+customer on one phone: decided (professional SaaS first) as one user, one role, phone unique; a role request never
+lowers a role (invite answers 409 `conflict` for a user whose role ranks above the request's, ST-9). Found in the last
+look and fixed: settings Phone + password uses could not be changed with it alone, so they are shared now, shown while
+either method is on: `passwords.lockMode`, `passwords.networkLimit`, `passwords.personalCheck` (were Email +
+password's) and `phone.channel`, `phone.codeLength`, `phone.codeMinutes`, `phone.cooldownSeconds`, `phone.perHour`,
+`phone.websitePerHour` (were Phone code's; reset codes and phone invites use them).
 
 #### Notifications
 
@@ -2687,6 +2694,9 @@ copied. It is tested in PayFast's sandbox before a store switches.
 - Why: CT offers bank transfer by its switch alone and sends the details over WhatsApp.
 - Key: setting `requireDetails` of `bank_transfer` (true); false makes bank transfer ready with only its instructions.
 - Data: none.
+- Built 2026-10-15 (ff9f151c): bank transfer is ready only when payers are told how to pay; with `requireDetails` off
+  it needs its instructions or an account number or IBAN. `GET /v1/bank-transfer` answers `missing` (`accountHolder`,
+  `accountNumber` for the number or IBAN, `instructions`) and the dashboard's Overview says what to set.
 
 **P3. Proof reference and confirmation note.**
 
