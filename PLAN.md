@@ -3685,7 +3685,8 @@ deal's folder; the promotions widget uploads, changes the alt text or removes a 
 **C20. Delete every conversation.** (owner, 2026-10-12)
 
 - Why: merchants clear test chats before going live.
-- API: `POST /v1/data/delete-all` `{ scope: 'conversations', confirm: '<domain>' }` (server token only).
+- API: `POST /v1/data/delete-all` `{ scope: 'conversations' | 'leads', confirm: '<domain>' }` (server token only;
+  `leads`: every lead, the conversations stay).
 - Data: none.
 
 Built after the re-audit (2026-10-13; commits 50d1ea0c, 17a53cd0, 385f3872, 1c53e560, 17074a3f, ea59fecf, and the
@@ -3725,10 +3726,10 @@ gain `name`, `message` (500 characters, line breaks kept) and, with the setting,
 downloads" only when on). Views link to `GET /v1/files/<signed token>`, which redirects each use to a fresh 10-minute
 storage link, so links in old messages keep working.
 
-Open: an "every active staff user" alert mode needs a kit option and an Accounts staff filter (CH-12, ST-13); alerts to
-the assignee's phone (CH-12); chats merge into the account's latest chat where the stores merge into the oldest (CH-7);
-the inbox widget still lists only staff Chat has seen (CH-6); image sizes and blur for attachments are a missing
-feature (CH-8, owner's call).
+Open: image sizes and blur for attachments are a missing feature (CH-8, owner's call). Closed (2026-10-15): every
+active staff user is `staff_alerts.staffPermission: all_staff` (CH-12, ST-13); the assignee's phone and the staff list
+from Accounts are built (CH-12, CH-6, below); CH-7 decided: a guest chat keeps merging into the account's latest
+conversation (the professional default; the stores adapt).
 
 **Product directory list (2026-10-15; 4716011e, 8159e446, ad1b896f, 4b0ce918, a7ad349c):** the Portal answers every
 connected product with its name and address (0.4.12 row 9), the kit keeps that list for 5 minutes (the last good list
@@ -3759,6 +3760,19 @@ page kind from `setPage` (`{product}`; empty = the general text), `oncePer` sess
 phone width shared with full screen); Settings → Assistant edits `fallback_answers` (intent, language from Language
 lock, keywords, text with placeholders), checked with the server's shared rules, and warns about placeholders whose
 shop tool is off. Bug fixed: a wrong-typed language or keyword list is refused (it used to match every message).
+
+**Chat gaps closed (2026-10-15; 88c43752, 64fabe77, ba45954a, c71381f5, 8210d3c6, 052e4759, e2e 94d066bf):** the law
+warning shows whenever the AI label is hidden (label off, or Never disclose on; C1); a transcript goes whole by email in
+the values `transcript` … `transcript45` (Notifications takes values of up to 1,000 characters, 50 a message: 45,000
+characters), and a longer chat sends its latest messages after a line saying how many (`transcript.earlier`), never cut
+silently; outside office hours a guest who left no contact is offered the lead form (`leadOffered`, once a session);
+leads are deleted one at a time (`DELETE /v1/leads/:id` and its ticket twin, inbox.manage, audited `lead.deleted`) or
+all (C20 scope `leads`), and the inbox widget lists them with Open the chat and Delete; the staff list and assignment
+picker hold every Accounts user who may answer chats (read through Accounts, kept 5 minutes; CH-6) and staff alerts
+reach the assignee's phone from Accounts (CH-12); the inbox widget has Delete (asked twice), a Call link, the one-note
+editor, the AI pause with a typed reason through `PUT …/ai` (a 403 hides only those controls) and Show earlier messages
+(C8, C11). Bugs fixed: each check put the saved custom field values back into fields staff were typing in; the widget
+script carried the unused list of message templates.
 
 #### Growth
 
