@@ -116,7 +116,12 @@ const orderOf = ({
 			taxIncluded: true,
 		},
 		promotions: { released: false, ...promotions },
-		payment: { method },
+		payment: {
+			method,
+			kind: /** @type {any} */ ({ cod: 'on_delivery', online: 'gateway', bank_transfer: 'pay_first', pickup: 'at_pickup' })[
+				method
+			],
+		},
 		payments,
 		refunds,
 		status,
@@ -180,7 +185,7 @@ const orders = () => [
 			step('2026-03-02T12:00:00Z', 'packed', 'dispatched', { shopperNote: ' On its way with Swift Post. ' }),
 			step('2026-03-04T12:00:00Z', 'dispatched', 'delivered'),
 		],
-		payments: [{ id: idOf('opy', 1), method: 'cash', amount: 2550, note: 'Imported', at: '2026-03-04T12:00:00Z' }],
+		payments: [{ id: idOf('opy', 1), method: 'cod', amount: 2550, note: 'Imported', at: '2026-03-04T12:00:00Z' }],
 		deliveredAt: '2026-03-04T12:00:00Z',
 		extra: { shipment: { courier: 'Swift Post', trackingNumber: 'TRK-1', trackingNote: 'Left at door' } },
 	}),
@@ -222,7 +227,10 @@ const orders = () => [
 			},
 		],
 		placedAt: '2026-09-01T09:00:00Z',
-		extra: { idempotencyKey: 'checkout-key-1', payment: { method: 'bank_transfer', state: 'paid', paid: 2300 } },
+		extra: {
+			idempotencyKey: 'checkout-key-1',
+			payment: { method: 'bank_transfer', kind: 'pay_first', state: 'paid', paid: 2300 },
+		},
 	}),
 	orderOf({
 		id: LAST_YEAR,
@@ -234,7 +242,7 @@ const orders = () => [
 			step('2025-12-01T09:00:00Z', null, 'awaiting_confirmation', { by: 'guest' }),
 			step('2025-12-05T09:00:00Z', 'awaiting_confirmation', 'delivered'),
 		],
-		payments: [{ id: idOf('opy', 3), method: 'cash', amount: 3300, at: '2025-12-05T09:00:00Z' }],
+		payments: [{ id: idOf('opy', 3), method: 'cod', amount: 3300, at: '2025-12-05T09:00:00Z' }],
 		placedAt: '2025-12-01T09:00:00Z',
 		deliveredAt: '2025-12-05T09:00:00Z',
 	}),
@@ -423,7 +431,11 @@ describe('import of shoppers and orders (K10)', () => {
 			[
 				delivered,
 				{ ...returned, status: 'lost', number: 'R-17' },
-				{ ...confirmed, totals: { ...confirmed.totals, total: 9999 }, payment: { method: 'bank_transfer', state: 'paid' } },
+				{
+					...confirmed,
+					totals: { ...confirmed.totals, total: 9999 },
+					payment: { method: 'bank_transfer', kind: 'pay_first', state: 'paid' },
+				},
 				{ ...lastYear, deliveredAt: null, stockHeld: undefined, payments: [] },
 			],
 			{ dryRun: true },
@@ -482,7 +494,7 @@ describe('import of shoppers and orders (K10)', () => {
 			placedAt: new Date('2026-03-01T09:00:00Z'),
 			createdAt: new Date('2026-03-01T09:00:00Z'),
 			deliveredAt: new Date('2026-03-04T12:00:00Z'),
-			payment: { method: 'cod', state: 'paid', paid: 2550, refunded: 0, paymentId: null },
+			payment: { method: 'cod', kind: 'on_delivery', state: 'paid', paid: 2550, refunded: 0, paymentId: null },
 			payments: [{ id: idOf('opy', 1), amount: 2550, by: { kind: 'server', id: 'server', name: 'Server' } }],
 			promotions: { pointsCredited: true, released: false, pointsEarned: 25 },
 			shipment: { courier: 'Swift Post', trackingNumber: 'TRK-1', booked: false, trackingNote: 'Left at door' },

@@ -8,12 +8,11 @@ import strings from '../strings/en.json' with { type: 'json' };
 import { SORTS } from '../core/catalog-query.js';
 import { CSV_PROBLEMS } from '../core/catalog-csv.js';
 import { BRAND_STATUSES, CATEGORY_STATUSES } from '../core/catalog-taxonomy.js';
-import { PAYMENT_METHODS as CHECKOUT_METHODS } from '../core/checkout.js';
 import { DEAL_TYPES } from '../core/deals.js';
 import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ADDRESS_FIELDS } from '../core/address.js';
-import { HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_METHODS, PAYMENT_STATES, RECORDED_METHODS } from '../core/orders.js';
+import { HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_STATES } from '../core/orders.js';
 import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
 import { CLAIM_TONES, HISTORY_ACTORS, ROLE_TONES, SERVER_KIND } from '../ui/admin-order.js';
@@ -42,12 +41,11 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 		const claimMoves = Object.keys(CLAIM_ACTIONS).filter((action) => action !== 'refund' && action !== 'restock');
 		const keys = [
 			...keysOf('ordersAdmin.role.', STATUS_ROLES),
-			...keysOf('ordersAdmin.method.', PAYMENT_METHODS),
 			...keysOf('ordersAdmin.payment.', PAYMENT_STATES),
-			...keysOf('ordersAdmin.paidWith.', RECORDED_METHODS),
+			// payment methods are the merchant's own names; only `other` has a text
+			'ordersAdmin.paidWith.other',
 			...keysOf('ordersAdmin.deliveryMethod.', ['delivery', 'pickup']),
 			...keysOf('orders.payment.', PAYMENT_STATES),
-			...keysOf('checkout.method.', [...PAYMENT_METHODS, ...CHECKOUT_METHODS]),
 			...keysOf('ordersAdmin.claimKind.', CLAIM_KINDS),
 			...keysOf('returns.kind.', CLAIM_KINDS),
 			...keysOf('ordersAdmin.claim.', CLAIM_STATUSES),

@@ -96,14 +96,14 @@ describe('the payments log (E26)', () => {
 		const half = await pay(order.id, { method: 'bank_transfer', amount: 400, reference: 'TRX-1' });
 		expect(half.status).toBe(201);
 		expect(half.json.order.payment).toMatchObject({ paid: 400, state: 'unpaid' });
-		expect(codeOf(await pay(order.id, { method: 'cash', amount: 700 }))).toBe('validation_failed');
-		expect(codeOf(await pay(order.id, { method: 'online', amount: 100 }))).toBe('validation_failed');
-		const rest = await pay(order.id, { method: 'cash', amount: 600, confirm: true });
+		expect(codeOf(await pay(order.id, { method: 'cod', amount: 700 }))).toBe('validation_failed');
+		expect(codeOf(await pay(order.id, { method: 'payments', amount: 100 }))).toBe('validation_failed');
+		const rest = await pay(order.id, { method: 'cod', amount: 600, confirm: true });
 		expect(rest.json.order).toMatchObject({ status: 'confirmed', payment: { paid: 1000, state: 'paid' } });
 		const record = await orderRecord(order.id);
 		expect(record.payments.map((/** @type {any} */ e) => [e.method, e.amount, e.reference])).toEqual([
 			['bank_transfer', 400, 'TRX-1'],
-			['cash', 600, ''],
+			['cod', 600, ''],
 		]);
 		// the server's own notes, with their codes and values for the widgets' words (PLAN 0.4.10)
 		expect(record.history.slice(-3).map((/** @type {any} */ e) => [e.code, e.values])).toEqual([
@@ -128,8 +128,8 @@ describe('the payments log (E26)', () => {
 	it('records refunds with their method, reference and claim, and moves to refunded when they cover the payments', async () => {
 		await shop.flow((flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover: 'refunded' } }));
 		const { order } = await placeOrder();
-		await pay(order.id, { method: 'cash', amount: 1000, confirm: true });
-		const part = await refund(order.id, { amount: 300, reason: 'Late', method: 'cash', reference: 'R-1' });
+		await pay(order.id, { method: 'cod', amount: 1000, confirm: true });
+		const part = await refund(order.id, { amount: 300, reason: 'Late', method: 'cod', reference: 'R-1' });
 		expect(part.status).toBe(201);
 		expect(part.json.order.status).toBe('confirmed');
 		const rest = await refund(order.id, { amount: 700, reason: 'Gone', method: 'bank_transfer', claimId: 'ret_abc' });
@@ -140,7 +140,7 @@ describe('the payments log (E26)', () => {
 		});
 		const record = await orderRecord(order.id);
 		expect(record.refunds.map((/** @type {any} */ e) => [e.method, e.amount, e.reference, e.claimId])).toEqual([
-			['cash', 300, 'R-1', null],
+			['cod', 300, 'R-1', null],
 			['bank_transfer', 700, '', 'ret_abc'],
 		]);
 		expect(codeOf(await refund(order.id, { amount: 1, reason: 'x', method: 'cheque' }))).toBe('validation_failed');
@@ -152,7 +152,7 @@ describe('the payments log (E26)', () => {
 		expect((await orderRecord(order.id)).payment.paymentId).toMatch(/^pay_/);
 		await pay(order.id, { method: 'bank_transfer', amount: order.totals.total, reference: 'TRX-9', confirm: true });
 		const calls = shop.callsTo(PAYMENTS).filter((call) => call.path.endsWith('/refunds')).length;
-		expect(codeOf(await refund(order.id, { amount: 100, reason: 'x', method: 'online' }))).toBe('validation_failed');
+		expect(codeOf(await refund(order.id, { amount: 100, reason: 'x', method: 'payments' }))).toBe('validation_failed');
 		const refunded = await moveTo(order.id, 'refunded');
 		expect(refunded.status).toBe(200);
 		expect(refunded.json.payment).toMatchObject({ state: 'refunded', refunded: order.totals.total });
@@ -164,7 +164,7 @@ describe('the payments log (E26)', () => {
 		const { order, token } = await placeOrder();
 		await moveTo(order.id, 'confirmed');
 		await moveTo(order.id, 'delivered');
-		await refund(order.id, { amount: 300, reason: 'Scratched', method: 'cash' });
+		await refund(order.id, { amount: 300, reason: 'Scratched', method: 'cod' });
 		const mine = await shop.call('GET', `/v1/shop/orders/${order.id}`, {
 			token: shop.browser,
 			origin: ORIGIN,
@@ -180,7 +180,7 @@ describe('the payments log (E26)', () => {
 		expect((await shop.api('GET', `/v1/orders/${cancelled.order.id}`)).json.payment).toMatchObject({ balanceDue: 0 });
 		const invoice = await shop.api('GET', `/v1/orders/${cancelled.order.id}/invoice`);
 		expect(invoice.text).not.toContain('Cash due on delivery');
-		const closed = await pay(cancelled.order.id, { method: 'cash', amount: 1000 });
+		const closed = await pay(cancelled.order.id, { method: 'cod', amount: 1000 });
 		expect(closed.status).toBe(422);
 		expect(closed.json.errors[0].message).toContain('closed');
 	});
@@ -216,23 +216,23 @@ describe('the payments log (E26)', () => {
 		expect(record.payment).toMatchObject({ refunded: order.totals.total, state: 'refunded' });
 	});
 
-	it('takes cash on delivery as paid unless staff record it', async () => {
+	it('takes an order paid on delivery as paid, by its own method, unless the move leaves it to staff (decision 11)', async () => {
 		const first = await placeOrder();
 		await moveTo(first.order.id, 'confirmed');
 		const delivered = await moveTo(first.order.id, 'delivered');
 		expect(delivered.json.payment).toMatchObject({ state: 'paid', paid: 1000 });
 		expect((await orderRecord(first.order.id)).payments).toEqual([
-			expect.objectContaining({ method: 'cash', amount: 1000, note: 'Paid on delivery' }),
+			expect.objectContaining({ method: 'cod', amount: 1000, note: 'Paid on delivery' }),
 		]);
 
-		await shop.setting('cod', 'paidOnDelivery', false);
+		await shop.moveOptions('confirmed', 'delivered', { paidOnDelivery: 'no' });
 		const second = await placeOrder();
 		await moveTo(second.order.id, 'confirmed');
 		const waiting = await moveTo(second.order.id, 'delivered');
 		expect(waiting.json.payment).toMatchObject({ paid: 0 });
-		const recorded = await pay(second.order.id, { method: 'cash', amount: 1000 });
+		const recorded = await pay(second.order.id, { method: 'cod', amount: 1000 });
 		expect(recorded.json.order.payment).toMatchObject({ state: 'paid', paid: 1000 });
-		await shop.setting('cod', 'paidOnDelivery', true);
+		await shop.moveOptions('confirmed', 'delivered', {});
 	});
 });
 
@@ -242,7 +242,7 @@ describe('paid when staff confirm (OR-7)', () => {
 		expect((await moveTo(plain.order.id, 'confirmed')).json.payment).toMatchObject({ paid: 0 });
 
 		await shop.moveOptions('pending_payment', 'confirmed', { paidOnConfirm: ['bank_transfer'] });
-		await shop.setting('checkout', 'bankTransferVia', 'manual');
+		await shop.methods({ bank_transfer: { via: 'manual', instructions: 'Pay to account 0000 0000.' } });
 		const manual = await placeOrder({ payment: 'bank_transfer' });
 		const confirmed = await moveTo(manual.order.id, 'confirmed');
 		expect(confirmed.json).toMatchObject({ status: 'confirmed', payment: { state: 'paid', paid: manual.order.totals.total } });
@@ -253,7 +253,7 @@ describe('paid when staff confirm (OR-7)', () => {
 		expect((await moveTo((await placeOrder()).order.id, 'confirmed')).json.payment).toMatchObject({ paid: 0 });
 
 		// through Payments: its payment there is canceled first, so it can no longer be paid twice
-		await shop.setting('checkout', 'bankTransferVia', 'payments');
+		await shop.methods({ bank_transfer: { via: 'payments' } });
 		const viaPayments = await placeOrder({ payment: 'bank_transfer' });
 		const { paymentId } = (await orderRecord(viaPayments.order.id)).payment;
 		const moved = await moveTo(viaPayments.order.id, 'confirmed');
@@ -263,7 +263,7 @@ describe('paid when staff confirm (OR-7)', () => {
 		const paidThere = await placeOrder({ payment: 'bank_transfer' });
 		shop.payPayment((await orderRecord(paidThere.order.id)).payment.paymentId);
 		expect(codeOf(await moveTo(paidThere.order.id, 'confirmed'))).toBe('move_not_allowed');
-		expect((await orderRecord(paidThere.order.id)).payments).toEqual([expect.objectContaining({ method: 'online' })]);
+		expect((await orderRecord(paidThere.order.id)).payments).toEqual([expect.objectContaining({ method: 'payments' })]);
 		await shop.moveOptions('pending_payment', 'confirmed', {});
 	});
 });
@@ -376,7 +376,7 @@ describe('more moves (E27)', () => {
 
 	it('needs the refund permission to move into refunded through a ticket', async () => {
 		const { order } = await placeOrder();
-		await pay(order.id, { method: 'cash', amount: 1000, confirm: true });
+		await pay(order.id, { method: 'cod', amount: 1000, confirm: true });
 		const ticket = await shop.ticket(['orders.manage']);
 		const refused = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/move`, { to: 'refunded' });
 		expect(refused.status).toBe(403);

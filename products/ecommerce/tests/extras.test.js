@@ -137,6 +137,7 @@ const order = async ({
 				},
 				payment: {
 					method: 'cod',
+					kind: 'on_delivery',
 					state: 'unpaid',
 					paymentId: null,
 					advance: 0,
@@ -197,7 +198,7 @@ describe('returns and warranty claims', () => {
 		const phone = await shop.seedProduct({ name: 'Phone A', stock: 5, price: 1000 });
 		const placed = await order({
 			lines: [{ product: phone, quantity: 2, serials: ['SN-1', 'SN-2'] }],
-			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000001', paid: 2000 },
+			payment: { method: 'online', kind: 'gateway', state: 'paid', paymentId: 'pay_000000000001', paid: 2000 },
 			pointsEarned: 20,
 		});
 		for (const serial of ['SN-1', 'SN-2'])
@@ -384,7 +385,7 @@ describe('returns and warranty claims', () => {
 		const used = await shop.seedProduct({ name: 'Used phone', price: 3000 });
 		const placed = await order({
 			lines: [{ product: used, grade: 'used_a' }],
-			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000009', paid: 3000 },
+			payment: { method: 'online', kind: 'gateway', state: 'paid', paymentId: 'pay_000000000009', paid: 3000 },
 		});
 		const lineId = /** @type {string} */ (placed.lines[0]?.id);
 		const view = await shop.visitor('GET', `/v1/shop/orders/${placed.id}/returnable`, { signIn: sara });

@@ -19,7 +19,7 @@ const entry = (method, amount, reference = '') => ({ method, amount, reference }
 const order = (payment, { payments, refunds = [], role = 'open', total = 1000 } = {}) => ({
 	role,
 	totals: { total, currency: 'USD' },
-	payment: { method: 'online', paymentId: 'pay_1', advance: 0, paid: 0, refunded: 0, ...payment },
+	payment: { method: 'online', kind: 'gateway', paymentId: 'pay_1', advance: 0, paid: 0, refunded: 0, ...payment },
 	...(payments ? { payments, refunds } : {}),
 });
 
@@ -31,25 +31,25 @@ describe('refundSplit (PM-2)', () => {
 		// a COD advance through Payments and the rest in cash
 		const advance = order(
 			{ method: 'cod', advance: 200, paid: 1000 },
-			{ payments: [entry('online', 200, 'pay_1'), entry('cash', 800)] },
+			{ payments: [entry('payments', 200, 'pay_1'), entry('cod', 800)] },
 		);
 		expect(refundSplit(advance, 1000)).toEqual({ online: 200, manual: 800 });
 		// after the advance went back online, nothing more goes through Payments
 		const back = order(
 			{ method: 'cod', advance: 200, paid: 1000, refunded: 200 },
-			{ payments: advance.payments, refunds: [entry('online', 200)] },
+			{ payments: advance.payments, refunds: [entry('payments', 200)] },
 		);
 		expect(refundSplit(back, 800)).toEqual({ online: 0, manual: 800 });
-		// an online entry of another (earlier) payment is not this payment's money
-		const other = order({ paid: 1000 }, { payments: [entry('online', 1000, 'pay_0')] });
+		// a Payments entry of another (earlier) payment is not this payment's money
+		const other = order({ paid: 1000 }, { payments: [entry('payments', 1000, 'pay_0')] });
 		expect(refundSplit(other, 500)).toEqual({ online: 0, manual: 500 });
 		// a recorded refund leaves Payments' share as it was
 		const recorded = order(
 			{ paid: 1000, refunded: 300 },
-			{ payments: [entry('online', 1000, 'pay_1')], refunds: [entry('cash', 300)] },
+			{ payments: [entry('payments', 1000, 'pay_1')], refunds: [entry('cod', 300)] },
 		);
 		expect(refundSplit(recorded, 700)).toEqual({ online: 700, manual: 0 });
-		expect(refundSplit(order({ paymentId: null, paid: 1000 }, { payments: [entry('cash', 1000)] }), 10)).toEqual({
+		expect(refundSplit(order({ paymentId: null, paid: 1000 }, { payments: [entry('cod', 1000)] }), 10)).toEqual({
 			online: 0,
 			manual: 10,
 		});
@@ -57,7 +57,10 @@ describe('refundSplit (PM-2)', () => {
 
 	it('counts records from before the payments log as before', () => {
 		expect(refundSplit(order({ paid: 1000, refunded: 400 }), 600)).toEqual({ online: 600, manual: 0 });
-		expect(refundSplit(order({ method: 'cod', advance: 300, paid: 1000 }), 1000)).toEqual({ online: 300, manual: 700 });
+		expect(refundSplit(order({ method: 'cod', kind: 'on_delivery', advance: 300, paid: 1000 }), 1000)).toEqual({
+			online: 300,
+			manual: 700,
+		});
 	});
 });
 
@@ -76,7 +79,7 @@ describe('orderMoney (CK-5, K-23)', () => {
 	});
 
 	it('is what the invoice, the lookup and the points use', () => {
-		const cod = { ...order({ method: 'cod', paymentId: null, state: 'unpaid' }), role: 'shipped' };
+		const cod = { ...order({ method: 'cod', kind: 'on_delivery', paymentId: null, state: 'unpaid' }), role: 'shipped' };
 		expect(cashToCollect(cod)).toBe(1000);
 		expect(cashToCollect({ ...cod, role: 'cancelled' })).toBe(0);
 		const looked = orderSummary(

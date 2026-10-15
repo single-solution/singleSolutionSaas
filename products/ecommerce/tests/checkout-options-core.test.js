@@ -3,8 +3,7 @@
  * pricing, loyalty options, guests and order keys, COD fees and whole-unit amounts.
  */
 import { describe, expect, it } from 'vitest';
-import { codAdvance, codFee } from '../core/cod.js';
-import { feeBaseOf, paymentOptions, priceLines, roleDiscountOf } from '../core/checkout.js';
+import { feeBaseOf, priceLines, roleDiscountOf } from '../core/checkout.js';
 import { conditionsHold, DEAL_RULES, dealLineDiscount, dealRulesOf, dealUnitDiscount, inWindow } from '../core/deals.js';
 import { keyOpens, newOrderKey, orderKeyHash, readLock, signLock } from '../adapters/crypto.js';
 import {
@@ -80,12 +79,8 @@ describe('whole units (E25)', () => {
 	it('rounds deal discounts down and fees and role discounts half up', () => {
 		expect(dealUnitDiscount(deal({ value: 15 }), 1990, 100)).toBe(200);
 		expect(dealUnitDiscount(deal({ value: 15 }), 1990)).toBe(299);
-		expect(codFee(10_050, { feePercent: 5 }, 100)).toBe(500);
-		expect(codFee(10_000, { feePercent: 25 })).toBe(2000);
-		expect(codFee(10_000, { feePercent: 0 })).toBe(0);
 		expect(roleDiscountOf(10_050, 10, 100)).toBe(1000);
 		expect(roleDiscountOf(0, 10)).toBe(0);
-		expect(codAdvance(10_050, { advanceAmount: 0, advancePercent: 10 }, 100)).toBe(1100);
 	});
 
 	it('reads the deal rules and works deals out exactly with total_half_up (D4)', () => {
@@ -374,45 +369,7 @@ describe('guests and order keys (E21)', () => {
 	});
 });
 
-const COD = { maxOrderValue: 0, advanceAmount: 0, advancePercent: 0, rtoThreshold: 0, rtoRequireAdvance: false };
-const OPTIONS = {
-	offered: ['cod', 'online', 'bank_transfer', 'pickup'],
-	paymentsConnected: true,
-	cod: { on: true, settings: COD },
-	pickupPossible: true,
-	deliveryMethod: /** @type {'delivery'} */ ('delivery'),
-	digital: false,
-	total: 10_000,
-	rtoCount: 0,
-};
-
-/** The COD option of a list. @param {ReturnType<typeof paymentOptions>} options */
-const codOf = (options) => options.find((option) => option.method === 'cod');
-
-describe('payment options (E22, E23, E24)', () => {
-	const base = OPTIONS;
-
-	it('follows the merchant order, adds the COD fee and offers COD at pickup when asked', () => {
-		const order = ['bank_transfer', 'cod', 'online', 'pickup'];
-		expect(paymentOptions({ ...base, order }).map((option) => option.method)).toEqual(order);
-		const fee = paymentOptions({ ...base, cod: { on: true, settings: { ...base.cod.settings, feePercent: 4 } } });
-		expect(codOf(fee)).toMatchObject({ method: 'cod', available: true, fee: 400 });
-		const pickup = { ...base, deliveryMethod: /** @type {any} */ ('pickup') };
-		expect(codOf(paymentOptions(pickup))).toMatchObject({ method: 'cod', available: false, reason: 'needs_delivery' });
-		const atPickup = { ...pickup, cod: { on: true, settings: { ...base.cod.settings, atPickup: true } } };
-		expect(codOf(paymentOptions(atPickup))).toMatchObject({ method: 'cod', available: true });
-	});
-
-	it('offers bank transfer without Payments when staff record it', () => {
-		const without = { ...base, paymentsConnected: false };
-		expect(paymentOptions(without).map((option) => option.method)).toEqual(['cod', 'pickup']);
-		expect(paymentOptions({ ...without, bankManual: true }).map((option) => option.method)).toEqual([
-			'bank_transfer',
-			'cod',
-			'pickup',
-		]);
-	});
-
+describe('payment fees (E23, D4)', () => {
 	it('adds the fee on the whole order', () => {
 		/** @type {any[]} */
 		const lines = [{ key: 'a', unitPrice: 10_000, quantity: 1, allCategoryIds: [] }];
@@ -452,9 +409,5 @@ describe('payment options (E22, E23, E24)', () => {
 		const unpriced = priceLines({ ...base, feePercent: 0 });
 		expect(feeBaseOf(unpriced)).toBe(9250);
 		expect(feeBaseOf(unpriced, 'goods_after_discounts')).toBe(10_000);
-		const cod = { on: true, settings: { ...COD, feePercent: 2 } };
-		const offered = { ...OPTIONS, cod, total: 9250 };
-		expect(codOf(paymentOptions(offered))).toMatchObject({ method: 'cod', fee: 185 });
-		expect(codOf(paymentOptions({ ...offered, feeBase: 10_000 }))).toMatchObject({ method: 'cod', fee: 200 });
 	});
 });

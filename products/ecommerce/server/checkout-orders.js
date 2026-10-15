@@ -6,12 +6,12 @@
  *   guest with a name and the contact `guestIdentity` asks for (E21, dynamic model §5: normalized, one customer record
  *   per guest key, a phone or an email address; `unless_password` sends members to sign in; a phone or email address a
  *   member's record already has links the order to that member's record, K-6, and into their account at their sign-in
- *   with it verified) places it; COD safety, the
+ *   with it verified) places it; the payment method's rules (largest order, advance, returned packages), the
  *   blocklist and the open-order cap apply per customer; the ledger places the
  *   order in one transaction (stock, offer uses — deals kept by locks too —, points, booked slots) with a number by
- *   the business year and the yearly counter (E30). Online, bank-transfer and COD-advance orders start awaiting
- *   payment and get a Payments payment, unless transfers or advances are recorded by staff (`manual`: the order waits
- *   for the shopper's proof, E23, E24); cash-on-delivery, pay-at-pickup and free orders start where the order flow's
+ *   the business year and the yearly counter (E30). Orders paid online or first and advances start awaiting
+ *   payment and get a Payments payment, unless the method is paid by hand (`manual`: the order waits for the shopper's
+ *   proof, E23, E24); orders paid on delivery or at pickup and free orders start where the order flow's
  *   `starts` say (awaiting confirmation by default; a free one may wait in awaiting payment without a time to pay,
  *   CK-41). A guest gets the order's key once (`orderKey`).
  * - Paying: an order is paid only when Payments says, server to server, that its payment is paid for exactly the
@@ -35,6 +35,7 @@ import { keyOpens, newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { heldStockBefore, placeOrder, swapOrderStock } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { STOCK_PROBLEMS, checkAddress, checkCart, checkOrderExtras } from '../core/checkout.js';
+import { PAY_LATER_KINDS } from '../core/payment-methods.js';
 import { shipmentLink } from '../core/couriers.js';
 import { PLACED_FACTS, factsGuard, isFacts } from '../core/facts.js';
 import { checkFieldValues, fieldValuesShown, unitsShown } from '../core/fields.js';
@@ -186,7 +187,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		try {
 			const payment = await service.payments.create(s, {
 				...expectedOf(order),
-				gateway: order.payment.method === 'bank_transfer' ? 'bank_transfer' : null,
+				// a method paid first goes to Payments' manual method of its key; online payments and advances to any gateway
+				gateway: order.payment.kind === 'pay_first' && order.payment.advance === 0 ? order.payment.method : null,
 				description: `${order.payment.advance > 0 ? 'Advance for order' : 'Order'} ${order.number}`,
 				reference: order.number,
 				customer: {
@@ -387,8 +389,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		// the units' numbers the shopper may see: plain serial numbers and the unit fields shown to shoppers
 		const units = order.lines.some((line) => (line.serials ?? []).length > 0);
 		const filled = Object.keys(order.fields ?? {}).length > 0;
-		const [checkout, zones, couriers, invoices, unitValues, unitFields, orderFields, reviewed] = await Promise.all([
-			s.values('checkout'),
+		const [zones, couriers, invoices, unitValues, unitFields, orderFields, reviewed] = await Promise.all([
 			s.has('delivery_zones') ? s.values('delivery_zones') : Promise.resolve(null),
 			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
 			s.has('invoices') ? s.values('invoices') : Promise.resolve(null),
@@ -399,9 +400,19 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		]);
 		// paid, refunded and due counted the one way (a refund never makes a debt, CK-5)
 		const sums = orderMoney(order);
-		const bankTransfer =
-			order.payment.method === 'bank_transfer' || (order.payment.via === 'manual' && order.payment.advance > 0);
-		const quoteBank = bankTransfer && order.role === 'awaiting_payment' ? await quoting.bankDetailsOf(s) : null;
+		// what a waiting order paid first (or its advance by hand) tells the shopper: the method's accounts and instructions
+		const methods = await service.methods.methodsOf(s);
+		const method = methods.find((entry) => entry.key === order.payment.method);
+		const payDetails =
+			order.role === 'awaiting_payment' && (order.payment.kind === 'pay_first' || order.payment.via === 'manual')
+				? ((
+						await service.methods.payDetails(
+							s,
+							method ? [{ ...method, active: true }] : [],
+							(await product.connections.value(s.websiteId, 'payments')) !== null,
+						)
+					).get(order.payment.method) ?? null)
+				: null;
 		return {
 			id: order.id,
 			number: order.number,
@@ -460,6 +471,9 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			delivery: { ...order.delivery, locationName: location ? String(location.name) : '' },
 			payment: {
 				method: order.payment.method,
+				// the method's name in the list (a key it no longer has reads as itself) and the kind it was placed with
+				name: method?.name ?? order.payment.method,
+				kind: order.payment.kind,
 				state: order.payment.state,
 				via: order.payment.via ?? 'payments',
 				advance: order.payment.advance,
@@ -483,17 +497,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 					at: iso(entry.at),
 				})),
 			},
-			bankDetails: quoteBank,
+			payDetails,
 			canSendProof: takesProof(order),
 			notes: {
-				payment: String(
-					{
-						cod: checkout.noteCod,
-						online: checkout.noteOnline,
-						bank_transfer: checkout.noteBankTransfer,
-						pickup: checkout.notePickup,
-					}[order.payment.method] ?? '',
-				),
+				payment: method?.note ?? '',
 				delivery: String(zones?.deliveryNote ?? ''),
 				prep: String(zones?.prepNote ?? ''),
 				pickupReady: order.delivery.method === 'pickup' ? String(zones?.pickupReadyNote ?? '') : '',
@@ -817,7 +824,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			delivery: { method: q.delivery.method, zone: q.delivery.zone, fee: q.delivery.fee, locationId: q.delivery.locationId },
 			address: q.delivery.method === 'delivery' ? address : null,
 			'payment.method': method,
-			'payment.advance': method === 'cod' ? option.advance : 0,
+			'payment.kind': option.kind,
+			'payment.advance': PAY_LATER_KINDS.includes(option.kind) ? option.advance : 0,
 			// the offers stay as placed (their uses stay counted and go back on a cancel); the points' value may shrink
 			'promotions.pointsValue': q.points?.value ?? 0,
 			...(restartPayment ? DROPPED : {}),
@@ -941,17 +949,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		if (q.deliveryProblem) throw service.invalid('delivery/locationId', 'Choose a pickup location.');
 		const option = q.payments.find((entry) => entry.method === method);
 		if (!option) throw service.invalid('payment', 'This payment method is not offered.');
-		if (!option.available) {
-			if (method === 'cod')
-				throw problem(
-					'cod_not_allowed',
-					option.reason === 'over_max'
-						? 'Cash on delivery is not possible for an order this large. Please choose another way to pay.'
-						: 'Cash on delivery is not possible for this order. Please choose another way to pay.',
-					{ extensions: { codReason: option.reason } },
-				);
-			throw service.invalid('payment', 'This payment method cannot be used for this order.');
-		}
+		if (!option.available)
+			throw problem(
+				'payment_not_allowed',
+				option.reason === 'over_max'
+					? `${option.name} is not possible for an order this large. Please choose another way to pay.`
+					: `${option.name} is not possible for this order. Please choose another way to pay.`,
+				{ extensions: { paymentReason: option.reason } },
+			);
 		// the shopper confirms the total they were shown: another total is not charged (CK-14)
 		if (extras.value.expectedTotal !== undefined && extras.value.expectedTotal !== q.totals.total)
 			throw problem('price_changed', 'The total of your order changed. Check your cart again.', {
@@ -962,20 +967,20 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const flow = await flowOf(s);
 		const now = service.now();
 		const total = q.totals.total;
-		const cod = await s.values('cod');
-		const advance = method === 'cod' ? option.advance : 0;
-		const bankManual = method === 'bank_transfer' && checkout.bankTransferVia === 'manual';
-		const advanceManual = method === 'cod' && advance > 0 && cod.advanceVia === 'manual';
-		const manual = bankManual || advanceManual;
-		const viaPayments = total > 0 && !manual && (method === 'online' || method === 'bank_transfer' || advance > 0);
-		// cash on delivery, pay at pickup and a free online or bank-transfer order (nothing to pay) start where the flow's
-		// `starts` say; a free one in awaiting payment waits for staff without a time to pay (CK-41)
+		const chosen = /** @type {import('../core/payment-methods.js').PaymentMethodRecord} */ (
+			(await service.methods.methodsOf(s)).find((entry) => entry.key === method)
+		);
+		const { kind } = option;
+		const later = PAY_LATER_KINDS.includes(kind);
+		const advance = later ? option.advance : 0;
+		// paid by hand: a method paid first by hand, or an advance staff record
+		const manual = (kind === 'pay_first' && chosen.via === 'manual') || (advance > 0 && chosen.advanceVia === 'manual');
+		const viaPayments = total > 0 && !manual && (!later || advance > 0);
+		// orders paid on delivery or at pickup and a free order paid online or first (nothing to pay) start where the
+		// flow's `starts` say; a free one in awaiting payment waits for staff without a time to pay (CK-41)
 		const starts = startsOfFlow(flow);
-		const startKey = method === 'cod' ? starts.cod : method === 'pickup' ? starts.pickup : starts.free;
-		const freeWaits =
-			total === 0 &&
-			(method === 'online' || method === 'bank_transfer') &&
-			statusOf(flow, starts.free)?.role === 'awaiting_payment';
+		const startKey = kind === 'on_delivery' ? starts.on_delivery : kind === 'at_pickup' ? starts.at_pickup : starts.free;
+		const freeWaits = total === 0 && !later && statusOf(flow, starts.free)?.role === 'awaiting_payment';
 		const waitsPayment = viaPayments || (total > 0 && manual) || freeWaits;
 		const status = waitsPayment ? statusWithRole(flow, 'awaiting_payment') : startKey;
 		/** @type {StatusRole} */
@@ -1035,6 +1040,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			},
 			payment: {
 				method,
+				kind,
 				state: /** @type {import('../core/model.js').PaymentState} */ (
 					viaPayments ? 'pending' : total === 0 ? 'paid' : 'unpaid'
 				),

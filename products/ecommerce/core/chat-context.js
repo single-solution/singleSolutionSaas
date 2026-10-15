@@ -1,14 +1,14 @@
 /**
- * Chat's live store context (PLAN 0.8.10 E37, C1): the shop basics (payment methods with their notes, the cash
- * handling fee, delivery fees and free-delivery amounts, pickup points with their address and hours, the loyalty earn
+ * Chat's live store context (PLAN 0.8.10 E37, C1): the shop basics (payment methods by their names, with their notes
+ * and fees, delivery fees and free-delivery amounts, pickup points with their address and hours, the loyalty earn
  * rate, the top categories, the return window and the warranty; parity P5-17), the shop's policies, the newest products
  * with their shown price per grade (with the price struck through above it), the deals table, the product the visitor
  * is viewing and, with a verified sign-in, the visitor's first name, city and points, written as one plain text of at
  * most {@link MAX_CONTEXT} characters that Chat adds to the AI's instructions. The visitor and the viewed product matter
  * most, so each part has its own share and the policies take what is left. Warranties read as the shopper widgets show
  * them (whole months when the days make them). Its headings and labels are the website's texts `chat.context.*` and
- * its payment method names `checkout.method.*` (E33: the merchant's words, in their language; {@link contextWordsOf}),
- * never English built into the code. No I/O.
+ * the payment methods are named as the website's `payment_methods` list names them (E33, E2: the merchant's words, in
+ * their language; {@link contextWordsOf}), never English built into the code. No I/O.
  * @module
  */
 
@@ -32,7 +32,7 @@ export const CONTEXT_WORDS = Object.freeze(
 		'title',
 		'basics',
 		'payment',
-		'codFee',
+		'fee',
 		'delivery',
 		'deliveryTo',
 		'free',
@@ -72,26 +72,15 @@ export const CONTEXT_WORDS = Object.freeze(
 		'points',
 	]),
 );
-/**
- * The context's words, and the payment methods' names (`checkout.method.<method>`).
- * @typedef {Record<typeof CONTEXT_WORDS[number], string> & { methods: Readonly<Record<string, string>> }} ContextWords
- */
+/** The context's words. @typedef {Record<typeof CONTEXT_WORDS[number], string>} ContextWords */
 
 /**
  * The context's words from a website's texts ('' for a text it has not).
  * @param {Readonly<Record<string, string>>} texts
  * @returns {ContextWords}
  */
-export const contextWordsOf = (texts) => ({
-	.../** @type {Record<typeof CONTEXT_WORDS[number], string>} */ (
-		Object.fromEntries(CONTEXT_WORDS.map((word) => [word, texts[`chat.context.${word}`] ?? '']))
-	),
-	methods: Object.fromEntries(
-		Object.entries(texts)
-			.filter(([key]) => key.startsWith('checkout.method.'))
-			.map(([key, value]) => [key.slice('checkout.method.'.length), value]),
-	),
-});
+export const contextWordsOf = (texts) =>
+	/** @type {ContextWords} */ (Object.fromEntries(CONTEXT_WORDS.map((word) => [word, texts[`chat.context.${word}`] ?? ''])));
 
 /**
  * A word with its `{placeholders}` filled.
@@ -123,9 +112,8 @@ const say = (text, values = {}) =>
 /**
  * The shop basics (parity P5-17): each part empty or null while its feature is off.
  * @typedef {object} ShopBasics
- * @property {Array<{ method: string, note: string }>} payments the methods offered, in the merchant's order, with the
- *   merchant's note for each
- * @property {number} codFeePercent the cash handling fee of cash on delivery (0 = none)
+ * @property {Array<{ method: string, name: string, note: string, feePercent: number }>} payments the methods offered,
+ *   in the list's order, with the merchant's name, note and fee (a percent, 0 = none) for each
  * @property {{ fee: number, feeText: string, freeOver: number, freeOverText: string } | null} delivery the fee where no
  *   zone matches and the amount over which delivery is free (0 = never)
  * @property {Array<{ name: string, fee: number, feeText: string, freeOver: number, freeOverText: string }>} zones
@@ -260,13 +248,16 @@ const feeWords = (rule, words) =>
 const basicsLines = (basics, words) => {
 	if (!basics) return [];
 	const payments = basics.payments.map((entry) => {
-		const name = words.methods[entry.method] || entry.method;
-		return entry.note ? `${name} (${oneLine(entry.note, 160)})` : name;
+		const extra = [
+			entry.note ? oneLine(entry.note, 160) : '',
+			entry.feePercent > 0 ? say(words.fee, { percent: entry.feePercent }) : '',
+		].filter(Boolean);
+		const name = oneLine(entry.name, 60);
+		return extra.length > 0 ? `${name} (${extra.join('; ')})` : name;
 	});
 	const warranty = warrantyWords(basics.warrantyDays, words);
 	const lines = [
 		payments.length > 0 ? say(words.payment, { methods: payments.join('; ') }) : '',
-		basics.codFeePercent > 0 ? say(words.codFee, { percent: basics.codFeePercent }) : '',
 		basics.delivery ? say(words.delivery, { fee: feeWords(basics.delivery, words) }) : '',
 		...basics.zones.map((zone) => say(words.deliveryTo, { zone: oneLine(zone.name, 80), fee: feeWords(zone, words) })),
 		...basics.pickup.map((point) =>

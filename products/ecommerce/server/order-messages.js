@@ -6,7 +6,7 @@
  * E32), sent with `ecommerce.order_status` as its fallback template: the website's template for the status, else its
  * template for the general message, else the general message's default words — with the values `number`, `name`,
  * `firstName`, `status` (the status's name for the shopper), `total` (by the website's Format, K7), `paymentMethod` and
- * `deliveryMethod` (words, not codes: the website's texts `checkout.method.<method>` and
+ * `deliveryMethod` (words, not codes: the payment method's name in the website's `payment_methods` list and the text
  * `messages.delivery.<method>`, '' without delivery; K-10), `courier`, `trackingNumber`, `trackingUrl`,
  * `trackingDetails`, `orderUrl` and `reviewUrl` (the `checkout` templates with `{number}`), `cancelReason` (why it was
  * canceled: the note for the shopper staff wrote with the move, else the text
@@ -65,10 +65,13 @@ export const ORDER_MESSAGE_VALUES = Object.freeze(
  * @param {Site} s
  */
 export const messageWords = async (s) => {
-	const texts = await s.texts();
+	const [texts, methods] = await Promise.all([s.texts(), s.list('payment_methods')]);
+	const names = new Map(
+		/** @type {Array<{ key: string, name: string }>} */ (methods).map((method) => [method.key, method.name]),
+	);
 	return Object.freeze({
-		/** @param {string} method */
-		payment: (method) => texts[`checkout.method.${method}`] ?? method,
+		/** @param {string} method a payment method key (one the list no longer has reads as itself) */
+		payment: (method) => names.get(method) ?? method,
 		/** @param {string} method `delivery`, `pickup` or `none` (no delivery: '') */
 		delivery: (method) => (method === 'none' ? '' : (texts[`messages.delivery.${method}`] ?? method)),
 		/**

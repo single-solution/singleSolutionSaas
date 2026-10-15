@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { OrderFlowEditor } from '../app/dashboard/flow-editor.js';
 import { DEFAULT_FLOW, checkOrderFlow } from '../core/flow.js';
+import { defaultPaymentMethods } from '../core/payment-methods.js';
 
 const WEBSITE = 'web_1';
 const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/order_flow`;
@@ -24,6 +25,9 @@ const serve = () => {
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
+			// the website's payment methods name the shopper lines (today's four)
+			if (path === `/v1/dashboard/websites/${WEBSITE}/lists/payment_methods`)
+				return new Response(JSON.stringify({ value: defaultPaymentMethods() }), { status: 200 });
 			if (path !== PATH) return new Response(JSON.stringify({ status: 404 }), { status: 404 });
 			if (init.method === 'PUT') {
 				const { value } = JSON.parse(String(init.body));
@@ -65,9 +69,13 @@ describe('the order flow editor', () => {
 			input.closest('details'),
 		);
 		type(/** @type {HTMLInputElement} */ (names[packed]), 'Getting ready');
+		// a line per payment method of the website's list, by its name
+		type(byLabel(container, 'Paid by Cash on delivery'), 'Pay the rider');
+		// delivering leaves the money of orders paid on delivery to staff (decision 11)
+		type(byLabel(container, 'Orders paid on delivery or at pickup'), 'no');
 		// refunds that cover the payments move the order to refunded; cash on delivery starts confirmed
 		type(byLabel(container, 'When refunds reach what was paid, move to'), 'refunded');
-		type(byLabel(container, 'Cash on delivery orders'), 'confirmed');
+		type(byLabel(container, 'Orders paid on delivery'), 'confirmed');
 		await act(async () => click(byText(container, 'Save', 'button')));
 		await settle();
 		expect(saved).toHaveLength(1);
@@ -78,7 +86,11 @@ describe('the order flow editor', () => {
 		expect(move('packed', 'dispatched').options).toMatchObject({ tracking: 'optional' });
 		expect(value.statuses[packed]).toMatchObject({ key: 'packed', shopperLabel: 'Getting ready' });
 		expect(value.triggers).toMatchObject({ refundsCover: 'refunded' });
-		expect(value.starts).toMatchObject({ cod: 'confirmed' });
+		expect(value.starts).toMatchObject({ on_delivery: 'confirmed' });
+		expect(value.statuses.find((/** @type {any} */ status) => status.shopperText?.cod)?.shopperText).toEqual({
+			cod: 'Pay the rider',
+		});
+		expect(value.moves.find((/** @type {any} */ entry) => entry.options?.paidOnDelivery === 'no')).toBeTruthy();
 		// the server takes it as it is: nothing was dropped
 		expect(checkOrderFlow(value).ok).toBe(true);
 	});

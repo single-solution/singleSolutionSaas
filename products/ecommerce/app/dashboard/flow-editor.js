@@ -13,7 +13,6 @@ import { useState } from 'react';
 import { Button, Callout, Card, Checkbox, CheckboxGroup, FieldGrid, Input, Select } from '@ss/ui';
 import {
 	DEFAULT_FLOW,
-	FLOW_METHODS,
 	MOVE_NEEDS,
 	MOVE_PERMISSIONS,
 	canMove,
@@ -23,7 +22,7 @@ import {
 	statusOf,
 } from '../../core/flow.js';
 import { STATUS_ROLES } from '../../core/model.js';
-import { fill } from './api.js';
+import { fill, useLoad } from './api.js';
 import { flowToSave, removeFlowStatus, renameFlowStatus } from './drafts.js';
 import { EntryHead, ListOutcome, SaveRow, moved, useList } from './lists.js';
 import { Loaded } from './parts.js';
@@ -33,6 +32,7 @@ import { TEXTS } from './texts.js';
 /** @typedef {import('../../core/model.js').OrderMove} OrderMove */
 /** @typedef {import('../../core/model.js').StatusRole} StatusRole */
 /** @typedef {Required<OrderFlow>} FullFlow */
+/** The website's payment methods by key and name (`payment_methods`): shopper lines and `paidOnConfirm` name them. @typedef {Array<{ key: string, name: string }>} Methods */
 
 const L = TEXTS.lists;
 const F = L.orderFlow;
@@ -68,9 +68,9 @@ const whoKey = (who) =>
 
 /**
  * The settings of one move: who, permission, needs and the options its kinds of step take.
- * @param {{ flow: FullFlow, move: OrderMove, onChange: (move: OrderMove) => void }} props
+ * @param {{ flow: FullFlow, move: OrderMove, methods: Methods, onChange: (move: OrderMove) => void }} props
  */
-function MoveSettings({ flow, move, onChange }) {
+function MoveSettings({ flow, move, methods, onChange }) {
 	const rules = moveRules(flow, move);
 	const from = /** @type {StatusRole} */ (statusOf(flow, move.from)?.role);
 	const to = /** @type {StatusRole} */ (statusOf(flow, move.to)?.role);
@@ -127,7 +127,7 @@ function MoveSettings({ flow, move, onChange }) {
 						<CheckboxGroup
 							key={name}
 							legend={F.options[/** @type {keyof typeof F.options} */ (name)]}
-							options={FLOW_METHODS.map((method) => ({ value: method, label: F.methods[method] }))}
+							options={methods.map((method) => ({ value: method.key, label: method.name }))}
 							value={/** @type {string[]} */ (/** @type {Record<string, unknown>} */ (rules.options)[name] ?? [])}
 							onChange={(next) => setOption(name, next)}
 						/>
@@ -145,9 +145,10 @@ function MoveSettings({ flow, move, onChange }) {
 
 /**
  * What shoppers read of a status: its name for them, whether it sends a message and a line per payment method.
- * @param {{ status: FullFlow['statuses'][number], onChange: (patch: Partial<FullFlow['statuses'][number]>) => void }} props
+ * @param {{ status: FullFlow['statuses'][number], methods: Methods,
+ *   onChange: (patch: Partial<FullFlow['statuses'][number]>) => void }} props
  */
-function ShopperFields({ status, onChange }) {
+function ShopperFields({ status, methods, onChange }) {
 	const texts = /** @type {Record<string, string>} */ (status.shopperText ?? {});
 	return (
 		<details className="rounded-lg border border-line p-3">
@@ -160,15 +161,13 @@ function ShopperFields({ status, onChange }) {
 						maxLength={60}
 						onChange={(event) => onChange({ shopperLabel: event.target.value })}
 					/>
-					{FLOW_METHODS.map((method) => (
+					{methods.map((method) => (
 						<Input
-							key={method}
-							label={F.shopperText[method]}
-							value={texts[method] ?? ''}
+							key={method.key}
+							label={fill(F.shopperLine, { method: method.name })}
+							value={texts[method.key] ?? ''}
 							maxLength={300}
-							onChange={(event) =>
-								onChange({ shopperText: /** @type {any} */ ({ ...texts, [method]: event.target.value }) })
-							}
+							onChange={(event) => onChange({ shopperText: { ...texts, [method.key]: event.target.value } })}
 						/>
 					))}
 				</FieldGrid>
@@ -201,7 +200,7 @@ function TriggersAndStarts({ flow, onChange }) {
 	];
 	/** @param {'paid' | 'windowEnd' | 'refundsCover'} name @param {string} value */
 	const setTrigger = (name, value) => onChange({ ...flow, triggers: { ...flow.triggers, [name]: value } });
-	/** @param {'cod' | 'pickup' | 'free'} name @param {string} value */
+	/** @param {keyof FullFlow['starts']} name @param {string} value */
 	const setStart = (name, value) => onChange({ ...flow, starts: { ...flow.starts, [name]: value } });
 	return (
 		<div className="space-y-4 rounded-xl bg-surface-2 p-4">
@@ -229,16 +228,16 @@ function TriggersAndStarts({ flow, onChange }) {
 			<p className="text-sm font-bold">{F.starts}</p>
 			<FieldGrid>
 				<Select
-					label={F.startFields.cod}
-					value={flow.starts.cod}
+					label={F.startFields.on_delivery}
+					value={flow.starts.on_delivery}
 					options={choices(['awaiting_confirmation', 'open'], false)}
-					onChange={(event) => setStart('cod', event.target.value)}
+					onChange={(event) => setStart('on_delivery', event.target.value)}
 				/>
 				<Select
-					label={F.startFields.pickup}
-					value={flow.starts.pickup}
+					label={F.startFields.at_pickup}
+					value={flow.starts.at_pickup}
 					options={choices(['awaiting_confirmation', 'open'], false)}
-					onChange={(event) => setStart('pickup', event.target.value)}
+					onChange={(event) => setStart('at_pickup', event.target.value)}
 				/>
 				<Select
 					label={F.startFields.free}
@@ -257,6 +256,9 @@ function TriggersAndStarts({ flow, onChange }) {
  */
 export function OrderFlowEditor({ websiteId, off }) {
 	const state = useList(websiteId, 'order_flow');
+	const listed = useLoad(`/v1/dashboard/websites/${websiteId}/lists/payment_methods`).answer;
+	/** @type {Methods} */
+	const methods = listed?.ok && Array.isArray(listed.data?.value) ? listed.data.value : [];
 	const [resetShown, setResetShown] = useState(false);
 	return (
 		<Card title={F.title} subtitle={off ? TEXTS.settings.off : F.help}>
@@ -338,7 +340,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 												}
 											/>
 										</FieldGrid>
-										<ShopperFields status={status} onChange={(patch) => setStatus(index, patch)} />
+										<ShopperFields status={status} methods={methods} onChange={(patch) => setStatus(index, patch)} />
 										{targets.length > 0 ? (
 											<CheckboxGroup
 												legend={F.moves}
@@ -364,7 +366,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 										{ticked
 											.filter((move) => targets.some((target) => target.key === move.to))
 											.map((move) => (
-												<MoveSettings key={move.to} flow={flow} move={move} onChange={setMove} />
+												<MoveSettings key={move.to} flow={flow} move={move} methods={methods} onChange={setMove} />
 											))}
 									</div>
 								);
@@ -395,7 +397,7 @@ export function OrderFlowEditor({ websiteId, off }) {
 													label: '',
 													role: /** @type {const} */ ('open'),
 													shopperLabel: '',
-													shopperText: { cod: '', online: '', bank_transfer: '', pickup: '' },
+													shopperText: {},
 													notify: false,
 													staffAlert: false,
 												},

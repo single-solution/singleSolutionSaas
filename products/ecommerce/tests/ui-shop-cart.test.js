@@ -65,9 +65,17 @@ const quoteOf = (over = {}) => ({
 	deliveryOptions: [DELIVERY, PICKUP],
 	deliveryProblem: null,
 	paymentMethods: [
-		{ method: 'cod', available: true, reason: null, advance: 5000 },
-		{ method: 'online', available: true, reason: null, advance: 0 },
-		{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0 },
+		{ method: 'cod', name: 'Cash on delivery', kind: 'on_delivery', note: '', available: true, reason: null, advance: 5000 },
+		{ method: 'online', name: 'Online payment', kind: 'gateway', note: '', available: true, reason: null, advance: 0 },
+		{
+			method: 'pickup',
+			name: 'Pay at pickup',
+			kind: 'at_pickup',
+			note: '',
+			available: false,
+			reason: 'needs_pickup',
+			advance: 0,
+		},
 	],
 	points: null,
 	totals: { subtotal: 200000, discount: 10000, delivery: 20000, tax: 0, total: 210000, currency: 'EUR', taxIncluded: true },
@@ -86,7 +94,7 @@ const ORDER = {
 		{ id: 'oln_2', name: 'Case', variantName: '', quantity: 1, total: 1000 },
 	],
 	totals: { subtotal: 200000, discount: 10000, delivery: 20000, tax: 0, total: 210000, currency: 'EUR', taxIncluded: true },
-	payment: { method: 'cod', state: 'unpaid', advance: 0, paid: 0, refunded: 0, payUrl: null, payBy: null },
+	payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid', advance: 0, paid: 0, refunded: 0, payUrl: null, payBy: null },
 };
 
 /** The labels of the guest's details, in order. @param {HTMLElement} host */
@@ -95,7 +103,10 @@ const labelsOf = (host) => $$(host, 'label[for^="ss-cart-guest-"]').map((node) =
 const SETTINGS = {
 	currency: 'EUR',
 	checkout: {
-		paymentMethods: ['cod', 'online'],
+		paymentMethods: [
+			{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+			{ key: 'online', name: 'Online payment', kind: 'gateway' },
+		],
 		coupons: true,
 		loyalty: true,
 		delivery: { zones: true, cities: ['Paris', 'Lyon'] },
@@ -166,7 +177,7 @@ describe('cart', () => {
 			text('cart.applied', { name: 'Sale' }),
 			'−EUR 100.00',
 			'EUR 2,100.00',
-			text('checkout.codAdvance', { amount: 'EUR 50.00' }),
+			text('checkout.advance', { amount: 'EUR 50.00' }),
 			text('checkout.days', { min: 1, max: 3 }),
 			text('checkout.pickupAt', { name: 'Main shop' }),
 			'Ships fast.',
@@ -176,7 +187,8 @@ describe('cart', () => {
 		])
 			expect(page).toContain(part);
 		expect(page).not.toContain('Our privacy');
-		expect(page).not.toContain(text('checkout.method.pickup'));
+		// pay at pickup is not available for a delivered order: not offered
+		expect(page).not.toContain('Pay at pickup');
 		expect($$(host, 'datalist option')).toHaveLength(2);
 		// an optional address field keeps its name in its label (review M10)
 		const line2 = text('checkout.field.line2');
@@ -698,7 +710,17 @@ describe('checkout', () => {
 					quoteOf({
 						deliveryOptions: [PICKUP],
 						delivery: PICKUP,
-						paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+						paymentMethods: [
+							{
+								method: 'pickup',
+								name: 'Pay at pickup',
+								kind: 'at_pickup',
+								note: '',
+								available: true,
+								reason: null,
+								advance: 0,
+							},
+						],
 					}),
 				),
 			routes: { 'POST /v1/shop/orders': () => ok({ order: ORDER, next: { kind: 'done' } }, 201) },
@@ -727,7 +749,17 @@ describe('checkout', () => {
 				quoteOf({
 					deliveryOptions: [PICKUP],
 					delivery: PICKUP,
-					paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+					paymentMethods: [
+						{
+							method: 'pickup',
+							name: 'Pay at pickup',
+							kind: 'at_pickup',
+							note: '',
+							available: true,
+							reason: null,
+							advance: 0,
+						},
+					],
 				}),
 			);
 		const { fake, host } = await setup({
@@ -791,7 +823,17 @@ describe('checkout', () => {
 				quoteOf({
 					deliveryOptions: [PICKUP],
 					delivery: PICKUP,
-					paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+					paymentMethods: [
+						{
+							method: 'pickup',
+							name: 'Pay at pickup',
+							kind: 'at_pickup',
+							note: '',
+							available: true,
+							reason: null,
+							advance: 0,
+						},
+					],
 				}),
 			);
 		const byEmail = await setup({
@@ -867,25 +909,32 @@ describe('checkout', () => {
 	});
 
 	it('shows the bank details of a transfer, then takes the transfer proof on the success page (E24)', async () => {
+		// the merchant's own rows, one account (an empty row is never shown)
 		const BANK = {
 			ready: true,
-			accountHolder: 'Example Store LLC',
-			bankName: 'First Bank',
-			accountNumber: '12345678',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: 'XX00 TEST 0000',
-			bic: '',
+			name: 'Bank transfer',
 			instructions: 'Put your order number in the reference.',
+			accounts: [
+				{
+					label: 'First Bank',
+					currency: '',
+					rows: [
+						{ label: 'Account holder', value: 'Example Store LLC' },
+						{ label: 'Account number', value: '12345678' },
+						{ label: 'IBAN', value: 'XX00 TEST 0000' },
+						{ label: 'Routing number', value: '' },
+					],
+				},
+			],
 		};
 		const NOTE = 'Orders ship once the money arrives.';
-		const notes = { cod: '', online: '', bank_transfer: NOTE, pickup: '', delivery: '', prep: '', pickupReady: '' };
+		const notes = { delivery: '', prep: '', pickupReady: '' };
 		const waiting = {
 			...ORDER,
 			role: 'awaiting_payment',
 			payment: {
 				method: 'bank_transfer',
+				kind: 'pay_first',
 				state: 'unpaid',
 				via: 'manual',
 				advance: 0,
@@ -895,7 +944,7 @@ describe('checkout', () => {
 				payBy: null,
 				proof: null,
 			},
-			bankDetails: BANK,
+			payDetails: BANK,
 			canSendProof: true,
 			notes: { payment: NOTE, delivery: '', prep: '', pickupReady: '' },
 		};
@@ -910,8 +959,18 @@ describe('checkout', () => {
 					quoteOf({
 						deliveryOptions: [PICKUP],
 						delivery: PICKUP,
-						paymentMethods: [{ method: 'bank_transfer', available: true, reason: null, advance: 0 }],
-						bankDetails: BANK,
+						paymentMethods: [
+							{
+								method: 'bank_transfer',
+								name: 'Bank transfer',
+								kind: 'pay_first',
+								note: NOTE,
+								available: true,
+								reason: null,
+								advance: 0,
+							},
+						],
+						payDetails: { bank_transfer: BANK },
 						notes,
 					}),
 				),
@@ -925,15 +984,16 @@ describe('checkout', () => {
 		// before placing: the details given (never empty ones) and the shop's note for the method
 		let page = textOf(host);
 		for (const part of [
-			text('checkout.bank.title'),
-			text('checkout.bank.accountHolder'),
+			text('checkout.pay.title', { method: 'Bank transfer' }),
+			'First Bank',
+			'Account holder',
 			'Example Store LLC',
 			'XX00 TEST 0000',
 			'Put your order number in the reference.',
 			NOTE,
 		])
 			expect(page).toContain(part);
-		expect(page).not.toContain(text('checkout.bank.routingNumber'));
+		expect(page).not.toContain('Routing number');
 		await click(buttonOf(host, text('checkout.place')));
 		expect(fake.went).toEqual([]);
 		page = textOf(host);
@@ -943,18 +1003,18 @@ describe('checkout', () => {
 		expect(page).not.toContain(text('success.retry'));
 
 		const form = () => $(host, 'form.proof-form');
-		expect(form()?.textContent).toContain(text('checkout.bank.proofTitle'));
+		expect(form()?.textContent).toContain(text('checkout.pay.proofTitle'));
 		await submit(form());
-		expect(textOf(host)).toContain(text('checkout.bank.proofNeeded'));
+		expect(textOf(host)).toContain(text('checkout.pay.proofNeeded'));
 		const input = $(host, 'form.proof-form input[type="file"]');
 		const choose = (/** @type {File} */ file) => Object.defineProperty(input, 'files', { value: [file], configurable: true });
 		choose(new window.File(['x'], 'proof.gif', { type: 'image/gif' }));
 		await submit(form());
-		expect(textOf(host)).toContain(text('checkout.bank.proofInvalid'));
+		expect(textOf(host)).toContain(text('checkout.pay.proofInvalid'));
 		choose(new window.File(['receipt'], 'proof.png', { type: 'image/png' }));
 		$(host, 'form.proof-form input[maxlength="120"]').value = ' TX-99 ';
 		await submit(form());
-		expect(textOf(host)).toContain(text('checkout.bank.problem.storage_not_connected'));
+		expect(textOf(host)).toContain(text('checkout.pay.problem.storage_not_connected'));
 		expect(fake.last('POST /v1/shop/orders/ord_1/proof/upload')?.body).toEqual({ type: 'image/png', size: 7 });
 		upload = ok(
 			{
@@ -966,11 +1026,11 @@ describe('checkout', () => {
 		);
 		const put = vi.spyOn(window, 'fetch').mockResolvedValueOnce(new Response(null, { status: 500 }));
 		await submit(form());
-		expect(textOf(host)).toContain(text('checkout.bank.proofFailed'));
+		expect(textOf(host)).toContain(text('checkout.pay.proofFailed'));
 		put.mockResolvedValue(new Response(null, { status: 200 }));
 		await submit(form());
 		expect(put).toHaveBeenLastCalledWith('https://storage.example.com/up', expect.objectContaining({ method: 'PUT' }));
-		expect(textOf(host)).toContain(text('checkout.bank.problem.nothing_to_pay'));
+		expect(textOf(host)).toContain(text('checkout.pay.problem.nothing_to_pay'));
 		expect(fake.last('POST /v1/shop/orders/ord_1/proof')?.body).toEqual({
 			key: 'ecommerce/proofs/ord_1/prf_1.png',
 			reference: 'TX-99',
@@ -981,7 +1041,7 @@ describe('checkout', () => {
 		await submit(form());
 		expect($(host, 'p.save')?.textContent).toContain('TX-99');
 		// another proof may still follow while staff have not recorded the payment
-		expect(form()?.textContent).toContain(text('checkout.bank.proofAgain'));
+		expect(form()?.textContent).toContain(text('checkout.pay.proofAgain'));
 	});
 
 	it('asks the order fields the quote names, checks them as the server does and sends them', async () => {
@@ -1028,7 +1088,17 @@ describe('checkout', () => {
 					quoteOf({
 						deliveryOptions: [PICKUP],
 						delivery: PICKUP,
-						paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+						paymentMethods: [
+							{
+								method: 'pickup',
+								name: 'Pay at pickup',
+								kind: 'at_pickup',
+								note: '',
+								available: true,
+								reason: null,
+								advance: 0,
+							},
+						],
 						fields,
 					}),
 				),
@@ -1133,7 +1203,7 @@ describe('checkout', () => {
 			fail(409, 'out_of_stock'),
 			fail(422, 'validation_failed', { errors: [{ path: '/address/phone', message: 'x' }] }),
 			fail(422, 'validation_failed', { errors: [{ path: '/note', message: 'x' }] }),
-			fail(422, 'cod_not_allowed'),
+			fail(422, 'payment_not_allowed'),
 			fail(403, 'customer_blocked'),
 			fail(400, 'something_new'),
 		];
@@ -1159,7 +1229,7 @@ describe('checkout', () => {
 		await place();
 		expect(textOf(host)).toContain(text('checkout.problem.validation_failed'));
 		await place();
-		expect(textOf(host)).toContain(text('checkout.problem.cod_not_allowed'));
+		expect(textOf(host)).toContain(text('checkout.problem.payment_not_allowed'));
 		await place();
 		expect(textOf(host)).toContain(text('checkout.problem.customer_blocked'));
 		await place();

@@ -13,6 +13,7 @@ import { ID_PREFIX, STATUS_ROLES } from './model.js';
 import { MAX_MEASURED, piecesOf } from './measure.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
+import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
@@ -20,14 +21,10 @@ import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 /** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
 /** An amount as text, by the website's Format (`product.format(websiteId).money`). @typedef {(amount: number, currency: string) => string} Money */
 
-/** Payment methods. */
-export const PAYMENT_METHODS = Object.freeze(/** @type {const} */ (['cod', 'online', 'bank_transfer', 'pickup']));
 /** Payment states. */
 export const PAYMENT_STATES = Object.freeze(
 	/** @type {const} */ (['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded']),
 );
-/** Methods whose money is cash taken at the door or the counter. */
-export const CASH_METHODS = Object.freeze(/** @type {ReadonlyArray<string>} */ (['cod', 'pickup']));
 /** Roles in which an order's address may still change (before shipping). */
 export const EDITABLE_ROLES = Object.freeze(
 	/** @type {ReadonlyArray<StatusRole>} */ (['awaiting_payment', 'awaiting_confirmation', 'open', 'packed']),
@@ -162,8 +159,8 @@ export const wire = (value) => {
 // --------------------------------------------------------------------------------------------------------- money
 
 /**
- * What Payments took for an order and has not refunded yet (online, bank transfer, a COD advance): the `online` entries
- * of its payments log for its Payments payment, less the refunds made through Payments (`online`, or with a Payments
+ * What Payments took for an order and has not refunded yet (paid online or first, an advance): the `payments` entries
+ * of its payments log for its Payments payment, less the refunds made through Payments (`payments`, or with a Payments
  * refund id when Payments only recorded them, OR-8) (PM-2). Money staff recorded (a transfer, cash, another way) is never
  * Payments' to refund, even on an order that has a Payments payment. Records from before the payments log (E26) have no
  * entries: what was paid counts as before (all of it, or the COD advance), less the refunds logged through Payments
@@ -176,11 +173,11 @@ const leftAtPayments = (order) => {
 	const entries = order.payments ?? [];
 	const took =
 		entries.length === 0
-			? CASH_METHODS.includes(order.payment.method)
+			? PAY_LATER_KINDS.includes(order.payment.kind)
 				? Math.min(order.payment.advance, order.payment.paid)
 				: order.payment.paid
 			: entries
-					.filter((entry) => entry.method === 'online' && entry.reference === paymentId)
+					.filter((entry) => entry.method === VIA_PAYMENTS && entry.reference === paymentId)
 					.reduce((sum, entry) => sum + entry.amount, 0);
 	const refunds = order.refunds ?? [];
 	// a refund staff gave by hand is not Payments' even on an order from before the payments log; only an order whose
@@ -189,7 +186,7 @@ const leftAtPayments = (order) => {
 		entries.length === 0 && refunds.length === 0
 			? order.payment.refunded
 			: refunds
-					.filter((entry) => entry.method === 'online' || Boolean(entry.refundId))
+					.filter((entry) => entry.method === VIA_PAYMENTS || Boolean(entry.refundId))
 					.reduce((sum, entry) => sum + entry.amount, 0);
 	return Math.max(0, took - gave);
 };
@@ -336,7 +333,7 @@ export const orderFilters = (query) => {
 	}
 	const paymentMethod = text('paymentMethod');
 	if (paymentMethod !== null) {
-		const methods = several(paymentMethod, (method) => /** @type {readonly string[]} */ (PAYMENT_METHODS).includes(method));
+		const methods = several(paymentMethod, isMethodKey);
 		if (!methods) return refuse('paymentMethod', 'Unknown payment method.');
 		value.paymentMethods = /** @type {import('./model.js').PaymentMethod[]} */ (methods);
 	}
@@ -548,16 +545,20 @@ export const videoOf = (value) => {
 	return UPLOAD_KEY.test(raw) && !raw.includes('..') ? { kind: 'dispatch_video', key: raw } : null;
 };
 
-/** How staff say money came in or went back (E26); `online` is Payments' own. */
-export const RECORDED_METHODS = Object.freeze(/** @type {const} */ (['bank_transfer', 'cash', 'other']));
+/**
+ * True for a way staff may record money in or out by (E26, E16): a method of the website's list, or `other` (with a
+ * reference); `payments` is Payments' own.
+ * @param {unknown} way @param {ReadonlyArray<string>} keys the `payment_methods` list's keys
+ */
+export const isRecordedWay = (way, keys) => way === OTHER_WAY || (isMethodKey(way) && keys.includes(way));
 /** Longest payment or refund reference. */
 export const MAX_REFERENCE = 120;
 
 /**
- * @typedef {{ amount: number, reason: string, method: 'online' | 'bank_transfer' | 'cash' | 'other' | null,
+ * @typedef {{ amount: number, reason: string, method: string | null,
  *   reference: string, claimId: string | null, claimReference?: string,
  *   claim?: import('./transitions.js').ClaimRefundUndo }} RefundInput `method` null: through Payments first, the rest
- *   recorded; `claimReference`: a claim's refund without a note (its reason is then `Claim <reference>`); `claim`: what
+ *   recorded as `other`; `payments`: only through Payments; else the way staff gave it back (a method key or `other`); `claimReference`: a claim's refund without a note (its reason is then `Claim <reference>`); `claim`: what
  *   the claim gets back when its refund through Payments does not happen
  */
 
@@ -573,9 +574,10 @@ const referenceOf = (value) => {
  * Check a refund without a status change (E26: with how it was given back, a reference and the claim it is for).
  * @param {unknown} body
  * @param {OrderRecord} order
+ * @param {ReadonlyArray<string>} keys the `payment_methods` list's keys
  * @returns {{ ok: true, value: RefundInput } | Refusal}
  */
-export const checkRefund = (body, order) => {
+export const checkRefund = (body, order, keys) => {
 	const input = objectOf(body);
 	const left = refundable(order);
 	if (left <= 0) return refuse('amount', 'Nothing paid is left to refund.');
@@ -584,9 +586,9 @@ export const checkRefund = (body, order) => {
 	const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
 	if (!reason || reason.length > 500) return refuse('reason', 'Give a reason of at most 500 characters.');
 	const method = input.method === undefined || input.method === null ? null : input.method;
-	if (method !== null && method !== 'online' && !RECORDED_METHODS.includes(/** @type {any} */ (method)))
-		return refuse('method', 'method is online, bank_transfer, cash or other.');
-	if (method === 'online' && refundSplit(order, 1).online === 0)
+	if (method !== null && method !== VIA_PAYMENTS && !isRecordedWay(method, keys))
+		return refuse('method', 'method is payments, one of the payment methods, or other.');
+	if (method === VIA_PAYMENTS && refundSplit(order, 1).online === 0)
 		return refuse('method', 'Nothing paid through Payments is left to refund on this order.');
 	const reference = referenceOf(input.reference);
 	if (!reference.ok) return reference;
@@ -606,8 +608,8 @@ export const checkRefund = (body, order) => {
 };
 
 /**
- * @typedef {{ method: 'bank_transfer' | 'cash' | 'other', amount: number, reference: string, note: string,
- *   confirm: boolean }} PaymentInput
+ * @typedef {{ method: string, amount: number, reference: string, note: string, confirm: boolean }} PaymentInput
+ *   `method`: a payment method key of the list, or `other`
  */
 
 /**
@@ -615,12 +617,12 @@ export const checkRefund = (body, order) => {
  * refunded: money for it is refunded, not taken, K-13).
  * @param {unknown} body
  * @param {OrderRecord} order
+ * @param {ReadonlyArray<string>} keys the `payment_methods` list's keys
  * @returns {{ ok: true, value: PaymentInput } | Refusal}
  */
-export const checkPayment = (body, order) => {
+export const checkPayment = (body, order, keys) => {
 	const input = objectOf(body);
-	if (!RECORDED_METHODS.includes(/** @type {any} */ (input.method)))
-		return refuse('method', 'method is bank_transfer, cash or other.');
+	if (!isRecordedWay(input.method, keys)) return refuse('method', 'method is one of the payment methods, or other.');
 	if (CLOSED_ROLES.includes(order.role)) return refuse('amount', 'This order is closed: no payment can be recorded on it.');
 	const { due } = orderMoney(order);
 	if (due <= 0) return refuse('amount', 'Nothing is left to pay on this order.');
@@ -634,7 +636,7 @@ export const checkPayment = (body, order) => {
 	return {
 		ok: true,
 		value: {
-			method: /** @type {PaymentInput['method']} */ (input.method),
+			method: /** @type {string} */ (input.method),
 			amount: /** @type {number} */ (input.amount),
 			reference: reference.value,
 			note: note.trim(),
@@ -816,8 +818,7 @@ const waitingEditOf = (input) => {
 		value.lines = lines;
 	}
 	if (input.paymentMethod !== undefined) {
-		if (!PAYMENT_METHODS.includes(/** @type {any} */ (input.paymentMethod)))
-			return refuse('paymentMethod', 'paymentMethod is cod, online, bank_transfer or pickup.');
+		if (!isMethodKey(input.paymentMethod)) return refuse('paymentMethod', 'paymentMethod is a payment method key.');
 		value.paymentMethod = /** @type {import('./model.js').PaymentMethod} */ (input.paymentMethod);
 	}
 	if (input.delivery !== undefined) {

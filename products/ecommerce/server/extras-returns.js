@@ -666,7 +666,11 @@ export const createReturns = (product, service) => {
 		if (!allows('refund', claim)) throw problem('move_not_allowed', `A ${claim.status} claim cannot be refunded.`);
 		const order = await findOrder(data, { id: claim.orderId });
 		if (!order) throw problem('not_found', 'The order of this claim is gone.');
-		const how = checkRefundMethod(body, paidOnline(order));
+		const how = checkRefundMethod(
+			body,
+			paidOnline(order),
+			/** @type {Array<{ key: string }>} */ (await s.list('payment_methods')).map((method) => method.key),
+		);
 		if (!how.ok) throw service.invalid(how.field, how.message);
 		const cap = await capOf(s, data, order, claim);
 		if (cap <= 0 && refundable(order) <= 0)

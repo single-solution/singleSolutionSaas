@@ -65,7 +65,6 @@ export const rulesOf = async (s) => {
 	const checkout = await s.values('checkout');
 	return {
 		paymentWindowMinutes: Number(checkout.paymentWindowMinutes ?? 0),
-		paidOnDelivery: !s.has('cod') || (await s.values('cod')).paidOnDelivery !== false,
 		loyalty: s.has('loyalty') ? await s.values('loyalty') : null,
 		timeZone: (await s.format()).timeZone || 'UTC',
 	};

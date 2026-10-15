@@ -159,7 +159,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		expect(later.json.effects[0]).toMatchObject({ state: 'done', refundId: expect.any(String), tries: 2 });
 		expect(later.json.payment).toMatchObject({ state: 'refunded', refunded: 2000 });
 		// the note staff typed is the refund entry's; Payments (which may show its reason to the payer) gets plain words
-		expect(later.json.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 2000, note: 'Shop closed' })]);
+		expect(later.json.refunds).toEqual([expect.objectContaining({ method: 'payments', amount: 2000, note: 'Shop closed' })]);
 		const calls = refundCalls(paymentId);
 		expect(calls).toHaveLength(2);
 		expect(calls.map((call) => call.headers['idempotency-key'])).toEqual([`${order.id}:cancel`, `${order.id}:cancel`]);
@@ -187,7 +187,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const byHand = await shop.admin(ticket, 'POST', `/v1/admin/orders/${byStaff.order.id}/refunds`, {
 			amount: 1000,
 			reason: 'Refunded by hand',
-			method: 'cash',
+			method: 'cod',
 		});
 		expect(byHand.status).toBe(201);
 		expect((await recordOf(byStaff.order.id)).effects[0]).toMatchObject({
@@ -240,7 +240,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 			const unreachable = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/refunds`, {
 				amount: 1000,
 				reason: 'By hand',
-				method: 'cash',
+				method: 'cod',
 			});
 			expect(codeOf(unreachable)).toBe('payments_unavailable');
 		} finally {
@@ -257,7 +257,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 			const byHand = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/refunds`, {
 				amount: 1000,
 				reason: 'By hand',
-				method: 'cash',
+				method: 'cod',
 			});
 			expect(codeOf(byHand)).toBe('conflict');
 		} finally {
@@ -266,7 +266,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const after = await recordOf(order.id);
 		expect(after.effects[0]).toMatchObject({ state: 'done' });
 		expect(after.payment).toMatchObject({ refunded: 1000, state: 'refunded' });
-		expect(after.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 1000 })]);
+		expect(after.refunds).toEqual([expect.objectContaining({ method: 'payments', amount: 1000 })]);
 		// recorded from what Payments shows, not asked again
 		expect(after.effects[0].refundId).toBe('rfd_x_1');
 		expect(refundCalls(paymentId).map((call) => call.headers['idempotency-key'])).toEqual([`${order.id}:cancel`]);
@@ -294,7 +294,7 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const waits = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/refunds`, {
 			amount: 1000,
 			reason: 'By hand',
-			method: 'cash',
+			method: 'cod',
 		});
 		expect(codeOf(waits)).toBe('conflict');
 		// a try that never ended is taken over after two minutes, with the same key

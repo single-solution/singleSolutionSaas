@@ -5,8 +5,8 @@
  * payment method, the shopper's picked deal and signed deal locks, E18; how they round, D4), the role price of a
  * signed-in shopper (`role_pricing`, E19), loyalty points (while `loyalty` is on and the shopper takes part, E20),
  * delivery zones, pickup locations or the one pickup point (`delivery_zones`, E22), tax rules (`taxes`), the payment
- * methods in the merchant's order with their fees (COD cash handling on its `feeBase`, E23, D4) and bank details
- * (Payments P1, cached 5 minutes, E24). Every amount rounds to whole units with Format's `wholeUnits` (E25). Used by
+ * methods in the list's order with their fees (each on its `feeBase`, D4) and what each method paid first tells
+ * shoppers (its own accounts, or Payments' manual method of the same key, E8, E24). Every amount rounds to whole units with Format's `wholeUnits` (E25). Used by
  * the quote route and again, on the server, when an order is placed. Also the bookable slots of a product
  * (`bookings`).
  * @module
@@ -17,16 +17,7 @@ import { loyaltyAccount } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { loadOffers } from '../adapters/promotions-store.js';
 import { MAX_SLOT_DAYS, slotAt, slotsBetween } from '../core/bookings.js';
-import {
-	MAX_QUANTITY,
-	feeBaseOf,
-	grossOf,
-	merchandiseOf,
-	paymentOptions,
-	priceLines,
-	resolveLines,
-	roleDiscountOf,
-} from '../core/checkout.js';
+import { MAX_QUANTITY, feeBaseOf, grossOf, merchandiseOf, priceLines, resolveLines, roleDiscountOf } from '../core/checkout.js';
 import { placeOf } from '../core/address.js';
 import { matchZone, zoneFee } from '../core/delivery.js';
 import { dealRulesOf } from '../core/deals.js';
@@ -48,6 +39,7 @@ import { grossFits, measureView } from '../core/measure.js';
 import { roundDown } from '../core/money.js';
 import { applyPromotions, attributeValues } from '../core/promotions.js';
 import { COLLECTIONS } from '../core/model.js';
+import { paymentOptions } from '../core/payment-methods.js';
 import { createMedia } from './catalog-media.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -64,8 +56,6 @@ import { createMedia } from './catalog-media.js';
 /** @typedef {import('../core/model.js').PaymentMethod} PaymentMethod */
 
 const DAY_MS = 86_400_000;
-/** Bank details are read from Payments at most this often per website (E24). */
-const BANK_DETAILS_MS = 5 * 60_000;
 
 /**
  * @typedef {object} DeliveryChoice
@@ -82,28 +72,6 @@ const BANK_DETAILS_MS = 5 * 60_000;
  */
 
 /**
- * The bank details a bank transfer shows, exactly as Payments answers them (P1, `GET /v1/bank-transfer`): each '' when
- * not set, so a page shows only the ones given.
- * @typedef {{ ready: boolean, accountHolder: string, bankName: string, accountNumber: string, routingNumber: string,
- *   sortCode: string, branchCode: string, iban: string, bic: string, instructions: string }} BankDetails
- */
-
-/** The texts of the bank details, in Payments' order. */
-const BANK_FIELDS = Object.freeze(
-	/** @type {const} */ ([
-		'accountHolder',
-		'bankName',
-		'accountNumber',
-		'routingNumber',
-		'sortCode',
-		'branchCode',
-		'iban',
-		'bic',
-		'instructions',
-	]),
-);
-
-/**
  * A priced cart.
  * @typedef {object} Quote
  * @property {ResolvedLine[]} lines every line, in cart order
@@ -115,7 +83,8 @@ const BANK_FIELDS = Object.freeze(
  * @property {DeliveryChoice} delivery the chosen delivery
  * @property {DeliveryChoice[]} deliveryOptions
  * @property {string | null} deliveryProblem `choose_pickup_location` when pickup names no location
- * @property {import('../core/checkout.js').PaymentOption[]} payments in the merchant's order (E22)
+ * @property {Array<import('../core/payment-methods.js').PaymentOption & { note: string }>} payments the payment
+ *   methods in the list's order, each with the merchant's note
  * @property {PaymentMethod | null} paymentMethod the method priced: the one asked, else the first available (E22)
  * @property {{ balance: number, max: number, used: number, value: number } | null} points
  * @property {number} pointsToEarn what the order would earn (E20; 0 without loyalty)
@@ -127,8 +96,9 @@ const BANK_FIELDS = Object.freeze(
  * @property {Map<string, string>} [urls] each priced line's page by its key (E13)
  * @property {Map<string, DealRecord>} deals the deals of the lines and of free delivery, by id (their display fields)
  * @property {Map<string, string>} locks each line's signed deal lock by its key (E18 `lockMinutes`)
- * @property {BankDetails | null} bankDetails while bank transfer is offered (E24)
- * @property {Record<string, string>} notes the texts per payment method and for delivery and pickup (E22)
+ * @property {Record<string, import('./payment-methods.js').PayDetails>} payDetails what each method paid first offered
+ *   tells shoppers: its instructions and accounts (E8, E24)
+ * @property {Record<string, string>} notes the texts for delivery and pickup (E22)
  * @property {ReturnType<typeof checkoutFields>} fields the order fields the checkout asks the shopper (dynamic model §2)
  */
 
@@ -150,8 +120,6 @@ const BANK_FIELDS = Object.freeze(
  */
 export const createQuoting = (product, service) => {
 	const media = createMedia(product);
-	/** Bank details per website, read at most every {@link BANK_DETAILS_MS}. @type {Map<string, { at: number, value: BankDetails | null }>} */
-	const bankCache = new Map();
 
 	/**
 	 * What booking checks need: the weekly hours, the business time zone, the lead time and the days ahead.
@@ -168,43 +136,10 @@ export const createQuoting = (product, service) => {
 	};
 
 	/**
-	 * The website's bank details from Payments (P1), cached; null when Payments does not answer.
-	 * @param {Site} s
-	 * @returns {Promise<BankDetails | null>}
-	 */
-	const bankDetails = async (s) => {
-		const now = service.now();
-		const cached = bankCache.get(s.websiteId);
-		if (cached && now - cached.at < BANK_DETAILS_MS) return cached.value;
-		const answer = await product
-			.callProduct(s.websiteId, 'payments', '/v1/bank-transfer', { method: 'GET' })
-			.catch(() => /** @type {const} */ ({ ok: false }));
-		/** @param {unknown} value */
-		const text = (value) => (typeof value === 'string' ? value : '');
-		/** @type {BankDetails | null} */
-		let value = null;
-		if (answer.ok && answer.status === 200 && typeof answer.body === 'object' && answer.body !== null) {
-			const body = /** @type {Record<string, unknown>} */ (answer.body);
-			value = /** @type {BankDetails} */ ({
-				ready: body.ready === true,
-				...Object.fromEntries(BANK_FIELDS.map((field) => [field, text(body[field])])),
-			});
-		} else if (answer.ok)
-			value = /** @type {BankDetails} */ ({ ready: false, ...Object.fromEntries(BANK_FIELDS.map((field) => [field, ''])) });
-		bankCache.set(s.websiteId, { at: now, value });
-		return value;
-	};
-
-	/**
-	 * The texts a cart and an order show per payment method and for delivery and pickup (E22).
-	 * @param {Record<string, any>} checkout
+	 * The texts a cart and an order show for delivery and pickup (E22; each payment method's note is its own).
 	 * @param {Record<string, any> | null} zones the `delivery_zones` settings
 	 */
-	const notesOf = (checkout, zones) => ({
-		cod: String(checkout.noteCod ?? ''),
-		online: String(checkout.noteOnline ?? ''),
-		bank_transfer: String(checkout.noteBankTransfer ?? ''),
-		pickup: String(checkout.notePickup ?? ''),
+	const notesOf = (zones) => ({
 		delivery: String(zones?.deliveryNote ?? ''),
 		prep: String(zones?.prepNote ?? ''),
 		pickupReady: String(zones?.pickupReadyNote ?? ''),
@@ -298,9 +233,9 @@ export const createQuoting = (product, service) => {
 			}
 		}
 		const customer = options.customer ?? (shopper ? await store.customer(shopper.id) : null);
-		const codSettings = await s.values('cod');
-		// staff switch cash on delivery off for new orders themselves (`cod.enabled`, AO-2); an order staff edit keeps it
-		const codOn = s.has('cod') && (codSettings.enabled !== false || edit !== null);
+		// a method switched off takes no new orders; an order staff edit may keep or take any (AO-2)
+		const listed = await service.methods.methodsOf(s);
+		const methods = edit ? listed.map((method) => ({ ...method, active: true })) : listed;
 		const zonesOn = s.has('delivery_zones');
 		const zoneSettings = zonesOn ? await s.values('delivery_zones') : null;
 
@@ -434,10 +369,7 @@ export const createQuoting = (product, service) => {
 				})
 			: null;
 		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
-		/** @type {string[]} */
-		const offered = checkout.paymentMethods;
-		const bankManual = checkout.bankTransferVia === 'manual';
-		const bank = offered.includes('bank_transfer') && paymentsConnected ? await bankDetails(s) : null;
+		const payDetails = await service.methods.payDetails(s, methods, paymentsConnected);
 
 		/**
 		 * One pricing pass for a payment method.
@@ -548,29 +480,24 @@ export const createQuoting = (product, service) => {
 			};
 			const fixedPromotions = keep ? { promotions: keep.promotions } : null;
 			const unpriced = priceLines({ ...base, fixed: fixedPromotions });
-			const feeBase = codSettings.feeBase === 'goods_after_discounts' ? 'goods_after_discounts' : 'order_total';
 			const payments = paymentOptions({
-				offered,
-				order: Array.isArray(checkout.paymentOrder) ? checkout.paymentOrder : undefined,
+				methods,
 				paymentsConnected,
-				bankManual,
-				cod: { on: codOn, settings: /** @type {import('../core/cod.js').CodSettings} */ (codSettings) },
 				pickupPossible,
 				deliveryMethod: delivery.method,
 				digital,
 				total: unpriced.totals.total,
-				feeBase: feeBaseOf(unpriced, feeBase),
+				feeBase: (base) => feeBaseOf(unpriced, base),
 				rtoCount: customer?.rtoCount ?? 0,
+				// a method paid first waits until shoppers can be told how to pay (CK-33); a Payments that does not answer
+				// leaves it offered
+				ready: (method) => payDetails.get(method.key)?.ready !== false,
 				unit,
-			}).map((option) =>
-				// bank transfer waits for Payments' bank details (or its `requireDetails` off), also when staff record the
-				// transfers (CK-33); a Payments that does not answer leaves it offered
-				option.method === 'bank_transfer' && bank !== null && !bank.ready
-					? { ...option, available: false, reason: 'not_ready' }
-					: option,
-			);
+			}).map((option) => ({ ...option, note: methods.find((entry) => entry.key === option.method)?.note ?? '' }));
 			const effective = method ?? payments.find((option) => option.available)?.method ?? null;
-			const feePercent = effective === 'cod' && codOn ? Number(codSettings.feePercent ?? 0) : 0;
+			const chosenMethod = methods.find((entry) => entry.key === effective) ?? null;
+			const feePercent = chosenMethod?.feePercent ?? 0;
+			const feeBase = chosenMethod?.feeBase ?? 'order_total';
 			// an edited order that keeps its placed amounts keeps its payment method's fee while the method stays
 			const keptFee = keep && effective === keep.method ? keep.fee : null;
 			const { lines: prices, totals } =
@@ -653,8 +580,8 @@ export const createQuoting = (product, service) => {
 			digital,
 			customer,
 			locations,
-			bankDetails: offered.includes('bank_transfer') ? bank : null,
-			notes: notesOf(checkout, zoneSettings),
+			payDetails: Object.fromEntries([...payDetails].filter(([key]) => payments.some((option) => option.method === key))),
+			notes: notesOf(zoneSettings),
 			// the order fields the checkout asks the shopper (dynamic model §2)
 			fields: checkoutFields(fields),
 			ready: lines.length > 0 && lines.every((line) => line.priced && line.problems.length === 0) && deliveryProblem === null,
@@ -733,7 +660,7 @@ export const createQuoting = (product, service) => {
 		deliveryProblem: q.deliveryProblem,
 		paymentMethods: q.payments,
 		paymentMethod: q.paymentMethod,
-		bankDetails: q.bankDetails,
+		payDetails: q.payDetails,
 		notes: q.notes,
 		fields: q.fields,
 		points: q.points,
@@ -767,7 +694,7 @@ export const createQuoting = (product, service) => {
 		};
 	};
 
-	return Object.freeze({ quote, view, freeSlots, bankDetailsOf: bankDetails });
+	return Object.freeze({ quote, view, freeSlots });
 };
 
 /** @typedef {ReturnType<typeof createQuoting>} Quoting */

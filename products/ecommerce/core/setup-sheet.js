@@ -130,6 +130,12 @@ const named = (one, many, name) => (items) =>
 /** Each list in Ecommerce's own words (`hooks.blueprint` lists). */
 export const LIST_WORDS = Object.freeze({
 	order_flow: flowWords,
+	payment_methods: named(
+		'payment method',
+		'payment methods',
+		(/** @type {import('./payment-methods.js').PaymentMethodRecord} */ method) =>
+			`${nameOf(method.name)} (${method.kind}${method.active ? '' : ', off'})`,
+	),
 	couriers: named('courier', 'couriers', (/** @type {Courier} */ courier) => nameOf(courier.name)),
 	policies: named('policy', 'policies', (/** @type {import('./policies.js').Policy} */ policy) =>
 		policy.text.trim() === '' ? `${nameOf(policy.title)} (no text)` : nameOf(policy.title),

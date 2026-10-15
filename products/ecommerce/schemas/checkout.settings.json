@@ -47,16 +47,6 @@
 			"default": "unknown",
 			"enum": ["unknown", "no"]
 		},
-		"paymentMethods": {
-			"type": "array",
-			"title": "Payment methods offered",
-			"description": "Online payment and bank transfer go through Payments (paste its token in Connections); pay at pickup needs a pickup location. Cash on delivery is its own feature.",
-			"default": ["online", "bank_transfer", "pickup"],
-			"items": {
-				"type": "string",
-				"enum": ["online", "bank_transfer", "pickup"]
-			}
-		},
 		"paymentWindowMinutes": {
 			"type": "integer",
 			"title": "Time to pay (minutes)",
@@ -399,40 +389,6 @@
 			"default": "first_order",
 			"enum": ["first_order", "sign_in"]
 		},
-		"paymentOrder": {
-			"type": "array",
-			"title": "Payment methods order",
-			"description": "The order the cart lists them; the first available is preselected.",
-			"default": ["online", "bank_transfer", "cod", "pickup"],
-			"items": {
-				"type": "string",
-				"enum": ["cod", "online", "bank_transfer", "pickup"]
-			}
-		},
-		"noteCod": {
-			"type": "string",
-			"title": "Note: cash on delivery",
-			"default": "",
-			"maxLength": 500
-		},
-		"noteOnline": {
-			"type": "string",
-			"title": "Note: online payment",
-			"default": "",
-			"maxLength": 500
-		},
-		"noteBankTransfer": {
-			"type": "string",
-			"title": "Note: bank transfer",
-			"default": "",
-			"maxLength": 500
-		},
-		"notePickup": {
-			"type": "string",
-			"title": "Note: pay at pickup",
-			"default": "",
-			"maxLength": 500
-		},
 		"maxLines": {
 			"type": "integer",
 			"title": "Most lines in a cart",
@@ -460,13 +416,6 @@
 			"description": "Where shoppers return when they leave a payment, with {number} and {id}. Empty = as the success page.",
 			"default": "",
 			"maxLength": 500
-		},
-		"bankTransferVia": {
-			"type": "string",
-			"title": "Bank transfers",
-			"description": "Payments: through Payments' bank page. Manual: the order waits for the shopper's proof and staff record the payment. Either way, while Payments is connected, bank transfer is offered only once its bank details are saved there (or its Require bank details is off).",
-			"default": "payments",
-			"enum": ["payments", "manual"]
 		},
 		"editPricing": {
 			"type": "string",

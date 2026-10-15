@@ -2,8 +2,9 @@
  * Invoices, packing slips and pick lists (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line;
  * E35) as printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed
  * comes from the order snapshot, business.json (name, address, email, phone) and the `invoices` settings, whose texts
- * the merchant edits (`INVOICE_TEXTS` are the English defaults); payment methods and states are the website's texts
- * (`checkout.method.*`, `orders.payment.*`; decision 10), so each word lives in one place. The invoice's line columns
+ * the merchant edits (`INVOICE_TEXTS` are the English defaults); payment methods are named as the website's
+ * `payment_methods` list names them (E2, E16) and payment states are the website's texts (`orders.payment.*`; decision
+ * 10), so each word lives in one place. The invoice's line columns
  * are the merchant's (`columns`, E26): item, SKU, quantity, unit price, discount, tax and amount, and any product or
  * variant field by `field.<slug>` (an HS code, a material …); the seller details under the business and the footer take
  * `{business}`, `{email}`, `{phone}`, `{address}`, `{number}`, `{date}` and `{field.<slug>}` of the order's and its
@@ -20,6 +21,7 @@ import { isSlug } from './catalog.js';
 import { WAITING_ROLES } from './flow.js';
 import { placedGross, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
+import { PAY_LATER_KINDS, VIA_PAYMENTS } from './payment-methods.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null }} BusinessLike */
@@ -65,16 +67,19 @@ const fieldLines = (order, context, place) =>
 
 /**
  * The payment words a document prints, from the website's texts (decision 10): each method's
- * (`checkout.method.<method>`) and each payment state's (`orders.payment.<state>`).
- * @typedef {{ methods: Readonly<Record<string, string>>, states: Readonly<Record<string, string>> }} DocumentWords
+ * (its name in the `payment_methods` list, by key; `online`: the first method paid online, which names an advance
+ * Payments took, E16) and each payment state's (`orders.payment.<state>`).
+ * @typedef {{ methods: Readonly<Record<string, string>>, online: string, states: Readonly<Record<string, string>> }}
+ *   DocumentWords
  */
 
 /**
- * The payment words of a website's texts.
+ * The payment words of a website: its payment methods' names and its texts' payment states.
  * @param {Readonly<Record<string, string>>} texts
+ * @param {ReadonlyArray<{ key: string, name: string, kind: string }>} [methods] the `payment_methods` list
  * @returns {DocumentWords}
  */
-export const documentWordsOf = (texts) => {
+export const documentWordsOf = (texts, methods = []) => {
 	/** @param {string} prefix */
 	const under = (prefix) =>
 		Object.fromEntries(
@@ -82,7 +87,11 @@ export const documentWordsOf = (texts) => {
 				.filter(([key]) => key.startsWith(prefix))
 				.map(([key, value]) => [key.slice(prefix.length), value]),
 		);
-	return { methods: under('checkout.method.'), states: under('orders.payment.') };
+	return {
+		methods: Object.fromEntries(methods.map((method) => [method.key, method.name])),
+		online: methods.find((method) => method.kind === 'gateway')?.name ?? '',
+		states: under('orders.payment.'),
+	};
 };
 
 /** The line columns an invoice may have besides fields (`field.<slug>`), and those of a new website. */
@@ -289,11 +298,17 @@ const lineDetail = (order, line, context, place) => {
 };
 
 /**
- * The payment method an entry was made by (E26), for its words. Cash is taken by the courier or at the counter, so it
- * reads as the cash method; `other` has no words of its own and shows its reference only.
- * @type {Record<string, string>}
+ * How a payment or refund entry was made (E26, E16), by the names of the website's payment methods: a recorded way is
+ * its method's name (`other` has none and shows its reference only, never another method's name); money Payments took
+ * or gave back reads as the order's own method, or, for the advance of a method paid later, as the method paid online.
+ * @param {string} way @param {OrderRecord} order @param {DocumentWords} words
  */
-const ENTRY_METHOD = { online: 'online', bank_transfer: 'bank_transfer', cash: 'cod' };
+const wayText = (way, order, words) =>
+	way === VIA_PAYMENTS
+		? PAY_LATER_KINDS.includes(order.payment.kind)
+			? words.online
+			: (words.methods[order.payment.method] ?? '')
+		: (words.methods[way] ?? '');
 
 /**
  * A text with its `{placeholders}` filled ({business}, {email}, {phone}, {address}, {number}, {date} and
@@ -437,11 +452,13 @@ const columnOf = (column, context) => {
 const dueOf = (order) => orderMoney(order).due;
 
 /**
- * The cash the courier or the counter still collects: what is owed on a cash-on-delivery order not yet paid (E35).
+ * The money the courier still collects: what is owed on an order paid on delivery, not yet paid (E35).
  * @param {OrderRecord} order
  */
 export const cashToCollect = (order) =>
-	order.payment.method === 'cod' && (order.payment.state === 'unpaid' || order.payment.state === 'pending') ? dueOf(order) : 0;
+	order.payment.kind === 'on_delivery' && (order.payment.state === 'unpaid' || order.payment.state === 'pending')
+		? dueOf(order)
+		: 0;
 
 /**
  * Who prints a document: staff (and the merchant's server) see who recorded each payment; the shopper does not.
@@ -453,18 +470,18 @@ export const cashToCollect = (order) =>
  * note and who recorded it.
  * @param {string} title
  * @param {Array<import('./model.js').OrderPaymentEntry | import('./model.js').OrderRefundEntry>} entries
+ * @param {OrderRecord} order
  * @param {DocumentContext} context
  * @param {(amount: number) => string} money
  * @param {boolean} shopper
  */
-const entriesBlock = (title, entries, context, money, shopper) => {
+const entriesBlock = (title, entries, order, context, money, shopper) => {
 	if (entries.length === 0) return '';
 	const { format, timeZone } = context;
 	const rows = entries
 		.map((entry) => {
-			const method = ENTRY_METHOD[entry.method];
 			const detail = [
-				method ? (context.words.methods[method] ?? '') : '',
+				wayText(entry.method, order, context.words),
 				entry.reference,
 				...(shopper ? [] : [entry.note, entry.by?.name ?? '']),
 			]
@@ -529,8 +546,8 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 		.join(' · ');
 	const { seller, footer } = sellerAndFooter(order, context);
 	const entries =
-		entriesBlock(t.labelPayments, order.payments ?? [], context, money, shopper) +
-		entriesBlock(t.labelRefunds, order.refunds ?? [], context, money, shopper);
+		entriesBlock(t.labelPayments, order.payments ?? [], order, context, money, shopper) +
+		entriesBlock(t.labelRefunds, order.refunds ?? [], order, context, money, shopper);
 	const customer = order.customer;
 	const billed = [customer.name, customer.email, customer.phone]
 		.filter(Boolean)

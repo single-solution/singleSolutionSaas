@@ -248,13 +248,13 @@ describe('reports', () => {
 			`/v1/admin/reports/sales?by=payment_method&${RANGE}`,
 		);
 		expect(byMethod.json.rows).toEqual([
-			{ key: 'cod', name: 'cod', units: 2, revenue: 1200, discount: 0 },
-			{ key: 'bank_transfer', name: 'bank_transfer', units: 1, revenue: 1000, discount: 100 },
+			{ key: 'cod', name: 'Cash on delivery', units: 2, revenue: 1200, discount: 0 },
+			{ key: 'bank_transfer', name: 'Bank transfer', units: 1, revenue: 1000, discount: 100 },
 		]);
 		expect(linesOf(await shop.api('GET', `/v1/reports/sales?by=payment_method&${RANGE}&format=csv`))).toEqual([
 			'key,name,units,revenue,discount',
-			'cod,cod,2,12.00,0.00',
-			'bank_transfer,bank_transfer,1,10.00,1.00',
+			'cod,Cash on delivery,2,12.00,0.00',
+			'bank_transfer,Bank transfer,1,10.00,1.00',
 		]);
 	});
 
@@ -326,7 +326,7 @@ describe('CSV', () => {
 		expect(searched[0]?.startsWith('number,placed_at,status,customer,city,region,country,product,')).toBe(true);
 		expect(searched.slice(1).map((line) => line.split(',')[0])).toEqual(['R-A']);
 		expect((await shop.api('GET', '/v1/csv/orders?per=week')).status).toBe(422);
-		expect((await shop.api('GET', '/v1/csv/orders?paymentMethod=cheque')).status).toBe(422);
+		expect((await shop.api('GET', '/v1/csv/orders?paymentMethod=Cheque!')).status).toBe(422);
 		const staff = await shop.ticket(['csv.run']);
 		const twin = await shop.admin(staff, 'GET', '/v1/admin/csv/orders?per=order&status=delivered');
 		expect(

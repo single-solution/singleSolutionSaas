@@ -2602,10 +2602,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods, comma-separated: cod, online, bank_transfer, pickup.",
+						"description": "Payment method keys, comma-separated.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods, comma-separated: cod, online, bank_transfer, pickup."
+							"description": "Payment method keys, comma-separated."
 						}
 					},
 					{
@@ -4765,10 +4765,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30.",
+						"description": "Payment method keys, comma-separated (or repeated), at most 30.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30."
+							"description": "Payment method keys, comma-separated (or repeated), at most 30."
 						}
 					},
 					{
@@ -5191,10 +5191,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30.",
+						"description": "Payment method keys, comma-separated (or repeated), at most 30.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30."
+							"description": "Payment method keys, comma-separated (or repeated), at most 30."
 						}
 					},
 					{
@@ -5404,10 +5404,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30.",
+						"description": "Payment method keys, comma-separated (or repeated), at most 30.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30."
+							"description": "Payment method keys, comma-separated (or repeated), at most 30."
 						}
 					},
 					{
@@ -6015,13 +6015,8 @@
 									},
 									"paymentMethod": {
 										"type": "string",
-										"enum": [
-											"cod",
-											"online",
-											"bank_transfer",
-											"pickup"
-										],
-										"description": "A waiting order only."
+										"description": "A waiting order only.",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"delivery": {
 										"type": "object",
@@ -6538,7 +6533,7 @@
 		"/v1/admin/orders/{id}/refunds": {
 			"post": {
 				"summary": "Refund part of what was paid, without a move (Orders admin widget)",
-				"description": "Through Payments first for what Payments took (or only online, or only recorded by method), the rest recorded as given back. The part through Payments goes through the order's refund lock: it is written on the order first (an effect), only while the order's refunds are as read and no refund is pending, then sent with that effect's id as the Idempotency-Key and recorded with the rest; of two refunds at once one wins (409 conflict) and a refund Payments made is always recorded. When Payments does not answer, the refund is kept pending (refund.pending, warning refund_pending) and sent again with the same key when the order is next used. With the flow's trigger refundsCover (lists/order_flow), an order whose refunds reach what was paid moves to that refunded status when the flow lists the move, also when a refund Payments did not answer at once is done later (when the order is next used); a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once recorded the money is never undone by the move. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile, or while a refund runs at Payments for it (try again in a moment); a refund its cancel left pending is not sent any more once staff refund (its effect is skipped); 502 payments_refused (nothing is recorded; the effect says failed) or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
+				"description": "Through Payments first for what Payments took (or only through Payments with method payments, or only recorded by method), the rest recorded as given back. The part through Payments goes through the order's refund lock: it is written on the order first (an effect), only while the order's refunds are as read and no refund is pending, then sent with that effect's id as the Idempotency-Key and recorded with the rest; of two refunds at once one wins (409 conflict) and a refund Payments made is always recorded. When Payments does not answer, the refund is kept pending (refund.pending, warning refund_pending) and sent again with the same key when the order is next used. With the flow's trigger refundsCover (lists/order_flow), an order whose refunds reach what was paid moves to that refunded status when the flow lists the move, also when a refund Payments did not answer at once is done later (when the order is next used); a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once recorded the money is never undone by the move. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile, or while a refund runs at Payments for it (try again in a moment); a refund its cancel left pending is not sent any more once staff refund (its effect is skipped); 502 payments_refused (nothing is recorded; the effect says failed) or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "orders.refund",
@@ -6593,14 +6588,8 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"online",
-											"bank_transfer",
-											"cash",
-											"other",
-											null
-										],
-										"description": "null: through Payments first, the rest recorded as other; online: through Payments only; the others: recorded as given back that way."
+										"description": "null: through Payments first, the rest recorded as other; payments: through Payments only; a payment method key of the list or other: recorded as given back that way.",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"reference": {
 										"type": [
@@ -9903,7 +9892,7 @@
 		"/v1/admin/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing (Customers admin widget)",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, Payments' bank details while bank transfer is offered, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "reports",
 				"x-ss-permission": "reports.read",
@@ -11140,14 +11129,8 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"online",
-											"bank_transfer",
-											"cash",
-											"other",
-											null
-										],
-										"description": "How the money goes back; leave it out (or null) for Payments when the order was paid through Payments, else other."
+										"description": "How the money goes back; leave it out (or null) for Payments when the order was paid through Payments, else other. A payment method key of the list, other, or payments (through Payments).",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"reference": {
 										"type": "string",
@@ -15309,12 +15292,7 @@
 						"required": false,
 						"schema": {
 							"type": "string",
-							"enum": [
-								"cod",
-								"online",
-								"bank_transfer",
-								"pickup"
-							]
+							"pattern": "^[a-z][a-z0-9_]{0,39}$"
 						}
 					},
 					{
@@ -16164,10 +16142,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods, comma-separated: cod, online, bank_transfer, pickup.",
+						"description": "Payment method keys, comma-separated.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods, comma-separated: cod, online, bank_transfer, pickup."
+							"description": "Payment method keys, comma-separated."
 						}
 					},
 					{
@@ -20192,10 +20170,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30.",
+						"description": "Payment method keys, comma-separated (or repeated), at most 30.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30."
+							"description": "Payment method keys, comma-separated (or repeated), at most 30."
 						}
 					},
 					{
@@ -20640,10 +20618,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30.",
+						"description": "Payment method keys, comma-separated (or repeated), at most 30.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30."
+							"description": "Payment method keys, comma-separated (or repeated), at most 30."
 						}
 					},
 					{
@@ -20977,10 +20955,10 @@
 						"name": "paymentMethod",
 						"in": "query",
 						"required": false,
-						"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30.",
+						"description": "Payment method keys, comma-separated (or repeated), at most 30.",
 						"schema": {
 							"type": "string",
-							"description": "Payment methods (cod, online, bank_transfer, pickup), comma-separated (or repeated), at most 30."
+							"description": "Payment method keys, comma-separated (or repeated), at most 30."
 						}
 					},
 					{
@@ -21666,13 +21644,8 @@
 									},
 									"paymentMethod": {
 										"type": "string",
-										"enum": [
-											"cod",
-											"online",
-											"bank_transfer",
-											"pickup"
-										],
-										"description": "A waiting order only."
+										"description": "A waiting order only.",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"delivery": {
 										"type": "object",
@@ -22233,7 +22206,7 @@
 		"/v1/orders/{id}/refunds": {
 			"post": {
 				"summary": "Refund part of what was paid, without a move",
-				"description": "Through Payments first for what Payments took (or only online, or only recorded by method), the rest recorded as given back. The part through Payments goes through the order's refund lock: it is written on the order first (an effect), only while the order's refunds are as read and no refund is pending, then sent with that effect's id as the Idempotency-Key and recorded with the rest; of two refunds at once one wins (409 conflict) and a refund Payments made is always recorded. When Payments does not answer, the refund is kept pending (refund.pending, warning refund_pending) and sent again with the same key when the order is next used. With the flow's trigger refundsCover (lists/order_flow), an order whose refunds reach what was paid moves to that refunded status when the flow lists the move, also when a refund Payments did not answer at once is done later (when the order is next used); a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once recorded the money is never undone by the move. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile, or while a refund runs at Payments for it (try again in a moment); a refund its cancel left pending is not sent any more once staff refund (its effect is skipped); 502 payments_refused (nothing is recorded; the effect says failed) or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
+				"description": "Through Payments first for what Payments took (or only through Payments with method payments, or only recorded by method), the rest recorded as given back. The part through Payments goes through the order's refund lock: it is written on the order first (an effect), only while the order's refunds are as read and no refund is pending, then sent with that effect's id as the Idempotency-Key and recorded with the rest; of two refunds at once one wins (409 conflict) and a refund Payments made is always recorded. When Payments does not answer, the refund is kept pending (refund.pending, warning refund_pending) and sent again with the same key when the order is next used. With the flow's trigger refundsCover (lists/order_flow), an order whose refunds reach what was paid moves to that refunded status when the flow lists the move, also when a refund Payments did not answer at once is done later (when the order is next used); a ticket needs that move's permission for such a refund (403 forbidden before any money moves), and once recorded the money is never undone by the move. 422 validation_failed (amount above what is refundable, a missing reason, an unknown method or claimId); 409 conflict when the order changed meanwhile, or while a refund runs at Payments for it (try again in a moment); a refund its cancel left pending is not sent any more once staff refund (its effect is skipped); 502 payments_refused (nothing is recorded; the effect says failed) or 503 payments_unavailable from Payments; 404 not_found. The widget needs the orders.refund permission. Send an Idempotency-Key so a retried request is done once.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -22299,14 +22272,8 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"online",
-											"bank_transfer",
-											"cash",
-											"other",
-											null
-										],
-										"description": "null: through Payments first, the rest recorded as other; online: through Payments only; the others: recorded as given back that way."
+										"description": "null: through Payments first, the rest recorded as other; payments: through Payments only; a payment method key of the list or other: recorded as given back that way.",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"reference": {
 										"type": [
@@ -25956,7 +25923,7 @@
 		"/v1/reports/health": {
 			"get": {
 				"summary": "Shop health: what needs fixing",
-				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, Payments' bank details while bank transfer is offered, the payment methods shoppers can use now (cash on delivery while its feature is on; online payment and bank transfer when offered in the checkout setting paymentMethods and Payments is connected, bank transfer also with bankTransferVia manual; pay at pickup when offered with a pickup location), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
+				"description": "Every check runs on each read (nothing is stored): one pipeline over the products, the categories and brands, the business.json copy, the connections, what each active method paid first tells shoppers (its own accounts and instructions, or Payments' manual method of the same key), the payment methods shoppers can use now (the active methods of the payment_methods list: those through Payments while Payments is connected, those at pickup with a pickup point), and, while Growth's token is pasted in Connections, Growth's GET /v1/settings for its tag ids.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "reports",
 				"security": [
@@ -27381,14 +27348,8 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"online",
-											"bank_transfer",
-											"cash",
-											"other",
-											null
-										],
-										"description": "How the money goes back; leave it out (or null) for Payments when the order was paid through Payments, else other."
+										"description": "How the money goes back; leave it out (or null) for Payments when the order was paid through Payments, else other. A payment method key of the list, other, or payments (through Payments).",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"reference": {
 										"type": "string",
@@ -30149,14 +30110,8 @@
 											"string",
 											"null"
 										],
-										"enum": [
-											"cod",
-											"online",
-											"bank_transfer",
-											"pickup",
-											null
-										],
-										"description": "The method to price (null: the first available)."
+										"description": "The method to price (null: the first available).",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									}
 								}
 							}
@@ -30650,7 +30605,7 @@
 			},
 			"post": {
 				"summary": "Place an order",
-				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone?, email? } (what checkout.guestIdentity and checkout.phoneRequired ask for) while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone or email address belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone or member_email); a phone or email address a member’s record has links the order to that member’s record (it enters their account when they sign in with it verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. Order numbers come from a counter of their form; should the counter ever be behind the numbers already used (set back, or orders imported before it moved on), the placement moves it past the highest one and is placed again, never stopping checkout. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
+				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone?, email? } (what checkout.guestIdentity and checkout.phoneRequired ask for) while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone or email address belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone or member_email); a phone or email address a member’s record has links the order to that member’s record (it enters their account when they sign in with it verified). The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): a method paid online, one paid first through Payments and an advance through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); a method paid first by hand or an advance staff record (via or advanceVia manual): awaiting_payment / unpaid / proof; a method paid on delivery: the order flow's starts.on_delivery status (awaiting_confirmation by default) / unpaid / done; one paid at pickup: starts.at_pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 payment_not_allowed (reason needs_delivery, needs_pickup, digital_items, over_max, advance_unavailable or not_ready); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 429 too_many_orders (checkout.placeLimit: orders a customer placed in the last 15 minutes); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. Order numbers come from a counter of their form; should the counter ever be behind the numbers already used (set back, or orders imported before it moved on), the placement moves it past the highest one and is placed again, never stopping checkout. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -30829,13 +30784,8 @@
 									},
 									"payment": {
 										"type": "string",
-										"enum": [
-											"cod",
-											"online",
-											"bank_transfer",
-											"pickup"
-										],
-										"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+										"description": "A payment method key of the website’s payment_methods list.",
+										"pattern": "^[a-z][a-z0-9_]{0,39}$"
 									},
 									"address": {
 										"type": "object",
@@ -35839,9 +35789,12 @@
 			},
 			"CartPaymentOption": {
 				"type": "object",
-				"description": "A payment method, in the merchant’s order (checkout.paymentOrder).",
+				"description": "A payment method of the website’s payment_methods list, in the list’s order.",
 				"required": [
 					"method",
+					"name",
+					"kind",
+					"note",
 					"available",
 					"reason",
 					"advance",
@@ -35851,13 +35804,26 @@
 				"properties": {
 					"method": {
 						"type": "string",
+						"description": "A payment method key of the website’s payment_methods list.",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"name": {
+						"type": "string",
+						"description": "The merchant’s name for it."
+					},
+					"kind": {
+						"type": "string",
 						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
+							"gateway",
+							"pay_first",
+							"on_delivery",
+							"at_pickup"
 						],
-						"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+						"description": "The kind of payment method: gateway (paid online through Payments), pay_first, on_delivery or at_pickup."
+					},
+					"note": {
+						"type": "string",
+						"description": "The merchant’s note shown when it is chosen."
 					},
 					"available": {
 						"type": "boolean"
@@ -35876,15 +35842,15 @@
 							"not_ready",
 							null
 						],
-						"description": "Why it cannot be used (null when available): needs_delivery / needs_pickup, digital_items (digital goods are paid first), over_max (cod.maxOrderValue), advance_unavailable (a returned-package customer needs an advance that cannot be paid), not_ready (Payments has no bank details)."
+						"description": "Why it cannot be used (null when available): needs_delivery / needs_pickup (not offered for this way of getting the order), digital_items (digital goods are paid first), over_max (its maxOrderValue), advance_unavailable (a customer with returned packages needs an advance that cannot be paid), not_ready (a method paid first that does not tell shoppers how to pay yet)."
 					},
 					"advance": {
 						"type": "integer",
-						"description": "What a cash-on-delivery order pays first (0 = none)."
+						"description": "What an order paid on delivery or at pickup pays first (0 = none)."
 					},
 					"fee": {
 						"type": "integer",
-						"description": "What choosing it adds (the COD cash-handling fee)."
+						"description": "What choosing it adds (its feePercent)."
 					}
 				}
 			},
@@ -35901,7 +35867,7 @@
 					"deliveryProblem",
 					"paymentMethods",
 					"paymentMethod",
-					"bankDetails",
+					"payDetails",
 					"notes",
 					"points",
 					"pointsToEarn",
@@ -36073,52 +36039,26 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup",
-							null
-						],
-						"description": "The method priced: the one asked, else the first available."
+						"description": "The method priced: the one asked, else the first available.",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
-					"bankDetails": {
-						"oneOf": [
-							{
-								"$ref": "#/components/schemas/CheckoutBankDetails"
-							},
-							{
-								"type": "null"
-							}
-						],
-						"description": "While bank transfer is offered and Payments is connected."
+					"payDetails": {
+						"type": "object",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/PayDetails"
+						},
+						"description": "By method key: what each offered method paid first tells shoppers (its accounts and instructions)."
 					},
 					"notes": {
 						"type": "object",
-						"description": "The merchant’s texts per payment method and for delivery and pickup.",
+						"description": "The merchant’s texts for delivery and pickup (each payment method’s note is on its option).",
 						"required": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup",
 							"delivery",
 							"prep",
 							"pickupReady"
 						],
 						"additionalProperties": false,
 						"properties": {
-							"cod": {
-								"type": "string"
-							},
-							"online": {
-								"type": "string"
-							},
-							"bank_transfer": {
-								"type": "string"
-							},
-							"pickup": {
-								"type": "string"
-							},
 							"delivery": {
 								"type": "string"
 							},
@@ -36764,7 +36704,6 @@
 						"description": "The shop basics: each part empty or null while its feature is off.",
 						"required": [
 							"payments",
-							"codFeePercent",
 							"delivery",
 							"zones",
 							"pickup",
@@ -36777,33 +36716,33 @@
 						"properties": {
 							"payments": {
 								"type": "array",
-								"description": "The payment methods offered, in your order, with your note for each (checkout).",
+								"description": "The payment methods the shop takes now, in the list’s order, with their names, notes and fees.",
 								"items": {
 									"type": "object",
 									"required": [
 										"method",
-										"note"
+										"name",
+										"note",
+										"feePercent"
 									],
 									"additionalProperties": false,
 									"properties": {
 										"method": {
 											"type": "string",
-											"enum": [
-												"cod",
-												"online",
-												"bank_transfer",
-												"pickup"
-											]
+											"pattern": "^[a-z][a-z0-9_]{0,39}$"
+										},
+										"name": {
+											"type": "string"
 										},
 										"note": {
 											"type": "string"
+										},
+										"feePercent": {
+											"type": "number",
+											"description": "Its fee, a percent (0 = none)."
 										}
 									}
 								}
-							},
-							"codFeePercent": {
-								"type": "number",
-								"description": "Cash on delivery's cash handling fee (0 = none)."
 							},
 							"delivery": {
 								"oneOf": [
@@ -37344,13 +37283,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup",
-							null
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"paid": {
 						"type": "integer",
@@ -37467,9 +37400,12 @@
 			},
 			"ChatPaymentOption": {
 				"type": "object",
-				"description": "A payment method for the quoted item, in the merchant’s order.",
+				"description": "A payment method for the quoted item, in the list’s order.",
 				"required": [
 					"method",
+					"name",
+					"kind",
+					"note",
 					"available",
 					"reason",
 					"advance",
@@ -37480,13 +37416,24 @@
 				"properties": {
 					"method": {
 						"type": "string",
+						"description": "A payment method key of the website’s payment_methods list.",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"name": {
+						"type": "string",
+						"description": "The merchant’s name for it."
+					},
+					"kind": {
+						"type": "string",
 						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						],
-						"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+							"gateway",
+							"pay_first",
+							"on_delivery",
+							"at_pickup"
+						]
+					},
+					"note": {
+						"type": "string"
 					},
 					"available": {
 						"type": "boolean"
@@ -37509,11 +37456,11 @@
 					},
 					"advance": {
 						"type": "integer",
-						"description": "What a cash-on-delivery order pays first (0 = none)."
+						"description": "What an order paid on delivery or at pickup pays first (0 = none)."
 					},
 					"fee": {
 						"type": "integer",
-						"description": "What choosing it adds (the COD cash-handling fee)."
+						"description": "What choosing it adds (its feePercent)."
 					},
 					"advanceText": {
 						"type": "string"
@@ -38151,13 +38098,7 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup",
-							null
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"paymentMethods": {
 						"type": "array",
@@ -38431,62 +38372,6 @@
 							"null"
 						],
 						"description": "Physical items with a warranty only."
-					}
-				}
-			},
-			"CheckoutBankDetails": {
-				"type": "object",
-				"description": "The bank details exactly as Payments answers them (GET /v1/bank-transfer, read at most every 5 minutes), each '' when not set: show only the ones given.",
-				"required": [
-					"ready",
-					"accountHolder",
-					"bankName",
-					"accountNumber",
-					"routingNumber",
-					"sortCode",
-					"branchCode",
-					"iban",
-					"bic",
-					"instructions"
-				],
-				"additionalProperties": false,
-				"properties": {
-					"ready": {
-						"type": "boolean",
-						"description": "Bank transfer can be offered: the account holder and the account number or IBAN are set (or Payments does not require details)."
-					},
-					"accountHolder": {
-						"type": "string",
-						"description": "The name on the bank account."
-					},
-					"bankName": {
-						"type": "string"
-					},
-					"accountNumber": {
-						"type": "string"
-					},
-					"routingNumber": {
-						"type": "string",
-						"description": "Where the country uses one (for example the ABA routing number in the United States)."
-					},
-					"sortCode": {
-						"type": "string",
-						"description": "Where the country uses one (for example in the United Kingdom and Ireland)."
-					},
-					"branchCode": {
-						"type": "string",
-						"description": "A branch or clearing code where the country uses one (for example a BSB, IFSC or transit number)."
-					},
-					"iban": {
-						"type": "string"
-					},
-					"bic": {
-						"type": "string",
-						"description": "The bank's SWIFT/BIC code."
-					},
-					"instructions": {
-						"type": "string",
-						"description": "The merchant's own words shown under the details (plain text)."
 					}
 				}
 			},
@@ -40305,12 +40190,7 @@
 						"type": "array",
 						"items": {
 							"type": "string",
-							"enum": [
-								"cod",
-								"online",
-								"bank_transfer",
-								"pickup"
-							]
+							"pattern": "^[a-z][a-z0-9_]{0,39}$"
 						},
 						"description": "Only when the order is paid one of these ways ([]: any)."
 					}
@@ -40484,12 +40364,7 @@
 						"type": "array",
 						"items": {
 							"type": "string",
-							"enum": [
-								"cod",
-								"online",
-								"bank_transfer",
-								"pickup"
-							]
+							"pattern": "^[a-z][a-z0-9_]{0,39}$"
 						},
 						"default": []
 					}
@@ -41467,12 +41342,12 @@
 							"storage",
 							"delivery_days",
 							"payment_methods",
-							"bank_details",
+							"pay_details",
 							"staff_alerts",
 							"admin_url",
 							"pixel_ids"
 						],
-						"description": "no_products: no active product at all (1 or 0); products_without_photos: active products with no photo; products_not_buyable: active products without an offered variant priced above 0; variants_priced_zero: offered variants of active products priced 0 (left out of structured data and feeds); images_without_alt: active products with a photo that has no alternative text; images_too_small: active products with a photo under 500 × 500 pixels (the shopping catalogs' minimum); images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); short_descriptions: active products whose description has fewer than 20 words; duplicate_names: active products sharing a name with another (any letter case); duplicate_titles and duplicate_descriptions: active products, and categories and brands, whose own SEO title or description another record of the same kind also uses; long_titles: own SEO titles over 60 characters (search engines cut them); canonical_elsewhere: active products, categories and brands whose canonical address is on another site; branded_without_gtin: products the feeds send (active, with an offered variant priced above 0) of a brand without a GTIN on any offered variant (or a SKU, with the feeds setting skuAs gtin) (skipped while Feeds is off); missing_identifiers: products the feeds send with no brand and no GTIN or MPN (or a SKU sent as one) (skipped while Feeds is off or its identifierExists is no); empty_categories: categories shoppers see with no active product in them or below them; glossary_without_text: active product and variant fields without their glossary text, so their pages stay out of search results (skipped while Landing pages is off or attributeUrl is empty); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); business_country, business_logo and business_phone: business.json gives no country (search engines need it for your shipping and return policies), no logo (shown with your business in search results; at least 112 × 112 pixels) or no phone (shoppers and search engines reach you by it) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); storage: no Storage connection, so no photo can be uploaded (1 or 0); delivery_days: the delivery settings handlingDays and transitDays are not both set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); bank_details: bank transfer is offered but shoppers are not told where to pay: Payments' bank details are not saved, or, without Payments, the checkout setting noteBankTransfer is empty (1 or 0; skipped while bank transfer is not offered or Payments does not answer); staff_alerts: Staff alerts is on but nobody gets them (no recipients, no Accounts staff by permission with the Accounts token) or Notifications is not connected (1 or 0); admin_url: the staff_alerts setting adminUrl is empty, so alerts link to no order page (1 or 0); both skipped while Staff alerts is off; pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
+						"description": "no_products: no active product at all (1 or 0); products_without_photos: active products with no photo; products_not_buyable: active products without an offered variant priced above 0; variants_priced_zero: offered variants of active products priced 0 (left out of structured data and feeds); images_without_alt: active products with a photo that has no alternative text; images_too_small: active products with a photo under 500 × 500 pixels (the shopping catalogs' minimum); images_short_lived: storage is connected but the catalog setting mediaBaseUrl (the public address of your images) is empty, so the shop's widgets show images through links that last an hour (no browser caching; search engines, sitemaps and feeds get your website's media addresses instead) (1 or 0; skipped without storage); short_descriptions: active products whose description has fewer than 20 words; duplicate_names: active products sharing a name with another (any letter case); duplicate_titles and duplicate_descriptions: active products, and categories and brands, whose own SEO title or description another record of the same kind also uses; long_titles: own SEO titles over 60 characters (search engines cut them); canonical_elsewhere: active products, categories and brands whose canonical address is on another site; branded_without_gtin: products the feeds send (active, with an offered variant priced above 0) of a brand without a GTIN on any offered variant (or a SKU, with the feeds setting skuAs gtin) (skipped while Feeds is off); missing_identifiers: products the feeds send with no brand and no GTIN or MPN (or a SKU sent as one) (skipped while Feeds is off or its identifierExists is no); empty_categories: categories shoppers see with no active product in them or below them; glossary_without_text: active product and variant fields without their glossary text, so their pages stay out of search results (skipped while Landing pages is off or attributeUrl is empty); archived_featured: archived products still featured; variants_out_of_stock and variants_low_stock: offered variants of products that track stock and are not archived, with no units (or marked sold out) and with 1 to the catalog setting lowStock units; business_name: business.json is missing or gives no name (1 or 0); business_country, business_logo and business_phone: business.json gives no country (search engines need it for your shipping and return policies), no logo (shown with your business in search results; at least 112 × 112 pixels) or no phone (shoppers and search engines reach you by it) (1 or 0); website_address: the website's address is not a public web address, such as localhost, an IP address or a .local or .test name (1 or 0); storage: no Storage connection, so no photo can be uploaded (1 or 0); delivery_days: the delivery settings handlingDays and transitDays are not both set, so search engines show no shipping (1 or 0; skipped while Delivery zones is off); payment_methods: shoppers have no payment method they can use (1 or 0); pay_details: active payment methods paid first (or with an advance paid by hand) that do not tell shoppers where to pay: no instructions and no account with a value of their own (by hand), or Payments' manual method of their key not ready (skipped while there is none or Payments does not answer); staff_alerts: Staff alerts is on but nobody gets them (no recipients, no Accounts staff by permission with the Accounts token) or Notifications is not connected (1 or 0); admin_url: the staff_alerts setting adminUrl is empty, so alerts link to no order page (1 or 0); both skipped while Staff alerts is off; pixel_ids: tag ids set in Growth (Meta and TikTok pixels, Google tags) that are not in the form their tag takes."
 					},
 					"status": {
 						"type": "string",
@@ -43459,12 +43334,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -43548,12 +43418,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -43630,12 +43495,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -43691,12 +43551,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -43708,12 +43563,8 @@
 					},
 					"method": {
 						"type": "string",
-						"enum": [
-							"bank_transfer",
-							"cash",
-							"other",
-							"online"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$",
+						"description": "A payment method key of the list, other, or payments (through Payments)."
 					},
 					"amount": {
 						"type": "integer",
@@ -43763,12 +43614,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -43823,12 +43669,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -44030,12 +43871,7 @@
 					},
 					"paymentMethod": {
 						"type": "string",
-						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"deliveryMethod": {
 						"type": "string",
@@ -44839,12 +44675,7 @@
 						"type": "array",
 						"items": {
 							"type": "string",
-							"enum": [
-								"cod",
-								"online",
-								"bank_transfer",
-								"pickup"
-							]
+							"pattern": "^[a-z][a-z0-9_]{0,39}$"
 						}
 					},
 					"window": {
@@ -44905,6 +44736,14 @@
 							"take_back",
 							"keep"
 						]
+					},
+					"paidOnDelivery": {
+						"type": "string",
+						"enum": [
+							"yes",
+							"no"
+						],
+						"description": "Into a delivered status: an order paid on delivery or at pickup counts as paid with the move (yes, the default) or staff record that money (no)."
 					}
 				}
 			},
@@ -45037,13 +44876,8 @@
 					},
 					"method": {
 						"type": "string",
-						"enum": [
-							"bank_transfer",
-							"cash",
-							"other",
-							"online"
-						],
-						"description": "online: taken through Payments."
+						"description": "payments: taken through Payments; else a payment method key of the list or other (recorded by staff).",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"amount": {
 						"type": "integer",
@@ -45053,7 +44887,7 @@
 					"reference": {
 						"type": "string",
 						"maxLength": 120,
-						"description": "A transfer reference, or the Payments payment id for online."
+						"description": "A transfer reference, or the Payments payment id for payments."
 					},
 					"proofKey": {
 						"type": [
@@ -45107,6 +44941,7 @@
 				"description": "The payment, with what is due and refundable counted the one way every view counts it.",
 				"required": [
 					"method",
+					"kind",
 					"state",
 					"paymentId",
 					"advance",
@@ -45121,12 +44956,17 @@
 				"properties": {
 					"method": {
 						"type": "string",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"kind": {
+						"type": "string",
 						"enum": [
-							"cod",
-							"online",
-							"bank_transfer",
-							"pickup"
-						]
+							"gateway",
+							"pay_first",
+							"on_delivery",
+							"at_pickup"
+						],
+						"description": "The kind of its payment method when it was placed (what the order engine follows)."
 					},
 					"state": {
 						"type": "string",
@@ -45149,7 +44989,7 @@
 					"advance": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "The cash-on-delivery advance taken first. Minor units."
+						"description": "The advance of a method paid on delivery or at pickup, taken first. Minor units."
 					},
 					"paid": {
 						"type": "integer",
@@ -45179,7 +45019,7 @@
 							"payments",
 							"manual"
 						],
-						"description": "A bank transfer or advance taken through Payments or recorded by staff."
+						"description": "What is paid first (or an advance) taken through Payments or recorded by staff."
 					},
 					"proof": {
 						"oneOf": [
@@ -45375,13 +45215,8 @@
 					},
 					"method": {
 						"type": "string",
-						"enum": [
-							"online",
-							"bank_transfer",
-							"cash",
-							"other"
-						],
-						"description": "online: through Payments; the others recorded (manual: Payments only recorded it and the shop gives the money back by hand)."
+						"description": "payments: through Payments; else recorded as given back by a payment method of the list or other (manual: Payments only recorded it and the shop gives the money back by hand, by the manual method of the same key).",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"amount": {
 						"type": "integer",
@@ -45646,12 +45481,7 @@
 						"properties": {
 							"method": {
 								"type": "string",
-								"enum": [
-									"cod",
-									"online",
-									"bank_transfer",
-									"pickup"
-								]
+								"pattern": "^[a-z][a-z0-9_]{0,39}$"
 							},
 							"state": {
 								"type": "string",
@@ -45783,6 +45613,68 @@
 					},
 					"values": {
 						"$ref": "#/components/schemas/OrderNoteValues"
+					}
+				}
+			},
+			"PayDetails": {
+				"type": "object",
+				"description": "What a payment method paid first tells shoppers: its name, its instructions and the accounts for the shop's currency (each the merchant's own label/value rows, only those with a value) — the method's own when it is paid by hand, else those of Payments' manual payment method of the same key (GET /v1/manual-methods, read at most every 5 minutes). ready: it tells shoppers how to pay.",
+				"required": [
+					"ready",
+					"name",
+					"instructions",
+					"accounts"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"ready": {
+						"type": "boolean"
+					},
+					"name": {
+						"type": "string"
+					},
+					"instructions": {
+						"type": "string"
+					},
+					"accounts": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": [
+								"label",
+								"currency",
+								"rows"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"label": {
+									"type": "string"
+								},
+								"currency": {
+									"type": "string",
+									"description": "ISO 4217, or '' for any currency."
+								},
+								"rows": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"label",
+											"value"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"label": {
+												"type": "string"
+											},
+											"value": {
+												"type": "string"
+											}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			},
@@ -47279,14 +47171,8 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"online",
-							"bank_transfer",
-							"cash",
-							"other",
-							null
-						],
-						"description": "How the refund went back (null: not refunded)."
+						"description": "How the refund went back (null: not refunded). A payment method key of the list, other, or payments (through Payments).",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"refundReference": {
 						"type": "string",
@@ -47562,14 +47448,8 @@
 							"string",
 							"null"
 						],
-						"enum": [
-							"online",
-							"bank_transfer",
-							"cash",
-							"other",
-							null
-						],
-						"description": "How the refund went back (null: not refunded)."
+						"description": "How the refund went back (null: not refunded). A payment method key of the list, other, or payments (through Payments).",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
 					"refundReference": {
 						"type": "string",
@@ -47934,12 +47814,7 @@
 						"properties": {
 							"method": {
 								"type": "string",
-								"enum": [
-									"cod",
-									"online",
-									"bank_transfer",
-									"pickup"
-								]
+								"pattern": "^[a-z][a-z0-9_]{0,39}$"
 							},
 							"state": {
 								"type": "string",
@@ -49915,12 +49790,7 @@
 						"type": "array",
 						"items": {
 							"type": "string",
-							"enum": [
-								"cod",
-								"online",
-								"bank_transfer",
-								"pickup"
-							]
+							"pattern": "^[a-z][a-z0-9_]{0,39}$"
 						},
 						"description": "Only with these payment methods ([]: any)."
 					},
@@ -50329,7 +50199,7 @@
 						"items": {
 							"$ref": "#/components/schemas/HealthCheck"
 						},
-						"description": "Every check, in this order: no_products, products_without_photos, products_not_buyable, variants_priced_zero, images_without_alt, images_too_small, images_short_lived, short_descriptions, duplicate_names, duplicate_titles, duplicate_descriptions, long_titles, canonical_elsewhere, branded_without_gtin, missing_identifiers, empty_categories, glossary_without_text, archived_featured, variants_out_of_stock, variants_low_stock, business_name, business_country, business_logo, business_phone, website_address, storage, delivery_days, payment_methods, bank_details, staff_alerts, admin_url, pixel_ids."
+						"description": "Every check, in this order: no_products, products_without_photos, products_not_buyable, variants_priced_zero, images_without_alt, images_too_small, images_short_lived, short_descriptions, duplicate_names, duplicate_titles, duplicate_descriptions, long_titles, canonical_elsewhere, branded_without_gtin, missing_identifiers, empty_categories, glossary_without_text, archived_featured, variants_out_of_stock, variants_low_stock, business_name, business_country, business_logo, business_phone, website_address, storage, delivery_days, payment_methods, pay_details, staff_alerts, admin_url, pixel_ids."
 					},
 					"attention": {
 						"type": "integer",
@@ -50520,7 +50390,7 @@
 					"address",
 					"delivery",
 					"payment",
-					"bankDetails",
+					"payDetails",
 					"canSendProof",
 					"notes",
 					"pickupPoint",
@@ -50738,6 +50608,8 @@
 						"type": "object",
 						"required": [
 							"method",
+							"name",
+							"kind",
 							"state",
 							"via",
 							"advance",
@@ -50754,13 +50626,22 @@
 						"properties": {
 							"method": {
 								"type": "string",
+								"description": "A payment method key of the website’s payment_methods list.",
+								"pattern": "^[a-z][a-z0-9_]{0,39}$"
+							},
+							"name": {
+								"type": "string",
+								"description": "The method’s name in the list (a key it no longer has reads as itself)."
+							},
+							"kind": {
+								"type": "string",
 								"enum": [
-									"cod",
-									"online",
-									"bank_transfer",
-									"pickup"
+									"gateway",
+									"pay_first",
+									"on_delivery",
+									"at_pickup"
 								],
-								"description": "cod: cash on delivery; online: through Payments; bank_transfer; pickup: paid at the pickup counter."
+								"description": "The kind it was placed with."
 							},
 							"state": {
 								"type": "string",
@@ -50778,11 +50659,11 @@
 									"payments",
 									"manual"
 								],
-								"description": "manual: staff record the bank transfer or advance (the shopper sends a proof)."
+								"description": "manual: staff record what is paid by hand (the shopper may send a proof)."
 							},
 							"advance": {
 								"type": "integer",
-								"description": "The COD advance paid first (0 = none)."
+								"description": "The advance of a method paid on delivery or at pickup, paid first (0 = none)."
 							},
 							"paid": {
 								"type": "integer",
@@ -50850,16 +50731,16 @@
 							}
 						}
 					},
-					"bankDetails": {
+					"payDetails": {
 						"oneOf": [
 							{
-								"$ref": "#/components/schemas/CheckoutBankDetails"
+								"$ref": "#/components/schemas/PayDetails"
 							},
 							{
 								"type": "null"
 							}
 						],
-						"description": "Where to transfer, while a bank transfer (or a manual advance) awaits payment."
+						"description": "How to pay, while a method paid first (or an advance paid by hand) awaits payment."
 					},
 					"canSendProof": {
 						"type": "boolean",
@@ -51274,12 +51155,8 @@
 				"properties": {
 					"method": {
 						"type": "string",
-						"enum": [
-							"online",
-							"bank_transfer",
-							"cash",
-							"other"
-						]
+						"pattern": "^[a-z][a-z0-9_]{0,39}$",
+						"description": "A payment method key of the list, other, or payments (through Payments)."
 					},
 					"amount": {
 						"type": "integer",

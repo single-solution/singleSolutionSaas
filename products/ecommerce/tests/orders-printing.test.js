@@ -105,7 +105,16 @@ const orderOf = (patch = {}) => ({
 		released: false,
 		role: { key: 'member', percent: 3, label: 'Club price' },
 	},
-	payment: { method: 'cod', state: 'unpaid', paymentId: null, advance: 10000, paid: 10000, refunded: 1000, checkedAt: null },
+	payment: {
+		method: 'cod',
+		kind: 'on_delivery',
+		state: 'unpaid',
+		paymentId: null,
+		advance: 10000,
+		paid: 10000,
+		refunded: 1000,
+		checkedAt: null,
+	},
 	payments: [
 		{
 			id: 'opy_1',
@@ -121,7 +130,7 @@ const orderOf = (patch = {}) => ({
 	refunds: [
 		{
 			id: 'orf_1',
-			method: 'cash',
+			method: 'cod',
 			amount: 1000,
 			reference: 'RF-1',
 			claimId: null,
@@ -234,6 +243,7 @@ describe('packing slips of several orders (E35)', () => {
 			orderOf({
 				payment: {
 					method: 'online',
+					kind: 'gateway',
 					state: 'paid',
 					paymentId: 'pay_1',
 					advance: 0,
@@ -315,7 +325,7 @@ describe('document parts (E35)', () => {
 	const context = {
 		business,
 		texts: invoiceTexts({}),
-		words: { methods: {}, states: {} },
+		words: { methods: {}, online: '', states: {} },
 		columns: ['item', 'quantity', 'unitPrice', 'amount'],
 		format: DEFAULT_FORMAT,
 		timeZone: 'UTC',
@@ -325,7 +335,9 @@ describe('document parts (E35)', () => {
 	it('collects cash only on unpaid cash-on-delivery orders', () => {
 		expect(cashToCollect(orderOf())).toBe(80750);
 		expect(cashToCollect(orderOf({ payment: { ...orderOf().payment, state: 'paid', paid: 90750 } }))).toBe(0);
-		expect(cashToCollect(orderOf({ payment: { ...orderOf().payment, method: 'online' } }))).toBe(0);
+		expect(cashToCollect(orderOf({ payment: { ...orderOf().payment, method: 'online', kind: 'gateway' } }))).toBe(0);
+		// paid at the counter: nothing for the courier to collect
+		expect(cashToCollect(orderOf({ payment: { ...orderOf().payment, method: 'pickup', kind: 'at_pickup' } }))).toBe(0);
 		expect(cashToCollect(orderOf({ payment: { ...orderOf().payment, state: 'pending', paid: 0 } }))).toBe(90750);
 	});
 
@@ -333,7 +345,16 @@ describe('document parts (E35)', () => {
 		const plain = orderOf({
 			totals: { subtotal: 1000, discount: 0, delivery: 0, tax: 0, total: 1000, currency: 'USD', taxIncluded: false },
 			promotions: { ...orderOf().promotions, pointsRedeemed: 0, pointsValue: 0, role: null },
-			payment: { method: 'online', state: 'paid', paymentId: 'p', advance: 0, paid: 1000, refunded: 0, checkedAt: null },
+			payment: {
+				method: 'online',
+				kind: 'gateway',
+				state: 'paid',
+				paymentId: 'p',
+				advance: 0,
+				paid: 1000,
+				refunded: 0,
+				checkedAt: null,
+			},
 			payments: [
 				{
 					id: 'opy_9',

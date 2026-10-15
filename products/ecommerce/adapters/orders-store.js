@@ -7,6 +7,7 @@
 import { createId } from '@ss/contracts';
 import { phoneDigitsOf } from '../core/guests.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { VIA_PAYMENTS } from '../core/payment-methods.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
@@ -406,7 +407,7 @@ export const createOrdersStore = (data) => {
 							role: 'cancelled',
 							'payment.voidedAt': { $gte: new Date(now - windowMs) },
 							'payment.paymentId': { $ne: null },
-							payments: { $not: { $elemMatch: { method: 'online' } } },
+							payments: { $not: { $elemMatch: { method: VIA_PAYMENTS } } },
 							$or: [{ 'payment.checkedAt': null }, { 'payment.checkedAt': { $lte: new Date(now - everyMs) } }],
 						},
 						NO_ID,

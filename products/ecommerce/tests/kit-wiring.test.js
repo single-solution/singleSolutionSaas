@@ -104,7 +104,16 @@ const seedOrder = async (patch = {}) => {
 			pointsEarned: 0,
 			released: true,
 		},
-		payment: { method: 'cod', state: 'unpaid', paymentId: null, advance: 0, paid: 0, refunded: 0, checkedAt: null },
+		payment: {
+			method: 'cod',
+			kind: 'on_delivery',
+			state: 'unpaid',
+			paymentId: null,
+			advance: 0,
+			paid: 0,
+			refunded: 0,
+			checkedAt: null,
+		},
 		status: 'awaiting_confirmation',
 		role: /** @type {import('../core/model.js').StatusRole} */ ('awaiting_confirmation'),
 		history: [],
@@ -248,6 +257,7 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 			role: 'open',
 			payment: {
 				method: 'online',
+				kind: 'gateway',
 				state: 'paid',
 				paymentId: 'pay_kitrefund',
 				advance: 0,
@@ -282,6 +292,7 @@ describe('K2 and K9: the acting staff member and labeled activity', () => {
 			deliveredAt: new Date(shop.now()),
 			payment: {
 				method: 'online',
+				kind: 'gateway',
 				state: 'paid',
 				paymentId: 'pay_kitclaim',
 				advance: 0,
@@ -414,6 +425,9 @@ describe('K4: counts equal to their lists', () => {
 		expect((await shop.api('PUT', '/v1/lists/order_flow', { value: flow })).status).toBe(200);
 		const pay = (/** @type {any} */ method, /** @type {any} */ state) => ({
 			method,
+			kind: /** @type {any} */ ({ cod: 'on_delivery', online: 'gateway', bank_transfer: 'pay_first', pickup: 'at_pickup' })[
+				method
+			],
 			state,
 			paymentId: null,
 			advance: 0,

@@ -129,6 +129,12 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 				},
 				payment: {
 					method,
+					kind: /** @type {any} */ ({
+						cod: 'on_delivery',
+						online: 'gateway',
+						bank_transfer: 'pay_first',
+						pickup: 'at_pickup',
+					})[method],
 					state: method === 'cod' ? 'unpaid' : 'paid',
 					paymentId: method === 'cod' ? null : 'pay_courier',
 					advance: 0,
@@ -229,7 +235,7 @@ describe('the generic courier API adapter', () => {
 			{ kind: 'digital', quantity: 1 },
 		],
 		totals: { total: 1999, currency: 'USD' },
-		payment: { method: 'online', paid: 1999 },
+		payment: { method: 'online', kind: 'gateway', paid: 1999 },
 	});
 
 	it('checks the connection without calling the courier', async () => {
@@ -319,7 +325,7 @@ describe('the generic courier API adapter', () => {
 		const values = bookingValues(
 			{
 				...order,
-				payment: { method: 'cod', paid: 500 },
+				payment: { method: 'cod', kind: 'on_delivery', paid: 500 },
 				address: {
 					name: '',
 					phone: '',

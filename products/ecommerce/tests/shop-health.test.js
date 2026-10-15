@@ -134,16 +134,25 @@ describe('shop health: the catalog data', () => {
 });
 
 describe('shop health: the setup (P5-18)', () => {
-	it('checks the business phone, storage, bank details and staff alerts', async () => {
+	it('checks the business phone, storage, how methods paid first tell shoppers to pay and staff alerts', async () => {
 		expect(await state('business_phone')).toBe('attention 1');
-		// Payments has no bank details saved: shoppers are not told where to pay
-		shop.responders.set(`${PAYMENTS}/v1/bank-transfer`, () => ({ status: 200, body: { ready: false } }));
-		expect(await state('bank_details')).toBe('attention 1');
-		shop.responders.set(`${PAYMENTS}/v1/bank-transfer`, () => ({ status: 200, body: { ready: true } }));
-		expect(await state('bank_details')).toBe('ok 0');
-		await shop.setting('checkout', 'paymentMethods', ['online']);
-		expect(await state('bank_details')).toBe('skipped 0');
-		await shop.setting('checkout', 'paymentMethods', ['online', 'bank_transfer', 'pickup']);
+		// Payments' manual method of the same key is not ready: shoppers are not told where to pay
+		/** @param {boolean} ready */
+		const payments = (ready) => {
+			shop.responders.set(`${PAYMENTS}/v1/manual-methods`, () => ({
+				status: 200,
+				body: { methods: [{ key: 'bank_transfer', kind: 'pay_first', ready, name: 'Bank transfer', accounts: [] }] },
+			}));
+			// read again once the copy kept for 5 minutes is old
+			shop.advance(5 * 60_000 + 1000);
+		};
+		payments(false);
+		expect(await state('pay_details')).toBe('attention 1');
+		payments(true);
+		expect(await state('pay_details')).toBe('ok 0');
+		await shop.methods({ bank_transfer: { active: false } });
+		expect(await state('pay_details')).toBe('skipped 0');
+		await shop.methods({ bank_transfer: { active: true } });
 		// staff alerts to someone through Notifications, linking to the admin
 		expect(await state('staff_alerts')).toBe('attention 1');
 		await shop.setting('staff_alerts', 'recipients', ['orders@shop.example.com']);
@@ -157,11 +166,11 @@ describe('shop health: the setup (P5-18)', () => {
 		expect(await state('staff_alerts')).toBe('attention 1');
 		await shop.dashboard(await shop.adminSession(), 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/storage`);
 		expect(await state('storage')).toBe('attention 1');
-		// without Payments, staff record transfers: the bank transfer note tells shoppers where to pay
+		// without Payments, staff record transfers: the method's own instructions or accounts tell shoppers where to pay
 		await shop.dashboard(await shop.adminSession(), 'DELETE', `/v1/dashboard/websites/${shop.websiteId}/connections/payments`);
-		await shop.setting('checkout', 'bankTransferVia', 'manual');
-		expect(await state('bank_details')).toBe('attention 1');
-		await shop.setting('checkout', 'noteBankTransfer', 'Pay to account 0000 0000, quoting your order number.');
-		expect(await state('bank_details')).toBe('ok 0');
+		await shop.methods({ bank_transfer: { via: 'manual' } });
+		expect(await state('pay_details')).toBe('attention 1');
+		await shop.methods({ bank_transfer: { instructions: 'Pay to account 0000 0000, quoting your order number.' } });
+		expect(await state('pay_details')).toBe('ok 0');
 	});
 });

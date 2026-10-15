@@ -223,10 +223,9 @@ describe('core: Chat filters, warranties and the context text', () => {
 			visitor: { firstName: 'Alex', city: 'London', points: 120 },
 			basics: {
 				payments: [
-					{ method: 'cod', note: 'Pay the courier in cash.' },
-					{ method: 'bank_transfer', note: '' },
+					{ method: 'cod', name: 'Cash on delivery', note: 'Pay the courier in cash.', feePercent: 2 },
+					{ method: 'bank_transfer', name: 'Bank transfer', note: '', feePercent: 0 },
 				],
-				codFeePercent: 2,
 				delivery: { fee: 500, feeText: '$5', freeOver: 5000, freeOverText: '$50' },
 				zones: [
 					{ name: 'City', fee: 0, feeText: '$0', freeOver: 0, freeOverText: '$0' },
@@ -243,8 +242,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 		// the shop basics come first after the business (parity P5-17)
 		expect(text.indexOf('## Shop basics')).toBeLessThan(text.indexOf('## Store policies'));
 		for (const part of [
-			'- Payment: Cash on delivery (Pay the courier in cash.); Bank transfer',
-			'- Cash on delivery adds a 2% cash handling fee',
+			'- Payment: Cash on delivery (Pay the courier in cash.; adds a 2% fee); Bank transfer',
 			'- Delivery: $5, free over $50',
 			'- Delivery to City: free',
 			'- Delivery to Far away: $9',
@@ -314,7 +312,6 @@ describe('core: Chat filters, warranties and the context text', () => {
 			visitor: null,
 			basics: {
 				payments: [],
-				codFeePercent: 0,
 				delivery: null,
 				zones: [],
 				pickup: [],
@@ -482,7 +479,16 @@ describe('Chat lookups (E37)', () => {
 				},
 			],
 			totals: { subtotal: 120000, discount: 0, delivery: 0, tax: 0, total: 120000, currency: 'USD', taxIncluded: true },
-			payment: { method: 'cod', state: 'unpaid', paymentId: null, advance: 0, paid: 20000, refunded: 0, checkedAt: null },
+			payment: {
+				method: 'cod',
+				kind: 'on_delivery',
+				state: 'unpaid',
+				paymentId: null,
+				advance: 0,
+				paid: 20000,
+				refunded: 0,
+				checkedAt: null,
+			},
 			status: 'dispatched',
 			role: 'shipped',
 			history: [],
@@ -597,7 +603,7 @@ describe('Chat lookups (E37)', () => {
 		expect(out.json).toMatchObject({ inStock: false, problems: [{ code: 'out_of_stock' }] });
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?quantity=6')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?quantity=1.5')).status).toBe(422);
-		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?paymentMethod=card')).status).toBe(422);
+		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?paymentMethod=Card!')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?variantId=var_nope')).status).toBe(404);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?variantId=a%20b')).status).toBe(422);
 		// the place a Chat quote asks for picks the most specific zone (a postcode start over the city)
@@ -724,7 +730,7 @@ describe('Chat lookups (E37)', () => {
 	});
 
 	it('serves the store context with policies, newest products, deals, the viewed product and the visitor', async () => {
-		await shop.setting('checkout', 'noteCod', 'Have cash ready.');
+		await shop.methods({ cod: { note: 'Have cash ready.' } });
 		const guest = await shop.api('GET', '/v1/chat/context?productId=iphone-13');
 		expect(guest.status).toBe(200);
 		expect(guest.json).toMatchObject({
@@ -773,7 +779,12 @@ describe('Chat lookups (E37)', () => {
 			categories: ['Phones', 'Accessories'],
 			warrantyDays: 7,
 		});
-		expect(guest.json.basics.payments).toContainEqual({ method: 'cod', note: 'Have cash ready.' });
+		expect(guest.json.basics.payments).toContainEqual({
+			method: 'cod',
+			name: 'Cash on delivery',
+			note: 'Have cash ready.',
+			feePercent: 0,
+		});
 		for (const part of ['## Shop basics', '- Categories: Phones, Accessories', '- Delivery: USD 300.00', '- Warranty: 7 days'])
 			expect(guest.json.text).toContain(part);
 		const token = await shop.signIn({ id: sara, name: 'Sara Shopper' });

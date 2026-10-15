@@ -50,7 +50,6 @@ describe('the website Setup sheet: tags and what the website builds', () => {
 			'catalog',
 			'variants',
 			'checkout',
-			'cod',
 			'delivery_zones',
 			'courier_apis',
 			'taxes',
@@ -88,7 +87,6 @@ describe('the website Setup sheet: tags and what the website builds', () => {
 		expect(services.notRecommended.map((entry) => entry.feature)).toEqual([
 			'variants',
 			'digital_goods',
-			'cod',
 			'delivery_zones',
 			'courier_apis',
 			'wishlist',
@@ -184,6 +182,10 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'order_flow',
 				'9 statuses: Awaiting payment, Awaiting confirmation, Confirmed, Packed, Dispatched, Delivered, Canceled, Returned to origin, Refunded; 14 moves; 5 statuses message the shopper.',
 			],
+			[
+				'payment_methods',
+				'4 payment methods: Online payment (gateway), Bank transfer (pay_first), Cash on delivery (on_delivery), Pay at pickup (at_pickup).',
+			],
 			['couriers', '1 courier: FastShip.'],
 			[
 				'policies',
@@ -255,6 +257,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		const part = await partOf(env);
 		expect(listsOf(part, 'checkout')).toEqual([
 			['order_flow', expect.stringMatching(/^9 statuses: /)],
+			['payment_methods', expect.stringMatching(/^4 payment methods: /)],
 			['couriers', 'Not available right now'],
 			[
 				'policies',

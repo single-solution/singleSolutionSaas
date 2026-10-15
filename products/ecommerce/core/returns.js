@@ -8,6 +8,7 @@
  * @module
  */
 import { gradesFor } from './grades.js';
+import { OTHER_WAY, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').ReturnRecord} ReturnRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
@@ -33,8 +34,10 @@ export const CLAIM_STATUSES = Object.freeze(
 	/** @type {ClaimStatus[]} */ (['requested', 'approved', 'rejected', 'received', 'refunded', 'replaced', 'repaired', 'closed']),
 );
 /** How a refund was given back: `online` through Payments, the rest recorded by staff (E33, as E26). */
-export const REFUND_METHODS = Object.freeze(/** @type {const} */ (['online', 'bank_transfer', 'cash', 'other']));
-/** @typedef {typeof REFUND_METHODS[number]} RefundMethod */
+/**
+ * How a claim's money goes back: `payments` (through Payments), a payment method key of the website's list, or `other`.
+ * @typedef {string} RefundMethod
+ */
 /**
  * History entries of a claim the server writes itself (PLAN 0.4.10): the code is kept as `code` and as the `note`
  * (the widgets' words `ordersAdmin.historyNote.<code>`). `restocked`: items went back in stock.
@@ -324,21 +327,24 @@ export const deliveryLeft = (order, claims, claimId) => {
 
 /**
  * Check how a claim's refund is given back and its reference (E33). Without a method an order paid online is
- * refunded through Payments and any other is recorded as `other`; a recorded method never calls Payments.
+ * refunded through Payments and any other is recorded as `other`; a recorded way (a payment method of the list, or
+ * `other`, E16) never calls Payments.
  * @param {unknown} body
  * @param {boolean} online some of what the order was paid can go back through Payments
+ * @param {ReadonlyArray<string>} keys the `payment_methods` list's keys
  * @returns {{ ok: true, method: RefundMethod, reference: string } | { ok: false, field: string, message: string }}
  */
-export const checkRefundMethod = (body, online) => {
+export const checkRefundMethod = (body, online, keys) => {
 	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
 	const given = input.method === undefined || input.method === null ? null : input.method;
-	if (given !== null && !REFUND_METHODS.includes(/** @type {RefundMethod} */ (given)))
-		return { ok: false, field: 'method', message: 'method is online, bank_transfer, cash or other.' };
-	if (given === 'online' && !online) return { ok: false, field: 'method', message: 'This order was not paid through Payments.' };
+	if (given !== null && given !== VIA_PAYMENTS && !(given === OTHER_WAY || (isMethodKey(given) && keys.includes(given))))
+		return { ok: false, field: 'method', message: 'method is payments, one of the payment methods, or other.' };
+	if (given === VIA_PAYMENTS && !online)
+		return { ok: false, field: 'method', message: 'This order was not paid through Payments.' };
 	const raw = input.reference === undefined || input.reference === null ? '' : input.reference;
 	if (typeof raw !== 'string' || plain(raw).length > MAX_REFERENCE)
 		return { ok: false, field: 'reference', message: `A reference has at most ${MAX_REFERENCE} characters.` };
-	const method = /** @type {RefundMethod} */ (given ?? (online ? 'online' : 'other'));
+	const method = /** @type {RefundMethod} */ (given ?? (online ? VIA_PAYMENTS : OTHER_WAY));
 	return { ok: true, method, reference: plain(raw) };
 };
 

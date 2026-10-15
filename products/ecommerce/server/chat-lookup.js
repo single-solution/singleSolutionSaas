@@ -21,7 +21,8 @@ import { topField } from '../core/catalog-query.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
 import { CONTEXT_BASICS, CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText, contextWordsOf } from '../core/chat-context.js';
-import { paymentOptions } from '../core/checkout.js';
+import { paymentMethodsOn } from '../core/health.js';
+import { isMethodKey } from '../core/payment-methods.js';
 import { shipmentLink } from '../core/couriers.js';
 import { byShowOrder } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
@@ -46,7 +47,7 @@ import {
 } from '../core/lookup.js';
 import { measureView, toThousandths } from '../core/measure.js';
 import { COLLECTIONS } from '../core/model.js';
-import { PAYMENT_METHODS, customerOwner, isCustomerId } from '../core/orders.js';
+import { customerOwner, isCustomerId } from '../core/orders.js';
 import { isLoyaltyMember } from '../core/loyalty.js';
 import { listShown } from '../core/promotions.js';
 import { createCatalogSearch } from './catalog-search.js';
@@ -105,8 +106,7 @@ const quoteQuery = (query, measure) => {
 			throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUOTE_QUANTITY}.`);
 	}
 	const method = query.paymentMethod === undefined || query.paymentMethod === '' ? null : query.paymentMethod;
-	if (method !== null && !PAYMENT_METHODS.includes(/** @type {any} */ (method)))
-		throw invalidQuery('paymentMethod', `paymentMethod is one of ${PAYMENT_METHODS.join(', ')}.`);
+	if (method !== null && !isMethodKey(method)) throw invalidQuery('paymentMethod', 'paymentMethod is a payment method key.');
 	/** @type {Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string>} */
 	const place = { country: '', region: '', city: '', area: '', postalCode: '' };
 	for (const field of /** @type {Array<keyof typeof place>} */ (Object.keys(place))) {
@@ -519,13 +519,15 @@ export const createChatLookup = (product, service, media) => {
 			: cardVariant(item, await (await pricesFor(s, data))(item));
 		if (!variant) throw problem('not_found', 'There is no such variant.');
 		const shopper = await service.shopper(s);
+		// a method paid at pickup is quoted for a picked-up order
+		const asked = paymentMethod ? (await service.methods.methodsOf(s)).find((entry) => entry.key === paymentMethod) : null;
 		const q = await quoting.quote(
 			s,
 			{
 				lines: [{ productId: item.id, variantId: variant.id, quantity, slot: null }],
 				coupon: '',
 				points: 0,
-				delivery: { method: paymentMethod === 'pickup' ? 'pickup' : null, ...place, locationId: null },
+				delivery: { method: asked?.kind === 'at_pickup' ? 'pickup' : null, ...place, locationId: null },
 				payment: paymentMethod,
 			},
 			shopper,
@@ -729,9 +731,8 @@ export const createChatLookup = (product, service, media) => {
 	const basicsOf = async (s, data) => {
 		const checkoutOn = s.has('checkout');
 		const zonesOn = checkoutOn && s.has('delivery_zones');
-		const [checkout, cod, zones, zoneList, locations, loyalty, returns, categories, payments, { money }] = await Promise.all([
-			checkoutOn ? s.values('checkout') : Promise.resolve(null),
-			checkoutOn && s.has('cod') ? s.values('cod') : Promise.resolve(null),
+		const [listed, zones, zoneList, locations, loyalty, returns, categories, payments, { money }] = await Promise.all([
+			checkoutOn ? service.methods.methodsOf(s) : Promise.resolve([]),
 			zonesOn ? s.values('delivery_zones') : Promise.resolve(null),
 			zonesOn ? s.list('delivery_zones') : Promise.resolve([]),
 			zonesOn && s.has('multi_location') ? locationsOf(data) : Promise.resolve([]),
@@ -771,33 +772,13 @@ export const createChatLookup = (product, service, media) => {
 						},
 					]
 				: [];
-		/** @type {Record<string, unknown>} */
-		const notes = checkout
-			? {
-					cod: checkout.noteCod,
-					online: checkout.noteOnline,
-					bank_transfer: checkout.noteBankTransfer,
-					pickup: checkout.notePickup,
-				}
-			: {};
-		const codOn = cod !== null && cod.enabled !== false;
-		const methods = checkout
-			? paymentOptions({
-					offered: checkout.paymentMethods,
-					order: checkout.paymentOrder,
-					paymentsConnected: payments !== null,
-					bankManual: checkout.bankTransferVia === 'manual',
-					cod: { on: codOn, settings: /** @type {any} */ (cod ?? {}) },
-					pickupPossible: pickup.length > 0,
-					deliveryMethod: 'delivery',
-					digital: false,
-					total: 0,
-					rtoCount: 0,
-				}).map((option) => ({ method: option.method, note: String(notes[option.method] ?? '') }))
-			: [];
+		// the methods the shop can take now, by the merchant's names, notes and fees
+		const on = new Set(paymentMethodsOn({ methods: listed, paymentsConnected: payments !== null, pickup: pickup.length > 0 }));
+		const methods = listed
+			.filter((method) => on.has(method.key))
+			.map((method) => ({ method: method.key, name: method.name, note: method.note, feePercent: method.feePercent }));
 		return {
 			payments: methods,
-			codFeePercent: codOn ? Number(cod?.feePercent) || 0 : 0,
 			delivery: zones ? feeOf(zones.defaultFee, zones.defaultFreeOver) : null,
 			zones: /** @type {Array<{ name: string, fee: number, freeOver: number }>} */ (zoneList)
 				.slice(0, CONTEXT_BASICS)

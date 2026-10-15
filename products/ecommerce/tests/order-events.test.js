@@ -109,7 +109,7 @@ describe('events and staff alerts (E32)', () => {
 			'ecommerce.order.payment_recorded',
 		]);
 		expect(mine.find((/** @type {any} */ e) => e.type === 'ecommerce.order.payment_recorded').data).toMatchObject({
-			method: 'cash',
+			method: 'cod',
 			amount: order.totals.total,
 		});
 		expect(mine.find((/** @type {any} */ e) => e.type === 'ecommerce.order.paid').data).toMatchObject({

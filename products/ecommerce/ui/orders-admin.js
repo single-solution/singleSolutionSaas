@@ -11,10 +11,10 @@
  * @module
  */
 import { STATUS_ROLES } from '../core/model.js';
-import { PAYMENT_METHODS, PAYMENT_STATES } from '../core/orders.js';
+import { PAYMENT_STATES } from '../core/orders.js';
 import { dayEnd, dayStart, mountAdmin, query } from './admin-kit.js';
 import { chipFilter, countedSelect, listScreen } from './admin-lists.js';
-import { ROLE_TONES, orderDetail } from './admin-order.js';
+import { ROLE_TONES, methodName, methodsOf, orderDetail } from './admin-order.js';
 import { returnsTab } from './admin-returns.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
@@ -77,7 +77,7 @@ const ordersTab = (kit, panel) => {
 	);
 	const paymentMethod = countedSelect(
 		kit,
-		[all, ...PAYMENT_METHODS.map((method) => ({ value: method, label: t(`ordersAdmin.method.${method}`) }))],
+		[all, ...methodsOf(kit).map((method) => ({ value: method.key, label: method.name }))],
 		withCount,
 	);
 	const from = kit.input('', { type: 'date' });
@@ -269,7 +269,7 @@ const ordersTab = (kit, panel) => {
 				order.customer?.name,
 				order.city,
 				kit.when(order.placedAt),
-				t(`ordersAdmin.method.${order.payment.method}`),
+				methodName(kit, order.payment.method),
 				t(`ordersAdmin.payment.${order.payment.state}`),
 			]
 				.filter(Boolean)

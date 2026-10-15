@@ -806,7 +806,7 @@ describe('CSV', () => {
 			address: null,
 			lines: [{ name: 'L', variantName: '', sku: '', quantity: 1, unitPrice: 1, discount: 0, total: 1 }],
 			totals: { currency: 'JPY' },
-			payment: { method: 'cod', state: 'unpaid' },
+			payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid' },
 		});
 		expect(orderRows([order])[0]).toEqual([
 			'1',

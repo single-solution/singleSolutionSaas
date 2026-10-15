@@ -10,6 +10,7 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@ss/ui/testing';
 import { TABS } from '../app/dashboard/tabs.js';
+import { defaultPaymentMethods, newAccount } from '../core/payment-methods.js';
 
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
@@ -17,9 +18,17 @@ const BASE = `/v1/dashboard/websites/${WEBSITE}`;
 /**
  * The dashboard API's answers for a website with these features on, connections and settings (`{ value, source }`).
  * @param {{ on: string[], connections?: Array<Record<string, unknown>>, needed?: Array<Record<string, unknown>>,
- *   settings?: Record<string, Record<string, { value: unknown, source: string }>>, search?: unknown }} state
+ *   settings?: Record<string, Record<string, { value: unknown, source: string }>>, search?: unknown,
+ *   methods?: unknown[] }} state `methods`: the `payment_methods` list (today's four by default)
  */
-const serve = ({ on, connections = [], needed = [], settings = {}, search = { search: 'basic', index: 'x', state: null } }) => {
+const serve = ({
+	on,
+	connections = [],
+	needed = [],
+	settings = {},
+	search = { search: 'basic', index: 'x', state: null },
+	methods = defaultPaymentMethods(),
+}) => {
 	/** @type {Record<string, unknown>} */
 	const answers = {
 		[`${BASE}/overview`]: {
@@ -32,6 +41,7 @@ const serve = ({ on, connections = [], needed = [], settings = {}, search = { se
 		},
 		[`${BASE}/connections`]: { connections },
 		[`${BASE}/search-index`]: search,
+		[`${BASE}/lists/payment_methods`]: { value: methods },
 		[`${BASE}/settings`]: {
 			features: Object.entries(settings).map(([key, values]) => ({ key, on: true, schema: {}, values })),
 		},
@@ -107,7 +117,7 @@ describe('Ecommerce’s Overview', () => {
 				{ name: 'payments', label: 'Payments', neededBy: [], status: 'not_connected' },
 				{ name: 'notifications', label: 'Notifications', neededBy: [], status: 'connected' },
 			],
-			settings: { catalog: { currency: value('USD', 'website') }, checkout: { paymentMethods: value(['online']) } },
+			settings: { catalog: { currency: value('USD', 'website') } },
 		});
 		const Overview = TABS.overview;
 		const { container } = render(<Overview {...props} />);
@@ -121,17 +131,18 @@ describe('Ecommerce’s Overview', () => {
 		expect(opened).toEqual(['connections']);
 	});
 
-	it('asks for staff alert recipients and admin page, bank details and the Atlas Search index', async () => {
+	it('asks for staff alert recipients and admin page, how to pay methods paid by hand and the Atlas Search index', async () => {
+		/** today's bank transfer paid by hand: no instructions, no account with a value yet @param {Record<string, unknown>} patch */
+		const byHand = (patch) =>
+			defaultPaymentMethods().map((method) =>
+				method.key === 'bank_transfer' ? { ...method, via: 'manual', accounts: [newAccount()], ...patch } : method,
+			);
 		serve({
 			on: ['catalog', 'checkout', 'staff_alerts'],
 			connections: [{ name: 'payments', label: 'Payments', neededBy: [], status: 'connected' }],
+			methods: byHand({}),
 			settings: {
 				catalog: { currency: value('USD', 'website') },
-				checkout: {
-					paymentMethods: value(['bank_transfer']),
-					bankTransferVia: value('manual', 'website'),
-					noteBankTransfer: value(''),
-				},
 				staff_alerts: { recipients: value([]), staffPermission: value(''), adminUrl: value('') },
 			},
 			search: {
@@ -147,7 +158,7 @@ describe('Ecommerce’s Overview', () => {
 		for (const words of [
 			'No one gets staff alerts',
 			'Staff alerts have no admin page to link to',
-			'Shoppers are not told where to pay by bank transfer',
+			'Shoppers are not told where to pay: Bank transfer',
 			'The Atlas Search index products_search is missing',
 			'Atlas Search: index not found',
 			'3 more things need you',
@@ -155,20 +166,16 @@ describe('Ecommerce’s Overview', () => {
 			expect(text).toContain(words);
 		const docs = [...container.querySelectorAll('a')].find((node) => node.textContent === 'How to create it');
 		expect(docs?.getAttribute('href')).toBe('/docs#atlas-search');
-		await press(container, 'Write them');
+		await press(container, 'Add them');
 		expect(opened).toEqual(['settings']);
 		cleanup();
 		// recipients set, the admin page set, the note written: nothing of them
 		serve({
 			on: ['catalog', 'checkout', 'staff_alerts'],
 			connections: [{ name: 'payments', label: 'Payments', neededBy: [], status: 'connected' }],
+			methods: byHand({ accounts: [{ label: '', currency: '', rows: [{ label: 'Account', value: '123' }] }] }),
 			settings: {
 				catalog: { currency: value('USD', 'website') },
-				checkout: {
-					paymentMethods: value(['bank_transfer']),
-					bankTransferVia: value('manual', 'website'),
-					noteBankTransfer: value('Bank: Example Bank, account 123', 'website'),
-				},
 				staff_alerts: {
 					recipients: value(['orders@example.com'], 'website'),
 					staffPermission: value(''),

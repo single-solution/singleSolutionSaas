@@ -717,10 +717,14 @@ describe('shared helpers', () => {
 		expect(settings.compare.max).toBe(4);
 		const full = settingsOf(
 			configOf([], {
-				checkout: { paymentMethods: ['cod'], pickupLocations: [{ id: 'loc_1', name: 'Shop' }], delivery: { cities: ['A'] } },
+				checkout: {
+					paymentMethods: [{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' }],
+					pickupLocations: [{ id: 'loc_1', name: 'Shop' }],
+					delivery: { cities: ['A'] },
+				},
 			}),
 		);
-		expect(full.checkout.paymentMethods).toEqual(['cod']);
+		expect(full.checkout.paymentMethods).toEqual([{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' }]);
 		expect(full.checkout.cities).toEqual(['A']);
 		expect(currencyOf(settings, 'nope', 'USD')).toBe('USD');
 		expect(currencyOf(full)).toBe('USD');

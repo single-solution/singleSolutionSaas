@@ -613,10 +613,10 @@ describe('guest checkout and order keys (E21)', () => {
 
 describe('payment, delivery and COD options (E22, E23)', () => {
 	it('orders methods, adds notes and the COD fee, and starts COD open when asked', async () => {
-		await shop.setting('checkout', 'paymentOrder', ['bank_transfer', 'cod', 'online', 'pickup']);
-		await shop.setting('checkout', 'noteCod', 'Pay the rider');
-		await shop.setting('cod', 'feePercent', 5);
-		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, cod: 'confirmed' } }));
+		await shop.methods({}, ['bank_transfer', 'cod', 'online', 'pickup']);
+		await shop.methods({ cod: { note: 'Pay the rider' } });
+		await shop.methods({ cod: { feePercent: 5 } });
+		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, on_delivery: 'confirmed' } }));
 		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
 		const shopper = await newShopper();
 		const priced = await quote(
@@ -624,18 +624,18 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 			shopper.token,
 		);
 		expect(priced.json.paymentMethods.map((/** @type {any} */ m) => m.method).slice(0, 2)).toEqual(['bank_transfer', 'cod']);
-		expect(priced.json.notes).toMatchObject({ cod: 'Pay the rider' });
+		expect(priced.json.paymentMethods.find((/** @type {any} */ m) => m.method === 'cod').note).toBe('Pay the rider');
 		expect(priced.json.totals).toMatchObject({ fee: 515, total: 10_815 });
 		const placed = await place({ lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS }, shopper.token);
 		expect(placed.json.order).toMatchObject({ totals: { fee: 515 } });
 		expect((await orderRecord(placed.json.order.id)).role).toBe('open');
-		await shop.setting('cod', 'feePercent', 0);
-		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, cod: 'awaiting_confirmation' } }));
-		await shop.setting('checkout', 'paymentOrder', ['cod', 'online', 'bank_transfer', 'pickup']);
-		await shop.setting('checkout', 'noteCod', '');
+		await shop.methods({ cod: { feePercent: 0 } });
+		await shop.flow((flow) => ({ ...flow, starts: { ...flow.starts, on_delivery: 'awaiting_confirmation' } }));
+		await shop.methods({}, ['online', 'bank_transfer', 'cod', 'pickup']);
+		await shop.methods({ cod: { note: '' } });
 	});
 
-	it('lets staff switch cash on delivery off for new orders while the feature stays on (cod.enabled, AO-2)', async () => {
+	it('lets staff switch a payment method off for new orders, kept on orders staff edit (active, AO-2)', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const shopper = await newShopper();
 		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' } };
@@ -644,25 +644,25 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		const before = await place({ ...body, payment: 'cod', address: ADDRESS }, shopper.token);
 		expect(before.status).toBe(201);
 		expect(methods(await quote(body))).toContain('cod');
-		await shop.setting('cod', 'enabled', false);
+		await shop.methods({ cod: { active: false } });
 		expect(methods(await quote(body))).not.toContain('cod');
 		const refused = await place({ ...body, payment: 'cod', address: ADDRESS }, shopper.token);
 		expect(refused.json.errors[0].path).toBe('/payment');
-		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout).toMatchObject({ cod: null });
-		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.paymentMethods).not.toContain('cod');
+		const offered = (await visit('GET', '/v1/widget/config')).json.settings.checkout.paymentMethods;
+		expect(offered.map((/** @type {any} */ m) => m.key)).not.toContain('cod');
 		// an order placed before keeps cash on delivery when staff edit it
 		const variantId = /** @type {any} */ (item.variants[0]).id;
 		const edited = await shop.api('PATCH', `/v1/orders/${before.json.order.id}`, { lines: [{ variantId, quantity: 2 }] });
 		expect(edited.status).toBe(200);
 		expect(edited.json.payment.method).toBe('cod');
-		await shop.setting('cod', 'enabled', true);
+		await shop.methods({ cod: { active: true } });
 		expect(methods(await quote(body))).toContain('cod');
 		await shop.api('DELETE', `/v1/orders/${before.json.order.id}`);
 	});
 
 	it('takes the COD fee on the goods after discounts with feeBase goods_after_discounts (D4)', async () => {
-		await shop.setting('cod', 'feePercent', 5);
-		await shop.setting('cod', 'feeBase', 'goods_after_discounts');
+		await shop.methods({ cod: { feePercent: 5 } });
+		await shop.methods({ cod: { feeBase: 'goods_after_discounts' } });
 		const item = await shop.seedProduct({ price: 10_000, stock: 10 });
 		const shopper = await newShopper();
 		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' }, payment: 'cod' };
@@ -672,8 +672,8 @@ describe('payment, delivery and COD options (E22, E23)', () => {
 		expect(priced.json.paymentMethods.find((/** @type {any} */ m) => m.method === 'cod')).toMatchObject({ fee: 500 });
 		const placed = await place({ lines: body.lines, payment: 'cod', address: ADDRESS }, shopper.token);
 		expect(placed.json.order.totals).toMatchObject({ fee: 500, total: 10_800 });
-		await shop.setting('cod', 'feeBase', 'order_total');
-		await shop.setting('cod', 'feePercent', 0);
+		await shop.methods({ cod: { feeBase: 'order_total' } });
+		await shop.methods({ cod: { feePercent: 0 } });
 	});
 
 	it('refuses a total other than the one the shopper was shown, with the new quote (CK-14)', async () => {
@@ -736,7 +736,7 @@ describe('the way back from Payments (E22)', () => {
 
 describe('bank transfers recorded by staff (E24)', () => {
 	it('waits for the payment without Payments and takes the shopper’s proof', async () => {
-		await shop.setting('checkout', 'bankTransferVia', 'manual');
+		await shop.methods({ bank_transfer: { via: 'manual', instructions: 'Pay to account 0000 0000.' } });
 		await shop.connectStorage();
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const shopper = await newShopper();
@@ -783,65 +783,91 @@ describe('bank transfers recorded by staff (E24)', () => {
 		await visit('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
 		expect((await orderRecord(unproved.json.order.id)).role).toBe('cancelled');
 		expect((await orderRecord(id)).role).toBe('awaiting_payment');
-		await shop.setting('checkout', 'bankTransferVia', 'payments');
+		await shop.methods({ bank_transfer: { via: 'payments' } });
 	});
 
-	it('offers it only while Payments has the bank details, or does not require them (CK-33)', async () => {
-		await shop.setting('checkout', 'bankTransferVia', 'manual');
+	it('offers a method paid first only once it tells shoppers how to pay: its own accounts, or Payments’ (CK-33, E8)', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const body = { lines: [{ productId: item.id }], delivery: { city: 'Springfield' } };
-		const none = {
-			accountHolder: '',
-			bankName: '',
-			accountNumber: '',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: '',
-			bic: '',
-			instructions: '',
-		};
-		/** The bank transfer option while Payments answers these bank details. @param {Record<string, unknown>} details */
+		const none = { name: 'Bank transfer', instructions: '', accounts: [] };
+		/** The bank transfer option while Payments answers this `bank_transfer` method. @param {Record<string, unknown>} details */
 		const bankWith = async (details) => {
-			shop.responders.set(`${PAYMENTS}/v1/bank-transfer`, () => ({ status: 200, body: details }));
+			shop.responders.set(`${PAYMENTS}/v1/manual-methods`, () => ({
+				status: 200,
+				body: {
+					methods: [
+						{ key: 'cheque', kind: 'pay_first', ready: true },
+						{ key: 'bank_transfer', kind: 'pay_first', ...details },
+					],
+				},
+			}));
 			// the details are read again once the copy kept for 5 minutes is old
 			shop.advance(5 * 60_000 + 1000);
 			return (await quote(body)).json.paymentMethods.find((/** @type {any} */ m) => m.method === 'bank_transfer');
 		};
+		// through Payments (the default): Payments' manual method of the same key, for the shop's currency
 		expect(await bankWith({ ready: false, ...none })).toMatchObject({ available: false, reason: 'not_ready' });
+		expect(shop.callsTo(`${PAYMENTS}/v1/manual-methods`).at(-1)?.url).toContain('currency=USD');
 		const shopper = await newShopper();
 		const refused = await place({ ...body, payment: 'bank_transfer', address: ADDRESS }, shopper.token);
-		expect(refused.status).toBe(422);
-		expect(await bankWith({ ready: true, ...none, accountNumber: '0123456789' })).toMatchObject({ available: true });
-		// Payments' requireDetails off: ready with only the instructions
-		expect(await bankWith({ ready: true, ...none, instructions: 'Ask us for our account.' })).toMatchObject({
+		expect([refused.status, refused.json.paymentReason]).toEqual([422, 'not_ready']);
+		const account = { label: '', currency: '', rows: [{ label: 'Account number', value: '0123456789' }] };
+		expect(await bankWith({ ready: true, ...none, accounts: [account] })).toMatchObject({ available: true });
+		// the quote shows the merchant's own rows as Payments answers them, whatever the country's fields
+		const accounts = [
+			{
+				label: 'Example Bank',
+				currency: 'USD',
+				rows: [
+					{ label: 'Account holder', value: 'Example Shop Ltd' },
+					{ label: 'IBAN', value: 'GB33BUKB20201555555555' },
+					{ label: 'SWIFT/BIC', value: 'BUKBGB22' },
+				],
+			},
+		];
+		await bankWith({ ready: true, ...none, instructions: 'Use the order number as the reference.', accounts });
+		expect((await quote(body)).json.payDetails).toEqual({
+			bank_transfer: { ready: true, name: 'Bank transfer', instructions: 'Use the order number as the reference.', accounts },
+		});
+		// Payments without that method: not ready
+		shop.responders.set(`${PAYMENTS}/v1/manual-methods`, () => ({ status: 200, body: { methods: [] } }));
+		shop.advance(5 * 60_000 + 1000);
+		expect((await quote(body)).json.paymentMethods.find((/** @type {any} */ m) => m.method === 'bank_transfer')).toMatchObject({
+			reason: 'not_ready',
+		});
+		shop.responders.delete(`${PAYMENTS}/v1/manual-methods`);
+
+		// by hand: the method's own accounts for the shop's currency (else those for any currency), never Payments'
+		await shop.methods({ bank_transfer: { via: 'manual' } });
+		expect((await quote(body)).json.paymentMethods.find((/** @type {any} */ m) => m.method === 'bank_transfer')).toMatchObject({
+			reason: 'not_ready',
+		});
+		await shop.methods({
+			bank_transfer: {
+				accounts: [
+					{ label: 'Euro', currency: 'EUR', rows: [{ label: 'IBAN', value: 'DE89370400440532013000' }] },
+					{
+						label: 'Main',
+						currency: '',
+						rows: [
+							{ label: 'Account', value: '0000 0000' },
+							{ label: 'Sort code', value: '' },
+						],
+					},
+				],
+			},
+		});
+		const own = await quote(body);
+		expect(own.json.paymentMethods.find((/** @type {any} */ m) => m.method === 'bank_transfer')).toMatchObject({
 			available: true,
 		});
-		// the quote shows the details exactly as Payments answers them, whatever the country's fields
-		const full = {
+		expect(own.json.payDetails.bank_transfer).toEqual({
 			ready: true,
-			accountHolder: 'Example Shop Ltd',
-			bankName: 'Example Bank',
-			accountNumber: '0123456789',
-			routingNumber: '021000021',
-			sortCode: '12-34-56',
-			branchCode: '001',
-			iban: 'GB33BUKB20201555555555',
-			bic: 'BUKBGB22',
-			instructions: 'Use the order number as the reference.',
-		};
-		await bankWith({ ...full, accountTitle: 'an old field' });
-		expect((await quote(body)).json.bankDetails).toEqual(full);
-		// a field Payments leaves out reads as ''
-		await bankWith({ ready: true, accountHolder: 'Example Shop Ltd', iban: full.iban });
-		expect((await quote(body)).json.bankDetails).toEqual({
-			...none,
-			ready: true,
-			accountHolder: 'Example Shop Ltd',
-			iban: full.iban,
+			name: 'Bank transfer',
+			instructions: '',
+			accounts: [{ label: 'Main', currency: '', rows: [{ label: 'Account', value: '0000 0000' }] }],
 		});
-		shop.responders.delete(`${PAYMENTS}/v1/bank-transfer`);
-		await shop.setting('checkout', 'bankTransferVia', 'payments');
+		await shop.methods({ bank_transfer: { via: 'payments', accounts: [] } });
 	});
 });
 
@@ -906,14 +932,14 @@ describe('loyalty options (E20)', () => {
 describe('whole-unit amounts (E25)', () => {
 	it('rounds deal discounts down and fees half up to whole units', async () => {
 		await shop.api('PUT', '/v1/format', { wholeUnits: true });
-		await shop.setting('cod', 'feePercent', 3);
+		await shop.methods({ cod: { feePercent: 3 } });
 		const item = await shop.seedProduct({ price: 1999, stock: 10 });
 		const deal = await newDeal({ scope: { productIds: [item.id], categoryIds: [], brandIds: [] }, value: 15 });
 		const priced = await quote({ lines: [{ productId: item.id }], payment: 'cod', delivery: { city: 'Springfield' } });
 		expect(priced.json.totals.discount % 100).toBe(0);
 		expect(priced.json.totals.fee % 100).toBe(0);
 		await shop.api('DELETE', `/v1/deals/${deal.id}`);
-		await shop.setting('cod', 'feePercent', 0);
+		await shop.methods({ cod: { feePercent: 0 } });
 		await shop.api('PUT', '/v1/format', { wholeUnits: false });
 	});
 

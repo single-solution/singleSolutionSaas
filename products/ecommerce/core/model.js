@@ -318,8 +318,9 @@ export const STATUS_ROLES = Object.freeze([
 
 /** @typedef {(typeof STATUS_ROLES)[number]} StatusRole */
 /**
- * What the shopper reads under a status, per payment method ('' = nothing; PLAN 0.8.10 dynamic model phase 2).
- * @typedef {{ cod: string, online: string, bank_transfer: string, pickup: string }} ShopperTexts
+ * What the shopper reads under a status, per payment method key of the `payment_methods` list ('' or missing =
+ * nothing; PLAN 0.8.10 dynamic model phase 2).
+ * @typedef {Record<string, string>} ShopperTexts
  */
 /**
  * A status of the order flow: its key, the name staff see (`label`), its kind of step (`role`), the name shoppers see
@@ -334,7 +335,8 @@ export const STATUS_ROLES = Object.freeze([
  * says which a move takes and their defaults).
  * @typedef {{ paidOnConfirm?: PaymentMethod[], window?: 'restart' | 'none', video?: 'off' | 'optional' | 'required',
  *   tracking?: 'required' | 'optional', refund?: 'auto' | 'staff', shopperPaid?: 'refuse' | 'flag' | 'refund',
- *   unpaid?: 'refuse' | 'cancel', restock?: 'yes' | 'no' | 'ask', points?: 'take_back' | 'keep' }} MoveOptions
+ *   unpaid?: 'refuse' | 'cancel', restock?: 'yes' | 'no' | 'ask', points?: 'take_back' | 'keep',
+ *   paidOnDelivery?: 'yes' | 'no' }} MoveOptions
  */
 /**
  * An allowed move: who may make it (`staff`, `shopper` — a cancel before dispatch —, or only the shop itself:
@@ -346,9 +348,10 @@ export const STATUS_ROLES = Object.freeze([
 /**
  * Moves the shop makes by itself, by the status they go to ('' = none): `paid` (Payments confirmed the payment of the
  * order waiting for it), `windowEnd` (a waiting order's time ran out) and `refundsCover` (refunds reached what was
- * paid). `starts`: where orders that need no payment first start — cash on delivery, pay at pickup and free orders.
+ * paid). `starts`: where orders that need no payment first start, by kind of payment method — paid on delivery
+ * (`on_delivery`), paid at pickup (`at_pickup`) — and free orders.
  * @typedef {{ paid: string, windowEnd: string, refundsCover: string }} FlowTriggers
- * @typedef {{ cod: string, pickup: string, free: string }} FlowStarts
+ * @typedef {{ on_delivery: string, at_pickup: string, free: string }} FlowStarts
  */
 /**
  * The merchant's order flow (the `order_flow` list). `triggers` and `starts` are filled from the statuses and moves
@@ -357,7 +360,7 @@ export const STATUS_ROLES = Object.freeze([
  *   starts?: FlowStarts }} OrderFlow
  */
 
-/** @typedef {'cod' | 'online' | 'bank_transfer' | 'pickup'} PaymentMethod */
+/** A payment method's key in the website's `payment_methods` list (`core/payment-methods.js`). @typedef {string} PaymentMethod */
 /** @typedef {'unpaid' | 'pending' | 'paid' | 'partially_refunded' | 'refunded'} PaymentState */
 
 /**
@@ -408,7 +411,7 @@ export const STATUS_ROLES = Object.freeze([
  * @property {OrderLineRecord[]} lines
  * @property {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, currency: string,
  *   taxIncluded: boolean, fee?: number, roleDiscount?: number }} totals `discount` = deals + bundles + coupon + points
- *   (+ the role discount, E19); `fee` the payment method's fee (COD cash handling, E23), included in `total`
+ *   (+ the role discount, E19); `fee` the payment method's fee, included in `total`
  * @property {{ couponId: string | null, couponCode: string, dealIds: string[], bundleIds: string[], pointsRedeemed: number,
  *   pointsValue: number, pointsEarned: number, released: boolean, role?: { key: string, percent: number, label: string } | null,
  *   pointsFixed?: boolean, pointsCredited?: boolean, pointsBlocked?: boolean, pointsReversed?: number }} promotions `released`: offer uses and points were given back
@@ -416,12 +419,14 @@ export const STATUS_ROLES = Object.freeze([
  *   credited (E20 `earnAt`); `pointsFixed`: `pointsEarned` was fixed at placement (`earnAt: placement`, or 0 for a
  *   signed-in shopper whose role the loyalty settings leave out); `pointsBlocked`: a deal without points applied (E18 `allowPoints`);
  *   `pointsReversed`: earned points already taken back (a claim's refund, a return or a refund, OR-10)
- * @property {{ method: PaymentMethod, state: PaymentState, paymentId: string | null, advance: number, paid: number,
- *   refunded: number, checkedAt: Date | null, checkoutUrl?: string, via?: 'payments' | 'manual',
- *   proof?: { key: string, reference: string, at: Date } | null, voidedAt?: Date | null,
- *   voidPendingAt?: Date | null }} payment `paymentId`: the Payments payment; `advance`: the COD advance;
- *   `checkoutUrl`: Payments' page for paying it; `via`: a bank transfer or advance taken through Payments or recorded by
- *   staff (E23, E24); `proof`: the shopper's transfer proof (E24); `voidedAt`: its Payments payment was canceled with
+ * @property {{ method: PaymentMethod, kind: import('./payment-methods.js').PaymentKind, state: PaymentState,
+ *   paymentId: string | null, advance: number, paid: number, refunded: number, checkedAt: Date | null,
+ *   checkoutUrl?: string, via?: 'payments' | 'manual', proof?: { key: string, reference: string, at: Date } | null,
+ *   voidedAt?: Date | null, voidPendingAt?: Date | null }} payment `method`: the key of its payment method and `kind`
+ *   that method's kind when it was placed (what the order engine follows, whatever the list says later);
+ *   `paymentId`: the Payments payment; `advance`: the advance of a method paid later;
+ *   `checkoutUrl`: Payments' page for paying it; `via`: a payment made first or an advance taken through Payments or
+ *   recorded by staff (E23, E24); `proof`: the shopper's proof (E24); `voidedAt`: its Payments payment was canceled with
  *   the order; `voidPendingAt`: the order was canceled while Payments could not take that cancel (tried again on use,
  *   K-13); `checkedAt`: when Payments was last asked. `paid` and `refunded` add up `payments` and `refunds` (E26)
  * @property {OrderPaymentEntry[]} [payments] money received (E26)
@@ -464,15 +469,16 @@ export const STATUS_ROLES = Object.freeze([
  */
 
 /**
- * One payment staff record or Payments confirms (E26).
- * @typedef {{ id: string, method: 'bank_transfer' | 'cash' | 'other' | 'online', amount: number, reference: string,
+ * One payment staff record or Payments confirms (E26, E16): `method` the way it came — a payment method key of the
+ * list, `other`, or `payments` (taken through Payments).
+ * @typedef {{ id: string, method: string, amount: number, reference: string,
  *   proofKey: string | null, note: string, by: { kind: string, id: string, name: string, role?: string }, at: Date }}
  *   OrderPaymentEntry
  */
 /**
- * One refund (E26): through Payments (`online`) or recorded. `refundId`: Payments' refund; `manual`: Payments only
- * recorded it and the shop returns the money by hand, `method` saying how (OR-8).
- * @typedef {{ id: string, method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference: string,
+ * One refund (E26): through Payments (`payments`) or recorded (a payment method key, or `other`). `refundId`: Payments'
+ * refund; `manual`: Payments only recorded it and the shop returns the money by hand, `method` saying how (OR-8).
+ * @typedef {{ id: string, method: string, amount: number, reference: string,
  *   claimId: string | null, note: string, by: { kind: string, id: string, name: string, role?: string }, at: Date,
  *   refundId?: string | null, manual?: boolean }} OrderRefundEntry
  */

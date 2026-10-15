@@ -87,14 +87,32 @@ export const orderRecords = (shop) => {
 				released: false,
 			},
 			payment: cod
-				? { method: 'cod', state: 'unpaid', paymentId: null, advance: 0, paid: 0, refunded: 0, checkedAt: null }
-				: { method: 'online', state: 'paid', paymentId, advance: 0, paid: total, refunded: 0, checkedAt: null },
+				? {
+						method: 'cod',
+						kind: 'on_delivery',
+						state: 'unpaid',
+						paymentId: null,
+						advance: 0,
+						paid: 0,
+						refunded: 0,
+						checkedAt: null,
+					}
+				: {
+						method: 'online',
+						kind: 'gateway',
+						state: 'paid',
+						paymentId,
+						advance: 0,
+						paid: total,
+						refunded: 0,
+						checkedAt: null,
+					},
 			payments: cod
 				? []
 				: [
 						{
 							id: createId('opy'),
-							method: 'online',
+							method: 'payments',
 							amount: total,
 							reference: paymentId,
 							proofKey: null,

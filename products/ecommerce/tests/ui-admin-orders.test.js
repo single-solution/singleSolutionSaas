@@ -57,7 +57,7 @@ const summary = (over = {}) => ({
 	total: 250000,
 	totalText: 'USD 2,500.00',
 	currency: 'USD',
-	payment: { method: 'cod', state: 'unpaid' },
+	payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid' },
 	shipment: null,
 	placedAt: AT,
 	createdAt: AT,
@@ -100,7 +100,7 @@ const detail = (over = {}) => ({
 	],
 	totals: { subtotal: 250000, discount: 1000, delivery: 0, tax: 500, total: 250000, currency: 'USD', taxIncluded: true },
 	promotions: { couponCode: 'SAVE', pointsRedeemed: 20, pointsEarned: 25 },
-	payment: { method: 'online', state: 'paid', paid: 250000, refunded: 1000, refundable: 249000, advance: 5000 },
+	payment: { method: 'online', kind: 'gateway', state: 'paid', paid: 250000, refunded: 1000, refundable: 249000, advance: 5000 },
 	address: {
 		name: 'Ana',
 		phone: '+12025550143',
@@ -154,6 +154,12 @@ const SETTINGS = {
 			{ key: 'packed', label: 'Packed', role: 'packed' },
 		],
 		couriers: [{ key: 'fast', name: 'Fast' }],
+		paymentMethods: [
+			{ key: 'online', name: 'Online payment', kind: 'gateway' },
+			{ key: 'bank_transfer', name: 'Bank transfer', kind: 'pay_first' },
+			{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+			{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup' },
+		],
 	},
 };
 
@@ -217,7 +223,8 @@ describe('orders admin: the list', () => {
 		expect(chipCount(panel, 'packed')).toBe('1');
 		expect(fieldIn(panel, 'Stage').options[1].textContent).toBe('Awaiting payment (0)');
 		expect(fieldIn(panel, 'Payment').options[0].textContent).toBe('All (2)');
-		expect(fieldIn(panel, 'Paid by').options[1].textContent).toBe('Cash on delivery (2)');
+		// the website's own methods, in the list's order
+		expect(fieldIn(panel, 'Paid by').options[3].textContent).toBe('Cash on delivery (2)');
 		// load more, then pick the second order
 		await click(buttonIn(panel, 'Load more'));
 		expect(rowsOf(panel)).toHaveLength(2);
@@ -879,7 +886,9 @@ describe('orders admin: one order', () => {
 		expect(dialogStatus(root)).toBe(TEXTS['problem.field.reason']);
 		refund = () =>
 			answer(201, {
-				order: detail({ payment: { method: 'online', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 } }),
+				order: detail({
+					payment: { method: 'online', kind: 'gateway', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 },
+				}),
 				refund: {},
 				warnings: [SERVER_ENGLISH],
 				warningCodes: [{ code: 'refund_by_hand', values: { amount: 1000 } }],
@@ -910,6 +919,7 @@ describe('orders admin: one order', () => {
 						shipment: null,
 						payment: {
 							method: 'bank_transfer',
+							kind: 'pay_first',
 							state: 'unpaid',
 							via: 'manual',
 							paid: 0,
@@ -939,7 +949,7 @@ describe('orders admin: one order', () => {
 							nextStatuses: [],
 							note: '',
 							staffNote: '',
-							payment: { method: 'cod', state: 'paid', paid: 250000, refunded: 0, refundable: 0 },
+							payment: { method: 'cod', kind: 'on_delivery', state: 'paid', paid: 250000, refunded: 0, refundable: 0 },
 							shipment: { courier: 'Fast', trackingNumber: 'TN1', trackingUrl: 'javascript:alert(1)', status: '' },
 							customerFlags: undefined,
 							totals: {
@@ -1056,7 +1066,7 @@ describe('orders admin: one order', () => {
 				},
 			},
 			['checkout'],
-			{ orders: { statuses: SETTINGS.orders.statuses, couriers: [] } },
+			{ orders: { statuses: SETTINGS.orders.statuses, couriers: [], paymentMethods: SETTINGS.orders.paymentMethods } },
 		);
 		const pane = detailOf(panelOf(root, 'orders'));
 		await pickMenu(pane, 'Move to Dispatched');
@@ -1388,6 +1398,7 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 			lines: [{ ...detail().lines[0], kind: 'physical', variantId: 'var_1', unitPrice: 100000, quantity: 2 }],
 			payment: {
 				method: 'bank_transfer',
+				kind: 'pay_first',
 				state: 'unpaid',
 				paid: 0,
 				refunded: 0,
@@ -1420,9 +1431,12 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 		const dialog = dialogOf(root);
 		expect(textOf(dialog)).toContain('Up to USD 2,500.00 is still to pay.');
 		expect(fieldIn(dialog, 'Paid by').value).toBe('bank_transfer');
+		// the website's payment methods by name, then another way (E16)
 		expect([...fieldIn(dialog, 'Paid by').options].map((/** @type {any} */ o) => o.textContent)).toEqual([
+			'Online payment',
 			'Bank transfer',
-			'Cash',
+			'Cash on delivery',
+			'Pay at pickup',
 			'Another way',
 		]);
 		expect(fieldIn(dialog, 'Amount (USD)').value).toBe('2500.00');
@@ -1453,12 +1467,12 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 			answer(200, detail({ payment: { ...waiting().payment, method: 'cod', balanceDue: 1000 } }));
 		await openRow(panelOf(root, 'orders'), 'ord_1');
 		await pickMenu(pane, 'Record a payment');
-		expect(fieldIn(dialogOf(root), 'Paid by').value).toBe('cash');
+		expect(fieldIn(dialogOf(root), 'Paid by').value).toBe('cod');
 		expect(() => checkIn(dialogOf(root), 'Also confirm the order')).toThrow();
 		reply = () => problem(409, 'move_not_allowed');
 		type(fieldIn(dialogOf(root), 'Note (optional, only staff see it)'), 'at the counter');
 		await submitDialog(root);
-		expect(posts.at(-1)).toEqual({ method: 'cash', amount: 1000, note: 'at the counter' });
+		expect(posts.at(-1)).toEqual({ method: 'cod', amount: 1000, note: 'at the counter' });
 		expect(dialogStatus(root)).toBe(TEXTS['problem.move_not_allowed']);
 	});
 

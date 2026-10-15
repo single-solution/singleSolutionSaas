@@ -147,6 +147,7 @@ const order = async ({ lines, delivery = 0, payment = {}, pointsEarned = 0 }) =>
 				},
 				payment: {
 					method: 'cod',
+					kind: 'on_delivery',
 					state: 'paid',
 					paymentId: null,
 					advance: 0,
@@ -457,7 +458,7 @@ describe('claim refunds', () => {
 
 		const refund = (/** @type {string} */ id, /** @type {Record<string, unknown>} */ body) =>
 			shop.api('POST', `/v1/returns/${id}/refund`, body);
-		expect((await refund(a.json.id, { amount: 100, method: 'online' })).json.errors[0].path).toBe('/method');
+		expect((await refund(a.json.id, { amount: 100, method: 'payments' })).json.errors[0].path).toBe('/method');
 		expect((await refund(a.json.id, { amount: 100, method: 'cheque' })).json.errors[0].path).toBe('/method');
 		expect((await refund(a.json.id, { amount: 100, reference: 'x'.repeat(121) })).json.errors[0].path).toBe('/reference');
 		expect((await refund(a.json.id, { amount: 100, reference: 7 })).json.errors[0].path).toBe('/reference');
@@ -515,20 +516,20 @@ describe('claim refunds', () => {
 		const tv = await shop.seedProduct({ name: 'TV', price: 5000 });
 		const placed = await order({
 			lines: [{ product: tv }],
-			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000077', paid: 5000 },
+			payment: { method: 'online', kind: 'gateway', state: 'paid', paymentId: 'pay_000000000077', paid: 5000 },
 		});
 		const made = await claim(placed, {});
 		await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
 		const online = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 3000, reference: 'Web' });
-		expect(online.json).toMatchObject({ refundMethod: 'online', refundId: expect.stringMatching(/^rfd_/) });
+		expect(online.json).toMatchObject({ refundMethod: 'payments', refundId: expect.stringMatching(/^rfd_/) });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/pay_000000000077/refunds`)).toHaveLength(1);
-		const cash = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 2000, method: 'cash' });
-		expect(cash.json).toMatchObject({ refundMethod: 'cash', refundAmount: 5000 });
+		const cash = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 2000, method: 'cod' });
+		expect(cash.json).toMatchObject({ refundMethod: 'cod', refundAmount: 5000 });
 		expect(shop.callsTo(`${PAYMENTS}/v1/payments/pay_000000000077/refunds`)).toHaveLength(1);
 		const stored = await orderOf(placed.id);
 		expect(stored.refunds.map((/** @type {any} */ r) => [r.method, r.amount, r.refundId])).toEqual([
-			['online', 3000, expect.stringMatching(/^rfd_/)],
-			['cash', 2000, null],
+			['payments', 3000, expect.stringMatching(/^rfd_/)],
+			['cod', 2000, null],
 		]);
 		// refunded without a note: the claim's reference, in the order's history too (PLAN 0.4.10)
 		const reference = made.json.reference;
@@ -542,7 +543,7 @@ describe('claim refunds', () => {
 		// Payments refusing undoes the claim's refund, method and reference
 		const again = await order({
 			lines: [{ product: tv }],
-			payment: { method: 'online', state: 'paid', paymentId: 'pay_000000000078', paid: 5000 },
+			payment: { method: 'online', kind: 'gateway', state: 'paid', paymentId: 'pay_000000000078', paid: 5000 },
 		});
 		const refused = await claim(again, {});
 		await shop.api('POST', `/v1/returns/${refused.json.id}/approve`, {});
@@ -620,7 +621,7 @@ describe('claim refunds', () => {
 			history: [],
 			notes: [],
 		});
-		const done = await shop.api('POST', `/v1/returns/${id}/refund`, { amount: 1000, method: 'cash' });
+		const done = await shop.api('POST', `/v1/returns/${id}/refund`, { amount: 1000, method: 'cod' });
 		expect(done.status).toBe(200);
 		expect((await loyaltyAccount(data, guest, { now: shop.now() })).balance).toBe(0);
 		expect((await orderOf(placed.id)).promotions.pointsReversed).toBe(30);
@@ -644,7 +645,7 @@ describe('claim refunds', () => {
 		const made = await claim(placed, {});
 		await shop.api('POST', `/v1/returns/${made.json.id}/approve`, {});
 		const sent = shop.messages().length;
-		const done = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 2000, method: 'cash' });
+		const done = await shop.api('POST', `/v1/returns/${made.json.id}/refund`, { amount: 2000, method: 'cod' });
 		expect(done.status).toBe(200);
 		const stored = await orderOf(placed.id);
 		expect(stored).toMatchObject({ status: 'refunded', payment: { refunded: 2000, state: 'refunded' } });
@@ -667,8 +668,16 @@ describe('claim rules', () => {
 		expect(checkClaimInput(body, { maxPhotos: 0 })).toMatchObject({ field: 'kind', message: 'kind is return or warranty.' });
 		expect(checkClaimInput(body, { maxPhotos: 0, kinds: [] })).toMatchObject({ message: 'kind is not open.' });
 		expect(checkClaimInput(body, { maxPhotos: 0, kinds: ['exchange'], reasons: ['Damaged'] })).toMatchObject({ ok: true });
-		expect(checkRefundMethod(null, true)).toEqual({ ok: true, method: 'online', reference: '' });
-		expect(checkRefundMethod({ method: 'cash', reference: null }, false)).toEqual({ ok: true, method: 'cash', reference: '' });
+		const keys = ['online', 'cod'];
+		expect(checkRefundMethod(null, true, keys)).toEqual({ ok: true, method: 'payments', reference: '' });
+		expect(checkRefundMethod({ method: 'cod', reference: null }, false, keys)).toEqual({
+			ok: true,
+			method: 'cod',
+			reference: '',
+		});
+		// a way the list does not have, and Payments for an order not paid through it
+		expect(checkRefundMethod({ method: 'cheque' }, false, keys)).toMatchObject({ ok: false, field: 'method' });
+		expect(checkRefundMethod({ method: 'payments' }, false, keys)).toMatchObject({ ok: false, field: 'method' });
 		expect(checkRestockChoices(undefined, { lines: [] })).toMatchObject({ ok: true });
 		expect(checkRestockChoices([null], { lines: [] })).toMatchObject({ field: 'lines/0/lineId' });
 		expect(checkRestockChoices(Array.from({ length: 51 }), { lines: [] })).toMatchObject({ field: 'lines' });

@@ -229,7 +229,7 @@ describe('CSV', () => {
 				{ name: '@Case', variantName: '', sku: '', quantity: 1, unitPrice: 500, discount: 0, total: 500 },
 			],
 			totals: { currency: 'USD' },
-			payment: { method: 'cod', state: 'paid' },
+			payment: { method: 'cod', kind: 'on_delivery', state: 'paid' },
 		});
 		await data
 			.collection(COLLECTIONS.orders)

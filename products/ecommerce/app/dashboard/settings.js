@@ -26,6 +26,7 @@ import {
 	ZonesEditor,
 } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
+import { PaymentMethodsEditor } from './payment-methods.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('./parts.js').FeatureSettings} FeatureSettings */
@@ -37,7 +38,6 @@ const SECTION_ORDER = /** @type {SectionId[]} */ ([
 	'variants',
 	'grades',
 	'checkout',
-	'cod',
 	'delivery',
 	'taxes',
 	'orders',
@@ -70,7 +70,6 @@ const FEATURE_SECTION = Object.freeze({
 	multi_location: 'variants',
 	grades_serials: 'grades',
 	checkout: 'checkout',
-	cod: 'cod',
 	delivery_zones: 'delivery',
 	taxes: 'taxes',
 	invoices: 'invoices',
@@ -278,7 +277,12 @@ export function SettingsTab({ websiteId: id }) {
 								</>
 							),
 							grades: seen('grades_serials') ? <GradesEditor websiteId={websiteId} off={off('grades_serials')} /> : null,
-							checkout: seen('checkout') ? <AddressRegionsEditor websiteId={websiteId} off={off('checkout')} /> : null,
+							checkout: seen('checkout') ? (
+								<>
+									<PaymentMethodsEditor websiteId={websiteId} off={off('checkout')} currency={currency} />
+									<AddressRegionsEditor websiteId={websiteId} off={off('checkout')} />
+								</>
+							) : null,
 							delivery: seen('delivery_zones') ? (
 								<ZonesEditor websiteId={websiteId} off={off('delivery_zones')} currency={currency} />
 							) : null,

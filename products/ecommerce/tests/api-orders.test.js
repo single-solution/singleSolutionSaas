@@ -52,13 +52,13 @@ describe('the shop events (GET /v1/events)', () => {
 		expect((await shop.api('PUT', '/v1/settings/catalog.lowStock', { value: 9 })).status).toBeLessThan(300);
 		const { order: paid } = await placeOrder();
 		expect((await shop.api('POST', `/v1/orders/${paid.id}/move`, { to: 'confirmed' })).status).toBe(200);
-		const payment = await shop.api('POST', `/v1/orders/${paid.id}/payments`, { method: 'cash', amount: 1000 });
+		const payment = await shop.api('POST', `/v1/orders/${paid.id}/payments`, { method: 'cod', amount: 1000 });
 		expect(payment.status).toBe(201);
 		expect(payment.json.order.payment).toMatchObject({ state: 'paid', paid: 1000, balanceDue: 0, refundable: 1000 });
 		const refund = await shop.api('POST', `/v1/orders/${paid.id}/refunds`, {
 			amount: 400,
 			reason: 'Box damaged',
-			method: 'cash',
+			method: 'cod',
 		});
 		expect(refund.status).toBe(201);
 		expect(refund.json.refund).toEqual({ amount: 400, online: 0, manual: 400, refundId: null, recorded: true });
@@ -83,7 +83,7 @@ describe('the shop events (GET /v1/events)', () => {
 			by: 'Server',
 		});
 		expect(find('ecommerce.order.payment_recorded', paid.id)[0]?.data).toMatchObject({
-			method: 'cash',
+			method: 'cod',
 			amount: 1000,
 			reference: '',
 		});
@@ -200,7 +200,7 @@ describe('a guest’s order for staff', () => {
 		expect(read.json).toMatchObject({
 			stockHeld: true,
 			customerFlags: { blocked: false, rtoCount: 0 },
-			payment: { method: 'cod', state: 'unpaid', balanceDue: 1000, refundable: 0, refundDue: 0 },
+			payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid', balanceDue: 1000, refundable: 0, refundDue: 0 },
 		});
 		expect(read.json.nextStatuses.map((/** @type {any} */ next) => next.role)).toEqual(['open', 'cancelled']);
 

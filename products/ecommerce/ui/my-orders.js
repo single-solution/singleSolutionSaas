@@ -370,7 +370,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 						'p',
 						{},
 						t('orders.paymentLine', {
-							method: t(`checkout.method.${payment.method}`),
+							method: payment.name,
 							state: t(`orders.payment.${payment.state}`),
 						}),
 					),

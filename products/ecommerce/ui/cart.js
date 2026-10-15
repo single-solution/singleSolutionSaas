@@ -42,7 +42,7 @@ import {
 } from './shop-common.js';
 import { addressForm, guestForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
 import { checkoutFieldsForm } from './shop-fields.js';
-import { bankDetailsBox } from './shop-payment.js';
+import { payDetailsBox } from './shop-payment.js';
 
 /** The pause after a change before the cart is priced again (ms). */
 const QUOTE_DELAY = 300;
@@ -53,7 +53,7 @@ const REQUOTE = [
 	'offer_unavailable',
 	'points_changed',
 	'slot_taken',
-	'cod_not_allowed',
+	'payment_not_allowed',
 	'validation_failed',
 	'price_changed',
 ];
@@ -518,6 +518,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					return;
 				}
 				if (!available.some((/** @type {any} */ option) => option.method === payment)) payment = available[0]?.method ?? null;
+				const chosenNote = available.find((/** @type {any} */ option) => option.method === payment)?.note ?? '';
 				const choices = available.map((/** @type {any} */ option) => {
 					const radio = /** @type {HTMLInputElement} */ (
 						h(doc, 'input', {
@@ -537,9 +538,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						'label',
 						{ class: 'check' },
 						radio,
-						t(`checkout.method.${option.method}`),
+						option.name,
 						option.advance > 0
-							? h(doc, 'span', { class: 'meta' }, t('checkout.codAdvance', { amount: money(option.advance, currency()) }))
+							? h(doc, 'span', { class: 'meta' }, t('checkout.advance', { amount: money(option.advance, currency()) }))
 							: null,
 					);
 				});
@@ -552,9 +553,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						choices.length > 0
 							? h(doc, 'div', { class: 'choices' }, ...choices)
 							: h(doc, 'p', { class: 'error' }, t('checkout.noPayment')),
-						// the shop's note for the chosen method, and the bank details of a transfer (E22, E24)
-						payment && quote.notes?.[payment] ? h(doc, 'p', { class: 'meta' }, quote.notes[payment]) : null,
-						payment === 'bank_transfer' ? bankDetailsBox(doc, t, quote.bankDetails) : null,
+						// the shop's note for the chosen method, and how to pay a method paid first (E22, E24, E8)
+						chosenNote ? h(doc, 'p', { class: 'meta' }, chosenNote) : null,
+						payment ? payDetailsBox(doc, t, quote.payDetails?.[payment]) : null,
 					),
 				);
 			};

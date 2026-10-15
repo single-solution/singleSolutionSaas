@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { countsForStock, staffFilter, stockEventOf, variantStockCounts } from '../core/catalog-query.js';
 import { HEALTH_CHECKS, badTagIds, healthOf, isPublicAddress, paymentMethodsOn } from '../core/health.js';
 import { GROWTH, readyShop } from './helpers.js';
+import { defaultPaymentMethods } from '../core/payment-methods.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -130,18 +131,18 @@ describe('shop health (E41)', () => {
 			}),
 		).toEqual(['meta_pixel.pixelId', 'google_tags.adsId']);
 		expect(badTagIds(null)).toEqual([]);
-		const none = { cod: false, offered: ['online', 'bank_transfer', 'pickup'], paymentsConnected: false, bankManual: false };
-		expect(paymentMethodsOn({ ...none, pickup: false })).toEqual([]);
-		expect(paymentMethodsOn({ ...none, pickup: true, bankManual: true })).toEqual(['bank_transfer', 'pickup']);
-		expect(paymentMethodsOn({ ...none, cod: true, paymentsConnected: true, pickup: false })).toEqual([
-			'cod',
-			'online',
-			'bank_transfer',
-		]);
+		const methods = defaultPaymentMethods();
+		const noCod = methods.map((method) => (method.key === 'cod' ? { ...method, active: false } : method));
+		expect(paymentMethodsOn({ methods: noCod, paymentsConnected: false, pickup: false })).toEqual([]);
+		const byHand = noCod.map((method) =>
+			method.key === 'bank_transfer' ? { ...method, via: /** @type {const} */ ('manual') } : method,
+		);
+		expect(paymentMethodsOn({ methods: byHand, paymentsConnected: false, pickup: true })).toEqual(['bank_transfer', 'pickup']);
+		expect(paymentMethodsOn({ methods, paymentsConnected: true, pickup: false })).toEqual(['online', 'bank_transfer', 'cod']);
 		const clean = { sameTitles: 0, sameDescriptions: 0, longTitles: 0, canonicalElsewhere: 0, emptyCategories: 0 };
 		const ready = {
 			storage: true,
-			bankReady: true,
+			payUnready: 0,
 			staffAlerted: true,
 			adminUrl: true,
 			feeds: true,
@@ -245,8 +246,8 @@ describe('shop health (E41)', () => {
 	});
 
 	it('finds no payment method shoppers can use, and reads badly formed tag ids with the Growth token', async () => {
-		await shop.setting('checkout', 'paymentMethods', ['pickup']);
-		await shop.setting('cod', 'enabled', false);
+		// only pay at pickup is on, and there is no pickup point yet
+		await shop.methods({ online: { active: false }, bank_transfer: { active: false }, cod: { active: false } });
 		const byKey = async () =>
 			Object.fromEntries(
 				(await shop.api('GET', '/v1/reports/health')).json.checks.map((/** @type {any} */ check) => [check.key, check]),
@@ -263,7 +264,6 @@ describe('shop health (E41)', () => {
 		expect((await byKey()).pixel_ids).toEqual({ key: 'pixel_ids', status: 'attention', count: 1, link: null });
 		shop.responders.set(`${GROWTH}/v1/settings`, () => ({ status: 503, body: {} }));
 		expect((await byKey()).pixel_ids.status).toBe('skipped');
-		await shop.setting('checkout', 'paymentMethods', ['online', 'bank_transfer', 'pickup']);
-		await shop.setting('cod', 'enabled', true);
+		await shop.methods({ online: { active: true }, bank_transfer: { active: true }, cod: { active: true } });
 	});
 });

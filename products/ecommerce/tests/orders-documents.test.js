@@ -17,6 +17,7 @@ import {
 import strings from '../strings/en.json' with { type: 'json' };
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, readyShop } from './helpers.js';
+import { defaultPaymentMethods } from '../core/payment-methods.js';
 
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
@@ -114,7 +115,16 @@ const orderOf = (patch = {}) => ({
 		pointsEarned: 0,
 		released: false,
 	},
-	payment: { method: 'cod', state: 'unpaid', paymentId: 'pay_adv', advance: 10000, paid: 10000, refunded: 0, checkedAt: null },
+	payment: {
+		method: 'cod',
+		kind: 'on_delivery',
+		state: 'unpaid',
+		paymentId: 'pay_adv',
+		advance: 10000,
+		paid: 10000,
+		refunded: 0,
+		checkedAt: null,
+	},
 	status: 'dispatched',
 	role: 'shipped',
 	history: [],
@@ -236,7 +246,7 @@ describe('document parts', () => {
 		const context = {
 			format: DEFAULT_FORMAT,
 			timeZone: 'Asia/Tokyo',
-			words: documentWordsOf(strings),
+			words: documentWordsOf(strings, defaultPaymentMethods()),
 			columns: [...DEFAULT_COLUMNS],
 			fields: { list: [], units: new Map(), customers: new Map() },
 		};
@@ -248,6 +258,7 @@ describe('document parts', () => {
 			totals: { subtotal: 1000, discount: 0, delivery: 0, tax: 100, total: 1000, currency: 'USD', taxIncluded: true },
 			payment: {
 				method: 'online',
+				kind: 'gateway',
 				state: 'partially_refunded',
 				paymentId: 'p',
 				advance: 0,
@@ -265,7 +276,7 @@ describe('document parts', () => {
 		expect(html).toContain('Store pickup');
 		expect(html).toContain('Tax included');
 		expect(html).toContain('−USD 3.00');
-		expect(html).toContain('Pay online · partly refunded');
+		expect(html).toContain('Online payment · partly refunded');
 		expect(html).toContain('Oct 5, 2026');
 		expect(html).not.toContain('Balance due');
 		const slip = packingSlipHtml(order, { business, texts, ...context });
@@ -275,7 +286,7 @@ describe('document parts', () => {
 			delivery: { method: 'none', zone: '', fee: 0, locationId: null },
 			payment: { ...order.payment, method: /** @type {any} */ ('other'), state: /** @type {any} */ ('odd') },
 		});
-		// a method or state the texts have no words for prints none: no English is built in
+		// a method the list no longer has and a state the texts have no words for print none: no code or English shows
 		expect(invoiceHtml(none, { business, texts, ...context })).not.toContain('Payment:');
 		expect(packingSlipHtml(none, { business, texts, ...context })).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
 		const local = {
@@ -313,7 +324,7 @@ describe('document parts', () => {
 		const context = {
 			format: DEFAULT_FORMAT,
 			timeZone: 'UTC',
-			words: documentWordsOf(strings),
+			words: documentWordsOf(strings, defaultPaymentMethods()),
 			columns: invoiceColumnsOf({ columns: ['item', 'field.hs-code', 'sku', 'quantity', 'tax', 'amount', 'bogus', 'sku'] }),
 			fields: {
 				list: /** @type {any} */ ([

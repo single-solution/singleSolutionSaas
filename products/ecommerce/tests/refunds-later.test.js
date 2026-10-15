@@ -132,7 +132,7 @@ describe('a claim whose refund through Payments is not done', () => {
 		expect(claim.json).toMatchObject({ status: 'approved', refundAmount: 0, refundMethod: null, refundId: null });
 		expect(claim.json.history.at(-1)).toMatchObject({ status: 'approved', by: 'system' });
 		// refunded again: its units count as returned once, its points are taken back once
-		const again = await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1000, method: 'cash' });
+		const again = await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1000, method: 'cod' });
 		expect(again.status).toBe(200);
 		expect(again.json).toMatchObject({ status: 'refunded', refundAmount: 1000, refundMethod: 'cash' });
 		const record = await records.recordOf(order.id);
@@ -149,7 +149,7 @@ describe('a claim whose refund through Payments is not done', () => {
 		const byHand = await shop.api('POST', `/v1/orders/${order.id}/refunds`, {
 			amount: 1000,
 			reason: 'Paid back in the shop',
-			method: 'cash',
+			method: 'cod',
 		});
 		expect(byHand.status).toBe(201);
 		expect(byHand.json.order.effects).toEqual([expect.objectContaining({ state: 'skipped', amount: 1000 })]);

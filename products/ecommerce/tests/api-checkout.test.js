@@ -108,13 +108,25 @@ describe('the pickup point and coupon problems', () => {
 		});
 		expect(quote.json.paymentMethods).toContainEqual({
 			method: 'cod',
+			name: 'Cash on delivery',
+			kind: 'on_delivery',
+			note: '',
 			available: false,
 			reason: 'needs_delivery',
 			advance: 0,
 			fee: 0,
 		});
-		expect(quote.json.paymentMethods).toContainEqual({ method: 'pickup', available: true, reason: null, advance: 0, fee: 0 });
-		// no method asked: the first available one in checkout.paymentOrder is priced
+		expect(quote.json.paymentMethods).toContainEqual({
+			method: 'pickup',
+			name: 'Pay at pickup',
+			kind: 'at_pickup',
+			note: '',
+			available: true,
+			reason: null,
+			advance: 0,
+			fee: 0,
+		});
+		// no method asked: the first available one of the payment_methods list is priced
 		expect(quote.json).toMatchObject({ paymentMethod: 'online', deliveryProblem: null, ready: true, totals: { total: 2000 } });
 
 		const placed = await visit('POST', '/v1/shop/orders', {
@@ -132,7 +144,7 @@ describe('the pickup point and coupon problems', () => {
 			delivery: { method: 'pickup', zone: '', fee: 0, locationId: null, locationName: '' },
 			pickupPoint: { name: 'Front desk', address: '1 Market Road', hours: '9–5' },
 			notes: { pickupReady: 'We text you when it is ready.' },
-			payment: { method: 'pickup', state: 'unpaid', via: 'payments', payUrl: null, balanceDue: 2000 },
+			payment: { method: 'pickup', kind: 'at_pickup', state: 'unpaid', via: 'payments', payUrl: null, balanceDue: 2000 },
 		});
 		await shop.setting('delivery_zones', 'pickupEnabled', false);
 	});
@@ -157,7 +169,7 @@ describe('a guest order and its key (SS-Order-Key)', () => {
 		expect(order).toMatchObject({
 			guest: true,
 			role: 'awaiting_payment',
-			payment: { method: 'online', state: 'pending', via: 'payments' },
+			payment: { method: 'online', kind: 'gateway', state: 'pending', via: 'payments' },
 			canCancel: true,
 		});
 		expect(next.kind).toBe('pay');

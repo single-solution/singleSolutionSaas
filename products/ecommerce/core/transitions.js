@@ -18,7 +18,8 @@
  * - into `packed`, `shipped` or `delivered`: the serial numbers of the move's plan are captured (units → captured;
  *   the item types say which lines need them by which stage); into `packed` the dispatch video is kept;
  * - into `shipped`: the shipment;
- * - into `delivered`: stock held → sold, units counted sold, cash on delivery paid (`rules.paidOnDelivery`), earned
+ * - into `delivered`: stock held → sold, units counted sold, an order paid on delivery or at pickup paid (the move's
+ *   `paidOnDelivery`), earned
  *   points credited once (`loyalty`, none → credited);
  * - into `cancelled`, or `refunded` before delivery (a cancel): stock and slots back, offer uses released, redeemed
  *   points given back, serial numbers back, each only while the facts say it was not; what Payments took is refunded
@@ -55,7 +56,8 @@ import {
 import { expiryFor, loyaltyRules, pointsToEarn } from './loyalty.js';
 import { piecesOf } from './measure.js';
 import { ID_PREFIX } from './model.js';
-import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAfterRefund } from './orders.js';
+import { earnedLeft, pointsOwner, refundSplit, refundable, stateAfterRefund } from './orders.js';
+import { OTHER_WAY, PAY_LATER_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
@@ -71,7 +73,6 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  * @typedef {object} TransitionRules
  * @property {number} paymentWindowMinutes the time to pay (`checkout.paymentWindowMinutes`; 0 = until staff move it): an
  *   order moved back to waiting for payment gets it again when its move restarts the window
- * @property {boolean} paidOnDelivery cash taken at the door counts as paid when delivered (`cod.paidOnDelivery`)
  * @property {Record<string, any> | null} loyalty the `loyalty` settings while Loyalty is on
  * @property {string} timeZone the business time zone (points' expiry)
  */
@@ -79,7 +80,7 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
 /**
  * What a transition chose where the stage contract leaves a choice ({@link choicesOf}).
  * @typedef {{ restock: boolean, points: 'take_back' | 'keep', refund: boolean, window: 'restart' | 'none',
- *   unpaid: 'refuse' | 'cancel' }} TransitionChoices
+ *   unpaid: 'refuse' | 'cancel', paidOnDelivery: boolean }} TransitionChoices
  */
 
 /**
@@ -287,6 +288,7 @@ export const choicesOf = ({ move, from, to, input }) => {
 			refund,
 			window: options.window === 'none' ? 'none' : 'restart',
 			unpaid: options.unpaid === 'cancel' ? 'cancel' : 'refuse',
+			paidOnDelivery: options.paidOnDelivery !== 'no',
 		},
 	};
 };
@@ -316,7 +318,7 @@ const effectId = (order, base) => {
 /**
  * A refund entry of the order's log (E26).
  * @param {Actor} by @param {number} now
- * @param {{ method: 'online' | 'bank_transfer' | 'cash' | 'other', amount: number, reference?: string,
+ * @param {{ method: string, amount: number, reference?: string,
  *   refundId?: string | null, claimId?: string | null, note?: string, manual?: boolean }} refund
  */
 export const refundEntry = (
@@ -337,16 +339,17 @@ export const refundEntry = (
 });
 
 /**
- * The refund entry of money given back through Payments: `online`, or — when Payments only recorded the refund and the
- * shop returns the money by hand (a bank transfer, a gateway without a refund API, K-22) — the way it goes back
- * (`bank_transfer` for a transfer, else `other`), marked `manual`, with Payments' refund id (OR-8).
+ * The refund entry of money given back through Payments: `payments`, or — when Payments only recorded the refund and
+ * the shop returns the money by hand (a manual method such as a bank transfer, a gateway without a refund API, K-22) —
+ * the way it goes back (the manual method's key, the same in the shop's list; else `other`), marked `manual`, with
+ * Payments' refund id (OR-8).
  * @param {Actor} by @param {number} now @param {{ refundId: string, manual: boolean, gateway: string }} done
  * @param {{ amount: number, reference?: string, claimId?: string | null, note?: string }} refund
  */
 export const paymentsRefundEntry = (by, now, done, refund) =>
 	refundEntry(by, now, {
 		...refund,
-		method: done.manual ? (done.gateway === 'bank_transfer' ? 'bank_transfer' : 'other') : 'online',
+		method: done.manual ? (isMethodKey(done.gateway) ? done.gateway : OTHER_WAY) : VIA_PAYMENTS,
 		refundId: done.refundId || null,
 		manual: done.manual,
 	});
@@ -612,16 +615,17 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		case 'delivered': {
 			captureUnits();
 			set.deliveredAt = new Date(now);
-			// cash taken at the door counts as paid on delivery, unless staff record it (E23 `paidOnDelivery: false`)
+			// money taken at the door or the counter counts as paid on delivery, unless the move leaves it to staff
+			// (`paidOnDelivery: no`, decision 11); the entry names the order's own method (E16)
 			if (
-				CASH_METHODS.includes(order.payment.method) &&
-				rules.paidOnDelivery &&
+				PAY_LATER_KINDS.includes(order.payment.kind) &&
+				choices.paidOnDelivery &&
 				!REFUNDED_STATES.includes(order.payment.state) &&
 				order.totals.total > order.payment.paid
 			) {
 				const cash = {
 					id: createId(ID_PREFIX.orderPayment),
-					method: 'cash',
+					method: order.payment.method,
 					amount: order.totals.total - order.payment.paid,
 					reference: '',
 					proofKey: null,

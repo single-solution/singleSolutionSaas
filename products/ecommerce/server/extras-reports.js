@@ -32,6 +32,7 @@ import {
 	totalsPipeline,
 } from '../core/reports.js';
 import { badTagIds, healthOf, healthPipeline, paymentMethodsOn, taxonomyHealth } from '../core/health.js';
+import { paidByHand } from '../core/payment-methods.js';
 import { daysRange } from '../core/seo.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { csvFile } from './catalog-tools.js';
@@ -120,12 +121,15 @@ export const createReports = (product, service) => {
 				? await namesOf(data, COLLECTIONS.categories, keys)
 				: by === 'brand'
 					? await namesOf(data, COLLECTIONS.brands, keys)
-					: null;
+					: by === 'payment_method'
+						? // the payment methods by the names of the website's list (a key it no longer has reads as itself)
+							new Map((await service.methods.methodsOf(s)).map((method) => [method.key, method.name]))
+						: null;
 		const list = rows.map((row) => {
 			const key = String(row._id ?? '');
 			return {
 				key,
-				name: names ? (names.get(key) ?? '') : String(row.name ?? ''),
+				name: names ? (names.get(key) ?? (by === 'payment_method' ? key : '')) : String(row.name ?? ''),
 				units: Number(row.units),
 				revenue: Number(row.revenue),
 				discount: Number(row.discount),
@@ -309,25 +313,21 @@ export const createReports = (product, service) => {
 	};
 
 	/**
-	 * The payment methods shoppers can use now (E41): cash on delivery, online and bank transfer, pay at pickup.
+	 * The payment methods shoppers can use now (E41, E2): the list's active methods the shop can take.
 	 * @param {Site} s @param {WebsiteData} data
 	 */
 	const paymentMethods = async (s, data) => {
-		const checkout = await s.values('checkout');
-		/** @type {string[]} */
-		const offered = Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : [];
-		const cod = s.has('cod') && (await s.values('cod')).enabled !== false;
+		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const pickup =
-			offered.includes('pickup') &&
-			s.has('delivery_zones') &&
-			(await data
-				.collection(COLLECTIONS.locations)
-				.countDocuments({ websiteId: data.websiteId, pickup: true }, { limit: 1 })) > 0;
+			zones !== null &&
+			(s.has('multi_location')
+				? (await data
+						.collection(COLLECTIONS.locations)
+						.countDocuments({ websiteId: data.websiteId, pickup: true }, { limit: 1 })) > 0
+				: zones.pickupEnabled === true);
 		return paymentMethodsOn({
-			cod,
-			offered,
+			methods: await service.methods.methodsOf(s),
 			paymentsConnected: (await product.connections.value(s.websiteId, 'payments')) !== null,
-			bankManual: checkout.bankTransferVia === 'manual',
 			pickup,
 		});
 	};
@@ -342,24 +342,22 @@ export const createReports = (product, service) => {
 	};
 
 	/**
-	 * Whether shoppers are told where to pay by bank transfer (P5-18): Payments' bank details while Payments is connected
-	 * (null when it does not answer), else the bank transfer note when staff record transfers; null while bank transfer is
-	 * not offered.
+	 * How many active methods paid first (or with an advance paid by hand) do not tell shoppers where to pay (P5-18, E8),
+	 * as the cart reads them: no account or instructions of their own, or Payments' method of their key not ready; null
+	 * while there is none or Payments does not answer.
 	 * @param {Site} s
 	 */
-	const bankReady = async (s) => {
-		const checkout = await s.values('checkout');
-		const offered = Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : [];
-		if (!s.has('checkout') || !offered.includes('bank_transfer')) return null;
-		if ((await product.connections.value(s.websiteId, 'payments')) !== null) {
-			// as the cart reads them: a Payments without saved details does not offer the transfer
-			const answer = await product
-				.callProduct(s.websiteId, 'payments', '/v1/bank-transfer', { method: 'GET' })
-				.catch(() => /** @type {const} */ ({ ok: false }));
-			if (!answer.ok) return null;
-			return answer.status === 200 && /** @type {any} */ (answer.body)?.ready === true;
-		}
-		return checkout.bankTransferVia === 'manual' && String(checkout.noteBankTransfer ?? '').trim() !== '';
+	const payUnready = async (s) => {
+		if (!s.has('checkout')) return null;
+		const methods = await service.methods.methodsOf(s);
+		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
+		const details = await service.methods.payDetails(s, methods, paymentsConnected);
+		const asked = methods.filter(
+			(method) =>
+				method.active && (method.kind === 'pay_first' || paidByHand(method)) && (paymentsConnected || paidByHand(method)),
+		);
+		if (asked.length === 0 || asked.some((method) => !details.has(method.key))) return null;
+		return asked.filter((method) => details.get(method.key)?.ready !== true).length;
 	};
 
 	/**
@@ -427,7 +425,7 @@ export const createReports = (product, service) => {
 		const feeds = s.has('feeds') ? await s.values('feeds') : null;
 		const skuAs = feeds?.skuAs === 'gtin' || feeds?.skuAs === 'mpn' ? feeds.skuAs : 'none';
 		const { brandIds: hiddenBrandIds } = await hiddenFor(s);
-		const [[facets], business, methods, tags, storage, bank, alerts, glossary, taxonomy] = await Promise.all([
+		const [[facets], business, methods, tags, storage, unready, alerts, glossary, taxonomy] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
 				.aggregate(
@@ -443,7 +441,7 @@ export const createReports = (product, service) => {
 			paymentMethods(s, data),
 			badTags(s),
 			product.connections.storage(s.websiteId),
-			bankReady(s),
+			payUnready(s),
 			staffAlertSetup(s),
 			glossaryGaps(s, data),
 			taxonomyOf(s, data),
@@ -468,7 +466,7 @@ export const createReports = (product, service) => {
 			deliveryDays: zones ? daysRange(zones.handlingDays) !== null && daysRange(zones.transitDays) !== null : null,
 			setup: {
 				storage: storage !== null,
-				bankReady: bank,
+				payUnready: unready,
 				...alerts,
 				feeds: feeds === null ? null : true,
 				missingIdentifiers: feeds?.identifierExists !== 'no',

@@ -191,7 +191,16 @@ describe('cart', () => {
 		role: 'awaiting_confirmation',
 		lines: LINES.map((line, index) => ({ ...line, id: `oln_${index}`, variantName: '', total: 0 })),
 		totals: QUOTE.totals,
-		payment: { method: 'cod', state: 'unpaid', advance: 0, paid: 0, refunded: 0, payUrl: null, payBy: null },
+		payment: {
+			method: 'cod',
+			kind: 'on_delivery',
+			state: 'unpaid',
+			advance: 0,
+			paid: 0,
+			refunded: 0,
+			payUrl: null,
+			payBy: null,
+		},
 	};
 
 	it('tells Growth the checkout began on the first Place order, and the purchase once the order exists', async () => {

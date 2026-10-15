@@ -96,6 +96,7 @@ const delivered = async (products) => {
 				},
 				payment: {
 					method: 'cod',
+					kind: 'on_delivery',
 					state: 'paid',
 					paymentId: null,
 					advance: 0,
@@ -202,7 +203,11 @@ describe('claim outcomes', () => {
 			id: exchange,
 			kind: 'exchange',
 			status: 'replaced',
-			order: { id: placed.id, number: placed.number, payment: { method: 'cod', state: 'paid', paid: 6000, refunded: 0 } },
+			order: {
+				id: placed.id,
+				number: placed.number,
+				payment: { method: 'cod', kind: 'on_delivery', state: 'paid', paid: 6000, refunded: 0 },
+			},
 			refundable: 6000,
 			refundsOnline: false,
 			refundMethod: null,

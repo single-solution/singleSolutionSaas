@@ -51,6 +51,7 @@ import {
 } from '../core/flow.js';
 import { createId } from '@ss/contracts';
 import { elementsOf } from '../core/item-types.js';
+import { OTHER_WAY, VIA_PAYMENTS } from '../core/payment-methods.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import {
 	checkTransition,
@@ -65,7 +66,6 @@ import {
 import { DROPPED, createOrderPayments, openAtPayments } from './order-payments.js';
 import { createTransitions, rulesOf } from './transitions.js';
 import {
-	CASH_METHODS,
 	byActor,
 	missingSerials,
 	orderMoney,
@@ -292,7 +292,7 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * The payment a move out of waiting records when the order's method counts as paid then (`paidOnConfirm`, OR-7):
-	 * the balance due, as a payment of the order's method (cash for cash on delivery and pay at pickup), written with
+	 * the balance due, as a payment of the order's own method (E16), written with
 	 * what canceling its open Payments payment writes (K-13, `leaveWaiting`); null when the move records none.
 	 * @param {any} ctx @param {OrderRecord} order @param {import('../core/model.js').StatusRole} to
 	 * @param {ReadonlyArray<string>} methods the move's `paidOnConfirm`
@@ -305,12 +305,7 @@ export const createMoves = (product, service) => {
 		const paid = order.payment.paid + due;
 		const entry = {
 			id: createId(ID_PREFIX.orderPayment),
-			method:
-				order.payment.method === 'bank_transfer'
-					? 'bank_transfer'
-					: CASH_METHODS.includes(order.payment.method)
-						? 'cash'
-						: 'other',
+			method: order.payment.method,
 			amount: due,
 			reference: order.payment.proof?.reference ?? '',
 			proofKey: order.payment.proof?.key ?? null,
@@ -741,12 +736,12 @@ export const createMoves = (product, service) => {
 			);
 		const reason = input.reason || `Claim ${input.claimReference ?? ''}`;
 		const split = refundSplit(order, input.amount);
-		const online = input.method === null || input.method === 'online' ? split.online : 0;
+		const online = input.method === null || input.method === VIA_PAYMENTS ? split.online : 0;
 		const manual = input.amount - online;
-		if (input.method === 'online' && manual > 0)
+		if (input.method === VIA_PAYMENTS && manual > 0)
 			throw service.invalid('amount', `At most ${split.online} can be refunded through Payments.`);
 		const money = (await s.format()).money(input.amount, order.totals.currency);
-		const recordedMethod = input.method === null || input.method === 'online' ? 'other' : input.method;
+		const recordedMethod = input.method === null || input.method === VIA_PAYMENTS ? OTHER_WAY : input.method;
 		const actor = service.actor(ctx);
 		const now = product.now();
 		const manualEntries =

@@ -24,6 +24,7 @@
 import { publicPhoto } from './catalog-content.js';
 import { lineGross, perMeasure, piecesOf } from './measure.js';
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
+import { isMethodKey } from './payment-methods.js';
 import {
 	checkAmount,
 	checkBoolean,
@@ -48,8 +49,8 @@ import {
 export const DEAL_TYPES = Object.freeze(/** @type {const} */ (['percent', 'fixed', 'free_delivery']));
 /** Rule fields of conditions. */
 const RULE_FIELDS = Object.freeze(/** @type {const} */ (['products', 'categories', 'brands', 'grades', 'attribute']));
-/** Payment methods a condition may name. */
-const METHODS = Object.freeze(['cod', 'online', 'bank_transfer', 'pickup']);
+/** A condition names at most this many payment methods (the website's `payment_methods` keys). */
+const MAX_METHODS = 20;
 /** Most rules per list, groups, values per rule. */
 const MAX_RULES = 20;
 const MAX_GROUPS = 10;
@@ -556,8 +557,8 @@ const checkConditions = (value) => {
 	const cartTotal = checkWhole(value.cartTotal, 'conditions/cartTotal', { min: 0, max: 1_000_000_000_000, fallback: 0 });
 	if (!cartTotal.ok) return cartTotal;
 	const methods = value.paymentMethods ?? [];
-	if (!Array.isArray(methods) || !methods.every((method) => METHODS.includes(method)))
-		return fail('conditions/paymentMethods', `paymentMethods lists some of ${METHODS.join(', ')}.`);
+	if (!Array.isArray(methods) || methods.length > MAX_METHODS || !methods.every(isMethodKey))
+		return fail('conditions/paymentMethods', `paymentMethods lists at most ${MAX_METHODS} payment method keys.`);
 	return {
 		ok: true,
 		value: {

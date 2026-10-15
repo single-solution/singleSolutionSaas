@@ -21,6 +21,9 @@ import { createService } from '../server/service.js';
 import { DOMAIN, ORIGIN, PAYMENTS, readyShop } from './helpers.js';
 import { randomFlow, randomOf } from './transitions-helpers.js';
 
+/** The keys of today's payment methods (the ways staff record money by, with `other`). */
+const KEYS = ['online', 'bank_transfer', 'cod', 'pickup'];
+
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
 /** @type {ReturnType<typeof createService>} */
@@ -245,6 +248,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 									how === 'paid'
 										? {
 												method: 'online',
+												kind: 'gateway',
 												state: 'paid',
 												paymentId,
 												advance: 0,
@@ -255,6 +259,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 										: how === 'pending'
 											? {
 													method: 'online',
+													kind: 'gateway',
 													state: 'pending',
 													paymentId,
 													advance: 0,
@@ -264,6 +269,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 												}
 											: {
 													method: 'cod',
+													kind: 'on_delivery',
 													state: 'unpaid',
 													paymentId: null,
 													advance: 0,
@@ -276,7 +282,7 @@ describe('property: random flows × every way an order moves, retries, two at on
 										? [
 												{
 													id: createId('opy'),
-													method: 'online',
+													method: 'payments',
 													amount: total,
 													reference: paymentId,
 													proofKey: null,
@@ -409,9 +415,10 @@ describe('property: random flows × every way an order moves, retries, two at on
 									{
 										amount: Math.max(1, Math.ceil(left * /** @type {number} */ (action.share))),
 										reason: 'Goodwill',
-										...(action.cash ? { method: 'cash' } : {}),
+										...(action.cash ? { method: 'cod' } : {}),
 									},
 									current,
+									KEYS,
 								);
 								if (!checked.ok) return false;
 								try {
@@ -428,11 +435,12 @@ describe('property: random flows × every way an order moves, retries, two at on
 								const due = Math.max(0, current.totals.total - current.payment.paid);
 								const checked = checkPayment(
 									{
-										method: 'cash',
+										method: 'cod',
 										amount: Math.max(1, Math.ceil(due * /** @type {number} */ (action.share))),
 										confirm: action.confirm,
 									},
 									current,
+									KEYS,
 								);
 								if (!checked.ok) return false;
 								try {

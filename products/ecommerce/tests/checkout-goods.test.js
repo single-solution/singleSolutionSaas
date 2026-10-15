@@ -361,13 +361,17 @@ describe('free orders', () => {
 });
 
 describe('a shop with only the catalog and checkout', () => {
-	it('prices without zones, taxes or COD, keeps a paid order the flow cannot move, and ends unpaid ones without Payments', async () => {
+	it('prices without zones or taxes, keeps a paid order the flow cannot move, and ends unpaid ones without Payments', async () => {
 		const other = await readyShop({ features: ['catalog', 'checkout'] });
 		try {
 			const config = await other.visitor('GET', '/v1/widget/config');
 			expect(config.json.settings.checkout).toMatchObject({
-				paymentMethods: ['online', 'bank_transfer'],
-				cod: null,
+				// today's four methods but pay at pickup, which needs a pickup point
+				paymentMethods: [
+					{ key: 'online', name: 'Online payment', kind: 'gateway' },
+					{ key: 'bank_transfer', name: 'Bank transfer', kind: 'pay_first' },
+					{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+				],
 				pickupLocations: [],
 				delivery: { zones: false, cities: [] },
 				pricesIncludeTax: true,
@@ -412,7 +416,12 @@ describe('a shop with only the catalog and checkout', () => {
 			await other.visitor('POST', '/v1/shop/cart/quote', { body: { lines: [{ productId: item.id }] } });
 			expect((await record(unpaid.id)).status).toBe('cancelled');
 			expect((await record(paid.id)).status).toBe('pending_payment');
-			expect((await other.visitor('GET', '/v1/widget/config')).json.settings.checkout.paymentMethods).toEqual([]);
+			// without Payments only the methods it does not take part in stay
+			expect(
+				(await other.visitor('GET', '/v1/widget/config')).json.settings.checkout.paymentMethods.map(
+					(/** @type {any} */ method) => method.key,
+				),
+			).toEqual(['cod']);
 
 			await other.switchOn(['catalog']);
 			const off = await other.visitor('GET', '/v1/widget/config');

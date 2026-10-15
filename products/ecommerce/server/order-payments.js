@@ -19,6 +19,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { canMove, statusOf, triggersOfFlow } from '../core/flow.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { paymentStateOf, serverNote } from '../core/orders.js';
+import { VIA_PAYMENTS } from '../core/payment-methods.js';
 import { planTransition } from '../core/transitions.js';
 import { createTransitions, rulesOf } from './transitions.js';
 
@@ -55,7 +56,7 @@ export const expectedOf = (order) => ({
  * @param {OrderRecord} order
  */
 const tookIn = (order) =>
-	(order.payments ?? []).some((entry) => entry.method === 'online' && entry.reference === order.payment.paymentId);
+	(order.payments ?? []).some((entry) => entry.method === VIA_PAYMENTS && entry.reference === order.payment.paymentId);
 
 /**
  * Whether an order's Payments payment may still be paid: started, not canceled at Payments, and not paid yet (records
@@ -114,7 +115,7 @@ export const createOrderPayments = (product, service) => {
 		};
 		const entry = {
 			id: createId(ID_PREFIX.orderPayment),
-			method: 'online',
+			method: VIA_PAYMENTS,
 			amount,
 			reference: order.payment.paymentId ?? '',
 			proofKey: null,
@@ -186,7 +187,7 @@ export const createOrderPayments = (product, service) => {
 		const money = (await s.format()).money(payment.amount, order.totals.currency);
 		const entry = {
 			id: createId(ID_PREFIX.orderPayment),
-			method: 'online',
+			method: VIA_PAYMENTS,
 			amount: payment.amount,
 			reference: paymentId,
 			proofKey: null,
@@ -212,7 +213,7 @@ export const createOrderPayments = (product, service) => {
 			{
 				where: {
 					'payment.paid': order.payment.paid,
-					payments: { $not: { $elemMatch: { method: 'online', reference: paymentId } } },
+					payments: { $not: { $elemMatch: { method: VIA_PAYMENTS, reference: paymentId } } },
 				},
 				push: {
 					payments: entry,

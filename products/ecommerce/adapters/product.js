@@ -28,7 +28,6 @@ import digitalGoodsSettings from '../schemas/digital_goods.settings.json' with {
 import bookingsSettings from '../schemas/bookings.settings.json' with { type: 'json' };
 import measuredSalesSettings from '../schemas/measured_sales.settings.json' with { type: 'json' };
 import checkoutSettings from '../schemas/checkout.settings.json' with { type: 'json' };
-import codSettings from '../schemas/cod.settings.json' with { type: 'json' };
 import deliveryZonesSettings from '../schemas/delivery_zones.settings.json' with { type: 'json' };
 import courierApisSettings from '../schemas/courier_apis.settings.json' with { type: 'json' };
 import taxesSettings from '../schemas/taxes.settings.json' with { type: 'json' };
@@ -84,7 +83,6 @@ const SETTINGS = {
 	bookings: bookingsSettings,
 	measured_sales: measuredSalesSettings,
 	checkout: checkoutSettings,
-	cod: codSettings,
 	delivery_zones: deliveryZonesSettings,
 	courier_apis: courierApisSettings,
 	taxes: taxesSettings,
@@ -158,7 +156,7 @@ const PROBLEM_CODES = Object.freeze({
 	nothing_to_pay: Object.freeze({ status: 409, title: 'Nothing to pay' }),
 	nothing_paid: Object.freeze({ status: 409, title: 'Nothing was paid' }),
 	download_not_allowed: Object.freeze({ status: 403, title: 'Download not available' }),
-	cod_not_allowed: Object.freeze({ status: 422, title: 'Cash on delivery not possible' }),
+	payment_not_allowed: Object.freeze({ status: 422, title: 'Payment method not possible for this order' }),
 	not_returnable: Object.freeze({ status: 422, title: 'Not returnable' }),
 	review_not_allowed: Object.freeze({ status: 403, title: 'Review not allowed' }),
 	already_reviewed: Object.freeze({ status: 409, title: 'Already reviewed' }),

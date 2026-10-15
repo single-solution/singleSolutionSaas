@@ -9,12 +9,10 @@ import {
 	checkCart,
 	checkOrderExtras,
 	merchandiseOf,
-	paymentOptions,
 	priceLines,
 	promotionDiscounts,
 	resolveLines,
 } from '../core/checkout.js';
-import { codAdvance, codDecision, isRtoFlagged } from '../core/cod.js';
 import { ADDRESS_LIMITS, checkAddressRegions, countryKey, placeKey, postcodeKey, regionsFor } from '../core/address.js';
 import { checkZones, matchZone, zoneCities, zoneFee } from '../core/delivery.js';
 import { canDownload, checkLicenceKeys, downloadLimitOf, fileKey, fileNameOf, safeFileName } from '../core/digital.js';
@@ -127,7 +125,7 @@ describe('cart checks', () => {
 		[{ lines: [{ productId: 'p' }], delivery: { method: 'drone' } }, 'delivery/method'],
 		[{ lines: [{ productId: 'p' }], delivery: { city: 'x'.repeat(101) } }, 'delivery/city'],
 		[{ lines: [{ productId: 'p' }], delivery: { locationId: 'a b' } }, 'delivery/locationId'],
-		[{ lines: [{ productId: 'p' }], payment: 'cheque' }, 'payment'],
+		[{ lines: [{ productId: 'p' }], payment: 'Cheque!' }, 'payment'],
 	])('refuses %j', (body, field) => {
 		const checked = checkCart(body);
 		expect(checked.ok).toBe(false);
@@ -438,76 +436,6 @@ describe('pricing', () => {
 		});
 		expect(full.lines[1]).toMatchObject({ tax: 100, total: 500 });
 		expect(full.totals.total).toBe(2500);
-	});
-});
-
-describe('payment methods', () => {
-	const cod = {
-		on: true,
-		settings: { maxOrderValue: 5000, advanceAmount: 0, advancePercent: 10, rtoThreshold: 2, rtoRequireAdvance: true },
-	};
-	const base = {
-		offered: ['online', 'bank_transfer', 'pickup'],
-		paymentsConnected: true,
-		cod,
-		pickupPossible: true,
-		deliveryMethod: /** @type {'delivery' | 'pickup' | 'none'} */ ('delivery'),
-		digital: false,
-		total: 1000,
-		rtoCount: 0,
-	};
-
-	it('offers online, transfer, COD with its advance and pickup, in that order by default', () => {
-		expect(paymentOptions(base)).toEqual([
-			{ method: 'online', available: true, reason: null, advance: 0, fee: 0 },
-			{ method: 'bank_transfer', available: true, reason: null, advance: 0, fee: 0 },
-			{ method: 'cod', available: true, reason: null, advance: 100, fee: 0 },
-			{ method: 'pickup', available: false, reason: 'needs_pickup', advance: 0, fee: 0 },
-		]);
-	});
-
-	it('says why a method cannot be used', () => {
-		const reasons = (/** @type {Partial<typeof base>} */ over) =>
-			paymentOptions({ ...base, ...over }).map((option) => `${option.method}:${option.reason ?? 'ok'}`);
-		expect(reasons({ deliveryMethod: 'pickup' })).toEqual(['online:ok', 'bank_transfer:ok', 'cod:needs_delivery', 'pickup:ok']);
-		expect(reasons({ digital: true })).toEqual(['online:ok', 'bank_transfer:ok', 'cod:digital_items', 'pickup:needs_pickup']);
-		expect(reasons({ deliveryMethod: 'pickup', digital: true }).at(-1)).toBe('pickup:digital_items');
-		expect(reasons({ total: 6000 })[2]).toBe('cod:over_max');
-		expect(reasons({ paymentsConnected: false, rtoCount: 3 })).toEqual(['cod:advance_unavailable', 'pickup:needs_pickup']);
-		expect(reasons({ cod: { ...cod, on: false }, pickupPossible: false, offered: [] })).toEqual([]);
-	});
-});
-
-describe('COD safety', () => {
-	it('computes the advance', () => {
-		expect(codAdvance(0, { advanceAmount: 10, advancePercent: 0 })).toBe(0);
-		expect(codAdvance(1000, { advanceAmount: 300, advancePercent: 50 })).toBe(300);
-		expect(codAdvance(200, { advanceAmount: 300, advancePercent: 0 })).toBe(200);
-		expect(codAdvance(1001, { advanceAmount: 0, advancePercent: 10 })).toBe(101);
-		expect(codAdvance(1000, { advanceAmount: 0, advancePercent: 0 })).toBe(0);
-	});
-
-	it('flags returned packages and decides', () => {
-		expect(isRtoFlagged(2, 2)).toBe(true);
-		expect(isRtoFlagged(5, 0)).toBe(false);
-		const settings = { maxOrderValue: 0, advanceAmount: 0, advancePercent: 0, rtoThreshold: 1, rtoRequireAdvance: true };
-		expect(codDecision({ total: 10, rtoCount: 1, canCollectAdvance: true }, settings)).toEqual({
-			ok: false,
-			reason: 'advance_unavailable',
-			flagged: true,
-		});
-		expect(codDecision({ total: 10, rtoCount: 1, canCollectAdvance: true }, { ...settings, rtoRequireAdvance: false })).toEqual(
-			{
-				ok: true,
-				advance: 0,
-				flagged: true,
-			},
-		);
-		expect(codDecision({ total: 1000, rtoCount: 0, canCollectAdvance: false }, { ...settings, advancePercent: 50 })).toEqual({
-			ok: true,
-			advance: 0,
-			flagged: false,
-		});
 	});
 });
 

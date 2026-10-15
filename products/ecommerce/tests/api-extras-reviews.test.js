@@ -265,7 +265,7 @@ describe('reports', () => {
 				{ key: '', name: '', units: 1, revenue: 500, discount: 0 },
 			],
 			payment_method: [
-				{ key: 'cod', name: 'cod', units: 2, revenue: 3000, discount: 0 },
+				{ key: 'cod', name: 'Cash on delivery', units: 2, revenue: 3000, discount: 0 },
 				{ key: 'card', name: 'card', units: 1, revenue: 500, discount: 0 },
 			],
 		};

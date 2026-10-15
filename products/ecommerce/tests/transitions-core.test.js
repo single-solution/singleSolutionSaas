@@ -13,7 +13,7 @@ import { randomFlow, randomOf } from './transitions-helpers.js';
 const NOW = Date.parse('2026-10-14T10:00:00Z');
 const STAFF = { kind: 'staff', id: 'usr_staff', name: 'Sam' };
 /** @type {import('../core/transitions.js').TransitionRules} */
-const RULES = { paymentWindowMinutes: 60, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' };
+const RULES = { paymentWindowMinutes: 60, loyalty: null, timeZone: 'UTC' };
 const LOYALTY = { earnPercent: 10, pointValue: 100 };
 
 /**
@@ -42,8 +42,17 @@ const order = (patch = {}) => ({
 		pointsCredited: false,
 		released: false,
 	},
-	payment: { method: 'online', state: 'paid', paymentId: 'pay_1', advance: 0, paid: 3000, refunded: 0, checkedAt: null },
-	payments: [{ id: 'opy_1', method: 'online', amount: 3000, reference: 'pay_1' }],
+	payment: {
+		method: 'online',
+		kind: 'gateway',
+		state: 'paid',
+		paymentId: 'pay_1',
+		advance: 0,
+		paid: 3000,
+		refunded: 0,
+		checkedAt: null,
+	},
+	payments: [{ id: 'opy_1', method: 'payments', amount: 3000, reference: 'pay_1' }],
 	refunds: [],
 	status: 'confirmed',
 	role: 'open',
@@ -244,15 +253,23 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		const credited = order({ facts: { ...PLACED_FACTS, earned: 'credited' } });
 		expect(kinds(planOf(plan(credited, 'delivered', {}, { loyalty: LOYALTY })))).toEqual(['count_sold']);
 		expect(kinds(planOf(plan(order(), 'delivered')))).toEqual(['count_sold']);
-		// cash on delivery becomes paid unless staff record it
+		// an order paid on delivery becomes paid, by its own method (E16), unless the move leaves it to staff (decision 11)
 		const cod = order({
-			payment: { ...order().payment, method: 'cod', state: 'unpaid', paid: 0, paymentId: null },
+			payment: { ...order().payment, method: 'cod', kind: 'on_delivery', state: 'unpaid', paid: 0, paymentId: null },
 			payments: [],
 		});
 		const cash = planOf(plan(cod, 'delivered'));
-		expect(cash.recorded).toMatchObject({ method: 'cash', amount: 3000, note: 'Paid on delivery' });
+		expect(cash.recorded).toMatchObject({ method: 'cod', amount: 3000, note: 'Paid on delivery' });
 		expect(cash.set).toMatchObject({ 'payment.state': 'paid', 'payment.paid': 3000 });
-		expect(planOf(plan(cod, 'delivered', {}, { paidOnDelivery: false })).recorded).toBeNull();
+		const recorded = {
+			...DEFAULT_FLOW,
+			moves: DEFAULT_FLOW.moves.map((move) =>
+				move.to === 'delivered'
+					? { ...move, options: { ...move.options, paidOnDelivery: /** @type {const} */ ('no') } }
+					: move,
+			),
+		};
+		expect(planOf(plan(cod, 'delivered', {}, {}, recorded)).recorded).toBeNull();
 	});
 
 	it('cancels: everything back once, and a refund of what Payments took after the transaction', () => {
@@ -371,7 +388,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		// transaction, Payments' part refunded after it (the Idempotency-Key names the refunds before it)
 		const split = order({
 			payments: [
-				{ id: 'opy_1', method: 'online', amount: 2000, reference: 'pay_1' },
+				{ id: 'opy_1', method: 'payments', amount: 2000, reference: 'pay_1' },
 				{ id: 'opy_2', method: 'bank_transfer', amount: 1000, reference: 'T-1' },
 			],
 		});

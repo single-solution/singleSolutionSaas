@@ -134,6 +134,12 @@ const place = async (options = {}) => {
 				},
 				payment: {
 					method,
+					kind: /** @type {any} */ ({
+						cod: 'on_delivery',
+						online: 'gateway',
+						bank_transfer: 'pay_first',
+						pickup: 'at_pickup',
+					})[method],
 					state: paid ? 'paid' : 'unpaid',
 					paymentId: paid || advance > 0 ? createId('pay') : null,
 					advance,
@@ -204,7 +210,7 @@ describe('the order list and detail', () => {
 			'role=nope',
 			'status=BAD',
 			'paymentState=nope',
-			'paymentMethod=nope',
+			'paymentMethod=No-pe',
 			'from=yesterday',
 			`q=${'x'.repeat(121)}`,
 		]) {
@@ -230,7 +236,7 @@ describe('the order list and detail', () => {
 			number: order.number,
 			statusLabel: 'Awaiting confirmation',
 			customerFlags: { blocked: true, blockedReason: 'fraud', rtoCount: 2, orderCount: 3 },
-			payment: { method: 'cod', refundable: 0 },
+			payment: { method: 'cod', kind: 'on_delivery', refundable: 0 },
 			staffNote: '',
 		});
 		expect(detail.json.nextStatuses.map((/** @type {any} */ s) => s.key)).toEqual(['confirmed', 'cancelled']);
@@ -617,7 +623,7 @@ describe('data rights', () => {
 			.updateOne({ websiteId: shop.websiteId, id: order.id }, { $set: { 'lines.$[].cost': 600 } });
 		await shop.api('PATCH', `/v1/orders/${order.id}`, { staffNote: 'Difficult customer' });
 		const recorded = await shop.admin(ticket, 'POST', `/v1/admin/orders/${order.id}/payments`, {
-			method: 'cash',
+			method: 'cod',
 			amount: 400,
 			note: 'Taken by the rider',
 		});
@@ -647,7 +653,7 @@ describe('data rights', () => {
 		});
 		expect(Object.keys(first).sort()).toEqual(Object.keys(shopperSees.json).sort());
 		expect(first).toMatchObject({ number: order.number, address: { line1: '1 Main Street' } });
-		expect(first.payment.entries).toEqual([{ method: 'cash', amount: 400, reference: '', at: expect.any(String) }]);
+		expect(first.payment.entries).toEqual([{ method: 'cod', amount: 400, reference: '', at: expect.any(String) }]);
 		expect(typeof first.placedAt).toBe('string');
 		expect(exported.customers).toEqual([
 			{

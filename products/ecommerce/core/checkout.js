@@ -17,9 +17,9 @@
  */
 import { normalisePhone } from '@ss/contracts/phone';
 import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
-import { codDecision, codFee } from './cod.js';
 import { MAX_MEASURED, grossFits, lineGross, measureProblem, piecesOf } from './measure.js';
 import { allocateUnits, isPrice, roundHalfUp } from './money.js';
+import { isMethodKey, methodFee } from './payment-methods.js';
 import { taxOf, taxPercent } from './taxes.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -27,7 +27,6 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./model.js').PaymentMethod} PaymentMethod */
 /** @typedef {import('./promotions.js').PromotionsResult} PromotionsResult */
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
-/** @typedef {import('./cod.js').CodSettings} CodSettings */
 /** @typedef {import('./guests.js').PhoneRules} PhoneRules */
 
 /** At most this many lines in a cart, and this many pieces of one line (the `checkout` settings `maxLines` and
@@ -35,8 +34,6 @@ import { taxOf, taxPercent } from './taxes.js';
  * (thousandths of its unit) is checked against its item type's step, least and most. */
 export const MAX_LINES = 50;
 export const MAX_QUANTITY = 99;
-/** Payment methods, in their default order (`checkout.paymentOrder`, E22). @type {ReadonlyArray<PaymentMethod>} */
-export const PAYMENT_METHODS = Object.freeze(/** @type {PaymentMethod[]} */ (['online', 'bank_transfer', 'cod', 'pickup']));
 /** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
 
@@ -157,8 +154,8 @@ export const checkCart = (body, { maxLines = MAX_LINES } = {}) => {
 	if (locationId !== null && (typeof locationId !== 'string' || !ID.test(locationId)))
 		return { ok: false, field: 'delivery/locationId', message: 'delivery.locationId is a pickup location id.' };
 	const payment = input.payment ?? null;
-	if (payment !== null && !PAYMENT_METHODS.includes(/** @type {PaymentMethod} */ (payment)))
-		return { ok: false, field: 'payment', message: `payment is one of ${PAYMENT_METHODS.join(', ')}.` };
+	if (payment !== null && !isMethodKey(payment))
+		return { ok: false, field: 'payment', message: 'payment is a payment method key.' };
 	return {
 		ok: true,
 		value: {
@@ -228,8 +225,7 @@ export const checkAddress = (body, rules) => {
  */
 export const checkOrderExtras = (body) => {
 	const input = isObject(body) ? /** @type {Record<string, unknown>} */ (body) : {};
-	if (!PAYMENT_METHODS.includes(/** @type {PaymentMethod} */ (input.payment)))
-		return { ok: false, field: 'payment', message: `payment is one of ${PAYMENT_METHODS.join(', ')}.` };
+	if (!isMethodKey(input.payment)) return { ok: false, field: 'payment', message: 'payment is a payment method key.' };
 	const note = text(input.note, 1000);
 	if (note === null) return { ok: false, field: 'note', message: 'note is at most 1000 characters.' };
 	const returnUrl = input.returnUrl ?? null;
@@ -296,6 +292,7 @@ const PROBLEM_TEXT = {
 	slot_unavailable: 'This time cannot be booked.',
 	slot_taken: 'This time is already booked.',
 	one_per_slot: 'A time can be booked once per order.',
+	too_many: 'That is more of one item than an order can take.',
 	too_large: 'This line comes to more than an order can take.',
 	measure_step: 'This quantity is not one of the steps this item is sold in.',
 	measure_min: 'This quantity is less than the least this item is sold in.',
@@ -504,7 +501,7 @@ export const grossOf = (line, unit = 1) => lineGross(line.unitPrice, line.quanti
 /**
  * @typedef {{ subtotal: number, discount: number, delivery: number, tax: number, total: number, taxIncluded: boolean,
  *   roleDiscount: number, fee: number }} PriceTotals `discount` holds the role discount; `fee` the payment method's fee
- *   (COD cash handling, E23), included in `total`
+ *   (its fee, a percent), included in `total`
  */
 
 /**
@@ -557,7 +554,7 @@ export const roleDiscountOf = (merchandise, percent, unit = 1) =>
  * @param {boolean} input.taxIncluded
  * @param {number} [input.rolePercent] the shopper's role discount (E19)
  * @param {number} [input.feePercent] the payment method's fee (E23)
- * @param {CodSettings['feeBase']} [input.feeBase] what the fee is a percent of (`cod.feeBase`, D4)
+ * @param {import('./payment-methods.js').PaymentMethodRecord['feeBase']} [input.feeBase] what the fee is a percent of (the method's `feeBase`, D4)
  * @param {number} [input.unit] whole units (E25)
  * @param {{ promotions?: number, fee?: number } | null} [input.fixed] amounts an edited order keeps from placement
  *   (`checkout.editPricing: keep_placed`): its offer discount (spread over the lines in proportion, at most what they
@@ -611,7 +608,7 @@ export const priceLines = ({
 		fixed && typeof fixed.fee === 'number'
 			? fixed.fee
 			: feePercent > 0
-				? codFee(feeBase === 'goods_after_discounts' ? merchandise - roleTotal : beforeFee, { feePercent }, unit)
+				? methodFee(feeBase === 'goods_after_discounts' ? merchandise - roleTotal : beforeFee, { feePercent }, unit)
 				: 0;
 	return {
 		lines: priced,
@@ -629,10 +626,10 @@ export const priceLines = ({
 };
 
 /**
- * What the COD fee is a percent of (`cod.feeBase`, D4): the order total before the fee (`order_total`), or the goods
- * after offers and the role discount, before points, delivery and tax (`goods_after_discounts`).
+ * What a payment method's fee is a percent of (its `feeBase`, D4): the order total before the fee (`order_total`), or
+ * the goods after offers and the role discount, before points, delivery and tax (`goods_after_discounts`).
  * @param {{ lines: PricedLine[], totals: PriceTotals }} priced a pricing without the fee
- * @param {CodSettings['feeBase']} [feeBase]
+ * @param {import('./payment-methods.js').PaymentMethodRecord['feeBase']} [feeBase]
  */
 export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
 	feeBase === 'goods_after_discounts'
@@ -648,88 +645,4 @@ export const feeBaseOf = ({ lines, totals }, feeBase = 'order_total') =>
 export const merchandiseOf = (lines, promotions, kept = null, unit = 1) => {
 	const promo = kept === null ? promotionDiscounts(lines, promotions, unit) : fixedDiscounts(lines, kept, unit);
 	return lines.reduce((n, line, index) => n + grossOf(line, unit) - (promo[index] ?? 0), 0);
-};
-
-// -------------------------------------------------------------------------------------------------- payment methods
-
-/**
- * @typedef {{ method: PaymentMethod, available: boolean, reason: string | null, advance: number, fee: number }} PaymentOption
- *   `reason` when not available: `needs_delivery`, `needs_pickup`, `digital_items`, `over_max`, `advance_unavailable`,
- *   `blocked`; `fee`: what choosing it adds (COD cash handling, E23)
- */
-
-/**
- * The payment methods a cart may use, in the merchant's order (`paymentOrder`, E22): COD while `cod` is on, delivered
- * (or picked up with `atPickup`, E23) and without digital items (its largest value, advance and RTO rules); online
- * when offered and Payments is connected; bank transfer when offered and Payments is connected or transfers are
- * recorded by staff (`bankTransferVia: manual`, E24; the caller marks it `not_ready` while Payments has no bank details
- * it requires, CK-33); pay at pickup when offered and the order is picked up. Digital
- * items are paid before they are given, so they need online payment or a bank transfer.
- * @param {object} input
- * @param {ReadonlyArray<string>} input.offered the `checkout` setting `paymentMethods`
- * @param {ReadonlyArray<string>} [input.order] the `checkout` setting `paymentOrder`
- * @param {boolean} input.paymentsConnected
- * @param {boolean} [input.bankManual] bank transfers are recorded by staff, no Payments payment (E24)
- * @param {{ on: boolean, settings: CodSettings }} input.cod
- * @param {boolean} input.pickupPossible store pickup is offered (pickup locations)
- * @param {'delivery' | 'pickup' | 'none'} input.deliveryMethod
- * @param {boolean} input.digital the cart has digital items
- * @param {number} input.total before any fee
- * @param {number} [input.feeBase] what the COD fee is a percent of (`feeBaseOf`; default `total`)
- * @param {number} input.rtoCount the shopper's returned packages
- * @param {number} [input.unit] whole units (E25)
- * @returns {PaymentOption[]}
- */
-export const paymentOptions = ({
-	offered,
-	order = PAYMENT_METHODS,
-	paymentsConnected,
-	bankManual = false,
-	cod,
-	pickupPossible,
-	deliveryMethod,
-	digital,
-	total,
-	feeBase = total,
-	rtoCount,
-	unit = 1,
-}) => {
-	/** @type {PaymentOption[]} */
-	const out = [];
-	if (cod.on) {
-		const collected = deliveryMethod === 'delivery' || (deliveryMethod === 'pickup' && cod.settings.atPickup === true);
-		if (!collected) out.push({ method: 'cod', available: false, reason: 'needs_delivery', advance: 0, fee: 0 });
-		else if (digital) out.push({ method: 'cod', available: false, reason: 'digital_items', advance: 0, fee: 0 });
-		else {
-			const fee = codFee(feeBase, cod.settings, unit);
-			const decision = codDecision(
-				{
-					total: total + fee,
-					rtoCount,
-					canCollectAdvance: paymentsConnected || cod.settings.advanceVia === 'manual',
-					unit,
-				},
-				cod.settings,
-			);
-			out.push(
-				decision.ok
-					? { method: 'cod', available: true, reason: null, advance: decision.advance, fee }
-					: { method: 'cod', available: false, reason: decision.reason, advance: 0, fee },
-			);
-		}
-	}
-	if (paymentsConnected && offered.includes('online'))
-		out.push({ method: 'online', available: true, reason: null, advance: 0, fee: 0 });
-	if ((paymentsConnected || bankManual) && offered.includes('bank_transfer'))
-		out.push({ method: 'bank_transfer', available: true, reason: null, advance: 0, fee: 0 });
-	if (pickupPossible && offered.includes('pickup')) {
-		const reason = deliveryMethod !== 'pickup' ? 'needs_pickup' : digital ? 'digital_items' : null;
-		out.push({ method: 'pickup', available: reason === null, reason, advance: 0, fee: 0 });
-	}
-	/** @param {PaymentMethod} method */
-	const rank = (method) => {
-		const index = order.indexOf(method);
-		return index === -1 ? order.length + PAYMENT_METHODS.indexOf(method) : index;
-	};
-	return out.sort((a, b) => rank(a.method) - rank(b.method));
 };

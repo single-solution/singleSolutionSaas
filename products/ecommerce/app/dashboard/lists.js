@@ -75,7 +75,7 @@ const errorLines = (problem) => {
  * @param {number | null} empty
  * @returns {number | null | undefined}
  */
-const amountOf = (text, currency, empty) => {
+export const amountOf = (text, currency, empty) => {
 	const value = String(text ?? '').trim();
 	if (value === '') return empty;
 	if (/^0*(\.0*)?$/.test(value)) return 0;
@@ -87,7 +87,7 @@ const amountOf = (text, currency, empty) => {
  * @param {unknown} amount minor units
  * @param {string} currency
  */
-const decimalOf = (amount, currency) =>
+export const decimalOf = (amount, currency) =>
 	typeof amount === 'number' && Number.isSafeInteger(amount) && amount >= 0 ? toDecimal(amount, currency) : '';
 
 /**
@@ -252,7 +252,20 @@ export const useList = (websiteId, list) => {
  *   blank: () => Item, load?: (item: Item) => Item, clean: (item: Item) => Item, check?: (items: Item[]) => string[],
  *   off?: boolean, render: (item: Item, set: (patch: Item) => void) => import('react').ReactNode }} props
  */
-function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, load = (item) => item, clean, check, off, render }) {
+export function ListEditor({
+	websiteId,
+	list,
+	title,
+	help,
+	itemLabel,
+	max,
+	blank,
+	load = (item) => item,
+	clean,
+	check,
+	off,
+	render,
+}) {
 	const state = useList(websiteId, list);
 	return (
 		<Card title={title} subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}>

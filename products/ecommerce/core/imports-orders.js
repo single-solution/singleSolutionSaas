@@ -27,9 +27,7 @@ import {
 	MAX_NOTE,
 	MAX_REFERENCE,
 	MAX_STAFF_NOTE,
-	PAYMENT_METHODS,
 	PAYMENT_STATES,
-	RECORDED_METHODS,
 	checkCustomerEdit,
 	paymentStateOf,
 	shipmentFields,
@@ -37,7 +35,8 @@ import {
 } from './orders.js';
 import { FIELD_LIMITS, PLAIN_SERIAL_RULE, checkFieldValues, isPlainSerial } from './fields.js';
 import { balanceOf, expireLots } from './points.js';
-import { CLAIM_KINDS, CLAIM_STATUSES, REFUND_METHODS, checkClaimInput, checkNote, plainText } from './returns.js';
+import { CLAIM_KINDS, CLAIM_STATUSES, checkClaimInput, checkNote, plainText } from './returns.js';
+import { OTHER_WAY, PAYMENT_KINDS, VIA_PAYMENTS, isMethodKey } from './payment-methods.js';
 import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
 
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
@@ -482,7 +481,7 @@ const PROMOTIONS_FIELDS = fieldList(
 		'pointsCredited pointsBlocked pointsReversed',
 );
 const PAYMENT_FIELDS = fieldList(
-	'method state paymentId advance paid refunded checkedAt checkoutUrl via proof voidedAt voidPendingAt',
+	'method kind state paymentId advance paid refunded checkedAt checkoutUrl via proof voidedAt voidPendingAt',
 );
 const PAYMENT_ENTRY_FIELDS = fieldList('id method amount reference proofKey note by at');
 const REFUND_ENTRY_FIELDS = fieldList('id method amount reference claimId note by at refundId manual');
@@ -730,7 +729,7 @@ const paymentEntriesOf = (c, value, now) =>
 		const input = c.fields(raw, path, PAYMENT_ENTRY_FIELDS, 'a payment') ?? {};
 		return {
 			id: c.id(input.id, ID_PREFIX.orderPayment, `${path}/id`) ?? '',
-			method: c.oneOf(input.method, [...RECORDED_METHODS, /** @type {const} */ ('online')], `${path}/method`),
+			method: wayOf(c, input.method, `${path}/method`),
 			amount: c.whole(input.amount, `${path}/amount`, { min: 1 }),
 			reference: c.text(input.reference, `${path}/reference`, MAX_REFERENCE),
 			proofKey: missing(input.proofKey) || input.proofKey === '' ? null : c.text(input.proofKey, `${path}/proofKey`, MAX_KEY),
@@ -739,6 +738,18 @@ const paymentEntriesOf = (c, value, now) =>
 			at: c.time(input.at, `${path}/at`, now),
 		};
 	});
+
+/**
+ * The way money came or went back (E16): a payment method key, `payments` (through Payments) or `other`; an order's own
+ * method (`entry` false) only a key. The keys are the website's, so any key shape is taken.
+ * @param {Checker} c @param {unknown} value @param {string} path @param {boolean} [entry]
+ * @returns {string}
+ */
+const wayOf = (c, value, path, entry = true) => {
+	if (isMethodKey(value) || (entry && (value === VIA_PAYMENTS || value === OTHER_WAY))) return /** @type {string} */ (value);
+	c.fail(path, entry ? 'A payment method key, payments or other is expected.' : 'A payment method key is expected.');
+	return '';
+};
 
 /**
  * The refunds log (E26).
@@ -751,7 +762,7 @@ const refundEntriesOf = (c, value, now) =>
 		const refundId = missing(input.refundId) || input.refundId === '' ? null : c.text(input.refundId, `${path}/refundId`, 80);
 		return {
 			id: c.id(input.id, ID_PREFIX.orderRefund, `${path}/id`) ?? '',
-			method: c.oneOf(input.method, REFUND_METHODS, `${path}/method`),
+			method: wayOf(c, input.method, `${path}/method`),
 			amount: c.whole(input.amount, `${path}/amount`, { min: 1 }),
 			reference: c.text(input.reference, `${path}/reference`, MAX_REFERENCE),
 			claimId: c.id(input.claimId, ID_PREFIX.claim, `${path}/claimId`, { nullable: true }),
@@ -818,7 +829,8 @@ const paymentOf = (c, value, total, payments, refunds, now) => {
 	for (const name of ['voidedAt', 'voidPendingAt'])
 		if (!missing(input[name])) optional[name] = c.time(input[name], `/payment/${name}`, now);
 	return {
-		method: c.oneOf(input.method, PAYMENT_METHODS, '/payment/method'),
+		method: wayOf(c, input.method, '/payment/method', false),
+		kind: c.oneOf(input.kind, PAYMENT_KINDS, '/payment/kind'),
 		state,
 		paymentId,
 		advance: c.whole(input.advance, '/payment/advance', { fallback: 0, max: total }),
@@ -1264,7 +1276,7 @@ export const checkImportedReturn = (record, rules) => {
 		restockedAt: c.time(record.restockedAt, '/restockedAt', now, { nullable: true }),
 		history,
 		notes,
-		...(missing(record.refundMethod) ? {} : { refundMethod: c.oneOf(record.refundMethod, REFUND_METHODS, '/refundMethod') }),
+		...(missing(record.refundMethod) ? {} : { refundMethod: wayOf(c, record.refundMethod, '/refundMethod') }),
 		...(refundReference ? { refundReference } : {}),
 		...(createdAt ? { createdAt } : {}),
 	});

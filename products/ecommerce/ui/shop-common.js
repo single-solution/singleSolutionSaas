@@ -74,7 +74,10 @@ export const settingsOf = (config) => {
 			grades: gradesOf(catalog.grades),
 		},
 		checkout: {
-			paymentMethods: /** @type {string[]} */ (Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : []),
+			/** the payment methods a cart may offer: { key, name, kind } */
+			paymentMethods: /** @type {Array<{ key: string, name: string, kind: string }>} */ (
+				Array.isArray(checkout.paymentMethods) ? checkout.paymentMethods : []
+			),
 			pickupLocations: /** @type {Array<{ id: string, name: string }>} */ (
 				Array.isArray(checkout.pickupLocations) ? checkout.pickupLocations : []
 			),

@@ -220,7 +220,7 @@ describe('placing with cash on delivery', () => {
 		expect(response.json.order).toMatchObject({
 			status: 'awaiting_confirmation',
 			statusLabel: 'Awaiting confirmation',
-			payment: { method: 'cod', state: 'unpaid', payUrl: null },
+			payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid', payUrl: null },
 			totals: { subtotal: 5000, delivery: 300, total: 5300 },
 			address: { city: 'Springfield' },
 			canCancel: true,
@@ -277,11 +277,11 @@ describe('placing with cash on delivery', () => {
 		expect(fourth.status).toBe(409);
 		expect(codeOf(fourth)).toBe('too_many_open_orders');
 
-		await shop.setting('cod', 'maxOrderValue', 1500);
+		await shop.methods({ cod: { maxOrderValue: 1500 } });
 		const large = await place((await newShopper()).token, { ...body, lines: [{ productId: item.id, quantity: 2 }] });
-		await shop.setting('cod', 'maxOrderValue', 0);
+		await shop.methods({ cod: { maxOrderValue: 0 } });
 		expect(large.status).toBe(422);
-		expect([codeOf(large), large.json.codReason]).toEqual(['cod_not_allowed', 'over_max']);
+		expect([codeOf(large), large.json.paymentReason]).toEqual(['payment_not_allowed', 'over_max']);
 
 		const rare = await shop.seedProduct({ stock: 1 });
 		const short = await place((await newShopper()).token, { ...body, lines: [{ productId: rare.id, quantity: 2 }] });
@@ -308,15 +308,15 @@ describe('placing with cash on delivery', () => {
 		});
 		const body = { lines: [{ productId: item.id }], payment: 'cod', address: ADDRESS };
 		const refused = await place(flagged.token, body);
-		expect([codeOf(refused), refused.json.codReason]).toEqual(['cod_not_allowed', 'advance_unavailable']);
+		expect([codeOf(refused), refused.json.paymentReason]).toEqual(['payment_not_allowed', 'advance_unavailable']);
 
-		await shop.setting('cod', 'advancePercent', 20);
+		await shop.methods({ cod: { advancePercent: 20 } });
 		const placed = await place(flagged.token, { ...body, returnUrl: `${ORIGIN}/thanks` });
-		await shop.setting('cod', 'advancePercent', 0);
+		await shop.methods({ cod: { advancePercent: 0 } });
 		expect(placed.status).toBe(201);
 		expect(placed.json.order).toMatchObject({
 			status: 'pending_payment',
-			payment: { method: 'cod', advance: 2060, state: 'pending' },
+			payment: { method: 'cod', kind: 'on_delivery', advance: 2060, state: 'pending' },
 		});
 		expect(placed.json.next.kind).toBe('pay');
 		const create = shop
@@ -610,12 +610,16 @@ describe('store pickup and the widget settings', () => {
 		});
 		expect(wrong.json.errors[0].path).toBe('/delivery/locationId');
 		const notHere = await place(shopper.token, { lines: [{ productId: item.id }], payment: 'pickup', address: ADDRESS });
-		expect(notHere.json.errors[0].path).toBe('/payment');
+		expect([codeOf(notHere), notHere.json.paymentReason]).toEqual(['payment_not_allowed', 'needs_pickup']);
 
 		const config = await visit('GET', '/v1/widget/config');
 		expect(config.json.settings.checkout).toMatchObject({
-			paymentMethods: ['cod', 'online', 'bank_transfer', 'pickup'],
-			cod: { maxOrderValue: 0 },
+			paymentMethods: [
+				{ key: 'online', name: 'Online payment', kind: 'gateway' },
+				{ key: 'bank_transfer', name: 'Bank transfer', kind: 'pay_first' },
+				{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+				{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup' },
+			],
 			pickupLocations: [{ id: 'loc_shop', name: 'Main shop' }],
 			delivery: { zones: true, cities: ['Springfield'] },
 			pricesIncludeTax: true,

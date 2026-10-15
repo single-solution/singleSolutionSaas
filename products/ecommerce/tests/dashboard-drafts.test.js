@@ -182,13 +182,13 @@ describe('order flow drafts (the flow editor)', () => {
 		const withRefund = {
 			...flow,
 			triggers: { ...flow.triggers, refundsCover: 'refunded' },
-			starts: { ...flow.starts, cod: 'confirmed' },
+			starts: { ...flow.starts, on_delivery: 'confirmed' },
 		};
 		const removed = removeFlowStatus(withRefund, 'refunded');
 		expect(removed.moves.some((move) => move.to === 'refunded')).toBe(false);
 		expect(removed.triggers).toEqual({ paid: 'confirmed', windowEnd: 'cancelled', refundsCover: '' });
 		const noCod = removeFlowStatus(withRefund, 'confirmed');
-		expect(noCod.starts).toEqual({ pickup: 'awaiting_confirmation', free: 'awaiting_confirmation' });
+		expect(noCod.starts).toEqual({ at_pickup: 'awaiting_confirmation', free: 'awaiting_confirmation' });
 		expect(noCod.triggers).toMatchObject({ paid: '' });
 	});
 
@@ -199,7 +199,7 @@ describe('order flow drafts (the flow editor)', () => {
 			label: ' On hold ',
 			role: 'open',
 			shopperLabel: 'Waiting',
-			shopperText: { cod: '', online: 'We hold it', bank_transfer: '', pickup: '' },
+			shopperText: { online: 'We hold it' },
 			notify: false,
 		});
 		flow.moves.push({ from: '', to: 'cancelled' }, { from: 'delivered', to: 'confirmed' });

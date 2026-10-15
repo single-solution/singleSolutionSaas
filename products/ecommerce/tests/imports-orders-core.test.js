@@ -63,8 +63,8 @@ const order = (patch = {}) => ({
 	lines: [LINE],
 	totals: { subtotal: 2000, discount: 100, delivery: 200, tax: 0, total: 2100, currency: 'USD', taxIncluded: true },
 	promotions: { released: false },
-	payment: { method: 'cod' },
-	payments: [{ id: idOf('opy', 1), method: 'cash', amount: 2100, at: '2026-03-04T00:00:00Z' }],
+	payment: { method: 'cod', kind: 'on_delivery' },
+	payments: [{ id: idOf('opy', 1), method: 'cod', amount: 2100, at: '2026-03-04T00:00:00Z' }],
 	status: 'delivered',
 	history: [
 		{ at: '2026-03-01T00:00:00Z', from: null, to: 'awaiting_confirmation', by: 'shopper', note: '' },
@@ -260,7 +260,7 @@ describe('orders', () => {
 			idempotencyKey: `import:${idOf('ord', 1)}`,
 			customer: { phone: '+15550001111', email: '' },
 			address: { phone: '+15550001111', line2: '', notes: '' },
-			payment: { state: 'paid', paid: 2100, refunded: 0, advance: 0, checkoutUrl: '', proof: null },
+			payment: { kind: 'on_delivery', state: 'paid', paid: 2100, refunded: 0, advance: 0, checkoutUrl: '', proof: null },
 			payments: [{ by: { kind: 'server', id: 'server', name: 'Server' }, reference: '', proofKey: null }],
 			lines: [{ kind: 'physical', serials: [], booking: null, licences: [], returnedQuantity: 0, grade: null, image: null }],
 			phoneDigits: '15550001111',
@@ -299,7 +299,7 @@ describe('orders', () => {
 					refunds: [
 						{
 							id: idOf('orf', 1),
-							method: 'online',
+							method: 'payments',
 							amount: 2100,
 							claimId: idOf('ret', 1),
 							refundId: 'rfd_1',
@@ -310,6 +310,7 @@ describe('orders', () => {
 					],
 					payment: {
 						method: 'online',
+						kind: 'gateway',
 						state: 'refunded',
 						paid: 2100,
 						refunded: 2100,
@@ -385,7 +386,7 @@ describe('orders', () => {
 			status: 'pending_payment',
 			history: [{ at: '2026-10-05T09:00:00Z', to: 'pending_payment' }],
 			payments: [],
-			payment: { method: 'online', state: 'pending' },
+			payment: { method: 'online', kind: 'gateway', state: 'pending' },
 			holdUntil: '2026-10-05T11:00:00Z',
 			deliveredAt: null,
 			delivery: { method: 'pickup', fee: 200 },
@@ -614,7 +615,7 @@ describe('orders', () => {
 							currency: 'USD',
 							taxIncluded: false,
 						},
-						payments: [{ id: idOf('opy', 1), method: 'cash', amount: 2290, at: '2026-03-04T00:00:00Z' }],
+						payments: [{ id: idOf('opy', 1), method: 'cod', amount: 2290, at: '2026-03-04T00:00:00Z' }],
 					}),
 					RULES,
 				),
@@ -708,7 +709,7 @@ describe('orders', () => {
 		expect(
 			pathsOf(
 				checkImportedOrder(
-					order({ payments: [], payment: { method: 'cod', state: 'paid', paid: 2100, refunded: 5 } }),
+					order({ payments: [], payment: { method: 'cod', kind: 'on_delivery', state: 'paid', paid: 2100, refunded: 5 } }),
 					RULES,
 				),
 			),
@@ -718,19 +719,20 @@ describe('orders', () => {
 				checkImportedOrder(
 					order({
 						payments: [
-							{ id: idOf('opy', 1), method: 'cash', amount: 3000, at: '2026-03-04T00:00:00Z' },
+							{ id: idOf('opy', 1), method: 'cod', amount: 3000, at: '2026-03-04T00:00:00Z' },
 							{
 								id: idOf('opy', 1),
-								method: 'cheque',
+								method: 'Cheque!',
 								amount: 0,
 								reference: 'x'.repeat(121),
 								at: '2099-01-01T00:00:00Z',
 								by: { kind: 'user' },
 							},
 						],
-						refunds: [{ id: idOf('orf', 1), method: 'cash', amount: 4000, at: '2026-03-05T00:00:00Z', manual: 'no' }],
+						refunds: [{ id: idOf('orf', 1), method: 'cod', amount: 4000, at: '2026-03-05T00:00:00Z', manual: 'no' }],
 						payment: {
-							method: 'cheque',
+							method: 'Cheque!',
+							kind: 'on_delivery',
 							state: 'partially_refunded',
 							paymentId: 'pay 1',
 							checkoutUrl: 'http://pay.example',
@@ -764,10 +766,14 @@ describe('orders', () => {
 			'/payment/proof/key',
 			'/payment/proof/at',
 		]);
-		expect(pathsOf(checkImportedOrder(order({ payment: { method: 'cod', state: 'settled' } }), RULES))).toEqual([
-			'/payment/state',
+		expect(
+			pathsOf(checkImportedOrder(order({ payment: { method: 'cod', kind: 'on_delivery', state: 'settled' } }), RULES)),
+		).toEqual(['/payment/state']);
+		expect(pathsOf(checkImportedOrder(order({ payment: 'cash' }), RULES))).toEqual([
+			'/payment',
+			'/payment/method',
+			'/payment/kind',
 		]);
-		expect(pathsOf(checkImportedOrder(order({ payment: 'cash' }), RULES))).toEqual(['/payment', '/payment/method']);
 	});
 
 	it('refuse a shipment or dispatch video that does not fit', () => {
@@ -938,7 +944,7 @@ describe('reviews, claims, alerts and wishlists', () => {
 			status: 'refunded',
 			refundAmount: 1900,
 			refundId: 'rfd_1',
-			refundMethod: 'cash',
+			refundMethod: 'cod',
 			refundReference: 'Cash at the counter',
 			restockedAt: '2026-05-03T00:00:00Z',
 			history: [
@@ -948,7 +954,7 @@ describe('reviews, claims, alerts and wishlists', () => {
 			notes: [{ at: '2026-05-02T00:00:00Z', by: 'Sam', text: 'Called the shopper' }],
 		};
 		const value = valueOf(checkImportedReturn(claim, RULES));
-		expect(value).toMatchObject({ reference: 'RR-0001', kind: 'exchange', refundMethod: 'cash', lines: [{ restock: true }] });
+		expect(value).toMatchObject({ reference: 'RR-0001', kind: 'exchange', refundMethod: 'cod', lines: [{ restock: true }] });
 		expect(value.createdAt).toEqual(new Date('2026-05-01T00:00:00Z'));
 		expect(
 			pathsOf(
@@ -961,7 +967,7 @@ describe('reviews, claims, alerts and wishlists', () => {
 						history: [],
 						notes: [{ at: '2026-05-02T00:00:00Z', by: 'Sam', text: '' }],
 						refundReference: 'x'.repeat(121),
-						refundMethod: 'cheque',
+						refundMethod: 'Cheque!',
 						status: 'lost',
 						orderNumber: '',
 						refundId: 7,

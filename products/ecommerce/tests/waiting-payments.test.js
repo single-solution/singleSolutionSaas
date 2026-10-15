@@ -171,6 +171,7 @@ describe('a delete, a recorded payment or an edit that loses its race (L1)', () 
 				delivery: { method: 'delivery', zone: '', fee: 0, locationId: null },
 				payment: {
 					method: 'online',
+					kind: 'gateway',
 					state: 'pending',
 					paymentId: 'pay_placeholder',
 					checkoutUrl: '',
@@ -237,7 +238,7 @@ describe('a delete, a recorded payment or an edit that loses its race (L1)', () 
 	it('a recorded payment leaves the order payable when another change won', async () => {
 		const { order, paymentId } = await waiting();
 		changeWhileCanceling(order.id, { 'payment.paid': 300 });
-		const refused = await shop.api('POST', `/v1/orders/${order.id}/payments`, { method: 'cash', amount: 700 });
+		const refused = await shop.api('POST', `/v1/orders/${order.id}/payments`, { method: 'cod', amount: 700 });
 		expect(refused.status).toBe(409);
 		expect(cancelsOf(paymentId)).toHaveLength(1);
 		expect((await records.recordOf(order.id)).payment).toMatchObject({ paymentId: null, checkoutUrl: '', paid: 300 });

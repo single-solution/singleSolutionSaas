@@ -80,13 +80,17 @@ export const createRoutes = (product) => {
 			/** @type {Record<string, unknown>} */
 			const settings = { currency: s.currency };
 			for (const area of areas) if (area.widgetSettings) Object.assign(settings, await area.widgetSettings(s));
-			// the merchant's order statuses (with their kind of step), couriers and grades (names only), for the admin
+			// the merchant's order statuses (with their kind of step), couriers, payment methods and grades (names only),
+			// for the admin
 			// widgets' pickers
 			if (s.has('checkout')) {
 				const flow = /** @type {import('../core/model.js').OrderFlow} */ (
 					/** @type {unknown} */ (await s.list('order_flow'))
 				);
 				const couriers = await s.list('couriers');
+				const methods = /** @type {import('../core/payment-methods.js').PaymentMethodRecord[]} */ (
+					await s.list('payment_methods')
+				);
 				settings.orders = {
 					statuses: flow.statuses.map((/** @type {any} */ status) => ({
 						key: status.key,
@@ -94,6 +98,8 @@ export const createRoutes = (product) => {
 						role: status.role,
 					})),
 					couriers: couriers.map((/** @type {any} */ courier) => ({ key: courier.key, name: courier.name })),
+					// the merchant's payment methods (names for orders, staff recording money against them, E16)
+					paymentMethods: methods.map((method) => ({ key: method.key, name: method.name, kind: method.kind })),
 				};
 			}
 			if (s.has('grades_serials')) {

@@ -88,7 +88,7 @@ const order = (userId, name, paid, refunded, customerId) => ({
 		pointsEarned: 0,
 		released: false,
 	},
-	payment: { method: 'online', state: 'paid', paymentId: 'pay_1', advance: 0, paid, refunded, checkedAt: null },
+	payment: { method: 'online', kind: 'gateway', state: 'paid', paymentId: 'pay_1', advance: 0, paid, refunded, checkedAt: null },
 	status: 'delivered',
 	role: 'delivered',
 	history: [],

@@ -390,6 +390,22 @@ export const setup = async ({
 	};
 
 	/**
+	 * Change payment methods of the saved list (or of today's four, E2): each key's method gets its patch merged in;
+	 * `order` (keys) puts them in that order first. @param {Record<string, Record<string, unknown>>} patches
+	 * @param {string[]} [order]
+	 */
+	const methods = async (patches, order = []) => {
+		const read = await dashboard(await adminSession(), 'GET', `/v1/dashboard/websites/${websiteId}/lists/payment_methods`);
+		/** @type {any[]} */
+		const saved = read.json.value.map((/** @type {any} */ method) => ({ ...method, ...(patches[method.key] ?? {}) }));
+		const rank = (/** @type {any} */ method) => (order.includes(method.key) ? order.indexOf(method.key) : order.length);
+		return list(
+			'payment_methods',
+			[...saved].sort((x, y) => rank(x) - rank(y)),
+		);
+	};
+
+	/**
 	 * Change the saved order flow (its options, triggers, starts …): `change` gets a copy of the flow as it reads and
 	 * returns the flow to save. @param {(flow: any) => any} change
 	 */
@@ -569,6 +585,7 @@ export const setup = async ({
 		connectStorage,
 		connectDatabase: () => connect('database', merchantDatabase()),
 		setting,
+		methods,
 		list,
 		flow,
 		moveOptions,

@@ -101,7 +101,17 @@ const detail = (over = {}) => ({
 		notes: '',
 	},
 	delivery: { method: 'delivery', zone: 'z1', fee: 20000, locationId: null, locationName: '' },
-	payment: { method: 'cod', state: 'unpaid', advance: 0, paid: 0, refunded: 5000, payUrl: null, payBy: null },
+	payment: {
+		method: 'cod',
+		name: 'Cash on delivery',
+		kind: 'on_delivery',
+		state: 'unpaid',
+		advance: 0,
+		paid: 0,
+		refunded: 5000,
+		payUrl: null,
+		payBy: null,
+	},
 	history: [{ at: '2026-10-01T10:00:00.000Z', status: 'placed', label: 'Placed' }],
 	shipment: { courier: 'Fast', trackingNumber: 'T1', trackingUrl: 'https://track.example.com/T1' },
 	note: 'Ring twice',
@@ -304,7 +314,7 @@ describe('my orders', () => {
 			text('orders.lineAmount', { quantity: 2, price: 'GBP 1,000.00', total: 'GBP 2,000.00' }),
 			text('orders.downloadsLeft', { count: 2 }),
 			'KEY-1',
-			text('orders.paymentLine', { method: text('checkout.method.cod'), state: text('orders.payment.unpaid') }),
+			text('orders.paymentLine', { method: 'Cash on delivery', state: text('orders.payment.unpaid') }),
 			text('orders.refunded', { amount: 'GBP 50.00' }),
 			'Ana, 1 Road, London',
 			text('orders.shipment', { courier: 'Fast', tracking: 'T1' }),
@@ -468,21 +478,27 @@ describe('my orders', () => {
 	it('shows the bank details, the shop’s payment note and the proof sent, and takes a transfer proof (E24)', async () => {
 		const BANK = {
 			ready: true,
-			accountHolder: 'Example Store LLC',
-			bankName: '',
-			accountNumber: '',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: 'XX00 TEST 0000',
-			bic: 'TESTXX00',
+			name: 'Bank transfer',
 			instructions: '',
+			accounts: [
+				{
+					label: '',
+					currency: '',
+					rows: [
+						{ label: 'Account holder', value: 'Example Store LLC' },
+						{ label: 'Bank', value: '' },
+						{ label: 'IBAN', value: 'XX00 TEST 0000' },
+						{ label: 'SWIFT/BIC', value: 'TESTXX00' },
+					],
+				},
+			],
 		};
 		const waiting = detail({
 			role: 'awaiting_payment',
 			canCancel: false,
 			payment: {
 				method: 'bank_transfer',
+				kind: 'pay_first',
 				state: 'unpaid',
 				via: 'manual',
 				advance: 0,
@@ -492,7 +508,7 @@ describe('my orders', () => {
 				payBy: null,
 				proof: null,
 			},
-			bankDetails: BANK,
+			payDetails: BANK,
 			canSendProof: true,
 			notes: { payment: 'Orders ship once the money arrives.', delivery: '', prep: '', pickupReady: '' },
 		});
@@ -523,19 +539,15 @@ describe('my orders', () => {
 		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
 		const page = textOf(host);
 		for (const part of [
-			text('checkout.bank.title'),
-			text('checkout.bank.bic'),
+			text('checkout.pay.title', { method: 'Bank transfer' }),
+			'SWIFT/BIC',
 			'TESTXX00',
 			'XX00 TEST 0000',
 			'Orders ship once the money arrives.',
 		])
 			expect(page).toContain(part);
-		// only the details given, in Payments' order
-		expect($$(host, '.bank-details dt').map((node) => node.textContent)).toEqual([
-			text('checkout.bank.accountHolder'),
-			text('checkout.bank.iban'),
-			text('checkout.bank.bic'),
-		]);
+		// only the rows with a value, in the merchant's order
+		expect($$(host, '.pay-details dt').map((node) => node.textContent)).toEqual(['Account holder', 'IBAN', 'SWIFT/BIC']);
 		const input = $(host, 'form.proof-form input[type="file"]');
 		Object.defineProperty(input, 'files', { value: [new window.File(['%PDF'], 'proof.pdf', { type: 'application/pdf' })] });
 		await submit($(host, 'form.proof-form'));
@@ -543,8 +555,8 @@ describe('my orders', () => {
 			key: 'ecommerce/proofs/ord_1/prf_1.pdf',
 			reference: '',
 		});
-		for (const part of text('checkout.bank.proofSent').split('{date}')) expect($(host, 'p.save')?.textContent).toContain(part);
-		expect($(host, 'form.proof-form')?.textContent).toContain(text('checkout.bank.proofAgain'));
+		for (const part of text('checkout.pay.proofSent').split('{date}')) expect($(host, 'p.save')?.textContent).toContain(part);
+		expect($(host, 'form.proof-form')?.textContent).toContain(text('checkout.pay.proofAgain'));
 		// paid: no details, no proof form
 		resetPage();
 		const paid = makeShop({
@@ -552,13 +564,13 @@ describe('my orders', () => {
 			features: ['checkout'],
 			routes: {
 				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
-				'GET /v1/shop/orders/ord_1': () => ok({ ...waiting, bankDetails: null, canSendProof: false, notes: undefined }),
+				'GET /v1/shop/orders/ord_1': () => ok({ ...waiting, payDetails: null, canSendProof: false, notes: undefined }),
 			},
 		});
 		const other = await mountOrders(paid);
 		await click(buttonOf(other, text('orders.open', { number: 'SO-1' })));
 		expect($(other, 'form.proof-form')).toBeNull();
-		expect(textOf(other)).not.toContain(text('checkout.bank.title'));
+		expect(textOf(other)).not.toContain(text('checkout.pay.title', { method: 'Bank transfer' }));
 	});
 
 	it('shows a failed invoice, a pickup order and a waiting payment', async () => {
@@ -574,6 +586,7 @@ describe('my orders', () => {
 			totals: { subtotal: 200000, discount: 0, delivery: 0, tax: 500, total: 200000, currency: 'GBP', taxIncluded: true },
 			payment: {
 				method: 'online',
+				kind: 'gateway',
 				state: 'pending',
 				advance: 0,
 				paid: 0,

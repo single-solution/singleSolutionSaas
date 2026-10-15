@@ -176,7 +176,9 @@ describe('a refund whose answer was lost', () => {
 			const read = await shop.api('GET', `/v1/orders/${order.id}`);
 			expect(read.json.effects[0]).toMatchObject({ state: 'done', refundId: 'rfd_lost_1' });
 			expect(read.json.payment).toMatchObject({ state: 'refunded', refunded: 1000 });
-			expect(read.json.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 1000, refundId: 'rfd_lost_1' })]);
+			expect(read.json.refunds).toEqual([
+				expect.objectContaining({ method: 'payments', amount: 1000, refundId: 'rfd_lost_1' }),
+			]);
 			expect(records.refundCalls(paymentId)).toHaveLength(1);
 		} finally {
 			payments.restore();
@@ -285,6 +287,7 @@ describe('orders without a payments log', () => {
 				// back in cash
 				payment: {
 					method: 'cod',
+					kind: 'on_delivery',
 					state: 'partially_refunded',
 					paymentId,
 					advance: 200,
@@ -296,7 +299,7 @@ describe('orders without a payments log', () => {
 				refunds: [
 					{
 						id: createId('orf'),
-						method: 'cash',
+						method: 'cod',
 						amount: 500,
 						reference: '',
 						claimId: null,
@@ -314,9 +317,9 @@ describe('orders without a payments log', () => {
 		// the advance Payments still holds goes back through it, the rest is recorded
 		expect(records.refundCalls(paymentId).map((call) => JSON.parse(call.body ?? '{}').amount)).toEqual([200]);
 		expect(moved.json.refunds).toEqual([
-			expect.objectContaining({ method: 'cash', amount: 500 }),
+			expect.objectContaining({ method: 'cod', amount: 500 }),
 			expect.objectContaining({ method: 'other', amount: 300 }),
-			expect.objectContaining({ method: 'online', amount: 200 }),
+			expect.objectContaining({ method: 'payments', amount: 200 }),
 		]);
 		expect(moved.json.payment).toMatchObject({ refunded: 1000, state: 'refunded' });
 	});
@@ -329,6 +332,7 @@ describe('orders without a payments log', () => {
 				stockHeld: false,
 				payment: {
 					method: 'online',
+					kind: 'gateway',
 					state: 'refunded',
 					paymentId: 'pay_placeholder',
 					advance: 0,
@@ -361,7 +365,7 @@ describe('orders without a payments log', () => {
 					refunds: [
 						{
 							id: createId('orf'),
-							method: 'online',
+							method: 'payments',
 							amount: 1000,
 							reference: '',
 							claimId: null,
@@ -442,7 +446,16 @@ describe('loyalty points', () => {
 			role: 'delivered',
 			cod: true,
 			patch: {
-				payment: { method: 'cod', state: 'paid', paymentId: null, advance: 0, paid: 1000, refunded: 0, checkedAt: null },
+				payment: {
+					method: 'cod',
+					kind: 'on_delivery',
+					state: 'paid',
+					paymentId: null,
+					advance: 0,
+					paid: 1000,
+					refunded: 0,
+					checkedAt: null,
+				},
 				promotions: {
 					couponId: null,
 					couponCode: '',
@@ -491,7 +504,7 @@ describe('loyalty points', () => {
 		});
 		// staff take the return with the order as read before the claim's refund took the points back
 		const read = await records.recordOf(order.id);
-		expect((await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1000, method: 'cash' })).status).toBe(200);
+		expect((await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1000, method: 'cod' })).status).toBe(200);
 		expect(await balanceOf(MEMBER)).toBe(start - 20);
 		const s = await service.site(ctx());
 		await expect(moves.move(s, ctx(), read, input('customer_returned'), flow)).rejects.toMatchObject({ code: 'conflict' });
@@ -512,6 +525,7 @@ describe('a move that loses its race after calling out', () => {
 			patch: {
 				payment: {
 					method: 'online',
+					kind: 'gateway',
 					state: 'pending',
 					paymentId,
 					checkoutUrl: `${PAYMENTS}/pay/w/${paymentId}`,

@@ -63,23 +63,25 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 /** Headers of the printable documents: never cached, no scripts, nothing loaded but images. */
 /**
  * What an order's documents are printed with (E35, E26): the business, the invoices settings' texts and columns, the
- * website's payment words (decision 10), its Format and business time zone, and the merchant fields with the values the
+ * website's payment words (its payment methods' names, E16, and its texts' payment states, decision 10), its Format and
+ * business time zone, and the merchant fields with the values the
  * orders name.
  * @param {Site} s @param {OrderRecord[]} orders
  * @returns {Promise<import('../core/invoice.js').DocumentContext>}
  */
 export const documentContextOf = async (s, orders) => {
-	const [business, settings, texts, { format, timeZone }, fields] = await Promise.all([
+	const [business, settings, texts, { format, timeZone }, fields, methods] = await Promise.all([
 		s.business(),
 		s.values('invoices'),
 		s.texts(),
 		s.format(),
 		s.data().then((data) => documentFieldsOf(data, orders)),
+		s.list('payment_methods'),
 	]);
 	return {
 		business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
 		texts: invoiceTexts(settings),
-		words: documentWordsOf(texts),
+		words: documentWordsOf(texts, /** @type {import('../core/payment-methods.js').PaymentMethodRecord[]} */ (methods)),
 		columns: invoiceColumnsOf(settings),
 		format,
 		timeZone,
@@ -274,11 +276,21 @@ export const createOrders = (product, service, { ordering }) => {
 		return { ...(await detailOf(s, moved.order)), ...warningsOf(moved.warnings) };
 	};
 
+	/**
+	 * The keys of the website's payment methods: the ways staff record money by, besides `other` (E16).
+	 * @param {Site} s
+	 * @returns {Promise<string[]>}
+	 */
+	const methodKeys = async (s) =>
+		/** @type {import('../core/payment-methods.js').PaymentMethodRecord[]} */ (await s.list('payment_methods')).map(
+			(method) => method.key,
+		);
+
 	/** @param {any} ctx */
 	const refundOrder = async (ctx) => {
 		const s = await service.site(ctx);
 		const order = await orderOf(s, ctx);
-		const input = checkRefund(ctx.body, order);
+		const input = checkRefund(ctx.body, order, await methodKeys(s));
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const done = await moves.refund(s, ctx, order, input.value);
 		return created({ order: await detailOf(s, done.order), refund: done.refund, ...warningsOf(done.warnings) });
@@ -488,7 +500,7 @@ export const createOrders = (product, service, { ordering }) => {
 	const recordPayment = async (ctx) => {
 		const s = await service.site(ctx);
 		const order = await orderOf(s, ctx);
-		const input = checkPayment(ctx.body, order);
+		const input = checkPayment(ctx.body, order, await methodKeys(s));
 		if (!input.ok) throw service.invalid(input.field, input.message);
 		const done = await moves.recordPayment(s, ctx, order, input.value, await flowOf(s));
 		return created({ order: await detailOf(s, done.order), ...warningsOf(done.warnings) });

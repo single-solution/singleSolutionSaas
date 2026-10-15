@@ -16,7 +16,8 @@
 import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { WAITING_ROLES } from '../core/flow.js';
 import { quantityLabel } from '../core/measure.js';
-import { EDITABLE_ROLES, PAYMENT_METHODS, RECORDED_METHODS } from '../core/orders.js';
+import { EDITABLE_ROLES } from '../core/orders.js';
+import { OTHER_WAY } from '../core/payment-methods.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, detailHead } from './admin-lists.js';
@@ -25,6 +26,19 @@ import { codeOf } from './admin-problems.js';
 import { variantLabel } from './admin-taxonomy.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
+
+/**
+ * The website's payment methods (the admin widget config's `settings.orders.paymentMethods: [{ key, name, kind }]`).
+ * @param {Kit} kit
+ * @returns {Array<{ key: string, name: string, kind: string }>}
+ */
+export const methodsOf = (kit) => kit.settings.orders.paymentMethods ?? [];
+
+/**
+ * A payment method's name by its key (a key the list no longer has reads as itself).
+ * @param {Kit} kit @param {string} key
+ */
+export const methodName = (kit, key) => methodsOf(kit).find((method) => method.key === key)?.name ?? key;
 /** @typedef {import('./admin-kit.js').Tone} Tone */
 /** @typedef {import('./admin-lists.js').Detail} Detail */
 /** @typedef {import('./admin-order-forms.js').SerialValues} SerialValues */
@@ -274,7 +288,7 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.placedAt'), kit.when(order.placedAt)],
 		[t('ordersAdmin.total'), money(order.totals.total)],
 		[t('ordersAdmin.paymentState'), t(`ordersAdmin.payment.${order.payment.state}`)],
-		[t('ordersAdmin.paymentMethod'), t(`ordersAdmin.method.${order.payment.method}`)],
+		[t('ordersAdmin.paymentMethod'), methodName(kit, order.payment.method)],
 		// the shopper's transfer proof: when it came, its reference and a link to open it (E24)
 		[t('ordersAdmin.proof'), proofOf(kit, order.payment.proof)],
 		[t('ordersAdmin.paid'), money(order.payment.paid)],
@@ -674,8 +688,8 @@ const noteDialog = (kit, order, done) => {
 };
 
 /**
- * Record a payment staff took (E26): a bank transfer, cash or another way, up to the balance due; a waiting order is
- * confirmed with it unless staff untick that.
+ * Record a payment staff took (E26, E16): by one of the website's payment methods (the order's own first) or another
+ * way with a reference, up to the balance due; a waiting order is confirmed with it unless staff untick that.
  * @param {Kit} kit @param {any} order @param {(order: any, text: string) => void} done
  */
 const paymentDialog = (kit, order, done) => {
@@ -684,10 +698,11 @@ const paymentDialog = (kit, order, done) => {
 	/** @param {number} minor */
 	const money = (minor) => kit.money(minor, currency);
 	const due = Number(order.payment.balanceDue ?? 0);
-	const method = kit.select(
-		RECORDED_METHODS.map((value) => ({ value, label: t(`ordersAdmin.paidWith.${value}`) })),
-		order.payment.method === 'bank_transfer' ? 'bank_transfer' : 'cash',
-	);
+	const ways = [
+		...methodsOf(kit).map((entry) => ({ value: entry.key, label: entry.name })),
+		{ value: OTHER_WAY, label: t('ordersAdmin.paidWith.other') },
+	];
+	const method = kit.select(ways, ways.some((way) => way.value === order.payment.method) ? order.payment.method : OTHER_WAY);
 	const amount = kit.input(kit.decimal(due), { inputmode: 'decimal' });
 	const reference = kit.input('', { maxlength: '120' });
 	const note = kit.input('', { maxlength: '1000' });
@@ -818,7 +833,7 @@ const editDialog = (kit, order, done) => {
 
 	const deliveryOn = order.delivery.method !== 'none';
 	const payment = kit.select(
-		PAYMENT_METHODS.map((value) => ({ value, label: t(`ordersAdmin.method.${value}`) })),
+		methodsOf(kit).map((entry) => ({ value: entry.key, label: entry.name })),
 		order.payment.method,
 	);
 	const delivery = kit.select(

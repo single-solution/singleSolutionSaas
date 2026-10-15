@@ -103,7 +103,7 @@ describe('a canceled order cancels its Payments payment (K-13)', () => {
 		expect(refused.json.detail).toContain('paid');
 		const record = await orderRecord(paidFirst.order.id);
 		expect(record).toMatchObject({ status: 'confirmed', payment: { state: 'paid', paid: record.totals.total } });
-		expect(record.payments).toEqual([expect.objectContaining({ method: 'online', reference: paidFirst.paymentId })]);
+		expect(record.payments).toEqual([expect.objectContaining({ method: 'payments', reference: paidFirst.paymentId })]);
 		expect(record.history.at(-1)).toMatchObject({ by: 'system', code: 'payment_confirmed' });
 	});
 
@@ -232,7 +232,7 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 		const total = read.json.totals.total;
 		expect(read.json).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total, refundable: total } });
 		expect(read.json.payments).toEqual([
-			expect.objectContaining({ method: 'online', reference: paymentId, note: 'Paid after the order was canceled' }),
+			expect.objectContaining({ method: 'payments', reference: paymentId, note: 'Paid after the order was canceled' }),
 		]);
 		// staff are told (staff alert event refund_due, on by default), and the refunds to make are listed
 		const alerts = shop
@@ -280,20 +280,20 @@ describe('money staff take, deletes and two "pay" at once (CK-21)', () => {
 		expect(cancelsOf(paymentId).map((call) => JSON.parse(call.body))).toEqual([{ reason: 'Paid by hand' }]);
 		expect((await orderRecord(order.id)).payment).toMatchObject({ paid: 400, state: 'unpaid', voidedAt: expect.any(Date) });
 		// the rest is recorded without asking Payments again
-		expect((await shop.api('POST', `/v1/orders/${order.id}/payments`, { method: 'cash', amount: 600 })).status).toBe(201);
+		expect((await shop.api('POST', `/v1/orders/${order.id}/payments`, { method: 'cod', amount: 600 })).status).toBe(201);
 		expect(cancelsOf(paymentId)).toHaveLength(1);
 
 		const paid = await placeOrder();
 		shop.payPayment(paid.paymentId);
-		const refused = await shop.api('POST', `/v1/orders/${paid.order.id}/payments`, { method: 'cash', amount: 1000 });
+		const refused = await shop.api('POST', `/v1/orders/${paid.order.id}/payments`, { method: 'cod', amount: 1000 });
 		expect(codeOf(refused)).toBe('conflict');
 		const record = await orderRecord(paid.order.id);
 		expect(record.payment).toMatchObject({ state: 'paid', paid: 1000 });
-		expect(record.payments.map((/** @type {any} */ entry) => entry.method)).toEqual(['online']);
+		expect(record.payments.map((/** @type {any} */ entry) => entry.method)).toEqual(['payments']);
 
 		const down = await placeOrder();
 		const restore = cancelAnswers({ status: 503, body: {} });
-		const unreachable = await shop.api('POST', `/v1/orders/${down.order.id}/payments`, { method: 'cash', amount: 500 });
+		const unreachable = await shop.api('POST', `/v1/orders/${down.order.id}/payments`, { method: 'cod', amount: 500 });
 		const notDeleted = await shop.api('DELETE', `/v1/orders/${down.order.id}`);
 		restore();
 		expect(codeOf(unreachable)).toBe('payments_unavailable');

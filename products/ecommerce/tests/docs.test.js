@@ -486,7 +486,7 @@ describe('the messages, staff alerts and events the code sends', () => {
 			// a payment staff record, which confirms the order
 			const recorded = await place('cod');
 			const paid = await shop.api('POST', `/v1/orders/${recorded.id}/payments`, {
-				method: 'cash',
+				method: 'cod',
 				amount: recorded.totals.total,
 				confirm: true,
 			});
@@ -494,7 +494,7 @@ describe('the messages, staff alerts and events the code sends', () => {
 			// a cancel with the staff's note
 			await move((await place('cod')).id, { to: 'cancelled', note: 'Out of stock' });
 			// a transfer proof
-			await shop.setting('checkout', 'bankTransferVia', 'manual');
+			await shop.methods({ bank_transfer: { via: 'manual', instructions: 'Pay to account 0000 0000.' } });
 			const transfer = await place('bank_transfer');
 			const upload = await visit('POST', `/v1/shop/orders/${transfer.id}/proof/upload`, {
 				signIn: sara,
@@ -506,7 +506,7 @@ describe('the messages, staff alerts and events the code sends', () => {
 				body: { key: upload.json.key, reference: 'TRX-1' },
 			});
 			expect(proof.status).toBe(200);
-			await shop.setting('checkout', 'bankTransferVia', 'payments');
+			await shop.methods({ bank_transfer: { via: 'payments' } });
 			// a back-in-stock alert
 			const out = await shop.seedProduct({ price: 2000, stock: 0 });
 			expect(

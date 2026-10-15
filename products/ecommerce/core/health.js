@@ -48,7 +48,7 @@ export const HEALTH_CHECKS = Object.freeze(
 		'storage',
 		'delivery_days',
 		'payment_methods',
-		'bank_details',
+		'pay_details',
 		'staff_alerts',
 		'admin_url',
 		'pixel_ids',
@@ -275,25 +275,31 @@ export const badTagIds = (answer) => {
 };
 
 /**
- * The payment methods shoppers can use now (E22–E24): cash on delivery while its feature is on and not switched off;
- * online payment and bank transfer when offered and Payments is connected (bank transfer also when staff record
- * transfers by hand); pay at pickup when offered and a pickup location exists.
- * @param {{ cod: boolean, offered: ReadonlyArray<string>, paymentsConnected: boolean, bankManual: boolean, pickup: boolean }} input
- * @returns {string[]}
+ * The payment methods shoppers can use now (E2): the active ones of the list, those paid through Payments (online, or
+ * first through Payments) while Payments is connected, and those paid at pickup while a pickup point exists.
+ * @param {{ methods: ReadonlyArray<import('./payment-methods.js').PaymentMethodRecord>, paymentsConnected: boolean,
+ *   pickup: boolean }} input
+ * @returns {string[]} their keys
  */
-export const paymentMethodsOn = ({ cod, offered, paymentsConnected, bankManual, pickup }) => [
-	...(cod ? ['cod'] : []),
-	...(paymentsConnected && offered.includes('online') ? ['online'] : []),
-	...((paymentsConnected || bankManual) && offered.includes('bank_transfer') ? ['bank_transfer'] : []),
-	...(pickup && offered.includes('pickup') ? ['pickup'] : []),
-];
+export const paymentMethodsOn = ({ methods, paymentsConnected, pickup }) =>
+	methods
+		.filter(
+			(method) =>
+				method.active &&
+				(method.kind === 'gateway' || (method.kind === 'pay_first' && method.via === 'payments')
+					? paymentsConnected
+					: true) &&
+				(method.kind === 'at_pickup' ? pickup : true),
+		)
+		.map((method) => method.key);
 
 /**
  * What the setup checks read; null where a check does not apply (it is skipped).
  * @typedef {object} SetupFacts
  * @property {boolean} storage the Storage connection is set (photos are uploaded to it)
- * @property {boolean | null} bankReady whether shoppers are told where to pay by bank transfer (Payments' bank details,
- *   or the bank transfer note when staff record transfers without Payments); null while bank transfer is not offered
+ * @property {number | null} payUnready the active methods paid first (or with an advance paid by hand) that do not tell
+ *   shoppers where to pay: no account with a value and no instructions (by hand), or Payments' method of their key not
+ *   ready; null while there is none, or Payments did not answer
  * @property {boolean | null} staffAlerted someone gets staff alerts (recipients or Accounts staff, through
  *   Notifications); null while Staff alerts is off
  * @property {boolean | null} adminUrl the admin page staff alerts link to is set; null while Staff alerts is off
@@ -363,7 +369,7 @@ export const healthOf = ({ facets, taxonomy, business, domain, paymentMethods, b
 		storage: { count: flag(setup.storage), link: null },
 		delivery_days: { count: deliveryDays === null ? null : deliveryDays ? 0 : 1, link: null },
 		payment_methods: { count: paymentMethods.length === 0 ? 1 : 0, link: null },
-		bank_details: { count: flag(setup.bankReady), link: null },
+		pay_details: { count: setup.payUnready, link: null },
 		staff_alerts: { count: flag(setup.staffAlerted), link: null },
 		admin_url: { count: flag(setup.adminUrl), link: null },
 		pixel_ids: { count: badTags === null ? null : badTags.length, link: null },

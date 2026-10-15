@@ -219,15 +219,11 @@ describe('texts', () => {
 			...['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country', 'notes'].map(
 				(key) => `checkout.field.${key}`,
 			),
-			...['cod', 'online', 'bank_transfer', 'pickup'].map((key) => `checkout.method.${key}`),
 			...['earn', 'redeem', 'refund', 'expire', 'adjust', 'reverse'].map((key) => `orders.points.kind.${key}`),
 			...['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'].map((key) => `orders.payment.${key}`),
 			...['return', 'warranty'].map((key) => `returns.kind.${key}`),
 			...['requested', 'approved', 'rejected', 'received', 'refunded', 'closed'].map((key) => `returns.status.${key}`),
 			...LINE_PROBLEMS.map((key) => `cart.problem.${key}`),
-			...['accountHolder', 'bankName', 'accountNumber', 'routingNumber', 'sortCode', 'branchCode', 'iban', 'bic'].map(
-				(key) => `checkout.bank.${key}`,
-			),
 		];
 		const missing = [...used, ...dynamic].filter((key) => !Object.hasOwn(TEXTS, key));
 		expect(missing).toEqual([]);

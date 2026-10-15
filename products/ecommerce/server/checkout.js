@@ -76,8 +76,6 @@ export const createCheckout = (product, service) => {
 	const widgetSettings = async (s) => {
 		if (!s.has('checkout')) return {};
 		const checkout = await s.values('checkout');
-		/** @type {string[]} */
-		const offered = checkout.paymentMethods;
 		const paymentsConnected = (await product.connections.value(s.websiteId, 'payments')) !== null;
 		const zonesOn = s.has('delivery_zones');
 		const pickupLocations = zonesOn
@@ -85,26 +83,23 @@ export const createCheckout = (product, service) => {
 					.filter((location) => location.pickup)
 					.map((location) => ({ id: location.id, name: location.name }))
 			: [];
-		const codSettings = s.has('cod') ? await s.values('cod') : null;
-		// cash on delivery is offered while its feature is on and staff have not switched it off (`enabled`, AO-2)
-		const cod = codSettings?.enabled === false ? null : codSettings;
+		// the one pickup point of the settings while stock has no locations (E22)
+		const zonesPickup = zonesOn && !s.has('multi_location') && (await s.values('delivery_zones')).pickupEnabled === true;
+		// the methods a cart may offer: active ones, through Payments while it is connected, at pickup with a pickup point
+		const methods = (await service.methods.methodsOf(s)).filter(
+			(method) =>
+				method.active &&
+				(method.kind === 'gateway' || (method.kind === 'pay_first' && method.via === 'payments')
+					? paymentsConnected
+					: true) &&
+				(method.kind === 'at_pickup' ? pickupLocations.length > 0 || zonesPickup : true),
+		);
 		/** @type {string[]} */
 		const required = checkout.addressRequired;
 		const phoneNeeded = checkout.phoneRequired !== false;
 		return {
 			checkout: {
-				paymentMethods: [
-					...(cod ? ['cod'] : []),
-					...['online', 'bank_transfer'].filter((method) => paymentsConnected && offered.includes(method)),
-					...(offered.includes('pickup') && pickupLocations.length > 0 ? ['pickup'] : []),
-				],
-				cod: cod
-					? {
-							maxOrderValue: cod.maxOrderValue,
-							advanceAmount: paymentsConnected ? cod.advanceAmount : 0,
-							advancePercent: paymentsConnected ? cod.advancePercent : 0,
-						}
-					: null,
+				paymentMethods: methods.map((method) => ({ key: method.key, name: method.name, kind: method.kind })),
 				pickupLocations,
 				delivery: {
 					zones: zonesOn,

@@ -89,7 +89,16 @@ const orderOf = (lines, promotions = {}, key = createId('key')) => ({
 		released: false,
 		...promotions,
 	},
-	payment: { method: 'cod', state: 'unpaid', paymentId: null, advance: 0, paid: 0, refunded: 0, checkedAt: null },
+	payment: {
+		method: 'cod',
+		kind: 'on_delivery',
+		state: 'unpaid',
+		paymentId: null,
+		advance: 0,
+		paid: 0,
+		refunded: 0,
+		checkedAt: null,
+	},
 	status: 'awaiting_confirmation',
 	role: 'awaiting_confirmation',
 	history: [],
@@ -113,7 +122,7 @@ const transition = async (order, to) => {
 		flow: DEFAULT_FLOW,
 		to,
 		input: { who: 'staff', actor: { kind: 'server', id: 'server', name: 'Server' }, by: 'Server', note: '' },
-		rules: { paymentWindowMinutes: 0, paidOnDelivery: true, loyalty: null, timeZone: 'UTC' },
+		rules: { paymentWindowMinutes: 0, loyalty: null, timeZone: 'UTC' },
 		now: shop.now(),
 	});
 	if (!planned.ok) throw new Error(planned.message);

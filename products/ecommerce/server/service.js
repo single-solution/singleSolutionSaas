@@ -11,6 +11,7 @@ import { actorOf, problem, zonedParts } from '@ss/app-kit';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { KEEP_MS, createOutbox } from '../adapters/outbox.js';
 import { unitOf } from '../core/money.js';
+import { createPaymentMethods } from './payment-methods.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -732,6 +733,8 @@ export const createService = (product) => {
 		notify,
 		sendRequired,
 		payments,
+		// the payment methods and what a method paid first tells shoppers (E2, E8)
+		methods: createPaymentMethods(product, { now }),
 		on,
 		emit,
 	});

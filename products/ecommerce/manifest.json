@@ -88,21 +88,11 @@
 		{
 			"key": "checkout",
 			"name": "Cart and checkout",
-			"description": "The cart, checkout, orders with merchant-defined statuses, couriers with tracking links, customer records and the success page.",
+			"description": "The cart, checkout, the merchant's own payment methods (paid online, paid first such as a bank transfer, on delivery or at pickup, each with its note, fee, largest order and advance), orders with merchant-defined statuses, couriers with tracking links, customer records and the success page.",
 			"dependsOn": ["catalog"],
 			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
 				"$ref": "schemas/checkout.settings.json"
-			}
-		},
-		{
-			"key": "cod",
-			"name": "Cash on delivery",
-			"description": "Cash on delivery with a confirmation step, a largest order value, an optional advance, a blocklist and return-to-origin flags.",
-			"dependsOn": ["checkout"],
-			"recommendFor": ["pays.cod"],
-			"settings": {
-				"$ref": "schemas/cod.settings.json"
 			}
 		},
 		{

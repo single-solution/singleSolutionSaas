@@ -464,7 +464,11 @@ export const renameFlowStatus = (flow, from, to) => {
 			windowEnd: swap(flow.triggers.windowEnd),
 			refundsCover: swap(flow.triggers.refundsCover),
 		},
-		starts: { cod: swap(flow.starts.cod), pickup: swap(flow.starts.pickup), free: swap(flow.starts.free) },
+		starts: {
+			on_delivery: swap(flow.starts.on_delivery),
+			at_pickup: swap(flow.starts.at_pickup),
+			free: swap(flow.starts.free),
+		},
 	};
 };
 

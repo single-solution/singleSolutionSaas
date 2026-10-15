@@ -28,6 +28,7 @@ import {
 	parseCredits,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
+import { paidByHand } from '../../core/payment-methods.js';
 import { SEARCH_INDEX_DEFINITION } from '../../core/search.js';
 import { SITE_ROUTES, createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
@@ -98,8 +99,8 @@ const settingOf = (answer, feature, key) => {
 /**
  * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview from `@ss/ui` (greeting, Needs you, setup,
  * numbers, Recent changes), with Ecommerce's own part, judged from setup only (no business data): with checkout,
- * Payments (recommended) and Notifications (optional, when no feature needs it), bank transfer offered with staff
- * recording transfers but no bank details for shoppers; with the catalog, the shop's currency until the merchant sets
+ * Payments (recommended) and Notifications (optional, when no feature needs it), payment methods paid by hand with
+ * no instructions or account details for shoppers; with the catalog, the shop's currency until the merchant sets
  * it (USD by default, Claude's decision 9), the Atlas Search index while the shop or Chat searches with Atlas and the
  * public address of the images once storage is connected; with Staff alerts, someone to alert and the admin page they
  * link to; and how many of the connections the features need are ready. `/connections` is read only with checkout or
@@ -117,6 +118,7 @@ function OverviewTab({ websiteId, who, support, portal, open }) {
 	const connections = useLoad(shop || alertsOn ? `${base}/connections` : null);
 	const search = useLoad(catalog ? `${base}/search-index` : null);
 	const settings = useLoad(catalog ? `${base}/settings` : null);
+	const methods = useLoad(shop ? `${base}/lists/payment_methods` : null);
 	const O = TEXTS.overview;
 	/** @param {string} label @param {import('@ss/ui').OverviewTab} tab */
 	const go = (label, tab) => (
@@ -261,20 +263,24 @@ function OverviewTab({ websiteId, who, support, portal, open }) {
 							action: go(O.adminUrl.action, 'settings'),
 						});
 				}
-				// bank transfer offered, recorded by staff, with nothing telling shoppers where to pay
-				if (shop && settings.answer?.ok) {
-					const methods = settingOf(settings.answer, 'checkout', 'paymentMethods')?.value;
-					const manual = settingOf(settings.answer, 'checkout', 'bankTransferVia')?.value === 'manual';
-					const note = String(settingOf(settings.answer, 'checkout', 'noteBankTransfer')?.value ?? '').trim();
-					if (Array.isArray(methods) && methods.includes('bank_transfer') && manual && !note)
-						needs.push({
-							key: 'bank',
-							tone: 'warning',
-							title: O.bank.title,
-							effect: O.bank.effect,
-							action: go(O.bank.action, 'settings'),
-						});
-				}
+				// a method paid by hand, offered, with nothing telling shoppers where to pay (no instructions, no account row
+				// with a value)
+				const listed = methods.answer?.ok && Array.isArray(methods.answer.data?.value) ? methods.answer.data.value : [];
+				const untold = listed.filter(
+					(/** @type {import('../../core/payment-methods.js').PaymentMethodRecord} */ method) =>
+						method.active &&
+						paidByHand(method) &&
+						!method.instructions &&
+						!method.accounts.some((account) => account.rows.some((row) => row.value !== '')),
+				);
+				if (shop && untold.length > 0)
+					needs.push({
+						key: 'bank',
+						tone: 'warning',
+						title: fill(O.bank.title, { methods: untold.map((/** @type {any} */ method) => method.name).join(', ') }),
+						effect: O.bank.effect,
+						action: go(O.bank.action, 'settings'),
+					});
 				return (
 					<ProductOverview
 						data={data}

@@ -6,7 +6,7 @@
  * `STATUS_ROLES`), and the role rules below hold whatever the flow, so stock, offer uses, points and money stay right:
  *
  * - exactly one `awaiting_payment` status and at most one `awaiting_confirmation` status: orders start there (a flow
- *   without a confirmation step starts cash-on-delivery, pickup and free orders in an open status, `starts`); an `open`
+ *   without a confirmation step starts orders paid on delivery or at pickup and free orders in an open status, `starts`); an `open`
  *   or `packed` order may wait for its payment again (PLAN 0.8.10 E27), nothing else moves into them;
  * - `cancelled` from waiting, open or packed statuses; `refunded` from waiting, open or packed statuses (E27: it acts
  *   as a cancel; with nothing paid only when the move says `unpaid: cancel`, the default), and after delivery;
@@ -32,6 +32,7 @@
  * @module
  */
 import { STATUS_ROLES } from './model.js';
+import { isMethodKey } from './payment-methods.js';
 
 /** @typedef {import('./model.js').OrderFlow} OrderFlow */
 /** @typedef {import('./model.js').OrderMove} OrderMove */
@@ -49,10 +50,8 @@ const KEY = /^[a-z][a-z0-9_-]{1,39}$/;
 const MAX_LABEL = 60;
 /** The longest line a shopper reads under a status for one payment method. */
 const MAX_SHOPPER_TEXT = 300;
-/** The payment methods a status has a shopper line for, and that `paidOnConfirm` lists. */
-export const FLOW_METHODS = Object.freeze(
-	/** @type {import('./model.js').PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']),
-);
+/** A status has a shopper line for at most this many payment methods (the `payment_methods` list's most). */
+const MAX_TEXT_METHODS = 20;
 /** Who may make a move: one of these sets. */
 const WHO_SETS = Object.freeze([['staff'], ['staff', 'shopper'], ['shopper'], ['system']]);
 /** What staff give with a move (`reason`: the shopper note, which the shopper reads in the order's timeline). */
@@ -128,6 +127,8 @@ Object.freeze(ALLOWED_FROM);
  *   moving it record as paid (OR-7; default none);
  * - into awaiting payment again: `window`, the time to pay `restart`s (default) or there is `none` (OR-5);
  * - into packed: `video`, the dispatch video `off` (default), `optional` or `required` (E28);
+ * - into delivered: `paidOnDelivery`, an order paid on delivery or at pickup counts as paid with it (`yes`, the
+ *   default: the money was taken at the door or the counter) or staff record that money (`no`; decision 11);
  * - into shipped: `tracking`, the tracking number `required` (default) or `optional`;
  * - into cancelled: `refund`, what Payments took is refunded `auto`matically when staff cancel (default) or by `staff`
  *   from the order; with the shopper among `who`, `shopperPaid`: a paid order the shopper cancels is refused
@@ -154,6 +155,7 @@ export const moveOptionSpecs = (from, to, who = ['staff']) => {
 		specs.paidOnConfirm = { kind: 'methods', default: [] };
 	if (to === 'awaiting_payment') specs.window = one(['restart', 'none'], 'restart');
 	if (to === 'packed') specs.video = one(['off', 'optional', 'required'], 'off');
+	if (to === 'delivered') specs.paidOnDelivery = one(['yes', 'no'], 'yes');
 	if (to === 'shipped') specs.tracking = one(['required', 'optional'], 'required');
 	if (to === 'cancelled') {
 		specs.refund = one(['auto', 'staff'], 'auto');
@@ -179,6 +181,7 @@ const OPTION_NAMES = Object.freeze([
 	'unpaid',
 	'restock',
 	'points',
+	'paidOnDelivery',
 ]);
 
 /**
@@ -286,15 +289,19 @@ export const checkOrderFlow = (value) => {
 		const texts = objectOf(status.shopperText);
 		/** @type {Record<string, string>} */
 		const shopperText = {};
-		for (const method of FLOW_METHODS) {
-			const text = texts[method] === undefined || texts[method] === null ? '' : texts[method];
+		// a line per payment method key of the website's list ('' lines are left out)
+		if (Object.keys(texts).length > MAX_TEXT_METHODS)
+			errors.push(`Status '${key}' has shopper lines for at most ${MAX_TEXT_METHODS} payment methods.`);
+		for (const [method, given] of Object.entries(texts)) {
+			if (!isMethodKey(method)) {
+				errors.push(`Status '${key}' has a shopper line for '${method}', which is not a payment method key.`);
+				continue;
+			}
+			const text = given === undefined || given === null ? '' : given;
 			if (typeof text !== 'string' || text.trim().length > MAX_SHOPPER_TEXT)
 				errors.push(`The shopper's line of status '${key}' for ${method} has at most ${MAX_SHOPPER_TEXT} characters.`);
-			shopperText[method] = typeof text === 'string' ? text.trim() : '';
+			else if (text.trim() !== '') shopperText[method] = text.trim();
 		}
-		for (const method of Object.keys(texts))
-			if (!FLOW_METHODS.includes(/** @type {any} */ (method)))
-				errors.push(`Status '${key}' has a shopper line for an unknown payment method '${method}'.`);
 		if (status.notify !== undefined && typeof status.notify !== 'boolean')
 			errors.push(`Whether status '${key}' sends a message is true or false.`);
 		if (status.staffAlert !== undefined && typeof status.staffAlert !== 'boolean')
@@ -416,12 +423,8 @@ const moveProblems = (name, move, from, to) => {
 				continue;
 			}
 			if (spec.kind === 'methods') {
-				if (
-					!Array.isArray(given) ||
-					given.some((method) => !FLOW_METHODS.includes(method)) ||
-					new Set(given).size !== given.length
-				)
-					problems.push(`${name}: ${option} lists payment methods (${FLOW_METHODS.join(', ')}), each once.`);
+				if (!Array.isArray(given) || given.some((method) => !isMethodKey(method)) || new Set(given).size !== given.length)
+					problems.push(`${name}: ${option} lists payment method keys, each once.`);
 			} else if (!spec.values.includes(/** @type {string} */ (given)))
 				problems.push(`${name}: ${option} is ${spec.values.join(', ')}.`);
 		}
@@ -456,7 +459,7 @@ const triggersOf = (flow, input, errors) => {
 };
 
 /**
- * Where orders that need no payment first start, checked: cash on delivery and pay at pickup in the
+ * Where orders that need no payment first start, checked: those paid on delivery and at pickup in the
  * awaiting-confirmation status or an open one, free orders also in the awaiting-payment status (they wait there for
  * staff, with no time to pay).
  * @param {OrderFlow} flow checked @param {Record<string, unknown>} input @param {string[]} errors
@@ -464,7 +467,7 @@ const triggersOf = (flow, input, errors) => {
  */
 const startsOf = (flow, input, errors) => {
 	const fallback = defaultStarts(flow);
-	/** @param {'cod' | 'pickup' | 'free'} name @param {StatusRole[]} roles */
+	/** @param {keyof import('./model.js').FlowStarts} name @param {StatusRole[]} roles */
 	const pick = (name, roles) => {
 		const given = input[name];
 		if (given === undefined || given === null) return fallback[name];
@@ -476,8 +479,8 @@ const startsOf = (flow, input, errors) => {
 		return /** @type {string} */ (given);
 	};
 	return {
-		cod: pick('cod', ['awaiting_confirmation', 'open']),
-		pickup: pick('pickup', ['awaiting_confirmation', 'open']),
+		on_delivery: pick('on_delivery', ['awaiting_confirmation', 'open']),
+		at_pickup: pick('at_pickup', ['awaiting_confirmation', 'open']),
 		free: pick('free', ['awaiting_confirmation', 'open', 'awaiting_payment']),
 	};
 };
@@ -503,7 +506,7 @@ const defaultTriggers = (flow) => {
  */
 const defaultStarts = (flow) => {
 	const start = statusWithRole(flow, 'awaiting_confirmation') || statusWithRole(flow, 'open');
-	return { cod: start, pickup: start, free: start };
+	return { on_delivery: start, at_pickup: start, free: start };
 };
 
 /**

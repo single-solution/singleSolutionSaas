@@ -317,7 +317,7 @@ describe('checkout options of the flow', () => {
 	it('an edit of a waiting order keeps the amounts it was placed with, or prices it again', async () => {
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const variantId = /** @type {any} */ (item.variants[0]).id;
-		await shop.setting('cod', 'feePercent', 5);
+		await shop.methods({ cod: { feePercent: 5 } });
 		/** @param {string} key */
 		const place = async (key) => {
 			visits += 1;
@@ -341,7 +341,7 @@ describe('checkout options of the flow', () => {
 			const fee = (await records.recordOf(kept)).totals.fee;
 			expect(fee).toBe(50);
 			// the fee is no more; one edit prices again, the other keeps what was placed
-			await shop.setting('cod', 'feePercent', 0);
+			await shop.methods({ cod: { feePercent: 0 } });
 			const again = await shop.api('PATCH', `/v1/orders/${repriced}`, { lines: [{ variantId, quantity: 2 }] });
 			expect(again.json.totals).toMatchObject({ subtotal: 2000, fee: 0 });
 			await shop.setting('checkout', 'editPricing', 'keep_placed');
@@ -349,7 +349,7 @@ describe('checkout options of the flow', () => {
 			expect(same.json.totals).toMatchObject({ subtotal: 2000, fee: 50 });
 		} finally {
 			await shop.setting('checkout', 'editPricing', 'reprice');
-			await shop.setting('cod', 'feePercent', 0);
+			await shop.methods({ cod: { feePercent: 0 } });
 		}
 	});
 
