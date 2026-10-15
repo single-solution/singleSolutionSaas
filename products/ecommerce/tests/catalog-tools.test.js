@@ -382,6 +382,56 @@ describe('bulk edit any field (E23)', () => {
 	});
 });
 
+describe('staff filters and counts by filterable fields (E24)', () => {
+	it('filters the staff list and counts products by any field marked filterable', async () => {
+		const color = await ok('POST', '/v1/attributes', {
+			name: 'Colour',
+			slug: 'color',
+			type: 'choice',
+			choices: ['red', 'blue'],
+			show: { filter: true },
+		});
+		const size = await ok('POST', '/v1/attributes', { name: 'Size', slug: 'size', on: 'variant', show: { filter: true } });
+		const secret = await ok('POST', '/v1/attributes', { name: 'Supplier', slug: 'supplier' });
+		const one = await ok('POST', '/v1/products', {
+			name: 'Facet one',
+			price: 100,
+			locations: {},
+			specs: { [color.id]: 'red', [secret.id]: 'Acme' },
+		});
+		const two = await ok('POST', '/v1/products', {
+			name: 'Facet two',
+			specs: { [color.id]: 'blue' },
+			variants: [
+				{ price: 100, locations: {}, attributes: { [size.id]: 'L' } },
+				{ price: 100, locations: {}, attributes: { [size.id]: 'M' }, sku: 'FT-M' },
+			],
+		});
+		const three = await ok('POST', '/v1/products', { name: 'Facet three', price: 100, locations: {} });
+		const ids = `ids=${one.id},${two.id},${three.id}`;
+		/** @param {string} path */
+		const listed = async (path) => (await ok('GET', path)).items.map((/** @type {any} */ p) => p.id).sort();
+		expect(await listed(`/v1/products?${ids}&attr.color=red`)).toEqual([one.id]);
+		expect(await listed(`/v1/products?${ids}&attr.color=red,blue`)).toEqual([one.id, two.id].sort());
+		expect(await listed(`/v1/products?${ids}&attr.${size.id}=M`)).toEqual([two.id]);
+		// a field not marked filterable filters nothing in
+		expect(await listed(`/v1/products?${ids}&attr.supplier=Acme`)).toEqual([]);
+		expect(await ok('GET', `/v1/products/count?${ids}&attr.color=blue`)).toEqual({ count: 1, capped: false });
+		const byColor = await ok('GET', `/v1/products/counts?${ids}&by=attr.color`);
+		expect(byColor).toEqual({ total: 3, groups: { red: 1, blue: 1, none: 1 } });
+		const bySize = await ok('GET', `/v1/products/counts?${ids}&by=attr.size`);
+		expect(bySize).toEqual({ total: 3, groups: { L: 1, M: 1, none: 2 } });
+		// with another filter
+		expect(await ok('GET', `/v1/products/counts?${ids}&attr.color=blue&by=attr.size`)).toEqual({
+			total: 1,
+			groups: { L: 1, M: 1 },
+		});
+		expect((await api('GET', `/v1/products/counts?${ids}&by=attr.supplier`)).status).toBe(422);
+		const staff = await shop.ticket(['catalog.edit']);
+		expect((await shop.admin(staff, 'GET', `/v1/admin/products/counts?${ids}&by=attr.color`)).json.groups.red).toBe(1);
+	});
+});
+
 describe('AI copy', () => {
 	it('suggests texts with the merchant AI key and never saves them', async () => {
 		const staff = await shop.ticket(['catalog.edit']);

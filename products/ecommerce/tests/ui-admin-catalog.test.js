@@ -99,6 +99,8 @@ describe('catalog admin: the product list', () => {
 		await tick(checkIn(dialog, 'Grade A1'), true);
 		await tick(checkIn(dialog, 'Out of stock1'), true);
 		await tick(checkIn(dialog, 'Some variants in stock1'), true);
+		// a field marked filterable, with the values products hold and their counts (E24)
+		await tick(checkIn(dialog, '6.11'), true);
 		await submitDialog(root);
 		expect(hasDialog(root)).toBe(false);
 		expect(lastQuery(server)).toEqual({
@@ -110,6 +112,7 @@ describe('catalog admin: the product list', () => {
 			hasMedia: '0',
 			lowStock: 'true',
 			kind: 'digital',
+			'attr.att_1': '6.1',
 		});
 		// the counts by stock state leave their own filter out
 		const counts = server.all('GET /v1/admin/products/counts').map((call) => Object.fromEntries(call.url.searchParams));

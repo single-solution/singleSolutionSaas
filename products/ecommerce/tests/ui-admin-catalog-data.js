@@ -347,6 +347,8 @@ export const lists = (routes = {}) => ({
 			grade: { a: 1, none: 1 },
 			featured: { true: 1, false: 1 },
 			category: { cat_b: 5, cat_c: 1, none: 1 },
+			// a field marked filterable (E24)
+			'attr.att_1': { 6.1: 1, none: 1 },
 		};
 		return answer(200, { total: 2, groups: groups[by] ?? {} });
 	},

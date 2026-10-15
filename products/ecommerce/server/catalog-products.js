@@ -17,6 +17,7 @@ import { createId } from '@ss/contracts';
 import { countHandlers, created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import {
 	NO_ID,
+	attributesOf,
 	brandsOf,
 	categoriesOf,
 	findProduct,
@@ -40,7 +41,16 @@ import {
 	summarize,
 } from '../core/catalog.js';
 import { VIDEO_TYPES } from '../core/catalog-content.js';
-import { afterFilter, cursorKey, listOf, staffFilter, variantStockCounts, variantStockPipeline } from '../core/catalog-query.js';
+import {
+	afterFilter,
+	cursorKey,
+	fieldPath,
+	fieldsNamed,
+	listOf,
+	staffFilter,
+	variantStockCounts,
+	variantStockPipeline,
+} from '../core/catalog-query.js';
 import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
@@ -222,9 +232,16 @@ export const createCatalogProducts = (product, service, common) => {
 		if (taken.length > 0) throw problem('conflict', `Another product already uses the SKU ${taken.join(', ')}.`);
 	};
 
+	/** Every field by id. @param {WebsiteData} data */
+	const fieldMap = async (data) =>
+		new Map(
+			/** @type {import('../core/model.js').AttributeRecord[]} */ (await attributesOf(data)).map((field) => [field.id, field]),
+		);
+
 	/**
-	 * The staff list's filter (`q`, `status`, `kind`, `category` with its subcategories, `brand`, `lowStock`), without
-	 * `websiteId` and the page; the list and its counts share it.
+	 * The staff list's filter (`q`, `status`, `kind`, `category` with its subcategories, `brand`, `lowStock`, and E24
+	 * `attr.<slug or id>` for any field marked filterable), without `websiteId` and the page; the list and its counts
+	 * share it.
 	 * @param {any} ctx
 	 */
 	const staffSource = async (ctx) => {
@@ -243,11 +260,13 @@ export const createCatalogProducts = (product, service, common) => {
 			brandIds = (await brandsOf(data)).filter((b) => wanted.includes(b.id) || wanted.includes(b.slug)).map((b) => b.id);
 		const { lowStock } = await s.values('catalog');
 		const lowAsked = ctx.query.lowStock === 'true' || ctx.query.lowStock === '1';
+		const byFields = Object.keys(ctx.query).some((name) => name.startsWith('attr.'));
 		const inner = staffFilter(ctx.query, {
 			categoryIds,
 			brandIds,
 			lowStock: Number(lowStock),
 			measured: lowAsked ? await measuredScope(data, await s.list('item_types')) : null,
+			...(byFields ? { attributes: await fieldMap(data) } : {}),
 		});
 		const below = seoBelowOf(s, ctx.query);
 		if (below === null) return { s, data, inner };
@@ -267,6 +286,55 @@ export const createCatalogProducts = (product, service, common) => {
 		},
 		by: { status: 'status', brand: 'brandId', stockState: 'stockState', featured: 'featured' },
 	});
+
+	/** Most products a count by a field reads (E24). */
+	const MAX_FIELD_COUNTED = 20_000;
+
+	/**
+	 * Counts by a field marked filterable (`by=attr.<slug or id>`, E24): a product counts under each value it or any of
+	 * its variants holds (`none` without), its total once; the 50 largest groups.
+	 * @param {any} ctx
+	 */
+	const fieldCounts = async (ctx) => {
+		const { data, inner } = await staffSource(ctx);
+		const fields = fieldsNamed(await fieldMap(data), String(ctx.query.by).slice('attr.'.length));
+		if (fields.length === 0)
+			throw refuse([
+				{ path: '/by', message: 'by=attr.<slug or id> names an active product or variant field marked filterable.' },
+			]);
+		const rows = /** @type {ProductRecord[]} */ (
+			await data
+				.collection(COLLECTIONS.products)
+				.find(
+					{ websiteId: data.websiteId, $and: [inner] },
+					{
+						projection: { _id: 0, ...Object.fromEntries(fields.map((field) => [fieldPath(field), 1])) },
+						limit: MAX_FIELD_COUNTED,
+						maxTimeMS: 3000,
+					},
+				)
+				.toArray()
+		);
+		/** @type {Map<string, number>} */
+		const groups = new Map();
+		for (const product of rows) {
+			/** @type {Set<string>} */
+			const held = new Set();
+			/** @param {unknown} value */
+			const add = (value) => {
+				for (const one of Array.isArray(value) ? value : value === undefined || value === null ? [] : [value])
+					held.add(String(one));
+			};
+			for (const field of fields)
+				if (field.on === 'product') add(product.specs?.[field.id]);
+				else for (const variant of product.variants ?? []) add(variant.attributes?.[field.id]);
+			for (const key of held.size > 0 ? held : ['none']) groups.set(key, (groups.get(key) ?? 0) + 1);
+		}
+		return {
+			total: rows.length,
+			groups: Object.fromEntries([...groups].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 50)),
+		};
+	};
 
 	/** Counts by a list field: a product counts under each value it holds (`none` without), its total once. */
 	const LIST_COUNTS = Object.freeze(/** @type {Record<string, string>} */ ({ grade: 'grades', category: 'categoryIds' }));
@@ -296,6 +364,7 @@ export const createCatalogProducts = (product, service, common) => {
 				const groups = Object.fromEntries(Object.entries(counted).filter(([, n]) => n > 0));
 				return { total: counted.out + counted.low + counted.in, groups };
 			}
+			if (String(ctx.query.by ?? '').startsWith('attr.')) return fieldCounts(ctx);
 			const field = LIST_COUNTS[String(ctx.query.by)];
 			if (!field) return kitCounts.counts(ctx);
 			const { data, inner } = await staffSource(ctx);

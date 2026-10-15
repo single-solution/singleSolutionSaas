@@ -117,6 +117,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 		kind: '',
 		sort: '',
 		seoBelow: '',
+		/** @type {Record<string, string[]>} the values picked per filterable field, by its slug (E24) */ fields: {},
 	};
 	/** @type {Set<string>} */
 	const selected = new Set();
@@ -140,8 +141,28 @@ export const productsTab = (kit, panel, lookups, links) => {
 			kind: filters.kind,
 			sort: filters.sort,
 			seoBelow: filters.seoBelow,
+			...Object.fromEntries(
+				Object.entries(filters.fields)
+					.filter(([, values]) => values.length > 0)
+					.map(([ref, values]) => [`attr.${ref}`, values.join(',')]),
+			),
 			...over,
 		});
+
+	/**
+	 * The fields staff filter by (E24): the active product and variant fields marked filterable, one per slug.
+	 * @returns {Array<{ ref: string, name: string, type: string, choices: Array<{ value: string, label: string }> }>}
+	 */
+	const filterableFields = () => {
+		/** @type {Map<string, any>} */
+		const byRef = new Map();
+		for (const field of /** @type {any[]} */ (lookups.state.attributes))
+			if ((field.on === 'product' || field.on === 'variant') && field.active !== false && field.show?.filter) {
+				const ref = field.slug || field.id;
+				if (!byRef.has(ref)) byRef.set(ref, { ref, name: field.name, type: field.type, choices: field.choices ?? [] });
+			}
+		return [...byRef.values()];
+	};
 
 	const chips = h('div', { class: 'chipbar', role: 'group', 'aria-label': t('admin.status') });
 	const total = kit.text('p', { class: 'muted total' }, '');
@@ -158,6 +179,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 			kind: '',
 			sort: '',
 			seoBelow: '',
+			fields: {},
 		});
 		return reload();
 	});
@@ -255,7 +277,14 @@ export const productsTab = (kit, panel, lookups, links) => {
 
 	/** The filters dialog, with counts by stock state, brand, grade and featured. */
 	const openFilters = async () => {
-		const by = ['stockState', 'brand', ...(lookups.grades().length > 0 ? ['grade'] : []), 'featured'];
+		const fields = filterableFields();
+		const by = [
+			'stockState',
+			'brand',
+			...(lookups.grades().length > 0 ? ['grade'] : []),
+			'featured',
+			...fields.map((field) => `attr.${field.ref}`),
+		];
 		const answers = await Promise.all(
 			by.map((name) => kit.call('GET', `/v1/admin/products/counts${params({ [name]: '', sort: '', by: name })}`)),
 		);
@@ -338,6 +367,22 @@ export const productsTab = (kit, panel, lookups, links) => {
 			filters.stockState,
 			counts.stockState,
 		);
+		// a group per filterable field (E24): its choices, else the values products hold
+		const fieldGroups = fields.map((field) => {
+			const held = /** @type {Record<string, number>} */ (counts[`attr.${field.ref}`] ?? {});
+			const choices =
+				field.type === 'choice'
+					? field.choices
+					: field.type === 'yes_no'
+						? [
+								{ value: 'true', label: t('admin.yes') },
+								{ value: 'false', label: t('admin.no') },
+							]
+						: Object.keys(held)
+								.filter((value) => value !== 'none')
+								.map((value) => ({ value, label: value }));
+			return { ref: field.ref, group: checkGroup(kit, field.name, choices, filters.fields[field.ref] ?? [], held) };
+		});
 		kit.dialog({
 			title: t('catalogAdmin.filters'),
 			wide: true,
@@ -354,6 +399,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 				states.node,
 				lookups.state.brands.length > 0 ? brands.node : null,
 				lookups.grades().length > 0 ? grades.node : null,
+				...fieldGroups.map((entry) => entry.group.node),
 			],
 			submitLabel: t('catalogAdmin.showProducts'),
 			onSubmit: async () => {
@@ -368,6 +414,7 @@ export const productsTab = (kit, panel, lookups, links) => {
 					stockState: states.value(),
 					sort: has('seo') ? order.value : '',
 					seoBelow: has('seo') ? seoBelow.value : '',
+					fields: Object.fromEntries(fieldGroups.map((entry) => [entry.ref, entry.group.value()])),
 				});
 				await reload();
 				return null;

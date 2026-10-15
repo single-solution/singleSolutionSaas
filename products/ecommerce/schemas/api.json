@@ -16185,7 +16185,7 @@
 	},
 	"GET /v1/products": {
 		"summary": "The products, newest first",
-		"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow.",
+		"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow. Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -16264,7 +16264,7 @@
 	},
 	"GET /v1/admin/products": {
 		"summary": "The products, newest first (Catalog admin widget)",
-		"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow.",
+		"description": "Every status, with exact stock (the /v1/shop routes are for shoppers), newest first; while the seo feature is on each row carries seoScore, and sort=seo_score and seoBelow order and filter by it (E42). Answers a Link header to the next page. 400 bad_request for an invalid cursor or limit; 422 validation_failed at /sort or /seoBelow. Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -16402,7 +16402,8 @@
 		},
 		"response": {
 			"$ref": "#/components/schemas/Count"
-		}
+		},
+		"description": "Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing."
 	},
 	"GET /v1/admin/products/count": {
 		"summary": "Count the products (the list’s filters) (Catalog admin widget)",
@@ -16465,18 +16466,20 @@
 		},
 		"response": {
 			"$ref": "#/components/schemas/Count"
-		}
+		},
+		"description": "Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing."
 	},
 	"GET /v1/products/counts": {
-		"summary": "Count the products by status, brand, stock state, featured, grade or category, or their variants by stock",
-		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. by=variantStock counts variants instead: the offered variants of products that track stock and are not archived (with the other filters), as out (no units, or marked sold out), low (1 to the catalog setting lowStock units) and in (more), a group without variants left out, the total every variant counted. 422 validation_failed for another by.",
+		"summary": "Count the products by status, brand, stock state, featured, grade, category or any filterable field, or their variants by stock",
+		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. by=variantStock counts variants instead: the offered variants of products that track stock and are not archived (with the other filters), as out (no units, or marked sold out), low (1 to the catalog setting lowStock units) and in (more), a group without variants left out, the total every variant counted. 422 validation_failed for another by. Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing.",
 		"query": {
 			"type": "object",
 			"required": ["by"],
 			"properties": {
 				"by": {
 					"type": "string",
-					"enum": ["status", "brand", "stockState", "featured", "grade", "category", "variantStock"]
+					"pattern": "^(status|brand|stockState|featured|grade|category|variantStock|attr\\.[A-Za-z0-9_-]{1,64})$",
+					"description": "status, brand, stockState, featured, grade, category or variantStock; or attr.<slug or id> (E24): a product counts under each value it or any of its variants holds (none: without one), the 50 largest groups. 422 validation_failed at /by for a field not marked filterable."
 				},
 				"q": {
 					"type": "string",
@@ -16537,15 +16540,16 @@
 		}
 	},
 	"GET /v1/admin/products/counts": {
-		"summary": "Count the products by status, brand, stock state, featured, grade or category, or their variants by stock (Catalog admin widget)",
-		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. by=variantStock counts variants instead: the offered variants of products that track stock and are not archived (with the other filters), as out (no units, or marked sold out), low (1 to the catalog setting lowStock units) and in (more), a group without variants left out, the total every variant counted. 422 validation_failed for another by.",
+		"summary": "Count the products by status, brand, stock state, featured, grade, category or any filterable field, or their variants by stock (Catalog admin widget)",
+		"description": "by=grade counts each product under every grade its active variants have, by=category under every category it is in (none: without one); the total counts each product once. by=variantStock counts variants instead: the offered variants of products that track stock and are not archived (with the other filters), as out (no units, or marked sold out), low (1 to the catalog setting lowStock units) and in (more), a group without variants left out, the total every variant counted. 422 validation_failed for another by. Filter by any active product or variant field marked filterable (show.filter, E24) with attr.<slug or id>=value[,value], as the shop's listing does: by id that field, by slug every product or variant field with that slug; a product's own value or any of its variants'. A field not marked filterable matches nothing.",
 		"query": {
 			"type": "object",
 			"required": ["by"],
 			"properties": {
 				"by": {
 					"type": "string",
-					"enum": ["status", "brand", "stockState", "featured", "grade", "category", "variantStock"]
+					"pattern": "^(status|brand|stockState|featured|grade|category|variantStock|attr\\.[A-Za-z0-9_-]{1,64})$",
+					"description": "status, brand, stockState, featured, grade, category or variantStock; or attr.<slug or id> (E24): a product counts under each value it or any of its variants holds (none: without one), the 50 largest groups. 422 validation_failed at /by for a field not marked filterable."
 				},
 				"q": {
 					"type": "string",

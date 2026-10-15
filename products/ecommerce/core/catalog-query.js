@@ -689,11 +689,44 @@ export const variantStockCounts = (rows) => {
 };
 
 /**
+ * Where a product or variant field's values are kept on a product record (E24): `specs.<id>` or, on any of its
+ * variants, `variants.attributes.<id>`.
+ * @param {Pick<AttributeRecord, 'id' | 'on'>} field
+ */
+export const fieldPath = (field) => (field.on === 'product' ? `specs.${field.id}` : `variants.attributes.${field.id}`);
+
+/**
+ * The staff list's field filters (E24): `attr.<slug or id>=value[,value]` for the active product and variant fields
+ * marked filterable, as the shop's listing takes them (a product's own value, or any of its variants'); a field not
+ * marked filterable matches nothing.
+ * @param {Record<string, string>} query
+ * @param {ReadonlyMap<string, AttributeRecord>} attributes every field by id
+ * @returns {Record<string, unknown>[]}
+ */
+export const staffFieldFilters = (query, attributes) => {
+	/** @type {Record<string, unknown>[]} */
+	const and = [];
+	for (const [name, value] of Object.entries(query)) {
+		if (!name.startsWith('attr.')) continue;
+		const values = listOf(value);
+		if (values.length === 0 || and.length >= MAX_VALUES) continue;
+		const fields = fieldsNamed(attributes, name.slice('attr.'.length));
+		and.push(
+			fields.length === 0
+				? { id: { $in: [] } }
+				: { $or: fields.map((field) => ({ [fieldPath(field)]: { $in: storedValues(field, values) } })) },
+		);
+	}
+	return and;
+};
+
+/**
  * The staff's product list filter (the caller adds `websiteId`).
  * @param {Record<string, string>} query `q`, `status`, `kind`, `lowStock`, `featured`, `stockState` (one or several),
- *   `hasMedia`, `grade` (one or several), `ids` (product ids, at most 20)
+ *   `hasMedia`, `grade` (one or several), `ids` (product ids, at most 20), `attr.<slug or id>` (E24)
  * @param {{ categoryIds: string[] | null, brandIds: string[] | null, lowStock: number,
- *   measured?: MeasuredScope | null }} resolved `measured`: the products sold in a unit of their own
+ *   measured?: MeasuredScope | null, attributes?: ReadonlyMap<string, AttributeRecord> }} resolved `measured`: the
+ *   products sold in a unit of their own; `attributes`: every field by id, for `attr.` filters
  * @returns {Record<string, unknown>}
  */
 export const staffFilter = (query, resolved) => {
@@ -716,5 +749,6 @@ export const staffFilter = (query, resolved) => {
 	if (grades.length > 0) and.push({ grades: { $in: grades } });
 	const ids = listOf(query.ids);
 	if (ids.length > 0) and.push({ id: { $in: ids } });
+	if (resolved.attributes) and.push(...staffFieldFilters(query, resolved.attributes));
 	return and.length === 0 ? {} : { $and: and };
 };
