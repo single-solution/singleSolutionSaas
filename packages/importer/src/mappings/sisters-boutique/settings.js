@@ -359,8 +359,6 @@ export const settingsPlan = (values) => {
 				'loyalty.redeemMode': 'maximum',
 				'loyalty.expiryUnit': 'days',
 				'loyalty.expiryRule': 'at_earn',
-				// the SaaS default (E47; store mapping to review when the owner asks)
-				'loyalty.memberFlag': 'off',
 				// alerts on placement, status changes and cancels (`apps/admin/src/app/api/orders/[id]/route.ts`:336-342)
 				'staff_alerts.events': ['placed', 'status', 'cancelled'],
 				'staff_alerts.recipients': recipientsOf(values),
