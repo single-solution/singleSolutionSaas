@@ -112,7 +112,8 @@ describe('statuses of the product on a website', () => {
 		expect(cards.json.items).toEqual([]);
 
 		const card = await sys.addProduct(m.merchantId, websiteId);
-		expect(card).toMatchObject({ status: 'active', featuresOn: [] });
+		// the re-add raises the features version (every feature off)
+		expect(card).toMatchObject({ status: 'active', featuresOn: [], featuresVersion: 2 });
 		expect(await sys.tokens(m.merchantId, websiteId)).toEqual(tokens);
 		expect(await sys.product.featuresOn(websiteId)).toEqual([]);
 		// the tokens work again; the feature routes wait until an admin switches the feature on
@@ -122,6 +123,26 @@ describe('statuses of the product on a website', () => {
 		expect(config.status).toBe(200);
 		expect(config.json.features).toEqual([]);
 		await sys.switchFeatures(await sys.adminSession(owner, websiteId), websiteId, ['notes']);
+		expect(await api()).toEqual([200, '', null]);
+	});
+
+	it('a product that could not be reached across a removal and a re-add drops its old switches on its next status read', async () => {
+		const owner = await sys.owner();
+		const before = (await portalStatus()).featuresVersion;
+		sys.setReachable(false);
+		await owner.del(`/v1/merchants/${m.merchantId}/websites/${websiteId}/products/notes`);
+		await sys.addProduct(m.merchantId, websiteId);
+		sys.setReachable(true);
+		expect((await portalStatus()).featuresVersion).toBe(before + 1);
+		// the product never saw `removed`: until its status copy runs out it keeps its old switches
+		expect(await sys.product.featuresOn(websiteId)).toEqual(['notes']);
+		sys.clock.advance(5 * 60_000);
+		await api(); // served from the old copy, the status is fetched again right after
+		expect(await sys.product.featuresOn(websiteId)).toEqual([]);
+		expect(await api()).toEqual([403, 'feature_off', null]);
+		// switched on again by an admin, with the next version
+		await sys.switchFeatures(await sys.adminSession(owner, websiteId), websiteId, ['notes']);
+		expect((await portalStatus()).featuresVersion).toBe(before + 2);
 		expect(await api()).toEqual([200, '', null]);
 	});
 });
