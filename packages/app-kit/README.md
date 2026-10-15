@@ -70,7 +70,11 @@ The exact API is in [API.md](./API.md).
   `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
   `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's
   widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS.
-- **Testing** — `@ss/app-kit/testing` has a fake Portal, Accounts and Notifications doubles, an in-process network,
+- **Logging** — `createLogger()` writes JSON lines to standard output, which the host keeps: every request (method,
+  path, status, time), a failed route (500, with its route and request id), a misconfiguration (503, naming the
+  variables) and the kit's warnings. Members named like credentials, signed tokens and the user part of addresses are
+  redacted. Each product's `route.js` passes it (below); without it nothing is logged.
+- **Testing** — `@ss/app-kit/testing` has a fake Portal, an Accounts double, an in-process network,
   the memory store and `apiChecker`, which checks every answer a product's tests see against its `schemas/api.json`
   and the kit's own routes (`src/kit-api.json`), so the API descriptions cannot drift from the code.
 
@@ -95,13 +99,14 @@ writes them.
 ```js
 // app/api/[...path]/route.js
 import { after } from 'next/server.js';
-import { configFromEnv, toNextRoute } from '@ss/app-kit';
+import { configFromEnv, createLogger, toNextRoute } from '@ss/app-kit';
 import { createProductInstance } from '../../../adapters/product.js';
 import { createRoutes } from '../../../server/routes.js';
 
 // a missing or invalid variable is named (never its value) and every route answers 503 until it is fixed
 const { config, problems } = configFromEnv();
-const product = createProductInstance({ config, problems });
+// JSON lines in the host's logs (a failed route, a misconfiguration, the kit's warnings), secrets redacted
+const product = createProductInstance({ config, problems, logger: createLogger() });
 
 export const dynamic = 'force-dynamic';
 export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(createRoutes(product)), { after });
