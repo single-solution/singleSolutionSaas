@@ -40,7 +40,6 @@ export const OWN_TEXT = new Set([
 	'already_exists',
 	'contact_unverified',
 	'code_invalid',
-	'too_soon',
 	'notifications_not_connected',
 	'not_sent',
 	'signed_out',

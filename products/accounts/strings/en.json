@@ -109,7 +109,6 @@
 	"error.already_exists": "An account with these details already exists. Sign in instead.",
 	"error.contact_unverified": "Someone signed up with this phone number or email address without proving it. Check with the person first.",
 	"error.code_invalid": "This code or link is not valid or has expired.",
-	"error.too_soon": "Please wait a moment before asking for another code.",
 	"error.notifications_not_connected": "Codes cannot be sent right now.",
 	"error.not_sent": "The message could not be sent. Try again later.",
 	"error.signed_out": "You were signed out. Sign in again.",

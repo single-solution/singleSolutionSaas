@@ -13,8 +13,6 @@ import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView
 import { sessionEnd } from '../core/roles.js';
 import {
 	CODE_ATTEMPTS,
-	CODE_COOLDOWN_SECONDS,
-	CODES_PER_HOUR,
 	emailRefused,
 	generateCode,
 	lockAfter,
@@ -320,31 +318,33 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * A one-time code for an address, sent through Notifications (cooldown and hourly caps: code constants for email, the
-	 * shared phone settings for phone codes).
+	 * The settings that limit codes sent to an address (A7, A9): the wait between codes, the hourly caps per address and
+	 * for the website, and the wrong tries per code; Email code's for email codes, the shared phone settings for codes
+	 * by SMS or WhatsApp (sign-in and reset codes alike).
+	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind
+	 * @returns {Promise<{ cooldownSeconds: number, perHour: number, websitePerHour: number, codeTries: number }>}
+	 */
+	const codeLimits = async (s, kind) =>
+		/** @type {any} */ (await service.settings(s, kind === 'email' ? 'email_code' : 'phone'));
+
+	/**
+	 * A one-time code for an address, sent through Notifications, within the website's code limits (`codeLimits`).
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target
 	 * @param {{ length: number, minutes: number, linkTo?: string | null }} shape
 	 * @param {(code: string, link: string | null, expireAt: Date) => Promise<void>} deliver
 	 */
 	const sendCode = async (s, kind, target, { length, minutes, linkTo }, deliver) => {
 		const latest = await s.store.codes.latest(kind, target);
-		if (kind === 'email') {
-			if (latest && now() - latest.createdAt.getTime() < CODE_COOLDOWN_SECONDS * 1000)
-				throw problem('too_soon', `Wait ${CODE_COOLDOWN_SECONDS} seconds before asking for another code.`);
-			if ((await s.store.codes.countSince(kind, target, new Date(now() - 3_600_000))) >= CODES_PER_HOUR)
-				throw problem('too_soon', 'Too many codes were asked for. Try again later.');
-		} else {
-			// codes by SMS or WhatsApp: the shared phone settings (A7), for sign-in and reset codes alike
-			const { cooldownSeconds, perHour, websitePerHour } = await service.settings(s, 'phone');
-			if (latest && now() - latest.createdAt.getTime() < cooldownSeconds * 1000)
-				throw problem('code_cooldown', `Wait ${cooldownSeconds} seconds before asking for another code.`, {
-					extensions: { retryAt: new Date(latest.createdAt.getTime() + cooldownSeconds * 1000).toISOString() },
-				});
-			if (!(await s.store.counters.take(`codes|${target}`, HOUR_MS, perHour)))
-				throw problem('code_limit', 'Too many codes were asked for this number. Try again later.');
-			if (websitePerHour > 0 && !(await s.store.counters.take('codes|website', HOUR_MS, websitePerHour)))
-				throw problem('code_limit', 'Too many codes were asked for. Try again later.');
-		}
+		const { cooldownSeconds, perHour, websitePerHour } = await codeLimits(s, kind);
+		if (latest && now() - latest.createdAt.getTime() < cooldownSeconds * 1000)
+			throw problem('code_cooldown', `Wait ${cooldownSeconds} seconds before asking for another code.`, {
+				extensions: { retryAt: new Date(latest.createdAt.getTime() + cooldownSeconds * 1000).toISOString() },
+			});
+		const channel = kind === 'email' ? 'email' : 'phone';
+		if (!(await s.store.counters.take(`codes|${target}`, HOUR_MS, perHour)))
+			throw problem('code_limit', 'Too many codes were asked for this address. Try again later.');
+		if (websitePerHour > 0 && !(await s.store.counters.take(`codes|website|${channel}`, HOUR_MS, websitePerHour)))
+			throw problem('code_limit', 'Too many codes were asked for. Try again later.');
 		const code = generateCode({ length, randomBytes });
 		const linkSecret = linkTo ? randomToken(32) : null;
 		const expireAt = new Date(now() + minutes * 60_000);
@@ -386,8 +386,10 @@ export const createFlows = (product, service) => {
 			if (record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)))
 				return { id: record.id, staff: record === staff };
 		}
+		const { codeTries } = await codeLimits(s, kind);
 		for (const record of [sent, staff])
-			if (record && (await s.store.codes.attempt(record.id)) >= CODE_ATTEMPTS) await s.store.codes.consume(record.id);
+			if (record && (await s.store.codes.attempt(record.id)) >= (record === sent ? codeTries : CODE_ATTEMPTS))
+				await s.store.codes.consume(record.id);
 		throw problem('code_invalid', 'The code is not valid or has expired.');
 	};
 

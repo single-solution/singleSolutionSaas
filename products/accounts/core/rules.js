@@ -7,12 +7,11 @@ import { emailDomain } from './identifiers.js';
 
 // ------------------------------------------------------------------------------------------------- one-time codes
 
-/** Wrong tries a code allows before it is spent (code constant). */
+/**
+ * Wrong tries a two-step step or a staff sign-in code allows before it is spent (code constant). Codes sent by email
+ * or phone take theirs from the website's settings (`codeTries`, A9).
+ */
 export const CODE_ATTEMPTS = 5;
-/** Seconds before the same address can get a new code (code constant protecting the merchant's provider). */
-export const CODE_COOLDOWN_SECONDS = 30;
-/** Codes per address per hour (code constant). */
-export const CODES_PER_HOUR = 6;
 /** Days the trace of a setup link is kept after the link's end, so a setup page can still tell why it no longer works. */
 export const SETUP_TRACE_DAYS = 30;
 

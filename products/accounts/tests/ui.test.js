@@ -546,7 +546,7 @@ describe('email and password', () => {
 describe('codes', () => {
 	it('phone code: asks for a code, then signs in (a new user gives their details at once)', async () => {
 		const host = place('sign_in');
-		const codes = [answer(202, { expiresAt: at(300_000) }), problem(429, 'too_soon'), answer(202, {})];
+		const codes = [answer(202, { expiresAt: at(300_000) }), problem(429, 'code_cooldown'), answer(202, {})];
 		const { server } = await start(
 			{
 				'POST /v1/sign-in/phone/code': () => /** @type {Response} */ (codes.shift()),
@@ -571,7 +571,7 @@ describe('codes', () => {
 		expect(server.last('POST /v1/sign-in/phone/code')?.body).toEqual({ phone: '+15550001111' });
 		expect(statusIn(root)).toBe('We sent a code to +15550001111.');
 		await click(buttonIn(root, strings['code.again']));
-		expect(statusIn(root)).toBe(strings['error.too_soon']);
+		expect(statusIn(root)).toBe(strings['error.code_cooldown']);
 		await click(buttonIn(root, strings['code.again']));
 		expect(statusIn(root)).toBe('We sent a code to +15550001111.');
 		fieldIn(root, strings['code.code']).value = '123456';

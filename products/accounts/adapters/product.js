@@ -107,7 +107,6 @@ const PROBLEM_CODES = Object.freeze({
 	contact_unverified: Object.freeze({ status: 409, title: 'Phone number or email address not proven' }),
 	weak_password: Object.freeze({ status: 422, title: 'Password refused' }),
 	code_invalid: Object.freeze({ status: 422, title: 'Code not valid' }),
-	too_soon: Object.freeze({ status: 429, title: 'Too soon' }),
 	notifications_not_connected: Object.freeze({ status: 503, title: 'Notifications not connected' }),
 	not_sent: Object.freeze({ status: 502, title: 'Not sent' }),
 	provider_failed: Object.freeze({ status: 502, title: 'Provider failed' }),

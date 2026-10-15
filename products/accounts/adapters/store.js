@@ -497,8 +497,6 @@ export const createStore = (data, { now }) => {
 						),
 					)
 				),
-			/** Records of a kind and target made since a time (rate limits). @param {CodeRecord['kind']} kind @param {string} target @param {Date} since */
-			countSince: (kind, target, since) => codes.countDocuments({ websiteId, kind, target, createdAt: { $gte: since } }),
 			/** Count a wrong try; returns the new count. @param {string} id */
 			attempt: async (id) =>
 				as(

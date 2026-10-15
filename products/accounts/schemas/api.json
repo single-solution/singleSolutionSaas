@@ -1865,7 +1865,7 @@
 	},
 	"POST /v1/sign-in/email/code": {
 		"summary": "Send a sign-in code (and magic link) by email",
-		"description": "Through Notifications (template accounts.email_code); with returnTo the message also holds a link to returnTo#ss_accounts_link=<link>. One code per 30 seconds and 6 per hour for an address (429 too_soon). 403 sign_in_paused or method_refused; 422 validation_failed; 503 notifications_not_connected; 502 not_sent.",
+		"description": "Through Notifications (template accounts.email_code); with returnTo the message also holds a link to returnTo#ss_accounts_link=<link>. Within Email code’s limits: cooldownSeconds between codes (429 code_cooldown with retryAt), perHour per address and websitePerHour for the website (429 code_limit); a code takes codeTries wrong tries. 403 sign_in_paused or method_refused; 422 validation_failed; 503 notifications_not_connected; 502 not_sent.",
 		"body": {
 			"type": "object",
 			"required": ["email"],

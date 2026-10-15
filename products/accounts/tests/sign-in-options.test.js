@@ -119,6 +119,60 @@ describe('A7: phone-code options', () => {
 	});
 });
 
+describe('A9: email code limits are settings, like the phone ones', () => {
+	it('waits between codes, caps codes per address and per website, and spends a code after its tries', async () => {
+		/** @param {string} email */
+		const ask = (email) => env.visitor('POST', '/v1/sign-in/email/code', { email });
+		env.advance(3_600_000);
+		await env.setting('email_code', 'cooldownSeconds', 60);
+		expect((await ask('limits@example.com')).status).toBe(202);
+		env.advance(30_000);
+		const soon = await ask('limits@example.com');
+		expect(code(soon)).toBe('code_cooldown');
+		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(30_000);
+		env.advance(30_000);
+		expect((await ask('limits@example.com')).status).toBe(202);
+		await env.setting('email_code', 'perHour', 2);
+		env.advance(60_000);
+		expect(code(await ask('limits@example.com'))).toBe('code_limit');
+		await env.setting('email_code', 'websitePerHour', 2);
+		env.advance(3_600_000);
+		expect((await ask('one@example.com')).status).toBe(202);
+		expect((await ask('two@example.com')).status).toBe(202);
+		expect(code(await ask('three@example.com'))).toBe('code_limit');
+		await env.setting('email_code', 'websitePerHour', 0);
+		await env.setting('email_code', 'codeTries', 3);
+		env.advance(3_600_000);
+		expect((await ask('tries@example.com')).status).toBe(202);
+		const sent = String(env.messages().at(-1).values.code);
+		const wrong = sent === '000000' ? '111111' : '000000';
+		for (let i = 0; i < 3; i += 1)
+			expect(code(await env.visitor('POST', '/v1/sign-in/email', { email: 'tries@example.com', code: wrong }))).toBe(
+				'code_invalid',
+			);
+		// the third wrong try spent the code
+		expect(code(await env.visitor('POST', '/v1/sign-in/email', { email: 'tries@example.com', code: sent }))).toBe(
+			'code_invalid',
+		);
+		for (const [key, value] of Object.entries({ cooldownSeconds: 30, perHour: 6, codeTries: 5 }))
+			await env.setting('email_code', key, value);
+	});
+
+	it('phone codes take their tries from the phone settings', async () => {
+		await env.setting('phone', 'codeTries', 3);
+		env.advance(3_600_000);
+		expect((await askCode('+447700900888')).status).toBe(202);
+		const sent = String(env.messages().at(-1).values.code);
+		const wrong = sent === '000000' ? '111111' : '000000';
+		for (let i = 0; i < 3; i += 1)
+			expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900888', code: wrong }))).toBe(
+				'code_invalid',
+			);
+		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900888', code: sent }))).toBe('code_invalid');
+		await env.setting('phone', 'codeTries', 5);
+	});
+});
+
 describe('A6: per-role sign-in options', () => {
 	it('remember: ask, ask_ticked or always; the widget config follows the role of sign-ups', async () => {
 		await signUp('rem@example.com');

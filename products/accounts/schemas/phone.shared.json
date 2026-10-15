@@ -59,6 +59,14 @@
 			"default": 0,
 			"minimum": 0,
 			"maximum": 10000
+		},
+		"codeTries": {
+			"type": "integer",
+			"title": "Wrong tries per code",
+			"description": "Wrong codes typed before the code is used up and a new one is needed.",
+			"default": 5,
+			"minimum": 3,
+			"maximum": 10
 		}
 	}
 }
