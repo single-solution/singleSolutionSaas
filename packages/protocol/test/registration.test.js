@@ -113,6 +113,17 @@ describe('connect handshake', () => {
 		expectThrowCode(check({ headers: request.headers, body: request.body }), 'signature');
 	});
 
+	it('reads the headers of a Request whose Headers class is not the global one (another realm, a test DOM)', () => {
+		const clock = createClock();
+		const request = start(clock);
+		const real = new Headers(request.headers);
+		// a WHATWG Headers of another realm: not `instanceof` this realm's Headers, known by its `get`
+		const foreign = /** @type {Headers} */ (/** @type {unknown} */ ({ get: (/** @type {string} */ name) => real.get(name) }));
+		expect(foreign instanceof Headers).toBe(false);
+		const verified = verifyConnectRequest({ secret: SECRET, headers: foreign, body: request.body, now: clock.now });
+		expect(verified.nonce).toBe(request.nonce);
+	});
+
 	it('checks the answer members', () => {
 		const clock = createClock();
 		const nonce = 'n'.repeat(22);

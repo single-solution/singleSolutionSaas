@@ -81,14 +81,15 @@ export const defaultRandomBytes = (length) => globalThis.crypto.getRandomValues(
 export const randomId = (randomBytes) => b64url(randomBytes(16));
 
 /**
- * Case-insensitive header lookup over a plain object or a WHATWG `Headers`.
+ * Case-insensitive header lookup over a plain object or a WHATWG `Headers` — of any realm: it is known by its `get`,
+ * since the `Headers` of a `Request` need not be the global one (in a test DOM it is not).
  * @param {Record<string, string | string[] | undefined> | Headers | undefined | null} headers
  * @param {string} name
  * @returns {string | undefined}
  */
 export const getHeader = (headers, name) => {
 	if (!headers) return undefined;
-	if (typeof Headers !== 'undefined' && headers instanceof Headers) return headers.get(name) ?? undefined;
+	if (typeof headers.get === 'function') return /** @type {Headers} */ (headers).get(name) ?? undefined;
 	const wanted = name.toLowerCase();
 	for (const [key, value] of Object.entries(/** @type {Record<string, string | string[] | undefined>} */ (headers))) {
 		if (key.toLowerCase() !== wanted) continue;
