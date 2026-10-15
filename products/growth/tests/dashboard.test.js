@@ -62,7 +62,7 @@ const settingsAnswer = (/** @type {string[]} */ on) => ({
 });
 
 const THEME = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
-const FORMAT = { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
+const FORMAT = { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' };
 
 /** The writes the dashboard made. @type {Array<{ path: string, body: any }>} */
 const sent = [];

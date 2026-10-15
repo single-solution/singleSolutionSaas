@@ -15,8 +15,37 @@ describe('validateBusinessJson', () => {
 				address: '1 Example Street\nExample City',
 				country: 'US',
 				timeZone: 'America/New_York',
+				currency: null,
+				currencies: [],
+				language: null,
 			},
 		});
+	});
+
+	it('reads the store currency, the currencies it takes and its default language (K5)', () => {
+		const result = validateBusinessJson({
+			name: 'Shop',
+			currency: 'eur',
+			currencies: ['USD', 'EUR', 'usd', 'Euro', 'GBP'],
+			language: 'fr-fr',
+		});
+		expect(result.ok && result.value).toMatchObject({ currency: 'EUR', currencies: ['EUR', 'USD', 'GBP'], language: 'fr-FR' });
+		// the store currency alone; a list without it gets it first; unusable values are dropped
+		expect(validateBusinessJson({ name: 'Shop', currency: 'PKR' })).toMatchObject({
+			value: { currency: 'PKR', currencies: ['PKR'] },
+		});
+		expect(validateBusinessJson({ name: 'Shop', currency: 'Rs', currencies: 'USD', language: 'English!' })).toMatchObject({
+			value: { currency: null, currencies: [], language: null },
+		});
+		expect(
+			validateBusinessJson({
+				name: 'Shop',
+				currencies: Array.from(
+					{ length: 30 },
+					(_, i) => `A${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + Math.floor(i / 26))}`,
+				),
+			}),
+		).toMatchObject({ ok: true });
 	});
 
 	it('accepts the template', () => {
@@ -27,7 +56,18 @@ describe('validateBusinessJson', () => {
 	it('needs only the name and drops invalid fields', () => {
 		expect(validateBusinessJson({ name: '  Shop  ', version: 1 })).toEqual({
 			ok: true,
-			value: { name: 'Shop', logo: null, email: null, phone: null, address: null, country: null, timeZone: null },
+			value: {
+				name: 'Shop',
+				logo: null,
+				email: null,
+				phone: null,
+				address: null,
+				country: null,
+				timeZone: null,
+				currency: null,
+				currencies: [],
+				language: null,
+			},
 		});
 		const result = validateBusinessJson({
 			name: 'Shop',
@@ -46,6 +86,9 @@ describe('validateBusinessJson', () => {
 			address: null,
 			country: null,
 			timeZone: null,
+			currency: null,
+			currencies: [],
+			language: null,
 		});
 		const more = validateBusinessJson({
 			name: 'Shop',

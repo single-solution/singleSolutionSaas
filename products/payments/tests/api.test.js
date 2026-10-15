@@ -1500,10 +1500,10 @@ describe('kit features (PLAN 0.8.10)', () => {
 	});
 
 	it('formats money with the website’s Format on hosted pages, in activity details and in the widget config (K7)', async () => {
-		const saved = await env.api('PUT', '/v1/format', { currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true });
+		const saved = await env.api('PUT', '/v1/format', { currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true });
 		expect(saved.status).toBe(200);
 		const config = await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN });
-		expect(config.json).toMatchObject({ format: { currencySymbol: 'US$', wholeUnits: true }, timeZone: 'UTC' });
+		expect(config.json).toMatchObject({ format: { currencySymbols: { USD: 'US$' }, wholeUnits: true }, timeZone: 'UTC' });
 		const payment = await createPayment({});
 		const choice = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(choice.text).toContain('US$ 2,500');
@@ -1519,7 +1519,7 @@ describe('kit features (PLAN 0.8.10)', () => {
 		expect(entry.detail).toBe('Bank transfer of US$ 2,500 confirmed');
 		// API JSON keeps minor units and ISO times
 		expect((await env.api('GET', `/v1/payments/${transfer.id}`)).json).toMatchObject({ amount: 250000, amountText: '2500.00' });
-		await env.api('PUT', '/v1/format', { currencyDisplay: null, currencySymbol: null, wholeUnits: null });
+		await env.api('PUT', '/v1/format', { currencyDisplay: null, currencySymbols: null, wholeUnits: null });
 		expect((await page(`/pay/${env.websiteId}/${payment.id}`)).text).toContain('USD 2,500.00');
 	});
 

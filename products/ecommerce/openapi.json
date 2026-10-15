@@ -20011,16 +20011,23 @@
 										"enum": [
 											"code",
 											"symbol",
-											"custom",
 											null
 										]
 									},
-									"currencySymbol": {
+									"currencySymbols": {
 										"type": [
-											"string",
+											"object",
 											"null"
 										],
-										"maxLength": 8
+										"maxProperties": 20,
+										"propertyNames": {
+											"pattern": "^[A-Z]{3}$"
+										},
+										"additionalProperties": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 8
+										}
 									},
 									"wholeUnits": {
 										"type": [
@@ -43289,7 +43296,7 @@
 						"required": [
 							"locale",
 							"currencyDisplay",
-							"currencySymbol",
+							"currencySymbols",
 							"wholeUnits",
 							"times"
 						],
@@ -43303,14 +43310,21 @@
 								"type": "string",
 								"enum": [
 									"code",
-									"symbol",
-									"custom"
+									"symbol"
 								]
 							},
-							"currencySymbol": {
-								"type": "string",
-								"maxLength": 8,
-								"description": "With currencyDisplay custom."
+							"currencySymbols": {
+								"type": "object",
+								"maxProperties": 20,
+								"propertyNames": {
+									"pattern": "^[A-Z]{3}$"
+								},
+								"additionalProperties": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 8
+								},
+								"description": "The merchant's own symbol per currency (ISO 4217 code → symbol), used with currencyDisplay symbol; a currency without one shows the locale's symbol."
 							},
 							"wholeUnits": {
 								"type": "boolean",
@@ -43331,7 +43345,7 @@
 						"required": [
 							"locale",
 							"currencyDisplay",
-							"currencySymbol",
+							"currencySymbols",
 							"wholeUnits",
 							"times"
 						],
@@ -43343,7 +43357,7 @@
 							"currencyDisplay": {
 								"$ref": "#/components/schemas/ValueSource"
 							},
-							"currencySymbol": {
+							"currencySymbols": {
 								"$ref": "#/components/schemas/ValueSource"
 							},
 							"wholeUnits": {
@@ -56128,7 +56142,7 @@
 						"required": [
 							"locale",
 							"currencyDisplay",
-							"currencySymbol",
+							"currencySymbols",
 							"wholeUnits",
 							"times"
 						],
@@ -56142,14 +56156,21 @@
 								"type": "string",
 								"enum": [
 									"code",
-									"symbol",
-									"custom"
+									"symbol"
 								]
 							},
-							"currencySymbol": {
-								"type": "string",
-								"maxLength": 8,
-								"description": "With currencyDisplay custom."
+							"currencySymbols": {
+								"type": "object",
+								"maxProperties": 20,
+								"propertyNames": {
+									"pattern": "^[A-Z]{3}$"
+								},
+								"additionalProperties": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 8
+								},
+								"description": "The merchant's own symbol per currency (ISO 4217 code → symbol), used with currencyDisplay symbol; a currency without one shows the locale's symbol."
 							},
 							"wholeUnits": {
 								"type": "boolean",

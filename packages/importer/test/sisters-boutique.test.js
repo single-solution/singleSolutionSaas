@@ -545,8 +545,8 @@ describe('the Sisters Boutique mapping', () => {
 		// every product gets SB's Format; a secret row is never read
 		expect(settings.ecommerce?.format).toEqual({
 			wholeUnits: true,
-			currencyDisplay: 'custom',
-			currencySymbol: 'Rs',
+			currencyDisplay: 'symbol',
+			currencySymbols: { PKR: 'Rs' },
 			locale: 'en',
 			times: 'business',
 		});

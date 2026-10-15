@@ -171,6 +171,26 @@ const WORD_CASE = Object.freeze({
 });
 
 /**
+ * The rows of a Format's own symbols, one per currency, in the order they were added.
+ * @param {Readonly<Record<string, string>>} symbols
+ * @returns {Array<{ currency: string, symbol: string }>}
+ */
+export const symbolRowsOf = (symbols) => Object.entries(symbols).map(([currency, symbol]) => ({ currency, symbol }));
+
+/**
+ * The Format's own symbols from the rows: codes in capitals, rows without a code or a symbol left out (the product
+ * checks the rest when it is saved).
+ * @param {ReadonlyArray<{ currency: string, symbol: string }>} rows
+ * @returns {Record<string, string>}
+ */
+export const symbolsOf = (rows) =>
+	Object.fromEntries(
+		rows
+			.map((row) => [row.currency.trim().toUpperCase(), row.symbol.trim()])
+			.filter(([currency, symbol]) => currency !== '' && symbol !== ''),
+	);
+
+/**
  * A support contact channel of the Portal (`@ss/contracts/text` support channels).
  * @typedef {{ type: 'email' | 'phone' | 'link', label: string, url: string }} SupportChannel
  */

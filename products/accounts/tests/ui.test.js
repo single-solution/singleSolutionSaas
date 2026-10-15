@@ -56,7 +56,7 @@ const PLAIN_LOOKS = Object.freeze({
 	format: Object.freeze({
 		locale: '',
 		currencyDisplay: /** @type {const} */ ('code'),
-		currencySymbol: '',
+		currencySymbols: {},
 		wholeUnits: false,
 		times: /** @type {const} */ ('viewer'),
 	}),
@@ -1366,7 +1366,7 @@ describe('My account', () => {
 
 	it('shows dates and order totals in the Format and business time zone of the widget config', async () => {
 		looks = {
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
 			timeZone: 'Asia/Tokyo',
 		};
 		const { host } = await open({
@@ -2335,7 +2335,7 @@ describe('admin widgets', () => {
 
 	it('Users admin shows sign-in and deletion times in the Format and business time zone', async () => {
 		looks = {
-			format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'business' },
+			format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'business' },
 			timeZone: 'Asia/Tokyo',
 		};
 		const host = place('users_admin');
@@ -2939,7 +2939,7 @@ describe('helpers', () => {
 	it('show dates and money in the Format and business time zone of the widget config', () => {
 		/** @type {import('../ui/common.js').Looks} */
 		const tokyo = {
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
 			timeZone: 'Asia/Tokyo',
 		};
 		const dates = datesOf(tokyo, window);

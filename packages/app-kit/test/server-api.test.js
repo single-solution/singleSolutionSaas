@@ -118,15 +118,15 @@ describe('settings API for the merchant’s server (K1)', () => {
 		const format = await body(
 			await call('PUT', '/v1/format', {
 				token: server.token,
-				body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Fr.', wholeUnits: true, times: 'business' },
+				body: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { CHF: 'Fr.' }, wholeUnits: true, times: 'business' },
 			}),
 		);
 		expect(format.json).toEqual({
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'Fr.', wholeUnits: true, times: 'business' },
+			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { CHF: 'Fr.' }, wholeUnits: true, times: 'business' },
 			sources: {
 				locale: 'website',
 				currencyDisplay: 'website',
-				currencySymbol: 'website',
+				currencySymbols: 'website',
 				wholeUnits: 'website',
 				times: 'website',
 			},

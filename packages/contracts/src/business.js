@@ -1,6 +1,9 @@
 /**
  * business.json version 1 (PLAN 0.4.9): `https://<domain>/.well-known/business.json` gives
- * `{ name, logo, email, phone, address, country, timeZone }`. Only `name` is required. Every value is plain text.
+ * `{ name, logo, email, phone, address, country, timeZone, currency, currencies, language }`. Only `name` is required.
+ * Every value is plain text but `currencies`, a list. `currency` is the store currency (ISO 4217), `currencies` the
+ * ones the business takes (the store currency first; at most {@link MAX_CURRENCIES}), `language` its default language
+ * (BCP 47; fixed-choices audit K5).
  * @module
  */
 import { isObject } from './util.js';
@@ -20,11 +23,19 @@ export const BUSINESS_JSON_TEMPLATE = Object.freeze({
 	address: '1 Example Street, Example City',
 	country: 'US',
 	timeZone: 'America/New_York',
+	currency: 'USD',
+	currencies: Object.freeze(['USD']),
+	language: 'en-US',
 });
+
+/** The most currencies a business lists. */
+export const MAX_CURRENCIES = 20;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^\+?[0-9 ().-]{3,40}$/;
 const COUNTRY = /^[A-Za-z]{2}$/;
+const CURRENCY = /^[A-Za-z]{3}$/;
+const LANGUAGE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/;
 
 /**
  * True when the text has a control character other than tab, line feed and carriage return.
@@ -92,6 +103,32 @@ const httpsUrl = (value) => {
  */
 const matching = (value, pattern) => (value !== null && pattern.test(value) ? value : null);
 
+/** @param {unknown} value an ISO 4217 code in capitals, or null */
+const currencyOf = (value) => matching(text(value, 3), CURRENCY)?.toUpperCase() ?? null;
+
+/**
+ * The currencies a business takes: its store currency first, each once, at most {@link MAX_CURRENCIES}; values that
+ * are no currency code are dropped.
+ * @param {unknown} value
+ * @param {string | null} currency
+ * @returns {string[]}
+ */
+const currenciesOf = (value, currency) => {
+	const listed = Array.isArray(value) ? value.map(currencyOf).filter((code) => code !== null) : [];
+	return [...new Set([...(currency === null ? [] : [currency]), ...listed])].slice(0, MAX_CURRENCIES);
+};
+
+/** @param {unknown} value a canonical BCP 47 language tag, or null */
+const languageOf = (value) => {
+	const tag = matching(text(value, 35), LANGUAGE);
+	if (tag === null) return null;
+	try {
+		return Intl.getCanonicalLocales(tag)[0] ?? null;
+	} catch {
+		return null;
+	}
+};
+
 /**
  * Validate and normalize a business.json document. Fails only when it is not an object or `name` is missing or
  * invalid; any other invalid field is dropped (`null`). Normalizes: trimmed text, `logo` an https URL, `country`
@@ -111,6 +148,7 @@ export const validateBusinessJson = (value) => {
 			]),
 		});
 	const country = matching(text(value.country, 2), COUNTRY);
+	const currency = currencyOf(value.currency);
 	return Object.freeze({
 		ok: true,
 		value: Object.freeze({
@@ -121,6 +159,9 @@ export const validateBusinessJson = (value) => {
 			address: text(value.address, 500, true),
 			country: country === null ? null : country.toUpperCase(),
 			timeZone: timeZoneOf(value.timeZone),
+			currency,
+			currencies: Object.freeze(currenciesOf(value.currencies, currency)),
+			language: languageOf(value.language),
 		}),
 	});
 };

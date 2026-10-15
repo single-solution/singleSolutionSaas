@@ -6,8 +6,10 @@
  * `@ss/contracts/format` and `@ss/app-kit/widget`.
  *
  * - `locale`: BCP 47; '' = the viewer's browser in widgets and `en-US` in text the server makes.
- * - `currencyDisplay`: `code` ("USD 12,500.00"), `symbol` (the locale's narrow symbol, "$12,500.00") or `custom`
- *   (`currencySymbol` in the place of the code, "US$ 12,500.00").
+ * - `currencyDisplay`: `code` ("USD 12,500.00") or `symbol` ("$12,500.00": the currency's own symbol from
+ *   `currencySymbols` when the merchant gave one, else the locale's narrow symbol).
+ * - `currencySymbols`: the merchant's symbol per currency (`{ PKR: 'Rs', CHF: 'Fr.' }`, fixed-choices audit K5), each
+ *   at most 8 characters, at most 20 currencies; one currency's symbol never replaces another's.
  * - `wholeUnits`: true shows no minor units ("USD 12,500").
  * - `times`: `viewer` (widgets show the viewer's own time zone) or `business` (the business.json time zone). Text the
  *   server makes has no viewer, so it always uses the business time zone.
@@ -20,8 +22,8 @@
 /**
  * @typedef {object} Format
  * @property {string} locale BCP 47 language tag, or '' (the viewer's, `en-US` on the server)
- * @property {'code' | 'symbol' | 'custom'} currencyDisplay
- * @property {string} currencySymbol at most 8 characters, used with `custom`
+ * @property {'code' | 'symbol'} currencyDisplay
+ * @property {Readonly<Record<string, string>>} currencySymbols the merchant's symbol per ISO 4217 code (with `symbol`)
  * @property {boolean} wholeUnits
  * @property {'viewer' | 'business'} times
  */
@@ -36,14 +38,14 @@ const DEFAULT_LOCALE = 'en-US';
 
 /** The fields of a Format value, in screen order. */
 export const FORMAT_FIELDS = Object.freeze(
-	/** @type {const} */ (['locale', 'currencyDisplay', 'currencySymbol', 'wholeUnits', 'times']),
+	/** @type {const} */ (['locale', 'currencyDisplay', 'currencySymbols', 'wholeUnits', 'times']),
 );
 
 /** The Format before anyone changes it. @type {Readonly<Format>} */
 export const DEFAULT_FORMAT = Object.freeze({
 	locale: '',
 	currencyDisplay: 'code',
-	currencySymbol: '',
+	currencySymbols: Object.freeze({}),
 	wholeUnits: false,
 	times: 'viewer',
 });
@@ -54,8 +56,9 @@ export const DEFAULT_FORMAT = Object.freeze({
  */
 const hasControl = (value) => [...value].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f);
 
-/** Longest custom currency symbol. */
+/** Longest currency symbol, and the most currencies with their own symbol. */
 const MAX_SYMBOL = 8;
+const MAX_SYMBOLS = 20;
 const LOCALE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,4}$/;
 
 /**
@@ -83,11 +86,19 @@ export const formatViolation = (field, value) => {
 				? null
 				: "locale is a language tag such as en-US or fr-FR, or '' for the viewer's";
 		case 'currencyDisplay':
-			return value === 'code' || value === 'symbol' || value === 'custom' ? null : 'currencyDisplay is code, symbol or custom';
-		case 'currencySymbol':
-			return typeof value === 'string' && value.length <= MAX_SYMBOL && !hasControl(value)
-				? null
-				: `currencySymbol is at most ${MAX_SYMBOL} characters`;
+			return value === 'code' || value === 'symbol' ? null : 'currencyDisplay is code or symbol';
+		case 'currencySymbols': {
+			if (typeof value !== 'object' || value === null || Array.isArray(value))
+				return 'currencySymbols maps a currency code (USD) to its symbol';
+			const entries = Object.entries(value);
+			if (entries.length > MAX_SYMBOLS) return `currencySymbols has at most ${MAX_SYMBOLS} currencies`;
+			for (const [code, symbol] of entries) {
+				if (!/^[A-Z]{3}$/.test(code)) return 'currencySymbols maps a currency code (USD) to its symbol';
+				if (typeof symbol !== 'string' || symbol === '' || symbol.length > MAX_SYMBOL || hasControl(symbol))
+					return `currencySymbols: each symbol is 1 to ${MAX_SYMBOL} characters`;
+			}
+			return null;
+		}
 		case 'wholeUnits':
 			return typeof value === 'boolean' ? null : 'wholeUnits is true or false';
 		case 'times':
@@ -232,16 +243,17 @@ export const formatMoney = (amount, currency, format = DEFAULT_FORMAT, viewer = 
 	const fraction = f.wholeUnits ? 0 : digits;
 	const major = amount / 10 ** digits;
 	const locale = localeOf(f, viewer);
+	// the merchant's own symbol takes the code's place (with the locale's spacing for codes: "Rs 12,500")
+	const own = f.currencyDisplay === 'symbol' ? (f.currencySymbols[currency] ?? null) : null;
 	try {
 		const parts = new Intl.NumberFormat(locale, {
 			style: 'currency',
 			currency,
-			currencyDisplay: f.currencyDisplay === 'symbol' ? 'narrowSymbol' : 'code',
+			currencyDisplay: f.currencyDisplay === 'symbol' && own === null ? 'narrowSymbol' : 'code',
 			minimumFractionDigits: fraction,
 			maximumFractionDigits: fraction,
 		}).formatToParts(major);
-		const symbol = f.currencyDisplay === 'custom' && f.currencySymbol !== '' ? f.currencySymbol : null;
-		return plainSpaces(parts.map((part) => (part.type === 'currency' && symbol !== null ? symbol : part.value)).join(''));
+		return plainSpaces(parts.map((part) => (part.type === 'currency' && own !== null ? own : part.value)).join(''));
 	} catch {
 		// not an ISO 4217 code the runtime knows: the number with the code
 		const number = new Intl.NumberFormat(locale, { minimumFractionDigits: fraction, maximumFractionDigits: fraction }).format(

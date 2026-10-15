@@ -393,7 +393,7 @@ describe('admin widgets', () => {
 			[`GET ${ADMIN_CONFIG_PATH}`]: () =>
 				answer(200, {
 					...configOf(ADMIN_FEATURES),
-					format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'business' },
+					format: { locale: 'en-GB', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'business' },
 					timeZone: 'Asia/Tokyo',
 				}),
 			'GET /v1/admin/messages': () => answer(200, { items: [message], nextCursor: null, hasMore: false }),

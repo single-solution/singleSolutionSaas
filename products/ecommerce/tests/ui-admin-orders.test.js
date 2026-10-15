@@ -396,7 +396,7 @@ describe('orders admin: the list', () => {
 		const { root, server } = await mountWith(mountOrdersAdmin, {
 			features: ['checkout'],
 			settings: SETTINGS,
-			format: { locale: 'en-US', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			format: { locale: 'en-US', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
 			timeZone: 'Asia/Tokyo',
 			routes: {
 				'GET /v1/admin/orders': () => answer(200, { items: [summary()], nextCursor: null, hasMore: false }),

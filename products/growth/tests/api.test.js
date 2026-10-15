@@ -701,7 +701,7 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		expect(await codeOf(bad)).toBe('invalid_actor');
 		const format = await kit.call('PUT', '/v1/format', {
 			token: kit.server,
-			body: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			body: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
 			headers: { 'ss-actor-id': 'u_7', 'ss-actor-name': encodeURIComponent('Alex Morgan'), 'ss-actor-role': 'Manager' },
 		});
 		expect(format.status).toBe(200);
@@ -712,14 +712,14 @@ describe('store conversion kit (PLAN 0.8.10 K2–K9)', () => {
 		const config = await (await kit.call('GET', '/v1/widget/config', { token: kit.browser, origin: ORIGIN })).json();
 		expect(config.format).toEqual({
 			locale: 'en-GB',
-			currencyDisplay: 'custom',
-			currencySymbol: 'US$',
+			currencyDisplay: 'symbol',
+			currencySymbols: { USD: 'US$' },
 			wholeUnits: true,
 			times: 'business',
 		});
 		const ticket = await kit.ticket(['seo.check']);
 		const admin = await (await kit.call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN_ORIGIN })).json();
-		expect(admin).toMatchObject({ timeZone: 'Asia/Tokyo', format: { currencySymbol: 'US$' } });
+		expect(admin).toMatchObject({ timeZone: 'Asia/Tokyo', format: { currencySymbols: { USD: 'US$' } } });
 		kit.web.pages['/'] = { status: 200, body: HOME };
 		const checked = await kit.call('POST', '/v1/admin/seo/checks', {
 			token: ticket,

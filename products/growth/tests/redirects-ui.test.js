@@ -24,7 +24,7 @@ const configOf = (features) => ({
 	format: {
 		locale: 'en-US',
 		currencyDisplay: /** @type {const} */ ('code'),
-		currencySymbol: '',
+		currencySymbols: {},
 		wholeUnits: false,
 		times: /** @type {const} */ ('business'),
 	},

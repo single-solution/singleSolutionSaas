@@ -50,7 +50,7 @@ const configOf = (features, values = {}, look = {}) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
-	format: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer', ...look.format },
+	format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer', ...look.format },
 	timeZone: look.timeZone ?? 'UTC',
 	features,
 	widgets: widgetsOf(features),
@@ -1560,7 +1560,7 @@ describe('admin widgets', () => {
 		// 20:00 UTC on 8 October is 9 October in Tokyo (UTC+9)
 		vi.setSystemTime(Date.parse('2026-10-08T20:00:00Z'));
 		const look = {
-			format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+			format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
 			timeZone: 'Asia/Tokyo',
 		};
 		const dashboard = place('analytics_dashboard');

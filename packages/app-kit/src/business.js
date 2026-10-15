@@ -17,7 +17,8 @@ const BUSINESS_MAX_AGE_MS = 24 * 60 * 60_000;
 const BUSINESS_MAX_BYTES = 64 * 1024;
 
 /**
- * The defaults when the file or a field is missing: name = the domain, time zone UTC, other fields empty.
+ * The defaults when the file or a field is missing: name = the domain, time zone UTC, no currencies, other fields
+ * empty (a product then keeps its own currency setting).
  * @param {string} domain
  * @returns {BusinessInfo}
  */
@@ -29,6 +30,9 @@ const businessDefaults = (domain) => ({
 	address: null,
 	country: null,
 	timeZone: 'UTC',
+	currency: null,
+	currencies: [],
+	language: null,
 });
 
 /**
@@ -70,7 +74,7 @@ export const createBusiness = ({ store, send, now, logger }) => {
 	const withDefaults = (copy, domain) => {
 		const defaults = businessDefaults(domain);
 		if (!copy) return defaults;
-		return { ...copy, timeZone: copy.timeZone ?? defaults.timeZone };
+		return { ...defaults, ...copy, timeZone: copy.timeZone ?? defaults.timeZone };
 	};
 
 	return Object.freeze({

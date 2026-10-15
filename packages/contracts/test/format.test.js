@@ -26,11 +26,11 @@ import { WEBSITE } from './fixtures.js';
 
 describe('Format values (K7)', () => {
 	it('has five fields with safe defaults', () => {
-		expect(FORMAT_FIELDS).toEqual(['locale', 'currencyDisplay', 'currencySymbol', 'wholeUnits', 'times']);
+		expect(FORMAT_FIELDS).toEqual(['locale', 'currencyDisplay', 'currencySymbols', 'wholeUnits', 'times']);
 		expect(DEFAULT_FORMAT).toEqual({
 			locale: '',
 			currencyDisplay: 'code',
-			currencySymbol: '',
+			currencySymbols: {},
 			wholeUnits: false,
 			times: 'viewer',
 		});
@@ -44,10 +44,22 @@ describe('Format values (K7)', () => {
 		expect(formatViolation('locale', 'not a locale')).toMatch(/language tag/);
 		expect(formatViolation('locale', 7)).toMatch(/language tag/);
 		expect(formatViolation('currencyDisplay', 'symbol')).toBeNull();
-		expect(formatViolation('currencyDisplay', 'name')).toMatch(/code, symbol or custom/);
-		expect(formatViolation('currencySymbol', 'Fr.')).toBeNull();
-		expect(formatViolation('currencySymbol', 'TooLongSym')).toMatch(/8 characters/);
-		expect(formatViolation('currencySymbol', 'a\u0007')).toMatch(/8 characters/);
+		expect(formatViolation('currencyDisplay', 'name')).toMatch(/code or symbol/);
+		expect(formatViolation('currencyDisplay', 'custom')).toMatch(/code or symbol/);
+		// one symbol per currency (K5), not one symbol for all
+		expect(formatViolation('currencySymbols', { CHF: 'Fr.', PKR: 'Rs' })).toBeNull();
+		expect(formatViolation('currencySymbols', {})).toBeNull();
+		expect(formatViolation('currencySymbols', { CHF: 'TooLongSym' })).toMatch(/1 to 8 characters/);
+		expect(formatViolation('currencySymbols', { CHF: 'a\u0007' })).toMatch(/1 to 8 characters/);
+		expect(formatViolation('currencySymbols', { CHF: '' })).toMatch(/1 to 8 characters/);
+		expect(formatViolation('currencySymbols', { chf: 'Fr.' })).toMatch(/currency code/);
+		expect(formatViolation('currencySymbols', 'Fr.')).toMatch(/currency code/);
+		expect(
+			formatViolation(
+				'currencySymbols',
+				Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`A${String.fromCharCode(65 + i)}A`, 'x'])),
+			),
+		).toMatch(/at most 20/);
 		expect(formatViolation('wholeUnits', true)).toBeNull();
 		expect(formatViolation('wholeUnits', 'yes')).toMatch(/true or false/);
 		expect(formatViolation('times', 'business')).toBeNull();
@@ -75,11 +87,14 @@ describe('formatMoney (K7)', () => {
 	it("shows the locale's symbol, a custom symbol and whole units", () => {
 		expect(formatMoney(1_250_000, 'GBP', { currencyDisplay: 'symbol' })).toBe('£12,500.00');
 		expect(formatMoney(1_250_000, 'GBP', { currencyDisplay: 'symbol', wholeUnits: true })).toBe('£12,500');
-		expect(formatMoney(1_250_050, 'CHF', { currencyDisplay: 'custom', currencySymbol: 'Fr.', wholeUnits: true })).toBe(
+		// each currency its own symbol; a currency without one keeps the locale's symbol, and codes stay codes
+		const symbols = { CHF: 'Fr.', PKR: 'Rs' };
+		expect(formatMoney(1_250_050, 'CHF', { currencyDisplay: 'symbol', currencySymbols: symbols, wholeUnits: true })).toBe(
 			'Fr. 12,501',
 		);
-		// a custom display without a symbol keeps the code
-		expect(formatMoney(100, 'USD', { currencyDisplay: 'custom' })).toBe('USD 1.00');
+		expect(formatMoney(150_000, 'PKR', { currencyDisplay: 'symbol', currencySymbols: symbols })).toBe('Rs 1,500.00');
+		expect(formatMoney(100, 'USD', { currencyDisplay: 'symbol', currencySymbols: symbols })).toBe('$1.00');
+		expect(formatMoney(100, 'CHF', { currencyDisplay: 'code', currencySymbols: symbols })).toBe('CHF 1.00');
 		expect(formatMoney(-150, 'USD')).toBe('-USD 1.50');
 	});
 

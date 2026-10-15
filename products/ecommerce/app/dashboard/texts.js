@@ -166,9 +166,14 @@ export const TEXTS = Object.freeze({
 		currencyDisplays: Object.freeze({
 			code: 'Code (USD 12,500.00)',
 			symbol: 'Symbol ($12,500.00)',
-			custom: 'Your own symbol',
 		}),
-		currencySymbol: 'Your own symbol (up to 8 characters)',
+		currencySymbols: 'Your own symbols',
+		currencySymbolsHelp:
+			'Shown instead of the usual symbol for that currency (Symbol display). A currency without one keeps the usual symbol.',
+		currency: 'Currency (ISO code)',
+		symbol: 'Symbol (up to 8 characters)',
+		addSymbol: 'Add symbol',
+		symbolRow: '{currency} symbol',
 		times: 'Dates and times in',
 		timesOptions: Object.freeze({
 			viewer: "Each visitor's time zone",

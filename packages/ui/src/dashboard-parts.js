@@ -9,9 +9,11 @@ import { ViewTransition, createContext, useContext, useMemo, useState } from 're
 import { Button } from './Button.js';
 import { Callout, Card, ErrorState, Skeleton, SoftBreaks } from './display.js';
 import { Checkbox, FieldGrid, Input, Select, TextArea } from './fields.js';
+import { ListEditor } from './ListEditor.js';
 import { SchemaForm } from './SchemaForm.js';
 import { describeProblem } from './problems.js';
 import { call, fill } from './dashboard-api.js';
+import { symbolRowsOf, symbolsOf } from './format.js';
 import { dashboardTexts } from './dashboard-texts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
@@ -332,13 +334,16 @@ export function ThemeForm({ theme, save, reload }) {
 }
 
 /**
- * How money and dates look in the widgets, messages, invoices and hosted pages (one Format per website, PLAN 0.8.10 K7).
- * @param {{ format: { locale: string, currencyDisplay: string, currencySymbol: string, wholeUnits: boolean, times: string },
- *   save: (format: Record<string, unknown>) => Promise<Answer>, reload: () => void }} props
+ * How money and dates look in the widgets, messages, invoices and hosted pages (one Format per website, PLAN 0.8.10 K7):
+ * its own symbol per currency (fixed-choices audit K5) is a merchant list.
+ * @param {{ format: { locale: string, currencyDisplay: string, currencySymbols: Record<string, string>,
+ *   wholeUnits: boolean, times: string }, save: (format: Record<string, unknown>) => Promise<Answer>,
+ *   reload: () => void }} props
  */
 export function FormatForm({ format, save, reload }) {
 	const { texts } = useDashboard();
 	const [draft, setDraft] = useState(format);
+	const [rows, setRows] = useState(() => symbolRowsOf(format.currencySymbols ?? {}));
 	const [result, setResult] = useState(/** @type {Answer | null} */ (null));
 	return (
 		<Card title={texts.settings.format} subtitle={texts.settings.formatHelp}>
@@ -356,13 +361,6 @@ export function FormatForm({ format, save, reload }) {
 					options={Object.entries(texts.settings.currencyDisplays).map(([value, label]) => ({ value, label }))}
 					onChange={(event) => setDraft({ ...draft, currencyDisplay: event.target.value })}
 				/>
-				<Input
-					label={texts.settings.currencySymbol}
-					maxLength={8}
-					disabled={draft.currencyDisplay !== 'custom'}
-					value={draft.currencySymbol}
-					onChange={(event) => setDraft({ ...draft, currencySymbol: event.target.value })}
-				/>
 				<Select
 					label={texts.settings.times}
 					value={draft.times}
@@ -374,11 +372,39 @@ export function FormatForm({ format, save, reload }) {
 					checked={draft.wholeUnits}
 					onChange={(event) => setDraft({ ...draft, wholeUnits: event.target.checked })}
 				/>
+				<ListEditor
+					legend={texts.settings.currencySymbols}
+					help={texts.settings.currencySymbolsHelp}
+					items={rows}
+					onChange={setRows}
+					max={20}
+					newItem={() => ({ currency: '', symbol: '' })}
+					nameOf={(row, index) => fill(texts.settings.symbolRow, { currency: row.currency || String(index + 1) })}
+					texts={{ add: texts.settings.addSymbol }}
+					renderItem={(row, _index, update) => (
+						<>
+							<Input
+								label={texts.settings.currency}
+								maxLength={3}
+								placeholder="PKR"
+								value={row.currency}
+								onChange={(event) => update({ ...row, currency: event.target.value.toUpperCase() })}
+							/>
+							<Input
+								label={texts.settings.symbol}
+								maxLength={8}
+								placeholder="Rs"
+								value={row.symbol}
+								onChange={(event) => update({ ...row, symbol: event.target.value })}
+							/>
+						</>
+					)}
+				/>
 			</FieldGrid>
 			<Button
 				className="mt-4"
 				onClick={async () => {
-					setResult(await save(draft));
+					setResult(await save({ ...draft, currencySymbols: symbolsOf(rows) }));
 					reload();
 				}}>
 				{texts.save}

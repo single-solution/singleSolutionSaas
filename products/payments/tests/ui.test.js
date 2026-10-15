@@ -33,7 +33,7 @@ const configOf = (features, { format = {}, timeZone = 'UTC' } = {}) => ({
 
 /** A custom Format: "US$ 12,500" and "1 Oct 2026, 19:00" in the business time zone (Tokyo, UTC+9). */
 const CUSTOM_LOOK = {
-	format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: 'US$', wholeUnits: true, times: 'business' },
+	format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { USD: 'US$' }, wholeUnits: true, times: 'business' },
 	timeZone: 'Asia/Tokyo',
 };
 

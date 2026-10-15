@@ -132,6 +132,9 @@
  * @property {string | null} address
  * @property {string | null} country ISO 3166-1 alpha-2, upper case
  * @property {string | null} timeZone IANA name
+ * @property {string | null} currency the store currency, ISO 4217 (K5)
+ * @property {readonly string[]} currencies the currencies the business takes, the store currency first
+ * @property {string | null} language the default language, a canonical BCP 47 tag
  */
 
 /** @typedef {{ user: { id?: string, email?: string, phone?: string } }} DataRightsRequest */

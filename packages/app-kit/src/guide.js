@@ -49,7 +49,7 @@ export const KIT_GUIDE = Object.freeze([
 		id: 'format',
 		title: 'Format and time zone',
 		paragraphs: Object.freeze([
-			'Settings → Format (or GET and PUT /v1/format) decides how money and dates look in widgets, messages, invoices and hosted pages: locale (a language tag such as en-US or fr-FR, or empty for the visitor’s own browser; text made on the server then uses en-US), currencyDisplay (code “USD 12,500.00”, symbol “$12,500.00” or custom with currencySymbol), wholeUnits (no minor units) and times (viewer: each visitor’s own time zone; business: your business.json time zone). Text made on the server always uses your business.json time zone, and so does every calendar rule (days, months and years), UTC when it is missing.',
+			'Settings → Format (or GET and PUT /v1/format) decides how money and dates look in widgets, messages, invoices and hosted pages: locale (a language tag such as en-US or fr-FR, or empty for the visitor’s own browser; text made on the server then uses en-US), currencyDisplay (code “USD 12,500.00” or symbol “$12,500.00”), currencySymbols (your own symbol per currency, for example PKR “Rs” and CHF “Fr.”; a currency without one shows the usual symbol), wholeUnits (no minor units) and times (viewer: each visitor’s own time zone; business: your business.json time zone). Text made on the server always uses your business.json time zone, and so does every calendar rule (days, months and years), UTC when it is missing.',
 		]),
 	}),
 ]);

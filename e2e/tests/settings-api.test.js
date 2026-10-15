@@ -202,7 +202,7 @@ describe.each(CASES)('settings API of $id (K1)', ({ id, product, routes, on, set
 		expect(format.json.format).toEqual({
 			locale: 'en-GB',
 			currencyDisplay: 'symbol',
-			currencySymbol: '',
+			currencySymbols: {},
 			wholeUnits: true,
 			times: 'business',
 		});

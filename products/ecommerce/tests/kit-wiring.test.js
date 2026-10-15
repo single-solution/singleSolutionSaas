@@ -605,8 +605,8 @@ describe('K7 and K8: Format and business time zone', () => {
 		await useTimeZone('Asia/Tokyo');
 		const saved = await shop.api('PUT', '/v1/format', {
 			locale: 'en-US',
-			currencyDisplay: 'custom',
-			currencySymbol: 'US$',
+			currencyDisplay: 'symbol',
+			currencySymbols: { USD: 'US$' },
 			wholeUnits: true,
 			times: 'business',
 		});
@@ -614,7 +614,7 @@ describe('K7 and K8: Format and business time zone', () => {
 		try {
 			const config = await shop.visitor('GET', '/v1/widget/config');
 			expect(config.json).toMatchObject({
-				format: { locale: 'en-US', currencySymbol: 'US$', wholeUnits: true },
+				format: { locale: 'en-US', currencySymbols: { USD: 'US$' }, wholeUnits: true },
 				timeZone: 'Asia/Tokyo',
 			});
 
@@ -651,7 +651,7 @@ describe('K7 and K8: Format and business time zone', () => {
 			await shop.api('PUT', '/v1/format', {
 				locale: null,
 				currencyDisplay: null,
-				currencySymbol: null,
+				currencySymbols: null,
 				wholeUnits: null,
 				times: null,
 			});

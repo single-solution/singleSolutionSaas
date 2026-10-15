@@ -398,19 +398,30 @@ describe('shared pieces', () => {
 		const saveFormat = vi.fn(
 			async () => /** @type {const} */ ({ ok: false, problem: { status: 422, code: 'product_rule', title: 'Bad locale' } }),
 		);
-		const format = { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
+		const format = {
+			locale: '',
+			currencyDisplay: 'code',
+			currencySymbols: { CHF: 'Fr.' },
+			wholeUnits: false,
+			times: 'viewer',
+		};
 		const second = render(inDashboard(<FormatForm format={format} save={saveFormat} reload={reload} />));
-		expect(byLabel(second.container, TEXTS.settings.currencySymbol).disabled).toBe(true);
 		type(byLabel(second.container, TEXTS.settings.locale), ' fr-FR ');
-		type(byLabel(second.container, TEXTS.settings.currencyDisplay), 'custom');
-		type(byLabel(second.container, TEXTS.settings.currencySymbol), 'Rs');
+		type(byLabel(second.container, TEXTS.settings.currencyDisplay), 'symbol');
+		// one symbol per currency (K5): add PKR, keep CHF, a row without a symbol is left out
+		await act(async () => button(TEXTS.settings.addSymbol).click());
+		await act(async () => button(TEXTS.settings.addSymbol).click());
+		const rows = second.container.querySelectorAll('li');
+		type(byLabel(/** @type {HTMLElement} */ (rows[1]), TEXTS.settings.currency), 'pkr');
+		type(byLabel(/** @type {HTMLElement} */ (rows[1]), TEXTS.settings.symbol), 'Rs');
+		type(byLabel(/** @type {HTMLElement} */ (rows[2]), TEXTS.settings.currency), 'EUR');
 		type(byLabel(second.container, TEXTS.settings.times), 'business');
 		click(byLabel(second.container, TEXTS.settings.wholeUnits));
 		await act(async () => button('Save').click());
 		expect(saveFormat).toHaveBeenCalledWith({
 			locale: 'fr-FR',
-			currencyDisplay: 'custom',
-			currencySymbol: 'Rs',
+			currencyDisplay: 'symbol',
+			currencySymbols: { CHF: 'Fr.', PKR: 'Rs' },
 			wholeUnits: true,
 			times: 'business',
 		});
@@ -580,7 +591,7 @@ describe('standard tabs', () => {
 				theme: { colors: { accent: '#000000' }, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' },
 			}),
 			[`GET ${base}/format`]: ok({
-				format: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' },
+				format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' },
 			}),
 			[`PUT ${base}/settings/notes.greeting`]: ok({}),
 			[`PUT ${base}/texts/hello`]: ok({}),
@@ -749,7 +760,7 @@ describe('standard tabs', () => {
 				features: [{ key: 'notes', name: 'Notes', schema: SCHEMA, values: { greeting: { value: 'Hi', source: 'default' } } }],
 				texts: [{ key: 'hello', english: 'Hello', value: 'Hey', source: 'default' }],
 				theme: { theme: { colors: {}, fontFamily: 'inherit', radius: 4, mode: 'auto', customCss: '' } },
-				format: { format: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' } },
+				format: { format: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' } },
 				recentChanges: [],
 			}),
 			'PUT /v1/dashboard/defaults/notes.greeting': ok({}),
@@ -777,7 +788,7 @@ describe('standard tabs', () => {
 			{
 				method: 'PUT',
 				path: '/v1/dashboard/defaults/format',
-				body: { value: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' } },
+				body: { value: { locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' } },
 			},
 		]);
 		cleanup();

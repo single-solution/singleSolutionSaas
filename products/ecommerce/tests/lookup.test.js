@@ -142,8 +142,8 @@ describe('core/lookup', () => {
 	it('shapes cards and details, every price with its text by the Format', () => {
 		const symbol = {
 			...DEFAULT_FORMAT,
-			currencyDisplay: /** @type {const} */ ('custom'),
-			currencySymbol: 'US$',
+			currencyDisplay: /** @type {const} */ ('symbol'),
+			currencySymbols: { USD: 'US$' },
 			wholeUnits: true,
 		};
 		/** @param {number} amount @param {string} currency */

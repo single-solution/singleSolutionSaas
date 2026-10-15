@@ -73,10 +73,13 @@ Vocabularies: `ADMIN_ROLES` (`owner`, `support`, `finance`) and `PRODUCT_UNAVAIL
 
 ## business.json (0.4.9)
 
-`validateBusinessJson(value)` returns the normalized `{ name, logo, email, phone, address, country, timeZone }`. Only
-`name` is required (a missing or invalid name fails the whole file); any other invalid field becomes `null`. `logo`
-must be an https URL, `country` an ISO 3166-1 alpha-2 code (returned upper-case), `timeZone` an IANA name the runtime
-knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship.
+`validateBusinessJson(value)` returns the normalized `{ name, logo, email, phone, address, country, timeZone, currency,
+currencies, language }`. Only `name` is required (a missing or invalid name fails the whole file); any other invalid
+field becomes `null` (`currencies`: `[]`). `logo` must be an https URL, `country` an ISO 3166-1 alpha-2 code (returned
+upper-case), `timeZone` an IANA name the runtime knows (returned in canonical form), `currency` the store currency
+(ISO 4217, upper-case), `currencies` the currencies the business takes (the store currency first, each once, at most
+`MAX_CURRENCIES` 20; codes that are not currencies are dropped) and `language` the default language (a canonical BCP
+47 tag). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship.
 
 ## Cross-product shapes (0.4.11)
 
@@ -168,10 +171,13 @@ defaults with the same rules.
 
 Pure and browser-safe, so products' `core/` and widgets (through `@ss/app-kit/widget`) use the same code.
 
-- `DEFAULT_FORMAT` `{ locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' }`,
-  `FORMAT_FIELDS`, `formatViolation(field, value)`, `normaliseFormat(value)`.
+- `DEFAULT_FORMAT` `{ locale: '', currencyDisplay: 'code', currencySymbols: {}, wholeUnits: false, times: 'viewer' }`,
+  `FORMAT_FIELDS`, `formatViolation(field, value)`, `normaliseFormat(value)`. `currencySymbols` is the merchant's own
+  symbol per currency (`{ PKR: 'Rs', CHF: 'Fr.' }`, at most 20, each 1 to 8 characters): one currency's symbol never
+  replaces another's.
 - `formatMoney(amount, currency, format?, viewer?)`: integer minor units (ISO 4217 exponents, `currencyDigits`) as
-  `USD 12,500.00` (code), `$12,500.00` (symbol), a custom symbol, or without minor units (`wholeUnits`). The locale is
+  `USD 12,500.00` (code), `$12,500.00` (symbol), the currency's own symbol in the code's place (`Rs 12,500.00`), or
+  without minor units (`wholeUnits`). The locale is
   the Format's, else the viewer's (widgets), else `en-US` (US English).
 - `formatDate(value, format?, { timeZone, style: 'date' | 'datetime' | 'time', viewer })`: `Mar 12, 2026`,
   `Mar 12, 2026, 7:30 PM` or `7:30 PM` in `en-US`; text the server makes (`viewer` null) uses the business time zone;

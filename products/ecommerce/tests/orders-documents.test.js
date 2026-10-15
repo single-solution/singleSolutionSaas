@@ -294,8 +294,8 @@ describe('document parts', () => {
 			format: {
 				...DEFAULT_FORMAT,
 				locale: 'fr-CA',
-				currencyDisplay: /** @type {const} */ ('custom'),
-				currencySymbol: '$ US',
+				currencyDisplay: /** @type {const} */ ('symbol'),
+				currencySymbols: { USD: '$ US' },
 				wholeUnits: true,
 			},
 		};

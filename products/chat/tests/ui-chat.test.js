@@ -1092,7 +1092,7 @@ describe('product cards', () => {
 		const { root, api } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ai_replies', 'product_cards', 'handoff'],
 			look: {
-				format: { locale: 'en-GB', currencyDisplay: 'custom', currencySymbol: '€', wholeUnits: true, times: 'business' },
+				format: { locale: 'en-GB', currencyDisplay: 'symbol', currencySymbols: { EUR: '€' }, wholeUnits: true, times: 'business' },
 				timeZone: 'Europe/Paris',
 			},
 			routes: {
