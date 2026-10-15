@@ -876,7 +876,13 @@ export const createReply = (product, service) => {
 					retryInstruction: language ? languageRetry(language) : '',
 					checks:
 						settings.neverDisclose === true
-							? [{ ok: (text) => !disclosesBot(text), retry: DISCLOSE_RETRY, failure: 'disclosed' }]
+							? [
+									{
+										ok: (text) => !disclosesBot(text, /** @type {string[]} */ (settings.botPhrases)),
+										retry: DISCLOSE_RETRY,
+										failure: 'disclosed',
+									},
+								]
 							: [],
 				},
 				{

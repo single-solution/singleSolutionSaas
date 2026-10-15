@@ -343,10 +343,16 @@ describe('the comparison answer (C18)', () => {
 
 describe('never disclose, strict language and the own contact (C1, C14, C15)', () => {
 	it('spots answers that reveal a bot and builds the prompt', () => {
-		expect(disclosesBot('As an AI, I can help')).toBe(true);
-		expect(disclosesBot('I’m a virtual assistant')).toBe(true);
-		expect(disclosesBot('I am not a real person')).toBe(true);
-		expect(disclosesBot('Our lamps are made with care.')).toBe(false);
+		// the merchant's phrases (C17): whole words, case, accents and apostrophes aside, in any language
+		const phrases = ['as an AI', 'virtual assistant', 'not a real person', 'je suis une IA', 'ロボット'];
+		expect(disclosesBot('As an AI, I can help', phrases)).toBe(true);
+		expect(disclosesBot('I’m a virtual assistant', phrases)).toBe(true);
+		expect(disclosesBot('I am not a real person', phrases)).toBe(true);
+		expect(disclosesBot('Je suis une IA.', phrases)).toBe(true);
+		expect(disclosesBot('私はロボットです', phrases)).toBe(true);
+		expect(disclosesBot('Our lamps are made with care.', phrases)).toBe(false);
+		expect(disclosesBot('Our maidens are made with care.', ['AI'])).toBe(false);
+		expect(disclosesBot('As an AI, I can help', [])).toBe(false);
 		const prompt = buildSystemPrompt({
 			botName: 'Sam',
 			business: { name: 'Shop' },

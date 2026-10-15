@@ -67,6 +67,36 @@
 			"default": false,
 			"description": "The AI never says it is a bot or an AI, answers that do are asked again once, and the AI label is hidden. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot; you are responsible for following the law where you operate."
 		},
+		"botPhrases": {
+			"type": "array",
+			"title": "Phrases that say it is a bot",
+			"default": [
+				"I am an AI",
+				"I'm an AI",
+				"as an AI",
+				"an A.I.",
+				"being an AI",
+				"I am a bot",
+				"I'm a bot",
+				"as a bot",
+				"chatbot",
+				"chat bot",
+				"language model",
+				"artificial intelligence",
+				"virtual assistant",
+				"automated assistant",
+				"automated system",
+				"not a human",
+				"not a real human",
+				"not a person",
+				"not a real person"
+			],
+			"items": {
+				"type": "string",
+				"maxLength": 100
+			},
+			"description": "With Never say it is a bot, an answer holding one of these (whole words, case and accents aside) is asked again once. Add the phrases of each language your AI answers in."
+		},
 		"bubbles": {
 			"type": "integer",
 			"title": "Most messages per answer",

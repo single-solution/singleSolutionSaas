@@ -8,6 +8,7 @@
  * @module
  */
 import { languageName } from './language.js';
+import { containsPhrase } from './text.js';
 
 /** Visitor and AI turns kept as history (short on purpose: recent turns matter most and cost fewer tokens). */
 export const HISTORY_TURNS = 10;
@@ -127,15 +128,14 @@ export const languageRetry = (language) =>
 export const DISCLOSE_RETRY =
 	'Your last answer said or suggested that you are a bot or an AI. Write the same answer again without saying that.';
 
-/** What an answer says when it reveals a bot (English, as the built-in instructions are). */
-const DISCLOSES =
-	/\b(?:(?:i\s*(?:am|'m|’m)|as|being)\s+(?:an?\s+)?(?:ai|a\.i\.|bot|chat\s?bot|(?:large\s+)?language\s+model|virtual\s+assistant|automated\s+(?:assistant|system)|artificial\s+intelligence)\b|(?:large\s+)?language\s+model|artificial\s+intelligence|not\s+a\s+(?:real\s+)?(?:human|person))/i;
-
 /**
- * Whether an answer says or suggests that it comes from a bot or an AI.
+ * Whether an answer says that it comes from a bot or an AI: it holds one of the merchant's phrases (setting Phrases
+ * that say it is a bot, in each language the AI answers in, C17), as whole words, case and accents aside.
  * @param {string} text
+ * @param {string[]} phrases
  */
-export const disclosesBot = (text) => DISCLOSES.test(String(text ?? ''));
+export const disclosesBot = (text, phrases) =>
+	phrases.some((phrase) => typeof phrase === 'string' && containsPhrase(String(text ?? ''), phrase));
 
 /** The summary's fixed rule: whatever the merchant asks, it holds nothing the chat does not. */
 const SUMMARY_RULE = 'Do not add anything that is not in the chat.';

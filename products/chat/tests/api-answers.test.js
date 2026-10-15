@@ -112,6 +112,15 @@ describe('instructions, never disclose and rich answers (C1, C2)', () => {
 		sys.ai({ text: 'I am a bot.' }, { text: 'I am a chatbot, sorry.' });
 		await v('POST', '/v1/chat/messages', { text: 'Are you real?' });
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
+		// the phrases that give a bot away are the merchant's, in each language the AI answers in (C17)
+		await sys.setting('ai_replies', 'botPhrases', ['je suis une IA', 'robot']);
+		sys.ai({ text: 'Je suis une IA, désolé.' }, { text: 'Nous livrons en deux jours.' });
+		await v('POST', '/v1/chat/messages', { text: 'Vous livrez quand ?' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'Nous livrons en deux jours.']);
+		// English phrases the list no longer has pass
+		sys.ai({ text: 'As an AI I ship in two days.' });
+		await v('POST', '/v1/chat/messages', { text: 'Shipping?' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'As an AI I ship in two days.']);
 	});
 
 	it('answers in markdown, split into bubbles, with links only on the website or as moderation allows', async () => {
