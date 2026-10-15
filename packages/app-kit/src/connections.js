@@ -11,8 +11,8 @@
  *   product for the same website (else it is refused), and the definition's own `test` hook runs last.
  * - Every change writes Recent changes.
  * - `callProduct` calls another product with a pasted token, at the address the Portal's directory gives (cached up to
- *   5 minutes), through `@ss/net`; a send to Notifications carries the defaults of the product's message (`attach`,
- *   `messages.js`). `addressOf` gives another product's address (the same cache); `products` every connected
+ *   5 minutes), through `@ss/net`; a send to Notifications carries the defaults and long values of the product's
+ *   message (`attach`, `messages.js`). `addressOf` gives another product's address (the same cache); `products` every connected
  *   product and its address (the Portal's directory list, cached up to 5 minutes; its last good copy while the Portal
  *   cannot answer), so a product can serve the others without naming them in its code.
  * @module
@@ -371,7 +371,7 @@ export const createConnections = ({
 
 	/**
 	 * Call another product with the server token pasted for it, exactly as the merchant's own server would. A send to
-	 * Notifications carries the defaults of the product's message (parity P1).
+	 * Notifications carries the defaults and long values of the product's message (parity P1).
 	 * @param {string} websiteId
 	 * @param {string} otherProductId
 	 * @param {string} path e.g. `/v1/activity-copies`

@@ -3,7 +3,10 @@ import { defineRoute } from '../src/index.js';
 import { createMessages } from '../src/messages.js';
 import { productRoutes, setup } from './helpers.js';
 
-/** The sample product's messages: a staff alert with defaults by email and SMS, and a code sent on WhatsApp only. */
+/**
+ * The sample product's messages: a staff alert with defaults by email and SMS, a code sent on WhatsApp only, and a
+ * copy of a note with its long body (a long value).
+ */
 const DECLARATION = Object.freeze({
 	messages: [
 		{
@@ -19,6 +22,14 @@ const DECLARATION = Object.freeze({
 			},
 		},
 		{ key: 'notes.code', name: 'Code', values: ['code'], channels: { whatsapp: null } },
+		{
+			key: 'notes.copy',
+			name: 'Copy of a note',
+			values: ['title', 'body'],
+			longValues: ['body'],
+			required: true,
+			channels: { email: { subject: 'Your note {title}', text: '{body}' } },
+		},
 	],
 });
 
@@ -63,6 +74,14 @@ describe('message defaults (parity P1)', () => {
 				declaration: { messages: [{ key: 'notes.x', name: 'X', values: [], channels: { sms: { text: 'Hi {name}' } } }] },
 			}),
 		).toThrow(/is not one of the message's values/);
+		expect(() =>
+			createMessages({
+				productId: 'notes',
+				declaration: {
+					messages: [{ key: 'notes.x', name: 'X', values: ['a'], longValues: ['b'], channels: { sms: { text: '{a}' } } }],
+				},
+			}),
+		).toThrow(/longValues\/0 'b' is not one of the message's values/);
 		expect(() => createMessages({ productId: 'notes', declaration: [] })).toThrow(/messages are invalid/);
 	});
 
@@ -88,6 +107,29 @@ describe('message defaults (parity P1)', () => {
 		expect(attach('notifications', '/v1/messages/email', untitled)).toBe(untitled);
 		const whatsappOnly = { method: 'POST', body: { template: 'notes.code' } };
 		expect(attach('notifications', '/v1/messages/whatsapp', whatsappOnly)).toBe(whatsappOnly);
+	});
+
+	it('names a message’s long values on every send of it, so Notifications takes them whole', () => {
+		const { attach } = createMessages({ productId: 'notes', declaration: DECLARATION });
+		const copy = { method: 'POST', body: { template: 'notes.copy', to: { email: 'a@b.example' } } };
+		expect(attach('notifications', '/v1/messages/email', copy).body).toEqual({
+			...copy.body,
+			defaults: { email: { subject: 'Your note {title}', text: '{body}', required: true, urgent: false, sensitive: false } },
+			longValues: ['body'],
+		});
+		// with the caller's own defaults, the long values still go; the caller's own long values are kept
+		expect(attach('notifications', '/v1/messages/sms', { ...copy, body: { ...copy.body, defaults: {} } }).body).toEqual({
+			...copy.body,
+			defaults: {},
+			longValues: ['body'],
+		});
+		const own = { ...copy, body: { ...copy.body, defaults: {}, longValues: [] } };
+		expect(attach('notifications', '/v1/messages/email', own)).toBe(own);
+		// a key made per case carries those of the message it falls back to; a message without long values names none
+		const perCase = { method: 'POST', body: { template: 'notes.copy.weekly', fallbackTemplate: 'notes.copy' } };
+		expect(attach('notifications', '/v1/messages/email', perCase).body).toMatchObject({ longValues: ['body'] });
+		const alert = { method: 'POST', body: { template: 'notes.staff_note_created' } };
+		expect(attach('notifications', '/v1/messages/email', alert).body).not.toHaveProperty('longValues');
 	});
 
 	it('a key made per case carries the defaults of the declared message it falls back to', () => {
