@@ -11,7 +11,8 @@
  * at most once a day per website and instance.
  *
  * The merchant's server reads the log with `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=` (server token,
- * newest first), with counts (`/count`, `/counts?by=action|actor`).
+ * newest first), with counts (`/count`, `/counts?by=action|actor`). A website's settings saves are entries too
+ * (`settings.changed`, written by the kit's `settingsChanged`).
  * @module
  */
 import { createId, validateActivityCopy, zonedDayStart } from '@ss/contracts';

@@ -176,14 +176,16 @@ export const createDashboard = (kit) => {
 	 */
 	const outcome = (result, answer = () => noContent()) => (result.ok ? answer() : result.problem);
 	/**
-	 * The answer of a website's settings change; a saved one also raises `settings.changed` (K5, SG-14).
+	 * The answer of a website's settings change; a saved one is also an activity-log entry and raises
+	 * `settings.changed` (K5, SG-14).
 	 * @param {RequestContext} ctx
-	 * @param {Parameters<import('./events.js').Events['settingsChanged']>[1]} change
-	 * @param {{ ok: true } | { ok: false, problem: ProblemResult }} result
+	 * @param {{ what: import('./product.js').SettingsChange['what'], key?: string }} change
+	 * @param {import('./settings.js').Change} result
 	 * @param {() => unknown} [answer]
 	 */
 	const changed = async (ctx, change, result, answer) => {
-		if (result.ok) await kit.events.settingsChanged(ctx, change);
+		if (result.ok)
+			await kit.settingsChanged(ctx, { ...change, who: whoOf(sessionOf(ctx)), label: result.label, detail: result.detail });
 		return outcome(result, answer);
 	};
 	/** @param {unknown} body @returns {Record<string, any>} */

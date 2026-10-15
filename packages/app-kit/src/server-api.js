@@ -15,7 +15,10 @@
  *   come back.
  * - `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=&limit=` (newest first) and its counts.
  *
- * Every write is a Recent change by the acting user (K2), else `Server`; at most 60 writes per minute per website.
+ * Every write is a Recent change by the acting user (K2), else `Server`; a setting, text, theme, Format or list save is
+ * also an activity-log entry (`settings.changed`) and raises the `settings.changed` event. At most 60 writes per minute
+ * per website, and 3,000 reads per minute per route per website (the window of SEO reads, SG-31: a storefront rendered
+ * on the merchant's server reads its settings on every page).
  * @module
  */
 import { currentFeatures } from './connection.js';
@@ -44,6 +47,8 @@ export const SETTINGS_WRITE_LIMIT = Object.freeze({
 	per: /** @type {const} */ ('website'),
 	bucket: 'kit-settings-writes',
 });
+/** Reads of the merchant's server per route per website (code constant; the window SEO reads have, SG-31). */
+export const SETTINGS_READ_LIMIT = Object.freeze({ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') });
 
 /**
  * A list filter with a page's keyset: both may hold `$or` (the search and the cursor), so they are joined with `$and`.
@@ -87,6 +92,16 @@ export const createServerApi = (kit, lists) => {
 	const orThrow = (result) => {
 		if (!result.ok) throw result.problem;
 	};
+	/**
+	 * A settings save: refused, thrown; saved, an activity-log entry and `settings.changed`.
+	 * @param {RequestContext} ctx
+	 * @param {{ what: import('./product.js').SettingsChange['what'], key?: string }} change
+	 * @param {import('./settings.js').Change} result
+	 */
+	const saved = async (ctx, change, result) => {
+		if (!result.ok) throw result.problem;
+		await kit.settingsChanged(ctx, { ...change, who: whoOf(ctx), label: result.label, detail: result.detail });
+	};
 	/** @param {string} key */
 	const splitKey = (key) => {
 		const dot = key.indexOf('.');
@@ -108,18 +123,24 @@ export const createServerApi = (kit, lists) => {
 		const value = ctx.method === 'PUT' ? valueOf(ctx) : undefined;
 		if (ctx.method === 'PUT' && value === null)
 			throw problem('validation_failed', 'Send a value, or DELETE to reset to the default.');
-		orThrow(await kit.settings.setSetting({ websiteId: website(ctx), feature, key, value, who: whoOf(ctx) }));
-		await kit.events.settingsChanged(ctx, { what: 'settings', key: full });
-		const saved = (await kit.settings.settingsOf(website(ctx), feature))[key];
-		return { key: full, value: saved?.value, source: saved?.source };
+		await saved(
+			ctx,
+			{ what: 'settings', key: full },
+			await kit.settings.setSetting({ websiteId: website(ctx), feature, key, value, who: whoOf(ctx) }),
+		);
+		const current = (await kit.settings.settingsOf(website(ctx), feature))[key];
+		return { key: full, value: current?.value, source: current?.source };
 	};
 
 	/** @param {RequestContext} ctx */
 	const text = async (ctx) => {
 		const key = String(ctx.params.key ?? '');
 		const value = ctx.method === 'PUT' ? valueOf(ctx) : undefined;
-		orThrow(await kit.settings.setText({ websiteId: website(ctx), key, value, who: whoOf(ctx) }));
-		await kit.events.settingsChanged(ctx, { what: 'texts', key });
+		await saved(
+			ctx,
+			{ what: 'texts', key },
+			await kit.settings.setText({ websiteId: website(ctx), key, value, who: whoOf(ctx) }),
+		);
 		const found = (await kit.settings.textsOf(website(ctx))).find((entry) => entry.key === key);
 		return found ?? problem('not_found', 'No such text.');
 	};
@@ -162,8 +183,14 @@ export const createServerApi = (kit, lists) => {
 		by: { action: 'action', actor: 'actor.id', kind: 'actor.kind' },
 	});
 
-	/** @param {Omit<import('./http/routes.js').RouteDefinition, 'auth'>} definition */
-	const route = (definition) => defineRoute({ database: false, ...definition, auth: 'server' });
+	/** A server-token route; a read gets the read window. @param {Omit<import('./http/routes.js').RouteDefinition, 'auth'>} definition */
+	const route = (definition) =>
+		defineRoute({
+			database: false,
+			...(definition.method === 'GET' ? { rateLimit: SETTINGS_READ_LIMIT } : {}),
+			...definition,
+			auth: 'server',
+		});
 
 	return [
 		route({
@@ -219,8 +246,11 @@ export const createServerApi = (kit, lists) => {
 			path: '/v1/theme',
 			rateLimit: writes,
 			handler: async (ctx) => {
-				orThrow(await kit.settings.setTheme({ websiteId: website(ctx), theme: objectBody(ctx.body), who: whoOf(ctx) }));
-				await kit.events.settingsChanged(ctx, { what: 'theme' });
+				await saved(
+					ctx,
+					{ what: 'theme' },
+					await kit.settings.setTheme({ websiteId: website(ctx), theme: objectBody(ctx.body), who: whoOf(ctx) }),
+				);
 				return kit.settings.themeOf(website(ctx));
 			},
 		}),
@@ -230,8 +260,11 @@ export const createServerApi = (kit, lists) => {
 			path: '/v1/format',
 			rateLimit: writes,
 			handler: async (ctx) => {
-				orThrow(await kit.settings.setFormat({ websiteId: website(ctx), format: objectBody(ctx.body), who: whoOf(ctx) }));
-				await kit.events.settingsChanged(ctx, { what: 'format' });
+				await saved(
+					ctx,
+					{ what: 'format' },
+					await kit.settings.setFormat({ websiteId: website(ctx), format: objectBody(ctx.body), who: whoOf(ctx) }),
+				);
 				return kit.settings.formatOf(website(ctx));
 			},
 		}),
@@ -253,9 +286,9 @@ export const createServerApi = (kit, lists) => {
 				const { on } = await kit.reports.switches(website(ctx));
 				if (!features.some((key) => on.includes(key)))
 					throw problem('feature_off', `The feature ${features.join(' or ')} is off: its lists cannot be changed.`);
-				const saved = await definition.save(website(ctx), valueOf(ctx));
-				if (!saved.ok) {
-					const errors = saved.errors.map((error) =>
+				const list = await definition.save(website(ctx), valueOf(ctx));
+				if (!list.ok) {
+					const errors = list.errors.map((error) =>
 						typeof error === 'string'
 							? { path: '/value', message: error }
 							: { path: error.path ?? '/value', message: error.message },
@@ -268,8 +301,14 @@ export const createServerApi = (kit, lists) => {
 					what: 'settings',
 					detail: `${definition.title}: changed`,
 				});
-				await kit.events.settingsChanged(ctx, { what: 'list', key: name });
-				return { value: saved.value };
+				await kit.settingsChanged(ctx, {
+					what: 'list',
+					key: name,
+					who: whoOf(ctx),
+					label: definition.title,
+					detail: 'changed',
+				});
+				return { value: list.value };
 			},
 		}),
 		route({

@@ -45,12 +45,19 @@ import { createStatus } from './status.js';
 import { createMemoryStore } from './stores/memory.js';
 import { createMongoStore } from './stores/mongo.js';
 import { createTickets } from './tickets.js';
-import { defaultRandomBytes, isObject, kitError } from './util.js';
+import { defaultRandomBytes, isKitError, isObject, kitError } from './util.js';
 import { verifyToken } from '@ss/protocol';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 /** @typedef {import('./connections.js').ConnectionDefinition} ConnectionDefinition */
 /** @typedef {import('./connections.js').OutboundSend} OutboundSend */
+/**
+ * A website's settings change in words: what (`settings`, `texts`, `theme`, `format` or `list`), which one (`key`: the
+ * setting `<feature>.<setting>`, the text or the list), who changed it, and the change as Recent changes shows it
+ * (`label`, for example `Checkout › Payment methods`, and `detail`, for example `changed`).
+ * @typedef {{ what: 'settings' | 'texts' | 'theme' | 'format' | 'list', key?: string,
+ *   who: import('./recent.js').Who, label: string, detail: string }} SettingsChange
+ */
 
 /**
  * @typedef {object} ProductOptions
@@ -111,6 +118,8 @@ import { verifyToken } from '@ss/protocol';
  * @property {import('./business.js').Business} business
  * @property {import('./activity.js').Activity} activity
  * @property {import('./events.js').Events} events
+ * @property {(ctx: { websiteId: string | null, merchantId: string | null, after: (task: () => Promise<unknown>) => void },
+ *   change: SettingsChange) => Promise<void>} settingsChanged a website's settings change: activity-log entry and event
  * @property {import('./staff-alerts.js').StaffAlerts} staffAlerts
  * @property {import('./messages.js').Messages} messages
  * @property {ReturnType<typeof createTickets>} tickets
@@ -270,6 +279,32 @@ export const createProduct = (options) => {
 	};
 	const activity = createActivity({ productId: manifest.id, data, connections, now, logger });
 	const events = createEvents({ productId: manifest.id, enabled: options.events === true, data, connections, now, logger });
+	/**
+	 * A website's settings change (a setting, text, theme, Format or list, from the dashboard or the settings API): an
+	 * activity-log entry by who changed it (`settings.changed`, the change in words), so the Activity screen and the
+	 * activity copies show it like any other change (parity), and the `settings.changed` event (K5, SG-14). Only with the
+	 * merchant database connected; it never fails the change.
+	 * @type {Kit['settingsChanged']}
+	 */
+	const settingsChanged = async (ctx, { what, key, who, label, detail }) => {
+		if (!ctx.websiteId) return;
+		try {
+			await activity.record(
+				{ websiteId: ctx.websiteId, merchantId: ctx.merchantId, after: ctx.after },
+				{
+					actor: { kind: who.kind, id: who.id, name: who.name, ...(who.role ? { role: who.role } : {}) },
+					action: 'settings.changed',
+					target: key === undefined ? what : `${what}.${key}`,
+					label,
+					detail,
+				},
+			);
+		} catch (error) {
+			if (!isKitError(error, 'database_not_connected'))
+				logger.warn('settings change not written to the activity log', { websiteId: ctx.websiteId, error });
+		}
+		await events.settingsChanged(ctx, { what, ...(key === undefined ? {} : { key }) });
+	};
 	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, data, now, logger });
 	const imports = createImports({
 		options: options.imports,
@@ -315,6 +350,7 @@ export const createProduct = (options) => {
 		business,
 		activity,
 		events,
+		settingsChanged,
 		staffAlerts,
 		messages,
 		tickets,
@@ -423,6 +459,12 @@ export const createProduct = (options) => {
 		business: businessOf,
 		format: formatOf,
 		activity: Object.freeze({ record: activity.record }),
+		/**
+		 * A settings change the product saves through its own routes (a list on its dashboard …), with who changed it and
+		 * the change in words: an activity-log entry and the `settings.changed` event, as the kit writes for its own
+		 * settings routes (never fails the change).
+		 */
+		settingsChanged,
 		events: Object.freeze({
 			emit: events.emit,
 			list: events.list,

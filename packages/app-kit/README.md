@@ -22,9 +22,11 @@ The exact API is in [API.md](./API.md).
   reports (Features screen); switches are saved only after the Portal accepts.
 - **Settings** — one value per website × setting with global defaults and schema defaults; widget texts with the same
   placeholders as the English text; the theme (colors, font, radius, mode, custom CSS); the Format (locale, currency
-  display, whole units, times). Every change goes to Recent changes.
+  display, whole units, times). Every change goes to Recent changes; a website's change also to its activity log
+  (`settings.changed`, by who changed it).
 - **The merchant's server** (PLAN 0.8.10 K1–K4, K9) — the settings API (`/v1/features`, `/v1/settings`, `/v1/texts`,
-  `/v1/theme`, `/v1/format`, `/v1/lists`, `/v1/connections`) with a merchant's rights; the acting user named by
+  `/v1/theme`, `/v1/format`, `/v1/lists`, `/v1/connections`; 3,000 reads per minute per route and 60 writes per
+  minute per website) with a merchant's rights; the acting user named by
   `SS-Actor-*` headers; visitor calls with the server token (`SS-Visitor-IP`, their own rate window); counts of lists
   (`countHandlers`); the activity log (`GET /v1/activity`).
 - **Events, staff alerts and imports** (K5, K6, K10) — events kept 30 days and forwarded through Notifications; staff

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FORMAT, defineRoute } from '../src/index.js';
-import { SETTINGS_WRITE_LIMIT } from '../src/server-api.js';
+import { SETTINGS_READ_LIMIT, SETTINGS_WRITE_LIMIT } from '../src/server-api.js';
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
@@ -209,6 +209,68 @@ describe('settings API for the merchant’s server (K1)', () => {
 		expect((await call('DELETE', '/v1/connections/nope', { token: server.token })).status).toBe(404);
 		expect((await call('POST', '/v1/connections/ai/test', { token: server.token })).status).toBe(404);
 	});
+
+	it('writes every settings save to the activity log, by who saved it (parity: the Activity screen shows them)', async () => {
+		const { call, server, switchOn, connectDatabase, session, dash, websiteId, clock, settle } = await setup({
+			lists: memoryLists(),
+		});
+		await switchOn(['notes', 'inbox']);
+		await connectDatabase();
+		/** @type {Array<[string, string, Record<string, unknown> | undefined]>} */
+		const saves = [
+			['PUT', '/v1/settings/notes.maxNotes', { value: 9 }],
+			['DELETE', '/v1/settings/notes.maxNotes', undefined],
+			['PUT', '/v1/texts/form.title', { value: 'Write to us' }],
+			['PUT', '/v1/theme', { radius: 4, mode: 'dark' }],
+			['PUT', '/v1/format', { wholeUnits: true }],
+			['PUT', '/v1/lists/labels', { value: ['vip'] }],
+		];
+		for (const [method, path, sent] of saves) {
+			clock.advance(1000);
+			const headers = method === 'DELETE' ? {} : ACTOR;
+			expect((await call(method, path, { token: server.token, headers, ...(sent ? { body: sent } : {}) })).status).toBe(200);
+		}
+		// a save from the dashboard names the dashboard's person
+		clock.advance(1000);
+		const merchant = await session({ kind: 'merchant' });
+		expect(
+			(await dash(merchant, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/notes.greeting`, { value: 'Hi' })).status,
+		).toBe(204);
+		await settle();
+		const log = (await body(await call('GET', '/v1/activity?action=settings.changed', { token: server.token }))).json;
+		const user = { kind: 'user', id: 'usr_1', name: 'Alex M.', role: 'Owner' };
+		expect(log.items.map((/** @type {any} */ e) => [e.actor, e.target, e.label, e.detail])).toEqual([
+			[
+				{ kind: 'merchant', id: expect.any(String), name: expect.any(String) },
+				'settings.notes.greeting',
+				'Notes › Greeting',
+				'changed',
+			],
+			[user, 'list.labels', 'Labels', 'changed'],
+			[user, 'format', 'Format', 'wholeUnits changed'],
+			[user, 'theme', 'Theme', 'radius, mode changed'],
+			[user, 'texts.form.title', 'Text form.title', 'changed'],
+			[
+				{ kind: 'server', id: 'server', name: 'Server' },
+				'settings.notes.maxNotes',
+				'Notes › Notes per visitor per day',
+				'reset to default',
+			],
+			[user, 'settings.notes.maxNotes', 'Notes › Notes per visitor per day', 'changed'],
+		]);
+	});
+
+	it('takes 3,000 reads per minute per route and website (the SEO read window)', async () => {
+		const { call, server, clock } = await setup();
+		expect(SETTINGS_READ_LIMIT).toEqual({ limit: 3000, windowSeconds: 60, per: 'website' });
+		for (let i = 0; i < SETTINGS_READ_LIMIT.limit; i += 1)
+			expect((await call('GET', '/v1/theme', { token: server.token })).status).toBe(200);
+		expect((await call('GET', '/v1/theme', { token: server.token })).status).toBe(429);
+		// each route has its own window
+		expect((await call('GET', '/v1/texts', { token: server.token })).status).toBe(200);
+		clock.advance(60_000);
+		expect((await call('GET', '/v1/theme', { token: server.token })).status).toBe(200);
+	}, 60_000);
 
 	it('takes at most 60 writes per minute per website', async () => {
 		const { call, server, clock } = await setup();

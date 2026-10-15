@@ -23,7 +23,11 @@ import { isObject } from './util.js';
 /** @typedef {import('./http/results.js').ProblemResult} ProblemResult */
 /** @typedef {'website' | 'default' | 'built-in'} Source where a value comes from */
 /** @typedef {{ colors: Record<string, string>, fontFamily: string, radius: number, mode: 'light' | 'dark' | 'auto', customCss: string }} Theme */
-/** @typedef {{ ok: true } | { ok: false, problem: ProblemResult }} Change */
+/**
+ * A save's outcome: what changed in words (`label`, for example `Notes › Greeting`, and `detail`, for example `changed`),
+ * as Recent changes shows it (`<label>: <detail>`) and the activity log keeps it.
+ * @typedef {{ ok: true, label: string, detail: string } | { ok: false, problem: ProblemResult }} Change
+ */
 /** @typedef {{ name: string, features: string[], settings: ManifestFeature['settings'] }} SharedSettings */
 /**
  * A settings section: a feature's settings, or shared settings with the features that use them.
@@ -140,9 +144,15 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 		if (value === undefined) await store.delete('settings', idOf(websiteId, kind, key));
 		else await store.put('settings', idOf(websiteId, kind, key), { websiteId, kind, key, value, at: now() });
 	};
-	/** @param {string | null} websiteId @param {Who} who @param {string} what @param {string} detail */
-	const log = (websiteId, who, what, detail) =>
-		recent.record({ websiteId, who, what: websiteId === null ? 'defaults' : what, detail });
+	/**
+	 * Record a saved change in Recent changes and answer it.
+	 * @param {string | null} websiteId @param {Who} who @param {string} what @param {string} label @param {string} detail
+	 * @returns {Promise<Change>}
+	 */
+	const log = async (websiteId, who, what, label, detail) => {
+		await recent.record({ websiteId, who, what: websiteId === null ? 'defaults' : what, detail: `${label}: ${detail}` });
+		return { ok: true, label, detail };
+	};
 
 	/** A feature's settings or shared settings, by key. @param {string} key @returns {Section | undefined} */
 	const featureOf = (key) => sections.find((section) => section.key === key);
@@ -208,13 +218,13 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 				};
 		}
 		await write(websiteId, 'setting', `${featureKey}.${key}`, value);
-		await log(
+		return log(
 			websiteId,
 			who,
 			'settings',
-			`${feature.name} › ${node.title}: ${value === undefined ? 'reset to default' : 'changed'}`,
+			`${feature.name} › ${node.title}`,
+			value === undefined ? 'reset to default' : 'changed',
 		);
-		return { ok: true };
 	};
 
 	/**
@@ -245,8 +255,7 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 				};
 		}
 		await write(websiteId, 'text', key, value);
-		await log(websiteId, who, 'texts', `Text ${key}: ${value === undefined ? 'reset to English' : 'changed'}`);
-		return { ok: true };
+		return log(websiteId, who, 'texts', `Text ${key}`, value === undefined ? 'reset to English' : 'changed');
 	};
 
 	/**
@@ -280,8 +289,7 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 		}
 		for (const [field, value] of Object.entries(theme))
 			await write(websiteId, 'theme', field, value === null ? undefined : value);
-		await log(websiteId, who, 'theme', `Theme: ${Object.keys(theme).join(', ')} changed`);
-		return { ok: true };
+		return log(websiteId, who, 'theme', 'Theme', `${Object.keys(theme).join(', ')} changed`);
 	};
 
 	/**
@@ -323,8 +331,7 @@ export const createSettings = ({ store, manifest, strings, recent, now, shared =
 		}
 		for (const [field, value] of Object.entries(format))
 			await write(websiteId, 'format', field, value === null ? undefined : value);
-		await log(websiteId, who, 'format', `Format: ${Object.keys(format).join(', ')} changed`);
-		return { ok: true };
+		return log(websiteId, who, 'format', 'Format', `${Object.keys(format).join(', ')} changed`);
 	};
 
 	return Object.freeze({
