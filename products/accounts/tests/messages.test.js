@@ -73,7 +73,7 @@ describe('Accounts’ messages and their defaults (parity P1)', () => {
 			template: 'accounts.email_code',
 			defaults: defaultsOf('accounts.email_code'),
 		});
-		await env.setting('phone_code', 'channel', 'whatsapp');
+		await env.setting('phone', 'channel', 'whatsapp');
 		expect((await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900123' })).status).toBe(202);
 		// on WhatsApp too: Notifications uses the SMS words only for a fallback to SMS
 		expect(env.messages().at(-1)).toMatchObject({
@@ -81,6 +81,6 @@ describe('Accounts’ messages and their defaults (parity P1)', () => {
 			template: 'accounts.phone_code',
 			defaults: { sms: defaultsOf('accounts.phone_code').sms },
 		});
-		await env.setting('phone_code', 'channel', 'sms');
+		await env.setting('phone', 'channel', 'sms');
 	});
 });

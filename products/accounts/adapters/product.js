@@ -81,7 +81,7 @@ const SETTINGS = {
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 const SHARED_SETTINGS = {
-	phone: { name: 'Phone numbers', features: ['phone_code', 'phone_password'], settings: phoneShared },
+	phone: { name: 'Phone numbers and codes', features: ['phone_code', 'phone_password'], settings: phoneShared },
 	passwords: { name: 'Passwords', features: ['email_password', 'phone_password'], settings: passwordsShared },
 	profile: { name: 'Profile', features: [...SIGN_IN_METHODS], settings: profileShared },
 };

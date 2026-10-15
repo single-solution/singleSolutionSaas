@@ -318,7 +318,8 @@ export const createFlows = (product, service) => {
 	};
 
 	/**
-	 * A one-time code for an address, sent through Notifications (cooldown and hourly cap are code constants).
+	 * A one-time code for an address, sent through Notifications (cooldown and hourly caps: code constants for email, the
+	 * shared phone settings for phone codes).
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target
 	 * @param {{ length: number, minutes: number, linkTo?: string | null }} shape
 	 * @param {(code: string, link: string | null, expireAt: Date) => Promise<void>} deliver
@@ -331,8 +332,8 @@ export const createFlows = (product, service) => {
 			if ((await s.store.codes.countSince(kind, target, new Date(now() - 3_600_000))) >= CODES_PER_HOUR)
 				throw problem('too_soon', 'Too many codes were asked for. Try again later.');
 		} else {
-			// codes by SMS or WhatsApp: the Phone code settings (A7), for sign-in and reset codes alike
-			const { cooldownSeconds, perHour, websitePerHour } = await service.settings(s, 'phone_code');
+			// codes by SMS or WhatsApp: the shared phone settings (A7), for sign-in and reset codes alike
+			const { cooldownSeconds, perHour, websitePerHour } = await service.settings(s, 'phone');
 			if (latest && now() - latest.createdAt.getTime() < cooldownSeconds * 1000)
 				throw problem('code_cooldown', `Wait ${cooldownSeconds} seconds before asking for another code.`, {
 					extensions: { retryAt: new Date(latest.createdAt.getTime() + cooldownSeconds * 1000).toISOString() },
@@ -511,7 +512,7 @@ export const createFlows = (product, service) => {
 		afterAnswer(ctx, async () => {
 			const user = await s.store.users.byPhone(phone);
 			if (!user?.passwordHash || user.blocked) return;
-			const { channel, codeLength, codeMinutes } = await service.settings(s, 'phone_code');
+			const { channel, codeLength, codeMinutes } = await service.settings(s, 'phone');
 			await sendCode(s, 'phone_reset', phone, { length: codeLength, minutes: codeMinutes }, (code, _link, expireAt) =>
 				service.deliver(s, channel, 'accounts.phone_code', { phone }, { code, minutes: codeMinutes }, expireAt),
 			);
@@ -616,7 +617,8 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
-		const { channel, codeLength, codeMinutes, countries } = await service.settings(s, 'phone_code');
+		const { countries } = await service.settings(s, 'phone_code');
+		const { channel, codeLength, codeMinutes } = await service.settings(s, 'phone');
 		if (!phoneInCountries(phone, countries))
 			throw problem('country_not_allowed', 'Codes go only to numbers of the countries this website serves.');
 		await service.allowCode(s, await s.store.users.byPhone(phone), 'phone_code');

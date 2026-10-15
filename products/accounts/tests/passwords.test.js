@@ -249,6 +249,36 @@ describe('A2: phone + password', () => {
 		expect(reset.status).toBe(204);
 	});
 
+	it('reset codes follow the shared phone settings, which the merchant sets with Phone + password alone', async () => {
+		// Phone code is off here: its own settings cannot be changed, the shared Phone numbers and codes ones can
+		const cookie = await env.merchantSession();
+		/** @param {string} key @param {unknown} value */
+		const save = async (key, value) =>
+			(await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/${key}`, { value })).status;
+		expect(await save('phone_code.newUserName', 'Customer {last4}')).toBe(403);
+		for (const [key, value] of /** @type {const} */ ([
+			['phone.channel', 'whatsapp'],
+			['phone.codeLength', 8],
+			['phone.codeMinutes', 15],
+		]))
+			expect(await save(key, value)).toBe(204);
+		env.advance(31_000);
+		expect((await env.visitor('POST', '/v1/password/phone/forgot', { phone: '+447700900000' })).status).toBe(202);
+		const sent = env.messages().at(-1);
+		expect(sent).toMatchObject({ channel: 'whatsapp', template: 'accounts.phone_code', values: { minutes: 15 } });
+		expect(String(sent.values.code)).toMatch(/^\d{8}$/);
+		// staff invite someone by phone on the same channel
+		await env.switchOn(['email_password', 'phone_password', 'approval']);
+		await env.setting('approval', 'invitePageUrl', 'https://shop.example.com/join');
+		const invited = await env.serverCall('POST', '/v1/users/invite', { name: 'Ira Vale', phone: '+447700900344' });
+		expect(invited.status).toBe(201);
+		expect(env.messages().at(-1)).toMatchObject({ channel: 'whatsapp', template: 'accounts.invite' });
+		await env.switchOn(['email_password', 'phone_password']);
+		expect(await save('phone.channel', 'sms')).toBe(204);
+		expect(await save('phone.codeLength', 6)).toBe(204);
+		expect(await save('phone.codeMinutes', 10)).toBe(204);
+	});
+
 	it('with Forgot password off, the reset routes refuse and the widget config names the page', async () => {
 		await env.setting('phone_password', 'selfReset', 'off');
 		await env.setting('phone_password', 'forgotUrl', 'https://wa.me/447700900567');

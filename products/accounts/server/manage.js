@@ -576,8 +576,9 @@ export const createManage = (product, service, flows) => {
 		try {
 			if (email) await service.notify(s, 'email', 'accounts.invite', { email }, values);
 			else {
-				const { channel } = await service.settings(s, 'phone_code');
-				sentBy = s.on.includes('phone_code') ? channel : 'sms';
+				// the phone channel while a phone sign-in is on (it is set only then), else SMS
+				const { channel } = await service.settings(s, 'phone');
+				sentBy = s.on.includes('phone_code') || s.on.includes('phone_password') ? channel : 'sms';
 				await service.notify(
 					s,
 					/** @type {'sms' | 'whatsapp'} */ (sentBy),

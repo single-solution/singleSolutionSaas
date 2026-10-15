@@ -15,6 +15,50 @@
 			"description": "Dropped from national numbers before the calling code is added, for example 0. Empty: the country's usual prefix (0; 8 for +7; none where national numbers keep their 0, as in Italy).",
 			"default": "",
 			"maxLength": 2
+		},
+		"channel": {
+			"type": "string",
+			"title": "Send codes by",
+			"description": "The channel Notifications sends phone codes on: sign-in codes and Forgot password codes (template accounts.phone_code), and invites to a phone number.",
+			"default": "sms",
+			"enum": ["sms", "whatsapp"]
+		},
+		"codeLength": {
+			"type": "integer",
+			"title": "Code length",
+			"default": 6,
+			"minimum": 4,
+			"maximum": 8
+		},
+		"codeMinutes": {
+			"type": "integer",
+			"title": "Code valid for (minutes)",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 30
+		},
+		"cooldownSeconds": {
+			"type": "integer",
+			"title": "Wait before a new code (seconds)",
+			"description": "How long a phone number waits before it can get another code.",
+			"default": 30,
+			"minimum": 30,
+			"maximum": 300
+		},
+		"perHour": {
+			"type": "integer",
+			"title": "Codes per phone number per hour",
+			"default": 6,
+			"minimum": 1,
+			"maximum": 20
+		},
+		"websitePerHour": {
+			"type": "integer",
+			"title": "Codes per hour for the whole website",
+			"description": "0: no cap.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 10000
 		}
 	}
 }

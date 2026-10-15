@@ -1611,7 +1611,7 @@
 	},
 	"POST /v1/password/phone/forgot": {
 		"summary": "Send a password reset code by SMS or WhatsApp",
-		"description": "Answers 202 at once, the same for every number; a code goes only to an account with a password, on the Phone code channel (template accounts.phone_code), within the Phone code limits (a cooldown or cap sends nothing). 403 self_reset_off while Forgot password is off; 422 validation_failed for phone.",
+		"description": "Answers 202 at once, the same for every number; a code goes only to an account with a password, on the phone channel (template accounts.phone_code), within the phone code limits (Settings → Phone numbers and codes; a cooldown or cap sends nothing). 403 self_reset_off while Forgot password is off; 422 validation_failed for phone.",
 		"body": {
 			"type": "object",
 			"required": ["phone"],

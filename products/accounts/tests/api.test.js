@@ -387,7 +387,7 @@ describe('phone code and email code', () => {
 			'code_invalid',
 		);
 		// WhatsApp, an existing user, and too many wrong tries spend the code
-		await env.setting('phone_code', 'channel', 'whatsapp');
+		await env.setting('phone', 'channel', 'whatsapp');
 		env.advance(31_000);
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900567' });
 		const again = lastMessage();

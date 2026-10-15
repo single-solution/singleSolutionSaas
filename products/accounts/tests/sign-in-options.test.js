@@ -41,7 +41,7 @@ afterAll(async () => {
 
 describe('A7: phone-code options', () => {
 	it('waits between codes, caps codes per number and per website, and keeps to the allowed countries', async () => {
-		await env.setting('phone_code', 'cooldownSeconds', 60);
+		await env.setting('phone', 'cooldownSeconds', 60);
 		expect((await askCode('+447700900001')).status).toBe(202);
 		env.advance(30_000);
 		const soon = await askCode('+447700900001');
@@ -49,16 +49,16 @@ describe('A7: phone-code options', () => {
 		expect(Date.parse(soon.json.retryAt) - env.now()).toBe(30_000);
 		env.advance(30_000);
 		expect((await askCode('+447700900001')).status).toBe(202);
-		await env.setting('phone_code', 'perHour', 2);
+		await env.setting('phone', 'perHour', 2);
 		env.advance(60_000);
 		expect(code(await askCode('+447700900001'))).toBe('code_limit');
-		await env.setting('phone_code', 'websitePerHour', 3);
+		await env.setting('phone', 'websitePerHour', 3);
 		env.advance(3_600_000);
 		expect((await askCode('+447700900002')).status).toBe(202);
 		expect((await askCode('+447700900003')).status).toBe(202);
 		expect((await askCode('+447700900004')).status).toBe(202);
 		expect(code(await askCode('+447700900005'))).toBe('code_limit');
-		await env.setting('phone_code', 'websitePerHour', 0);
+		await env.setting('phone', 'websitePerHour', 0);
 		await env.setting('phone_code', 'countries', ['GB']);
 		expect(code(await askCode('+14155550100'))).toBe('country_not_allowed');
 		expect((await askCode('+447700900006')).status).toBe(202);
@@ -66,7 +66,7 @@ describe('A7: phone-code options', () => {
 	});
 
 	it('a code lasts the website’s codeMinutes, and the message says so', async () => {
-		await env.setting('phone_code', 'codeMinutes', 5);
+		await env.setting('phone', 'codeMinutes', 5);
 		env.advance(3_600_000);
 		const asked = await askCode('+447700900007');
 		expect(Date.parse(asked.json.expiresAt) - env.now()).toBe(5 * 60_000);
@@ -76,7 +76,7 @@ describe('A7: phone-code options', () => {
 		expect(code(await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900007', code: sent.values.code }))).toBe(
 			'code_invalid',
 		);
-		await env.setting('phone_code', 'codeMinutes', 10);
+		await env.setting('phone', 'codeMinutes', 10);
 	});
 
 	it('names new phone-code users with the website’s template', async () => {
