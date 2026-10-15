@@ -480,6 +480,9 @@ importers:
       '@ss/net':
         specifier: workspace:^
         version: link:../../packages/net
+      '@ss/protocol':
+        specifier: workspace:^
+        version: link:../../packages/protocol
       '@ss/ui':
         specifier: workspace:^
         version: link:../../packages/ui
@@ -553,6 +556,9 @@ importers:
       '@ss/net':
         specifier: workspace:^
         version: link:../../packages/net
+      '@ss/protocol':
+        specifier: workspace:^
+        version: link:../../packages/protocol
       '@ss/ui':
         specifier: workspace:^
         version: link:../../packages/ui
@@ -766,6 +772,9 @@ importers:
       '@ss/net':
         specifier: workspace:^
         version: link:../../packages/net
+      '@ss/protocol':
+        specifier: workspace:^
+        version: link:../../packages/protocol
       '@ss/ui':
         specifier: workspace:^
         version: link:../../packages/ui
