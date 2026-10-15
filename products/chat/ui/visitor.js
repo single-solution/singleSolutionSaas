@@ -3,8 +3,8 @@
  * `SS-Sign-In`) and the guest key (localStorage with its expiry, sent as `SS-Guest`). Never cookies or URLs.
  * @module
  */
+import { requestJson } from '@ss/app-kit/widget';
 import { GUEST_HEADER, GUEST_STORAGE_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
-import { requestJson } from './common.js';
 
 const DAY_MS = 86_400_000;
 
@@ -52,7 +52,7 @@ export const createVisitor = ({ win, base, token, now }) => {
 		},
 		/**
 		 * @param {string} method @param {string} path @param {unknown} [body]
-		 * @returns {Promise<import('./common.js').Answer>}
+		 * @returns {Promise<import('@ss/app-kit/widget').Answer>}
 		 */
 		call: (method, path, body) => {
 			const key = guestKey();

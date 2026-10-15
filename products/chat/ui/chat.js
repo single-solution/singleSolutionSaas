@@ -9,7 +9,7 @@
  * `transport.js`.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { ATTACHMENT_TYPES, MAX_ATTACHMENT_BYTES, MAX_MESSAGE_LENGTH, PACE } from '../core/widgets.js';
 import { cardsPart, contactPart, flowPart, leadPart, ratingPart, signInPart, transcriptPart } from './chat-parts.js';
 import {
@@ -26,7 +26,6 @@ import {
 	webAddress,
 	whenOf,
 } from './common.js';
-import { element } from './dom.js';
 import { createMemory, pageFlow, startProactive } from './proactive.js';
 import { messageBody } from './rich.js';
 import { WIDGET_CSS } from './styles.js';
@@ -178,7 +177,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	};
 	/**
 	 * What to tell the visitor when a call failed: the widget's own texts, never the server's English detail.
-	 * @param {import('./common.js').Answer} answer
+	 * @param {import('@ss/app-kit/widget').Answer} answer
 	 * @param {string} [invalid] the text of a refused value (`validation_failed`) for this action
 	 */
 	const failure = (answer, invalid = 'chat.error') => {

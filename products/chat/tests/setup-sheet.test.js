@@ -212,7 +212,7 @@ describe('the website Setup sheet', () => {
 		const env = await setup();
 		const docs = await env.call('GET', '/docs');
 		expect(docs.text).toContain(
-			'<section id="feature-book_slot"><h3>Book-a-slot tool</h3><p>The AI offers free time slots and books one through your own booking endpoint.</p><p><strong>What your website builds.</strong> On your server, a booking endpoint (https)',
+			'<section id="feature-book_slot"><h3>Book-a-slot tool <code>book_slot</code></h3><p>The AI offers free time slots and books one through your own booking endpoint.</p><p>Needs: AI replies.</p><p><strong>What your website builds.</strong> On your server, a booking endpoint (https)',
 		);
 		// escaped like every value
 		expect(docs.text).toContain(

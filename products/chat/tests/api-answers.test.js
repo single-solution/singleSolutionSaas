@@ -194,7 +194,7 @@ describe('fallback answers (C3)', () => {
 					'PUT',
 					`/v1/dashboard/websites/${sys.websiteId}/lists/fallback_answers`,
 					{
-						items: [{ intent: 'nope', language: 'english', keywords: 'x', text: '' }],
+						value: [{ intent: 'nope', language: 'english', keywords: 'x', text: '' }],
 					},
 				)
 			).status,
@@ -276,7 +276,7 @@ describe('the comparison answer (C18)', () => {
 			await sys.adminSession(),
 			'PUT',
 			`/v1/dashboard/websites/${sys.websiteId}/lists/fallback_answers`,
-			{ items: [{ intent: 'compare', language: '', keywords: [], text: '{comparison}' }] },
+			{ value: [{ intent: 'compare', language: '', keywords: [], text: '{comparison}' }] },
 		);
 		expect(refused.status).toBe(422);
 		expect(refused.text).toContain('{comparison} needs keywords');

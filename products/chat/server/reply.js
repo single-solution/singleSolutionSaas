@@ -77,7 +77,7 @@ import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
 import { currencyDigits } from '@ss/contracts/format';
 import { normalisePhone } from '@ss/contracts/phone';
 import { jsonOf } from '@ss/net';
-import { signTool } from '../adapters/crypto.js';
+import { signWebhook } from '@ss/protocol';
 import { phoneCodeOf } from './service.js';
 
 /** @typedef {import('./service.js').Site} Site */
@@ -442,7 +442,7 @@ export const createReply = (product, service) => {
 		try {
 			const response = await product.send(url, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', [TOOL_SIGNATURE_HEADER]: signTool(secret, body, now()) },
+				headers: { 'content-type': 'application/json', [TOOL_SIGNATURE_HEADER]: signWebhook({ body, secret, now }) },
 				body,
 				redirect: 'error',
 				timeoutMs: TOOL_TIMEOUT_MS,

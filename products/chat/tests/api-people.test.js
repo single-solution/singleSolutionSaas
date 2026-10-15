@@ -4,7 +4,7 @@
  * older messages (C8), typing, Seen and the paused notice (C9), the inbox options (C11) and staff attachments (C12).
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { sha256 } from '../adapters/crypto.js';
+import { sha256Hex } from '@ss/protocol';
 import { AI_KEY, STORAGE_KEY, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
@@ -251,7 +251,7 @@ describe('guests and sign-ins (C7)', () => {
 		const data = await sys.product.data.forWebsite(sys.websiteId);
 		await data
 			.collection('guests')
-			.insertOne({ id: 'guest_imported', keyHash: sha256(cookie), expireAt: new Date(sys.now() + 86_400_000) });
+			.insertOne({ id: 'guest_imported', keyHash: sha256Hex(cookie), expireAt: new Date(sys.now() + 86_400_000) });
 		const imported = sys.visitor({ guestKey: cookie });
 		const first = await imported('POST', '/v1/chat/messages', { text: 'guest 1' });
 		expect(first.json.guestKey).toBeUndefined();

@@ -5,6 +5,7 @@
  * @module
  */
 import { vi } from 'vitest';
+import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import { WIDGET_ATTRIBUTE } from '../core/widgets.js';
 
@@ -14,7 +15,7 @@ export const START = Date.parse('2026-10-01T10:00:00Z');
 export const TEXTS = strings;
 
 /**
- * A widget config.
+ * A widget config, with the widgets whose feature is on as the kit answers them.
  * @param {string[]} features
  * @param {Record<string, any>} [settings]
  * @param {{ format?: Record<string, unknown>, timeZone?: string }} [look] the website's Format and business time zone
@@ -25,6 +26,7 @@ export const configOf = (features, settings = {}, look = {}) => ({
 	customCss: '',
 	...look,
 	features,
+	widgets: manifest.widgets.filter((widget) => features.includes(widget.feature)).map((widget) => widget.key),
 	settings,
 });
 

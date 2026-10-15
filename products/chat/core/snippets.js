@@ -4,6 +4,7 @@
  * and the tool signature check on the merchant's server. Plain text; no I/O.
  * @module
  */
+import { widgetScriptTag } from '@ss/contracts/text';
 import { TOOL_SIGNATURE_HEADER } from './tools.js';
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
@@ -14,7 +15,7 @@ import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 export const createSnippets = ({ base, widgets, permissions }) => {
 	const admins = widgets.filter((widget) => widget.kind === 'admin').map((w) => `<div ${WIDGET_ATTRIBUTE}="${w.key}"></div>`);
 	const visitor = [
-		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, token: 'YOUR_BROWSER_TOKEN' }),
 		'<script>',
 		'  // after the script loaded (window.SSChat exists):',
 		'  // a visitor signed in with Accounts chats as themselves (call identify(null) on sign-out)',
@@ -26,7 +27,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		'</script>',
 	].join('\n');
 	const admin = [
-		`<script src="${base}/widget.js"></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
 		...admins,
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

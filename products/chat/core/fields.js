@@ -5,7 +5,9 @@
  * every product shares (`@ss/contracts/phone`) with the website's default calling code.
  * @module
  */
+import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
+import { isObject } from '@ss/contracts/util';
 
 /** Most custom fields a website has. */
 const MAX_CUSTOM_FIELDS = 30;
@@ -13,14 +15,10 @@ const MAX_CUSTOM_FIELDS = 30;
 const MAX_PAGE_RULES = 20;
 export const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'yes_no', 'choice']));
 const KEY = /^[a-z][a-z0-9_]{0,39}$/;
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,}$/u;
 const RESERVED = Object.freeze(['name', 'email', 'phone', 'message', 'text']);
 
 /** @typedef {{ key: string, label: string, type: 'text' | 'number' | 'yes_no' | 'choice' | 'name' | 'email' | 'phone', options: string[] }} CustomField */
 /** @typedef {{ path: string, delay: number, message: string }} PageRule */
-
-/** @param {unknown} value */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Check the custom field definitions a merchant saves.
@@ -88,8 +86,10 @@ export const checkFieldValue = (field, raw, callingCode = '') => {
 			return value === 'yes' || value === 'no' ? { ok: true, value: value === 'yes' } : { ok: false };
 		case 'choice':
 			return typeof value === 'string' && field.options.includes(value) ? { ok: true, value } : { ok: false };
-		case 'email':
-			return typeof value === 'string' && EMAIL.test(value) ? { ok: true, value: value.toLowerCase() } : { ok: false };
+		case 'email': {
+			const email = normalizeEmail(value);
+			return email ? { ok: true, value: email } : { ok: false };
+		}
 		case 'phone': {
 			const phone = normalisePhone(value, callingCode);
 			return phone ? { ok: true, value: phone } : { ok: false };

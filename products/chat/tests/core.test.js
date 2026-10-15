@@ -9,7 +9,7 @@ import { alertRoutes, deviceOf, limitNext, messageText, pageContext, statusAfter
 import { checkCustomFields, checkFieldValue, checkLead, checkPageRules } from '../core/fields.js';
 import { advance, answerStep, checkFlows, waitingView } from '../core/flows.js';
 import { handoffReason, officeState, parseOfficeHours } from '../core/handoff.js';
-import { checkEntry, chunkText, decodeEntities, htmlToText } from '../core/knowledge.js';
+import { checkEntry, chunkText, htmlToText } from '../core/knowledge.js';
 import { detectLanguage, isLanguageNeutral, replyMatchesLanguage } from '../core/language.js';
 import { checkAiConnection } from '../core/models.js';
 import { applyLinkPolicy, ibanValid, leakCheck, moderateInbound, moderateOutbound, redact } from '../core/moderation.js';
@@ -17,7 +17,7 @@ import { buildSystemPrompt } from '../core/prompt.js';
 import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
 import { reportRange, summarise } from '../core/reports.js';
 import { cardsOf, shopAnswer, shopInfoOf, shopRequest } from '../core/shop.js';
-import { pathMatches, truncate } from '../core/text.js';
+import { truncate } from '../core/text.js';
 import { dayKey, dayStart, isOpenAt, monthKey, nextOpenAt, zoneOr } from '../core/time.js';
 import { checkArguments, checkTools, slotRange, toolOutput } from '../core/tools.js';
 import { endpointOf } from '../adapters/ai.js';
@@ -474,7 +474,11 @@ describe('moderation, language, knowledge and the prompt', () => {
 	});
 
 	it('extracts page text, chunks and checks entries; builds the prompt', () => {
-		expect(decodeEntities('&amp;&#65;&#x42;&#0;&bogus;')).toBe('&AB &bogus;');
+		// entities decoded in the title and the text, no-break spaces as plain spaces
+		expect(htmlToText('<head><title>Tea &amp; cake</title></head><p>A&nbsp;&#66;&#x43; &bogus;</p>')).toEqual({
+			title: 'Tea & cake',
+			text: 'A BC &bogus;',
+		});
 		expect(htmlToText('<p>No title</p>').title).toBe('');
 		expect(
 			chunkText(`${'a '.repeat(600)}\n${'b. '.repeat(400)}\n${'c'.repeat(2000)}`, { size: 900, overlap: 100, max: 3 }),
@@ -496,8 +500,6 @@ describe('moderation, language, knowledge and the prompt', () => {
 		expect(prompt).toContain('The visitor is signed in.');
 		expect(prompt).toContain('viewing a cart page.');
 		expect(truncate('abc', 2)).toBe('a…');
-		expect(pathMatches('/a/*/c', '/a/b/c')).toBe(true);
-		expect(pathMatches('/a/**', '/b')).toBe(false);
 	});
 });
 

@@ -8,6 +8,7 @@
  * products found, or Ecommerce cannot answer) is skipped.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { primary } from './language.js';
 import { aroundPhrase, containsPhrase, normalise, tokenize } from './text.js';
 
@@ -43,9 +44,6 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
  * products).
  * @typedef {'item' | 'intent' | 'language' | 'keywords' | 'compareKeywords' | 'text'} FallbackProblem
  */
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * The placeholders a text uses.

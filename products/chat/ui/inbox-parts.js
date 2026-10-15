@@ -3,18 +3,16 @@
  * and max chats, leads, and the conversation's context panel. A part whose route answers 403 hides itself.
  * @module
  */
-import { formatText } from '@ss/app-kit/widget';
+import { adminCall, element, formatText } from '@ss/app-kit/widget';
 import { buttonOf, formPart, setHidden, webAddress } from './common.js';
-import { element } from './dom.js';
-import { adminCall } from './tickets.js';
 
 /**
  * @typedef {object} PartKit
  * @property {Document} doc
  * @property {import('./common.js').Texts} t
  * @property {import('./common.js').FieldMaker} make
- * @property {import('./tickets.js').AdminApi} api
- * @property {(answer: import('./common.js').Answer, invalid?: string) => string} failure the widget's text for a failed
+ * @property {import('@ss/app-kit/widget').AdminApi} api
+ * @property {(answer: import('@ss/app-kit/widget').Answer, invalid?: string) => string} failure the widget's text for a failed
  *   call (`invalid`: the text of a refused value for that action)
  */
 

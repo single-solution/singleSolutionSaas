@@ -1,7 +1,8 @@
 /**
  * Chat's routes (the kit adds its own: connect, notices, tickets, permissions, data rights, widget config, `/sso`,
- * the dashboard API, and for the merchant's server the settings API with Chat's lists, and the activity log). Every browser-token, server-token and ticket route belongs to one feature (ticket routes to their
- * permission's feature unless they name another); `openapi.json` is generated from these definitions
+ * the dashboard API with Chat's lists, the import routes of the feature `import`, and for the merchant's server the
+ * settings API with Chat's lists, and the activity log). Every browser-token, server-token and ticket route belongs to
+ * one feature (ticket routes to their permission's feature unless they name another); `openapi.json` is generated from these definitions
  * (`ss app assets`), so `method`, `path`, `auth`, `feature` and `permission` stay literals. Public entry
  * `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
@@ -9,7 +10,6 @@
 import { defineRoute } from '@ss/app-kit';
 import { createAdmin } from './admin.js';
 import { renderDocs } from './docs.js';
-import { importRoutes } from './imports.js';
 import { createInbox } from './inbox.js';
 import { createKnowledge } from './knowledge.js';
 import { createReply } from './reply.js';
@@ -571,18 +571,6 @@ export const createRoutes = (product) => {
 		defineRoute({ method: 'GET', path: '/v1/reports', auth: 'server', feature: 'reports', handler: admin.report }),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/dashboard/websites/:websiteId/lists/:list',
-			auth: 'dashboard',
-			handler: admin.getList,
-		}),
-		defineRoute({
-			method: 'PUT',
-			path: '/v1/dashboard/websites/:websiteId/lists/:list',
-			auth: 'dashboard',
-			handler: admin.putList,
-		}),
-		defineRoute({
-			method: 'GET',
 			path: '/v1/dashboard/websites/:websiteId/tool-secret',
 			auth: 'dashboard',
 			handler: admin.getSecret,
@@ -593,7 +581,5 @@ export const createRoutes = (product) => {
 			auth: 'dashboard',
 			handler: admin.regenerateSecret,
 		}),
-		// records moved in from another system (ss-import, feature `import`, PLAN 0.8.10 K10)
-		...importRoutes(product),
 	];
 };

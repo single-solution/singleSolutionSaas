@@ -8,7 +8,7 @@
  * @module
  */
 import { parseMarkdown } from '../core/markdown.js';
-import { element } from './dom.js';
+import { element } from '@ss/app-kit/widget';
 
 /** @typedef {import('../core/markdown.js').Inline} Inline */
 /** @typedef {import('../core/markdown.js').Block} Block */

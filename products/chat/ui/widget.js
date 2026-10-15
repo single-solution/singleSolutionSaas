@@ -8,14 +8,14 @@
  * features are on. Nothing renders while the product is stopped.
  * @module
  */
+import { adminCall, createTicketSource, requestJson } from '@ss/app-kit/widget';
 import { pathMatches } from '../core/text.js';
-import { PAGE_KINDS, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { PAGE_KINDS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountChat } from './chat.js';
-import { requestJson, settingsOf } from './common.js';
+import { settingsOf } from './common.js';
 import { mountInbox } from './inbox.js';
 import { mountKnowledge } from './knowledge.js';
 import { mountReports } from './reports.js';
-import { adminCall, createTicketSource } from './tickets.js';
 import { createChecks } from './transport.js';
 import { createVisitor } from './visitor.js';
 
@@ -77,7 +77,7 @@ export const startWidget = ({
 	const ready = (async () => {
 		if (!visitor || !token) return;
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
-		if (!config?.features?.includes(WIDGET_FEATURES.chat)) return;
+		if (!config?.widgets?.includes('chat')) return;
 		const path = win.location.pathname;
 		if (settingsOf(config).look.hideOnPages.some((pattern) => pathMatches(pattern, path))) return;
 		const host = doc.createElement('div');
@@ -119,9 +119,9 @@ export const startWidget = ({
 		chat?.close();
 	};
 
-	/** @param {{ getTicket: import('./tickets.js').GetTicket }} options */
+	/** @param {{ getTicket: import('@ss/app-kit/widget').GetTicket }} options */
 	const admin = async ({ getTicket }) => {
-		/** @type {import('./tickets.js').Ticket} */
+		/** @type {import('@ss/app-kit/widget').Ticket} */
 		let first;
 		try {
 			first = await getTicket();
@@ -135,7 +135,7 @@ export const startWidget = ({
 		const api = { base, tickets, fetch: request };
 		/** @param {'inbox' | 'knowledge_editor' | 'reports'} key */
 		const hosts = (key) =>
-			config.features.includes(WIDGET_FEATURES[key])
+			config.widgets.includes(key)
 				? /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)])
 				: [];
 		const inboxes = hosts('inbox');

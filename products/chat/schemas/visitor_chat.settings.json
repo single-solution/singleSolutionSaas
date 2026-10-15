@@ -46,9 +46,10 @@
 			"default": [],
 			"items": {
 				"type": "string",
+				"pattern": "^/",
 				"maxLength": 200
 			},
-			"description": "Path patterns: an exact path, * = one segment, ** = any (for example /checkout/**).",
+			"description": "Path patterns, each starting with /: an exact path, * = any characters inside one segment, ** = any segments (for example /checkout/**).",
 			"x-ui": {
 				"group": "Launcher"
 			}

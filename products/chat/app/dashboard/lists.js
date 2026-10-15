@@ -1,8 +1,8 @@
 'use client';
 /**
- * Settings list editors (Chat's own dashboard routes, PLAN 0.8.3): webhook tools, page rules, flows, custom fields and
- * fallback answers (PLAN 0.8.10 C3), each saved whole with `PUT /v1/dashboard/websites/:websiteId/lists/:list
- * { items }` (a 422 lists its `errors`), and the tool signing secret (reveal, copy, regenerate). The fallback answers
+ * Settings list editors (PLAN 0.8.3): webhook tools, page rules, flows, custom fields and fallback answers (PLAN 0.8.10
+ * C3), each saved whole with the kit's `PUT /v1/dashboard/websites/:websiteId/lists/:list { value }` (a 422 lists its
+ * `errors`), and the tool signing secret (Chat's own route: reveal, copy, regenerate). The fallback answers
  * editor checks each answer with the server's own rules before it saves.
  * @module
  */
@@ -63,24 +63,16 @@ const moved = (items, index, step) => {
 };
 
 /**
- * The `errors` of a 422 answer as lines, whatever their shape (strings, `{ path, message }` or a key → message map).
+ * The `errors` of a 422 answer (`{ path, message }`) as lines; an error of the whole list shows its message only.
  * @param {any} problem
  * @returns {string[]}
  */
-const errorLines = (problem) => {
-	const errors = problem?.errors;
-	if (Array.isArray(errors))
-		return errors.map((entry) =>
-			typeof entry === 'string'
-				? entry
-				: [entry?.path ?? entry?.field ?? entry?.index, entry?.message ?? entry?.detail]
-						.filter((part) => part !== undefined && part !== null && part !== '')
-						.map(String)
-						.join(': '),
-		);
-	if (errors && typeof errors === 'object') return Object.entries(errors).map(([key, message]) => `${key}: ${String(message)}`);
-	return [];
-};
+const errorLines = (problem) =>
+	Array.isArray(problem?.errors)
+		? problem.errors.map((/** @type {{ path?: string, message?: string }} */ entry) =>
+				entry.path && entry.path !== '/value' ? `${entry.path}: ${entry.message}` : String(entry.message),
+			)
+		: [];
 
 /**
  * Up, down and remove buttons of one entry.
@@ -120,7 +112,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 			<Loaded answer={answer}>
 				{(data) => {
 					/** @type {Item[]} */
-					const items = draft ?? data.items;
+					const items = draft ?? data.value;
 					/** @param {number} index @param {Item} patch */
 					const set = (index, patch) => setDraft(items.map((item, at) => (at === index ? { ...item, ...patch } : item)));
 					const problems = result && !result.ok ? errorLines(result.problem) : [];
@@ -151,7 +143,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 									size="sm"
 									disabled={draft === null || (invalid !== undefined && items.some((item) => invalid(clean(item))))}
 									onClick={async () => {
-										const next = await call('PUT', path, { items: items.map(clean) });
+										const next = await call('PUT', path, { value: items.map(clean) });
 										setResult(next);
 										if (next.ok) {
 											setDraft(null);
@@ -419,7 +411,7 @@ const cleanStep = (step) => {
 export function FlowsEditor({ websiteId, off, customFields }) {
 	const custom = useLoad(customFields ? `/v1/dashboard/websites/${websiteId}/lists/custom_fields` : null);
 	/** @type {Array<{ key: string, label: string }>} */
-	const extra = custom.answer?.ok ? custom.answer.data.items : [];
+	const extra = custom.answer?.ok ? custom.answer.data.value : [];
 	const fieldOptions = [
 		...STANDARD_FIELDS.map((value) => ({ value, label: F.fields[value] })),
 		...extra.map((field) => ({ value: `custom:${field.key}`, label: fill(F.custom, { label: field.label }) })),

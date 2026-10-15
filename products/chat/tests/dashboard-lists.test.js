@@ -34,12 +34,13 @@ const serve = (more = {}) => {
 			if (path === LIST) {
 				if (init.method === 'PUT') {
 					const body = JSON.parse(String(init.body));
-					saved.push(body.items);
-					const checked = checkFallbackAnswers(body.items);
-					if (!checked.ok) return new Response(JSON.stringify({ status: 422, errors: checked.errors }), { status: 422 });
+					saved.push(body.value);
+					const checked = checkFallbackAnswers(body.value);
+					const errors = checked.ok ? [] : checked.errors.map((message) => ({ path: '/value', message }));
+					if (!checked.ok) return new Response(JSON.stringify({ status: 422, errors }), { status: 422 });
 					items = checked.value;
 				}
-				return new Response(JSON.stringify({ items }), { status: 200 });
+				return new Response(JSON.stringify({ value: items }), { status: 200 });
 			}
 			if (Object.hasOwn(more, path)) return new Response(JSON.stringify(more[path]), { status: 200 });
 			return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
@@ -167,7 +168,7 @@ describe('the fallback answers editor (C3)', () => {
 		cleanup();
 		serve();
 		vi.mocked(fetch).mockImplementationOnce(
-			async () => new Response(JSON.stringify({ items: [{ ...DEALS, language: 'ur-Latn' }] }), { status: 200 }),
+			async () => new Response(JSON.stringify({ value: [{ ...DEALS, language: 'ur-Latn' }] }), { status: 200 }),
 		);
 		const again = render(<FallbackAnswersEditor websiteId="web_2" languages={['en']} on={() => true} />);
 		await settle();
