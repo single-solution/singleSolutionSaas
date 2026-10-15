@@ -288,12 +288,22 @@ export const createCatalogProducts = (product, service, common) => {
 		return ok({ items, nextCursor: body.nextCursor, hasMore: body.hasMore }, { headers: link ? { link } : {} });
 	};
 
+	/**
+	 * A replacement (G9) must be a product of the shop.
+	 * @param {WebsiteData} data @param {string | null} id
+	 */
+	const checkReplacement = async (data, id) => {
+		if (id !== null && !(await findProduct(data, id)))
+			throw refuse([{ path: '/replacedBy', message: 'There is no such product.' }]);
+	};
+
 	/** @param {any} ctx */
 	const create = async (ctx) => {
 		const { s, data } = await common.open(ctx);
 		const checked = checkProduct(ctx.body, await common.rulesOf(s, data), null);
 		if (!checked.ok) throw refuse(checked.errors);
 		const fields = checked.value;
+		await checkReplacement(data, fields.replacedBy);
 		await checkSkus(data, fields.variants, null);
 		if (fields.slug && (await slugTaken(data, COLLECTIONS.products, fields.slug, null)))
 			throw problem('conflict', 'Another product already uses this slug.');
@@ -344,6 +354,7 @@ export const createCatalogProducts = (product, service, common) => {
 		// new files are checked in the bucket before the transaction (E4, E6)
 		const first = checkProduct(body, rules, existing);
 		if (!first.ok) throw refuse(first.errors);
+		if (first.value.replacedBy !== existing.replacedBy) await checkReplacement(data, first.value.replacedBy);
 		// units in stock were numbered by the product's item type: it keeps its type while it has some
 		if (
 			productType(existing, rules).key !== productType(first.value, rules).key &&
@@ -419,6 +430,10 @@ export const createCatalogProducts = (product, service, common) => {
 			.countDocuments({ websiteId: data.websiteId, 'lines.productId': existing.id }, { limit: 1 });
 		if (ordered > 0) throw problem('conflict', 'This product is in orders: archive it instead.');
 		await data.collection(COLLECTIONS.products).deleteOne({ websiteId: data.websiteId, id: existing.id });
+		// products it replaced lead nowhere through it any more (G9)
+		await data
+			.collection(COLLECTIONS.products)
+			.updateMany({ websiteId: data.websiteId, replacedBy: existing.id }, { $set: { replacedBy: null } });
 		await data.collection(COLLECTIONS.serials).deleteMany({ websiteId: data.websiteId, productId: existing.id });
 		// every file of the product under its folder: photos with their sizes, variant photos and the video (E4, E6);
 		// keys an import kept in other folders may be shared with other records, so they stay (CA-5)

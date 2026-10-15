@@ -3,14 +3,14 @@
  * detail pane (it would still scroll a lot as a dialog): featured, status, kind, item type (when the merchant has
  * types), name, slug (earlier ones shown), summary, the rich description, categories, brand, tags, specs (several values
  * where the field takes several), the attribute setup with Generate, option axes, the variants table, stock tracking,
- * digital and booking fields, the size chart and hiding the size guide, SEO fields, FAQs and the return and warranty
- * days. The item type as the form stands (its own, its first category's, else the built-in one of its kind; dynamic
+ * digital and booking fields, the size chart and hiding the size guide, SEO fields, FAQs, the return and warranty
+ * days, and for an archived product the product that replaces it (SEO audit G9). The item type as the form stands (its own, its first category's, else the built-in one of its kind; dynamic
  * model §1) decides the sections shown: the fields it names, variants, grades, the size guide, packages, its own days,
  * downloads, license keys and booked slots. Prices are typed as decimals of the shop currency.
  * @module
  */
 import { typeTakes } from '../core/item-types.js';
-import { entriesOf, wholeOf } from './admin-kit.js';
+import { entriesOf, query, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import { chartChoices, checkGroup, earlierSlugs, faqsEditor, paragraphsOf, richEditor, seoEditor } from './admin-fields.js';
 import { fieldsOf } from './admin-screen.js';
@@ -53,6 +53,7 @@ const blank = () => ({
 	hideSizeGuide: false,
 	returnDays: null,
 	warrantyDays: null,
+	replacedBy: null,
 	media: [],
 	previousSlugs: [],
 });
@@ -250,6 +251,38 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			kit.field(t('catalogAdmin.returnDays'), returnDays),
 			kit.field(t('catalogAdmin.warrantyDays'), warrantyDays),
 		]);
+		// an archived product's replacement: found by name or SKU, its address leads there (G9)
+		const findReplacement = kit.input('', { type: 'search' });
+		const replacement = kit.select([{ value: '', label: t('catalogAdmin.noReplacement') }], '');
+		if (product.replacedBy) {
+			const current = kit.text('option', { value: product.replacedBy }, product.replacedBy);
+			replacement.append(current);
+			replacement.value = product.replacedBy;
+			void kit.call('GET', `/v1/admin/products/${product.replacedBy}`).then((answer) => {
+				if (answer.ok) current.textContent = answer.data.name;
+			});
+		}
+		const replacementGroup = kit.group(t('catalogAdmin.replacedBy'), [
+			kit.text('p', { class: 'muted' }, t('catalogAdmin.replacedByHint')),
+			fieldsOf(kit, [
+				kit.field(t('admin.search'), findReplacement),
+				kit.button(t('admin.find'), async () => {
+					const answer = await kit.call('GET', `/v1/admin/products${query({ q: findReplacement.value.trim(), limit: 20 })}`);
+					if (!answer.ok) return kit.fail(note, answer);
+					const kept = replacement.value;
+					replacement.replaceChildren(
+						kit.text('option', { value: '' }, t('catalogAdmin.noReplacement')),
+						...[...replacement.options].filter((option) => option.value !== '' && option.value === kept),
+						...(answer.data.items ?? [])
+							.filter((/** @type {any} */ item) => item.id !== product.id && item.id !== kept)
+							.map((/** @type {any} */ item) => kit.text('option', { value: item.id }, item.name)),
+					);
+					replacement.value = kept;
+					return answer;
+				}),
+				kit.field(t('catalogAdmin.replacedBy'), replacement),
+			]),
+		]);
 		const specsGroup = kit.group(t('catalogAdmin.specs'), [
 			fieldsOf(
 				kit,
@@ -284,6 +317,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			bookingGroup.hidden = !parts.slots;
 			guideGroup.hidden = !parts.chart;
 			daysGroup.hidden = !parts.days;
+			replacementGroup.hidden = status.value !== 'archived';
 			variants.draw();
 		};
 		kind.addEventListener('change', () => {
@@ -295,6 +329,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			show();
 		});
 		type.addEventListener('change', show);
+		status.addEventListener('change', show);
 		categoryBoxes.node.addEventListener('change', show);
 		show();
 
@@ -342,6 +377,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 				seo: seo.value(),
 				faqs: faqs.value(),
 				...(parts.days ? { returnDays: days[0], warrantyDays: days[1] } : {}),
+				...(status.value === 'archived' ? { replacedBy: replacement.value || null } : {}),
 			};
 		};
 		/** Save the form; the answer, or null when a number is wrong (the note says so). */
@@ -403,6 +439,7 @@ export const productEditor = (kit, { product: given, lookups, saved, cancel }) =
 			seo.node,
 			faqs.node,
 			has('returns') ? daysGroup : null,
+			isNew ? null : replacementGroup,
 		]);
 		kit.say(note, message);
 	};

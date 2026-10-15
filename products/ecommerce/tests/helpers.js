@@ -525,6 +525,7 @@ export const setup = async ({
 			attributeSetup: [],
 			faqs: [],
 			previousSlugs: [],
+			replacedBy: null,
 			...rest,
 			id,
 			variants,

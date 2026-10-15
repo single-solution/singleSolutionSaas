@@ -252,6 +252,50 @@ describe('catalog admin: a product', () => {
 		expect(shows(detailOf(panel), 'Stock')).toBe(true);
 	});
 
+	it('names the product that replaces an archived one (SEO audit G9)', async () => {
+		/** @type {any[]} */
+		const patches = [];
+		/** @type {string[]} */
+		const searched = [];
+		const { root } = await start(ALL, {
+			'GET /v1/admin/products/prd_1': () => answer(200, product({ status: 'archived', replacedBy: 'prd_3' })),
+			'GET /v1/admin/products/prd_3': () => answer(200, product({ id: 'prd_3', name: 'Phone 3' })),
+			'GET /v1/admin/products': (/** @type {any} */ call) => {
+				searched.push(call.url.searchParams.get('q') ?? '');
+				return answer(200, {
+					items: [ROW, { ...ROW, id: 'prd_3', name: 'Phone 3' }, { ...ROW, id: 'prd_9', name: 'Phone 9' }],
+					nextCursor: null,
+					hasMore: false,
+				});
+			},
+			'PATCH /v1/admin/products/prd_1': (/** @type {any} */ call) => {
+				patches.push(call.body);
+				return answer(200, product({ status: 'archived', replacedBy: call.body.replacedBy }));
+			},
+		});
+		const panel = panelOf(root, 'products');
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		const editor = detailOf(panel);
+		const picker = fieldIn(editor, 'Replaced by');
+		expect(picker.value).toBe('prd_3');
+		expect(picker.selectedOptions[0].textContent).toBe('Phone 3');
+		type(fieldIn(editor, 'Search'), ' phone ');
+		await click(buttonIn(editor, 'Find'));
+		expect(searched.at(-1)).toBe('phone');
+		// the product itself is never offered; the one named stays once
+		expect([...picker.options].map((option) => option.textContent)).toEqual(['No replacement', 'Phone 3', 'Phone 9']);
+		expect(picker.value).toBe('prd_3');
+		await change(picker, 'prd_9');
+		await click(buttonIn(editor, 'Save'));
+		expect(patches[0].replacedBy).toBe('prd_9');
+		// only archived products name one
+		await click(buttonIn(detailOf(panel), 'Edit'));
+		await change(fieldIn(detailOf(panel), 'Status'), 'active');
+		expect(() => fieldIn(detailOf(panel), 'Replaced by')).toThrow();
+		await click(buttonIn(detailOf(panel), 'Save'));
+		expect(patches[1]).not.toHaveProperty('replacedBy');
+	});
+
 	it('creates a product without variants, with the single price and stock', async () => {
 		/** @type {any[]} */
 		const posts = [];

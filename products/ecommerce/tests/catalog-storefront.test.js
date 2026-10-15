@@ -711,4 +711,36 @@ describe('E13 URL templates and slug history', () => {
 		expect((await shop.api('GET', `/v1/seo/products/${ids.shown.slug}`)).json.moved.slug).toBe('gowns');
 		await api('PATCH', `/v1/products/${ids.shown.id}`, { status: 'active' });
 	});
+
+	it('moves a retired product to its replacement, and answers each product’s own address (SEO audit G9)', async () => {
+		const featured = (await server(`/v1/shop/products/${ids.featured.slug}`)).json;
+		// the product answer's own address: a website's route that finds it by another path sends shoppers there
+		expect((await server(`/v1/seo/products/${ids.featured.slug.toUpperCase()}`)).json.url).toBe(featured.url);
+		const old = await shop.seedProduct({ name: 'Old gown', status: 'archived', categoryIds: [ids.dresses.id] });
+		const older = await shop.seedProduct({ name: 'Older gown', status: 'archived', replacedBy: old.id });
+		expect((await api('PATCH', `/v1/products/${old.id}`, { replacedBy: ids.featured.id })).replacedBy).toBe(ids.featured.id);
+		const toFeatured = { moved: { kind: 'product', slug: ids.featured.slug, url: featured.url } };
+		expect((await get(`/v1/shop/products/${old.slug}`)).json).toEqual(toFeatured);
+		expect((await server(`/v1/seo/products/${old.slug}`)).json).toEqual(toFeatured);
+		// through an archived replacement: one hop to the active one, never a chain
+		expect((await get(`/v1/shop/products/${older.slug}`)).json).toEqual(toFeatured);
+		// itself, a product that does not exist or a wrong id: refused
+		for (const replacedBy of [old.id, 'prd_00000000000000000000000000', 'gown'])
+			expect((await shop.api('PATCH', `/v1/products/${old.id}`, { replacedBy })).json.errors?.[0]?.path, replacedBy).toBe(
+				'/replacedBy',
+			);
+		// a replacement shoppers cannot see leads on to the category (retiredUrl), else nowhere
+		await api('PATCH', `/v1/products/${old.id}`, { replacedBy: older.id });
+		expect((await get(`/v1/shop/products/${old.slug}`)).json.moved).toMatchObject({ kind: 'category', slug: 'gowns' });
+		await shop.setting('catalog', 'retiredUrl', 'none');
+		expect((await get(`/v1/shop/products/${old.slug}`)).status).toBe(404);
+		expect((await shop.api('GET', `/v1/seo/products/${older.slug}`)).status).toBe(404);
+		// an active product with a replacement is itself; deleting a replacement clears the links to it
+		await api('PATCH', `/v1/products/${old.id}`, { replacedBy: ids.featured.id, status: 'active' });
+		expect((await get(`/v1/shop/products/${old.slug}`)).json.name).toBe('Old gown');
+		const spare = await shop.seedProduct({ name: 'Spare gown' });
+		await api('PATCH', `/v1/products/${older.id}`, { replacedBy: spare.id });
+		await api('DELETE', `/v1/products/${spare.id}`);
+		expect((await api('GET', `/v1/products/${older.id}`)).replacedBy).toBeNull();
+	});
 });

@@ -153,6 +153,8 @@ export const ID_PREFIX = Object.freeze({
  *   defaultValue: string | number | null }>} attributeSetup (E7)
  * @property {import('./catalog-content.js').Faq[]} faqs (E16)
  * @property {string[]} previousSlugs (E13)
+ * @property {string | null} replacedBy the product that replaces it (SEO audit G9): once archived, its address answers
+ *   `moved` to the replacement (followed to the first active one shoppers may see); null = none
  * @property {number | null} returnDays this item's return window in days after delivery (null = the grade's, else the
  *   `returns` setting)
  * @property {number | null} warrantyDays this item's warranty in days after delivery (null = the grade's, else the setting)

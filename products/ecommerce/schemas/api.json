@@ -8378,6 +8378,7 @@
 				"attributeSetup",
 				"faqs",
 				"previousSlugs",
+				"replacedBy",
 				"sold",
 				"rating",
 				"price",
@@ -8726,6 +8727,10 @@
 						"type": "string"
 					},
 					"description": "Earlier slugs that still find the product."
+				},
+				"replacedBy": {
+					"type": ["string", "null"],
+					"description": "The product that replaces it (G9): once archived, its address answers moved to the replacement (followed through archived replacements to the first active product shoppers may see); null: none."
 				},
 				"sold": {
 					"type": "integer",
@@ -10907,7 +10912,7 @@
 		},
 		"SeoMoved": {
 			"type": "object",
-			"description": "The page moved (an earlier slug, or an archived product sent to its category by the catalog setting retiredUrl): answer it with a 308 to url.",
+			"description": "The page moved (an earlier slug, or an archived product sent to its replacement or, by the catalog setting retiredUrl, its category): answer it with a 308 to url.",
 			"required": ["moved"],
 			"additionalProperties": false,
 			"properties": {
@@ -10937,7 +10942,7 @@
 		"SeoProduct": {
 			"type": "object",
 			"description": "What a product page puts in its head.",
-			"required": ["title", "description", "canonical", "image", "robots", "focusKeyword", "jsonLd", "lastModified"],
+			"required": ["title", "description", "url", "canonical", "image", "robots", "focusKeyword", "jsonLd", "lastModified"],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -10947,6 +10952,11 @@
 				"description": {
 					"type": "string",
 					"description": "The meta description: the product's SEO description as written (never cut), else its summary when it has 50 characters or more, else the productDescription pattern with the product's facts as they are now, else its description as text, else the seo setting defaultDescription as written. Text not written as a description is cut at a word to 160 characters."
+				},
+				"url": {
+					"type": "string",
+					"format": "uri",
+					"description": "The product's own page (the catalog setting productUrl): a website route that found it by another path (another case, an old category segment, its id) answers a 308 to it (G9)."
 				},
 				"canonical": {
 					"type": "string",
@@ -15795,6 +15805,10 @@
 					"minimum": 0,
 					"maximum": 3650,
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
+				},
+				"replacedBy": {
+					"type": ["string", "null"],
+					"description": "The id of the product that replaces this one once it is archived (G9): its address then answers moved to the replacement instead of 404 or its category; null or '': none. 422 at /replacedBy for this product itself or an unknown product. Deleting a product clears it where it is the replacement."
 				}
 			}
 		},
@@ -16353,6 +16367,10 @@
 					"minimum": 0,
 					"maximum": 3650,
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
+				},
+				"replacedBy": {
+					"type": ["string", "null"],
+					"description": "The id of the product that replaces this one once it is archived (G9): its address then answers moved to the replacement instead of 404 or its category; null or '': none. 422 at /replacedBy for this product itself or an unknown product. Deleting a product clears it where it is the replacement."
 				}
 			}
 		},
@@ -16924,6 +16942,10 @@
 					"minimum": 0,
 					"maximum": 3650,
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
+				},
+				"replacedBy": {
+					"type": ["string", "null"],
+					"description": "The id of the product that replaces this one once it is archived (G9): its address then answers moved to the replacement instead of 404 or its category; null or '': none. 422 at /replacedBy for this product itself or an unknown product. Deleting a product clears it where it is the replacement."
 				}
 			}
 		},
@@ -17480,6 +17502,10 @@
 					"minimum": 0,
 					"maximum": 3650,
 					"description": "Warranty after delivery; null: the grade’s, else the returns setting."
+				},
+				"replacedBy": {
+					"type": ["string", "null"],
+					"description": "The id of the product that replaces this one once it is archived (G9): its address then answers moved to the replacement instead of 404 or its category; null or '': none. 422 at /replacedBy for this product itself or an unknown product. Deleting a product clears it where it is the replacement."
 				}
 			}
 		},
@@ -18441,7 +18467,7 @@
 	},
 	"GET /v1/shop/products/:ref": {
 		"summary": "The product page (by id, slug in any case, or an earlier slug)",
-		"description": "Browser token from your website (or the server token, for pages your server renders). Found by an earlier slug it answers { moved } with the product's page to redirect to; an archived product answers { moved } to its category when the catalog setting retiredUrl is category. Stock counts only as the showStock setting allows. 404 not_found for a product that is not active, or whose category or brand is hidden. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"description": "Browser token from your website (or the server token, for pages your server renders). Found by an earlier slug it answers { moved } with the product's page to redirect to; an archived product answers { moved } to its replacement (replacedBy, the first active one shoppers may see), else to its category when the catalog setting retiredUrl is category. Stock counts only as the showStock setting allows. 404 not_found for a product that is not active, or whose category or brand is hidden. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"oneOf": [
 				{
@@ -26330,7 +26356,7 @@
 	},
 	"GET /v1/seo/products/:ref": {
 		"summary": "A product page's meta tags and structured data",
-		"description": ":ref is the product's id or slug (any case). An earlier slug answers moved to the product; an archived product answers moved to its first category when the catalog setting retiredUrl is category. 404 not_found for an unknown product, a draft, an archived one otherwise, or one shoppers may not see (a hidden category or brand). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"description": ":ref is the product's id or slug (any case). An earlier slug answers moved to the product; an archived product answers moved to its replacement (replacedBy, the first active one shoppers may see), else to its first category when the catalog setting retiredUrl is category. 404 not_found for an unknown product, a draft, an archived one otherwise, or one shoppers may not see (a hidden category or brand). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"oneOf": [
 				{

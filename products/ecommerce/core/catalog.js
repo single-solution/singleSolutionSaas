@@ -281,7 +281,7 @@ export const heldKeys = (product) =>
  * and the timestamps are kept by the adapter and the ledger).
  * @typedef {Pick<ProductRecord, 'slug' | 'name' | 'kind' | 'status' | 'summary' | 'description' | 'categoryIds' | 'brandId'
  *   | 'typeKey' | 'tags' | 'specs' | 'options' | 'variants' | 'trackStock' | 'digital' | 'booking' | 'seo' | 'returnDays'
- *   | 'warrantyDays' | 'feedGroupId'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId'
+ *   | 'warrantyDays' | 'feedGroupId' | 'replacedBy'> & Required<Pick<ProductRecord, 'featured' | 'descriptionHtml' | 'video' | 'sizeChartId'
  *   | 'hideSizeGuide' | 'attributeSetup' | 'faqs'>>} ProductFields `slug` '' = make one from the name
  */
 
@@ -1199,6 +1199,13 @@ export const checkProduct = (body, rules, existing) => {
 	};
 	const returnDays = daysOf('returnDays');
 	const warrantyDays = daysOf('warrantyDays');
+	// the product that replaces it once archived (G9); the route checks that it exists
+	let replacedBy = existing?.replacedBy ?? null;
+	if (input.replacedBy !== undefined) {
+		if (input.replacedBy === null || input.replacedBy === '') replacedBy = null;
+		else if (isId(input.replacedBy, 'prd') && input.replacedBy !== existing?.id) replacedBy = input.replacedBy;
+		else fail('/replacedBy', 'Give the id of another product, or null.');
+	}
 	const feedGroupId = rules.importing
 		? importedFeedId(input.feedGroupId, '/feedGroupId', errors)
 		: (existing?.feedGroupId ?? '');
@@ -1226,6 +1233,7 @@ export const checkProduct = (body, rules, existing) => {
 			seo,
 			returnDays,
 			warrantyDays,
+			replacedBy,
 			featured,
 			descriptionHtml,
 			video,

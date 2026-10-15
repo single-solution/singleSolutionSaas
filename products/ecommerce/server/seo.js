@@ -53,7 +53,7 @@ import {
 	writtenSummary,
 } from '../core/seo.js';
 import { createMedia } from './catalog-media.js';
-import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
+import { hiddenFor, retiredMove, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
 import { conditional } from './http-cache.js';
 import { createAutoSeo } from './seo-auto.js';
@@ -286,15 +286,9 @@ export const createSeo = (product, service) => {
 		if (!found || !item) throw problem('not_found', 'There is no such product.');
 		const hidden = await hiddenFor(s);
 		if (item.status !== 'active') {
-			const { retiredUrl } = await s.values('catalog');
-			const [category] = /** @type {CategoryRecord[]} */ (
-				await data
-					.collection(COLLECTIONS.categories)
-					.find({ websiteId: data.websiteId, id: item.categoryIds[0] ?? '' }, { projection: { _id: 0 } })
-					.toArray()
-			);
-			if (item.status === 'archived' && retiredUrl === 'category' && category && !hidden.unlisted.has(category.id))
-				return { moved: { kind: 'category', slug: category.slug, url: await media.categoryUrl(s, category) } };
+			// an archived product may lead to its replacement or its category (E13, G9)
+			const retired = await retiredMove(s, data, item, media);
+			if (retired) return retired;
 			throw problem('not_found', 'There is no such product.');
 		}
 		if (!visible(item, hidden)) throw problem('not_found', 'There is no such product.');
@@ -420,6 +414,8 @@ export const createSeo = (product, service) => {
 				business: names.storeName,
 			}),
 			description,
+			// its own address, for the website's 308 from any other path that finds it (G9)
+			url,
 			canonical: item.seo.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
 			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? defaultImageOf(settings, s.domain)),
 			robots: robotsOf(item.seo),

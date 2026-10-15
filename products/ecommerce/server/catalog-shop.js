@@ -37,7 +37,7 @@ import { chartView, resolveSizeChart } from '../core/size-charts.js';
 import { SHOP_LIMITS, refuse } from './catalog-common.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { conditional } from './http-cache.js';
-import { hiddenFor, visible } from './catalog-visibility.js';
+import { hiddenFor, retiredMove, visible } from './catalog-visibility.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -422,10 +422,9 @@ export const createCatalogShop = (product, service, common) => {
 		]);
 		const byId = new Map(categories.map((c) => [c.id, c]));
 		if (item.status !== 'active') {
-			// an archived product may lead to its category (E13)
-			const category = byId.get(item.categoryIds[0] ?? '');
-			if (item.status === 'archived' && settings.retiredUrl === 'category' && category && !hidden.unlisted.has(category.id))
-				return { moved: { kind: 'category', slug: category.slug, url: await common.media.categoryUrl(s, category) } };
+			// an archived product may lead to its replacement or its category (E13, G9)
+			const retired = await retiredMove(s, data, item, common.media);
+			if (retired) return retired;
 			throw problem('not_found', 'There is no such product.');
 		}
 		if (!visible(item, hidden)) throw problem('not_found', 'There is no such product.');

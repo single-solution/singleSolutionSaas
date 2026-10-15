@@ -113,6 +113,10 @@ describe('createSnippets', () => {
 		expect(snippets.productMeta).toContain('application/ld+json');
 		expect(snippets.productMeta).toContain("import { notFound, permanentRedirect } from 'next/navigation';");
 		expect(snippets.productMeta).toContain('if (seo.moved) permanentRedirect(seo.moved.url);');
+		// one address per product: another path that finds it is sent to its own (G9)
+		expect(snippets.productMeta).toContain(
+			'if (new URL(seo.url).pathname !== `/products/${encodeURIComponent(slug)}`) permanentRedirect(seo.url);',
+		);
 		expect(snippets.productMeta).toContain('robots: seo.robots');
 		expect(snippets.productMeta).toContain('SS_SERVER_TOKEN');
 	});

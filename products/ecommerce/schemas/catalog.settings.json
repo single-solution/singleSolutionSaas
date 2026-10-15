@@ -33,7 +33,7 @@
 		"retiredUrl": {
 			"type": "string",
 			"title": "Archived products",
-			"description": "Where an archived product's address leads: nowhere (not found), or its category's page.",
+			"description": "Where an archived product's address leads when it names no replacement: nowhere (not found), or its category's page. Search engines treat many old addresses sent to one broad page as soft 404s: prefer a replacement for products with a near match.",
 			"default": "none",
 			"enum": ["none", "category"]
 		},
