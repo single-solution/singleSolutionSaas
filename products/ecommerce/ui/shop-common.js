@@ -8,6 +8,7 @@
  * @module
  */
 import { DEFAULT_FORMAT, formatDate, formatMoney, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
+import { GUEST_IDENTITIES } from '../core/guests.js';
 import { fromDecimal, isCurrency, toDecimal } from '../core/money.js';
 import { element } from './dom.js';
 import { SHOP_CSS } from './shop-styles.js';
@@ -46,6 +47,17 @@ const gradesOf = (value) =>
 	});
 
 /**
+ * How guests order (`settings.checkout.guests`): the contact they check out by and whether a phone is needed; null
+ * while shoppers sign in to order.
+ * @param {any} value
+ * @returns {{ identity: import('../core/guests.js').GuestIdentity, phoneRequired: boolean } | null}
+ */
+const guestsOf = (value) =>
+	value && GUEST_IDENTITIES.includes(value.identity)
+		? { identity: value.identity, phoneRequired: value.phoneRequired === true }
+		: null;
+
+/**
  * The settings the shopper widgets read (each part's `widgetSettings`), with defaults while a part is off.
  * @param {WidgetConfig} config
  */
@@ -72,8 +84,8 @@ export const settingsOf = (config) => {
 			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
 			coupons: checkout.coupons === true,
 			loyalty: checkout.loyalty === true,
-			/** whether shoppers may order without signing in (E21) */
-			guests: checkout.guests === 'on' || checkout.guests === 'unless_password',
+			/** how a shopper orders without signing in (E21): the contact guests check out by; null while guests sign in */
+			guests: guestsOf(checkout.guests),
 			address: {
 				required: /** @type {string[]} */ (checkout.address?.required ?? ['name', 'phone', 'line1', 'city']),
 				optional: /** @type {string[]} */ (

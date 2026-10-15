@@ -232,10 +232,13 @@ describe('role pricing (E19)', () => {
 
 describe('guest checkout and order keys (E21)', () => {
 	it('lets a guest order with a phone, read the order with its key and claims it at sign-in', async () => {
-		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.guests).toBe('off');
+		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.guests).toBeNull();
 		await shop.setting('checkout', 'guests', 'on');
 		// the cart widget offers guest checkout as the setting says
-		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.guests).toBe('on');
+		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.guests).toEqual({
+			identity: 'phone',
+			phoneRequired: true,
+		});
 		await shop.setting('checkout', 'defaultCallingCode', '+1');
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const placed = await place({
@@ -459,6 +462,11 @@ describe('guest checkout and order keys (E21)', () => {
 		await shop.setting('checkout', 'guests', 'on');
 		await shop.setting('checkout', 'guestIdentity', 'email');
 		await shop.setting('checkout', 'phoneRequired', false);
+		// the cart widget asks what the settings say
+		expect((await visit('GET', '/v1/widget/config')).json.settings.checkout.guests).toEqual({
+			identity: 'email',
+			phoneRequired: false,
+		});
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
 		const noPhone = { name: 'Ella Guest', line1: '1 Main Street', city: 'Springfield', country: 'US' };
 		/** @param {Record<string, unknown>} customer */

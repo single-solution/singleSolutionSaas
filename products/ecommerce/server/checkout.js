@@ -11,6 +11,7 @@ import { createOrdersStore } from '../adapters/orders-store.js';
 import { elementsOf } from '../core/item-types.js';
 import { OPTIONAL_ADDRESS_FIELDS } from '../core/address.js';
 import { zoneCities } from '../core/delivery.js';
+import { guestRules } from '../core/guests.js';
 import { createDigital } from './checkout-digital.js';
 import { createOrdering } from './checkout-orders.js';
 import { createQuoting } from './checkout-quote.js';
@@ -118,8 +119,9 @@ export const createCheckout = (product, service) => {
 				digital: s.has('digital_goods'),
 				coupons: s.has('coupons'),
 				loyalty: s.has('loyalty'),
-				// whether shoppers may order without signing in (E21): off, on or unless_password
-				guests: checkout.guests,
+				// how a shopper orders without signing in (E21): the contact guests check out by and whether a phone is
+				// needed (phase 5); null while guests sign in
+				guests: checkout.guests === 'off' ? null : guestRules(checkout),
 				address: {
 					required: [
 						'name',

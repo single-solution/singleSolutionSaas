@@ -6,8 +6,9 @@
  * pickup), the address, the payment methods the quote allows, the order fields the shop asks (`ui/shop-fields.js`), a note, the shop's policies (filled and only the ones it
  * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
  * totals, with the shop's note for the chosen payment method and a bank transfer's bank details (E22, E24). Placing
- * the order needs the shopper's sign-in, or, while the checkout setting `guests` allows it, a guest's name and contact
- * (E21; the order's key is kept in the browser, so the success page and My orders open it); the Idempotency-Key is
+ * the order needs the shopper's sign-in, or, while the checkout setting `guests` allows it, a guest's name and the
+ * contact `guestIdentity` and `phoneRequired` ask for (E21, phase 5; the order's key is kept in the browser, so the
+ * success page and My orders open it); the Idempotency-Key is
  * kept while the same attempt
  * is retried after a lost answer or while the first press still runs (409 `in_progress`, after the runtime's own retries). Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
  * page (`done`), or can start the payment again (`retry`). Coming back from Payments, the page's `ss_order` shows that
@@ -106,12 +107,13 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			const placeStatus = h(doc, 'p', { class: 'status', role: 'status' });
 			const address = addressForm({ doc, t, settings, onPlace: () => requote() });
 			// a shopper who is not signed in orders as a guest while the shop allows it (E21)
-			const guest = guestForm({ doc, t });
-			const guestOrder = () => settings.checkout.guests && !shop.signIn();
+			const guests = settings.checkout.guests;
+			const guest = guests ? guestForm({ doc, t, rules: guests }) : null;
+			const guestOrder = () => guest !== null && !shop.signIn();
 			const note = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '1000', rows: '3' }));
 			// the order fields the shop asks the shopper (the quote's fields)
 			const fields = checkoutFieldsForm({ doc, t });
-			for (const control of [note, fields.node, guest.node])
+			for (const control of [note, fields.node, ...(guest ? [guest.node] : [])])
 				for (const event of ['input', 'change'])
 					control.addEventListener(event, () => {
 						attemptKey = null;
@@ -134,7 +136,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 				address.node,
 				paymentBox,
 				fields.node,
-				guest.node,
+				guest?.node ?? null,
 				field(doc, 'ss-cart-note', t('checkout.note'), note),
 				policies.length > 0
 					? h(
@@ -568,7 +570,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					return;
 				}
 				const notReady = quote.ready ? null : h(doc, 'p', { class: 'error' }, t('cart.notReady'));
-				guest.node.hidden = !guestOrder();
+				if (guest) guest.node.hidden = !guestOrder();
 				if (!shop.signIn() && !guestOrder()) {
 					fill(placeBox, notReady, h(doc, 'p', { class: 'hint' }, t('checkout.signIn')), placeStatus);
 					return;
@@ -616,9 +618,14 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			const placeOrder = async () => {
 				if (placing || (!shop.signIn() && !guestOrder())) return;
 				const asGuest = guestOrder();
-				if (asGuest && guest.missing()) {
-					sayPlace(t('checkout.missing', { field: t('checkout.guest.name') }));
-					guest.focus('name');
+				const missingGuest = asGuest ? (guest?.missing() ?? null) : null;
+				if (missingGuest) {
+					sayPlace(
+						missingGuest === 'contact'
+							? t('checkout.guest.contactNeeded')
+							: t('checkout.missing', { field: t(`checkout.guest.${missingGuest}`) }),
+					);
+					guest?.focus(missingGuest);
 					return;
 				}
 				if (!checkoutBegun) {
@@ -650,7 +657,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						note: note.value.trim(),
 						...(Object.keys(given.value).length > 0 ? { fields: given.value } : {}),
 						...(isDelivery ? { address: address.values() } : {}),
-						...(asGuest ? { customer: guest.values() } : {}),
+						...(asGuest && guest ? { customer: guest.values() } : {}),
 						returnUrl: returnUrlOf(shop),
 						// the total the shopper sees: another total is not charged (409 price_changed: the cart is priced again)
 						expectedTotal: quote.totals.total,
@@ -681,7 +688,11 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							: invalid.startsWith('/customer')
 								? t('checkout.problem.guest')
 								: asGuest && code === 'sign_in_required'
-									? t('checkout.guest.member')
+									? t(
+											answer.data?.signIn === 'member_email'
+												? 'checkout.guest.member_email'
+												: 'checkout.guest.member_phone',
+										)
 									: problemText(config, 'checkout.problem.', code, 'checkout.problem.failed'),
 				);
 				renderPlace();

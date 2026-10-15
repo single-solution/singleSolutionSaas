@@ -89,6 +89,9 @@ const ORDER = {
 	payment: { method: 'cod', state: 'unpaid', advance: 0, paid: 0, refunded: 0, payUrl: null, payBy: null },
 };
 
+/** The labels of the guest's details, in order. @param {HTMLElement} host */
+const labelsOf = (host) => $$(host, 'label[for^="ss-cart-guest-"]').map((node) => node.textContent);
+
 const SETTINGS = {
 	currency: 'EUR',
 	checkout: {
@@ -654,7 +657,7 @@ describe('checkout', () => {
 				}),
 			);
 		const { fake, host } = await setup({
-			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: 'on' } },
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'phone', phoneRequired: true } } },
 			quote: pickupOnly,
 			routes: { 'POST /v1/shop/orders': () => answerOf },
 		});
@@ -666,11 +669,20 @@ describe('checkout', () => {
 		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.name') }));
 		expect(fake.all('POST /v1/shop/orders')).toHaveLength(0);
 		$(host, '#ss-cart-guest-name').value = ' Gina Guest ';
+		// guests check out by phone: it is needed, the email address is not
+		expect(labelsOf(host)).toEqual([
+			text('checkout.guest.name'),
+			text('checkout.guest.phone'),
+			text('checkout.optional', { field: text('checkout.guest.email') }),
+		]);
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.phone') }));
+		expect(fake.all('POST /v1/shop/orders')).toHaveLength(0);
 		$(host, '#ss-cart-guest-phone').value = '555 000 7777';
 		await click(buttonOf(host, text('checkout.place')));
 		expect(fake.last('POST /v1/shop/orders')?.body.customer).toEqual({ name: 'Gina Guest', phone: '555 000 7777', email: '' });
 		// a contact of a member with a password signs in instead
-		expect(textOf(host)).toContain(text('checkout.guest.member'));
+		expect(textOf(host)).toContain(text('checkout.guest.member_phone'));
 		answerOf = fail(422, 'validation_failed', { errors: [{ path: '/customer/phone', message: 'Give your phone number.' }] });
 		await click(buttonOf(host, text('checkout.place')));
 		expect(textOf(host)).toContain(text('checkout.problem.guest'));
@@ -690,11 +702,84 @@ describe('checkout', () => {
 		resetPage();
 		const member = await setup({
 			signIn: 's1',
-			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: 'on' } },
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'phone', phoneRequired: true } } },
 			quote: pickupOnly,
 		});
 		expect($(member.host, '#ss-cart-guest-name').closest('fieldset').hidden).toBe(true);
 		expect(buttonOf(member.host, text('checkout.place'))).toBeTruthy();
+	});
+
+	it('asks guests the contact guestIdentity and phoneRequired name: email, or either one (E21, phase 5)', async () => {
+		/** @type {any} */
+		let answerOf = fail(403, 'sign_in_required', { signIn: 'member_email' });
+		const pickupOnly = () =>
+			ok(
+				quoteOf({
+					deliveryOptions: [PICKUP],
+					delivery: PICKUP,
+					paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+				}),
+			);
+		const byEmail = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'email', phoneRequired: false } } },
+			quote: pickupOnly,
+			routes: { 'POST /v1/shop/orders': () => answerOf },
+		});
+		let host = byEmail.host;
+		// the email address comes first and is needed; the phone may be left out
+		expect(labelsOf(host)).toEqual([
+			text('checkout.guest.name'),
+			text('checkout.guest.email'),
+			text('checkout.optional', { field: text('checkout.guest.phone') }),
+		]);
+		$(host, '#ss-cart-guest-name').value = 'Ella Guest';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.email') }));
+		$(host, '#ss-cart-guest-email').value = 'ella@example.com';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(byEmail.fake.last('POST /v1/shop/orders')?.body.customer).toEqual({
+			name: 'Ella Guest',
+			phone: '',
+			email: 'ella@example.com',
+		});
+		expect(textOf(host)).toContain(text('checkout.guest.member_email'));
+
+		// either one: neither given is refused before sending, one is enough
+		resetPage();
+		answerOf = ok({ order: ORDER, next: { kind: 'done' }, orderKey: 'k'.repeat(32) }, 201);
+		const either = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'either', phoneRequired: false } } },
+			quote: pickupOnly,
+			routes: { 'POST /v1/shop/orders': () => answerOf },
+		});
+		host = either.host;
+		expect(labelsOf(host)).toEqual([text('checkout.guest.name'), text('checkout.guest.phone'), text('checkout.guest.email')]);
+		expect(textOf(host)).toContain(text('checkout.guest.either'));
+		$(host, '#ss-cart-guest-name').value = 'Eve Guest';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.guest.contactNeeded'));
+		expect(either.fake.all('POST /v1/shop/orders')).toHaveLength(0);
+		$(host, '#ss-cart-guest-email').value = 'eve@example.com';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(either.fake.last('POST /v1/shop/orders')?.body.customer).toEqual({
+			name: 'Eve Guest',
+			phone: '',
+			email: 'eve@example.com',
+		});
+		expect(either.fake.kept).toEqual([['ord_1', 'k'.repeat(32)]]);
+
+		// either one with a phone needed: the phone is asked, the email address is not
+		resetPage();
+		const phoneToo = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: { identity: 'either', phoneRequired: true } } },
+			quote: pickupOnly,
+		});
+		expect(labelsOf(phoneToo.host)).toEqual([
+			text('checkout.guest.name'),
+			text('checkout.guest.phone'),
+			text('checkout.optional', { field: text('checkout.guest.email') }),
+		]);
+		expect(textOf(phoneToo.host)).not.toContain(text('checkout.guest.either'));
 	});
 
 	it('reads a guest’s order back from Payments with the key kept in the browser (E21)', async () => {
