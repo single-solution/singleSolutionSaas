@@ -15,7 +15,7 @@ const N = TEXTS.connections.fields;
 /** Connections with their own form. */
 export const FORMS = Object.freeze(['ai', 'ai_backup', 'storage']);
 
-/** @param {{ onSave: (value: object) => void }} props */
+/** @param {{ onSave: (value: object) => Promise<void> }} props */
 export function AiForm({ onSave }) {
 	const list = useId();
 	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({ provider: 'openai' }));
@@ -90,7 +90,7 @@ const STORAGE = /** @type {const} */ ([
 	{ name: 'prefix', optional: true },
 ]);
 
-/** @param {{ onSave: (value: object) => void }} props */
+/** @param {{ onSave: (value: object) => Promise<void> }} props */
 export function StorageForm({ onSave }) {
 	const [values, setValues] = useState(/** @type {Record<string, string>} */ ({}));
 	/** @param {string} name */

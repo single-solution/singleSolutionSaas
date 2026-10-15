@@ -26,8 +26,7 @@ import { FALLBACK_INTENTS, FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, plac
 import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
-import { call, fill, useLoad } from './api.js';
-import { Loaded } from './parts.js';
+import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, any>} Item */
@@ -106,7 +105,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, clean
 	const path = `/v1/dashboard/websites/${websiteId}/lists/${list}`;
 	const { answer, reload } = useLoad(path);
 	const [draft, setDraft] = useState(/** @type {Item[] | null} */ (null));
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	return (
 		<Card title={title} subtitle={off ? TEXTS.settings.off : `${help} ${fill(L.max, { max })}`}>
 			<Loaded answer={answer}>
@@ -669,7 +668,7 @@ export function ToolSecret({ websiteId }) {
 	const [secret, setSecret] = useState(/** @type {string | null} */ (null));
 	const [confirming, setConfirming] = useState(false);
 	const [busy, setBusy] = useState(false);
-	const [result, setResult] = useState(/** @type {import('./api.js').Answer | null} */ (null));
+	const [result, setResult] = useState(/** @type {import('@ss/ui/dashboard').Answer | null} */ (null));
 	/** @param {'GET' | 'POST'} method */
 	const load = async (method) => {
 		setBusy(true);

@@ -1,126 +1,74 @@
 /**
- * The dashboard's texts (English, kept in this file; the dashboard is not translated, PLAN 0.6).
+ * The dashboard's words (US English, kept in this file; the dashboard is not translated, PLAN 0.6): Chat's title and
+ * its own words laid over the words every product dashboard shares (`dashboardTexts`). The server's page title reads
+ * it too, so it comes from the `@ss/ui` root.
  * @module
  */
-export const TEXTS = Object.freeze({
+import { dashboardTexts } from '@ss/ui';
+
+export const TEXTS = dashboardTexts({
 	title: 'Chat',
-	loading: 'Loading…',
-	signedOut: 'Open this dashboard from the Portal.',
-	failed: 'This could not be loaded.',
-	backToPortal: 'Back to Portal',
-	pickWebsite: 'Pick a website',
-	website: 'Website',
-	adminView: 'Admin view: {merchant} / {domain}',
-	saved: 'Saved',
-	save: 'Save',
-	reset: 'Reset to default',
-	cancel: 'Cancel',
-	andMore: '{names} and {count} more',
-	tabs: Object.freeze({
-		overview: 'Overview',
-		features: 'Features',
-		settings: 'Settings',
-		connections: 'Connections',
-		developers: 'Developers',
-		defaults: 'Defaults',
-		prices: 'Prices',
-	}),
-	overview: Object.freeze({
+	overview: {
 		bookingStep: 'Set the booking URL',
-		noBooking: Object.freeze({
+		noBooking: {
 			title: 'The Book-a-slot tool is on, but no booking URL is set',
 			effect: 'It is charged, but the AI cannot offer or book slots until the URL is set in Settings → Tools.',
 			action: 'Set the URL',
-		}),
-	}),
-	features: Object.freeze({
-		price: 'Price: {price}',
-		on: 'On',
-		needs: 'Needs: {features}',
-		contact: 'To change features, contact {contact}.',
-		confirmTitle: 'Save features?',
-		confirmCost: 'New hourly cost: {cost}',
-		alsoOff: 'Also turned off: {features}',
-		docs: 'Docs',
-		notWorking: 'Not working: connect {connection}',
+		},
+	},
+	features: {
 		noOneStarts: 'No one can start a chat: switch on Guest chat or Signed-in chat.',
 		noOneAnswers: 'No one answers: switch on AI replies or the Inbox.',
-	}),
-	settings: Object.freeze({
-		off: 'This feature is off.',
-		sections: Object.freeze({
-			assistant: Object.freeze({
+	},
+	settings: {
+		sections: {
+			assistant: {
 				title: 'Assistant',
 				help: 'How the AI answers: behavior, your instructions, token caps, cost alerts, languages and your fallback answers.',
-			}),
-			tools: Object.freeze({
+			},
+			tools: {
 				title: 'Tools',
 				help: 'Tools the AI can call on your own server, the secret that signs those calls, and booking.',
-			}),
-			look: Object.freeze({
+			},
+			look: {
 				title: 'Widget look',
 				help: 'Bot name, avatar, launcher and window of the chat widget, its theme and custom CSS, and how money and dates look.',
-			}),
-			texts: Object.freeze({ title: 'Texts', help: 'Every word the widgets show, welcome messages included.' }),
-			guests: Object.freeze({ title: 'Guests', help: 'Chatting without signing in, and signing in to chat.' }),
-			proactive: Object.freeze({
+			},
+			texts: { title: 'Texts', help: 'Every word the widgets show, welcome messages included.' },
+			guests: { title: 'Guests', help: 'Chatting without signing in, and signing in to chat.' },
+			proactive: {
 				title: 'Proactive',
 				help: 'Messages that open the conversation: after idle time and on chosen pages.',
-			}),
-			flows: Object.freeze({
+			},
+			flows: {
 				title: 'Flows',
 				help: 'Scripted conversations, started on a page or by keywords, run top to bottom.',
-			}),
-			leads: Object.freeze({ title: 'Lead capture', help: 'The fields a lead form asks for and its consent text.' }),
-			customFields: Object.freeze({
+			},
+			leads: { title: 'Lead capture', help: 'The fields a lead form asks for and its consent text.' },
+			customFields: {
 				title: 'Custom fields',
 				help: 'Your own fields on a conversation: collected in flows and lead forms, edited in the inbox.',
-			}),
-			handoff: Object.freeze({
+			},
+			handoff: {
 				title: 'Handoff and office hours',
 				help: 'When a chat goes to a person, your office hours, chats per person and the queue position.',
-			}),
-			inbox: Object.freeze({ title: 'Inbox', help: 'The conversation page alerts link to, and who gets staff alerts.' }),
-			attachments: Object.freeze({ title: 'Attachments', help: 'Who may attach files, which types and how large.' }),
-			ratings: Object.freeze({ title: 'Ratings', help: 'How visitors rate a conversation and when they are asked.' }),
-			transcripts: Object.freeze({ title: 'Transcripts', help: 'Conversation copies sent by email.' }),
-			moderation: Object.freeze({
+			},
+			inbox: { title: 'Inbox', help: 'The conversation page alerts link to, and who gets staff alerts.' },
+			attachments: { title: 'Attachments', help: 'Who may attach files, which types and how large.' },
+			ratings: { title: 'Ratings', help: 'How visitors rate a conversation and when they are asked.' },
+			transcripts: { title: 'Transcripts', help: 'Conversation copies sent by email.' },
+			moderation: {
 				title: 'Moderation',
 				help: 'Hidden personal data, blocked terms, links and leak phrases.',
-			}),
-			other: Object.freeze({ title: 'Other settings', help: 'Settings of the other features.' }),
-		}),
+			},
+			other: { title: 'Other settings', help: 'Settings of the other features.' },
+		},
 		aiLabelWarning:
 			'AI replies are not labeled. Laws in some places (for example the EU AI Act and California’s bot disclosure law) require telling visitors they are talking to a bot. You are responsible for following the law where you operate.',
 		transcriptsNote: 'Transcripts are emailed through Notifications: paste its server token in Connections.',
-		texts: 'Widget texts',
-		textsHelp: 'Every word the widgets show. A text must keep the same {placeholders} as the English text.',
-		theme: 'Theme',
-		mode: 'Light or dark',
-		modes: Object.freeze({ auto: 'Follow device', light: 'Light', dark: 'Dark' }),
-		fontFamily: 'Font family (inherit, or a font your site loads)',
-		radius: 'Corner radius (0–24 px)',
-		accent: 'Accent color',
-		customCss: 'Custom CSS',
-		format: 'Format',
 		formatHelp: 'How money and dates look in the widgets, messages, chat answers and pages.',
-		locale: 'Language and region',
-		localeHelp: "A tag such as en-US or fr-FR; empty uses each visitor's browser (en-US in messages).",
-		currencyDisplay: 'Currency shown as',
-		currencyDisplays: Object.freeze({
-			code: 'Code (USD 12,500.00)',
-			symbol: 'Symbol ($12,500.00)',
-			custom: 'Your own symbol',
-		}),
-		currencySymbol: 'Your own symbol (up to 8 characters)',
-		times: 'Dates and times in',
-		timesOptions: Object.freeze({
-			viewer: "Each visitor's time zone",
-			business: 'Your business time zone (business.json)',
-		}),
-		wholeUnits: 'Whole amounts only (no minor units)',
-	}),
-	lists: Object.freeze({
+	},
+	lists: {
 		add: 'Add',
 		remove: 'Remove',
 		up: 'Move up',
@@ -129,7 +77,7 @@ export const TEXTS = Object.freeze({
 		max: 'Up to {max}.',
 		saveList: 'Save list',
 		errors: 'Not saved: fix these first.',
-		tools: Object.freeze({
+		tools: {
 			title: 'Webhook tools',
 			help: 'Each tool is a POST to your https address with the arguments the AI chose, signed with the tool signing secret.',
 			item: 'Tool',
@@ -141,50 +89,50 @@ export const TEXTS = Object.freeze({
 			addParameter: 'Add parameter',
 			parameter: 'Parameter name',
 			type: 'Type',
-			types: Object.freeze({ string: 'Text', number: 'Number', boolean: 'Yes or no' }),
+			types: { string: 'Text', number: 'Number', boolean: 'Yes or no' },
 			required: 'Required',
-		}),
-		pageRules: Object.freeze({
+		},
+		pageRules: {
 			title: 'Page rules',
-			help: 'A message the widget shows on matching pages after a delay. In a path, * is one segment and ** any.',
+			help: 'A message the widget shows on matching pages after a delay. A path starts with /; * is any characters inside one segment and ** any segments.',
 			item: 'Rule',
 			path: 'Page path (for example /products/**)',
 			delay: 'Delay (seconds, 0–3600)',
 			message: 'Message',
-		}),
-		flows: Object.freeze({
+		},
+		flows: {
 			title: 'Flows',
 			help: 'A flow starts on a page after a delay, or when a visitor message contains a keyword.',
 			item: 'Flow',
 			id: 'ID (lower-case letters, digits, - or _)',
 			name: 'Name',
 			start: 'Starts',
-			starts: Object.freeze({ page: 'On a page', keyword: 'On keywords' }),
+			starts: { page: 'On a page', keyword: 'On keywords' },
 			path: 'Page path',
 			delay: 'Delay (seconds)',
 			keywords: 'Keywords (one per line)',
 			steps: 'Steps (top to bottom)',
 			addStep: 'Add step',
 			step: 'Step',
-			kinds: Object.freeze({
+			kinds: {
 				message: 'Message',
 				question: 'Question with buttons',
 				collect: 'Collect a field',
 				handoff: 'Hand off to a person',
 				end: 'End',
-			}),
+			},
 			text: 'Text',
 			buttons: 'Buttons (one per line, up to 6)',
 			field: 'Field',
-			fields: Object.freeze({ name: 'Name', email: 'Email', phone: 'Phone', text: 'Free text' }),
+			fields: { name: 'Name', email: 'Email', phone: 'Phone', text: 'Free text' },
 			custom: 'Custom: {label}',
-		}),
-		fallbackAnswers: Object.freeze({
+		},
+		fallbackAnswers: {
 			title: 'Fallback answers',
 			help: 'Your own answers when the AI fails, reaches a cap or its answer is refused: the first answer whose language and keywords fit the visitor’s message is sent, else the When the AI cannot answer message.',
 			item: 'Answer',
 			intent: 'For',
-			intents: Object.freeze({
+			intents: {
 				greeting: 'Greetings',
 				deals: 'Deals',
 				products: 'Products',
@@ -192,7 +140,7 @@ export const TEXTS = Object.freeze({
 				my_orders: 'The visitor’s orders',
 				compare: 'Comparing two products',
 				other: 'Anything else',
-			}),
+			},
 			language: 'Language',
 			anyLanguage: 'Any language',
 			languageHelp: 'A language answers only visitors writing in it, and needs Language lock (its languages are listed here).',
@@ -203,33 +151,33 @@ export const TEXTS = Object.freeze({
 			textHelp:
 				'Markdown, up to {max} characters. Placeholders, filled by the shop tools that are on: {deals_table} the active deals, {top_products} the top products, {products_under} products under the budget in the message, {my_orders} the visitor’s orders, {comparison} the two products the message names before and after a keyword side by side (Lamp Max vs Lamp Mini). An answer whose placeholder cannot be filled is skipped.',
 			needsOff: 'Skipped while these are off: {features}.',
-			placeholderFeatures: Object.freeze({
+			placeholderFeatures: {
 				deals_table: 'Shop tools: deals and savings quotes',
 				top_products: 'Shop tools: top and new products',
 				products_under: 'Shop tools: product search and details',
 				my_orders: 'Shop tools: my orders and account',
 				comparison: 'Shop tools: product search and details',
-			}),
-			problems: Object.freeze({
+			},
+			problems: {
 				intent: 'Pick what the answer is for.',
 				language: 'Pick a language, or Any language.',
 				keywords: 'Up to {max} keywords of up to {length} characters each.',
 				compareKeywords: 'Add the words between the two products, such as vs, for {comparison}.',
 				text: 'Write the answer (up to {max} characters).',
-			}),
-		}),
-		customFields: Object.freeze({
+			},
+		},
+		customFields: {
 			title: 'Custom fields',
 			help: 'Fields kept on each conversation.',
 			item: 'Field',
 			key: 'Key (lower-case letters, digits or _)',
 			label: 'Label',
 			type: 'Type',
-			types: Object.freeze({ text: 'Text', number: 'Number', yes_no: 'Yes or no', choice: 'Choice' }),
+			types: { text: 'Text', number: 'Number', yes_no: 'Yes or no', choice: 'Choice' },
 			options: 'Options (one per line)',
-		}),
-	}),
-	secret: Object.freeze({
+		},
+	},
+	secret: {
 		title: 'Tool signing secret',
 		help: 'Your tool and booking endpoints check the signature of each call with this secret (see Developers).',
 		reveal: 'Reveal',
@@ -237,9 +185,9 @@ export const TEXTS = Object.freeze({
 		regenerate: 'Regenerate',
 		confirmTitle: 'Regenerate the secret?',
 		confirmText: 'Calls signed with the old secret stop passing your check until your server uses the new one.',
-	}),
-	connections: Object.freeze({
-		fields: Object.freeze({
+	},
+	connections: {
+		fields: {
 			provider: 'Provider',
 			apiKey: 'API key',
 			model: 'Model',
@@ -250,14 +198,14 @@ export const TEXTS = Object.freeze({
 			accessKeyId: 'Access key ID',
 			secretAccessKey: 'Secret access key',
 			prefix: 'Key prefix (optional)',
-		}),
-		providers: Object.freeze({
+		},
+		providers: {
 			openai: 'OpenAI',
 			anthropic: 'Anthropic',
 			google: 'Google Gemini',
 			compatible: 'OpenAI-compatible service',
-		}),
-		hints: Object.freeze({
+		},
+		hints: {
 			database: 'A MongoDB connection string (mongodb+srv://…). Conversations, leads and knowledge live here.',
 			storage: 'An S3-compatible bucket (AWS S3, Cloudflare R2 and others). Attachments are kept here.',
 			ai: 'Your own AI provider key. The model is free text; suggestions are shown as you type.',
@@ -267,23 +215,9 @@ export const TEXTS = Object.freeze({
 				"Paste the website's Notifications server token from the Portal. Staff alerts, transcripts and cost alerts are sent with it.",
 			ecommerce:
 				"Paste the website's Ecommerce server token from the Portal. The shop tools, track shipment, product cards and the context panel's shop info read your shop with it.",
-		}),
-		save: 'Save and test',
-		neededBy: 'Needed by: {features}',
-		neededByNone: 'Optional',
-		connected: 'Connected',
-		not_connected: 'Not connected',
-		test_failed: 'Test failed',
-		value: 'New value',
-		test: 'Test',
-		remove: 'Remove',
-		none: 'No connections.',
-	}),
-	developers: Object.freeze({
-		intro: 'The docs show every feature, widget and route. Features that are off are marked.',
-		openDocs: 'Open the docs',
-		manageTokens: 'Manage tokens in the Portal',
-		off: 'off',
+		},
+	},
+	developers: {
 		visitor: 'Visitor widget',
 		visitorHelp:
 			"The chat widget on your website and its JS API. Replace YOUR_BROWSER_TOKEN with the website's browser token from the Portal.",
@@ -294,20 +228,5 @@ export const TEXTS = Object.freeze({
 			"Your server asks for a ticket for the admin widgets after checking its user and role. Keep the website's server token from the Portal in SS_SERVER_TOKEN, on your server only.",
 		tools: 'Tool signature check',
 		toolsHelp: 'Your tool and booking endpoints check that a call comes from Chat with the tool signing secret.',
-	}),
-	defaults: Object.freeze({
-		intro: 'Global defaults apply to every website that has not saved its own value.',
-	}),
-	prices: Object.freeze({
-		intro: 'One hourly price per feature, in credits, for every merchant and website.',
-		perHour: 'Credits per hour',
-	}),
-	reseal: Object.freeze({
-		title: 'Encryption key',
-		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
-		button: 'Re-seal stored secrets',
-		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
-		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
-	}),
+	},
 });
