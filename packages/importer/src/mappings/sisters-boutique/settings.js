@@ -383,6 +383,7 @@ export const settingsPlan = (values) => {
 				'seo.categoryDescription': '',
 				'seo.variantTitle': '{name} - {options}',
 				'seo.pagedListings': 'index',
+				'seo.emptyCategories': 'noindex', // SaaS default (store mapping to review when the owner asks)
 				'seo.sitemapUrl': '/sitemap.xml',
 				'seo.sitemapSize': 10_000,
 				'seo.defaultDescription': seo.defaultDescription || store.siteTagline,
