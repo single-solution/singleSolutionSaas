@@ -503,11 +503,13 @@ export const shipmentSummary = (order, flow, extras = {}) => {
 };
 
 /**
- * A deal as Chat sees it (E37): its name, what it takes off, its display fields (E18) and when it ends.
+ * A deal as Chat sees it (E37): its name, what it takes off, its display fields (E18) and when it ends. Without a
+ * discount label of its own, the label is the website's text `chat.context.dealFree` or `chat.context.dealOff` (E33).
  * @param {import('./model.js').DealRecord} deal
- * @param {{ currency: string, money: Money, date: (value: Date) => string, bannerUrl?: string | null }} context
+ * @param {{ currency: string, money: Money, date: (value: Date) => string, bannerUrl?: string | null,
+ *   words: { dealFree: string, dealOff: string } }} context
  */
-export const chatDeal = (deal, { currency, money, date, bannerUrl = null }) => {
+export const chatDeal = (deal, { currency, money, date, bannerUrl = null, words }) => {
 	const record = /** @type {Record<string, any>} */ (deal);
 	const kind = record.type === 'free_delivery' ? 'free_delivery' : record.type === 'fixed' ? 'fixed' : 'percent';
 	const valueText =
@@ -526,8 +528,8 @@ export const chatDeal = (deal, { currency, money, date, bannerUrl = null }) => {
 			typeof record.discountLabel === 'string' && record.discountLabel
 				? record.discountLabel
 				: kind === 'free_delivery'
-					? 'Free delivery'
-					: `${valueText} off`,
+					? words.dealFree
+					: words.dealOff.replaceAll('{value}', valueText),
 		color: typeof record.color === 'string' ? record.color : '',
 		bannerUrl,
 		minQuantity: Number(record.conditions?.minQuantity ?? 0) || null,

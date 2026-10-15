@@ -22457,7 +22457,7 @@
 	},
 	"GET /v1/chat/context": {
 		"summary": "Chat’s live store context",
-		"description": "What Chat’s AI replies add to their instructions: the shop basics (payment methods and notes, delivery fees and free-delivery amounts, pickup points, the cash handling fee, the loyalty earn rate, top categories, the return window and warranty), the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. 422 validation_failed at /productId.",
+		"description": "What Chat’s AI replies add to their instructions: the shop basics (payment methods and notes, delivery fees and free-delivery amounts, pickup points, the cash handling fee, the loyalty earn rate, top categories, the return window and warranty), the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. The text's headings and labels are your texts chat.context.* (Settings → Texts), in your words and language; a deal without a discount label of its own reads chat.context.dealFree or chat.context.dealOff. 422 validation_failed at /productId.",
 		"query": {
 			"type": "object",
 			"properties": {

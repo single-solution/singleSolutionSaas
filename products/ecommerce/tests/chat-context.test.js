@@ -5,12 +5,16 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MAX_CONTEXT, contextText, oneLine, warrantyWords } from '../core/chat-context.js';
+import { MAX_CONTEXT, contextText, contextWordsOf, oneLine, warrantyWords } from '../core/chat-context.js';
 import { chatFilters, filtersGiven, gradePrices, matchingVariant, variantFilter, warrantyOf } from '../core/lookup.js';
 import { shipmentLink } from '../core/couriers.js';
 import { COLLECTIONS } from '../core/model.js';
 import { listShown } from '../core/promotions.js';
+import strings from '../strings/en.json' with { type: 'json' };
 import { ACCOUNTS, readyShop, storedCategory } from './helpers.js';
+
+/** The context's words as the website's default texts say them. */
+const WORDS = contextWordsOf(strings);
 
 /** @typedef {import('../core/model.js').VariantRecord} VariantRecord */
 
@@ -159,6 +163,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 		expect(oneLine('x'.repeat(10), 5)).toBe('xxxx…');
 		const long = 'Policy text. '.repeat(2000);
 		const text = contextText({
+			words: WORDS,
 			business: 'Shop',
 			policies: [
 				{ key: 'shipping', title: 'Delivery', text: long },
@@ -260,9 +265,29 @@ describe('core: Chat filters, warranties and the context text', () => {
 		expect(text).toContain('A $1,000 (out of stock)');
 		expect(text).toContain('Delivery: Policy text.');
 		expect(text).toContain('Custom: Custom.');
-		const small = contextText({ business: 'Shop', policies: [], products: [], deals: [], product: null, visitor: null });
+		const small = contextText({
+			words: WORDS,
+			business: 'Shop',
+			policies: [],
+			products: [],
+			deals: [],
+			product: null,
+			visitor: null,
+		});
 		expect(small).toBe('# Shop — live store facts');
+		// the merchant's words, in their language (E33): nothing English is built in
+		const spanish = contextText({
+			words: { ...WORDS, title: 'Datos de {business}', visitor: 'Cliente', points: '{points} puntos' },
+			business: 'Tienda',
+			policies: [],
+			products: [],
+			deals: [],
+			product: null,
+			visitor: { firstName: '', city: '', points: 5 },
+		});
+		expect(spanish).toBe('# Datos de Tienda\n## Cliente\n- 5 puntos');
 		const quiet = contextText({
+			words: WORDS,
 			business: 'Shop',
 			policies: [],
 			products: [],
@@ -280,6 +305,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 		expect(quiet).not.toContain('Signed-in visitor');
 		expect(quiet).not.toContain('Shop basics');
 		const none = contextText({
+			words: WORDS,
 			business: 'Shop',
 			policies: [],
 			products: [],
@@ -300,7 +326,15 @@ describe('core: Chat filters, warranties and the context text', () => {
 		});
 		expect(none).toContain('- Returns: not accepted');
 		expect(none).toContain('- Warranty: none');
-		expect([30, 60, 45, 1, 0, null, 1.5].map(warrantyWords)).toEqual(['1 month', '2 months', '45 days', '1 day', '', '', '']);
+		expect([30, 60, 45, 1, 0, null, 1.5].map((days) => warrantyWords(days, WORDS))).toEqual([
+			'1 month',
+			'2 months',
+			'45 days',
+			'1 day',
+			'',
+			'',
+			'',
+		]);
 	});
 });
 

@@ -20,7 +20,7 @@ import { htmlToText } from '../core/catalog-content.js';
 import { topField } from '../core/catalog-query.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
-import { CONTEXT_BASICS, CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
+import { CONTEXT_BASICS, CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText, contextWordsOf } from '../core/chat-context.js';
 import { paymentOptions } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { byShowOrder } from '../core/deals.js';
@@ -543,6 +543,7 @@ export const createChatLookup = (product, service, media) => {
 		const offers = q.promotions?.applied.filter((entry) => entry.kind === 'deal') ?? [];
 		const deals = s.has('deals') ? (await loadOffers(data, { now: service.now(), deals: true })).deals : [];
 		const { date } = await s.format();
+		const words = contextWordsOf(await s.texts());
 		const totals = /** @type {Record<string, number>} */ (/** @type {unknown} */ (q.totals));
 		const delivery = q.delivery.method === 'none' ? null : q.delivery;
 		const freeOver = delivery?.freeOver ?? 0;
@@ -565,7 +566,7 @@ export const createChatLookup = (product, service, media) => {
 				const deal = deals.find((candidate) => candidate.id === entry.id);
 				return {
 					...(deal
-						? chatDeal(deal, { currency: s.currency, money, date: (at) => date(at, 'date') })
+						? chatDeal(deal, { currency: s.currency, money, date: (at) => date(at, 'date'), words })
 						: { id: entry.id, name: entry.name }),
 					amount: entry.amount,
 					amountText: text(entry.amount),
@@ -610,6 +611,7 @@ export const createChatLookup = (product, service, media) => {
 	const dealRows = async (s, data, limit) => {
 		const live = await dealsLiveNow(data, { now: service.now(), clock: await service.pricing(s) });
 		const { money, date } = await s.format();
+		const words = contextWordsOf(await s.texts());
 		return Promise.all(
 			[...live]
 				.sort(byShowOrder)
@@ -617,6 +619,7 @@ export const createChatLookup = (product, service, media) => {
 				.map(async (/** @type {DealRecord} */ deal) =>
 					chatDeal(deal, {
 						currency: s.currency,
+						words,
 						money,
 						date: (at) => date(at, 'date'),
 						bannerUrl: await media.mediaUrl(s, /** @type {any} */ (deal).banner?.key),
@@ -874,7 +877,17 @@ export const createChatLookup = (product, service, media) => {
 			visitor = { firstName: firstNameOf(shopper.name), city: await cityOf(data, shopper.id, profile), points };
 		}
 		return {
-			text: contextText({ business: business.name, basics, policies, products, deals: dealList, product, visitor, units }),
+			text: contextText({
+				business: business.name,
+				basics,
+				policies,
+				products,
+				deals: dealList,
+				product,
+				visitor,
+				units,
+				words: contextWordsOf(await s.texts()),
+			}),
 			business: business.name,
 			currency: s.currency,
 			basics,
