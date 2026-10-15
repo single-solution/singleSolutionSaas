@@ -1,16 +1,19 @@
 /**
- * Size charts (PLAN 0.8.10 E5): a named table of sizes in inches or centimeters, with columns, rows of values, fit
- * advice and notes. A product shows the chart named on it, else its brand's, else its first category's (or the nearest
- * ancestor's), unless it hides the size guide. No I/O.
+ * Measurement tables (PLAN 0.8.10 E5, dynamic model §6; stored as size charts): a named table of sizes with columns,
+ * rows of values, advice and notes. Its values are in any unit of `core/units.js`, an own label (`EU`, `years`) or none
+ * (no default), and each column may name its own; `convertTo` lets shoppers see the columns of one dimension in another
+ * unit of it (exact factors, never between dimensions). A product shows the table named on it, else its brand's, else
+ * its first category's (or the nearest ancestor's), unless it hides the size guide. No I/O.
  * @module
  */
 import { cleanText, isObject } from './catalog.js';
+import { sameDimension, unitOf } from './units.js';
 
 /** @typedef {import('./model.js').SizeChartRecord} SizeChartRecord */
 /** @typedef {import('./catalog.js').FieldError} FieldError */
 
 /** Limits of a chart. */
-const CHART_LIMITS = Object.freeze({ name: 120, columns: 12, rows: 40, label: 60, value: 60, text: 2000 });
+const CHART_LIMITS = Object.freeze({ name: 120, columns: 12, rows: 40, label: 60, value: 60, text: 2000, unit: 20 });
 
 /** Column keys: lowercase letters, digits, `_` and `-` (keys made from labels with dashes, CA-16). */
 const COLUMN_KEY = /^[a-z0-9][a-z0-9_-]{0,39}$/;
@@ -35,8 +38,17 @@ export const checkSizeChart = (body, existing) => {
 
 	const name = body.name === undefined ? (existing?.name ?? '') : cleanText(body.name, CHART_LIMITS.name);
 	if (!name) fail('/name', `Give a name of 1 to ${CHART_LIMITS.name} characters.`);
-	const unit = body.unit === undefined ? (existing?.unit ?? 'in') : body.unit;
-	if (unit !== 'in' && unit !== 'cm') fail('/unit', 'The unit is in or cm.');
+	/**
+	 * A unit: a known one, an own label or '' (none).
+	 * @param {unknown} value @param {string} path @param {string} kept
+	 */
+	const unitText = (value, path, kept) => {
+		if (value === undefined) return kept;
+		const text = value === null ? '' : cleanText(value, CHART_LIMITS.unit);
+		if (text === null) fail(path, `A unit is a unit such as cm or kg, or a label of at most ${CHART_LIMITS.unit} characters.`);
+		return text ?? kept;
+	};
+	const unit = unitText(body.unit, '/unit', existing?.unit ?? '');
 
 	/** @type {SizeChartRecord['columns']} */
 	let columns = existing?.columns ?? [];
@@ -48,10 +60,11 @@ export const checkSizeChart = (body, existing) => {
 			body.columns.forEach((column, index) => {
 				const key = isObject(column) && typeof column.key === 'string' ? column.key.trim() : '';
 				const label = isObject(column) ? cleanText(column.label, CHART_LIMITS.label) : null;
+				const own = unitText(isObject(column) ? column.unit : undefined, `/columns/${index}/unit`, '');
 				if (!COLUMN_KEY.test(key) || columns.some((other) => other.key === key))
 					fail(`/columns/${index}/key`, 'Each column has its own key (lowercase letters, digits, _ and -).');
 				else if (!label) fail(`/columns/${index}/label`, `A column label has 1 to ${CHART_LIMITS.label} characters.`);
-				else columns.push({ key, label });
+				else columns.push({ key, label, unit: own });
 			});
 		}
 	}
@@ -83,14 +96,29 @@ export const checkSizeChart = (body, existing) => {
 			});
 		}
 	}
-	/** @param {'fitAdvice' | 'notes'} field */
+	// shoppers switch to another unit only of a dimension the table's values are in (exact, never between dimensions)
+	const convertTo = unitText(body.convertTo, '/convertTo', existing?.convertTo ?? '');
+	if (
+		convertTo &&
+		!columns.some((column) => {
+			const from = column.unit || unit;
+			return from !== convertTo && sameDimension(from, convertTo);
+		})
+	)
+		fail(
+			'/convertTo',
+			unitOf(convertTo)
+				? 'Switch only to another unit of the length, weight or volume the table is in.'
+				: 'Switch to a unit such as cm, in, kg or lb.',
+		);
+	/** @param {'advice' | 'notes'} field */
 	const longText = (field) => {
 		if (body[field] === undefined) return existing?.[field] ?? '';
 		const text = cleanText(body[field], CHART_LIMITS.text, { multiline: true });
 		if (text === null) fail(`/${field}`, `This text has at most ${CHART_LIMITS.text} characters.`);
 		return text ?? existing?.[field] ?? '';
 	};
-	const fitAdvice = longText('fitAdvice');
+	const advice = longText('advice');
 	const notes = longText('notes');
 	const active = body.active === undefined ? (existing?.active ?? true) : body.active;
 	if (typeof active !== 'boolean') fail('/active', 'Active is true or false.');
@@ -99,10 +127,11 @@ export const checkSizeChart = (body, existing) => {
 		ok: true,
 		value: {
 			name: /** @type {string} */ (name),
-			unit: /** @type {'in' | 'cm'} */ (unit),
+			unit,
+			convertTo,
 			columns,
 			rows,
-			fitAdvice,
+			advice,
 			notes,
 			active: active !== false,
 		},
@@ -136,15 +165,16 @@ export const resolveSizeChart = (product, brand, categories, charts, defaultId =
 };
 
 /**
- * A chart as shoppers see it (without its notes for staff only: there are none; everything is public).
+ * A table as shoppers see it (everything but `active` is public).
  * @param {SizeChartRecord} chart
  */
 export const chartView = (chart) => ({
 	id: chart.id,
 	name: chart.name,
 	unit: chart.unit,
+	convertTo: chart.convertTo,
 	columns: chart.columns,
 	rows: chart.rows,
-	fitAdvice: chart.fitAdvice,
+	advice: chart.advice,
 	notes: chart.notes,
 });

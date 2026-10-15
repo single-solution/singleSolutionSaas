@@ -1,24 +1,46 @@
 /**
- * Size charts in the catalog admin widget (feature `size_charts`, PLAN 0.8.10 E5) as a list-and-detail screen: each
- * chart with how many products, brands and categories use it; its table (columns and rows of values) in inches or
- * centimeters, fit advice and notes; an editor for all of it; and Delete, which the server refuses while the chart is
- * used (the answer is shown).
+ * Size charts (measurement tables) in the catalog admin widget (feature `size_charts`, PLAN 0.8.10 E5, dynamic model
+ * §6) as a list-and-detail screen: each table with how many products, brands and categories use it; its columns (each
+ * with its own unit, or the table's) and rows of values in any unit or an own label, the unit shoppers may switch to,
+ * advice and notes; an editor for all of it; and Delete, which the server refuses while the table is used (the answer
+ * is shown).
  * @module
  */
+import { UNIT_KEYS, unitOf } from '../core/units.js';
 import { card, createScreen, deleteEntry, detailHead, fieldsOf, masonryOf, readFrom, saveDialog } from './admin-screen.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
-/** @typedef {{ key: string, label: string }} Column */
+/** @typedef {{ key: string, label: string, unit: string }} Column */
 /** @typedef {{ size: string, label: string, values: Record<string, string> }} Row */
 /**
- * @typedef {{ id: string, name: string, unit: 'in' | 'cm', columns: Column[], rows: Row[], fitAdvice: string,
+ * @typedef {{ id: string, name: string, unit: string, convertTo: string, columns: Column[], rows: Row[], advice: string,
  *   notes: string, active: boolean, uses?: { products: number, brands: number, categories: number } }} Chart
  */
 
 /** Limits of a chart (E5). */
 const MAX_COLUMNS = 12;
 const MAX_ROWS = 40;
+
+/**
+ * A unit as staff read it: a known unit's name, an own label as written, none.
+ * @param {Kit} kit @param {string} unit
+ */
+const unitName = (kit, unit) => (unitOf(unit) ? kit.t(`catalogAdmin.unit.${unit}`) : unit || kit.t('catalogAdmin.noUnit'));
+
+/**
+ * A unit field: any text, with the known units offered (`list` names the page's list of them).
+ * @param {Kit} kit @param {string} value
+ */
+const unitInput = (kit, value) => kit.input(value, { maxlength: '20', list: 'ss-chart-units' });
+
+/** The known units offered by unit fields. @param {Kit} kit */
+const unitList = (kit) =>
+	kit.h(
+		'datalist',
+		{ id: 'ss-chart-units' },
+		UNIT_KEYS.map((key) => kit.h('option', { value: key }, [kit.t(`catalogAdmin.unit.${key}`)])),
+	);
 
 /**
  * A column key from its label (lowercase letters, digits and _; starting with a letter), unique among `taken`.
@@ -47,7 +69,12 @@ const chartTable = (kit, chart) =>
 	chart.rows.length === 0
 		? kit.text('p', { class: 'muted' }, kit.t('catalogAdmin.chartEmpty'))
 		: kit.table(
-				[kit.t('catalogAdmin.chartSize'), ...chart.columns.map((column) => column.label)],
+				[
+					kit.t('catalogAdmin.chartSize'),
+					...chart.columns.map((column) =>
+						column.unit ? kit.t('catalogAdmin.columnWithUnit', { label: column.label, unit: column.unit }) : column.label,
+					),
+				],
 				chart.rows.map((row) => [row.label || row.size, ...chart.columns.map((column) => row.values[column.key] ?? '')]),
 			);
 
@@ -59,11 +86,12 @@ const chartTable = (kit, chart) =>
 const gridEditor = (kit, chart) => {
 	const { t, h } = kit;
 	let ids = 0;
-	/** @type {Array<{ id: number, key: string, label: HTMLInputElement }>} */
+	/** @type {Array<{ id: number, key: string, label: HTMLInputElement, unit: HTMLInputElement }>} */
 	let columns = (chart?.columns ?? []).map((column) => ({
 		id: (ids += 1),
 		key: column.key,
 		label: kit.input(column.label, { maxlength: '60' }),
+		unit: unitInput(kit, column.unit),
 	}));
 	/** @type {Array<{ size: HTMLInputElement, label: HTMLInputElement, values: Map<number, HTMLInputElement> }>} */
 	let rows = [];
@@ -93,6 +121,7 @@ const gridEditor = (kit, chart) => {
 				...columns.map((column, index) =>
 					h('div', { class: 'row inline' }, [
 						kit.field(t('catalogAdmin.columnLabel', { number: index + 1 }), column.label),
+						kit.field(t('catalogAdmin.columnUnit', { number: index + 1 }), column.unit),
 						kit.button(
 							t('admin.remove'),
 							() => {
@@ -105,7 +134,12 @@ const gridEditor = (kit, chart) => {
 				),
 				columns.length < MAX_COLUMNS
 					? kit.button(t('catalogAdmin.addColumn'), () => {
-							columns.push({ id: (ids += 1), key: '', label: kit.input('', { maxlength: '60' }) });
+							columns.push({
+								id: (ids += 1),
+								key: '',
+								label: kit.input('', { maxlength: '60' }),
+								unit: unitInput(kit, ''),
+							});
 							draw();
 						})
 					: null,
@@ -167,7 +201,7 @@ const gridEditor = (kit, chart) => {
 				.filter((column) => column.label.value.trim())
 				.map((column) => ({ column, key: column.key || columnKey(column.label.value.trim(), taken) }));
 			return {
-				columns: keyed.map(({ column, key }) => ({ key, label: column.label.value.trim() })),
+				columns: keyed.map(({ column, key }) => ({ key, label: column.label.value.trim(), unit: column.unit.value.trim() })),
 				rows: rows
 					.filter((row) => row.size.value.trim())
 					.map((row) => ({
@@ -220,13 +254,17 @@ export const chartsTab = (kit, panel, lookups) => {
 	/** @param {Chart | null} chart */
 	const edit = (chart) => {
 		const name = kit.input(chart?.name ?? '', { maxlength: '120', required: '' });
-		const unit = kit.select(
-			['in', 'cm'].map((key) => ({ value: key, label: t(`catalogAdmin.unit.${key}`) })),
-			chart?.unit ?? 'in',
+		const unit = unitInput(kit, chart?.unit ?? '');
+		const convertTo = kit.select(
+			[
+				{ value: '', label: t('catalogAdmin.noSwitch') },
+				...UNIT_KEYS.map((key) => ({ value: key, label: t(`catalogAdmin.unit.${key}`) })),
+			],
+			chart?.convertTo ?? '',
 		);
 		const active = kit.check(t('catalogAdmin.chartActive'), chart?.active !== false);
 		const grid = gridEditor(kit, chart);
-		const fit = kit.area(chart?.fitAdvice ?? '', { rows: '3', maxlength: '2000' });
+		const advice = kit.area(chart?.advice ?? '', { rows: '3', maxlength: '2000' });
 		const notes = kit.area(chart?.notes ?? '', { rows: '3', maxlength: '2000' });
 		saveDialog(kit, {
 			title: chart ? t('admin.editing', { name: chart.name }) : t('catalogAdmin.newChart'),
@@ -234,9 +272,15 @@ export const chartsTab = (kit, panel, lookups) => {
 			path,
 			id: chart?.id ?? null,
 			body: [
-				fieldsOf(kit, [kit.field(t('catalogAdmin.name'), name), kit.field(t('catalogAdmin.chartUnit'), unit), active.node]),
+				fieldsOf(kit, [
+					kit.field(t('catalogAdmin.name'), name),
+					kit.field(t('catalogAdmin.chartUnit'), unit),
+					kit.field(t('catalogAdmin.chartConvertTo'), convertTo),
+					active.node,
+				]),
+				unitList(kit),
 				grid.node,
-				kit.field(t('catalogAdmin.fitAdvice'), fit),
+				kit.field(t('catalogAdmin.advice'), advice),
 				kit.field(t('catalogAdmin.chartNotes'), notes),
 			],
 			value: () => {
@@ -244,11 +288,12 @@ export const chartsTab = (kit, panel, lookups) => {
 				if (columns.length === 0) return t('catalogAdmin.chartNeedsColumns');
 				return {
 					name: name.value,
-					unit: unit.value,
+					unit: unit.value.trim(),
+					convertTo: convertTo.value,
 					active: active.box.checked,
 					columns,
 					rows,
-					fitAdvice: fit.value,
+					advice: advice.value,
 					notes: notes.value,
 				};
 			},
@@ -277,7 +322,7 @@ export const chartsTab = (kit, panel, lookups) => {
 			name: chart.name,
 			tone: chart.active === false ? 'neutral' : 'success',
 			toneLabel: t(chart.active === false ? 'catalogAdmin.inactive' : 'catalogAdmin.active'),
-			figure: t(`catalogAdmin.unit.${chart.unit}`),
+			figure: unitName(kit, chart.unit),
 			meta: usesText(chart),
 		}),
 		detail: (chart) => [
@@ -300,13 +345,14 @@ export const chartsTab = (kit, panel, lookups) => {
 				],
 			}),
 			kit.fieldGrid([
-				[t('catalogAdmin.chartUnit'), t(`catalogAdmin.unit.${chart.unit}`)],
+				[t('catalogAdmin.chartUnit'), unitName(kit, chart.unit)],
+				[t('catalogAdmin.chartConvertTo'), chart.convertTo ? unitName(kit, chart.convertTo) : t('catalogAdmin.noSwitch')],
 				[t('catalogAdmin.usedBy'), usesText(chart)],
 				[t('catalogAdmin.chartSizes'), String(chart.rows.length)],
 			]),
 			masonryOf(kit, [
 				card(kit, t('catalogAdmin.chartTable'), [chartTable(kit, chart)]),
-				chart.fitAdvice ? card(kit, t('catalogAdmin.fitAdvice'), [kit.text('p', { class: 'prose' }, chart.fitAdvice)]) : null,
+				chart.advice ? card(kit, t('catalogAdmin.advice'), [kit.text('p', { class: 'prose' }, chart.advice)]) : null,
 				chart.notes ? card(kit, t('catalogAdmin.chartNotes'), [kit.text('p', { class: 'prose' }, chart.notes)]) : null,
 			]),
 		],

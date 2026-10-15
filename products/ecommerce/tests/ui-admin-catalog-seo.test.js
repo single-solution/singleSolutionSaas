@@ -49,7 +49,7 @@ const labelled = (scope, label) => {
 };
 
 describe('catalog admin: size charts', () => {
-	it('lists charts with their uses, shows one and edits columns, rows, fit advice and notes', async () => {
+	it('lists charts with their uses, shows one and edits units, columns, rows, advice and notes', async () => {
 		const { root, server } = await start(ALL, {
 			'PATCH /v1/admin/size-charts/szc_1': (/** @type {any} */ call) => answer(200, { ...CHARTS[0], ...call.body }),
 			'POST /v1/admin/size-charts': (/** @type {any} */ call) => answer(201, { id: 'szc_9', ...call.body, uses: undefined }),
@@ -59,10 +59,13 @@ describe('catalog admin: size charts', () => {
 		expect(rowsOf(panel)).toEqual(['Shirts', 'Shoes']);
 		expect(textOf(panel)).toContain('2 products · 1 brands · 0 categories');
 		expect(textOf(panel)).toContain('Inches');
+		expect(textOf(panel)).toContain('EU');
 		const detail = textOf(detailOf(panel));
-		for (const part of ['SizeChestWaist', 'Small3630', 'M40', 'Runs small.', 'Measured flat.']) expect(detail).toContain(part);
+		for (const part of ['SizeChestWaist', 'Small3630', 'M40', 'Runs small.', 'Measured flat.', 'Centimeters'])
+			expect(detail).toContain(part);
 		await pick(panel, 'Shoes');
 		expect(textOf(detailOf(panel))).toContain('No sizes yet.');
+		expect(textOf(detailOf(panel))).toContain('No switch');
 		expect(textOf(detailOf(panel))).toContain('Inactive');
 		await pick(panel, 'Shirts');
 		await click(buttonIn(detailOf(panel), 'Edit'));
@@ -79,23 +82,27 @@ describe('catalog admin: size charts', () => {
 		type(labelled(dialog, 'Size of row 3'), 'L');
 		await click(buttonIn(dialog, 'Add a size'));
 		await click(labelled(dialog, 'Remove row 2'));
+		expect(fieldIn(dialog, 'Unit').getAttribute('list')).toBe('ss-chart-units');
 		await change(fieldIn(dialog, 'Unit'), 'cm');
-		type(fieldIn(dialog, 'Fit advice'), 'True to size.');
+		await change(fieldIn(dialog, 'Shoppers can switch to'), 'in');
+		type(fieldIn(dialog, 'Unit of column 2 (empty: the table’s)'), 'kg');
+		type(fieldIn(dialog, 'Advice'), 'True to size.');
 		await tick(checkIn(dialog, 'Active'), false);
 		await submitDialog(root);
 		expect(server.last('PATCH /v1/admin/size-charts/szc_1')?.body).toEqual({
 			name: 'Shirts',
 			unit: 'cm',
+			convertTo: 'in',
 			active: false,
 			columns: [
-				{ key: 'chest', label: 'Chest' },
-				{ key: 'hip', label: 'Hip' },
+				{ key: 'chest', label: 'Chest', unit: '' },
+				{ key: 'hip', label: 'Hip', unit: 'kg' },
 			],
 			rows: [
 				{ size: 'S', label: 'Small', values: { chest: '36', hip: '38' } },
 				{ size: 'L', label: 'L', values: {} },
 			],
-			fitAdvice: 'True to size.',
+			advice: 'True to size.',
 			notes: 'Measured flat.',
 		});
 		// a new chart needs a column; keys come from the labels
@@ -110,8 +117,8 @@ describe('catalog admin: size charts', () => {
 		type(fieldIn(fresh, 'Column 2'), '2 Head');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/size-charts')?.body.columns).toEqual([
-			{ key: 'c_2_head', label: '2 Head' },
-			{ key: 'c_2_head_2', label: '2 Head' },
+			{ key: 'c_2_head', label: '2 Head', unit: '' },
+			{ key: 'c_2_head_2', label: '2 Head', unit: '' },
 		]);
 		// delete is refused while the chart is used
 		await pick(panel, 'Shirts');

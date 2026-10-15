@@ -133,7 +133,7 @@
 				"id": "size-charts",
 				"title": "Size charts",
 				"paragraphs": [
-					"With Size charts on, a chart has a name, a unit (in or cm), at most 12 columns { key, label }, at most 40 rows { size, label, values }, fit advice, notes and active. Products, brands and categories take a sizeChartId: a product page shows the product's chart, else its brand's, else its category's, else the size_charts setting defaultChartId (empty by default: none; hideSizeGuide on a product shows none), with an in/cm switch. A chart in use or set as the default cannot be deleted (409); its answer says where it is used."
+					"With Size charts on, a chart is a measurement table: a name, a unit (mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label such as EU or years, or none: there is no default), at most 12 columns { key, label, unit } (a column's own unit, or '' for the table's), at most 40 rows { size, label, values }, convertTo, advice, notes and active. convertTo ('' by default) is the unit shoppers can switch the table to: only a unit of the length, weight or volume one of its columns is in (422 otherwise), converted with the exact factors (1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); numbers and ranges convert, other text and the columns of another dimension or an own label stay as written. Products, brands and categories take a sizeChartId: a product page shows the product's chart, else its brand's, else its category's, else the size_charts setting defaultChartId (empty by default: none; hideSizeGuide on a product shows none). A chart in use or set as the default cannot be deleted (409); its answer says where it is used."
 				],
 				"routes": [
 					["GET /v1/size-charts", "size_charts"],
@@ -394,7 +394,7 @@
 			"An llms.txt of your catalog for AI assistants (or the one you wrote yourself) and, with the full setting on, llms-full.txt with every product in stock, served by your own site from the API."
 		],
 		"size_charts": [
-			"Size charts in inches or centimeters with fit advice, linked to products, brands or categories; the product page shows a Size guide (see Catalog and SEO)."
+			"Size charts (measurement tables) in any unit or your own label, a unit per column, a switch to another unit of the same kind, and advice, linked to products, brands or categories; the product page shows a Size guide (see Catalog and SEO)."
 		],
 		"landing_pages": [
 			"Category, brand and grade landing pages with their own copy, indexed only while enough of their products are in stock, and attribute and grade glossary pages, all in the sitemaps (see Catalog and SEO)."

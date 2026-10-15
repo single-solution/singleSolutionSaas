@@ -68,7 +68,8 @@ const DEFAULT_CHART = Object.freeze({
 		{ size: 'l', label: 'L (Large)', values: { bust: '42', waist: '35', hip: '45', kameez: '41' } },
 		{ size: 'xl', label: 'XL (Extra Large)', values: { bust: '46', waist: '39', hip: '49', kameez: '42' } },
 	],
-	fitAdvice:
+	convertTo: 'cm',
+	advice:
 		'Designed for a standard relaxed fit. Select your standard size or use our interactive size finder to match your body measurements.',
 	notes: 'All measurements are body measurements in inches unless toggled to centimetres.',
 	active: true,
@@ -124,11 +125,13 @@ export const taxonomySteps = Object.freeze([
 			id: ctx.id('szc', doc._id),
 			name: text(doc.name),
 			unit: doc.unitPrimary === 'cm' ? 'cm' : 'in',
+			// SB's guide switches between inches and centimeters
+			convertTo: doc.unitPrimary === 'cm' ? 'in' : 'cm',
 			columns: (Array.isArray(doc.measurementKeys) ? doc.measurementKeys : [])
 				.filter(isObject)
 				.map((column) => ({ key: text(column.key), label: text(column.label) })),
 			rows: chartRows(doc),
-			fitAdvice: text(doc.fitAdvice),
+			advice: text(doc.fitAdvice),
 			notes: text(doc.notes),
 			active: doc.isActive !== false,
 			...created(doc.createdAt),

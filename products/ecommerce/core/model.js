@@ -247,9 +247,12 @@ export const ID_PREFIX = Object.freeze({
  *   its glossary page (E7, E15)
  */
 /**
- * A size chart (E5): shown from the product, else its brand, else its category.
- * @typedef {{ id: string, name: string, unit: 'in' | 'cm', columns: Array<{ key: string, label: string }>,
- *   rows: Array<{ size: string, label: string, values: Record<string, string> }>, fitAdvice: string, notes: string,
+ * A measurement table (E5, dynamic model §6; a size chart): shown from the product, else its brand, else its category.
+ * `unit` and a column's `unit` are a unit of `core/units.js`, an own label or '' (a column's '': the table's);
+ * `convertTo` is '' or a unit shoppers may switch the columns of its dimension to.
+ * @typedef {{ id: string, name: string, unit: string, convertTo: string,
+ *   columns: Array<{ key: string, label: string, unit: string }>,
+ *   rows: Array<{ size: string, label: string, values: Record<string, string> }>, advice: string, notes: string,
  *   active: boolean }} SizeChartRecord
  */
 /**

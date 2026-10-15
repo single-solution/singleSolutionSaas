@@ -141,7 +141,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'seo',
 		...STAMPS,
 	]),
-	size_charts: Object.freeze(['id', 'name', 'unit', 'columns', 'rows', 'fitAdvice', 'notes', 'active', ...STAMPS]),
+	size_charts: Object.freeze(['id', 'name', 'unit', 'convertTo', 'columns', 'rows', 'advice', 'notes', 'active', ...STAMPS]),
 	landings: Object.freeze([
 		'id',
 		'categoryId',

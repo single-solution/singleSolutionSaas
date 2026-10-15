@@ -63,7 +63,7 @@ const RECORDS = {
 				{ key: 'length', label: 'Length' },
 			],
 			rows: [{ size: 'm', label: 'M', values: { 'chest-width': '96', length: '120' } }],
-			fitAdvice: 'Runs small.',
+			advice: 'Runs small.',
 			notes: '',
 			active: true,
 			createdAt: '2023-02-01T09:00:00.000Z',

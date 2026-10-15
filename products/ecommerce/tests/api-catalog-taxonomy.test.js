@@ -48,7 +48,7 @@ describe('size charts, categories and brands through the admin widget', () => {
 			unit: 'cm',
 			columns: [{ key: 'chest', label: 'Chest' }],
 			rows: [{ size: 'M', values: { chest: 96 } }],
-			fitAdvice: 'Fits true to size.',
+			advice: 'Fits true to size.',
 		});
 		expect(chart.status).toBe(201);
 		expect(chart.json).toMatchObject({

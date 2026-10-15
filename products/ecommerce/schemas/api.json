@@ -13854,7 +13854,7 @@
 		},
 		"ShopSizeChart": {
 			"type": "object",
-			"required": ["id", "name", "unit", "columns", "rows", "fitAdvice", "notes"],
+			"required": ["id", "name", "unit", "convertTo", "columns", "rows", "advice", "notes"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -13865,7 +13865,13 @@
 				},
 				"unit": {
 					"type": "string",
-					"enum": ["in", "cm"]
+					"maxLength": 20,
+					"description": "A unit such as mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label (for example EU or years), or '' (none). A column without its own unit is in this one."
+				},
+				"convertTo": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "'' (no switch) or a unit shoppers may switch the table to: only a unit of the length, weight or volume one of its columns is in (exact factors: 1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); a column of another dimension or an own label keeps its values."
 				},
 				"columns": {
 					"type": "array",
@@ -13879,14 +13885,14 @@
 						"$ref": "#/components/schemas/SizeChartRow"
 					}
 				},
-				"fitAdvice": {
+				"advice": {
 					"type": "string"
 				},
 				"notes": {
 					"type": "string"
 				}
 			},
-			"description": "A size chart as shoppers see it."
+			"description": "A size chart (measurement table) as shoppers see it."
 		},
 		"ShopSlots": {
 			"type": "object",
@@ -14058,8 +14064,8 @@
 		},
 		"SizeChart": {
 			"type": "object",
-			"description": "A size chart (E5), with how many records name it.",
-			"required": ["id", "name", "unit", "columns", "rows", "fitAdvice", "notes", "active", "uses"],
+			"description": "A size chart: a measurement table in any unit (E5, dynamic model §6), with how many records name it.",
+			"required": ["id", "name", "unit", "convertTo", "columns", "rows", "advice", "notes", "active", "uses"],
 			"additionalProperties": false,
 			"properties": {
 				"id": {
@@ -14073,7 +14079,13 @@
 				},
 				"unit": {
 					"type": "string",
-					"enum": ["in", "cm"]
+					"maxLength": 20,
+					"description": "A unit such as mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label (for example EU or years), or '' (none). A column without its own unit is in this one."
+				},
+				"convertTo": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "'' (no switch) or a unit shoppers may switch the table to: only a unit of the length, weight or volume one of its columns is in (exact factors: 1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); a column of another dimension or an own label keeps its values."
 				},
 				"columns": {
 					"type": "array",
@@ -14090,7 +14102,7 @@
 						"$ref": "#/components/schemas/SizeChartRow"
 					}
 				},
-				"fitAdvice": {
+				"advice": {
 					"type": "string",
 					"maxLength": 2000,
 					"description": "Line breaks kept."
@@ -14128,7 +14140,7 @@
 		},
 		"SizeChartColumn": {
 			"type": "object",
-			"required": ["key", "label"],
+			"required": ["key", "label", "unit"],
 			"additionalProperties": false,
 			"properties": {
 				"key": {
@@ -14141,6 +14153,11 @@
 					"minLength": 1,
 					"maxLength": 60,
 					"description": "For example Chest."
+				},
+				"unit": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "The column's own unit (a unit such as cm or kg, or an own label); '' = the table's unit."
 				}
 			}
 		},
@@ -14155,8 +14172,13 @@
 				},
 				"unit": {
 					"type": "string",
-					"enum": ["in", "cm"],
-					"default": "in"
+					"maxLength": 20,
+					"description": "A unit such as mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label (for example EU or years), or '' (none). A column without its own unit is in this one. Default ''."
+				},
+				"convertTo": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "'' (no switch) or a unit shoppers may switch the table to: only a unit of the length, weight or volume one of its columns is in (exact factors: 1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); a column of another dimension or an own label keeps its values."
 				},
 				"columns": {
 					"type": "array",
@@ -14176,6 +14198,11 @@
 								"type": "string",
 								"minLength": 1,
 								"maxLength": 60
+							},
+							"unit": {
+								"type": "string",
+								"maxLength": 20,
+								"description": "The column's own unit; '' or none: the table's."
 							}
 						}
 					}
@@ -14209,7 +14236,7 @@
 						}
 					}
 				},
-				"fitAdvice": {
+				"advice": {
 					"type": "string",
 					"maxLength": 2000
 				},
@@ -20543,8 +20570,13 @@
 				},
 				"unit": {
 					"type": "string",
-					"enum": ["in", "cm"],
-					"default": "in"
+					"maxLength": 20,
+					"description": "A unit such as mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label (for example EU or years), or '' (none). A column without its own unit is in this one. Default ''."
+				},
+				"convertTo": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "'' (no switch) or a unit shoppers may switch the table to: only a unit of the length, weight or volume one of its columns is in (exact factors: 1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); a column of another dimension or an own label keeps its values."
 				},
 				"columns": {
 					"type": "array",
@@ -20564,6 +20596,11 @@
 								"type": "string",
 								"minLength": 1,
 								"maxLength": 60
+							},
+							"unit": {
+								"type": "string",
+								"maxLength": 20,
+								"description": "The column's own unit; '' or none: the table's."
 							}
 						}
 					}
@@ -20597,7 +20634,7 @@
 						}
 					}
 				},
-				"fitAdvice": {
+				"advice": {
 					"type": "string",
 					"maxLength": 2000
 				},
@@ -20631,8 +20668,13 @@
 				},
 				"unit": {
 					"type": "string",
-					"enum": ["in", "cm"],
-					"default": "in"
+					"maxLength": 20,
+					"description": "A unit such as mm, cm, m, in, ft, yd, g, kg, lb, oz, ml or l, an own label (for example EU or years), or '' (none). A column without its own unit is in this one. Default ''."
+				},
+				"convertTo": {
+					"type": "string",
+					"maxLength": 20,
+					"description": "'' (no switch) or a unit shoppers may switch the table to: only a unit of the length, weight or volume one of its columns is in (exact factors: 1 in = 25.4 mm, 1 ft = 304.8 mm, 1 lb = 453.59237 g, 1 oz = 28.349523125 g); a column of another dimension or an own label keeps its values."
 				},
 				"columns": {
 					"type": "array",
@@ -20652,6 +20694,11 @@
 								"type": "string",
 								"minLength": 1,
 								"maxLength": 60
+							},
+							"unit": {
+								"type": "string",
+								"maxLength": 20,
+								"description": "The column's own unit; '' or none: the table's."
 							}
 						}
 					}
@@ -20685,7 +20732,7 @@
 						}
 					}
 				},
-				"fitAdvice": {
+				"advice": {
 					"type": "string",
 					"maxLength": 2000
 				},
@@ -27000,7 +27047,7 @@
 	},
 	"POST /v1/import/:collection": {
 		"summary": "Import records (NDJSON, ss-import)",
-		"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, columns, rows, fitAdvice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, typeKey, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
+		"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, convertTo, columns, rows, advice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, typeKey, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
 		"query": {
 			"type": "object",
 			"properties": {

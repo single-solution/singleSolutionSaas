@@ -3,11 +3,12 @@
  * up to 6, else the variants' attributes, plus the condition when two variants differ only by grade), the stock text
  * of a variant ("Only N left", "N in stock", Sold out), photos with their smaller sizes, size and blur placeholder, the
  * grade's details (color, description, content, return days and condition video), the product video, the FAQs, the
- * Size guide (a dialog, a full-screen sheet on phones, with an in/cm switch) and the shopper's own alerts
+ * Size guide (a dialog, a full-screen sheet on phones, with the measurement table's unit switch) and the shopper's own alerts
  * (`GET /v1/shop/alerts`, read once per sign-in and shared by the widgets of a page).
  * @module
  */
 import { youtubeId } from '../core/catalog-content.js';
+import { convertAmount, sameDimension, unitOf } from '../core/units.js';
 import { button, h, paragraphs, safeHref } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
@@ -310,39 +311,54 @@ export const faqBlock = (doc, t, faqs) => {
 
 // ---------------------------------------------------------------------------------------------- size guide (E5)
 
-/** Plain numbers and ranges of numbers ("32", "32.5", "32-34") are converted between inches and centimeters. */
+/** Plain numbers and ranges of numbers ("32", "32.5", "32-34") are converted to another unit. */
 const NUMERIC = /^\s*(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*$/;
 
+/** A converted number: one decimal from 10 up, two below (trailing zeros dropped). @param {number} value */
+const shortNumber = (value) => String(Number(value.toFixed(Math.abs(value) >= 10 ? 1 : 2)));
+
 /**
- * A size chart cell in another unit (1 in = 2.54 cm, one decimal); other text stays as it is.
+ * A measurement table cell in another unit of its dimension (exact factors, `core/units.js`); other text, and any
+ * value between dimensions or in an own label, stays as it is.
  * @param {string} text
- * @param {'in' | 'cm'} from
- * @param {'in' | 'cm'} to
+ * @param {string} from
+ * @param {string} to
  */
 export const convertCell = (text, from, to) => {
-	const match = from === to ? null : NUMERIC.exec(text);
+	const match = from === to || !sameDimension(from, to) ? null : NUMERIC.exec(text);
 	if (!match) return text;
 	/** @param {string} raw */
-	const one = (raw) => (Number(raw.replace(',', '.')) * (from === 'in' ? 2.54 : 1 / 2.54)).toFixed(1);
+	const one = (raw) => shortNumber(/** @type {number} */ (convertAmount(Number(raw.replace(',', '.')), from, to)));
 	return match[2] ? `${one(String(match[1]))}–${one(match[2])}` : one(String(match[1]));
 };
 
 /**
- * @typedef {{ name: string, unit: string, columns: Array<{ key: string, label: string }>,
- *   rows: Array<{ size: string, label: string, values: Record<string, string> }>, fitAdvice: string, notes: string }} SizeChart
+ * @typedef {{ name: string, unit: string, convertTo: string, columns: Array<{ key: string, label: string, unit: string }>,
+ *   rows: Array<{ size: string, label: string, values: Record<string, string> }>, advice: string, notes: string }} SizeChart
  */
 
 /**
- * The Size guide: a button, and the dialog it opens in `layer` (a full-screen sheet on phones) with the table, the
- * in/cm switch, the fit advice and the notes. Escape, the Close button and a click beside the dialog close it, and the
- * focus goes back to the button.
+ * The Size guide: a button, and the dialog it opens in `layer` (a full-screen sheet on phones) with the measurement
+ * table, its units (a column's own unit in its heading), the switch to `convertTo` for the columns of its dimension, the
+ * advice and the notes. Escape, the Close button and a click beside the dialog close it, and the focus goes back to the
+ * button.
  * @param {{ doc: Document, t: Texts, chart: SizeChart, layer: HTMLElement }} input
  */
 export const sizeGuide = ({ doc, t, chart, layer }) => {
-	const stored = chart.unit === 'cm' ? 'cm' : 'in';
-	/** @type {'in' | 'cm'} */
-	let unit = stored;
+	const target = String(chart.convertTo ?? '');
+	/** @param {{ unit?: string }} column */
+	const unitIn = (column) => String(column.unit || chart.unit || '');
+	/** @param {{ unit?: string }} column */
+	const converts = (column) => target !== '' && unitIn(column) !== target && sameDimension(unitIn(column), target);
+	// the switch's first unit: the table's own when it converts, else the first converting column's
+	const first = chart.columns.find(converts);
+	const source = converts(chart) ? String(chart.unit) : first ? unitIn(first) : '';
+	/** A unit's short name: the widget's text for a known unit, else the merchant's own label. @param {string} key */
+	const unitName = (key) => (unitOf(key) ? t(`unit.${key}`) : key);
+	let converted = false;
 	const title = chart.name || t('page.sizeGuide');
+	/** The unit a column is shown in now. @param {{ unit?: string }} column */
+	const shownUnit = (column) => (converted && converts(column) ? target : unitIn(column));
 
 	const close = () => {
 		layer.replaceChildren();
@@ -363,7 +379,16 @@ export const sizeGuide = ({ doc, t, chart, layer }) => {
 					'tr',
 					{},
 					h(doc, 'th', { scope: 'col' }, t('page.sizeColumn')),
-					...chart.columns.map((column) => h(doc, 'th', { scope: 'col' }, column.label)),
+					...chart.columns.map((column) =>
+						h(
+							doc,
+							'th',
+							{ scope: 'col' },
+							column.unit || (converted && converts(column))
+								? t('page.sizeWithUnit', { label: column.label, unit: unitName(shownUnit(column)) })
+								: column.label,
+						),
+					),
 				),
 			),
 			h(
@@ -376,22 +401,24 @@ export const sizeGuide = ({ doc, t, chart, layer }) => {
 						'tr',
 						{},
 						h(doc, 'th', { scope: 'row' }, row.label || row.size),
-						...chart.columns.map((column) => h(doc, 'td', {}, convertCell(row.values?.[column.key] ?? '', stored, unit))),
+						...chart.columns.map((column) =>
+							h(doc, 'td', {}, convertCell(row.values?.[column.key] ?? '', unitIn(column), shownUnit(column))),
+						),
 					),
 				),
 			),
 		);
-		/** @param {'in' | 'cm'} to @param {string} text */
-		const unitButton = (to, text) =>
+		/** @param {boolean} to converted or not @param {string} key the unit */
+		const unitButton = (to, key) =>
 			button(
 				doc,
-				text,
+				unitName(key),
 				() => {
-					unit = to;
+					converted = to;
 					show();
-					/** @type {HTMLElement | null} */ (layer.querySelector(`[data-unit="${to}"]`))?.focus();
+					/** @type {HTMLElement | null} */ (layer.querySelector(`[data-unit="${to ? 'to' : 'from'}"]`))?.focus();
 				},
-				{ class: 'icon', 'aria-pressed': String(unit === to), 'data-unit': to },
+				{ class: 'icon', 'aria-pressed': String(converted === to), 'data-unit': to ? 'to' : 'from' },
 			);
 		const shut = button(doc, t('page.sizeClose'), close, { class: 'secondary', 'data-close': '' });
 		const sheet = h(
@@ -399,16 +426,20 @@ export const sizeGuide = ({ doc, t, chart, layer }) => {
 			'div',
 			{ class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'ss-size-title' },
 			h(doc, 'div', { class: 'sheet-head' }, h(doc, 'h2', { id: 'ss-size-title' }, title), shut),
-			h(
-				doc,
-				'div',
-				{ class: 'actions', role: 'group', 'aria-label': t('page.sizeUnits') },
-				unitButton('in', t('page.sizeIn')),
-				unitButton('cm', t('page.sizeCm')),
-			),
+			source
+				? h(
+						doc,
+						'div',
+						{ class: 'actions', role: 'group', 'aria-label': t('page.sizeUnits') },
+						unitButton(false, source),
+						unitButton(true, target),
+					)
+				: chart.unit
+					? h(doc, 'p', { class: 'meta' }, t('page.sizeMeasuredIn', { unit: unitName(String(chart.unit)) }))
+					: null,
 			h(doc, 'div', { class: 'scroll' }, table),
-			chart.fitAdvice ? h(doc, 'h3', {}, t('page.fitAdvice')) : null,
-			...paragraphs(doc, chart.fitAdvice),
+			chart.advice ? h(doc, 'h3', {}, t('page.sizeAdvice')) : null,
+			...paragraphs(doc, chart.advice),
 			...paragraphs(doc, chart.notes).map((node) => {
 				node.classList.add('meta');
 				return node;

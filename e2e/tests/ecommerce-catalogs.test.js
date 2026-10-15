@@ -153,7 +153,8 @@ describe('Ecommerce catalogs on the real Portal', () => {
 				{ size: 'S', values: { bust: '34' } },
 				{ size: 'M', values: { bust: '36' } },
 			],
-			fitAdvice: 'Order one size up.',
+			convertTo: 'cm',
+			advice: 'Order one size up.',
 		});
 		await write(APPAREL, 'PATCH', `/v1/categories/${dresses.id}`, { sizeChartId: chart.id });
 		const dress = await write(APPAREL, 'POST', '/v1/products', {
@@ -192,7 +193,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			featured: true,
 			descriptionHtml: '<p>Hand <strong>embroidered</strong>.</p>',
 			video: { kind: 'youtube', id: 'dQw4w9WgXcQ' },
-			sizeChart: { id: chart.id, unit: 'in', fitAdvice: 'Order one size up.' },
+			sizeChart: { id: chart.id, unit: 'in', convertTo: 'cm', advice: 'Order one size up.' },
 			faqs: [{ question: 'Lined?', answer: 'Yes.' }],
 		});
 		expect(page.json.variants[0].attributes.map((/** @type {any} */ a) => [a.slug, a.label])).toEqual([

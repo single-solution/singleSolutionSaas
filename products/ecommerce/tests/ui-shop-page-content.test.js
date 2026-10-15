@@ -12,7 +12,6 @@ import {
 	GRADE_AXIS,
 	alertsOf,
 	axesOf,
-	convertCell,
 	gradeVideoUrl,
 	nearestVariant,
 	photoOf,
@@ -451,7 +450,7 @@ describe('product page content', () => {
 		expect(fake.cart.state().lines).toEqual([{ productId: 'prd_1', variantId: 'var_bs', quantity: 1 }]);
 	});
 
-	it('shows the Size guide in a dialog with an in/cm switch', async () => {
+	it('shows the Size guide in a dialog with its unit switch', async () => {
 		const fake = makeShop({
 			features: ['catalog'],
 			routes: {
@@ -462,15 +461,16 @@ describe('product page content', () => {
 								id: 'szc_1',
 								name: 'Shirts',
 								unit: 'in',
+								convertTo: 'cm',
 								columns: [
-									{ key: 'chest', label: 'Chest' },
-									{ key: 'fit', label: 'Fit' },
+									{ key: 'chest', label: 'Chest', unit: '' },
+									{ key: 'fit', label: 'Fit', unit: '' },
 								],
 								rows: [
 									{ size: 'S', label: 'Small', values: { chest: '36-38', fit: 'Slim' } },
 									{ size: 'M', label: '', values: { chest: '40,5' } },
 								],
-								fitAdvice: 'Take one size up.',
+								advice: 'Take one size up.',
 								notes: 'Measured flat.',
 							},
 						}),
@@ -490,27 +490,27 @@ describe('product page content', () => {
 			['Small', '36-38', 'Slim'],
 			['M', '40,5', ''],
 		]);
-		expect(dialog().textContent).toContain(text('page.fitAdvice'));
+		expect(dialog().textContent).toContain(text('page.sizeAdvice'));
 		expect(dialog().textContent).toContain('Take one size up.');
 		expect(dialog().querySelector('p.meta').textContent).toBe('Measured flat.');
-		expect(buttonOf(host, text('page.sizeIn')).getAttribute('aria-pressed')).toBe('true');
-		await click(buttonOf(host, text('page.sizeCm')));
+		expect(buttonOf(host, text('unit.in')).getAttribute('aria-pressed')).toBe('true');
+		await click(buttonOf(host, text('unit.cm')));
 		expect(cells()).toEqual([
 			['Small', '91.4–96.5', 'Slim'],
 			['M', '102.9', ''],
 		]);
-		expect(buttonOf(host, text('page.sizeCm')).getAttribute('aria-pressed')).toBe('true');
-		expect(host.shadowRoot?.activeElement?.textContent).toBe(text('page.sizeCm'));
+		expect(buttonOf(host, text('unit.cm')).getAttribute('aria-pressed')).toBe('true');
+		expect(host.shadowRoot?.activeElement?.textContent).toBe(text('unit.cm'));
 		// the focus stays inside the dialog
 		const overlay = $(host, '.overlay');
 		const close = buttonOf(host, text('page.sizeClose'));
-		const last = buttonOf(host, text('page.sizeCm'));
+		const last = buttonOf(host, text('unit.cm'));
 		last.focus();
 		overlay.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
 		expect(host.shadowRoot?.activeElement).toBe(close);
 		overlay.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }));
 		expect(host.shadowRoot?.activeElement).toBe(last);
-		buttonOf(host, text('page.sizeIn')).focus();
+		buttonOf(host, text('unit.in')).focus();
 		overlay.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
 		overlay.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'a', bubbles: true }));
 		expect(dialog()).not.toBeNull();
@@ -585,12 +585,7 @@ describe('product page content', () => {
 });
 
 describe('product page parts', () => {
-	it('converts size cells, words stock and grade videos, and keeps safe links only', () => {
-		expect(convertCell('40', 'in', 'cm')).toBe('101.6');
-		expect(convertCell('101.6', 'cm', 'in')).toBe('40.0');
-		expect(convertCell('30 – 32', 'in', 'cm')).toBe('76.2–81.3');
-		expect(convertCell('XL', 'in', 'cm')).toBe('XL');
-		expect(convertCell('40', 'cm', 'cm')).toBe('40');
+	it('words stock and grade videos, and keeps safe links only', () => {
 		const t = (/** @type {string} */ key, /** @type {any} */ values = {}) => text(key, values);
 		const base = { id: 'v', name: '', options: {}, price: 1, compareAtPrice: null, inStock: true, grade: null };
 		expect(stockText(t, { ...base, stockLeft: 0 }, 5).text).toBe(text('page.inStock'));

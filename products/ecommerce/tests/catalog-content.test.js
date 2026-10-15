@@ -327,7 +327,7 @@ describe('size charts', () => {
 		);
 		expect(chart).toMatchObject({
 			ok: true,
-			value: { unit: 'in', rows: [{ size: 'S', label: 'Small', values: { bust: '30' } }] },
+			value: { unit: '', rows: [{ size: 'S', label: 'Small', values: { bust: '30' } }] },
 		});
 		expect(checkSizeChart('x', null).ok).toBe(false);
 		expect(checkSizeChart({ name: 'C', unit: 'mm', columns: [{ key: 'A', label: '' }] }, null)).toMatchObject({ ok: false });
@@ -339,7 +339,7 @@ describe('size charts', () => {
 		).toBe(false);
 		expect(
 			checkSizeChart(
-				{ name: 'C', columns: [{ key: 'a', label: 'A' }], rows: 'x', fitAdvice: 'x'.repeat(2001), active: 'no' },
+				{ name: 'C', columns: [{ key: 'a', label: 'A' }], rows: 'x', advice: 'x'.repeat(2001), active: 'no' },
 				null,
 			),
 		).toMatchObject({
@@ -349,15 +349,16 @@ describe('size charts', () => {
 			id: 'szc_1',
 			name: 'C',
 			unit: 'cm',
-			columns: [{ key: 'a', label: 'A' }],
+			convertTo: '',
+			columns: [{ key: 'a', label: 'A', unit: '' }],
 			rows: [],
-			fitAdvice: 'F',
+			advice: 'F',
 			notes: '',
 			active: true,
 		});
 		expect(checkSizeChart({ active: false }, existing)).toMatchObject({
 			ok: true,
-			value: { unit: 'cm', fitAdvice: 'F', active: false },
+			value: { unit: 'cm', advice: 'F', active: false },
 		});
 		const charts = new Map([
 			['p', existing],

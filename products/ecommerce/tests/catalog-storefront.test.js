@@ -341,7 +341,8 @@ describe('E5 size charts', () => {
 				{ key: 'waist', label: 'Waist' },
 			],
 			rows: [{ size: 'S', values: { bust: 34, waist: '28' } }],
-			fitAdvice: 'Runs small.',
+			convertTo: 'cm',
+			advice: 'Runs small.',
 		});
 		expect(chart).toMatchObject({
 			unit: 'in',
@@ -362,7 +363,8 @@ describe('E5 size charts', () => {
 		await api('PATCH', `/v1/categories/${ids.clothes.id}`, { sizeChartId: chart.id });
 		expect((await get(`/v1/shop/products/${ids.shown.slug}`)).json.sizeChart).toMatchObject({
 			id: chart.id,
-			fitAdvice: 'Runs small.',
+			convertTo: 'cm',
+			advice: 'Runs small.',
 		});
 		await api('PATCH', `/v1/brands/${ids.brand.id}`, { sizeChartId: brandChart.id });
 		expect((await get(`/v1/shop/products/${ids.featured.slug}`)).json.sizeChart).toMatchObject({
