@@ -1,8 +1,10 @@
 /**
  * Moderation (pure): the checks on what visitors and the AI write:
  *
- * - **PII redaction** in and out: payment cards (Luhn-checked), IBANs (mod-97), emails, phone numbers (8–15 digits),
- *   IPv4 addresses — replaced by a label so the conversation stays readable.
+ * - **PII redaction** in and out: the merchant's own patterns first (the list `redaction_patterns`, a safe subset of
+ *   regular expressions that can never hang the server, C14), then payment cards (Luhn-checked), IBANs (mod-97),
+ *   emails, phone numbers (8–15 digits), IPv6 and IPv4 addresses — replaced by a label so the conversation stays
+ *   readable.
  * - **Leak filter** for AI answers: credential shapes (connection strings, API-key formats, bearer tokens, private
  *   keys, environment variable names, `process.env`) and merchant-configured phrases that reveal internals. A hit
  *   replaces the whole answer (never a partial burst).
@@ -15,6 +17,7 @@
  */
 import { luhnValid } from '@ss/contracts/text';
 import { MARKDOWN_LINK } from './markdown.js';
+import { compilePattern, replacePattern } from './patterns.js';
 import { normalise } from './text.js';
 
 /** @typedef {'card' | 'iban' | 'email' | 'phone' | 'ip'} PiiKind */
@@ -24,6 +27,89 @@ const CARD_CANDIDATE = /\b(?:\d[ -]?){12,18}\d\b/g;
 const IBAN_CANDIDATE = /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,30}\b/g;
 const PHONE_CANDIDATE = /(?<![\w.])\+?\d[\d ()./-]{6,20}\d(?![\w])/g;
 const IPV4 = /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g;
+/** An IPv6 candidate (hex digits, colons and dots, bounded), checked by `isIPv6`. */
+const IPV6_CANDIDATE = /(?<![\p{L}\p{N}:.])[0-9a-f:.]{3,45}(?![\p{L}\p{N}:])/giu;
+
+/**
+ * An IPv6 address (RFC 4291 text forms): eight groups of 1–4 hex digits, or fewer around one `::`, the last two may be
+ * an IPv4 address.
+ * @param {string} value
+ */
+export const isIPv6 = (value) => {
+	const halves = value.split('::');
+	if (halves.length > 2) return false;
+	/** @param {string} part */
+	const groups = (part) => (part === '' ? [] : part.split(':'));
+	const head = groups(/** @type {string} */ (halves[0]));
+	const tail = halves.length === 2 ? groups(/** @type {string} */ (halves[1])) : [];
+	const all = [...head, ...tail];
+	let count = all.length;
+	const last = all.at(-1) ?? '';
+	if (last.includes('.')) {
+		if (!/^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(last)) return false;
+		count += 1;
+		all.pop();
+	}
+	if (!all.every((group) => /^[0-9a-f]{1,4}$/i.test(group))) return false;
+	return halves.length === 2 ? count < 8 : count === 8;
+};
+
+/** The list's limits: patterns, and the longest name and replacement. */
+export const REDACTION_LIMITS = Object.freeze({ patterns: 30, name: 60, replacement: 60 });
+
+/**
+ * A merchant redaction pattern (C14).
+ * @typedef {{ name: string, pattern: string, replacement: string }} RedactionPattern
+ */
+
+/**
+ * Check the list `redaction_patterns`: each `{ name, pattern, replacement }`, the pattern in the safe subset
+ * (`core/patterns.js`); `replacement` empty = the name in brackets.
+ * @param {unknown} raw
+ * @returns {{ ok: true, value: RedactionPattern[] } | { ok: false, errors: string[] }}
+ */
+export const checkRedactionPatterns = (raw) => {
+	if (!Array.isArray(raw)) return { ok: false, errors: ['Send a list of patterns.'] };
+	if (raw.length > REDACTION_LIMITS.patterns) return { ok: false, errors: [`Up to ${REDACTION_LIMITS.patterns} patterns.`] };
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {RedactionPattern[]} */
+	const value = [];
+	raw.forEach((item, index) => {
+		const at = `Pattern ${index + 1}:`;
+		if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+			errors.push(`${at} not valid.`);
+			return;
+		}
+		const name = typeof item.name === 'string' ? item.name.trim() : '';
+		const pattern = typeof item.pattern === 'string' ? item.pattern : '';
+		const replacement = typeof item.replacement === 'string' ? item.replacement.trim() : '';
+		if (name === '' || [...name].length > REDACTION_LIMITS.name)
+			errors.push(`${at} give it a name of up to ${REDACTION_LIMITS.name} characters.`);
+		const compiled = compilePattern(pattern);
+		if (!compiled.ok) errors.push(`${at} ${compiled.error}`);
+		if ([...replacement].length > REDACTION_LIMITS.replacement)
+			errors.push(`${at} the replacement is up to ${REDACTION_LIMITS.replacement} characters.`);
+		value.push({ name, pattern, replacement });
+	});
+	return errors.length > 0 ? { ok: false, errors } : { ok: true, value };
+};
+
+/**
+ * The saved patterns ready to run (one that no longer compiles is left out).
+ * @param {unknown} items
+ * @returns {CompiledPattern[]}
+ */
+export const compileRedactionPatterns = (items) =>
+	(Array.isArray(items) ? items : []).flatMap((item) => {
+		const compiled = compilePattern(item?.pattern);
+		if (!compiled.ok || typeof item?.name !== 'string') return [];
+		const replacement =
+			typeof item.replacement === 'string' && item.replacement.trim() ? item.replacement.trim() : `[${item.name}]`;
+		return [{ name: item.name, program: compiled.program, replacement }];
+	});
+
+/** @typedef {{ name: string, program: import('./patterns.js').Instruction[], replacement: string }} CompiledPattern */
 
 /**
  * A payment card number: 13 to 19 digits that pass the Luhn check.
@@ -75,9 +161,10 @@ const samePhone = (a, b) => {
  * @param {readonly string[]} kinds
  * @param {Record<string, string>} labels replacement per kind (from the string catalog)
  * @param {OwnContact} [own] the business.json contact, never redacted
+ * @param {CompiledPattern[]} [patterns] the merchant's own patterns, run first (C14)
  * @returns {{ text: string, found: Record<string, number> }}
  */
-export const redact = (text, kinds, labels, own = {}) => {
+export const redact = (text, kinds, labels, own = {}, patterns = []) => {
 	const ownEmail = typeof own.email === 'string' ? own.email.trim().toLowerCase() : '';
 	const ownPhone = typeof own.phone === 'string' ? phoneDigits(own.phone) : '';
 	let out = String(text ?? '');
@@ -88,12 +175,24 @@ export const redact = (text, kinds, labels, own = {}) => {
 		return labels[kind] ?? `[${kind}]`;
 	};
 	const want = new Set(kinds);
-	// order matters: cards and IBANs before phones (long digit runs)
+	for (const pattern of patterns)
+		out = replacePattern(out, pattern.program, () => {
+			found[pattern.name] = (found[pattern.name] ?? 0) + 1;
+			return pattern.replacement;
+		});
+	// order matters: cards and IBANs before phones (long digit runs), IPv6 before IPv4 (an IPv4 tail)
 	if (want.has('card')) out = out.replace(CARD_CANDIDATE, (match) => (isCard(match.replace(/\D/g, '')) ? hit('card') : match));
 	if (want.has('iban')) out = out.replace(IBAN_CANDIDATE, (match) => (ibanValid(match) ? hit('iban') : match));
 	if (want.has('email'))
 		out = out.replace(EMAIL, (match) => (ownEmail !== '' && match.toLowerCase() === ownEmail ? match : hit('email')));
-	if (want.has('ip')) out = out.replace(IPV4, () => hit('ip'));
+	if (want.has('ip'))
+		out = out
+			.replace(IPV6_CANDIDATE, (match) => {
+				const trailing = /\.+$/.exec(match)?.[0] ?? '';
+				const address = match.slice(0, match.length - trailing.length);
+				return address.includes(':') && isIPv6(address) ? `${hit('ip')}${trailing}` : match;
+			})
+			.replace(IPV4, () => hit('ip'));
 	if (want.has('phone'))
 		out = out.replace(PHONE_CANDIDATE, (match) => {
 			const digits = match.replace(/\D/g, '');
@@ -244,6 +343,7 @@ const applyBlockedTerms = (text, terms, action) => {
  * @property {'website' | 'allow_list' | 'none' | 'any'} linkPolicy
  * @property {string[]} allowedLinkHosts
  * @property {string[]} leakPhrases
+ * @property {CompiledPattern[]} [patterns] the merchant's own redaction patterns, compiled (C14)
  */
 
 /**
@@ -258,7 +358,7 @@ export const moderateInbound = (text, config, labels, own = {}) => {
 	if (!config) return { ok: true, text };
 	const terms = applyBlockedTerms(text, config.blockedTerms, config.blockedAction);
 	if (!terms.ok) return { ok: false };
-	return { ok: true, text: redact(terms.text, config.redact, labels, own).text };
+	return { ok: true, text: redact(terms.text, config.redact, labels, own, config.patterns).text };
 };
 
 /**
@@ -273,6 +373,6 @@ export const moderateInbound = (text, config, labels, own = {}) => {
 export const moderateOutbound = (text, config, { labels, websiteDomain, own = {} }) => {
 	if (!config) return { ok: leakCheck(text).ok, text };
 	const linked = applyLinkPolicy(text, { mode: config.linkPolicy, hosts: config.allowedLinkHosts, websiteDomain });
-	const cleaned = tidy(redact(linked, config.redact, labels, own).text, 8000);
+	const cleaned = tidy(redact(linked, config.redact, labels, own, config.patterns).text, 8000);
 	return { ok: leakCheck(cleaned, { phrases: config.leakPhrases }).ok, text: cleaned };
 };

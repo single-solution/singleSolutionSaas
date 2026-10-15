@@ -927,7 +927,7 @@ export const createReply = (product, service) => {
 			return current;
 		};
 		if (result.text) {
-			const moderation = s.on.includes('moderation') ? /** @type {any} */ (await s.values('moderation')) : null;
+			const moderation = await service.moderation(s);
 			const { email, phone } = await s.business();
 			const checked = moderateOutbound(result.text, moderation, {
 				labels: labelsOf(texts),

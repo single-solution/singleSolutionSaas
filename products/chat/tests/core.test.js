@@ -12,7 +12,16 @@ import { handoffReason, officeState, parseOfficeHours } from '../core/handoff.js
 import { checkEntry, chunkText, htmlToText } from '../core/knowledge.js';
 import { detectLanguage, isLanguageNeutral, replyMatchesLanguage } from '../core/language.js';
 import { checkAiConnection } from '../core/models.js';
-import { applyLinkPolicy, ibanValid, leakCheck, moderateInbound, moderateOutbound, redact } from '../core/moderation.js';
+import {
+	applyLinkPolicy,
+	checkRedactionPatterns,
+	compileRedactionPatterns,
+	ibanValid,
+	leakCheck,
+	moderateInbound,
+	moderateOutbound,
+	redact,
+} from '../core/moderation.js';
 import { buildSystemPrompt } from '../core/prompt.js';
 import { WIRE, estimateTokens, parseArguments } from '../core/providers.js';
 import { reportRange, summarise } from '../core/reports.js';
@@ -438,6 +447,28 @@ describe('moderation, language, knowledge and the prompt', () => {
 				{},
 			).text,
 		).toBe('card [card], iban [iban], ip [ip], call [phone]');
+		// IPv6 too (C14), compressed, full or with an IPv4 tail; words of hex letters are no address
+		expect(
+			redact('ip 2001:db8::1, fe80::1ff:fe23:4567:890a and ::ffff:192.0.2.1. cafe:bad deadbeef', ['ip'], { ip: '[ip]' }).text,
+		).toBe('ip [ip], [ip] and [ip]. cafe:bad deadbeef');
+		// the merchant's own patterns (C14) go first, with their replacement or their name
+		const patterns = compileRedactionPatterns([
+			{ name: 'national ID', pattern: '\\d{5}-\\d{7}-\\d', replacement: '' },
+			{ name: 'tax ID', pattern: 'TX\\d{6}', replacement: '[tax]' },
+		]);
+		expect(redact('ID 35202-1234567-1, tax tx123456', ['phone'], {}, {}, patterns).text).toBe('ID [national ID], tax [tax]');
+		expect(checkRedactionPatterns([{ name: 'x', pattern: '(a)\\1' }])).toEqual({
+			ok: false,
+			errors: ['Pattern 1: Back-references are not taken.'],
+		});
+		expect(checkRedactionPatterns([{ name: '', pattern: 'a' }, 'x'])).toEqual({
+			ok: false,
+			errors: ['Pattern 1: give it a name of up to 60 characters.', 'Pattern 2: not valid.'],
+		});
+		expect(checkRedactionPatterns([{ name: ' ID ', pattern: 'a+', replacement: ' [id] ', extra: 1 }])).toEqual({
+			ok: true,
+			value: [{ name: 'ID', pattern: 'a+', replacement: '[id]' }],
+		});
 		expect(ibanValid('GB00WEST12345698765432')).toBe(false);
 		expect(
 			applyLinkPolicy('[a](https://evil.example.com) https://shop.example.com/x [b](/p) mailto:x', {

@@ -9,7 +9,15 @@
 import { Callout, Masonry, Section } from '@ss/ui';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, call, hasSettings, useLoad } from '@ss/ui/dashboard';
 import { aiLabelShown } from '../../core/widgets.js';
-import { CustomFieldsEditor, FallbackAnswersEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
+import {
+	CustomFieldsEditor,
+	FallbackAnswersEditor,
+	FlowsEditor,
+	PageRulesEditor,
+	RedactionPatternsEditor,
+	ToolSecret,
+	ToolsEditor,
+} from './lists.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {import('@ss/ui/dashboard').FeatureSettings} FeatureSettings */
@@ -152,7 +160,7 @@ export function SettingsTab({ websiteId: id }) {
 					attachments: null,
 					ratings: null,
 					transcripts: seen('transcripts') ? <Callout tone="info">{TEXTS.settings.transcriptsNote}</Callout> : null,
-					moderation: null,
+					moderation: seen('moderation') ? <RedactionPatternsEditor websiteId={websiteId} off={off('moderation')} /> : null,
 					other: null,
 				};
 				const others = features.filter((feature) => !PLACED.has(feature.key) && hasSettings(feature));

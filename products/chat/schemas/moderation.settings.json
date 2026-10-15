@@ -10,7 +10,7 @@
 				"type": "string",
 				"enum": ["card", "iban", "email", "phone", "ip"]
 			},
-			"description": "In visitor messages and AI answers."
+			"description": "In visitor messages and AI answers (ip: IPv4 and IPv6). Your own kinds: Redaction patterns, below."
 		},
 		"blockedTerms": {
 			"type": "array",

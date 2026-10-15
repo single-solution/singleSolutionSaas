@@ -190,6 +190,7 @@ const LIST_WORDS = {
 	custom_fields: (fields) => namedList('field', 'fields', fields, (field) => field.label),
 	page_rules: (rules) => countedList('page rule', 'page rules', rules),
 	fallback_answers: (answers) => countedList('answer', 'answers', answers),
+	redaction_patterns: (patterns) => namedList('pattern', 'patterns', patterns, (pattern) => pattern.name),
 };
 
 /**

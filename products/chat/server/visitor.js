@@ -238,7 +238,7 @@ export const createVisitorApi = (product, service, reply) => {
 		}
 		if (s.on.includes('moderation') && text) {
 			const { email, phone } = await s.business();
-			const moderated = moderateInbound(text, /** @type {any} */ (await s.values('moderation')), labelsOf(await s.texts()), {
+			const moderated = moderateInbound(text, await service.moderation(s), labelsOf(await s.texts()), {
 				email,
 				phone,
 			});

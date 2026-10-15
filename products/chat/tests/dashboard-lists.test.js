@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import manifest from '../manifest.json' with { type: 'json' };
-import { FallbackAnswersEditor } from '../app/dashboard/lists.js';
+import { FallbackAnswersEditor, RedactionPatternsEditor } from '../app/dashboard/lists.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { checkFallbackAnswers } from '../core/fallback.js';
@@ -213,5 +213,33 @@ describe('Settings → Assistant', () => {
 		expect(optionsOf(field(container, 'Language'))).toEqual(['Any language', 'English (en)', 'Arabic (ar)']);
 		// the deals table needs the deals shop tool, which is off here
 		expect(container.textContent).toContain('Skipped while these are off: Shop tools: deals and savings quotes.');
+	});
+});
+
+describe('the redaction patterns editor (C14)', () => {
+	it('refuses a pattern the safe subset does not take, as the server would, and saves the list', async () => {
+		const path = `${BASE}/lists/redaction_patterns`;
+		/** @type {any[]} */
+		const puts = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ url, /** @type {RequestInit} */ init = {}) => {
+				if (url !== path) return new Response(JSON.stringify({ status: 404 }), { status: 404 });
+				if (init.method === 'PUT') puts.push(JSON.parse(String(init.body)).value);
+				return new Response(JSON.stringify({ value: puts.at(-1) ?? [] }), { status: 200 });
+			}),
+		);
+		const { container } = render(inDashboard(<RedactionPatternsEditor websiteId={WEBSITE} />));
+		await settle();
+		click(button(container, 'Add'));
+		type(field(container, 'Name'), 'member number');
+		type(field(container, 'Pattern (for example \\d{5}-\\d{7}-\\d)'), '(?=M)M\\d+');
+		expect(container.textContent).toContain('Look-arounds and named groups are not taken');
+		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
+		type(field(container, 'Pattern (for example \\d{5}-\\d{7}-\\d)'), 'M-\\d{6}');
+		expect(container.textContent).not.toContain('not taken');
+		click(button(container, 'Save list'));
+		await settle();
+		expect(puts).toEqual([[{ name: 'member number', pattern: 'M-\\d{6}', replacement: '' }]]);
 	});
 });

@@ -160,6 +160,17 @@ describe('guests and AI replies', () => {
 		await sys.setting('moderation', 'blockedAction', 'reject');
 		const refused = await v('POST', '/v1/chat/messages', { text: 'darn it' });
 		expect(refused.status).toBe(422);
+		// the merchant's own patterns (C14): a pattern the safe subset refuses is never saved
+		const bad = await sys.dashboard(
+			await sys.adminSession(),
+			'PUT',
+			`/v1/dashboard/websites/${sys.websiteId}/lists/redaction_patterns`,
+			{ value: [{ name: 'slow', pattern: '(?=a)a', replacement: '' }] },
+		);
+		expect(bad.status).toBe(422);
+		await sys.list('redaction_patterns', [{ name: 'member number', pattern: 'M-\\d{6}', replacement: '' }]);
+		const hidden = await v('POST', '/v1/chat/messages', { text: 'my number is m-123456' });
+		expect(hidden.json.message.text).toBe('my number is [member number]');
 	});
 });
 

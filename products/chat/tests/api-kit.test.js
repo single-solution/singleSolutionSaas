@@ -166,7 +166,9 @@ describe('widgets and docs', () => {
 			expect(docs.text).toContain(`<h2 id="${id}">`);
 		expect(docs.text).toContain('GET /v1/conversations/counts?by=status|waiting|guest|unread');
 		// every list the settings API serves, fallback answers too
-		expect(docs.text).toContain('page_rules (Page rules) and fallback_answers (Fallback answers)');
+		expect(docs.text).toContain(
+			'page_rules (Page rules), fallback_answers (Fallback answers) and redaction_patterns (Redaction patterns',
+		);
 		// the API reference: what each call takes and answers, from schemas/api.json; the route tables link to it
 		for (const part of [
 			'<a href="#op-get-v1-admin-conversations-count"><code>GET /v1/admin/conversations/count</code></a>',

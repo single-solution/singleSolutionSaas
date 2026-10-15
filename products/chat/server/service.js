@@ -40,6 +40,7 @@ import { waitingView } from '../core/flows.js';
 import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
 import { plainOf } from '../core/markdown.js';
+import { compileRedactionPatterns } from '../core/moderation.js';
 import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
 import { createStore } from '../adapters/store.js';
 
@@ -849,8 +850,22 @@ export const createService = (product) => {
 			...(detail ? { detail } : {}),
 		});
 
+	/**
+	 * The Moderation settings with the merchant's own redaction patterns compiled (C14), or null while it is off.
+	 * @param {Site} s
+	 * @returns {Promise<import('../core/moderation.js').ModerationConfig | null>}
+	 */
+	const moderation = async (s) =>
+		s.on.includes('moderation')
+			? {
+					.../** @type {any} */ (await s.values('moderation')),
+					patterns: compileRedactionPatterns(await s.list('redaction_patterns')),
+				}
+			: null;
+
 	return Object.freeze({
 		site,
+		moderation,
 		guestLimit,
 		staffOfAccounts,
 		visitorOf,

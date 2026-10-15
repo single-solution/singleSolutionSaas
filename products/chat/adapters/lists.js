@@ -1,6 +1,6 @@
 /**
  * Chat's list settings and the tool signing secret, in the product database (PLAN 0.8.3 Chat data): webhook tools,
- * flows, custom field definitions, proactive page rules and fallback answers (PLAN 0.8.10 C3) are kept per website in the kit's settings collection (so
+ * flows, custom field definitions, proactive page rules, fallback answers (PLAN 0.8.10 C3) and redaction patterns (C14) are kept per website in the kit's settings collection (so
  * a removed website's lists go with its settings), each checked by its feature's rules and recorded in Recent changes.
  * Lists have no global defaults. The tool signing secret is sealed with `ENCRYPTION_KEY`; it is made on first use and
  * sealed again with the current key by the Owner's Re-seal (`resealToolSecrets`).
@@ -9,6 +9,7 @@
 import { checkFallbackAnswers } from '../core/fallback.js';
 import { checkCustomFields, checkPageRules } from '../core/fields.js';
 import { checkFlows } from '../core/flows.js';
+import { checkRedactionPatterns } from '../core/moderation.js';
 import { checkTools } from '../core/tools.js';
 import { resealEach } from '@ss/app-kit';
 import { randomToken } from '@ss/protocol';
@@ -20,6 +21,7 @@ export const LISTS = Object.freeze({
 	custom_fields: { feature: 'custom_fields', title: 'Custom fields', check: checkCustomFields },
 	page_rules: { feature: 'proactive_pages', title: 'Page rules', check: checkPageRules },
 	fallback_answers: { feature: 'fallback_answers', title: 'Fallback answers', check: checkFallbackAnswers },
+	redaction_patterns: { feature: 'moderation', title: 'Redaction patterns', check: checkRedactionPatterns },
 });
 
 /** @typedef {keyof typeof LISTS} ListName */

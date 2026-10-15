@@ -25,6 +25,7 @@ import {
 import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
+import { checkRedactionPatterns } from '../../core/moderation.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -322,6 +323,62 @@ export function PageRulesEditor({ websiteId, off }) {
 					/>
 				</>
 			)}
+		/>
+	);
+}
+
+const R = L.redactionPatterns;
+
+/**
+ * Settings → Moderation: the merchant's own redaction patterns (C14), each checked as the server checks it.
+ * @param {EditorProps} props
+ */
+export function RedactionPatternsEditor({ websiteId, off }) {
+	/** @param {Item} pattern */
+	const clean = (pattern) => ({
+		name: String(pattern.name ?? '').trim(),
+		pattern: String(pattern.pattern ?? ''),
+		replacement: String(pattern.replacement ?? '').trim(),
+	});
+	/** @param {Item} pattern */
+	const problemsOf = (pattern) => {
+		const checked = checkRedactionPatterns([clean(pattern)]);
+		return checked.ok ? [] : checked.errors.map((error) => error.replace(/^Pattern 1: /, ''));
+	};
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="redaction_patterns"
+			title={R.title}
+			help={R.help}
+			itemLabel={R.item}
+			max={30}
+			off={off}
+			blank={() => ({ name: '', pattern: '', replacement: '' })}
+			clean={clean}
+			invalid={(pattern) => problemsOf(pattern).length > 0}
+			render={(pattern, set) => {
+				const problems = problemsOf(pattern);
+				return (
+					<>
+						<FieldGrid>
+							<Input label={R.name} value={pattern.name ?? ''} onChange={(event) => set({ name: event.target.value })} />
+							<Input
+								label={R.replacement}
+								value={pattern.replacement ?? ''}
+								onChange={(event) => set({ replacement: event.target.value })}
+							/>
+						</FieldGrid>
+						<Input
+							label={R.pattern}
+							className="font-mono"
+							value={pattern.pattern ?? ''}
+							error={problems.length > 0 ? problems.join(' ') : undefined}
+							onChange={(event) => set({ pattern: event.target.value })}
+						/>
+					</>
+				);
+			}}
 		/>
 	);
 }

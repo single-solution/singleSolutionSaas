@@ -95,6 +95,14 @@ export const TEXTS = dashboardTexts({
 			types: { string: 'Text', number: 'Number', boolean: 'Yes or no' },
 			required: 'Required',
 		},
+		redactionPatterns: {
+			title: 'Redaction patterns',
+			help: 'Your own personal data to hide in visitor messages and AI answers, before the built-in kinds: national or tax IDs, member numbers, wallets. A pattern is a safe regular expression: characters, ., classes such as [A-Z] or \\d, \\p{L} (any letter), groups, |, the repeats * + ? {n} {n,m} (at most 100), ^ $ and \\b; case is ignored; up to 200 characters.',
+			item: 'Pattern',
+			name: 'Name',
+			pattern: 'Pattern (for example \\d{5}-\\d{7}-\\d)',
+			replacement: 'Shown instead (empty = [name])',
+		},
 		pageRules: {
 			title: 'Page rules',
 			help: 'A message the widget shows on matching pages after a delay. A path starts with /; * is any characters inside one segment and ** any segments.',
