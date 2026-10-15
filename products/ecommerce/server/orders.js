@@ -40,7 +40,7 @@ import {
 } from '../core/orders.js';
 import { checkRestatus, statusOf } from '../core/flow.js';
 import { COLLECTIONS } from '../core/model.js';
-import { isYearly, numberFormOf } from '../core/order-numbers.js';
+import { counterIdOf, counterNameOf, numberFormOf, periodOf } from '../core/order-numbers.js';
 import { createMedia } from './catalog-media.js';
 import { addressRulesOf, phoneRulesOf } from './guests.js';
 import { createCustomers } from './orders-customers.js';
@@ -380,34 +380,38 @@ export const createOrders = (product, service, { ordering }) => {
 	};
 
 	/**
-	 * POST /v1/orders/counter `{ year?, next }`: the next order number (E30) — of the running counter, or of a year's with
-	 * the yearly form (`checkout.numberPattern`; `year` is given exactly then).
+	 * POST /v1/orders/counter `{ year?, month?, next }`: the next order number (E30, E29) — of the running counter, or of
+	 * a year's or month's when the pattern has `{year}` or `{month}` (`checkout.numberPattern`; `year`, and `month` with
+	 * `{month}`, are given exactly then).
 	 * @param {any} ctx
 	 */
 	const setCounter = async (ctx) => {
 		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
 		const s = await service.site(ctx);
 		const form = numberFormOf(await s.values('checkout'));
-		const yearly = isYearly(form);
-		const year = body.year;
-		const next = body.next;
-		if (!yearly && year !== undefined)
+		const period = periodOf(form);
+		const { year, month, next } = body;
+		if (period === 'all' && year !== undefined)
 			throw service.invalid('year', 'Order numbers have no year (checkout.numberPattern): give only next.');
-		if (yearly && (!Number.isSafeInteger(year) || year < 2000 || year > 9999))
+		if (period !== 'month' && month !== undefined)
+			throw service.invalid('month', 'Order numbers have no month (checkout.numberPattern): leave month out.');
+		if (period !== 'all' && (!Number.isSafeInteger(year) || year < 2000 || year > 9999))
 			throw service.invalid('year', 'year is a four-digit year.');
+		if (period === 'month' && (!Number.isSafeInteger(month) || month < 1 || month > 12))
+			throw service.invalid('month', 'month is a month from 1 to 12.');
 		if (!Number.isSafeInteger(next) || next < 1 || next > 99_999_999)
 			throw service.invalid('next', 'next is the next order number, from 1.');
-		const done = await setOrderCounter(await s.data(), { form, year: yearly ? year : 0, next });
-		if (!done.ok)
-			throw service.invalid(
-				'next',
-				yearly
-					? `Order number ${done.used} of ${year} is already used; give a higher one.`
-					: `Order number ${done.used} is already used; give a higher one.`,
-			);
-		const counter = yearly ? `${form.prefix}${year}` : form.prefix;
-		await service.log(ctx, 'orders.counter_set', counter || 'orders', { label: counter || 'Orders', detail: `Next ${next}` });
-		return { prefix: form.prefix, year: yearly ? year : null, next: done.next };
+		const at = { year: period === 'all' ? 0 : year, month: period === 'month' ? month : 0 };
+		const done = await setOrderCounter(await s.data(), { form, at, next });
+		const counter = counterNameOf(form, at);
+		if (!done.ok) throw service.invalid('next', `Order number ${done.used} of ${counter} is already used; give a higher one.`);
+		await service.log(ctx, 'orders.counter_set', counterIdOf(form, at), { label: counter, detail: `Next ${next}` });
+		return {
+			prefix: form.prefix,
+			year: period === 'all' ? null : year,
+			month: period === 'month' ? month : null,
+			next: done.next,
+		};
 	};
 
 	/**

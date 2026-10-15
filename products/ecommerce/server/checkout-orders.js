@@ -1079,6 +1079,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				numberPrefix: String(checkout.numberPrefix),
 				numberDigits: Number(checkout.numberDigits ?? 6),
 				numberPattern: String(checkout.numberPattern ?? ''),
+				numberSuffix: String(checkout.numberSuffix ?? ''),
 				locationOrder,
 				couponPerCustomer: q.coupon?.perCustomer ?? null,
 				...(member?.userId ? { offersOwner: member.userId } : {}),

@@ -561,8 +561,8 @@ describe('import of shoppers and orders (K10)', () => {
 		]);
 		const counters = await all(COLLECTIONS.counters);
 		expect(counters.map((c) => [c.id, c.seq]).sort()).toEqual([
-			['orders-2025', 41],
-			['orders-2026', 4],
+			['orders-2025-:', 41],
+			['orders-2026-:', 4],
 		]);
 		const stamps = Object.fromEntries(
 			await Promise.all(

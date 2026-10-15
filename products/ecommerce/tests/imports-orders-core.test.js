@@ -86,7 +86,7 @@ describe('import rules', () => {
 		expect(
 			importRules({ flow: DEFAULT_FLOW, checkout: { numberDigits: 12 }, catalog: {}, country: null, now: NOW }),
 		).toMatchObject({
-			numbers: { pattern: '{prefix}{number}', prefix: '', digits: 8 },
+			numbers: { pattern: '{prefix}{number}', prefix: '', suffix: '', digits: 10 },
 			currency: 'USD',
 			phoneRules: { defaultCallingCode: '', trunkPrefix: '' },
 		});
@@ -444,7 +444,7 @@ describe('orders', () => {
 				{
 					path: '/number',
 					message:
-						'An order number of this website is S-<at least 4 digits> (checkout.numberPattern, numberPrefix and numberDigits).',
+						'An order number of this website is S-<at least 4 digits> (checkout.numberPattern, numberPrefix, numberSuffix and numberDigits).',
 				},
 			],
 		});

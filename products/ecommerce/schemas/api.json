@@ -6593,7 +6593,7 @@
 				},
 				"number": {
 					"type": "string",
-					"description": "The order number, unique per website (checkout.numberPattern: <prefix><sequence>, or <prefix><year>-<sequence>)."
+					"description": "The order number, unique per website (in the form of checkout.numberPattern, for example <prefix><sequence> or <prefix><year>-<sequence>)."
 				},
 				"customer": {
 					"$ref": "#/components/schemas/OrderCustomer"
@@ -7956,7 +7956,7 @@
 				},
 				"number": {
 					"type": "string",
-					"description": "The order number, unique per website (checkout.numberPattern: <prefix><sequence>, or <prefix><year>-<sequence>)."
+					"description": "The order number, unique per website (in the form of checkout.numberPattern, for example <prefix><sequence> or <prefix><year>-<sequence>)."
 				},
 				"customer": {
 					"$ref": "#/components/schemas/OrderCustomer"
@@ -12728,7 +12728,7 @@
 				},
 				"number": {
 					"type": "string",
-					"description": "Unique per website, in the form of checkout.numberPattern: <numberPrefix><sequence>, or <numberPrefix><year>-<sequence>."
+					"description": "Unique per website, in the form of checkout.numberPattern, for example <numberPrefix><sequence> or <numberPrefix><year>-<sequence>."
 				},
 				"status": {
 					"type": "string",
@@ -24484,7 +24484,7 @@
 	},
 	"POST /v1/orders/counter": {
 		"summary": "Set the next order number",
-		"description": "Numbers take the form of the checkout setting numberPattern: <numberPrefix><sequence> from one running counter (give only next), or <numberPrefix><year>-<sequence> from a counter per year (give year and next). 422 at /next when that number or a higher one is already used; 422 at /year when year is missing with the yearly form or given without it, or at /year or /next for values out of range.",
+		"description": "Numbers take the form of the checkout setting numberPattern (its tokens {prefix}, {year}, {month}, {number} and {suffix}): one running counter without {year} (give only next), a counter per year with {year} (give year and next), a counter per month with {month} (give year, month and next). 422 at /next when that number or a higher one is already used; 422 at /year or /month when one the pattern needs is missing or one it has not is given, or at /year, /month or /next for values out of range.",
 		"body": {
 			"type": "object",
 			"required": ["next"],
@@ -24493,7 +24493,13 @@
 					"type": "integer",
 					"minimum": 2000,
 					"maximum": 9999,
-					"description": "With the yearly form only: the year whose counter is set."
+					"description": "With {year} in the pattern only: the year whose counter is set."
+				},
+				"month": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 12,
+					"description": "With {month} in the pattern only: the month whose counter is set."
 				},
 				"next": {
 					"type": "integer",
@@ -24505,7 +24511,7 @@
 		},
 		"response": {
 			"type": "object",
-			"required": ["prefix", "year", "next"],
+			"required": ["prefix", "year", "month", "next"],
 			"additionalProperties": false,
 			"properties": {
 				"prefix": {
@@ -24515,6 +24521,10 @@
 				"year": {
 					"type": ["integer", "null"],
 					"description": "The year whose counter was set; null for the running counter."
+				},
+				"month": {
+					"type": ["integer", "null"],
+					"description": "The month whose counter was set; null without {month} in the pattern."
 				},
 				"next": {
 					"type": "integer",

@@ -295,7 +295,7 @@ describe('placing an order', () => {
 				.map((counter) => [counter.id, counter.seq])
 				.sort(),
 		).toEqual([
-			['orders-N-2026', 42],
+			['orders-N-2026-:', 42],
 			['orders-N-:', 1],
 		]);
 	});

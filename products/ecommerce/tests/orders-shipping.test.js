@@ -199,7 +199,7 @@ describe('order editing and numbers (E29, E30)', () => {
 		const yearGiven = await shop.api('POST', '/v1/orders/counter', { year, next: used + 100 });
 		expect(yearGiven.json.errors[0]).toMatchObject({ path: '/year' });
 		const set = await shop.api('POST', '/v1/orders/counter', { next: used + 100 });
-		expect(set.json).toEqual({ prefix: '', year: null, next: used + 100 });
+		expect(set.json).toEqual({ prefix: '', year: null, month: null, next: used + 100 });
 		const after = await confirmedOrder();
 		expect((await orderRecord(after.id)).number).toBe(String(used + 100).padStart(6, '0'));
 
@@ -210,13 +210,35 @@ describe('order editing and numbers (E29, E30)', () => {
 		expect((await orderRecord(first.id)).number).toBe(`Y-${year}-000001`);
 		expect((await shop.api('POST', '/v1/orders/counter', { next: 50 })).json.errors[0]).toMatchObject({ path: '/year' });
 		expect(codeOf(await shop.api('POST', '/v1/orders/counter', { year, next: 1 }))).toBe('validation_failed');
-		expect((await shop.api('POST', '/v1/orders/counter', { year, next: 50 })).json).toEqual({ prefix: 'Y-', year, next: 50 });
+		expect((await shop.api('POST', '/v1/orders/counter', { year, next: 50 })).json).toEqual({
+			prefix: 'Y-',
+			year,
+			month: null,
+			next: 50,
+		});
 		const fiftieth = await confirmedOrder();
 		expect((await orderRecord(fiftieth.id)).number).toBe(`Y-${year}-000050`);
-		await shop.setting('checkout', 'numberPattern', '{prefix}{number}');
+
+		// the merchant's own pattern (E29): a counter per month, a suffix and fewer digits
+		const month = new Date(shop.now()).getUTCMonth() + 1;
+		const yearMonth = `${year}${String(month).padStart(2, '0')}`;
+		await shop.setting('checkout', 'numberPattern', 'W{year}{month}_{number}{suffix}');
+		await shop.setting('checkout', 'numberSuffix', '-EU');
+		await shop.setting('checkout', 'numberDigits', 2);
+		const monthly = await confirmedOrder();
+		expect((await orderRecord(monthly.id)).number).toBe(`W${yearMonth}_01-EU`);
+		expect((await shop.api('POST', '/v1/orders/counter', { year, next: 7 })).json.errors[0]).toMatchObject({ path: '/month' });
+		expect((await shop.api('POST', '/v1/orders/counter', { year, month, next: 7 })).json).toMatchObject({ month, next: 7 });
+		expect((await orderRecord((await confirmedOrder()).id)).number).toBe(`W${yearMonth}_07-EU`);
+		// a pattern that breaks the rules ({month} without {year}) reads as the default
+		await shop.setting('checkout', 'numberPattern', '{month}{number}');
+		await shop.setting('checkout', 'numberDigits', 6);
+		await shop.setting('checkout', 'numberSuffix', '');
 		await shop.setting('checkout', 'numberPrefix', '');
+		expect((await orderRecord((await confirmedOrder()).id)).number).toBe(String(used + 101).padStart(6, '0'));
+		await shop.setting('checkout', 'numberPattern', '{prefix}{number}');
 		// back to the running form: its counter goes on where it was
 		const later = await confirmedOrder();
-		expect((await orderRecord(later.id)).number).toBe(String(used + 101).padStart(6, '0'));
+		expect((await orderRecord(later.id)).number).toBe(String(used + 102).padStart(6, '0'));
 	});
 });

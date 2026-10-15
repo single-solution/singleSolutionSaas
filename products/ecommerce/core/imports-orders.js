@@ -933,7 +933,7 @@ export const checkImportedOrder = (record, rules) => {
 	if (number !== '' && !numberMatcher(rules.numbers).test(number))
 		c.fail(
 			'/number',
-			`An order number of this website is ${describeNumberForm(rules.numbers)} (checkout.numberPattern, numberPrefix and numberDigits).`,
+			`An order number of this website is ${describeNumberForm(rules.numbers)} (checkout.numberPattern, numberPrefix, numberSuffix and numberDigits).`,
 		);
 	const status = typeof record.status === 'string' ? record.status : '';
 	const definition = statusOf(flow, status);

@@ -96,6 +96,7 @@ const FEATURE_SECTION = Object.freeze({
 const ORDER_SETTINGS = new Set([
 	'numberPattern',
 	'numberPrefix',
+	'numberSuffix',
 	'numberDigits',
 	'messageChannels',
 	'editPricing',

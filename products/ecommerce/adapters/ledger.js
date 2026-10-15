@@ -24,6 +24,7 @@ import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from 
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').LoyaltyRecord} LoyaltyRecord */
 /** @typedef {import('../core/order-numbers.js').NumberForm} NumberForm */
+/** @typedef {import('../core/order-numbers.js').NumberAt} NumberAt */
 
 /** Loyalty history entries kept per account (the newest). */
 const HISTORY_KEPT = 200;
@@ -523,14 +524,14 @@ const releaseSlots = (data, orderId, session) =>
 	data.collection(COLLECTIONS.slots).deleteMany({ websiteId: data.websiteId, orderId }, { session });
 
 /**
- * The highest sequence one counter already gave (0 when none), whatever its digits: the numbers of a year in the yearly
- * form, of all time in the running one.
+ * The highest sequence one counter already gave (0 when none), whatever its digits: the numbers of its month, its year
+ * or all time, as the form's period is.
  * @param {WebsiteData} data
- * @param {{ form: NumberForm, year: number, session?: Session }} options
+ * @param {{ form: NumberForm, at: NumberAt, session?: Session }} options
  * @returns {Promise<number>}
  */
-const highestNumber = async (data, { form, year, session }) => {
-	const numbers = counterNumbers(form, year);
+const highestNumber = async (data, { form, at, session }) => {
+	const numbers = counterNumbers(form, at);
 	const [found] = await data
 		.collection(COLLECTIONS.orders)
 		.aggregate(
@@ -547,15 +548,15 @@ const highestNumber = async (data, { form, year, session }) => {
 };
 
 /**
- * The next order number (E30, `core/order-numbers.js`): `<prefix><sequence>` from one running counter, or
- * `<prefix><year>-<sequence>` from the counter of the year (the year in the business time zone, PLAN 0.8.10 K8). A
+ * The next order number (E30, E29, `core/order-numbers.js`): the website's pattern filled with the sequence of its
+ * counter — one running counter, or the counter of the year or month (in the business time zone, PLAN 0.8.10 K8). A
  * missing counter starts after the highest number already used in its form.
  * @param {WebsiteData} data
- * @param {{ form: NumberForm, year: number, session?: Session }} options
+ * @param {{ form: NumberForm, at: NumberAt, session?: Session }} options
  */
-const nextOrderNumber = async (data, { form, year, session }) => {
+const nextOrderNumber = async (data, { form, at, session }) => {
 	const counters = data.collection(COLLECTIONS.counters);
-	const id = counterIdOf(form, year);
+	const id = counterIdOf(form, at);
 	const bump = () =>
 		counters.findOneAndUpdate(
 			{ websiteId: data.websiteId, id },
@@ -564,7 +565,7 @@ const nextOrderNumber = async (data, { form, year, session }) => {
 		);
 	let counter = /** @type {any} */ (await bump());
 	if (!counter) {
-		const used = await highestNumber(data, { form, year, ...(session ? { session } : {}) });
+		const used = await highestNumber(data, { form, at, ...(session ? { session } : {}) });
 		try {
 			await counters.updateOne(
 				{ websiteId: data.websiteId, id },
@@ -576,20 +577,20 @@ const nextOrderNumber = async (data, { form, year, session }) => {
 		}
 		counter = /** @type {any} */ (await bump());
 	}
-	return orderNumberOf(form, { year, sequence: Number(counter?.seq ?? 1) });
+	return orderNumberOf(form, { ...at, sequence: Number(counter?.seq ?? 1) });
 };
 
 /**
- * Set the next sequence of a counter (E30 `POST /v1/orders/counter`: the running one, or a year's), never at or below
- * one already used.
+ * Set the next sequence of a counter (E30 `POST /v1/orders/counter`: the running one, or a year's or month's), never at
+ * or below one already used.
  * @param {WebsiteData} data
- * @param {{ form: NumberForm, year: number, next: number }} input `year`: only the yearly form reads it
+ * @param {{ form: NumberForm, at: NumberAt, next: number }} input `at`: only a form with a year (and month) reads it
  * @returns {Promise<{ ok: true, next: number } | { ok: false, used: number }>}
  */
-export const setOrderCounter = async (data, { form, year, next }) => {
-	const used = await highestNumber(data, { form, year });
+export const setOrderCounter = async (data, { form, at, next }) => {
+	const used = await highestNumber(data, { form, at });
 	if (next <= used) return { ok: false, used };
-	const id = counterIdOf(form, year);
+	const id = counterIdOf(form, at);
 	await data
 		.collection(COLLECTIONS.counters)
 		.updateOne({ websiteId: data.websiteId, id }, { $set: { seq: next - 1 }, $setOnInsert: { id } }, { upsert: true });
@@ -600,11 +601,11 @@ export const setOrderCounter = async (data, { form, year, next }) => {
  * Move a counter past the highest number already used in its form, never back (it fell behind them: set back while an
  * order was placed, or orders imported before it moved on).
  * @param {WebsiteData} data
- * @param {{ form: NumberForm, year: number }} numbering
+ * @param {{ form: NumberForm, at: NumberAt }} numbering
  */
-const counterPast = async (data, { form, year }) => {
-	const used = await highestNumber(data, { form, year });
-	const id = counterIdOf(form, year);
+const counterPast = async (data, { form, at }) => {
+	const used = await highestNumber(data, { form, at });
+	const id = counterIdOf(form, at);
 	await data
 		.collection(COLLECTIONS.counters)
 		.updateOne({ websiteId: data.websiteId, id }, { $max: { seq: used }, $setOnInsert: { id } }, { upsert: true });
@@ -618,7 +619,8 @@ const counterPast = async (data, { form, year }) => {
  *   are filled from where the stock was taken)
  * @property {string} numberPrefix the `checkout` setting (may be '')
  * @property {number} [numberDigits] the `checkout` setting (E30; default 6)
- * @property {string} [numberPattern] the `checkout` setting (E30; default one running counter)
+ * @property {string} [numberPattern] the `checkout` setting (E30, E29; default one running counter)
+ * @property {string} [numberSuffix] the `checkout` setting (E29; may be '')
  * @property {string[]} [lockedDealIds] deals whose locks the order keeps (E18)
  * @property {string[]} [locationOrder] locations to take stock from, in order (multi_location)
  * @property {number | null} [couponPerCustomer] the coupon's per-customer limit
@@ -700,7 +702,8 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 		);
 	const before = await existing();
 	if (before) return { ok: true, order: before, duplicate: true, taken: [] };
-	const numbering = { form: numberFormOf(placement), year: zonedParts(now, timeZone).year };
+	const { year, month } = zonedParts(now, timeZone);
+	const numbering = { form: numberFormOf(placement), at: { year, month } };
 	for (let attempt = 1; ; attempt += 1) {
 		try {
 			const placed = await data.transaction(async (session) => {

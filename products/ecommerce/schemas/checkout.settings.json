@@ -4,17 +4,24 @@
 	"properties": {
 		"numberPattern": {
 			"type": "string",
-			"title": "Order number form",
-			"description": "{prefix}{number}: one running number (SH-001043). {prefix}{year}-{number}: the number starts again each year, by your business time zone's year (SH-2026-0043).",
+			"title": "Order number pattern",
+			"description": "Your order numbers from {prefix}, {year}, {month}, {number} and {suffix}, with letters, digits, - and _ between them: {number} once, {month} only with {year}. The number starts again each month with {month}, each year with {year}, by your business time zone (SH-001043 from {prefix}{number}; SH-2026-0043 from {prefix}{year}-{number}; 202603-0043 from {year}{month}-{number}). A pattern that breaks these rules reads as {prefix}{number}.",
 			"default": "{prefix}{number}",
-			"enum": ["{prefix}{number}", "{prefix}{year}-{number}"]
+			"maxLength": 60
 		},
 		"numberPrefix": {
 			"type": "string",
 			"title": "Order number prefix",
-			"description": "Put before every order number (for example SH-): letters, digits, - and _ (other characters are left out, as order numbers go in addresses).",
+			"description": "What {prefix} stands for in the order number pattern (for example SH-): letters, digits, - and _ (other characters are left out, as order numbers go in addresses).",
 			"default": "",
 			"maxLength": 12
+		},
+		"numberSuffix": {
+			"type": "string",
+			"title": "Order number suffix",
+			"description": "What {suffix} stands for in the order number pattern: letters, digits, - and _ (other characters are left out).",
+			"default": "",
+			"maxLength": 20
 		},
 		"messageChannels": {
 			"type": "array",
@@ -528,10 +535,10 @@
 		"numberDigits": {
 			"type": "integer",
 			"title": "Order number digits",
-			"description": "The fewest digits of the number part (zeros in front): SH-001043 has 6, SH-2026-0043 has 4.",
+			"description": "The fewest digits of {number} (zeros in front; it grows past them when it must): SH-001043 has 6, SH-2026-0043 has 4.",
 			"default": 6,
-			"minimum": 4,
-			"maximum": 8
+			"minimum": 1,
+			"maximum": 10
 		},
 		"statusTemplates": {
 			"type": "string",
