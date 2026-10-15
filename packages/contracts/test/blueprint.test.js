@@ -17,6 +17,7 @@ const sheet = () => ({
 	website: {
 		id: WEBSITE,
 		domain: 'shop.example.com',
+		status: 'active',
 		business: { found: true, name: 'Example Shop', country: 'US', timeZone: 'America/New_York' },
 		profile: { sells: ['physical'], chat: ['people'], countries: ['US', 'CA'] },
 	},
@@ -29,6 +30,7 @@ const sheet = () => ({
 		{
 			...productBlueprint(),
 			reachable: /** @type {const} */ (true),
+			apiBase: 'https://notes.example.dev',
 			serverToken: { issued: true },
 			install: {
 				scriptUrl: 'https://notes.example.dev/widget.js',
@@ -93,6 +95,14 @@ describe('product blueprint', () => {
 		['an unknown status', (b) => (b.status = 'paused'), '/status', 'enum'],
 		['a widget of another kind', (b) => (b.widgets[0].kind = 'popup'), '/widgets/0/kind', 'enum'],
 		['an empty summary', (b) => b.summaries.push({ title: 'Flow', text: '' }), '/summaries/0/text', 'minLength'],
+		[
+			'a secret setting with its value',
+			(b) => (b.features[0].settings[0].set = true),
+			'/features/0/settings/0/value',
+			'false schema',
+		],
+		['a setting set of another kind', (b) => (b.features[0].settings[0].set = 'yes'), '/features/0/settings/0/set', 'type'],
+		['the address in a product part', (b) => (b.apiBase = 'https://notes.example.dev'), '/apiBase', 'additionalProperties'],
 		['a missing checklist', (b) => delete b.checklist, '/checklist', 'required'],
 		['a feature without its tags', (b) => delete b.features[1].recommendFor, '/features/1/recommendFor', 'required'],
 		[
@@ -123,6 +133,12 @@ describe('blueprint (the sheet)', () => {
 	it('accepts a sheet with a reachable and a missing product, and a shared copy without values or install', () => {
 		expect(validateBlueprint(sheet()).ok).toBe(true);
 		expect(validateBlueprint({ ...sheet(), website: { ...sheet().website, profile: null } }).ok).toBe(true);
+		// a setting whose value holds a secret shows only that it is set
+		const secret = sheet();
+		const hidden = /** @type {any} */ (secret.products[0]).features[0].settings[0];
+		delete hidden.value;
+		hidden.set = true;
+		expect(validateBlueprint(secret).ok).toBe(true);
 		const shared = sheet();
 		const product = /** @type {any} */ (shared.products[0]);
 		for (const feature of product.features) for (const one of feature.settings) delete one.value;
@@ -143,6 +159,9 @@ describe('blueprint (the sheet)', () => {
 		['a domain with a scheme', (b) => (b.website.domain = 'https://shop.example.com'), '/website/domain', 'pattern'],
 		['a share without its expiry', (b) => (b.share = { values: true, install: true }), '/share/expiresAt', 'required'],
 		['a website without its profile', (b) => delete b.website.profile, '/website/profile', 'required'],
+		['a website without its status', (b) => delete b.website.status, '/website/status', 'required'],
+		['a removed website status', (b) => (b.website.status = 'removed'), '/website/status', 'enum'],
+		['a reachable product without its address', (b) => delete b.products[0].apiBase, '/products/0', 'oneOf'],
 		['a profile answer of another kind', (b) => (b.website.profile.sells = ['cars']), '/website/profile', 'anyOf'],
 		['a reachable product without advice', (b) => delete b.products[0].recommended, '/products/0', 'oneOf'],
 		['advice without a reason', (b) => (b.products[0].recommended[0].because = []), '/products/0', 'oneOf'],

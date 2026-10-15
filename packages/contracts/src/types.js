@@ -104,7 +104,8 @@
  * @property {import('./constants.js').ProductStatus} status
  * @property {string | null} graceEndsAt ISO-8601 UTC, null outside grace
  * @property {number} todayMillicredits
- * @property {number} featuresVersion last accepted feature-report version
+ * @property {number} featuresVersion last accepted feature-report version, raised by one when the product is added to
+ *   the website again (every feature off): a product whose switches are older turns them off
  * @property {string} validUntil ISO-8601 UTC; cache at most until then
  */
 
@@ -164,8 +165,9 @@
 /** @typedef {{ productId?: string, messages: DeclaredMessage[] }} MessageDefaults */
 
 /**
- * One setting in a Setup sheet; `value` is absent in a shared copy without values.
- * @typedef {{ key: string, title: string, value?: unknown, default: boolean }} BlueprintSetting
+ * One setting in a Setup sheet; `value` is absent in a shared copy without values, and replaced by `set: true` when it
+ * holds a secret saved in the website's Connections.
+ * @typedef {{ key: string, title: string, value?: unknown, set?: boolean, default: boolean }} BlueprintSetting
  */
 /** @typedef {{ name: string, title: string, summary: string, count: number | null }} BlueprintList */
 /**
@@ -207,10 +209,11 @@
  * @typedef {object} Blueprint
  * @property {'ss.blueprint/1'} schema
  * @property {string} generatedAt
- * @property {{ id: string, domain: string, business: { found: boolean, name: string | null, country: string | null,
- *   timeZone: string | null }, profile: import('./profile.js').BusinessProfile | null }} website
+ * @property {{ id: string, domain: string, status: 'active' | 'grace' | 'stopped' | 'suspended', business: { found: boolean,
+ *   name: string | null, country: string | null, timeZone: string | null },
+ *   profile: import('./profile.js').BusinessProfile | null }} website `status`: the status of the website's products
  * @property {{ allowedOrigins: string[], testingOrigins: string[], serverTokens: string }} access
- * @property {Array<(ProductBlueprint & BlueprintAdvice & { reachable: true, serverToken: { issued: boolean } })
+ * @property {Array<(ProductBlueprint & BlueprintAdvice & { reachable: true, apiBase: string, serverToken: { issued: boolean } })
  *   | { productId: string, name: string, reachable: false, reason: 'timeout' | 'unreachable' | 'refused' | 'invalid' }>} products
  * @property {{ expiresAt: string, values: boolean, install: boolean }} [share] a copy opened from a share link
  */

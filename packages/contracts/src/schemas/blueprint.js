@@ -5,14 +5,16 @@
  *   the product's part for one website: `{ productId, name, version, status, docs, business, install, features,
  *   shared, connections, widgets, staffPermissions, events, checklist, summaries, build }`. Features carry the
  *   business profile answers they suit (`recommendFor`, from the manifest) and their settings with values
- *   (`default: true` while the website has not saved its own) and their lists summarized, but only while the feature
- *   is on. Connections show their state only: `set` and `state`, never a value, its last characters or a test
- *   message. `build` says, per feature that is on, what the merchant's website builds for it (pages, routes, script
+ *   (`default: true` while the website has not saved its own; a value holding a secret saved in the website's
+ *   Connections is never shown: the setting has `set: true` instead of `value`) and their lists summarized, but only
+ *   while the feature is on. Connections show their state only: `set` and `state`, never a value, its last characters
+ *   or a test message. `build` says, per feature that is on, what the merchant's website builds for it (pages, routes, script
  *   tags, server calls) with the guide's section.
  * - **Blueprint** (the Portal's sheet): `{ schema: 'ss.blueprint/1', generatedAt, website, access, products, share? }`.
- *   `website.profile` is the website's business profile (null until someone fills it in). Each product is its
- *   blueprint plus `reachable: true`, the browser token and install snippet in `install`, `serverToken: { issued }`
- *   (the value is never in a sheet) and the advisor's view: `recommended` (features the profile calls for, on or not,
+ *   `website.status` is the status the website's products have (`active`, `grace`, `stopped` or `suspended`, PLAN
+ *   0.5.5) and `website.profile` its business profile (null until someone fills it in). Each product is its blueprint
+ *   plus `reachable: true`, `apiBase` (the address its API paths go after), the browser token and install snippet in
+ *   `install`, `serverToken: { issued }` (the value is never in a sheet) and the advisor's view: `recommended` (features the profile calls for, on or not,
  *   with the tags and why) and `notRecommended` (features that are on although the profile rules them out); a
  *   product that did not answer in time is `{ productId, name, reachable: false, reason }`. `share` describes a copy
  *   opened from a share link: what it leaves out (`values: false` drops every setting's `value`, `install: false`
@@ -44,15 +46,24 @@ const CONNECTION_STATES = Object.freeze(['connected', 'not_connected', 'test_fai
 const text = (/** @type {number} */ max) => ({ type: 'string', maxLength: max });
 const nullable = (/** @type {Record<string, unknown>} */ schema) => ({ anyOf: [schema, { type: 'null' }] });
 
-/** One setting with its value; `value` is absent in a shared copy without values. */
+/**
+ * One setting with its value; `value` is absent in a shared copy without values, and replaced by `set` when it holds
+ * a secret.
+ */
 const setting = {
 	type: 'object',
 	required: ['key', 'title', 'default'],
 	additionalProperties: false,
+	// `set` stands in for the value: never both
+	dependentSchemas: { set: { type: 'object', properties: { value: false } } },
 	properties: {
 		key: { type: 'string', pattern: PATTERNS.settingKey },
 		title: text(120),
 		value: {},
+		set: {
+			type: 'boolean',
+			description: 'In place of value when the value holds a secret saved in Connections: a value is set (never shown).',
+		},
 		default: { type: 'boolean', description: 'True while the website has not saved a value of its own.' },
 	},
 };
@@ -69,6 +80,9 @@ const list = {
 		count: nullable({ type: 'integer', minimum: 0 }),
 	},
 };
+
+/** The statuses a website's products have (PLAN 0.5.5; a removed product is no part of a sheet). */
+const WEBSITE_STATUSES = Object.freeze(['active', 'grace', 'stopped', 'suspended']);
 
 /** Members of a product's part, shared by the product blueprint and the sheet. */
 const productProperties = {
@@ -287,11 +301,12 @@ export const blueprintSchema = deepFreeze({
 		generatedAt: ref('timestamp'),
 		website: {
 			type: 'object',
-			required: ['id', 'domain', 'business', 'profile'],
+			required: ['id', 'domain', 'status', 'business', 'profile'],
 			additionalProperties: false,
 			properties: {
 				id: ref('opaqueId'),
 				domain: ref('hostname'),
+				status: { type: 'string', enum: [...WEBSITE_STATUSES], description: "The status of the website's products." },
 				profile: nullable({ $ref: SCHEMA_IDS.businessProfile }),
 				business: {
 					type: 'object',
@@ -323,10 +338,11 @@ export const blueprintSchema = deepFreeze({
 				oneOf: [
 					{
 						type: 'object',
-						required: ['reachable', 'serverToken', ...PRODUCT_REQUIRED, ...Object.keys(adviceProperties)],
+						required: ['reachable', 'apiBase', 'serverToken', ...PRODUCT_REQUIRED, ...Object.keys(adviceProperties)],
 						additionalProperties: false,
 						properties: {
 							reachable: { const: true },
+							apiBase: ref('url'),
 							serverToken: {
 								type: 'object',
 								required: ['issued'],

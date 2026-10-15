@@ -104,13 +104,16 @@ permissions, events, checklist and docs, generated on request and never stored.
   Portal call): `{ productId, name, version, status, docs: { guide, openapi }, business, install, features, shared,
 connections, widgets, staffPermissions, events, checklist, summaries, build }`. Features carry their `recommendFor`
   rules and their settings `{ key, title, value, default }` (`default: true` while the website has not saved its own
-  value) and their lists `{ name, title, summary, count }` only while the feature is on. Connections are `{ key, title,
+  value; a value holding a secret saved in the website's Connections is never shown: `set: true` instead of `value`)
+  and their lists `{ name, title, summary, count }` only while the feature is on. Connections are `{ key, title,
 kind, neededBy, needed, set, state, testedAt }`: never a value, its last characters or a test message (the schema
   refuses them). `build: [{ feature, what, docs }]`: what the merchant's website builds for each feature that is on
   (at most `BUILD_TEXT_MAX` characters) and the guide's section of it.
 - `validateBlueprint`: the Portal's sheet `{ schema: 'ss.blueprint/1' (BLUEPRINT_SCHEMA), generatedAt, website: { id,
-domain, business, profile }, access: { allowedOrigins, testingOrigins, serverTokens }, products, share? }`. `profile`
-  is the website's business profile (or `null`). A product is its blueprint plus `reachable: true`, `serverToken:
+domain, status, business, profile }, access: { allowedOrigins, testingOrigins, serverTokens }, products, share? }`.
+  `status` is the status of the website's products (`active`, `grace`, `stopped`, `suspended`); `profile` the website's
+  business profile (or `null`). A product is its blueprint plus `reachable: true`, `apiBase` (its address, before the
+  API paths), `serverToken:
 { issued }` (the token itself is never in a sheet), in `install` the public browser token and the install snippet,
   and the advisor's view: `recommended: [{ feature, on, because, why }]` (features the profile calls for, `because`
   the tags of the rule that holds) and `notRecommended: [{ feature, missing, why }]` (features that are on although
