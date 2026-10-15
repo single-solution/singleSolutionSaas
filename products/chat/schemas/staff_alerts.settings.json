@@ -2,12 +2,12 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"inboxUrl": {
+		"adminUrl": {
 			"type": "string",
-			"title": "Inbox address",
+			"title": "Conversation page in your admin",
 			"default": "",
 			"maxLength": 500,
-			"description": "The page of your admin with the inbox widget, for example https://admin.shop.com/inbox. Alerts link to it with ?conversation=<id>, or with the id where you write {id}, for example https://admin.shop.com/chats?open={id}."
+			"description": "With {conversationId}, for example https://admin.example.com/inbox?conversation={conversationId} (the inbox widget opens the conversation named by ?conversation= in its page address). Alerts link to it."
 		},
 		"recipients": {
 			"type": "array",
@@ -17,7 +17,7 @@
 				"type": "string",
 				"maxLength": 254
 			},
-			"description": "Email addresses and international phone numbers (+ or 00 first; phones get WhatsApp or SMS), up to 20. The assigned person is added."
+			"description": "Email addresses and international phone numbers (+ or 00 first; phones get SMS or WhatsApp), up to 20. The assigned person is added."
 		},
 		"frequency": {
 			"type": "string",
@@ -36,8 +36,9 @@
 		"phoneChannel": {
 			"type": "string",
 			"title": "Phones get",
-			"default": "whatsapp",
-			"enum": ["whatsapp", "sms"]
+			"default": "sms",
+			"enum": ["sms", "whatsapp"],
+			"description": "SMS goes out with Chat's default words; WhatsApp needs your own template approved at Meta (Notifications, Settings → Templates)."
 		},
 		"includePhone": {
 			"type": "boolean",

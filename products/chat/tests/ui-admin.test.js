@@ -525,6 +525,24 @@ describe('inbox', () => {
 		expect(part.hidden).toBe(true);
 	});
 
+	it('opens the conversation a staff alert links to (?conversation=<id> in the page address)', async () => {
+		window.history.replaceState(null, '', '/inbox?conversation=c1');
+		try {
+			const { server, hosts } = await startAdmin({
+				features: ['inbox'],
+				routes: {
+					'GET /v1/admin/conversations': () => answer(200, { items: [], nextCursor: null, hasMore: false, unread: 0 }),
+					'GET /v1/admin/conversations/c1': () => answer(200, { conversation: full(), messages: [message(1, 'visitor')] }),
+					'POST /v1/admin/conversations/c1/read': () => answer(204),
+				},
+			});
+			expect(server.last('GET /v1/admin/conversations/c1')).toBeTruthy();
+			expect(shadow(hosts.inbox).querySelector('.split')?.classList.contains('open')).toBe(true);
+		} finally {
+			window.history.replaceState(null, '', '/');
+		}
+	});
+
 	it('deletes a conversation (asked twice), calls the visitor, and shows earlier messages (C8, C11)', async () => {
 		let removed = () => problem(403, 'forbidden');
 		const { server, hosts } = await startAdmin({

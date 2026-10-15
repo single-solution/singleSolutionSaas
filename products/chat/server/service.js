@@ -513,7 +513,6 @@ export const createService = (product) => {
 			visitor: visitor
 				? { kind: visitor.kind, name: c?.name ?? visitor.name, email: visitor.email ?? c?.email ?? null }
 				: { kind: 'none', name: null, email: null },
-			guestLimit: limit > 0 ? { limit, used: c?.visitorMessages ?? 0 } : null,
 			guestMessagesLeft: limit > 0 ? Math.max(0, limit - (c?.visitorMessages ?? 0)) : null,
 			// no staff are in (outside office hours): a guest who left no contact is offered the lead form (PLAN 0.8.3)
 			leadOffered:
@@ -649,25 +648,13 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * The link of an alert: the Inbox address setting with the conversation id, put where `{id}` stands (RW-8), else
-	 * added as `conversation=<id>`.
-	 * @param {Site} s
-	 * @param {string} conversationId
-	 */
-	const inboxLink = async (s, conversationId) => {
-		const url = String((await s.values('staff_alerts')).inboxUrl ?? '');
-		if (!url) return '';
-		if (url.includes('{id}')) return url.replaceAll('{id}', encodeURIComponent(conversationId));
-		return `${url}${url.includes('?') ? '&' : '?'}conversation=${conversationId}`;
-	};
-
-	/**
 	 * A staff alert through the kit's staff alerts (K6; the recipients setting with email addresses and phones, Accounts
 	 * staff with the permission setting, and the assigned person: their email, and their phone from Accounts, CH-12):
 	 * `new_message` on a visitor message — with frequency `first_unanswered` at most once until staff reply or open it,
 	 * with `every_message` every time — and `needs_you` on handoff. Besides the short `preview`, the values carry the
-	 * visitor's `name` and latest `message` (up to 500 characters with its line breaks), and their `phone` with the
-	 * setting `includePhone` (CH-9). Sent after the answer.
+	 * visitor's `name` and latest `message` (up to 500 characters with its line breaks), their `phone` with the setting
+	 * `includePhone` (CH-9), and `conversationId`; the kit adds `link`, the setting `adminUrl` filled with the values
+	 * (for example `{conversationId}`, RW-8). Sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {'new_message' | 'needs_you'} kind
@@ -693,7 +680,6 @@ export const createService = (product) => {
 				...(settings.includePhone === true ? { phone: c.phone ?? '' } : {}),
 				preview: c.preview,
 				message: excerptOf(latest ? latest.text || latest.attachment?.name || '' : ''),
-				link: await inboxLink(s, c.id),
 				conversationId: c.id,
 				business: (await s.business()).name,
 			},

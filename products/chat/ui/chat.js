@@ -54,7 +54,7 @@ const LIMIT_STEPS = Object.freeze(['sign_in', 'lead', 'none']);
 const NO_CHAT = Object.freeze({
 	conversation: null,
 	visitor: { kind: 'none', name: null, email: null },
-	guestLimit: null,
+	guestMessagesLeft: null,
 	leadOffered: false,
 	lastSeq: 0,
 });
@@ -287,8 +287,7 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	/** @param {any} view */
 	const apply = (view) => {
 		chat = { ...NO_CHAT, ...view };
-		const guestLimit = chat.guestLimit;
-		if (!limit && isGuest() && guestLimit && guestLimit.limit > 0 && guestLimit.used >= guestLimit.limit) limit = nextStep();
+		if (!limit && isGuest() && chat.guestMessagesLeft === 0) limit = nextStep();
 		paint();
 	};
 	/** @param {any} data a Chat view with `messages` @param {boolean} paced */
@@ -489,15 +488,10 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	const needsContact = () =>
 		chat.conversation?.contactNeeded === true ||
 		(on('guest_chat') && s.guests.contactCapture === 'before_first' && isGuest() && !chat.conversation && !pendingContact);
+	// the API asks for a rating (on resolve, after a staff reply or on request, as the Ratings setting says)
 	const wantsRating = () => {
 		const c = chat.conversation;
-		if (!on('ratings') || !c || c.rating || rated) return false;
-		const staffTookPart = [...shown.values()].some((each) => each.message.author === 'staff');
-		return (
-			c.ratingRequested === true ||
-			(c.status === 'resolved' &&
-				(s.ratings.askWhen === 'on_resolve' || (s.ratings.askWhen === 'after_staff' && staffTookPart)))
-		);
+		return on('ratings') && !!c && !c.rating && !rated && c.ratingRequested === true;
 	};
 	/** @returns {[string, (() => HTMLElement) | null]} */
 	const partOf = () => {
@@ -534,8 +528,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 					? formatText(t('chat.officeClosed'), { time: when(c.officeHours.backAt) })
 					: t('chat.officeAway'),
 			);
-		if (on('presence_queue') && s.queuePosition && typeof c?.queuePosition === 'number')
-			lines.push(formatText(t('chat.queuePosition'), { position: c.queuePosition }));
+		// the API sets the queue position only with Presence and queue's setting on
+		if (typeof c?.queuePosition === 'number') lines.push(formatText(t('chat.queuePosition'), { position: c.queuePosition }));
 		// staff paused the AI and the website tells the visitor (the API sets paused only then, C9)
 		if (c?.paused === true) lines.push(t('chat.paused'));
 		notices.replaceChildren(...lines.map((line) => element(doc, 'p', { class: 'notice' }, line)));

@@ -80,7 +80,7 @@ export const TEXTS = Object.freeze({
 				title: 'Handoff and office hours',
 				help: 'When a chat goes to a person, your office hours, chats per person and the queue position.',
 			}),
-			inbox: Object.freeze({ title: 'Inbox', help: 'Your inbox address and who gets staff alerts.' }),
+			inbox: Object.freeze({ title: 'Inbox', help: 'The conversation page alerts link to, and who gets staff alerts.' }),
 			attachments: Object.freeze({ title: 'Attachments', help: 'Who may attach files, which types and how large.' }),
 			ratings: Object.freeze({ title: 'Ratings', help: 'How visitors rate a conversation and when they are asked.' }),
 			transcripts: Object.freeze({ title: 'Transcripts', help: 'Conversation copies sent by email.' }),

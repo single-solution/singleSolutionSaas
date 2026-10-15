@@ -10,7 +10,8 @@
  * on), with Open the chat and Delete. Only parts of switched-on features show, and a part whose route answers 403
  * hides itself (only that part). A field staff are typing in is not overwritten by the checks. It checks for news with
  * the same back-off as the visitor chat. Where the widget is wide the open conversation sits beside the list; in a
- * narrow one it replaces the list until it is closed (PLAN 0.6: by the widget's own width, a container query).
+ * narrow one it replaces the list until it is closed (PLAN 0.6: by the widget's own width, a container query). The
+ * conversation a staff alert links to (`?conversation=<id>` in the page address) opens on start.
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
@@ -644,6 +645,9 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				if (on('saved_replies')) await saved.load();
 				if (on('leads_flows')) await leads.load(true);
 				await load(true);
+				// a staff alert links to the inbox page with ?conversation=<id> (the setting adminUrl): open it
+				const linked = new URLSearchParams(win.location.search).get('conversation');
+				if (linked) await show(linked);
 				checks.start();
 			})();
 			return () => {

@@ -91,7 +91,7 @@
 			"key": "ai_cost_alerts",
 			"name": "AI cost alerts",
 			"description": "One alert a month to your staff when the AI tokens cross a share of the monthly cap.",
-			"dependsOn": ["ai_caps"],
+			"dependsOn": ["ai_caps", "staff_alerts"],
 			"settings": {
 				"$ref": "schemas/ai_cost_alerts.settings.json"
 			}
@@ -431,17 +431,17 @@
 	"permissions": [
 		{
 			"key": "inbox.read",
-			"name": "See conversations and set your own presence",
+			"name": "See conversations, leads and AI summaries; set your own presence",
 			"feature": "inbox"
 		},
 		{
 			"key": "inbox.reply",
-			"name": "Reply and attach",
+			"name": "Reply, attach, send transcripts, ask for ratings; pause the AI if allowed",
 			"feature": "inbox"
 		},
 		{
 			"key": "inbox.manage",
-			"name": "Status, assignment, notes, saved replies, custom field values and max chats",
+			"name": "Status, assignment, notes, saved replies, fields, max chats, AI pause, deletes",
 			"feature": "inbox"
 		},
 		{

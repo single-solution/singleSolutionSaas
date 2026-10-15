@@ -104,15 +104,20 @@ describe('inbox', () => {
 		const reopened = await sys.admin(ticket, 'PATCH', `/v1/admin/conversations/${id}`, {
 			status: 'open',
 			assignedTo: 'usr_lee',
-			aiPaused: true,
 			fields: { tier: 'Gold' },
 		});
 		expect(reopened.json.conversation).toMatchObject({
 			status: 'open',
-			aiPaused: true,
+			aiPaused: false,
 			assignedTo: { id: 'usr_lee', name: 'Lee' },
 			fields: { tier: 'Gold' },
 		});
+		// the AI is paused one way only, PUT …/ai: PATCH does not take aiPaused
+		expect((await sys.admin(ticket, 'PATCH', `/v1/admin/conversations/${id}`, { aiPaused: true })).status).toBe(422);
+		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { aiPaused: true })).status).toBe(422);
+		expect((await sys.admin(ticket, 'GET', `/v1/admin/conversations/${id}`)).json.conversation.aiPaused).toBe(false);
+		const paused = await sys.admin(ticket, 'PUT', `/v1/admin/conversations/${id}/ai`, { paused: true });
+		expect(paused.json.conversation.aiPaused).toBe(true);
 		const other = list.json.items.find((/** @type {any} */ c) => c.id !== id).id;
 		const full = await sys.admin(ticket, 'PATCH', `/v1/admin/conversations/${other}`, { assignedTo: 'usr_lee' });
 		expect(full.status).toBe(409);

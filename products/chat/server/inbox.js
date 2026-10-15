@@ -360,12 +360,6 @@ export const createInbox = (product, service, reply) => {
 			}
 			actions.push({ action: 'conversation.status_changed', detail: `Status: ${c.status} → ${body.status}` });
 		}
-		if (body.aiPaused !== undefined) {
-			if (typeof body.aiPaused !== 'boolean') throw invalid(['aiPaused is true or false.']);
-			const reason = typeof body.aiPausedReason === 'string' ? body.aiPausedReason.slice(0, REASON_MAX) : null;
-			Object.assign(set, pauseSet(actor, body.aiPaused, reason, new Date(now())));
-			actions.push({ action: 'conversation.ai_paused_changed', detail: pauseDetail(body.aiPaused, c) });
-		}
 		if (body.assignedTo !== undefined) {
 			needs(s, 'assignment');
 			/** @type {string | null} */

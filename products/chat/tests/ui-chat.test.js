@@ -56,7 +56,7 @@ const conv = (over = {}) => ({
 const view = (over = {}) => ({
 	conversation: conv(),
 	visitor: { kind: 'guest', name: null, email: null },
-	guestLimit: null,
+	guestMessagesLeft: null,
 	lastSeq: 0,
 	...over,
 });
@@ -392,7 +392,7 @@ describe('guest limit', () => {
 	it('shows the limit from the chat itself', async () => {
 		keepGuest();
 		const { $ } = await start({
-			routes: { 'GET /v1/chat': () => answer(200, { ...view({ guestLimit: { limit: 5, used: 5 } }), messages: [] }) },
+			routes: { 'GET /v1/chat': () => answer(200, { ...view({ guestMessagesLeft: 0 }), messages: [] }) },
 		});
 		await click($('.launcher'));
 		expect($('.slot').textContent).toBe(TEXTS['chat.limitReached']);
@@ -581,7 +581,6 @@ describe('conversation tools', () => {
 		let transcript = problem(503, 'notifications_not_connected');
 		const { $, root, server } = await start({
 			features: ['visitor_chat', 'guest_chat', 'handoff', 'presence_queue', 'transcripts'],
-			settings: { queuePosition: true },
 			routes: {
 				'GET /v1/chat': () => answer(200, { ...view({ conversation: current }), messages: [] }),
 				'POST /v1/chat/handoff': () => {
@@ -697,7 +696,8 @@ describe('conversation tools', () => {
 			features: ['visitor_chat', 'guest_chat', 'ratings'],
 			settings: { ratings: { scale: 2, askWhen: 'on_resolve', comment: false } },
 			routes: {
-				'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ status: 'resolved' }) }), messages: [] }),
+				'GET /v1/chat': () =>
+					answer(200, { ...view({ conversation: conv({ status: 'resolved', ratingRequested: true }) }), messages: [] }),
 				'POST /v1/chat/rating': () =>
 					answer(200, { chat: view({ conversation: conv({ status: 'resolved', rating: { score: 2 } }) }) }),
 			},
@@ -719,7 +719,7 @@ describe('conversation tools', () => {
 			routes: {
 				'GET /v1/chat': () =>
 					answer(200, {
-						...view({ conversation: conv({ status: 'resolved' }) }),
+						...view({ conversation: conv({ status: 'resolved', ratingRequested: true }) }),
 						messages: [msg(1, 'staff', 'Done', { name: 'Ana' })],
 					}),
 				'POST /v1/chat/rating': () => rating,
@@ -759,6 +759,23 @@ describe('conversation tools', () => {
 		await click(asked.$('.launcher'));
 		expect(textsIn(asked.root, '.slot .choices button')).toEqual(['1', '2', '3']);
 		expect($).toBeTruthy();
+	});
+
+	it('asks only when the chat says so: a resolved chat that was not asked (an imported one) shows no rating', async () => {
+		keepGuest();
+		const { $, root } = await start({
+			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			settings: { ratings: { scale: 5, askWhen: 'on_resolve', comment: false } },
+			routes: {
+				'GET /v1/chat': () =>
+					answer(200, {
+						...view({ conversation: conv({ status: 'resolved', ratingRequested: false }) }),
+						messages: [msg(1, 'staff', 'Done', { name: 'Ana' })],
+					}),
+			},
+		});
+		await click($('.launcher'));
+		expect(root.textContent).not.toContain(TEXTS['chat.ratingAsk']);
 	});
 });
 

@@ -60,7 +60,8 @@ describe('guests and AI replies', () => {
 		await sys.setting('signed_in_chat', 'signInUrl', 'https://shop.example.com/sign-in');
 		expect((await v('POST', '/v1/chat/messages', { text: 'two' })).json).toMatchObject({ next: 'sign_in' });
 		const state = await v('GET', '/v1/chat');
-		expect(state.json.guestLimit).toEqual({ limit: 1, used: 1 });
+		expect(state.json.guestMessagesLeft).toBe(0);
+		expect(state.json).not.toHaveProperty('guestLimit');
 	});
 
 	it('lifts the guest limit while the Customer role’s sign-in is paused at Accounts, with the setting (C17)', async () => {
@@ -92,7 +93,7 @@ describe('guests and AI replies', () => {
 		expect(await send('two')).toBe(201);
 		expect(await send('three')).toBe(201);
 		const state = await v('GET', '/v1/chat');
-		expect(state.json).toMatchObject({ guestLimit: null, guestMessagesLeft: null });
+		expect(state.json).toMatchObject({ guestMessagesLeft: null });
 		expect((await config()).messageLimit).toBe(0);
 		// asked once with the pasted Accounts token, then kept for a minute
 		expect(reads()).toHaveLength(1);
@@ -178,7 +179,7 @@ describe('handoff, office hours and failures', () => {
 		await sys.connect('ai', AI_KEY);
 		await sys.paste('notifications');
 		await sys.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
-		await sys.setting('staff_alerts', 'inboxUrl', 'https://admin.shop.example.com/inbox');
+		await sys.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/inbox?conversation={conversationId}');
 		const v = sys.visitor();
 		sys.ai({ text: 'Visitor wants a person.' });
 		const sent = await v('POST', '/v1/chat/messages', { text: 'I want to talk to someone please' });

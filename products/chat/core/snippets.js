@@ -1,7 +1,7 @@
 /**
  * The code snippets the public docs and the dashboard's Developers tab show: the widget script and its JS API
- * (`identify`, `setPage`, `onUnread`), admin widgets with their ticket function, the ticket request (Node.js and cURL),
- * the tool signature check on the merchant's server and the booking endpoint's two requests. Plain text; no I/O.
+ * (`identify`, `setPage`, `onUnread`), admin widgets with their ticket function, the ticket request (Node.js and cURL)
+ * and the tool signature check on the merchant's server. Plain text; no I/O.
  * @module
  */
 import { TOOL_SIGNATURE_HEADER } from './tools.js';

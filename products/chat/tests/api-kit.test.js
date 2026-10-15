@@ -133,11 +133,12 @@ describe('widgets and docs', () => {
 			flows: [{ id: 'w', name: 'W', start: { kind: 'page', path: '/', delay: 0 } }],
 			attachments: { visitors: 'off', maxBytes: 5 * 1024 * 1024, storage: true },
 			ratings: { scale: 5, askWhen: 'on_resolve', comment: true },
-			queuePosition: true,
 			// how often the widget checks: the website's own, else the code's (C19)
 			checks: { focusedSeconds: 5, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 		});
 		expect(JSON.stringify(config.json)).not.toContain('secretAccessKey');
+		// the queue position is the chat's own answer (the server applies its setting), not a widget setting
+		expect(config.json.settings).not.toHaveProperty('queuePosition');
 	});
 
 	it('the check settings default to the code’s intervals (C19)', () => {
@@ -151,6 +152,8 @@ describe('widgets and docs', () => {
 		expect(script.headers.get('content-type')).toContain('javascript');
 		const docs = await sys.call('GET', '/docs');
 		expect(docs.text).toContain('Chat docs');
+		// a feature with no route of its own shows no empty route table
+		expect(docs.text).not.toContain('<tbody></tbody>');
 		expect(docs.text).toContain('chat.staff_needs_you');
 		expect(docs.text).toContain(`${BASE}/v1/tickets`);
 		expect(docs.text).toContain('search_catalog');

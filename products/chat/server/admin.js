@@ -245,7 +245,6 @@ export const createAdmin = (product, service) => {
 				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,
 			},
 			ratings: { scale: Number(ratings.scale), askWhen: ratings.askWhen, comment: ratings.askComment },
-			queuePosition: (await values('presence_queue')).queuePosition,
 			// how often the widget checks for messages (C19)
 			checks: { focusedSeconds: look.pollFocusedSeconds, backgroundSeconds: look.pollBackgroundSeconds },
 		};

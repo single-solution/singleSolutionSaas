@@ -294,8 +294,8 @@ describe('Chat on the real Portal', () => {
 			},
 		);
 		expect(recipients.status).toBe(204);
-		await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/staff_alerts.inboxUrl`, {
-			value: `${ADMIN_ORIGIN}/inbox`,
+		await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/settings/staff_alerts.adminUrl`, {
+			value: `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,
 		});
 		const before = mails.length;
 		const sent = await visitor('POST', '/v1/chat/messages', { body: { text: 'Can I talk to a person?' } });

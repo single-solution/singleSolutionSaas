@@ -71,7 +71,7 @@ describe('handoff options (C4)', () => {
 });
 
 describe('staff alerts and reply alerts (C5, C6)', () => {
-	it('alerts emails and phones (WhatsApp or SMS), Accounts staff who can reply, on every message when asked', async () => {
+	it('alerts emails and phones (SMS, or WhatsApp), Accounts staff who can reply, on every message when asked', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts', 'assignment']);
 		await sys.paste('notifications');
 		await sys.paste('accounts');
@@ -89,13 +89,14 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		const sent = sys.messages();
 		expect(sent).toHaveLength(8);
 		expect(new Set(sent.map((m) => m.template))).toEqual(new Set(['chat.staff_new_message']));
+		// phones get SMS by default: Chat's staff alerts have default words for SMS, none for WhatsApp
 		expect(sent.slice(0, 4).map((m) => [m.channel, m.to])).toEqual([
 			['email', { email: 'boss@shop.example.com' }],
-			['whatsapp', { phone: '+442079460958' }],
+			['sms', { phone: '+442079460958' }],
 			['email', { email: 'agent@shop.example.com' }],
-			['whatsapp', { phone: '+12025550143' }],
+			['sms', { phone: '+12025550143' }],
 		]);
-		await sys.setting('staff_alerts', 'phoneChannel', 'sms');
+		await sys.setting('staff_alerts', 'phoneChannel', 'whatsapp');
 		await sys.setting('staff_alerts', 'frequency', 'first_unanswered');
 		const other = sys.visitor();
 		await other('POST', '/v1/chat/messages', { text: 'three' });
@@ -105,7 +106,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 				.messages()
 				.slice(8)
 				.map((m) => m.channel),
-		).toEqual(['email', 'sms', 'email', 'sms']);
+		).toEqual(['email', 'whatsapp', 'email', 'whatsapp']);
 	});
 
 	it('a staff reply alerts a visitor who left, once until they check again', async () => {
@@ -317,7 +318,7 @@ describe('older messages, typing, Seen and the paused notice (C8, C9)', () => {
 		expect(hidden.json.conversation).toMatchObject({ staffSeenSeq: null, aiPending: false });
 		expect((await sys.admin(ticket, 'GET', `/v1/admin/conversations/${id}`)).json.conversation.visitorSeenSeq).toBeUndefined();
 		// the paused notice while staff paused the AI
-		await sys.admin(ticket, 'PATCH', `/v1/admin/conversations/${id}`, { aiPaused: true });
+		await sys.admin(ticket, 'PUT', `/v1/admin/conversations/${id}/ai`, { paused: true });
 		expect((await v('GET', '/v1/chat')).json.conversation.paused).toBe(false);
 		await sys.setting('visitor_chat', 'showPaused', true);
 		expect((await v('GET', '/v1/chat')).json.conversation.paused).toBe(true);

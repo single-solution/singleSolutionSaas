@@ -252,7 +252,8 @@ describe('activity labels (K9)', () => {
 		const sent = await v('POST', '/v1/chat/messages', { text: 'My secret question' });
 		const id = sent.json.chat.conversation.id;
 		await v('POST', '/v1/chat/contact', { name: 'Ann Lee', email: 'ann@example.com' });
-		await server(sys, 'PATCH', `/v1/conversations/${id}`, { body: { status: 'resolved', aiPaused: true } });
+		await server(sys, 'PATCH', `/v1/conversations/${id}`, { body: { status: 'resolved' } });
+		await server(sys, 'PUT', `/v1/conversations/${id}/ai`, { body: { paused: true } });
 		const entry = await server(sys, 'POST', '/v1/knowledge/entries', {
 			body: { kind: 'faq', title: 'Returns', text: 'Within 14 days.' },
 			headers: ZOE,

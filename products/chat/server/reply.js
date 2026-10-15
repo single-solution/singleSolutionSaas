@@ -942,7 +942,7 @@ export const createReply = (product, service) => {
 		const handoffNow = s.on.includes('handoff') && (inARow || (onFailure !== 'message' && !wrongLanguage));
 		let current = failed;
 		if (onFailure !== 'handoff' || !handoffNow) {
-			const translated = lock && language ? translationOf(lock.unavailableTexts ?? [], language) : null;
+			const translated = lock && language ? translationOf(lock.unavailableTexts, language) : null;
 			current = (await service.botMessage(s, current, translated ?? String(texts['chat.aiUnavailable']))).conversation;
 		}
 		if (handoffNow) await handOff(s, current);

@@ -339,7 +339,12 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 			const pasted = await setUp('chat', `/connections/${id}`, { value: tokens[id]?.server });
 			expect(pasted.json, id).toMatchObject({ status: 'connected' });
 		}
-		await configure('chat', { 'ai_replies.onFailure': 'message', 'staff_alerts.inboxUrl': `${ADMIN_ORIGIN}/inbox` });
+		await configure('chat', {
+			'ai_replies.onFailure': 'message',
+			'staff_alerts.adminUrl': `${ADMIN_ORIGIN}/inbox?conversation={conversationId}`,
+			// phones get SMS by default; this website has its WhatsApp templates approved
+			'staff_alerts.phoneChannel': 'whatsapp',
+		});
 	});
 
 	it('C1: 32,000 characters of instructions, and each AI reply adds Ecommerce’s live store context, cached 60 s', async () => {

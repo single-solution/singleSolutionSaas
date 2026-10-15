@@ -486,7 +486,7 @@ export const createVisitorApi = (product, service, reply) => {
 export const uploadRules = (settings, who) =>
 	who === 'staff'
 		? {
-				types: STAFF_TYPES.filter((type) => (settings.staffTypes ?? []).includes(type)),
+				types: STAFF_TYPES.filter((type) => settings.staffTypes.includes(type)),
 				max: Math.min(Number(settings.staffMaxSizeMb) * 1024 * 1024, MAX_STAFF_ATTACHMENT_BYTES),
 			}
 		: {

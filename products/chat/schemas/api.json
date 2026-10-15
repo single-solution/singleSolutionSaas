@@ -79,7 +79,7 @@
 		"Chat": {
 			"type": "object",
 			"description": "The visitor's chat.",
-			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "leadOffered", "lastSeq"],
+			"required": ["conversation", "visitor", "guestMessagesLeft", "leadOffered", "lastSeq"],
 			"additionalProperties": false,
 			"properties": {
 				"conversation": {
@@ -110,32 +110,10 @@
 						}
 					}
 				},
-				"guestLimit": {
-					"oneOf": [
-						{
-							"type": "object",
-							"required": ["limit", "used"],
-							"additionalProperties": false,
-							"properties": {
-								"limit": {
-									"type": "integer",
-									"minimum": 1
-								},
-								"used": {
-									"type": "integer",
-									"minimum": 0
-								}
-							}
-						},
-						{
-							"type": "null"
-						}
-					],
-					"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise, also while the limit is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
-				},
 				"guestMessagesLeft": {
 					"type": ["integer", "null"],
-					"minimum": 0
+					"minimum": 0,
+					"description": "The messages a guest may still send (Guest chat with a limit; 0 = the limit is reached); null for signed-in visitors and when there is no limit, also while it is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
 				},
 				"leadOffered": {
 					"type": "boolean",
@@ -1579,7 +1557,7 @@
 		},
 		"response": {
 			"type": "object",
-			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "leadOffered", "lastSeq", "messages"],
+			"required": ["conversation", "visitor", "guestMessagesLeft", "leadOffered", "lastSeq", "messages"],
 			"additionalProperties": false,
 			"properties": {
 				"conversation": {
@@ -1610,32 +1588,10 @@
 						}
 					}
 				},
-				"guestLimit": {
-					"oneOf": [
-						{
-							"type": "object",
-							"required": ["limit", "used"],
-							"additionalProperties": false,
-							"properties": {
-								"limit": {
-									"type": "integer",
-									"minimum": 1
-								},
-								"used": {
-									"type": "integer",
-									"minimum": 0
-								}
-							}
-						},
-						{
-							"type": "null"
-						}
-					],
-					"description": "A guest's message limit and the messages used (Guest chat with a limit); null otherwise, also while the limit is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
-				},
 				"guestMessagesLeft": {
 					"type": ["integer", "null"],
-					"minimum": 0
+					"minimum": 0,
+					"description": "The messages a guest may still send (Guest chat with a limit; 0 = the limit is reached); null for signed-in visitors and when there is no limit, also while it is lifted because the Customer role's sign-in is paused at Accounts (setting No limit while customer sign-in is paused)."
 				},
 				"leadOffered": {
 					"type": "boolean",
@@ -2507,22 +2463,14 @@
 		}
 	},
 	"PATCH /v1/admin/conversations/:id": {
-		"summary": "Change status, AI pause, assignment or custom field values",
-		"description": "Send any of them (at least one). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
+		"summary": "Change status, assignment or custom field values",
+		"description": "Send any of them (at least one; pause or resume the AI with PUT /v1/admin/conversations/:id/ai). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
 		"body": {
 			"type": "object",
 			"properties": {
 				"status": {
 					"type": "string",
 					"enum": ["open", "awaiting_visitor", "resolved"]
-				},
-				"aiPaused": {
-					"type": "boolean",
-					"description": "false also hands a chat waiting for a person back to the AI."
-				},
-				"aiPausedReason": {
-					"type": "string",
-					"description": "With aiPaused true; cut to 200 characters."
 				},
 				"assignedTo": {
 					"type": ["string", "null"],
@@ -3242,22 +3190,14 @@
 		}
 	},
 	"PATCH /v1/conversations/:id": {
-		"summary": "Change status, AI pause, assignment or custom field values",
-		"description": "Send any of them (at least one). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
+		"summary": "Change status, assignment or custom field values",
+		"description": "Send any of them (at least one; pause or resume the AI with PUT /v1/conversations/:id/ai). resolved ends waiting and, with Ratings asking on resolve (or after a staff reply that came), asks for a rating. assignedTo needs Assignment: someone on the staff list, or an Accounts user whose role may reply in the inbox (with the Accounts token); 409 staff_full when they have the most open chats they can take. fields needs Custom fields: null or '' clears a value. Each change is written to the activity log. 422 validation_failed; 403 feature_off.",
 		"body": {
 			"type": "object",
 			"properties": {
 				"status": {
 					"type": "string",
 					"enum": ["open", "awaiting_visitor", "resolved"]
-				},
-				"aiPaused": {
-					"type": "boolean",
-					"description": "false also hands a chat waiting for a person back to the AI."
-				},
-				"aiPausedReason": {
-					"type": "string",
-					"description": "With aiPaused true; cut to 200 characters."
 				},
 				"assignedTo": {
 					"type": ["string", "null"],

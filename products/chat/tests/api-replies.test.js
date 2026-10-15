@@ -227,9 +227,6 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['ai', 'A person will reply here soon.']);
 		const view = (await sys.serverCall('GET', `/v1/conversations/${first.id}`)).json.conversation;
 		expect(Date.parse(view.waitingSince) - Date.parse(view.handedOffAt)).toBe(10 * 60_000);
-		// PATCH aiPaused false hands it back too
-		const patched = await sys.serverCall('PATCH', `/v1/conversations/${first.id}`, { aiPaused: false });
-		expect(patched.json.conversation).toMatchObject({ waiting: false, waitingSince: null });
 	});
 
 	it('assigns a chat to staff Chat has not seen yet when Accounts lets them reply in the inbox', async () => {
@@ -301,7 +298,8 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		).toEqual([
 			['email', { email: 'boss@shop.example.com' }],
 			['email', { email: 'ana@shop.example.com' }],
-			['whatsapp', { phone: '+12025550143' }],
+			// phones get SMS unless the setting Phones get says WhatsApp (staff alerts have no WhatsApp words)
+			['sms', { phone: '+12025550143' }],
 		]);
 		// later, while Accounts cannot be reached, the phone read last still gets the alert
 		sys.advance(6 * 60_000);
@@ -357,13 +355,13 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 });
 
 describe('options from the settings draft (CH-13, CH-21, RW-8)', () => {
-	it('the inbox can show signed-in visitors only; alerts link with {id}; tables get messages of their own', async () => {
+	it('the inbox can show signed-in visitors only; alerts link with {conversationId}; tables get messages of their own', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'signed_in_chat', 'ai_replies', 'inbox', 'staff_alerts']);
 		await sys.paste('accounts');
 		await sys.paste('notifications');
 		await sys.setting('inbox', 'guests', 'signed_in');
 		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
-		await sys.setting('staff_alerts', 'inboxUrl', 'https://admin.shop.example.com/inquiries?inquiry={id}');
+		await sys.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/inquiries?inquiry={conversationId}');
 		await sys.setting('ai_replies', 'bubbles', 5);
 		await sys.setting('ai_replies', 'tableBubble', true);
 		sys.ai({ text: 'Two lamps:\n| Lamp | Price |\n|---|---|\n| A | $1 |\nWant one?' }, { text: 'Hi Ann.' });

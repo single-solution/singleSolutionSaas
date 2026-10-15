@@ -49,6 +49,11 @@ describe('the website Setup sheet', () => {
 			'chat.ai+signIn.*+sells.digital',
 		]);
 		expect(manifest.features.find((feature) => feature.key === 'reports')?.recommendFor).toBeUndefined();
+		// AI cost alerts go to the Staff alerts recipients, so they cannot be on without Staff alerts
+		expect(manifest.features.find((feature) => feature.key === 'ai_cost_alerts')?.dependsOn).toEqual([
+			'ai_caps',
+			'staff_alerts',
+		]);
 		// every route a build text names is one Chat serves
 		const named = Object.values(build).flatMap((text) =>
 			[...text.matchAll(/\b(GET|POST|PUT|PATCH|DELETE) (\/v1\/[^\s?,;)]+)/g)].map(([, method, path]) => ({
