@@ -1214,7 +1214,8 @@ in, before any other page opens. A merchant with no websites sees a short welcom
 - **Overview**: totals (merchants, websites, active products, credits added and spent this month), needs attention
   (merchants that are low, in grace or stopped), recent activity, per-product numbers (for each connected product, the
   websites using it and the credits it earned this month); numbers with 30-day charts. Active products = products on
-  websites with status active or grace and at least one feature on. A warning shows while SMTP is not set.
+  websites with status active or grace and at least one feature on. A warning shows while SMTP is not set. (Decided
+  2026-10-15: the Workbench Overview of 0.6 replaced this tile list.)
 - **Merchants** (list-and-detail, 0.6): the list (search by name, owner e-mail or domain; status filter; per row name +
   owner e-mail, status dot and balance; bulk actions, 0.6) beside the selected merchant's page (on wide screens the
   first merchant of the list until another is picked). **Add merchant** (Owner, Support) opens a dialog with the merchant
@@ -2009,6 +2010,23 @@ sitemaps were refused; the Redirects CSV download lost its byte order mark. Also
 between groups of ten (a slow batch is never redone); a shared Setup link survives a reload (the tab keeps its key).
 Kept as designed: a fresh Notifications instance without the product list treats `name.something` keys as a
 product's while the Portal is down; any Notifications server token may send other products' keys (as before).
+
+**Portal and kit gaps closed (2026-10-15; `audit/plan-gaps-2026-10-15.md` §6; 4e9eb4b2, 431ba1d2, 2ce96f75, b91dc21e,
+ddf09859, 586ab3fc, 7216213c, 8e28653f, 0aea03a5, 434a76e1):** product dashboards can no longer be framed (0.4.3):
+`@ss/app-kit/headers` `dashboardHeaders()` in each product's `next.config.js` gives the dashboard page `X-Frame-Options:
+DENY`, CSP `frame-ancestors 'none'` and the Portal's other static security headers (Accounts, Notifications, Chat,
+Payments, Growth, the CLI template and the Notes fixture; Ecommerce's one line comes with its next helper). A website's
+setting, text, theme, Format and list saves are activity-log entries (`settings.changed`, by who saved them; parity SB
+#12) besides Recent changes and the event; the kit offers `product.settingsChanged` for settings a product saves through
+its own routes (Chat's and Ecommerce's dashboard lists do not use it yet). Settings API reads get 3,000 per minute per
+route and website (SG-31). A re-add raises `featuresVersion` with every feature off, and a product with older switches
+turns them off on its next status read (0.8.4). The admin Overview's credits added this month are summed by the Portal
+over every receipt (not in the browser from at most 500). Setup sheet: `website.status` (the status of the website's
+products), `apiBase` per product, and a setting whose value holds a secret shows `set: true` instead of its value.
+Kept by decision: the Portal's optional `LOG_LEVEL` and every deployable's optional `ENCRYPTION_KEY_PREVIOUS` (0.11,
+0.12). Closed by decision: the Developers tab's browser token (the Setup sheet's install snippet carries it) and step
+4's splittable-unit test (per-unit CI runs and the `ss app init` tests). Bug fixed: the Setup page's part headings were
+all caps (0.6: sentence case).
 
 **Owner request, 2026-10-14 ~22:00 — website setup sheet and setup advisor (new SaaS feature, design
 `audit/design/website-blueprint.md`).** "Once it is complete I will add websites and products … there should be
@@ -3483,7 +3501,8 @@ name or a SKU) and `catalog.chatSearch` (`same` default | `basic` | `atlas`).
 
 Not built from these findings: Google category per category, a product_type template and extra images in feeds (SG-3);
 SEO-title overrides used as written (K-25); grade glossary patterns (SG-20); `identifier_exists` in the Meta CSV
-(SG-22); the kit's `/v1/settings` window (SG-31).
+(SG-22). The kit's settings API read window (SG-31) was built on 2026-10-15 (ddf09859: 3,000 reads per minute per
+route and website).
 
 Built after the re-audit, sixth batch (2026-10-14; commits fd345e30, 9b533e68, e7c26b67, 377bce7c, c799edc1, 0062e958,
 2aa4f452, e6a23c96, e6804dfa, 58b6532b; the developer side: every route described in `schemas/api.json`, docs and
@@ -4830,7 +4849,9 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
    - **Money code** lives in the Portal: the pure money function (`commerce/core/money.js`) and the ledger's canonical
      JSON hash (`commerce/core/ledger.js`).
    - **Admin Overview** money totals (credits added and spent this month) and the 30-day home charts are left for the
-     Overview work; step 3 shows them on Credits and billing, the merchant page and Usage and credits.
+     Overview work; step 3 shows them on Credits and billing, the merchant page and Usage and credits. Closed
+     (2026-10-15): the Workbench Overview (0.6) replaced the 0.8.2 tile list; credits added this month are summed by the
+     Portal over every receipt of the UTC month (8e28653f).
    - **Step 5 test product**: step 5 is verified in e2e against a test-only product generated by `ss app init` in
      `e2e/fixtures/notes` (part of the e2e unit, never deployed). Add product accepts any id of the right format
      (`^[a-z][a-z0-9-]{1,30}$`), not only the six, and refuses an id already connected (`use Reconnect`).
@@ -4846,10 +4867,12 @@ Built after the re-audit (2026-10-13, owner decisions D7 and D11; commits b122ce
 actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
    - **Developers tab browser token**: products never receive tokens, so the dashboard's Developers tab shows a
      placeholder with `Manage tokens in the Portal`; 0.4.3 says the website's browser token is filled in. How the
-     product learns it (for example in the launch) needs an owner decision.
+     product learns it (for example in the launch) needs an owner decision. Closed by decision (2026-10-15): the
+     website's Setup sheet gives each product's install snippet with the browser token, so the tab keeps the link.
    - **Re-add while unreachable**: if a product cannot be reached across both the removal and the re-add of itself on
-     a website, it never sees `removed` and keeps its old switches on while the Portal charges nothing. A fix needs
-     the Portal to raise `featuresVersion` on re-add (a contract change; owner decision).
+     a website, it never sees `removed` and keeps its old switches on while the Portal charges nothing. Built
+     (2026-10-15, 8e28653f, 7216213c): a re-add raises `featuresVersion` by one with every feature off, and a product
+     whose switches are older turns them off on its next status read (unless its own feature report is still running).
    - **Products menu**: Owner only (0.8.2); Support can still read the active product list, which Add product needs,
      and the product cards. The merchant console opens on `/overview`.
    - **Tokens**: the Portal signs tokens with its own token key (generated on first start); the revocation
@@ -4863,7 +4886,7 @@ actor, action, target, at }` sent to Accounts at `POST /v1/activity-copies`.
    - **Reports**: Add product takes the first price list the product answers (connect sends version 0); Reconnect
      ignores an equal version and refuses a lower one. Feature reports are refused with 422 for an unknown key, a key
      without a price, a dependency off or an unknown admin, 403 for a Finance admin, 404 `website_not_found`, 409 for an
-     old version; `featuresVersion` keeps rising across remove and re-add.
+     old version; `featuresVersion` keeps rising across remove and re-add (a re-add raises it by one itself).
    - **Outbound to products**: outside production the Portal may reach products on `localhost`, `127.0.0.1` and
      `[::1]`; in production only public https addresses.
    - **Kit details** (`@ss/app-kit`): one generic store in the product database; the price report after a deploy that
@@ -5376,12 +5399,13 @@ These bind wherever the rest of Part 0 does not change them.
 | Each product | `CONNECT_SECRET`          | Random, at least 32 characters. Typed once into Portal → Products → Add; the Portal never stores it. Changing it locks the old binding out until Reconnect.                                                                                                                                                                                                                  |
 | Each product | `ENCRYPTION_KEY`          | Random, at least 32 characters, different for each deployable. Encrypts the product's stored secrets (0.4.8).                                                                                                                                                                                                                                                                |
 | Any          | `ENCRYPTION_KEY_PREVIOUS` | Optional, set only while changing `ENCRYPTION_KEY`: the old key, so stored values stay readable until they are re-sealed; removed afterwards (0.4.8; owner, 2026-10-13).                                                                                                                                                                                                     |
+| Portal       | `LOG_LEVEL`               | Optional, Portal only: how much the Portal logs, `debug`, `info`, `warn`, `error` or `silent` (default `info`; `debug` in development). Kept by decision (2026-10-15): useful and documented in `.env.example`.                                                                                                                                                              |
 
 - Nothing else is read in production. There are no host-specific variables, no
   tuning variables, no product URL variable and no cron secret.
 - A deployable fails at start with a clear error naming the missing or invalid variable (never its value).
 - The deployable's own source reads only the three variables listed (plus the optional `ENCRYPTION_KEY_PREVIOUS` during
-  a key change), in every environment. Only test and e2e harness
+  a key change, and the Portal's optional `LOG_LEVEL`), in every environment. Only test and e2e harness
   code (for example a test database URI) may read other variables, and they never appear in `.env.example`.
 - Secrets not in this list (signing keys, session secret, idempotency secret) are generated on first start into the
   deployable's own database.
@@ -5417,7 +5441,8 @@ These bind wherever the rest of Part 0 does not change them.
   the ticket snippet in `/docs`. Every product: public docs at `/docs`.
 - Its dashboard has the 0.4.3 tabs, admin view and Recent changes, and shows no business data.
 - The e2e suite runs it against the real Portal (connect, reports, statuses, tokens, tickets, notices, data rights).
-- `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`.
+- `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`, plus the optional
+  `ENCRYPTION_KEY_PREVIOUS` (set only while changing `ENCRYPTION_KEY`, D11; kept by decision, 2026-10-15).
 - For a product built before Accounts (step 6), the export and delete routes and the log-forwarding client are tested
   against the kit's test double. The e2e tests against the real Accounts are added in step 7, which is not done until
   they pass for every product already shipped.
@@ -5479,7 +5504,8 @@ Done: <date>, verified by <who>
   log-forwarding routes, Shadow DOM widget mount, widget texts, Recent changes, admin switcher and roles, tenant guard.
 - `ss app init` generates the 0.4.13 layout and `ss app validate` checks it.
 - Every package passes its own `check` (coverage thresholds: 90 % lines, 90 % functions, 85 % branches) and the
-  splittable-unit test.
+  splittable-unit test. (Closed by decision, 2026-10-15: the per-unit CI runs, each unit checked on its own, and the
+  `ss app init` tests are that test.)
 
 #### Step 5 — Portal: products, tokens and the contract
 
