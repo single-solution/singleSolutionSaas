@@ -7,6 +7,7 @@
  * @module
  */
 import { Callout, Masonry, Section } from '@ss/ui';
+import { aiLabelShown } from '../../core/widgets.js';
 import { call, useLoad } from './api.js';
 import { CustomFieldsEditor, FallbackAnswersEditor, FlowsEditor, PageRulesEditor, ToolSecret, ToolsEditor } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
@@ -40,12 +41,13 @@ const SECTIONS = [
 const PLACED = new Set(SECTIONS.flatMap((section) => section.features));
 
 /**
- * The AI label warning (PLAN 0.8.3 AI) on the AI replies card while the label is hidden.
+ * The AI label warning (PLAN 0.8.3 AI) on the AI replies card while the label is hidden: Show the AI label off, or
+ * Never disclose on (C1).
  * @param {string} key
  * @param {Record<string, unknown>} values
  */
 export const aiLabelNotice = (key, values) =>
-	key === 'ai_replies' && values.showAiLabel === false ? (
+	key === 'ai_replies' && !aiLabelShown(values) ? (
 		<Callout tone="warning" className="mb-4">
 			{TEXTS.settings.aiLabelWarning}
 		</Callout>

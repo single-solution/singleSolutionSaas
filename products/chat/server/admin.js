@@ -8,6 +8,7 @@
 import { problem } from '@ss/app-kit';
 import { reportRange, summarise } from '../core/reports.js';
 import { dayStart } from '../core/time.js';
+import { aiLabelShown } from '../core/widgets.js';
 import { uploadRules } from './visitor.js';
 import { LISTS } from '../adapters/lists.js';
 import { createStore } from '../adapters/store.js';
@@ -212,7 +213,7 @@ export const createAdmin = (product, service) => {
 			},
 			signInUrl: on.includes('signed_in_chat') ? (await values('signed_in_chat')).signInUrl : '',
 			// "never disclose" hides the AI label (C1)
-			ai: { showLabel: ai.showAiLabel === true && ai.neverDisclose !== true },
+			ai: { showLabel: aiLabelShown(ai) },
 			handoff: { showButton: (await values('handoff')).showButton },
 			proactive: {
 				idleMinutes: idle.idleMinutes,

@@ -2,12 +2,14 @@
 /**
  * The dashboard's times in the browser (jsdom), on a faked dashboard API: computed in UTC and shown in the viewer's
  * local time (owner 2026-10-14). Overview's grace end, the widget's last visit and Recent changes print UTC on the
- * server and in the first render, then the same style in the viewer's time zone, with UTC on hover.
+ * server and in the first render, then the same style in the viewer's time zone, with UTC on hover. Also the AI label
+ * warning of Settings.
  */
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@ss/ui/testing';
+import { aiLabelNotice } from '../app/dashboard/settings.js';
 import { TABS } from '../app/dashboard/tabs.js';
 
 const WEBSITE = 'web_1';
@@ -111,5 +113,20 @@ describe("Chat's dashboard times", () => {
 		])
 			expect(html).toContain(words);
 		expect(html).not.toContain('EDT');
+	});
+});
+
+describe('the AI label warning (PLAN 0.8.3 AI, C1)', () => {
+	it('shows on the AI replies card whenever the label is hidden: label off, or never disclose on', () => {
+		/** @param {Record<string, unknown>} values */
+		const shown = (values) => {
+			const notice = aiLabelNotice('ai_replies', values);
+			return notice === null ? null : renderToString(notice);
+		};
+		expect(shown({ showAiLabel: true, neverDisclose: false })).toBeNull();
+		expect(shown({ showAiLabel: false, neverDisclose: false })).toContain('EU AI Act');
+		// never disclose hides the label even while Show the AI label is on
+		expect(shown({ showAiLabel: true, neverDisclose: true })).toContain('EU AI Act');
+		expect(aiLabelNotice('ai_caps', { showAiLabel: false })).toBeNull();
 	});
 });

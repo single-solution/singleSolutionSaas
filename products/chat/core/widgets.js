@@ -112,6 +112,13 @@ export const EXTENSIONS = Object.freeze({
 	'text/plain': 'txt',
 });
 
+/**
+ * Whether AI replies carry the AI label (PLAN 0.8.3 AI): Show the AI label on and Never disclose off (C1). While it is
+ * hidden, Settings show the law warning.
+ * @param {Record<string, unknown>} values the AI replies settings
+ */
+export const aiLabelShown = (values) => values.showAiLabel === true && values.neverDisclose !== true;
+
 /** How long a send with `?wait=1` waits for the AI reply (C10). */
 export const WAIT_MS = 20_000;
 
