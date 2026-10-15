@@ -1,13 +1,33 @@
 /**
  * The admin widget `send_message` (permission `messages.send`): a member of the merchant's staff sends a one-off
- * message by email, SMS or WhatsApp to one person. It is a required, urgent message (it ignores unsubscribes and quiet
- * hours, never send limits) and is kept in the delivery log like every other. A refused call or a message that was not
- * sent shows the website's words for why, never the server's English.
+ * message by email, SMS, WhatsApp, browser push (to a subscriber id) or staff push (to a staff user id) to one person,
+ * as transactional (required and urgent: it ignores unsubscribes and quiet hours) or marketing (optional: unsubscribes,
+ * quiet hours and send limits apply), fixed-choices N9. It is kept in the delivery log like every other. A refused
+ * call or a message that was not sent shows the website's words for why, never the server's English.
  * @module
  */
 import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { notSentText, problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
+
+/** Each channel and the feature that switches it on. */
+const CHANNEL_FEATURES = Object.freeze({
+	email: 'email',
+	sms: 'sms',
+	whatsapp: 'whatsapp',
+	push: 'browser_push',
+	staff_push: 'staff_push',
+});
+/** Channels with a subject (email) or title (push). */
+const TITLED = Object.freeze(['email', 'push', 'staff_push']);
+/** The text naming who a channel sends to. */
+const TO_TEXT = Object.freeze({
+	email: 'send.to',
+	sms: 'send.to',
+	whatsapp: 'send.to',
+	push: 'send.toPush',
+	staff_push: 'send.toStaff',
+});
 
 /**
  * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig }} input
@@ -22,12 +42,19 @@ export const mountSendMessage = ({ host, api, config }) => {
 		css: WIDGET_CSS,
 		render: (root) => {
 			const doc = /** @type {Document} */ (root.ownerDocument);
-			const channels = ['email', 'sms', 'whatsapp'].filter((channel) => config.features.includes(channel));
+			const channels = /** @type {Array<keyof typeof CHANNEL_FEATURES>} */ (Object.keys(CHANNEL_FEATURES)).filter((channel) =>
+				config.features.includes(CHANNEL_FEATURES[channel]),
+			);
 			const channel = /** @type {HTMLSelectElement} */ (element(doc, 'select', { id: 'send-channel' }));
 			channel.append(...channels.map((value) => element(doc, 'option', { value }, t(`channel.${value}`))));
+			const kind = /** @type {HTMLSelectElement} */ (element(doc, 'select', { id: 'send-kind' }));
+			kind.append(
+				...['transactional', 'marketing'].map((value) => element(doc, 'option', { value }, t(`send.kind.${value}`))),
+			);
 			const to = /** @type {HTMLInputElement} */ (
 				element(doc, 'input', { id: 'send-to', autocomplete: 'off', maxlength: '254' })
 			);
+			const toLabel = element(doc, 'label', { for: 'send-to' }, t('send.to'));
 			const subject = /** @type {HTMLInputElement} */ (element(doc, 'input', { id: 'send-subject', maxlength: '200' }));
 			const subjectLabel = element(doc, 'label', { for: 'send-subject' }, t('send.subject'));
 			const text = /** @type {HTMLTextAreaElement} */ (
@@ -40,7 +67,9 @@ export const mountSendMessage = ({ host, api, config }) => {
 				element(doc, 'h2', {}, t('send.title')),
 				element(doc, 'label', { for: 'send-channel' }, t('send.channel')),
 				channel,
-				element(doc, 'label', { for: 'send-to' }, t('send.to')),
+				element(doc, 'label', { for: 'send-kind' }, t('send.kind')),
+				kind,
+				toLabel,
 				to,
 				subjectLabel,
 				subject,
@@ -51,11 +80,12 @@ export const mountSendMessage = ({ host, api, config }) => {
 			);
 			root.append(form);
 			const showSubject = () => {
-				const email = channel.value === 'email';
+				const titled = TITLED.includes(channel.value);
 				for (const node of [subject, subjectLabel]) {
-					if (email) node.removeAttribute('hidden');
+					if (titled) node.removeAttribute('hidden');
 					else node.setAttribute('hidden', '');
 				}
+				toLabel.textContent = t(TO_TEXT[/** @type {keyof typeof TO_TEXT} */ (channel.value)] ?? 'send.to');
 			};
 			channel.addEventListener('change', showSubject);
 			showSubject();
@@ -71,7 +101,8 @@ export const mountSendMessage = ({ host, api, config }) => {
 				const answer = await adminCall(api, 'POST', '/v1/admin/messages', {
 					channel: channel.value,
 					to: to.value.trim(),
-					...(channel.value === 'email' ? { subject: subject.value } : {}),
+					kind: kind.value,
+					...(TITLED.includes(channel.value) ? { subject: subject.value } : {}),
 					text: text.value,
 				});
 				button.removeAttribute('disabled');

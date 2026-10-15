@@ -626,7 +626,7 @@ describe('admin widgets', () => {
 		expect(statusOf(host)).toBe(`The templates could not be loaded: ${strings['problem.failed']}`);
 	});
 
-	it('send a message: picks channels of switched-on features and reports the outcome', async () => {
+	it('send a message: picks channels of switched-on features, push too, and its kind, and reports the outcome', async () => {
 		const host = place('send_message');
 		/** @type {any[]} */
 		const bodies = [];
@@ -649,7 +649,9 @@ describe('admin widgets', () => {
 			},
 		});
 		const channel = /** @type {HTMLSelectElement} */ (inside(host, 'select'));
-		expect([...channel.options].map((option) => option.value)).toEqual(['email', 'sms']);
+		expect([...channel.options].map((option) => option.value)).toEqual(['email', 'sms', 'staff_push']);
+		const kind = /** @type {HTMLSelectElement} */ (inside(host, '#send-kind'));
+		expect([...kind.options].map((option) => option.value)).toEqual(['transactional', 'marketing']);
 		const subject = /** @type {HTMLInputElement} */ (inside(host, '#send-subject'));
 		expect(subject.hidden).toBe(false);
 		/** @type {HTMLInputElement} */ (inside(host, '#send-to')).value = ' ana@example.com ';
@@ -662,12 +664,21 @@ describe('admin widgets', () => {
 			return statusOf(host);
 		};
 		expect(await submit()).toBe(strings['send.done']);
-		expect(bodies[0]).toEqual({ channel: 'email', to: 'ana@example.com', subject: 'Hi', text: 'Hello' });
+		expect(bodies[0]).toEqual({ channel: 'email', to: 'ana@example.com', kind: 'transactional', subject: 'Hi', text: 'Hello' });
 		channel.value = 'sms';
 		channel.dispatchEvent(new window.Event('change'));
 		expect(subject.hidden).toBe(true);
+		kind.value = 'marketing';
 		expect(await submit()).toBe(strings['send.later']);
 		expect(bodies[1]).not.toHaveProperty('subject');
+		expect(bodies[1]).toMatchObject({ kind: 'marketing' });
+		// staff push: a title, to a staff user id
+		channel.value = 'staff_push';
+		channel.dispatchEvent(new window.Event('change'));
+		expect(subject.hidden).toBe(false);
+		expect(inside(host, 'label[for="send-to"]').textContent).toBe(strings['send.toStaff']);
+		channel.value = 'sms';
+		channel.dispatchEvent(new window.Event('change'));
 		// why it was not sent, in the website's words: never the server's English
 		expect(await submit()).toBe(`The message was not sent: ${strings['reason.limited']}`);
 		expect(await submit()).toBe(`The message was not sent: ${strings['reason.failed']}`);
