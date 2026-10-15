@@ -61,7 +61,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 			// ------------------------------------------------------------------------------------------ points
 
 			/**
-			 * The loyalty points: the balance and what it is worth, the points expiring soon and the history.
+			 * The loyalty points: the balance and what it is worth, the points expiring soon and the history (none for a
+			 * shopper who is not a loyalty member).
 			 * @param {number} mine
 			 */
 			const showPoints = async (mine) => {
@@ -72,6 +73,11 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 					return;
 				}
 				const account = answer.data;
+				// a shopper who is not a loyalty member sees no points (the loyalty setting memberFlag, E47)
+				if (account.member === false) {
+					pointsBox.replaceChildren();
+					return;
+				}
 				const currency = currencyOf(settings, account.currency);
 				const history = Array.isArray(account.history) ? account.history : [];
 				const expiring = Array.isArray(account.expiringSoon) ? account.expiringSoon : [];

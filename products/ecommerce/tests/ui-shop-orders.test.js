@@ -225,6 +225,11 @@ describe('my orders', () => {
 		await flush();
 		expect(box().textContent).toContain(text('orders.points.balance', { balance: 0, value: 'GBP 0.00' }));
 		expect(box().querySelector('details')).toBeNull();
+		// not a loyalty member (E47): no points shown
+		points = ok({ member: false, balance: 0, value: 0, currency: 'GBP', history: [], expiringSoon: [] });
+		fake.identify('s3');
+		await flush();
+		expect(box().children).toHaveLength(0);
 		fake.identify(null);
 		await flush();
 		expect(box().children).toHaveLength(0);

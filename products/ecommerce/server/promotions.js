@@ -21,7 +21,15 @@ import {
 import { byShowOrder, dealRulesOf, publicDeal } from '../core/deals.js';
 import { COLLECTIONS } from '../core/model.js';
 import { isCustomerId } from '../core/orders.js';
-import { expiringSoon, expiryFor, historyView, loyaltyRules, pointsValue, SHOPPER_HISTORY } from '../core/loyalty.js';
+import {
+	expiringSoon,
+	expiryFor,
+	historyView,
+	isLoyaltyMember,
+	loyaltyRules,
+	pointsValue,
+	SHOPPER_HISTORY,
+} from '../core/loyalty.js';
 import { quoteProduct } from '../core/promotions.js';
 import { checkText, checkWhole } from '../core/promotions-rules.js';
 import { createMedia } from './catalog-media.js';
@@ -298,10 +306,30 @@ export const createPromotions = (product, service) => {
 					const data = await s.data();
 					const settings = await s.values('loyalty');
 					const timeZone = (await s.format()).timeZone || 'UTC';
-					const account = await loyaltyAccount(data, shopper.id, { now: at, rules: { settings, timeZone } });
 					const rules = loyaltyRules(settings);
+					// only a loyalty member sees points (the setting memberFlag, E47)
+					const record = await data
+						.collection(COLLECTIONS.customers)
+						.findOne({ websiteId: s.websiteId, userId: shopper.id }, { projection: { _id: 0, loyaltyMember: 1 } });
+					if (!isLoyaltyMember(settings, record))
+						return {
+							member: false,
+							balance: 0,
+							value: 0,
+							currency: s.currency,
+							pointValue: rules.pointValue,
+							minRedeem: rules.minRedeem,
+							maxPercent: rules.maxPercent,
+							lifetimeEarned: 0,
+							pending: 0,
+							history: [],
+							hasMore: false,
+							expiringSoon: [],
+						};
+					const account = await loyaltyAccount(data, shopper.id, { now: at, rules: { settings, timeZone } });
 					const history = historyView(account.history);
 					return {
+						member: true,
 						balance: account.balance,
 						value: account.balance * rules.pointValue,
 						currency: s.currency,

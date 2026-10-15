@@ -5,8 +5,7 @@
  * `server/orders-moves.js`.
  * @module
  */
-import { createId } from '@ss/contracts';
-import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { COLLECTIONS } from '../core/model.js';
 import { isCustomerId, spentKey } from '../core/orders.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -36,7 +35,8 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, status: 1, createdAt: -1, id: -1 }, name: 'fulfil_by_status' },
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'customer.email': 1 }, name: 'fulfil_by_email' },
 	{ collection: COLLECTIONS.orders, keys: { websiteId: 1, 'customer.phone': 1 }, name: 'fulfil_by_phone' },
-	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, name: 1, userId: 1 }, name: 'fulfil_by_name' },
+	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, name: 1, id: 1 }, name: 'fulfil_by_name' },
+	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'fulfil_newest' },
 	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, email: 1 }, name: 'fulfil_by_email' },
 	{ collection: COLLECTIONS.customers, keys: { websiteId: 1, phone: 1 }, name: 'fulfil_by_phone' },
 ];
@@ -65,16 +65,26 @@ const newerPage = (after, timeField, idField) => {
  */
 const namePage = (after) => {
 	const [name, id] = Array.isArray(after) ? after : [];
-	return typeof name === 'string' && typeof id === 'string'
-		? { $or: [{ name: { $gt: name } }, { name, userId: { $gt: id } }] }
+	return typeof name === 'string' && typeof id === 'string' ? { $or: [{ name: { $gt: name } }, { name, id: { $gt: id } }] } : {};
+};
+
+/**
+ * The customers after a page's last one, newest first (keyset after `[createdAt ISO, id]`).
+ * @param {unknown} after
+ */
+const newestPage = (after) => {
+	const [time, id] = Array.isArray(after) ? after : [];
+	return typeof time === 'string' && typeof id === 'string' && !Number.isNaN(Date.parse(time))
+		? { $or: [{ createdAt: { $lt: new Date(time) } }, { createdAt: new Date(time), id: { $lt: id } }] }
 		: {};
 };
 
 /**
  * @typedef {{ q: string, blocked: boolean | null, segment?: 'loyalty' | 'active' | 'guest' | null,
- *   loyalty?: { userIds: string[], customerIds: string[] } | null, seenBy?: string, unseen?: boolean,
- *   createdAfter?: Date | null, userIds?: string[] | null }} CustomerQuery `loyalty`: the owners of loyalty accounts
- *   (segment `loyalty`); `userIds`: only these Accounts users (a page of the store's own member list, CU-2)
+ *   loyalty?: { userIds: string[], customerIds: string[] } | 'flag' | null, seenBy?: string, unseen?: boolean,
+ *   createdAfter?: Date | null, userIds?: string[] | null }} CustomerQuery `loyalty`: who segment `loyalty` holds — the
+ *   owners of loyalty accounts with points, or `flag`: the customers flagged as members (the loyalty setting
+ *   `memberFlag` on, E47); `userIds`: only these Accounts users (a page of the store's own member list, CU-2)
  */
 
 /**
@@ -102,7 +112,11 @@ export const customerFilter = (
 	if (segment === 'guest') and.push({ guest: true });
 	if (segment === 'active') and.push({ orderCount: { $gte: 1 } });
 	if (segment === 'loyalty')
-		and.push({ $or: [{ userId: { $in: loyalty?.userIds ?? [] } }, { id: { $in: loyalty?.customerIds ?? [] } }] });
+		and.push(
+			loyalty === 'flag'
+				? { loyaltyMember: true }
+				: { $or: [{ userId: { $in: loyalty?.userIds ?? [] } }, { id: { $in: loyalty?.customerIds ?? [] } }] },
+		);
 	if (unseen && seenBy) and.push({ seenBy: { $ne: seenBy } });
 	if (createdAfter) and.push({ createdAt: { $gt: createdAfter } });
 	if (q) {
@@ -292,22 +306,53 @@ export const createFulfilmentStore = (data) => {
 
 		customers: Object.freeze({
 			/**
-			 * A page of customers, A to Z.
-			 * @param {CustomerQuery & { after: unknown, limit: number }} input
+			 * A page of customers, A to Z (by name, then customer id), or the newest first (`sort: newest`).
+			 * @param {CustomerQuery & { after: unknown, limit: number, sort: 'name' | 'newest' }} input
 			 * @returns {Promise<Array<CustomerRecord & { createdAt?: Date, updatedAt?: Date }>>}
 			 */
-			list: async ({ after, limit, ...query }) =>
-				as(
+			list: async ({ after, limit, sort, ...query }) => {
+				const filter = customerFilter(websiteId, query);
+				const page = sort === 'newest' ? newestPage(after) : namePage(after);
+				return as(
 					await customers
 						.find(
-							(() => {
-								const filter = customerFilter(websiteId, query);
-								return { ...filter, $and: [.../** @type {any[]} */ (filter.$and ?? []), namePage(after)] };
-							})(),
-							{ ...NO_ID, sort: { name: 1, userId: 1 }, limit },
+							{ ...filter, $and: [.../** @type {any[]} */ (filter.$and ?? []), page] },
+							{ ...NO_ID, sort: sort === 'newest' ? { createdAt: -1, id: -1 } : { name: 1, id: 1 }, limit },
 						)
 						.toArray(),
-				),
+				);
+			},
+			/**
+			 * Add a customer record (a guest staff add, E46); false when one of that phone is there already.
+			 * @param {CustomerRecord & { createdAt: Date }} record
+			 */
+			create: async (record) => {
+				const taken = await customers.findOne({ websiteId, phone: record.phone }, { projection: { _id: 0, id: 1 } });
+				if (taken) return false;
+				try {
+					await customers.insertOne({ ...record });
+					return true;
+				} catch (error) {
+					if (/** @type {any} */ (error)?.code === 11000) return false;
+					throw error;
+				}
+			},
+			/**
+			 * Delete a customer record by customer id while no order names it (E46): 'deleted', 'ordered' or 'missing'.
+			 * @param {string} id
+			 * @returns {Promise<'deleted' | 'ordered' | 'missing'>}
+			 */
+			remove: async (id) => {
+				const record = /** @type {CustomerRecord | null} */ (
+					await customers.findOne({ websiteId, id }, { projection: { _id: 0 } })
+				);
+				if (!record) return 'missing';
+				const owner = record.userId ? { userId: record.userId, customerId: id } : { customerId: id };
+				if ((await orders.countDocuments({ websiteId, ...ownerOrders(owner) }, { limit: 1 })) > 0) return 'ordered';
+				return (await customers.deleteOne({ websiteId, id, orderCount: { $in: [0, null] } })).deletedCount === 1
+					? 'deleted'
+					: 'ordered';
+			},
 			/** @param {string} userId @returns {Promise<(CustomerRecord & { createdAt?: Date, updatedAt?: Date }) | null>} */
 			get: async (userId) => as(await customers.findOne({ websiteId, userId }, NO_ID)),
 			/**
@@ -318,38 +363,11 @@ export const createFulfilmentStore = (data) => {
 			find: async (ref) =>
 				as(await customers.findOne({ websiteId, ...(isCustomerId(ref) ? { id: ref } : { userId: ref }) }, NO_ID)),
 			/**
-			 * Change a customer record: a member's by user id (created when missing, with the details of their latest
-			 * order), any customer's by customer id (K-6).
-			 * @param {{ userId: string } | { id: string }} key
-			 * @param {Record<string, unknown>} set
-			 * @param {{ name: string, email: string, phone: string }} details used only when the record is created
-			 * @param {Date} at the record's `createdAt` when it is created (CU-4)
+			 * Change a customer record, by customer id (K-6).
+			 * @param {string} id @param {Record<string, unknown>} set
 			 */
-			update: async (key, set, details, at) => {
-				if ('id' in key) {
-					await customers.updateOne({ websiteId, id: key.id }, { $set: set });
-					return as(await customers.findOne({ websiteId, id: key.id }, NO_ID));
-				}
-				const { userId } = key;
-				await customers.updateOne(
-					{ websiteId, userId },
-					{
-						$set: set,
-						$setOnInsert: {
-							id: createId(ID_PREFIX.customer),
-							userId,
-							createdAt: at,
-							...details,
-							...Object.fromEntries(
-								Object.entries({ blocked: false, blockedReason: '', rtoCount: 0, orderCount: 0, note: '' }).filter(
-									([key]) => !(key in set),
-								),
-							),
-						},
-					},
-					{ upsert: true },
-				);
-				return as(await customers.findOne({ websiteId, userId }, NO_ID));
+			update: async (id, set) => {
+				await customers.updateOne({ websiteId, id }, { $set: set });
 			},
 			/** @param {Person} person @returns {Promise<CustomerRecord[]>} */
 			ofPerson: async (person) => {
@@ -357,7 +375,7 @@ export const createFulfilmentStore = (data) => {
 				return or.length === 0 ? [] : as(await customers.find({ websiteId, $or: or }, NO_ID).toArray());
 			},
 			/** @param {Person} person */
-			remove: async (person) => {
+			forget: async (person) => {
 				const or = personOr(person, { id: 'userId', email: 'email', phone: 'phone' });
 				return or.length === 0 ? 0 : (await customers.deleteMany({ websiteId, $or: or })).deletedCount;
 			},

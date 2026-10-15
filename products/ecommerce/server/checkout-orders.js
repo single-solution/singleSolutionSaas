@@ -48,8 +48,8 @@ import {
 	triggersOfFlow,
 } from '../core/flow.js';
 import { shopperInvoiceReady } from '../core/invoice.js';
-import { checkGuest, phoneDigitsOf } from '../core/guests.js';
-import { loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
+import { checkGuest, phoneDigitsOf, savedAddresses } from '../core/guests.js';
+import { earnsAsMember, loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
@@ -946,7 +946,12 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		// a signed-in shopper whose role the loyalty settings leave out earns nothing, at delivery either (E20 roles): 0 is
 		// fixed now
 		const leftOut = loyalty !== null && shopper !== null && !takesPart(loyalty, shopper.role);
-		const earns = loyalty !== null && !leftOut && (shopper !== null || loyaltyRules(loyalty).guests === 'earn');
+		// a loyalty member earns (E47: with memberFlag first_order the order makes its customer one)
+		const earns =
+			loyalty !== null &&
+			!leftOut &&
+			(shopper !== null || loyaltyRules(loyalty).guests === 'earn') &&
+			earnsAsMember(loyalty, known);
 		const orderKey = shopper ? null : newOrderKey();
 		const order = {
 			id: orderId,
@@ -1051,7 +1056,14 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			return created({ order: await shopperView(s, placed.order, flow), next: await nextOf(s, placed.order) });
 
 		let current = placed.order;
-		await store.countOrder(/** @type {string} */ (customer.id), { city: order.address?.city ?? '', at: new Date(now) });
+		await store.countOrder(/** @type {string} */ (customer.id), {
+			city: order.address?.city ?? '',
+			at: new Date(now),
+			// with memberFlag first_order an order makes its customer a loyalty member (E47)
+			member: loyalty !== null && loyaltyRules(loyalty).memberFlag === 'first_order',
+			// a guest's own record keeps the addresses their orders went to (E46); never a member's from a phone typed
+			addresses: !shopper && !member && order.address ? savedAddresses(customer.addresses ?? [], order.address) : null,
+		});
 		if (viaPayments) current = (await startPayment(s, current, returnUrl, current.id)) ?? current;
 		await service.emit('order.placed', s, { order: current, statusLabel: shopperLabel(flow, status) });
 		if (placed.taken.length > 0) await service.emit('stock.taken', s, { lines: placed.taken });

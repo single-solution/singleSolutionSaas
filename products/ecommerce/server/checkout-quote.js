@@ -24,7 +24,16 @@ import { checkoutFields } from '../core/fields.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
 import { elementsOf } from '../core/item-types.js';
-import { loyaltyRules, maxRedeemable, pointsToEarn, pointsToRedeem, pointsValue, takesPart } from '../core/loyalty.js';
+import {
+	earnsAsMember,
+	isLoyaltyMember,
+	loyaltyRules,
+	maxRedeemable,
+	pointsToEarn,
+	pointsToRedeem,
+	pointsValue,
+	takesPart,
+} from '../core/loyalty.js';
 import { roundDown } from '../core/money.js';
 import { applyPromotions, attributeValues } from '../core/promotions.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -387,7 +396,12 @@ export const createQuoting = (product, service) => {
 		const taxRules = taxesOn ? /** @type {import('../core/taxes.js').TaxRule[]} */ (await s.list('tax_rules')) : [];
 		const taxIncluded = taxesOn ? (await s.values('taxes')).pricesIncludeTax === true : true;
 		const loyaltySettings = s.has('loyalty') ? await s.values('loyalty') : null;
-		const loyaltyOn = loyaltySettings !== null && shopper !== null && takesPart(loyaltySettings, shopper.role);
+		// points are redeemed by a signed-in shopper who takes part and is a loyalty member (E20, E47)
+		const loyaltyOn =
+			loyaltySettings !== null &&
+			shopper !== null &&
+			takesPart(loyaltySettings, shopper.role) &&
+			isLoyaltyMember(loyaltySettings, customer);
 		const account = loyaltyOn
 			? await loyaltyAccount(data, /** @type {Shopper} */ (shopper).id, {
 					now,
@@ -590,7 +604,8 @@ export const createQuoting = (product, service) => {
 		const earnTotals = { total: totals.total, delivery: totals.delivery, tax: totals.tax, fee: totals.fee };
 		const earns =
 			loyaltySettings !== null &&
-			(shopper ? takesPart(loyaltySettings, shopper.role) : loyaltyRules(loyaltySettings).guests === 'earn');
+			(shopper ? takesPart(loyaltySettings, shopper.role) : loyaltyRules(loyaltySettings).guests === 'earn') &&
+			earnsAsMember(loyaltySettings, customer);
 		return {
 			lines,
 			priced,

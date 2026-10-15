@@ -38,6 +38,8 @@ const DAY_MS = 86_400_000;
  * @property {'amount' | 'maximum'} redeemMode
  * @property {'days' | 'months'} expiryUnit
  * @property {'at_earn' | 'current'} expiryRule
+ * @property {'off' | 'manual' | 'first_order'} memberFlag who is a loyalty member (E47): everyone, or the customers
+ *   staff flag, also flagged by their first order
  */
 
 /** The `loyalty` settings' defaults (also in `schemas/loyalty.settings.json`). @type {LoyaltyRules} */
@@ -55,6 +57,7 @@ export const LOYALTY_DEFAULTS = Object.freeze({
 	redeemMode: /** @type {'amount'} */ ('amount'),
 	expiryUnit: /** @type {'days'} */ ('days'),
 	expiryRule: /** @type {'at_earn'} */ ('at_earn'),
+	memberFlag: /** @type {'off'} */ ('off'),
 });
 
 /**
@@ -91,8 +94,27 @@ export const loyaltyRules = (settings) => {
 		redeemMode: oneOf(s.redeemMode, /** @type {const} */ (['amount', 'maximum']), 'amount'),
 		expiryUnit: oneOf(s.expiryUnit, /** @type {const} */ (['days', 'months']), 'days'),
 		expiryRule: oneOf(s.expiryRule, /** @type {const} */ (['at_earn', 'current']), 'at_earn'),
+		memberFlag: oneOf(s.memberFlag, /** @type {const} */ (['off', 'manual', 'first_order']), 'off'),
 	};
 };
+
+/**
+ * Whether a customer is a loyalty member (E47): everyone while the settings' `memberFlag` is off, else only a customer
+ * whose record is flagged (by staff, or by their first order with `first_order`). Only members see and redeem points.
+ * @param {Record<string, any> | null | undefined} settings the `loyalty` settings
+ * @param {{ loyaltyMember?: boolean } | null | undefined} customer their customer record (none yet: not flagged)
+ */
+export const isLoyaltyMember = (settings, customer) =>
+	loyaltyRules(settings).memberFlag === 'off' || customer?.loyaltyMember === true;
+
+/**
+ * Whether an order placed now earns for its customer (E47): a member, or anyone with `memberFlag: first_order` (the
+ * order flags them).
+ * @param {Record<string, any> | null | undefined} settings the `loyalty` settings
+ * @param {{ loyaltyMember?: boolean } | null | undefined} customer
+ */
+export const earnsAsMember = (settings, customer) =>
+	isLoyaltyMember(settings, customer) || loyaltyRules(settings).memberFlag === 'first_order';
 
 /**
  * Whether a signed-in shopper takes part (E20 `roles`): every signed-in shopper while no role is listed.

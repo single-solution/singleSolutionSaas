@@ -666,7 +666,7 @@ export const createOrders = (product, service, { ordering }) => {
 			numbers: known(orders.map((order) => order.number)),
 		});
 		const anonymised = await store.orders.anonymise(user);
-		const deleted = (await store.customers.remove(user)) + forgotten;
+		const deleted = (await store.customers.forget(user)) + forgotten;
 		return { deleted, anonymised };
 	};
 
@@ -1037,6 +1037,57 @@ export const createOrders = (product, service, { ordering }) => {
 				permission: 'customers.manage',
 				rateLimit: serverLimits,
 				handler: customers.edit,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/customers',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.create,
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/admin/customers',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.create,
+			}),
+			defineRoute({
+				method: 'PUT',
+				path: '/v1/customers/:userId/addresses',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.setAddresses,
+			}),
+			defineRoute({
+				method: 'PUT',
+				path: '/v1/admin/customers/:userId/addresses',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.setAddresses,
+			}),
+			defineRoute({
+				method: 'DELETE',
+				path: '/v1/customers/:userId',
+				auth: 'server',
+				feature: 'checkout',
+				rateLimit: serverLimits,
+				handler: customers.remove,
+			}),
+			defineRoute({
+				method: 'DELETE',
+				path: '/v1/admin/customers/:userId',
+				auth: 'ticket',
+				feature: 'checkout',
+				permission: 'customers.manage',
+				rateLimit: serverLimits,
+				handler: customers.remove,
 			}),
 			defineRoute({
 				method: 'POST',

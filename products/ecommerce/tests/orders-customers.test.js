@@ -19,6 +19,7 @@ beforeAll(async () => {
 	const data = await shop.db();
 	await data.collection(COLLECTIONS.customers).insertMany([
 		{
+			id: createId('cus'),
 			userId: 'usr_amy00000001',
 			name: 'Amy Adams',
 			email: 'amy@example.com',
@@ -30,6 +31,7 @@ beforeAll(async () => {
 			note: '',
 		},
 		{
+			id: createId('cus'),
 			userId: 'usr_bob00000001',
 			name: 'Bob Brown',
 			email: 'bob@example.com',
@@ -41,6 +43,7 @@ beforeAll(async () => {
 			note: '',
 		},
 		{
+			id: createId('cus'),
 			userId: 'usr_cat00000001',
 			name: 'Cat Cole',
 			email: 'cat@example.com',

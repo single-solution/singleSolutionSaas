@@ -2802,7 +2802,7 @@
 		"/v1/admin/customers": {
 			"get": {
 				"summary": "The customers, A to Z (Customers admin widget)",
-				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, an unknown segment, a createdAfter that is not a date, or more than 100 or malformed userIds.",
+				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, an unknown segment or sort, a createdAfter that is not a date, or more than 100 or malformed userIds.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -2862,7 +2862,7 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -2870,7 +2870,7 @@
 								"active",
 								"guest"
 							],
-							"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user."
+							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
 						}
 					},
 					{
@@ -2907,6 +2907,21 @@
 							],
 							"description": "Only customers the acting staff member has not opened (POST …/seen)."
 						}
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "name: A to Z (the default); newest: the newest records first.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"name",
+								"newest"
+							],
+							"default": "name",
+							"description": "name: A to Z (the default); newest: the newest records first."
+						}
 					}
 				],
 				"responses": {
@@ -2916,6 +2931,89 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/CustomerPage"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"summary": "Add a customer without an account (Customers admin widget)",
+				"description": "A guest customer (no Accounts user) staff add by phone (E46): one record per phone, so 409 conflict when a customer has this phone already (open them instead). points gives opening loyalty points (needs Loyalty on; they expire as the loyalty settings say); loyaltyMember marks a loyalty member (E47). 422 validation_failed at /name, /phone (with code country_not_allowed for a phone of a country the website does not serve), /email, /city, /note, /points or /loyaltyMember. The widget needs the customers.manage permission. Answers 201 with the customer.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"name",
+									"phone"
+								],
+								"properties": {
+									"name": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 120
+									},
+									"phone": {
+										"type": "string",
+										"maxLength": 40,
+										"description": "Read as the website reads guests’ phones (checkout setting defaultCallingCode, else the business country’s)."
+									},
+									"email": {
+										"type": "string",
+										"maxLength": 254
+									},
+									"city": {
+										"type": "string",
+										"maxLength": 80
+									},
+									"note": {
+										"type": "string",
+										"maxLength": 5000,
+										"description": "The staff note."
+									},
+									"points": {
+										"type": "integer",
+										"minimum": 0,
+										"maximum": 1000000000,
+										"description": "Opening loyalty points."
+									},
+									"loyaltyMember": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CustomerDetail"
 								}
 							}
 						}
@@ -2975,7 +3073,7 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -2983,7 +3081,7 @@
 								"active",
 								"guest"
 							],
-							"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user."
+							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
 						}
 					},
 					{
@@ -3100,7 +3198,7 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -3108,7 +3206,7 @@
 								"active",
 								"guest"
 							],
-							"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user."
+							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
 						}
 					},
 					{
@@ -3172,6 +3270,43 @@
 			}
 		},
 		"/v1/admin/customers/{userId}": {
+			"delete": {
+				"summary": "Delete a customer without orders (Customers admin widget)",
+				"description": "Deletes the customer record and its loyalty account while no order names the customer (E46); 409 conflict once one does (a customer with orders is kept with them); 404 not_found. A member’s Accounts user stays (their record is made again when staff open them or they order). The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
 			"get": {
 				"summary": "Read a customer with their latest orders (Customers admin widget)",
 				"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the pasted Accounts token), so staff can note or block them before their first order. 404 not_found.",
@@ -3217,8 +3352,8 @@
 				}
 			},
 			"patch": {
-				"summary": "Block or unblock a customer, change their staff note or reset their returned packages (Customers admin widget)",
-				"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
+				"summary": "Change a customer: block or unblock them, their staff note, returned packages, field values or loyalty member flag (Customers admin widget)",
+				"description": "A blocked shopper cannot order. A member’s record is made when missing (from their latest order, else their Accounts user). 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, loyaltyMember other than true or false, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "checkout",
 				"x-ss-permission": "customers.manage",
@@ -3286,6 +3421,107 @@
 											]
 										},
 										"description": "The customer fields' values staff keep (active fields on customers); null clears one. 422 at /fields/<id> for a value its field refuses."
+									},
+									"loyaltyMember": {
+										"type": "boolean",
+										"description": "Mark or unmark a loyalty member (the loyalty setting memberFlag, E47)."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CustomerDetail"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/customers/{userId}/addresses": {
+			"put": {
+				"summary": "Set the addresses kept for a customer (Customers admin widget)",
+				"description": "Replaces the customer’s addresses (E46): at most 6, the first the newest, each checked as checkout checks a delivery address (the checkout setting addressRequired; the phone read by the website’s phone rules). A guest’s orders add the address they were delivered to (the same address once). 422 validation_failed at /addresses or /addresses/<n>/<field>; 404 not_found. The widget needs the customers.manage permission.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "checkout",
+				"x-ss-permission": "customers.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"addresses"
+								],
+								"properties": {
+									"addresses": {
+										"type": "array",
+										"maxItems": 6,
+										"items": {
+											"type": "object",
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"phone": {
+													"type": "string"
+												},
+												"line1": {
+													"type": "string"
+												},
+												"line2": {
+													"type": "string"
+												},
+												"city": {
+													"type": "string"
+												},
+												"area": {
+													"type": "string"
+												},
+												"postalCode": {
+													"type": "string"
+												},
+												"country": {
+													"type": "string"
+												},
+												"notes": {
+													"type": "string"
+												}
+											}
+										}
 									}
 								}
 							}
@@ -15900,7 +16136,7 @@
 		"/v1/customers": {
 			"get": {
 				"summary": "The customers, A to Z",
-				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, an unknown segment, a createdAfter that is not a date, or more than 100 or malformed userIds.",
+				"description": "Members and guests, each with what they paid over all their orders. The widget needs the customers.manage permission. 422 validation_failed for a search longer than 120 characters, an unknown segment or sort, a createdAfter that is not a date, or more than 100 or malformed userIds.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -15959,7 +16195,7 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -15967,7 +16203,7 @@
 								"active",
 								"guest"
 							],
-							"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user."
+							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
 						}
 					},
 					{
@@ -16006,6 +16242,21 @@
 						}
 					},
 					{
+						"name": "sort",
+						"in": "query",
+						"required": false,
+						"description": "name: A to Z (the default); newest: the newest records first.",
+						"schema": {
+							"type": "string",
+							"enum": [
+								"name",
+								"newest"
+							],
+							"default": "name",
+							"description": "name: A to Z (the default); newest: the newest records first."
+						}
+					},
+					{
 						"$ref": "#/components/parameters/SSActorId"
 					},
 					{
@@ -16025,6 +16276,101 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/CustomerPage"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
+			"post": {
+				"summary": "Add a customer without an account",
+				"description": "A guest customer (no Accounts user) staff add by phone (E46): one record per phone, so 409 conflict when a customer has this phone already (open them instead). points gives opening loyalty points (needs Loyalty on; they expire as the loyalty settings say); loyaltyMember marks a loyalty member (E47). 422 validation_failed at /name, /phone (with code country_not_allowed for a phone of a country the website does not serve), /email, /city, /note, /points or /loyaltyMember. The widget needs the customers.manage permission. Answers 201 with the customer.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"name",
+									"phone"
+								],
+								"properties": {
+									"name": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 120
+									},
+									"phone": {
+										"type": "string",
+										"maxLength": 40,
+										"description": "Read as the website reads guests’ phones (checkout setting defaultCallingCode, else the business country’s)."
+									},
+									"email": {
+										"type": "string",
+										"maxLength": 254
+									},
+									"city": {
+										"type": "string",
+										"maxLength": 80
+									},
+									"note": {
+										"type": "string",
+										"maxLength": 5000,
+										"description": "The staff note."
+									},
+									"points": {
+										"type": "integer",
+										"minimum": 0,
+										"maximum": 1000000000,
+										"description": "Opening loyalty points."
+									},
+									"loyaltyMember": {
+										"type": "boolean"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CustomerDetail"
 								}
 							}
 						}
@@ -16083,7 +16429,7 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -16091,7 +16437,7 @@
 								"active",
 								"guest"
 							],
-							"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user."
+							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
 						}
 					},
 					{
@@ -16219,7 +16565,7 @@
 						"name": "segment",
 						"in": "query",
 						"required": false,
-						"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user.",
+						"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user.",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -16227,7 +16573,7 @@
 								"active",
 								"guest"
 							],
-							"description": "loyalty: with loyalty points earned or left; active: ordered at least once; guest: no Accounts user."
+							"description": "loyalty: the loyalty members while the loyalty setting memberFlag is on, else who has points earned or left; active: ordered at least once; guest: no Accounts user."
 						}
 					},
 					{
@@ -16303,6 +16649,54 @@
 			}
 		},
 		"/v1/customers/{userId}": {
+			"delete": {
+				"summary": "Delete a customer without orders",
+				"description": "Deletes the customer record and its loyalty account while no order names the customer (E46); 409 conflict once one does (a customer with orders is kept with them); 404 not_found. A member’s Accounts user stays (their record is made again when staff open them or they order). The widget needs the customers.manage permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
 			"get": {
 				"summary": "Read a customer with their latest orders",
 				"description": ":userId is a customer id (cus_…, members and guests) or an Accounts user id. A member without a record is shown from their latest order; an Accounts user without orders gets their record made now (through the pasted Accounts token), so staff can note or block them before their first order. 404 not_found.",
@@ -16359,8 +16753,8 @@
 				}
 			},
 			"patch": {
-				"summary": "Block or unblock a customer, change their staff note or reset their returned packages",
-				"description": "A blocked shopper cannot order. A member’s record is made when missing. 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
+				"summary": "Change a customer: block or unblock them, their staff note, returned packages, field values or loyalty member flag",
+				"description": "A blocked shopper cannot order. A member’s record is made when missing (from their latest order, else their Accounts user). 422 validation_failed (a block without its reason, a reason over 500 characters, a note over 5,000, resetRto other than true, loyaltyMember other than true or false, or nothing to change at /blocked); 404 not_found. fields sets customer field values (active fields on customers; null clears one; 422 at /fields/<id>).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -16439,6 +16833,118 @@
 											]
 										},
 										"description": "The customer fields' values staff keep (active fields on customers); null clears one. 422 at /fields/<id> for a value its field refuses."
+									},
+									"loyaltyMember": {
+										"type": "boolean",
+										"description": "Mark or unmark a loyalty member (the loyalty setting memberFlag, E47)."
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CustomerDetail"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/customers/{userId}/addresses": {
+			"put": {
+				"summary": "Set the addresses kept for a customer",
+				"description": "Replaces the customer’s addresses (E46): at most 6, the first the newest, each checked as checkout checks a delivery address (the checkout setting addressRequired; the phone read by the website’s phone rules). A guest’s orders add the address they were delivered to (the same address once). 422 validation_failed at /addresses or /addresses/<n>/<field>; 404 not_found. The widget needs the customers.manage permission.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "checkout",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"addresses"
+								],
+								"properties": {
+									"addresses": {
+										"type": "array",
+										"maxItems": 6,
+										"items": {
+											"type": "object",
+											"properties": {
+												"name": {
+													"type": "string"
+												},
+												"phone": {
+													"type": "string"
+												},
+												"line1": {
+													"type": "string"
+												},
+												"line2": {
+													"type": "string"
+												},
+												"city": {
+													"type": "string"
+												},
+												"area": {
+													"type": "string"
+												},
+												"postalCode": {
+													"type": "string"
+												},
+												"country": {
+													"type": "string"
+												},
+												"notes": {
+													"type": "string"
+												}
+											}
+										}
 									}
 								}
 							}
@@ -35503,7 +36009,7 @@
 					},
 					"loyaltyPoints": {
 						"type": "integer",
-						"description": "0 while loyalty is off."
+						"description": "0 while loyalty is off or the shopper is not a loyalty member."
 					},
 					"city": {
 						"type": "string",
@@ -37889,11 +38395,13 @@
 					"name",
 					"email",
 					"phone",
+					"city",
 					"blocked",
 					"blockedReason",
 					"rtoCount",
 					"orderCount",
 					"note",
+					"loyaltyMember",
 					"totalSpent",
 					"totalSpentText",
 					"ordersPlaced",
@@ -37923,6 +38431,11 @@
 					"phone": {
 						"type": "string"
 					},
+					"city": {
+						"type": "string",
+						"maxLength": 80,
+						"description": "The city of their latest delivery, or the one staff gave."
+					},
 					"blocked": {
 						"type": "boolean",
 						"description": "A blocked customer cannot order."
@@ -37945,6 +38458,10 @@
 						"type": "string",
 						"maxLength": 5000,
 						"description": "The staff note."
+					},
+					"loyaltyMember": {
+						"type": "boolean",
+						"description": "Flagged as a loyalty member (the loyalty setting memberFlag, E47; while it is off every customer is one)."
 					},
 					"totalSpent": {
 						"type": "integer",
@@ -37985,16 +38502,19 @@
 					"name",
 					"email",
 					"phone",
+					"city",
 					"blocked",
 					"blockedReason",
 					"rtoCount",
 					"orderCount",
 					"note",
+					"loyaltyMember",
 					"totalSpent",
 					"totalSpentText",
 					"ordersPlaced",
 					"createdAt",
 					"updatedAt",
+					"addresses",
 					"recentOrders",
 					"fields",
 					"customerFields"
@@ -38022,6 +38542,11 @@
 					"phone": {
 						"type": "string"
 					},
+					"city": {
+						"type": "string",
+						"maxLength": 80,
+						"description": "The city of their latest delivery, or the one staff gave."
+					},
 					"blocked": {
 						"type": "boolean",
 						"description": "A blocked customer cannot order."
@@ -38044,6 +38569,10 @@
 						"type": "string",
 						"maxLength": 5000,
 						"description": "The staff note."
+					},
+					"loyaltyMember": {
+						"type": "boolean",
+						"description": "Flagged as a loyalty member (the loyalty setting memberFlag, E47; while it is off every customer is one)."
 					},
 					"totalSpent": {
 						"type": "integer",
@@ -38071,6 +38600,14 @@
 							"null"
 						],
 						"format": "date-time"
+					},
+					"addresses": {
+						"type": "array",
+						"maxItems": 6,
+						"items": {
+							"$ref": "#/components/schemas/OrderAddress"
+						},
+						"description": "The addresses staff keep and a guest’s orders were delivered to, the newest first (at most 6)."
 					},
 					"recentOrders": {
 						"type": "array",
@@ -41295,7 +41832,8 @@
 					"blockedReason",
 					"rtoCount",
 					"orderCount",
-					"note"
+					"note",
+					"loyaltyMember"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -41318,6 +41856,10 @@
 					"note": {
 						"type": "string",
 						"description": "The staff note on the customer."
+					},
+					"loyaltyMember": {
+						"type": "boolean",
+						"description": "Flagged as a loyalty member (E47)."
 					}
 				}
 			},
@@ -48339,6 +48881,7 @@
 				"type": "object",
 				"description": "The signed-in shopper’s points.",
 				"required": [
+					"member",
 					"balance",
 					"value",
 					"currency",
@@ -48353,6 +48896,10 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"member": {
+						"type": "boolean",
+						"description": "A loyalty member: false while the loyalty setting memberFlag is on and the shopper is not flagged (then every number is 0 and the lists are empty)."
+					},
 					"balance": {
 						"type": "integer",
 						"minimum": 0,

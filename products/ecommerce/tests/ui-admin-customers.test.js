@@ -166,7 +166,7 @@ describe('customers admin: customers', () => {
 			expect(textOf(pane)).toContain(part);
 		expect(server.last('GET /v1/admin/returns')?.url.searchParams.get('userId')).toBe('u1');
 		expect(textOf(pane)).toContain('R-1 · Order SO-1 · Warranty');
-		expect(menuEntries(pane)).toEqual(['Reset returned packages']);
+		expect(menuEntries(pane)).toEqual(['Reset returned packages', 'Add address']);
 		// block with a reason
 		await click(buttonIn(pane, 'Block'));
 		expect(textOf(dialogOf(root))).toContain('A blocked customer cannot order');
@@ -194,7 +194,7 @@ describe('customers admin: customers', () => {
 		expect(textOf(dialogOf(root))).toContain('Set the 2 returned packages back to 0.');
 		await submitDialog(root);
 		expect(statuses(pane)).toContain('Returned packages reset.');
-		expect(menuEntries(pane)).toEqual([]);
+		expect(menuEntries(pane)).toEqual(['Add address']);
 		expect(patches).toEqual([
 			{ blocked: true, blockedReason: '' },
 			{ blocked: true, blockedReason: 'Fraud' },
@@ -203,6 +203,88 @@ describe('customers admin: customers', () => {
 			{ note: '' },
 			{ resetRto: true },
 		]);
+	});
+
+	it('adds a customer, sorts the newest first, keeps addresses, marks a loyalty member and deletes (E46, E47)', async () => {
+		const added = customer({ id: 'cus_n1', userId: '', guest: true, name: 'Nia', ordersPlaced: 0, orderCount: 0, rtoCount: 0 });
+		/** @type {any[]} */
+		const calls = [];
+		/** @param {Record<string, unknown>} over */
+		const detailOf_ = (over) => answer(200, { ...added, addresses: [], recentOrders: [], ...over });
+		const { root, server } = await start(
+			{
+				'GET /v1/admin/customers': () => answer(200, { items: [added], nextCursor: null, hasMore: false }),
+				'GET /v1/admin/customers/cus_n1': () => detailOf_({}),
+				'POST /v1/admin/customers': (/** @type {any} */ call) => {
+					calls.push(['POST', call.body]);
+					return call.body.phone ? answer(201, { ...added, addresses: [], recentOrders: [] }) : invalid('/phone');
+				},
+				'PUT /v1/admin/customers/cus_n1/addresses': (/** @type {any} */ call) => {
+					calls.push(['PUT', call.body]);
+					return detailOf_({ addresses: call.body.addresses });
+				},
+				'PATCH /v1/admin/customers/cus_n1': (/** @type {any} */ call) => {
+					calls.push(['PATCH', call.body]);
+					return detailOf_({ loyaltyMember: call.body.loyaltyMember });
+				},
+				'DELETE /v1/admin/customers/cus_n1': () => {
+					calls.push(['DELETE']);
+					return answer(204, null);
+				},
+			},
+			['checkout', 'loyalty'],
+		);
+		const panel = panelOf(root, 'customers');
+		// the newest first
+		await change(fieldIn(panel, 'Order'), 'newest');
+		expect(server.last('GET /v1/admin/customers')?.url.searchParams.get('sort')).toBe('newest');
+		// add a customer without an account, with opening points
+		await click(buttonIn(panel, 'Add customer'));
+		await submitDialog(root);
+		expect(dialogStatus(root)).not.toBe('');
+		type(fieldIn(dialogOf(root), 'Full name'), 'Nia');
+		type(fieldIn(dialogOf(root), 'Phone'), '+15550001234');
+		type(fieldIn(dialogOf(root), 'Opening loyalty points'), '50');
+		await submitDialog(root);
+		expect(hasDialog(root)).toBe(false);
+		expect(calls.at(-1)).toEqual(['POST', { name: 'Nia', phone: '+15550001234', points: 50, loyaltyMember: false }]);
+		const pane = detailOf(panel);
+		expect(textOf(pane)).toContain('No addresses kept.');
+		expect(textOf(pane)).toContain('Loyalty memberNo');
+		// an address
+		await pickMenu(pane, 'Add address');
+		type(fieldIn(dialogOf(root), 'Address'), '1 Main Street');
+		type(fieldIn(dialogOf(root), 'City'), 'Springfield');
+		await submitDialog(root);
+		expect(calls.at(-1)).toEqual([
+			'PUT',
+			{
+				addresses: [
+					{
+						name: 'Nia',
+						phone: '+12025550143',
+						line1: '1 Main Street',
+						line2: '',
+						city: 'Springfield',
+						area: '',
+						postalCode: '',
+						country: '',
+						notes: '',
+					},
+				],
+			},
+		]);
+		expect(textOf(pane)).toContain('Nia, +12025550143, 1 Main Street, Springfield');
+		// a loyalty member
+		await pickMenu(pane, 'Mark as loyalty member');
+		expect(calls.at(-1)).toEqual(['PATCH', { loyaltyMember: true }]);
+		expect(statuses(pane)).toContain('Marked as a loyalty member.');
+		expect(menuEntries(pane)).toContain('Remove from loyalty members');
+		// delete a customer without orders
+		await pickMenu(pane, 'Delete customer');
+		expect(textOf(dialogOf(root))).toContain('Nia and their loyalty points are deleted for good.');
+		await submitDialog(root);
+		expect(calls.at(-1)).toEqual(['DELETE']);
 	});
 
 	it('shows only switched-on sections, and no claims without returns', async () => {

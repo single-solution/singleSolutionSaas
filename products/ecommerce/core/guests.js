@@ -71,3 +71,65 @@ export const checkGuest = (body, rules) => {
 		return { ok: false, field: 'customer/email', message: 'Give a valid email address or none.' };
 	return { ok: true, value: { name, phone, email } };
 };
+
+/** The most addresses a customer record keeps (E46), the newest first. */
+export const MAX_ADDRESSES = 6;
+/** The most opening points staff give a customer they add. */
+const MAX_OPENING_POINTS = 1_000_000_000;
+
+/**
+ * Check a customer staff add without an account (E46): a guest record by phone, `{ name, phone, email?, city?, note?,
+ * points?, loyaltyMember? }` — `points`: the opening loyalty points; `loyaltyMember`: the loyalty member flag (E47).
+ * @param {unknown} body
+ * @param {PhoneRules} rules the website's phone rules
+ * @returns {{ ok: true, value: { name: string, phone: string, email: string, city: string, note: string,
+ *   points: number, loyaltyMember: boolean } } | { ok: false, field: string, message: string, code?: string }}
+ */
+export const checkNewCustomer = (body, rules) => {
+	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
+	const who = checkGuest(input, rules);
+	if (!who.ok)
+		return {
+			...who,
+			field: who.field.replace(/^customer\/?/, '') || 'name',
+			message: who.message.replace('your name', 'the name').replace('your phone', 'the phone'),
+		};
+	const city = typeof input.city === 'string' ? input.city.trim() : input.city === undefined ? '' : null;
+	if (city === null || city.length > 80) return { ok: false, field: 'city', message: 'city is at most 80 characters.' };
+	const note = typeof input.note === 'string' ? input.note.trim() : input.note === undefined ? '' : null;
+	if (note === null || note.length > 5000) return { ok: false, field: 'note', message: 'note is at most 5,000 characters.' };
+	const points = input.points ?? 0;
+	if (!Number.isSafeInteger(points) || Number(points) < 0 || Number(points) > MAX_OPENING_POINTS)
+		return { ok: false, field: 'points', message: 'points is a whole number of opening points from 0.' };
+	if (input.loyaltyMember !== undefined && typeof input.loyaltyMember !== 'boolean')
+		return { ok: false, field: 'loyaltyMember', message: 'loyaltyMember is true or false.' };
+	return {
+		ok: true,
+		value: { ...who.value, city, note, points: Number(points), loyaltyMember: input.loyaltyMember === true },
+	};
+};
+
+/**
+ * The same address, whatever the letter case and spaces.
+ * @param {Record<string, unknown>} address
+ */
+const addressKey = (address) =>
+	['name', 'phone', 'line1', 'line2', 'city', 'area', 'postalCode', 'country']
+		.map((field) =>
+			String(address[field] ?? '')
+				.trim()
+				.replace(/\s+/g, ' ')
+				.toLowerCase(),
+		)
+		.join('|');
+
+/**
+ * A customer's addresses with one more (E46): the new one first, the same address once, at most {@link MAX_ADDRESSES}.
+ * @template {Record<string, unknown>} A
+ * @param {ReadonlyArray<A>} addresses @param {A} address
+ * @returns {A[]}
+ */
+export const savedAddresses = (addresses, address) => {
+	const key = addressKey(address);
+	return [address, ...addresses.filter((entry) => addressKey(entry) !== key)].slice(0, MAX_ADDRESSES);
+};

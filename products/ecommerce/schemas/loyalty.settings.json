@@ -100,6 +100,13 @@
 			"description": "At earn: the setting when the points were earned. Current: today's setting, so a change applies to past points too.",
 			"default": "at_earn",
 			"enum": ["at_earn", "current"]
+		},
+		"memberFlag": {
+			"type": "string",
+			"title": "Loyalty members",
+			"description": "Off: every customer the settings above let in is a member. Manual: only customers your staff mark as members earn, see and redeem points. First order: a customer becomes a member with their first order (staff can mark or unmark anyone too). The customers list's loyalty segment is the members.",
+			"default": "off",
+			"enum": ["off", "manual", "first_order"]
 		}
 	}
 }

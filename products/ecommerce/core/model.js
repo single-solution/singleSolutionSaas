@@ -466,8 +466,10 @@ export const STATUS_ROLES = Object.freeze([
  * @typedef {{ id: string, userId: string | null, guest: boolean, name: string, email: string, phone: string,
  *   phoneDigits: string, city: string, blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number,
  *   note: string, seenBy: string[], lastOrderAt?: Date | null,
- *   fields?: Record<string, import('./fields.js').FieldValue> }} CustomerRecord `fields`: the values of the shop's
- *   customer fields by field id, kept by staff (dynamic model §2); none when it has no values
+ *   fields?: Record<string, import('./fields.js').FieldValue>, addresses?: import('./checkout.js').Address[],
+ *   loyaltyMember?: boolean }} CustomerRecord `fields`: the values of the shop's customer fields by field id, kept by
+ *   staff (dynamic model §2); none when it has no values; `addresses`: the addresses staff keep and a guest's orders
+ *   delivered to, the newest first, at most 6 (E46); `loyaltyMember`: flagged as a loyalty member (E47)
  */
 
 // ---------------------------------------------------------------------------------------------------- promotions

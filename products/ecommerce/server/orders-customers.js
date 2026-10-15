@@ -7,12 +7,18 @@
  * 0.8.10 K4) with the same filters.
  * @module
  */
-import { countHandlers, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, paginate, problem } from '@ss/app-kit';
+import { createId } from '@ss/contracts';
 import { fieldsOn } from '../adapters/catalog-store.js';
 import { createFulfilmentStore, customerFilter, markSeenBy } from '../adapters/fulfilment-store.js';
+import { givePoints } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
+import { checkAddress } from '../core/checkout.js';
 import { checkFieldValues } from '../core/fields.js';
-import { COLLECTIONS } from '../core/model.js';
+import { MAX_ADDRESSES, checkNewCustomer, phoneDigitsOf } from '../core/guests.js';
+import { expiryFor, loyaltyRules } from '../core/loyalty.js';
+import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
+import { phoneRulesOf } from './guests.js';
 import {
 	MAX_SEARCH,
 	checkCustomerEdit,
@@ -89,11 +95,25 @@ export const createCustomers = (service) => {
 	};
 
 	/**
-	 * Who has a loyalty account with points earned or left (segment `loyalty`, E31), at most 5,000.
+	 * The list's order (E46): A to Z by name (the default) or the newest first.
 	 * @param {any} ctx
+	 * @returns {'name' | 'newest'}
+	 */
+	const sortOf = (ctx) => {
+		const sort = ctx.query.sort === undefined || ctx.query.sort === '' ? 'name' : ctx.query.sort;
+		if (sort !== 'name' && sort !== 'newest') throw service.invalid('sort', 'sort is name or newest.');
+		return sort;
+	};
+
+	/**
+	 * Who segment `loyalty` holds (E31): the customers flagged as members while the loyalty setting `memberFlag` is on
+	 * (E47), else who has a loyalty account with points earned or left, at most 5,000.
+	 * @param {any} ctx
+	 * @returns {Promise<{ userIds: string[], customerIds: string[] } | 'flag'>}
 	 */
 	const loyaltyOwners = async (ctx) => {
 		const s = await service.site(ctx);
+		if (s.has('loyalty') && loyaltyRules(await s.values('loyalty')).memberFlag !== 'off') return 'flag';
 		const rows = await (
 			await s.data()
 		)
@@ -120,26 +140,28 @@ export const createCustomers = (service) => {
 
 	/** @param {any} ctx */
 	const list = async (ctx) => {
+		const sort = sortOf(ctx);
 		const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url }, { defaultLimit: 25 });
 		const query = await queryOf(ctx);
 		const s = await service.site(ctx);
 		const store = await storeOf(s);
-		const rows = await store.customers.list({ ...query, after: page.after, limit: page.fetchLimit });
+		const rows = await store.customers.list({ ...query, sort, after: page.after, limit: page.fetchLimit });
 		const spent = await store.orders.spent(rows);
 		const { money } = await s.format();
 		return page.respond(
 			rows.map((row) => customerView(row, spent.get(spentKey(row)) ?? { total: 0, count: 0 }, s.currency, money)),
-			(view) => [view.name, view.userId],
+			(view) => (sort === 'newest' ? [view.createdAt ?? '', view.id] : [view.name, view.id]),
 		);
 	};
 
 	/**
-	 * A customer by customer id or user id (K-6): their record, else (a member) one made from their latest order, else
+	 * A customer by customer id or user id (K-6): their record, else (a member) the details of their latest order, else
 	 * the record of an Accounts user without orders, made now (CU-2: staff open, note and block them before their first
-	 * order; joined when Accounts says), else 404.
-	 * @param {Site} s @param {string} ref
+	 * order; joined when Accounts says), else 404. `make`: a member known only from their orders gets their record too,
+	 * whole (a change is written to it).
+	 * @param {Site} s @param {string} ref @param {{ make?: boolean }} [options]
 	 */
-	const find = async (s, ref) => {
+	const find = async (s, ref, { make = false } = {}) => {
 		const store = await storeOf(s);
 		let record = await store.customers.find(ref);
 		if (!record && isCustomerId(ref)) throw problem('not_found', 'There is no such customer.');
@@ -147,12 +169,14 @@ export const createCustomers = (service) => {
 		const owner = record ? { ...customerOwner(record), customerId: String(record.id ?? '') } : { userId: ref };
 		const recent = await store.orders.ofCustomer(owner, RECENT_ORDERS);
 		const latest = recent[0];
-		if (!record && !latest) {
-			const user = await service.accountsUser(s, ref);
-			if (!user) throw problem('not_found', 'There is no such customer.');
+		if (!record && (make || !latest)) {
+			const user = latest ? null : await service.accountsUser(s, ref);
+			if (!latest && !user) throw problem('not_found', 'There is no such customer.');
 			record = await createOrdersStore(await s.data()).ensureCustomer(
-				{ userId: ref, name: user.name, email: user.email, phone: user.phone },
-				{ at: user.createdAt, refresh: false },
+				latest
+					? { userId: ref, name: latest.customer.name, email: latest.customer.email, phone: latest.customer.phone }
+					: { userId: ref, .../** @type {NonNullable<typeof user>} */ (user) },
+				{ at: latest ? new Date(service.now()) : /** @type {NonNullable<typeof user>} */ (user).createdAt, refresh: false },
 			);
 		}
 		const details = latest
@@ -173,6 +197,8 @@ export const createCustomers = (service) => {
 		const values = record?.fields ?? {};
 		return {
 			...customerView(shown, spent, s.currency, money),
+			// the addresses staff keep and a guest's orders delivered to (E46)
+			addresses: record?.addresses ?? [],
 			recentOrders: recent.map((order) => orderSummary(order, flow, money)),
 			// its customer field values (staff see every one), and the fields staff fill (dynamic model §2)
 			fields: values,
@@ -180,6 +206,15 @@ export const createCustomers = (service) => {
 				.filter((field) => field.active || values[field.id] !== undefined)
 				.map(fieldDefinition),
 		};
+	};
+
+	/**
+	 * A customer's record for a change, made when missing (`find` with `make`).
+	 * @param {Site} s @param {string} ref
+	 */
+	const recordFor = async (s, ref) => {
+		const { store, record } = await find(s, ref, { make: true });
+		return { store, record: /** @type {import('../core/model.js').CustomerRecord} */ (record) };
 	};
 
 	/** @param {any} ctx */
@@ -191,33 +226,28 @@ export const createCustomers = (service) => {
 		const checked = checkCustomerEdit(ctx.body);
 		if (!checked.ok) throw service.invalid(checked.field, checked.message);
 		const s = await service.site(ctx);
-		const { store, record, details, userId } = await find(s, ref);
-		const { blocked, blockedReason, note, resetRto, fields } = checked.value;
+		const { store, record } = await recordFor(s, ref);
+		const { blocked, blockedReason, note, resetRto, fields, loyaltyMember } = checked.value;
 		/** @type {Record<string, unknown> | null} the customer field values after the edit (null: not changed) */
 		let nextFields = null;
 		if (fields) {
 			const known = (await fieldsOn(await s.data(), 'customer')).filter((field) => field.active);
 			const given = checkFieldValues(fields, known);
 			if (!given.ok) throw service.invalid(given.path, given.message);
-			nextFields = { ...(record?.fields ?? {}), ...given.value };
+			nextFields = { ...(record.fields ?? {}), ...given.value };
 			for (const id of given.cleared) delete nextFields[id];
 		}
-		await store.customers.update(
-			// a guest's record by its id; a member's by user id (made when missing)
-			userId ? { userId } : { id: /** @type {string} */ (record?.id) },
-			{
-				...(blocked === undefined ? {} : { blocked, blockedReason }),
-				...(note === undefined ? {} : { note }),
-				...(resetRto ? { rtoCount: 0 } : {}),
-				...(nextFields ? { fields: nextFields } : {}),
-			},
-			record ? { name: record.name, email: record.email, phone: record.phone } : details,
-			new Date(service.now()),
-		);
+		await store.customers.update(record.id, {
+			...(blocked === undefined ? {} : { blocked, blockedReason }),
+			...(note === undefined ? {} : { note }),
+			...(resetRto ? { rtoCount: 0 } : {}),
+			...(nextFields ? { fields: nextFields } : {}),
+			...(loyaltyMember === undefined ? {} : { loyaltyMember }),
+		});
 		const action =
-			blocked === true && record?.blocked !== true
+			blocked === true && record.blocked !== true
 				? 'customer.blocked'
-				: blocked === false && record?.blocked === true
+				: blocked === false && record.blocked === true
 					? 'customer.unblocked'
 					: 'customer.edited';
 		const changes = [
@@ -225,12 +255,124 @@ export const createCustomers = (service) => {
 			...(note === undefined ? [] : ['note changed']),
 			...(resetRto ? ['returned packages reset'] : []),
 			...(fields ? ['fields changed'] : []),
+			...(loyaltyMember === undefined || loyaltyMember === (record.loyaltyMember === true)
+				? []
+				: [loyaltyMember ? 'marked a loyalty member' : 'no longer a loyalty member']),
 		];
 		await service.log(ctx, action, ref, {
-			label: (record?.name || details.name || ref).slice(0, 200),
+			label: (record.name || ref).slice(0, 200),
 			...(changes.length > 0 ? { detail: changes.join(', ') } : {}),
 		});
 		return view(s, ref);
+	};
+
+	/**
+	 * POST /v1/customers (E46): a customer without an account, added by staff — a guest record by phone (one per phone:
+	 * 409 conflict when a customer has it), with the opening loyalty points given (while Loyalty is on) and the loyalty
+	 * member flag (E47).
+	 * @param {any} ctx
+	 */
+	const create = async (ctx) => {
+		const s = await service.site(ctx);
+		const checked = checkNewCustomer(ctx.body, await phoneRulesOf(s));
+		if (!checked.ok) throw service.invalid(checked.field, checked.message, checked.code);
+		const { points, ...who } = checked.value;
+		if (points > 0 && !s.has('loyalty')) throw service.invalid('points', 'Opening points need Loyalty on.');
+		const now = service.now();
+		const record = {
+			id: createId(ID_PREFIX.customer),
+			userId: null,
+			guest: true,
+			name: who.name,
+			email: who.email,
+			phone: who.phone,
+			phoneDigits: phoneDigitsOf(who.phone),
+			city: who.city,
+			blocked: false,
+			blockedReason: '',
+			rtoCount: 0,
+			orderCount: 0,
+			note: who.note,
+			seenBy: [],
+			addresses: [],
+			...(who.loyaltyMember ? { loyaltyMember: true } : {}),
+			createdAt: new Date(now),
+		};
+		const store = await storeOf(s);
+		if (!(await store.customers.create(record)))
+			throw problem('conflict', 'A customer with this phone number is there already: open them instead.');
+		if (points > 0)
+			await givePoints(
+				await s.data(),
+				{
+					userId: { customerId: record.id },
+					points,
+					orderId: null,
+					kind: 'adjust',
+					expiresAt: expiryFor(now, await s.values('loyalty')),
+					note: 'Opening points',
+				},
+				{ now },
+			);
+		await service.log(ctx, 'customer.created', record.id, {
+			label: record.name.slice(0, 200),
+			...(points > 0 ? { detail: `${points} opening points` } : {}),
+		});
+		return created(await view(s, record.id));
+	};
+
+	/**
+	 * PUT /v1/customers/:userId/addresses `{ addresses }` (E46): the addresses staff keep for a customer, at most
+	 * {@link MAX_ADDRESSES}, the first the newest; each checked as checkout checks a delivery address.
+	 * @param {any} ctx
+	 */
+	const setAddresses = async (ctx) => {
+		const ref = refOf(ctx);
+		const given = ctx.body?.addresses;
+		if (!Array.isArray(given) || given.length > MAX_ADDRESSES)
+			throw service.invalid('addresses', `addresses is a list of at most ${MAX_ADDRESSES} addresses.`);
+		const s = await service.site(ctx);
+		const checkout = await s.values('checkout');
+		/** @type {string[]} */
+		const required = Array.isArray(checkout.addressRequired) ? checkout.addressRequired : ['line1', 'city'];
+		const rules = await phoneRulesOf(s);
+		const addresses = given.map((entry, index) => {
+			const checked = checkAddress(entry, required, rules);
+			if (!checked.ok)
+				throw service.invalid(
+					`addresses/${index}${checked.field.replace(/^address/, '')}`,
+					checked.message.replace(/^address\./, ''),
+				);
+			return checked.value;
+		});
+		const { store, record } = await recordFor(s, ref);
+		await store.customers.update(record.id, { addresses });
+		await service.log(ctx, 'customer.edited', ref, { label: (record.name || ref).slice(0, 200), detail: 'addresses changed' });
+		return view(s, ref);
+	};
+
+	/**
+	 * DELETE /v1/customers/:userId (E46): a customer record no order names, with its loyalty account (409 conflict once
+	 * one does: their orders keep it). A member's Accounts user stays.
+	 * @param {any} ctx
+	 */
+	const remove = async (ctx) => {
+		const ref = refOf(ctx);
+		const s = await service.site(ctx);
+		const store = await storeOf(s);
+		const record = await store.customers.find(ref);
+		if (!record) throw problem('not_found', 'There is no such customer.');
+		const done = await store.customers.remove(record.id);
+		if (done === 'missing') throw problem('not_found', 'There is no such customer.');
+		if (done === 'ordered') throw problem('conflict', 'This customer has orders: a customer with orders is kept with them.');
+		const data = await s.data();
+		await data
+			.collection(COLLECTIONS.loyalty)
+			.deleteOne(
+				record.userId ? { websiteId: s.websiteId, userId: record.userId } : { websiteId: s.websiteId, customerId: record.id },
+			);
+		await service.log(ctx, 'customer.deleted', record.id, { label: (record.name || record.id).slice(0, 200) });
+		return undefined;
 	};
 
 	/** POST /v1/customers/:userId/seen: the acting staff member opened the customer (a user id or customer id, E31). @param {any} ctx */
@@ -243,5 +385,15 @@ export const createCustomers = (service) => {
 		return { seen: true };
 	};
 
-	return Object.freeze({ list, read, edit, seen, count: counts.count, counts: counts.counts });
+	return Object.freeze({
+		list,
+		read,
+		edit,
+		create,
+		setAddresses,
+		remove,
+		seen,
+		count: counts.count,
+		counts: counts.counts,
+	});
 };

@@ -15,9 +15,11 @@ import {
 } from '../core/coupons.js';
 import { bestDeal, byShowOrder, checkDealInput, DEAL_RULES, dealUnitDiscount, dealView, publicDeal } from '../core/deals.js';
 import {
+	earnsAsMember,
 	expiringSoon,
 	expiryFor,
 	historyView,
+	isLoyaltyMember,
 	LOYALTY_DEFAULTS,
 	loyaltyRules,
 	maxRedeemable,
@@ -754,7 +756,16 @@ describe('loyalty rules', () => {
 			redeemMode: 'amount',
 			expiryUnit: 'days',
 			expiryRule: 'at_earn',
+			memberFlag: 'off',
 		});
+		// who is a loyalty member (E47): everyone while the flag is off, else only a flagged customer; with first_order
+		// an order makes its customer one
+		expect(isLoyaltyMember({}, null)).toBe(true);
+		expect(isLoyaltyMember({ memberFlag: 'manual' }, { loyaltyMember: false })).toBe(false);
+		expect(isLoyaltyMember({ memberFlag: 'manual' }, { loyaltyMember: true })).toBe(true);
+		expect(earnsAsMember({ memberFlag: 'manual' }, null)).toBe(false);
+		expect(earnsAsMember({ memberFlag: 'first_order' }, null)).toBe(true);
+		expect(loyaltyRules({ memberFlag: 'sometimes' }).memberFlag).toBe('off');
 	});
 
 	it('earns a percentage of the goods paid, in points', () => {

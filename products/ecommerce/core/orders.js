@@ -837,15 +837,15 @@ const waitingEditOf = (input) => {
 };
 
 /**
- * Check a change to a customer record: the block and its reason, the staff note, resetting returned packages, and
- * customer field values (checked against the fields by the caller).
+ * Check a change to a customer record: the block and its reason, the staff note, resetting returned packages,
+ * customer field values (checked against the fields by the caller) and the loyalty member flag (E47).
  * @param {unknown} body
  * @returns {{ ok: true, value: { blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean,
- *   fields?: Record<string, unknown> } } | Refusal}
+ *   fields?: Record<string, unknown>, loyaltyMember?: boolean } } | Refusal}
  */
 export const checkCustomerEdit = (body) => {
 	const input = objectOf(body);
-	/** @type {{ blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean, fields?: Record<string, unknown> }} */
+	/** @type {{ blocked?: boolean, blockedReason?: string, note?: string, resetRto?: boolean, fields?: Record<string, unknown>, loyaltyMember?: boolean }} */
 	const value = {};
 	if (input.blocked !== undefined) {
 		if (typeof input.blocked !== 'boolean') return refuse('blocked', 'true or false.');
@@ -863,6 +863,11 @@ export const checkCustomerEdit = (body) => {
 	if (input.resetRto !== undefined) {
 		if (input.resetRto !== true) return refuse('resetRto', 'Send true to reset the count.');
 		value.resetRto = true;
+	}
+	// the loyalty member flag (E47)
+	if (input.loyaltyMember !== undefined) {
+		if (typeof input.loyaltyMember !== 'boolean') return refuse('loyaltyMember', 'true or false.');
+		value.loyaltyMember = input.loyaltyMember;
 	}
 	// customer field values (null clears one), checked against the fields by the caller
 	if (input.fields !== undefined) {
@@ -1029,7 +1034,8 @@ export const orderSummary = (order, flow, money) => ({
 
 /**
  * Shop flags of the order's customer.
- * @typedef {{ blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number, note: string }} CustomerFlags
+ * @typedef {{ blocked: boolean, blockedReason: string, rtoCount: number, orderCount: number, note: string,
+ *   loyaltyMember: boolean }} CustomerFlags
  */
 
 /**
@@ -1042,6 +1048,7 @@ const customerFlags = (customer) => ({
 	rtoCount: customer?.rtoCount ?? 0,
 	orderCount: customer?.orderCount ?? 0,
 	note: customer?.note ?? '',
+	loyaltyMember: customer?.loyaltyMember === true,
 });
 
 /**
@@ -1179,6 +1186,7 @@ export const customerView = (customer, spent, currency, money) => ({
 	name: customer.name ?? '',
 	email: customer.email ?? '',
 	phone: customer.phone ?? '',
+	city: customer.city ?? '',
 	...customerFlags(customer),
 	totalSpent: spent.total,
 	totalSpentText: money(spent.total, currency),

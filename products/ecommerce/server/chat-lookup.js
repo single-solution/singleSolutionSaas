@@ -44,6 +44,7 @@ import {
 } from '../core/lookup.js';
 import { COLLECTIONS } from '../core/model.js';
 import { PAYMENT_METHODS, customerOwner, isCustomerId } from '../core/orders.js';
+import { isLoyaltyMember } from '../core/loyalty.js';
 import { listShown } from '../core/promotions.js';
 import { createCatalogSearch } from './catalog-search.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
@@ -252,6 +253,19 @@ export const createChatLookup = (product, service, media) => {
 	 */
 	const pointsOf = async (s, data, owner) =>
 		s.has('loyalty') ? (await loyaltyAccount(data, owner, { now: service.now() })).balance : null;
+
+	/**
+	 * The signed-in shopper's own points: null while loyalty is off, and for a shopper who is not a loyalty member
+	 * (the loyalty setting `memberFlag`, E47: only members see points).
+	 * @param {Site} s @param {WebsiteData} data @param {string} userId
+	 */
+	const shopperPointsOf = async (s, data, userId) => {
+		if (!s.has('loyalty')) return null;
+		const record = await data
+			.collection(COLLECTIONS.customers)
+			.findOne({ websiteId: data.websiteId, userId }, { projection: { _id: 0, loyaltyMember: 1 } });
+		return isLoyaltyMember(await s.values('loyalty'), record) ? pointsOf(s, data, userId) : null;
+	};
 
 	/**
 	 * A user's most recent orders, or a guest's by customer id.
@@ -588,7 +602,7 @@ export const createChatLookup = (product, service, media) => {
 		const [orders, flow, loyaltyPoints, { money }, extras] = await Promise.all([
 			ordersOf(data, shopper.id, limitOf(ctx.query.limit, 5, 10)),
 			flowOf(s),
-			pointsOf(s, data, shopper.id),
+			shopperPointsOf(s, data, shopper.id),
 			s.format(),
 			orderExtras(s),
 		]);
@@ -626,7 +640,7 @@ export const createChatLookup = (product, service, media) => {
 		const s = await service.site(ctx);
 		const shopper = await service.requireShopper(s);
 		const data = await s.data();
-		const [points, profile] = await Promise.all([pointsOf(s, data, shopper.id), service.accountProfile(s)]);
+		const [points, profile] = await Promise.all([shopperPointsOf(s, data, shopper.id), service.accountProfile(s)]);
 		return {
 			name: shopper.name,
 			firstName: firstNameOf(shopper.name),
@@ -707,7 +721,7 @@ export const createChatLookup = (product, service, media) => {
 		/** @type {{ firstName: string, city: string, points: number | null } | null} */
 		let visitor = null;
 		if (shopper) {
-			const [points, profile] = await Promise.all([pointsOf(s, data, shopper.id), service.accountProfile(s)]);
+			const [points, profile] = await Promise.all([shopperPointsOf(s, data, shopper.id), service.accountProfile(s)]);
 			visitor = { firstName: firstNameOf(shopper.name), city: await cityOf(data, shopper.id, profile), points };
 		}
 		return {

@@ -211,16 +211,24 @@ export const createOrdersStore = (data) => {
 			return /** @type {CustomerRecord} */ (found);
 		},
 		/**
-		 * Count an order on its customer record, with the delivery city.
-		 * @param {string} customerId @param {{ city: string, at: Date }} order
+		 * Count an order on its customer record, with the delivery city, the loyalty member flag (E47) and the addresses
+		 * it keeps after the order (E46; null: unchanged).
+		 * @param {string} customerId
+		 * @param {{ city: string, at: Date, member: boolean, addresses: import('../core/checkout.js').Address[] | null }} order
 		 */
-		countOrder: async (customerId, { city, at }) => {
-			await data
-				.collection(COLLECTIONS.customers)
-				.updateOne(
-					{ websiteId, id: customerId },
-					{ $inc: { orderCount: 1 }, $set: { lastOrderAt: at, ...(city ? { city } : {}) } },
-				);
+		countOrder: async (customerId, { city, at, member, addresses }) => {
+			await data.collection(COLLECTIONS.customers).updateOne(
+				{ websiteId, id: customerId },
+				{
+					$inc: { orderCount: 1 },
+					$set: {
+						lastOrderAt: at,
+						...(city ? { city } : {}),
+						...(member ? { loyaltyMember: true } : {}),
+						...(addresses ? { addresses } : {}),
+					},
+				},
+			);
 		},
 		/** Uses of a coupon by a customer. @param {string} couponId @param {string} userId */
 		couponUses: (couponId, userId) => data.collection(COLLECTIONS.couponUses).countDocuments({ websiteId, couponId, userId }),

@@ -11,7 +11,7 @@
  */
 import { mergeLoyalty } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
-import { phoneRules } from '../core/guests.js';
+import { phoneRules, savedAddresses } from '../core/guests.js';
 import { COLLECTIONS } from '../core/model.js';
 import { MAX_STAFF_NOTE } from '../core/orders.js';
 
@@ -86,13 +86,22 @@ export const createGuests = (product) => {
 						{ $set: { userId: shopper.id, customerId: member.id } },
 						{ session },
 					);
-				// what staff kept on the guest's record: its block, its note and the field values the member's lacks
+				// what staff kept on the guest's record: its block, its note, the field values the member's lacks, its
+				// addresses (the guest's first, then the member's, at most 6) and the loyalty member flag
 				/** @type {Record<string, unknown>} */
 				const set = {
 					...(guest.blocked && !member.blocked ? { blocked: true, blockedReason: guest.blockedReason ?? '' } : {}),
 					...(guest.note
 						? { note: member.note ? `${member.note}\n${guest.note}`.slice(0, MAX_STAFF_NOTE) : guest.note }
 						: {}),
+					...((guest.addresses ?? []).length > 0
+						? {
+								addresses: [...(guest.addresses ?? [])]
+									.reverse()
+									.reduce((kept, address) => savedAddresses(kept, address), member.addresses ?? []),
+							}
+						: {}),
+					...(guest.loyaltyMember && !member.loyaltyMember ? { loyaltyMember: true } : {}),
 				};
 				for (const [id, value] of Object.entries(guest.fields ?? {}))
 					if (member.fields?.[id] === undefined) set[`fields.${id}`] = value;
