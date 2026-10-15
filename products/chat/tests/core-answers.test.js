@@ -110,22 +110,25 @@ describe('fallback answers (C3)', () => {
 	it('checks the list', () => {
 		expect(checkFallbackAnswers('x')).toEqual({ ok: false, errors: ['Send a list of fallback answers.'] });
 		expect(checkFallbackAnswers(Array.from({ length: 51 }, () => ({}))).ok).toBe(false);
-		const bad = checkFallbackAnswers([1, { intent: 'x', language: 'english', keywords: ['k'.repeat(101)], text: '' }]);
+		const bad = checkFallbackAnswers([1, { language: 'english', keywords: ['k'.repeat(101)], text: '' }]);
 		expect(bad.ok).toBe(false);
-		expect(checkFallbackAnswers([{ intent: 'other', language: ' pt-BR ', keywords: [' hi ', ''], text: ' ok ' }])).toEqual({
+		expect(checkFallbackAnswers([{ language: ' pt-BR ', keywords: [' hi ', ''], text: ' ok ' }])).toEqual({
 			ok: true,
-			value: [{ intent: 'other', language: 'pt-BR', keywords: ['hi'], text: 'ok' }],
+			value: [{ language: 'pt-BR', keywords: ['hi'], text: 'ok' }],
 		});
-		// no language and no keywords: any
-		expect(checkFallbackAnswers([{ intent: 'greeting', text: 'Hello!' }])).toEqual({
+		// no language and no keywords: any; no fixed "intent" list (C20): what the answer is for is its keywords and text
+		expect(checkFallbackAnswers([{ text: 'Hello!' }])).toEqual({
 			ok: true,
-			value: [{ intent: 'greeting', language: '', keywords: [], text: 'Hello!' }],
+			value: [{ language: '', keywords: [], text: 'Hello!' }],
+		});
+		expect(checkFallbackAnswers([{ intent: 'anything', text: 'Hello!' }])).toEqual({
+			ok: true,
+			value: [{ language: '', keywords: [], text: 'Hello!' }],
 		});
 		expect(bad).toEqual({
 			ok: false,
 			errors: [
 				'Answer 1: not valid.',
-				'Answer 2: the intent is one of greeting, deals, products, budget, my_orders, compare, other.',
 				'Answer 2: the language is empty (any) or a code such as en.',
 				'Answer 2: the keywords are a list of up to 30 words or phrases of up to 100 characters.',
 				'Answer 2: write the answer (up to 2000 characters).',
@@ -134,7 +137,7 @@ describe('fallback answers (C3)', () => {
 	});
 
 	it('names what is wrong per field, the same rules for Settings and the server', () => {
-		const good = { intent: 'deals', language: 'en', keywords: ['deal'], text: 'Our deals: {deals_table}' };
+		const good = { language: 'en', keywords: ['deal'], text: 'Our deals: {deals_table}' };
 		expect(fallbackProblems(good)).toEqual([]);
 		expect(fallbackProblems(null)).toEqual(['item']);
 		expect(fallbackProblems([good])).toEqual(['item']);
@@ -154,9 +157,9 @@ describe('fallback answers (C3)', () => {
 
 	it('matches by language and keywords, finds budgets and fills placeholders', () => {
 		const items = /** @type {any[]} */ ([
-			{ intent: 'greeting', language: 'fr', keywords: ['bonjour'], text: 'a' },
-			{ intent: 'other', language: '', keywords: ['hi there'], text: 'b' },
-			{ intent: 'other', language: '', keywords: [], text: 'c' },
+			{ language: 'fr', keywords: ['bonjour'], text: 'a' },
+			{ language: '', keywords: ['hi there'], text: 'b' },
+			{ language: '', keywords: [], text: 'c' },
 		]);
 		expect(matchingFallbacks(items, { message: 'Bonjour !', language: 'fr-CA' }).map((i) => i.text)).toEqual(['a', 'c']);
 		expect(matchingFallbacks(items, { message: 'well hi there', language: null }).map((i) => i.text)).toEqual(['b', 'c']);
@@ -185,7 +188,7 @@ describe('fallback answers (C3)', () => {
 
 describe('the comparison answer (C18)', () => {
 	it('needs keywords: the words between the two products', () => {
-		const answer = { intent: 'compare', language: '', keywords: [], text: 'Here: {comparison}' };
+		const answer = { language: '', keywords: [], text: 'Here: {comparison}' };
 		expect(fallbackProblems(answer)).toEqual(['compareKeywords']);
 		expect(fallbackProblems({ ...answer, keywords: ['vs'] })).toEqual([]);
 		expect(checkFallbackAnswers([answer])).toEqual({

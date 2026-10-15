@@ -116,8 +116,8 @@ describe('the website Setup sheet', () => {
 			{ key: 'budget', label: 'Budget', type: 'number' },
 		]);
 		await env.list('fallback_answers', [
-			{ intent: 'greeting', language: '', keywords: [], text: 'Hello! How can we help?' },
-			{ intent: 'other', language: '', keywords: ['hours'], text: 'We are open from 9 AM to 5 PM.' },
+			{ language: '', keywords: [], text: 'Hello! How can we help?' },
+			{ language: '', keywords: ['hours'], text: 'We are open from 9 AM to 5 PM.' },
 		]);
 		const filled = await partOf(env);
 		expect(listSummaries(filled)).toEqual({
@@ -161,7 +161,7 @@ describe('the website Setup sheet', () => {
 			{ id: 'refund', name: 'Refund', start: { kind: 'keyword', keywords: ['refund'] }, steps: [{ kind: 'handoff' }] },
 		]);
 		await env.list('page_rules', [{ path: '/products/**', delay: 10, message: 'Need help choosing?' }]);
-		await env.list('fallback_answers', [{ intent: 'greeting', language: '', keywords: [], text: 'Hello!' }]);
+		await env.list('fallback_answers', [{ language: '', keywords: [], text: 'Hello!' }]);
 		const one = listSummaries(await partOf(env));
 		expect(one).toEqual({
 			tools: '1 tool: check_stock.',

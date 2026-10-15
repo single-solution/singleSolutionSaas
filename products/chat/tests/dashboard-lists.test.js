@@ -18,7 +18,7 @@ import { checkFallbackAnswers } from '../core/fallback.js';
 const WEBSITE = 'web_1';
 const BASE = `/v1/dashboard/websites/${WEBSITE}`;
 const LIST = `${BASE}/lists/fallback_answers`;
-const DEALS = { intent: 'deals', language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' };
+const DEALS = { language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' };
 
 /**
  * A dashboard piece inside the dashboard's provider (its words and feature names), as the page renders it.
@@ -98,19 +98,9 @@ describe('the fallback answers editor (C3)', () => {
 		);
 		await settle();
 		// the saved answer
-		expect(field(container, 'For').value).toBe('deals');
 		expect(field(container, 'Keywords (one per line)').value).toBe('deal\noffer');
 		expect(field(container, 'Answer').value).toBe(DEALS.text);
 		expect(optionsOf(field(container, 'Language'))).toEqual(['Any language', 'English (en)', 'French (fr)']);
-		expect(optionsOf(field(container, 'For'))).toEqual([
-			'Greetings',
-			'Deals',
-			'Products',
-			'A budget',
-			'The visitor’s orders',
-			'Comparing two products',
-			'Anything else',
-		]);
 		expect(container.textContent).not.toContain('Skipped while these are off');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
 
@@ -123,7 +113,6 @@ describe('the fallback answers editor (C3)', () => {
 		expect(container.textContent).not.toContain('Write the answer');
 		// its placeholder needs a shop tool that is off: the answer would be skipped
 		expect(container.textContent).toContain('Skipped while these are off: Shop tools: top and new products.');
-		type(field(container, 'For', 1), 'products');
 		type(field(container, 'Language', 1), 'fr');
 		// 31 keywords are more than the server takes
 		type(field(container, 'Keywords (one per line)', 1), Array.from({ length: 31 }, (_, i) => `word ${i}`).join('\n'));
@@ -136,10 +125,7 @@ describe('the fallback answers editor (C3)', () => {
 		click(button(container, 'Save list'));
 		await settle();
 		expect(saved).toEqual([
-			[
-				DEALS,
-				{ intent: 'products', language: 'fr', keywords: ['best', 'bestseller'], text: 'Popular this week:\n{top_products}' },
-			],
+			[DEALS, { language: 'fr', keywords: ['best', 'bestseller'], text: 'Popular this week:\n{top_products}' }],
 		]);
 		expect(container.textContent).toContain('Saved');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
@@ -150,7 +136,6 @@ describe('the fallback answers editor (C3)', () => {
 		const { container } = render(inDashboard(<FallbackAnswersEditor websiteId={WEBSITE} languages={[]} on={() => true} />));
 		await settle();
 		click(button(container, 'Add'));
-		type(field(container, 'For', 1), 'compare');
 		type(field(container, 'Answer', 1), 'Side by side:\n{comparison}');
 		expect(container.textContent).toContain('Add the words between the two products, such as vs, for {comparison}.');
 		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
@@ -158,9 +143,7 @@ describe('the fallback answers editor (C3)', () => {
 		expect(container.textContent).not.toContain('Add the words between');
 		click(button(container, 'Save list'));
 		await settle();
-		expect(saved).toEqual([
-			[DEALS, { intent: 'compare', language: '', keywords: ['vs', 'versus'], text: 'Side by side:\n{comparison}' }],
-		]);
+		expect(saved).toEqual([[DEALS, { language: '', keywords: ['vs', 'versus'], text: 'Side by side:\n{comparison}' }]]);
 	});
 
 	it('keeps a saved language Language lock no longer lists; moves and removes answers', async () => {
@@ -169,12 +152,13 @@ describe('the fallback answers editor (C3)', () => {
 		await settle();
 		click(button(container, 'Add'));
 		type(field(container, 'Answer', 1), 'Hello!');
-		type(field(container, 'For', 1), 'greeting');
 		click(container.querySelectorAll('button[aria-label="Move up"]')[1] ?? container);
-		expect(field(container, 'For', 0).value).toBe('greeting');
+		expect(field(container, 'Answer', 0).value).toBe('Hello!');
+		// no fixed "For" list (C20): an answer is its language, keywords and text
+		expect(container.textContent).not.toContain('Anything else');
 		click(button(container, 'Save list'));
 		await settle();
-		expect(saved.at(-1).map((/** @type {any} */ a) => a.intent)).toEqual(['greeting', 'deals']);
+		expect(saved.at(-1).map((/** @type {any} */ a) => a.text)).toEqual(['Hello!', DEALS.text]);
 		// an answer saved in a language the lock no longer lists still shows it
 		saved = [];
 		vi.unstubAllGlobals();

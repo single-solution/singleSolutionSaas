@@ -1,7 +1,7 @@
 /**
  * Fallback answers (PLAN 0.8.10 C3; pure): the merchant's own answers, used before the on-failure message when the AI
- * fails, a cap is reached or the answer is refused. The list `fallback_answers` holds `{ intent, language, keywords,
- * text }` items; the first entry whose language and keywords match the visitor's message wins. `text` may hold
+ * fails, a cap is reached or the answer is refused. The list `fallback_answers` holds `{ language, keywords, text }`
+ * items; the first entry whose language and keywords match the visitor's message wins. `text` may hold
  * `{deals_table}`, `{top_products}`, `{products_under}`, `{my_orders}` and `{comparison}` (C18: the two products the
  * message names around one of the answer's keywords, side by side), filled from the shop tools that are on; an entry
  * whose placeholder cannot be filled (its tool is off, the visitor is not signed in, no budget in the message, no two
@@ -12,10 +12,6 @@ import { isObject } from '@ss/contracts/util';
 import { primary } from './language.js';
 import { aroundPhrase, containsPhrase, normalise, tokenize } from './text.js';
 
-/** What an answer is for (C3); the merchant picks one per answer. */
-export const FALLBACK_INTENTS = Object.freeze(
-	/** @type {const} */ (['greeting', 'deals', 'products', 'budget', 'my_orders', 'compare', 'other']),
-);
 /** The placeholders and the shop feature each one needs. */
 export const PLACEHOLDERS = Object.freeze({
 	deals_table: 'shop_deals',
@@ -34,7 +30,6 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
 
 /**
  * @typedef {object} FallbackAnswer
- * @property {(typeof FALLBACK_INTENTS)[number]} intent
  * @property {string} language '' = any, else a language-lock language
  * @property {string[]} keywords any one of them in the message (none = any message)
  * @property {string} text markdown with placeholders
@@ -42,7 +37,7 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
 /**
  * What is wrong with an answer: a field, or `compareKeywords` (`{comparison}` needs keywords: the words between the two
  * products).
- * @typedef {'item' | 'intent' | 'language' | 'keywords' | 'compareKeywords' | 'text'} FallbackProblem
+ * @typedef {'item' | 'language' | 'keywords' | 'compareKeywords' | 'text'} FallbackProblem
  */
 
 /**
@@ -59,7 +54,6 @@ export const placeholdersOf = (text) =>
  * @param {Record<string, unknown>} item
  */
 const keptOf = (item) => ({
-	intent: item.intent,
 	language: typeof item.language === 'string' ? item.language.trim() : '',
 	keywords: (Array.isArray(item.keywords) ? item.keywords : [])
 		.map((keyword) => (typeof keyword === 'string' ? keyword.trim() : keyword))
@@ -79,10 +73,9 @@ const missing = (value) => value === undefined || value === null;
  */
 export const fallbackProblems = (item) => {
 	if (!isObject(item)) return ['item'];
-	const { intent, language, keywords, text } = keptOf(item);
+	const { language, keywords, text } = keptOf(item);
 	/** @type {FallbackProblem[]} */
 	const problems = [];
-	if (!FALLBACK_INTENTS.includes(/** @type {any} */ (intent))) problems.push('intent');
 	if ((!missing(item.language) && typeof item.language !== 'string') || (language !== '' && !LANGUAGE.test(language)))
 		problems.push('language');
 	if (
@@ -99,7 +92,6 @@ export const fallbackProblems = (item) => {
 /** The server's words for each problem. */
 const PROBLEM_TEXTS = Object.freeze({
 	item: 'not valid.',
-	intent: `the intent is one of ${FALLBACK_INTENTS.join(', ')}.`,
 	language: 'the language is empty (any) or a code such as en.',
 	keywords: `the keywords are a list of up to ${FALLBACK_LIMITS.keywords} words or phrases of up to ${FALLBACK_LIMITS.keywordLength} characters.`,
 	compareKeywords: '{comparison} needs keywords: the words between the two products, such as vs.',

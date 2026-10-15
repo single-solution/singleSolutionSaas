@@ -194,18 +194,18 @@ describe('fallback answers (C3)', () => {
 					'PUT',
 					`/v1/dashboard/websites/${sys.websiteId}/lists/fallback_answers`,
 					{
-						value: [{ intent: 'nope', language: 'english', keywords: 'x', text: '' }],
+						value: [{ language: 'english', keywords: 'x', text: '' }],
 					},
 				)
 			).status,
 		).toBe(422);
 		await sys.list('fallback_answers', [
-			{ intent: 'greeting', language: 'ar', keywords: [], text: 'مرحبا' },
-			{ intent: 'my_orders', language: '', keywords: ['order'], text: 'Your orders:\n{my_orders}' },
-			{ intent: 'deals', language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' },
-			{ intent: 'budget', language: '', keywords: ['under', 'budget'], text: 'Within your budget:\n{products_under}' },
-			{ intent: 'products', language: '', keywords: ['best'], text: 'Popular:\n{top_products}' },
-			{ intent: 'other', language: '', keywords: ['hours'], text: 'We are open 9 to 5.' },
+			{ language: 'ar', keywords: [], text: 'مرحبا' },
+			{ language: '', keywords: ['order'], text: 'Your orders:\n{my_orders}' },
+			{ language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' },
+			{ language: '', keywords: ['under', 'budget'], text: 'Within your budget:\n{products_under}' },
+			{ language: '', keywords: ['best'], text: 'Popular:\n{top_products}' },
+			{ language: '', keywords: ['hours'], text: 'We are open 9 to 5.' },
 		]);
 		sys.responders.set(`${ECOMMERCE}/v1/chat/deals`, () => ({ status: 200, body: { items: [DEAL] } }));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, () => ({ status: 200, body: { items: [PRODUCT] } }));
@@ -276,13 +276,11 @@ describe('the comparison answer (C18)', () => {
 			await sys.adminSession(),
 			'PUT',
 			`/v1/dashboard/websites/${sys.websiteId}/lists/fallback_answers`,
-			{ value: [{ intent: 'compare', language: '', keywords: [], text: '{comparison}' }] },
+			{ value: [{ language: '', keywords: [], text: '{comparison}' }] },
 		);
 		expect(refused.status).toBe(422);
 		expect(refused.text).toContain('{comparison} needs keywords');
-		await sys.list('fallback_answers', [
-			{ intent: 'compare', language: '', keywords: ['vs', 'versus'], text: 'Side by side:\n\n{comparison}' },
-		]);
+		await sys.list('fallback_answers', [{ language: '', keywords: ['vs', 'versus'], text: 'Side by side:\n\n{comparison}' }]);
 		const max = { ...PRODUCT, id: 'prd_max', name: 'Lamp Max', url: 'https://shop.example.com/lamps/lamp-max' };
 		const mini = {
 			...PRODUCT,

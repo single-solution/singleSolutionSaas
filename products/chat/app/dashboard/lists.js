@@ -22,7 +22,7 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
-import { FALLBACK_INTENTS, FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
+import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from '../../core/fallback.js';
 import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
@@ -579,7 +579,6 @@ const languageLabel = (code) => {
  * @param {Item} answer
  */
 const cleanAnswer = (answer) => ({
-	intent: answer.intent,
 	language: String(answer.language ?? '').trim(),
 	keywords: cleanLines(answer.keywords),
 	text: String(answer.text ?? '').trim(),
@@ -601,7 +600,7 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 			itemLabel={A.item}
 			max={FALLBACK_LIMITS.answers}
 			off={off}
-			blank={() => ({ intent: 'other', language: '', keywords: [], text: '' })}
+			blank={() => ({ language: '', keywords: [], text: '' })}
 			clean={cleanAnswer}
 			invalid={(answer) => fallbackProblems(answer).length > 0}
 			render={(answer, set) => {
@@ -615,13 +614,6 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 				return (
 					<>
 						<FieldGrid>
-							<Select
-								label={A.intent}
-								value={answer.intent}
-								options={FALLBACK_INTENTS.map((value) => ({ value, label: A.intents[value] }))}
-								error={problem('intent')}
-								onChange={(event) => set({ intent: event.target.value })}
-							/>
 							<Select
 								label={A.language}
 								value={answer.language ?? ''}

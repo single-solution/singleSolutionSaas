@@ -487,8 +487,8 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		const cookie = await sys.adminSession(await sys.owner(), websiteId);
 		const list = await sys.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/lists/fallback_answers`, {
 			value: [
-				{ intent: 'deals', language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' },
-				{ intent: 'other', language: '', keywords: ['hours'], text: 'We are open 9 to 5.' },
+				{ language: '', keywords: ['deal', 'offer'], text: 'Our deals:\n\n{deals_table}' },
+				{ language: '', keywords: ['hours'], text: 'We are open 9 to 5.' },
 			],
 		});
 		expect(list.status, JSON.stringify(list.json)).toBeLessThan(300);
