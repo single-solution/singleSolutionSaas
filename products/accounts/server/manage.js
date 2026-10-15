@@ -775,14 +775,16 @@ export const createManage = (product, service, flows) => {
 	 * (`completion`: a new user starts with the default role, an existing one keeps theirs until then). What the invite
 	 * did is kept on the request (its `grant`), so a decline can undo it. A user who never proved the request's phone or
 	 * email gets nothing (409 `contact_unverified`): someone may have signed up first with another person's number
-	 * (SA-2); only an untouched user is invited again.
+	 * (SA-2); only an untouched user is invited again. A user has one role (K-27), so a request never lowers one: a user
+	 * whose role ranks above the request's (for example staff asking with their own phone) is refused (409 `conflict`).
 	 * @param {any} ctx
 	 */
 	const inviteRequest = async (ctx) => {
 		const s = await service.site(ctx);
 		const request = await requestOr404(s, ctx.params.id);
 		if (request.status !== 'pending') throw problem('conflict', 'Only a pending request can be invited.');
-		if (!(await s.store.roles.get(request.role))) throw problem('conflict', 'The role of this request no longer exists.');
+		const requested = await s.store.roles.get(request.role);
+		if (!requested) throw problem('conflict', 'The role of this request no longer exists.');
 		const byPhone = request.phone ? await s.store.users.byPhone(request.phone) : null;
 		const existing = byPhone ?? (request.email ? await s.store.users.byEmail(request.email) : null);
 		if (existing && !(byPhone ? existing.phoneVerified : existing.emailVerified) && !untouched(existing))
@@ -790,6 +792,14 @@ export const createManage = (product, service, flows) => {
 				'contact_unverified',
 				'Someone signed up with this phone number or email address without proving it. Check with the person: ' +
 					'confirm it on their user if the account is theirs, or remove that account; then invite again.',
+			);
+		const current = existing ? await service.roleOf(s, existing) : null;
+		if (current && current.rank < requested.rank)
+			throw problem(
+				'conflict',
+				`The user with this phone number or email address has the role ${current.name}, which ranks above ` +
+					`${requested.name}: a request never lowers a role. Change the role on their user if that is what you want, ` +
+					'or decline the request.',
 			);
 		const at = (await service.settings(s, 'role_requests')).giveRoleAt === 'completion' ? 'completion' : 'invite';
 		/** @type {import('../core/profile.js').UserRecord} */

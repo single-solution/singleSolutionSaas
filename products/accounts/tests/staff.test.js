@@ -382,18 +382,29 @@ describe('A5: role requests', () => {
 		expect((await server('GET', `/v1/users/${invited.json.user.id}`)).json.roleSince).toBeTruthy();
 
 		// an existing user with a password gets the role at once
+		const cal = await server('POST', '/v1/users', { name: 'Cal Moss', phone: '07700 900077', password: 'cal pass 1234' });
+		const calAsk = await env.visitor('POST', '/v1/role-requests', {
+			role: 'member',
+			name: 'Cal',
+			phone: '07700900077',
+			note: 'Me',
+		});
+		const given = await server('POST', `/v1/role-requests/${calAsk.json.id}/invite`);
+		expect(given.json).toMatchObject({
+			request: { status: 'completed' },
+			setupLink: null,
+			user: { id: cal.json.id, role: 'member' },
+		});
+		// one user, one role: staff asking with their own phone number are never moved down to it (ST-9)
 		const sue = await env.visitor('POST', '/v1/role-requests', {
 			role: 'member',
 			name: 'Sue',
 			phone: '07700900001',
 			note: 'Me',
 		});
-		const given = await server('POST', `/v1/role-requests/${sue.json.id}/invite`);
-		expect(given.json).toMatchObject({
-			request: { status: 'completed' },
-			setupLink: null,
-			user: { id: people.support.id, role: 'member' },
-		});
+		expect(code(await server('POST', `/v1/role-requests/${sue.json.id}/invite`))).toBe('conflict');
+		expect((await server('GET', `/v1/users/${people.support.id}`)).json.role).toBe('product_manager');
+		await server('POST', `/v1/role-requests/${sue.json.id}/decline`);
 
 		// decline and reopen; an invite whose setup link runs out is expired (judged on read)
 		const dee = await env.visitor('POST', '/v1/role-requests', {
@@ -414,7 +425,7 @@ describe('A5: role requests', () => {
 		expect((await server('GET', '/v1/role-requests?status=invited')).json.items).toEqual([]);
 		expect((await server('POST', `/v1/role-requests/${dee.json.id}/reopen`)).json.status).toBe('pending');
 		const counts = await server('GET', '/v1/role-requests/counts?by=status');
-		expect(counts.json).toEqual({ total: 3, groups: { completed: 2, pending: 1 } });
+		expect(counts.json).toEqual({ total: 4, groups: { completed: 2, pending: 1, declined: 1 } });
 		expect(code(await server('POST', '/v1/role-requests/rrq_00000000000000000000000000/decline'))).toBe('not_found');
 		expect((await env.admin(ticket, 'POST', `/v1/admin/role-requests/${dee.json.id}/decline`)).status).toBe(401);
 	});

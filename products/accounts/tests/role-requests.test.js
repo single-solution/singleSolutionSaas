@@ -255,13 +255,13 @@ describe('giveRoleAt: the role when the setup link is completed', () => {
 		expect((await requestOf(oli.json.id)).status).toBe('completed');
 
 		// an existing user keeps their role until the setup is completed
-		const pat = await server('POST', '/v1/users', { name: 'Pat Webb', phone: '07700 900571', role: 'support_staff' });
+		const pat = await server('POST', '/v1/users', { name: 'Pat Webb', phone: '07700 900571', role: 'wholesale' });
 		const patAsk = await ask({ name: 'Pat Webb', phone: '07700900571' });
 		const patInvite = await server('POST', `/v1/role-requests/${patAsk.json.id}/invite`);
-		expect(patInvite.json.user).toMatchObject({ id: pat.json.id, role: 'support_staff' });
+		expect(patInvite.json.user).toMatchObject({ id: pat.json.id, role: 'wholesale' });
 		// a decline before then changes no role
 		await server('POST', `/v1/role-requests/${patAsk.json.id}/decline`);
-		expect((await userOf(pat.json.id)).json.role).toBe('support_staff');
+		expect((await userOf(pat.json.id)).json.role).toBe('wholesale');
 
 		// a user with a password: completed at once, the role given now
 		const sol = await server('POST', '/v1/users', { name: 'Sol Park', phone: '07700 900572', password: 'sol pass 1234' });
@@ -307,6 +307,41 @@ describe('giveRoleAt: the role when the setup link is completed', () => {
 		await server('POST', `/v1/role-requests/${wes.json.id}/decline`);
 		expect((await userOf(wesFirst.json.user.id)).json.role).toBe('customer');
 		await env.setting('role_requests', 'giveRoleAt', 'invite');
+	});
+});
+
+describe('a request never lowers a role (one user, one role; K-27, ST-9)', () => {
+	it('an invite for someone whose role ranks above the request’s is refused, by phone or email, and changes nothing', async () => {
+		const staff = await server('POST', '/v1/users', { name: 'Quinn Shaw', phone: '07700 900610', role: 'support_staff' });
+		for (const giveRoleAt of ['invite', 'completion']) {
+			await env.setting('role_requests', 'giveRoleAt', giveRoleAt);
+			const asked = await ask({ name: 'Quinn Shaw', phone: '07700900610' });
+			const refused = await server('POST', `/v1/role-requests/${asked.json.id}/invite`);
+			expect([refused.status, code(refused)]).toEqual([409, 'conflict']);
+			expect(refused.json.detail).toBe(
+				'The user with this phone number or email address has the role Support staff, which ranks above Member: a ' +
+					'request never lowers a role. Change the role on their user if that is what you want, or decline the request.',
+			);
+			expect((await userOf(staff.json.id)).json.role).toBe('support_staff');
+			expect((await requestOf(asked.json.id)).status).toBe('pending');
+			expect((await server('POST', `/v1/role-requests/${asked.json.id}/decline`)).json.status).toBe('declined');
+		}
+		await env.setting('role_requests', 'giveRoleAt', 'invite');
+		const manager = await server('POST', '/v1/users', {
+			name: 'Rae Hunt',
+			email: 'rae.hunt@example.com',
+			role: 'marketing_manager',
+		});
+		const byEmail = await ask({ name: 'Rae Hunt', email: 'rae.hunt@example.com', role: 'wholesale' });
+		expect(code(await server('POST', `/v1/role-requests/${byEmail.json.id}/invite`))).toBe('conflict');
+		expect((await userOf(manager.json.id)).json.role).toBe('marketing_manager');
+		// a customer asking for a role that ranks higher gets it, as before
+		const shopper = await server('POST', '/v1/users', { name: 'Sky Moss', phone: '07700 900611' });
+		const upgrade = await ask({ name: 'Sky Moss', phone: '07700900611' });
+		expect((await server('POST', `/v1/role-requests/${upgrade.json.id}/invite`)).json.user).toMatchObject({
+			id: shopper.json.id,
+			role: 'member',
+		});
 	});
 });
 
