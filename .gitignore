@@ -15,3 +15,6 @@ next-env.d.ts
 
 # Agent worktrees (local only)
 .claude/worktrees/
+
+# What ss-import read writes (store data: never commit it)
+import-out/

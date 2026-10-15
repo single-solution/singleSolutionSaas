@@ -8,18 +8,11 @@
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
 		"check": "prettier --check . && pnpm -r --workspace-concurrency=1 check",
-		"test": "pnpm -r --workspace-concurrency=1 test",
-		"test:all": "vitest run",
-		"lint": "pnpm -r lint",
-		"typecheck": "pnpm -r typecheck",
 		"format": "prettier --write . && pnpm -r format",
-		"format:check": "prettier --check . && pnpm -r format:check",
 		"validate": "pnpm --filter './products/*' validate"
 	},
 	"devDependencies": {
 		"@ss/config": "workspace:^",
-		"@vitest/coverage-v8": "^3.2.7",
-		"prettier": "^3.9.9",
-		"vitest": "^3.2.7"
+		"prettier": "^3.9.9"
 	}
 }

@@ -25,8 +25,9 @@ pnpm check
 
 `pnpm check` checks the root files' format, then runs every unit's own `check` (format, lint, typecheck and tests with
 coverage of 90 % lines, 90 % functions and 85 % branches). Tests start their own in-memory MongoDB. CI runs the same per
-unit, plus `next build` for deployables and `ss app validate` for products. `pnpm --filter <unit> <script>` runs one
-unit's script; `pnpm test:all` runs every unit's tests in one Vitest run (sharing one in-memory MongoDB).
+unit, plus `next build` for deployables and `ss app validate` for products. `pnpm format` writes the format of the
+root files and of every unit, `pnpm validate` runs `ss app validate` on every product, and
+`pnpm --filter <unit> <script>` runs one unit's script.
 
 ## Deploying
 

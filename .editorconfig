@@ -11,6 +11,7 @@ indent_size = 3
 [*.md]
 trim_trailing_whitespace = false
 
+# YAML cannot hold tabs: Prettier indents it with 3 spaces (tabWidth 3)
 [*.{yml,yaml}]
 indent_style = space
-indent_size = 2
+indent_size = 3

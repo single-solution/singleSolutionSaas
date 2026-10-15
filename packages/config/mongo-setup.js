@@ -1,19 +1,13 @@
 /**
  * Vitest global setup (`defineUnitConfig({ mongo: true })`): ONE single-node MongoMemoryReplSet for the whole run,
  * shared by every test file. Its URI is exposed as `TEST_MONGODB_URI` (inherited by the test workers); test helpers
- * give each test file its own databases on it. When `TEST_MONGODB_URI` is already set (an outer run, or a real
- * server), nothing is started. Needs the optional peers `mongodb` and `mongodb-memory-server`.
+ * give each test file its own databases on it. Needs the optional peers `mongodb` and `mongodb-memory-server`.
  * @module
  */
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
-/** Shared across every project of a run (each project's global setup may be loaded as its own module instance). */
-const KEY = Symbol.for('@ss/config/mongo-setup');
-
-/** @typedef {{ users: number, ready: Promise<{ replSet: MongoMemoryReplSet, uri: string }> }} SharedMongo */
-
-/** @returns {Promise<{ replSet: MongoMemoryReplSet, uri: string }>} */
+/** @returns {Promise<MongoMemoryReplSet>} */
 const start = async () => {
 	// the TTL monitor is off: it deletes documents by **wall-clock** time, while every test runs on an injected clock
 	// (`createClock`, starting at a fixed T0). Expiry stays deterministic because the code compares `expireAt` with the
@@ -42,26 +36,18 @@ const start = async () => {
 	} finally {
 		await client.close();
 	}
-	return { replSet, uri };
+	return replSet;
 };
 
-/** @type {Record<symbol, SharedMongo | undefined>} */
-const shared = /** @type {any} */ (globalThis);
-
+/**
+ * Starts the replica set and sets `TEST_MONGODB_URI`; the function it returns (Vitest's teardown) stops it.
+ * @returns {Promise<() => Promise<void>>}
+ */
 export const setup = async () => {
-	// an outer run (or a real server) already provides the database
-	if (process.env.TEST_MONGODB_URI && shared[KEY] === undefined) return;
-	const state = (shared[KEY] ??= { users: 0, ready: start() });
-	state.users += 1;
-	process.env.TEST_MONGODB_URI = (await state.ready).uri;
-};
-
-export const teardown = async () => {
-	const state = shared[KEY];
-	if (state === undefined) return;
-	state.users -= 1;
-	if (state.users > 0) return;
-	shared[KEY] = undefined;
-	delete process.env.TEST_MONGODB_URI;
-	await (await state.ready).replSet.stop();
+	const replSet = await start();
+	process.env.TEST_MONGODB_URI = replSet.getUri();
+	return async () => {
+		delete process.env.TEST_MONGODB_URI;
+		await replSet.stop();
+	};
 };

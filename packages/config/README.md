@@ -39,9 +39,8 @@ export default defineUnitConfig({ dir: import.meta.dirname, coverageInclude: ['s
 
 `jsx` lists the unit's folders whose `.js` files contain JSX; `@ss/ui` sources are always transformed (also when the
 package comes from `node_modules`, where Vitest inlines it). `mongo: true` adds the Mongo global setup: one
-single-node replica set per run, reference-counted across Vitest projects (the root `pnpm test:all` shares one between
-every unit) and skipped when `TEST_MONGODB_URI` is already set. Test helpers give each test file its own databases
-on it. Its TTL monitor is off because tests run on an injected clock: documents must never expire by wall time.
+single-node replica set per run, stopped when the run ends. Test helpers give each test file its own databases on it.
+Its TTL monitor is off because tests run on an injected clock: documents must never expire by wall time.
 
 The tools themselves are peer dependencies (`eslint`, `prettier`, `typescript`, `vitest`, `@vitest/coverage-v8`, and
 `mongodb` + `mongodb-memory-server` for the Mongo setup): each unit declares the versions it runs.

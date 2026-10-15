@@ -14,15 +14,9 @@ importers:
       '@ss/config':
         specifier: workspace:^
         version: link:packages/config
-      '@vitest/coverage-v8':
-        specifier: ^3.2.7
-        version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0))
       prettier:
         specifier: ^3.9.9
         version: 3.9.9
-      vitest:
-        specifier: ^3.2.7
-        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
 
   e2e:
     devDependencies:

@@ -75,22 +75,22 @@ describe('mongo global setup', () => {
 		}
 	});
 
-	it('shares one replica set between setups, stops it after the last teardown and defers to an outer URI', async () => {
+	it('starts its own replica set and stops it at teardown', async () => {
 		const outer = process.env.TEST_MONGODB_URI;
-		await mongoSetup.setup();
-		expect(process.env.TEST_MONGODB_URI).toBe(outer);
-		await mongoSetup.teardown();
-		delete process.env.TEST_MONGODB_URI;
 		try {
-			await Promise.all([mongoSetup.setup(), mongoSetup.setup()]);
-			const own = process.env.TEST_MONGODB_URI;
+			const teardown = await mongoSetup.setup();
+			const own = /** @type {string} */ (process.env.TEST_MONGODB_URI);
 			expect(own).toMatch(/^mongodb:\/\//);
 			expect(own).not.toBe(outer);
-			await mongoSetup.teardown();
-			expect(process.env.TEST_MONGODB_URI).toBe(own);
-			await mongoSetup.teardown();
+			const client = await new MongoClient(own, { directConnection: true }).connect();
+			try {
+				const { config } = await client.db('admin').command({ replSetGetConfig: 1 });
+				expect(config.writeConcernMajorityJournalDefault).toBe(false);
+			} finally {
+				await client.close();
+			}
+			await teardown();
 			expect(process.env.TEST_MONGODB_URI).toBeUndefined();
-			await mongoSetup.teardown();
 		} finally {
 			process.env.TEST_MONGODB_URI = outer;
 		}
