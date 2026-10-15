@@ -1,11 +1,13 @@
 /**
  * Orders and returns (admin widget `orders_admin`, tickets with `orders.read`, `orders.manage`, `orders.refund`,
- * `bulk.run`, `csv.run` and `returns.manage`; PLAN 0.8.8 Orders, 0.6): the orders as a list-and-detail screen — the
- * count of matching orders as a badge, search, status chips with their counts, more filters (stage, payment state and
- * method with their counts, placed between two days), a checkbox on each row with Move selected (Bulk actions), and
- * Export these orders as CSV in the list's More menu (CSV) — beside one order (`./admin-order.js`); and the return and
- * warranty claims (Returns, `./admin-returns.js`). What the ticket does not allow answers 403 and is shown as not
- * allowed.
+ * `orders.delete`, `bulk.run`, `csv.run` and `returns.manage`; PLAN 0.8.8 Orders, 0.6): the orders as a
+ * list-and-detail screen — the count of matching orders as a badge, search, status chips with their counts, more
+ * filters (stage, payment state and method with their counts, placed between two days, only the orders this staff
+ * member has not opened), a checkbox on each row with Move selected (Bulk actions) and the packing slips and pick list
+ * of the selected orders (Invoices), and in the list's More menu Export these orders as CSV (CSV) and Move all orders
+ * of a status (to another status of the same kind, before a status is removed or renamed in the order flow) — beside
+ * one order (`./admin-order.js`); and the return and warranty claims (Returns, `./admin-returns.js`). What the ticket
+ * does not allow answers 403 and is shown as not allowed.
  * @module
  */
 import { STATUS_ROLES } from '../core/model.js';
@@ -80,6 +82,7 @@ const ordersTab = (kit, panel) => {
 	);
 	const from = kit.input('', { type: 'date' });
 	const to = kit.input('', { type: 'date' });
+	const unseen = kit.check(t('ordersAdmin.unseenOnly'));
 
 	/**
 	 * The list's filters; a count by a field leaves out that field's own filter.
@@ -93,6 +96,7 @@ const ordersTab = (kit, panel) => {
 		paymentMethod: without === 'paymentMethod' ? '' : paymentMethod.node.value,
 		from: dayStart(from.value, kit.timeZone),
 		to: dayEnd(to.value, kit.timeZone),
+		unseen: unseen.box.checked,
 	});
 	/** @param {string} by */
 	const countsBy = (by) => kit.call('GET', `/v1/admin/orders/counts${query({ ...filters(by), by })}`);
@@ -106,6 +110,8 @@ const ordersTab = (kit, panel) => {
 		]);
 		screen.count(total);
 		chips.counts(chipCounts);
+		// statuses with orders that the flow no longer has (imported orders), for Move all orders of a status
+		if (chipCounts.ok) for (const key of Object.keys(chipCounts.data.groups ?? {})) if (!known.has(key)) others.add(key);
 		stage.counts(roleCounts);
 		paymentState.counts(states);
 		paymentMethod.counts(methods);
@@ -127,9 +133,10 @@ const ordersTab = (kit, panel) => {
 			kit.field(t('ordersAdmin.paymentMethod'), paymentMethod.node),
 			kit.field(t('admin.from'), from),
 			kit.field(t('admin.to'), to),
+			unseen.node,
 		]),
 	]);
-	for (const control of [stage.node, paymentState.node, paymentMethod.node, from, to])
+	for (const control of [stage.node, paymentState.node, paymentMethod.node, from, to, unseen.box])
 		control.addEventListener('change', reload);
 
 	// bulk moves: the selected orders to one status (each move follows the flow; refusals are listed per order)
@@ -173,6 +180,71 @@ const ordersTab = (kit, panel) => {
 		});
 	});
 
+	// the packing slips or the pick list of the selected orders, as one printable page (Invoices)
+	/** @param {string} path @param {string} name */
+	const printSelected = (path, name) =>
+		kit.button(name, async () => {
+			failures.replaceChildren();
+			if (screen.selected.size === 0) return kit.say(screen.line, t('admin.selectFirst'), true);
+			const file = await kit.fetchText(`/v1/admin/orders/${path}${query({ ids: [...screen.selected].join(',') })}`);
+			if (!file.ok) return kit.fail(screen.line, file);
+			kit.openHtml(file.text);
+			kit.say(screen.line, t('ordersAdmin.opened', { name }));
+			return file;
+		});
+
+	// every order of a status to another status of the same kind (role), so the flow can drop or rename the status
+	const known = new Set(flow.map((status) => status.key));
+	/** Statuses with orders the flow no longer has. @type {Set<string>} */
+	const others = new Set();
+	const restatus = () => {
+		const source = kit.select([
+			...flow.map((status) => ({ value: status.key, label: status.label })),
+			...[...others].map((key) => ({ value: key, label: t('ordersAdmin.retiredStatus', { status: key }) })),
+		]);
+		const target = kit.select(flow.map((status) => ({ value: status.key, label: status.label })));
+		// only statuses of the same kind of step (any status of the flow for one it no longer has)
+		const sameKind = () => {
+			const role = flow.find((status) => status.key === source.value)?.role;
+			for (const option of target.options) {
+				const status = flow.find((item) => item.key === option.value);
+				option.disabled = option.value === source.value || (role !== undefined && status?.role !== role);
+				option.hidden = option.disabled;
+			}
+			const first = [...target.options].find((option) => !option.disabled);
+			target.value = first ? first.value : '';
+		};
+		source.addEventListener('change', sameKind);
+		sameKind();
+		kit.dialog({
+			title: t('ordersAdmin.restatus'),
+			body: [
+				kit.text('p', { class: 'muted' }, t('ordersAdmin.restatusHint')),
+				h('div', { class: 'fields' }, [
+					kit.field(t('ordersAdmin.restatusFrom'), source),
+					kit.field(t('ordersAdmin.moveTo'), target),
+				]),
+			],
+			submitLabel: t('ordersAdmin.restatusButton'),
+			onSubmit: async () => {
+				if (!target.value) return t('ordersAdmin.restatusNoTarget');
+				const answer = await kit.call('POST', '/v1/admin/orders/restatus', { from: source.value, to: target.value });
+				if (!answer.ok) return kit.reason(answer);
+				const label = (/** @type {string} */ key) => flow.find((status) => status.key === key)?.label ?? key;
+				await screen.reload();
+				kit.say(
+					screen.line,
+					t('ordersAdmin.restatusDone', {
+						count: answer.data.moved,
+						from: label(answer.data.from),
+						to: label(answer.data.to),
+					}),
+				);
+				return null;
+			},
+		});
+	};
+
 	// CSV: the orders the filters match (by status and days; the CSV takes no other filter)
 	const exportCsv = async () => {
 		const answer = await kit.fetchText(
@@ -206,16 +278,25 @@ const ordersTab = (kit, panel) => {
 		open: (order, detail) => orderDetail(kit, order.id, detail),
 		empty: t('ordersAdmin.noOrders'),
 		nothing: t('ordersAdmin.nothing'),
-		actions: [has('csv') ? kit.moreMenu([{ label: t('ordersAdmin.exportCsv'), onSelect: exportCsv }]) : null],
+		actions: [
+			kit.moreMenu([
+				has('csv') ? { label: t('ordersAdmin.exportCsv'), onSelect: exportCsv } : null,
+				{ label: t('ordersAdmin.restatus'), onSelect: restatus },
+			]),
+		],
 		filters: [form, chips.node, more],
 		after: [failures],
 		counts,
-		...(has('bulk_actions')
+		...(has('bulk_actions') || has('invoices')
 			? {
 					bulk: {
 						label: (/** @type {any} */ order) => order.number,
 						all: t('ordersAdmin.selectAll'),
-						actions: [moveSelected],
+						actions: [
+							has('bulk_actions') ? moveSelected : null,
+							has('invoices') ? printSelected('packing-slips', t('ordersAdmin.packingSlips')) : null,
+							has('invoices') ? printSelected('pick-list', t('ordersAdmin.pickList')) : null,
+						],
 					},
 				}
 			: {}),

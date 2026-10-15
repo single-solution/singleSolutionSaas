@@ -12,7 +12,14 @@ import { PAYMENT_METHODS as CHECKOUT_METHODS } from '../core/checkout.js';
 import { DEAL_TYPES } from '../core/deals.js';
 import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
-import { ADDRESS_FIELDS, HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_METHODS, PAYMENT_STATES } from '../core/orders.js';
+import {
+	ADDRESS_FIELDS,
+	HISTORY_NOTES,
+	MOVE_WARNINGS,
+	PAYMENT_METHODS,
+	PAYMENT_STATES,
+	RECORDED_METHODS,
+} from '../core/orders.js';
 import { POLICY_SETTINGS } from '../core/policies.js';
 import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
@@ -44,6 +51,8 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			...keysOf('ordersAdmin.role.', STATUS_ROLES),
 			...keysOf('ordersAdmin.method.', PAYMENT_METHODS),
 			...keysOf('ordersAdmin.payment.', PAYMENT_STATES),
+			...keysOf('ordersAdmin.paidWith.', RECORDED_METHODS),
+			...keysOf('ordersAdmin.deliveryMethod.', ['delivery', 'pickup']),
 			...keysOf('orders.payment.', PAYMENT_STATES),
 			...keysOf('checkout.method.', [...PAYMENT_METHODS, ...CHECKOUT_METHODS]),
 			...keysOf('ordersAdmin.claimKind.', CLAIM_KINDS),

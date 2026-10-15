@@ -449,8 +449,12 @@ describe('orders admin: one order', () => {
 			'Invoice',
 			'Packing slip',
 			'Move to Canceled',
+			'Delete order',
 		]);
-		expect(pane.querySelector('.menu button.danger')?.textContent).toBe('Move to Canceled');
+		expect([...pane.querySelectorAll('.menu button.danger')].map((button) => button.textContent)).toEqual([
+			'Move to Canceled',
+			'Delete order',
+		]);
 	});
 
 	it('moves an order with serial numbers, a shipment or a typed confirmation', async () => {
@@ -926,7 +930,7 @@ describe('orders admin: one order', () => {
 		expect(textOf(pane)).not.toContain('Notes');
 		expect(pane.querySelector('a')).toBeNull();
 		expect(pane.querySelector('.detail-head button.secondary:not(.icon)')).toBeNull();
-		expect(menuEntries(pane)).toEqual(['Edit staff note']);
+		expect(menuEntries(pane)).toEqual(['Edit staff note', 'Delete order']);
 		await click(buttonIn(panel, 'Load more'));
 		await openRow(panel, 'ord_2');
 		expect(statuses(pane)).toContain(TEXTS['problem.not_found']);
@@ -1290,5 +1294,307 @@ describe('orders admin: returns', () => {
 		await click(buttonIn(pane, 'Put back in stock'));
 		await submitDialog(root);
 		expect(dialogStatus(root)).toBe(TEXTS['problem.conflict']);
+	});
+});
+
+describe('orders admin: payments, edits, deletes and batches the API has', () => {
+	/** A waiting bank-transfer order with nothing paid. @param {Record<string, unknown>} [over] */
+	const waiting = (over = {}) =>
+		detail({
+			status: 'pending_payment',
+			statusLabel: 'Awaiting payment',
+			role: 'awaiting_payment',
+			lines: [{ ...detail().lines[0], kind: 'physical', variantId: 'var_1', unitPrice: 100000, quantity: 2 }],
+			payment: {
+				method: 'bank_transfer',
+				state: 'unpaid',
+				paid: 0,
+				refunded: 0,
+				refundable: 0,
+				advance: 0,
+				balanceDue: 250000,
+				refundDue: 0,
+			},
+			delivery: { method: 'delivery', zone: 'Everywhere', fee: 0, locationId: null },
+			nextStatuses: [{ key: 'confirmed', label: 'Confirmed', role: 'open' }],
+			...over,
+		});
+
+	it('records a payment staff took, confirming a waiting order with it (E26)', async () => {
+		/** @type {any[]} */
+		const posts = [];
+		let reply = () => invalid('/amount');
+		const { root, server } = await start({
+			'GET /v1/admin/orders/ord_1': () => answer(200, waiting()),
+			'POST /v1/admin/orders/ord_1/payments': (/** @type {any} */ call) => {
+				posts.push(call.body);
+				return reply();
+			},
+		});
+		const pane = detailOf(panelOf(root, 'orders'));
+		// opening the order marks it opened by this staff member
+		expect(server.last('POST /v1/admin/orders/ord_1/seen')).toBeDefined();
+		expect(textOf(pane)).toContain('Still to pay');
+		await click(buttonIn(pane, 'Record a payment'));
+		const dialog = dialogOf(root);
+		expect(textOf(dialog)).toContain('Up to USD 2,500.00 is still to pay.');
+		expect(fieldIn(dialog, 'Paid by').value).toBe('bank_transfer');
+		expect([...fieldIn(dialog, 'Paid by').options].map((/** @type {any} */ o) => o.textContent)).toEqual([
+			'Bank transfer',
+			'Cash',
+			'Another way',
+		]);
+		expect(fieldIn(dialog, 'Amount (USD)').value).toBe('2500.00');
+		expect(checkIn(dialog, 'Also confirm the order').checked).toBe(true);
+		type(fieldIn(dialog, 'Amount (USD)'), '0');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['admin.checkNumbers']);
+		expect(posts).toHaveLength(0);
+		type(fieldIn(dialog, 'Amount (USD)'), '2600');
+		type(fieldIn(dialog, 'Reference (optional), such as the transfer number'), ' TR-77 ');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.amount']);
+		expect(textOf(root)).not.toContain(SERVER_ENGLISH);
+		reply = () =>
+			answer(201, {
+				order: detail({ payment: { ...waiting().payment, state: 'paid', paid: 250000, balanceDue: 0 } }),
+				warnings: [],
+				warningCodes: [],
+			});
+		type(fieldIn(dialog, 'Amount (USD)'), '2500');
+		await submitDialog(root);
+		expect(posts.at(-1)).toEqual({ method: 'bank_transfer', amount: 250000, reference: 'TR-77', confirm: true });
+		expect(statuses(pane)).toContain('Payment of USD 2,500.00 recorded.');
+		expect(shows(pane, 'Record a payment')).toBe(false);
+		expect(menuEntries(pane)).not.toContain('Record a payment');
+		// an open order with money still due: in the More menu, without confirming
+		server.routes['GET /v1/admin/orders/ord_1'] = () =>
+			answer(200, detail({ payment: { ...waiting().payment, method: 'cod', balanceDue: 1000 } }));
+		await openRow(panelOf(root, 'orders'), 'ord_1');
+		await pickMenu(pane, 'Record a payment');
+		expect(fieldIn(dialogOf(root), 'Paid by').value).toBe('cash');
+		expect(() => checkIn(dialogOf(root), 'Also confirm the order')).toThrow();
+		reply = () => problem(409, 'move_not_allowed');
+		type(fieldIn(dialogOf(root), 'Note (optional, only staff see it)'), 'at the counter');
+		await submitDialog(root);
+		expect(posts.at(-1)).toEqual({ method: 'cash', amount: 1000, note: 'at the counter' });
+		expect(dialogStatus(root)).toBe(TEXTS['problem.move_not_allowed']);
+	});
+
+	it('shows only the orders this staff member has not opened', async () => {
+		const { root, server } = await start();
+		const panel = panelOf(root, 'orders');
+		await tick(checkIn(panel, 'Only orders I have not opened'), true);
+		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({ unseen: 'true' });
+		expect(paramsOf(server, 'GET /v1/admin/orders/count')).toEqual({ unseen: 'true' });
+		await tick(checkIn(panel, 'Only orders I have not opened'), false);
+		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({});
+	});
+
+	it('deletes an order behind its number typed, in the website’s words when it is refused', async () => {
+		let reply = () => problem(409, 'conflict');
+		const { root, server } = await start({
+			'DELETE /v1/admin/orders/ord_1': () => reply(),
+		});
+		const panel = panelOf(root, 'orders');
+		const pane = detailOf(panel);
+		await pickMenu(pane, 'Delete order');
+		expect(textOf(dialogOf(root))).toContain('Order SO2026-1 is removed for good.');
+		const remove = await confirmDialog(root, 'SO2026-1');
+		expect(remove.disabled).toBe(false);
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.deleteRefused']);
+		reply = () => problem(403, 'forbidden');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['admin.notAllowed']);
+		reply = () => problem(503, 'payments_unavailable');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['problem.payments_unavailable']);
+		const lists = server.all('GET /v1/admin/orders').length;
+		reply = () => answer(204);
+		await submitDialog(root);
+		expect(hasDialog(root)).toBe(false);
+		expect(server.all('DELETE /v1/admin/orders/ord_1')).toHaveLength(4);
+		// the list is loaded again
+		expect(server.all('GET /v1/admin/orders').length).toBe(lists + 1);
+	});
+
+	it('edits a waiting order’s items, payment and delivery, priced again by the server (E29)', async () => {
+		/** @type {any[]} */
+		const edits = [];
+		let reply = () => invalid('/lines/1/variantId');
+		const { root, server } = await start(
+			{
+				'GET /v1/admin/orders/ord_1': () => answer(200, waiting()),
+				'PATCH /v1/admin/orders/ord_1': (/** @type {any} */ call) => {
+					edits.push(call.body);
+					return reply();
+				},
+				'GET /v1/admin/products': () =>
+					answer(200, { items: [{ id: 'prd_2', name: 'Case' }], nextCursor: null, hasMore: false }),
+				'GET /v1/admin/products/prd_2': () =>
+					answer(200, {
+						id: 'prd_2',
+						name: 'Case',
+						variants: [
+							{ id: 'var_9', options: { Color: 'Blue' }, sku: 'C-9', active: true },
+							{ id: 'var_8', options: { Color: 'Gray' }, sku: 'C-8', active: false },
+						],
+					}),
+				'GET /v1/admin/locations': () =>
+					answer(200, {
+						items: [
+							{ id: 'loc_1', name: 'Main store', pickup: true },
+							{ id: 'loc_2', name: 'Warehouse', pickup: false },
+						],
+					}),
+			},
+			[...FEATURES, 'multi_location'],
+		);
+		const pane = detailOf(panelOf(root, 'orders'));
+		await pickMenu(pane, 'Edit items and payment');
+		const dialog = dialogOf(root);
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.editNothing']);
+		// one more item, found by name, of its active variants
+		server.routes['GET /v1/admin/products'] = () => answer(200, { items: [], nextCursor: null, hasMore: false });
+		await click(buttonIn(dialog, 'Find'));
+		expect(textOf(dialog)).toContain(TEXTS['admin.noMatches']);
+		server.routes['GET /v1/admin/products'] = () => problem(500, 'internal_error');
+		await click(buttonIn(dialog, 'Find'));
+		expect(textOf(dialog)).toContain(TEXTS['admin.failed']);
+		server.routes['GET /v1/admin/products'] = () =>
+			answer(200, { items: [{ id: 'prd_2', name: 'Case' }], nextCursor: null, hasMore: false });
+		type(fieldIn(dialog, 'Add an item'), 'case');
+		await click(buttonIn(dialog, 'Find'));
+		expect(paramsOf(server, 'GET /v1/admin/products')).toEqual({ q: 'case', limit: '10' });
+		await click(buttonIn(dialog, 'Case'));
+		expect(shows(dialog, 'Case · Gray')).toBe(false);
+		await click(buttonIn(dialog, 'Case · Blue'));
+		await click(buttonIn(dialog, 'Case · Blue'));
+		const quantity = /** @type {HTMLInputElement} */ (dialog.querySelector('input[aria-label="Quantity of Case · Blue"]'));
+		expect(quantity.value).toBe('2');
+		type(dialog.querySelector('input[aria-label="Quantity of Phone · Red"]'), '1');
+		type(dialog.querySelector('input[aria-label="Unit price of Phone · Red"]'), '900');
+		await change(fieldIn(dialog, 'Paid by'), 'cod');
+		await change(fieldIn(dialog, 'Delivery'), 'pickup');
+		expect(fieldIn(dialog, 'Pickup location').value).toBe('loc_1');
+		expect([...fieldIn(dialog, 'Pickup location').options].map((/** @type {any} */ o) => o.textContent)).toEqual([
+			'Main store',
+		]);
+		await submitDialog(root);
+		expect(edits.at(-1)).toEqual({
+			lines: [
+				{ variantId: 'var_1', quantity: 1, unitPrice: 90000 },
+				{ variantId: 'var_9', quantity: 2 },
+			],
+			paymentMethod: 'cod',
+			delivery: { method: 'pickup', city: 'Tokyo', area: '', country: 'JP', locationId: 'loc_1' },
+		});
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.lines']);
+		// every item out: refused before asking
+		type(dialog.querySelector('input[aria-label="Quantity of Phone · Red"]'), '0');
+		type(quantity, '0');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.editNoItems']);
+		type(quantity, '1.5');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['admin.checkNumbers']);
+		type(quantity, '1');
+		reply = () => answer(200, waiting({ staffNote: 'edited' }));
+		await submitDialog(root);
+		expect(edits.at(-1).lines).toEqual([{ variantId: 'var_9', quantity: 1 }]);
+		expect(hasDialog(root)).toBe(false);
+		expect(statuses(pane)).toContain('Order changed and priced again.');
+		// a paid order or one with digital items is not edited
+		server.routes['GET /v1/admin/orders/ord_1'] = () => answer(200, waiting({ payment: { ...waiting().payment, paid: 1000 } }));
+		await openRow(panelOf(root, 'orders'), 'ord_1');
+		expect(menuEntries(pane)).not.toContain('Edit items and payment');
+		server.routes['GET /v1/admin/orders/ord_1'] = () => answer(200, waiting({ lines: detail().lines }));
+		await openRow(panelOf(root, 'orders'), 'ord_1');
+		expect(menuEntries(pane)).not.toContain('Edit items and payment');
+	});
+
+	it('moves every order of a status to another of the same kind, as the API allows', async () => {
+		let reply = () => invalid('/to');
+		const { root, server } = await start(
+			{
+				'POST /v1/admin/orders/restatus': () => reply(),
+				'GET /v1/admin/orders/counts': (/** @type {any} */ call) =>
+					call.url.searchParams.get('by') === 'status'
+						? answer(200, { total: 3, groups: { confirmed: 1, packed: 1, old_open: 1 } })
+						: counts(call),
+			},
+			FEATURES,
+			{
+				orders: {
+					statuses: [
+						{ key: 'confirmed', label: 'Confirmed', role: 'open' },
+						{ key: 'checked', label: 'Checked', role: 'open' },
+						{ key: 'packed', label: 'Packed', role: 'packed' },
+					],
+					couriers: [],
+				},
+			},
+		);
+		const panel = panelOf(root, 'orders');
+		await pickMenu(panel, 'Move all orders of a status');
+		const dialog = dialogOf(root);
+		const from = fieldIn(dialog, 'Orders in');
+		const to = fieldIn(dialog, 'Move to');
+		expect([...from.options].map((/** @type {any} */ o) => o.textContent)).toEqual([
+			'Confirmed',
+			'Checked',
+			'Packed',
+			'old_open (no longer in the order flow)',
+		]);
+		// only statuses of the same kind of step
+		const offered = () => [...to.options].filter((/** @type {any} */ o) => !o.disabled).map((/** @type {any} */ o) => o.value);
+		expect(offered()).toEqual(['checked']);
+		expect(to.value).toBe('checked');
+		await change(from, 'packed');
+		expect(offered()).toEqual([]);
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.restatusNoTarget']);
+		expect(server.all('POST /v1/admin/orders/restatus')).toHaveLength(0);
+		// a status the flow no longer has: any status of the flow
+		await change(from, 'old_open');
+		expect(offered()).toEqual(['confirmed', 'checked', 'packed']);
+		await change(from, 'confirmed');
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/orders/restatus')?.body).toEqual({ from: 'confirmed', to: 'checked' });
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.to']);
+		reply = () => answer(200, { from: 'confirmed', to: 'checked', role: 'open', moved: 4 });
+		await submitDialog(root);
+		expect(hasDialog(root)).toBe(false);
+		expect(statuses(panel)).toContain('Moved 4 orders from Confirmed to Checked.');
+	});
+
+	it('prints the packing slips and the pick list of the selected orders', async () => {
+		window.URL.createObjectURL = vi.fn(() => 'blob:slips');
+		window.URL.revokeObjectURL = vi.fn();
+		let reply = () => new Response('<h1>Slips</h1>', { status: 200 });
+		const { root, server, opened } = await start(
+			{
+				'GET /v1/admin/orders/packing-slips': () => reply(),
+				'GET /v1/admin/orders/pick-list': () => invalid('/ids'),
+			},
+			['checkout', 'invoices'],
+		);
+		const panel = panelOf(root, 'orders');
+		expect(shows(panel, 'Move selected')).toBe(false);
+		await click(buttonIn(panel, 'Packing slips'));
+		expect(statuses(panel)).toContain(TEXTS['admin.selectFirst']);
+		await click(buttonIn(panel, 'Load more'));
+		await tick(checkIn(panel, 'Select all shown'), true);
+		await click(buttonIn(panel, 'Packing slips'));
+		expect(paramsOf(server, 'GET /v1/admin/orders/packing-slips')).toEqual({ ids: 'ord_1,ord_2' });
+		expect(opened).toEqual(['blob:slips']);
+		expect(statuses(panel)).toContain('Packing slips opened in a new tab.');
+		await click(buttonIn(panel, 'Pick list'));
+		expect(statuses(panel)).toContain(TEXTS['problem.field.ids']);
+		reply = () => problem(403, 'feature_off');
+		await click(buttonIn(panel, 'Packing slips'));
+		expect(statuses(panel)).toContain(TEXTS['problem.feature_off']);
 	});
 });

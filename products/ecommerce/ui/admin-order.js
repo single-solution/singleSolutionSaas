@@ -1,20 +1,26 @@
 /**
  * One order in the orders admin widget (PLAN 0.8.8 Orders, 0.6): a head with the number and status, the next step as
- * a button (Move to …) and Refund or Type serial numbers beside it, and in its More menu the other next statuses, the
- * typed serial numbers (E11), Refund, Edit delivery address (before shipping), Edit staff note, Invoice and Packing
- * slip (opened in a new tab), and a canceling status last, in danger text behind its typed confirmation. Then the
- * figures in a grid, the lines with their warranty and serial numbers (E12), and cards: customer (blocked, returned
- * packages), delivery address, shipment, notes, the order's return claims and history (the website's words for who and
- * what the server wrote itself, PLAN 0.4.10). Forms open in dialogs (the packing step asks one serial number per unit;
- * shipping asks a courier and tracking number, or books the courier API); the warnings a move or a refund answers show
- * in the website's words too.
+ * a button (Move to …) and Type serial numbers, Record a payment (an order awaiting payment) or Refund beside it, and
+ * in its More menu the other next statuses, the typed serial numbers (E11), Record a payment (E26: a bank transfer,
+ * cash or another way, up to the balance due, confirming a waiting order with it), Refund, Edit items and payment (a
+ * waiting order with nothing paid, priced again, E29), Edit delivery address (before shipping), Edit staff note,
+ * Invoice and Packing slip (opened in a new tab), a canceling status in danger text behind its typed confirmation, and
+ * Delete order last (E31, behind the order number typed). Then the figures in a grid, the lines with their warranty and
+ * serial numbers (E12), and cards: customer (blocked, returned packages), delivery address, shipment, notes, the
+ * order's return claims and history (the website's words for who and what the server wrote itself, PLAN 0.4.10).
+ * Forms open in dialogs (the packing step asks one serial number per unit; shipping asks a courier and tracking
+ * number, or books the courier API); the warnings a move, a refund or a payment answers show in the website's words
+ * too. Opening an order marks it opened by the staff member (the list's "not opened by me" filter).
  * @module
  */
-import { EDITABLE_ROLES } from '../core/orders.js';
+import { WAITING_ROLES } from '../core/flow.js';
+import { EDITABLE_ROLES, PAYMENT_METHODS, RECORDED_METHODS } from '../core/orders.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
 import { card, detailHead } from './admin-lists.js';
 import { serialForm, serialLines, shipForm, typedLine, unitsMissing, warrantyOf } from './admin-order-forms.js';
+import { codeOf } from './admin-problems.js';
+import { variantLabel } from './admin-taxonomy.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-kit.js').Tone} Tone */
@@ -135,8 +141,10 @@ export const orderDetail = async (kit, id, detail) => {
 	kit.say(line, kit.t('ordersAdmin.loading'));
 	const answer = await kit.call('GET', `/v1/admin/orders/${id}`);
 	if (!detail.current()) return;
-	if (answer.ok) renderOrder(kit, answer.data, detail, '');
-	else kit.fail(line, answer);
+	if (!answer.ok) return void kit.fail(line, answer);
+	renderOrder(kit, answer.data, detail, '');
+	// opened by this staff member (E31): a marker only, so a refusal changes nothing shown
+	await kit.call('POST', `/v1/admin/orders/${id}/seen`);
 };
 
 /**
@@ -161,14 +169,27 @@ const renderOrder = (kit, order, detail, message) => {
 	const forward = next.filter((status) => status.role !== 'cancelled');
 	const cancels = next.filter((status) => status.role === 'cancelled');
 	const refundable = Number(order.payment.refundable ?? 0);
+	const balanceDue = Number(order.payment.balanceDue ?? 0);
 	// lines whose units are typed (their item type), and typed numbers still missing make Type serial numbers a main action
 	const typed = serialLines(order).filter(typedLine);
 	const missing = typed.some(unitsMissing);
+	// a waiting order with nothing paid and only physical lines is edited and priced again (E29)
+	const editable =
+		WAITING_ROLES.includes(order.role) &&
+		Number(order.payment.paid ?? 0) === 0 &&
+		order.lines.every((/** @type {any} */ item) => item.kind === 'physical');
 	/** @param {NextStatus} status */
 	const moveTo = (status) => () => moveDialog(kit, order, status, done);
 	const serials = () => serialsDialog(kit, order, done);
 	const refund = () => refundDialog(kit, order, done);
-	const second = missing ? 'serials' : refundable > 0 ? 'refund' : '';
+	const pay = () => paymentDialog(kit, order, done);
+	const second = missing
+		? 'serials'
+		: order.role === 'awaiting_payment' && balanceDue > 0
+			? 'payment'
+			: refundable > 0
+				? 'refund'
+				: '';
 	/** @param {string} path @param {string} name */
 	const document = (path, name) => async () => {
 		const file = await kit.fetchText(`/v1/admin/orders/${order.id}/${path}`);
@@ -182,13 +203,16 @@ const renderOrder = (kit, order, detail, message) => {
 			? kit.button(t('ordersAdmin.moveToStatus', { status: forward[0].label }), moveTo(forward[0]), { primary: true })
 			: null,
 		second === 'serials' ? kit.button(t('ordersAdmin.typeSerials'), serials) : null,
+		second === 'payment' ? kit.button(t('ordersAdmin.recordPayment'), pay) : null,
 		second === 'refund' ? kit.button(t('ordersAdmin.refund'), refund) : null,
 		kit.moreMenu([
 			...forward
 				.slice(1)
 				.map((status) => ({ label: t('ordersAdmin.moveToStatus', { status: status.label }), onSelect: moveTo(status) })),
 			typed.length > 0 && second !== 'serials' ? { label: t('ordersAdmin.typeSerials'), onSelect: serials } : null,
+			balanceDue > 0 && second !== 'payment' ? { label: t('ordersAdmin.recordPayment'), onSelect: pay } : null,
 			refundable > 0 && second !== 'refund' ? { label: t('ordersAdmin.refund'), onSelect: refund } : null,
+			editable ? { label: t('ordersAdmin.editItems'), onSelect: () => editDialog(kit, order, done) } : null,
 			order.address && EDITABLE_ROLES.includes(order.role)
 				? { label: t('ordersAdmin.editAddress'), onSelect: () => addressDialog(kit, order, done) }
 				: null,
@@ -223,6 +247,7 @@ const renderOrder = (kit, order, detail, message) => {
 				onSelect: moveTo(status),
 				danger: true,
 			})),
+			{ label: t('ordersAdmin.deleteOrder'), onSelect: () => deleteDialog(kit, order, detail), danger: true },
 		]),
 	];
 
@@ -234,6 +259,7 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.paymentState'), t(`ordersAdmin.payment.${order.payment.state}`)],
 		[t('ordersAdmin.paymentMethod'), t(`ordersAdmin.method.${order.payment.method}`)],
 		[t('ordersAdmin.paid'), money(order.payment.paid)],
+		[t('ordersAdmin.balanceDue'), balanceDue > 0 ? money(balanceDue) : ''],
 		[t('ordersAdmin.advance'), order.payment.advance > 0 ? money(order.payment.advance) : ''],
 		[t('ordersAdmin.refundedAmount'), order.payment.refunded > 0 ? money(order.payment.refunded) : ''],
 		[t('ordersAdmin.refundableAmount'), refundable > 0 ? money(refundable) : ''],
@@ -619,6 +645,255 @@ const noteDialog = (kit, order, done) => {
 			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, { staffNote: text.value });
 			if (!answer.ok) return kit.reason(answer);
 			done(answer.data, t('admin.saved'));
+			return null;
+		},
+	});
+};
+
+/**
+ * Record a payment staff took (E26): a bank transfer, cash or another way, up to the balance due; a waiting order is
+ * confirmed with it unless staff untick that.
+ * @param {Kit} kit @param {any} order @param {(order: any, text: string) => void} done
+ */
+const paymentDialog = (kit, order, done) => {
+	const { t } = kit;
+	const currency = order.totals.currency;
+	/** @param {number} minor */
+	const money = (minor) => kit.money(minor, currency);
+	const due = Number(order.payment.balanceDue ?? 0);
+	const method = kit.select(
+		RECORDED_METHODS.map((value) => ({ value, label: t(`ordersAdmin.paidWith.${value}`) })),
+		order.payment.method === 'bank_transfer' ? 'bank_transfer' : 'cash',
+	);
+	const amount = kit.input(kit.decimal(due), { inputmode: 'decimal' });
+	const reference = kit.input('', { maxlength: '120' });
+	const note = kit.input('', { maxlength: '1000' });
+	const confirm = WAITING_ROLES.includes(order.role) ? kit.check(t('ordersAdmin.paymentConfirm'), true) : null;
+	kit.dialog({
+		title: t('ordersAdmin.recordPayment'),
+		body: [
+			kit.text('p', { class: 'muted' }, t('ordersAdmin.paymentDue', { amount: money(due) })),
+			kit.h('div', { class: 'fields' }, [
+				kit.field(t('ordersAdmin.paymentHow'), method),
+				kit.field(t('ordersAdmin.refundAmount', { currency }), amount),
+				kit.field(t('ordersAdmin.paymentReference'), reference),
+				kit.field(t('ordersAdmin.paymentNote'), note),
+			]),
+			confirm?.node,
+		],
+		submitLabel: t('ordersAdmin.recordPayment'),
+		onSubmit: async () => {
+			const minor = kit.amount(amount.value);
+			if (minor === null || Number.isNaN(minor) || minor <= 0) return t('admin.checkNumbers');
+			const answer = await kit.call('POST', `/v1/admin/orders/${order.id}/payments`, {
+				method: method.value,
+				amount: minor,
+				...(reference.value.trim() ? { reference: reference.value.trim() } : {}),
+				...(note.value.trim() ? { note: note.value.trim() } : {}),
+				...(confirm ? { confirm: confirm.box.checked } : {}),
+			});
+			if (!answer.ok) return kit.reason(answer);
+			done(
+				answer.data.order,
+				[t('ordersAdmin.paymentRecorded', { amount: money(minor) }), ...warningsText(kit, answer.data, money)].join(' '),
+			);
+			return null;
+		},
+	});
+};
+
+/**
+ * One line of a waiting order being edited: its variant, its name, and the quantity and unit price staff give.
+ * @typedef {{ variantId: string, name: string, quantity: HTMLInputElement, price: HTMLInputElement, placedPrice: string,
+ *   placedQuantity: number }} EditLine
+ */
+
+/**
+ * Edit a waiting order (E29: awaiting payment or confirmation, nothing paid, physical lines only): its items (a
+ * quantity of 0 takes a line out; another unit price only where staff change it; more items by searching the
+ * products), how it is paid and how it is delivered. The server prices it again with the offers it was placed with.
+ * @param {Kit} kit @param {any} order @param {(order: any, text: string) => void} done
+ */
+const editDialog = (kit, order, done) => {
+	const { t, h } = kit;
+	const currency = order.totals.currency;
+	/** @type {EditLine[]} */
+	const lines = [];
+	const table = h('div');
+	const draw = () =>
+		kit.put(table, [
+			kit.table(
+				[t('ordersAdmin.item'), t('ordersAdmin.quantity'), t('ordersAdmin.unitPriceIn', { currency })],
+				lines.map((line) => [line.name, line.quantity, line.price]),
+			),
+		]);
+	/** @param {string} variantId @param {string} name @param {number} quantity @param {number | null} unitPrice */
+	const addLine = (variantId, name, quantity, unitPrice) => {
+		const found = lines.find((line) => line.variantId === variantId);
+		if (found) {
+			found.quantity.value = String(Number(found.quantity.value || 0) + 1);
+			return;
+		}
+		const price = unitPrice === null ? '' : kit.decimal(unitPrice);
+		lines.push({
+			variantId,
+			name,
+			quantity: kit.input(String(quantity), {
+				type: 'number',
+				min: '0',
+				max: '99',
+				step: '1',
+				'aria-label': t('ordersAdmin.quantityOf', { item: name }),
+			}),
+			price: kit.input(price, { inputmode: 'decimal', 'aria-label': t('ordersAdmin.unitPriceOf', { item: name }) }),
+			placedPrice: price,
+			placedQuantity: unitPrice === null ? 0 : quantity,
+		});
+		draw();
+	};
+	for (const item of order.lines)
+		addLine(item.variantId, [item.name, item.variantName].filter(Boolean).join(' · '), item.quantity, item.unitPrice);
+
+	// more items: a product found by name or SKU, then one of its variants
+	const find = kit.input('', { type: 'search', placeholder: t('ordersAdmin.findItem') });
+	// what a search found (or why it found nothing), as chips to pick
+	const found = h('ul', { class: 'chips' });
+	/** @param {{ status: number, data: any }} answer */
+	const failed = (answer) => {
+		kit.put(found, [kit.text('li', { class: 'error' }, kit.reason(answer))]);
+		return answer;
+	};
+	const search = kit.button(t('admin.find'), async () => {
+		const answer = await kit.call('GET', `/v1/admin/products${query({ q: find.value.trim(), limit: 10 })}`);
+		if (!answer.ok) return failed(answer);
+		/** @type {any[]} */
+		const items = answer.data.items ?? [];
+		kit.put(
+			found,
+			items.length === 0
+				? [kit.text('li', { class: 'muted' }, t('admin.noMatches'))]
+				: items.map((product) => h('li', {}, [kit.button(product.name, () => variantsOf(product.id))])),
+		);
+		return answer;
+	});
+	/** @param {string} productId */
+	const variantsOf = async (productId) => {
+		const answer = await kit.call('GET', `/v1/admin/products/${productId}`);
+		if (!answer.ok) return failed(answer);
+		const product = answer.data;
+		/** @type {any[]} */
+		const variants = (product.variants ?? []).filter((/** @type {any} */ variant) => variant.active !== false);
+		kit.put(
+			found,
+			variants.map((variant) => {
+				const name = [product.name, variantLabel(kit, variant)].join(' · ');
+				return h('li', {}, [kit.button(name, () => addLine(variant.id, name, 1, null))]);
+			}),
+		);
+		return answer;
+	};
+
+	const deliveryOn = order.delivery.method !== 'none';
+	const payment = kit.select(
+		PAYMENT_METHODS.map((value) => ({ value, label: t(`ordersAdmin.method.${value}`) })),
+		order.payment.method,
+	);
+	const delivery = kit.select(
+		['delivery', 'pickup'].map((value) => ({ value, label: t(`ordersAdmin.deliveryMethod.${value}`) })),
+		order.delivery.method,
+	);
+	// pickup locations (multi_location): the one the order has, else the first
+	const location = kit.select([]);
+	const locationField = kit.field(t('ordersAdmin.pickupLocation'), location);
+	const showLocation = () => {
+		locationField.hidden = delivery.value !== 'pickup' || location.options.length === 0;
+	};
+	delivery.addEventListener('change', showLocation);
+	if (deliveryOn && kit.has('multi_location'))
+		void kit.call('GET', '/v1/admin/locations').then((answer) => {
+			/** @type {any[]} */
+			const places = answer.ok ? (answer.data.items ?? []).filter((/** @type {any} */ place) => place.pickup) : [];
+			location.replaceChildren(...places.map((place) => kit.text('option', { value: place.id }, place.name)));
+			if (places.some((place) => place.id === order.delivery.locationId)) location.value = order.delivery.locationId;
+			showLocation();
+		});
+	showLocation();
+
+	kit.dialog({
+		title: t('ordersAdmin.editItems'),
+		body: [
+			kit.text('p', { class: 'muted' }, t('ordersAdmin.editItemsHint')),
+			table,
+			h('div', { class: 'row inline' }, [kit.field(t('ordersAdmin.addItem'), find), search]),
+			found,
+			h('div', { class: 'fields' }, [
+				kit.field(t('ordersAdmin.paymentMethod'), payment),
+				deliveryOn ? kit.field(t('ordersAdmin.deliveryHow'), delivery) : null,
+				deliveryOn ? locationField : null,
+			]),
+		],
+		submitLabel: t('admin.save'),
+		wide: true,
+		onSubmit: async () => {
+			/** @type {Array<{ variantId: string, quantity: number, unitPrice?: number }>} */
+			const wanted = [];
+			let changed = false;
+			for (const line of lines) {
+				const quantity = Number(line.quantity.value || 0);
+				if (!Number.isInteger(quantity) || quantity < 0 || quantity > 99) return t('admin.checkNumbers');
+				const priced = line.price.value.trim() !== line.placedPrice;
+				const unitPrice = priced ? kit.amount(line.price.value) : null;
+				if (priced && (unitPrice === null || Number.isNaN(unitPrice))) return t('admin.checkNumbers');
+				if (quantity !== line.placedQuantity || priced) changed = true;
+				if (quantity > 0)
+					wanted.push({ variantId: line.variantId, quantity, ...(priced ? { unitPrice: Number(unitPrice) } : {}) });
+			}
+			if (wanted.length === 0) return t('ordersAdmin.editNoItems');
+			const placedLocation = order.delivery.locationId ?? '';
+			const moved =
+				deliveryOn &&
+				(delivery.value !== order.delivery.method || (delivery.value === 'pickup' && location.value !== placedLocation));
+			const body = {
+				...(changed ? { lines: wanted } : {}),
+				...(payment.value !== order.payment.method ? { paymentMethod: payment.value } : {}),
+				...(moved
+					? {
+							delivery: {
+								method: delivery.value,
+								city: order.address?.city ?? '',
+								area: order.address?.area ?? '',
+								country: order.address?.country ?? '',
+								locationId: delivery.value === 'pickup' && location.value ? location.value : null,
+							},
+						}
+					: {}),
+			};
+			if (Object.keys(body).length === 0) return t('ordersAdmin.editNothing');
+			const answer = await kit.call('PATCH', `/v1/admin/orders/${order.id}`, body);
+			if (!answer.ok) return kit.reason(answer);
+			done(answer.data, t('ordersAdmin.itemsSaved'));
+			return null;
+		},
+	});
+};
+
+/**
+ * Delete the order (E31), behind its number typed. What it holds is given back as a cancel does; the server refuses
+ * (409) while it holds the shopper's money, a refund through Payments is pending or it is with the courier.
+ * @param {Kit} kit @param {any} order @param {Detail} detail
+ */
+const deleteDialog = (kit, order, detail) => {
+	const { t } = kit;
+	kit.dialog({
+		title: t('ordersAdmin.deleteOrder'),
+		body: [kit.text('p', {}, t('ordersAdmin.deleteHint', { number: order.number }))],
+		submitLabel: t('ordersAdmin.deleteOrder'),
+		danger: true,
+		confirmText: order.number,
+		onSubmit: async () => {
+			const answer = await kit.call('DELETE', `/v1/admin/orders/${order.id}`);
+			if (!answer.ok) return codeOf(answer) === 'conflict' ? t('ordersAdmin.deleteRefused') : kit.reason(answer);
+			await detail.reload();
 			return null;
 		},
 	});
