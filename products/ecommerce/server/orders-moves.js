@@ -22,10 +22,12 @@
  * - `refunded`: what is left is refunded (through Payments for what Payments took, else recorded) and earned points
  *   are taken back.
  *
- * What a move needs is checked before anything is called: the shipment (its tracking number as the move's `tracking`
- * says), the serial numbers (every one the item types need by the stage the order enters), the dispatch video
- * (the move's `video`) and the order fields required by the stage it moves into (`requiredAt`); then the open Payments payment is canceled (K-13), a shipment booked and a refund made, as the
- * move needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
+ * What a move needs is checked before anything is called: the permissions (the move's, and the refund permission for
+ * any move that gives money back: into a refunded status, or a cancel that refunds what was paid), the shipment (its
+ * tracking number as the move's `tracking` says), the serial numbers (every one the item types need by the stage the
+ * order enters), the dispatch video (the move's `video`) and the order fields required by the stage it moves into
+ * (`requiredAt`); then the open Payments payment is canceled (K-13), a shipment booked and a refund made, as the move
+ * needs. A staff refund (`refund`) goes through the order's refund lock (`server/transitions.js` `lockedRefund`).
  *
  * Every move is written to the order's history with the name of the staff member who made it (a ticket's user, or the
  * one a server-token call names in its `SS-Actor-*` headers, else `Server`; PLAN 0.8.10 K2) and its kind, the activity
@@ -38,7 +40,15 @@ import { fieldsOn, productTypes, unitRulesOf } from '../adapters/catalog-store.j
 import { heldStockBefore } from '../adapters/ledger.js';
 import { checkUnit, missingOrderFields, sharedKeys } from '../core/fields.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
-import { BEFORE_DELIVERY_ROLES, WAITING_ROLES as WAITING, canMove, confirmedStatus, triggersOfFlow } from '../core/flow.js';
+import {
+	BEFORE_DELIVERY_ROLES,
+	WAITING_ROLES as WAITING,
+	canMove,
+	confirmedStatus,
+	moveOf,
+	statusOf,
+	triggersOfFlow,
+} from '../core/flow.js';
 import { createId } from '@ss/contracts';
 import { elementsOf } from '../core/item-types.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
@@ -377,6 +387,26 @@ export const createMoves = (product, service) => {
 		const data = await s.data();
 		const now = product.now();
 		const actor = service.actor(ctx);
+		const settings = await rulesOf(s);
+		/** What staff ask of the move as the order engine plans it (what the move calls out for is added once called). */
+		const asked = {
+			who: /** @type {const} */ ('staff'),
+			...(trigger ? { trigger: true } : {}),
+			actor,
+			...byActor(actor),
+			note: input.note,
+			...(input.shopperNote ? { shopperNote: input.shopperNote } : {}),
+			...(input.restock === undefined ? {} : { restock: input.restock }),
+			...(input.code ? { code: input.code } : {}),
+			...(input.reason ? { reason: input.reason } : {}),
+		};
+		// a move that gives money back needs the refund permission, whatever permission it names (a cancel that refunds
+		// what was paid, before delivery or after it, E40): planned with the order as read, before anything is called
+		if (ctx.ticket && !ctx.ticket.permissions.includes('orders.refund')) {
+			const planned = planTransition({ order, flow, to: input.to, input: asked, rules: settings, now });
+			if (planned.ok && (planned.plan.external.length > 0 || planned.plan.refunded > 0))
+				throw problem('forbidden', 'This move gives money back, so it needs the refund permission.');
+		}
 
 		// what the move needs, checked before anything is called
 		/** @type {{ plan: Awaited<ReturnType<typeof capturePlan>> } | undefined} */
@@ -436,22 +466,14 @@ export const createMoves = (product, service) => {
 				flow,
 				to: input.to,
 				input: {
-					who: 'staff',
-					...(trigger ? { trigger: true } : {}),
-					actor,
-					...byActor(actor),
-					note: input.note,
-					...(input.shopperNote ? { shopperNote: input.shopperNote } : {}),
-					...(input.restock === undefined ? {} : { restock: input.restock }),
-					...(input.code ? { code: input.code } : {}),
-					...(input.reason ? { reason: input.reason } : {}),
+					...asked,
 					...(shipment ? { shipment } : {}),
 					...(video ? { video } : {}),
 					...(units ? { units } : {}),
 					...(paid ? { paid } : {}),
 					...(step ? { payments: step.set } : {}),
 				},
-				rules: await rulesOf(s),
+				rules: settings,
 				now,
 			});
 			if (!planned.ok)
@@ -579,6 +601,64 @@ export const createMoves = (product, service) => {
 		return after;
 	};
 
+	/** @param {Site} s @returns {Promise<OrderFlow>} */
+	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
+
+	/** @param {Site} s @param {string} id @returns {Promise<OrderRecord | null>} */
+	const orderNow = async (s, id) =>
+		/** @type {OrderRecord | null} */ (
+			await (await s.data()).collection(COLLECTIONS.orders).findOne({ websiteId: s.websiteId, id }, { projection: { _id: 0 } })
+		);
+
+	/**
+	 * The status the flow's trigger `refundsCover` moves an order to once its refunds reach what was paid (`refunded`
+	 * what it will have refunded), when the flow lists the move; null when none.
+	 * @param {OrderFlow} flow @param {OrderRecord} order @param {number} [refunded]
+	 */
+	const coverStatus = (flow, order, refunded = order.payment.refunded) => {
+		const to = triggersOfFlow(flow).refundsCover;
+		return to && order.payment.paid > 0 && refunded >= order.payment.paid && canMove(flow, order.status, to) ? to : null;
+	};
+
+	/**
+	 * Refunds that reach what was paid move the order to the flow's refunded status (`triggers.refundsCover`), a
+	 * transition like any other that the shop makes for whoever refunded it (`ctx`). It never undoes the refund before it
+	 * (the money is recorded): a move that lost its race to another change is made again with the order read again, and
+	 * one the order cannot make now is left to staff (the server's log says why).
+	 * @param {Site} s @param {any} ctx @param {OrderRecord} order after the refund @param {OrderFlow} flow
+	 * @returns {Promise<{ order: OrderRecord, warnings: Warning[] }>}
+	 */
+	const cover = async (s, ctx, order, flow) => {
+		let current = order;
+		for (let attempt = 1; attempt <= 2; attempt += 1) {
+			const to = coverStatus(flow, current);
+			if (!to) break;
+			try {
+				return await move(
+					s,
+					ctx,
+					current,
+					{
+						to,
+						note: 'Refunds cover the payments',
+						code: 'refunds_cover_payments',
+						serials: {},
+						shipment: null,
+						updatedAt: null,
+					},
+					flow,
+					{ trigger: true },
+				);
+			} catch (error) {
+				const code = String(/** @type {any} */ (error)?.code ?? 'error');
+				s.ctx.log?.warn?.('refunds cover the payments, the order was not moved', { code, orderId: order.id });
+				if (code !== 'conflict') break;
+				current = (await orderNow(s, order.id)) ?? current;
+			}
+		}
+		return { order: current, warnings: [] };
+	};
+
 	/**
 	 * Refund part of what was paid without a status change (E26): through Payments for what Payments took (or as asked),
 	 * the rest recorded as given back by `method`, with its reference and the claim it is for (a claim refunded without
@@ -587,13 +667,26 @@ export const createMoves = (product, service) => {
 	 * Payments made is always recorded — done now, or pending and sent again with the same key when Payments did not
 	 * answer (warning `refund_pending`). A part only recorded is written while the order's refunds are as read and no
 	 * refund runs at Payments. With the flow's trigger `refundsCover`, an order whose refunds reach what was paid moves to
-	 * that refunded status when the flow lists the move (a transition like any other).
+	 * that refunded status when the flow lists the move (`cover`): staff refunding it need that move's permission,
+	 * checked before any money moves.
 	 * @param {Site} s
 	 * @param {any} ctx
 	 * @param {OrderRecord} order
 	 * @param {import('../core/orders.js').RefundInput} input
 	 */
 	const refund = async (s, ctx, order, input) => {
+		const flow = await flowOf(s);
+		// a refund that will move the order needs that move's permission too, before anything is called (no money moves
+		// for a refund that would then be refused)
+		const to = coverStatus(flow, order, order.payment.refunded + input.amount);
+		const permission = to ? moveOf(flow, order.status, to)?.permission : undefined;
+		if (to && permission && ctx.ticket && !ctx.ticket.permissions.includes(permission))
+			throw problem(
+				'forbidden',
+				`This refund covers what was paid, so the order moves to ${statusOf(flow, to)?.label ?? to}: that needs the ${
+					permission === 'orders.refund' ? 'refund permission' : `permission ${permission}`
+				}.`,
+			);
 		// staff refund now: a refund the order's cancel left pending at Payments is not sent any more (one running right
 		// now records itself first)
 		const settled = await transitions.dropPending(s, order);
@@ -731,30 +824,8 @@ export const createMoves = (product, service) => {
 			await service.emit('order.refunded', s, { order: after, amount: input.amount, claimId: input.claimId });
 		}
 		// refunds that reach what was paid move the order to the flow's refunded status, when the flow lists the move
-		const flow = /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
-		const to = triggersOfFlow(flow).refundsCover;
-		if (
-			!pending &&
-			to &&
-			after.payment.paid > 0 &&
-			after.payment.refunded >= after.payment.paid &&
-			canMove(flow, after.status, to)
-		) {
-			const moved = await move(
-				s,
-				ctx,
-				after,
-				{
-					to,
-					note: 'Refunds cover the payments',
-					code: 'refunds_cover_payments',
-					serials: {},
-					shipment: null,
-					updatedAt: null,
-				},
-				flow,
-				{ trigger: true },
-			);
+		if (!pending) {
+			const moved = await cover(s, ctx, after, flow);
 			after = moved.order;
 			warnings.push(...moved.warnings);
 		}
