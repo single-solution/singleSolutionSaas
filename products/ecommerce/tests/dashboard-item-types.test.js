@@ -31,6 +31,7 @@ const START = [
 			units: null,
 			chart: false,
 			measure: null,
+			quantity: null,
 			parcel: false,
 			warranty: false,
 			downloads: true,
@@ -124,6 +125,32 @@ describe('item type drafts', () => {
 		expect(blankType().measure.on).toBe(false);
 	});
 
+	it('load and clean a quantity rule in whole pieces (E4), none with a measure', () => {
+		const cases = { ...blankType(), name: 'Cases', quantity: { step: '6', min: '12', max: '600' } };
+		expect(cleanType(cases).elements.quantity).toEqual({ step: 6, min: 12, max: 600 });
+		expect(cleanType({ ...cases, quantity: { step: '1', min: '1', max: '' } }).elements.quantity).toBeNull();
+		expect(cleanType({ ...cases, quantity: { step: '6', min: '6', max: '' } }).elements.quantity).toEqual({
+			step: 6,
+			min: 6,
+			max: null,
+		});
+		expect(loadType(/** @type {any} */ (checkItemTypes([cleanType(cases)]).ok && cleanType(cases))).quantity).toEqual({
+			step: '6',
+			min: '12',
+			max: '600',
+		});
+		/** @param {Partial<typeof cases.quantity>} quantity */
+		const problem = (quantity) => typeProblems({ ...cases, quantity: { ...cases.quantity, ...quantity } }, []).quantity;
+		expect(problem({})).toBeUndefined();
+		expect(problem({ step: '0' })).toBe('step');
+		expect(problem({ min: '13' })).toBe('min');
+		expect(problem({ max: '601' })).toBe('max');
+		expect(problem({ max: '6' })).toBe('max');
+		const cloth = { ...cases, measure: { ...blankType().measure, on: true, unit: 'm' } };
+		expect(cleanType(cloth).elements.quantity).toBeNull();
+		expect(typeProblems({ ...cloth, quantity: { step: 'x', min: '', max: '' } }, []).quantity).toBeUndefined();
+	});
+
 	it('load and clean every field, keep only the parts of the kind, and key a type from its name', () => {
 		const loaded = loadType(/** @type {any} */ (START[0]));
 		expect(loaded).toMatchObject({ key: 'ebook', kind: 'digital', active: false, fieldsNamed: false });
@@ -196,6 +223,7 @@ describe('the item types editor', () => {
 				grades: true,
 				chart: false,
 				measure: null,
+				quantity: null,
 				parcel: false,
 				warranty: false,
 				downloads: false,

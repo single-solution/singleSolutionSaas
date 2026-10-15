@@ -30,6 +30,7 @@ afterEach(() => {
 
 /** @param {Record<string, unknown>} [over] */
 const line = (over = {}) => ({
+	limits: { step: 1, min: 1, max: 99 },
 	key: 'prd_1|var_1',
 	productId: 'prd_1',
 	variantId: 'var_1',
@@ -225,7 +226,7 @@ describe('cart', () => {
 				discount: 0,
 				total: quantity,
 				measure: { unit: 'sq ft', quantityText: String(quantity / 1000) },
-				problems: quantity % 500 === 0 ? [] : [{ code: 'measure_step', message: '' }],
+				problems: quantity % 500 === 0 ? [] : [{ code: 'quantity_step', message: '' }],
 			});
 		const { fake, timers, host } = await setup({
 			lines: [{ productId: 'prd_fabric', variantId: 'var_f', quantity: 2500, measured: true }],
@@ -247,7 +248,7 @@ describe('cart', () => {
 		await setValue(amount, '3.75');
 		await timers.run();
 		expect(fake.cart.state().lines[0]?.quantity).toBe(3750);
-		expect(textOf(host)).toContain(text('cart.problem.measure_step'));
+		expect(textOf(host)).toContain(text('cart.problem.quantity_step'));
 		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '3.7501');
 		expect(fake.cart.state().lines[0]?.quantity).toBe(3750);
 		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '4');

@@ -99,6 +99,9 @@ export const createCheckout = (product, service) => {
 		const phoneNeeded = checkout.phoneRequired !== false;
 		return {
 			checkout: {
+				// the most lines of a cart and pieces of one item (E4); each line's own limits come with its quote
+				maxLines: checkout.maxLines,
+				maxQuantity: checkout.maxQuantity,
 				paymentMethods: methods.map((method) => ({ key: method.key, name: method.name, kind: method.kind })),
 				pickupLocations,
 				delivery: {

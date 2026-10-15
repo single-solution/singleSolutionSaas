@@ -20,7 +20,7 @@ import {
 	grossFits,
 	levelOf,
 	lineGross,
-	measureProblem,
+	quantityProblem,
 	measureView,
 	piecesOf,
 	placedGross,
@@ -132,13 +132,13 @@ describe('thousandths', () => {
 
 describe('steps and limits', () => {
 	it('takes a quantity that is a multiple of the step between the least and the most', () => {
-		expect(measureProblem(1000, FABRIC)).toBeNull();
-		expect(measureProblem(2500, FABRIC)).toBeNull();
-		expect(measureProblem(20_000, FABRIC)).toBeNull();
-		expect(measureProblem(500, FABRIC)).toBe('measure_min');
-		expect(measureProblem(2600, FABRIC)).toBe('measure_step');
-		expect(measureProblem(20_500, FABRIC)).toBe('measure_max');
-		expect(measureProblem(1_000_000, { ...FABRIC, max: null })).toBeNull();
+		expect(quantityProblem(1000, FABRIC)).toBeNull();
+		expect(quantityProblem(2500, FABRIC)).toBeNull();
+		expect(quantityProblem(20_000, FABRIC)).toBeNull();
+		expect(quantityProblem(500, FABRIC)).toBe('quantity_min');
+		expect(quantityProblem(2600, FABRIC)).toBe('quantity_step');
+		expect(quantityProblem(20_500, FABRIC)).toBe('quantity_max');
+		expect(quantityProblem(1_000_000, { ...FABRIC, max: null })).toBeNull();
 	});
 
 	it('checks a measure element of any unit label, with its defaults', () => {
@@ -310,9 +310,9 @@ describe('cart lines', () => {
 	it('checks a measured line’s steps, least and most, and keeps its measure', () => {
 		const [ok] = resolve([['prd_fabric', 2500]]);
 		expect(ok).toMatchObject({ quantity: 2500, measure: FABRIC, priced: true, problems: [] });
-		expect(resolve([['prd_fabric', 2600]])[0]?.problems.map((p) => p.code)).toEqual(['measure_step']);
-		expect(resolve([['prd_fabric', 500]])[0]?.problems.map((p) => p.code)).toEqual(['measure_min']);
-		expect(resolve([['prd_fabric', 20_500]])[0]?.problems.map((p) => p.code)).toEqual(['measure_max', 'not_enough_stock']);
+		expect(resolve([['prd_fabric', 2600]])[0]?.problems.map((p) => p.code)).toEqual(['quantity_step']);
+		expect(resolve([['prd_fabric', 500]])[0]?.problems.map((p) => p.code)).toEqual(['quantity_min']);
+		expect(resolve([['prd_fabric', 20_500]])[0]?.problems.map((p) => p.code)).toEqual(['quantity_max', 'not_enough_stock']);
 		expect(resolve([['prd_box', 2]])[0]).toMatchObject({ measure: null, problems: [] });
 	});
 
@@ -335,7 +335,7 @@ describe('cart lines', () => {
 		);
 		expect(merged).toHaveLength(1);
 		expect(merged[0]).toMatchObject({ quantity: 10_250 });
-		expect(merged[0]?.problems.map((p) => p.code)).toEqual(['measure_step', 'not_enough_stock']);
+		expect(merged[0]?.problems.map((p) => p.code)).toEqual(['quantity_step', 'not_enough_stock']);
 	});
 
 	it('does not sell measured items while Measured sales is off, and never prices a line above the largest amount', () => {

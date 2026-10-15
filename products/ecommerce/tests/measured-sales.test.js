@@ -77,6 +77,8 @@ describe('answers', () => {
 	it('carry the measure on the product page, its card and the staff product', async () => {
 		const page = (await shopper('GET', `/v1/shop/products/${ids.linen.id}`)).json;
 		expect(page.measure).toEqual(FABRIC);
+		expect(page.limits).toEqual({ step: 500, min: 1000, max: 20_000 });
+		expect((await shopper('GET', `/v1/shop/products/${ids.box.id}`)).json.limits).toEqual({ step: 1, min: 1, max: 99 });
 		const staff = await api('GET', `/v1/products/${ids.linen.id}`);
 		expect(staff.type).toEqual({ key: 'fabric', kind: 'physical', measure: FABRIC });
 		const cards = (await shopper('GET', '/v1/shop/products')).json.items;
@@ -98,13 +100,40 @@ describe('the cart', () => {
 		/** @param {number} quantity */
 		const codes = async (quantity) =>
 			(await quote([{ productId: ids.linen.id, quantity }])).lines[0].problems.map((/** @type {any} */ p) => p.code);
-		expect(await codes(2600)).toEqual(['measure_step']);
-		expect(await codes(500)).toEqual(['measure_min']);
-		expect(await codes(20_500)).toEqual(['measure_max', 'not_enough_stock']);
+		expect(await codes(2600)).toEqual(['quantity_step']);
+		expect(await codes(500)).toEqual(['quantity_min']);
+		expect(await codes(20_500)).toEqual(['quantity_max', 'not_enough_stock']);
 		// a measured line is one piece of the most of one item; pieces keep the checkout's limit
 		const box = await quote([{ productId: ids.box.id, quantity: 100 }]);
 		expect(box.lines[0].problems).toContainEqual({ code: 'too_many', message: 'At most 99 of one item.' });
 		expect(box.lines[0].measure).toBeNull();
+		expect(box.lines[0].limits).toEqual({ step: 1, min: 1, max: 99 });
+		expect(ok.lines[0].limits).toEqual({ step: 500, min: 1000, max: 20_000 });
+	});
+
+	it("holds pieces to their item type's step, least and most (E4)", async () => {
+		const cases = { key: 'cases', name: 'Cases', kind: 'physical', elements: { quantity: { step: 6, min: 12, max: 60 } } };
+		await saveTypes([
+			{ key: 'fabric', name: 'Fabric', kind: 'physical', elements: { variants: true, measure: FABRIC } },
+			cases,
+		]);
+		const water = await api('POST', '/v1/products', {
+			name: 'Water',
+			price: 100,
+			stock: 500,
+			status: 'active',
+			typeKey: 'cases',
+		});
+		expect((await shopper('GET', `/v1/shop/products/${water.id}`)).json.limits).toEqual({ step: 6, min: 12, max: 60 });
+		/** @param {number} quantity */
+		const codes = async (quantity) =>
+			(await quote([{ productId: water.id, quantity }])).lines[0].problems.map((/** @type {any} */ p) => p.code);
+		expect(await codes(18)).toEqual([]);
+		expect(await codes(6)).toEqual(['quantity_min']);
+		expect(await codes(20)).toEqual(['quantity_step']);
+		expect(await codes(66)).toEqual(['quantity_max']);
+		await api('DELETE', `/v1/products/${water.id}`);
+		await saveTypes();
 	});
 
 	it('takes a fixed deal off each unit and a percent off what the line comes to', async () => {
@@ -158,7 +187,7 @@ describe('orders', () => {
 		// off its steps: refused, nothing held
 		const off = await place([{ productId: ids.linen.id, quantity: 2600 }]);
 		expect(off.answer.status).toBe(422);
-		expect(off.answer.json.errors[0]).toMatchObject({ path: '/lines/0', code: 'measure_step' });
+		expect(off.answer.json.errors[0]).toMatchObject({ path: '/lines/0', code: 'quantity_step' });
 		expect(await linenStock()).toBe(7500);
 	});
 

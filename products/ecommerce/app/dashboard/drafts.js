@@ -8,7 +8,7 @@
 import { CONTENT_LIMITS } from '../../core/catalog-content.js';
 import { CONDITIONS, MAX_GRADES } from '../../core/grades.js';
 import { ELEMENTS, elementFor, isBuiltInKey } from '../../core/item-types.js';
-import { MAX_UNIT_LABEL, quantityText, toThousandths } from '../../core/measure.js';
+import { MAX_QUANTITY, MAX_UNIT_LABEL, quantityText, toThousandths } from '../../core/measure.js';
 
 /** What a grade may hold, for the editor's counters and Add buttons. */
 export const GRADE_LIMITS = Object.freeze({
@@ -267,9 +267,9 @@ export const gradeProblems = (draft, otherKeys) => {
 
 // ------------------------------------------------------------------------------------------------- item types
 
-/** The parts of a type other than its numbered units and its measure, which are edited on their own. */
-const TYPE_PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure'>>} */ (
-	ELEMENTS.filter((element) => element !== 'units' && element !== 'measure')
+/** The parts of a type other than its numbered units, its measure and its quantity rule, which are edited on their own. */
+const TYPE_PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure' | 'quantity'>>} */ (
+	ELEMENTS.filter((element) => element !== 'units' && element !== 'measure' && element !== 'quantity')
 );
 
 /** A measure as the editor holds it: amounts as decimal texts of the unit ('' max = no most; '' standard = none). */
@@ -284,6 +284,9 @@ const NO_MEASURE = Object.freeze({
 	standardAmount: '1',
 });
 
+/** A quantity rule as the editor holds it: whole pieces as texts ('' max = up to the shop's most of one item). */
+const NO_QUANTITY = Object.freeze({ step: '1', min: '1', max: '' });
+
 /**
  * Thousandths as the editor shows them (`2500` → `2.5`).
  * @param {number} value
@@ -296,13 +299,15 @@ const unitsText = (value) => quantityText(value, true);
  * @property {string} name
  * @property {'physical' | 'digital' | 'service'} kind
  * @property {boolean} active
- * @property {Record<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure'>, boolean>} elements
+ * @property {Record<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure' | 'quantity'>, boolean>} elements
  * @property {{ on: boolean, fieldIds: string[], capture: 'stock' | 'packing', requiredBefore: 'packed' | 'shipped' | '' }}
  *   units its numbered units ('' = never needed)
  * @property {{ on: boolean, unit: string, decimals: string, step: string, min: string, max: string,
  *   standardCode: string, standardAmount: string }} measure sold in a unit of its own: its label, the decimals a
  *   shopper may give and, as decimal texts of the unit, the step, the least and the most ('' = no most); the standard
  *   measure for feeds ('' code = none)
+ * @property {{ step: string, min: string, max: string }} quantity items counted in pieces: the step, the least and the
+ *   most ('' = up to the shop's most of one item), E4
  * @property {boolean} fieldsNamed the type names the fields its items take (else every field)
  * @property {string[]} fieldIds
  */
@@ -316,6 +321,7 @@ export const blankType = () => ({
 	elements: /** @type {TypeDraft['elements']} */ (Object.fromEntries(TYPE_PARTS.map((part) => [part, false]))),
 	units: { on: false, fieldIds: [], capture: 'stock', requiredBefore: 'packed' },
 	measure: { ...NO_MEASURE },
+	quantity: { ...NO_QUANTITY },
 	fieldsNamed: false,
 	fieldIds: [],
 });
@@ -353,6 +359,13 @@ export const loadType = (type) => ({
 				standardAmount: String(type.elements.measure.standard?.amount ?? 1),
 			}
 		: { ...NO_MEASURE },
+	quantity: type.elements.quantity
+		? {
+				step: String(type.elements.quantity.step),
+				min: String(type.elements.quantity.min),
+				max: type.elements.quantity.max === null ? '' : String(type.elements.quantity.max),
+			}
+		: { ...NO_QUANTITY },
 	fieldsNamed: type.fieldIds !== null,
 	fieldIds: [...(type.fieldIds ?? [])],
 });
@@ -383,6 +396,7 @@ export const cleanType = (draft) => ({
 							: null,
 					}
 				: null,
+		quantity: draft.measure.on && elementFor('measure', draft.kind) ? null : quantityRuleOf(draft.quantity),
 		units:
 			draft.units.on && !draft.measure.on && elementFor('units', draft.kind)
 				? {
@@ -402,7 +416,7 @@ export const cleanType = (draft) => ({
  * @param {TypeDraft} draft
  * @param {string[]} otherKeys the keys of the other types
  * @returns {{ name?: 'missing', key?: 'invalid' | 'taken' | 'built_in',
- *   measure?: 'unit' | 'step' | 'min' | 'max' | 'standard' }}
+ *   measure?: 'unit' | 'step' | 'min' | 'max' | 'standard', quantity?: 'step' | 'min' | 'max' }}
  */
 export const typeProblems = (draft, otherKeys) => {
 	const key = keyOf(draft.key, draft.name);
@@ -417,7 +431,44 @@ export const typeProblems = (draft, otherKeys) => {
 			: otherKeys.includes(key)
 				? { key: 'taken' }
 				: {};
-	return { ...(unnamed ? { name: /** @type {const} */ ('missing') } : {}), ...keyed, ...measureProblems(draft) };
+	return {
+		...(unnamed ? { name: /** @type {const} */ ('missing') } : {}),
+		...keyed,
+		...measureProblems(draft),
+		...(draft.measure.on && elementFor('measure', draft.kind) ? {} : quantityProblems(draft.quantity)),
+	};
+};
+
+/** @param {string} text @returns {number | null} a whole number of pieces from 1 to the system's most */
+const piecesOf = (text) =>
+	/^\d{1,6}$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= MAX_QUANTITY ? Number(text) : null;
+
+/**
+ * A quantity rule as saved: null for the plain one (from 1 in steps of 1, up to the shop's most).
+ * @param {TypeDraft['quantity']} quantity
+ * @returns {import('../../core/measure.js').QuantityRule | null}
+ */
+const quantityRuleOf = (quantity) => {
+	const step = piecesOf(quantity.step) ?? 1;
+	const min = piecesOf(quantity.min) ?? step;
+	const max = quantity.max.trim() === '' ? null : piecesOf(quantity.max);
+	return step === 1 && min === 1 && max === null ? null : { step, min, max };
+};
+
+/**
+ * The quantity part of {@link typeProblems}: whole pieces, the least and the most multiples of the step, the most at
+ * least the least.
+ * @param {TypeDraft['quantity']} quantity
+ * @returns {{ quantity?: 'step' | 'min' | 'max' }}
+ */
+const quantityProblems = (quantity) => {
+	const step = piecesOf(quantity.step);
+	if (step === null) return { quantity: 'step' };
+	const min = piecesOf(quantity.min);
+	if (min === null || min % step !== 0) return { quantity: 'min' };
+	if (quantity.max.trim() === '') return {};
+	const max = piecesOf(quantity.max);
+	return max === null || max % step !== 0 || max < min ? { quantity: 'max' } : {};
 };
 
 /**

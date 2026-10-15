@@ -281,6 +281,8 @@ export const startWidget = ({ window: win, script }) => {
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
 		if (!config) return;
 		visitorConfig = config;
+		// the shop's most lines in a cart (E4)
+		cart.setLimits({ lines: Number(config.settings?.checkout?.maxLines) || undefined });
 		/** @type {Shop} */
 		const shop = {
 			call,

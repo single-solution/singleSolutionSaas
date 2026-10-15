@@ -22,6 +22,11 @@ export const MILLI = 1000;
 export const MAX_MEASURED = 1_000_000_000;
 /** The longest unit label. */
 export const MAX_UNIT_LABEL = 20;
+/** The most pieces of one cart line (the system ceiling: the `checkout` setting `maxQuantity` and an item type's
+ * quantity rule lower it, E4). */
+export const MAX_QUANTITY = 100_000;
+/** The most lines of one cart (the system ceiling: the `checkout` setting `maxLines` lowers it, E4). */
+export const MAX_LINES = 500;
 
 /**
  * The standard units a merchant may tie a unit to, for shopping feeds and structured data only: the UN/CEFACT common
@@ -246,16 +251,72 @@ export const toThousandths = (value) => {
 };
 
 /**
- * Why a measured quantity cannot be bought: `measure_step` (not a multiple of the step), `measure_min` (below the least)
- * or `measure_max` (above the most); null when it can.
- * @param {number} quantity thousandths
- * @param {Pick<Measure, 'step' | 'min' | 'max'>} measure
- * @returns {'measure_step' | 'measure_min' | 'measure_max' | null}
+ * The quantity rule of an item counted in pieces (its item type's `quantity` element, E4): the step a quantity is a
+ * multiple of (6 for a case of six), the least and the most (null: up to the shop's most of one item).
+ * @typedef {{ step: number, min: number, max: number | null }} QuantityRule
  */
-export const measureProblem = (quantity, measure) => {
-	if (quantity < measure.min) return 'measure_min';
-	if (measure.max !== null && quantity > measure.max) return 'measure_max';
-	if (quantity % measure.step !== 0) return 'measure_step';
+/**
+ * The quantities a shopper may buy of an item: a multiple of `step` from `min` to `max` — in thousandths of the unit
+ * of a measured item, else in pieces.
+ * @typedef {{ step: number, min: number, max: number }} QuantityLimits
+ */
+
+/**
+ * Check the `quantity` element an item type gives: null (any number of pieces from 1) or `{ step, min, max }` in whole
+ * pieces: a step from 1 to {@link MAX_QUANTITY} (default 1), the least a multiple of the step (default one step), the
+ * most null (the shop's most of one item) or a multiple of the step from the least to {@link MAX_QUANTITY}.
+ * @param {unknown} raw
+ * @returns {{ ok: true, value: QuantityRule | null } | { ok: false, errors: Array<{ path: string, message: string }> }}
+ */
+export const checkQuantityRule = (raw) => {
+	if (raw === null || raw === undefined || raw === false) return { ok: true, value: null };
+	if (!isObject(raw)) return { ok: false, errors: [{ path: '', message: 'quantity is null or { step, min, max }.' }] };
+	/** @type {Array<{ path: string, message: string }>} */
+	const errors = [];
+	const step = raw.step ?? 1;
+	if (!whole(step, 1, MAX_QUANTITY))
+		errors.push({ path: '/step', message: `The step is a whole number of pieces from 1 to ${MAX_QUANTITY}.` });
+	const okStep = whole(step, 1, MAX_QUANTITY) ? Number(step) : 1;
+	const min = raw.min ?? okStep;
+	if (!whole(min, okStep, MAX_QUANTITY) || Number(min) % okStep !== 0)
+		errors.push({ path: '/min', message: 'The least quantity is a multiple of the step.' });
+	const max = raw.max ?? null;
+	if (max !== null && (!whole(max, Number(min) || okStep, MAX_QUANTITY) || Number(max) % okStep !== 0))
+		errors.push({
+			path: '/max',
+			message: `The most quantity is null or a multiple of the step from the least quantity to ${MAX_QUANTITY}.`,
+		});
+	for (const key of Object.keys(raw))
+		if (!['step', 'min', 'max'].includes(key)) errors.push({ path: `/${key}`, message: `quantity has no ${key}.` });
+	if (errors.length > 0) return { ok: false, errors };
+	return { ok: true, value: { step: Number(step), min: Number(min), max: max === null ? null : Number(max) } };
+};
+
+/**
+ * The quantities a shopper may buy of an item: a measured item's step, least and most (in thousandths of its unit;
+ * no most: {@link MAX_MEASURED}); else in pieces its type's quantity rule (none: from 1 in steps of 1), its most at
+ * most `cap` (the shop's most of one item).
+ * @param {Pick<Measure, 'step' | 'min' | 'max'> | null | undefined} measure
+ * @param {QuantityRule | null | undefined} rule
+ * @param {number} cap
+ * @returns {QuantityLimits}
+ */
+export const limitsOf = (measure, rule, cap) =>
+	measure
+		? { step: measure.step, min: measure.min, max: measure.max ?? MAX_MEASURED }
+		: { step: rule?.step ?? 1, min: rule?.min ?? 1, max: Math.min(cap, rule?.max ?? cap) };
+
+/**
+ * Why a quantity cannot be bought: `quantity_step` (not a multiple of the step), `quantity_min` (below the least) or
+ * `quantity_max` (above the most); null when it can.
+ * @param {number} quantity pieces, or thousandths of a measured item's unit
+ * @param {{ step: number, min: number, max: number | null }} limits
+ * @returns {'quantity_step' | 'quantity_min' | 'quantity_max' | null}
+ */
+export const quantityProblem = (quantity, limits) => {
+	if (quantity < limits.min) return 'quantity_min';
+	if (limits.max !== null && quantity > limits.max) return 'quantity_max';
+	if (quantity % limits.step !== 0) return 'quantity_step';
 	return null;
 };
 

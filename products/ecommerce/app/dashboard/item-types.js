@@ -29,9 +29,9 @@ import { TEXTS } from './texts.js';
 const L = TEXTS.lists;
 const T = L.itemTypes;
 
-/** The parts a type switches on, without its numbered units and its measure (edited on their own). */
-const PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure'>>} */ (
-	ELEMENTS.filter((element) => element !== 'units' && element !== 'measure')
+/** The parts a type switches on, without its numbered units, its measure and its quantities (edited on their own). */
+const PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure' | 'quantity'>>} */ (
+	ELEMENTS.filter((element) => element !== 'units' && element !== 'measure' && element !== 'quantity')
 );
 
 /**
@@ -179,6 +179,36 @@ function TypeFields({ draft, set, problems, tried }) {
 					) : null}
 				</fieldset>
 			) : null}
+			{measure.on && physical ? null : (
+				<fieldset className="min-w-0 space-y-3">
+					<legend className="mb-1 text-sm font-bold text-fg">{T.quantity}</legend>
+					<p className="text-xs text-muted">{T.quantityHelp}</p>
+					<FieldGrid>
+						<Input
+							label={T.quantityStep}
+							inputMode="numeric"
+							value={draft.quantity.step}
+							error={problems.quantity === 'step' ? T.quantityStepInvalid : undefined}
+							onChange={(event) => set({ quantity: { ...draft.quantity, step: event.target.value } })}
+						/>
+						<Input
+							label={T.quantityLeast}
+							inputMode="numeric"
+							value={draft.quantity.min}
+							error={problems.quantity === 'min' ? T.quantityLeastInvalid : undefined}
+							onChange={(event) => set({ quantity: { ...draft.quantity, min: event.target.value } })}
+						/>
+						<Input
+							label={T.quantityMost}
+							help={T.quantityMostHelp}
+							inputMode="numeric"
+							value={draft.quantity.max}
+							error={problems.quantity === 'max' ? T.quantityMostInvalid : undefined}
+							onChange={(event) => set({ quantity: { ...draft.quantity, max: event.target.value } })}
+						/>
+					</FieldGrid>
+				</fieldset>
+			)}
 			{physical && !measure.on ? (
 				<fieldset className="min-w-0 space-y-3">
 					<legend className="mb-1 text-sm font-bold text-fg">{T.units}</legend>
@@ -272,6 +302,11 @@ function TypeRow({ type, index, count, onEdit, onMove, onRemove }) {
 			? [T.soldBy.replace('{unit}', type.measure.unit.trim())]
 			: type.units.on && elementFor('units', type.kind)
 				? [T.unitsOn]
+				: []),
+		...(type.measure.on && elementFor('measure', type.kind)
+			? []
+			: type.quantity.step.trim() !== '1' || type.quantity.min.trim() !== '1'
+				? [fill(T.quantityRule, { step: type.quantity.step.trim(), min: type.quantity.min.trim() })]
 				: []),
 	];
 	return (

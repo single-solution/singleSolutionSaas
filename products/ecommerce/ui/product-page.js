@@ -143,7 +143,9 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				// sold in a unit of its own: an amount in thousandths of the unit, from the least
 				/** @type {{ unit: string, decimals: number, step: number, min: number, max: number | null } | null} */
 				const measure = item.measure ?? null;
-				let quantity = measure ? measure.min : 1;
+				// the quantities a shopper may buy (the server's limits: pieces, or thousandths of the unit, E4)
+				const limits = item.limits ?? { step: measure?.step ?? 1, min: measure?.min ?? 1, max: measure?.max ?? MAX_QUANTITY };
+				let quantity = limits.min;
 				let added = false;
 				/** @param {string} name @param {PageVariant | null} of @param {number} count */
 				const tell = (name, of, count) =>
@@ -364,8 +366,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						input.value = quantityText(quantity, measure);
 						/** @param {number} next thousandths */
 						const setAmount = (next) => {
-							const most = measure.max ?? 1_000_000_000;
-							quantity = Math.max(measure.min, Math.min(most, Math.round(next / measure.step) * measure.step));
+							quantity = Math.max(limits.min, Math.min(limits.max, Math.round(next / limits.step) * limits.step));
 							input.value = quantityText(quantity, measure);
 						};
 						input.addEventListener('change', () => setAmount(toThousandths(input.value) ?? quantity));
@@ -401,22 +402,22 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						const input = /** @type {HTMLInputElement} */ (
 							h(doc, 'input', {
 								type: 'number',
-								min: '1',
-								max: String(MAX_QUANTITY),
+								min: String(limits.min),
+								max: String(limits.max),
+								step: String(limits.step),
 								inputmode: 'numeric',
 								'data-focus': 'qty',
 							})
 						);
 						input.value = String(quantity);
-						input.addEventListener('change', () => {
-							quantity = Math.max(1, Math.min(MAX_QUANTITY, Math.floor(Number(input.value)) || 1));
-							input.value = String(quantity);
-						});
-						/** @param {number} step */
-						const stepBy = (step) => {
-							quantity = Math.max(1, Math.min(MAX_QUANTITY, quantity + step));
+						/** @param {number} wanted */
+						const setPieces = (wanted) => {
+							quantity = Math.max(limits.min, Math.min(limits.max, Math.round(wanted / limits.step) * limits.step));
 							input.value = String(quantity);
 						};
+						input.addEventListener('change', () => setPieces(Math.floor(Number(input.value)) || limits.min));
+						/** @param {number} step */
+						const stepBy = (step) => setPieces(quantity + step * limits.step);
 						parts.push(
 							h(doc, 'label', { for: 'ss-page-qty' }, t('page.quantity')),
 							h(
@@ -428,6 +429,8 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								button(doc, '+', () => stepBy(1), { class: 'secondary', 'aria-label': t('page.more') }),
 							),
 						);
+						if (limits.step > 1 || limits.min > 1)
+							parts.push(h(doc, 'p', { class: 'hint' }, t('page.quantityHelp', { step: limits.step, min: limits.min })));
 						input.id = 'ss-page-qty';
 					}
 					const ready = current !== null && buyable(current) && (!booking || slot !== null);

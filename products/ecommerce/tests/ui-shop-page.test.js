@@ -31,6 +31,7 @@ const product = (over = {}) => ({
 	slug: 'phone',
 	name: 'Phone One',
 	kind: 'physical',
+	limits: { step: 1, min: 1, max: 99 },
 	summary: 'A good phone.',
 	description: 'First part.\n\nSecond part.',
 	price: 100000,
@@ -309,6 +310,7 @@ describe('product page', () => {
 							name: 'Linen',
 							options: [],
 							measure: { unit: 'bolt', decimals: 1, step: 500, min: 1000, max: 3000, standard: null },
+							limits: { step: 500, min: 1000, max: 3000 },
 							variants: [
 								{
 									id: 'var_f',

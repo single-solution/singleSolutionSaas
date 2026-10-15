@@ -206,6 +206,8 @@ export const createQuoting = (product, service) => {
 			slots,
 			// a measured item's stock is counted in its unit whatever the feature: its type's measure
 			measureOf: (item) => typed.get(item.id)?.elements.measure ?? null,
+			// an item counted in pieces: its type's least, most and step (E4)
+			quantityOf: (item) => typed.get(item.id)?.elements.quantity ?? null,
 			// staff editing an order are held to the most of one item, not the shop's own limit (E29)
 			maxQuantity: edit ? MAX_QUANTITY : Number(checkout.maxQuantity ?? MAX_QUANTITY),
 			unit,
@@ -633,6 +635,8 @@ export const createQuoting = (product, service) => {
 					quantity: line.quantity,
 					// an item sold in a unit of its own: its unit and the quantity in units (`quantity` is thousandths)
 					measure: measureView(line.quantity, line.measure),
+					// the quantities the shopper may choose (pieces, or thousandths of a measured item's unit, E4)
+					limits: line.limits ?? null,
 					discount: price?.discount ?? 0,
 					dealDiscount: promo?.dealDiscount ?? 0,
 					tax: price?.tax ?? 0,

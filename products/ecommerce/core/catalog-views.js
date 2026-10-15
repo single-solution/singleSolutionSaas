@@ -7,7 +7,7 @@
  */
 import { summarize, valueLabel, variantInStock, variantName } from './catalog.js';
 import { gradeView } from './grades.js';
-import { levelOf } from './measure.js';
+import { MAX_QUANTITY, levelOf, limitsOf } from './measure.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
@@ -233,6 +233,7 @@ export const specsOf = (product, attributes) =>
  * @param {boolean} context.slots it is booked in time slots (its type's `slots`, while Services and bookings is on)
  * @param {import('./measure.js').Measure | null} [context.measure] it is sold in a unit of its own (its type's
  *   `measure`, while Sell in any unit is on)
+ * @param {import('./measure.js').QuantityLimits} [context.limits] the quantities a shopper may buy (E4)
  */
 export const pageOf = (product, context) => {
 	const { currency, url, media, brand, breadcrumb, attributes, grades, shown } = context;
@@ -275,6 +276,8 @@ export const pageOf = (product, context) => {
 		type: { key: context.type.key, kind: context.type.kind },
 		// sold in a unit of its own: prices are per unit, quantities and stock thousandths of it
 		measure: context.measure ?? null,
+		// the quantities a shopper may buy: in pieces, or thousandths of the unit (E4)
+		limits: context.limits ?? limitsOf(context.measure, null, MAX_QUANTITY),
 		summary: product.summary,
 		description: product.description,
 		descriptionHtml: product.descriptionHtml,

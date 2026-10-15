@@ -263,34 +263,40 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						});
 						controls.push(h(doc, 'div', { class: 'stepper' }, input, h(doc, 'span', { class: 'meta' }, unit)));
 					} else if (source && !line.slot) {
+						// pieces in the item's steps, from its least to its most (the server's limits, E4)
+						const { step, min, max } = line.limits ?? { step: 1, min: 1, max: MAX_QUANTITY };
+						/** @param {number} wanted */
+						const fit = (wanted) => Math.max(min, Math.min(max, Math.round(wanted / step) * step));
 						const input = /** @type {HTMLInputElement} */ (
 							h(doc, 'input', {
 								type: 'number',
-								min: '1',
-								max: String(MAX_QUANTITY),
+								min: String(min),
+								max: String(max),
+								step: String(step),
 								inputmode: 'numeric',
 								'aria-label': t('cart.quantity', { name }),
 								'data-focus': `qty${index}`,
 							})
 						);
 						input.value = String(source.quantity);
-						input.addEventListener('change', () => cart.set(source, Math.max(1, Math.floor(Number(input.value)) || 1)));
+						input.addEventListener('change', () => cart.set(source, fit(Math.floor(Number(input.value)) || min)));
 						controls.push(
 							h(
 								doc,
 								'div',
 								{ class: 'stepper' },
-								button(doc, '−', () => cart.set(source, source.quantity - 1), {
+								button(doc, '−', () => cart.set(source, fit(source.quantity - step)), {
 									class: 'secondary',
 									'aria-label': t('cart.less', { name }),
 									'data-focus': `less${index}`,
+									...(source.quantity <= min ? { disabled: '' } : {}),
 								}),
 								input,
-								button(doc, '+', () => cart.set(source, source.quantity + 1), {
+								button(doc, '+', () => cart.set(source, fit(source.quantity + step)), {
 									class: 'secondary',
 									'aria-label': t('cart.more', { name }),
 									'data-focus': `more${index}`,
-									...(source.quantity >= MAX_QUANTITY ? { disabled: '' } : {}),
+									...(source.quantity >= max ? { disabled: '' } : {}),
 								}),
 							),
 						);

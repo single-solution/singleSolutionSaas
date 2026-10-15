@@ -17,7 +17,7 @@
  */
 import { normalisePhone } from '@ss/contracts/phone';
 import { ADDRESS_LIMITS, placeKey, regionsFor } from './address.js';
-import { MAX_MEASURED, grossFits, lineGross, measureProblem, piecesOf } from './measure.js';
+import { MAX_LINES, MAX_MEASURED, MAX_QUANTITY, grossFits, limitsOf, lineGross, piecesOf, quantityProblem } from './measure.js';
 import { allocateUnits, isPrice, roundHalfUp } from './money.js';
 import { isMethodKey, methodFee } from './payment-methods.js';
 import { taxOf, taxPercent } from './taxes.js';
@@ -29,11 +29,11 @@ import { taxOf, taxPercent } from './taxes.js';
 /** @typedef {import('./taxes.js').TaxRule} TaxRule */
 /** @typedef {import('./guests.js').PhoneRules} PhoneRules */
 
-/** At most this many lines in a cart, and this many pieces of one line (the `checkout` settings `maxLines` and
- * `maxQuantity` lower them, E22; the cart widget keeps the same limits). A measured line is one piece: its quantity
- * (thousandths of its unit) is checked against its item type's step, least and most. */
-export const MAX_LINES = 50;
-export const MAX_QUANTITY = 99;
+/** At most this many lines in a cart, and this many pieces of one line (`core/measure.js`; the `checkout` settings
+ * `maxLines` and `maxQuantity` lower them, E4, and the cart widget reads them). A line's quantity keeps to its item
+ * type's step, least and most: a measured line's in thousandths of its unit (a measured line is one piece), else its
+ * quantity rule's in pieces. */
+export { MAX_LINES, MAX_QUANTITY };
 /** A deal lock's longest text (`adapters/crypto.js`). */
 const MAX_LOCK = 600;
 
@@ -269,6 +269,8 @@ export const checkOrderExtras = (body) => {
  * @property {number} quantity pieces, or thousandths of the unit of a measured item
  * @property {import('./measure.js').Measure | null} measure how the item is measured (its item type's `measure`,
  *   `core/measure.js`); null: counted in pieces
+ * @property {import('./measure.js').QuantityLimits} [limits] the quantities a shopper may buy of it (its type's step,
+ *   least and most, the most at most the shop's most of one item, E4)
  * @property {number | null} cost
  * @property {string[]} categoryIds the product's own
  * @property {string[]} allCategoryIds with their ancestors (promotions and taxes match these)
@@ -294,9 +296,9 @@ const PROBLEM_TEXT = {
 	one_per_slot: 'A time can be booked once per order.',
 	too_many: 'That is more of one item than an order can take.',
 	too_large: 'This line comes to more than an order can take.',
-	measure_step: 'This quantity is not one of the steps this item is sold in.',
-	measure_min: 'This quantity is less than the least this item is sold in.',
-	measure_max: 'This quantity is more than the most this item is sold in.',
+	quantity_step: 'This quantity is not one of the steps this item is sold in.',
+	quantity_min: 'This quantity is less than the least this item is sold in.',
+	quantity_max: 'This quantity is more than the most this item is sold in.',
 };
 
 /** The problems a cart line can have (each has its widget text `cart.problem.<code>`). */
@@ -323,7 +325,9 @@ const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });
  * @param {Set<string>} context.booked `<productId>|<start ms>` of booked slots
  * @param {(product: ProductRecord) => import('./measure.js').Measure | null} [context.measureOf] how an item is measured
  *   (its item type's `measure`, whatever the feature: its stock is counted in it); none: in pieces
- * @param {number} [context.maxQuantity] the most pieces of one item (the `checkout` setting `maxQuantity`, E22)
+ * @param {(product: ProductRecord) => import('./measure.js').QuantityRule | null} [context.quantityOf] the quantity
+ *   rule of an item counted in pieces (its item type's `quantity`, E4); none: from 1 in steps of 1
+ * @param {number} [context.maxQuantity] the most pieces of one item (the `checkout` setting `maxQuantity`, E4)
  * @param {number} [context.unit] whole units (E25): what a measured line comes to rounds to them
  * @returns {ResolvedLine[]}
  */
@@ -339,6 +343,7 @@ export const resolveLines = (
 		slotOf,
 		booked,
 		measureOf = () => null,
+		quantityOf = () => null,
 		maxQuantity = MAX_QUANTITY,
 		unit = 1,
 	},
@@ -412,6 +417,7 @@ export const resolveLines = (
 			warrantyDays: variant.warrantyDays ?? product.warrantyDays ?? null,
 			unitPrice: variant.price,
 			measure,
+			limits: limitsOf(measure, measure ? null : quantityOf(product), pieceCap),
 			cost: variant.cost ?? null,
 			priced: true,
 		};
@@ -434,15 +440,14 @@ export const resolveLines = (
 		}
 		out.push(resolved);
 	}
-	// the most of one item (pieces; a measured line is one piece), a measured line's steps and limits, and a line too
-	// large to price
+	// the most of one item (pieces; a measured line is one piece), a line's steps and limits (a booked slot is one), and
+	// a line too large to price
 	for (const line of out) {
 		if (!line.priced) continue;
-		if (piecesOf(line) > pieceCap) line.problems.push({ code: 'too_many', message: `At most ${pieceCap} of one item.` });
-		if (line.measure) {
-			const problem = measureProblem(line.quantity, line.measure);
-			if (problem) line.problems.push(problemOf(problem));
-		}
+		const tooMany = piecesOf(line) > pieceCap;
+		if (tooMany) line.problems.push({ code: 'too_many', message: `At most ${pieceCap} of one item.` });
+		const problem = line.limits && !line.booking ? quantityProblem(line.quantity, line.limits) : null;
+		if (problem && !(tooMany && problem === 'quantity_max')) line.problems.push(problemOf(problem));
 		if (!grossFits(line.unitPrice, line.quantity, line.measure !== null, unit)) {
 			line.problems.push(problemOf('too_large'));
 			line.priced = false;

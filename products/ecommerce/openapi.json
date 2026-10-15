@@ -30012,7 +30012,7 @@
 													"minimum": 1,
 													"maximum": 1000000000,
 													"default": 1,
-													"description": "Pieces: at most checkout.maxQuantity (≤ 99) of one item. For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
+													"description": "Pieces: in the item's steps from its least to its most (limits in its answers: its item type's quantity rule, at most checkout.maxQuantity ≤ 100,000). For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 												},
 												"slot": {
 													"type": [
@@ -30042,8 +30042,8 @@
 											}
 										},
 										"minItems": 1,
-										"maxItems": 50,
-										"description": "1 to checkout.maxLines (≤ 50) lines; lines of one product, variant and slot are merged."
+										"maxItems": 500,
+										"description": "1 to checkout.maxLines (≤ 500) lines; lines of one product, variant and slot are merged."
 									},
 									"coupon": {
 										"type": [
@@ -30689,7 +30689,7 @@
 													"minimum": 1,
 													"maximum": 1000000000,
 													"default": 1,
-													"description": "Pieces: at most checkout.maxQuantity (≤ 99) of one item. For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
+													"description": "Pieces: in the item's steps from its least to its most (limits in its answers: its item type's quantity rule, at most checkout.maxQuantity ≤ 100,000). For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 												},
 												"slot": {
 													"type": [
@@ -30719,8 +30719,8 @@
 											}
 										},
 										"minItems": 1,
-										"maxItems": 50,
-										"description": "1 to checkout.maxLines (≤ 50) lines; lines of one product, variant and slot are merged."
+										"maxItems": 500,
+										"description": "1 to checkout.maxLines (≤ 500) lines; lines of one product, variant and slot are merged."
 									},
 									"coupon": {
 										"type": [
@@ -35775,11 +35775,11 @@
 							"one_per_slot",
 							"too_many",
 							"too_large",
-							"measure_step",
-							"measure_min",
-							"measure_max"
+							"quantity_step",
+							"quantity_min",
+							"quantity_max"
 						],
-						"description": "too_many: more pieces than checkout.maxQuantity; too_large: the line comes to more than an order can take; measure_step, measure_min, measure_max: a measured quantity not in the item's steps, below its least or above its most."
+						"description": "too_many: more pieces than checkout.maxQuantity; too_large: the line comes to more than an order can take; quantity_step, quantity_min, quantity_max: a quantity not in the item's steps, below its least or above its most (its limits)."
 					},
 					"message": {
 						"type": "string",
@@ -36130,6 +36130,7 @@
 				"description": "A cart line as priced.",
 				"required": [
 					"measure",
+					"limits",
 					"key",
 					"productId",
 					"variantId",
@@ -36163,6 +36164,17 @@
 							}
 						],
 						"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+					},
+					"limits": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/QuantityLimits"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The quantities the shopper may choose; null when the item could not be read."
 					},
 					"key": {
 						"type": "string",
@@ -40178,7 +40190,7 @@
 					"minQuantity": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 99,
+						"maximum": 100000,
 						"description": "Least units of the line (0: none)."
 					},
 					"cartTotal": {
@@ -40350,7 +40362,7 @@
 					"minQuantity": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 99,
+						"maximum": 100000,
 						"default": 0
 					},
 					"cartTotal": {
@@ -46978,6 +46990,60 @@
 					}
 				}
 			},
+			"QuantityLimits": {
+				"type": "object",
+				"description": "The quantities a shopper may buy of an item (E4): a multiple of step from min to max, in pieces (its item type's quantity rule, the most at most checkout.maxQuantity) or, for an item sold in a unit of its own, in thousandths of the unit (its measure).",
+				"required": [
+					"step",
+					"min",
+					"max"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"step": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"min": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"max": {
+						"type": "integer",
+						"minimum": 1
+					}
+				}
+			},
+			"QuantityRule": {
+				"type": "object",
+				"description": "An item type's quantity rule for items counted in pieces (E4): the step a quantity is a multiple of, the least (a multiple of the step) and the most (null: up to checkout.maxQuantity).",
+				"required": [
+					"step",
+					"min",
+					"max"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"step": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100000
+					},
+					"min": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100000
+					},
+					"max": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"minimum": 1,
+						"maximum": 100000
+					}
+				}
+			},
 			"ReportSummary": {
 				"type": "object",
 				"description": "The totals of the counted orders of the range, and the orders and total per day.",
@@ -51354,6 +51420,7 @@
 				"type": "object",
 				"required": [
 					"measure",
+					"limits",
 					"id",
 					"slug",
 					"name",
@@ -51395,6 +51462,10 @@
 							}
 						],
 						"description": "Sold in a unit of its own (its item type’s measure, while measured_sales is on); null: pieces."
+					},
+					"limits": {
+						"$ref": "#/components/schemas/QuantityLimits",
+						"description": "The quantities a shopper may buy (E4)."
 					},
 					"id": {
 						"type": "string",

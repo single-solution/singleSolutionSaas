@@ -22,7 +22,7 @@
  * @module
  */
 import { publicPhoto } from './catalog-content.js';
-import { lineGross, perMeasure, piecesOf } from './measure.js';
+import { MAX_QUANTITY, lineGross, perMeasure, piecesOf } from './measure.js';
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
 import { isMethodKey } from './payment-methods.js';
 import {
@@ -552,7 +552,7 @@ const checkConditions = (value) => {
 			return fail('conditions/priceRange/max', 'max is at least min.');
 		priceRange = min.value === null && max.value === null ? null : { min: min.value, max: max.value };
 	}
-	const minQuantity = checkWhole(value.minQuantity, 'conditions/minQuantity', { min: 0, max: 99, fallback: 0 });
+	const minQuantity = checkWhole(value.minQuantity, 'conditions/minQuantity', { min: 0, max: MAX_QUANTITY, fallback: 0 });
 	if (!minQuantity.ok) return minQuantity;
 	const cartTotal = checkWhole(value.cartTotal, 'conditions/cartTotal', { min: 0, max: 1_000_000_000_000, fallback: 0 });
 	if (!cartTotal.ok) return cartTotal;

@@ -38,6 +38,7 @@ import { cardOf, cardPhotos, cardVariantsOf, pageOf, sizeOf } from '../core/cata
 import { dealProductsFilter, productDeals } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
+import { MAX_QUANTITY, limitsOf } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { attributeValues } from '../core/promotions.js';
 import { createShownPrices } from './shown-prices.js';
@@ -463,6 +464,11 @@ export const createCatalogShop = (product, service, common) => {
 			type,
 			slots: elements.slots,
 			measure: elements.measure,
+			limits: limitsOf(
+				elements.measure,
+				elements.quantity,
+				s.has('checkout') ? Number((await s.values('checkout')).maxQuantity) : MAX_QUANTITY,
+			),
 			currency: s.currency,
 			url,
 			media: await Promise.all(item.media.map((file) => common.mediaView(s, file, item.name))),

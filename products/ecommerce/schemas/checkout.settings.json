@@ -392,16 +392,18 @@
 		"maxLines": {
 			"type": "integer",
 			"title": "Most lines in a cart",
+			"description": "Up to 500.",
 			"default": 50,
 			"minimum": 1,
-			"maximum": 50
+			"maximum": 500
 		},
 		"maxQuantity": {
 			"type": "integer",
 			"title": "Most of one item",
+			"description": "Pieces of one item in a cart, up to 100,000. An item type can set its own least, most and step quantity.",
 			"default": 99,
 			"minimum": 1,
-			"maximum": 99
+			"maximum": 100000
 		},
 		"successUrl": {
 			"type": "string",

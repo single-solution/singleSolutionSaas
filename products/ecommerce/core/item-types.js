@@ -2,22 +2,22 @@
  * Item types (PLAN 0.8.10 dynamic model §1, phase 4): what an item is (its kind: physical, digital or a service) and
  * which parts ("elements") it has — options and variants, a condition grade, numbered units (with the unit fields their
  * numbers take, when the numbers are captured and the stage they are needed before), a measurement table, selling in a
- * unit of the merchant's own in decimal quantities (`measure`, `core/measure.js`), a package (weight and size), per-item return and warranty
- * days, downloads, license keys and booked time slots. Merchants keep
+ * unit of the merchant's own in decimal quantities (`measure`, `core/measure.js`), the least, most and step quantity
+ * of items counted in pieces (`quantity`, E4), a package (weight and size), per-item return and warranty times, downloads, license keys and booked time slots. Merchants keep
  * their types as the `item_types` list (feature `catalog`, at most 50); a type may also name the product and variant
  * fields its items take (at most 40; none named: every field their categories take) and names its units' fields (at
  * most 3, one of them with two values).
  *
  * A product's type is its own (`typeKey`), else its first category's (a category without one takes its parent's), else
  * the **built-in type** of its kind. A type of another kind never applies: the product keeps its kind. Built-in types
- * have every element the switched-on features allow (so a shop needs no types of its own), except numbered units and
- * measures: those are always a merchant's choice, made with a type. An element works only while its feature is on
+ * have every element the switched-on features allow (so a shop needs no types of its own), except numbered units,
+ * measures and quantity rules: those are always a merchant's choice, made with a type. An element works only while its feature is on
  * ({@link elementsOf}); a measure keeps giving its items' quantities their meaning when Sell in any unit is off (their
  * stock is in thousandths of the unit), but they are not sold then. No I/O.
  * @module
  */
 import { FIELD_LIMITS } from './fields.js';
-import { checkMeasure, sameMeaning } from './measure.js';
+import { checkMeasure, checkQuantityRule, sameMeaning } from './measure.js';
 
 /** Item kinds (fixed in code): physical goods (delivery or pickup), digital goods (paid before given), services. */
 export const ITEM_KINDS = Object.freeze(/** @type {const} */ (['physical', 'digital', 'service']));
@@ -29,6 +29,7 @@ export const ELEMENTS = Object.freeze(
 		'units',
 		'chart',
 		'measure',
+		'quantity',
 		'parcel',
 		'warranty',
 		'downloads',
@@ -43,6 +44,7 @@ const ELEMENT_FEATURES = Object.freeze({
 	units: 'grades_serials',
 	chart: 'size_charts',
 	measure: 'measured_sales',
+	quantity: 'checkout',
 	parcel: 'delivery_zones',
 	warranty: 'returns',
 	downloads: 'digital_goods',
@@ -85,9 +87,10 @@ const CONTROL = /[\u0000-\u001F\u007F]/;
  */
 /**
  * The elements of a type: each on or off; `units` null when its items have no numbered units; `measure` null when its
- * items are counted in pieces (else sold in a unit of its own, `core/measure.js`).
+ * items are counted in pieces (else sold in a unit of its own, `core/measure.js`); `quantity` the least, most and step
+ * of items counted in pieces (null: from 1 in steps of 1).
  * @typedef {{ variants: boolean, grades: boolean, units: UnitsElement | null, chart: boolean,
- *   measure: import('./measure.js').Measure | null, parcel: boolean, warranty: boolean, downloads: boolean,
+ *   measure: import('./measure.js').Measure | null, quantity: import('./measure.js').QuantityRule | null, parcel: boolean, warranty: boolean, downloads: boolean,
  *   licenceKeys: boolean, slots: boolean }} Elements
  */
 /**
@@ -133,6 +136,7 @@ const builtIn = (kind) =>
 			units: null,
 			chart: true,
 			measure: null,
+			quantity: null,
 			parcel: elementFor('parcel', kind),
 			warranty: true,
 			downloads: elementFor('downloads', kind),
@@ -212,6 +216,21 @@ const measureOf = (raw, path, name, errors) => {
 };
 
 /**
+ * Check the quantity element of a type.
+ * @param {unknown} raw @param {string} path @param {string} name @param {TypeProblem[]} errors
+ * @returns {import('./measure.js').QuantityRule | null}
+ */
+const quantityOf = (raw, path, name, errors) => {
+	const checked = checkQuantityRule(raw);
+	if (checked.ok) return checked.value;
+	for (const error of checked.errors) errors.push({ path: `${path}${error.path}`, message: `${name}: ${error.message}` });
+	return null;
+};
+
+/** The elements that hold an object (or null) rather than on or off. */
+const SHAPED = Object.freeze(['units', 'measure', 'quantity']);
+
+/**
  * Check the `item_types` list the merchant saves: each type's key (not a built-in one, each once), name, kind, whether
  * it is offered, its elements (only those of its kind) and the fields it names (none named: every field). Elements left
  * out are off.
@@ -262,10 +281,12 @@ export const checkItemTypes = (value) => {
 					? unitsOf(raw.units, at, name, errors)
 					: element === 'measure'
 						? measureOf(raw.measure, at, name, errors)
-						: raw[element] === undefined
-							? false
-							: raw[element];
-			if (element !== 'units' && element !== 'measure' && typeof on !== 'boolean')
+						: element === 'quantity'
+							? quantityOf(raw.quantity, at, name, errors)
+							: raw[element] === undefined
+								? false
+								: raw[element];
+			if (!SHAPED.includes(element) && typeof on !== 'boolean')
 				errors.push({ path: at, message: `${name}: ${element} is true or false.` });
 			const kindOk = ITEM_KINDS.includes(kind) ? elementFor(element, kind) : true;
 			if (on && !kindOk)
@@ -273,8 +294,13 @@ export const checkItemTypes = (value) => {
 					path: at,
 					message: `${name}: ${element} is for ${ELEMENT_KINDS[element]?.join(' and ')} items only.`,
 				});
-			elements[element] = element === 'units' || element === 'measure' ? on : on === true;
+			elements[element] = SHAPED.includes(element) ? on : on === true;
 		}
+		if (elements.measure && elements.quantity)
+			errors.push({
+				path: `${path}/elements/quantity`,
+				message: `${name}: items sold in a unit of their own keep the step, least and most of their measure.`,
+			});
 		if (elements.measure && elements.units)
 			errors.push({
 				path: `${path}/elements/measure`,
@@ -363,12 +389,11 @@ export const elementsOf = (type, has) => {
 	const out = {};
 	for (const element of ELEMENTS) {
 		const on = has(ELEMENT_FEATURES[element]) && elementFor(element, type.kind);
-		out[element] =
-			element === 'units' || element === 'measure'
-				? on
-					? (type.elements[element] ?? null)
-					: null
-				: on && type.elements[element] === true;
+		out[element] = SHAPED.includes(element)
+			? on
+				? (type.elements[element] ?? null)
+				: null
+			: on && type.elements[element] === true;
 	}
 	return /** @type {Elements} */ (out);
 };
