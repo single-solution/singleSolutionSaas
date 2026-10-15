@@ -9,13 +9,7 @@ import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
 import { CHECKS } from '../core/seo-checks.js';
 import { DEFAULT_ACTIONS, DEFAULT_CATEGORIES, readList } from '../core/lists.js';
-import {
-	CONSENT_STORAGE_KEY,
-	SESSION_STORAGE_KEY,
-	VISIT_STORAGE_KEY,
-	WIDGET_ATTRIBUTE,
-	WIDGET_GLOBAL,
-} from '../core/widgets.js';
+import { CONSENT_STORAGE_KEY, SESSION_STORAGE_KEY, VISIT_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { ANALYTICS_PROBLEMS } from '../ui/analytics-dashboard.js';
 import {
 	cameFrom,
