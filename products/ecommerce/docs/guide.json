@@ -62,7 +62,7 @@
 	"chatRoutes": [
 		"GET /v1/chat/products?q=<text>&category=<id or slug>&grade=<keys>&minPrice=&maxPrice=&inStock=1&limit=5: search the catalog by words and filters (up to 12 results; with filters the words may be left out), each at the price on the product page",
 		"GET /v1/chat/products/<productId>: one product's details, each variant with its grade, price on the product page, stock left and warranty",
-		"GET /v1/chat/products/<productId>/quote?variantId=&quantity=1-5&paymentMethod=&city=: the price as the cart prices it, with deals, fees, delivery and the free-delivery threshold",
+		"GET /v1/chat/products/<productId>/quote?variantId=&quantity=&paymentMethod=&city=: the price as the cart prices it (any quantity in the item's steps, least and most, a decimal amount for an item sold in its own unit; limits in the answer), with deals, fees, delivery and the free-delivery threshold",
 		"GET /v1/chat/deals?limit=10: active deals with their badge, discount label, color, banner and hours",
 		"GET /v1/chat/products/top?kind=top|new&limit=5: best sellers or new products",
 		"GET /v1/chat/me/orders?limit=5 (SS-Sign-In): the visitor's orders with their lines, amount due, tracking note, expected date and dispatch video",

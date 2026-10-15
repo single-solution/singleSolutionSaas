@@ -576,7 +576,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			inStock: true,
 			soldOut: false,
 			stockLeft: 3,
-			warrantyDays: 730,
+			warrantyTime: { amount: 730, unit: 'days' },
 		};
 		const details = shopAnswer(
 			'get_product_details',
@@ -610,7 +610,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						inStock: false,
 						soldOut: true,
 						stockLeft: null,
-						warrantyDays: null,
+						warrantyTime: null,
 					},
 				],
 			},
@@ -771,7 +771,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			unitPriceText: '$5.00',
 			total: 1000,
 			totalText: '$10.00',
-			warrantyDays: 30,
+			warrantyTime: { amount: 30, unit: 'days' },
 		};
 		const orders = shopAnswer(
 			'get_my_orders',
@@ -800,7 +800,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 								gradeLabel: '',
 								quantity: 1,
 								totalText: '$0.00',
-								warrantyDays: null,
+								warrantyTime: null,
 							},
 						],
 						courier: 'UPS',

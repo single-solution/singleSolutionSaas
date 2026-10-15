@@ -31,8 +31,6 @@ const MAX_TERMS = 6;
 const MAX_QUERY = 120;
 /** Chat product searches answer at most this many products (E37). */
 const MAX_CHAT_RESULTS = 12;
-/** A Chat quote prices at most this many units (E37). */
-export const MAX_QUOTE_QUANTITY = 5;
 /** Most grades a `grade` filter takes. */
 const MAX_GRADE_FILTER = 10;
 /** Grade keys (as the `grades` list keeps them). */

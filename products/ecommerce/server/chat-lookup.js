@@ -27,7 +27,6 @@ import { shipmentLink } from '../core/couriers.js';
 import { byShowOrder } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
 import {
-	MAX_QUOTE_QUANTITY,
 	cardVariant,
 	chatDeal,
 	chatFilters,
@@ -45,7 +44,7 @@ import {
 	variantFilter,
 	warrantyOf,
 } from '../core/lookup.js';
-import { measureView, toThousandths } from '../core/measure.js';
+import { MAX_QUANTITY, measureView, toThousandths } from '../core/measure.js';
 import { COLLECTIONS } from '../core/model.js';
 import { customerOwner, isCustomerId } from '../core/orders.js';
 import { isLoyaltyMember } from '../core/loyalty.js';
@@ -81,15 +80,17 @@ const firstNameOf = (name) =>
 		.split(/\s+/)[0] ?? '';
 
 /**
- * Read a Chat quote's query (E37): `variantId`, `quantity` (1–5 pieces; for an item sold in a unit of its own a
- * number of its units with at most three decimals, such as `2.5`, converted exactly to thousandths — its least when
- * left out), `paymentMethod` and where it goes (`country`, `region`, `city`, `area`, `postalCode`; dynamic model §5).
+ * Read a Chat quote's query (E37): `variantId`, `quantity` (whole pieces up to the most of one item; for an item sold in
+ * a unit of its own a number of its units with at most three decimals, such as `2.5`, converted exactly to thousandths;
+ * the item's least when left out, C3), `paymentMethod` and where it goes (`country`, `region`, `city`, `area`,
+ * `postalCode`; dynamic model §5). Steps, least and most are checked as the cart checks them (the quote's problems).
  * @param {Record<string, unknown>} query
  * @param {import('../core/measure.js').Measure | null} measure the item's measure (none: pieces)
+ * @param {number} least the least pieces of an item counted in pieces (its type's quantity rule)
  * @returns {{ variantId: string | null, quantity: number, paymentMethod: import('../core/model.js').PaymentMethod | null,
  *   place: Record<'country' | 'region' | 'city' | 'area' | 'postalCode', string> }}
  */
-const quoteQuery = (query, measure) => {
+const quoteQuery = (query, measure, least = 1) => {
 	const variantId = query.variantId === undefined || query.variantId === '' ? null : query.variantId;
 	if (variantId !== null && (typeof variantId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(variantId)))
 		throw invalidQuery('variantId', 'variantId is a variant id.');
@@ -102,9 +103,9 @@ const quoteQuery = (query, measure) => {
 			throw invalidQuery('quantity', `quantity is a number of ${measure.unit} with at most three decimals, such as 2.5.`);
 		quantity = read;
 	} else {
-		quantity = given === null ? 1 : Number(given);
-		if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUOTE_QUANTITY || !/^\d+$/.test(String(given ?? 1)))
-			throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUOTE_QUANTITY}.`);
+		quantity = given === null ? least : Number(given);
+		if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY || !/^\d+$/.test(String(given ?? least)))
+			throw invalidQuery('quantity', `quantity is a whole number from 1 to ${MAX_QUANTITY}.`);
 	}
 	const method = query.paymentMethod === undefined || query.paymentMethod === '' ? null : query.paymentMethod;
 	if (method !== null && !isMethodKey(method)) throw invalidQuery('paymentMethod', 'paymentMethod is a payment method key.');
@@ -501,8 +502,8 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (1–5, or a
-	 * decimal number of the units of an item sold in a unit of its own), priced exactly as the cart prices it for the
+	 * GET /v1/chat/products/:id/quote: one variant (`variantId`, else the card variant) times `quantity` (pieces, or a
+	 * decimal number of the units of an item sold in a unit of its own; its steps, least and most in `limits`, C3), priced exactly as the cart prices it for the
 	 * payment method asked (deals, fees, delivery to the place asked — `country`, `region`, `city`, `area`, `postalCode`
 	 * — with its zone's free-delivery threshold and taxes; a forwarded sign-in adds role pricing) (E37), with the
 	 * variant's own "was" price struck through on the product page. A measured item's prices and savings are per unit,
@@ -514,7 +515,11 @@ export const createChatLookup = (product, service, media) => {
 		const data = await s.data();
 		const item = await shownProduct(s, data, ctx.params.id);
 		const measure = (await measuresOf(s, data, [item])).get(item.id) ?? null;
-		const { variantId, quantity, paymentMethod, place } = quoteQuery(ctx.query, measure);
+		// an item counted in pieces starts at its type's least (C3)
+		const rule = measure
+			? null
+			: (await productTypes(data, [item], await s.list('item_types'))).get(item.id)?.elements.quantity;
+		const { variantId, quantity, paymentMethod, place } = quoteQuery(ctx.query, measure, rule?.min ?? 1);
 		const variant = variantId
 			? item.variants.find((candidate) => candidate.id === variantId && candidate.active)
 			: cardVariant(item, await (await pricesFor(s, data))(item));
@@ -555,6 +560,8 @@ export const createChatLookup = (product, service, media) => {
 			variantId: variant.id,
 			quantity,
 			measure: measureView(quantity, measure),
+			// the quantities the shopper may buy: pieces, or thousandths of the unit (C3)
+			limits: line?.limits ?? null,
 			price: unitPrice,
 			priceText: text(unitPrice),
 			compareAtPrice: was,

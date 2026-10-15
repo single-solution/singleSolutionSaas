@@ -41,8 +41,8 @@ export const SHOP_LIMIT = 5;
 /** Most products one search or top list asks for, and most cards under one answer (C13): Ecommerce's most. */
 const SHOP_MAX = 12;
 
-/** Most units one quote asks for (C13). */
-const QUOTE_MAX_QUANTITY = 5;
+/** The largest quantity a quote asks for: Ecommerce holds it to the item's own steps, least and most (C3). */
+const MAX_QUOTE_QUANTITY = 1_000_000;
 
 /** The longest store context given to the AI (characters, C1): Ecommerce's, and the default of `shop_context`. */
 const CONTEXT_MAX = 6000;
@@ -90,7 +90,7 @@ export const SHOP_ENDPOINTS = Object.freeze([
 		feature: 'shop_deals',
 		signIn: false,
 		request:
-			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<1–5>&paymentMethod=<payment method key>&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
+			'GET /v1/chat/products/<productId>/quote?variantId=<id>&quantity=<pieces, or an amount of its unit such as 2.5>&paymentMethod=<payment method key>&country=<country>&region=<region>&city=<city>&postalCode=<postal code>',
 	},
 	{ tool: SHOP_TOOLS.deals, feature: 'shop_deals', signIn: false, request: 'GET /v1/chat/deals?limit=<1–20>' },
 	{ tool: SHOP_TOOLS.top, feature: 'shop_top', signIn: false, request: 'GET /v1/chat/products/top?kind=top|new&limit=<1–12>' },
@@ -124,11 +124,11 @@ export const SHOP_ANSWERS = Object.freeze({
 	product:
 		'id, name, price (the shown price: after the best live deal on one unit), priceText, compareAtPrice and compareAtPriceText (the price struck through beside it, or null), deal ({ name, savings, savingsText } or null), priceMax, priceMaxText, currency, image (https or null), url (the product page), inStock, variantId (or null), grade (the label, or null), stockLeft (or null)',
 	details:
-		'a product plus summary, description, brand, options: [{ name, values: [text] }], specs: [{ name, value (text, number, true/false or a list), unit }], variants: [{ id, options: { name: value }, price, priceText, compareAtPrice, compareAtPriceText, deal, grade, gradeKey, inStock, soldOut, stockLeft, warrantyDays }]',
-	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), inStock, deals: [name], paymentMethods: [{ method (the website’s payment method key), name, available, reason (or null), advance, advanceText, fee }]',
+		'a product plus summary, description, brand, options: [{ name, values: [text] }], specs: [{ name, value (text, number, true/false or a list), unit }], variants: [{ id, options: { name: value }, price, priceText, compareAtPrice, compareAtPriceText, deal, grade, gradeKey, inStock, soldOut, stockLeft, warrantyTime }]',
+	quote: 'productId, variantId, quantity, paymentMethod, price (one unit before deals), compareAtPrice (its own price struck through, or null), priceAfterDeals, savings, subtotal, discount, roleDiscount, fee, tax, freeDeliveryOver, total (each with its …Text), currency, delivery ({ method, name, fee, feeText, minDays, maxDays } or null), limits ({ step, min, max } of pieces, or thousandths of its unit with measure { unit, quantityText }), inStock, deals: [name], paymentMethods: [{ method (the website’s payment method key), name, available, reason (or null), advance, advanceText, fee }]',
 	deals: 'items: [{ name, description, valueText, badgeLabel, discountLabel, minQuantity, days (weekdays, 0 = Sunday), timeFrom, timeTo, endsAt, endsText }]',
 	orders:
-		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyDays }] }] (the latest, as many as asked), loyaltyPoints, name',
+		'items: [{ number, status (the label), total, totalText, currency, placedAt, paymentMethod, balanceDue, balanceDueText, courier, trackingNumber, trackingUrl, trackingNote, expectedAt, dispatchVideo ({ kind, url } or null), lines: [{ name, variantName, gradeLabel, quantity, totalText, warrantyTime }] }] (the latest, as many as asked), loyaltyPoints, name',
 	account: 'name, firstName, loyaltyPoints, city, area, region, country',
 	shipments: 'items: [{ orderNumber, courier, trackingNumber, trackingUrl, status, trackingNote, expectedAt }]',
 	context:
@@ -374,7 +374,11 @@ const SCHEMAS = {
 		{
 			productId: PRODUCT_ID,
 			variantId: { type: 'string', description: 'The variant id from get_product_details (optional).' },
-			quantity: { type: 'integer', description: 'How many (1–5, default 1).' },
+			quantity: {
+				type: 'number',
+				description:
+					'How many: pieces, or an amount of the product’s own unit such as 2.5 (default: its least). Keep to its steps, least and most (limits in the answer).',
+			},
 			paymentMethod: {
 				type: 'string',
 				description:
@@ -509,8 +513,10 @@ export const shopRequest = (
 		const query = new URLSearchParams();
 		const variant = variantId(args.variantId);
 		if (variant) query.set('variantId', variant);
+		// pieces, or an amount of an item sold in a unit of its own (at most three decimals; Ecommerce checks the steps, C3)
 		const quantity = Number(args.quantity);
-		if (Number.isInteger(quantity) && quantity > 0) query.set('quantity', String(Math.min(QUOTE_MAX_QUANTITY, quantity)));
+		if (Number.isFinite(quantity) && quantity > 0 && quantity <= MAX_QUOTE_QUANTITY && Number.isInteger(quantity * 1000))
+			query.set('quantity', String(quantity));
 		const method = typeof args.paymentMethod === 'string' ? args.paymentMethod.trim().toLowerCase() : '';
 		if (isMethodKey(method)) query.set('paymentMethod', method);
 		// where it goes (Ecommerce's address lengths), for the delivery zone and tax
@@ -633,8 +639,43 @@ const optionsOf = (value) =>
 		.slice(0, 10)
 		.map((option) => ({ name: textOf(option.name, 80), values: listOfTexts(option.values) }));
 
-/** A warranty in days as text, else null. @param {unknown} value */
-const daysOf = (value) => (Number.isSafeInteger(value) && Number(value) > 0 ? `${value} days` : null);
+/**
+ * The quantities a quoted product is sold in (`limits`, C3): pieces, or amounts of its own unit (Ecommerce gives
+ * thousandths of the unit), as the AI reads them; nothing when not given.
+ * @param {Record<string, any>} b the quote
+ */
+const limitsOf = (b) => {
+	const l = isObject(b.limits) ? b.limits : null;
+	if (!l || countOf(l.step) === null || countOf(l.min) === null || countOf(l.max) === null) return {};
+	const scale = isObject(b.measure) ? 1000 : 1;
+	return { limits: { step: Number(l.step) / scale, least: Number(l.min) / scale, most: Number(l.max) / scale } };
+};
+
+/** Intl's unit of each time unit Ecommerce gives. */
+const TIME_UNITS = Object.freeze(/** @type {Record<string, string>} */ ({ days: 'day', months: 'month', years: 'year' }));
+
+/**
+ * A return or warranty time (`{ amount, unit }`, as the merchant typed it, C8) in the website's language (`1 year`,
+ * `6 months`), else null.
+ * @param {unknown} value @param {Look} look
+ */
+const timeOf = (value, look) => {
+	if (!isObject(value) || !Number.isSafeInteger(value.amount) || Number(value.amount) <= 0) return null;
+	const unit = TIME_UNITS[String(value.unit)];
+	if (!unit) return null;
+	return new Intl.NumberFormat(localeOf(look), { style: 'unit', unit, unitDisplay: 'long' }).format(Number(value.amount));
+};
+
+/**
+ * Delivery days (`min`–`max`) in the website's language (`2–4 days`), else null (C8).
+ * @param {unknown} min @param {unknown} max @param {Look} look
+ */
+const deliveryDaysOf = (min, max, look) => {
+	if (countOf(min) === null || countOf(max) === null) return null;
+	const days = (/** @type {number} */ n) =>
+		new Intl.NumberFormat(localeOf(look), { style: 'unit', unit: 'day', unitDisplay: 'long' }).format(n);
+	return min === max ? days(Number(max)) : `${min}–${days(Number(max))}`;
+};
 
 /** A variant's options (`{ name: value }`) as `name: value` text. @param {unknown} value */
 const variantOptions = (value) =>
@@ -760,7 +801,7 @@ export const shopAnswer = (name, body, look = {}) => {
 				const grade = textOf(v.grade, 60);
 				const gradeKey = textOf(v.gradeKey, 40);
 				const stockLeft = countOf(v.stockLeft);
-				const warranty = daysOf(v.warrantyDays);
+				const warranty = timeOf(v.warrantyTime, look);
 				return {
 					id: textOf(v.id, 100),
 					options: variantOptions(v.options),
@@ -793,7 +834,13 @@ export const shopAnswer = (name, body, look = {}) => {
 		const content = {
 			productId: textOf(b.productId, 100),
 			...(textOf(b.variantId, 100) ? { variantId: textOf(b.variantId, 100) } : {}),
-			...(countOf(b.quantity) !== null ? { quantity: countOf(b.quantity) } : {}),
+			// an amount of the product's own unit reads as `2.5 m` (its quantity is thousandths of the unit, C3)
+			...(isObject(b.measure) && textOf(b.measure.unit, 20)
+				? { quantity: `${textOf(b.measure.quantityText, 20)} ${textOf(b.measure.unit, 20)}` }
+				: countOf(b.quantity) !== null
+					? { quantity: countOf(b.quantity) }
+					: {}),
+			...limitsOf(b),
 			...(textOf(b.paymentMethod, 60) ? { paymentMethod: textOf(b.paymentMethod, 60) } : {}),
 			price: priceOf(b, 'price', look),
 			...(wasOf(b) !== null ? { wasPrice: priceOf(b, 'compareAtPrice', look) } : {}),
@@ -810,7 +857,7 @@ export const shopAnswer = (name, body, look = {}) => {
 		if (isObject(b.delivery)) {
 			const d = b.delivery;
 			const fee = priceOf({ ...d, currency: b.currency }, 'fee', look);
-			const days = countOf(d.minDays) !== null && countOf(d.maxDays) !== null ? `${d.minDays}–${d.maxDays} days` : null;
+			const days = deliveryDaysOf(d.minDays, d.maxDays, look);
 			content.delivery = [textOf(d.name, 80), fee, days].filter(Boolean).join(', ');
 		}
 		if (b.inStock === false) content.inStock = false;
@@ -879,7 +926,7 @@ export const shopAnswer = (name, body, look = {}) => {
 							textOf(line.gradeLabel, 60),
 							countOf(line.quantity) !== null ? `× ${line.quantity}` : null,
 							textOf(line.totalText, 60),
-							daysOf(line.warrantyDays) ? `warranty ${daysOf(line.warrantyDays)}` : null,
+							timeOf(line.warrantyTime, look) ? `warranty ${timeOf(line.warrantyTime, look)}` : null,
 						]
 							.filter(Boolean)
 							.join(' '),

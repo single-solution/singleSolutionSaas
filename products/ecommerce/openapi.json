@@ -15289,11 +15289,11 @@
 						"name": "quantity",
 						"in": "query",
 						"required": false,
-						"description": "1–5 pieces (default 1); for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least).",
+						"description": "Pieces (default: the item's least, 1 unless its item type says), up to 100,000; for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least). Steps, least and most are checked as the cart checks them (problems).",
 						"schema": {
 							"type": "string",
 							"pattern": "^\\d{1,7}(\\.\\d{1,12})?$",
-							"description": "1–5 pieces (default 1); for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least)."
+							"description": "Pieces (default: the item's least, 1 unless its item type says), up to 100,000; for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least). Steps, least and most are checked as the cart checks them (problems)."
 						}
 					},
 					{
@@ -37931,6 +37931,7 @@
 				"description": "One variant priced as the cart prices it.",
 				"required": [
 					"measure",
+					"limits",
 					"productId",
 					"variantId",
 					"quantity",
@@ -37967,6 +37968,17 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"limits": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/QuantityLimits"
+							},
+							{
+								"type": "null"
+							}
+						],
+						"description": "The quantities the shopper may buy (C3): pieces, or thousandths of the unit."
+					},
 					"measure": {
 						"oneOf": [
 							{
@@ -37987,7 +37999,7 @@
 					"quantity": {
 						"type": "integer",
 						"minimum": 1,
-						"description": "Pieces (1–5), or thousandths of the unit of an item sold in a unit of its own (measure.quantityText in units); price, savings and priceAfterDeals are then per unit."
+						"description": "Pieces, or thousandths of the unit of an item sold in a unit of its own (measure.quantityText in units); price, savings and priceAfterDeals are then per unit. Its steps, least and most are in limits; a quantity off them lists quantity_step, quantity_min or quantity_max in problems."
 					},
 					"price": {
 						"type": "integer",

@@ -413,7 +413,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			inStock: true,
 			soldOut: false,
 			stockLeft: 3,
-			warrantyDays: 365,
+			warrantyTime: { amount: 1, unit: 'years' },
 		};
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products`, () => ({ status: 200, body: { items: [PRODUCT] } }));
 		sys.responders.set(`${ECOMMERCE}/v1/chat/products/prd_lamp`, () => ({
@@ -442,7 +442,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 						inStock: false,
 						soldOut: true,
 						stockLeft: null,
-						warrantyDays: 90,
+						warrantyTime: { amount: 90, unit: 'days' },
 					},
 				],
 			},
@@ -466,6 +466,7 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				dealsApplied: [{ ...DEAL, amount: 1000, amountText: '$10.00' }],
 				inStock: true,
 				problems: [],
+				limits: { step: 1, min: 1, max: 99 },
 				paymentMethod: 'cod',
 				paymentMethods: [
 					{ method: 'cod', available: true, reason: null, advance: 1000, fee: 100, advanceText: '$10.00' },
@@ -506,7 +507,13 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					{ name: 'get_product_details', arguments: { productId: 'prd_lamp' } },
 					{
 						name: 'quote_product_savings',
-						arguments: { productId: 'prd_lamp', variantId: 'var_black', quantity: 9, paymentMethod: 'cod', city: 'Leeds' },
+						arguments: {
+							productId: 'prd_lamp',
+							variantId: 'var_black',
+							quantity: 2.5,
+							paymentMethod: 'cod',
+							city: 'Leeds',
+						},
 					},
 				],
 			},
@@ -517,7 +524,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(paths).toContain(
 			'/v1/chat/products?q=lamp&category=desk-lamps&grade=new%2Clike_new&minPrice=2000&maxPrice=150000&inStock=1&limit=8',
 		);
-		expect(paths).toContain('/v1/chat/products/prd_lamp/quote?variantId=var_black&quantity=5&paymentMethod=cod&city=Leeds');
+		// any quantity, a decimal amount of an item's own unit too: Ecommerce checks its steps (C3)
+		expect(paths).toContain('/v1/chat/products/prd_lamp/quote?variantId=var_black&quantity=2.5&paymentMethod=cod&city=Leeds');
 		const results = sys
 			.aiCalls()[1]
 			.messages.filter((/** @type {any} */ m) => m.role === 'tool')
@@ -544,7 +552,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 					gradeKey: 'new',
 					inStock: true,
 					stockLeft: 3,
-					warranty: '365 days',
+					// as the merchant typed it (C8): 1 year stays 1 year
+					warranty: '1 year',
 				},
 				{
 					id: 'var_used',
@@ -560,6 +569,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 			productId: 'prd_lamp',
 			variantId: 'var_black',
 			quantity: 2,
+			// the quantities it is sold in (C3)
+			limits: { step: 1, least: 1, most: 99 },
 			paymentMethod: 'cod',
 			price: '$45.00',
 			priceAfterDeals: '$40.00',

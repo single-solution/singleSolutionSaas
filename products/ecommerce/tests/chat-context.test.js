@@ -652,7 +652,10 @@ describe('Chat lookups (E37)', () => {
 		});
 		const out = await shop.api('GET', `/v1/chat/products/iphone-13/quote?variantId=${phone.variants[1]?.id}`);
 		expect(out.json).toMatchObject({ inStock: false, problems: [{ code: 'out_of_stock' }] });
-		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?quantity=6')).status).toBe(422);
+		// any number of pieces up to the most of one item, with the limits the cart keeps (C3)
+		const six = await shop.api('GET', '/v1/chat/products/iphone-13/quote?quantity=6');
+		expect(six.json).toMatchObject({ quantity: 6, limits: { step: 1, min: 1, max: 99 } });
+		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?quantity=100001')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?quantity=1.5')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?paymentMethod=Card!')).status).toBe(422);
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote?variantId=var_nope')).status).toBe(404);
