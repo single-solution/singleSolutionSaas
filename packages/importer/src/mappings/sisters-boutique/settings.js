@@ -277,6 +277,7 @@ export const settingsPlan = (values) => {
 				'checkout.policyTerms': '',
 				'checkout.policyWarranty': '',
 				'checkout.policyFormat': 'html',
+				'checkout.returnsAccepted': 'unknown', // SaaS default (store mapping to review when the owner asks)
 				// bank transfer by hand, cash on delivery; no card (D5)
 				'checkout.paymentMethods': store.paymentBankTransferEnabled ? ['bank_transfer'] : [],
 				'checkout.paymentOrder': ['bank_transfer', 'cod', 'online', 'pickup'], // `apps/web/src/app/checkout/_components/Checkout.tsx`:66
@@ -323,6 +324,9 @@ export const settingsPlan = (values) => {
 				'cod.advanceVia': 'payments',
 				'delivery_zones.defaultFee': store.courierFlatFeeRupees * 100,
 				'delivery_zones.defaultFreeOver': store.freeDeliveryThresholdRupees * 100,
+				// SaaS defaults: no delivery days said (store mapping to review when the owner asks)
+				'delivery_zones.handlingDays': [],
+				'delivery_zones.transitDays': [],
 				'delivery_zones.defaultMethod': 'pickup',
 				'delivery_zones.pickupEnabled': true,
 				'delivery_zones.pickupName': '',
@@ -367,6 +371,12 @@ export const settingsPlan = (values) => {
 					.replaceAll('{title}', '{name}')
 					.replaceAll('{storeName}', '{business}'),
 				'seo.brandName': seo.storeName,
+				// the site answer's settings at the SaaS defaults (store mapping to review when the owner asks)
+				'seo.alternateName': '',
+				'seo.homeTitle': '',
+				'seo.homeDescription': '',
+				'seo.siteType': 'online_store',
+				'seo.socialProfiles': [],
 				'seo.productTitle': '{name}',
 				'seo.categoryTitle': 'Shop {name}',
 				'seo.productDescription': '',
