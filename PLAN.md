@@ -2048,6 +2048,21 @@ messages queued before 3ec0bfec and the Portal's repair of old history entries (
 region `bom1` (next to the Atlas cluster). The flaky e2e import run came from a helper changing a shared fixture
 mid-run (e2e must run on a clean worktree of HEAD while helpers edit).
 
+**Cleanup N4–N6: Accounts, Notifications, Chat, Payments, Growth (2026-10-15; 3872cf71 Chat, 078dfa54 Accounts,
+c28e8836 + ddb32a43 + 25da216d Notifications, eebaaf0f Payments, 48a43a9e Growth; `audit/necessity-audit-2026-10-15.md`
+§2.5–2.6, §4.4–4.8):** Chat pauses the AI one way only (`PUT …/ai`; `PATCH` no longer takes `aiPaused`), answers
+`guestMessagesLeft` only (no `guestLimit`), links staff alerts through the kit's `staff_alerts.adminUrl` with
+`{conversationId}` (replaces C25's `inboxUrl`) and its inbox widget opens `?conversation=<id>`; staff alert phones
+default to SMS; AI cost alerts depend on Staff alerts; the widget takes the queue position and rating requests from the
+chat answer. Accounts gives the browser each password method's own minimum (phone users and phone invitees were
+refused by the browser) and words for any business. Notifications keeps one webhook filter, each URL's events (N5's
+`events` setting is gone); WhatsApp templates go to Meta in Meta's language code (`pt_BR`), a default version in the
+new setting `whatsapp.templateLanguage` (`en`); the SMTP sender is required. Payments' links admin reads a picked link
+fresh (`GET /v1/admin/links/:id`); its CSV starts with a byte order mark. Growth: an empty Search query parameters
+names none (the default stays `q, s, search, query`); retention comes from its setting only. No /docs page shows an
+empty route table. Left for the shared-code batch (N7): Accounts' activity filter and `verifyJwt` (need kit exports)
+and the one email check (X9).
+
 **Review of the new features (2026-10-15; `audit/review-new-features-2026-10-15.md`; fixes 26d2dbf4 Chat, 6cf9c47a
 app-kit, fcbb5b4f Growth, then f7c901c9 Chat, 75711a1c Portal):** nine confirmed problems fixed, each with a failing-first
 test: Growth's robots.txt matching and HTML/sitemap scanning could run for minutes on hostile input (now linear, one
