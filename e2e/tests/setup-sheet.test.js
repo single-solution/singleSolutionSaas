@@ -299,7 +299,7 @@ describe('Setup sheet (end to end)', () => {
 			expect.arrayContaining(['catalog', 'checkout', 'variants', 'returns', 'wishlist', 'alerts', 'staff_alerts', 'import']),
 		);
 		expect(shop.notRecommended.map((/** @type {any} */ entry) => entry.feature)).toEqual(
-			expect.arrayContaining(['digital_goods', 'bookings', 'cod']),
+			expect.arrayContaining(['digital_goods', 'bookings']),
 		);
 
 		// the merchant cannot switch features; the Owner does it in one click, through the product's feature report

@@ -202,7 +202,7 @@ describe('Ecommerce on the real Portal', () => {
 		expect(await sys.setPrices({ catalog: 1000, checkout: 500 })).toMatchObject({ version: 2 });
 		const support = await sys.admin('support');
 		const cookie = await sys.adminSession(support.client, websiteId);
-		const on = ['catalog', 'checkout', 'cod', 'returns'];
+		const on = ['catalog', 'checkout', 'returns'];
 		const report = await sys.switchFeatures(cookie, websiteId, on);
 		expect(report.version).toBe(1);
 		expect([...report.on].sort()).toEqual(on);

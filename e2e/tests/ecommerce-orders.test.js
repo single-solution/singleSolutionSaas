@@ -1,7 +1,7 @@
 /**
  * PLAN 0.8.10 build phase 4, Ecommerce's "done when": guest and member checkout (a guest's order key and order page by
  * number; a member's sign-in claims the guest's orders and points), COD (the cash-handling fee, the open start status),
- * bank transfer (through the real Payments `bank_transfer` gateway with its bank details, and `bankTransferVia: manual`
+ * bank transfer (through the real Payments' manual method `bank_transfer` with its account, and paid by hand (`via: manual`)
  * with the shopper's proof upload and staff-recorded payments) and whole-unit totals (Format `wholeUnits` with GBP),
  * deal rules and locks, role pricing (an Accounts role on the sign-in), the loyalty options, the extra moves (refunded
  * before delivery only when paid; a customer return after delivery with and without restock), the payments log, an
@@ -51,6 +51,18 @@ const LONDON = { city: 'London' };
 const PHONE_PRICE = 4_999_900;
 const CASE_PRICE = 99_900;
 const DELIVERY = 25_000;
+
+/**
+ * The website's payment methods (Ecommerce's `payment_methods` list, E2): today's four; `patches` change methods by key.
+ * @param {Record<string, Record<string, unknown>>} [patches]
+ */
+const methodsWith = (patches = {}) =>
+	[
+		{ key: 'online', name: 'Online payment', kind: 'gateway' },
+		{ key: 'bank_transfer', name: 'Bank transfer', kind: 'pay_first', via: 'payments' },
+		{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery' },
+		{ key: 'pickup', name: 'Pay at pickup', kind: 'at_pickup' },
+	].map((method) => ({ ...method, ...(patches[method.key] ?? {}) }));
 
 /** The default order flow with the E27 moves listed, and a customer-return status (role `returned`). */
 const FLOW = {
@@ -373,7 +385,6 @@ beforeAll(async () => {
 		'variants',
 		'grades_serials',
 		'checkout',
-		'cod',
 		'delivery_zones',
 		'deals',
 		'loyalty',
@@ -406,7 +417,7 @@ beforeAll(async () => {
 		'checkout.numberPattern': '{prefix}{year}-{number}',
 		'checkout.numberPrefix': 'SO-',
 		'checkout.numberDigits': 4,
-		'checkout.paymentMethods': ['online', 'bank_transfer', 'pickup'],
+		'list.payment_methods': methodsWith(),
 		'checkout.paymentWindowMinutes': 0,
 		'checkout.confirmationHours': 0,
 		'checkout.guests': 'unless_password',
@@ -577,9 +588,9 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 	it('prices a member’s cart with deal rules, the role price, the COD fee and whole units by both totals rules, kept by a lock (E18, E19, E23, E25, D4)', async () => {
 		await configure({
 			'deals.lockMinutes': 30,
-			'cod.feePercent': 2,
-			// cash-on-delivery orders start confirmed (the flow's starts)
-			'list.order_flow': { ...FLOW, starts: { cod: 'confirmed' } },
+			'list.payment_methods': methodsWith({ cod: { feePercent: 2 } }),
+			// orders paid on delivery start confirmed (the flow's starts)
+			'list.order_flow': { ...FLOW, starts: { on_delivery: 'confirmed' } },
 			'list.role_prices': [{ role: 'member', percent: 7, label: 'Member price' }],
 		});
 		const deal = await write('POST', '/v1/deals', {
@@ -640,7 +651,10 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 
 		// the other totals rules (D4): the deal worked out on the line and rounded once, half up (7,499.85 → 7,500), the
 		// member's 7% of GBP 42,499 (2,975), and the 2% cash handling on the goods after both (GBP 39,524 → 790)
-		await configure({ 'deals.rounding': 'total_half_up', 'cod.feeBase': 'goods_after_discounts' });
+		await configure({
+			'deals.rounding': 'total_half_up',
+			'list.payment_methods': methodsWith({ cod: { feePercent: 2, feeBase: 'goods_after_discounts' } }),
+		});
 		const other = await quote({ lines: [line], payment: 'cod' }, mona);
 		expect(other.json.totals).toMatchObject({
 			subtotal: PHONE_PRICE,
@@ -653,7 +667,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		expect(other.json.paymentMethods.find((/** @type {any} */ method) => method.method === 'cod')).toMatchObject({
 			fee: 79_000,
 		});
-		await configure({ 'deals.rounding': 'per_unit_down', 'cod.feeBase': 'order_total' });
+		await configure({ 'deals.rounding': 'per_unit_down', 'list.payment_methods': methodsWith({ cod: { feePercent: 2 } }) });
 
 		// the deal ends; the signed lock keeps its price at placement
 		await write('PATCH', `/v1/deals/${deal.id}`, { active: false });
@@ -671,7 +685,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		sys.clock.advance(31 * 60_000);
 		const late = await quote({ lines: [{ ...line, lock }], payment: 'cod' }, await signIn('07700900222'));
 		expect(late.json.totals.discount).toBe(roleOf(PHONE_PRICE));
-		await configure({ 'cod.feePercent': 0, 'list.order_flow': FLOW });
+		await configure({ 'list.payment_methods': methodsWith(), 'list.order_flow': FLOW });
 	});
 
 	it('prints invoices with the fee, the role price, points and cash due, packing slips and a pick list (E35)', async () => {
@@ -717,28 +731,32 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		expect(priced.json.points.value).toBe(priced.json.points.used * 100);
 	});
 
-	it('takes a bank transfer through the real Payments: bank details, its page, and paid once Payments confirms (E24)', async () => {
+	it('takes a bank transfer through the real Payments: its manual method’s accounts, its page, and paid once Payments confirms (E24, E8)', async () => {
 		const sara = await signIn('07700900111');
 		const priced = await quote({ lines: [caseLine()], payment: 'bank_transfer' }, sara);
-		// exactly Payments' answer: every field, '' for those the merchant did not set
-		expect(priced.json.bankDetails).toEqual({
+		// Payments' manual method of the same key: its instructions and the merchant's own rows, never kept twice
+		expect(priced.json.payDetails.bank_transfer).toEqual({
 			ready: true,
-			accountHolder: 'Example Shop Ltd',
-			bankName: 'Example Bank',
-			accountNumber: '31926819',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: 'GB29NWBK60161331926819',
-			bic: '',
+			name: 'Bank transfer',
 			instructions: 'Write your order number as the reference.',
+			accounts: [
+				{
+					label: 'Example Bank',
+					currency: '',
+					rows: [
+						{ label: 'Account holder', value: 'Example Shop Ltd' },
+						{ label: 'Account number', value: '31926819' },
+						{ label: 'IBAN', value: 'GB29NWBK60161331926819' },
+					],
+				},
+			],
 		});
 		// the cart widget sends its return address (Payments sends the shopper back there)
 		const placed = await place({ lines: [caseLine()], payment: 'bank_transfer', returnUrl: `${ORIGIN}/checkout` }, sara);
 		expect(placed.status, JSON.stringify(placed.json)).toBe(201);
 		const { order, next } = placed.json;
 		expect(order).toMatchObject({ status: 'pending_payment', payment: { state: 'pending', via: 'payments' } });
-		expect(order.bankDetails).toMatchObject({ bankName: 'Example Bank' });
+		expect(order.payDetails).toMatchObject({ accounts: [{ label: 'Example Bank' }] });
 		expect(next.kind).toBe('pay');
 		expect(new URL(next.url).origin).toBe(PAYMENTS);
 		const { paymentId } = (await orderOf(order.id)).payment;
@@ -760,7 +778,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 			payment: { state: 'paid', paid: order.totals.total, balanceDue: 0 },
 		});
 		expect(read.json.payment.entries).toEqual([
-			{ method: 'online', amount: order.totals.total, reference: paymentId, at: expect.any(String) },
+			{ method: 'payments', amount: order.totals.total, reference: paymentId, at: expect.any(String) },
 		]);
 		const paid = (await eventsOf('ecommerce.order.paid')).find((/** @type {any} */ e) => e.data.orderId === order.id);
 		expect(paid.data).toMatchObject({ number: order.number, paid: order.totals.total });
@@ -782,7 +800,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		// the money arrives anyway and the store's staff confirm it in Payments: it is to be refunded
 		const late = await payments('POST', `/v1/payments/${paymentId}/confirm`, { reference: 'TRX-9', note: 'Late' });
 		expect(late.json).toMatchObject({ status: 'paid', refundDue: true });
-		await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'bank_transfer', 'refunds'] });
+		await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'manual_payments', 'refunds'] });
 		sys.clock.advance(31_000);
 		const read = await orderOf(order.id);
 		expect(read).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total } });
@@ -802,8 +820,10 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 	});
 
 	it('takes a manual bank transfer with the shopper’s proof, and the payments log records staff payments and refunds (E24, E26)', async () => {
+		// paid by hand: the method's own account (the one in Payments is not read)
+		const own = { label: '', currency: '', rows: [{ label: 'Account number', value: '31926819' }] };
 		await configure({
-			'checkout.bankTransferVia': 'manual',
+			'list.payment_methods': methodsWith({ bank_transfer: { via: 'manual', accounts: [own] } }),
 			// refunds that cover the payments move the order to refunded (the flow's trigger)
 			'list.order_flow': { ...FLOW, triggers: { refundsCover: 'refunded' } },
 		});
@@ -813,7 +833,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const { order, next } = placed.json;
 		const total = order.totals.total;
 		expect(order).toMatchObject({ status: 'pending_payment', canSendProof: true, payment: { via: 'manual', state: 'unpaid' } });
-		expect(order.bankDetails).toMatchObject({ accountNumber: '31926819' });
+		expect(order.payDetails).toMatchObject({ accounts: [own] });
 		expect(next.kind).toBe('proof');
 		expect((await orderOf(order.id)).payment.paymentId).toBeNull();
 
@@ -849,20 +869,20 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const tooMuch = await server(
 			'POST',
 			`/v1/orders/${order.id}/payments`,
-			{ method: 'cash', amount: total },
+			{ method: 'other', amount: total },
 			{ key: 'pay-manual-x' },
 		);
 		expect(codeOf(tooMuch)).toBe('validation_failed');
 		const rest = await server(
 			'POST',
 			`/v1/orders/${order.id}/payments`,
-			{ method: 'cash', amount: total - half, confirm: true },
+			{ method: 'other', amount: total - half, reference: 'Cash at the counter', confirm: true },
 			{ staff: 'Omar Staff', key: 'pay-manual-2' },
 		);
 		expect(rest.json.order).toMatchObject({ status: 'confirmed', payment: { state: 'paid', paid: total } });
 		expect(rest.json.order.payments.map((/** @type {any} */ e) => [e.method, e.amount, e.reference, e.by.name])).toEqual([
 			['bank_transfer', half, 'TRX-42', 'Omar Staff'],
-			['cash', total - half, '', 'Omar Staff'],
+			['other', total - half, 'Cash at the counter', 'Omar Staff'],
 		]);
 		// the shopper sees paid, the balance and the entries, never the staff's names
 		sara = await signIn('07700900111');
@@ -870,13 +890,13 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		expect(mine.json.payment).toMatchObject({ paid: total, balanceDue: 0 });
 		expect(mine.json.payment.entries.map((/** @type {any} */ e) => [e.method, e.amount])).toEqual([
 			['bank_transfer', half],
-			['cash', total - half],
+			['other', total - half],
 		]);
 		expect(JSON.stringify(mine.json)).not.toContain('Omar Staff');
 		const recorded = (await eventsOf('ecommerce.order.payment_recorded')).filter(
 			(/** @type {any} */ e) => e.data.orderId === order.id,
 		);
-		expect(recorded.map((/** @type {any} */ e) => e.data.method).sort()).toEqual(['bank_transfer', 'cash']);
+		expect(recorded.map((/** @type {any} */ e) => e.data.method).sort()).toEqual(['bank_transfer', 'other']);
 
 		// refunds with a method and reference; once they cover the payments the order is refunded (the refundsCover trigger)
 		const part = await server(
@@ -890,17 +910,17 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		const all = await server(
 			'POST',
 			`/v1/orders/${order.id}/refunds`,
-			{ amount: total - half, reason: 'Both returned', method: 'cash', reference: 'RF-2' },
+			{ amount: total - half, reason: 'Both returned', method: 'other', reference: 'RF-2' },
 			{ staff: 'Omar Staff', key: 'refund-manual-2' },
 		);
 		expect(all.json.order).toMatchObject({ status: 'refunded', payment: { state: 'refunded', refunded: total } });
 		expect(all.json.order.refunds.map((/** @type {any} */ e) => [e.method, e.amount, e.reference])).toEqual([
 			['bank_transfer', half, 'RF-1'],
-			['cash', total - half, 'RF-2'],
+			['other', total - half, 'RF-2'],
 		]);
 		const refunded = (await eventsOf('ecommerce.order.refunded')).filter((/** @type {any} */ e) => e.data.orderId === order.id);
 		expect(refunded).toHaveLength(2);
-		await configure({ 'checkout.bankTransferVia': 'payments', 'list.order_flow': FLOW });
+		await configure({ 'list.payment_methods': methodsWith(), 'list.order_flow': FLOW });
 	});
 
 	it('moves to refunded before dispatch as a cancel, giving the stock back; unpaid with no money (E27)', async () => {
@@ -918,7 +938,7 @@ describe('Ecommerce orders on the real Portal, Accounts, Payments and Notificati
 		await server(
 			'POST',
 			`/v1/orders/${paid.id}/payments`,
-			{ method: 'cash', amount: paid.totals.total, confirm: true },
+			{ method: 'cod', amount: paid.totals.total, confirm: true },
 			{ key: 'pay-before-refund' },
 		);
 		expect(await stockOf(ids.case.id)).toBe(stock - 1);

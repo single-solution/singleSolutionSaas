@@ -173,9 +173,7 @@ describe('default templates: no template written, messages still go (parity P1)'
 	it('an order email and an Ecommerce staff alert go with Ecommerce’s default words; a per-status message falls back to the general one', async () => {
 		await sys.addProduct(merchantId, websiteId, 'ecommerce');
 		tokens.ecommerce = await sys.tokens(merchantId, websiteId, 'ecommerce');
-		expect((await dash('ecommerce', 'PUT', '/features', { on: ['catalog', 'checkout', 'cod', 'staff_alerts'] })).status).toBe(
-			200,
-		);
+		expect((await dash('ecommerce', 'PUT', '/features', { on: ['catalog', 'checkout', 'staff_alerts'] })).status).toBe(200);
 		await sys.connectDatabase(await sys.adminSession(await sys.owner(), websiteId, 'ecommerce'), websiteId, SHOP);
 		for (const id of ['accounts', 'notifications'])
 			expect((await dash('ecommerce', 'PUT', `/connections/${id}`, { value: tokens[id]?.server })).json).toMatchObject({

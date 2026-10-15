@@ -197,7 +197,6 @@ const FEATURES = {
 		'variants',
 		'size_charts',
 		'checkout',
-		'cod',
 		'deals',
 		'loyalty',
 		'reviews',
