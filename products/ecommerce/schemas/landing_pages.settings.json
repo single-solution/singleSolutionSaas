@@ -13,21 +13,36 @@
 		"landingUrl": {
 			"type": "string",
 			"title": "Landing page address",
-			"description": "Where a landing page is on your website: {categoryUrl} (its category's page), {category}, {brand} and {grade}, for example {categoryUrl}?brand={brand}&grade={grade}. Empty values are left out.",
-			"default": "{categoryUrl}?brand={brand}&grade={grade}",
+			"description": "Where a landing page is on your website: {categoryUrl} (its category's page), {category}, {brand}, {facet} (the listing parameter of its facet: grade or attr.<slug>) and {value} (the facet's value), for example {categoryUrl}?brand={brand}&{facet}={value} or /shop/{category}/{brand}/{value}. Query pairs with an empty name or value are left out.",
+			"default": "{categoryUrl}?brand={brand}&{facet}={value}",
 			"maxLength": 300
 		},
 		"auto": {
 			"type": "string",
 			"title": "Automatic landing pages",
-			"description": "Off: only the landing pages you create. Category brand: every category and brand with enough products and variants in stock is a landing page without creating it (indexed and in the sitemap; one you create wins). Category brand grade: also every category, brand and grade.",
+			"description": "Off: only the landing pages you create. Category brand: every category and brand with enough products and variants in stock is a landing page without creating it (indexed and in the sitemap; one you create wins). Category brand facet: also every category and brand with each value of the field Automatic facet.",
 			"default": "off",
-			"enum": ["off", "category_brand", "category_brand_grade"]
+			"enum": ["off", "category_brand", "category_brand_facet"]
+		},
+		"autoFacet": {
+			"type": "string",
+			"title": "Automatic facet",
+			"description": "With Category brand facet: the field whose values make automatic pages, grade or the slug of a field shoppers filter by (for example color). Empty, or a field shoppers do not filter by: no facet pages.",
+			"default": "",
+			"maxLength": 64
+		},
+		"autoMaxPages": {
+			"type": "integer",
+			"title": "Most automatic pages in the sitemaps",
+			"description": "At most this many automatic landing pages are listed in the sitemaps, those with the most products in stock first, so each read stays light on a small database.",
+			"default": 2000,
+			"minimum": 1,
+			"maximum": 2000
 		},
 		"autoMinProducts": {
 			"type": "integer",
 			"title": "Products in stock for an automatic page",
-			"description": "An automatic landing page exists while at least this many of its products are in stock. A landing page you create for such a category and brand (and grade), set to Automatic, is indexed from the lower of this and Products in stock to index.",
+			"description": "An automatic landing page exists while at least this many of its products are in stock. A landing page you create for such a category and brand (and facet value), set to Automatic, is indexed from the lower of this and Products in stock to index.",
 			"default": 2,
 			"minimum": 1,
 			"maximum": 1000
@@ -43,21 +58,21 @@
 		"autoCopy": {
 			"type": "string",
 			"title": "Copy of automatic pages",
-			"description": "Formula: the automatic page title and description patterns below, from the category, brand and grade names and what is in stock. AI: when staff save a product, Ecommerce writes one of its automatic pages with your AI provider (AI copy on and its key in Connections) and keeps it as a landing page you can edit; until then, and when the provider does not answer, the formula.",
+			"description": "Formula: the automatic page title and description patterns below, from the category, brand and facet names and what is in stock. AI: when staff save a product, Ecommerce writes one of its automatic pages with your AI provider (AI copy on and its key in Connections) and keeps it as a landing page you can edit; until then, and when the provider does not answer, the formula.",
 			"default": "formula",
 			"enum": ["formula", "ai"]
 		},
 		"autoTitle": {
 			"type": "string",
 			"title": "Automatic page title",
-			"description": "An automatic landing page's heading and part of the page title: {category}, {brand} and {grade} (their names), {products} and {variants} (in stock), {price} (the lowest price in stock) and {storeName}, for example {brand} {category}.",
-			"default": "{category} {brand} {grade}",
+			"description": "An automatic landing page's heading and part of the page title: {category} and {brand} (their names), {facet} (the facet field's name) and {value} (its value), {products} and {variants} (in stock), {price} (the lowest price in stock) and {storeName}, for example {brand} {category}.",
+			"default": "{category} {brand} {value}",
 			"maxLength": 160
 		},
 		"autoDescription": {
 			"type": "string",
 			"title": "Automatic page description",
-			"description": "An automatic landing page's description, with the same placeholders, for example Shop {brand} {category} at {storeName}: {products} designs in stock from {price}. Empty: the category's or brand's description, as other listings.",
+			"description": "An automatic landing page's description, with the same placeholders, for example Shop {brand} {category} at {storeName}: {products} products in stock from {price}. Empty: the category's or brand's description, as other listings.",
 			"default": "",
 			"maxLength": 500,
 			"x-ui": {

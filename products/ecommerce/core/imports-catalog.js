@@ -20,7 +20,7 @@ import { checkAttribute, checkBrand, checkCategory } from './catalog-taxonomy.js
 import { checkBundleInput } from './bundles.js';
 import { checkDealInput } from './deals.js';
 import { typeByKey } from './item-types.js';
-import { checkLanding } from './landings.js';
+import { GRADE_FACET, checkLanding } from './landings.js';
 import { MAX_PREVIOUS_SLUGS } from './links.js';
 import { ID_PREFIX } from './model.js';
 import { checkSizeChart } from './size-charts.js';
@@ -39,6 +39,8 @@ import { checkSizeChart } from './size-charts.js';
  * @property {ReadonlySet<string>} brandIds
  * @property {ReadonlySet<string>} sizeChartIds
  * @property {ReadonlySet<string>} gradeKeys the `grades` list (empty while Condition grades and unit numbers is off)
+ * @property {ReadonlySet<string>} [fieldSlugs] the slugs of the active product and variant fields shoppers filter by
+ *   (landing pages' facets)
  * @property {ReadonlySet<string>} locationIds
  * @property {ReadonlyArray<import('./item-types.js').ItemType>} types the merchant's item types
  * @property {ReadonlyMap<string, { path: string[] }>} [categories] stored categories (a category's path)
@@ -146,7 +148,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'id',
 		'categoryId',
 		'brandId',
-		'grade',
+		'facet',
 		'h1',
 		'title',
 		'description',
@@ -644,7 +646,8 @@ export const checkImportedSizeChart = (record, context) => {
 };
 
 /**
- * A landing page (E15): its category, brand and grade must exist.
+ * A landing page (E15): its category, brand and facet must exist (a grade of the grades list, or a field shoppers
+ * filter by, `fieldSlugs`).
  * @param {Record<string, unknown>} record
  * @param {ImportContext} context
  * @returns {ImportChecked}
@@ -657,7 +660,10 @@ export const checkImportedLanding = (record, context) => {
 	if (checked) {
 		if (checked.categoryId) mustExist([checked.categoryId], context.categoryIds, '/categoryId', 'category', errors);
 		if (checked.brandId) mustExist([checked.brandId], context.brandIds, '/brandId', 'brand', errors);
-		if (checked.grade) mustExist([checked.grade], context.gradeKeys, '/grade', 'grade', errors);
+		if (checked.facet?.field === GRADE_FACET)
+			mustExist([checked.facet.value], context.gradeKeys, '/facet/value', 'grade', errors);
+		else if (checked.facet)
+			mustExist([checked.facet.field], context.fieldSlugs ?? new Set(), '/facet/field', 'field shoppers filter by', errors);
 	}
 	const stamps = stampsOf(record, context.now, errors);
 	return outcome(errors, () => ({ id, ...checked, ...stamps }));

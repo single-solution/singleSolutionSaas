@@ -25,6 +25,7 @@ import {
 	checkImportedSizeChart,
 	offerProductIds,
 } from '../core/imports-catalog.js';
+import { comboKey, comboQuery } from '../core/landings.js';
 import { COLLECTIONS } from '../core/model.js';
 import { checkUnit } from '../core/fields.js';
 import { loadRules, unitRulesOf } from './catalog-store.js';
@@ -69,9 +70,26 @@ export const catalogImports = (deps) => {
 		new Set((await data.collection(collection).distinct('id', { websiteId: data.websiteId })).map(String));
 
 	/**
+	 * The slugs of the active product and variant fields shoppers filter by (a landing page's facet names one).
+	 * @param {WebsiteData} data
+	 */
+	const filterSlugs = async (data) =>
+		new Set(
+			(
+				await data.collection(COLLECTIONS.attributes).distinct('slug', {
+					websiteId: data.websiteId,
+					on: { $in: ['product', 'variant'] },
+					active: true,
+					'show.filter': true,
+				})
+			).map(String),
+		);
+
+	/**
 	 * What a call's checks read once: the switched-on features, the grades list, the ids records may name, the stored
 	 * categories' paths (`categories`), and the catalog rules (`rules`, products).
-	 * @param {{ categories?: boolean, rules?: boolean }} [needs]
+	 * @param {{ categories?: boolean, rules?: boolean, fields?: boolean }} [needs] `fields`: the slugs of the fields
+	 *   shoppers filter by (landing pages' facets)
 	 * @returns {(ctx: PrepareContext) => Promise<Prepared>}
 	 */
 	const prepareWith =
@@ -129,6 +147,7 @@ export const catalogImports = (deps) => {
 					types,
 					...(categories ? { categories } : {}),
 					...(rules ? { rules } : {}),
+					...(needs.fields ? { fieldSlugs: await filterSlugs(data) } : {}),
 				},
 				taken: new Map(),
 				variants: new Map(),
@@ -328,12 +347,13 @@ export const catalogImports = (deps) => {
 	 * @returns {Promise<FieldError[]>}
 	 */
 	const landingClashes = async (value, data, prepared) => {
-		const match = { categoryId: value.categoryId, brandId: value.brandId, grade: value.grade };
+		const combination = /** @type {import('../core/landings.js').Combination} */ (/** @type {unknown} */ (value));
+		const match = comboQuery(combination);
 		const other =
-			heldInCall(prepared, `landings:${JSON.stringify(match)}`, value.id) ??
+			heldInCall(prepared, `landings:${comboKey(combination)}`, value.id) ??
 			(await heldInDatabase(data, COLLECTIONS.landings, match, value.id));
 		return other
-			? [{ path: '/categoryId', message: `Another landing page (${other}) has this category, brand and grade.` }]
+			? [{ path: '/categoryId', message: `Another landing page (${other}) has this category, brand and facet.` }]
 			: [];
 	};
 
@@ -381,7 +401,7 @@ export const catalogImports = (deps) => {
 		}),
 		landings: imported({
 			collection: COLLECTIONS.landings,
-			prepare: plain,
+			prepare: prepareWith({ fields: true }),
 			check: checkImportedLanding,
 			unique: landingClashes,
 		}),

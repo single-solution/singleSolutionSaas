@@ -418,6 +418,8 @@ export const settingsPlan = (values) => {
 				'landing_pages.gradeTitle': '{name}', // SaaS default (store mapping to review when the owner asks)
 				'landing_pages.gradeDescription': '', // SaaS default (store mapping to review when the owner asks)
 				'landing_pages.auto': 'category_brand',
+				'landing_pages.autoFacet': '', // SaaS default (store mapping to review when the owner asks)
+				'landing_pages.autoMaxPages': 2000, // SaaS default (store mapping to review when the owner asks)
 				'landing_pages.autoMinProducts': 2,
 				'landing_pages.autoMinInStockVariants': 3,
 				'landing_pages.autoCopy': 'formula',

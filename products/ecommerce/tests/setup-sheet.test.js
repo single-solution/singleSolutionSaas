@@ -193,7 +193,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		expect(on.summaries).toEqual([
 			{
 				title: 'Pages on your website',
-				text: "Product pages at /products/{slug}, category pages at /categories/{slug}, variants at their product's address with ?grade={grade}&{attributes}, landing pages at {categoryUrl}?brand={brand}&grade={grade}, attribute glossary pages at /glossary/{slug}, a cart page and an orders page (the cart and my_orders widgets), a wishlist page, a compare page, the alert stop page at /alerts/stop/{token}.",
+				text: "Product pages at /products/{slug}, category pages at /categories/{slug}, variants at their product's address with ?grade={grade}&{attributes}, landing pages at {categoryUrl}?brand={brand}&{facet}={value}, attribute glossary pages at /glossary/{slug}, a cart page and an orders page (the cart and my_orders widgets), a wishlist page, a compare page, the alert stop page at /alerts/stop/{token}.",
 			},
 			{
 				title: 'Served from your domain',

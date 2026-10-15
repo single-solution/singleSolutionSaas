@@ -1,8 +1,9 @@
 /**
- * Landing pages in the catalog admin widget (feature `landing_pages`, PLAN 0.8.10 E15) as a list-and-detail screen:
- * the list filtered by category, brand, grade and a search, each row with its address, how many of its products are in
- * stock and whether search engines index it now; the editor (category, brand, grade, heading, title, description,
- * introduction, FAQs and indexable auto / yes / no); AI copy suggestions (with `ai_copy`) to check and apply; Delete.
+ * Landing pages in the catalog admin widget (feature `landing_pages`, PLAN 0.8.10 E15, dynamic model §6) as a
+ * list-and-detail screen: the list filtered by category, brand, facet field and a search, each row with its address,
+ * how many of its products are in stock and whether search engines index it now; the editor (category, brand, facet —
+ * a grade or a field shoppers filter by, and its value — heading, title, description, introduction, FAQs and indexable
+ * auto / yes / no); AI copy suggestions (with `ai_copy`) to check and apply; Delete.
  * @module
  */
 import { query } from './admin-kit.js';
@@ -13,7 +14,8 @@ import { categoryChoices, faqList } from './admin-taxonomy.js';
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
 /**
- * @typedef {{ id: string, categoryId: string | null, brandId: string | null, grade: string | null, h1: string,
+ * @typedef {{ id: string, categoryId: string | null, brandId: string | null,
+ *   facet: { field: string, value: string } | null, h1: string,
  *   title: string, description: string, intro: string, faqs: Array<{ question: string, answer: string }>,
  *   indexable: 'auto' | 'yes' | 'no', url?: string, inStock?: number, indexed?: boolean }} Landing
  */
@@ -22,15 +24,48 @@ import { categoryChoices, faqList } from './admin-taxonomy.js';
 const AI_FIELDS = Object.freeze(['h1', 'title', 'description', 'intro', 'faqs']);
 
 /**
- * What a landing page lists, for people (`Chairs · Acme · Grade A`).
- * @param {Lookups} lookups @param {Landing} landing
+ * The fields a landing page's facet may name, by slug: grade (with grades), then each field shoppers filter by (its
+ * first definition's name and choices).
+ * @param {Lookups} lookups
+ * @returns {Array<{ value: string, label: string, choices: Array<{ value: string, label: string }> }>}
  */
-const comboOf = (lookups, landing) => {
-	const grades = new Map(lookups.grades().map((grade) => [grade.key, grade.label]));
+const facetFields = (lookups) => {
+	const grades = lookups.grades();
+	/** @type {Map<string, { value: string, label: string, choices: Array<{ value: string, label: string }> }>} */
+	const fields = new Map();
+	for (const field of /** @type {any[]} */ (lookups.state.attributes))
+		if ((field.on === 'product' || field.on === 'variant') && field.active !== false && field.show?.filter && field.slug)
+			if (!fields.has(field.slug))
+				fields.set(field.slug, {
+					value: field.slug,
+					label: field.name,
+					choices: Array.isArray(field.choices) ? field.choices : [],
+				});
+	return [
+		...(grades.length > 0
+			? [{ value: 'grade', label: '', choices: grades.map((grade) => ({ value: grade.key, label: grade.label })) }]
+			: []),
+		...fields.values(),
+	];
+};
+
+/**
+ * What a landing page lists, for people (`Chairs · Acme · Color: Red`, a grade by its name).
+ * @param {Kit} kit @param {Lookups} lookups @param {Landing} landing
+ */
+const comboOf = (kit, lookups, landing) => {
+	const field = landing.facet ? facetFields(lookups).find((entry) => entry.value === landing.facet?.field) : undefined;
+	const value = landing.facet
+		? (field?.choices.find((choice) => choice.value === landing.facet?.value)?.label ?? landing.facet.value)
+		: '';
 	return [
 		lookups.nameOf('categories', landing.categoryId),
 		lookups.nameOf('brands', landing.brandId),
-		landing.grade ? (grades.get(landing.grade) ?? landing.grade) : '',
+		landing.facet
+			? landing.facet.field === 'grade'
+				? value
+				: kit.t('catalogAdmin.facetValue', { field: field?.label ?? landing.facet.field, value })
+			: '',
 	]
 		.filter(Boolean)
 		.join(' · ');
@@ -46,18 +81,20 @@ const withNone = (none, items) => [{ value: '', label: none }, ...items];
 export const landingsTab = (kit, panel, lookups) => {
 	const { t, h, has } = kit;
 	const path = '/v1/admin/landings';
-	const gradeChoices = lookups.grades().map((grade) => ({ value: grade.key, label: grade.label }));
+	/** the facet fields, grade named in the widget's words */
+	const facetChoices = () =>
+		facetFields(lookups).map((field) => ({ ...field, label: field.value === 'grade' ? t('catalogAdmin.grade') : field.label }));
 	const brandChoices = lookups.state.brands.map((brand) => ({ value: brand.id, label: brand.name }));
 	const search = kit.input('', { type: 'search', placeholder: t('catalogAdmin.searchLandings') });
 	const category = kit.select(withNone(t('admin.all'), categoryChoices(lookups.state.categories)));
 	const brand = kit.select(withNone(t('admin.all'), brandChoices));
-	const grade = kit.select(withNone(t('admin.all'), gradeChoices));
+	const facetFilter = kit.select(withNone(t('admin.all'), facetChoices()));
 
 	/** @param {string | null} [pick] @returns {Promise<unknown>} */
 	const load = async (pick = null) => {
 		const answer = await kit.call(
 			'GET',
-			`${path}${query({ q: search.value.trim(), category: category.value, brand: brand.value, grade: grade.value })}`,
+			`${path}${query({ q: search.value.trim(), category: category.value, brand: brand.value, facet: facetFilter.value })}`,
 		);
 		if (!answer.ok) return kit.fail(screen.line, answer);
 		/** @type {Landing[]} */
@@ -71,7 +108,7 @@ export const landingsTab = (kit, panel, lookups) => {
 		await load(saved.id);
 	};
 	/** @param {Landing} landing */
-	const nameOf = (landing) => landing.h1 || landing.title || comboOf(lookups, landing) || landing.id;
+	const nameOf = (landing) => landing.h1 || landing.title || comboOf(kit, lookups, landing) || landing.id;
 
 	/** @param {Landing | null} landing */
 	const edit = (landing) => {
@@ -80,7 +117,19 @@ export const landingsTab = (kit, panel, lookups) => {
 			landing?.categoryId ?? '',
 		);
 		const brandPick = kit.select(withNone(t('catalogAdmin.anyBrand'), brandChoices), landing?.brandId ?? '');
-		const gradePick = kit.select(withNone(t('catalogAdmin.anyGrade'), gradeChoices), landing?.grade ?? '');
+		const facets = facetChoices();
+		const facetPick = kit.select(withNone(t('catalogAdmin.noFacet'), facets), landing?.facet?.field ?? '');
+		const facetValue = kit.input(landing?.facet?.value ?? '', { maxlength: '100', list: 'ss-landing-values' });
+		const valueList = h('datalist', { id: 'ss-landing-values' });
+		const fillValues = () =>
+			kit.put(
+				valueList,
+				(facets.find((field) => field.value === facetPick.value)?.choices ?? []).map((choice) =>
+					h('option', { value: choice.value }, [choice.label]),
+				),
+			);
+		facetPick.addEventListener('change', fillValues);
+		fillValues();
 		const h1 = kit.input(landing?.h1 ?? '', { maxlength: '200' });
 		const title = kit.input(landing?.title ?? '', { maxlength: '200' });
 		const description = kit.area(landing?.description ?? '', { rows: '2', maxlength: '500' });
@@ -99,28 +148,32 @@ export const landingsTab = (kit, panel, lookups) => {
 				fieldsOf(kit, [
 					kit.field(t('catalogAdmin.category'), categoryPick),
 					kit.field(t('catalogAdmin.brand'), brandPick),
-					gradeChoices.length > 0 ? kit.field(t('catalogAdmin.grade'), gradePick) : null,
+					facets.length > 0 ? kit.field(t('catalogAdmin.facet'), facetPick) : null,
+					facets.length > 0 ? kit.field(t('catalogAdmin.facetValueOf'), facetValue) : null,
 					kit.field(t('catalogAdmin.indexableTitle'), indexable),
 				]),
 				fieldsOf(kit, [kit.field(t('catalogAdmin.landingH1'), h1), kit.field(t('catalogAdmin.seoTitle'), title)]),
 				kit.field(t('catalogAdmin.seoDescription'), description),
 				kit.field(t('catalogAdmin.landingIntro'), intro),
+				valueList,
 				faqs.node,
 			],
 			value: () =>
-				categoryPick.value || brandPick.value || gradePick.value
-					? {
-							categoryId: categoryPick.value || null,
-							brandId: brandPick.value || null,
-							grade: gradePick.value || null,
-							h1: h1.value,
-							title: title.value,
-							description: description.value,
-							intro: intro.value,
-							faqs: faqs.value(),
-							indexable: indexable.value,
-						}
-					: t('catalogAdmin.landingNeedsOne'),
+				facetPick.value && !facetValue.value.trim()
+					? t('catalogAdmin.facetNeedsValue')
+					: categoryPick.value || brandPick.value || facetPick.value
+						? {
+								categoryId: categoryPick.value || null,
+								brandId: brandPick.value || null,
+								facet: facetPick.value ? { field: facetPick.value, value: facetValue.value.trim() } : null,
+								h1: h1.value,
+								title: title.value,
+								description: description.value,
+								intro: intro.value,
+								faqs: faqs.value(),
+								indexable: indexable.value,
+							}
+						: t('catalogAdmin.landingNeedsOne'),
 			saved: after,
 		});
 	};
@@ -214,7 +267,7 @@ export const landingsTab = (kit, panel, lookups) => {
 			],
 		}),
 		kit.fieldGrid([
-			[t('catalogAdmin.landingLists'), comboOf(lookups, landing)],
+			[t('catalogAdmin.landingLists'), comboOf(kit, lookups, landing)],
 			[
 				t('catalogAdmin.landingUrl'),
 				landing.url ? h('a', { href: landing.url, target: '_blank', rel: 'noopener' }, [landing.url]) : '',
@@ -239,13 +292,13 @@ export const landingsTab = (kit, panel, lookups) => {
 		kit.field(t('admin.search'), search),
 		kit.field(t('catalogAdmin.category'), category),
 		kit.field(t('catalogAdmin.brand'), brand),
-		gradeChoices.length > 0 ? kit.field(t('catalogAdmin.grade'), grade) : null,
+		facetChoices().length > 0 ? kit.field(t('catalogAdmin.facet'), facetFilter) : null,
 	]);
 	filters.addEventListener('submit', (event) => {
 		event.preventDefault();
 		void load();
 	});
-	for (const control of [category, brand, grade]) control.addEventListener('change', () => void load());
+	for (const control of [category, brand, facetFilter]) control.addEventListener('change', () => void load());
 
 	const screen = createScreen(kit, panel, {
 		tools: [

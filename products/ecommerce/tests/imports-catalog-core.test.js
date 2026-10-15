@@ -266,11 +266,34 @@ describe('taxonomy', () => {
 		expect(
 			paths(
 				checkImportedLanding(
-					{ id: idOf('lnd', 1), categoryId: idOf('cat', 9), brandId: idOf('brd', 9), grade: 'z', h1: 'H' },
+					{
+						id: idOf('lnd', 1),
+						categoryId: idOf('cat', 9),
+						brandId: idOf('brd', 9),
+						facet: { field: 'grade', value: 'z' },
+						h1: 'H',
+					},
 					context,
 				),
 			),
-		).toEqual(['/categoryId', '/brandId', '/grade']);
+		).toEqual(['/categoryId', '/brandId', '/facet/value']);
+		// a field's slug must name a field shoppers filter by
+		expect(
+			paths(
+				checkImportedLanding(
+					{ id: idOf('lnd', 1), facet: { field: 'color', value: 'red' } },
+					{ ...context, fieldSlugs: new Set(['size']) },
+				),
+			),
+		).toEqual(['/facet/field']);
+		expect(
+			paths(
+				checkImportedLanding(
+					{ id: idOf('lnd', 1), facet: { field: 'size', value: 'M' } },
+					{ ...context, fieldSlugs: new Set(['size']) },
+				),
+			),
+		).toEqual([]);
 		expect(paths(checkImportedLanding({ id: idOf('lnd', 1) }, context))).toEqual(['/categoryId']);
 	});
 

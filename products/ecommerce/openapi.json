@@ -3998,13 +3998,23 @@
 						}
 					},
 					{
-						"name": "grade",
+						"name": "facet",
 						"in": "query",
 						"required": false,
-						"description": "Only landing pages of this grade key.",
+						"description": "Only landing pages whose facet is of this field (grade or a field's slug).",
 						"schema": {
 							"type": "string",
-							"description": "Only landing pages of this grade key."
+							"description": "Only landing pages whose facet is of this field (grade or a field's slug)."
+						}
+					},
+					{
+						"name": "value",
+						"in": "query",
+						"required": false,
+						"description": "Only landing pages whose facet has this value.",
+						"schema": {
+							"type": "string",
+							"description": "Only landing pages whose facet has this value."
 						}
 					},
 					{
@@ -4043,7 +4053,7 @@
 			},
 			"post": {
 				"summary": "Create a landing page (Catalog admin widget)",
-				"description": "A category, brand and grade combination (at least one) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and grade is given or the category does not exist, at /brandId or /grade (a key of your grades list) when it does not exist, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least landingMinProducts of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
+				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least landingMinProducts of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "landing_pages",
 				"x-ss-permission": "catalog.edit",
@@ -4182,7 +4192,7 @@
 			},
 			"patch": {
 				"summary": "Change a landing page (Catalog admin widget)",
-				"description": "Members left out keep their value; null (or '') clears categoryId, brandId or grade, but one of them must stay. 404 not_found; 422 validation_failed at /categoryId when none of categoryId, brandId and grade is given or the category does not exist, at /brandId or /grade (a key of your grades list) when it does not exist, or at a text that is too long; 409 conflict when another landing page has the same combination.",
+				"description": "Members left out keep their value; null (or '') clears categoryId or brandId and null clears facet, but one of them must stay. 404 not_found; 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "landing_pages",
 				"x-ss-permission": "catalog.edit",
@@ -4238,7 +4248,7 @@
 		"/v1/admin/landings/{id}/ai-copy": {
 			"post": {
 				"summary": "Suggest a landing page's copy with AI (Catalog admin widget)",
-				"description": "Your AI provider (Connections) writes the fields asked for from the page's category, brand and grade and up to 20 of its best-selling products, in the ai_copy settings' tone and language unless given. Nothing is saved. Needs AI copy and Landing pages on (403 feature_off). 422 validation_failed at /fields or /tone; 404 not_found; 503 ai_not_connected without an AI connection; 502 ai_failed when the provider fails or gives no usable text.",
+				"description": "Your AI provider (Connections) writes the fields asked for from the page's category, brand and facet (its field's name and value) and up to 20 of its best-selling products, in the ai_copy settings' tone and language unless given. Nothing is saved. Needs AI copy and Landing pages on (403 feature_off). 422 validation_failed at /fields or /tone; 404 not_found; 503 ai_not_connected without an AI connection; 502 ai_failed when the provider fails or gives no usable text.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "ai_copy",
 				"x-ss-permission": "catalog.edit",
@@ -18566,7 +18576,7 @@
 		"/v1/import/{collection}": {
 			"post": {
 				"summary": "Import records (NDJSON, ss-import)",
-				"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, convertTo, columns, rows, advice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, typeKey, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, grade, h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
+				"description": "collection is one of size_charts, categories, brands, attributes, landings, products, serials, deals, bundles, customers, orders, loyalty, reviews, returns, alerts, wishlists; import them in that order (records must name records of an earlier step), then call finish. The body is application/x-ndjson (Content-Type), not JSON: one record per line, at most 1,000 records or 4 MB per call. Records are Ecommerce's stored shapes, every one with optional createdAt and updatedAt: size_charts { id (szc_), name, unit, convertTo, columns, rows, advice, notes, active }; categories { id (cat_), slug, name, parentId, description, seo, image, sort, status, icon, content, faqs, sizeChartId, typeKey, previousSlugs }; brands { id (brd_), slug, name, description, logo, status, categoryIds, seo, sizeChartId }; attributes { id (att_), name, type, choices, unit, slug, categoryId (the category it is the definition for: one record per category, not merged by slug), categoryIds, on, multiple, visibility, card, active, seo … }; landings { id (lnd_), categoryId, brandId, facet { field, value } (grade or a field's slug shoppers filter by), h1, title, description, intro, faqs, indexable }; products { id (prd_), slug, name, kind, status, … variants (var_ ids), media, sold, rating, publishedAt, previousSlugs } (a product without a variant is stored as a draft); serials { id (ser_), productId, variantId, serial, status, orderId, lineId, locationId }; deals (deal_) and bundles (bnd_) with their use count used; customers { id (cus_), userId, name, email, phone, city, blocked … }; orders { id (ord_), number, customer, address, delivery, lines, totals, promotions, payment, payments, refunds, status, history, shipment … } (money in minor units, adding up as checkout adds it); loyalty { customerId, userId, lots, history … }; reviews (rev_); returns (ret_); alerts (alr_); wishlists { userId, productIds }. Each record is found by its key: id (<prefix>_<10 to 64 of 0-9a-z>), customerId for loyalty, userId for wishlists. Each record passes Ecommerce's own check in import mode: given ids, numbers, past times and histories are kept; fields the record type does not have and values the shop derives (a category's path, a product's price or stockState …) are refused by name, as is text over a limit (never cut); slugs, SKUs, variant ids, serial numbers and landing combinations another record holds are refused. A checked record replaces the stored one (createdAt kept when it has none), so a re-run changes nothing. Nothing is sent: no message, event, alert, activity copy or IndexNow call, and no stock is held. Server token only. 404 not_found for another collection; 415 unsupported_media_type without NDJSON; 413 payload_too_large.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -18780,13 +18790,23 @@
 						}
 					},
 					{
-						"name": "grade",
+						"name": "facet",
 						"in": "query",
 						"required": false,
-						"description": "Only landing pages of this grade key.",
+						"description": "Only landing pages whose facet is of this field (grade or a field's slug).",
 						"schema": {
 							"type": "string",
-							"description": "Only landing pages of this grade key."
+							"description": "Only landing pages whose facet is of this field (grade or a field's slug)."
+						}
+					},
+					{
+						"name": "value",
+						"in": "query",
+						"required": false,
+						"description": "Only landing pages whose facet has this value.",
+						"schema": {
+							"type": "string",
+							"description": "Only landing pages whose facet has this value."
 						}
 					},
 					{
@@ -18837,7 +18857,7 @@
 			},
 			"post": {
 				"summary": "Create a landing page",
-				"description": "A category, brand and grade combination (at least one) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and grade is given or the category does not exist, at /brandId or /grade (a key of your grades list) when it does not exist, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least landingMinProducts of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
+				"description": "A category, brand and facet combination (at least one; a facet is one value of a field shoppers filter by: a grade, or a product or variant field by its slug) with its own heading, title, description, introduction and FAQs; one landing page per combination. 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination or when the website has 2,000. url comes from the landing_pages setting landingUrl; indexable auto is indexed while at least landingMinProducts of its products are in stock. Send an Idempotency-Key so a retried request makes one landing page.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"security": [
@@ -19009,7 +19029,7 @@
 			},
 			"patch": {
 				"summary": "Change a landing page",
-				"description": "Members left out keep their value; null (or '') clears categoryId, brandId or grade, but one of them must stay. 404 not_found; 422 validation_failed at /categoryId when none of categoryId, brandId and grade is given or the category does not exist, at /brandId or /grade (a key of your grades list) when it does not exist, or at a text that is too long; 409 conflict when another landing page has the same combination.",
+				"description": "Members left out keep their value; null (or '') clears categoryId or brandId and null clears facet, but one of them must stay. 404 not_found; 422 validation_failed at /categoryId when none of categoryId, brandId and facet is given or the category does not exist, at /brandId when it does not exist, at /facet when it is not { field, value }, at /facet/value for a grade not in your grades list, at /facet/field for a field shoppers do not filter by, or at a text that is too long; 409 conflict when another landing page has the same combination.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "landing_pages",
 				"security": [
@@ -19076,7 +19096,7 @@
 		"/v1/landings/{id}/ai-copy": {
 			"post": {
 				"summary": "Suggest a landing page's copy with AI",
-				"description": "Your AI provider (Connections) writes the fields asked for from the page's category, brand and grade and up to 20 of its best-selling products, in the ai_copy settings' tone and language unless given. Nothing is saved. Needs AI copy and Landing pages on (403 feature_off). 422 validation_failed at /fields or /tone; 404 not_found; 503 ai_not_connected without an AI connection; 502 ai_failed when the provider fails or gives no usable text.",
+				"description": "Your AI provider (Connections) writes the fields asked for from the page's category, brand and facet (its field's name and value) and up to 20 of its best-selling products, in the ai_copy settings' tone and language unless given. Nothing is saved. Needs AI copy and Landing pages on (403 feature_off). 422 validation_failed at /fields or /tone; 404 not_found; 503 ai_not_connected without an AI connection; 502 ai_failed when the provider fails or gives no usable text.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "ai_copy",
 				"security": [
@@ -28172,7 +28192,7 @@
 		"/v1/seo/listing": {
 			"get": {
 				"summary": "The head of a listing page",
-				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly — a category, one brand and one facet: one grade, or one value of a field shoppers filter by named by its slug (attr.<slug>=<value>; several values, two facets or a field id count as filters) — (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_facet also a value of the field autoFacet, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -28205,10 +28225,20 @@
 						"name": "grade",
 						"in": "query",
 						"required": false,
-						"description": "A grade key (several, comma-separated, count as a filter).",
+						"description": "A grade key (several, comma-separated, count as a filter). One grade, and no attr.<slug>, is the listing's facet.",
 						"schema": {
 							"type": "string",
-							"description": "A grade key (several, comma-separated, count as a filter)."
+							"description": "A grade key (several, comma-separated, count as a filter). One grade, and no attr.<slug>, is the listing's facet."
+						}
+					},
+					{
+						"name": "attr.<slug>",
+						"in": "query",
+						"required": false,
+						"description": "A field's values (several, comma-separated, count as a filter); one value of a field shoppers filter by, with no grade, is the listing's facet.",
+						"schema": {
+							"type": "string",
+							"description": "A field's values (several, comma-separated, count as a filter); one value of a field shoppers filter by, with no grade, is the listing's facet."
 						}
 					},
 					{
@@ -40978,12 +41008,12 @@
 			},
 			"Landing": {
 				"type": "object",
-				"description": "A landing page: a category, brand and grade combination (at least one of them) with its own copy.",
+				"description": "A landing page: a category, brand and facet combination (at least one of them) with its own copy.",
 				"required": [
 					"id",
 					"categoryId",
 					"brandId",
-					"grade",
+					"facet",
 					"h1",
 					"title",
 					"description",
@@ -41019,18 +41049,35 @@
 						"maxLength": 64,
 						"description": "The brand, or null."
 					},
-					"grade": {
+					"facet": {
 						"type": [
-							"string",
+							"object",
 							"null"
 						],
-						"maxLength": 64,
-						"description": "A key of your grades list, or null."
+						"description": "The facet: one value of a field shoppers filter by — grade (a key of your grades list) or a product or variant field by its slug — as a listing takes it (grade=<key> or attr.<slug>=<value>); null: none.",
+						"required": [
+							"field",
+							"value"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"field": {
+								"type": "string",
+								"pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+								"description": "grade, or a field's slug."
+							},
+							"value": {
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 100,
+								"description": "The value as a listing takes it (a number or yes/no as text)."
+							}
+						}
 					},
 					"h1": {
 						"type": "string",
 						"maxLength": 200,
-						"description": "The page heading ('' = the names of the category, brand and grade)."
+						"description": "The page heading ('' = the names of the category, brand and facet value)."
 					},
 					"title": {
 						"type": "string",
@@ -41084,7 +41131,7 @@
 					"inStockVariants": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Their sellable variants in stock (of its grade, when it names one)."
+						"description": "Their sellable variants in stock (of its facet value, when it names one)."
 					},
 					"indexed": {
 						"type": "boolean",
@@ -41094,7 +41141,7 @@
 			},
 			"LandingInput": {
 				"type": "object",
-				"description": "A landing page's fields. categoryId, brandId and grade take an id (a grade key) of at most 64 characters, or null ('' too) for none; texts are trimmed and refused (never cut) over their length.",
+				"description": "A landing page's fields. categoryId and brandId take an id of at most 64 characters, or null ('' too) for none; facet takes { field, value } or null; texts are trimmed and refused (never cut) over their length.",
 				"properties": {
 					"categoryId": {
 						"type": [
@@ -41112,13 +41159,33 @@
 						"maxLength": 64,
 						"description": "An existing brand."
 					},
-					"grade": {
+					"facet": {
 						"type": [
-							"string",
+							"object",
 							"null"
 						],
-						"maxLength": 64,
-						"description": "A key of your grades list (Condition grades and unit numbers)."
+						"description": "{ field, value }: grade with a key of your grades list (Condition grades and unit numbers), or the slug of an active product or variant field shoppers filter by (show.filter) with one of its values (at most 100 characters; a number or true/false may be sent as such); null: none.",
+						"required": [
+							"field",
+							"value"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"field": {
+								"type": "string",
+								"pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+								"description": "grade, or a field's slug."
+							},
+							"value": {
+								"type": [
+									"string",
+									"number",
+									"boolean"
+								],
+								"maxLength": 100,
+								"description": "The value as a listing takes it (a number or yes/no as text)."
+							}
+						}
 					},
 					"h1": {
 						"type": "string",

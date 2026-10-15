@@ -132,7 +132,7 @@ const RECORDS = {
 			id: ID.landing,
 			categoryId: ID.clothes,
 			brandId: ID.brand,
-			grade: null,
+			facet: null,
 			h1: 'Maison clothes',
 			title: 'Maison clothes',
 			description: 'Every Maison piece.',

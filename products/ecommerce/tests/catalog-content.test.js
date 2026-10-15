@@ -382,11 +382,20 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 	it('checks landings, fills their address and judges them indexable', () => {
 		expect(checkLanding('x', null).ok).toBe(false);
 		expect(checkLanding({}, null).ok).toBe(false);
-		expect(checkLanding({ grade: 5, indexable: 'x', h1: 'x'.repeat(201), faqs: 'x' }, null)).toMatchObject({ ok: false });
-		const landing = checkLanding({ categoryId: 'cat_1', brandId: '', grade: 'a', intro: 'Line 1\nLine 2' }, null);
+		expect(checkLanding({ facet: 5, indexable: 'x', h1: 'x'.repeat(201), faqs: 'x' }, null)).toMatchObject({ ok: false });
+		const landing = checkLanding(
+			{ categoryId: 'cat_1', brandId: '', facet: { field: 'grade', value: 'a' }, intro: 'Line 1\nLine 2' },
+			null,
+		);
 		expect(landing).toMatchObject({
 			ok: true,
-			value: { categoryId: 'cat_1', brandId: null, grade: 'a', indexable: 'auto', intro: 'Line 1\nLine 2' },
+			value: {
+				categoryId: 'cat_1',
+				brandId: null,
+				facet: { field: 'grade', value: 'a' },
+				indexable: 'auto',
+				intro: 'Line 1\nLine 2',
+			},
 		});
 		const minimum = { minProducts: 3, minVariants: 3 };
 		expect(isIndexable({ indexable: 'auto' }, { products: 3, variants: 3 }, minimum)).toBe(true);
@@ -396,15 +405,17 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 		expect(isIndexable({ indexable: 'yes' }, { products: 0, variants: 0 }, minimum)).toBe(true);
 		expect(isIndexable({ indexable: 'no' }, { products: 9, variants: 9 }, minimum)).toBe(false);
 		expect(
-			landingLink('', { categoryUrl: 'https://s.example/phones', category: 'phones', brand: 'a b', grade: '' }, 's.example'),
+			landingLink('', { categoryUrl: 'https://s.example/phones', category: 'phones', brand: 'a b', facet: null }, 's.example'),
 		).toBe('https://s.example/phones?brand=a%20b');
-		expect(landingLink('/l/{category}/{brand}', { categoryUrl: '', category: 'c', brand: 'b', grade: '' }, 's.example')).toBe(
+		expect(landingLink('/l/{category}/{brand}', { categoryUrl: '', category: 'c', brand: 'b', facet: null }, 's.example')).toBe(
 			'https://s.example/l/c/b',
 		);
-		expect(landingLink('l', { categoryUrl: '', category: '', brand: '', grade: '' }, 's.example')).toBe('https://s.example/l');
-		const all = /** @type {any} */ ([{ categoryId: 'c', brandId: null, grade: null }]);
-		expect(landingFor(all, { categoryId: 'c', brandId: null, grade: null })).toBe(all[0]);
-		expect(landingFor(all, { categoryId: 'c', brandId: 'b', grade: null })).toBeNull();
+		expect(landingLink('l', { categoryUrl: '', category: '', brand: '', facet: null }, 's.example')).toBe(
+			'https://s.example/l',
+		);
+		const all = /** @type {any} */ ([{ categoryId: 'c', brandId: null, facet: null }]);
+		expect(landingFor(all, { categoryId: 'c', brandId: null, facet: null })).toBe(all[0]);
+		expect(landingFor(all, { categoryId: 'c', brandId: 'b', facet: null })).toBeNull();
 	});
 
 	it('builds Atlas Search stages that pin the website', () => {
@@ -481,11 +492,11 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 		expect(checkLandingAiRequest({ fields: [] }).ok).toBe(false);
 		expect(checkLandingAiRequest({ fields: ['h1'], tone: 'x'.repeat(101) }).ok).toBe(false);
 		const prompt = landingPrompt(
-			{ category: 'Phones', brand: null, grade: 'Mint', products: ['A'] },
+			{ category: 'Phones', brand: null, facet: { facet: 'Condition', value: 'Mint' }, products: ['A'] },
 			{ fields: ['h1', 'faqs'], tone: 'warm', language: 'English' },
 		);
 		expect(prompt.prompt).toContain('Category: Phones');
-		expect(prompt.prompt).toContain('Condition grade: Mint');
+		expect(prompt.prompt).toContain('Condition: Mint');
 		expect(prompt.system).toContain('Tone: warm.');
 		expect(readSuggestions('{"faqs":"x"}', ['faqs'])).toBeNull();
 		expect(readSuggestions('no json', ['faqs'])).toBeNull();

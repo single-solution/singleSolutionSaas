@@ -1,8 +1,10 @@
 /**
  * The product grid with search, filters and sort (visitor widget `product_grid`, feature catalog; PLAN 0.8.8 Shopper
  * widgets, 0.8.10 E1, E2, E6, E8). Placed as `<div data-ss-ecommerce="product_grid" data-category="accessories"
- * data-brand="acme,zeta" data-grade="" data-deal="" data-featured="" data-sort="newest" data-query=""
- * data-limit="24"></div>`: the data attributes are where the grid starts; the shopper can change everything.
+ * data-brand="acme,zeta" data-grade="" data-attributes="" data-deal="" data-featured="" data-sort="newest" data-query=""
+ * data-limit="24"></div>`: the data attributes are where the grid starts (`data-attributes`: field values by slug in
+ * query form, for example `color=red,blue&size=m`, as a landing page by a field lists them); the shopper can change
+ * everything.
  *
  * Filters (`./shop-filters.js`) come from the category tree (`GET /v1/shop/categories?include=coming_soon`: coming-soon
  * categories are shown as such and cannot be chosen), the category's brands (`GET /v1/shop/brands?category=`), the
@@ -77,7 +79,11 @@ export const mountProductGrid = async ({ host, config, shop, win }) => {
 		category: data.category ?? '',
 		brands: listOf(data.brand),
 		grades: listOf(data.grade),
-		attributes: new Map(),
+		attributes: new Map(
+			[...new URLSearchParams(data.attributes ?? '')]
+				.map(([slug, values]) => /** @type {[string, string[]]} */ ([slug, listOf(values)]))
+				.filter(([slug, values]) => slug !== '' && values.length > 0),
+		),
 		minPrice: '',
 		maxPrice: '',
 		inStock: false,

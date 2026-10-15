@@ -256,8 +256,13 @@ export const ID_PREFIX = Object.freeze({
  *   active: boolean }} SizeChartRecord
  */
 /**
- * A landing page (E15): a category, brand and grade combination with its own copy.
- * @typedef {{ id: string, categoryId: string | null, brandId: string | null, grade: string | null, h1: string,
+ * A landing page's facet (dynamic model §6): one value of a field shoppers filter by — `grade` (a grade key) or a
+ * product or variant field by its slug — as a listing takes it (`grade=` or `attr.<slug>=`).
+ * @typedef {{ field: string, value: string }} LandingFacet
+ */
+/**
+ * A landing page (E15): a category, brand and facet combination (at least one of them) with its own copy.
+ * @typedef {{ id: string, categoryId: string | null, brandId: string | null, facet: LandingFacet | null, h1: string,
  *   title: string, description: string, intro: string, faqs: import('./catalog-content.js').Faq[],
  *   indexable: 'auto' | 'yes' | 'no' }} LandingRecord
  */

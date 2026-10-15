@@ -1,5 +1,5 @@
 /**
- * Automatic landing pages and SEO copy (PLAN E43): every category and brand (and grade) combination with enough
+ * Automatic landing pages and SEO copy (PLAN E43): every category and brand (and facet) combination with enough
  * products and variants in stock is a landing page without a record (a stored one wins), in the listing reads and the
  * sitemaps, with its copy from the patterns; stored pages set to Automatic need the variants too (SG-10); the defaults
  * keep today's pages. Saving a product or an attribute writes its empty SEO copy with the merchant's AI (marked as AI
@@ -74,20 +74,22 @@ describe('the stock of combinations (E43)', () => {
 			{ _id: { p: 'p1', g: 'b' }, c: ['c2'], b: 'b1', n: 1, min: 300 },
 			{ _id: { p: 'p2', g: null }, c: ['c1'], b: null, n: 1, min: null },
 		];
-		const table = comboStock(rows, (id) => (id === 'c2' ? ['c1'] : []));
-		expect(table.get(comboKey({ categoryId: 'c2', brandId: 'b1', grade: null }))).toEqual({
+		const table = comboStock(rows, (id) => (id === 'c2' ? ['c1'] : []), { field: 'grade' });
+		/** @param {string} value */
+		const grade = (value) => ({ field: 'grade', value });
+		expect(table.get(comboKey({ categoryId: 'c2', brandId: 'b1', facet: null }))).toEqual({
 			products: 1,
 			variants: 3,
 			minPrice: 300,
 			lastmod: null,
 		});
-		expect(table.get(comboKey({ categoryId: 'c1', brandId: null, grade: null }))).toEqual({
+		expect(table.get(comboKey({ categoryId: 'c1', brandId: null, facet: null }))).toEqual({
 			products: 2,
 			variants: 4,
 			minPrice: 300,
 			lastmod: null,
 		});
-		expect(table.get(comboKey({ categoryId: 'c1', brandId: 'b1', grade: 'a' }))).toEqual({
+		expect(table.get(comboKey({ categoryId: 'c1', brandId: 'b1', facet: grade('a') }))).toEqual({
 			products: 1,
 			variants: 2,
 			minPrice: 400,
@@ -100,13 +102,13 @@ describe('the stock of combinations (E43)', () => {
 		const at = [new Date('2026-10-01T00:00:00Z'), new Date('2026-10-03T00:00:00Z')];
 		const dated = rows.map((row, index) => ({ ...row, at: at[index % 2] }));
 		expect(stockOf(dated).lastmod).toEqual(at[1]);
-		expect(comboStock(dated, () => []).get(comboKey({ categoryId: 'c2', brandId: null, grade: null }))?.lastmod).toEqual(at[1]);
-		const pair = { categoryId: 'c', brandId: 'b', grade: null };
-		expect(isAutomatic('off', pair)).toBe(false);
-		expect(isAutomatic('category_brand', pair)).toBe(true);
-		expect(isAutomatic('category_brand', { ...pair, grade: 'a' })).toBe(false);
-		expect(isAutomatic('category_brand_grade', { ...pair, grade: 'a' })).toBe(true);
-		expect(isAutomatic('category_brand', { ...pair, brandId: null })).toBe(false);
+		expect(comboStock(dated, () => []).get(comboKey({ categoryId: 'c2', brandId: null, facet: null }))?.lastmod).toEqual(at[1]);
+		const pair = { categoryId: 'c', brandId: 'b', facet: null };
+		expect(isAutomatic({ auto: 'off' }, pair)).toBe(false);
+		expect(isAutomatic({ auto: 'category_brand' }, pair)).toBe(true);
+		expect(isAutomatic({ auto: 'category_brand' }, { ...pair, facet: grade('a') })).toBe(false);
+		expect(isAutomatic({ auto: 'category_brand_facet', autoFacet: 'grade' }, { ...pair, facet: grade('a') })).toBe(true);
+		expect(isAutomatic({ auto: 'category_brand' }, { ...pair, brandId: null })).toBe(false);
 	});
 });
 
@@ -148,8 +150,9 @@ describe('automatic landing pages (E43)', () => {
 		expect(map).not.toContain(`brand=${ids.beta.slug}`);
 	});
 
-	it('takes the grades with category_brand_grade and the merchant’s thresholds', async () => {
-		await shop.setting('landing_pages', 'auto', 'category_brand_grade');
+	it('takes the grades with category_brand_facet on grade and the merchant’s thresholds', async () => {
+		await shop.setting('landing_pages', 'auto', 'category_brand_facet');
+		await shop.setting('landing_pages', 'autoFacet', 'grade');
 		expect((await listing(`category=${ids.dresses.slug}&brand=${ids.alpha.slug}&grade=a`)).robots).toBe('noindex, follow');
 		await shop.setting('landing_pages', 'autoMinProducts', 1);
 		await shop.setting('landing_pages', 'autoMinInStockVariants', 2);
@@ -310,7 +313,7 @@ describe('SEO copy when saving (E43)', () => {
 		expect(written).toMatchObject({
 			categoryId: ids.dresses.id,
 			brandId: ids.alpha.id,
-			grade: null,
+			facet: null,
 			h1: 'Alpha dresses',
 			title: 'Alpha dresses online',
 			indexable: 'auto',

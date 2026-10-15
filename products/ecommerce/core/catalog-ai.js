@@ -155,8 +155,10 @@ const LANDING_NOTES = Object.freeze({
 });
 
 /**
- * The prompt for a landing page's copy (E15): what it lists (category, brand, grade) and some of its products.
- * @param {{ category: string | null, brand: string | null, grade: string | null, products: string[] }} facts
+ * The prompt for a landing page's copy (E15): what it lists (category, brand, facet: a field's name and value) and
+ * some of its products.
+ * @param {{ category: string | null, brand: string | null, facet: { facet: string, value: string } | null,
+ *   products: string[] }} facts
  * @param {{ fields: LandingField[], tone: string, language: string }} request
  */
 export const landingPrompt = (facts, { fields, tone, language }) => {
@@ -173,7 +175,7 @@ export const landingPrompt = (facts, { fields, tone, language }) => {
 		'Page facts:',
 		facts.category ? `Category: ${facts.category}` : '',
 		facts.brand ? `Brand: ${facts.brand}` : '',
-		facts.grade ? `Condition grade: ${facts.grade}` : '',
+		facts.facet ? `${facts.facet.facet || 'Filter'}: ${facts.facet.value}` : '',
 		facts.products.length > 0 ? `Some products: ${facts.products.slice(0, 20).join(', ')}` : '',
 		'',
 		`Write these fields: ${fields.map((field) => LANDING_NOTES[field]).join('; ')}.`,

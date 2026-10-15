@@ -1,9 +1,12 @@
 /**
- * Landing pages, listing SEO and glossary pages (PLAN 0.8.10 E15). Landing pages (feature `landing_pages`) are a
- * category, brand and grade combination with its own copy; with the setting `auto` (E43) every category and brand
- * (and grade) combination with enough products and variants in stock is an automatic landing page without a record,
- * its copy from the patterns `autoTitle` and `autoDescription` (a stored landing page wins), in the listing reads and
- * the sitemaps (judged on read: one aggregation per read, never stored); for the merchant's server (`/v1/landings…`, server token)
+ * Landing pages, listing SEO and glossary pages (PLAN 0.8.10 E15, dynamic model §6). Landing pages (feature
+ * `landing_pages`) are a category, brand and facet combination (a facet: a grade or one value of a field shoppers
+ * filter by, `attr.<slug>=` in a listing) with its own copy; with the setting `auto` (E43) every category and brand
+ * combination (with `category_brand_facet` also with each value of the field `autoFacet`) with enough products and
+ * variants in stock is an automatic landing page without a record, its copy from the patterns `autoTitle` and
+ * `autoDescription` (a stored landing page wins), in the listing reads and the sitemaps (judged on read: one aggregation
+ * per facet field per read, never stored; the sitemaps list at most `autoMaxPages` of them, the most products in stock
+ * first); for the merchant's server (`/v1/landings…`, server token)
  * and the catalog admin widget (`/v1/admin/landings…`, ticket with `catalog.edit`), with AI copy suggestions (with
  * `ai_copy`). `GET /v1/seo/listing` answers the heading, title, description, introduction, FAQs, canonical address,
  * JSON-LD and robots of any listing the site renders: `index` only for a category (and its pages, unless the `seo`
@@ -20,13 +23,28 @@ import { created, defineRoute, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
-import { SORTS, listOf, readShopQuery, shopFilter, sortDocument, sortOf, topField } from '../core/catalog-query.js';
+import {
+	SORTS,
+	attributeOf,
+	fieldsNamed,
+	listOf,
+	readShopQuery,
+	shopFilter,
+	sortDocument,
+	sortOf,
+	storedValues,
+	topField,
+} from '../core/catalog-query.js';
 import { lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import {
+	GRADE_FACET,
 	NO_STOCK,
 	checkLanding,
 	comboKey,
+	comboOfKey,
+	comboQuery,
 	comboStock,
+	facetValues,
 	isAutomatic,
 	isIndexable,
 	landingFor,
@@ -67,6 +85,10 @@ import { defaultImageOf, newestOf, seoSettingsOf, storeNameOf, trailOf } from '.
 /** @typedef {import('./catalog-media.js').Media} Media */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').LandingRecord} LandingRecord */
+/** @typedef {import('../core/model.js').LandingFacet} LandingFacet */
+/** @typedef {import('../core/model.js').AttributeRecord} AttributeRecord */
+/** @typedef {import('../core/landings.js').Combination} Combination */
+/** @typedef {import('../core/landings.js').FacetPlace} FacetPlace */
 /** @typedef {import('../core/model.js').CategoryRecord} CategoryRecord */
 /** @typedef {import('../core/model.js').BrandRecord} BrandRecord */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
@@ -87,12 +109,14 @@ const MAX_LANDINGS = 2000;
 const MAX_PAGE = 60;
 /** Most combinations of a saved product looked at for an AI-written automatic landing page (E43). */
 const MAX_AUTO_TRIES = 5;
-/** Most rows of the stock of every combination (E43): products in stock, by grade. */
+/** Most rows of the stock of every combination (E43): products in stock, by facet value. */
 const MAX_STOCK_ROWS = 50_000;
 /** A listing's total is exact up to this many products (as the grid counts, E8). */
 const TOTAL_CAP = 10_000;
 /** At most this many landing pages are remembered as indexed (G7.7). */
 const MAX_REMEMBERED = 10_000;
+/** Most facet fields whose stock one read adds up (stored pages' fields and `autoFacet`). */
+const MAX_FACET_FIELDS = 5;
 /** Listing parameters that are not filters (they keep a category or landing page indexable). */
 const NOT_FILTERS = new Set(['category', 'brand', 'grade', 'page', 'limit', 'cursor', 'html']);
 /** Listing parameters that narrow nothing: an empty result with only these is a page, not a 404 (G7.4). */
@@ -126,23 +150,75 @@ export const createLandings = (product, service, media) => {
 	 * @param {Site} s @param {WebsiteData} data
 	 */
 	const namesOf = async (s, data) => {
-		const [categories, brands, gradeList] = await Promise.all([
+		const [categories, brands, gradeList, attributeList, texts] = await Promise.all([
 			categoriesOf(data),
 			brandsOf(data),
 			s.has('grades_serials') ? s.list('grades') : Promise.resolve([]),
+			attributesOf(data),
+			s.texts(),
 		]);
 		const byCategory = new Map(categories.map((c) => [c.id, c]));
+		/** @type {Map<string, AttributeRecord>} */
+		const attributes = new Map(attributeList.map((attribute) => [attribute.id, attribute]));
+		/** @param {string | null} categoryId */
+		const gradesIn = (categoryId) =>
+			/** @type {Map<string, Grade>} */ (gradesFor(gradeList, lineageOf([categoryId], byCategory)));
 		return {
+			attributes,
+			/**
+			 * Where a facet field's values are: the grade, or the fields with its slug shoppers filter by; null for any
+			 * other (a staff-only field never makes a page).
+			 * @param {string} field
+			 * @returns {FacetPlace | null}
+			 */
+			placeOf: (field) => {
+				if (field === GRADE_FACET) return { grade: true };
+				const named = fieldsNamed(attributes, field).filter((attribute) => attribute.slug === field);
+				if (named.length === 0) return null;
+				/** @param {string} on */
+				const ids = (on) => named.filter((attribute) => attribute.on === on).map((attribute) => attribute.id);
+				return { variantIds: ids('variant'), productIds: ids('product') };
+			},
+			/**
+			 * A facet's value as stored (a number field's is a number).
+			 * @param {LandingFacet} facet
+			 */
+			storedOf: (facet) => {
+				if (facet.field === GRADE_FACET) return facet.value;
+				const field = fieldsNamed(attributes, facet.field)[0];
+				return storedValues(field, [facet.value])[0] ?? facet.value;
+			},
+			/**
+			 * A facet's names on a page of a category: its field's (`grid.grade` for grades) and its value's (a grade's or a
+			 * choice's label, yes or no, a number with its unit).
+			 * @param {string | null} categoryId @param {LandingFacet | null} facet
+			 */
+			facetNames: (categoryId, facet) => {
+				if (!facet) return { facet: '', value: '' };
+				if (facet.field === GRADE_FACET)
+					return {
+						facet: String(texts['grid.grade'] ?? ''),
+						value: gradesIn(categoryId).get(facet.value)?.label ?? facet.value,
+					};
+				const field = attributeOf(attributes, facet.field, lineageOf([categoryId], byCategory));
+				if (!field) return { facet: facet.field, value: facet.value };
+				const choice = field.choices.find((option) => option.value === facet.value);
+				const value = choice
+					? choice.label
+					: field.type === 'yes_no'
+						? String(texts[facet.value === 'true' ? 'shop.yes' : 'shop.no'] ?? facet.value)
+						: field.type === 'number' && field.unit
+							? `${facet.value} ${field.unit}`
+							: facet.value;
+				return { facet: field.name, value };
+			},
 			categories,
 			byCategory,
 			byBrand: new Map(brands.map((b) => [b.id, b])),
 			/** every grade key (a category's own entries only where no entry is for every category) */
 			grades: /** @type {Map<string, Grade>} */ (gradesByKey(gradeList)),
-			/**
-			 * The grades as a category (or the nearest one above it) defines them, then the ones for every category (E45).
-			 * @param {string | null} categoryId
-			 */
-			gradesIn: (categoryId) => /** @type {Map<string, Grade>} */ (gradesFor(gradeList, lineageOf([categoryId], byCategory))),
+			/** The grades as a category (or the nearest one above it) defines them, then the ones for every category (E45). */
+			gradesIn,
 			gradeList: /** @type {Grade[]} */ (gradeList),
 		};
 	};
@@ -196,7 +272,7 @@ export const createLandings = (product, service, media) => {
 	 * (`meets`); once indexed, while it has any product shoppers may see, in stock or not, so its place in search results
 	 * does not come and go with stock. Remembers a page newly indexed and forgets one that left the index.
 	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
-	 * @param {{ categoryId: string | null, brandId: string | null, grade: string | null }} combination
+	 * @param {Combination} combination
 	 * @param {boolean} meets @param {Set<string>} memory
 	 */
 	const judged = async (s, data, names, combination, meets, memory) => {
@@ -213,12 +289,12 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * The products of a listing (a category with those below it, a brand, a grade) shoppers may see.
+	 * The products of a listing (a category with those below it, a brand, a facet value) shoppers may see.
 	 * @param {Site} s @param {Awaited<ReturnType<typeof namesOf>>} names
-	 * @param {{ categoryId: string | null, brandId: string | null, grade: string | null }} combination
+	 * @param {Combination} combination
 	 * @param {boolean} inStock
 	 */
-	const filterOf = async (s, names, { categoryId, brandId, grade }, inStock) => ({
+	const filterOf = async (s, names, { categoryId, brandId, facet }, inStock) => ({
 		websiteId: s.websiteId,
 		...shopFilter(
 			{
@@ -228,8 +304,8 @@ export const createLandings = (product, service, media) => {
 				minPrice: null,
 				maxPrice: null,
 				inStock,
-				attributes: [],
-				grades: grade ? [grade] : [],
+				attributes: facet && facet.field !== GRADE_FACET ? [{ id: facet.field, values: [facet.value] }] : [],
+				grades: facet?.field === GRADE_FACET ? [facet.value] : [],
 				sort: 'newest',
 				featured: false,
 				deal: null,
@@ -239,7 +315,7 @@ export const createLandings = (product, service, media) => {
 			{
 				categoryIds: categoryId ? withDescendants(categoryId, names.categories) : null,
 				brandIds: brandId ? [brandId] : null,
-				attributes: new Map(),
+				attributes: names.attributes,
 				hidden: await hiddenFor(s),
 				// the brands hidden in the category or one above it (parity P3-12)
 				brandsOut: categoryId
@@ -258,7 +334,7 @@ export const createLandings = (product, service, media) => {
 	/**
 	 * A landing page's address on the merchant's website.
 	 * @param {Site} s @param {Awaited<ReturnType<typeof namesOf>>} names
-	 * @param {{ categoryId: string | null, brandId: string | null, grade: string | null }} landing
+	 * @param {Combination} landing
 	 */
 	const urlOf = async (s, names, landing) => {
 		const category = landing.categoryId ? names.byCategory.get(landing.categoryId) : undefined;
@@ -269,62 +345,78 @@ export const createLandings = (product, service, media) => {
 				categoryUrl: category ? await media.categoryUrl(s, category) : '',
 				category: category?.slug ?? '',
 				brand: landing.brandId ? (names.byBrand.get(landing.brandId)?.slug ?? '') : '',
-				grade: landing.grade ?? '',
+				facet: landing.facet,
 			},
 			s.domain,
 		);
 	};
 
 	/**
-	 * What a combination has in stock (shoppers may see): its products, their sellable variants (of the grade) and the
-	 * lowest price, in one aggregation (E43, SG-10).
+	 * What a combination has in stock (shoppers may see): its products, their sellable variants (of the facet value)
+	 * and the lowest price, in one aggregation (E43, SG-10).
 	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
-	 * @param {{ categoryId: string | null, brandId: string | null, grade: string | null }} combination
+	 * @param {Combination} combination
 	 */
-	const stockOfCombo = async (s, data, names, combination) =>
-		stockOf(
+	const stockOfCombo = async (s, data, names, combination) => {
+		const place = combination.facet ? names.placeOf(combination.facet.field) : null;
+		const only = combination.facet && place ? { place, stored: names.storedOf(combination.facet) } : null;
+		return stockOf(
 			await data
 				.collection(COLLECTIONS.products)
-				.aggregate([{ $match: await filterOf(s, names, combination, true) }, ...stockStages(combination.grade)], {
+				.aggregate([{ $match: await filterOf(s, names, combination, true) }, ...stockStages({ only })], {
 					maxTimeMS: 5000,
 				})
 				.toArray(),
 		);
+	};
 
 	/**
-	 * The stock of every combination at once (E43): one aggregation over the products in stock.
+	 * The stock of every combination at once (E43): one aggregation over the products in stock per facet field (none:
+	 * one, for the categories and brands), at most a few fields.
 	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
+	 * @param {ReadonlyArray<string>} fields the facet fields the combinations name
 	 */
-	const stockTable = async (s, data, names) =>
-		comboStock(
-			await data
+	const stockTable = async (s, data, names, fields) => {
+		const places = [...new Set(fields)]
+			.map((field) => ({ field, place: names.placeOf(field) }))
+			.filter((entry) => entry.place !== null)
+			.slice(0, MAX_FACET_FIELDS);
+		const match = { $match: await filterOf(s, names, { categoryId: null, brandId: null, facet: null }, true) };
+		/** @type {Map<string, import('../core/landings.js').ComboStock>} */
+		const table = new Map();
+		for (const { field, place } of places.length > 0 ? places : [{ field: null, place: null }]) {
+			const rows = await data
 				.collection(COLLECTIONS.products)
-				.aggregate(
-					[
-						{ $match: await filterOf(s, names, { categoryId: null, brandId: null, grade: null }, true) },
-						...stockStages(),
-						{ $limit: MAX_STOCK_ROWS },
-					],
-					{ maxTimeMS: 10_000 },
-				)
-				.toArray(),
-			(id) => names.byCategory.get(id)?.path ?? [],
-			(id) => names.byBrand.get(id)?.hiddenIn ?? [],
-		);
+				.aggregate([match, ...stockStages({ group: place }), { $limit: MAX_STOCK_ROWS }], { maxTimeMS: 10_000 })
+				.toArray();
+			const stocks = comboStock(rows, (id) => names.byCategory.get(id)?.path ?? [], {
+				field,
+				hiddenIn: (id) => names.byBrand.get(id)?.hiddenIn ?? [],
+			});
+			for (const [key, stock] of stocks) if (!table.has(key)) table.set(key, stock);
+		}
+		return table;
+	};
 
 	/**
 	 * The `landing_pages` settings that decide indexing (SG-10, E43): stored pages set to Automatic need
 	 * `landingMinProducts` products in stock, automatic ones `autoMinProducts`; while `auto` is on, both also need
-	 * `autoMinInStockVariants` variants in stock (off, stored pages are judged as before).
+	 * `autoMinInStockVariants` variants in stock (off, stored pages are judged as before); which combinations are
+	 * automatic (`auto`, `autoFacet`) and how many the sitemaps list (`autoMaxPages`).
 	 * @param {Site} s
 	 */
 	const rulesOf = async (s) => {
 		const settings = await s.values('landing_pages');
 		const mode = String(settings.auto ?? 'off');
+		const autoFacet = mode === 'category_brand_facet' ? String(settings.autoFacet ?? '') : '';
 		const minVariants = Number(settings.autoMinInStockVariants ?? 3);
 		return {
 			settings,
 			mode,
+			autoFacet,
+			maxPages: Number(settings.autoMaxPages ?? 2000),
+			/** @param {Combination} combination */
+			automatic: (combination) => isAutomatic({ auto: mode, autoFacet }, combination),
 			stored: { minProducts: Number(settings.landingMinProducts ?? 3), minVariants: mode === 'off' ? 0 : minVariants },
 			auto: { minProducts: Number(settings.autoMinProducts ?? 2), minVariants },
 		};
@@ -339,11 +431,9 @@ export const createLandings = (product, service, media) => {
 	 */
 	const viewOf = async (s, data, names, landing, known, memory) => {
 		const stock = known ?? (await stockOfCombo(s, data, names, landing));
-		const { stored, auto, mode } = await rulesOf(s);
+		const { stored, auto, automatic } = await rulesOf(s);
 		// a page stored for a combination that is automatic is never indexed less than without it (E43)
-		const minimum = isAutomatic(mode, landing)
-			? { ...stored, minProducts: Math.min(stored.minProducts, auto.minProducts) }
-			: stored;
+		const minimum = automatic(landing) ? { ...stored, minProducts: Math.min(stored.minProducts, auto.minProducts) } : stored;
 		const meets = isIndexable(landing, stock, minimum);
 		return {
 			...landing,
@@ -359,9 +449,9 @@ export const createLandings = (product, service, media) => {
 
 	/**
 	 * The copy of an automatic landing page (E43): the `autoTitle` and `autoDescription` patterns with the names of its
-	 * category, brand and grade, what is in stock and its lowest price.
+	 * category, brand, facet field and value, what is in stock and its lowest price.
 	 * @param {Site} s
-	 * @param {{ category: string, brand: string, grade: string, storeName: string }} names
+	 * @param {{ category: string, brand: string, facet: string, value: string, storeName: string }} names
 	 * @param {import('../core/landings.js').ComboStock} stock
 	 */
 	const autoCopyOf = async (s, names, stock) => {
@@ -374,8 +464,8 @@ export const createLandings = (product, service, media) => {
 		};
 		return {
 			name:
-				fillTemplate(String(settings.autoTitle ?? '{category} {brand} {grade}'), values) ||
-				[names.category, names.brand, names.grade].filter(Boolean).join(' '),
+				fillTemplate(String(settings.autoTitle ?? '{category} {brand} {value}'), values) ||
+				[names.category, names.brand, names.value].filter(Boolean).join(' '),
 			description: patternText(settings.autoDescription, values),
 		};
 	};
@@ -395,8 +485,10 @@ export const createLandings = (product, service, media) => {
 			throw refuse([{ path: '/categoryId', message: 'Pick an existing category.' }]);
 		if (value.brandId && !names.byBrand.has(value.brandId))
 			throw refuse([{ path: '/brandId', message: 'Pick an existing brand.' }]);
-		if (value.grade && !names.grades.has(value.grade))
-			throw refuse([{ path: '/grade', message: 'Pick a grade of your grades list.' }]);
+		if (value.facet?.field === GRADE_FACET && !names.grades.has(value.facet.value))
+			throw refuse([{ path: '/facet/value', message: 'Pick a grade of your grades list.' }]);
+		if (value.facet && value.facet.field !== GRADE_FACET && !names.placeOf(value.facet.field))
+			throw refuse([{ path: '/facet/field', message: 'Pick grade, or the slug of a field shoppers filter by.' }]);
 	};
 
 	/** @param {any} ctx */
@@ -418,10 +510,10 @@ export const createLandings = (product, service, media) => {
 
 	/** @param {unknown} error */
 	const clash = (error) =>
-		isDuplicate(error) ? problem('conflict', 'A landing page for this category, brand and grade already exists.') : error;
+		isDuplicate(error) ? problem('conflict', 'A landing page for this category, brand and facet already exists.') : error;
 
 	const landings = {
-		/** GET ?category=&brand=&grade=&q=. @param {any} ctx */
+		/** GET ?category=&brand=&facet=&value=&q=. @param {any} ctx */
 		list: async (ctx) => {
 			const { s, data } = await open(ctx);
 			const names = await namesOf(s, data);
@@ -429,7 +521,8 @@ export const createLandings = (product, service, media) => {
 			const filter = { websiteId: data.websiteId };
 			if (ctx.query.category) filter.categoryId = String(ctx.query.category);
 			if (ctx.query.brand) filter.brandId = String(ctx.query.brand);
-			if (ctx.query.grade) filter.grade = String(ctx.query.grade);
+			if (ctx.query.facet) filter['facet.field'] = String(ctx.query.facet);
+			if (ctx.query.value) filter['facet.value'] = String(ctx.query.value);
 			const rows = /** @type {LandingRecord[]} */ (
 				await data.collection(COLLECTIONS.landings).find(filter, NO_ID).sort({ id: 1 }).limit(MAX_LANDINGS).toArray()
 			);
@@ -448,8 +541,16 @@ export const createLandings = (product, service, media) => {
 							.some((text) => String(text).toLowerCase().includes(q)),
 					)
 				: rows;
-			// several pages: the stock of every combination in one aggregation (E43)
-			const table = shown.length > 1 ? await stockTable(s, data, names) : null;
+			// several pages: the stock of every combination in one aggregation per facet field (E43)
+			const table =
+				shown.length > 1
+					? await stockTable(
+							s,
+							data,
+							names,
+							shown.flatMap((row) => (row.facet ? [row.facet.field] : [])),
+						)
+					: null;
 			const memory = await memoryOf(data, shown.map(comboKey));
 			return {
 				items: await Promise.all(
@@ -533,7 +634,7 @@ export const createLandings = (product, service, media) => {
 				{
 					category: landing.categoryId ? (names.byCategory.get(landing.categoryId)?.name ?? null) : null,
 					brand: landing.brandId ? (names.byBrand.get(landing.brandId)?.name ?? null) : null,
-					grade: landing.grade ? (names.gradesIn(landing.categoryId).get(landing.grade)?.label ?? landing.grade) : null,
+					facet: landing.facet ? names.facetNames(landing.categoryId, landing.facet) : null,
 					products: sample.map((row) => String(row.name)),
 				},
 				{
@@ -597,7 +698,8 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * GET /v1/seo/listing?category=&brand=&grade=&page=&…: what a listing page puts in its head (E15).
+	 * GET /v1/seo/listing?category=&brand=&grade=&attr.<slug>=&page=&…: what a listing page puts in its head (E15): a
+	 * category, one brand and one facet (one grade, or one value of a field shoppers filter by) is a landing page.
 	 * @param {any} ctx
 	 */
 	const listing = async (ctx) => {
@@ -619,12 +721,24 @@ export const createLandings = (product, service, media) => {
 			brandRefs.length === 1
 				? ([...names.byBrand.values()].find((b) => b.id === brandRefs[0] || b.slug === brandRefs[0]) ?? null)
 				: null;
-		// a grade as the category defines it, then the one for every category (E45)
-		const grade =
-			gradeKeys.length === 1 ? (names.gradesIn(category?.id ?? null).get(/** @type {string} */ (gradeKeys[0])) ?? null) : null;
+		// the facet: one grade as the category defines it, then the one for every category (E45), or one value of a field
+		// shoppers filter by, named by its slug
+		const fieldKeys = Object.keys(ctx.query).filter((key) => key.startsWith('attr.') && ctx.query[key] !== '');
+		/** @type {LandingFacet | null} */
+		let facet = null;
+		if (gradeKeys.length === 1 && fieldKeys.length === 0) {
+			const grade = names.gradesIn(category?.id ?? null).get(/** @type {string} */ (gradeKeys[0]));
+			if (grade) facet = { field: GRADE_FACET, value: grade.key };
+		} else if (gradeKeys.length === 0 && fieldKeys.length === 1) {
+			const slug = String(fieldKeys[0]).slice(5);
+			const values = listOf(ctx.query[String(fieldKeys[0])]);
+			if (values.length === 1 && !names.attributes.has(slug) && names.placeOf(slug))
+				facet = { field: slug, value: /** @type {string} */ (values[0]) };
+		}
+		const facetKey = facet && facet.field !== GRADE_FACET ? `attr.${facet.field}` : null;
 		const page = /^\d{1,3}$/.test(String(ctx.query.page ?? '')) ? Math.max(1, Number(ctx.query.page)) : 1;
-		const filters = Object.keys(ctx.query).filter((key) => !NOT_FILTERS.has(key) && ctx.query[key] !== '');
-		const named = brandRefs.length === (brand ? 1 : 0) && gradeKeys.length === (grade ? 1 : 0);
+		const filters = Object.keys(ctx.query).filter((key) => !NOT_FILTERS.has(key) && key !== facetKey && ctx.query[key] !== '');
+		const named = brandRefs.length === (brand ? 1 : 0) && gradeKeys.length + fieldKeys.length === (facet ? 1 : 0);
 		const exact = filters.length === 0 && named && (brand === null || brand.status !== 'hidden');
 		// the grid's order: newest first, or the sort asked for (a sorted list is not indexed, but its items are known)
 		const sortKey = String(ctx.query.sort ?? '');
@@ -632,14 +746,16 @@ export const createLandings = (product, service, media) => {
 			? sortOf(/** @type {keyof typeof SORTS} */ (sortKey), (await s.values('catalog')).topBasis)
 			: null;
 		const itemsKnown = named && filters.every((key) => key === 'sort' && sorted !== null);
-		const combination = { categoryId: category?.id ?? null, brandId: brand?.id ?? null, grade: grade?.key ?? null };
+		/** @type {Combination} */
+		const combination = { categoryId: category?.id ?? null, brandId: brand?.id ?? null, facet };
+		const facetNames = names.facetNames(combination.categoryId, facet);
 		const landing =
-			exact && s.has('landing_pages') && (brand || grade)
+			exact && s.has('landing_pages') && (brand || facet)
 				? landingFor(
 						/** @type {LandingRecord[]} */ (
 							await data
 								.collection(COLLECTIONS.landings)
-								.find({ websiteId: data.websiteId, ...combination }, NO_ID)
+								.find({ websiteId: data.websiteId, ...comboQuery(combination) }, NO_ID)
 								.limit(1)
 								.toArray()
 						),
@@ -654,7 +770,7 @@ export const createLandings = (product, service, media) => {
 		const rules = await rulesOf(s);
 		const shown = category === null || !hidden.categoryIds.includes(category.id);
 		const autoStock =
-			!landing && exact && shown && s.has('landing_pages') && isAutomatic(rules.mode, combination)
+			!landing && exact && shown && s.has('landing_pages') && rules.automatic(combination)
 				? await stockOfCombo(s, data, names, combination)
 				: null;
 		const automatic =
@@ -665,7 +781,7 @@ export const createLandings = (product, service, media) => {
 						stock: autoStock,
 						copy: await autoCopyOf(
 							s,
-							{ category: category?.name ?? '', brand: brand?.name ?? '', grade: grade?.label ?? '', storeName },
+							{ category: category?.name ?? '', brand: brand?.name ?? '', ...facetNames, storeName },
 							autoStock,
 						),
 					}
@@ -689,7 +805,7 @@ export const createLandings = (product, service, media) => {
 			!hidden.categoryIds.includes(category.id) &&
 			!category.seo.noindex &&
 			brand === null &&
-			grade === null &&
+			facet === null &&
 			exact &&
 			// an empty category without text of its own is a thin page (G7.1)
 			(total > 0 || hasOwnText(category) || settings.emptyCategories === 'index');
@@ -717,14 +833,14 @@ export const createLandings = (product, service, media) => {
 		const h1 =
 			landing?.h1 ||
 			automatic?.copy.name ||
-			[category?.name, brand?.name, grade?.label].filter(Boolean).join(' ') ||
+			[category?.name, brand?.name, facetNames.value].filter(Boolean).join(' ') ||
 			business.name;
 		// a category's own page takes the merchant's category patterns (SG-5, SG-21)
-		const own = category && !brand && !grade && !landing ? category : null;
+		const own = category && !brand && !facet && !landing ? category : null;
 		const parent = own ? names.byCategory.get(own.path.at(-1) ?? '') : undefined;
 		const patternNames = { name: own?.name ?? '', category: parent?.name ?? '', storeName };
 		// a brand's own page: the listing by the brand alone
-		const brandPage = brand && !category && !grade && !landing ? brand : null;
+		const brandPage = brand && !category && !facet && !landing ? brand : null;
 		// own titles: the landing page's, else the category's or the brand's on its own page (with its titleMode, G6)
 		const titled = own ?? brandPage;
 		const title = pageTitle(String(settings.titleTemplate), {
@@ -1075,12 +1191,12 @@ export const createLandings = (product, service, media) => {
 				.limit(MAX_LANDINGS)
 				.toArray()
 		);
-		// the stock of every combination, read once for the stored and the automatic pages (E43)
-		const [table, rules, hidden, memory] = await Promise.all([
-			stockTable(s, data, names),
-			rulesOf(s),
-			hiddenFor(s),
-			memoryOf(data),
+		const [rules, hidden, memory] = await Promise.all([rulesOf(s), hiddenFor(s), memoryOf(data)]);
+		// the stock of every combination, read once for the stored and the automatic pages (E43): one aggregation per
+		// facet field they name
+		const table = await stockTable(s, data, names, [
+			...rows.flatMap((row) => (row.facet ? [row.facet.field] : [])),
+			...(rules.autoFacet ? [rules.autoFacet] : []),
 		]);
 		/** @param {Date | null | undefined} a @param {Date | null} b */
 		const newest = (a, b) => (a && (!b || a > b) ? a : b);
@@ -1100,20 +1216,35 @@ export const createLandings = (product, service, media) => {
 			const stored = new Set(rows.map(comboKey));
 			// the combinations with stock, and those indexed before that have none in stock now
 			const keys = new Set([...table.keys(), ...[...memory].filter((key) => !table.has(key))]);
-			/** @type {string[]} */
-			const fresh = [];
+			/** @type {Array<{ key: string, combination: Combination, stock: import('../core/landings.js').ComboStock, meets: boolean }>} */
+			const candidates = [];
 			for (const key of keys) {
 				if (stored.has(key)) continue;
-				const [categoryId = '', brandId = '', grade = ''] = key.split('|');
-				const combination = { categoryId: categoryId || null, brandId: brandId || null, grade: grade || null };
-				if (!isAutomatic(rules.mode, combination)) continue;
+				const combination = comboOfKey(key);
+				const categoryId = combination.categoryId ?? '';
+				if (!rules.automatic(combination)) continue;
 				if (hidden.unlisted.has(categoryId) || hidden.categoryIds.includes(categoryId)) continue;
 				const stock = table.get(key) ?? NO_STOCK;
 				const meets = isIndexable({ indexable: 'auto' }, stock, rules.auto);
-				if (meets && !memory.has(key)) fresh.push(key);
+				if (meets || memory.has(key)) candidates.push({ key, combination, stock, meets });
+			}
+			// at most autoMaxPages, the most products (then variants) in stock first, so the read stays bounded
+			candidates.sort(
+				(a, b) =>
+					b.stock.products - a.stock.products ||
+					b.stock.variants - a.stock.variants ||
+					(a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
+			);
+			/** @type {string[]} */
+			const fresh = [];
+			let listed = 0;
+			for (const { key, combination, stock, meets } of candidates) {
+				if (listed >= rules.maxPages) break;
 				// below the numbers: kept while it still has a product (else forgotten)
-				if (meets || (memory.has(key) && (await judged(s, data, names, combination, false, memory))))
-					out.push({ loc: await urlOf(s, names, combination), lastmod: stock.lastmod });
+				if (!meets && !(await judged(s, data, names, combination, false, memory))) continue;
+				if (meets && !memory.has(key)) fresh.push(key);
+				out.push({ loc: await urlOf(s, names, combination), lastmod: stock.lastmod });
+				listed += 1;
 			}
 			// the pages indexed for the first time, remembered at once
 			await remember(data, memory, fresh, true);
@@ -1124,7 +1255,8 @@ export const createLandings = (product, service, media) => {
 
 	/**
 	 * With `auto` on and `autoCopy` at `ai` (E43): when staff save a product, write the AI copy of one of its automatic
-	 * landing pages that has no record yet (its categories with its brand, and with `category_brand_grade` its grades),
+	 * landing pages that has no record yet (its categories with its brand, and with `category_brand_facet` its values of
+	 * the field `autoFacet`),
 	 * kept as a landing page set to Automatic that staff can edit. One per save, after at most a few stock reads; nothing
 	 * without AI copy on and the merchant's own AI key, or when the provider gives nothing usable (the formula stays).
 	 * @param {Site} s @param {ProductRecord} item
@@ -1137,13 +1269,28 @@ export const createLandings = (product, service, media) => {
 		const connection = await product.connections.value(s.websiteId, 'ai');
 		if (!connection) return null;
 		const data = await s.data();
-		const grades =
-			rules.mode === 'category_brand_grade'
-				? [...new Set(item.variants.filter((v) => v.active && v.grade).map((v) => /** @type {string} */ (v.grade)))]
-				: [];
+		const names = await namesOf(s, data);
+		const place = rules.autoFacet ? names.placeOf(rules.autoFacet) : null;
+		const active = item.variants.filter((v) => v.active);
+		/** the product's values of the field `autoFacet` */
+		const values = !place
+			? []
+			: 'grade' in place
+				? facetValues(active.map((v) => v.grade))
+				: facetValues(
+						[
+							...active.flatMap((v) => place.variantIds.map((id) => v.attributes?.[id])),
+							...place.productIds.map((id) => item.specs?.[id]),
+						].flat(),
+					);
+		/** @type {Array<Combination & { categoryId: string, brandId: string }>} */
 		const combinations = item.categoryIds
 			.flatMap((categoryId) =>
-				[null, ...grades].map((grade) => ({ categoryId, brandId: /** @type {string} */ (item.brandId), grade })),
+				[null, ...values.map((value) => ({ field: rules.autoFacet, value }))].map((facet) => ({
+					categoryId,
+					brandId: /** @type {string} */ (item.brandId),
+					facet,
+				})),
 			)
 			.slice(0, MAX_AUTO_TRIES);
 		const stored = new Set(
@@ -1151,14 +1298,13 @@ export const createLandings = (product, service, media) => {
 				await data
 					.collection(COLLECTIONS.landings)
 					.find(
-						{ websiteId: data.websiteId, $or: combinations },
-						{ projection: { _id: 0, categoryId: 1, brandId: 1, grade: 1 } },
+						{ websiteId: data.websiteId, $or: combinations.map(comboQuery) },
+						{ projection: { _id: 0, categoryId: 1, brandId: 1, facet: 1 } },
 					)
 					.toArray()
-			).map((row) => comboKey(/** @type {any} */ (row))),
+			).map((row) => comboKey({ categoryId: row.categoryId ?? null, brandId: row.brandId ?? null, facet: row.facet ?? null })),
 		);
 		const hidden = await hiddenFor(s);
-		const names = await namesOf(s, data);
 		for (const combination of combinations) {
 			if (stored.has(comboKey(combination)) || hidden.categoryIds.includes(combination.categoryId)) continue;
 			if (!isIndexable({ indexable: 'auto' }, await stockOfCombo(s, data, names, combination), rules.auto)) continue;
@@ -1169,9 +1315,7 @@ export const createLandings = (product, service, media) => {
 				{
 					category: names.byCategory.get(combination.categoryId)?.name ?? null,
 					brand: names.byBrand.get(combination.brandId)?.name ?? null,
-					grade: combination.grade
-						? (names.gradesIn(combination.categoryId).get(combination.grade)?.label ?? combination.grade)
-						: null,
+					facet: combination.facet ? names.facetNames(combination.categoryId, combination.facet) : null,
 					products: [item.name],
 				},
 				{

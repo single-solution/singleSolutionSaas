@@ -159,7 +159,7 @@ describe('catalog admin: landing pages', () => {
 			id: 'lnd_1',
 			categoryId: 'cat_b',
 			brandId: 'brd_1',
-			grade: 'a',
+			facet: { field: 'grade', value: 'a' },
 			h1: 'Acme phones, grade A',
 			title: 'Buy Acme phones',
 			description: 'Graded phones',
@@ -174,7 +174,7 @@ describe('catalog admin: landing pages', () => {
 			id: 'lnd_2',
 			categoryId: null,
 			brandId: 'brd_2',
-			grade: null,
+			facet: null,
 			h1: '',
 			title: '',
 			description: '',
@@ -219,14 +219,14 @@ describe('catalog admin: landing pages', () => {
 		// filters go to the server
 		await change(fieldIn(panel, 'Category'), 'cat_b');
 		await change(fieldIn(panel, 'Brand'), 'brd_1');
-		await change(fieldIn(panel, 'Grade'), 'a');
+		await change(fieldIn(panel, 'Facet (a field shoppers filter by)'), 'grade');
 		type(fieldIn(panel, 'Search'), 'acme');
 		await submit(fieldIn(panel, 'Search'));
 		expect(Object.fromEntries(server.last('GET /v1/admin/landings')?.url.searchParams ?? [])).toEqual({
 			q: 'acme',
 			category: 'cat_b',
 			brand: 'brd_1',
-			grade: 'a',
+			facet: 'grade',
 		});
 		await click(buttonIn(detailOf(panel), 'Edit'));
 		const dialog = dialogOf(root);
@@ -241,7 +241,7 @@ describe('catalog admin: landing pages', () => {
 		expect(server.last('PATCH /v1/admin/landings/lnd_1')?.body).toEqual({
 			categoryId: 'cat_b',
 			brandId: 'brd_1',
-			grade: 'a',
+			facet: { field: 'grade', value: 'a' },
 			h1: 'Acme phones',
 			title: 'Buy Acme phones',
 			description: 'Graded phones',
@@ -255,12 +255,26 @@ describe('catalog admin: landing pages', () => {
 		await click(buttonIn(panel, 'New landing page'));
 		const fresh = dialogOf(root);
 		await submitDialog(root);
-		expect(statuses(fresh)).toContain('Pick a category, a brand or a grade.');
+		expect(statuses(fresh)).toContain('Pick a category, a brand or a facet.');
+		// a field shoppers filter by, offered with its values
+		await change(fieldIn(fresh, 'Facet (a field shoppers filter by)'), 'storage');
+		expect([...fresh.querySelectorAll('datalist#ss-landing-values option')].map((node) => node.getAttribute('value'))).toEqual([
+			'64',
+			'128',
+		]);
+		await submitDialog(root);
+		expect(statuses(fresh)).toContain('Give the facet a value.');
+		type(fieldIn(fresh, 'Facet value'), '128');
 		await change(fieldIn(fresh, 'Brand'), 'brd_2');
 		await submitDialog(root);
 		expect(statuses(fresh)).toContain(TEXTS['problem.conflict']);
 		await submitDialog(root);
-		expect(posts[1]).toMatchObject({ categoryId: null, brandId: 'brd_2', grade: null, indexable: 'auto' });
+		expect(posts[1]).toMatchObject({
+			categoryId: null,
+			brandId: 'brd_2',
+			facet: { field: 'storage', value: '128' },
+			indexable: 'auto',
+		});
 		expect(hasDialog(root)).toBe(false);
 	});
 
@@ -308,15 +322,19 @@ describe('catalog admin: landing pages', () => {
 		const plain = await start(['catalog', 'landing_pages'], { 'GET /v1/admin/landings': () => problem(403, 'forbidden') }, {});
 		const denied = await openTab(plain.root, 'landings');
 		expect(statuses(denied)).toContain('You are not allowed to do this.');
-		expect(() => fieldIn(denied, 'Grade')).toThrow();
+		// no grades: grade is not a facet to pick
+		expect(
+			[...fieldIn(denied, 'Facet (a field shoppers filter by)').querySelectorAll('option')].map((o) => o.value),
+		).not.toContain('grade');
 		resetPage();
 		const empty = await start(['catalog', 'landing_pages'], {
-			'GET /v1/admin/landings': () => answer(200, { items: [{ ...LANDINGS[1], brandId: null, grade: 'x' }] }),
+			'GET /v1/admin/landings': () =>
+				answer(200, { items: [{ ...LANDINGS[1], brandId: null, facet: { field: 'storage', value: '64' } }] }),
 		});
 		const one = await openTab(empty.root, 'landings');
-		expect(rowsOf(one)).toEqual(['x']);
+		expect(rowsOf(one)).toEqual(['Storage: 64 GB']);
 		await menu(detailOf(one), 'Delete');
-		expect(textOf(dialogOf(empty.root))).toContain('Delete x?');
+		expect(textOf(dialogOf(empty.root))).toContain('Delete Storage: 64 GB?');
 		empty.server.routes['GET /v1/admin/landings'] = () => answer(200, { items: [] });
 		/** @type {HTMLElement} */ (
 			[...dialogOf(empty.root).querySelectorAll('button')].find((node) => node.textContent === 'Cancel')

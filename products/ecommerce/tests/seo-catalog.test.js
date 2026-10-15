@@ -229,7 +229,7 @@ describe('E15 landing pages, listing heads and glossary pages', () => {
 		expect((await shop.api('POST', '/v1/landings', { h1: 'Nothing' })).status).toBe(422);
 		expect((await shop.api('POST', '/v1/landings', { categoryId: 'cat_none' })).status).toBe(422);
 		expect((await shop.api('POST', '/v1/landings', { brandId: 'brd_none' })).status).toBe(422);
-		expect((await shop.api('POST', '/v1/landings', { grade: 'zz' })).status).toBe(422);
+		expect((await shop.api('POST', '/v1/landings', { facet: { field: 'grade', value: 'zz' } })).status).toBe(422);
 		const landing = await api('POST', '/v1/landings', {
 			categoryId: ids.phones.id,
 			brandId: ids.acme.id,
@@ -248,10 +248,15 @@ describe('E15 landing pages, listing heads and glossary pages', () => {
 		expect((await shop.api('POST', '/v1/landings', { categoryId: ids.phones.id, brandId: ids.acme.id })).status).toBe(409);
 		await shop.setting('landing_pages', 'landingMinProducts', 1);
 		expect((await api('GET', `/v1/landings/${landing.id}`)).indexed).toBe(true);
-		const graded = await api('POST', '/v1/landings', { grade: 'mint', indexable: 'yes', h1: 'Mint phones' });
+		const graded = await api('POST', '/v1/landings', {
+			facet: { field: 'grade', value: 'mint' },
+			indexable: 'yes',
+			h1: 'Mint phones',
+		});
 		expect(graded.url).toBe(`${ORIGIN}/?grade=mint`);
 		expect((await api('GET', `/v1/landings?brand=${ids.acme.id}`)).items).toHaveLength(1);
 		expect((await api('GET', '/v1/landings?q=mint')).items).toHaveLength(1);
+		expect((await api('GET', '/v1/landings?facet=grade&value=mint')).items).toHaveLength(1);
 		expect((await api('PATCH', `/v1/landings/${graded.id}`, { indexable: 'no' })).indexed).toBe(false);
 		expect((await shop.api('PATCH', `/v1/landings/${graded.id}`, { indexable: 'maybe' })).status).toBe(422);
 		expect((await shop.api('DELETE', `/v1/categories/${ids.phones.id}`)).status).toBe(409);

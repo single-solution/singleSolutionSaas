@@ -40,7 +40,7 @@ describe('landing pages', () => {
 		expect(created.json).toMatchObject({
 			categoryId: ids.phones.id,
 			brandId: null,
-			grade: null,
+			facet: null,
 			h1: 'Phones',
 			faqs: [],
 			indexable: 'auto',

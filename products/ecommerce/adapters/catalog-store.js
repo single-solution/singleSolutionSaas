@@ -79,7 +79,7 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.landings, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{
 		collection: COLLECTIONS.landings,
-		keys: { websiteId: 1, categoryId: 1, brandId: 1, grade: 1 },
+		keys: { websiteId: 1, categoryId: 1, brandId: 1, 'facet.field': 1, 'facet.value': 1 },
 		name: 'by_combination',
 		unique: true,
 	},
