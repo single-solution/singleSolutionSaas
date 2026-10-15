@@ -440,6 +440,20 @@ describe('shared pieces', () => {
 		answer = ok({ resealed: 0, current: 4, unreadable: 0, failedWebsites: ['w1', 'w2'] });
 		await act(async () => button(TEXTS.reseal.button).click());
 		expect(container.textContent).toContain('2 websites could not be reached');
+		// values no key opens: never "can be removed"; what to enter again, part by part
+		answer = ok({
+			resealed: 0,
+			current: 3,
+			unreadable: 3,
+			failedWebsites: [],
+			unreadableIn: { connections: 2, keys: 1 },
+		});
+		await act(async () => button(TEXTS.reseal.button).click());
+		expect(container.textContent).not.toContain(TEXTS.reseal.finished);
+		expect(container.textContent).toContain('Keep ENCRYPTION_KEY_PREVIOUS');
+		expect(container.textContent).toContain('2 secrets in Connections (type them again on each website)');
+		expect(container.textContent).toContain('1 signing keys (press Reconnect for this product in the Portal)');
+		expect(container.textContent).toContain('Remove ENCRYPTION_KEY_PREVIOUS only when "could not be opened" is 0.');
 		answer = { status: 500, body: { status: 500, code: 'product_rule', title: 'Broken' } };
 		await act(async () => button(TEXTS.reseal.button).click());
 		expect(container.textContent).toContain('Broken');

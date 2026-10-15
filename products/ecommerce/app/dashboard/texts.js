@@ -757,7 +757,14 @@ export const TEXTS = Object.freeze({
 		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
 		button: 'Re-seal stored secrets',
 		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
+		finished: 'Every stored secret now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
 		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
+		unreadable:
+			'Keep ENCRYPTION_KEY_PREVIOUS and check that it is the old key. Then enter these again and press Re-seal again: {parts}. Remove ENCRYPTION_KEY_PREVIOUS only when "could not be opened" is 0.',
+		parts: Object.freeze({
+			connections: '{count} secrets in Connections (type them again on each website)',
+			keys: '{count} signing keys (press Reconnect for this product in the Portal)',
+			product: '{count} of the shop’s own stored secrets (set them up again where Ecommerce asks for them)',
+		}),
 	}),
 });

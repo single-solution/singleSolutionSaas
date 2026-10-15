@@ -366,7 +366,11 @@ export const createProduct = (options) => {
 	const hooks = options.hooks ?? {};
 	const reseal = createReseal({
 		sealer,
-		parts: [connections.reseal, connection.resealKey, tickets.resealKey],
+		parts: [
+			{ part: 'connections', reseal: connections.reseal },
+			{ part: 'keys', reseal: connection.resealKey },
+			{ part: 'keys', reseal: tickets.resealKey },
+		],
 		hooks,
 		websites: connections.websitesWithDatabase,
 		data,

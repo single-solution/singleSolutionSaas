@@ -26,6 +26,7 @@ import {
 	Stat,
 	formatCreditsPerHour,
 	parseCredits,
+	resealAdvice,
 	supportContact,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
@@ -686,11 +687,8 @@ function ResealCard() {
 					{TEXTS.reseal.button}
 				</Button>
 				{done ? (
-					<Callout tone={done.failedWebsites.length === 0 ? 'success' : 'warning'}>
-						{fill(TEXTS.reseal.result, done)}{' '}
-						{done.failedWebsites.length === 0
-							? TEXTS.reseal.finished
-							: fill(TEXTS.reseal.again, { failed: done.failedWebsites.length })}
+					<Callout tone={done.failedWebsites.length === 0 && done.unreadable === 0 ? 'success' : 'warning'}>
+						{fill(TEXTS.reseal.result, done)} {resealAdvice(TEXTS.reseal, done)}
 					</Callout>
 				) : null}
 				{result && !result.ok ? <Outcome result={result} /> : null}

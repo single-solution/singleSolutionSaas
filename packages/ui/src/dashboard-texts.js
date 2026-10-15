@@ -114,10 +114,42 @@ export const DASHBOARD_TEXTS = Object.freeze({
 		intro: 'After ENCRYPTION_KEY is changed, with the old key set as ENCRYPTION_KEY_PREVIOUS, seal every stored secret again with the new key. Pressing again is safe.',
 		button: 'Re-seal stored secrets',
 		result: '{resealed} re-sealed, {current} already on the current key, {unreadable} could not be opened with either key.',
-		finished: 'Every stored secret that opens now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
+		finished: 'Every stored secret now uses the current key: ENCRYPTION_KEY_PREVIOUS can be removed.',
+		unreadable:
+			'Keep ENCRYPTION_KEY_PREVIOUS and check that it is the old key. Then enter these again and press Re-seal again: {parts}. Remove ENCRYPTION_KEY_PREVIOUS only when "could not be opened" is 0.',
+		parts: Object.freeze({
+			connections: '{count} secrets in Connections (type them again on each website)',
+			keys: '{count} signing keys (press Reconnect for this product in the Portal)',
+			product: '{count} of the product’s own stored secrets (set them up again where the product asks for them)',
+		}),
 		again: '{failed} websites could not be reached: press again later, and keep ENCRYPTION_KEY_PREVIOUS until none is left.',
 	}),
 });
+
+/**
+ * Fill `{name}` placeholders (unknown names stay).
+ * @param {string} text
+ * @param {Record<string, string | number>} values
+ */
+const fillWords = (text, values) =>
+	text.replace(/\{(\w+)\}/g, (match, name) => (Object.hasOwn(values, name) ? String(values[name]) : match));
+
+/**
+ * What the Owner does after a Re-seal: press again for websites not reached; keep ENCRYPTION_KEY_PREVIOUS and enter
+ * again what could not be opened, part by part; only when neither is left may it be removed.
+ * @param {{ finished: string, again: string, unreadable: string,
+ *   parts: Readonly<Record<'connections' | 'keys' | 'product', string>> }} words
+ * @param {{ unreadable: number, failedWebsites: string[], unreadableIn?: Partial<Record<'connections' | 'keys' | 'product', number>> }} done
+ * @returns {string}
+ */
+export const resealAdvice = (words, done) => {
+	if (done.failedWebsites.length > 0) return fillWords(words.again, { failed: done.failedWebsites.length });
+	if (done.unreadable === 0) return words.finished;
+	const parts = Object.entries(done.unreadableIn ?? {})
+		.filter(([, count]) => (count ?? 0) > 0)
+		.map(([part, count]) => fillWords(words.parts[/** @type {'connections' | 'keys' | 'product'} */ (part)], { count: count ?? 0 }));
+	return fillWords(words.unreadable, { parts: parts.join('; ') });
+};
 
 /** @param {unknown} value */
 const isGroup = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);

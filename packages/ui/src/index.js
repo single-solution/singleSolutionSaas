@@ -56,7 +56,7 @@ export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from '.
 export { BarChart, isEmptySeries } from './charts.js';
 export { NeedsList, SetupChecklist, Timeline, RecentChanges, ProductOverview, OverviewSkeleton, initialsOf } from './overview.js';
 // plain data, not a client module: a product's `texts.js` also gives its server `app/layout.js` the page title
-export { DASHBOARD_TEXTS, dashboardTexts } from './dashboard-texts.js';
+export { DASHBOARD_TEXTS, dashboardTexts, resealAdvice } from './dashboard-texts.js';
 export { SchemaForm } from './SchemaForm.js';
 export {
 	formatCredits,

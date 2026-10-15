@@ -195,6 +195,7 @@ describe('connections', () => {
 			current: 2,
 			unreadable: 1,
 			failedWebsites: [],
+			unreadableIn: { product: 1 },
 		});
 		expect(reached).toEqual([websiteId]);
 		const again = await (await dashOn(handler, owner, 'POST', '/v1/dashboard/reseal')).json();

@@ -14,7 +14,7 @@ import { SchemaForm } from './SchemaForm.js';
 import { describeProblem } from './problems.js';
 import { call, fill } from './dashboard-api.js';
 import { symbolRowsOf, symbolsOf } from './format.js';
-import { dashboardTexts } from './dashboard-texts.js';
+import { dashboardTexts, resealAdvice } from './dashboard-texts.js';
 
 /** @typedef {import('./dashboard-api.js').Answer} Answer */
 /** @typedef {import('react').ReactNode} ReactNode */
@@ -436,11 +436,8 @@ export function ResealCard() {
 					{texts.reseal.button}
 				</Button>
 				{done ? (
-					<Callout tone={done.failedWebsites.length === 0 ? 'success' : 'warning'}>
-						{fill(texts.reseal.result, done)}{' '}
-						{done.failedWebsites.length === 0
-							? texts.reseal.finished
-							: fill(texts.reseal.again, { failed: done.failedWebsites.length })}
+					<Callout tone={done.failedWebsites.length === 0 && done.unreadable === 0 ? 'success' : 'warning'}>
+						{fill(texts.reseal.result, done)} {resealAdvice(texts.reseal, done)}
 					</Callout>
 				) : null}
 				{result && !result.ok ? <Outcome result={result} /> : null}

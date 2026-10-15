@@ -5,15 +5,19 @@
  * ticket key (K-21), and what the product keeps itself, through its hooks: `resealProduct` (its own secrets in the product database) and `resealWebsite` (secrets in
  * one website's merchant database, called for every website whose database is connected).
  *
- * Values already on the current key stay as they are; values neither key opens are counted and left alone. Pressing
- * again is safe. When the answer shows nothing re-sealed, nothing unreadable and no failed website, the owner removes
- * `ENCRYPTION_KEY_PREVIOUS`. No timer: it runs only when pressed.
+ * Values already on the current key stay as they are; values neither key opens are counted and left alone, and
+ * `unreadableIn` says where they are (`connections`: secrets typed in Connections; `keys`: the product and ticket
+ * keys, made again by a Reconnect in the Portal; `product`: the product's own stored secrets). Pressing again is safe.
+ * Only when nothing is unreadable and no website failed does the owner remove `ENCRYPTION_KEY_PREVIOUS`. No timer: it
+ * runs only when pressed.
  * @module
  */
 
 /** @typedef {{ resealed: number, current: number, unreadable: number }} ResealCounts */
+/** @typedef {'connections' | 'keys' | 'product'} ResealPart */
 /**
- * @typedef {ResealCounts & { keyId: string, previousKeyId: string | null, failedWebsites: string[] }} ResealResult
+ * @typedef {ResealCounts & { keyId: string, previousKeyId: string | null, failedWebsites: string[],
+ *   unreadableIn: Partial<Record<ResealPart, number>> }} ResealResult
  */
 
 /**
@@ -50,7 +54,7 @@ export const sumCounts = (parts) => ({
 });
 
 /**
- * @param {{ sealer: import('./sealing.js').Sealer, parts: Array<() => Promise<ResealCounts>>,
+ * @param {{ sealer: import('./sealing.js').Sealer, parts: Array<{ part: ResealPart, reseal: () => Promise<ResealCounts> }>,
  *   hooks: import('./kit-routes.js').ProductHooks, websites: () => Promise<string[]>, data: import('./data.js').Data,
  *   logger: import('./logger.js').Logger }} options `parts`: the kit's parts in the product database (Connections,
  *   keys); `hooks` are read when pressed (products may attach them after `createProduct`)
@@ -59,24 +63,28 @@ export const sumCounts = (parts) => ({
 export const createReseal =
 	({ sealer, parts, hooks, websites, data, logger }) =>
 	async () => {
-		/** @type {ResealCounts[]} */
+		/** @type {Array<{ part: ResealPart, counts: ResealCounts }>} */
 		const done = [];
-		for (const part of parts) done.push(await part());
-		if (hooks.resealProduct) done.push(await hooks.resealProduct());
+		for (const { part, reseal } of parts) done.push({ part, counts: await reseal() });
+		if (hooks.resealProduct) done.push({ part: 'product', counts: await hooks.resealProduct() });
 		/** @type {string[]} */
 		const failedWebsites = [];
 		const { resealWebsite } = hooks;
 		if (resealWebsite) {
 			for (const websiteId of await websites()) {
 				try {
-					done.push(await resealWebsite(await data.forWebsite(websiteId)));
+					done.push({ part: 'product', counts: await resealWebsite(await data.forWebsite(websiteId)) });
 				} catch (error) {
 					logger.warn('re-seal: the merchant database was not reached', { websiteId, error });
 					failedWebsites.push(websiteId);
 				}
 			}
 		}
-		const counts = sumCounts(done);
+		const counts = sumCounts(done.map((entry) => entry.counts));
+		/** @type {Partial<Record<ResealPart, number>>} */
+		const unreadableIn = {};
+		for (const { part, counts: one } of done)
+			if (one.unreadable > 0) unreadableIn[part] = (unreadableIn[part] ?? 0) + one.unreadable;
 		logger.info('stored secrets re-sealed', { ...counts, failedWebsites: failedWebsites.length });
-		return { keyId: sealer.keyId, previousKeyId: sealer.previousKeyId, ...counts, failedWebsites };
+		return { keyId: sealer.keyId, previousKeyId: sealer.previousKeyId, ...counts, failedWebsites, unreadableIn };
 	};
