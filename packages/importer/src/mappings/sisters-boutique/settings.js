@@ -255,6 +255,7 @@ export const settingsPlan = (values) => {
 				'catalog.mediaPath': '/media',
 				'catalog.pageSize': 24, // `apps/web/src/lib/core/queries.ts`:153
 				'catalog.lowStock': store.lowStockThreshold,
+				'catalog.topBasis': 'delivered', // SaaS default (store mapping to review when the owner asks)
 				'catalog.imageMaxBytes': 12_582_912, // `apps/admin/src/lib/uploads/limits.ts`:9-10
 				'catalog.showStock': 'always',
 				'catalog.lowStockShown': 5,
