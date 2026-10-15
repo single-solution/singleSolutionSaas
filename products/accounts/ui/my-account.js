@@ -75,13 +75,24 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					trigger.removeAttribute('disabled');
 				}
 			};
-			/** A labeled password field. @param {string} label @param {string} autocomplete */
-			const passwordField = (label, autocomplete) =>
-				make.field('input', label, {
+			/**
+			 * A labeled password field; a new password gets the minimum of the method the server checks it with (A2): Email +
+			 * password for a user with an email address while it is on, else Phone + password.
+			 * @param {string} label @param {string} autocomplete @param {Record<string, any>} user
+			 */
+			const passwordField = (label, autocomplete, user) => {
+				const minimum =
+					user.email && settings.passwordMinLength !== null
+						? settings.passwordMinLength
+						: user.phone && settings.phonePassword
+							? settings.phonePassword.minLength
+							: null;
+				return make.field('input', label, {
 					type: 'password',
 					autocomplete,
-					...(autocomplete === 'new-password' ? { minlength: String(settings.passwordMinLength) } : {}),
+					...(autocomplete === 'new-password' && minimum !== null ? { minlength: String(minimum) } : {}),
 				});
+			};
 			/** The two-step code field. */
 			const codeField = () =>
 				make.field('input', t('twoStep.code'), { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' });
@@ -162,7 +173,7 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 				const add = button(t('account.addressAdd'), { class: 'secondary' });
 				section.append(list, area, add, note);
 				// the website's Profile settings (PLAN 0.8.10 A11)
-				const rules = settings.profile ?? { maxAddresses: 10, keepOneAddress: false, addressRequired: ['line1', 'city'] };
+				const rules = settings.profile;
 
 				/** @param {Array<Record<string, any>>} next @returns {Promise<boolean>} */
 				const save = async (next) => {
@@ -257,8 +268,8 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 			const passwordPart = (user) => {
 				const { section, note } = part(t('account.password'));
 				const form = element(doc, 'form');
-				const current = user.hasPassword ? passwordField(t('account.currentPassword'), 'current-password') : null;
-				const next = passwordField(t('account.newPassword'), 'new-password');
+				const current = user.hasPassword ? passwordField(t('account.currentPassword'), 'current-password', user) : null;
+				const next = passwordField(t('account.newPassword'), 'new-password', user);
 				next.input.setAttribute('required', '');
 				const submit = element(
 					doc,
@@ -513,17 +524,13 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 								{},
 								formatText(t('account.order'), { number: String(order.number ?? order.id ?? '') }),
 							);
-							// the amount in this website's Format; else the text Ecommerce made
+							// the amount in this website's Format; else the text Ecommerce made (`total` alone is in minor units)
 							const total =
 								moneyText(config, win, order.total, order.currency) ??
-								[order.totalText, order.total].find((value) => typeof value === 'string' || typeof value === 'number');
-							// Ecommerce's statuses are merchant-defined: its label first, else the status key
+								(typeof order.totalText === 'string' ? order.totalText : undefined);
+							// Ecommerce's statuses are merchant-defined: its label, else the status key
 							const status =
-								typeof order.statusLabel === 'string' && order.statusLabel !== ''
-									? order.statusLabel
-									: typeof order.status === 'string'
-										? (config.texts[`order.${order.status}`] ?? order.status)
-										: '';
+								[order.statusLabel, order.status].find((value) => typeof value === 'string' && value !== '') ?? '';
 							item.append(
 								element(
 									doc,

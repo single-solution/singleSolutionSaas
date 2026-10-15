@@ -43,7 +43,7 @@ refused by name; text over a limit is refused, never cut); times are ISO-8601 wi
   `identity` are derived; `passwordHash` is kept as given in a format sign-in checks (bcrypt, `pbkdf2$…` with the
   `imported_password_pepper` connection, or `scrypt$…`), any other is refused; `twoStep: { secret, recoveryHashes }` (plain base32
   secret and SHA-256 hex of `recovery:<code>`) is sealed at once. An email address or phone number another user holds
-  is refused (one user per phone number: a staff member and a shopper cannot share one). `roleSince` defaults to
+  is refused (one user per phone number: a staff member and a customer cannot share one). `roleSince` defaults to
   `createdAt`; a user or request without `createdAt` keeps the stored one, else gets the time of the import.
 - Requests keep their status (`expired` is read from `setupExpiresAt`); setup links are not imported (an older link
   cannot open here): staff give a new one from the user (`staff_links`).

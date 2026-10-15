@@ -34,7 +34,7 @@ import {
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
-import { MESSAGE_TEMPLATES } from '../../core/widgets.js';
+import { MESSAGE_TEMPLATES, OTHER_PRODUCTS } from '../../core/widgets.js';
 import { call, fill, useLoad } from './api.js';
 import { FieldsSection } from './fields.js';
 import { KEY_FORMS, KeyForm } from './forms.js';
@@ -587,9 +587,6 @@ function SettingsTab({ websiteId }) {
 	);
 }
 
-/** Connection names whose value is another product's pasted server token. */
-const PRODUCT_TOKENS = /** @type {const} */ (['notifications', 'ecommerce', 'chat', 'payments', 'growth']);
-
 /**
  * The one-line help under a connection: what to paste.
  * @param {string} name
@@ -597,7 +594,7 @@ const PRODUCT_TOKENS = /** @type {const} */ (['notifications', 'ecommerce', 'cha
 const connectionHint = (name) => {
 	if (name === 'database') return TEXTS.connections.hints.database;
 	if (name === 'imported_password_pepper') return TEXTS.connections.hints.imported_password_pepper;
-	const product = PRODUCT_TOKENS.find((entry) => entry === name);
+	const product = OTHER_PRODUCTS.find((entry) => entry === name);
 	return product ? fill(TEXTS.connections.hints.token, { product: TEXTS.connections.products[product] }) : null;
 };
 

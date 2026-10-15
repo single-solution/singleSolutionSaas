@@ -41,7 +41,7 @@ const at = (ms) => new Date(START + ms).toISOString();
  * @typedef {object} Settings
  * @property {{ mode: 'open' | 'invite' | 'approval', requiredFields: Array<'name' | 'email' | 'phone'> }} [signUp]
  * @property {any[]} [customFields]
- * @property {number} [passwordMinLength]
+ * @property {number | null} [passwordMinLength]
  * @property {{ version: string, url: string } | null} [terms]
  * @property {any} [phonePassword]
  * @property {string} [remember]
@@ -77,7 +77,9 @@ const configOf = (features, settings = {}) => ({
 		signUp: { mode: 'open', requiredFields: [] },
 		customFields: [],
 		passwordMinLength: 8,
+		phonePassword: null,
 		terms: null,
+		profile: { maxAddresses: 10, keepOneAddress: false, addressRequired: ['line1', 'city'] },
 		...settings,
 	},
 });
@@ -816,6 +818,42 @@ describe('social sign-in and links', () => {
 		});
 		expect(window.localStorage.getItem(REFRESH_STORAGE_KEY)).toBe('ref-1');
 	});
+
+	it('an invite link asks for a password with Phone + password alone, at its own minimum', async () => {
+		const host = place('sign_in');
+		const { server } = await start(
+			{ 'POST /v1/invites/accept': () => answer(200, signedIn()) },
+			{
+				features: ['phone_password'],
+				hash: 'ss_accounts_invite=invite.token',
+				settings: {
+					passwordMinLength: null,
+					phonePassword: { signUp: true, minLength: 6, selfReset: 'code', forgotUrl: '' },
+				},
+			},
+		);
+		const root = shadow(host);
+		expect(fieldIn(root, strings['invite.password']).getAttribute('minlength')).toBe('6');
+		fieldIn(root, strings['invite.password']).value = 'abc123';
+		await submit(buttonIn(root, strings['invite.submit']));
+		expect(server.last('POST /v1/invites/accept')?.body).toMatchObject({ token: 'invite.token', password: 'abc123' });
+	});
+
+	it('an invite link with both password methods asks for the lower minimum (the invitee may have a phone only)', async () => {
+		const host = place('sign_in');
+		await start(
+			{},
+			{
+				features: ['email_password', 'phone_password'],
+				hash: 'ss_accounts_invite=invite.token',
+				settings: {
+					passwordMinLength: 10,
+					phonePassword: { signUp: true, minLength: 6, selfReset: 'code', forgotUrl: '' },
+				},
+			},
+		);
+		expect(fieldIn(shadow(host), strings['invite.password']).getAttribute('minlength')).toBe('6');
+	});
 });
 
 describe('the session kept in the browser', () => {
@@ -1127,6 +1165,7 @@ describe('My account', () => {
 							total: 125000,
 						},
 						{ id: 'ord_2', status: 7, total: { amount: 5 } },
+						{ id: 'ord_4', number: 'A-102', status: 'paid', total: 1250 },
 						'junk',
 					],
 				}),
@@ -1145,10 +1184,18 @@ describe('My account', () => {
 		expect(privacy.textContent).toContain(`Your account will be deleted on ${when(at(30 * 86_400_000), 'date')}.`);
 		const orders = part(host, strings['account.orders']);
 		const rows = [...orders.querySelectorAll('li')];
-		expect(rows.map((li) => li.firstChild?.textContent)).toEqual(['Order A-100', 'Order A-101', 'Order ord_2', 'Order ']);
-		expect(rows[0]?.querySelector('.meta')?.textContent).toBe(`paid · $10.00 · ${when(at(0))}`);
+		expect(rows.map((li) => li.firstChild?.textContent)).toEqual([
+			'Order A-100',
+			'Order A-101',
+			'Order ord_2',
+			'Order A-102',
+			'Order ',
+		]);
+		expect(rows[0]?.querySelector('.meta')?.textContent).toBe(`paid · ${when(at(0))}`);
 		expect(rows[1]?.querySelector('.meta')?.textContent).toBe('Being packed · EUR 1,250.00');
 		expect(rows[2]?.querySelector('.meta')?.textContent).toBe('');
+		// minor units without a currency are no amount
+		expect(rows[3]?.querySelector('.meta')?.textContent).toBe('paid');
 	});
 
 	it('shows dates and order totals in the Format and business time zone of the widget config', async () => {
@@ -2160,7 +2207,7 @@ describe('admin widgets', () => {
 });
 
 describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
-	const PHONE_RULES = { minLength: 6, letterAndDigit: false, selfReset: 'code', forgotUrl: '' };
+	const PHONE_RULES = { signUp: true, minLength: 6, selfReset: 'code', forgotUrl: '' };
 
 	it('phone + password: signs in, signs up, and Forgot password sends a code', async () => {
 		const host = place('sign_in');
@@ -2510,7 +2557,11 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 			},
 			{
 				features: ['phone_password'],
-				settings: { profile: { maxAddresses: 2, keepOneAddress: true, addressRequired: ['line1', 'area'] } },
+				settings: {
+					passwordMinLength: null,
+					phonePassword: { signUp: true, minLength: 6, selfReset: 'code', forgotUrl: '' },
+					profile: { maxAddresses: 2, keepOneAddress: true, addressRequired: ['line1', 'area'] },
+				},
 			},
 		);
 		const profile = part(host, strings['account.profile']);
@@ -2536,6 +2587,8 @@ describe('Phase 2 options in the widgets (PLAN 0.8.10)', () => {
 		await click(buttonIn(/** @type {HTMLElement} */ (addresses.querySelectorAll('li')[1]), strings['account.remove']));
 		expect(hasButton(/** @type {HTMLElement} */ (addresses.querySelector('li')), strings['account.remove'])).toBe(false);
 		const password = part(host, strings['account.password']);
+		// the browser asks for Phone + password's minimum, as the server does for a phone user
+		expect(fieldIn(password, strings['account.newPassword']).getAttribute('minlength')).toBe('6');
 		fieldIn(password, strings['account.newPassword']).value = 'phone pass 1';
 		await submit(buttonIn(password, strings['account.passwordSet']));
 		expect(server.last('PUT /v1/me/password')?.body).toEqual({ password: 'phone pass 1' });

@@ -9,6 +9,9 @@ export const WIDGET_GLOBAL = 'SSAccounts';
 /** Widgets mount only into elements with this attribute; its value is the widget key from manifest.json. */
 export const WIDGET_ATTRIBUTE = 'data-ss-accounts';
 
+/** The other products whose server tokens can be pasted (data rights and the permission list; Ecommerce: Orders tab). */
+export const OTHER_PRODUCTS = Object.freeze(/** @type {const} */ (['notifications', 'chat', 'ecommerce', 'payments', 'growth']));
+
 /** The sign-in methods (features). The sign-in and My account widgets and the routes of a signed-in user work while any is on. */
 export const SIGN_IN_METHODS = Object.freeze(
 	/** @type {const} */ (['phone_code', 'phone_password', 'email_password', 'email_code', 'google', 'apple', 'facebook']),

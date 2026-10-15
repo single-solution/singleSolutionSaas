@@ -44,6 +44,7 @@ import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { normaliseEmail } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
+import { OPEN_SIGN_UP } from '../core/rules.js';
 import { SIGN_IN_METHODS } from '../core/widgets.js';
 import { createSealer, importedTwoStep, resealWebsite, totpAadOf } from './crypto.js';
 import { createImportOptions } from './imports.js';
@@ -73,11 +74,9 @@ const SETTINGS = {
 	import: importSettings,
 };
 
-/** Every sign-in method (feature). */
-
 /**
- * Settings several features use (PLAN 0.8.10 A2, A11): the phone format of Phone code and Phone + password, and the
- * Profile settings of every sign-in method.
+ * Settings several features use (PLAN 0.8.10 A2, A9, A11): the phone numbers and codes of Phone code and Phone +
+ * password, the Passwords settings of both password methods, and the Profile settings of every sign-in method.
  * @type {Record<string, { name: string, features: string[], settings: any }>}
  */
 const SHARED_SETTINGS = {
@@ -95,9 +94,6 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 );
 
 export { strings };
-
-/** The other products whose server tokens can be pasted (data rights and the permission list; Ecommerce: Orders tab). */
-export const OTHER_PRODUCTS = Object.freeze(/** @type {const} */ (['notifications', 'chat', 'ecommerce', 'payments', 'growth']));
 
 /** Accounts' own problem codes. */
 const PROBLEM_CODES = Object.freeze({
@@ -281,10 +277,10 @@ export const createProductInstance = (options) => {
 				const websiteId = /** @type {string} */ (ctx.websiteId);
 				const on = await product.featuresOn(websiteId);
 				const store = createStore(await ctx.data(), { now });
-				const rules = on.includes('approval')
-					? await product.settings.values(websiteId, 'approval')
-					: { mode: 'open', requiredFields: [] };
-				const password = await product.settings.values(websiteId, 'email_password');
+				const rules = on.includes('approval') ? await product.settings.values(websiteId, 'approval') : OPEN_SIGN_UP;
+				const emailPassword = on.includes('email_password')
+					? await product.settings.values(websiteId, 'email_password')
+					: null;
 				const termsSettings = on.includes('terms') ? await product.settings.values(websiteId, 'terms') : null;
 				const phonePassword = on.includes('phone_password')
 					? await product.settings.values(websiteId, 'phone_password')
@@ -297,12 +293,12 @@ export const createProductInstance = (options) => {
 				return {
 					signUp: { mode: rules.mode, requiredFields: rules.requiredFields },
 					customFields: on.includes('custom_fields') ? await store.fields.list() : [],
-					passwordMinLength: password.minLength,
+					// each password method's own minimum, for the browser's own check of a new password (A2)
+					passwordMinLength: emailPassword ? emailPassword.minLength : null,
 					phonePassword: phonePassword
 						? {
 								signUp: phonePassword.signUp,
 								minLength: phonePassword.minLength,
-								letterAndDigit: phonePassword.letterAndDigit,
 								selfReset: phonePassword.selfReset,
 								forgotUrl: phonePassword.forgotUrl,
 							}

@@ -529,6 +529,10 @@ describe('A9: password and lock options', () => {
 
 	it('the lock mode, the network limit and the personal check are shared by both methods, also with Phone + password alone', async () => {
 		await env.switchOn(['phone_password']);
+		// the widgets get the rules of the methods that are on: no Email + password minimum, Phone + password's own
+		const config = (await env.visitor('GET', '/v1/widget/config')).json.settings;
+		expect(config.passwordMinLength).toBeNull();
+		expect(Object.keys(config.phonePassword).sort()).toEqual(['forgotUrl', 'minLength', 'selfReset', 'signUp']);
 		// the merchant cannot change Email + password's own settings while it is off, but the shared Passwords ones
 		const cookie = await env.merchantSession();
 		/** @param {string} key @param {unknown} value */

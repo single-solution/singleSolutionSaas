@@ -42,12 +42,13 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @typedef {object} WidgetSettings
  * @property {{ mode: 'open' | 'invite' | 'approval', requiredFields: Array<'name' | 'email' | 'phone'> }} signUp
  * @property {import('./common.js').CustomField[]} customFields
- * @property {number} passwordMinLength
+ * @property {number | null} passwordMinLength Email + password's minimum length; null while it is off
  * @property {{ version: string, url: string } | null} terms
- * @property {{ signUp?: boolean, minLength: number, letterAndDigit: boolean, selfReset: 'code' | 'off', forgotUrl: string } | null} [phonePassword]
+ * @property {{ signUp: boolean, minLength: number, selfReset: 'code' | 'off', forgotUrl: string } | null} phonePassword
+ *   Phone + password's options; null while it is off
  * @property {'ask' | 'ask_ticked' | 'always' | 'never'} [remember] "Remember me" of the role sign-ups get (A6, A14)
  * @property {boolean} [signInPaused] the role sign-ups get has its sign-in paused (A6)
- * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[] }} [profile] (A11)
+ * @property {{ maxAddresses: number, keepOneAddress: boolean, addressRequired: string[] }} profile (A11)
  * @property {{ roles: Array<{ key: string, name: string }>, requireNote: boolean, revealStatus?: boolean } | null} [roleRequests]
  *   (A5; revealStatus: a repeat ask's answer says what is there, else one private text for every ask)
  */

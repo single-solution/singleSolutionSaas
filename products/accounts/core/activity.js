@@ -16,9 +16,6 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_ID = 256;
 const MAX_ACTIONS = 20;
 const MAX_QUERY = 100;
-/** Longest label and detail of an entry (the activity-copy shape). */
-const MAX_LABEL = 200;
-const MAX_DETAIL = 2000;
 
 /** @param {string} text */
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -90,19 +87,19 @@ export const copyFilter = (query, timeZone) => {
 };
 
 /**
- * The plain-text detail of an entry, cut to its longest length; undefined when empty.
+ * The plain-text detail of an entry; undefined when empty (the kit's activity log cuts it to its longest length).
  * @param {ReadonlyArray<string | null | undefined | false>} parts joined with '; '
  * @returns {string | undefined}
  */
 export const detailOf = (parts) => {
 	const text = parts.filter((part) => typeof part === 'string' && part.trim() !== '').join('; ');
-	return text === '' ? undefined : text.slice(0, MAX_DETAIL);
+	return text === '' ? undefined : text;
 };
 
 /**
- * The label of an entry (a user's name, a role's name …), cut to its longest length; undefined when empty.
+ * The label of an entry (a user's name, a role's name …); undefined when empty (the kit's activity log cuts it to its
+ * longest length).
  * @param {unknown} value
  * @returns {string | undefined}
  */
-export const labelOf = (value) =>
-	typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, MAX_LABEL) : undefined;
+export const labelOf = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined);

@@ -2,11 +2,12 @@
  * The public docs at `/docs` (PLAN 0.4.10, 0.8.6): sign-in methods and the Notifications templates they use, social
  * sign-in return addresses, sign-ins and their offline verification (public keys, Node.js and jose snippets), the
  * visitor API, roles and permissions, sign-up rules and security, data rights, activity-log copies, the Orders tab,
- * per-feature routes, widgets and what the website builds, the widget snippets, the ticket server snippet (Node.js
- * fetch and cURL), the kit's routes for your server (settings, acting user, visitor calls, counts, activity, Format;
- * PLAN 0.8.10), the business.json template, the localhost note and the API reference from `openapi.json`: every call
- * with its auth, feature, parameters, request fields and answer fields (`renderApiReference`, from `schemas/api.json`
- * and the kit's own descriptions); the route tables link to it. Plain HTML; every value is escaped.
+ * per-feature routes and widgets (a feature with none shows no table or list) and what the website builds, the widget
+ * snippets, the ticket server snippet (Node.js fetch and cURL), the kit's routes for your server (settings, acting
+ * user, visitor calls, counts, activity, Format; PLAN 0.8.10), the business.json template, the localhost note and the
+ * API reference from `openapi.json`: every call with its auth, feature, parameters, request fields and answer fields
+ * (`renderApiReference`, from `schemas/api.json` and the kit's own descriptions); the route tables link to it. Plain
+ * HTML; every value is escaped.
  * @module
  */
 import { KIT_GUIDE, apiAnchor, renderApiReference } from '@ss/app-kit';
@@ -68,13 +69,16 @@ export const renderDocs = ({ base }) => {
 	const rows = operations();
 	const featureSections = manifest.features.map((feature) => {
 		const widgets = manifest.widgets.filter((widget) => [widget.feature].flat().includes(feature.key));
+		const routes = rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key));
 		return [
 			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
 			para(feature.description),
 			...(features[feature.key] ?? []).map(para),
 			...(build[feature.key] ? [`<p><strong>What your website builds.</strong> ${escape(build[feature.key])}</p>`] : []),
-			`<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`,
-			routeTable(rows.filter(([, , operation]) => featuresOf(operation).includes(feature.key))),
+			widgets.length > 0
+				? `<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`
+				: '',
+			routes.length > 0 ? routeTable(routes) : '',
 			'</section>',
 		].join('');
 	});

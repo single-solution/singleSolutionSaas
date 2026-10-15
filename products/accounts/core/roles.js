@@ -1,7 +1,7 @@
 /**
  * Roles and permissions of the merchant's users (PLAN 0.8.6), pure.
  *
- * - Every user of a website has exactly one role. The ready-made roles are a usual shop team (Owner, Business manager,
+ * - Every user of a website has exactly one role. The ready-made roles are a usual business team (Owner, Business manager,
  *   Product manager, Marketing manager, Support staff) plus Customer, the role of every new sign-up.
  *   The merchant can change them (except their keys), copy them and add their own.
  * - A permission is `<source>:<key>`: `<source>` is the product that supplies it (`accounts`, `chat`, `ecommerce`, …,
@@ -109,13 +109,13 @@ export const roleView = (role) => ({
 });
 
 /** Ecommerce's published permission keys (its manifest), as `ecommerce:<key>`. */
-const shop = (/** @type {string[]} */ ...keys) => keys.map((key) => `ecommerce:${key}`);
+const ecommerce = (/** @type {string[]} */ ...keys) => keys.map((key) => `ecommerce:${key}`);
 
 /** The ready-made roles, created for a website on first use. */
 export const READY_ROLES = Object.freeze([
-	ready('customer', 'Customer', 900, 'Shoppers and visitors with an account. No staff permissions.', []),
+	ready('customer', 'Customer', 900, 'Customers and visitors with an account. No staff permissions.', []),
 	ready('owner', 'Owner', 100, 'Runs the business: every permission.', ['*']),
-	ready('business_manager', 'Business manager', 200, 'Day-to-day operations lead: users, the shop, chats and messages.', [
+	ready('business_manager', 'Business manager', 200, 'Day-to-day operations lead: users, sales, chats and messages.', [
 		'accounts:users.read',
 		'accounts:users.manage',
 		'chat:inbox.read',
@@ -126,7 +126,7 @@ export const READY_ROLES = Object.freeze([
 		'notifications:log.read',
 		'notifications:messages.send',
 		'notifications:templates.edit',
-		...shop(
+		...ecommerce(
 			'catalog.edit',
 			'orders.read',
 			'orders.manage',
@@ -148,19 +148,19 @@ export const READY_ROLES = Object.freeze([
 		'Product manager',
 		300,
 		'Catalog focus: products, CSV and bulk changes, and review moderation.',
-		shop('catalog.edit', 'csv.run', 'bulk.run', 'reviews.moderate'),
+		ecommerce('catalog.edit', 'csv.run', 'bulk.run', 'reviews.moderate'),
 	),
 	ready('marketing_manager', 'Marketing manager', 400, 'Offers, content and messages.', [
 		'notifications:templates.edit',
 		'chat:reports.read',
-		...shop('coupons.edit', 'deals.edit', 'bundles.edit', 'loyalty.manage', 'reports.read'),
+		...ecommerce('coupons.edit', 'deals.edit', 'bundles.edit', 'loyalty.manage', 'reports.read'),
 	]),
 	ready('support_staff', 'Support staff', 500, 'Customer-facing: reads users, answers chats and handles orders and returns.', [
 		'accounts:users.read',
 		'chat:inbox.read',
 		'chat:inbox.reply',
 		'notifications:log.read',
-		...shop('orders.read', 'orders.manage', 'returns.manage', 'customers.manage'),
+		...ecommerce('orders.read', 'orders.manage', 'returns.manage', 'customers.manage'),
 	]),
 ]);
 

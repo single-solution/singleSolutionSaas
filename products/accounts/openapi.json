@@ -4943,7 +4943,7 @@
 													},
 													"statusLabel": {
 														"type": "string",
-														"description": "The status as your shop names it."
+														"description": "The status as named in your Ecommerce settings."
 													},
 													"total": {
 														"type": "integer",

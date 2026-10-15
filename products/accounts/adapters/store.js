@@ -2,7 +2,7 @@
  * Accounts' records in the merchant database (collections `ss_accounts_<name>`, through the kit's tenant guard: every
  * query carries the website id; inserts are stamped with `websiteId`, `merchantId`, `createdAt` and `updatedAt`).
  *
- * - `users`: the one user list of the website (shoppers and the merchant's staff), unique email and phone
+ * - `users`: the one user list of the website (customers and the merchant's staff), unique email and phone
  * - `sessions`: signed-in devices with their rotating refresh token (hash only; the current secret sealed for the
  *   30-second grace of parallel renewals, dropped when the session is signed out), removed 7 days after their end (TTL)
  * - `codes`: one-time codes and links (sign-in codes, magic links, resets, invites, two-step steps, social hand-overs,

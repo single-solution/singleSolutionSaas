@@ -506,7 +506,7 @@ export const createFlows = (product, service) => {
 	const phoneForgot = async (ctx) => {
 		const s = await service.site(ctx);
 		const { selfReset } = await service.settings(s, 'phone_password');
-		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the shop.');
+		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the business.');
 		const phone = await service.phoneOf(s, bodyOf(ctx.body).phone);
 		if (!phone) throw invalid('phone', 'Enter the phone number with its country code.');
 		afterAnswer(ctx, async () => {
@@ -525,7 +525,7 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
 		const { selfReset } = await service.settings(s, 'phone_password');
-		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the shop.');
+		if (selfReset !== 'code') throw problem('self_reset_off', 'Passwords are not reset here: ask the business.');
 		const phone = await service.phoneOf(s, body.phone);
 		const user = phone ? await s.store.users.byPhone(phone) : null;
 		if (!phone || !user) throw problem('code_invalid', 'The code is not valid or has expired.');

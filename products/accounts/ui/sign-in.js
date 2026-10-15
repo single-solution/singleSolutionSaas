@@ -52,6 +52,19 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 	const methods = FORM_METHODS.filter(on);
 	const providers = PROVIDERS.filter(on);
 	const signUpOpen = settings.signUp.mode !== 'invite';
+	/**
+	 * The browser's minimum for a new password (A2): the given methods' minimums, the lowest when the method is not
+	 * known yet (an invitee may have an email address or a phone number); none while those methods are off.
+	 * @param {Array<'email_password' | 'phone_password'>} which
+	 * @returns {Record<string, string>}
+	 */
+	const minimumOf = (which) => {
+		const minimums = [
+			...(which.includes('email_password') && settings.passwordMinLength !== null ? [settings.passwordMinLength] : []),
+			...(which.includes('phone_password') && settings.phonePassword ? [settings.phonePassword.minLength] : []),
+		];
+		return minimums.length > 0 ? { minlength: String(Math.min(...minimums)) } : {};
+	};
 	/** @param {'name' | 'email' | 'phone'} name */
 	const required = (name) => settings.signUp.requiredFields.includes(name);
 	const returnTo = () => win.location.href.split('#')[0];
@@ -240,7 +253,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					type: 'password',
 					autocomplete: creating ? 'new-password' : 'current-password',
 					required: '',
-					...(creating ? { minlength: String(settings.passwordMinLength) } : {}),
+					...(creating ? minimumOf(['email_password']) : {}),
 				});
 				const terms = termsBox(doc, t, settings.terms);
 				setHidden(terms.wrap, !(creating && settings.terms));
@@ -336,7 +349,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					type: 'password',
 					autocomplete: creating ? 'new-password' : 'current-password',
 					required: '',
-					...(creating && rules ? { minlength: String(rules.minLength) } : {}),
+					...(creating ? minimumOf(['phone_password']) : {}),
 				});
 				const terms = termsBox(doc, t, settings.terms);
 				setHidden(terms.wrap, !(creating && settings.terms));
@@ -426,7 +439,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				const password = make.field('input', t('phoneForgot.password'), {
 					type: 'password',
 					autocomplete: 'new-password',
-					...(settings.phonePassword ? { minlength: String(settings.phonePassword.minLength) } : {}),
+					...minimumOf(['phone_password']),
 				});
 				const send = button(t('phoneForgot.send'), { class: 'secondary' });
 				const submit = element(doc, 'button', { type: 'submit' }, t('phoneForgot.submit'));
@@ -658,7 +671,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 				const password = make.field('input', t('reset.password'), {
 					type: 'password',
 					autocomplete: 'new-password',
-					minlength: String(settings.passwordMinLength),
+					...minimumOf(['email_password']),
 					required: '',
 				});
 				const submit = element(doc, 'button', { type: 'submit' }, t('reset.submit'));
@@ -681,13 +694,15 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			const inviteView = (token) => {
 				const form = element(doc, 'form');
 				const name = make.field('input', t('fields.name'), { autocomplete: 'name', maxlength: '120' });
-				const password = on('email_password')
-					? make.field('input', t('invite.password'), {
-							type: 'password',
-							autocomplete: 'new-password',
-							minlength: String(settings.passwordMinLength),
-						})
-					: null;
+				// a password for either method: the server applies the one of the invitee's address (A2)
+				const password =
+					on('email_password') || on('phone_password')
+						? make.field('input', t('invite.password'), {
+								type: 'password',
+								autocomplete: 'new-password',
+								...minimumOf(['email_password', 'phone_password']),
+							})
+						: null;
 				const terms = termsBox(doc, t, settings.terms);
 				setHidden(terms.wrap, !settings.terms);
 				const submit = element(doc, 'button', { type: 'submit' }, t('invite.submit'));

@@ -19,7 +19,7 @@
 		"setupPageUrl": {
 			"type": "string",
 			"title": "Setup page",
-			"description": "Your page that takes the link's code, for example https://shop.example.com/account/setup/{code}, or a page with the sign-in widget (the code comes as ?ss_setup=<code>). Empty: your home page, with ?ss_setup=<code>.",
+			"description": "Your page that takes the link's code, for example https://www.example.com/account/setup/{code}, or a page with the sign-in widget (the code comes as ?ss_setup=<code>). Empty: your home page, with ?ss_setup=<code>.",
 			"default": "",
 			"maxLength": 2048
 		}

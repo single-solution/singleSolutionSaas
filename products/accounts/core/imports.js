@@ -417,7 +417,7 @@ const identityOf = (input, { email, phone, providers }, errors) => {
 };
 
 /**
- * A user (`users`, id `usr_…`): a shopper or a staff member with their history. The password hash is kept as
+ * A user (`users`, id `usr_…`): a customer or a staff member with their history. The password hash is kept as
  * given in a format Accounts checks (A1); unknown hash formats are refused. Verified flags need the address.
  * @param {Record<string, unknown>} record
  * @param {UserRules} rules

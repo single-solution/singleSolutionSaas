@@ -19,7 +19,7 @@ import { detailOf, labelOf } from '../core/activity.js';
 import { DEFAULT_ROLE, READY_ROLES, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
 import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
-import { SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
+import { OTHER_PRODUCTS, SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
 import {
 	keyAadOf,
 	outboxAadOf,
@@ -37,7 +37,6 @@ import {
 	verifyJwt,
 	verifyPassword,
 } from '../adapters/crypto.js';
-import { OTHER_PRODUCTS } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -314,7 +313,7 @@ export const createService = (product) => {
 	};
 
 	/** The paused text the merchant set (the refusal's detail, so their own screens can show it). @param {Site} s */
-	const pausedText = async (s) => (await product.settings.texts(s.websiteId))['signIn.paused'] ?? 'Sign-in is paused.';
+	const pausedText = async (s) => String((await product.settings.texts(s.websiteId))['signIn.paused']);
 
 	/**
 	 * The role of the address a code goes to, before it is sent (A6): its user's role, or the default role for a new

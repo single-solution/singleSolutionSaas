@@ -50,6 +50,8 @@ describe('before setup', () => {
 		expect(docs.text).toContain('accounts.phone_code');
 		expect(docs.text).toContain('/oauth/google/callback');
 		expect(docs.text).toContain('feature-email_password');
+		// a feature with no route of its own shows no empty route table
+		expect(docs.text).not.toContain('<tbody></tbody>');
 		// the API reference: what each call takes and answers, from schemas/api.json
 		for (const part of [
 			'<a href="#op-post-v1-sign-up-password"><code>POST /v1/sign-up/password</code></a> Sign up with an email address and a password',
