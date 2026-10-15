@@ -18572,6 +18572,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "An order number, name, email address or phone."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		}
@@ -18639,6 +18644,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "An order number, name, email address or phone."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		}
@@ -21980,6 +21990,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		},
@@ -22069,6 +22084,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		},
@@ -22148,6 +22168,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		},
@@ -22227,6 +22252,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		},
@@ -22311,6 +22341,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		},
@@ -22395,6 +22430,11 @@
 					"type": "string",
 					"maxLength": 120,
 					"description": "Part of the order number (or 3 or more of its digits, anywhere in it), the start of the email or city, part of the customer’s or address name, or 4 or more digits of a phone (matched on its last digits)."
+				},
+				"refundDue": {
+					"type": "string",
+					"enum": ["1", "true"],
+					"description": "Only canceled orders that still hold the shopper’s money (paid before or after the cancel and not all refunded yet): the refunds to make."
 				}
 			}
 		},

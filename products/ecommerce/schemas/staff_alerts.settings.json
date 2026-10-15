@@ -5,10 +5,10 @@
 		"events": {
 			"type": "array",
 			"title": "Alert staff of",
-			"default": ["placed", "cancelled", "proof_uploaded", "return_requested"],
+			"default": ["placed", "cancelled", "proof_uploaded", "return_requested", "refund_due"],
 			"items": {
 				"type": "string",
-				"enum": ["placed", "status", "paid", "proof_uploaded", "cancelled", "expired", "return_requested"]
+				"enum": ["placed", "status", "paid", "proof_uploaded", "cancelled", "expired", "return_requested", "refund_due"]
 			}
 		},
 		"recipients": {

@@ -44,6 +44,7 @@ export const STAFF_ALERT_EVENTS = Object.freeze({
 	cancelled: Object.freeze(/** @type {const} */ (['reason'])),
 	expired: Object.freeze(/** @type {const} */ (['reason'])),
 	return_requested: Object.freeze(/** @type {const} */ (['claimId', 'reference'])),
+	refund_due: Object.freeze(/** @type {const} */ (['amount'])),
 });
 /** The value the link to the order in the merchant's admin goes as (the setting `adminUrl` filled in), when it is set. */
 export const STAFF_ALERT_LINK = 'link';
@@ -65,6 +66,7 @@ export const ALL_STAFF_PERMISSIONS = Object.freeze(
 		cancelled: 'orders.read',
 		expired: 'orders.read',
 		return_requested: 'returns.manage',
+		refund_due: 'orders.refund',
 	}),
 );
 

@@ -271,6 +271,8 @@ export const stateAfterRefund = (paid, refunded) => (refunded >= paid ? 'refunde
  * @property {Date} [from] placed at or after
  * @property {Date} [to] placed before
  * @property {Date} [createdAfter] created after (E31)
+ * @property {boolean} [refundDue] only canceled orders that still hold the shopper's money (`refundDue=1`: paid before
+ *   or after the cancel, not all refunded)
  * @property {boolean} [unseen] not yet opened by the acting staff member (E31; the server adds who)
  * @property {string} [q] number, name, phone (its last digits), email or city
  */
@@ -357,6 +359,7 @@ export const orderFilters = (query) => {
 		value[name] = date;
 	}
 	if (query.unseen === '1' || query.unseen === 'true') value.unseen = true;
+	if (query.refundDue === '1' || query.refundDue === 'true') value.refundDue = true;
 	const q = typeof query.q === 'string' ? query.q.trim() : '';
 	if (q.length > MAX_SEARCH) return refuse('q', `Search for at most ${MAX_SEARCH} characters.`);
 	if (q) value.q = q;
@@ -385,6 +388,8 @@ export const orderQuery = (filters, { seenBy = '' } = {}) => {
 		query.placedAt = { ...(filters.from ? { $gte: filters.from } : {}), ...(filters.to ? { $lt: filters.to } : {}) };
 	if (filters.createdAfter) query.createdAt = { $gt: filters.createdAfter };
 	if (filters.unseen && seenBy) query.seenBy = { $ne: seenBy };
+	// a canceled order whose money is not all given back (orderMoney's refundDue)
+	if (filters.refundDue) Object.assign(query, { role: 'cancelled', $expr: { $gt: ['$payment.paid', '$payment.refunded'] } });
 	if (filters.q) {
 		const term = escapeRegex(filters.q);
 		const digits = filters.q.replace(/\D/g, '');

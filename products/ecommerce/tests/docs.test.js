@@ -504,6 +504,13 @@ describe('the messages, staff alerts and events the code sends', () => {
 				changes: [{ variantId: /** @type {any} */ (out.variants[0]).id, set: 3 }],
 			});
 			expect(restock.status, JSON.stringify(restock.json)).toBe(200);
+			// money that arrives at Payments after the shopper canceled: a refund due
+			const late = await place('online');
+			const paymentId = String((await shop.api('GET', `/v1/orders/${late.id}`)).json.payment.paymentId);
+			expect((await visit('POST', `/v1/shop/orders/${late.id}/cancel`, { signIn: sara })).status).toBe(200);
+			shop.payPayment(paymentId);
+			shop.advance(31_000);
+			expect((await shop.api('GET', `/v1/orders/${late.id}`)).json.payment.refundDue).toBeGreaterThan(0);
 			// an order its time to confirm cancels
 			await place('cod');
 			shop.advance(25 * 3_600_000);

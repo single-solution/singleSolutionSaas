@@ -71,8 +71,8 @@ export const createOrderEvents = (product, service) => {
 
 	/**
 	 * Alert the staff of an event the `staff_alerts` setting lists.
-	 * @param {Site} s @param {string} event `placed`, `status`, `paid`, `proof_uploaded`, `cancelled`, `expired` or
-	 *   `return_requested` @param {OrderRecord} order
+	 * @param {Site} s @param {string} event `placed`, `status`, `paid`, `proof_uploaded`, `cancelled`, `expired`,
+	 *   `return_requested` or `refund_due` @param {OrderRecord} order
 	 * @param {Record<string, string | number>} [extra]
 	 */
 	const alert = async (s, event, order, extra = {}) => {
@@ -154,6 +154,12 @@ export const createOrderEvents = (product, service) => {
 			amount: entry.amount,
 			reference: String(entry.reference ?? '').slice(0, 120),
 		});
+	});
+
+	// money for a canceled order that arrived at Payments after the cancel: staff refund it
+	service.on('order.refund_due', async (s, { order, amount }) => {
+		const { money } = await s.format();
+		await alert(s, 'refund_due', order, { amount: money(Number(amount), order.totals.currency) });
 	});
 
 	service.on('order.proof_uploaded', async (s, { order, reference }) => {

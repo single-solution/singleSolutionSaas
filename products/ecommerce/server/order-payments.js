@@ -233,6 +233,7 @@ export const createOrderPayments = (product, service) => {
 		);
 		if (!changed) return null;
 		await service.emit('order.payment_recorded', s, { order: changed, entry });
+		if (late) await service.emit('order.refund_due', s, { order: changed, amount: payment.amount });
 		if (!late && state === 'paid' && order.payment.state !== 'paid')
 			await service.emit('order.paid', s, { order: changed, entry });
 		return changed;

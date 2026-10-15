@@ -222,20 +222,35 @@ describe('when Payments cannot be reached, and money paid after the cancel (K-13
 	});
 
 	it('finds money paid after the cancel when staff read the order, and refunds it through Payments', async () => {
+		await shop.setting('staff_alerts', 'recipients', ['ops@shop.example.com']);
 		const { order, token, paymentId } = await placeOrder();
 		await visit('POST', `/v1/shop/orders/${order.id}/cancel`, token);
 		shop.payPayment(paymentId);
 		shop.advance(31_000);
+		const sent = shop.messages().length;
 		const read = await shop.api('GET', `/v1/orders/${order.id}`);
 		const total = read.json.totals.total;
 		expect(read.json).toMatchObject({ status: 'cancelled', payment: { paid: total, refundDue: total, refundable: total } });
 		expect(read.json.payments).toEqual([
 			expect.objectContaining({ method: 'online', reference: paymentId, note: 'Paid after the order was canceled' }),
 		]);
+		// staff are told (staff alert event refund_due, on by default), and the refunds to make are listed
+		const alerts = shop
+			.messages()
+			.slice(sent)
+			.filter((message) => message.template === 'ecommerce.staff_refund_due');
+		expect(alerts).toHaveLength(1);
+		expect(alerts[0]?.values).toMatchObject({ number: order.number, amount: expect.stringMatching(/^USD /) });
+		const due = await shop.api('GET', '/v1/orders?refundDue=1');
+		expect(due.json.items.map((/** @type {any} */ item) => item.id)).toContain(order.id);
+		expect((await shop.api('GET', '/v1/orders/count?refundDue=1')).json.count).toBeGreaterThanOrEqual(1);
 		const refunded = await shop.api('POST', `/v1/orders/${order.id}/refunds`, { amount: total, reason: 'Canceled order' });
 		expect(refunded.status).toBe(201);
 		expect(refunded.json.refund).toMatchObject({ online: total, manual: 0 });
 		expect(refunded.json.order.payment).toMatchObject({ refundDue: 0, state: 'refunded' });
+		const after = await shop.api('GET', '/v1/orders?refundDue=1');
+		expect(after.json.items.map((/** @type {any} */ item) => item.id)).not.toContain(order.id);
+		await shop.setting('staff_alerts', 'recipients', []);
 		// money is never recorded twice
 		shop.advance(31_000);
 		expect((await shop.api('GET', `/v1/orders/${order.id}`)).json.payment.paid).toBe(total);

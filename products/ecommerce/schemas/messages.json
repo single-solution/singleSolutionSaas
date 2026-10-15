@@ -220,6 +220,23 @@
 			}
 		},
 		{
+			"key": "ecommerce.staff_refund_due",
+			"name": "Refund due",
+			"description": "Tells the staff that money for a canceled order arrived at Payments after the cancel, so it is to be refunded (staff alert event refund_due).",
+			"values": ["id", "number", "name", "total", "status", "paymentMethod", "business", "amount", "link", "phone"],
+			"required": true,
+			"channels": {
+				"email": {
+					"subject": "Refund due on order {number}",
+					"text": "A payment of {amount} for order {number} from {name} arrived after the order was canceled. Refund it to the shopper.{?phone}\nPhone: {phone}{/phone}{?link}\n\nOpen the order: {link}{/link}"
+				},
+				"sms": {
+					"text": "Order {number}: {amount} arrived after the cancel. Refund it.{?link} {link}{/link}"
+				},
+				"whatsapp": null
+			}
+		},
+		{
 			"key": "ecommerce.staff_return_requested",
 			"name": "New claim",
 			"description": "Tells the staff a shopper made a return, exchange or warranty claim (staff alert event return_requested).",
