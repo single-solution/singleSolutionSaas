@@ -31,7 +31,7 @@ describe('the website Setup sheet', () => {
 			recommendFor: feature.recommendFor ?? [],
 		}));
 		const manual = adviseFeatures(features, { pays: ['cod', 'bank_transfer'], countries: ['PK'] });
-		expect(manual.recommended.map((entry) => entry.feature)).toEqual(['bank_transfer']);
+		expect(manual.recommended.map((entry) => entry.feature)).toEqual(['manual_payments']);
 		const online = adviseFeatures(features, { pays: ['online'], countries: ['US'] });
 		expect(online.recommended.map((entry) => entry.feature)).toEqual(['stripe', 'paypal', 'payment_api', 'refunds']);
 	});
