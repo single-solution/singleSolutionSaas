@@ -10,6 +10,7 @@
 import { activityFilter, actorOf, countHandlers, paginate, problem } from '@ss/app-kit';
 import { createId, validateActivityCopy } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
+import { nationalNumberOf } from '@ss/contracts/phone';
 import { randomToken, sha256Hex } from '@ss/protocol';
 import { detailOf, labelOf } from '../core/activity.js';
 import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
@@ -37,6 +38,8 @@ import { bodyOf } from './service.js';
 /** @typedef {import('./flows.js').Flows} Flows */
 
 const PERMISSIONS_TTL_MS = 5 * 60_000;
+/** The fewest digits the users list's search by the end of a number takes (A7). */
+const MIN_PHONE_END = 4;
 /** The users list's statuses (`blocked`: blocked users, whatever their status). */
 const USER_STATUSES = Object.freeze(['active', 'pending', 'invited', 'blocked']);
 /** A product id, as the activity copies' `productId` filter takes it. */
@@ -133,12 +136,19 @@ export const createManage = (product, service, flows) => {
 	 * The filters of the users list and its counts: `q`, `role` and `roles` (a comma list; users of any of them),
 	 * `permission` (`<product>:<key>`: users whose role grants it, K6), `status` (active, pending, invited, blocked),
 	 * `blocked` (true or false), `deletion=1`, `phone` (exact, as typed in the website's phone format), `phoneDigits`
-	 * (the last 10 digits) and `createdAfter` (ISO-8601). A role or status that does not fit is ignored; a phone,
-	 * permission or time that does not fit answers 422.
+	 * (the end of a national number, A7: a whole number typed any usual way counts by its national number, so its trunk
+	 * prefix or calling code does not matter; else at least 4 digits the number ends with) and `createdAfter`
+	 * (ISO-8601). A role or status that does not fit is ignored; a phone, permission or time that does not fit answers
+	 * 422.
 	 * @param {any} ctx @param {import('./service.js').Site} s
 	 * @returns {Promise<import('../adapters/store.js').UserQuery>}
 	 */
 	const userQuery = async (ctx, s) => {
+		/** The national number of a whole number as typed, else its digits (the end of a number). @param {any} site @param {string} typed */
+		const phoneEndOf = async (site, typed) => {
+			const whole = await service.phoneOf(site, typed);
+			return (whole && nationalNumberOf(whole)) ?? typed.replace(/\D/g, '');
+		};
 		const { q, role, roles, status, deletion, blocked, phone, phoneDigits, permission, createdAfter } = ctx.query;
 		const named = [role, ...(typeof roles === 'string' ? roles.split(',') : [])]
 			.filter((key) => typeof key === 'string')
@@ -154,9 +164,9 @@ export const createManage = (product, service, flows) => {
 		const exact = typeof phone === 'string' && phone !== '' ? await service.phoneOf(s, phone) : null;
 		if (typeof phone === 'string' && phone !== '' && !exact)
 			throw invalid('phone', 'Enter the phone number with its country code.');
-		const digits = typeof phoneDigits === 'string' ? phoneDigits.replace(/\D/g, '').slice(-10) : '';
-		if (typeof phoneDigits === 'string' && phoneDigits !== '' && digits.length < 7)
-			throw invalid('phoneDigits', 'phoneDigits is the last 10 digits of a number.');
+		const end = typeof phoneDigits === 'string' && phoneDigits !== '' ? await phoneEndOf(s, phoneDigits) : '';
+		if (typeof phoneDigits === 'string' && phoneDigits !== '' && end.length < MIN_PHONE_END)
+			throw invalid('phoneDigits', `phoneDigits is a number, or at least ${MIN_PHONE_END} digits it ends with.`);
 		const after = typeof createdAfter === 'string' && createdAfter !== '' ? new Date(createdAfter) : null;
 		if (after && Number.isNaN(after.getTime())) throw invalid('createdAfter', 'createdAfter is an ISO-8601 time.');
 		return {
@@ -165,7 +175,7 @@ export const createManage = (product, service, flows) => {
 			...(USER_STATUSES.includes(status) ? { status } : {}),
 			...(blocked === 'true' || blocked === 'false' ? { blocked: blocked === 'true' } : {}),
 			...(exact ? { phone: exact } : {}),
-			...(digits ? { phoneDigits: digits } : {}),
+			...(end ? { phoneEnd: end } : {}),
 			...(after ? { createdAfter: after } : {}),
 			deletion: deletion === '1',
 		};

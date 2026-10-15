@@ -3,8 +3,8 @@
  * order: `roles` and `fields` (found by `key`), `users` (`usr_…`), `requests` (`rrq_…`, A5) and `copies` (the source
  * system's activity entries). Each record goes through `core/imports.js` with what the checks read once per call (the
  * role keys, the custom fields, the website's phone format); email addresses and phone numbers another user holds are
- * refused in the dry run too; a two-step secret is sealed at once (A8) and the phone's last digits derived as the
- * store does. A user or role request without a `createdAt` from the source keeps the stored one, else gets the
+ * refused in the dry run too; a two-step secret is sealed at once (A8) and the phone's reversed national number derived
+ * as the store does. A user or role request without a `createdAt` from the source keeps the stored one, else gets the
  * import's time; a user's `roleSince` is the source's, else its `createdAt`. `finish` derives nothing (every derived
  * value is set per record) and reports what points nowhere; the sums are what `ss-import verify` compares. Nothing is
  * sent: no message, event, alert or activity copy, no timer.
@@ -21,7 +21,7 @@ import {
 import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
 import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 import { isPasswordHash } from './crypto.js';
-import { createStore, phoneDigitsOf } from './store.js';
+import { createStore, phoneReversedOf } from './store.js';
 
 /** @typedef {import('@ss/app-kit').ImportCollection} ImportCollection */
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -212,7 +212,7 @@ export const createImportOptions = (deps) => ({
 						...user,
 						createdAt,
 						roleSince: user.roleSince ?? createdAt,
-						phoneDigits: phoneDigitsOf(user.phone),
+						phoneReversed: phoneReversedOf(user.phone),
 						// the plain secret came only over this server-token call; only its sealed form is kept
 						twoStep: twoStep ? deps.twoStepFromImport(ctx.websiteId, user.id, twoStep) : null,
 					},
@@ -235,7 +235,7 @@ export const createImportOptions = (deps) => ({
 	},
 
 	/**
-	 * Accounts derives nothing at the end (the phone's last digits, `createdAt`, `roleSince` and the identity are set per
+	 * Accounts derives nothing at the end (the phone's reversed national number, `createdAt`, `roleSince` and the identity are set per
 	 * record): it reports users whose role no longer exists (they act with the role for new sign-ups until it is imported
 	 * again) and
 	 * requests whose user is gone, for example after a prune.

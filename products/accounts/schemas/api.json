@@ -2505,7 +2505,7 @@
 				},
 				"phoneDigits": {
 					"type": "string",
-					"description": "The last 10 digits of a number (at least 7; 422 otherwise)."
+					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -2559,7 +2559,7 @@
 				},
 				"phoneDigits": {
 					"type": "string",
-					"description": "The last 10 digits of a number (at least 7; 422 otherwise)."
+					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -2619,7 +2619,7 @@
 				},
 				"phoneDigits": {
 					"type": "string",
-					"description": "The last 10 digits of a number (at least 7; 422 otherwise)."
+					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -3518,7 +3518,7 @@
 				},
 				"phoneDigits": {
 					"type": "string",
-					"description": "The last 10 digits of a number (at least 7; 422 otherwise)."
+					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -3572,7 +3572,7 @@
 				},
 				"phoneDigits": {
 					"type": "string",
-					"description": "The last 10 digits of a number (at least 7; 422 otherwise)."
+					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -3632,7 +3632,7 @@
 				},
 				"phoneDigits": {
 					"type": "string",
-					"description": "The last 10 digits of a number (at least 7; 422 otherwise)."
+					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
 				"createdAfter": {
 					"type": "string",

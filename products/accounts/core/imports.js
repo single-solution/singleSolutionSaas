@@ -313,10 +313,10 @@ export const checkImportedField = (record) => {
 
 /**
  * A user as the import check gives it: the stored user record, but two-step still as the importer sent it (the
- * adapter seals the secret at once, A8), without the phone's last digits (the store derives them) and with
+ * adapter seals the secret at once, A8), without the phone's reversed national number (the store derives it) and with
  * `createdAt` and `roleSince` only when the source gives them (`roleSince` defaults to `createdAt`; the adapter sets
  * both when the source gives neither).
- * @typedef {Omit<import('./profile.js').UserRecord, 'twoStep' | 'createdAt' | 'roleSince' | 'phoneDigits'> & {
+ * @typedef {Omit<import('./profile.js').UserRecord, 'twoStep' | 'createdAt' | 'roleSince' | 'phoneReversed'> & {
  *   createdAt?: Date, roleSince?: Date, twoStep: { secret: string, recoveryHashes: string[] } | null }} ImportedUser
  */
 

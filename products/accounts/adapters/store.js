@@ -24,6 +24,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
+import { nationalNumberOf } from '@ss/contracts/phone';
 import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -59,9 +60,9 @@ import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 /**
  * The filters of the users list (and its counts): text in the name, email or phone; roles (one or several); a status
  * (`active`, `pending`, `invited`, or `blocked` for blocked users); blocked or not; users who asked to be deleted; an
- * exact phone, the last 10 digits of a phone, and users made after a time (PLAN 0.8.10 A4).
+ * exact phone, the end of a national number (digits, A7), and users made after a time (PLAN 0.8.10 A4).
  * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, phone?: string,
- *   phoneDigits?: string, createdAfter?: Date }} UserQuery
+ *   phoneEnd?: string, createdAfter?: Date }} UserQuery
  */
 
 /**
@@ -149,7 +150,7 @@ export const INDEXES = [
 	{ collection: USERS, keys: { websiteId: 1, role: 1 }, name: 'by_role' },
 	{ collection: USERS, keys: { websiteId: 1, status: 1 }, name: 'by_status' },
 	{ collection: USERS, keys: { websiteId: 1, 'deletion.dueAt': 1 }, name: 'deletions_due' },
-	{ collection: USERS, keys: { websiteId: 1, phoneDigits: 1 }, name: 'by_phone_digits' },
+	{ collection: USERS, keys: { websiteId: 1, phoneReversed: 1 }, name: 'by_phone_reversed' },
 	{ collection: SESSIONS, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: SESSIONS, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
 	{ collection: SESSIONS, keys: { expiresAt: 1 }, name: 'expire', expireAfterSeconds: SESSION_KEPT_SECONDS },
@@ -180,8 +181,17 @@ export const INDEXES = [
 	{ collection: OUTBOX, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 ];
 
-/** The last 10 digits of an E.164 number (A4: a number found however it was typed). @param {string | null} phone */
-export const phoneDigitsOf = (phone) => (phone ? phone.replace(/\D/g, '').slice(-10) : null);
+/**
+ * The national number of a phone, written backwards, for the users list's search by the end of a number (A7): an
+ * index finds a number's end as the start of this text. The national number follows the number's own country (its
+ * digits after the calling code), never a fixed count of last digits.
+ * @param {string | null} phone E.164
+ * @returns {string | null}
+ */
+export const phoneReversedOf = (phone) => {
+	const national = nationalNumberOf(phone);
+	return national === null ? null : [...national].reverse().join('');
+};
 
 const NO_ID = { projection: { _id: 0 } };
 const MAX_LIST = 100;
@@ -214,7 +224,7 @@ export const createStore = (data, { now }) => {
 	 * The filter of the users list and of its counts (one builder, so a count always equals the list).
 	 * @param {UserQuery} query
 	 */
-	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneDigits, createdAfter }) => {
+	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneEnd, createdAfter }) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
 		/** @type {Record<string, unknown>[]} */
@@ -230,7 +240,7 @@ export const createStore = (data, { now }) => {
 		if (blocked === false) and.push({ blocked: null });
 		if (deletion) filter.deletion = { $ne: null };
 		if (phone) filter.phone = phone;
-		if (phoneDigits) filter.phoneDigits = phoneDigits;
+		if (phoneEnd) filter.phoneReversed = { $regex: `^${[...phoneEnd].reverse().join('')}` };
 		if (createdAfter) filter.createdAt = { $gt: createdAfter };
 		return { ...filter, ...(and.length > 0 ? { $and: and } : {}), websiteId };
 	};
@@ -296,7 +306,7 @@ export const createStore = (data, { now }) => {
 			create: async (user) => {
 				const id = createId('usr');
 				try {
-					await users.insertOne({ ...user, id, phoneDigits: phoneDigitsOf(user.phone), roleSince: at() });
+					await users.insertOne({ ...user, id, phoneReversed: phoneReversedOf(user.phone), roleSince: at() });
 				} catch (error) {
 					if (/** @type {{ code?: number }} */ (error).code === 11000) return null;
 					throw error;
@@ -308,10 +318,10 @@ export const createStore = (data, { now }) => {
 			 * @returns {Promise<UserRecord | null>} null when missing or the email or phone is taken
 			 */
 			update: async (id, set, more = {}) => {
-				// the phone's last digits and the time the role was set follow the fields they come from (A4, A5)
+				// the phone's reversed national number and the time the role was set follow the fields they come from (A4, A5)
 				const full = {
 					...set,
-					...('phone' in set ? { phoneDigits: phoneDigitsOf(/** @type {string | null} */ (set.phone)) } : {}),
+					...('phone' in set ? { phoneReversed: phoneReversedOf(/** @type {string | null} */ (set.phone)) } : {}),
 					...('role' in set ? { roleSince: at() } : {}),
 				};
 				// nothing to change (for example two-step turned off twice): the user as stored

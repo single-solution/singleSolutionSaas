@@ -255,7 +255,7 @@ describe('import routes', () => {
 		const customer = await store.users.get(ids.customer);
 		expect(customer).toMatchObject({
 			phone: '+447700900321',
-			phoneDigits: '7700900321',
+			phoneReversed: '1230090077',
 			identity: 'phone',
 			role: 'customer',
 			roleSince: new Date('2024-03-01T00:00:00Z'),

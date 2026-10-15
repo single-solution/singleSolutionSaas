@@ -189,6 +189,8 @@ Pure and browser-safe; every product normalizes phones with it, so one person ha
 - `websiteCallingCode(setting, country)`: the website's default calling code, its setting else the calling code of its
   business.json `country`; `callingCodeOf(country)`.
 - `PHONE_COUNTRIES` (ISO codes a setting may name) and `phoneInCountries(phone, countries)` (`[]` = any).
+- `nationalNumberOf(phone)`: the national significant number of an E.164 number (its digits after the calling code),
+  or null; products search numbers by its end, never by a fixed count of last digits.
 
 ## CSV (`@ss/contracts/csv`)
 

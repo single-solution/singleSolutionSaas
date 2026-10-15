@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from '../src/phone.js';
+import {
+	PHONE_COUNTRIES,
+	callingCodeOf,
+	nationalNumberOf,
+	normalisePhone,
+	phoneInCountries,
+	websiteCallingCode,
+} from '../src/phone.js';
 
 /** @param {string} defaultCallingCode @param {string} [trunkPrefix] */
 const site = (defaultCallingCode, trunkPrefix = '') => ({ defaultCallingCode, trunkPrefix });
@@ -177,5 +184,23 @@ describe('phone numbers (one normalizer for every product)', () => {
 		expect(phoneInCountries('+447700900123', ['FR'])).toBe(false);
 		expect(phoneInCountries('+14155550100', ['CA'])).toBe(true);
 		expect(phoneInCountries('+14155550100', ['ZZ'])).toBe(false);
+	});
+});
+
+describe('nationalNumberOf', () => {
+	it('splits an E.164 number after its calling code, for any country', () => {
+		expect(nationalNumberOf('+447700900123')).toBe('7700900123');
+		expect(nationalNumberOf('+4930123456')).toBe('30123456');
+		expect(nationalNumberOf('+14155550100')).toBe('4155550100');
+		expect(nationalNumberOf('+390612345678')).toBe('0612345678');
+		expect(nationalNumberOf('+97143334444')).toBe('43334444');
+		expect(nationalNumberOf('+80012345678')).toBe('12345678');
+	});
+
+	it('is null for anything that is not an E.164 number with an assigned code', () => {
+		expect(nationalNumberOf('07700900123')).toBeNull();
+		expect(nationalNumberOf('+')).toBeNull();
+		expect(nationalNumberOf('+2101234567')).toBeNull();
+		expect(nationalNumberOf(null)).toBeNull();
 	});
 });

@@ -197,3 +197,16 @@ export const normalisePhone = (input, options = {}) => {
  */
 export const phoneInCountries = (phone, countries) =>
 	countries.length === 0 || countries.some((country) => phone.startsWith(callingCodeOf(country) || 'x'));
+
+/**
+ * The national significant number of an E.164 number: its digits after the calling code (an Italian number keeps its
+ * 0), or null when it is not E.164 with an assigned code. Products search numbers by it (a national number of any
+ * length, by its own country's code), never by a fixed count of last digits.
+ * @param {unknown} phone E.164
+ * @returns {string | null}
+ */
+export const nationalNumberOf = (phone) => {
+	if (typeof phone !== 'string' || !/^\+\d{8,15}$/.test(phone)) return null;
+	const code = leadingCode(phone.slice(1));
+	return code === '' ? null : phone.slice(1 + code.length);
+};

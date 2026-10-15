@@ -108,14 +108,27 @@ describe('A4: staff and customer management', () => {
 		expect(removed.json).toMatchObject({ email: null, addresses: [] });
 	});
 
-	it('finds users by phone, the last 10 digits, a permission, several roles and the time they joined', async () => {
+	it('finds users by phone, the end of their national number, a permission, several roles and the time they joined', async () => {
 		/** @param {string} query */
 		const ids = async (query) => (await server('GET', `/v1/users?${query}`)).json.items.map((/** @type {any} */ u) => u.id);
 		expect(await ids('phone=07700900001')).toEqual([people.support.id]);
 		expect(code(await server('GET', '/v1/users?phone=abc'))).toBe('validation_failed');
 		expect(await ids('phoneDigits=447700900002')).toEqual([people.customer.id]);
 		expect(await ids('phoneDigits=7700900002')).toEqual([people.customer.id]);
+		expect(await ids(`phoneDigits=${encodeURIComponent('07700 900002')}`)).toEqual([people.customer.id]);
 		expect(code(await server('GET', '/v1/users?phoneDigits=12'))).toBe('validation_failed');
+		// A7: national numbers of any length, by their own country's rules (not the last 10 digits)
+		const berlin = (await server('POST', '/v1/users', { name: 'Bea Berlin', phone: '+49 30 123456' })).json;
+		const rome = (await server('POST', '/v1/users', { name: 'Rita Rome', phone: '+39 06 1234 5678' })).json;
+		expect(berlin.phone).toBe('+4930123456');
+		expect(await ids('phoneDigits=%2B4930123456')).toEqual([berlin.id]);
+		expect(await ids('phoneDigits=123456')).toEqual([berlin.id]);
+		expect(await ids(`phoneDigits=${encodeURIComponent('030 123456')}`)).toEqual([berlin.id]);
+		// Italian numbers keep their 0
+		expect(await ids('phoneDigits=0612345678')).toEqual([rome.id]);
+		expect(await ids('phoneDigits=5678')).toEqual([rome.id]);
+		await server('DELETE', `/v1/users/${berlin.id}`, { reason: 'test' });
+		await server('DELETE', `/v1/users/${rome.id}`, { reason: 'test' });
 		expect((await ids('permission=chat:inbox.reply')).sort()).toEqual(
 			[people.owner.id, people.manager.id, people.support.id].sort(),
 		);

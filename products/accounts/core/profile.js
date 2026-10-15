@@ -226,7 +226,8 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  *   (K-27)
  * @property {Date | null} lockedUntil
  * @property {number} [lockLevel] how far a growing lock has grown (A9)
- * @property {string | null} [phoneDigits] the last 10 digits of the phone (A4)
+ * @property {string | null} [phoneReversed] the phone's national number written backwards, for the search by the end of
+ *   a number (A7)
  * @property {Date} roleSince when the role was last set (A5: "Member since"; an import gives the source's, else
  *   `createdAt`)
  * @property {{ version: string, acceptedAt: Date } | null} terms
