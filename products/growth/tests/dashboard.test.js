@@ -16,6 +16,8 @@ import { byText, cleanup, click, render } from '@ss/ui/testing';
 import { manifest, SHARED_SETTINGS } from '../adapters/product.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
+import { LISTS } from '../core/lists.js';
+import { type } from '@ss/ui/testing';
 
 const WEBSITE = 'web_1';
 const DOMAIN = 'shop.example.com';
@@ -29,7 +31,12 @@ const VALUES = {
 	google_tags: { ga4Id: 'G-ABCD12', ga4ViaGtm: true, gtmId: '' },
 	visitor_analytics: { detail: 'sessions', retentionMonths: 6 },
 	web_vitals: { toGa4: true },
-	robots_verification: { blockAiCrawlers: true, sitemaps: [`https://${DOMAIN}/sitemap.xml`], yandexVerification: 'ya-1' },
+	robots_verification: {
+		aiCrawlers: ['GPTBot'],
+		blockPaths: ['/cart'],
+		sitemaps: [`https://${DOMAIN}/sitemap.xml`],
+		yandexVerification: 'ya-1',
+	},
 	searches_404s: { searchParams: 'term' },
 	indexnow: { key: 'abcdefgh', keyPath: '/indexnow-key.txt' },
 	seo_checklist: { paths: ['/', '/shop'] },
@@ -72,11 +79,18 @@ const viewerIn = (timeZone) => {
 const THEME = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
 const FORMAT = { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
 
+/** The writes the dashboard made. @type {Array<{ path: string, body: any }>} */
+const sent = [];
+
 /** @param {string[]} on */
 const serve = (on) =>
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async (/** @type {string} */ path) => {
+		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit | undefined} */ init) => {
+			if (init?.method === 'PUT') {
+				sent.push({ path, body: JSON.parse(String(init.body)) });
+				return new Response(JSON.stringify(JSON.parse(String(init.body))), { status: 200 });
+			}
 			const base = `/v1/dashboard/websites/${WEBSITE}`;
 			const body =
 				path === '/v1/dashboard/defaults'
@@ -90,15 +104,17 @@ const serve = (on) =>
 								checklist: { connections: [], widget: null, business: { found: true } },
 								recentChanges: [],
 							}
-						: path === `${base}/settings`
-							? settingsAnswer(on)
-							: path === `${base}/texts`
-								? { texts: [] }
-								: path === `${base}/theme`
-									? { theme: THEME }
-									: path === `${base}/format`
-										? { format: FORMAT }
-										: null;
+						: path.startsWith(`${base}/lists/`)
+							? { value: LISTS[/** @type {keyof typeof LISTS} */ (path.slice(`${base}/lists/`.length))].defaults() }
+							: path === `${base}/settings`
+								? settingsAnswer(on)
+								: path === `${base}/texts`
+									? { texts: [] }
+									: path === `${base}/theme`
+										? { theme: THEME }
+										: path === `${base}/format`
+											? { format: FORMAT }
+											: null;
 			return new Response(JSON.stringify(body), { status: body ? 200 : 404 });
 		}),
 	);
@@ -161,7 +177,7 @@ describe('the dashboard (setup only)', () => {
 			TEXTS.setup.sessions,
 			'6 months',
 			'Web Vitals',
-			TEXTS.setup.blocked,
+			TEXTS.setup.blocked.replace('{count}', '1'),
 			'yandex-verification',
 			`https://${DOMAIN}/indexnow-key.txt`,
 			'2 pages',
@@ -226,6 +242,59 @@ describe('the dashboard (setup only)', () => {
 		const { container } = render(<Overview {...props} />);
 		await settle();
 		expect(container.textContent).not.toContain(TEXTS.setup.title);
+	});
+
+	it('edits a merchant list: add, rename, reorder and remove, then saves the whole list (G1)', async () => {
+		sent.length = 0;
+		serve(ON.filter((key) => key !== 'google_tags').concat('conversion_funnel'));
+		const { container } = render(<Settings {...props} />);
+		await settle();
+		const card = /** @type {HTMLElement} */ (byText(container, TEXTS.lists.goals.title).closest('section'));
+		expect(card.textContent).toContain('1. Purchase');
+		expect(card.textContent).toContain('2. Contact');
+		await click(byText(card, TEXTS.lists.add, 'button'));
+		// the new entry's key, name and event (the kind is a select)
+		const fresh = [
+			.../** @type {HTMLElement} */ ([...card.querySelectorAll('.rounded-card')].at(-1)).querySelectorAll('input'),
+		];
+		await type(/** @type {HTMLInputElement} */ (fresh[1]), 'Booked a demo');
+		await type(/** @type {HTMLInputElement} */ (fresh[2]), 'book_demo');
+		// move the new goal up, rename Purchase, remove Contact
+		const ups = [...card.querySelectorAll(`button[aria-label="${TEXTS.lists.up}"]`)];
+		await click(/** @type {HTMLElement} */ (ups.at(-1)));
+		await type(
+			/** @type {HTMLInputElement} */ ([...card.querySelectorAll('input')].find((input) => input.value === 'Purchase')),
+			'Order',
+		);
+		const removes = [...card.querySelectorAll('button')].filter((button) => button.textContent === TEXTS.lists.remove);
+		await click(/** @type {HTMLElement} */ (removes.at(-1)));
+		await click(byText(card, TEXTS.lists.save, 'button'));
+		await settle();
+		expect(sent.at(-1)).toEqual({
+			path: `/v1/dashboard/websites/${WEBSITE}/lists/goals`,
+			body: {
+				value: [
+					{ key: 'purchase', name: 'Order', kind: 'event', match: 'purchase' },
+					{ key: 'new_3', name: 'Booked a demo', kind: 'event', match: 'book_demo' },
+				],
+			},
+		});
+	});
+
+	it('applies the online store preset to robots and verification in one click (G12)', async () => {
+		sent.length = 0;
+		serve(ON);
+		const reload = vi.fn();
+		vi.stubGlobal('location', { ...window.location, reload });
+		const { container } = render(<Settings {...props} />);
+		await settle();
+		await click(byText(container, TEXTS.lists.preset.apply, 'button'));
+		await settle();
+		expect(sent.map((write) => [write.path.split('/').pop(), write.body.value])).toEqual([
+			['robots_verification.blockSearchPages', true],
+			['robots_verification.blockParameters', 'sort, minPrice, maxPrice, inStock'],
+			['robots_verification.blockPaths', ['/cart', '/checkout', '/account']],
+		]);
 	});
 
 	it('Settings warn about the law, name ids that are not loaded and show what the site serves', async () => {

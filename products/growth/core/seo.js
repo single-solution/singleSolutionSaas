@@ -1,10 +1,13 @@
 /**
  * Site-wide SEO (PLAN 0.8.9): the robots.txt the merchant's site serves (their rules plus their sitemaps), the
- * verification tags (Google, Bing, Meta, Yandex), IndexNow submissions (the merchant's key, URLs of the website's exact
+ * verification tags (Google, Bing, Meta, Yandex and the merchant's own, G8), IndexNow submissions (the merchant's key, URLs of the website's exact
  * domain) and the activity-log texts of a submission and of an SEO checklist run (the checks themselves are
  * `core/seo-checks.js`). Pure: the fetching is done by the caller.
  * @module
  */
+
+import { escapeHtml } from '@ss/contracts/text';
+import { readList, verificationContentOf } from './lists.js';
 
 /** URLs one IndexNow submission takes (the IndexNow limit). */
 const MAX_INDEXNOW_URLS = 10_000;
@@ -26,9 +29,9 @@ const VERIFICATION_TAGS = Object.freeze({
 export const VERIFICATION_NAMES = Object.freeze(Object.values(VERIFICATION_TAGS));
 
 /**
- * Crawlers that only collect AI training data (PLAN 0.8.10 G4: the list is kept in code). Search engines and AI
- * answer bots that cite pages (Googlebot, Bingbot, OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot) are
- * not on it.
+ * Known crawlers that only collect AI training data (G13: the merchant ticks the ones robots.txt keeps out and adds
+ * their own user agents). Search engines and AI answer bots that cite pages (Googlebot, Bingbot, OAI-SearchBot,
+ * ChatGPT-User, PerplexityBot, Claude-SearchBot) are not on it.
  */
 export const AI_TRAINING_CRAWLERS = Object.freeze([
 	'GPTBot',
@@ -41,6 +44,37 @@ export const AI_TRAINING_CRAWLERS = Object.freeze([
 	'meta-externalagent',
 	'cohere-training-data-crawler',
 ]);
+
+/** Most of the merchant's own AI crawler user agents robots.txt names. */
+const MAX_MORE_CRAWLERS = 30;
+
+/**
+ * The AI training crawlers robots.txt keeps off the whole site (G13): the known ones the merchant ticked
+ * (`aiCrawlers`), then their own user agents (`moreAiCrawlers`: letters, digits, `.`, `_` and `-`, at most 100, at most
+ * {@link MAX_MORE_CRAWLERS}), each once.
+ * @param {Record<string, unknown>} values the `robots_verification` settings
+ * @returns {string[]}
+ */
+export const aiCrawlersOf = (values) => {
+	const picked = Array.isArray(values.aiCrawlers) ? values.aiCrawlers : [];
+	const more = (Array.isArray(values.moreAiCrawlers) ? values.moreAiCrawlers : [])
+		.map((agent) => (typeof agent === 'string' ? agent.trim() : ''))
+		.filter((agent) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(agent))
+		.slice(0, MAX_MORE_CRAWLERS);
+	const known = AI_TRAINING_CRAWLERS.filter((name) => picked.includes(name));
+	return [...new Set([...known, ...more])];
+};
+
+/**
+ * The online store preset of the robots.txt settings (G12): what a shop keeps out of crawling — search results, its
+ * sorted and filtered lists (the parameter names of Ecommerce's storefront) and its private pages. Every website
+ * starts with none of the shop names; the dashboard applies this preset in one click.
+ */
+export const ONLINE_STORE_PRESET = Object.freeze({
+	blockSearchPages: true,
+	blockParameters: 'sort, minPrice, maxPrice, inStock',
+	blockPaths: Object.freeze(['/cart', '/checkout', '/account']),
+});
 
 /**
  * A verification token from what the merchant pasted: the token itself, or the `content` of a pasted meta tag.
@@ -55,14 +89,26 @@ export const tokenOf = (value) => {
 };
 
 /**
- * The verification tags of the settings, as `{ name, content }` and as HTML for the page head.
+ * The verification tags of the settings and of the merchant's own list (G8; an entry that does not pass the list's
+ * check is left out), as `{ name, content }` and as HTML for the page head (escaped).
  * @param {Record<string, unknown>} values the `robots_verification` settings
+ * @param {unknown[]} [more] the `verification_tags` list
  */
-export const verificationOf = (values) => {
-	const tags = Object.entries(VERIFICATION_TAGS)
-		.map(([setting, name]) => ({ name, content: tokenOf(values[setting]) }))
-		.filter(/** @returns {tag is { name: string, content: string }} */ (tag) => tag.content !== null);
-	return { tags, html: tags.map((tag) => `<meta name="${tag.name}" content="${tag.content}">`).join('\n') };
+export const verificationOf = (values, more = []) => {
+	const own = readList('verification_tags', more).map((tag) => ({
+		name: String(tag.name),
+		content: verificationContentOf(tag.content),
+	}));
+	const tags = [
+		...Object.entries(VERIFICATION_TAGS).map(([setting, name]) => ({ name, content: tokenOf(values[setting]) })),
+		...own,
+	]
+		.filter(/** @returns {tag is { name: string, content: string }} */ (tag) => tag.content !== null)
+		.filter((tag, at, all) => all.findIndex((other) => other.name.toLowerCase() === tag.name.toLowerCase()) === at);
+	return {
+		tags,
+		html: tags.map((tag) => `<meta name="${escapeHtml(tag.name)}" content="${escapeHtml(tag.content)}">`).join('\n'),
+	};
 };
 
 /**
@@ -205,8 +251,8 @@ const withPresets = (lines, presets) => {
 
 /**
  * The robots.txt the merchant's site serves: their rules (control characters removed) with the presets in every group
- * ({@link robotsPresetsOf}), with `blockAiCrawlers` a group that keeps the AI training crawlers off the whole site (G4),
- * and a `Sitemap:` line per sitemap ({@link sitemapUrlsOf}).
+ * ({@link robotsPresetsOf}), a group that keeps the AI training crawlers the merchant picked off the whole site (G13,
+ * {@link aiCrawlersOf}), and a `Sitemap:` line per sitemap ({@link sitemapUrlsOf}).
  * @param {Record<string, unknown>} values the `robots_verification` settings
  * @param {string} domain
  * @param {ReadonlyArray<string>} [searchParams] the search parameters of Searches and 404s
@@ -220,9 +266,10 @@ export const robotsTxtOf = (values, domain, searchParams = []) => {
 		.filter((line) => !/^\s*sitemap\s*:/i.test(line));
 	while (own.length > 0 && own[own.length - 1] === '') own.pop();
 	const lines = withPresets(own, robotsPresetsOf(values, domain, searchParams));
+	const crawlers = aiCrawlersOf(values);
 	const blocked =
-		values.blockAiCrawlers === true
-			? [...(lines.length > 0 ? [''] : []), ...AI_TRAINING_CRAWLERS.map((name) => `User-agent: ${name}`), 'Disallow: /']
+		crawlers.length > 0
+			? [...(lines.length > 0 ? [''] : []), ...crawlers.map((name) => `User-agent: ${name}`), 'Disallow: /']
 			: [];
 	const before = [...lines, ...blocked];
 	const after = sitemapUrlsOf(values, domain).map((url) => `Sitemap: ${url}`);

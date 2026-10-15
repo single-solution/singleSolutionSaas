@@ -1837,8 +1837,8 @@
 			"properties": {
 				"tags": {
 					"type": "array",
-					"description": "The tags set (Google, Bing, Meta, Yandex), each once.",
-					"maxItems": 4,
+					"description": "The tags set, each name once: Google, Bing, Meta and Yandex from the settings, then the website's own list (verification_tags, at most 20; an entry that no longer passes the list's check is left out).",
+					"maxItems": 24,
 					"items": {
 						"type": "object",
 						"required": ["name", "content"],
@@ -1846,12 +1846,7 @@
 						"properties": {
 							"name": {
 								"type": "string",
-								"enum": [
-									"google-site-verification",
-									"msvalidate.01",
-									"facebook-domain-verification",
-									"yandex-verification"
-								]
+								"description": "The meta tag's name: google-site-verification, msvalidate.01, facebook-domain-verification, yandex-verification, or a name of the website's own list (verification_tags, G8)."
 							},
 							"content": {
 								"type": "string",

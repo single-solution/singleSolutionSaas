@@ -101,7 +101,7 @@
 		{
 			"key": "robots_verification",
 			"name": "robots and verification",
-			"description": "The robots.txt rules and the Google, Bing and Meta verification tags, served for the merchant's site to include.",
+			"description": "The robots.txt rules (with the AI training crawlers the merchant blocks) and the verification tags (Google, Bing, Meta, Yandex and the merchant's own), served for the merchant's site to include.",
 			"dependsOn": [],
 			"recommendFor": ["marketing.seo"],
 			"settings": {

@@ -21,25 +21,49 @@
 		"blockParameters": {
 			"type": "string",
 			"title": "Sort and filter parameters to keep out",
-			"description": "Query parameters of your sorted and filtered lists, comma-separated, as your storefront names them; a name ending in * covers every parameter that starts with it (attr.* covers attr.color). Adds Disallow lines for addresses that carry one. Never list a parameter of pages you want in search results, such as page numbers or a landing page's own filters. At most 20.",
-			"default": "sort, minPrice, maxPrice, inStock",
+			"description": "Query parameters of your sorted and filtered lists, comma-separated, as your site names them; a name ending in * covers every parameter that starts with it (attr.* covers attr.color). Adds Disallow lines for addresses that carry one. Never list a parameter of pages you want in search results, such as page numbers or a landing page's own filters. At most 20. Empty by default; the dashboard's online store preset fills in a shop's.",
+			"default": "",
 			"maxLength": 300
 		},
 		"blockPaths": {
 			"type": "array",
 			"title": "Private pages to keep out",
-			"description": "Paths of pages made for one visitor, such as the cart, checkout and account pages, as your storefront names them: each one, the pages under it and its query strings get Disallow lines (/cart keeps out /cart, /cart/… and /cart?…, never /cartoons). / and a path holding your sitemap are never kept out. At most 20.",
-			"default": ["/cart", "/checkout", "/account"],
+			"description": "Paths of pages made for one visitor, such as a cart, checkout or account page, as your site names them: each one, the pages under it and its query strings get Disallow lines (/cart keeps out /cart, /cart/… and /cart?…, never /cartoons). / and a path holding your sitemap are never kept out. At most 20. Empty by default; the dashboard's online store preset fills in a shop's.",
+			"default": [],
 			"items": {
 				"type": "string",
 				"maxLength": 200
 			}
 		},
-		"blockAiCrawlers": {
-			"type": "boolean",
-			"title": "Block AI training crawlers",
-			"description": "Adds a group that keeps crawlers which only collect AI training data (GPTBot, Google-Extended, CCBot, ClaudeBot and others) off the whole site. Search engines and AI answer bots that cite your pages still follow your rules.",
-			"default": false
+		"aiCrawlers": {
+			"type": "array",
+			"title": "AI training crawlers to block",
+			"description": "Crawlers that only collect AI training data, kept off the whole site by a group of their own in robots.txt. Search engines and AI answer bots that cite your pages still follow your rules. None by default.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"enum": [
+					"GPTBot",
+					"Google-Extended",
+					"CCBot",
+					"ClaudeBot",
+					"anthropic-ai",
+					"Applebot-Extended",
+					"Bytespider",
+					"meta-externalagent",
+					"cohere-training-data-crawler"
+				]
+			}
+		},
+		"moreAiCrawlers": {
+			"type": "array",
+			"title": "More crawlers to block",
+			"description": "Other user agents to keep off the whole site, as their makers name them (letters, digits, . _ and -). At most 30.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 100
+			}
 		},
 		"sitemaps": {
 			"type": "array",

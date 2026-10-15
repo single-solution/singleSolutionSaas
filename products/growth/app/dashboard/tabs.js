@@ -12,6 +12,7 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { searchParamsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
+import { ListCards } from './lists.js';
 import { AtAGlance, settingsNotice } from './setup.js';
 import { TEXTS } from './texts.js';
 
@@ -99,7 +100,13 @@ function GrowthSettings(props) {
 				String(features.find((feature) => feature.key === 'searches_404s')?.values.searchParams?.value ?? ''),
 			),
 		});
-	return <SettingsTab {...props} notice={notice} />;
+	return (
+		<SettingsTab
+			{...props}
+			notice={notice}
+			featureCards={(features) => (props.websiteId ? <ListCards websiteId={props.websiteId} features={features} /> : null)}
+		/>
+	);
 }
 
 /**

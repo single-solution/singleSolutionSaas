@@ -33,6 +33,7 @@ import tagsShared from '../schemas/tags.shared.json' with { type: 'json' };
 import pixelsShared from '../schemas/pixels.shared.json' with { type: 'json' };
 import { widgetSettings } from '../core/config.js';
 import { createImportOptions } from './imports.js';
+import { createLists, kitLists } from './lists.js';
 import { REDIRECT_INDEXES, createRedirectStore } from './redirects.js';
 import { SEO_REPORT_INDEXES } from './seo-reports.js';
 import { INDEXES } from './store.js';
@@ -104,6 +105,7 @@ export const createProductInstance = (options) => {
 	// the kit's store and outbound send (the policy for addresses merchants enter), shared with createProduct
 	const { store, send } = createProductBase(options);
 	const web = createWeb({ send });
+	const lists = createLists({ store, now });
 
 	/**
 	 * The settings of each switched-on feature, and of each shared group one of them uses.
@@ -194,11 +196,14 @@ export const createProductInstance = (options) => {
 		// days of daily totals moved in from another system with ss-import (feature `import`, PLAN 0.8.10 K10)
 		imports: createImportOptions(),
 		sharedSettings: SHARED_SETTINGS,
+		// the merchant's lists (goals, funnels, consent categories, announcements, conversion actions, verification tags,
+		// ignored SEO findings): `GET|PUT /v1/lists/:list` and the dashboard's Settings
+		lists: kitLists(lists),
 		// the website Setup sheet: the API document and what the merchant's website builds per feature
 		openapi,
 		build: guide.build,
 	});
-	return Object.freeze({ ...product, web, now, valuesOf });
+	return Object.freeze({ ...product, web, now, valuesOf, lists });
 };
 
 /** @typedef {ReturnType<typeof createProductInstance>} Product */

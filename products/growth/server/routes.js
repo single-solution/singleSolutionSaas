@@ -293,7 +293,12 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			feature: 'robots_verification',
 			database: false,
-			handler: async (ctx) => verificationOf(await product.settings.values(ctx.websiteId, 'robots_verification')),
+			// the four known tags of the settings and the merchant's own list (G8)
+			handler: async (ctx) =>
+				verificationOf(
+					await product.settings.values(ctx.websiteId, 'robots_verification'),
+					await product.lists.get(ctx.websiteId, 'verification_tags'),
+				),
 		}),
 
 		// --------------------------------------------------------------------------------------- IndexNow

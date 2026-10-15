@@ -37,8 +37,25 @@ export const BROWSER_EVENTS = Object.freeze({
  */
 export const SITE_EVENTS = Object.freeze({ 'ss:search': 'search', 'ss:contact': 'contact' });
 
-/** The funnel steps, in order. */
+/** The shop events, in the order of the shop funnel (each also a goal or funnel step's event, G1). */
 export const FUNNEL_STEPS = Object.freeze(['view_item', 'add_to_cart', 'begin_checkout', 'purchase']);
+
+/**
+ * The events the page script knows by itself (G1, G2): the shop events, a site search and a contact. Any other event
+ * name is a custom event the page sends with `SSGrowth.track(name, props)`.
+ */
+export const STANDARD_EVENTS = Object.freeze([...FUNNEL_STEPS, 'search', 'contact']);
+
+/** Google Consent Mode v2's signals a consent category may grant (G3). */
+export const CONSENT_SIGNALS = Object.freeze([
+	'ad_storage',
+	'ad_user_data',
+	'ad_personalization',
+	'analytics_storage',
+	'functionality_storage',
+	'personalization_storage',
+	'security_storage',
+]);
 
 /** Where the visitor's consent choice is kept (their own browser's localStorage). */
 export const CONSENT_STORAGE_KEY = 'ss-growth-consent';

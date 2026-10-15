@@ -1,3 +1,5 @@
+import { SHOP_FUNNEL, checkList, readList, zonedTimeOf } from '../core/lists.js';
+import { zonedParts } from '@ss/contracts/format';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
 import {
@@ -36,6 +38,8 @@ import {
 	keyLocationOf,
 	keyPathOf,
 	robotsPresetsOf,
+	ONLINE_STORE_PRESET,
+	AI_TRAINING_CRAWLERS,
 	robotsTxtOf,
 	siteUrlOf,
 	tokenOf,
@@ -687,8 +691,85 @@ describe('SEO', () => {
 		expect(siteUrlOf(1, DOMAIN)).toBeNull();
 	});
 
-	it('keeps search results, sorted and filtered lists and private pages out by default (G12), never what search needs', () => {
+	it('keeps only search results out by default, and the online store preset adds the shop pages (G12)', () => {
 		const defaults = Object.fromEntries(Object.entries(robotsSchema.properties).map(([name, field]) => [name, field.default]));
+		const searchParams = searchParamsOf(String(searchesSchema.properties.searchParams.default));
+		// a site of any kind: no shop names by default
+		expect(defaults.blockParameters).toBe('');
+		expect(defaults.blockPaths).toEqual([]);
+		expect(robotsPresetsOf(defaults, DOMAIN, searchParams)).toEqual(
+			['q', 's', 'search', 'query'].flatMap((name) => [`Disallow: /*?${name}=`, `Disallow: /*&${name}=`]),
+		);
+		expect(ONLINE_STORE_PRESET).toEqual({
+			blockSearchPages: true,
+			blockParameters: 'sort, minPrice, maxPrice, inStock',
+			blockPaths: ['/cart', '/checkout', '/account'],
+		});
+	});
+
+	it('blocks the AI training crawlers the merchant picks, and their own user agents (G13)', () => {
+		const base = { robotsRules: 'User-agent: *\nAllow: /', sitemaps: ['https://other.example/s.xml'] };
+		expect(robotsTxtOf(base, DOMAIN)).toBe('User-agent: *\nAllow: /\n');
+		expect(
+			robotsTxtOf(
+				{
+					...base,
+					aiCrawlers: ['GPTBot', 'CCBot', 'NotABot'],
+					moreAiCrawlers: ['ExampleAI-Crawler', 'bad agent!', 'GPTBot'],
+				},
+				DOMAIN,
+			),
+		).toBe(
+			[
+				'User-agent: *',
+				'Allow: /',
+				'',
+				'User-agent: GPTBot',
+				'User-agent: CCBot',
+				'User-agent: ExampleAI-Crawler',
+				'Disallow: /',
+				'',
+			].join('\n'),
+		);
+		expect(AI_TRAINING_CRAWLERS).toContain('ClaudeBot');
+	});
+
+	it('adds the merchant’s own verification tags, escaped, and never a tag that changes the page (G8)', () => {
+		expect(
+			verificationOf({ googleVerification: 'G1' }, [
+				{ name: 'p:domain_verify', content: 'abc123' },
+				{ name: 'robots', content: 'noindex' },
+				{ name: 'baidu-site-verification', content: '<meta name="baidu-site-verification" content="code-x1" />' },
+				{ name: 'bad name"', content: 'x' },
+				{ name: 'norton', content: 'bad"content' },
+			]),
+		).toEqual({
+			tags: [
+				{ name: 'google-site-verification', content: 'G1' },
+				{ name: 'p:domain_verify', content: 'abc123' },
+				{ name: 'baidu-site-verification', content: 'code-x1' },
+			],
+			html: [
+				'<meta name="google-site-verification" content="G1">',
+				'<meta name="p:domain_verify" content="abc123">',
+				'<meta name="baidu-site-verification" content="code-x1">',
+			].join('\n'),
+		});
+		expect(checkList('verification_tags', [{ name: 'robots', content: 'x' }])).toMatchObject({
+			ok: false,
+			errors: [{ path: '/value/0/name' }],
+		});
+		expect(checkList('verification_tags', [{ name: 'yandex-verification', content: 'a b' }])).toMatchObject({
+			ok: false,
+			errors: [{ path: '/value/0/content' }],
+		});
+	});
+
+	it('keeps search results, sorted and filtered lists and private pages out with the online store preset (G12), never what search needs', () => {
+		const defaults = {
+			...Object.fromEntries(Object.entries(robotsSchema.properties).map(([name, field]) => [name, field.default])),
+			...ONLINE_STORE_PRESET,
+		};
 		const searchParams = searchParamsOf(String(searchesSchema.properties.searchParams.default));
 		const presets = [
 			...['q', 's', 'search', 'query', 'sort', 'minPrice', 'maxPrice', 'inStock'].flatMap((name) => [
@@ -897,5 +978,61 @@ describe('snippets', () => {
 		expect(snippets.ticketNode).toContain('["analytics.read"]');
 		expect(snippets.notice).toContain('https://growth.example.dev/v1/notice?path=');
 		expect(snippets.analytics).toContain('/v1/events/counts?by=type');
+	});
+});
+
+describe('merchant lists', () => {
+	it('checks a list field by field, fills defaults and names every wrong field', () => {
+		expect(checkList('goals', [{ key: 'Signup', name: ' Signed up ', match: 'sign_up' }])).toEqual({
+			ok: true,
+			value: [{ key: 'signup', name: 'Signed up', kind: 'event', match: 'sign_up' }],
+		});
+		expect(
+			checkList('goals', [
+				{ key: 'a', name: 'A', kind: 'page', match: 'thank-you' },
+				{ key: 'a', name: 'B', match: 'b' },
+				{ key: 'c', name: '', match: 'c', extra: 1 },
+			]),
+		).toMatchObject({
+			ok: false,
+			errors: [{ path: '/value/0/match' }, { path: '/value/2/extra' }, { path: '/value/2/name' }, { path: '/value/1/key' }],
+		});
+		expect(checkList('funnels', [{ key: 'f', name: 'F', steps: [{ name: 'Only', match: 'x' }] }])).toMatchObject({
+			ok: false,
+			errors: [{ path: '/value/0/steps' }],
+		});
+		expect(checkList('goals', {})).toMatchObject({ ok: false, errors: [{ path: '/value' }] });
+		expect(
+			checkList(
+				'verification_tags',
+				Array.from({ length: 21 }, (_, n) => ({ name: `t${n}`, content: 'x' })),
+			),
+		).toMatchObject({
+			ok: false,
+		});
+	});
+
+	it('reads a list never saved as its defaults, and leaves out an entry that no longer passes', () => {
+		expect(readList('funnels', undefined)).toEqual([SHOP_FUNNEL]);
+		expect(readList('goals', undefined).map((goal) => goal.key)).toEqual(['purchase', 'contact']);
+		expect(
+			readList('goals', [
+				{ key: 'ok', name: 'OK', match: 'ok' },
+				{ key: 'bad key', name: 'X', match: 'x' },
+			]),
+		).toEqual([{ key: 'ok', name: 'OK', kind: 'event', match: 'ok' }]);
+		expect(readList('goals', 'nonsense')).toEqual([]);
+		expect(readList('announcements', undefined)).toEqual([]);
+	});
+
+	it('finds the instant of a wall-clock time in a time zone, also around a daylight-saving change', () => {
+		/** @param {string} zone */
+		const partsIn = (zone) => (/** @type {number} */ at) => zonedParts(at, zone);
+		expect(new Date(zonedTimeOf('2026-11-20T09:30', partsIn('America/New_York'))).toISOString()).toBe(
+			'2026-11-20T14:30:00.000Z',
+		);
+		expect(new Date(zonedTimeOf('2026-07-01T00:00', partsIn('Asia/Karachi'))).toISOString()).toBe('2026-06-30T19:00:00.000Z');
+		expect(new Date(zonedTimeOf('2026-03-29T03:30', partsIn('Europe/Berlin'))).toISOString()).toBe('2026-03-29T01:30:00.000Z');
+		expect(zonedTimeOf('2026-13-01T00:00', partsIn('UTC'))).toBeNaN();
 	});
 });

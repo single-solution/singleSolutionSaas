@@ -10,7 +10,7 @@
 import { Badge, Callout, Card, CodeBlock, KeyValueList, Masonry, Section, formatDateTime } from '@ss/ui';
 import { fill } from '@ss/ui/dashboard';
 import { noticeOf, tagsOf } from '../../core/config.js';
-import { keyLocationOf, robotsTxtOf, sitemapUrlsOf, verificationOf } from '../../core/seo.js';
+import { aiCrawlersOf, keyLocationOf, robotsTxtOf, sitemapUrlsOf, verificationOf } from '../../core/seo.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, Record<string, unknown>>} Values settings by feature or shared group */
@@ -262,7 +262,11 @@ export function AtAGlance({ values, context }) {
 							? [
 									{
 										label: TEXTS.setup.aiCrawlers,
-										value: flag(robots.blockAiCrawlers === true, TEXTS.setup.blocked, TEXTS.setup.allowed),
+										value: flag(
+											aiCrawlersOf(robots).length > 0,
+											fill(TEXTS.setup.blocked, { count: aiCrawlersOf(robots).length }),
+											TEXTS.setup.allowed,
+										),
 									},
 									{
 										label: TEXTS.setup.sitemaps,

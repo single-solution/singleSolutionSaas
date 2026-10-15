@@ -265,18 +265,12 @@ describe('the widget config', () => {
 describe('robots and verification', () => {
 	it('serves robots.txt with the presets of the settings (G12) to the server token', async () => {
 		const read = async () => (await env.call('GET', '/v1/robots.txt', { token: env.server })).text();
-		// by default: search results (Searches and 404s' parameters), sorted and filtered lists and private pages kept out
+		// by default: only search results (Searches and 404s' parameters) kept out, for a site of any kind (G12)
 		const served = await read();
 		expect(served).toMatch(/^User-agent: \*\nDisallow: \/\*\?q=\nDisallow: \/\*&q=\n/);
-		for (const line of [
-			'Disallow: /*?query=',
-			'Disallow: /*&sort=',
-			'Disallow: /*?inStock=',
-			'Disallow: /checkout/',
-			'Disallow: /account?',
-		])
-			expect(served).toContain(`\n${line}\n`);
-		expect(served).toContain('Disallow: /account?\nAllow: /\n');
+		expect(served).toContain('Disallow: /*&query=\nAllow: /\n');
+		expect(served).not.toContain('sort');
+		expect(served).not.toContain('/checkout');
 		// the merchant's own search parameter, parameters and paths
 		await env.setting('searches_404s', 'searchParams', 'term');
 		await env.setting('robots_verification', 'blockParameters', 'order, attr.*');
@@ -324,7 +318,7 @@ describe('robots and verification', () => {
 	});
 
 	it('blocks the AI training crawlers and adds the Yandex tag when the merchant asks (G4)', async () => {
-		await env.setting('robots_verification', 'blockAiCrawlers', true);
+		await env.setting('robots_verification', 'aiCrawlers', [...AI_TRAINING_CRAWLERS]);
 		await env.setting('robots_verification', 'yandexVerification', 'ya-123');
 		const robots = await (await env.call('GET', '/v1/robots.txt', { token: env.server })).text();
 		expect(robots).toBe(
@@ -342,6 +336,14 @@ describe('robots and verification', () => {
 		expect(robots).toContain('User-agent: GPTBot\nUser-agent: Google-Extended');
 		const tags = await (await env.call('GET', '/v1/verification', { token: env.server })).json();
 		expect(tags.tags).toContainEqual({ name: 'yandex-verification', content: 'ya-123' });
+		// more verification tags: the merchant's list (G8)
+		expect(
+			(await env.call('PUT', '/v1/lists/verification_tags', { token: env.server, body: { value: [{ name: 'p:domain_verify', content: 'pin-1' }] } }))
+				.status,
+		).toBe(200);
+		const more = await (await env.call('GET', '/v1/verification', { token: env.server })).json();
+		expect(more.tags.at(-1)).toEqual({ name: 'p:domain_verify', content: 'pin-1' });
+		expect(more.html).toContain('<meta name="p:domain_verify" content="pin-1">');
 		await env.setting('robots_verification', 'robotsRules', '');
 		expect(await (await env.call('GET', '/v1/robots.txt', { token: env.server })).text()).toMatch(/^User-agent: GPTBot\n/);
 	});

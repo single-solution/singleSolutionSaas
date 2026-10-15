@@ -123,6 +123,8 @@ describe('SEO checklist: the live site', () => {
 	it('reads the site, samples a page of each kind and reports every check with its reason, fix and test', async () => {
 		Object.assign(env.web.pages, SITE);
 		await env.setting('seo_checklist', 'paths', ['/', '/cart']);
+		// the shop's private pages, kept out with the online store preset (G12)
+		await env.setting('robots_verification', 'blockPaths', ['/cart', '/checkout', '/account']);
 		await env.setting('visitor_analytics', 'detail', 'sessions');
 		const visitor = { session: 'sessionaaaaaaaaaaaaaaaaaaaaaaaaa', browser: 'chrome', os: 'android' };
 		await env.collect([
