@@ -3,16 +3,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
-import { REFRESH_BEFORE_MS, mountInbox } from '../ui/inbox.js';
+import { REFRESH_BEFORE_MS } from '@ss/app-kit/widget';
+import { mountInbox } from '../ui/inbox.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
 const BASE = 'https://product.example.dev';
-/** @param {string[]} [features] */
+/** @param {string[]} [features] the switched-on features (the notes widgets mount while `notes` is on) */
 const configOf = (features = ['notes']) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
 	features,
+	widgets: features.includes('notes') ? ['note_form', 'inbox'] : [],
 	settings: { maxLength: 10 },
 });
 
@@ -62,7 +64,10 @@ describe('visitor widget', () => {
 		expect(fetch).not.toHaveBeenCalled();
 		expect(host.shadowRoot).toBeNull();
 		await startWidget({ window, script: script('browser-token') }).ready;
-		expect(fetch).toHaveBeenCalledWith(`${BASE}${CONFIG_PATH}`, { headers: { authorization: 'Bearer browser-token' } });
+		expect(fetch).toHaveBeenCalledWith(`${BASE}${CONFIG_PATH}`, {
+			method: 'GET',
+			headers: { authorization: 'Bearer browser-token' },
+		});
 		const root = /** @type {ShadowRoot} */ (host.shadowRoot);
 		const form = /** @type {HTMLFormElement} */ (root.querySelector('form'));
 		const text = /** @type {HTMLTextAreaElement} */ (root.querySelector('textarea'));
@@ -130,6 +135,7 @@ describe('admin widget', () => {
 		await vi.advanceTimersByTimeAsync(0);
 		expect(getTicket).toHaveBeenCalledTimes(1);
 		expect(fetch).toHaveBeenCalledWith(`${window.location.origin}/v1/admin/notes`, {
+			method: 'GET',
 			headers: { authorization: 'Bearer ticket-1' },
 		});
 		const root = /** @type {ShadowRoot} */ (host.shadowRoot);
@@ -176,18 +182,23 @@ describe('admin widget', () => {
 			cancel,
 			now: () => 0,
 		};
-		mountInbox({ host: place('inbox'), ...options, first: /** @type {any} */ (null) }).unmount();
+		const without = place('inbox');
+		const signedOut = mountInbox({ host: without, ...options, first: /** @type {any} */ (null) });
 		await flush();
+		expect(without.shadowRoot?.querySelector('[role="status"]')?.textContent).toBe(strings['inbox.signedOut']);
+		signedOut.unmount();
 		expect(cancel).not.toHaveBeenCalled();
+		// unmounted before the renewal: the renewal is cancelled
+		mountInbox({ host: place('inbox'), ...options }).unmount();
+		expect(cancel).toHaveBeenCalledWith(1);
+		// the renewal gets no ticket: Signed out
 		const host = place('inbox');
-		const widget = mountInbox({ host, ...options });
+		mountInbox({ host, ...options });
 		await flush();
-		expect(tasks).toHaveLength(1);
-		tasks[0]?.();
+		expect(tasks).toHaveLength(2);
+		tasks[1]?.();
 		await flush();
 		expect(host.shadowRoot?.querySelector('[role="status"]')?.textContent).toBe(strings['inbox.signedOut']);
-		widget.unmount();
-		expect(cancel).toHaveBeenCalledWith(1);
 	});
 
 	it('starts from the bundle entry when the script loads', async () => {

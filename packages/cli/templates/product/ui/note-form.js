@@ -3,9 +3,8 @@
  * token.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { element, formatText, mountWidget, requestJson } from '@ss/app-kit/widget';
 import { checkNote } from '../core/notes.js';
-import { element } from './dom.js';
 import { WIDGET_CSS } from './styles.js';
 
 /**
@@ -55,18 +54,13 @@ export const mountNoteForm = ({ host, base, token, config, fetch }) => {
 				}
 				button.setAttribute('disabled', '');
 				status.textContent = t('form.sending');
-				try {
-					const response = await fetch(`${base}/v1/notes`, {
-						method: 'POST',
-						headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-						body: JSON.stringify(checked.value),
-					});
-					if (!response.ok) throw new Error(`HTTP ${response.status}`);
-					/** @type {HTMLFormElement} */ (form).reset();
-					status.textContent = t('form.sent');
-				} catch {
-					status.textContent = t('form.failed');
-				}
+				const sent = await requestJson(fetch, `${base}/v1/notes`, {
+					method: 'POST',
+					headers: { authorization: `Bearer ${token}` },
+					body: checked.value,
+				});
+				if (sent.ok) /** @type {HTMLFormElement} */ (form).reset();
+				status.textContent = sent.ok ? t('form.sent') : t('form.failed');
 				button.removeAttribute('disabled');
 			});
 		},

@@ -30,21 +30,22 @@ export const WIDGET_ENTRY = 'ui/entry.js';
 const require = createRequire(import.meta.url);
 
 /**
- * esbuild plugin: when the project has no `@ss/app-kit` installed yet (right after `ss app init`), `@ss/app-kit/widget`
- * resolves to the kit this CLI depends on.
+ * esbuild plugin: when the project has no `@ss/*` installed yet (right after `ss app init`), the packages a widget
+ * bundle may import (`@ss/app-kit/widget` from ui/, `@ss/contracts` and its subpaths from core/) resolve to the ones
+ * this CLI depends on.
  * @type {import('esbuild').Plugin}
  */
 const kitFallback = {
 	name: 'ss-kit-fallback',
 	setup: (build) => {
-		build.onResolve({ filter: /^@ss\/app-kit\/widget$/ }, async (args) => {
+		build.onResolve({ filter: /^@ss\/(app-kit\/widget|contracts(\/[\w-]+)?)$/ }, async (args) => {
 			if (args.pluginData?.fallback) return undefined;
 			const found = await build.resolve(args.path, {
 				kind: args.kind,
 				resolveDir: args.resolveDir,
 				pluginData: { fallback: true },
 			});
-			return found.errors.length === 0 ? found : { path: require.resolve('@ss/app-kit/widget') };
+			return found.errors.length === 0 ? found : { path: require.resolve(args.path) };
 		});
 	},
 };

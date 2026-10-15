@@ -69,7 +69,6 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'ui/inbox.js',
 			'app/api/[...path]/route.js',
 			'app/dashboard/page.js',
-			'app/dashboard/tabs.js',
 			'app/dashboard/texts.js',
 			'app/layout.js',
 			'strings/en.json',

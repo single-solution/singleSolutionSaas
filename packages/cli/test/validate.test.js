@@ -188,11 +188,11 @@ describe('ss app validate', () => {
 			dir,
 			'core/notes.js',
 			(text) =>
-				`import { element } from '../ui/dom.js';\nimport fs from 'node:fs';\nimport x from './missing.js';\nimport y from '../../outside.js';\nimport texts from '../strings/en.json' with { type: 'json' };\nexport const w = () => window.location;\n${text}`,
+				`import { WIDGET_CSS } from '../ui/styles.js';\nimport fs from 'node:fs';\nimport x from './missing.js';\nimport y from '../../outside.js';\nimport texts from '../strings/en.json' with { type: 'json' };\nexport const w = () => window.location;\n${text}`,
 		);
 		await edit(
 			dir,
-			'ui/dom.js',
+			'ui/styles.js',
 			(text) => `import { createNotesStore } from '../adapters/notes-store.js';\nimport React from 'react';\n${text}`,
 		);
 		await edit(dir, 'adapters/notes-store.js', (text) => `import { createRoutes } from '../server/routes.js';\n${text}`);
@@ -211,9 +211,9 @@ describe('ss app validate', () => {
 			'core/notes.js:1',
 			'core/notes.js:5',
 			'server/docs.js:1',
-			'ui/dom.js:1',
+			'ui/styles.js:1',
 		]);
-		expect(byRule('imports.package')).toEqual(['core/notes.js:2', 'ui/dom.js:2']);
+		expect(byRule('imports.package')).toEqual(['core/notes.js:2', 'ui/styles.js:2']);
 		expect(byRule('imports.unresolved')).toEqual(['core/notes.js:3']);
 		expect(byRule('imports.outside')).toEqual(['app/globals.css:2', 'core/notes.js:4', 'tests/extra.test.js:1']);
 		expect(byRule('core.dom')).toEqual(['core/notes.js:6']);

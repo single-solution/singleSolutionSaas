@@ -7,7 +7,8 @@
  * off or the merchant database is not connected.
  * @module
  */
-import { WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
+import { requestJson } from '@ss/app-kit/widget';
+import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountInbox } from './inbox.js';
 import { mountNoteForm } from './note-form.js';
 
@@ -22,11 +23,12 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @property {import('@ss/app-kit/widget').WidgetTheme} theme
  * @property {string} customCss
  * @property {string[]} features the switched-on features
+ * @property {string[]} widgets the widgets whose feature is on (manifest.json `widgets`): only these mount
  * @property {{ maxLength: number }} settings what the widgets need of the settings (`hooks.widgetConfig`)
  */
 
-/** @typedef {{ ticket: string, expiresAt: string }} Ticket */
-/** @typedef {() => Promise<Ticket>} GetTicket */
+/** @typedef {import('@ss/app-kit/widget').Ticket} Ticket */
+/** @typedef {import('@ss/app-kit/widget').GetTicket} GetTicket */
 
 /**
  * @param {typeof globalThis.fetch} request
@@ -35,12 +37,8 @@ export const ADMIN_CONFIG_PATH = '/v1/widget/admin/config';
  * @returns {Promise<WidgetConfig | null>} null when the product says no (stopped, database not connected …)
  */
 const loadConfig = async (request, url, credential) => {
-	try {
-		const response = await request(url, { headers: { authorization: `Bearer ${credential}` } });
-		return response.ok ? /** @type {WidgetConfig} */ (await response.json()) : null;
-	} catch {
-		return null;
-	}
+	const answer = await requestJson(request, url, { headers: { authorization: `Bearer ${credential}` } });
+	return answer.ok ? /** @type {WidgetConfig} */ (answer.data) : null;
 };
 
 /**
@@ -52,7 +50,7 @@ export const startWidget = ({ window: win, script }) => {
 	const doc = win.document;
 	const base = new URL(script?.src ?? win.location.href).origin;
 	const token = script?.dataset.token;
-	/** @param {keyof typeof WIDGET_FEATURES} key */
+	/** @param {string} key */
 	const hosts = (key) => /** @type {HTMLElement[]} */ ([...doc.querySelectorAll(`[${WIDGET_ATTRIBUTE}="${key}"]`)]);
 	/** @type {typeof globalThis.fetch} */
 	const request = (input, init) => win.fetch(input, init);
@@ -60,7 +58,7 @@ export const startWidget = ({ window: win, script }) => {
 	const ready = (async () => {
 		if (!token) return;
 		const config = await loadConfig(request, `${base}${CONFIG_PATH}`, token);
-		if (!config?.features.includes(WIDGET_FEATURES.note_form)) return;
+		if (!config?.widgets.includes('note_form')) return;
 		for (const host of hosts('note_form')) mountNoteForm({ host, base, token, config, fetch: request });
 	})();
 
@@ -75,7 +73,7 @@ export const startWidget = ({ window: win, script }) => {
 		}
 		if (typeof first?.ticket !== 'string') return;
 		const config = await loadConfig(request, `${base}${ADMIN_CONFIG_PATH}`, first.ticket);
-		if (!config?.features.includes(WIDGET_FEATURES.inbox)) return;
+		if (!config?.widgets.includes('inbox')) return;
 		for (const host of hosts('inbox'))
 			mountInbox({
 				host,

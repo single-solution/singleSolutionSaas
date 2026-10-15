@@ -671,7 +671,7 @@ export const validateProject = async (dir) => {
 		...scanned.problems,
 		...(manifest === null ? [] : checkRoutes(scanned.routes, manifest)),
 		...description.problems,
-		...checkApiRoutes(description.api, scanned.routes),
+		...checkApiRoutes(description.api, scanned.routes, manifest),
 		...(await checkPackageWiring(files)),
 		...(await checkServerShape(files)),
 		...(await checkAssets(files, manifest)),

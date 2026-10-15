@@ -66,7 +66,7 @@ describe('ss (main)', () => {
 		});
 		expect((await ss(['app', 'init', 'demo', '--id', 'demo', '--name', 'Demo'])).code).toBe(1);
 		expect((await ss(['app', 'init', 'other', '--id', 'Bad', '--name', 'Demo'])).err).toContain('--id must be');
-		await writeFile(path.join(root, 'demo/core/extra.js'), "import '../ui/dom.js';\n");
+		await writeFile(path.join(root, 'demo/core/extra.js'), "import '../ui/inbox.js';\n");
 		const invalid = await ss(['app', 'validate', 'demo']);
 		expect(invalid).toMatchObject({ code: 1, out: expect.stringContaining('imports.direction') });
 	}, 60_000);

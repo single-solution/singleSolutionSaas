@@ -44,12 +44,6 @@ const IMPORT_CODE = Object.freeze({
 		['const SETTINGS = { notes: notesSettings };', 'const SETTINGS = { notes: notesSettings, import: importSettings };'],
 	],
 	'core/notes.js': [],
-	'server/routes.js': [
-		[
-			"import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';",
-			"import { IMPORT_LIMITS, countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';",
-		],
-	],
 });
 
 /**

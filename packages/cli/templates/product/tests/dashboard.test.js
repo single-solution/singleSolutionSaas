@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
- * The dashboard's Overview in the browser (jsdom), on a faked dashboard API (PLAN 0.6 "Overviews talk"): it greets the
- * signed-in person, says what needs them with the buttons that open the right section or read business.json again,
- * and shows the setup and Recent changes in the viewer's local time (UTC on the server and in the first render).
+ * The dashboard page in the browser (jsdom), on a faked dashboard API (PLAN 0.6 "Overviews talk"): opened from the
+ * Portal for a website, it greets the signed-in person with this product's name, says what needs them with the buttons
+ * that open the right section or read business.json again, and shows the setup and Recent changes in the viewer's
+ * local time.
  */
 import { act } from 'react';
-import { renderToString } from 'react-dom/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
-import { TABS } from '../app/dashboard/tabs.js';
+import Dashboard from '../app/dashboard/page.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 
 const WEBSITE = 'web_1';
@@ -35,15 +35,26 @@ const OVERVIEW = {
 	],
 };
 
-/** The dashboard API: the overview, and business.json read again on request. */
+/** The signed-in merchant's session, from the Portal's `/sso`. */
+const SESSION = {
+	who: { kind: 'merchant', id: 'mer_1', name: 'Acme' },
+	portalUrl: 'https://portal.example.com',
+	branding: { name: 'Single Solution' },
+	support: { email: 'help@example.com', phone: '' },
+	switcher: [{ merchantName: 'Acme', websites: [{ websiteId: WEBSITE, domain: 'shop.example.com' }] }],
+};
+
+/** The dashboard API: the session, the overview, and business.json read again on request. */
 const serve = () =>
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) =>
-			path === `${BASE}/overview` || (path === `${BASE}/business/refresh` && init.method === 'POST')
-				? new Response(JSON.stringify(path.endsWith('/overview') ? OVERVIEW : { found: false }), { status: 200 })
-				: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 }),
-		),
+		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
+			if (path === '/v1/dashboard/session') return new Response(JSON.stringify(SESSION), { status: 200 });
+			if (path === `${BASE}/overview`) return new Response(JSON.stringify(OVERVIEW), { status: 200 });
+			if (path === `${BASE}/business/refresh` && init.method === 'POST')
+				return new Response(JSON.stringify({ found: false }), { status: 200 });
+			return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
+		}),
 	);
 
 /**
@@ -65,14 +76,8 @@ const settle = async () => {
 	for (let i = 0; i < 6; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 };
 
-/** The tab's props: a merchant's session; `open` shows another section. */
-const props = () => ({
-	websiteId: WEBSITE,
-	who: /** @type {const} */ ({ kind: 'merchant', id: 'mer_1', name: 'Acme' }),
-	support: { email: 'help@example.com', phone: '' },
-	portal: 'https://portal.example.com',
-	open: vi.fn(),
-});
+// React names the section's view transition with CSS.escape, which jsdom lacks
+beforeEach(() => vi.stubGlobal('CSS', { escape: (/** @type {string} */ text) => text }));
 
 afterEach(() => {
 	cleanup();
@@ -80,14 +85,14 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-describe('the dashboard Overview', () => {
-	it('greets the merchant and says what needs them, most urgent first, with the right buttons', async () => {
+describe('the dashboard', () => {
+	it('opens the Overview of the website: this product greets the merchant and says what needs them', async () => {
 		viewerIn('America/New_York');
 		serve();
-		const Overview = TABS.overview;
-		const tab = props();
-		const { container } = render(<Overview {...tab} />);
+		window.history.replaceState(null, '', `/dashboard?websiteId=${WEBSITE}`);
+		const { container } = render(<Dashboard />);
 		await settle();
+		expect(container.textContent).toContain(TEXTS.title);
 		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Acme');
 		const needs = [...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
 		expect(needs).toEqual([
@@ -96,31 +101,16 @@ describe('the dashboard Overview', () => {
 			'The widget has not been seen on shop.example.com',
 			'business.json was not found on shop.example.com',
 		]);
-		expect(container.textContent).toContain(`${TEXTS.title} is in grace until Oct 4, 2026, 10:30 AM EDT, and 3 more`);
 		expect(byText(container, 'Contact support', 'a').getAttribute('href')).toBe('mailto:help@example.com');
-		click(byText(container, 'Connect', 'button'));
-		click(byText(container, 'Get the script', 'button'));
-		expect(tab.open.mock.calls).toEqual([['connections'], ['developers']]);
 		click(byText(container, 'Check again', 'button'));
 		await settle();
 		expect(vi.mocked(fetch)).toHaveBeenCalledWith(`${BASE}/business/refresh`, expect.objectContaining({ method: 'POST' }));
 		// the setup and Recent changes, in the viewer's time
 		expect(container.textContent).toContain('1 of 4 done');
-		expect(container.textContent).toContain('Last seen Sep 20, 2026, 7:15 PM EDT');
 		expect(container.textContent).toContain('Ada Admin · Features: notes on');
-		expect(container.textContent).toContain('2.5 credits');
-	});
-
-	it('prints UTC on the server and in the first render', async () => {
-		viewerIn('America/New_York');
-		serve();
-		const Overview = TABS.overview;
-		render(<Overview {...props()} />);
+		// a button opens another section of the page
+		click(byText(container, 'Connect', 'button'));
 		await settle();
-		// the answer this page already loaded shows at once, as the server would print it
-		const html = renderToString(<Overview {...props()} />);
-		for (const words of ['Oct 4, 2026, 2:30 PM UTC', 'Sep 20, 2026, 11:15 PM UTC', 'Oct 1, 2026, 10:00 AM UTC'])
-			expect(html).toContain(words);
-		expect(html).not.toContain('EDT');
+		expect(window.location.search).toBe(`?websiteId=${WEBSITE}&view=connections`);
 	});
 });

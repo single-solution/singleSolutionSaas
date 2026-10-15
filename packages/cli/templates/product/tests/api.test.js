@@ -111,6 +111,7 @@ describe('notes routes', () => {
 		expect(config.status).toBe(200);
 		expect(await config.json()).toMatchObject({
 			features: ['notes'],
+			widgets: ['note_form', 'inbox'],
 			settings: { maxLength: 500 },
 			texts: { 'form.title': 'Leave us a note' },
 		});

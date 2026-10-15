@@ -1,16 +1,12 @@
 /**
  * The notes feature's pure logic: checking a visitor's note and the note as the API answers it. No I/O, no DOM: the
- * API and the widgets share it.
+ * API and the widgets share it. Email addresses follow the one rule of the whole SaaS (`@ss/contracts/email`).
  * @module
  */
+import { normalizeEmail } from '@ss/contracts/email';
 
 /** Hard maximum of the `maxLength` setting (a limit is a setting within a maximum fixed in code, PLAN 0.4.2). */
 export const NOTE_MAX_LENGTH = 2000;
-/** Longest email address kept with a note. */
-export const EMAIL_MAX_LENGTH = 254;
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 /** @typedef {{ text: string, email: string | null }} NoteInput */
 /** @typedef {'empty' | 'too_long' | 'bad_email'} NoteError */
 /** @typedef {{ id: string, text: string, email: string | null, createdAt: Date | string }} NoteRecord */
@@ -29,9 +25,9 @@ export const checkNote = (input, { maxLength }) => {
 	if (text.length === 0) return { ok: false, error: 'empty', field: 'text', max };
 	if (text.length > max) return { ok: false, error: 'too_long', field: 'text', max };
 	const rawEmail = typeof body.email === 'string' ? body.email.trim() : '';
-	if (rawEmail.length > 0 && (rawEmail.length > EMAIL_MAX_LENGTH || !EMAIL.test(rawEmail)))
-		return { ok: false, error: 'bad_email', field: 'email', max };
-	return { ok: true, value: { text, email: rawEmail.length > 0 ? rawEmail.toLowerCase() : null } };
+	const email = rawEmail.length > 0 ? normalizeEmail(rawEmail) : null;
+	if (rawEmail.length > 0 && email === null) return { ok: false, error: 'bad_email', field: 'email', max };
+	return { ok: true, value: { text, email } };
 };
 
 /**

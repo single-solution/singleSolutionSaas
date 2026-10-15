@@ -5,7 +5,7 @@
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
-import { IMPORT_LIMITS, countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
+import { countHandlers, created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { checkNote, noteView } from '../core/notes.js';
 import { NOTES, createNotesStore, notesFilter } from '../adapters/notes-store.js';
 import { renderDocs } from './docs.js';
@@ -88,30 +88,6 @@ export const createRoutes = (product) => [
 		auth: 'ticket',
 		permission: 'notes.read',
 		handler: noteCounts.count,
-	}),
-	// imports (feature import, server token only; PLAN 0.8.10 K10): NDJSON upserts with given ids, finish and status
-	defineRoute({
-		method: 'POST',
-		path: '/v1/import/:collection',
-		auth: 'server',
-		feature: 'import',
-		rawBody: true,
-		maxBodyBytes: IMPORT_LIMITS.bytes + 64 * 1024,
-		handler: (ctx) => product.imports.upsert(ctx),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/import/finish',
-		auth: 'server',
-		feature: 'import',
-		handler: (ctx) => product.imports.finish(ctx),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/import/status',
-		auth: 'server',
-		feature: 'import',
-		handler: (ctx) => product.imports.status(ctx),
 	}),
 	// public docs: no sign-in, no tokens
 	defineRoute({
