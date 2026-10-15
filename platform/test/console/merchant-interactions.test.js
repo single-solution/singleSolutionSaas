@@ -16,7 +16,7 @@ import * as loaders from '../../src/console/loaders.js';
 import { apiFetch, signInAgain, takeFragmentToken, useResource } from '../../src/console/client.js';
 import { AccountView } from '../../src/console/views/account.js';
 import { LocalTime } from '@ss/ui';
-import { QrCode } from '../../src/console/views/login-settings.js';
+import { ActivityTable, ActivityTimeline, QrCode } from '../../src/console/views/login-settings.js';
 import {
 	ConfirmEmailView,
 	ForgotPasswordView,
@@ -448,6 +448,32 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 			expect(time?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
 			expect(time?.getAttribute('title')).toBe('Oct 4, 2026, 2:30 PM UTC');
 			expect(time?.getAttribute('datetime')).toBe('2026-10-04T14:30:00.000Z');
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it("shows activity in the viewer's own time zone: the Overview's timeline and the Activity table (were UTC)", () => {
+		const viewer = { ...new Intl.DateTimeFormat().resolvedOptions(), timeZone: 'America/New_York' };
+		const spy = vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue(viewer);
+		try {
+			const entry = {
+				activityId: 'act_1',
+				actor: { type: 'admin', id: 'adm_1', name: 'Sam Lee' },
+				action: 'merchant.suspended',
+				merchantName: 'Acme',
+				at: '2026-10-04T14:30:00.000Z',
+			};
+			const timeline = render(<ActivityTimeline items={[entry]} empty="None" />);
+			expect(timeline.container.textContent).toContain('Sam Lee · ');
+			expect(timeline.container.textContent).toContain(' · Acme');
+			expect(timeline.container.querySelector('time')?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
+			expect(timeline.container.querySelector('[aria-hidden="true"]')?.textContent).toBe('SL');
+			const table = render(<ActivityTable items={[entry]} empty="None" />);
+			expect(table.container.querySelector('td time, th time')?.textContent).toBe('Oct 4, 2026, 10:30 AM EDT');
+			expect(render(<ActivityTimeline items={[]} empty="No activity yet." />).container.textContent).toContain(
+				'No activity yet.',
+			);
 		} finally {
 			spy.mockRestore();
 		}

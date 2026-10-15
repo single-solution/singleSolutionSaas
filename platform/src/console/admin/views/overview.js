@@ -19,21 +19,24 @@ import {
 	EmptyState,
 	Icon,
 	IconBadge,
+	NeedsList,
 	PageHeader,
 	Section,
+	SetupChecklist,
 	Stat,
 	StatGrid,
 	cx,
 	describeProblem,
 	formatCredits,
+	initialsOf,
 	useToast,
 } from '@ss/ui';
 import { ADMIN, BILLING, MORE, PRODUCTS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { useNavigation } from '../../navigation.js';
 import { DaysLeft, MerchantStatusBadge } from '../../views/billing.js';
-import { NeedItem, NothingNeeded, openDashboard } from '../../views/common.js';
-import { ActivityTimeline, initialsOf } from '../../views/login-settings.js';
+import { openDashboard } from '../../views/common.js';
+import { ActivityTimeline } from '../../views/login-settings.js';
 import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
@@ -64,39 +67,6 @@ const totalDays = (products) => {
 };
 
 /**
- * One step of the setup checklist: a check mark when done, a dashed ring while to do (with its link).
- * @param {{ done: boolean, label: string, href?: string | null, onClick?: (() => void) | null }} props
- */
-function ReadyStep({ done, label, href, onClick }) {
-	const text = done ? (
-		<span className="text-muted line-through decoration-line-strong">{label}</span>
-	) : href ? (
-		<Link href={href} className="font-medium text-fg hover:text-primary hover:underline">
-			{label}
-		</Link>
-	) : onClick ? (
-		<button type="button" onClick={onClick} className="font-medium text-fg hover:text-primary hover:underline">
-			{label}
-		</button>
-	) : (
-		<span className="font-medium text-fg">{label}</span>
-	);
-	return (
-		<li className="flex items-center gap-3 text-sm">
-			<span
-				className={cx(
-					'flex size-5 shrink-0 items-center justify-center rounded-full',
-					done ? 'bg-success-soft text-on-success-soft' : 'border-[1.5px] border-dashed border-line-strong',
-				)}>
-				{done ? <Icon name="check" size={12} /> : null}
-				<span className="sr-only">{done ? ADMIN.ready.done : ADMIN.ready.todo}</span>
-			</span>
-			{text}
-		</li>
-	);
-}
-
-/**
  * @param {any} props loader result of `loadOverview` plus `admin`
  */
 export function OverviewView(props) {
@@ -122,7 +92,7 @@ export function OverviewView(props) {
 		if (!result.ok) toast.show({ tone: 'danger', title: describeProblem(result.problem) });
 	};
 
-	/** @type {Array<{ key: string, tone: 'warning' | 'danger', title: import('react').ReactNode, effect: string, action?: import('react').ReactNode }>} */
+	/** @type {import('@ss/ui').Need[]} */
 	const needs = [];
 	if (o.mailConfigured === false)
 		needs.push({
@@ -208,49 +178,30 @@ export function OverviewView(props) {
 			<div className="@container">
 				<div className={cx('grid gap-6', settingUp && '@4xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]')}>
 					<Card id="overview-needs" title={ADMIN.needs.title} subtitle={needs.length > 0 ? ADMIN.needs.intro : undefined}>
-						{needs.length === 0 ? (
-							<NothingNeeded>{ADMIN.needs.none}</NothingNeeded>
-						) : (
-							<div className="@container space-y-3">
-								<ul className="space-y-2.5">
-									{needs.map(({ key, ...need }) => (
-										<NeedItem key={key} {...need} />
-									))}
-								</ul>
-								{attention.length > NEEDS_MERCHANTS ? (
-									<ButtonLink as={Link} href={`${adminRoutes.finance()}#billing-attention`} variant="ghost" size="sm">
-										{BILLING.billingTitle}
-									</ButtonLink>
-								) : null}
-							</div>
-						)}
+						<div className="space-y-3">
+							<NeedsList items={needs} none={ADMIN.needs.none} />
+							{attention.length > NEEDS_MERCHANTS ? (
+								<ButtonLink as={Link} href={`${adminRoutes.finance()}#billing-attention`} variant="ghost" size="sm">
+									{BILLING.billingTitle}
+								</ButtonLink>
+							) : null}
+						</div>
 					</Card>
 					{settingUp ? (
-						<Card id="overview-ready" title={ADMIN.ready.title} subtitle={ADMIN.ready.progress(stepsDone, steps.length)}>
-							<div
-								className="mb-4 h-2 overflow-hidden rounded-full bg-surface-3"
-								role="progressbar"
-								aria-label={ADMIN.ready.title}
-								aria-valuemin={0}
-								aria-valuemax={steps.length}
-								aria-valuenow={stepsDone}>
-								<div
-									className="h-full rounded-full bg-primary transition-[width] duration-(--ss-motion-slow) ease-ss"
-									style={{ width: `${Math.round((stepsDone / steps.length) * 100)}%` }}
-								/>
-							</div>
-							<ul className="space-y-2.5">
-								{steps.map((s) => (
-									<ReadyStep
-										key={s.key}
-										done={s.done}
-										label={ADMIN.ready.steps[/** @type {'product'} */ (s.key)]}
-										href={s.href ?? null}
-										onClick={s.onClick ?? null}
-									/>
-								))}
-							</ul>
-						</Card>
+						<SetupChecklist
+							id="overview-ready"
+							title={ADMIN.ready.title}
+							progress={ADMIN.ready.progress(stepsDone, steps.length)}
+							labels={{ done: ADMIN.ready.done, todo: ADMIN.ready.todo }}
+							linkAs={Link}
+							steps={steps.map((step) => ({
+								key: step.key,
+								label: ADMIN.ready.steps[/** @type {'product'} */ (step.key)],
+								done: step.done,
+								...(step.href ? { href: step.href } : {}),
+								...(step.onClick ? { onSelect: step.onClick } : {}),
+							}))}
+						/>
 					) : null}
 				</div>
 			</div>

@@ -309,47 +309,6 @@ function BackLink({ href, label }) {
 }
 
 /**
- * One "Needs you" item of an Overview: what is wrong, what happens if it waits,
- * and its button; amber, or red when something has already stopped.
- * @param {{ tone: 'warning' | 'danger', title: import('react').ReactNode, effect: import('react').ReactNode,
- *   action?: import('react').ReactNode }} props
- */
-export function NeedItem({ tone, title, effect, action }) {
-	return (
-		<li
-			className={cx(
-				'flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-4 py-3.5 @lg:flex-nowrap',
-				tone === 'danger' ? 'bg-danger-soft' : 'bg-warning-soft',
-			)}>
-			<span
-				aria-hidden="true"
-				className={cx('size-2.5 shrink-0 rounded-full', tone === 'danger' ? 'bg-danger' : 'bg-warning')}
-			/>
-			<div className="min-w-0 flex-1">
-				<p className="text-sm font-semibold break-words text-fg">{title}</p>
-				<p className="mt-0.5 text-[13px] leading-relaxed text-muted">{effect}</p>
-			</div>
-			{action ? <div className="shrink-0">{action}</div> : null}
-		</li>
-	);
-}
-
-/**
- * The calm line of an Overview's "Needs you" when nothing does.
- * @param {{ children: import('react').ReactNode }} props
- */
-export function NothingNeeded({ children }) {
-	return (
-		<p className="flex items-center gap-2 text-sm text-muted">
-			<span className="flex size-5 items-center justify-center rounded-full bg-success-soft text-on-success-soft">
-				<Icon name="check" size={12} />
-			</span>
-			{children}
-		</p>
-	);
-}
-
-/**
  * Open a product dashboard: make the single-use launch, then open its URL in a new tab.
  * @param {Fetcher} fetcher
  * @param {string} path the launch route

@@ -18,11 +18,12 @@ import {
 	Form,
 	FormError,
 	Input,
+	LocalTime,
 	Stepper,
 	Table,
+	Timeline,
 	describeProblem,
 	fieldErrors,
-	formatDateTime,
 	humanize,
 	useToast,
 } from '@ss/ui';
@@ -486,47 +487,27 @@ function Changes({ entry }) {
 }
 
 /**
- * Initials of a name for a small avatar (`Alex Morgan` → `AM`, `shop.example` → `SH`).
- * @param {string} name
- */
-export const initialsOf = (name) => {
-	const words = String(name ?? '')
-		.trim()
-		.split(/[\s._@-]+/)
-		.filter(Boolean);
-	const letters = words.length > 1 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : (words[0] ?? '').slice(0, 2);
-	return letters.toUpperCase() || '·';
-};
-
-/**
- * The latest activity as a timeline (who, what, for which merchant, when): the Overview's short view of the log.
- * `showMerchant` (admin views) names the merchant of each entry; the merchant console leaves it out.
+ * The latest activity as a timeline (who, what, for which merchant, when in the viewer's local time): the Overview's
+ * short view of the log. `showMerchant` (admin views) names the merchant of each entry; the merchant console leaves it
+ * out.
  * @param {{ items: any[], empty: string, showMerchant?: boolean }} props
  */
 export function ActivityTimeline({ items, empty, showMerchant = true }) {
-	if (items.length === 0) return <EmptyState compact icon="activity" kind="activity" title={empty} />;
 	return (
-		<ol className="space-y-4">
-			{items.map((e) => {
-				const who = actorName(e);
-				return (
-					<li key={e.activityId} className="flex gap-3">
-						<span
-							aria-hidden="true"
-							className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-bold text-on-primary-soft">
-							{initialsOf(who)}
-						</span>
-						<div className="min-w-0 text-sm">
-							<p className="text-fg">
-								<span className="font-semibold">{who}</span> · {actionLabel(e.action)}
-								{showMerchant && e.merchantName ? <span className="text-muted"> · {e.merchantName}</span> : null}
-							</p>
-							<p className="text-xs text-muted">{formatDateTime(e.at)}</p>
-						</div>
-					</li>
-				);
-			})}
-		</ol>
+		<Timeline
+			empty={empty}
+			items={items.map((e) => ({
+				key: e.activityId,
+				who: actorName(e),
+				what: (
+					<>
+						{actionLabel(e.action)}
+						{showMerchant && e.merchantName ? <span className="text-muted"> · {e.merchantName}</span> : null}
+					</>
+				),
+				at: e.at,
+			}))}
+		/>
 	);
 }
 
@@ -565,7 +546,7 @@ export function ActivityTable({
 			loadingMore={loadingMore}
 			{...(onLoadMore ? { onLoadMore } : {})}
 			columns={[
-				{ key: 'at', header: 'When', render: (e) => formatDateTime(e.at) },
+				{ key: 'at', header: 'When', render: (e) => <LocalTime value={e.at} /> },
 				{
 					key: 'who',
 					header: 'Who',

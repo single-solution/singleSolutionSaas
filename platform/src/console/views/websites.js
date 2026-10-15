@@ -19,6 +19,7 @@ import {
 	IconBadge,
 	LocalTime,
 	Masonry,
+	NeedsList,
 	PageHeader,
 	Section,
 	SoftBreaks,
@@ -36,7 +37,7 @@ import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
 import { DaysLeft, ProductStatusBadge, ReceiptsTable, creditDayBars, formatChartCredits } from './billing.js';
 import { FrameBilling } from './frame-billing.js';
-import { ListDetail, ListPane, ListRow, ListSearch, NeedItem, NothingNeeded, PageProblem, openDashboard } from './common.js';
+import { ListDetail, ListPane, ListRow, ListSearch, PageProblem, openDashboard } from './common.js';
 import { ActivityTimeline } from './login-settings.js';
 import { contactLine } from './sign-in.js';
 import { WebsiteCard, dailyCostOf, websiteDot } from './website.js';
@@ -98,7 +99,7 @@ export function OverviewView(props) {
 		</Button>
 	);
 
-	/** @type {Array<{ key: string, tone: 'warning' | 'danger', title: string, effect: string, action?: import('react').ReactNode }>} */
+	/** @type {import('@ss/ui').Need[]} */
 	const needs = [];
 	for (const { website, cards } of rows) {
 		if (cards.length === 0)
@@ -133,15 +134,7 @@ export function OverviewView(props) {
 				<div className="@container">
 					<div className="grid gap-6 @4xl:grid-cols-2">
 						<Card title={MERCHANT.needs.title} subtitle={needs.length > 0 ? MERCHANT.needs.intro : undefined}>
-							{needs.length === 0 ? (
-								<NothingNeeded>{MERCHANT.needs.none}</NothingNeeded>
-							) : (
-								<ul className="@container space-y-2.5">
-									{needs.map(({ key, ...need }) => (
-										<NeedItem key={key} {...need} />
-									))}
-								</ul>
-							)}
+							<NeedsList items={needs} none={MERCHANT.needs.none} />
 						</Card>
 						<Card title={MERCHANT.spendChart} subtitle={props.usage ? formatCredits(props.usage.total ?? 0) : undefined}>
 							<BarChart
