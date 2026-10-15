@@ -24,7 +24,8 @@ placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}` a
   `CONNECT_SECRET`, `ENCRYPTION_KEY` (and the optional `ENCRYPTION_KEY_PREVIOUS`), `vercel.json` without crons,
   `.gitignore` (`.env*` except `.env.example`), `.prettierignore`, `eslint.config.js` / `tsconfig.json` /
   `vitest.config.js` from `@ss/config`, `next.config.js` (rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs`,
-  `/openapi.json`, `/v1/*` to the API function), `postcss.config.mjs`.
+  `/openapi.json`, `/v1/*` to the API function; the dashboard page's security headers from `@ss/app-kit/headers`,
+  so it is never shown inside a frame), `postcss.config.mjs`.
 - `core/` (note checks, widget names), `server/` (routes, the `/docs` page, the generated widget bundle), `adapters/`
   (`product.js`: the kit wiring, with its part of the website Setup sheet: the `openapi` and `build` options and a
   `blueprint` hook; `notes-store.js`: the merchant database), `ui/` (the visitor widget `note_form` and the

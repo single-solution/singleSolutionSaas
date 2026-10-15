@@ -63,6 +63,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 			'tests/api.test.js',
 			'tests/ui.test.js',
 			'tests/core.test.js',
+			'tests/next-config.test.js',
 		])
 			expect(files).toContain(file);
 		for (const file of files) expect(await read(dir, file), file).not.toMatch(/\{\{[A-Za-z]+\}\}/);
@@ -109,6 +110,8 @@ describe('ss app init → validate → own tests (integration)', () => {
 		expect(await read(dir, 'vitest.config.js')).toContain("from '@ss/config/vitest'");
 		expect((await json(dir, 'tsconfig.json')).extends).toBe('@ss/config/tsconfig.base.json');
 		expect(await read(dir, 'next.config.js')).toContain("'/widget.js', '/docs', '/openapi.json', '/v1/:path*'");
+		// the dashboard page refuses frames (tests/next-config.test.js checks it with the project's own tests below)
+		expect(await read(dir, 'next.config.js')).toContain('headers: async () => dashboardHeaders()');
 		expect(await read(dir, 'core/widgets.js')).toContain("WIDGET_GLOBAL = 'SSOrderNotes'");
 		expect(await read(dir, 'core/widgets.js')).toContain("WIDGET_ATTRIBUTE = 'data-ss-order-notes'");
 		expect(await read(dir, 'server/widget-script.js')).toContain('export const WIDGET_SCRIPT = ');
@@ -149,7 +152,7 @@ describe('ss app init → validate → own tests (integration)', () => {
 		// installed, the kit resolves from the project itself and the bundle is the same
 		expect((await validateProject(dir)).problems).toEqual([]);
 		const stdout = await runOwnTests(dir);
-		for (const file of ['core', 'api', 'ui']) expect(stdout).toContain(`tests/${file}.test.js`);
+		for (const file of ['core', 'api', 'ui', 'next-config']) expect(stdout).toContain(`tests/${file}.test.js`);
 		expect(stdout).toMatch(/Tests\s+\d+ passed/);
 	}, 120_000);
 
