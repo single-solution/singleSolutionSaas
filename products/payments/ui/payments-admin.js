@@ -22,7 +22,6 @@ import {
 	openDialog,
 	splitView,
 } from '@ss/app-kit/widget';
-import { fromDecimal, toDecimal } from '../core/money.js';
 import { PAYMENT_STATUSES, paymentsCsv } from '../core/payments.js';
 import { field, listSection } from './admin-kit.js';
 import { formattersOf } from './format.js';
@@ -51,7 +50,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
 	const can = (/** @type {string} */ feature) => config.features.includes(feature);
-	const { money, date } = formattersOf(config, host);
+	const { money, date, amountOf, amountText } = formattersOf(config, host);
 	/**
 	 * A gateway's name in the texts, or a manual payment method's own name (as the payment took it).
 	 * @param {string | null} gateway @param {string} [methodName]
@@ -168,7 +167,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 						const amount = /** @type {HTMLInputElement} */ (
 							element(doc, 'input', { inputmode: 'decimal', name: 'amount' })
 						);
-						amount.value = toDecimal(left, payment.currency);
+						amount.value = amountText(left, payment.currency);
 						const reason = /** @type {HTMLInputElement} */ (element(doc, 'input', { name: 'reason', maxlength: '200' }));
 						openDialog(root, {
 							title: t('admin.refund'),
@@ -179,7 +178,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 							submitLabel: t('admin.refund'),
 							closeLabel: t('admin.close'),
 							onSubmit: async () => {
-								const minor = fromDecimal(amount.value, payment.currency);
+								const minor = amountOf(amount.value, payment.currency);
 								const answer = await adminCall(api, 'POST', `/v1/admin/payments/${payment.id}/refunds`, {
 									amount: minor ?? -1,
 									reason: reason.value.trim(),

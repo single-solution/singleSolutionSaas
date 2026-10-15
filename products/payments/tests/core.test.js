@@ -13,7 +13,17 @@ import {
 	methodReady,
 	methodView,
 } from '../core/methods.js';
-import { MAX_AMOUNT, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
+import {
+	MAX_AMOUNT,
+	amountOf,
+	amountText,
+	decimalSignOf,
+	formatMoney,
+	fromDecimal,
+	isAmount,
+	isCurrency,
+	toDecimal,
+} from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
 	checkCustomer,
@@ -57,6 +67,28 @@ describe('money', () => {
 		expect(fromDecimal('abc', 'EUR')).toBeNull();
 		expect(fromDecimal('0', 'EUR')).toBeNull();
 		expect(fromDecimal(undefined, 'EUR')).toBeNull();
+	});
+	it('reads amounts typed with the website’s decimal sign, never misreading a thousands separator (P6)', () => {
+		expect(decimalSignOf('en-US')).toBe('.');
+		expect(decimalSignOf('de-DE')).toBe(',');
+		expect(decimalSignOf('')).toBe('.');
+		expect(decimalSignOf('not a locale!')).toBe('.');
+		// the shown sign, and the other of . and , where it cannot be a thousands separator
+		expect(amountOf('25.50', 'EUR', '.')).toBe(2550);
+		expect(amountOf(' 25,5 ', 'EUR', '.')).toBe(2550);
+		expect(amountOf('25,50', 'EUR', ',')).toBe(2550);
+		expect(amountOf('25.50', 'EUR', ',')).toBe(2550);
+		expect(amountOf('1,234', 'KWD', ',')).toBe(1234);
+		expect(amountOf('2500', 'JPY', ',')).toBe(2500);
+		expect(amountOf(12.5, 'USD', ',')).toBe(1250);
+		// three digits after the other sign could be a thousands group: refused
+		expect(amountOf('1,250', 'USD', '.')).toBeNull();
+		expect(amountOf('1.250', 'USD', ',')).toBeNull();
+		// one decimal sign at most, digits otherwise
+		for (const text of ['1,250.50', '1.250,50', '1 250', '-5', '1e3', '', 'abc', '25,505'])
+			expect(amountOf(text, 'USD', '.')).toBeNull();
+		expect(amountText(255050, 'USD', ',')).toBe('2550,50');
+		expect(amountText(2500, 'JPY', ',')).toBe('2500');
 	});
 	it('formats for people without assuming a locale', () => {
 		expect(formatMoney(125000, 'EUR')).toBe('EUR 1,250.00');

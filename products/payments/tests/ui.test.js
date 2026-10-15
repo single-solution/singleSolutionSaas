@@ -176,7 +176,18 @@ describe('pay button', () => {
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
 		expect(statusText(host)).toBe('Enter an amount of at least USD 5.00.');
-		expect(posted[0]).toEqual({ amount: '1', gateway: 'stripe', customer: { name: '', email: '' } });
+		expect(posted[0]).toEqual({ amount: '1.00', gateway: 'stripe', customer: { name: '', email: '' } });
+		// the shown decimal sign or a comma that cannot be a thousands separator; the API gets a plain decimal (P6)
+		inside(host, '#ss-pay-amount').value = '12,5';
+		inside(host, 'form').dispatchEvent(new window.Event('submit'));
+		await flush();
+		expect(posted[1]).toMatchObject({ amount: '12.50' });
+		inside(host, '#ss-pay-amount').value = '1,250';
+		inside(host, 'form').dispatchEvent(new window.Event('submit'));
+		await flush();
+		expect(posted).toHaveLength(2);
+		expect(statusText(host)).toBe('Enter an amount of at least USD 5.00.');
+		inside(host, '#ss-pay-amount').value = '10';
 		for (const [path, text] of [
 			['/email', strings['link.invalidEmail']],
 			['/gateway', strings['link.invalidMethod']],
@@ -429,13 +440,18 @@ describe('Payments admin widget', () => {
 		/** @type {any[]} */
 		const confirmBodies = [];
 		let refundReply = answer(422, { detail: 'Too much' });
+		/** @type {any[]} */
+		const refundBodies = [];
 		const open = vi.fn();
 		const copy = vi.fn();
 		const client = adminApi({
 			'GET /v1/admin/payments': () => answer(200, { items: [PAYMENT, pending], nextCursor: null, hasMore: false }),
 			'GET /v1/admin/payments/pay_1': () => answer(200, PAYMENT),
 			'GET /v1/admin/payments/pay_5': () => answer(200, pending),
-			'POST /v1/admin/payments/pay_1/refunds': () => refundReply,
+			'POST /v1/admin/payments/pay_1/refunds': (init) => {
+				refundBodies.push(JSON.parse(init.body));
+				return refundReply;
+			},
 			'POST /v1/admin/payments/pay_5/confirm': (init) => {
 				confirmBodies.push(JSON.parse(init.body));
 				return answer(200, {
@@ -457,7 +473,9 @@ describe('Payments admin widget', () => {
 		expect(detailText(host)).toContain(strings['admin.field.id']);
 		button(host, strings['admin.refund']).click();
 		expect(inside(host, '.dialog input[name="amount"]').value).toBe('2500.00');
+		inside(host, '.dialog input[name="amount"]').value = '2500,00';
 		await submitDialog(host);
+		expect(refundBodies.at(-1)).toMatchObject({ amount: 250000 });
 		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not refunded: Too much');
 		refundReply = answer(201, { ...PAYMENT, status: 'refunded', refunded: 250000 });
 		await submitDialog(host);
@@ -828,7 +846,9 @@ describe('Payment links admin widget', () => {
 		set('currency', 'usd');
 		set('minAmount', 'abc');
 		await submitDialog(host);
-		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['links.invalidAmount']);
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(
+			'Enter amounts like 2500 or 2500.50, without thousands separators.',
+		);
 		set('minAmount', '100');
 		set('returnUrl', 'https://elsewhere.example.org/');
 		/** @type {HTMLInputElement} */ (boxes[1]).checked = true;
@@ -853,6 +873,39 @@ describe('Payment links admin widget', () => {
 		expect(rows(host)[0]?.textContent).toContain('Donations');
 		expect(detailStatus(host)).toBe(strings['links.created']);
 		expect(statusText(host)).toBe('');
+	});
+
+	it('takes amounts typed with the website’s decimal sign (P6)', async () => {
+		const host = place('links_admin');
+		/** @type {any[]} */
+		const bodies = [];
+		const client = adminApi({
+			'GET /v1/admin/links': () => answer(200, { items: [], nextCursor: null, hasMore: false }),
+			'POST /v1/admin/links': (init) => {
+				bodies.push(JSON.parse(init.body));
+				return answer(201, OPEN);
+			},
+		});
+		const config = configOf(['payment_links', 'stripe'], { format: { locale: 'de-DE' } });
+		mountLinksAdmin({ host, api: client, config, open: vi.fn() });
+		await flush();
+		button(host, strings['links.new']).click();
+		await flush();
+		const form = /** @type {HTMLFormElement} */ (dialog(host));
+		const set = (/** @type {string} */ name, /** @type {string} */ value) => {
+			/** @type {HTMLInputElement} */ (form.querySelector(`[name="${name}"]`)).value = value;
+		};
+		set('title', 'Donations');
+		set('currency', 'EUR');
+		set('minAmount', '1.250');
+		await submitDialog(host);
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(
+			'Enter amounts like 2500 or 2500,50, without thousands separators.',
+		);
+		expect(bodies).toEqual([]);
+		set('minAmount', '25,50');
+		await submitDialog(host);
+		expect(bodies[0]).toMatchObject({ currency: 'EUR', amount: null, minAmount: 2550 });
 	});
 
 	it('tells gateways with the same brand apart by their currencies (P10)', async () => {

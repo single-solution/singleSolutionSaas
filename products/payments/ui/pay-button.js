@@ -8,6 +8,7 @@
  * @module
  */
 import { element, formatText, mountWidget } from '@ss/app-kit/widget';
+import { toDecimal } from '../core/money.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -33,7 +34,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 	const answer = await call(path);
 	if (!answer.ok) return;
 	const data = answer.data;
-	const { money } = formattersOf(config, host);
+	const { money, amountOf } = formattersOf(config, host);
 	mountWidget({
 		host,
 		theme: config.theme,
@@ -109,14 +110,21 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				button.setAttribute('disabled', '');
 				status.textContent = t('page.noGateway');
 			}
+			const invalidAmount = () => formatText(t('link.invalidAmount'), { min: money(data.minAmount ?? 1, data.currency) });
 			box.addEventListener('submit', async (event) => {
 				event.preventDefault();
+				// typed with the decimal sign money is shown with (P6); the API takes a plain decimal
+				const typed = amountInput ? amountOf(amountInput.value, data.currency) : null;
+				if (amountInput && typed === null) {
+					status.textContent = invalidAmount();
+					return;
+				}
 				button.setAttribute('disabled', '');
 				status.textContent = '';
 				const made = await call(path, {
 					method: 'POST',
 					body: {
-						...(amountInput ? { amount: amountInput.value.trim() } : {}),
+						...(typed === null ? {} : { amount: toDecimal(typed, data.currency) }),
 						gateway: method.value,
 						customer: { name: name.value.trim(), email: email.value.trim() },
 					},
@@ -126,7 +134,7 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				const field = made.data?.errors?.[0]?.path;
 				status.textContent =
 					field === '/amount'
-						? formatText(t('link.invalidAmount'), { min: money(data.minAmount ?? 1, data.currency) })
+						? invalidAmount()
 						: field === '/email'
 							? t('link.invalidEmail')
 							: field === '/gateway'

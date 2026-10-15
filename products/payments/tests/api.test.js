@@ -1000,14 +1000,17 @@ describe('payment links and the pay button routes', () => {
 		expect(email.text).toContain('Enter a valid email address.');
 		const method = await env.call('POST', `/l/${env.websiteId}/${open.id}`, { form: { amount: '10', gateway: 'jazzcash' } });
 		expect(method.text).toContain('Choose a payment method.');
+		// a comma that could be a thousands separator is refused, never misread (P6)
+		const grouped = await env.call('POST', `/l/${env.websiteId}/${open.id}`, { form: { amount: '1,250', gateway: 'stripe' } });
+		expect(grouped.status).toBe(422);
 		const made = await env.call('POST', `/l/${env.websiteId}/${open.id}`, {
-			form: { amount: '10', gateway: 'stripe', name: 'Ana', email: 'ana@example.com' },
+			form: { amount: '10,50', gateway: 'stripe', name: 'Ana', email: 'ana@example.com' },
 		});
 		expect(made.status).toBe(303);
 		const paymentId = /\/pay\/[^/]+\/(pay_[A-Za-z0-9]+)/.exec(made.headers.get('location') ?? '')?.[1] ?? '';
 		const payment = (await env.api('GET', `/v1/payments/${paymentId}`)).json;
 		expect(payment).toMatchObject({
-			amount: 1000,
+			amount: 1050,
 			currency: 'USD',
 			source: 'link',
 			linkId: open.id,
@@ -1015,7 +1018,7 @@ describe('payment links and the pay button routes', () => {
 			customer: { name: 'Ana' },
 		});
 		await page(`/pay/${env.websiteId}/${paymentId}`);
-		await stripePaid(paymentId, 1000, 'usd');
+		await stripePaid(paymentId, 1050, 'usd');
 		expect((await env.api('GET', `/v1/links/${open.id}`)).json.paidCount).toBe(1);
 	});
 

@@ -19,7 +19,6 @@ import {
 	splitView,
 } from '@ss/app-kit/widget';
 import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
-import { fromDecimal } from '../core/money.js';
 import { field } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
@@ -32,7 +31,7 @@ import { WIDGET_CSS } from './styles.js';
 export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
-	const { money, date } = formattersOf(config, host);
+	const { money, date, amountOf: typedAmount, amountText } = formattersOf(config, host);
 	/** @param {any} link */
 	const amountOf = (link) =>
 		link.amount === null
@@ -261,10 +260,11 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					closeLabel: t('links.close'),
 					onSubmit: async () => {
 						const code = currency.value.trim().toUpperCase();
-						const fixed = amount.value.trim() ? fromDecimal(amount.value, code) : null;
-						const min = minimum.value.trim() ? fromDecimal(minimum.value, code) : null;
+						// amounts are typed with the decimal sign money is shown with (P6)
+						const fixed = amount.value.trim() ? typedAmount(amount.value, code) : null;
+						const min = minimum.value.trim() ? typedAmount(minimum.value, code) : null;
 						if ((amount.value.trim() && fixed === null) || (minimum.value.trim() && min === null))
-							return t('links.invalidAmount');
+							return formatText(t('links.invalidAmount'), { example: amountText(250050, 'USD') });
 						const picked = [...gateways.querySelectorAll('input:checked')].map(
 							(box) => /** @type {HTMLInputElement} */ (box).value,
 						);

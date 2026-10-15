@@ -12,7 +12,7 @@ import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
 import { GATEWAY_FEATURES, isGateway } from '../core/gateways.js';
 import { methodView } from '../core/methods.js';
-import { fromDecimal } from '../core/money.js';
+import { amountOf, decimalSignOf, fromDecimal } from '../core/money.js';
 import {
 	PAYMENT_STATUSES,
 	SUBSCRIPTION_STATUSES,
@@ -148,13 +148,14 @@ export const createRoutes = (product) => {
 		);
 
 	/**
-	 * The look of the hosted pages: the website's texts and theme, and its Format for money (PLAN 0.8.10 K7).
+	 * The look of the hosted pages: the website's texts and theme, and its Format for money (PLAN 0.8.10 K7) and for
+	 * amounts payers type (its decimal sign, P6).
 	 * @param {string} websiteId
 	 */
 	const lookOf = async (websiteId) => {
 		const theme = await product.settings.theme(websiteId);
-		const { money } = await product.format(websiteId);
-		return { texts: await product.settings.texts(websiteId), theme, money };
+		const { money, format } = await product.format(websiteId);
+		return { texts: await product.settings.texts(websiteId), theme, money, decimalSign: decimalSignOf(format.locale) };
 	};
 
 	/**
@@ -399,11 +400,12 @@ export const createRoutes = (product) => {
 	 * A payment from a link, with what the payer entered.
 	 * @param {Site} s
 	 * @param {import('../adapters/store.js').LinkRecord} link
-	 * @param {{ amount: unknown, gateway: unknown, name: unknown, email: unknown }} input
+	 * @param {{ amount: number | null, gateway: unknown, name: unknown, email: unknown }} input `amount`: what the payer
+	 *   entered, in minor units (null when it is not an amount)
 	 * @returns {Promise<{ ok: true, payment: import('../adapters/store.js').PaymentRecord } | { ok: false, field: string, key: string }>}
 	 */
 	const payLink = async (s, link, input) => {
-		const amount = link.amount ?? fromDecimal(input.amount, link.currency);
+		const amount = link.amount ?? input.amount;
 		if (amount === null || (link.amount === null && amount < Number(link.minAmount ?? 1)))
 			return { ok: false, field: 'amount', key: 'link.invalidAmount' };
 		const customer = checkCustomer({ name: input.name ?? '', email: input.email ?? '' });
@@ -688,7 +690,13 @@ export const createRoutes = (product) => {
 		const action = `/l/${websiteId}/${link.id}`;
 		if (step === 'show') return html(renderLinkPage({ ...look, business, link, gateways, action }));
 		const form = Object.fromEntries(formFields(ctx.rawBody));
-		const made = await payLink(s, link, { amount: form.amount, gateway: form.gateway, name: form.name, email: form.email });
+		// the payer types the amount with the decimal sign the page shows money with (P6)
+		const made = await payLink(s, link, {
+			amount: amountOf(form.amount, link.currency, look.decimalSign),
+			gateway: form.gateway,
+			name: form.name,
+			email: form.email,
+		});
 		if (made.ok) return seeOther(`/pay/${websiteId}/${made.payment.id}`);
 		const error = formatText(look.texts[made.key] ?? made.key, { min: look.money(Number(link.minAmount ?? 1), link.currency) });
 		return html(renderLinkPage({ ...look, business, link, gateways, action, error, values: form }), 422);
@@ -917,7 +925,7 @@ export const createRoutes = (product) => {
 				if (!link) return problem('not_found', 'No such link.');
 				const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
 				const made = await payLink(s, link, {
-					amount: body.amount,
+					amount: fromDecimal(body.amount, link.currency),
 					gateway: body.gateway,
 					name: body.customer?.name,
 					email: body.customer?.email,

@@ -1483,7 +1483,7 @@
 											"string",
 											"number"
 										],
-										"description": "Only when the link has no fixed amount: a decimal in the currency's main unit, for example \"10.50\" (not minor units)."
+										"description": "Only when the link has no fixed amount: a decimal in the currency's main unit with a dot, for example \"10.50\" (not minor units, no thousands separators). The pay button reads what the payer typed with the decimal sign money is shown with and sends it in this form."
 									},
 									"gateway": {
 										"$ref": "#/components/schemas/Method"
