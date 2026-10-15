@@ -510,7 +510,13 @@ export const settingsPlan = (values) => {
 		},
 		notifications: {
 			format,
-			settings: { 'email.replyTo': '', 'email.retryPlan': 'short', 'delivery_log.retentionDays': 0 },
+			// the SaaS default waits (store mapping to review)
+			settings: {
+				'email.replyTo': '',
+				'email.retryPlan': 'short',
+				'email.retryWaits': [1, 5],
+				'delivery_log.retentionDays': 0,
+			},
 		},
 		payments: {
 			format,

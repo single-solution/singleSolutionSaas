@@ -34,6 +34,7 @@ const { ROLE_TEMPLATES } = await productModule('accounts/core/roles.js');
 const { checkCouriers } = await productModule('ecommerce/core/couriers.js');
 const { checkZones } = await productModule('ecommerce/core/delivery.js');
 const { checkOrderFlow } = await productModule('ecommerce/core/flow.js');
+const { checkPaymentMethods } = await productModule('ecommerce/core/payment-methods.js');
 const catalog = await productModule('ecommerce/core/imports-catalog.js');
 const orders = await productModule('ecommerce/core/imports-orders.js');
 const { checkRolePrices } = await productModule('ecommerce/core/role-pricing.js');
@@ -116,6 +117,7 @@ describe('the Sisters Boutique mapping through the products’ checks', () => {
 		expect(checkOrderFlow(lists.order_flow)).toMatchObject({ ok: true });
 		expect(checkRolePrices(lists.role_prices)).toMatchObject({ ok: true });
 		expect(checkCouriers(lists.couriers)).toMatchObject({ ok: true });
+		expect(checkPaymentMethods(lists.payment_methods)).toMatchObject({ ok: true });
 		expect(checkZones(lists.delivery_zones)).toMatchObject({ ok: true });
 	});
 
