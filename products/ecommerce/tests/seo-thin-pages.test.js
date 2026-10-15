@@ -211,6 +211,10 @@ describe('sitemap dates', () => {
 		);
 		expect((await read('/v1/seo/sitemaps/categories')).text).toContain(`<url><loc>${ORIGIN}/</loc></url>`);
 		await shop.setting('seo', 'sitemapSize', 10000);
+		// a file holds at most 15,000 addresses: with up to 10 photos each it stays under Google's 50 MB (review L9)
+		await shop.setting('seo', 'sitemapSize', 15000);
+		await expect(shop.setting('seo', 'sitemapSize', 15001)).rejects.toThrow(/422/);
+		await shop.setting('seo', 'sitemapSize', 10000);
 	}, 120_000);
 
 	it('forgets the landing pages indexed before with the catalog', async () => {

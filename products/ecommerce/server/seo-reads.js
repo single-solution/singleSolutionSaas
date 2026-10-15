@@ -9,6 +9,7 @@ import { SEO_DEFAULTS } from '../adapters/product.js';
 import { siteAddress } from '../core/catalog-content.js';
 import { absolute } from '../core/links.js';
 import { COLLECTIONS } from '../core/model.js';
+import { pageName, pageTitle } from '../core/seo.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').ProductRecord} ProductRecord */
@@ -47,6 +48,46 @@ export const newestOf = (times) => {
  * @param {{ name: string }} business
  */
 export const storeNameOf = (settings, business) => String(settings.brandName ?? '').trim() || business.name;
+
+/** @typedef {{ name: string, seo: { title: string, titleMode: 'template' | 'as_written' } }} TitledRecord */
+
+/** A website's page titles, read once per request. @type {WeakMap<Site, Promise<PageTitles>>} */
+const titles = new WeakMap();
+
+/**
+ * How the SEO answers title a product's, category's and brand's page (G6), for the titles staff's SEO scores judge
+ * (E42): its own SEO title as written (`as_written`), else the title pattern around its own title or, without one, its
+ * page part (`productTitle` or `categoryTitle`) filled with its name (the facts a pattern takes from other records —
+ * brand, category, prices — are left out).
+ * @typedef {{ product: (record: TitledRecord) => string, category: (record: TitledRecord) => string,
+ *   brand: (record: TitledRecord) => string }} PageTitles
+ * @param {Site} s
+ * @returns {Promise<PageTitles>}
+ */
+export const pageTitlesOf = (s) => {
+	let found = titles.get(s);
+	if (!found) {
+		found = (async () => {
+			const settings = await seoSettingsOf(s);
+			const storeName = storeNameOf(settings, await s.business());
+			/** @param {TitledRecord} record @param {unknown} pattern */
+			const titleOf = (record, pattern) =>
+				pageTitle(String(settings.titleTemplate), {
+					own: record.seo.title,
+					mode: record.seo.titleMode,
+					name: pageName(pattern, { name: record.name, storeName }),
+					business: storeName,
+				});
+			return Object.freeze({
+				product: (/** @type {TitledRecord} */ record) => titleOf(record, settings.productTitle),
+				category: (/** @type {TitledRecord} */ record) => titleOf(record, settings.categoryTitle),
+				brand: (/** @type {TitledRecord} */ record) => titleOf(record, ''),
+			});
+		})();
+		titles.set(s, found);
+	}
+	return found;
+};
 
 /**
  * An id or slug from the path, or '' when it cannot be one.

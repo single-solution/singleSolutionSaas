@@ -7,22 +7,11 @@
  * @module
  */
 
-/** Every check, in the order they are answered. */
-export const SEO_CHECKS = Object.freeze(
-	/** @type {const} */ ([
-		'title_length',
-		'description',
-		'focus_keyword',
-		'keyword_in_title',
-		'keyword_in_description',
-		'keyword_in_text',
-		'text_length',
-		'image_alt',
-		'in_category',
-	]),
-);
-
-/** @typedef {(typeof SEO_CHECKS)[number]} SeoCheckKey */
+/**
+ * A check, as the answers list them in this order.
+ * @typedef {'title_length' | 'description' | 'focus_keyword' | 'keyword_in_title' | 'keyword_in_description'
+ *   | 'keyword_in_text' | 'text_length' | 'image_alt' | 'in_category'} SeoCheckKey
+ */
 /** @typedef {{ score: number, checks: Array<{ key: SeoCheckKey, ok: boolean }> }} SeoScore */
 
 /** A title search engines show whole: about 60 characters (and more than a word). */
@@ -36,6 +25,8 @@ const TEXT_WORDS = 50;
  * What a record's score is worked out from.
  * @typedef {object} ScoreInput
  * @property {string} name the record's name (its title when it has no SEO title of its own)
+ * @property {string} [title] the page's whole title as search engines get it (the title pattern around the record's
+ *   own title or name, `server/seo-reads.js` `pageTitlesOf`); without it, the record's own SEO title or its name
  * @property {{ title?: string, description?: string, focusKeyword?: string }} seo its own SEO fields (a deal has no
  *   focus keyword: no keyword checks)
  * @property {string} text its own text as plain text (paragraphs split by blank lines)
@@ -62,8 +53,8 @@ const holds = (text, keyword) => keyword !== '' && plain(text).toLowerCase().inc
  * @param {ScoreInput} input
  * @returns {SeoScore}
  */
-export const seoScore = ({ name, seo, text, images, inCategory }) => {
-	const title = plain(seo.title) || plain(name);
+export const seoScore = ({ name, title: page, seo, text, images, inCategory }) => {
+	const title = plain(page) || plain(seo.title) || plain(name);
 	const description = plain(seo.description);
 	const keyword = plain(seo.focusKeyword);
 	const body = String(text ?? '').trim();
@@ -97,12 +88,15 @@ export const seoScore = ({ name, seo, text, images, inCategory }) => {
 };
 
 /**
- * A product's score: its photos (one at least, each with alternative text), its description and its categories.
+ * A product's score: its page's title, its photos (one at least, each with alternative text), its description and its
+ * categories.
  * @param {Pick<import('./model.js').ProductRecord, 'name' | 'seo' | 'description' | 'media' | 'categoryIds'>} product
+ * @param {string} [title] its page's whole title
  */
-export const productScore = (product) =>
+export const productScore = (product, title) =>
 	seoScore({
 		name: product.name,
+		...(title === undefined ? {} : { title }),
 		seo: product.seo,
 		text: product.description,
 		images: product.media,
@@ -110,24 +104,28 @@ export const productScore = (product) =>
 	});
 
 /**
- * A category's score: its description and content summary, its image when it has one.
+ * A category's score: its page's title, its description and content summary, its image when it has one.
  * @param {Pick<import('./model.js').CategoryRecord, 'name' | 'seo' | 'description' | 'content' | 'image'>} category
+ * @param {string} [title] its page's whole title
  */
-export const categoryScore = (category) =>
+export const categoryScore = (category, title) =>
 	seoScore({
 		name: category.name,
+		...(title === undefined ? {} : { title }),
 		seo: category.seo,
 		text: [category.description, category.content?.summary ?? ''].filter(Boolean).join('\n\n'),
 		images: category.image ? [category.image] : null,
 	});
 
 /**
- * A brand's score: its description, its logo when it has one.
+ * A brand's score: its page's title, its description, its logo when it has one.
  * @param {Pick<import('./model.js').BrandRecord, 'name' | 'seo' | 'description' | 'logo'>} brand
+ * @param {string} [title] its page's whole title
  */
-export const brandScore = (brand) =>
+export const brandScore = (brand, title) =>
 	seoScore({
 		name: brand.name,
+		...(title === undefined ? {} : { title }),
 		seo: brand.seo,
 		text: brand.description,
 		images: brand.logo ? [brand.logo] : null,

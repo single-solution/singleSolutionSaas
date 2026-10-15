@@ -227,6 +227,11 @@ export const createOrderEvents = (product, service) => {
 		}
 	});
 
+	// a category, brand or deal staff wrote: the pages that show it (its own, product pages, listings, shown prices)
+	service.on('page.changed', async (s, { kind, id, slug }) => {
+		if (s.has('events')) await publish(s, 'catalog.changed', { kind, id, slug });
+	});
+
 	// an order took stock (placed, or edited to more units): only offered variants not marked sold out, of active
 	// products that track stock, are held, so each counts for stock
 	service.on('stock.taken', async (s, { lines }) => {

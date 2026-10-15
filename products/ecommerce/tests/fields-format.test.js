@@ -41,6 +41,9 @@ describe('check digits', () => {
 		for (const wrong of ['4006381333932', '036000291453', '0360002914520', '1234567', '123456789', 'ABC', '', 5, null])
 			expect(gtinOf(wrong), String(wrong)).toBeNull();
 		expect(gtinOf('4'.repeat(41))).toBeNull();
+		// all zeros passes the check digit but names no item: GS1 and Google refuse it (review L4)
+		for (const zeros of ['00000000', '000000000000', '0000000000000', '00000000000000', '0000 0000'])
+			expect(gtinOf(zeros), zeros).toBeNull();
 	});
 });
 

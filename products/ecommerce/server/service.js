@@ -108,9 +108,11 @@ const claimsOf = (token) => {
 /**
  * @typedef {'products.changed' | 'stock.taken' | 'order.placed' | 'order.moved' | 'order.paid' | 'order.proof_uploaded'
  *   | 'order.payment_recorded' | 'order.refunded' | 'return.requested' | 'return.status_changed' | 'review.submitted'
- *   | 'product.saved' | 'attribute.saved'} HookName
+ *   | 'product.saved' | 'attribute.saved' | 'page.changed'} HookName
  *   `products.changed`: `{ productIds, before: Map<id, { price, inStock, stock? }> }` after catalog writes (alerts;
  *   `stock`: each variant's units before a catalog write, Map<variant id, units>);
+ *   `page.changed`: `{ kind: 'category' | 'brand' | 'deal', id, slug }` after staff made, changed or deleted a
+ *   category, a brand or a deal, or set or removed its image (what product pages, listings and shown prices show);
  *   `stock.taken`: `{ lines: [{ productId, variantId, quantity, left }] }` after an order took stock (placed, or edited
  *   to more units) from variants that track it, `left` read in the same write (E44 stock events);
  *   `product.saved`: `{ product, replace }` and `attribute.saved`: `{ attribute, replace }` after staff create or change

@@ -6754,7 +6754,7 @@
 														"null"
 													],
 													"maxLength": 40,
-													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 												},
 												"mpn": {
 													"type": [
@@ -6983,7 +6983,7 @@
 											"null"
 										],
 										"maxLength": 40,
-										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 									},
 									"mpn": {
 										"type": [
@@ -8159,7 +8159,7 @@
 														"null"
 													],
 													"maxLength": 40,
-													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 												},
 												"mpn": {
 													"type": [
@@ -8388,7 +8388,7 @@
 											"null"
 										],
 										"maxLength": 40,
-										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 									},
 									"mpn": {
 										"type": [
@@ -22071,7 +22071,7 @@
 														"null"
 													],
 													"maxLength": 40,
-													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 												},
 												"mpn": {
 													"type": [
@@ -22300,7 +22300,7 @@
 											"null"
 										],
 										"maxLength": 40,
-										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 									},
 									"mpn": {
 										"type": [
@@ -23555,7 +23555,7 @@
 														"null"
 													],
 													"maxLength": 40,
-													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+													"description": "Its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 												},
 												"mpn": {
 													"type": [
@@ -23784,7 +23784,7 @@
 											"null"
 										],
 										"maxLength": 40,
-										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
+										"description": "Single-variant shortcut: its GTIN (barcode number): 8, 12, 13 or 14 digits ending in the GS1 check digit, not all zeros (spaces and dashes are dropped); '' or null clears it. Structured data and feeds send it."
 									},
 									"mpn": {
 										"type": [
@@ -29602,7 +29602,7 @@
 			},
 			"post": {
 				"summary": "Place an order",
-				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: awaiting_confirmation (open with cod.startStatus open) / unpaid / done; pickup (pay at pickup): awaiting_confirmation / unpaid / done; a free order (total 0): paid, awaiting_confirmation (online or bank_transfer with checkout.freeOrderStart awaiting_payment: awaiting_payment without a time limit). Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
+				"description": "Send an Idempotency-Key (428 idempotency_key_required without one) so a retried request places one order: the same key with the same body answers the first answer again (Idempotent-Replayed: true), with another body 409 duplicate_request. The shopper is the Accounts user of the sign-in sent in SS-Sign-In (verified here; a wrong or expired one counts as none). Without a sign-in a guest orders with customer { name, phone } while checkout.guests is on or unless_password (off: 403 sign_in_required; unless_password and the phone belongs to an Accounts user with a password: 403 sign_in_required with signIn: member_phone); a phone a member already has makes the order that member’s. The cart is priced again here. How the order starts (order.role / order.payment.state / next.kind): online, bank_transfer and cash on delivery with an advance, through Payments: awaiting_payment / pending / pay (retry when Payments could not be reached); bank transfers or COD advances staff record (checkout.bankTransferVia or cod.advanceVia manual): awaiting_payment / unpaid / proof; cod: the order flow's starts.cod status (awaiting_confirmation by default) / unpaid / done; pickup (pay at pickup): starts.pickup (awaiting_confirmation by default) / unpaid / done; a free order (total 0): paid, starts.free (awaiting_confirmation by default; a status of the awaiting_payment role waits without a time limit) — starts is set in the order_flow list. Unpaid orders awaiting payment are canceled after checkout.paymentWindowMinutes, unconfirmed ones after checkout.confirmationHours (0 = never), giving back what they held. A guest gets orderKey once. 422 validation_failed (the cart’s fields, /payment, /address/<field>, /customer/<field>, /returnUrl, /note, /expectedTotal, /delivery/locationId, /lines/<n> for a line that cannot be ordered); 422 cod_not_allowed (codReason over_max or advance_unavailable); 403 customer_blocked; 409 too_many_open_orders (checkout.openOrderCap); 409 price_changed when expectedTotal differs (quote: the new CartQuote); 409 out_of_stock (lines), slot_taken, offer_unavailable or points_changed. fields gives the order fields the quote names (422 at /fields/<id> for a value its field refuses or a required one missing).",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "checkout",
 				"security": [
@@ -41619,7 +41619,7 @@
 			},
 			"OrderEventCatalogChanged": {
 				"type": "object",
-				"description": "ecommerce.catalog.changed: a product was written (or its stock moved).",
+				"description": "ecommerce.catalog.changed: a product was written (or its stock moved), or staff made, changed or deleted a category, a brand or a deal (or set or removed its image): what product pages, listings and shown prices show.",
 				"required": [
 					"kind",
 					"id",
@@ -41630,7 +41630,10 @@
 					"kind": {
 						"type": "string",
 						"enum": [
-							"product"
+							"product",
+							"category",
+							"brand",
+							"deal"
 						]
 					},
 					"id": {
@@ -47300,9 +47303,12 @@
 						"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage. While Role pricing has role prices above 0 %, each offer adds a UnitPriceSpecification per role with its member price (the price shown less the role's percent, rounded as the cart rounds it) and validForMemberTier { @id } of the site answer's member program tier (G17)."
 					},
 					"lastModified": {
-						"type": "string",
+						"type": [
+							"string",
+							"null"
+						],
 						"format": "date-time",
-						"description": "The last change of what the page shows (the product's contentUpdatedAt): send it as your page's Last-Modified."
+						"description": "The last change of what the page shows (the product's contentUpdatedAt, else its last change): send it as your page's Last-Modified; null when none is known."
 					},
 					"html": {
 						"type": "string",
@@ -47439,7 +47445,7 @@
 						"items": {
 							"type": "string"
 						},
-						"description": "serial:<serial> and <fieldId>:<value> for each value: unique across the shop's units, so no number names two units."
+						"description": "num:<number> for its serial and each value, whatever field holds it: unique across the shop's units, so no number names two units."
 					},
 					"status": {
 						"type": "string",

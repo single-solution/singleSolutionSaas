@@ -169,7 +169,7 @@ const CACHE_ROUTE = [
 	"  const parts = Object.fromEntries((request.headers.get('ss-signature') ?? '').split(',').map((part) => part.split('=')));",
 	"  const expected = createHmac('sha256', process.env.SS_WEBHOOK_SECRET).update(`${parts.t}.${body}`).digest('hex');",
 	'  const recent = Math.abs(Date.now() / 1000 - Number(parts.t)) <= 300;',
-	"  const signed = typeof parts.v1 === 'string' && parts.v1.length === expected.length;",
+	"  const signed = /^[0-9a-f]{64}$/.test(parts.v1 ?? '');",
 	'  if (!recent || !signed || !timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected)))',
 	"    return new Response('Bad signature', { status: 401 });",
 	'  const { type } = JSON.parse(body);',

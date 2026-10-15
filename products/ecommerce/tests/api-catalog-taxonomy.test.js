@@ -243,7 +243,7 @@ describe('attributes, locations and serials through the admin widget', () => {
 				variantId,
 				serial: 'SN-1',
 				values: {},
-				keys: ['serial:SN-1'],
+				keys: ['num:SN-1'],
 				status: 'in_stock',
 				orderId: null,
 				lineId: null,

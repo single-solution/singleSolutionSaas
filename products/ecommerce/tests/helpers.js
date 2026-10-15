@@ -119,7 +119,7 @@ export const storedBrand = (given) => ({ ...storedFields(checkBrand({ name: give
  */
 export const storedUnit = (given) => ({
 	values: {},
-	keys: [`serial:${given.serial}`],
+	keys: [`num:${given.serial}`],
 	orderId: null,
 	lineId: null,
 	locationId: null,

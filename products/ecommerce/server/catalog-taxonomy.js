@@ -42,6 +42,7 @@ import { nextPreviousSlugs } from '../core/links.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { brandScore, categoryScore } from '../core/seo-score.js';
 import { bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { pageTitlesOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -87,8 +88,17 @@ export const createCatalogTaxonomy = (product, service, common) => {
 	const withImage = async (s, record, field) => ({
 		...withoutStamps(record),
 		[field]: record[field] ? { ...record[field], url: await common.media.mediaUrl(s, record[field].key) } : null,
-		...(s.has('seo') ? { seo: { ...record.seo, ...(field === 'image' ? categoryScore(record) : brandScore(record)) } } : {}),
+		...(s.has('seo') ? { seo: { ...record.seo, ...(await scoreOf(s, record, field)) } } : {}),
 	});
+
+	/**
+	 * A category's or brand's SEO score, its page's title judged as the SEO answers write it (E42).
+	 * @param {Site} s @param {any} record @param {'image' | 'logo'} field
+	 */
+	const scoreOf = async (s, record, field) => {
+		const titles = await pageTitlesOf(s);
+		return field === 'image' ? categoryScore(record, titles.category(record)) : brandScore(record, titles.brand(record));
+	};
 
 	/**
 	 * A slug for a record: the one given (refused when taken) or a free one from the name; within `scope` (an
@@ -240,6 +250,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					throw slugClash(error);
 				});
 			await service.log(ctx, 'category.created', id, { label: record.name });
+			await service.emit('page.changed', s, { kind: 'category', id, slug: record.slug });
 			await announce(s, record);
 			return created(await withImage(s, record, 'image'));
 		},
@@ -283,6 +294,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 			});
 			/** @type {CategoryRecord} */
 			const saved = await one(data, COLLECTIONS.categories, existing.id, 'category');
+			await service.emit('page.changed', s, { kind: 'category', id: saved.id, slug: saved.slug });
 			await announce(s, saved, existing);
 			return withImage(s, saved, 'image');
 		},
@@ -315,6 +327,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				await storage?.deleteObject({ key: existing.image.key }).catch(() => null);
 			}
 			await service.log(ctx, 'category.deleted', existing.id, { label: existing.name });
+			await service.emit('page.changed', s, { kind: 'category', id: existing.id, slug: existing.slug });
 			return undefined;
 		},
 	};
@@ -354,6 +367,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					throw slugClash(error);
 				});
 			await service.log(ctx, 'brand.created', id, { label: record.name });
+			await service.emit('page.changed', s, { kind: 'brand', id, slug: record.slug });
 			return created(await withImage(s, record, 'logo'));
 		},
 		/** @param {any} ctx */
@@ -373,6 +387,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 					throw slugClash(error);
 				});
 			await service.log(ctx, 'brand.updated', existing.id, { label: checked.value.name });
+			await service.emit('page.changed', s, { kind: 'brand', id: existing.id, slug });
 			return withImage(s, await one(data, COLLECTIONS.brands, existing.id, 'brand'), 'logo');
 		},
 		/** @param {any} ctx */
@@ -393,6 +408,7 @@ export const createCatalogTaxonomy = (product, service, common) => {
 				await storage?.deleteObject({ key: existing.logo.key }).catch(() => null);
 			}
 			await service.log(ctx, 'brand.deleted', existing.id, { label: existing.name });
+			await service.emit('page.changed', s, { kind: 'brand', id: existing.id, slug: existing.slug });
 			return undefined;
 		},
 	};

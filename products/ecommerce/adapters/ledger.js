@@ -12,6 +12,7 @@
  */
 import { createId, zonedParts } from '@ss/contracts';
 import { summarize } from '../core/catalog.js';
+import { unitKeys } from '../core/fields.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { lotsByRule } from '../core/loyalty.js';
 import { counterIdOf, counterNumbers, numberFormOf, orderNumberOf } from '../core/order-numbers.js';
@@ -966,7 +967,7 @@ const captureUnits = async (data, { orderId, plan }, session) => {
 			);
 			if (taken.modifiedCount === 1) continue;
 			if (line.capture === 'stock') throw unitRefused(line.lineId, `Serial number ${serial} is not in stock for this item.`);
-			const unit = typedUnits.get(serial) ?? { serial, values: {}, keys: [`serial:${serial}`] };
+			const unit = typedUnits.get(serial) ?? { serial, values: {}, keys: unitKeys(serial) };
 			const known = await serials.findOne(
 				{ websiteId: data.websiteId, keys: { $in: unit.keys } },
 				{ session, projection: { _id: 0, serial: 1 } },

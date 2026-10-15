@@ -100,14 +100,14 @@ const sharedStages = (field) => [
  * The products' checks as one pipeline: the active products and those without photos, without a variant that can be
  * bought, with a variant priced 0, photos without their text or too small, short descriptions, names and own SEO
  * titles and descriptions used twice, long SEO titles, canonical addresses on another site, products without the
- * identifiers the feeds need, the categories that have active products, archived products still featured, and the
- * variants by stock (E44).
+ * identifiers the feeds need, the categories that have active products shoppers see (not of a hidden brand), archived
+ * products still featured, and the variants by stock (E44).
  * @param {string} websiteId
  * @param {number} level the `catalog` setting `lowStock`
- * @param {{ domain: string, skuAs: 'none' | 'gtin' | 'mpn' }} site the website's address; what the feeds send the SKU
- *   as for variants without their own GTIN or MPN
+ * @param {{ domain: string, skuAs: 'none' | 'gtin' | 'mpn', hiddenBrandIds: string[] }} site the website's address;
+ *   what the feeds send the SKU as for variants without their own GTIN or MPN; the brands shoppers do not see
  */
-export const healthPipeline = (websiteId, level, { domain, skuAs }) => {
+export const healthPipeline = (websiteId, level, { domain, skuAs, hiddenBrandIds }) => {
 	const active = { $match: { status: 'active' } };
 	// the products the feeds send: active, with an offered variant priced above 0
 	const listed = { status: 'active', variants: { $elemMatch: { active: true, price: { $gt: 0 } } } };
@@ -182,7 +182,11 @@ export const healthPipeline = (websiteId, level, { domain, skuAs }) => {
 					{ $match: { variants: { $not: { $elemMatch: { active: true, $or: identifier } } } } },
 					{ $count: 'n' },
 				],
-				categories: [active, { $unwind: '$categoryIds' }, { $group: { _id: '$categoryIds' } }],
+				categories: [
+					{ $match: { status: 'active', brandId: { $nin: hiddenBrandIds } } },
+					{ $unwind: '$categoryIds' },
+					{ $group: { _id: '$categoryIds' } },
+				],
 				archivedFeatured: [{ $match: { status: 'archived', featured: true } }, { $count: 'n' }],
 				variants: variantStockStages(level),
 			},

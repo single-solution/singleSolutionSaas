@@ -94,6 +94,11 @@ const VISITOR_RATE = [...VISITOR_LIMITS];
 
 /** At most this many images per product in structured data and sitemaps. */
 const MAX_IMAGES = 10;
+/**
+ * The most addresses in one sitemap file: an entry with {@link MAX_IMAGES} photos takes up to about 3 KB, so a file
+ * stays under the 50 MB search engines read (Google's sitemap limit).
+ */
+const MAX_SITEMAP_FILE = 15_000;
 /** Sitemap text is sent in pieces of about this many characters. */
 const CHUNK = 16_384;
 /** Products are read in batches of this size while writing sitemaps and feeds. */
@@ -106,6 +111,17 @@ const MAX_KEY = 500;
 const REVIEW_NODES = 5;
 /** Most products llms-full.txt reads. */
 const MAX_FULL_PRODUCTS = 50_000;
+
+/**
+ * A product's lowest and highest shown price for llms.txt (G4): after the live deals when its variants were read (a
+ * deal is live), else its stored prices.
+ * @param {ProductRecord} item
+ * @param {Awaited<ReturnType<ReturnType<typeof createShownPrices>>>} prices
+ */
+const listedPrices = (item, prices) =>
+	Array.isArray(item.variants)
+		? shownRange(item, prices.of(item))
+		: { price: item.price, priceMax: item.priceMax ?? item.price };
 /** The llms.txt section names (the llms.txt convention's structure, not shop wording). */
 const LLMS_HEADINGS = Object.freeze({ categories: 'Categories', products: 'Products', policies: 'Policies', grades: 'Grades' });
 /** The llms.txt names of the policies (the convention's structure). */
@@ -434,6 +450,7 @@ export const createSeo = (product, service) => {
 			})),
 			faqMarkup: settings.faqMarkup === true,
 			memberPrices,
+			timeZone: business.timeZone ?? 'UTC',
 		});
 		const ogImage = siteAddress(item.seo.ogImage);
 		const title = pageTitle(String(settings.titleTemplate), {
@@ -470,8 +487,13 @@ export const createSeo = (product, service) => {
 			robots: robotsOf(item.seo),
 			focusKeyword: item.seo.focusKeyword,
 			jsonLd: scriptJson(jsonLd),
-			// the last change of what the page shows, for the website's own Last-Modified (G10)
-			lastModified: new Date(item.contentUpdatedAt).toISOString(),
+			// the last change of what the page shows, for the website's own Last-Modified (G10); a product written before
+			// contentUpdatedAt was kept is dated by its last change
+			lastModified:
+				[item.contentUpdatedAt, /** @type {{ updatedAt?: Date }} */ (item).updatedAt]
+					.map((at) => (at ? new Date(at) : null))
+					.find((at) => at !== null && !Number.isNaN(at.getTime()))
+					?.toISOString() ?? null,
 			// the page's core as plain HTML for the widget's place, when asked (G3)
 			...(ctx.query.html === '1'
 				? { html: await pageHtml(s, item, { trail, fields, shown, money: (amount) => money(amount, s.currency) }) }
@@ -702,7 +724,7 @@ export const createSeo = (product, service) => {
 			// the categories with a product to show, in them or below them
 			filled: new Set(listed.map(String).flatMap((id) => [id, ...(paths.get(id) ?? [])])),
 			emptyIndexed: settings.emptyCategories === 'index',
-			size: Math.max(1000, Math.min(50_000, Number(settings.sitemapSize) || 10_000)),
+			size: Math.max(1000, Math.min(MAX_SITEMAP_FILE, Number(settings.sitemapSize) || 10_000)),
 			sitemapUrl: String(settings.sitemapUrl),
 		};
 	};
@@ -1043,11 +1065,13 @@ export const createSeo = (product, service) => {
 		const own = String((await s.values('llms_txt')).custom ?? '');
 		if (own.trim() !== '') return new Response(own, { headers: { 'content-type': 'text/plain; charset=utf-8' } });
 		const data = await s.data();
-		const [settings, business, { money }, hidden] = await Promise.all([
+		const [settings, business, { money }, hidden, prices] = await Promise.all([
 			s.values('llms_txt'),
 			s.business(),
 			s.format(),
 			hiddenFor(s),
+			// the prices shoppers see after the deals that hold all day (read at the AI crawlers' own pace, as feeds are)
+			shownPrices(s, data, { allDay: true }),
 		]);
 		const count = Math.max(0, Math.min(200, Number(settings.products)));
 		const top =
@@ -1058,7 +1082,21 @@ export const createSeo = (product, service) => {
 							.collection(COLLECTIONS.products)
 							.find(
 								{ websiteId: data.websiteId, status: 'active', ...visibleMatch(hidden) },
-								{ projection: { _id: 0, id: 1, slug: 1, name: 1, summary: 1, price: 1, categoryIds: 1, brandId: 1 } },
+								{
+									projection: {
+										_id: 0,
+										id: 1,
+										slug: 1,
+										name: 1,
+										summary: 1,
+										price: 1,
+										priceMax: 1,
+										categoryIds: 1,
+										brandId: 1,
+										// what a deal's conditions read of it, while one is live
+										...(prices.deals.length > 0 ? { variants: 1, specs: 1 } : {}),
+									},
+								},
 							)
 							.sort({ [topField((await s.values('catalog')).topBasis)]: -1, publishedAt: -1, id: 1 })
 							.limit(count)
@@ -1082,7 +1120,7 @@ export const createSeo = (product, service) => {
 				top.map(async (item) => ({
 					name: item.name,
 					url: await media.productUrl(s, item),
-					price: money(item.price, s.currency),
+					price: money(listedPrices(item, prices).price, s.currency),
 					summary: item.summary,
 				})),
 			),
@@ -1107,11 +1145,12 @@ export const createSeo = (product, service) => {
 		const settings = await s.values('llms_txt');
 		if (settings.full !== true) throw problem('not_found', 'Switch on the full list in the llms.txt settings first.');
 		const data = await s.data();
-		const [business, { money }, hidden, ordered] = await Promise.all([
+		const [business, { money }, hidden, ordered, prices] = await Promise.all([
 			s.business(),
 			s.format(),
 			hiddenFor(s),
 			shownCategories(s, data),
+			shownPrices(s, data, { allDay: true }),
 		]);
 		const gradeList = s.has('grades_serials') ? await s.list('grades') : [];
 		const byCategoryId = new Map(ordered.map((category) => [category.id, category]));
@@ -1121,15 +1160,29 @@ export const createSeo = (product, service) => {
 			.collection(COLLECTIONS.products)
 			.find(
 				{ websiteId: data.websiteId, status: 'active', inStock: true, ...visibleMatch(hidden) },
-				{ projection: { _id: 0, id: 1, slug: 1, name: 1, price: 1, priceMax: 1, categoryIds: 1, brandId: 1 } },
+				{
+					projection: {
+						_id: 0,
+						id: 1,
+						slug: 1,
+						name: 1,
+						price: 1,
+						priceMax: 1,
+						categoryIds: 1,
+						brandId: 1,
+						// what a deal's conditions read of it, while one is live
+						...(prices.deals.length > 0 ? { variants: 1, specs: 1 } : {}),
+					},
+				},
 			)
 			.sort({ name: 1, id: 1 })
 			.limit(MAX_FULL_PRODUCTS)
 			.batchSize(BATCH * 5);
 		for await (const row of rows) {
 			const item = /** @type {ProductRecord} */ (/** @type {unknown} */ (row));
-			const low = money(item.price, s.currency);
-			const high = item.priceMax !== undefined && item.priceMax > item.price ? money(item.priceMax, s.currency) : '';
+			const range = listedPrices(item, prices);
+			const low = money(range.price, s.currency);
+			const high = range.priceMax > range.price ? money(range.priceMax, s.currency) : '';
 			const key = item.categoryIds[0] ?? '';
 			byCategory.set(key, [
 				...(byCategory.get(key) ?? []),

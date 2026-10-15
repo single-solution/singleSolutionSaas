@@ -217,7 +217,7 @@ const GTIN_LENGTHS = Object.freeze([8, 12, 13, 14]);
 
 /**
  * A GTIN (barcode number) as kept: its digits (spaces and dashes dropped), 8, 12, 13 or 14 of them, the last the GS1
- * check digit; null when it is not one.
+ * check digit, not all zeros (it names no item; GS1 and Google refuse it); null when it is not one.
  * @param {unknown} value
  * @returns {string | null}
  */
@@ -229,7 +229,7 @@ export const gtinOf = (value) => {
 		if (!isDigit(char)) return null;
 		digits += char;
 	}
-	if (!GTIN_LENGTHS.includes(digits.length)) return null;
+	if (!GTIN_LENGTHS.includes(digits.length) || /^0+$/.test(digits)) return null;
 	let sum = 0;
 	// from the digit left of the check digit, weights 3, 1, 3 …
 	for (let index = 1; index < digits.length; index += 1)
@@ -532,16 +532,17 @@ export const isPlainSerial = (value) => PLAIN_SERIAL.test(value);
 /**
  * One unit as the shop keeps it: its serial (the plain serial number, else the first value of its first unit field
  * that has one; order lines, packing and searches name the unit by it), its values by unit field, and its keys
- * (`serial:<serial>` and `<fieldId>:<value>` for each value) the shop keeps unique, so no number names two units.
+ * (`num:<number>` for its serial and each value, whatever field holds it) the shop keeps unique, so no number names two
+ * units.
  * @typedef {{ serial: string, values: Record<string, string[]>, keys: string[] }} UnitRecordValues
  */
 
 /**
- * The keys of a unit (its serial and every value by field), each once.
- * @param {string} serial @param {Record<string, string[]>} values
+ * The keys of a unit: each of its numbers (its serial and every value, in any field) once.
+ * @param {string} serial @param {Record<string, string[]>} [values]
  */
-const unitKeys = (serial, values) => [
-	...new Set([`serial:${serial}`, ...Object.entries(values).flatMap(([id, list]) => list.map((value) => `${id}:${value}`))]),
+export const unitKeys = (serial, values = {}) => [
+	...new Set([serial, ...Object.values(values).flat()].map((number) => `num:${number}`)),
 ];
 
 /**

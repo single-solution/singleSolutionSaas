@@ -46,6 +46,7 @@ import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { productScore } from '../core/seo-score.js';
 import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
+import { pageTitlesOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -115,8 +116,10 @@ export const createCatalogProducts = (product, service, common) => {
 				(await productTypes(await s.data(), [item], await s.list('item_types'))).get(item.id)
 			),
 		});
-		// its SEO score and checks while SEO is on (E42)
-		return s.has('seo') ? { ...view, seo: { ...item.seo, ...productScore(item) } } : view;
+		// its SEO score and checks while SEO is on (E42), its page's title as the SEO answers write it
+		return s.has('seo')
+			? { ...view, seo: { ...item.seo, ...productScore(item, (await pageTitlesOf(s)).product(item)) } }
+			: view;
 	};
 
 	/** @param {Site} s */
@@ -138,17 +141,22 @@ export const createCatalogProducts = (product, service, common) => {
 
 	/**
 	 * The scores of the newest {@link SCORED_MAX} products that match (E42; the score is never stored), newest first.
-	 * @param {WebsiteData} data @param {Record<string, unknown>} inner
+	 * @param {Site} s @param {WebsiteData} data @param {Record<string, unknown>} inner
 	 */
-	const scored = async (data, inner) =>
-		(
+	const scored = async (s, data, inner) => {
+		const titles = await pageTitlesOf(s);
+		return (
 			await data
 				.collection(COLLECTIONS.products)
 				.find({ websiteId: data.websiteId, $and: [inner] }, { projection: SCORE_FIELDS })
 				.sort({ createdAt: -1, id: -1 })
 				.limit(SCORED_MAX)
 				.toArray()
-		).map((row) => ({ id: String(row.id), score: productScore(/** @type {any} */ (row)).score }));
+		).map((row) => {
+			const item = /** @type {any} */ (row);
+			return { id: String(item.id), score: productScore(item, titles.product(item)).score };
+		});
+	};
 
 	/**
 	 * Fill in the type and size of files the change names that the product did not have yet (its video, variant
@@ -236,7 +244,7 @@ export const createCatalogProducts = (product, service, common) => {
 		const below = seoBelowOf(s, ctx.query);
 		if (below === null) return { s, data, inner };
 		// scored below it (E42): the newest products that match, scored on read
-		const ranked = await scored(data, inner);
+		const ranked = await scored(s, data, inner);
 		return {
 			s,
 			data,
@@ -311,13 +319,14 @@ export const createCatalogProducts = (product, service, common) => {
 	/**
 	 * A page of the products by their SEO score (E42), the lowest first (newest first among equal scores), paged by
 	 * position.
-	 * @param {WebsiteData} data @param {Record<string, unknown>} inner @param {ReturnType<typeof paginate>} page
+	 * @param {Site} s @param {WebsiteData} data @param {Record<string, unknown>} inner
+	 * @param {ReturnType<typeof paginate>} page
 	 */
-	const scoredPage = async (data, inner, page) => {
+	const scoredPage = async (s, data, inner, page) => {
 		const offset = page.after === null ? 0 : Array.isArray(page.after) && page.after[0] === 'seo' ? Number(page.after[1]) : -1;
 		if (!Number.isSafeInteger(offset) || offset < 0) throw problem('bad_request', 'cursor is invalid');
 		const products = data.collection(COLLECTIONS.products);
-		const ranked = (await scored(data, inner)).sort((a, b) => a.score - b.score);
+		const ranked = (await scored(s, data, inner)).sort((a, b) => a.score - b.score);
 		const ids = ranked.slice(offset, offset + page.fetchLimit).map((row) => row.id);
 		const byId = new Map(
 			/** @type {ProductRecord[]} */ (
@@ -338,7 +347,7 @@ export const createCatalogProducts = (product, service, common) => {
 		let body;
 		if (sort === 'seo_score') {
 			scoreOn(s);
-			body = await scoredPage(data, inner, page);
+			body = await scoredPage(s, data, inner, page);
 		} else {
 			const after = page.after === null ? null : afterFilter(STAFF_SORT, page.after);
 			if (page.after !== null && !after) throw problem('bad_request', 'cursor is invalid');
@@ -355,7 +364,7 @@ export const createCatalogProducts = (product, service, common) => {
 		const items = await Promise.all(
 			body.items.map(async (item) => ({
 				...staffRowOf(item, { image: await common.media.mediaUrl(s, item.media?.[0]?.key) }),
-				...(s.has('seo') ? { seoScore: productScore(item).score } : {}),
+				...(s.has('seo') ? { seoScore: productScore(item, (await pageTitlesOf(s)).product(item)).score } : {}),
 			})),
 		);
 		const link = page.link(body.nextCursor);

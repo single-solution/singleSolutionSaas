@@ -450,7 +450,7 @@ export const promotionDiscounts = (lines, promotions) =>
  * what they come to, at most that.
  * @param {ResolvedLine[]} lines @param {number} amount @param {number} [unit]
  */
-export const fixedDiscounts = (lines, amount, unit = 1) => {
+const fixedDiscounts = (lines, amount, unit = 1) => {
 	const gross = lines.map((line) => line.unitPrice * line.quantity);
 	const total = gross.reduce((sum, value) => sum + value, 0);
 	return allocateUnits(Math.max(0, Math.min(amount, total)), gross, unit);

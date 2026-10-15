@@ -38,7 +38,7 @@
 import { problem } from '@ss/app-kit';
 import { fieldsOn, productTypes, unitRulesOf } from '../adapters/catalog-store.js';
 import { heldStockBefore } from '../adapters/ledger.js';
-import { checkUnit, missingOrderFields, sharedKeys } from '../core/fields.js';
+import { checkUnit, missingOrderFields, sharedKeys, unitKeys } from '../core/fields.js';
 import { courierNamed, courierOf, trackingLink } from '../core/couriers.js';
 import {
 	BEFORE_DELIVERY_ROLES,
@@ -168,7 +168,7 @@ export const createMoves = (product, service) => {
 				if (numbered.capture === 'stock') {
 					if (typeof entry !== 'string')
 						throw service.invalid(`serials/${lineId}/${index}`, 'Units in stock are picked by their serial numbers.');
-					checked.push({ serial: entry, values: {}, keys: [`serial:${entry}`] });
+					checked.push({ serial: entry, values: {}, keys: unitKeys(entry) });
 					continue;
 				}
 				const unit = checkUnit(entry, numbered.fields);

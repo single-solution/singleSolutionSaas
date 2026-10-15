@@ -25,6 +25,7 @@ import {
 } from '../core/imports-orders.js';
 import { ObjectId } from 'mongodb';
 import { COLLECTIONS } from '../core/model.js';
+import { fieldsOn } from './catalog-store.js';
 import { ratingSummary } from '../core/reviews.js';
 import { setOrderCounter } from './ledger.js';
 import { escapeRegex } from '../core/lookup.js';
@@ -360,8 +361,9 @@ const finishCounters = async (data, form) => {
 export const orderImports = (deps) => {
 	/**
 	 * What every check of a call reads of the website: the order flow, the checkout and catalog settings, the
-	 * business.json country (national phone numbers, K12), the time.
-	 * @param {{ websiteId: string, now: () => number, business: () => Promise<{ country?: string | null }> }} ctx
+	 * business.json country (national phone numbers, K12), the order and customer fields, the time.
+	 * @param {{ websiteId: string, data: import('@ss/app-kit').WebsiteData, now: () => number,
+	 *   business: () => Promise<{ country?: string | null }> }} ctx
 	 * @returns {Promise<ImportRules>}
 	 */
 	const prepare = async (ctx) =>
@@ -371,6 +373,7 @@ export const orderImports = (deps) => {
 			catalog: await deps.settings(ctx.websiteId, 'catalog'),
 			country: (await ctx.business()).country,
 			now: ctx.now(),
+			fields: { order: await fieldsOn(ctx.data, 'order'), customer: await fieldsOn(ctx.data, 'customer') },
 		});
 
 	/**

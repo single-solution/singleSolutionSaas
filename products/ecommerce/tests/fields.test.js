@@ -254,7 +254,7 @@ describe('units', () => {
 	const tag = { ...imei, id: 'att_tag', name: 'Tag', multiple: false, maxValues: 1, required: false, format: null };
 
 	it('names a unit by its plain serial number, or by the first value of its fields', () => {
-		expect(checkUnit(' SN-1 ', [])).toEqual({ ok: true, value: { serial: 'SN-1', values: {}, keys: ['serial:SN-1'] } });
+		expect(checkUnit(' SN-1 ', [])).toEqual({ ok: true, value: { serial: 'SN-1', values: {}, keys: ['num:SN-1'] } });
 		expect(checkUnit('', []).ok).toBe(false);
 		expect(checkUnit('x'.repeat(65), []).ok).toBe(false);
 		expect(checkUnit({ values: {} }, [])).toMatchObject({ ok: false });
@@ -264,7 +264,7 @@ describe('units', () => {
 			value: {
 				serial: '490154203237518',
 				values: { att_imei: ['490154203237518'] },
-				keys: ['serial:490154203237518', 'att_imei:490154203237518'],
+				keys: ['num:490154203237518'],
 			},
 		});
 		expect(
@@ -293,8 +293,17 @@ describe('units', () => {
 	});
 
 	it('finds numbers given twice, and shows each place only its fields', () => {
-		expect(sharedKeys([{ keys: ['serial:a', 'f:a'] }, { keys: ['serial:b', 'f:a'] }, { keys: ['f:a'] }])).toEqual(['f:a']);
-		expect(sharedKeys([{ keys: ['serial:a'] }, { keys: ['serial:b'] }])).toEqual([]);
+		expect(sharedKeys([{ keys: ['num:a'] }, { keys: ['num:b', 'num:a'] }, { keys: ['num:a'] }])).toEqual(['num:a']);
+		expect(sharedKeys([{ keys: ['num:a'] }, { keys: ['num:b'] }])).toEqual([]);
+		// one number names one unit, whichever field holds it (review L3) and whether it is a plain serial number
+		const second = { ...tag, id: 'att_imei2', name: 'IMEI 2' };
+		const one = checkUnit({ values: { att_imei: '490154203237518' } }, [imei, second]);
+		const other = checkUnit({ values: { att_imei: '356938035643809', att_imei2: '490154203237518' } }, [imei, second]);
+		const plain = checkUnit('490154203237518', []);
+		if (!one.ok || !other.ok || !plain.ok) throw new Error('units refused');
+		expect(other.value.keys).toEqual(['num:356938035643809', 'num:490154203237518']);
+		expect(sharedKeys([one.value, other.value])).toEqual(['num:490154203237518']);
+		expect(sharedKeys([plain.value, other.value])).toEqual(['num:490154203237518']);
 		const values = new Map(
 			/** @type {Array<[string, Record<string, string[]>]>} */ ([
 				['490154203237518', { att_imei: ['490154203237518', '356938035643809'], att_tag: ['B1'] }],

@@ -9,11 +9,11 @@
 
 /**
  * @typedef {{ maxOrderValue: number, advanceAmount: number, advancePercent: number, rtoThreshold: number,
- *   rtoRequireAdvance: boolean, startStatus?: 'awaiting_confirmation' | 'open', atPickup?: boolean, feePercent?: number,
+ *   rtoRequireAdvance: boolean, atPickup?: boolean, feePercent?: number,
  *   feeBase?: 'order_total' | 'goods_after_discounts', paidOnDelivery?: boolean, advanceVia?: 'payments' | 'manual',
- *   enabled?: boolean }} CodSettings `startStatus`, `atPickup`, `feePercent`, `paidOnDelivery` and `advanceVia`: PLAN
- *   0.8.10 E23; `feeBase`: what the fee is a percent of (D4); `enabled`: false when staff switched cash on delivery off
- *   for new orders (AO-2)
+ *   enabled?: boolean }} CodSettings `atPickup`, `feePercent`, `paidOnDelivery` and `advanceVia`: PLAN 0.8.10 E23 (where
+ *   a cash order starts is the order flow's `starts.cod`); `feeBase`: what the fee is a percent of (D4); `enabled`:
+ *   false when staff switched cash on delivery off for new orders (AO-2)
  */
 
 /** @param {unknown} value */

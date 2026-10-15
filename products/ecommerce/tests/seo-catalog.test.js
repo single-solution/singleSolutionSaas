@@ -288,6 +288,14 @@ describe('E15 landing pages, listing heads and glossary pages', () => {
 		expect(filtered).toMatchObject({ robots: 'noindex, follow', landing: null });
 		expect((await api('GET', '/v1/seo/listing?grade=mint')).robots).toBe('noindex, follow');
 		expect((await api('GET', '/v1/seo/listing?brand=acme')).description).toBe('Acme phones.');
+		// a brand's own page (the listing by the brand alone) takes the brand's own SEO title, as its description
+		await api('PATCH', `/v1/brands/${ids.acme.id}`, { seo: { title: 'Acme, the phone maker' } });
+		try {
+			expect((await api('GET', '/v1/seo/listing?brand=acme')).title).toMatch(/^Acme, the phone maker \| /);
+			expect((await api('GET', `/v1/seo/listing?category=${ids.phones.slug}&brand=acme`)).title).toMatch(/^Buy Acme phones/);
+		} finally {
+			await api('PATCH', `/v1/brands/${ids.acme.id}`, { seo: { title: '' } });
+		}
 		expect((await shop.api('GET', '/v1/seo/listing?category=nothing')).status).toBe(404);
 	});
 

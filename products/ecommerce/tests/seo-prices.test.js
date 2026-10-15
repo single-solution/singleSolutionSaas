@@ -152,11 +152,12 @@ describe('structured data and feeds', () => {
 	const ends = new Date('2026-10-20T00:00:00Z');
 	const starts = new Date('2026-10-01T08:00:00Z');
 	const sale = deal({ startsAt: starts, endsAt: ends });
-	/** @param {DealRecord[]} deals @param {Partial<VariantRecord>} [o] */
-	const offerOf = (deals, o = {}) => {
+	/** @param {DealRecord[]} deals @param {Partial<VariantRecord>} [o] @param {string} [timeZone] */
+	const offerOf = (deals, o = {}, timeZone = undefined) => {
 		const item = { ...product, variants: [variant(o)] };
 		return /** @type {any} */ (
 			productJsonLd({
+				...(timeZone ? { timeZone } : {}),
 				product: item,
 				url: 'https://shop.example.com/products/mug',
 				images: ['https://shop.example.com/media/s/a.jpg'],
@@ -192,6 +193,10 @@ describe('structured data and feeds', () => {
 		expect(plain.priceSpecification).toBeUndefined();
 		// a sale with no end gives no dates to keep
 		expect(offerOf([deal({ startsAt: starts })]).priceValidUntil).toBeUndefined();
+		// its last day is a day in the business time zone (review L8): midnight in New York is 04:00 UTC
+		const newYork = deal({ startsAt: starts, endsAt: new Date('2026-10-20T04:00:00Z') });
+		expect(offerOf([newYork], {}, 'America/New_York').priceValidUntil).toBe('2026-10-19');
+		expect(offerOf([newYork]).priceValidUntil).toBe('2026-10-20');
 		// a variant the deal makes free is not offered (merchant listings need a price above 0)
 		expect(offerOf([deal({ value: 100 })])).toBeUndefined();
 	});
@@ -316,6 +321,20 @@ describe('one price everywhere', () => {
 			priceAfterDeals: 4000,
 			savings: 1000,
 		});
+	});
+
+	it('gives llms.txt and llms-full.txt the price shoppers see (review L7)', async () => {
+		const short = (await shop.api('GET', '/v1/llms.txt')).text;
+		expect(short).toContain('USD 40.00');
+		expect(short).not.toContain('USD 50.00');
+		await shop.setting('llms_txt', 'full', true);
+		try {
+			const full = (await shop.api('GET', '/v1/llms-full.txt')).text;
+			expect(full).toContain('USD 40.00');
+			expect(full).not.toContain('USD 50.00');
+		} finally {
+			await shop.setting('llms_txt', 'full', false);
+		}
 	});
 
 	it('reads the categories as often for many products as for few (review M8)', async () => {

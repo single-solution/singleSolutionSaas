@@ -26,6 +26,7 @@ import {
 	htmlToText,
 	keyAllowed,
 	mediaExtras,
+	publicPhoto,
 } from './catalog-content.js';
 
 /** @typedef {import('./model.js').ProductRecord} ProductRecord */
@@ -466,7 +467,12 @@ const variantMediaOf = (input, existing, place, path, errors) => {
 	input.media.forEach((entry, index) => {
 		const at = `${path}/media/${index}`;
 		const key = isObject(entry) ? entry.key : undefined;
-		if (folder === null || !keyAllowed(key, folder, held) || out.some((file) => file.key === key)) {
+		if (
+			folder === null ||
+			!keyAllowed(key, folder, held) ||
+			(importing && !publicPhoto(key, entry.type)) ||
+			out.some((file) => file.key === key)
+		) {
 			errors.push({ path: `${at}/key`, message: 'Give the key of a photo uploaded for this product, once.' });
 			return;
 		}

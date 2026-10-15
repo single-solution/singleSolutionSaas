@@ -15,7 +15,7 @@
  */
 import { isId } from '@ss/contracts';
 import { LIMITS, checkProduct, cleanText, givenFacts, isObject, isSlug, summarize } from './catalog.js';
-import { keyAllowed, mediaExtras } from './catalog-content.js';
+import { keyAllowed, mediaExtras, publicPhoto } from './catalog-content.js';
 import { checkAttribute, checkBrand, checkCategory } from './catalog-taxonomy.js';
 import { checkBundleInput } from './bundles.js';
 import { checkDealInput } from './deals.js';
@@ -323,20 +323,27 @@ const stampsOf = (record, now, errors) => {
 };
 
 /**
- * A photo or file as an import gives it: its key (any folder, Migration "Storage"), type, size, alternative text and
- * extra sizes; null when invalid (the errors say why).
+ * A photo or file as an import gives it: its key (any folder, Migration "Storage"; a photo never one of the private
+ * folders nor a file whose type is not an image, review L15), type, size, alternative text and extra sizes; null when
+ * invalid (the errors say why).
  * @param {unknown} entry
  * @param {string} path
  * @param {FieldError[]} errors
+ * @param {{ photo?: boolean }} [kind] `photo`: false for a digital product's files
  * @returns {MediaRecord | null}
  */
-export const importedMedia = (entry, path, errors) => {
+export const importedMedia = (entry, path, errors, { photo = true } = {}) => {
 	if (!isObject(entry)) {
 		errors.push({ path, message: 'A file is { key, type, size, alt }.' });
 		return null;
 	}
 	const found = [...unknownFields(entry, MEDIA_FIELDS, 'a file', [], path)];
 	if (!keyAllowed(entry.key, '')) found.push({ path: `${path}/key`, message: 'Give the storage key (no ..).' });
+	else if (photo && !publicPhoto(entry.key, entry.type))
+		found.push({
+			path: `${path}/key`,
+			message: 'A photo is an image outside the private folders (digital goods, proofs, claims).',
+		});
 	const facts = givenFacts(entry, path, found);
 	const alt = entry.alt === undefined ? '' : cleanText(entry.alt, LIMITS.alt);
 	if (alt === null) found.push({ path: `${path}/alt`, message: `Alternative text has at most ${LIMITS.alt} characters.` });
@@ -351,9 +358,10 @@ export const importedMedia = (entry, path, errors) => {
  * @param {number} max
  * @param {string} path
  * @param {FieldError[]} errors
+ * @param {{ photo?: boolean }} [kind]
  * @returns {MediaRecord[]}
  */
-const mediaList = (value, max, path, errors) => {
+const mediaList = (value, max, path, errors, kind = {}) => {
 	if (value === undefined) return [];
 	if (!Array.isArray(value) || value.length > max) {
 		errors.push({ path, message: `Give at most ${max} files.` });
@@ -362,7 +370,7 @@ const mediaList = (value, max, path, errors) => {
 	/** @type {MediaRecord[]} */
 	const out = [];
 	value.forEach((entry, index) => {
-		const file = importedMedia(entry, `${path}/${index}`, errors);
+		const file = importedMedia(entry, `${path}/${index}`, errors, kind);
 		if (file && out.some((other) => other.key === file.key))
 			errors.push({ path: `${path}/${index}/key`, message: 'Each file is listed once.' });
 		else if (file) out.push(file);
@@ -713,7 +721,7 @@ export const checkImportedProduct = (record, context) => {
 	const media = mediaList(record.media, LIMITS.media, '/media', errors);
 	const files =
 		checked?.kind === 'digital' && isObject(record.digital)
-			? mediaList(record.digital.files, MAX_FILES, '/digital/files', errors)
+			? mediaList(record.digital.files, MAX_FILES, '/digital/files', errors, { photo: false })
 			: [];
 	const previousSlugs = previousSlugsOf(record.previousSlugs, slug, errors);
 	const sold = record.sold ?? 0;

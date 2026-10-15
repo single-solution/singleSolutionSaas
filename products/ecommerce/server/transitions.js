@@ -78,7 +78,7 @@ export const rulesOf = async (s) => {
  * @param {OrderRecord} order @param {import('../core/transitions.js').TransitionPlan} plan
  * @returns {Record<string, unknown>}
  */
-export const moneyGuard = (order, plan) =>
+const moneyGuard = (order, plan) =>
 	plan.stage === 'cancelled' || plan.stage === 'refunded'
 		? {
 				'payment.refunded': order.payment.refunded,
@@ -91,7 +91,7 @@ export const moneyGuard = (order, plan) =>
  * ids), of an amount: the refund an effect asked for whose answer was lost.
  * @param {OrderRecord} order @param {import('./service.js').PaymentFacts} payment @param {number} amount
  */
-export const unrecordedRefund = (order, payment, amount) => {
+const unrecordedRefund = (order, payment, amount) => {
 	const recorded = new Set((order.refunds ?? []).map((entry) => entry.refundId).filter(Boolean));
 	return payment.refunds.find((refund) => refund.id && !recorded.has(refund.id) && refund.amount === amount) ?? null;
 };

@@ -423,10 +423,11 @@ export const createReports = (product, service) => {
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const feeds = s.has('feeds') ? await s.values('feeds') : null;
 		const skuAs = feeds?.skuAs === 'gtin' || feeds?.skuAs === 'mpn' ? feeds.skuAs : 'none';
+		const { brandIds: hiddenBrandIds } = await hiddenFor(s);
 		const [[facets], business, methods, tags, storage, bank, alerts, glossary, taxonomy] = await Promise.all([
 			data
 				.collection(COLLECTIONS.products)
-				.aggregate(healthPipeline(data.websiteId, Number(lowStock), { domain: s.domain, skuAs }))
+				.aggregate(healthPipeline(data.websiteId, Number(lowStock), { domain: s.domain, skuAs, hiddenBrandIds }))
 				.toArray(),
 			s.business(),
 			paymentMethods(s, data),

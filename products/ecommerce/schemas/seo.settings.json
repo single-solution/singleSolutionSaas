@@ -129,10 +129,10 @@
 		"sitemapSize": {
 			"type": "integer",
 			"title": "Addresses per sitemap file",
-			"description": "Above this many addresses the sitemap becomes an index of files (categories, landing pages, products-1, products-2 …).",
+			"description": "Above this many addresses the sitemap becomes an index of files (categories, landing pages, products-1, products-2 …). At most 15,000: with up to 10 photos per product a file then stays under the 50 MB search engines read.",
 			"default": 10000,
 			"minimum": 1000,
-			"maximum": 50000
+			"maximum": 15000
 		},
 		"defaultDescription": {
 			"type": "string",

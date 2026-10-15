@@ -100,6 +100,18 @@ describe('shop health: the catalog data', () => {
 		expect(of('glossary_without_text')).toBe('skipped 0');
 	});
 
+	it('counts a category whose only products are of a hidden brand as empty: shoppers see none (review L10)', async () => {
+		const shades = await api('POST', '/v1/categories', { name: 'Shades' });
+		await shop.seedProduct({ name: 'Nova shade', media: [photo()], categoryIds: [shades.id], brandId: ids.brand.id });
+		expect(await state('empty_categories')).toBe('attention 1');
+		await api('PATCH', `/v1/brands/${ids.brand.id}`, { status: 'hidden' });
+		try {
+			expect(await state('empty_categories')).toBe('attention 2');
+		} finally {
+			await api('PATCH', `/v1/brands/${ids.brand.id}`, { status: 'active' });
+		}
+	});
+
 	it('counts glossary pages without text once they have an address, and identifiers by the feeds settings', async () => {
 		await api('POST', '/v1/attributes', { name: 'Shade', seo: { body: 'What each shade does to the light.' } });
 		await api('POST', '/v1/attributes', { name: 'Base' });

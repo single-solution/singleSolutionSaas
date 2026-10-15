@@ -1,5 +1,5 @@
 /**
- * Compare (PLAN 0.8.8): products side by side — the comparable attributes (`comparable: true`) as rows with each
+ * Compare (PLAN 0.8.8): products side by side — the fields shown in compare (`show.compare`) as rows with each
  * product's value, in the attributes' order. No I/O.
  * @module
  */

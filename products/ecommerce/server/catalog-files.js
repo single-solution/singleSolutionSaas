@@ -226,6 +226,7 @@ export const createCatalogFiles = (product, service, common) => {
 				.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { [field]: file } });
 			if (record[field] && record[field].key !== file.key) await deleteFile(s, record[field].key, owner, record.id);
 			await service.log(ctx, `${owner}.${field}_set`, record.id, { label: String(record.name) });
+			await service.emit('page.changed', s, { kind: owner, id: record.id, slug: String(record.slug) });
 			return { [field]: await withUrl(s, file) };
 		},
 		/** @param {any} ctx */
@@ -238,6 +239,7 @@ export const createCatalogFiles = (product, service, common) => {
 					.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { [field]: null } });
 				await deleteFile(s, record[field].key, owner, record.id);
 				await service.log(ctx, `${owner}.${field}_removed`, record.id, { label: String(record.name) });
+				await service.emit('page.changed', s, { kind: owner, id: record.id, slug: String(record.slug) });
 			}
 			return { [field]: null };
 		},

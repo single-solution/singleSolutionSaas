@@ -712,10 +712,13 @@ export const createLandings = (product, service, media) => {
 		const own = category && !brand && !grade && !landing ? category : null;
 		const parent = own ? names.byCategory.get(own.path.at(-1) ?? '') : undefined;
 		const patternNames = { name: own?.name ?? '', category: parent?.name ?? '', storeName };
-		// own titles: the landing page's, else the category's on its own page (with its titleMode, G6)
+		// a brand's own page: the listing by the brand alone
+		const brandPage = brand && !category && !grade && !landing ? brand : null;
+		// own titles: the landing page's, else the category's or the brand's on its own page (with its titleMode, G6)
+		const titled = own ?? brandPage;
 		const title = pageTitle(String(settings.titleTemplate), {
-			own: landing?.title || (own?.seo.title ?? ''),
-			mode: landing?.title ? 'template' : (own?.seo.titleMode ?? 'template'),
+			own: landing?.title || (titled?.seo.title ?? ''),
+			mode: landing?.title ? 'template' : (titled?.seo.titleMode ?? 'template'),
 			name: automatic?.copy.name || (own ? pageName(settings.categoryTitle, patternNames) : '') || h1,
 			business: storeName,
 		});

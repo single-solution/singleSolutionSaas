@@ -128,6 +128,27 @@ describe('the shop events (GET /v1/events)', () => {
 	});
 });
 
+describe('the catalog events of pages (review L13)', () => {
+	it('publishes catalog.changed when staff write a category, a brand or a deal, so cached pages are cleared', async () => {
+		const category = (await shop.api('POST', '/v1/categories', { name: 'Kettles' })).json;
+		const brand = (await shop.api('POST', '/v1/brands', { name: 'Steam' })).json;
+		await shop.api('PATCH', `/v1/brands/${brand.id}`, { description: 'Kettles that last.' });
+		const deal = (await shop.api('POST', '/v1/deals', { name: 'Kettle week', type: 'percent', value: 10 })).json;
+		await shop.api('DELETE', `/v1/deals/${deal.id}`);
+		await shop.api('POST', '/v1/coupons', { code: 'KETTLE', type: 'percent', value: 5 });
+		await shop.flush();
+		/** @type {string[]} */
+		const changed = (await shop.api('GET', '/v1/events?types=ecommerce.catalog.changed&limit=100')).json.items.map(
+			(/** @type {any} */ event) => `${event.data.kind} ${event.data.id}`,
+		);
+		expect(changed).toEqual(expect.arrayContaining([`category ${category.id}`, `brand ${brand.id}`, `deal ${deal.id}`]));
+		expect(changed.filter((entry) => entry === `brand ${brand.id}`)).toHaveLength(2);
+		expect(changed.filter((entry) => entry === `deal ${deal.id}`)).toHaveLength(2);
+		// a coupon is an offer of the cart: no page shows it
+		expect(changed.some((entry) => entry.startsWith('coupon'))).toBe(false);
+	});
+});
+
 describe('the stock events (E44)', () => {
 	/** @type {{ stocked?: string }} */
 	const ids = {};

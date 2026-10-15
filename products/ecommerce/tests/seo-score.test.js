@@ -145,16 +145,34 @@ describe('the score on staff reads', () => {
 			ok: false,
 		});
 		expect(ids.good.seo.score).toBe(89);
-		expect((await api('GET', `/v1/categories/${ids.category.id}`)).seo.score).toBe(71);
-		expect((await api('GET', '/v1/brands')).items[0].seo).toMatchObject({ score: 0 });
+		// "Shirts | Shop" is a title of a good length, as the page shows it
+		expect((await api('GET', `/v1/categories/${ids.category.id}`)).seo.score).toBe(86);
+		expect((await api('GET', '/v1/brands')).items[0].seo).toMatchObject({ score: 14 });
 		expect((await api('GET', `/v1/deals/${ids.deal.id}`)).seo).toMatchObject({ title: '', score: 33 });
 		// nothing for shoppers
 		expect((await shop.visitor('GET', `/v1/shop/products/${ids.good.slug}`)).json.seo).not.toHaveProperty('score');
 	});
 
+	it('judges the title the page shows: the title pattern around the name (review L10)', async () => {
+		// 55 characters of name: with the default pattern "{name} | {business}" the page title is 62
+		const long = await api('POST', '/v1/products', { name: 'A'.repeat(55), status: 'draft', price: 1000 });
+		const check = (/** @type {any} */ record) =>
+			record.seo.checks.find((/** @type {any} */ entry) => entry.key === 'title_length').ok;
+		expect(check(await api('GET', `/v1/products/${long.id}`))).toBe(false);
+		// a title written as the whole title is judged as written
+		const whole = await api('PATCH', `/v1/products/${long.id}`, {
+			seo: { title: 'A linen shirt for the summer', titleMode: 'as_written' },
+		});
+		expect(check(whole)).toBe(true);
+		const brand = await api('POST', '/v1/brands', { name: 'B'.repeat(55) });
+		expect(check((await api('GET', '/v1/brands')).items.find((/** @type {any} */ row) => row.id === brand.id))).toBe(false);
+		await api('DELETE', `/v1/brands/${brand.id}`);
+		await api('DELETE', `/v1/products/${long.id}`);
+	});
+
 	it('sorts and filters the product list by the score', async () => {
-		expect(await names('')).toEqual(['Good linen shirt 89', 'Fair linen shirt 44', 'Weak 0']);
-		expect(await names('sort=seo_score')).toEqual(['Weak 0', 'Fair linen shirt 44', 'Good linen shirt 89']);
+		expect(await names('')).toEqual(['Good linen shirt 89', 'Fair linen shirt 44', 'Weak 11']);
+		expect(await names('sort=seo_score')).toEqual(['Weak 11', 'Fair linen shirt 44', 'Good linen shirt 89']);
 		expect(await names('seoBelow=50&q=shirt')).toEqual(['Fair linen shirt 44']);
 		// the counts follow the filter
 		expect((await api('GET', '/v1/products/count?seoBelow=50')).count).toBe(2);

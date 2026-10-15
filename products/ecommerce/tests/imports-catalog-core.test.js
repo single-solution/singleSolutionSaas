@@ -150,6 +150,29 @@ describe('shared rules', () => {
 		expect(errors.map((error) => error.path)).toEqual(['/n', '/o/url', '/o/key', '/o/type', '/o/size', '/o/alt', '/o/width']);
 	});
 
+	it('never makes a private file a public photo (review L15)', () => {
+		// a transfer proof, a digital good or a claim photo, or a file whose type is not an image, as a product photo
+		for (const media of [
+			{ key: 'ecommerce/proofs/ord_1/prf_1.pdf' },
+			{ key: 'ecommerce/digital/prd_1/book.pdf' },
+			{ key: 'ecommerce/returns/usr_1/pho_1.jpg' },
+			{ key: 'uploads/manual.pdf', type: 'application/pdf' },
+		])
+			expect(paths(checkImportedProduct(product({ media: [media] }), contextOf())), media.key).toEqual(['/media/0/key']);
+		expect(
+			paths(
+				checkImportedCategory(
+					{ id: idOf('cat', 9), name: 'X', slug: 'x', image: { key: 'ecommerce/digital/a.zip' } },
+					contextOf(),
+				),
+			),
+		).toEqual(['/image/key']);
+		// a photo of any other folder, and a digital product's files, are taken
+		expect(
+			paths(checkImportedProduct(product({ media: [{ key: 'uploads/lamp.jpg', type: 'image/jpeg' }] }), contextOf())),
+		).toEqual([]);
+	});
+
 	it('lists the products an offer names', () => {
 		expect(
 			offerProductIds({

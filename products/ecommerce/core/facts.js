@@ -26,7 +26,7 @@
  */
 
 /** The facts and their values, in the order they are written. */
-export const FACT_VALUES = Object.freeze({
+const FACT_VALUES = Object.freeze({
 	stock: Object.freeze(['held', 'sold', 'back', 'none']),
 	offers: Object.freeze(['counted', 'released']),
 	redeemed: Object.freeze(['spent', 'given_back']),

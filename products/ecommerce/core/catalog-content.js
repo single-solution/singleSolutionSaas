@@ -484,6 +484,19 @@ export const keyAllowed = (key, folder, held) =>
 	!key.includes('..') &&
 	(held?.has(key) === true || key.startsWith(folder));
 
+/** Folders of files kept private: digital goods, transfer proofs and claim photos. */
+const PRIVATE_FOLDERS = Object.freeze(['ecommerce/digital/', 'ecommerce/proofs/', 'ecommerce/returns/']);
+
+/**
+ * Whether a file an import names may be a public photo (search engines, feeds and `/media` give a photo a lasting
+ * address, G1): never a file of a private folder, nor one whose given type is not an image.
+ * @param {unknown} key @param {unknown} [type]
+ */
+export const publicPhoto = (key, type) =>
+	typeof key === 'string' &&
+	!PRIVATE_FOLDERS.some((folder) => key.startsWith(folder)) &&
+	(type === undefined || type === '' || (typeof type === 'string' && type.startsWith('image/')));
+
 /**
  * The extra fields of a photo (E6): `sizes` (storage keys of smaller copies the uploader made, under the same folder,
  * or keys the record already holds, CA-5), `width`, `height` and `blur` (a small data URI image).

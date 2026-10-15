@@ -174,6 +174,58 @@ describe('customers', () => {
 			pathsOf(checkImportedCustomer({ id: idOf('cus', 4), name: ' ', phone: '+15550002222', createdAt: 'soon' }, RULES)),
 		).toEqual(['/name', '/createdAt']);
 	});
+
+	it('take field values only as the shop’s own fields take them (review L5)', () => {
+		/** @param {Record<string, unknown>} over @returns {any} */
+		const field = (over) => ({
+			name: 'Field',
+			type: 'text',
+			choices: [],
+			multiple: false,
+			maxValues: 1,
+			min: null,
+			max: null,
+			decimals: 0,
+			dates: 'any',
+			format: null,
+			...over,
+		});
+		const rules = importRules({
+			flow: DEFAULT_FLOW,
+			checkout: { numberPattern: '{prefix}{year}-{number}', numberPrefix: 'S-', numberDigits: 4, defaultCallingCode: '+1' },
+			catalog: { currency: 'USD' },
+			country: 'GB',
+			now: NOW,
+			fields: {
+				customer: [
+					field({ id: 'att_000000000000000000000001', name: 'Tax number' }),
+					field({
+						id: 'att_000000000000000000000002',
+						name: 'Tier',
+						type: 'choice',
+						choices: [{ value: 'gold', label: 'Gold' }],
+					}),
+				],
+				order: [field({ id: 'att_000000000000000000000003', name: 'Gift', type: 'yes_no' })],
+			},
+		});
+		const guest = { id: idOf('cus', 5), name: 'Gina', phone: '+15550002222' };
+		/** @param {Record<string, unknown>} fields */
+		const customer = (fields) => checkImportedCustomer({ ...guest, fields }, rules);
+		expect(valueOf(customer({ att_000000000000000000000001: 'TX-1', att_000000000000000000000002: 'gold' })).fields).toEqual({
+			att_000000000000000000000001: 'TX-1',
+			att_000000000000000000000002: 'gold',
+		});
+		// a field the shop does not have, a choice it does not offer, an order field on a customer
+		expect(pathsOf(customer({ att_000000000000000000000009: 'x' }))).toEqual(['/fields/att_000000000000000000000009']);
+		expect(pathsOf(customer({ att_000000000000000000000002: 'silver' }))).toEqual(['/fields/att_000000000000000000000002']);
+		expect(pathsOf(customer({ att_000000000000000000000003: true }))).toEqual(['/fields/att_000000000000000000000003']);
+		// orders take the order fields, in their type
+		const gift = (/** @type {unknown} */ value) =>
+			checkImportedOrder({ ...order(), fields: { att_000000000000000000000003: value } }, rules);
+		expect(valueOf(gift(true)).fields).toEqual({ att_000000000000000000000003: true });
+		expect(pathsOf(gift('maybe'))).toEqual(['/fields/att_000000000000000000000003']);
+	});
 });
 
 describe('orders', () => {

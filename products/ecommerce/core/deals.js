@@ -19,6 +19,7 @@
  * of a deal. No I/O.
  * @module
  */
+import { publicPhoto } from './catalog-content.js';
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
 import {
 	checkAmount,
@@ -584,7 +585,7 @@ const checkBanner = (value, { held = null, folder = null, importing = false } = 
 	const key = value.key;
 	const kept = importing || key === held;
 	const fresh = UPLOAD_KEY.test(key) && (!folder || (key.startsWith(folder) && key.length > folder.length));
-	if (!(kept ? ANY_KEY.test(key) : fresh) || key.includes('..')) return refused;
+	if (!(kept ? ANY_KEY.test(key) : fresh) || key.includes('..') || !publicPhoto(key, value.type)) return refused;
 	const alt = checkText(value.alt, 'banner/alt', { min: 0, max: 200, fallback: '' });
 	if (!alt.ok) return alt;
 	return {

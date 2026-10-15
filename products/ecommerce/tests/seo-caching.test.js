@@ -85,6 +85,20 @@ describe('conditional reads', () => {
 			(await shop.api('GET', '/v1/seo/products/desk-lamp', undefined, { 'if-none-match': String(before.headers.get('etag')) }))
 				.status,
 		).toBe(200);
+		// a product written before contentUpdatedAt existed is dated by its last change (review L6)
+		const products = (await shop.db()).collection(COLLECTIONS.products);
+		const stored = /** @type {any} */ (await products.findOne({ websiteId: shop.websiteId, id: ids.lamp.id }));
+		await products.updateOne({ websiteId: shop.websiteId, id: ids.lamp.id }, { $unset: { contentUpdatedAt: '' } });
+		try {
+			const older = await shop.api('GET', '/v1/seo/products/desk-lamp');
+			expect(older.status).toBe(200);
+			expect(older.json.lastModified).toBe(new Date(stored.updatedAt).toISOString());
+		} finally {
+			await products.updateOne(
+				{ websiteId: shop.websiteId, id: ids.lamp.id },
+				{ $set: { contentUpdatedAt: stored.contentUpdatedAt } },
+			);
+		}
 		// a listing and a category page date their newest product
 		expect((await shop.api('GET', '/v1/seo/listing?category=lamps')).json.lastModified).toBe(after.json.lastModified);
 		expect((await shop.api('GET', '/v1/seo/categories/lamps')).json.lastModified).toBe(after.json.lastModified);
@@ -150,6 +164,15 @@ describe('the docs’ webhook route', () => {
 		expect(cleared).toEqual(['ss-ecommerce', 'ss-ecommerce']);
 		expect((await post({ type: 'ecommerce.catalog.changed' }, 'another-secret-0123456789')).status).toBe(401);
 		expect((await post({ type: 'ecommerce.catalog.changed' }, undefined, 1_000)).status).toBe(401);
+		// a forged signature of the right length with a character of more than one byte is refused, never a crash (L11)
+		const forged = await POST(
+			new Request('https://shop.example.com/api/ss-ecommerce-events', {
+				method: 'POST',
+				headers: { 'ss-signature': `t=${Math.floor(Date.now() / 1000)},v1=${'é'.padEnd(64, '0')}` },
+				body: JSON.stringify({ type: 'ecommerce.catalog.changed' }),
+			}),
+		);
+		expect(forged.status).toBe(401);
 		expect(cleared).toHaveLength(2);
 		// every SEO and served answer is fetched with the tag the route clears
 		const snippets = createSnippets({ base: BASE, widgets: [], permissions: [] });

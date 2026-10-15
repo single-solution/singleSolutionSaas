@@ -6,6 +6,7 @@
  * `<script>` element. Pure functions, no I/O.
  * @module
  */
+import { zonedDay } from '@ss/contracts';
 import { valueLabel } from './catalog.js';
 import { toDecimal } from './money.js';
 
@@ -327,6 +328,7 @@ export const daysRange = (list) => {
  *   (`shownPrice`, G4)
  * @property {MemberPrice[]} [memberPrices] member prices (role pricing on, G17): each offer adds its price for each
  *   tier of the site's member program
+ * @property {string} [timeZone] the business time zone, whose days a sale's last day is (UTC without one)
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
  *   variant shows the product's photos
@@ -431,12 +433,14 @@ const specifications = (list) => (list.length === 0 ? null : list.length === 1 ?
 /**
  * The price of an offer (G4): the shown price; the struck-through price beside it (`StrikethroughPrice`, never on the
  * active price); member prices (G17); and for a sale that holds all day with an end, when it started (`validFrom`)
- * and its last day (`priceValidUntil`, the day before an end at midnight; Google may drop a listing whose date is past).
+ * and its last day (`priceValidUntil`, the day before an end at midnight, a day in the business time zone; Google may
+ * drop a listing whose date is past).
  * @param {import('./promotions.js').ShownPrice} shown
  * @param {string} currency
- * @param {MemberPrice[]} [members]
+ * @param {MemberPrice[]} members
+ * @param {string} timeZone
  */
-const offerPrice = (shown, currency, members = []) => ({
+const offerPrice = (shown, currency, members, timeZone) => ({
 	price: toDecimal(shown.price, currency),
 	priceCurrency: currency,
 	priceSpecification: specifications([
@@ -459,7 +463,7 @@ const offerPrice = (shown, currency, members = []) => ({
 		})),
 	]),
 	validFrom: shown.sale?.until && shown.sale.from ? new Date(shown.sale.from).toISOString() : null,
-	priceValidUntil: shown.sale?.until ? new Date(new Date(shown.sale.until).getTime() - 1).toISOString().slice(0, 10) : null,
+	priceValidUntil: shown.sale?.until ? zonedDay(new Date(new Date(shown.sale.until).getTime() - 1), timeZone) : null,
 });
 
 /** How items come back → schema.org `ReturnMethodEnumeration`. */
@@ -641,7 +645,7 @@ export const productJsonLd = (page) => {
 		compact({
 			'@type': 'Offer',
 			url: page.variantUrl?.(variant) ?? url,
-			...offerPrice(page.shown(variant), currency, page.memberPrices),
+			...offerPrice(page.shown(variant), currency, page.memberPrices ?? [], page.timeZone ?? 'UTC'),
 			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
 			itemCondition: (() => {
 				const condition = page.condition(variant);

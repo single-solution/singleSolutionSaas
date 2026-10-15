@@ -48,7 +48,7 @@ const KEY = /^[a-z][a-z0-9_-]{1,39}$/;
 /** The longest name of a status, staff's or the shopper's. */
 const MAX_LABEL = 60;
 /** The longest line a shopper reads under a status for one payment method. */
-export const MAX_SHOPPER_TEXT = 300;
+const MAX_SHOPPER_TEXT = 300;
 /** The payment methods a status has a shopper line for, and that `paidOnConfirm` lists. */
 export const FLOW_METHODS = Object.freeze(
 	/** @type {import('./model.js').PaymentMethod[]} */ (['cod', 'online', 'bank_transfer', 'pickup']),

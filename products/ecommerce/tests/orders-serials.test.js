@@ -199,7 +199,7 @@ describe('E11 serial capture', () => {
 			status: 'sold',
 			orderId: order.id,
 			typed: true,
-			keys: expect.arrayContaining([`${ids.imei.id}:356938035643809`, `${ids.tag.id}:AB-123`, 'serial:490154203237518']),
+			keys: expect.arrayContaining(['num:356938035643809', 'num:AB-123', 'num:490154203237518']),
 		});
 		expect((await move(order.id, 'dispatched', { shipment })).status).toBe(200);
 		// what shoppers see: the IMEI shown to them, never the staff's bin tag
@@ -350,7 +350,7 @@ describe('units moved in by an import', () => {
 		expect(kept).toMatchObject({
 			serial: '490154203237518',
 			values: { [ids.imei.id]: ['490154203237518'] },
-			keys: ['serial:490154203237518', `${ids.imei.id}:490154203237518`],
+			keys: ['num:490154203237518'],
 		});
 	});
 });

@@ -35,7 +35,7 @@ import {
 	shipmentFields,
 	videoOf,
 } from './orders.js';
-import { PLAIN_SERIAL_RULE, isPlainSerial } from './fields.js';
+import { FIELD_LIMITS, PLAIN_SERIAL_RULE, checkFieldValues, isPlainSerial } from './fields.js';
 import { balanceOf, expireLots } from './points.js';
 import { CLAIM_KINDS, CLAIM_STATUSES, REFUND_METHODS, checkClaimInput, checkNote, plainText } from './returns.js';
 import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
@@ -45,14 +45,17 @@ import { REVIEW_STATUSES, checkReply, checkReviewInput } from './reviews.js';
 /** @typedef {{ path: string, message: string }} ImportError */
 /** @typedef {{ ok: true, value: Record<string, unknown> } | { ok: false, errors: ImportError[] }} ImportCheck */
 
+/** A field as an imported value is checked against it. @typedef {Parameters<typeof checkFieldValues>[1][number]} ImportField */
+
 /**
  * What the checks of one import call read of the website (the collections' `prepare`): the order flow, the order
  * number's form (`checkout.numberPattern`, `numberPrefix`, `numberDigits`; `core/order-numbers.js`), the shop's
  * currency (`catalog.currency`), its phone rules (as checkout reads phones, K12: `checkout.defaultCallingCode`, else
- * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's) and the time of
- * the call.
+ * the business.json country's calling code, and `trunkPrefix`; so national numbers read as the shop's), its order and
+ * customer fields (imported values are checked as staff's are) and the time of the call.
  * @typedef {{ now: number, flow: OrderFlow, numbers: import('./order-numbers.js').NumberForm, currency: string,
- *   phoneRules: { defaultCallingCode: string, trunkPrefix: string } }} ImportRules
+ *   phoneRules: { defaultCallingCode: string, trunkPrefix: string },
+ *   fields: { order: ImportField[], customer: ImportField[] } }} ImportRules
  */
 
 /** The longest name of a person (checkout's guest and address name, IMP-31) and email address. */
@@ -308,35 +311,24 @@ const checker = () => {
 	};
 
 	/**
-	 * Field values moved in with an order or a customer (dynamic model §2): `{ <fieldId>: value or [values] }`, each a
-	 * text, number or yes/no, several at most 20; none when not given.
-	 * @param {unknown} value @param {string} path
+	 * Field values moved in with an order or a customer (dynamic model §2): `{ <fieldId>: value or [values] }`, each
+	 * checked by its field as staff's values are (a field the shop has on orders or customers, its type, choices and
+	 * format; switched-off fields too, as their values stay on records); none when not given.
+	 * @param {unknown} value @param {string} path @param {ReadonlyArray<ImportField>} fields
 	 * @returns {Record<string, import('./fields.js').FieldValue> | null}
 	 */
-	const fieldValues = (value, path) => {
+	const fieldValues = (value, path, fields) => {
 		if (value === undefined) return null;
-		const one = (/** @type {unknown} */ entry) =>
-			(typeof entry === 'string' && entry.length > 0 && entry.length <= 200) ||
-			(typeof entry === 'number' && Number.isFinite(entry)) ||
-			typeof entry === 'boolean';
-		const ok =
-			typeof value === 'object' &&
-			value !== null &&
-			!Array.isArray(value) &&
-			Object.entries(value).every(
-				([id, entry]) =>
-					isId(id, ID_PREFIX.attribute) &&
-					(one(entry) ||
-						(Array.isArray(entry) &&
-							entry.length > 0 &&
-							entry.length <= 20 &&
-							entry.every((item) => one(item) && typeof item !== 'boolean'))),
-			);
-		if (!ok) {
-			fail(path, 'Field values are given by field id: a text, number or yes/no, or a list of up to 20.');
+		if (typeof value === 'object' && value !== null && Object.keys(value).length > FIELD_LIMITS.fields) {
+			fail(path, `At most ${FIELD_LIMITS.fields} field values.`);
 			return null;
 		}
-		return Object.keys(value).length > 0 ? /** @type {Record<string, import('./fields.js').FieldValue>} */ (value) : null;
+		const checked = checkFieldValues(value, fields, { path: path.slice(1) });
+		if (!checked.ok) {
+			fail(`/${checked.path}`, checked.message);
+			return null;
+		}
+		return Object.keys(checked.value).length > 0 ? checked.value : null;
 	};
 
 	/**
@@ -379,10 +371,11 @@ const answer = (c, value) => (c.errors.length > 0 ? { ok: false, errors: c.error
 /**
  * The rules of one import call from what the website has (`prepare`).
  * @param {{ flow: unknown, checkout: Record<string, unknown>, catalog: Record<string, unknown>, country: unknown,
- *   now: number }} input `country`: business.json's
+ *   now: number, fields?: ImportRules['fields'] }} input `country`: business.json's; `fields`: the shop's order and
+ *   customer fields (none: no field value is taken)
  * @returns {ImportRules}
  */
-export const importRules = ({ flow, checkout, catalog, country, now }) => {
+export const importRules = ({ flow, checkout, catalog, country, now, fields = { order: [], customer: [] } }) => {
 	const { defaultCallingCode, trunkPrefix } = phoneRules(checkout, country);
 	return {
 		now,
@@ -390,6 +383,7 @@ export const importRules = ({ flow, checkout, catalog, country, now }) => {
 		numbers: numberFormOf(checkout),
 		currency: typeof catalog.currency === 'string' && catalog.currency ? catalog.currency : 'USD',
 		phoneRules: { defaultCallingCode, trunkPrefix },
+		fields,
 	};
 };
 
@@ -428,7 +422,7 @@ export const checkImportedCustomer = (record, rules) => {
 	});
 	if (!flags.ok) c.refused(flags);
 	const createdAt = c.time(record.createdAt, '/createdAt', rules.now, { nullable: true });
-	const fields = c.fieldValues(record.fields, '/fields');
+	const fields = c.fieldValues(record.fields, '/fields', rules.fields.customer);
 	return answer(c, {
 		id,
 		userId: guest ? null : userId,
@@ -1019,7 +1013,7 @@ export const checkImportedOrder = (record, rules) => {
 		idempotencyKey,
 		note: c.text(record.note, '/note', MAX_NOTE),
 		...(() => {
-			const fields = c.fieldValues(record.fields, '/fields');
+			const fields = c.fieldValues(record.fields, '/fields', rules.fields.order);
 			return fields ? { fields } : {};
 		})(),
 		staffNote: c.text(record.staffNote, '/staffNote', MAX_STAFF_NOTE),

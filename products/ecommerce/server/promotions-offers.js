@@ -61,6 +61,16 @@ export const createOfferRoutes = (product, service) => {
 	const dataOf = async (ctx) => (await service.site(ctx)).data();
 
 	/**
+	 * A deal staff wrote changes the prices pages show (G4): their cached answers are cleared (`catalog.changed`).
+	 * Coupons and bundles are offers of the cart, never shown on a page.
+	 * @param {any} ctx @param {OfferCollection} kind @param {{ id: string, slug?: string }} record
+	 */
+	const shownChanged = async (ctx, kind, record) => {
+		if (kind === 'deals')
+			await service.emit('page.changed', await service.site(ctx), { kind: 'deal', id: record.id, slug: record.slug ?? '' });
+	};
+
+	/**
 	 * How an offer is answered: a deal with its SEO score while SEO is on (E42).
 	 * @param {any} ctx @param {OfferCollection} kind
 	 * @returns {Promise<(record: any) => Record<string, unknown>>}
@@ -159,6 +169,7 @@ export const createOfferRoutes = (product, service) => {
 			return codeTaken(error);
 		}
 		await service.log(ctx, `${KINDS[kind].name}.created`, record.id, { label: KINDS[kind].label(record) });
+		await shownChanged(ctx, kind, record);
 		return created((await viewer(ctx, kind))(/** @type {any} */ (await getOffer(data, kind, record.id))));
 	};
 
@@ -188,6 +199,7 @@ export const createOfferRoutes = (product, service) => {
 		}
 		if (!changed) return problem('not_found', `No such ${KINDS[kind].name}.`);
 		await service.log(ctx, `${KINDS[kind].name}.updated`, changed.id, { label: KINDS[kind].label(changed) });
+		await shownChanged(ctx, kind, changed);
 		return (await viewer(ctx, kind))(changed);
 	};
 
@@ -198,6 +210,7 @@ export const createOfferRoutes = (product, service) => {
 		const found = await getOffer(data, kind, id);
 		if (!found || !(await deleteOffer(data, kind, id))) return problem('not_found', `No such ${KINDS[kind].name}.`);
 		await service.log(ctx, `${KINDS[kind].name}.deleted`, found.id, { label: KINDS[kind].label(found) });
+		await shownChanged(ctx, kind, found);
 		return undefined;
 	};
 
