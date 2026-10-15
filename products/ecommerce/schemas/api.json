@@ -8040,7 +8040,7 @@
 					"oneOf": [
 						{
 							"type": "object",
-							"required": ["key", "reference", "at"],
+							"required": ["key", "reference", "at", "url"],
 							"additionalProperties": false,
 							"properties": {
 								"key": {
@@ -8053,6 +8053,10 @@
 								"at": {
 									"type": "string",
 									"format": "date-time"
+								},
+								"url": {
+									"type": ["string", "null"],
+									"description": "A signed link that opens the file for 5 minutes (null while storage is not connected)."
 								}
 							}
 						},

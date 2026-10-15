@@ -44637,7 +44637,8 @@
 								"required": [
 									"key",
 									"reference",
-									"at"
+									"at",
+									"url"
 								],
 								"additionalProperties": false,
 								"properties": {
@@ -44651,6 +44652,13 @@
 									"at": {
 										"type": "string",
 										"format": "date-time"
+									},
+									"url": {
+										"type": [
+											"string",
+											"null"
+										],
+										"description": "A signed link that opens the file for 5 minutes (null while storage is not connected)."
 									}
 								}
 							},

@@ -6,6 +6,7 @@
  */
 import { ADDRESS_FIELDS, ADDRESS_LIMITS, regionsFor } from '../core/address.js';
 import { button, codeOf, currencyOf, field, formatsOf, h, problemText, select } from './shop-common.js';
+import { transferParts } from './shop-payment.js';
 
 /** @typedef {import('../core/address.js').AddressField} AddressField */
 
@@ -127,7 +128,8 @@ export const returnUrlOf = (shop) => {
 
 /**
  * Show a placed order: its number, status, lines and totals, and, while it waits for a payment, the payment page link
- * or the button that starts the payment again.
+ * or the button that starts the payment again; for a bank transfer, the bank details, the shop's note and the transfer
+ * proof (E24).
  * @param {{ box: HTMLElement, t: Texts, shop: Shop, config: WidgetConfig, settings: ShopSettings, order: any }} input
  */
 export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
@@ -181,5 +183,16 @@ export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
 				}),
 			);
 	} else if (order.role === 'awaiting_confirmation') parts.push(h(doc, 'p', { class: 'meta' }, t('success.confirming')));
+	parts.push(
+		...transferParts({
+			doc,
+			t,
+			shop,
+			config,
+			win: /** @type {Window & typeof globalThis} */ (doc.defaultView),
+			order,
+			onOrder: (next) => renderSuccess({ box, t, shop, config, settings, order: next }),
+		}),
+	);
 	box.replaceChildren(h(doc, 'div', { class: 'box' }, ...parts, status));
 };

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+/* global window */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountCart } from '../ui/cart.js';
 import { returnUrlOf } from '../ui/shop-checkout.js';
 import {
@@ -22,7 +23,10 @@ import {
 } from './ui-shop-helpers.js';
 
 beforeEach(resetPage);
-afterEach(resetPage);
+afterEach(() => {
+	resetPage();
+	vi.restoreAllMocks();
+});
 
 /** @param {Record<string, unknown>} [over] */
 const line = (over = {}) => ({
@@ -595,6 +599,124 @@ describe('checkout', () => {
 		await timers.run();
 		expect(textOf(host)).toContain(text('cart.title'));
 		expect($(host, '.box h2').closest('[hidden]')).not.toBeNull();
+	});
+
+	it('shows the bank details of a transfer, then takes the transfer proof on the success page (E24)', async () => {
+		const BANK = {
+			ready: true,
+			accountHolder: 'Example Store LLC',
+			bankName: 'First Bank',
+			accountNumber: '12345678',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
+			iban: 'XX00 TEST 0000',
+			bic: '',
+			instructions: 'Put your order number in the reference.',
+		};
+		const NOTE = 'Orders ship once the money arrives.';
+		const notes = { cod: '', online: '', bank_transfer: NOTE, pickup: '', delivery: '', prep: '', pickupReady: '' };
+		const waiting = {
+			...ORDER,
+			role: 'awaiting_payment',
+			payment: {
+				method: 'bank_transfer',
+				state: 'unpaid',
+				via: 'manual',
+				advance: 0,
+				paid: 0,
+				refunded: 0,
+				payUrl: null,
+				payBy: null,
+				proof: null,
+			},
+			bankDetails: BANK,
+			canSendProof: true,
+			notes: { payment: NOTE, delivery: '', prep: '', pickupReady: '' },
+		};
+		/** @type {any} */
+		let upload = fail(503, 'storage_not_connected');
+		/** @type {any} */
+		let proof = fail(409, 'nothing_to_pay');
+		const { fake, host } = await setup({
+			signIn: 's1',
+			quote: () =>
+				ok(
+					quoteOf({
+						deliveryOptions: [PICKUP],
+						delivery: PICKUP,
+						paymentMethods: [{ method: 'bank_transfer', available: true, reason: null, advance: 0 }],
+						bankDetails: BANK,
+						notes,
+					}),
+				),
+			routes: {
+				'POST /v1/shop/orders': () =>
+					ok({ order: waiting, next: { kind: 'proof', url: 'https://shop.example.com/thanks' } }, 201),
+				'POST /v1/shop/orders/ord_1/proof/upload': () => upload,
+				'POST /v1/shop/orders/ord_1/proof': () => proof,
+			},
+		});
+		// before placing: the details given (never empty ones) and the shop's note for the method
+		let page = textOf(host);
+		for (const part of [
+			text('checkout.bank.title'),
+			text('checkout.bank.accountHolder'),
+			'Example Store LLC',
+			'XX00 TEST 0000',
+			'Put your order number in the reference.',
+			NOTE,
+		])
+			expect(page).toContain(part);
+		expect(page).not.toContain(text('checkout.bank.routingNumber'));
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.went).toEqual([]);
+		page = textOf(host);
+		expect(page).toContain(text('success.title'));
+		expect(page).toContain('XX00 TEST 0000');
+		expect(page).toContain(NOTE);
+		expect(page).not.toContain(text('success.retry'));
+
+		const form = () => $(host, 'form.proof-form');
+		expect(form()?.textContent).toContain(text('checkout.bank.proofTitle'));
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.proofNeeded'));
+		const input = $(host, 'form.proof-form input[type="file"]');
+		const choose = (/** @type {File} */ file) => Object.defineProperty(input, 'files', { value: [file], configurable: true });
+		choose(new window.File(['x'], 'proof.gif', { type: 'image/gif' }));
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.proofInvalid'));
+		choose(new window.File(['receipt'], 'proof.png', { type: 'image/png' }));
+		$(host, 'form.proof-form input[maxlength="120"]').value = ' TX-99 ';
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.problem.storage_not_connected'));
+		expect(fake.last('POST /v1/shop/orders/ord_1/proof/upload')?.body).toEqual({ type: 'image/png', size: 7 });
+		upload = ok(
+			{
+				upload: { method: 'PUT', url: 'https://storage.example.com/up', headers: { 'content-type': 'image/png' } },
+				key: 'ecommerce/proofs/ord_1/prf_1.png',
+				expiresAt: '',
+			},
+			201,
+		);
+		const put = vi.spyOn(window, 'fetch').mockResolvedValueOnce(new Response(null, { status: 500 }));
+		await submit(form());
+		expect(textOf(host)).toContain(text('checkout.bank.proofFailed'));
+		put.mockResolvedValue(new Response(null, { status: 200 }));
+		await submit(form());
+		expect(put).toHaveBeenLastCalledWith('https://storage.example.com/up', expect.objectContaining({ method: 'PUT' }));
+		expect(textOf(host)).toContain(text('checkout.bank.problem.nothing_to_pay'));
+		expect(fake.last('POST /v1/shop/orders/ord_1/proof')?.body).toEqual({
+			key: 'ecommerce/proofs/ord_1/prf_1.png',
+			reference: 'TX-99',
+		});
+		proof = ok({
+			order: { ...waiting, payment: { ...waiting.payment, proof: { reference: 'TX-99', at: '2026-10-02T10:00:00.000Z' } } },
+		});
+		await submit(form());
+		expect($(host, 'p.save')?.textContent).toContain('TX-99');
+		// another proof may still follow while staff have not recorded the payment
+		expect(form()?.textContent).toContain(text('checkout.bank.proofAgain'));
 	});
 
 	it('asks the order fields the quote names, checks them as the server does and sends them', async () => {

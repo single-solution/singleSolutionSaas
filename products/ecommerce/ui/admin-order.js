@@ -146,6 +146,24 @@ export const orderDetail = async (kit, id, detail) => {
 };
 
 /**
+ * The shopper's transfer proof (E24): when it came, its reference and a link to open it; '' without one.
+ * @param {Kit} kit @param {any} proof
+ */
+const proofOf = (kit, proof) => {
+	if (!proof) return '';
+	const { t, h } = kit;
+	const sent = proof.reference
+		? t('ordersAdmin.proofSentRef', { date: kit.when(proof.at), reference: proof.reference })
+		: t('ordersAdmin.proofSent', { date: kit.when(proof.at) });
+	return h('span', {}, [
+		sent,
+		...(typeof proof.url === 'string' && /^https:\/\//.test(proof.url)
+			? [' ', kit.text('a', { href: proof.url, target: '_blank', rel: 'noopener noreferrer' }, t('ordersAdmin.openProof'))]
+			: []),
+	]);
+};
+
+/**
  * The order in the pane, with a message in its status line.
  * @param {Kit} kit @param {any} order @param {Detail} detail @param {string} message
  */
@@ -256,6 +274,8 @@ const renderOrder = (kit, order, detail, message) => {
 		[t('ordersAdmin.total'), money(order.totals.total)],
 		[t('ordersAdmin.paymentState'), t(`ordersAdmin.payment.${order.payment.state}`)],
 		[t('ordersAdmin.paymentMethod'), t(`ordersAdmin.method.${order.payment.method}`)],
+		// the shopper's transfer proof: when it came, its reference and a link to open it (E24)
+		[t('ordersAdmin.proof'), proofOf(kit, order.payment.proof)],
 		[t('ordersAdmin.paid'), money(order.payment.paid)],
 		[t('ordersAdmin.balanceDue'), balanceDue > 0 ? money(balanceDue) : ''],
 		[t('ordersAdmin.advance'), order.payment.advance > 0 ? money(order.payment.advance) : ''],

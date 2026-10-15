@@ -5,7 +5,8 @@
  * so and cannot be ordered), quantities, the coupon, loyalty points, the delivery method (delivery to an address, or
  * pickup), the address, the payment methods the quote allows, the order fields the shop asks (`ui/shop-fields.js`), a note, the shop's policies (filled and only the ones it
  * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
- * totals. Placing the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
+ * totals, with the shop's note for the chosen payment method and a bank transfer's bank details (E22, E24). Placing
+ * the order needs the shopper's sign-in; the Idempotency-Key is kept while the same attempt
  * is retried after a lost answer or while the first press still runs (409 `in_progress`, after the runtime's own retries). Then the shopper pays on Payments' page (`next.kind === 'pay'`), sees the success
  * page (`done`), or can start the payment again (`retry`). Coming back from Payments, the page's `ss_order` shows that
  * order's success page (reading it rechecks its payment). Growth's events (PLAN 0.8.9): `ss:begin_checkout` the first
@@ -35,6 +36,7 @@ import {
 } from './shop-common.js';
 import { addressForm, renderSuccess, returnUrlOf } from './shop-checkout.js';
 import { checkoutFieldsForm } from './shop-fields.js';
+import { bankDetailsBox } from './shop-payment.js';
 
 /** The pause after a change before the cart is priced again (ms). */
 const QUOTE_DELAY = 300;
@@ -503,6 +505,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 						choices.length > 0
 							? h(doc, 'div', { class: 'choices' }, ...choices)
 							: h(doc, 'p', { class: 'error' }, t('checkout.noPayment')),
+						// the shop's note for the chosen method, and the bank details of a transfer (E22, E24)
+						payment && quote.notes?.[payment] ? h(doc, 'p', { class: 'meta' }, quote.notes[payment]) : null,
+						payment === 'bank_transfer' ? bankDetailsBox(doc, t, quote.bankDetails) : null,
 					),
 				);
 			};

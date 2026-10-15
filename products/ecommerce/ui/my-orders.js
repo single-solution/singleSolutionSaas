@@ -2,7 +2,7 @@
  * The shopper's orders (visitor widget `my_orders`, feature checkout; PLAN 0.8.8 "my orders + tracking + invoices +
  * returns"). Signed in, the shopper sees their orders (newest first, more with Load more) and each order's lines,
  * status history, payment (and the way to pay while it waits), delivery and tracking link, totals, the invoice
- * (`invoices`), downloads and license keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
+ * (`invoices`), for a bank transfer its bank details and the transfer proof (E24), downloads and license keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
  * E11, E12), Cancel while the order allows it, return or warranty claims (`returns`) with their own list and, with
  * reviews per order line, a review of each delivered item (`reviews`, E34; the line's `canReview`). Above the
  * orders, the loyalty points balance with the points expiring soon and the points history (`loyalty`,
@@ -25,6 +25,7 @@ import {
 } from './shop-common.js';
 import { returnUrlOf } from './shop-checkout.js';
 import { renderClaimForm, renderClaims } from './shop-returns.js';
+import { transferParts } from './shop-payment.js';
 import { reviewForm } from './shop-reviews.js';
 
 const PAGE = 10;
@@ -355,6 +356,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							say(problemText(config, 'checkout.problem.', codeOf(answer), 'checkout.problem.failed'));
 						}),
 					);
+				// a bank transfer: the bank details, the shop's note, the proof sent and the proof form (E24)
+				paymentParts.push(...transferParts({ doc, t, shop, config, win, order, onOrder: renderOrder }));
 				if (payment.refunded > 0)
 					paymentParts.push(
 						h(doc, 'p', { class: 'meta' }, t('orders.refunded', { amount: money(payment.refunded, currency) })),

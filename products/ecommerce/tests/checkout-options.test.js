@@ -747,6 +747,12 @@ describe('bank transfers recorded by staff (E24)', () => {
 		expect(sent.status).toBeLessThan(300);
 		expect((await orderRecord(id)).payment.proof).toMatchObject({ key: upload.json.key, reference: 'TRX-42' });
 		expect((await orderRecord(id)).history.at(-1)).toMatchObject({ by: 'shopper', code: 'proof_sent' });
+		// staff see the proof with a short-lived link to open it; the shopper sees what was sent, never the file's key
+		const staff = await shop.api('GET', `/v1/orders/${id}`);
+		expect(staff.json.payment.proof).toMatchObject({ key: upload.json.key, reference: 'TRX-42', url: expect.any(String) });
+		expect(staff.json.payment.proof.url).toMatch(/^https:\/\//);
+		expect(sent.json.order.payment.proof).toEqual({ reference: 'TRX-42', at: expect.any(String) });
+		expect(sent.json.order.canSendProof).toBe(true);
 		const elsewhere = await visit('POST', `/v1/shop/orders/${id}/proof`, {
 			signIn: shopper.token,
 			body: { key: 'ecommerce/proofs/ord_other/x.png' },

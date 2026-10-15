@@ -398,6 +398,102 @@ describe('my orders', () => {
 		expect(() => buttonOf(other, text('orders.reviewLabel', { name: 'Phone (Blue)' }))).toThrow();
 	});
 
+	it('shows the bank details, the shop’s payment note and the proof sent, and takes a transfer proof (E24)', async () => {
+		const BANK = {
+			ready: true,
+			accountHolder: 'Example Store LLC',
+			bankName: '',
+			accountNumber: '',
+			routingNumber: '',
+			sortCode: '',
+			branchCode: '',
+			iban: 'XX00 TEST 0000',
+			bic: 'TESTXX00',
+			instructions: '',
+		};
+		const waiting = detail({
+			role: 'awaiting_payment',
+			canCancel: false,
+			payment: {
+				method: 'bank_transfer',
+				state: 'unpaid',
+				via: 'manual',
+				advance: 0,
+				paid: 0,
+				refunded: 0,
+				payUrl: null,
+				payBy: null,
+				proof: null,
+			},
+			bankDetails: BANK,
+			canSendProof: true,
+			notes: { payment: 'Orders ship once the money arrives.', delivery: '', prep: '', pickupReady: '' },
+		});
+		const sent = {
+			...waiting,
+			payment: { ...waiting.payment, proof: { reference: '', at: '2026-10-02T10:00:00.000Z' } },
+		};
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(waiting),
+				'POST /v1/shop/orders/ord_1/proof/upload': () =>
+					ok(
+						{
+							upload: { method: 'PUT', url: 'https://storage.example.com/up', headers: {} },
+							key: 'ecommerce/proofs/ord_1/prf_1.pdf',
+							expiresAt: '',
+						},
+						201,
+					),
+				'POST /v1/shop/orders/ord_1/proof': () => ok({ order: sent }),
+			},
+		});
+		vi.spyOn(window, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		const page = textOf(host);
+		for (const part of [
+			text('checkout.bank.title'),
+			text('checkout.bank.bic'),
+			'TESTXX00',
+			'XX00 TEST 0000',
+			'Orders ship once the money arrives.',
+		])
+			expect(page).toContain(part);
+		// only the details given, in Payments' order
+		expect($$(host, '.bank-details dt').map((node) => node.textContent)).toEqual([
+			text('checkout.bank.accountHolder'),
+			text('checkout.bank.iban'),
+			text('checkout.bank.bic'),
+		]);
+		const input = $(host, 'form.proof-form input[type="file"]');
+		Object.defineProperty(input, 'files', { value: [new window.File(['%PDF'], 'proof.pdf', { type: 'application/pdf' })] });
+		await submit($(host, 'form.proof-form'));
+		expect(fake.last('POST /v1/shop/orders/ord_1/proof')?.body).toEqual({
+			key: 'ecommerce/proofs/ord_1/prf_1.pdf',
+			reference: '',
+		});
+		for (const part of text('checkout.bank.proofSent').split('{date}')) expect($(host, 'p.save')?.textContent).toContain(part);
+		expect($(host, 'form.proof-form')?.textContent).toContain(text('checkout.bank.proofAgain'));
+		// paid: no details, no proof form
+		resetPage();
+		const paid = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok({ ...waiting, bankDetails: null, canSendProof: false, notes: undefined }),
+			},
+		});
+		const other = await mountOrders(paid);
+		await click(buttonOf(other, text('orders.open', { number: 'SO-1' })));
+		expect($(other, 'form.proof-form')).toBeNull();
+		expect(textOf(other)).not.toContain(text('checkout.bank.title'));
+	});
+
 	it('shows a failed invoice, a pickup order and a waiting payment', async () => {
 		let pay = fail(503, 'payments_unavailable');
 		const waiting = detail({
