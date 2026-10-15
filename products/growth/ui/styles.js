@@ -141,8 +141,8 @@ button.link.remove { color: #dc2626; padding: 4px 0; margin-top: 8px; }
 .dialog h3 { margin: 0 0 12px; }
 .form-grid { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr)); }
 .form-grid .wide { grid-column: 1 / -1; }
-.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 10px 16px; margin: 0 0 12px; }
-.fields dt { font-size: 0.8em; opacity: 0.7; } .fields dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 10px 16px; margin: 0 0 12px; }
+.facts dt { font-size: 0.8em; opacity: 0.7; } .facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 .live { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .live .value { font-size: 1.6em; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pulse { width: 10px; height: 10px; border-radius: 999px; background: #16a34a; flex: none;

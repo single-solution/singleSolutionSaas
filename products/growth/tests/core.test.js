@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
-import { pathMatches } from '../core/paths.js';
 import {
 	adminSettings,
 	hiddenPagesOf,
 	linkOf,
 	noticeAnswer,
+	noticeHiddenOn,
 	noticeOf,
 	searchParamsOf,
 	tagsOf,
@@ -432,13 +432,17 @@ describe('page script settings', () => {
 		// AO-2: turned off by the merchant, its text kept
 		expect(at({ text: 'Hi', enabled: false })).toBeNull();
 		expect(at({ text: 'Hi', enabled: true })).toMatchObject({ text: 'Hi' });
-		expect(pathMatches('/', '/')).toBe(true);
-		expect(pathMatches('/', '/shop')).toBe(false);
-		expect(pathMatches('/shop/*', '/shop/lamps?x=1')).toBe(true);
-		expect(pathMatches('/shop/*', '/shop/lamps/blue')).toBe(false);
-		expect(pathMatches('/**', '/anything/at/all')).toBe(true);
-		expect(pathMatches('/a/**/z', '/a/b/c/z')).toBe(true);
-		expect(pathMatches('shop', '/shop')).toBe(false);
+		// the hidden pages follow the shared page patterns (@ss/contracts/text): * inside a segment, ** across segments
+		/** @param {string[]} hideOnPages @param {string} path */
+		const hiddenOn = (hideOnPages, path) => noticeHiddenOn({ hideOnPages }, path);
+		expect(hiddenOn(['/'], '/')).toBe(true);
+		expect(hiddenOn(['/'], '/shop')).toBe(false);
+		expect(hiddenOn(['/shop/*'], '/shop/lamps?x=1')).toBe(true);
+		expect(hiddenOn(['/shop/*'], '/shop/lamps/blue')).toBe(false);
+		expect(hiddenOn(['/sale-*'], '/sale-summer')).toBe(true);
+		expect(hiddenOn(['/checkout/**'], '/checkout')).toBe(true);
+		expect(hiddenOn(['/a/**/z'], '/a/b/c/z')).toBe(true);
+		expect(hiddenOn([], '/')).toBe(false);
 		expect(
 			at({ text: 'Hi', linkUrl: 'https://x.example/a', startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-11-01T00:00:00Z' }),
 		).toMatchObject({ linkUrl: 'https://x.example/a' });

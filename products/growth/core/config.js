@@ -6,7 +6,7 @@
  * merchant's own scripts are public in any page that loads them).
  * @module
  */
-import { pathMatches } from './paths.js';
+import { pathMatches } from '@ss/contracts/text';
 import { isIndexNowKey, keyLocationOf } from './seo.js';
 
 /** The shape of each tag id. */
@@ -114,6 +114,14 @@ export const noticeOf = (values, now) => {
 };
 
 /**
+ * Whether the notice bar is hidden on a page: one of its `hideOnPages` patterns matches the page's path (the patterns
+ * of `@ss/contracts/text` `pathMatches`: `*` inside one segment, `**` any number of segments).
+ * @param {{ hideOnPages: ReadonlyArray<string> }} notice
+ * @param {string} path
+ */
+export const noticeHiddenOn = (notice, path) => notice.hideOnPages.some((pattern) => pathMatches(pattern, path));
+
+/**
  * What `GET /v1/notice` answers for custom UIs (G6): the notice bar now, or null — also null on a page it is hidden on
  * when the page's `path` is given.
  * @param {FeatureValues} values
@@ -124,7 +132,7 @@ export const noticeOf = (values, now) => {
 export const noticeAnswer = (values, now, path) => {
 	const notice = noticeOf(values, now);
 	if (notice === null) return null;
-	if (typeof path === 'string' && notice.hideOnPages.some((pattern) => pathMatches(pattern, path))) return null;
+	if (typeof path === 'string' && noticeHiddenOn(notice, path)) return null;
 	return { text: notice.text, linkText: notice.linkText, linkUrl: notice.linkUrl, dismissible: notice.dismissible };
 };
 

@@ -10,12 +10,20 @@
  * the widget says which zone; money and times follow the website's Format (PLAN 0.8.10 K7, K8).
  * @module
  */
-import { formatDate, formatMoney, formatText, mountWidget } from '@ss/app-kit/widget';
+import {
+	adminCall,
+	element,
+	fieldGrid,
+	formatDate,
+	formatMoney,
+	formatText,
+	moreMenu,
+	mountWidget,
+	openDialog,
+} from '@ss/app-kit/widget';
 import { PRESETS, dayStart, presetRange } from '../core/analytics.js';
 import { DIRECT, EVENT_FEATURES, UNKNOWN } from '../core/events.js';
-import { PROBLEM_TEXTS, chipGroup, fieldGrid, moreMenu, openDialog, rankList, problemKey } from './admin-kit.js';
-import { adminCall } from './tickets.js';
-import { element } from './dom.js';
+import { PROBLEM_TEXTS, chipGroup, rankList, problemKey } from './admin-kit.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** @typedef {import('../core/analytics.js').Report} Report */
@@ -32,7 +40,7 @@ const EVENT_TYPES = Object.freeze(Object.keys(EVENT_FEATURES));
 export const ANALYTICS_PROBLEMS = Object.freeze({ ...PROBLEM_TEXTS, 'validation_failed:from': 'analytics.problem.range' });
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
  *   viewer: import('./widget.js').Viewer, now: () => number }} input `viewer`: the browser's language and time zone
  */
 export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {

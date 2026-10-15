@@ -8,10 +8,8 @@
  * server's English (OT-4); times follow the website's Format and time zone (PLAN 0.8.10 K7).
  * @module
  */
-import { formatDate, formatText, mountWidget } from '@ss/app-kit/widget';
-import { PROBLEM_TEXTS, chipGroup, moreMenu, openDialog, problemKey } from './admin-kit.js';
-import { adminCall } from './tickets.js';
-import { element } from './dom.js';
+import { adminCall, element, formatDate, formatText, moreMenu, mountWidget, openDialog } from '@ss/app-kit/widget';
+import { PROBLEM_TEXTS, chipGroup, problemKey } from './admin-kit.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** Rules per page of the list. */
@@ -42,7 +40,7 @@ export const REDIRECT_PROBLEMS = Object.freeze({
 /** @typedef {{ line: number, path: string, code: string, steps?: string[] }} RowProblem */
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig,
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
  *   viewer: import('./widget.js').Viewer, download: (name: string, bytes: ArrayBuffer) => void }} input `viewer`: the
  *   browser's language and time zone; `download`: save a file the widget made
  */
@@ -232,11 +230,12 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 					},
 				});
 				remove?.addEventListener('click', () => {
-					const confirm = openDialog(root, {
+					openDialog(root, {
 						title: t('redirects.deleteTitle'),
 						body: [h('p', {}, t('redirects.deleteHelp', { from: /** @type {Rule} */ (rule).from }))],
 						submitLabel: t('redirects.delete'),
 						closeLabel: t('redirects.cancel'),
+						danger: true,
 						onSubmit: async () => {
 							const answer = await adminCall(api, 'DELETE', `/v1/admin/redirects/${encodeURIComponent(String(rule?.id))}`);
 							if (!answer.ok) return failure(answer);
@@ -246,7 +245,6 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 							return null;
 						},
 					});
-					confirm.form.querySelector('button[type="submit"]')?.classList.add('danger');
 				});
 			};
 
@@ -293,7 +291,7 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 						return t('redirects.import.checked');
 					},
 				});
-				const submit = /** @type {HTMLButtonElement} */ (dialog.form.querySelector('button[type="submit"]'));
+				const submit = /** @type {HTMLButtonElement} */ (dialog.submit);
 				const reset = () => {
 					checked = '';
 					submit.textContent = t('redirects.import.check');

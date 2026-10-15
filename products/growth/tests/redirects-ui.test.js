@@ -30,6 +30,7 @@ const configOf = (features) => ({
 	},
 	timeZone: 'UTC',
 	features,
+	widgets: features.includes('redirects') ? ['redirects'] : [],
 	settings: widgetSettings({ on: features, values: {}, now: Date.parse('2026-10-08T12:00:00Z') }),
 });
 
