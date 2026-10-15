@@ -1,21 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { checkHost, checkUrl, createOutboundPolicy, isAllowlisted } from '../src/index.js';
-import { DEFAULT_MAX_BYTES, normaliseHost, sameOrigin } from '../src/policy.js';
+import { checkHost, checkUrl, createOutboundPolicy } from '../src/index.js';
+import { isAllowlisted, normaliseHost, sameOrigin } from '../src/policy.js';
 
 const policy = createOutboundPolicy();
 const dev = createOutboundPolicy({ allowHosts: ['LocalHost', '[::1]', '10.0.0.5', 'minio.internal.'] });
 
 describe('createOutboundPolicy', () => {
 	it('has safe defaults', () => {
-		expect(policy).toMatchObject({
-			allowHttpForAllowed: true,
-			maxRedirects: 3,
-			sameHostRedirectsOnly: true,
-			timeoutMs: 10_000,
-			maxBytes: DEFAULT_MAX_BYTES,
-			userAgent: 'ss-net/1',
-		});
-		expect([...policy.ports]).toEqual([443, 8443]);
+		expect(policy.userAgent).toBe('ss-net/1');
 		expect(policy.allowHosts.size).toBe(0);
 		expect(Object.isFrozen(policy)).toBe(true);
 		expect([...dev.allowHosts]).toEqual(['localhost', '::1', '10.0.0.5', 'minio.internal']);
@@ -24,11 +16,6 @@ describe('createOutboundPolicy', () => {
 	it('validates options', () => {
 		expect(() => createOutboundPolicy({ allowHosts: /** @type {any} */ ('x') })).toThrow(TypeError);
 		expect(() => createOutboundPolicy({ allowHosts: /** @type {any} */ ([1]) })).toThrow(TypeError);
-		expect(() => createOutboundPolicy({ ports: /** @type {any} */ (443) })).toThrow(TypeError);
-		expect(() => createOutboundPolicy({ ports: [0] })).toThrow(TypeError);
-		expect(() => createOutboundPolicy({ maxRedirects: -1 })).toThrow(TypeError);
-		expect(() => createOutboundPolicy({ timeoutMs: 0 })).toThrow(TypeError);
-		expect(() => createOutboundPolicy({ maxBytes: 1.5 })).toThrow(TypeError);
 		expect(() => createOutboundPolicy({ resolve: /** @type {any} */ ('dns') })).toThrow(TypeError);
 	});
 });
@@ -131,13 +118,12 @@ describe('checkUrl', () => {
 		expect(checkUrl(url, policy)).toEqual({ ok: false, code, reason });
 	});
 
-	it('lets allowlisted hosts use http and any port, unless http is disabled', () => {
+	it('lets allowlisted hosts use http and any port; others only https on 443 and 8443', () => {
 		expect(checkUrl('http://localhost:3000/', dev)).toMatchObject({ ok: true, port: 3000, allowlisted: true });
 		expect(checkUrl('http://[::1]/', dev)).toMatchObject({ ok: true, port: 80 });
-		const strict = createOutboundPolicy({ allowHosts: ['localhost'], allowHttpForAllowed: false });
-		expect(checkUrl('http://localhost:3000/', strict)).toEqual({ ok: false, code: 'ssrf_blocked', reason: 'https_required' });
-		expect(checkUrl('https://localhost:3000/', strict)).toMatchObject({ ok: true });
-		expect(checkUrl('https://example.com:9000/', createOutboundPolicy({ ports: [9000] }))).toMatchObject({ ok: true });
+		expect(checkUrl('https://example.com:8443/', policy)).toMatchObject({ ok: true, port: 8443 });
+		expect(checkUrl('https://example.com:9000/', policy)).toEqual({ ok: false, code: 'ssrf_blocked', reason: 'port' });
+		expect(checkUrl('http://example.com/', policy)).toEqual({ ok: false, code: 'ssrf_blocked', reason: 'https_required' });
 	});
 
 	it('compares origins', () => {

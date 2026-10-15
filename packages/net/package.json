@@ -37,7 +37,6 @@
 		"build:types": "tsc -p tsconfig.types.json",
 		"prepack": "pnpm build:types"
 	},
-	"dependencies": {},
 	"devDependencies": {
 		"@ss/config": "workspace:^",
 		"@types/node": "^22.20.4",

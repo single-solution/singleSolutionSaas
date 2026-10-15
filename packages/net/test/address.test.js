@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyAddress } from '../src/index.js';
+import { classifyAddress } from '../src/address.js';
 import { formatIPv4, formatIPv6, IPV4_RANGES, IPV6_RANGES, parseIPv4, parseIPv6, parseLooseIPv4 } from '../src/address.js';
 
 describe('parsing', () => {

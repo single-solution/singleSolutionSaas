@@ -61,31 +61,25 @@ export const resolveVetted = async (policy, hostname, { family } = {}) => {
  * A Node `lookup` function enforcing the policy at connect time. Refusals call back with a `NetError`
  * (`code: 'ssrf_blocked'`); resolution failures with a `NetError` (`code: 'network'`, `detail` = DNS code).
  * @param {OutboundPolicy} policy
- * @param {{ onRefused?: (error: import('./errors.js').NetError) => void }} [hooks]
  * @returns {LookupFunction}
  */
-export const guardedLookup =
-	(policy, { onRefused } = {}) =>
-	(hostname, options, callback) => {
-		const cb = /** @type {(error: NodeJS.ErrnoException | null, address?: any, family?: number) => void} */ (
-			typeof options === 'function' ? options : callback
-		);
-		const opts =
-			typeof options === 'function' || options === undefined || options === null
-				? {}
-				: typeof options === 'number'
-					? { family: options }
-					: options;
-		const family = opts.family === 4 || opts.family === 6 ? opts.family : undefined;
-		resolveVetted(policy, normaliseHost(String(hostname)), family ? { family } : {}).then(
-			(vetted) => {
-				const first = /** @type {ResolvedAddress} */ (vetted[0]);
-				if (opts.all) cb(null, vetted);
-				else cb(null, first.address, first.family);
-			},
-			(error) => {
-				if (error.code === 'ssrf_blocked') onRefused?.(error);
-				cb(error);
-			},
-		);
-	};
+export const guardedLookup = (policy) => (hostname, options, callback) => {
+	const cb = /** @type {(error: NodeJS.ErrnoException | null, address?: any, family?: number) => void} */ (
+		typeof options === 'function' ? options : callback
+	);
+	const opts =
+		typeof options === 'function' || options === undefined || options === null
+			? {}
+			: typeof options === 'number'
+				? { family: options }
+				: options;
+	const family = opts.family === 4 || opts.family === 6 ? opts.family : undefined;
+	resolveVetted(policy, normaliseHost(String(hostname)), family ? { family } : {}).then(
+		(vetted) => {
+			const first = /** @type {ResolvedAddress} */ (vetted[0]);
+			if (opts.all) cb(null, vetted);
+			else cb(null, first.address, first.family);
+		},
+		(error) => cb(error),
+	);
+};

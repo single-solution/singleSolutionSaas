@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import {
-	BLUEPRINT_SCHEMA,
-	BLUEPRINT_UNREACHABLE_REASONS,
-	createValidator,
-	validateBlueprint,
-	validateProductBlueprint,
-} from '../src/index.js';
+import { BLUEPRINT_SCHEMA, validateBlueprint, validateProductBlueprint } from '../src/index.js';
+import { BLUEPRINT_UNREACHABLE_REASONS } from '../src/schemas/blueprint.js';
 import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
-import { WEBSITE, productBlueprint } from '../src/testing.js';
+import { productBlueprint } from '../src/testing.js';
+import { createValidator } from '../src/validate.js';
+import { WEBSITE } from './fixtures.js';
 import { expectProblem } from './helpers.js';
 
 /** A sheet with the sample product reachable and one product that did not answer. */

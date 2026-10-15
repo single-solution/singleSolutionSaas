@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createId, hostMatchesDomain, isId, normaliseDomain } from '../src/index.js';
+import { createId, isId, normaliseDomain } from '../src/index.js';
 import { encodeBase32, ID_ALPHABET, idPattern } from '../src/ids.js';
 import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
 import { getDefaultValidator } from '../src/validate.js';
@@ -143,15 +143,5 @@ describe('normaliseDomain', () => {
 			const result = normaliseDomain(input);
 			if (result.ok) expect(v.validate(`${SCHEMA_IDS.common}#/$defs/hostname`, result.value).ok).toBe(true);
 		}
-	});
-});
-
-describe('hostMatchesDomain', () => {
-	it('matches exact hosts only', () => {
-		expect(hostMatchesDomain('https://Shop.Example.com/x', 'shop.example.com')).toBe(true);
-		expect(hostMatchesDomain('www.shop.example.com', 'shop.example.com')).toBe(false);
-		expect(hostMatchesDomain('evilshop.example.com', 'shop.example.com')).toBe(false);
-		expect(hostMatchesDomain('localhost', 'localhost')).toBe(false);
-		expect(hostMatchesDomain('localhost:3000', 'localhost', { allowLocal: true })).toBe(true);
 	});
 });

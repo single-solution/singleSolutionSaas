@@ -117,7 +117,6 @@
 /** @typedef {{ tokenIds: string[], cursor: string | null }} Revocations */
 /** @typedef {{ baseUrl: string }} Directory */
 /** @typedef {{ items: Array<{ productId: string, name: string, baseUrl: string }> }} DirectoryList every connected product, by id */
-/** @typedef {{ type: import('./constants.js').NoticeType, websiteId?: string, subject?: string }} Notice */
 
 /**
  * business.json, normalized: missing or invalid optional fields are `null`.
@@ -132,8 +131,6 @@
  */
 
 /** @typedef {{ user: { id?: string, email?: string, phone?: string } }} DataRightsRequest */
-/** @typedef {{ records: Record<string, unknown> }} DataRightsExport */
-/** @typedef {{ deleted: number, anonymised: number }} DataRightsDelete */
 
 /**
  * @typedef {object} ActivityCopy

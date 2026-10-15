@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { NOTICE_PATH, NOTICE_TYPES, createJwks, createKeyResolver, signNotice, verifyNotice } from '../src/index.js';
+import { NOTICE_PATH, signNotice, verifyNotice } from '../src/index.js';
 import { createMemoryReplayStore } from '../src/testing.js';
-import { parseNotice } from '../src/notices.js';
+import { NOTICE_TYPES, parseNotice } from '../src/notices.js';
 import { createClock, expectCode, expectThrowCode, makeKey, staticResolver } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
@@ -125,12 +125,10 @@ describe('notices', () => {
 		await verify(clock, { ...headers, 'SS-Key-Id': 'portal-2' });
 	});
 
-	it('rejects unknown and revoked kids', async () => {
+	it('rejects unknown kids', async () => {
 		const clock = createClock();
 		const headers = await signNotice({ signer: portal.signer, body, timestamp: ts(clock) });
 		await expectCode(verify(clock, headers, { keyResolver: staticResolver([next.publicJwk]) }), 'unknown_kid');
-		const revoked = createKeyResolver({ jwks: createJwks([portal.publicJwk]), revokedKids: ['portal-1'] });
-		await expectCode(verify(clock, headers, { keyResolver: revoked }), 'revoked_key');
 	});
 
 	it('supports dual-signing during rotation', async () => {
@@ -140,8 +138,7 @@ describe('notices', () => {
 		expect(await verify(clock, headers, { keyResolver: staticResolver([next.publicJwk]) })).toMatchObject({
 			type: 'status.changed',
 		});
-		const resolver = createKeyResolver({ jwks: createJwks([portal.publicJwk, next.publicJwk]), revokedKids: ['portal-1'] });
-		await verify(clock, headers, { keyResolver: resolver });
+		await verify(clock, headers, { keyResolver: staticResolver([portal.publicJwk]) });
 		await expectCode(verify(clock, headers, { keyResolver: staticResolver([]) }), 'signature');
 	});
 

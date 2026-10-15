@@ -27,31 +27,29 @@ both steps.
 
 ```js
 import {
-	classifyAddress,
 	createOutboundPolicy,
 	checkUrl,
 	checkHost,
-	isAllowlisted,
 	guardedLookup,
 	resolveVetted,
 	safeFetch,
 	textOf,
 	jsonOf,
 	isSafeMongoUri,
-	parseMongoUri,
 	signV4,
 	presignV4,
-	uriEncode,
 	objectUrl,
 	isNetError,
+	netError,
 } from '@ss/net';
 ```
 
-### `classifyAddress(ip) → AddressClass`
+`isNetError(error, code?)` tells a `NetError` (`{ code, reason, detail? }`) apart; `netError(code, reason, message,
+detail?)` makes one, for test doubles that fail the way `safeFetch` does.
 
-```js
-{ category, blocked, family: 4 | 6 | null, address /* canonical */, canonical, range, via?, embedded? }
-```
+### Address categories
+
+Every IP address (a literal in a URL, every DNS answer) is classified; only `public` addresses are reached.
 
 | `category`      | Ranges                                                                                                                     |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -76,21 +74,15 @@ classified, with `canonical: false`.
 
 ### `createOutboundPolicy(options) → OutboundPolicy` (frozen)
 
-| Option                  | Default            | Meaning                                                                        |
-| ----------------------- | ------------------ | ------------------------------------------------------------------------------ |
-| `allowHosts`            | `[]`               | exact host names / IP literals admitted despite the rules (development only)   |
-| `allowHttpForAllowed`   | `true`             | allowlisted hosts may use plain `http:`                                        |
-| `ports`                 | `[443, 8443]`      | ports allowed for non-allowlisted hosts (implicit 443 for https)               |
-| `maxRedirects`          | `3`                | redirects `safeFetch` follows                                                  |
-| `sameHostRedirectsOnly` | `true`             | only follow redirects to the same origin                                       |
-| `timeoutMs`             | `10000`            | overall deadline of one `safeFetch` call, redirects included                   |
-| `maxBytes`              | `1048576`          | response body cap                                                              |
-| `resolve`               | `dns.lookup` (all) | `(host, { family? }) => Promise<Array<{ address, family }>>` — inject in tests |
-| `userAgent`             | `ss-net/1`         | default `user-agent`                                                           |
+| Option       | Default            | Meaning                                                                        |
+| ------------ | ------------------ | ------------------------------------------------------------------------------ |
+| `allowHosts` | `[]`               | exact host names / IP literals admitted despite the rules (development only)   |
+| `resolve`    | `dns.lookup` (all) | `(host, { family? }) => Promise<Array<{ address, family }>>` — inject in tests |
+| `userAgent`  | `ss-net/1`         | default `user-agent`                                                           |
 
-Allowlisted hosts skip the port and address rules, and may use http when `allowHttpForAllowed` is set. An
-allowlisted IP literal also admits that address as a DNS answer for another name. Only enable the allowlist in
-development and test environments.
+Hosts not on the allowlist need https on port 443 or 8443. Allowlisted hosts skip the port and address rules and may
+use http. An allowlisted IP literal also admits that address as a DNS answer for another name. Only enable the
+allowlist in development and test environments.
 
 ### `checkUrl(url, policy)` / `checkHost(host, policy)`
 
@@ -100,7 +92,7 @@ These checks are pure and run before DNS. They return `{ ok: true, url?, host, p
 `.home.arpa`, `.localdomain`, `.lan`, `.intranet`, `.corp`), `single_label`, `ip_spelling` (non-canonical numeric
 host), `<category>_address`.
 
-### `guardedLookup(policy, { onRefused? }) → lookup`
+### `guardedLookup(policy) → lookup`
 
 This returns a `dns.lookup`-compatible function to pass as `lookup` to `http.request`, `https.request`, `net.connect`,
 `tls.connect` or `new MongoClient(uri, { lookup })`. A refusal calls back with a `NetError` (`ssrf_blocked`). A DNS
@@ -109,12 +101,12 @@ failure calls back with a `NetError` (`network`, `reason: 'dns_failed'`, `detail
 
 ### `safeFetch(url, init?, policy?) → Promise<{ status, headers, body, url }>`
 
-- `init`: `{ method = 'GET', headers, body (string | Uint8Array), signal, redirect = 'follow' | 'manual' | 'error', timeoutMs, maxBytes }`.
+- `init`: `{ method = 'GET', headers, body (string | Uint8Array), signal, redirect = 'follow' | 'manual' | 'error', timeoutMs = 10000, maxBytes = 1048576 }`
+  (`timeoutMs` covers every hop, redirects included).
 - `headers` are lower-case with repeated values joined by `, `, `body` is a `Buffer`, and `url` is the final URL.
   `textOf(res)` and `jsonOf(res)` decode the body.
-- Redirects (301/302/303/307/308) are followed only for GET and HEAD, at most `maxRedirects` times, and only to the
-  same origin unless `sameHostRedirectsOnly: false`. Every hop is checked again. `authorization`, `cookie` and
-  `proxy-authorization` are dropped when the origin changes.
+- Redirects (301/302/303/307/308) are followed only for GET and HEAD, at most 3 times, and only to the same scheme,
+  host and port, so credentials never leave the origin. Every hop is checked again.
 - No connection reuse (`agent: false`). The size cap applies to both the declared `content-length` and the streamed
   bytes.
 - Throws a `NetError` with a `code`:
@@ -151,7 +143,7 @@ presignV4({ method, url, region, service = 's3', accessKeyId, secretAccessKey, s
 - `signV4` returns every signed header except `host`, plus `authorization`, `x-amz-date`, `x-amz-content-sha256` and
   `x-amz-security-token` when present.
 - The canonical URI is the URL path **as given**, which follows S3 semantics. Encode object keys once with
-  `uriEncode(key, true)` or `objectUrl(store, key)`.
+  `objectUrl(store, key)`.
 - Query parameters are RFC 3986 encoded and sorted by name, then value.
 - The output is checked against the AWS documentation vectors: S3 GET/PUT object, GET lifecycle, list objects,
   presigned GET, and the SigV4 suite `get-vanilla` and `get-vanilla-query-order-key-case`.

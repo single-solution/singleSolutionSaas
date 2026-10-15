@@ -71,11 +71,8 @@ afterAll(async () => {
 
 const LOOPBACK = [{ address: '127.0.0.1', family: 4 }];
 
-/**
- * Policy whose resolver pins every name to the local test server.
- * @param {import('../src/index.js').OutboundPolicyOptions} [options]
- */
-const local = (options = {}) => {
+/** Policy whose resolver pins every name to the local test server. */
+const local = () => {
 	let resolutions = 0;
 	const policy = createOutboundPolicy({
 		allowHosts: ['app.test', 'other.test'],
@@ -83,7 +80,6 @@ const local = (options = {}) => {
 			resolutions += 1;
 			return LOOPBACK;
 		},
-		...options,
 	});
 	return { policy, count: () => resolutions };
 };
@@ -116,7 +112,7 @@ describe('safeFetch', () => {
 		expect(jsonOf(empty)).toBeNull();
 	});
 
-	it('follows same-origin redirects up to maxRedirects', async () => {
+	it('follows at most 3 same-origin redirects', async () => {
 		const { policy, count } = local();
 		const res = await safeFetch(
 			`http://app.test:${port}/redirect?to=/redirect%3Fto%3D/json%26status%3D308&status=301`,
@@ -126,42 +122,33 @@ describe('safeFetch', () => {
 		expect(res.status).toBe(200);
 		expect(res.url).toBe(`http://app.test:${port}/json`);
 		expect(count()).toBe(3);
-		const one = local({ maxRedirects: 1 }).policy;
-		await expect(safeFetch(`http://app.test:${port}/redirect?to=/redirect%3Fto%3D/json`, {}, one)).rejects.toMatchObject({
-			code: 'redirect_refused',
-			reason: 'too_many',
-		});
-		const none = local({ maxRedirects: 0 }).policy;
-		await expect(safeFetch(`http://app.test:${port}/redirect`, {}, none)).rejects.toMatchObject({
-			code: 'redirect_refused',
-			reason: 'too_many',
-		});
+		/** @param {number} hops a chain of `hops` redirects ending at /json */
+		const chain = (hops) => {
+			let to = '/json';
+			for (let i = 0; i < hops; i += 1) to = `/redirect?to=${encodeURIComponent(to)}`;
+			return `http://app.test:${port}${to}`;
+		};
+		expect((await safeFetch(chain(3), {}, policy)).status).toBe(200);
+		await expect(safeFetch(chain(4), {}, policy)).rejects.toMatchObject({ code: 'redirect_refused', reason: 'too_many' });
 	});
 
-	it('refuses cross-origin redirects unless allowed, and drops credentials when following them', async () => {
+	it('refuses redirects to another origin, so credentials never leave it', async () => {
 		const { policy } = local();
-		await expect(
-			safeFetch(`http://app.test:${port}/redirect?to=http://other.test:${port}/json`, {}, policy),
-		).rejects.toMatchObject({ code: 'redirect_refused', reason: 'cross_origin' });
-		const open = local({ sameHostRedirectsOnly: false }).policy;
 		seen.length = 0;
-		const res = await safeFetch(
-			`http://app.test:${port}/redirect?to=http://other.test:${port}/json`,
-			{ headers: { authorization: 'Bearer secret', cookie: 'c=1', 'x-keep': 'yes' } },
-			open,
-		);
-		expect(jsonOf(res)).toEqual({ ok: true, host: `other.test:${port}` });
-		expect(seen[0]?.headers.authorization).toBe('Bearer secret');
-		expect(seen[1]?.headers.authorization).toBeUndefined();
-		expect(seen[1]?.headers.cookie).toBeUndefined();
-		expect(seen[1]?.headers['x-keep']).toBe('yes');
-		// a redirect is re-checked against the policy: a private literal is refused
-		await expect(
-			safeFetch(`http://app.test:${port}/redirect?to=http://127.0.0.1:${port}/json`, {}, open),
-		).rejects.toMatchObject({ code: 'ssrf_blocked', reason: 'loopback_address' });
-		await expect(
-			safeFetch(`http://app.test:${port}/redirect?to=https://169.254.169.254/latest/meta-data`, {}, open),
-		).rejects.toMatchObject({ code: 'ssrf_blocked', reason: 'metadata_address' });
+		for (const to of [
+			`http://other.test:${port}/json`,
+			`https://app.test:${port}/json`,
+			`http://127.0.0.1:${port}/json`,
+			'https://169.254.169.254/latest/meta-data',
+		])
+			await expect(
+				safeFetch(
+					`http://app.test:${port}/redirect?to=${encodeURIComponent(to)}`,
+					{ headers: { authorization: 'x' } },
+					policy,
+				),
+			).rejects.toMatchObject({ code: 'redirect_refused', reason: 'cross_origin' });
+		expect(seen).toHaveLength(4);
 	});
 
 	it('handles redirect modes, methods and bad locations', async () => {
@@ -184,12 +171,12 @@ describe('safeFetch', () => {
 	});
 
 	it('caps the response size (declared and streamed)', async () => {
-		const { policy } = local({ maxBytes: 4096 });
-		await expect(safeFetch(`http://app.test:${port}/big-declared`, {}, policy)).rejects.toMatchObject({
+		const { policy } = local();
+		await expect(safeFetch(`http://app.test:${port}/big-declared`, { maxBytes: 4096 }, policy)).rejects.toMatchObject({
 			code: 'too_large',
 			reason: 'declared_length',
 		});
-		await expect(safeFetch(`http://app.test:${port}/big-chunked`, {}, policy)).rejects.toMatchObject({
+		await expect(safeFetch(`http://app.test:${port}/big-chunked`, { maxBytes: 4096 }, policy)).rejects.toMatchObject({
 			code: 'too_large',
 			reason: 'body_length',
 		});
@@ -198,8 +185,6 @@ describe('safeFetch', () => {
 	});
 
 	it('enforces the deadline and abort signals', async () => {
-		const { policy } = local({ timeoutMs: 100 });
-		await expect(safeFetch(`http://app.test:${port}/hang`, {}, policy)).rejects.toMatchObject({ code: 'timeout' });
 		await expect(safeFetch(`http://app.test:${port}/hang`, { timeoutMs: 50 }, local().policy)).rejects.toMatchObject({
 			code: 'timeout',
 		});
@@ -214,10 +199,11 @@ describe('safeFetch', () => {
 		// a deadline that fires while DNS resolution is still pending
 		const slowDns = createOutboundPolicy({
 			allowHosts: ['app.test'],
-			timeoutMs: 30,
 			resolve: () => new Promise((resolve) => setTimeout(() => resolve(LOOPBACK), 80)),
 		});
-		await expect(safeFetch(`http://app.test:${port}/json`, {}, slowDns)).rejects.toMatchObject({ code: 'timeout' });
+		await expect(safeFetch(`http://app.test:${port}/json`, { timeoutMs: 30 }, slowDns)).rejects.toMatchObject({
+			code: 'timeout',
+		});
 	});
 
 	it('refuses private destinations before connecting (resolver answers checked)', async () => {

@@ -25,7 +25,7 @@ import { isObject } from './jws.js';
  */
 
 /**
- * Resolves a `kid` to a verification key, throwing a `ProtocolError` (`unknown_kid`, `revoked_key`, `key_not_active`,
+ * Resolves a `kid` to a verification key, throwing a `ProtocolError` (`unknown_kid`, `key_not_active`,
  * `key_retired`, `jwks_unavailable`) when the key must not be used.
  * @typedef {{ resolve: (kid: string) => Promise<CryptoKey> }} KeyResolver
  */
@@ -196,7 +196,6 @@ const parseJwks = (jwks) => {
  * resolver refetches when it meets an unknown `kid` (at most once per `minRefreshIntervalMs`, so forged kids cannot
  * turn it into a request amplifier) and when the cache is older than `cacheTtlMs`. If a refetch fails, the last known
  * keys keep working (the Portal may be unreachable) until `maxStaleMs` has passed since the last successful fetch.
- * Revocation (`revokedKids` / `isRevoked`) is checked on every resolve and wins over everything else.
  *
  * @param {{
  *   jwks?: Jwks | unknown,
@@ -204,11 +203,9 @@ const parseJwks = (jwks) => {
  *   cacheTtlMs?: number,
  *   minRefreshIntervalMs?: number,
  *   maxStaleMs?: number,
- *   revokedKids?: Iterable<string>,
- *   isRevoked?: (kid: string) => boolean,
  *   now?: () => number,
  * }} options
- * @returns {KeyResolver & { refresh: () => Promise<void>, kids: () => string[] }}
+ * @returns {KeyResolver}
  */
 export const createKeyResolver = ({
 	jwks,
@@ -216,14 +213,11 @@ export const createKeyResolver = ({
 	cacheTtlMs = 5 * 60_000,
 	minRefreshIntervalMs = 30_000,
 	maxStaleMs = 24 * 60 * 60_000,
-	revokedKids = [],
-	isRevoked = () => false,
 	now = Date.now,
 }) => {
 	if (jwks === undefined && typeof fetchJwks !== 'function') {
 		throw createProtocolError('invalid_argument', 'createKeyResolver needs jwks or fetchJwks');
 	}
-	const revoked = new Set(revokedKids);
 	/** @type {Map<string, PublicJwk>} */
 	let keys = jwks === undefined ? new Map() : parseJwks(jwks);
 	let fetchedAt = jwks === undefined ? -Infinity : now();
@@ -255,7 +249,6 @@ export const createKeyResolver = ({
 	const resolve = async (kid) => {
 		if (typeof kid !== 'string' || !KID_PATTERN.test(kid))
 			throw createProtocolError('unknown_kid', 'kid is missing or invalid');
-		if (revoked.has(kid) || isRevoked(kid)) throw createProtocolError('revoked_key', 'signing key is revoked', { kid });
 		if (fetchJwks && now() - fetchedAt >= cacheTtlMs) await refresh();
 		if (fetchJwks && !keys.has(kid) && now() - lastAttemptAt >= minRefreshIntervalMs) await refresh();
 		if (fetchJwks && now() - fetchedAt >= maxStaleMs) {
@@ -274,5 +267,5 @@ export const createKeyResolver = ({
 		return key;
 	};
 
-	return Object.freeze({ resolve, refresh, kids: () => [...keys.keys()] });
+	return Object.freeze({ resolve });
 };

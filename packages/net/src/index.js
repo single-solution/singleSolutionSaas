@@ -3,12 +3,11 @@
  * DNS-pinned guarded lookups, a guarded fetch, MongoDB URI safety and AWS SigV4 signing. See README.md.
  */
 export { isNetError, netError } from './errors.js';
-export { classifyAddress } from './address.js';
-export { checkHost, checkUrl, createOutboundPolicy, isAllowlisted } from './policy.js';
+export { checkHost, checkUrl, createOutboundPolicy } from './policy.js';
 export { guardedLookup, resolveVetted } from './lookup.js';
 export { jsonOf, safeFetch, textOf } from './fetch.js';
-export { isSafeMongoUri, parseMongoUri } from './mongo.js';
-export { objectUrl, presignV4, signV4, uriEncode } from './sigv4.js';
+export { isSafeMongoUri } from './mongo.js';
+export { objectUrl, presignV4, signV4 } from './sigv4.js';
 
 /** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */
 /** @typedef {import('./policy.js').OutboundPolicyOptions} OutboundPolicyOptions */

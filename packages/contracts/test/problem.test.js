@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PROBLEM_CODES, createProblemFactory, problem, validateManifest } from '../src/index.js';
+import { PROBLEM_CODES, createProblemFactory, validateManifest } from '../src/index.js';
+import { problem } from '../src/errors.js';
 import { SCHEMA_IDS } from '../src/schemas/schema-ids.js';
 import { getDefaultValidator } from '../src/validate.js';
 import { expectProblem } from './helpers.js';

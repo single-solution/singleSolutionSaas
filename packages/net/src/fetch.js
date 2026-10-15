@@ -3,17 +3,17 @@
  *
  * Every hop: URL policy (`checkUrl`: https only unless allowlisted, no userinfo, allowed ports, public IP literals,
  * no internal names) → connection through `guardedLookup` (every DNS answer vetted, socket pinned to the vetted
- * answers, no connection reuse) → response size cap (declared `content-length` and streamed bytes) → redirects per
- * policy (GET/HEAD only, same origin unless `sameHostRedirectsOnly: false`, credentials dropped across origins, at
- * most `maxRedirects`). One overall deadline covers every hop. Failures are typed `NetError`s; messages never carry
- * upstream text.
+ * answers, no connection reuse) → response size cap (declared `content-length` and streamed bytes, 1 MiB unless the
+ * call sets `maxBytes`) → redirects (GET/HEAD only, same scheme, host and port only, at most 3). One overall deadline
+ * (10 seconds unless the call sets `timeoutMs`) covers every hop. Failures are typed `NetError`s; messages never
+ * carry upstream text.
  * @module
  */
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isNetError, netError } from './errors.js';
 import { guardedLookup } from './lookup.js';
-import { checkUrl, createOutboundPolicy, sameOrigin } from './policy.js';
+import { MAX_BYTES, MAX_REDIRECTS, TIMEOUT_MS, checkUrl, createOutboundPolicy, sameOrigin } from './policy.js';
 
 /** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */
 /** @typedef {import('./errors.js').NetError} NetError */
@@ -24,10 +24,10 @@ import { checkUrl, createOutboundPolicy, sameOrigin } from './policy.js';
  * @property {Record<string, string>} [headers]
  * @property {string | Uint8Array} [body]
  * @property {AbortSignal} [signal] aborts with `aborted`
- * @property {'follow' | 'manual' | 'error'} [redirect] `follow` (default) obeys the policy; `manual` returns 3xx
- *   responses as they are; `error` refuses any redirect with `redirect_refused`
- * @property {number} [timeoutMs] overrides the policy deadline
- * @property {number} [maxBytes] overrides the policy body cap
+ * @property {'follow' | 'manual' | 'error'} [redirect] `follow` (default) follows same-origin redirects; `manual`
+ *   returns 3xx responses as they are; `error` refuses any redirect with `redirect_refused`
+ * @property {number} [timeoutMs] the call's deadline (default 10 seconds)
+ * @property {number} [maxBytes] the call's body cap (default 1 MiB)
  */
 
 /**
@@ -39,7 +39,6 @@ import { checkUrl, createOutboundPolicy, sameOrigin } from './policy.js';
  */
 
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
-const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization'];
 const TLS_CODE = /CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO_VERIFY|HOSTNAME|ALTNAME|EPROTO/;
 
 /**
@@ -141,13 +140,13 @@ export const safeFetch = async (target, init = {}, policy = createOutboundPolicy
 		body: initBody,
 		signal,
 		redirect = 'follow',
-		timeoutMs = policy.timeoutMs,
-		maxBytes = policy.maxBytes,
+		timeoutMs = TIMEOUT_MS,
+		maxBytes = MAX_BYTES,
 	} = init;
 	const method = String(init.method ?? 'GET').toUpperCase();
 	if (!/^[A-Z]{1,16}$/.test(method)) throw netError('bad_url', 'invalid_method', 'the request method is invalid');
 	/** @type {Record<string, string>} */
-	let headers = Object.fromEntries(Object.entries(initHeaders).map(([k, v]) => [k.toLowerCase(), String(v)]));
+	const headers = Object.fromEntries(Object.entries(initHeaders).map(([k, v]) => [k.toLowerCase(), String(v)]));
 	const body = initBody === undefined ? undefined : typeof initBody === 'string' ? Buffer.from(initBody) : Buffer.from(initBody);
 
 	/** @type {((error: NetError) => void) | null} */
@@ -168,15 +167,10 @@ export const safeFetch = async (target, init = {}, policy = createOutboundPolicy
 	signal?.addEventListener('abort', onAbort, { once: true });
 	try {
 		let current = target;
-		/** @type {URL | null} */
-		let previous = null;
 		for (let hop = 0; ; hop += 1) {
 			if (stopped) throw stopped;
 			const checked = checkUrl(current, policy);
 			if (!checked.ok) throw netError(checked.code, checked.reason, `destination refused: ${checked.reason}`);
-			if (previous && !sameOrigin(previous, checked.url)) {
-				headers = Object.fromEntries(Object.entries(headers).filter(([name]) => !CREDENTIAL_HEADERS.includes(name)));
-			}
 			const res = await once(checked.url, {
 				method,
 				headers,
@@ -194,7 +188,7 @@ export const safeFetch = async (target, init = {}, policy = createOutboundPolicy
 			if (redirect === 'error') throw netError('redirect_refused', 'redirect_mode', `redirect (${res.status}) refused`);
 			if (method !== 'GET' && method !== 'HEAD')
 				throw netError('redirect_refused', 'method', `redirect (${res.status}) of a ${method} refused`);
-			if (hop >= policy.maxRedirects) throw netError('redirect_refused', 'too_many', 'too many redirects');
+			if (hop >= MAX_REDIRECTS) throw netError('redirect_refused', 'too_many', 'too many redirects');
 			/** @type {URL} */
 			let next;
 			try {
@@ -202,9 +196,8 @@ export const safeFetch = async (target, init = {}, policy = createOutboundPolicy
 			} catch {
 				throw netError('redirect_refused', 'invalid_location', 'the redirect location is invalid');
 			}
-			if (policy.sameHostRedirectsOnly && !sameOrigin(checked.url, next))
+			if (!sameOrigin(checked.url, next))
 				throw netError('redirect_refused', 'cross_origin', 'redirect to another origin refused');
-			previous = checked.url;
 			current = next.href;
 		}
 	} finally {

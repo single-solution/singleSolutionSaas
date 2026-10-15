@@ -1,13 +1,13 @@
 /**
  * Product ↔ Portal wire shapes (PLAN 0.4.12): price report, feature report, status response, websites page,
- * revocations, directory (one product, or every connected product) and notice body. The validators in `validate.js` add the semantic rules (unique keys,
- * dependencies, real timestamps, grace consistency).
+ * revocations and directory (one product, or every connected product). The validators in `validate.js` add the semantic
+ * rules (unique keys, dependencies, real timestamps, grace consistency). Notice bodies are checked by `@ss/protocol`
+ * (`verifyNotice`).
  * @module
  */
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 import { commonRef as ref } from './common.js';
-import { NOTICE_TYPES } from '../constants.js';
 
 const draft = 'https://json-schema.org/draft/2020-12/schema';
 
@@ -161,22 +161,4 @@ export const directoryListSchema = deepFreeze({
 			},
 		},
 	},
-});
-
-/** Notice body `{ type, websiteId?, subject? }`. */
-export const noticeSchema = deepFreeze({
-	$schema: draft,
-	$id: SCHEMA_IDS.notice,
-	title: 'Notice',
-	type: 'object',
-	required: ['type'],
-	additionalProperties: false,
-	properties: {
-		type: { type: 'string', enum: [...NOTICE_TYPES] },
-		websiteId: ref('opaqueId'),
-		subject: ref('opaqueId'),
-	},
-	if: { properties: { type: { const: 'sessions.revoked' } } },
-	then: { required: ['subject'], properties: { subject: true, websiteId: false } },
-	else: { required: ['websiteId'], properties: { websiteId: true, subject: false } },
 });

@@ -148,17 +148,3 @@ export const normaliseDomain = (input, options = {}) => {
 	if (options.isPublicSuffix?.(ascii)) return fail('public_suffix', 'A public suffix cannot be registered as a website domain.');
 	return { ok: true, value: ascii };
 };
-
-/**
- * True when `host` and `domain` normalize to the same domain (exact match only: a website is one exact domain).
- * @param {string} host
- * @param {string} domain
- * @param {{ allowLocal?: boolean }} [options]
- * @returns {boolean}
- */
-export const hostMatchesDomain = (host, domain, options = {}) => {
-	const allowLocal = options.allowLocal ?? false;
-	const h = normaliseDomain(host, { allowLocal });
-	const d = normaliseDomain(domain, { allowLocal });
-	return h.ok && d.ok && h.value === d.value;
-};

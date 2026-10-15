@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RULES, manifestPriceList, validateManifest, validatePriceReport } from '../src/index.js';
-import { checkManifest, findCycles } from '../src/semantics.js';
+import { manifestPriceList, validateManifest, validatePriceReport } from '../src/index.js';
+import { RULES, checkManifest, findCycles } from '../src/semantics.js';
 import { manifest } from '../src/testing.js';
 import { expectProblem } from './helpers.js';
 

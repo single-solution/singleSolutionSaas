@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createOutboundPolicy, isSafeMongoUri, parseMongoUri } from '../src/index.js';
+import { createOutboundPolicy, isSafeMongoUri } from '../src/index.js';
+import { parseMongoUri } from '../src/mongo.js';
 
 const policy = createOutboundPolicy();
 const dev = createOutboundPolicy({ allowHosts: ['127.0.0.1', 'localhost'] });

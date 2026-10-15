@@ -12,11 +12,6 @@ export const MERCHANT_STATUSES = Object.freeze(/** @type {const} */ (['active', 
 /** Admin roles. */
 export const ADMIN_ROLES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
 
-/** Notice types (the same list as `@ss/protocol` `NOTICE_TYPES`). */
-export const NOTICE_TYPES = Object.freeze(
-	/** @type {const} */ (['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted']),
-);
-
 /** Statuses for which a product refuses service; the `reason` of a `product_unavailable` problem. */
 export const PRODUCT_UNAVAILABLE_REASONS = Object.freeze(/** @type {const} */ (['stopped', 'suspended', 'removed']));
 
@@ -29,5 +24,4 @@ export const IMPORT_LIMITS = Object.freeze({ records: 1000, bytes: 4 * 1024 * 10
 /** @typedef {typeof PRODUCT_STATUSES[number]} ProductStatus */
 /** @typedef {typeof MERCHANT_STATUSES[number]} MerchantStatus */
 /** @typedef {typeof ADMIN_ROLES[number]} AdminRole */
-/** @typedef {typeof NOTICE_TYPES[number]} NoticeType */
 /** @typedef {typeof PRODUCT_UNAVAILABLE_REASONS[number]} ProductUnavailableReason */

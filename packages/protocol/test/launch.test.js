@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createJwks, createKeyResolver, issueLaunch, launchViolation, verifyLaunch } from '../src/index.js';
+import { issueLaunch, verifyLaunch } from '../src/index.js';
+import { launchViolation } from '../src/launch.js';
 import { consumeWith, createMemoryReplayStore } from '../src/testing.js';
 import { signCompact } from '../src/jws.js';
 import {
@@ -171,13 +172,6 @@ describe('launches', () => {
 		);
 		await expectCode(verify(clock, (await issue(clock, { signer: attacker.signer })).token), 'signature');
 		await expectCode(verify(clock, (await issue(clock, { audience: 'growth' })).token), 'audience');
-	});
-
-	it('rejects a revoked signing key', async () => {
-		const clock = createClock();
-		const { token } = await issue(clock);
-		const keyResolver = createKeyResolver({ jwks: createJwks([portal.publicJwk]), revokedKids: ['portal-1'] });
-		await expectCode(verify(clock, token, { keyResolver }), 'revoked_key');
 	});
 
 	it('requires consume and valid arguments', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUSINESS_JSON_TEMPLATE, validateActivityCopy, validateBusinessJson, validateDataRightsRequest } from '../src/index.js';
-import { WEBSITE, businessJson } from '../src/testing.js';
+import { WEBSITE, businessJson } from './fixtures.js';
 import { expectProblem } from './helpers.js';
 
 describe('validateBusinessJson', () => {

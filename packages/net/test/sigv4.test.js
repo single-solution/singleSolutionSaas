@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { objectUrl, presignV4, signV4, uriEncode } from '../src/index.js';
+import { objectUrl, presignV4, signV4 } from '../src/index.js';
+import { uriEncode } from '../src/sigv4.js';
 import { amzDates } from '../src/sigv4.js';
 
 // AWS S3 documentation example credentials ("Signature Calculations for the Authorization Header" / "Query String")

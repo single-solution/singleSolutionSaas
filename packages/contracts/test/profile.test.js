@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { PROFILE_CHOICES, adviseFeatures, validateBusinessProfile, validateManifest } from '../src/index.js';
 import {
-	PROFILE_CHOICES,
-	RULES,
-	adviseFeatures,
+	PROFILE_QUESTIONS,
+	answeredQuestions,
 	featureFit,
 	isRecommendTag,
 	profileTags,
 	ruleHolds,
 	ruleProblem,
-	validateBusinessProfile,
-	validateManifest,
-} from '../src/index.js';
-import { answeredQuestions, PROFILE_QUESTIONS } from '../src/profile.js';
+} from '../src/profile.js';
+import { RULES } from '../src/semantics.js';
 import * as browser from '../src/profile.js';
 import { manifest } from '../src/testing.js';
 import { expectProblem } from './helpers.js';

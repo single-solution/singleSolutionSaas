@@ -2,17 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
 	createJwks,
 	createKeyResolver,
-	createProtocolError,
 	createSigner,
-	ERROR_CODES,
 	generateSigningKey,
-	importPrivateKey,
-	importPublicKey,
 	isProtocolError,
 	signingKeyFromSeed,
-	thumbprint,
 	toPublicJwk,
 } from '../src/index.js';
+import { ERROR_CODES, createProtocolError } from '../src/errors.js';
+import { importPrivateKey, importPublicKey, thumbprint } from '../src/keys.js';
 import { createClock, expectCode, expectThrowCode, makeKey } from './helpers.js';
 
 describe('keys', () => {
@@ -105,7 +102,6 @@ describe('createKeyResolver', () => {
 		await expectCode(resolver.resolve('b'), 'unknown_kid');
 		await expectCode(resolver.resolve(/** @type {any} */ (undefined)), 'unknown_kid');
 		await expectCode(resolver.resolve('bad kid!'), 'unknown_kid');
-		expect(resolver.kids()).toEqual(['a']);
 	});
 
 	it('ignores malformed JWKS members and drops ambiguous duplicate kids', async () => {
@@ -113,16 +109,10 @@ describe('createKeyResolver', () => {
 		const b = await makeKey('b');
 		const b2 = await makeKey('b');
 		const resolver = createKeyResolver({ jwks: { keys: [a.publicJwk, { kty: 'RSA', kid: 'r' }, b.publicJwk, b2.publicJwk] } });
-		expect(resolver.kids()).toEqual(['a']);
+		expect(await resolver.resolve('a')).toBeInstanceOf(CryptoKey);
+		await expectCode(resolver.resolve('r'), 'unknown_kid');
+		await expectCode(resolver.resolve('b'), 'unknown_kid');
 		expectThrowCode(() => createKeyResolver({ jwks: { nope: true } }), 'jwks_unavailable');
-	});
-
-	it('enforces revocation by list and predicate', async () => {
-		const a = await makeKey('a');
-		const b = await makeKey('b');
-		const jwks = createJwks([a.publicJwk, b.publicJwk]);
-		await expectCode(createKeyResolver({ jwks, revokedKids: ['a'] }).resolve('a'), 'revoked_key');
-		await expectCode(createKeyResolver({ jwks, isRevoked: (kid) => kid === 'b' }).resolve('b'), 'revoked_key');
 	});
 
 	it('honors nbf/exp overlap windows on keys', async () => {
@@ -220,7 +210,7 @@ describe('createKeyResolver', () => {
 				return createJwks([a.publicJwk]);
 			},
 		});
-		await Promise.all([resolver.resolve('a'), resolver.resolve('a'), resolver.refresh()]);
+		await Promise.all([resolver.resolve('a'), resolver.resolve('a'), resolver.resolve('a')]);
 		expect(calls).toBe(1);
 	});
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { RULES, checkSettingsSchema, createValidator, validateSettingValue, validateSettings } from '../src/index.js';
-import { checkSettingsRules } from '../src/semantics.js';
+import { checkSettingsSchema, validateSettingValue } from '../src/index.js';
+import { RULES, checkSettingsRules } from '../src/semantics.js';
+import { createValidator } from '../src/validate.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 /** @returns {any} */
@@ -217,25 +218,11 @@ describe('setting values', () => {
 		expectProblem(validateSettingValue(/** @type {any} */ ({}), 'dailyLimit', 1), '', RULES.settingsSchema);
 	});
 
-	it('validates several values; any subset, unknown keys refused', () => {
-		const s = schema();
-		expect(validateSettings(s, { dailyLimit: 1, tone: 'formal' })).toEqual({
-			ok: true,
-			value: { dailyLimit: 1, tone: 'formal' },
-		});
-		expect(validateSettings(s, {}).ok).toBe(true);
-		expectProblem(validateSettings(s, { other: 1 }), '/other', 'additionalProperties');
-		expectProblem(validateSettings(s, { ratio: 2 }), '/ratio', 'maximum');
-		expectProblem(validateSettings(s, []), '', 'type');
-		expectProblem(validateSettings(/** @type {any} */ (null), {}), '', RULES.settingsSchema);
-	});
-
 	it('compiles each schema once per validator', () => {
 		const v = createValidator();
 		const s = schema();
-		expect(v.validateSettings(s, { ratio: 0.1 }).ok).toBe(true);
-		expect(v.validateSettings(s, { ratio: 0.2 }).ok).toBe(true);
-		expect(v.validateSettingValue(s, 'ratio', 0.3).ok).toBe(true);
+		expect(v.validateSettingValue(s, 'ratio', 0.1).ok).toBe(true);
+		expect(v.validateSettingValue(s, 'ratio', 0.2).ok).toBe(true);
 		expect(v.checkSettingsSchema(s)).toEqual([]);
 	});
 });

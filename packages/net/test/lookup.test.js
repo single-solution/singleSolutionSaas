@@ -51,15 +51,13 @@ describe('guardedLookup', () => {
 	it('defeats DNS rebinding: each connection is vetted on its own answer', async () => {
 		// first resolution is public, the attacker's second answer is private
 		const { resolve, calls } = sequenceResolver([[PUBLIC], [{ address: '127.0.0.1', family: 4 }]]);
-		const refused = /** @type {any[]} */ ([]);
-		const lookup = guardedLookup(createOutboundPolicy({ resolve }), { onRefused: (e) => refused.push(e.reason) });
+		const lookup = guardedLookup(createOutboundPolicy({ resolve }));
 		expect(await call(lookup, 'rebind.example.com')).toMatchObject({ error: null, address: PUBLIC.address });
 		const second = await call(lookup, 'rebind.example.com');
 		expect(isNetError(second.error, 'ssrf_blocked')).toBe(true);
 		expect(second.error.reason).toBe('loopback_address');
 		expect(second.address).toBeUndefined();
 		expect(calls).toHaveLength(2);
-		expect(refused).toEqual(['loopback_address']);
 	});
 
 	it('refuses the whole name when any answer is private', async () => {

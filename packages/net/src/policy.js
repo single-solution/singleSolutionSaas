@@ -3,15 +3,17 @@
  * again on every resolved answer at connect time (`lookup.js`), so a rebinding DNS answer cannot slip through.
  *
  * Rules for hosts **not** on the allowlist:
- * - `https:` only; explicit ports only from `ports` (default 443, 8443); no userinfo.
+ * - `https:` only; explicit ports only 443 and 8443; no userinfo.
  * - IP literals must be public unicast addresses (see `address.js`).
  * - Names must be syntactically valid DNS names with at least two labels; `localhost` and the internal suffixes
  *   (`.localhost`, `.local`, `.internal`, `.home.arpa`, `.localdomain`, `.lan`, `.intranet`, `.corp`) are refused, and a
  *   numeric last label (an IPv4 spelling in disguise, e.g. `0x7f.1`) must be a canonical public dotted quad.
  *
- * Allowlisted hosts (exact host names or IP literals — meant for development) may use `http:` when
- * `allowHttpForAllowed`, any port, and private addresses. An allowlisted IP literal also admits that address when a
- * non-allowlisted name resolves to it.
+ * Allowlisted hosts (exact host names or IP literals — meant for development) may use `http:`, any port, and private
+ * addresses. An allowlisted IP literal also admits that address when a non-allowlisted name resolves to it.
+ *
+ * `safeFetch` follows at most 3 redirects, each to the same scheme, host and port; one call has 10 seconds and a 1 MiB
+ * body unless the call sets its own `timeoutMs` and `maxBytes`.
  * @module
  */
 import { lookup as dnsLookup } from 'node:dns/promises';
@@ -23,21 +25,11 @@ import { classifyAddress } from './address.js';
 /**
  * @typedef {object} OutboundPolicyOptions
  * @property {ReadonlyArray<string>} [allowHosts] exact host names / IP literals admitted despite the rules (development)
- * @property {boolean} [allowHttpForAllowed] allowlisted hosts may use plain `http:` (default true)
- * @property {ReadonlyArray<number>} [ports] ports allowed for non-allowlisted hosts (default [443, 8443])
- * @property {number} [maxRedirects] redirects `safeFetch` follows (default 3; 0 = none)
- * @property {boolean} [sameHostRedirectsOnly] only follow redirects to the same scheme, host and port (default true)
- * @property {number} [timeoutMs] overall deadline of one `safeFetch` call, redirects included (default 10 000)
- * @property {number} [maxBytes] response body cap (default 1 MiB)
  * @property {Resolver} [resolve] DNS resolver returning every address (default `dns.lookup` with `all`, `verbatim`)
  * @property {string} [userAgent] default `user-agent` request header (default `ss-net/1`)
  */
 
-/**
- * @typedef {Readonly<{ allowHosts: ReadonlySet<string>, allowHttpForAllowed: boolean, ports: ReadonlySet<number>,
- *   maxRedirects: number, sameHostRedirectsOnly: boolean, timeoutMs: number, maxBytes: number, resolve: Resolver,
- *   userAgent: string }>} OutboundPolicy
- */
+/** @typedef {Readonly<{ allowHosts: ReadonlySet<string>, resolve: Resolver, userAgent: string }>} OutboundPolicy */
 
 /**
  * @typedef {{ ok: true, host: string, ip: boolean, allowlisted: boolean }
@@ -48,10 +40,14 @@ import { classifyAddress } from './address.js';
  *   | { ok: false, code: 'bad_url' | 'ssrf_blocked', reason: string }} UrlCheck
  */
 
-const DEFAULT_PORTS = Object.freeze([443, 8443]);
-const DEFAULT_TIMEOUT_MS = 10_000;
-export const DEFAULT_MAX_BYTES = 1024 * 1024;
-const DEFAULT_MAX_REDIRECTS = 3;
+/** Ports allowed for hosts not on the allowlist. */
+const PORTS = new Set([443, 8443]);
+/** Overall deadline of one `safeFetch` call, redirects included, unless the call sets `timeoutMs`. */
+export const TIMEOUT_MS = 10_000;
+/** Response body cap of one `safeFetch` call unless the call sets `maxBytes`. */
+export const MAX_BYTES = 1024 * 1024;
+/** Redirects `safeFetch` follows, each to the same scheme, host and port. */
+export const MAX_REDIRECTS = 3;
 const MAX_URL_LENGTH = 4096;
 
 /** Name suffixes that only resolve inside a network. */
@@ -83,45 +79,16 @@ export const normaliseHost = (host) => {
 };
 
 /**
- * @param {unknown} value
- * @param {string} name
- * @param {number} min
- * @param {number} max
- */
-const integer = (value, name, min, max) => {
-	if (!Number.isInteger(value) || /** @type {number} */ (value) < min || /** @type {number} */ (value) > max)
-		throw new TypeError(`${name} must be an integer in ${min}..${max}`);
-	return /** @type {number} */ (value);
-};
-
-/**
  * Create an immutable outbound policy.
  * @param {OutboundPolicyOptions} [options]
  * @returns {OutboundPolicy}
  */
-export const createOutboundPolicy = ({
-	allowHosts = [],
-	allowHttpForAllowed = true,
-	ports = DEFAULT_PORTS,
-	maxRedirects = DEFAULT_MAX_REDIRECTS,
-	sameHostRedirectsOnly = true,
-	timeoutMs = DEFAULT_TIMEOUT_MS,
-	maxBytes = DEFAULT_MAX_BYTES,
-	resolve = defaultResolve,
-	userAgent = 'ss-net/1',
-} = {}) => {
+export const createOutboundPolicy = ({ allowHosts = [], resolve = defaultResolve, userAgent = 'ss-net/1' } = {}) => {
 	if (!Array.isArray(allowHosts) || allowHosts.some((h) => typeof h !== 'string'))
 		throw new TypeError('allowHosts must be an array of strings');
-	if (!Array.isArray(ports)) throw new TypeError('ports must be an array');
 	if (typeof resolve !== 'function') throw new TypeError('resolve must be a function');
 	return Object.freeze({
 		allowHosts: new Set(allowHosts.map(normaliseHost).filter((h) => h !== '')),
-		allowHttpForAllowed: allowHttpForAllowed === true,
-		ports: new Set(ports.map((p) => integer(p, 'ports[]', 1, 65_535))),
-		maxRedirects: integer(maxRedirects, 'maxRedirects', 0, 20),
-		sameHostRedirectsOnly: sameHostRedirectsOnly !== false,
-		timeoutMs: integer(timeoutMs, 'timeoutMs', 1, 600_000),
-		maxBytes: integer(maxBytes, 'maxBytes', 0, 2 ** 31),
 		resolve,
 		userAgent: String(userAgent),
 	});
@@ -201,9 +168,9 @@ export const checkUrl = (raw, policy) => {
 	url.hash = '';
 	const host = checkHost(url.hostname, policy);
 	if (!host.ok) return host;
-	if (url.protocol === 'http:' && !(host.allowlisted && policy.allowHttpForAllowed)) return blocked('https_required');
+	if (url.protocol === 'http:' && !host.allowlisted) return blocked('https_required');
 	const port = url.port === '' ? (url.protocol === 'https:' ? 443 : 80) : Number(url.port);
-	if (!host.allowlisted && !policy.ports.has(port)) return blocked('port');
+	if (!host.allowlisted && !PORTS.has(port)) return blocked('port');
 	return { ok: true, url, host: host.host, port, ip: host.ip, allowlisted: host.allowlisted };
 };
 

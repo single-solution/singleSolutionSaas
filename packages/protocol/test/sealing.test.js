@@ -1,6 +1,7 @@
 import { createCipheriv, hkdfSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { SEAL_FORMAT, createSealer, legacyV1, sealKeyId } from '../src/index.js';
+import { createSealer, legacyV1 } from '../src/index.js';
+import { SEAL_FORMAT, sealKeyId } from '../src/sealing.js';
 import { expectThrowCode } from './helpers.js';
 
 const A = 'key-a-0123456789-0123456789-abcdef';

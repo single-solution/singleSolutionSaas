@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RULES, validateMessageDefaults } from '../src/index.js';
-import { checkMessageDefaults } from '../src/semantics.js';
+import { validateMessageDefaults } from '../src/index.js';
+import { RULES, checkMessageDefaults } from '../src/semantics.js';
 import {
 	BUILT_IN_VALUES,
 	LONG_VALUE_LIMIT,

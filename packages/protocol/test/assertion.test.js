@@ -115,19 +115,6 @@ describe('client assertions', () => {
 		await expectCode(verify(clock, await raw({ ...base, aud: [AUD] })), 'audience');
 		await expectCode(verify(clock, await sign(clock), { replayStore: undefined }), 'invalid_argument');
 	});
-
-	it('rejects a product key revoked in the product resolver', async () => {
-		const clock = createClock();
-		const { createKeyResolver, createJwks } = await import('../src/index.js');
-		const token = await sign(clock);
-		await expectCode(
-			verify(clock, token, {
-				keyResolverForProduct: () =>
-					createKeyResolver({ jwks: createJwks([product.publicJwk]), revokedKids: ['product-key-1'] }),
-			}),
-			'revoked_key',
-		);
-	});
 });
 
 describe('memory replay store', () => {

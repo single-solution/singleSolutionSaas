@@ -7,15 +7,13 @@
  * @module
  */
 export * from './types.js';
-export * from './constants.js';
-export { BLUEPRINT_SCHEMA, BLUEPRINT_UNREACHABLE_REASONS, BUILD_TEXT_MAX } from './schemas/blueprint.js';
+export { ADMIN_ROLES, IMPORT_LIMITS, PRODUCT_UNAVAILABLE_REASONS } from './constants.js';
+export { BLUEPRINT_SCHEMA, BUILD_TEXT_MAX } from './schemas/blueprint.js';
 export { PATTERNS } from './schemas/common.js';
 export {
-	createValidator,
 	validateManifest,
 	checkSettingsSchema,
 	validateSettingValue,
-	validateSettings,
 	validatePriceReport,
 	validateFeatureReport,
 	validateStatusResponse,
@@ -23,7 +21,6 @@ export {
 	validateRevocations,
 	validateDirectory,
 	validateDirectoryList,
-	validateNotice,
 	validateDataRightsRequest,
 	validateActivityCopy,
 	validateMessageDefaults,
@@ -31,34 +28,24 @@ export {
 	validateProductBlueprint,
 	validateBlueprint,
 } from './validate.js';
-export { RULES, manifestPriceList } from './semantics.js';
+export { manifestPriceList } from './semantics.js';
 export { BUSINESS_JSON_TEMPLATE, validateBusinessJson } from './business.js';
-export {
-	PROFILE_CHOICES,
-	PROFILE_NONE,
-	adviseFeatures,
-	featureFit,
-	isRecommendTag,
-	profileTags,
-	ruleHolds,
-	ruleProblem,
-} from './profile.js';
+export { PROFILE_CHOICES, adviseFeatures } from './profile.js';
 export {
 	DEFAULT_FORMAT,
 	FORMAT_FIELDS,
-	currencyDigits,
 	formatDate,
 	formatMoney,
 	formatViolation,
-	normaliseFormat,
 	zonedDay,
 	zonedDayStart,
 	zonedParts,
 } from './format.js';
-export { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from './phone.js';
-export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
-export { createId, isId, normaliseDomain, hostMatchesDomain } from './ids.js';
+export { PROBLEM_CODES, createProblemFactory } from './errors.js';
+export { createId, isId, normaliseDomain } from './ids.js';
 
+/** @typedef {import('./constants.js').ProductUnavailableReason} ProductUnavailableReason */
+/** @typedef {import('./constants.js').AdminRole} AdminRole */
 /** @typedef {import('./format.js').Format} Format */
 /** @typedef {import('./format.js').Viewer} Viewer */
 /** @typedef {import('./format.js').DateStyle} DateStyle */

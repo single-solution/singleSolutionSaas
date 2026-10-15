@@ -8,9 +8,8 @@ only dependencies are `ajv` and `ajv-formats`.
 ## Results
 
 Every validator returns `{ ok: true, value }` or `{ ok: false, problems: [{ path, message, keyword }] }`. `path` is a
-JSON Pointer; `keyword` is the failing schema keyword or a semantic rule id from `RULES`. The named functions use one
-lazily created validator; `createValidator({ schemas })` makes another with extra schemas (each with a string `$id`)
-that may `$ref` the common definitions (`urn:ss:contracts:v1:common#/$defs/<name>`).
+JSON Pointer; `keyword` is the failing schema keyword or a semantic rule id (for example `recommendRule`). The named
+functions share one lazily created validator.
 
 ## Manifest
 
@@ -35,7 +34,7 @@ const prices = manifestPriceList(json); // { version: 1, features: [{ key, name,
 - Every feature's `settings` is a valid settings schema (below), defaults included.
 - `recommendFor` (optional, at most 20 rules, each once): the business profile answers the feature suits, for the
   Setup sheet's advisor (below). A rule is one to four tags joined by `+` (all must hold), each a tag of
-  `@ss/contracts/profile` (`RULES.recommendRule` otherwise), for example `["pays.cod"]` or
+  `@ss/contracts/profile` (`recommendRule` otherwise), for example `["pays.cod"]` or
   `["pays.online+countries.za"]`.
 
 ## Settings schemas
@@ -50,7 +49,6 @@ values must be valid.
 
 - `checkSettingsSchema(schema)` → problems (empty when valid).
 - `validateSettingValue(schema, key, value)` → result for one value; unknown keys are refused.
-- `validateSettings(schema, values)` → result for an object holding any subset of the settings.
 
 ## Product ↔ Portal shapes (0.4.12)
 
@@ -63,14 +61,12 @@ values must be valid.
 | `validateRevocations`    | `{ tokenIds: string[], cursor: string \| null }`                                                                               |
 | `validateDirectory`      | `{ baseUrl }` (https, or http on a local host)                                                                                 |
 | `validateDirectoryList`  | `{ items: [{ productId, name, baseUrl }] }`: every connected product once, by id                                               |
-| `validateNotice`         | `{ type, websiteId }` for `status.changed`, `token.revoked`, `website.deleted`; `{ type, subject }` for `sessions.revoked`     |
 
 Times are ISO-8601 UTC strings (`Z`) and must be real instants; `graceEndsAt` is set exactly while the status is
-`grace`. Money is integer millicredits.
+`grace`. Money is integer millicredits. Notice bodies are checked by `@ss/protocol` (`verifyNotice`).
 
-Vocabularies: `PRODUCT_STATUSES` (`active`, `grace`, `stopped`, `suspended`, `removed`), `MERCHANT_STATUSES`
-(`active`, `low_balance`, `grace`, `stopped`, `suspended`), `ADMIN_ROLES` (`owner`, `support`, `finance`),
-`NOTICE_TYPES`, `PRODUCT_UNAVAILABLE_REASONS`.
+Vocabularies: `ADMIN_ROLES` (`owner`, `support`, `finance`) and `PRODUCT_UNAVAILABLE_REASONS` (`stopped`, `suspended`,
+`removed`: the `reason` of a `product_unavailable` problem).
 
 ## business.json (0.4.9)
 
@@ -79,10 +75,10 @@ Vocabularies: `PRODUCT_STATUSES` (`active`, `grace`, `stopped`, `suspended`, `re
 must be an https URL, `country` an ISO 3166-1 alpha-2 code (returned upper-case), `timeZone` an IANA name the runtime
 knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship.
 
-## Cross-product shapes (0.4.11, provisional)
+## Cross-product shapes (0.4.11)
 
 - `validateDataRightsRequest`: `{ user: { id?, email?, phone? } }` with at least one member. Answers: export
-  `{ records }`, delete `{ deleted, anonymised }` (types `DataRightsExport`, `DataRightsDelete`).
+  `{ records }`, delete `{ deleted, anonymised }`.
 - `validateActivityCopy`: `{ websiteId, productId, actor: { kind, id, name?, role? }, action, target, label?, detail?, at }`
   (`label` at most 200 characters, `detail` at most 2,000 plain-text characters; PLAN 0.8.10 K9).
 - `IMPORT_LIMITS`: one call of a product's import route takes NDJSON of at most 1,000 records and 4 MB (K10).
@@ -120,7 +116,7 @@ domain, status, business, profile }, access: { allowedOrigins, testingOrigins, s
   and the advisor's view: `recommended: [{ feature, on, because, why }]` (features the profile calls for, `because`
   the tags of the rule that holds) and `notRecommended: [{ feature, missing, why }]` (features that are on although
   the profile rules them out). One that did not answer in time is `{ productId, name, reachable: false, reason }`
-  (`BLUEPRINT_UNREACHABLE_REASONS`: `timeout`, `unreachable`, `refused`, `invalid`). A copy opened from a share link
+  (`timeout`, `unreachable`, `refused`, `invalid`). A copy opened from a share link
   has `share: { expiresAt, values, install }`: without values every setting's `value` is left out, without install
   the browser token and snippet.
 
@@ -130,16 +126,17 @@ A website's business profile is a few optional answers kept by the Portal: what 
 orders reach them, how shoppers sign in, who answers the chat, how it messages customers, marketing, what it offers
 shoppers (`PROFILE_CHOICES`, each a list of options; `none` stands alone), whether it is moving from another website
 or system (`moving`, yes or no), and its countries (ISO 3166-1 alpha-2, capitals) and languages (ISO 639, two or three
-small letters). `validateBusinessProfile(value)` checks it (`RULES.profileAnswer` for `none` with other options;
+small letters). `validateBusinessProfile(value)` checks it (`profileAnswer` for `none` with other options;
 `PROFILE_NONE` is that option).
 
-- `profileTags(profile)`: `<question>.<option>` (`pays.cod`, `moving.yes`, `countries.us`, `languages.fr`) and
-  `<question>.many` for two countries or languages or more. A rule's `<choice>.*` holds for any option but `none`.
-- `ruleHolds(rule, tags)`, `isRecommendTag(tag)`, `ruleProblem(rule)`.
-- `featureFit(rules, profile)`: `recommended` (with the tags of the first rule that holds), `ruled_out` (every rule
-  fails on a question the profile answered; `missing` one tag per rule) or `neutral` (no rules, or an open question
-  could still make a rule hold). `adviseFeatures(features, profile)` → `{ recommended, notRecommended }` for a
-  product's features (`notRecommended`: ruled out and on).
+A profile's tags are `<question>.<option>` (`pays.cod`, `moving.yes`, `countries.us`, `languages.fr`) and
+`<question>.many` for two countries or languages or more; a rule's `<choice>.*` holds for any option but `none`. A
+feature is `recommended` (with the tags of the first rule that holds), `ruled_out` (every rule fails on a question the
+profile answered; `missing` one tag per rule) or `neutral` (no rules, or an open question could still make a rule
+hold): `adviseFeatures(features, profile)` → `{ recommended, notRecommended }` for a product's features
+(`notRecommended`: ruled out and on). The root entry has `PROFILE_CHOICES`, `adviseFeatures` and
+`validateBusinessProfile` for servers; `@ss/contracts/profile` has `PROFILE_CHOICES`, `PROFILE_NONE` and
+`adviseFeatures` for the browser.
 
 ## Message templates (`@ss/contracts/templates`)
 
@@ -211,13 +208,11 @@ patterns of the schemas (product ids, feature, permission, widget and setting ke
 host names) for code that checks the same values.
 `normaliseDomain(input, { allowLocal?, isPublicSuffix? })` returns `{ ok, value }` or `{ ok: false, code, message }`:
 lower-case punycode, no scheme, port, path or trailing dot; IP literals, `localhost` and single-label names refused.
-`hostMatchesDomain(host, domain)` compares exactly.
 
 ## Testing entry
 
 `@ss/contracts/testing` returns fresh fixtures: `manifest()` (product `notes`: two features with a dependency, a
-permission, a visitor and an admin widget), `priceReport()`, `statusResponse()`, `businessJson()`,
-`productBlueprint()` (its Setup sheet part), plus the ids `WEBSITE` and `MERCHANT`.
+permission, a visitor and an admin widget) and `productBlueprint()` (its Setup sheet part).
 
 ## Versioning
 

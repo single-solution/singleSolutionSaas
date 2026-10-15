@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { createJwks, createKeyResolver, signNotice, signPortalCall, verifyPortalCall } from '../src/index.js';
+import { signNotice, signPortalCall, verifyPortalCall } from '../src/index.js';
 import { createMemoryReplayStore } from '../src/testing.js';
 import { createClock, expectCode, makeKey, seededRandom, staticResolver } from './helpers.js';
 
@@ -113,12 +113,10 @@ describe('Portal calls', () => {
 		await verify(clock, await sign(clock, { timestamp: ts(clock) - 300 }));
 	});
 
-	it('refuses unknown and revoked kids, and verifies a dual-signed call with either key', async () => {
+	it('refuses unknown kids, and verifies a dual-signed call with either key', async () => {
 		const clock = createClock();
 		const headers = await sign(clock);
 		await expectCode(verify(clock, headers, { keyResolver: staticResolver([next.publicJwk]) }), 'unknown_kid');
-		const revoked = createKeyResolver({ jwks: createJwks([portal.publicJwk]), revokedKids: ['portal-1'] });
-		await expectCode(verify(clock, headers, { keyResolver: revoked }), 'revoked_key');
 		const dual = await sign(clock, { signer: undefined, signers: [portal.signer, next.signer] });
 		await verify(clock, dual, { keyResolver: staticResolver([next.publicJwk]) });
 	});

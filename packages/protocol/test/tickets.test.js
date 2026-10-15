@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { TICKET_TTL_SECONDS, issueTicket, verifyTicket } from '../src/index.js';
+import { issueTicket, verifyTicket } from '../src/index.js';
+import { TICKET_TTL_SECONDS } from '../src/tickets.js';
 import { signCompact } from '../src/jws.js';
 import {
 	T0,

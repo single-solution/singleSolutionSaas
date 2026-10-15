@@ -95,8 +95,6 @@ const result = (value, problems) =>
  * @property {(schemaId: string) => boolean} has whether a schema id is registered
  * @property {(schema: unknown) => ValidationProblem[]} checkSettingsSchema settings meta-schema, keyword fit, defaults and enum values
  * @property {(schema: SettingsSchema, key: string, value: unknown) => ValidationResult<unknown>} validateSettingValue one setting value
- * @property {(schema: SettingsSchema, values: unknown) => ValidationResult<Record<string, unknown>>} validateSettings
- *   an object of setting values (any subset of the settings; unknown keys refused)
  * @property {(value: unknown) => ValidationResult<Manifest>} validateManifest schema, semantic rules and every settings schema
  * @property {(value: unknown) => ValidationResult<import('./types.js').PriceList>} validatePriceReport
  * @property {(value: unknown) => ValidationResult<import('./types.js').FeatureReport>} validateFeatureReport
@@ -105,7 +103,6 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').Revocations>} validateRevocations
  * @property {(value: unknown) => ValidationResult<import('./types.js').Directory>} validateDirectory
  * @property {(value: unknown) => ValidationResult<import('./types.js').DirectoryList>} validateDirectoryList
- * @property {(value: unknown) => ValidationResult<import('./types.js').Notice>} validateNotice
  * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
  * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
  * @property {(value: unknown) => ValidationResult<import('./types.js').MessageDefaults>} validateMessageDefaults
@@ -244,14 +241,6 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		return result(value, fn(value) ? [] : problemsFromAjv(fn.errors, pointer([key])));
 	};
 
-	/** @type {Validator['validateSettings']} */
-	const validateSettings = (schema, values) => {
-		const typed = /** @type {Record<string, unknown>} */ (values);
-		if (!usable(schema)) return result(typed, unusable);
-		const fn = compile(schema, () => ({ type: 'object', additionalProperties: false, properties: schema.properties }));
-		return result(typed, fn(values) ? [] : problemsFromAjv(fn.errors));
-	};
-
 	/** @type {Validator['validateManifest']} */
 	const validateManifest = (value) => {
 		const problems = run(SCHEMA_IDS.manifest, value);
@@ -268,7 +257,6 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		has,
 		checkSettingsSchema,
 		validateSettingValue,
-		validateSettings,
 		validateManifest,
 		validatePriceReport: validator(SCHEMA_IDS.priceReport, checkPriceReport),
 		validateFeatureReport: /** @type {Validator['validateFeatureReport']} */ (validator(SCHEMA_IDS.featureReport)),
@@ -277,7 +265,6 @@ export const createValidator = ({ schemas = [] } = {}) => {
 		validateRevocations: /** @type {Validator['validateRevocations']} */ (validator(SCHEMA_IDS.revocations)),
 		validateDirectory: validator(SCHEMA_IDS.directory, checkDirectory),
 		validateDirectoryList: validator(SCHEMA_IDS.directoryList, checkDirectoryList),
-		validateNotice: /** @type {Validator['validateNotice']} */ (validator(SCHEMA_IDS.notice)),
 		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
 		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
 		validateMessageDefaults: validator(SCHEMA_IDS.messageDefaults, checkMessageDefaults),
@@ -314,11 +301,6 @@ export const checkSettingsSchema = (schema) => getDefaultValidator().checkSettin
  * @param {unknown} value
  */
 export const validateSettingValue = (schema, key, value) => getDefaultValidator().validateSettingValue(schema, key, value);
-/**
- * @param {SettingsSchema} schema
- * @param {unknown} values
- */
-export const validateSettings = (schema, values) => getDefaultValidator().validateSettings(schema, values);
 /** @param {unknown} value */
 export const validatePriceReport = (value) => getDefaultValidator().validatePriceReport(value);
 /** @param {unknown} value */
@@ -333,8 +315,6 @@ export const validateRevocations = (value) => getDefaultValidator().validateRevo
 export const validateDirectory = (value) => getDefaultValidator().validateDirectory(value);
 /** @param {unknown} value */
 export const validateDirectoryList = (value) => getDefaultValidator().validateDirectoryList(value);
-/** @param {unknown} value */
-export const validateNotice = (value) => getDefaultValidator().validateNotice(value);
 /** @param {unknown} value */
 export const validateDataRightsRequest = (value) => getDefaultValidator().validateDataRightsRequest(value);
 /** @param {unknown} value */

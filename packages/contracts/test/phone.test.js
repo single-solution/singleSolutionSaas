@@ -1,16 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from '../src/index.js';
-import * as browserEntry from '../src/phone.js';
+import { PHONE_COUNTRIES, callingCodeOf, normalisePhone, phoneInCountries, websiteCallingCode } from '../src/phone.js';
 
 /** @param {string} defaultCallingCode @param {string} [trunkPrefix] */
 const site = (defaultCallingCode, trunkPrefix = '') => ({ defaultCallingCode, trunkPrefix });
 
 describe('phone numbers (one normalizer for every product)', () => {
-	it('is the browser-safe entry too', () => {
-		expect(browserEntry.normalisePhone).toBe(normalisePhone);
-		expect(browserEntry.websiteCallingCode).toBe(websiteCallingCode);
-	});
-
 	it('reads every usual way of typing one number with a default calling code', () => {
 		/** @type {Array<[string, string, string[]]>} the default calling code, the number, the ways it is typed */
 		const countries = [

@@ -18,7 +18,6 @@ export const ERROR_CODES = Object.freeze(
 		'wrong_type',
 		'signature',
 		'unknown_kid',
-		'revoked_key',
 		'key_not_active',
 		'key_retired',
 		'jwks_unavailable',

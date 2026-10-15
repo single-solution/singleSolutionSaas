@@ -1,29 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
 	ADMIN_ROLES,
-	MERCHANT_STATUSES,
-	NOTICE_TYPES,
-	PRODUCT_STATUSES,
 	PRODUCT_UNAVAILABLE_REASONS,
-	RULES,
 	validateDirectory,
 	validateDirectoryList,
 	validateFeatureReport,
-	validateNotice,
 	validatePriceReport,
 	validateRevocations,
 	validateStatusResponse,
 	validateWebsitesPage,
 } from '../src/index.js';
-import { MERCHANT, WEBSITE, priceReport, statusResponse } from '../src/testing.js';
+import { MERCHANT_STATUSES, PRODUCT_STATUSES } from '../src/constants.js';
+import { RULES } from '../src/semantics.js';
+import { MERCHANT, WEBSITE, priceReport, statusResponse } from './fixtures.js';
 import { expectProblem } from './helpers.js';
 
 describe('vocabularies', () => {
-	it('lists the statuses, roles and notices', () => {
+	it('lists the statuses and roles', () => {
 		expect(PRODUCT_STATUSES).toEqual(['active', 'grace', 'stopped', 'suspended', 'removed']);
 		expect(MERCHANT_STATUSES).toEqual(['active', 'low_balance', 'grace', 'stopped', 'suspended']);
 		expect(ADMIN_ROLES).toEqual(['owner', 'support', 'finance']);
-		expect(NOTICE_TYPES).toEqual(['status.changed', 'token.revoked', 'sessions.revoked', 'website.deleted']);
 		expect(PRODUCT_UNAVAILABLE_REASONS).toEqual(['stopped', 'suspended', 'removed']);
 	});
 });
@@ -166,32 +162,5 @@ describe('validateDirectoryList', () => {
 			'/items/0/baseUrl',
 			RULES.url,
 		);
-	});
-});
-
-describe('validateNotice', () => {
-	it.each([
-		[{ type: 'status.changed', websiteId: WEBSITE }],
-		[{ type: 'token.revoked', websiteId: WEBSITE }],
-		[{ type: 'website.deleted', websiteId: WEBSITE }],
-		[{ type: 'sessions.revoked', subject: 'adm_1' }],
-	])('accepts %j', (notice) => {
-		expect(validateNotice(notice).ok).toBe(true);
-	});
-
-	it.each([
-		['an unknown type', { type: 'order.placed', websiteId: WEBSITE }, '/type', 'enum'],
-		['status.changed without websiteId', { type: 'status.changed' }, '/websiteId', 'required'],
-		['sessions.revoked without subject', { type: 'sessions.revoked' }, '/subject', 'required'],
-		[
-			'sessions.revoked with websiteId',
-			{ type: 'sessions.revoked', subject: 's', websiteId: WEBSITE },
-			'/websiteId',
-			'false schema',
-		],
-		['website.deleted with subject', { type: 'website.deleted', websiteId: WEBSITE, subject: 's' }, '/subject', 'false schema'],
-		['an extra member', { type: 'token.revoked', websiteId: WEBSITE, jti: 'x' }, '/jti', 'additionalProperties'],
-	])('refuses %s', (_name, notice, path, keyword) => {
-		expectProblem(validateNotice(notice), path, keyword);
 	});
 });

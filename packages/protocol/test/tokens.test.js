@@ -1,17 +1,15 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-	TOKEN_KINDS,
 	canonicalOrigin,
 	createJwks,
 	createKeyResolver,
 	isLocalOrigin,
-	isProductId,
 	issueToken,
-	normalizeDomain,
 	originAllowed,
 	ticketOriginAllowed,
 	verifyToken,
 } from '../src/index.js';
+import { TOKEN_KINDS, isProductId, normalizeDomain } from '../src/tokens.js';
 import { signCompact } from '../src/jws.js';
 import {
 	createClock,
@@ -171,10 +169,11 @@ describe('tokens', () => {
 		).rejects.toBe(failure);
 	});
 
-	it('rejects a revoked Portal key as invalid_token', async () => {
+	it('rejects a retired Portal key as invalid_token', async () => {
 		const clock = createClock();
 		const { token } = await issue(clock);
-		const keyResolver = createKeyResolver({ jwks: createJwks([portal.publicJwk]), revokedKids: ['portal-1'] });
+		const retired = { ...portal.publicJwk, exp: Math.floor(clock.now() / 1000) - 1 };
+		const keyResolver = createKeyResolver({ jwks: createJwks([retired]), now: clock.now });
 		await expectCode(verify(clock, token, { keyResolver }), 'invalid_token');
 	});
 

@@ -3,18 +3,17 @@ import {
 	DEFAULT_FORMAT,
 	FORMAT_FIELDS,
 	IMPORT_LIMITS,
-	currencyDigits,
 	formatDate,
 	formatMoney,
 	formatViolation,
-	normaliseFormat,
 	validateActivityCopy,
 	zonedDay,
 	zonedDayStart,
 	zonedParts,
 } from '../src/index.js';
 import * as browserEntry from '../src/format.js';
-import { WEBSITE } from '../src/testing.js';
+import { currencyDigits, normaliseFormat } from '../src/format.js';
+import { WEBSITE } from './fixtures.js';
 
 describe('Format values (K7)', () => {
 	it('has five fields with safe defaults', () => {
