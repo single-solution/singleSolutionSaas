@@ -47,6 +47,7 @@ import {
 	refundCap,
 	returnableLines,
 } from '../core/returns.js';
+import { measureView, piecesOf, quantityText } from '../core/measure.js';
 import { byActor, earnedLeft, pointsOwner, refundSplit, refundable, warningsOf } from '../core/orders.js';
 import { createMedia } from './catalog-media.js';
 import { createMoves } from './orders-moves.js';
@@ -90,6 +91,7 @@ const NOT_RETURNABLE = Object.freeze({
 	unknown: 'This item is not part of the order or cannot be returned.',
 	window_closed: 'The time to claim this item has passed.',
 	quantity: 'More units than can still be claimed.',
+	step: 'This item is sold in a unit of its own: claim it in the steps it was sold in.',
 });
 
 /** @param {any} ctx */
@@ -292,6 +294,14 @@ export const createReturns = (product, service) => {
 					image: await media.mediaUrl(s, entry.line.image),
 					quantity: entry.line.quantity,
 					claimable: entry.claimable,
+					// an item sold in a unit of its own: its unit and step (quantities are thousandths of the unit)
+					measure: entry.line.measure
+						? {
+								unit: entry.line.measure.unit,
+								step: entry.line.measure.step,
+								quantityText: quantityText(entry.claimable, true),
+							}
+						: null,
 					return: { days: entry.return.days, until: iso(entry.return.until), open: entry.return.open },
 					warranty: { days: entry.warranty.days, until: iso(entry.warranty.until), open: entry.warranty.open },
 				})),
@@ -490,6 +500,7 @@ export const createReturns = (product, service) => {
 					sku: line?.sku ?? '',
 					unitPrice: line?.unitPrice ?? 0,
 					bought: line?.quantity ?? 0,
+					measure: measureView(claimed.quantity, line?.measure),
 					total: line?.total ?? 0,
 				};
 			}),
@@ -545,6 +556,7 @@ export const createReturns = (product, service) => {
 					variantId: line?.variantId ?? '',
 					quantity: physical ? claimed.quantity : 0,
 					locationId: line?.locationId ?? null,
+					measure: line?.measure ?? null,
 				};
 			});
 		const productIds = [...new Set(lines.filter((line) => line.quantity > 0).map((line) => line.productId))];
@@ -570,10 +582,11 @@ export const createReturns = (product, service) => {
 				},
 			},
 		);
-		const units = lines.filter((line) => done.includes(line.lineId)).reduce((sum, line) => sum + line.quantity, 0);
+		const back = lines.filter((line) => done.includes(line.lineId));
+		const units = back.reduce((sum, line) => sum + piecesOf(line), 0);
 		await service.log(ctx, 'return.restocked', claim.id, {
 			label: claimLabel(claim),
-			detail: `${units} unit(s) back in stock`,
+			detail: `${units} item(s) back in stock`,
 		});
 		await service.emit('products.changed', s, {
 			productIds,

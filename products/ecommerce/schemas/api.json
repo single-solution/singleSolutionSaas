@@ -1,5 +1,185 @@
 {
 	"$schemas": {
+		"ReturnableMeasure": {
+			"type": "object",
+			"description": "A line sold in a unit of its own: claim it in thousandths of the unit, a multiple of step (or all that is left).",
+			"required": ["unit", "step", "quantityText"],
+			"additionalProperties": false,
+			"properties": {
+				"unit": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20,
+					"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+				},
+				"step": { "type": "integer", "minimum": 1 },
+				"quantityText": { "type": "string", "description": "What can still be claimed, in units." }
+			}
+		},
+		"ChatMeasure": {
+			"type": "object",
+			"description": "An item sold in a unit of its own as Chat tells it: the measure (quantities in thousandths of the unit) and its step, least and most as text with the unit label.",
+			"required": ["unit", "decimals", "step", "min", "max", "standard", "stepText", "minText", "maxText"],
+			"additionalProperties": false,
+			"properties": {
+				"unit": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20,
+					"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+				},
+				"decimals": { "type": "integer", "minimum": 0, "maximum": 3 },
+				"step": { "type": "integer", "minimum": 1 },
+				"min": { "type": "integer", "minimum": 1 },
+				"max": { "type": ["integer", "null"] },
+				"standard": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["code", "amount"],
+							"additionalProperties": false,
+							"properties": {
+								"code": {
+									"type": "string",
+									"enum": [
+										"MMT",
+										"CMT",
+										"MTR",
+										"INH",
+										"FOT",
+										"YRD",
+										"MTK",
+										"FTK",
+										"MGM",
+										"GRM",
+										"KGM",
+										"ONZ",
+										"LBR",
+										"MLT",
+										"CLT",
+										"LTR",
+										"MTQ",
+										"OZA",
+										"GLL",
+										"C62"
+									],
+									"description": "A UN/CEFACT common code."
+								},
+								"amount": {
+									"type": "number",
+									"minimum": 0.000001,
+									"maximum": 1000000,
+									"description": "How many of that standard unit one unit is (at most six decimals)."
+								}
+							}
+						},
+						{ "type": "null" }
+					],
+					"description": "Only for shopping feeds (unit_pricing_measure) and structured data (UnitPriceSpecification): what one unit is in a standard unit. null: none, and they send no unit price."
+				},
+				"stepText": { "type": "string", "description": "e.g. 0.5 sq ft" },
+				"minText": { "type": "string" },
+				"maxText": { "type": ["string", "null"] }
+			}
+		},
+		"Measure": {
+			"type": "object",
+			"description": "An item sold in decimal quantities of a unit of the merchant's own (its item type's measure, feature measured_sales): prices are per one unit; stock and quantities count thousandths of the unit (2.5 = 2500), a multiple of step from min to max.",
+			"required": ["unit", "decimals", "step", "min", "max", "standard"],
+			"additionalProperties": false,
+			"properties": {
+				"unit": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20,
+					"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+				},
+				"decimals": { "type": "integer", "minimum": 0, "maximum": 3, "description": "How many decimals a shopper may give." },
+				"step": { "type": "integer", "minimum": 1, "maximum": 1000000, "description": "Thousandths of the unit." },
+				"min": { "type": "integer", "minimum": 1, "description": "The least quantity, in thousandths." },
+				"max": {
+					"type": ["integer", "null"],
+					"minimum": 1,
+					"description": "The most quantity, in thousandths (null: no most)."
+				},
+				"standard": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["code", "amount"],
+							"additionalProperties": false,
+							"properties": {
+								"code": {
+									"type": "string",
+									"enum": [
+										"MMT",
+										"CMT",
+										"MTR",
+										"INH",
+										"FOT",
+										"YRD",
+										"MTK",
+										"FTK",
+										"MGM",
+										"GRM",
+										"KGM",
+										"ONZ",
+										"LBR",
+										"MLT",
+										"CLT",
+										"LTR",
+										"MTQ",
+										"OZA",
+										"GLL",
+										"C62"
+									],
+									"description": "A UN/CEFACT common code."
+								},
+								"amount": {
+									"type": "number",
+									"minimum": 0.000001,
+									"maximum": 1000000,
+									"description": "How many of that standard unit one unit is (at most six decimals)."
+								}
+							}
+						},
+						{ "type": "null" }
+					],
+					"description": "Only for shopping feeds (unit_pricing_measure) and structured data (UnitPriceSpecification): what one unit is in a standard unit. null: none, and they send no unit price."
+				}
+			}
+		},
+		"LineMeasure": {
+			"type": "object",
+			"description": "How an order line's item was sold in a unit of its own at placement: its quantities (quantity, returned and claimed quantities) count thousandths of the unit, in steps of step.",
+			"required": ["unit", "decimals", "step"],
+			"additionalProperties": false,
+			"properties": {
+				"unit": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20,
+					"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+				},
+				"decimals": { "type": "integer", "minimum": 0, "maximum": 3 },
+				"step": { "type": "integer", "minimum": 1, "maximum": 1000000, "description": "Thousandths of the unit." }
+			}
+		},
+		"MeasureQuantity": {
+			"type": "object",
+			"description": "A quantity of an item sold in a unit of its own: the merchant's unit label and the quantity in units as decimal text (quantity itself counts thousandths of the unit: 2.5 = 2500).",
+			"required": ["unit", "quantityText"],
+			"additionalProperties": false,
+			"properties": {
+				"unit": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 20,
+					"description": "The merchant's own unit label, in any language (such as m, kg, sq ft, hour, dozen, tola)."
+				},
+				"quantityText": { "type": "string", "description": "The quantity in units, e.g. 2.5." }
+			}
+		},
 		"Attribute": {
 			"type": "object",
 			"description": "A field (an attribute): a value products, variants, units (numbered items), orders or customers keep, with its type, checks and where it shows.",
@@ -1181,8 +1361,14 @@
 						"slot_required",
 						"slot_unavailable",
 						"slot_taken",
-						"one_per_slot"
-					]
+						"one_per_slot",
+						"too_many",
+						"too_large",
+						"measure_step",
+						"measure_min",
+						"measure_max"
+					],
+					"description": "too_many: more pieces than checkout.maxQuantity; too_large: the line comes to more than an order can take; measure_step, measure_min, measure_max: a measured quantity not in the item's steps, below its least or above its most."
 				},
 				"message": {
 					"type": "string",
@@ -1469,6 +1655,7 @@
 			"type": "object",
 			"description": "A cart line as priced.",
 			"required": [
+				"measure",
 				"key",
 				"productId",
 				"variantId",
@@ -1492,6 +1679,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/MeasureQuantity" }, { "type": "null" }],
+					"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+				},
 				"key": {
 					"type": "string",
 					"description": "<productId>|<variantId> (and |<slot start> for a booking)."
@@ -1541,7 +1732,8 @@
 				},
 				"quantity": {
 					"type": "integer",
-					"minimum": 1
+					"minimum": 1,
+					"description": "Pieces, or thousandths of the unit of a measured item (measure)."
 				},
 				"discount": {
 					"type": "integer",
@@ -2360,6 +2552,7 @@
 		"ChatOrderLine": {
 			"type": "object",
 			"required": [
+				"measure",
 				"name",
 				"variantName",
 				"gradeLabel",
@@ -2372,6 +2565,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/MeasureQuantity" }, { "type": "null" }],
+					"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+				},
 				"name": {
 					"type": "string"
 				},
@@ -2439,6 +2636,8 @@
 			"type": "object",
 			"description": "A product card for Chat.",
 			"required": [
+				"stockLeftText",
+				"measure",
 				"id",
 				"name",
 				"price",
@@ -2458,6 +2657,14 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"stockLeftText": {
+					"type": ["string", "null"],
+					"description": "stockLeft as text: pieces, or the units of a measured item with its unit symbol (2.5 m)."
+				},
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/ChatMeasure" }, { "type": "null" }],
+					"description": "Sold in a unit of its own (null: pieces)."
+				},
 				"id": {
 					"type": "string"
 				},
@@ -2545,6 +2752,8 @@
 			"type": "object",
 			"description": "A product’s details for Chat: the card with its active variants (at most 20).",
 			"required": [
+				"stockLeftText",
+				"measure",
 				"id",
 				"name",
 				"price",
@@ -2571,6 +2780,14 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"stockLeftText": {
+					"type": ["string", "null"],
+					"description": "stockLeft as text: pieces, or the units of a measured item with its unit symbol (2.5 m)."
+				},
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/ChatMeasure" }, { "type": "null" }],
+					"description": "Sold in a unit of its own (null: pieces)."
+				},
 				"id": {
 					"type": "string"
 				},
@@ -2746,6 +2963,7 @@
 			"type": "object",
 			"description": "One variant priced as the cart prices it.",
 			"required": [
+				"measure",
 				"productId",
 				"variantId",
 				"quantity",
@@ -2782,6 +3000,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/MeasureQuantity" }, { "type": "null" }],
+					"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+				},
 				"productId": {
 					"type": "string"
 				},
@@ -2791,7 +3013,7 @@
 				"quantity": {
 					"type": "integer",
 					"minimum": 1,
-					"maximum": 5
+					"description": "Pieces (1–5), or thousandths of the unit of an item sold in a unit of its own (measure.quantityText in units); price, savings and priceAfterDeals are then per unit."
 				},
 				"price": {
 					"type": "integer",
@@ -3043,6 +3265,7 @@
 		"ChatVariant": {
 			"type": "object",
 			"required": [
+				"stockLeftText",
 				"id",
 				"options",
 				"price",
@@ -3059,6 +3282,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"stockLeftText": {
+					"type": ["string", "null"],
+					"description": "stockLeft as text: pieces, or the units of a measured item with its unit symbol (2.5 m)."
+				},
 				"id": {
 					"type": "string"
 				},
@@ -7456,6 +7683,7 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": { "$ref": "#/components/schemas/LineMeasure" },
 				"id": {
 					"type": "string",
 					"pattern": "^oln_"
@@ -7503,7 +7731,8 @@
 				},
 				"quantity": {
 					"type": "integer",
-					"minimum": 1
+					"minimum": 1,
+					"description": "Pieces, or thousandths of the unit of a measured item (measure)."
 				},
 				"discount": {
 					"type": "integer",
@@ -8701,7 +8930,7 @@
 				},
 				"type": {
 					"type": "object",
-					"required": ["key", "kind"],
+					"required": ["key", "kind", "measure"],
 					"additionalProperties": false,
 					"properties": {
 						"key": {
@@ -8711,6 +8940,10 @@
 						"kind": {
 							"type": "string",
 							"enum": ["physical", "digital", "service"]
+						},
+						"measure": {
+							"oneOf": [{ "$ref": "#/components/schemas/Measure" }, { "type": "null" }],
+							"description": "Its type's measure (whatever the measured_sales switch): its variants' stock counts thousandths of the unit; null: pieces."
 						}
 					},
 					"description": "Its item type: its own, else its first category's (or the nearest one above it), else the built-in type of its kind; its elements decide the parts the product has."
@@ -9898,9 +10131,21 @@
 		"ReturnableLine": {
 			"type": "object",
 			"description": "A physical line of the order and what can still be claimed on it.",
-			"required": ["lineId", "productId", "name", "variantName", "image", "quantity", "claimable", "return", "warranty"],
+			"required": [
+				"measure",
+				"lineId",
+				"productId",
+				"name",
+				"variantName",
+				"image",
+				"quantity",
+				"claimable",
+				"return",
+				"warranty"
+			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": { "oneOf": [{ "$ref": "#/components/schemas/ReturnableMeasure" }, { "type": "null" }] },
 				"lineId": {
 					"type": "string",
 					"description": "The order line (oln_…): name it in the claim."
@@ -10134,6 +10379,7 @@
 			"type": "object",
 			"description": "A claimed line with the order line as bought.",
 			"required": [
+				"measure",
 				"lineId",
 				"quantity",
 				"serials",
@@ -10149,6 +10395,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/MeasureQuantity" }, { "type": "null" }],
+					"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+				},
 				"lineId": {
 					"type": "string"
 				},
@@ -12945,6 +13195,7 @@
 			"type": "object",
 			"description": "An order line at the price paid.",
 			"required": [
+				"measure",
 				"id",
 				"productId",
 				"variantId",
@@ -12969,6 +13220,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/MeasureQuantity" }, { "type": "null" }],
+					"description": "An item sold in a unit of its own: its unit and the quantity in units (quantity counts thousandths); null for pieces."
+				},
 				"id": {
 					"type": "string"
 				},
@@ -13031,7 +13286,8 @@
 				},
 				"quantity": {
 					"type": "integer",
-					"minimum": 1
+					"minimum": 1,
+					"description": "Pieces, or thousandths of the unit of a measured item (measure)."
 				},
 				"discount": {
 					"type": "integer",
@@ -13235,6 +13491,7 @@
 		"ShopProduct": {
 			"type": "object",
 			"required": [
+				"measure",
 				"id",
 				"slug",
 				"name",
@@ -13266,6 +13523,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/Measure" }, { "type": "null" }],
+					"description": "Sold in a unit of its own (its item type’s measure, while measured_sales is on); null: pieces."
+				},
 				"id": {
 					"type": "string",
 					"pattern": "^prd_"
@@ -13586,6 +13847,7 @@
 		"ShopProductCard": {
 			"type": "object",
 			"required": [
+				"measure",
 				"id",
 				"slug",
 				"name",
@@ -13608,6 +13870,10 @@
 			],
 			"additionalProperties": false,
 			"properties": {
+				"measure": {
+					"oneOf": [{ "$ref": "#/components/schemas/Measure" }, { "type": "null" }],
+					"description": "Sold in a unit of its own (its item type’s measure, while measured_sales is on); null: pieces."
+				},
 				"id": {
 					"type": "string",
 					"pattern": "^prd_"
@@ -14999,7 +15265,7 @@
 				"stock": {
 					"type": "integer",
 					"minimum": 0,
-					"description": "Units available to sell now (all locations together)."
+					"description": "Units available to sell now (all locations together); thousandths of the unit for an item sold in a unit of its own (its type’s measure)."
 				},
 				"locations": {
 					"type": "object",
@@ -18287,7 +18553,7 @@
 	},
 	"POST /v1/products/:id/stock": {
 		"summary": "Set or adjust a product's stock, or mark variants sold out",
-		"description": "Each change sets or adjusts one variant’s units, and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
+		"description": "Each change sets or adjusts one variant’s units (thousandths of the unit for an item sold in a unit of its own), and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
 		"body": {
 			"type": "object",
 			"required": ["changes"],
@@ -18335,7 +18601,7 @@
 	},
 	"POST /v1/admin/products/:id/stock": {
 		"summary": "Set or adjust a product's stock, or mark variants sold out (Catalog admin widget)",
-		"description": "Each change sets or adjusts one variant’s units, and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
+		"description": "Each change sets or adjusts one variant’s units (thousandths of the unit for an item sold in a unit of its own), and/or marks it sold out. With multi-location stock, set and adjust are at one location (locationId required); without it, a locationId is refused. 422 validation_failed (for example an unknown variant or location); 409 conflict when stock would go below 0; 404 not_found.",
 		"body": {
 			"type": "object",
 			"required": ["changes"],
@@ -18729,12 +18995,12 @@
 	},
 	"GET /v1/csv/products": {
 		"summary": "Export the products as CSV",
-		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does); prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 		"status": 200
 	},
 	"GET /v1/admin/csv/products": {
 		"summary": "Export the products as CSV (Customers admin widget)",
-		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+		"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does); prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 		"status": 200
 	},
 	"POST /v1/csv/products": {
@@ -21228,9 +21494,9 @@
 							"quantity": {
 								"type": "integer",
 								"minimum": 1,
-								"maximum": 99,
+								"maximum": 1000000000,
 								"default": 1,
-								"description": "At most checkout.maxQuantity (≤ 99) of one item."
+								"description": "Pieces: at most checkout.maxQuantity (≤ 99) of one item. For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 							},
 							"slot": {
 								"type": ["string", "null"],
@@ -21346,9 +21612,9 @@
 							"quantity": {
 								"type": "integer",
 								"minimum": 1,
-								"maximum": 99,
+								"maximum": 1000000000,
 								"default": 1,
-								"description": "At most checkout.maxQuantity (≤ 99) of one item."
+								"description": "Pieces: at most checkout.maxQuantity (≤ 99) of one item. For an item sold in a unit of its own (measure in its answers): thousandths of its unit (2.5 m = 2500), a multiple of measure.step from measure.min to measure.max; such a line is one piece."
 							},
 							"slot": {
 								"type": ["string", "null"],
@@ -21994,7 +22260,7 @@
 	},
 	"GET /v1/chat/products/:id/quote": {
 		"summary": "Price a product for Chat",
-		"description": "One variant (variantId, else the card variant) times quantity, priced exactly as the cart prices it for the payment method asked: deals, the payment method’s fee, delivery to city with its free-delivery threshold, taxes. A forwarded Accounts sign-in in SS-Sign-In adds the shopper’s role price. Needs the deals feature. 404 not_found (product or variant); 422 validation_failed at /variantId, /quantity, /paymentMethod or /city.",
+		"description": "One variant (variantId, else the card variant) times quantity (an item sold in a unit of its own: a decimal number of its units such as 2.5, its least when left out; the answer's quantity counts thousandths, measure gives the unit and the amount, and price, savings and priceAfterDeals are per unit), priced exactly as the cart prices it for the payment method asked: deals, the payment method’s fee, delivery to city with its free-delivery threshold, taxes. A forwarded Accounts sign-in in SS-Sign-In adds the shopper’s role price. Needs the deals feature. 404 not_found (product or variant); 422 validation_failed at /variantId, /quantity, /paymentMethod or /city.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -22003,10 +22269,9 @@
 					"pattern": "^[A-Za-z0-9_-]{1,64}$"
 				},
 				"quantity": {
-					"type": "integer",
-					"minimum": 1,
-					"maximum": 5,
-					"default": 1
+					"type": "string",
+					"pattern": "^\\d{1,7}(\\.\\d{1,12})?$",
+					"description": "1–5 pieces (default 1); for an item sold in a unit of its own, a number of its units with at most three decimals, such as 2.5, converted exactly to thousandths (default: its least)."
 				},
 				"paymentMethod": {
 					"type": "string",
@@ -23031,7 +23296,8 @@
 							"quantity": {
 								"type": "integer",
 								"minimum": 1,
-								"maximum": 99
+								"maximum": 1000000000,
+								"description": "Pieces (at most 99), or thousandths of the unit of an item sold in a unit of its own, in its steps."
 							},
 							"unitPrice": {
 								"type": ["integer", "null"],
@@ -23258,7 +23524,8 @@
 							"quantity": {
 								"type": "integer",
 								"minimum": 1,
-								"maximum": 99
+								"maximum": 1000000000,
+								"description": "Pieces (at most 99), or thousandths of the unit of an item sold in a unit of its own, in its steps."
 							},
 							"unitPrice": {
 								"type": ["integer", "null"],
@@ -25246,7 +25513,7 @@
 	},
 	"POST /v1/bundles": {
 		"summary": "Create a bundle",
-		"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). Send an Idempotency-Key so a retried request makes one bundle.",
+		"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown); items sold in a unit of their own named in items or a scope answer 422 at /items (code measured): sets are counted in pieces, and a scope by category or brand leaves them out. Send an Idempotency-Key so a retried request makes one bundle.",
 		"body": {
 			"$ref": "#/components/schemas/BundleInput"
 		},
@@ -25257,7 +25524,7 @@
 	},
 	"POST /v1/admin/bundles": {
 		"summary": "Create a bundle (Promotions admin widget)",
-		"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown). Send an Idempotency-Key so a retried request makes one bundle.",
+		"description": "bundle: each complete set of items in the cart costs price (or value percent off), the most expensive units first; buy_x_get_y: for every buy units of scope, get units of getScope are value percent off, the cheapest first. A unit a bundle discounts takes no deal, so a set forms only when it saves more than those deals. Fields the type does not use are stored empty (items [], price null, buy and get 0, empty scopes). 422 validation_failed names the field (/type, /items/0/productId, /price, /value, /buy …); product, category or brand ids that do not exist (in items, scope or getScope) answer 422 at /scope/productIds, /scope/categoryIds or /scope/brandIds (code unknown); items sold in a unit of their own named in items or a scope answer 422 at /items (code measured): sets are counted in pieces, and a scope by category or brand leaves them out. Send an Idempotency-Key so a retried request makes one bundle.",
 		"body": {
 			"$ref": "#/components/schemas/BundleInput"
 		},
@@ -25514,7 +25781,7 @@
 	},
 	"POST /v1/shop/returns": {
 		"summary": "Make a return, exchange or warranty claim",
-		"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). Only on the shopper's own delivered order (404 not_found; 422 not_returnable before delivery). Each line must be in its window (an exchange uses the return window) with enough units left, else 422 not_returnable with errors[0].code unknown, window_closed or quantity (also when another claim took the units at the same moment). kind is one of the returns setting kinds (default return and warranty); with the reasons setting, reason is one of those texts. photos are keys from POST /v1/shop/returns/photos, uploaded already (422 validation_failed at /photos otherwise), at most the maxPhotos setting (503 storage_not_connected). 422 validation_failed names the field (/orderId, /kind, /lines/<i>/lineId, /lines/<i>/quantity, /reason, /photos). The claim starts requested: the shopper gets the ecommerce.return_status message and the return.requested hook runs. Send an Idempotency-Key so a retried request makes one claim.",
+		"description": "Send the shopper's Accounts sign-in in the SS-Sign-In header (403 sign_in_required without a valid one). Only on the shopper's own delivered order (404 not_found; 422 not_returnable before delivery). Each line must be in its window (an exchange uses the return window) with enough units left, else 422 not_returnable with errors[0].code unknown, window_closed, quantity or step (a line sold in a unit of its own is claimed in thousandths of its unit, a multiple of its step, or all that is left of it) (also when another claim took the units at the same moment). kind is one of the returns setting kinds (default return and warranty); with the reasons setting, reason is one of those texts. photos are keys from POST /v1/shop/returns/photos, uploaded already (422 validation_failed at /photos otherwise), at most the maxPhotos setting (503 storage_not_connected). 422 validation_failed names the field (/orderId, /kind, /lines/<i>/lineId, /lines/<i>/quantity, /reason, /photos). The claim starts requested: the shopper gets the ecommerce.return_status message and the return.requested hook runs. Send an Idempotency-Key so a retried request makes one claim.",
 		"headers": {
 			"type": "object",
 			"required": ["SS-Sign-In"],

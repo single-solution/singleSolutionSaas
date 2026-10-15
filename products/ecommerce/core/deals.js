@@ -9,7 +9,9 @@
  *   deals with `cartThresholdBase`) and the payment methods;
  * - **actions**: `percent` or `fixed` off each unit of the lines it covers (`target: 'items'`, the default), or off
  *   the covered lines together (`target: 'cart'`: a percent of their amount, or one fixed amount spread over them);
- *   `free_delivery` waives the delivery fee while it applies to a line of the cart.
+ *   `free_delivery` waives the delivery fee while it applies to a line of the cart. A line of an item sold by length,
+ *   weight or volume is one piece (`core/measure.js` `piecesOf`: minimum quantities, rounding): a percent comes off
+ *   what it comes to, a fixed amount off each of its units (worked out for its measured quantity).
  *
  * A line takes one deal: the largest saving, then the higher priority, then the smaller id — or the deal the shopper
  * picked among its eligible ones (`shopperChoice`); the `deals` settings choose the first deal instead, put one
@@ -20,6 +22,7 @@
  * @module
  */
 import { publicPhoto } from './catalog-content.js';
+import { lineGross, perMeasure, piecesOf } from './measure.js';
 import { exactPercentOf, percentOf, roundDown, roundHalfUp } from './money.js';
 import {
 	checkAmount,
@@ -66,8 +69,9 @@ const COLOUR = /^[#A-Za-z0-9(),.%\s-]{0,40}$/;
  * @property {string | null} brandId
  * @property {string | null} [grade]
  * @property {Record<string, string[]>} [attributes] attribute id → values (the product's and the variant's)
- * @property {number} unitPrice
- * @property {number} [quantity]
+ * @property {number} unitPrice per piece, or per unit of a measured item
+ * @property {number} [quantity] pieces, or thousandths of the unit of a measured item
+ * @property {unknown} [measure] set for an item sold in a unit of its own (`core/measure.js`)
  */
 
 /**
@@ -161,7 +165,8 @@ export const conditionsHold = (conditions, line, cart) => {
 	const range = conditions.priceRange;
 	if (range && ((range.min !== null && line.unitPrice < range.min) || (range.max !== null && line.unitPrice > range.max)))
 		return false;
-	if (conditions.minQuantity > 0 && (line.quantity ?? 1) < conditions.minQuantity) return false;
+	if (conditions.minQuantity > 0 && piecesOf({ quantity: line.quantity ?? 1, measure: line.measure }) < conditions.minQuantity)
+		return false;
 	if (conditions.cartTotal > 0 && cart.goods < conditions.cartTotal) return false;
 	if (conditions.paymentMethods.length > 0 && !conditions.paymentMethods.includes(cart.paymentMethod ?? '')) return false;
 	return true;
@@ -365,19 +370,29 @@ export const dealUnitDiscount = (deal, unitPrice, unit = 1) => {
 /**
  * What a deal would take off a whole line: per unit for item deals; a percent of the line, or the line's share of the
  * fixed amount (`share`), for cart deals. Rounded down to whole units (`per_unit_down`), or exact (`total_half_up`:
- * the caller rounds the order's deal discounts once).
+ * the caller rounds the order's deal discounts once). A measured line (`measure`, its quantity in thousandths of its
+ * unit) is one piece: a percent of what it comes to, or the fixed amount for each of its units, rounded once.
  * @param {DealRecord} deal
- * @param {{ unitPrice: number, quantity: number }} line
+ * @param {{ unitPrice: number, quantity: number, measure?: unknown }} line
  * @param {{ unit?: number, share?: number, rounding?: DealRules['rounding'] }} [options] `share`: this line's part of a
  *   cart deal's fixed amount
  */
 export const dealLineDiscount = (deal, line, { unit = 1, share = 0, rounding = 'per_unit_down' } = {}) => {
 	if (deal.type === 'free_delivery') return 0;
-	const amount = line.unitPrice * line.quantity;
+	const measured = Boolean(line.measure);
+	// pieces as they are (a leftover amount may have a fraction with `total_half_up`), a measured line's `lineGross`
+	const amount = measured ? lineGross(line.unitPrice, line.quantity, true, unit) : line.unitPrice * line.quantity;
 	const exact = rounding === 'total_half_up';
 	if (deal.target === 'cart') {
 		const off = deal.type === 'percent' ? (exact ? exactPercentOf(amount, deal.value) : percentOf(amount, deal.value)) : share;
 		return Math.max(0, Math.min(amount, exact ? off : roundDown(off, unit)));
+	}
+	if (measured) {
+		if (deal.type === 'percent') return exact ? exactPercentOf(amount, deal.value) : dealUnitDiscount(deal, amount, unit);
+		const off = exact
+			? (Math.max(0, deal.value) * line.quantity) / 1000
+			: roundDown(perMeasure(deal.value, line.quantity), unit);
+		return Math.max(0, Math.min(amount, off));
 	}
 	if (exact)
 		return Math.max(

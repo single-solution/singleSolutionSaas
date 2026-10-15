@@ -7,7 +7,8 @@
  */
 import { createId } from '@ss/contracts';
 import { contentChanged, freeSlug, slugify } from '../core/catalog.js';
-import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
+import { categoryTypeKey, elementsOf, typeOf, typeTree } from '../core/item-types.js';
+import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { refreshProducts } from './ledger.js';
 
@@ -165,6 +166,28 @@ export const productTypes = async (data, products, types) => {
 };
 
 /**
+ * The products sold in a unit of their own as a query names them (`core/catalog-query.js` `MeasuredScope`): the
+ * keys of the merchant's types with a measure and the categories whose type is one of them; null when no type has
+ * one. Whatever the Sell in any unit switch: their stock counts thousandths of their unit.
+ * @param {WebsiteData} data
+ * @param {ReadonlyArray<import('../core/item-types.js').ItemType>} types the merchant's
+ * @returns {Promise<import('../core/catalog-query.js').MeasuredScope | null>}
+ */
+export const measuredScope = async (data, types) => {
+	const keys = types.filter((type) => type.kind === 'physical' && type.elements.measure).map((type) => type.key);
+	if (keys.length === 0) return null;
+	const rows = await data
+		.collection(COLLECTIONS.categories)
+		.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1, typeKey: 1 } })
+		.limit(5000)
+		.toArray();
+	const tree = typeTree(
+		rows.map((row) => ({ id: String(row.id), path: (row.path ?? []).map(String), typeKey: row.typeKey ?? null })),
+	);
+	return { keys, categoryIds: [...tree.keys()].filter((id) => keys.includes(categoryTypeKey(id, types, tree))) };
+};
+
+/**
  * The products given that have units in stock.
  * @param {WebsiteData} data @param {string[]} productIds
  * @returns {Promise<Set<string>>}
@@ -298,15 +321,21 @@ export const documentFieldsOf = async (data, orders) => {
 
 /**
  * What saving the item types list must keep (`core/item-types.js` `typeChangeProblems`): the shop's fields by id (where
- * their values live, whether they take two values), the type keys its products and categories name, and the keys of
- * the types (as saved) whose items have units in stock.
+ * their values live, whether they take two values), the type keys its products and categories name, the keys of the
+ * types (as saved) whose items have units in stock and, when the save changes how a type's items are measured, the
+ * keys of the types whose items have any stock.
  * @param {WebsiteData} data
  * @param {ReadonlyArray<import('../core/item-types.js').ItemType>} saved
+ * @param {ReadonlyArray<import('../core/item-types.js').ItemType>} [next] the list being saved
  */
-export const typeUses = async (data, saved) => {
+export const typeUses = async (data, saved, next = saved) => {
 	const { websiteId } = data;
 	const named = { websiteId, typeKey: { $type: 'string' } };
-	const [fields, productKeys, categoryKeys, categories, stockedIds] = await Promise.all([
+	const measureChanged = saved.some((type) => {
+		const after = next.find((entry) => entry.key === type.key);
+		return after !== undefined && !sameMeaning(type.elements.measure, after.elements.measure);
+	});
+	const [fields, productKeys, categoryKeys, categories, stockedIds, withStock] = await Promise.all([
 		data
 			.collection(COLLECTIONS.attributes)
 			.find({ websiteId }, { projection: { _id: 0, id: 1, on: 1, multiple: 1 } })
@@ -319,6 +348,15 @@ export const typeUses = async (data, saved) => {
 			.limit(5000)
 			.toArray(),
 		data.collection(COLLECTIONS.serials).distinct('productId', { websiteId, status: 'in_stock' }),
+		measureChanged
+			? data
+					.collection(COLLECTIONS.products)
+					.find(
+						{ websiteId, kind: 'physical', variants: { $elemMatch: { stock: { $gt: 0 } } } },
+						{ projection: { _id: 0, kind: 1, typeKey: 1, categoryIds: 1 } },
+					)
+					.toArray()
+			: Promise.resolve([]),
 	]);
 	const stocked =
 		stockedIds.length > 0
@@ -330,11 +368,10 @@ export const typeUses = async (data, saved) => {
 	const tree = typeTree(
 		categories.map((row) => ({ id: String(row.id), path: (row.path ?? []).map(String), typeKey: row.typeKey ?? null })),
 	);
-	return {
-		fields: new Map(fields.map((row) => [String(row.id), { on: String(row.on), multiple: row.multiple === true }])),
-		named: new Set([...productKeys, ...categoryKeys].map(String)),
-		stocked: new Set(
-			stocked.map(
+	/** @param {Array<Record<string, any>>} rows */
+	const keysOf = (rows) =>
+		new Set(
+			rows.map(
 				(row) =>
 					typeOf(
 						{ kind: String(row.kind), typeKey: row.typeKey ?? null, categoryIds: (row.categoryIds ?? []).map(String) },
@@ -342,7 +379,12 @@ export const typeUses = async (data, saved) => {
 						tree,
 					).key,
 			),
-		),
+		);
+	return {
+		fields: new Map(fields.map((row) => [String(row.id), { on: String(row.on), multiple: row.multiple === true }])),
+		named: new Set([...productKeys, ...categoryKeys].map(String)),
+		stocked: keysOf(stocked),
+		withStock: keysOf(withStock),
 	};
 };
 

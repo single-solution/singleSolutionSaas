@@ -186,7 +186,8 @@ export const createMoves = (product, service) => {
 
 	/**
 	 * The weight in grams of an order's package for a courier booking: each physical line's variant weight (its item
-	 * type's `parcel`, while Delivery zones is on) times its quantity; null when one of them is not known.
+	 * type's `parcel`, while Delivery zones is on) times its quantity (a measured line's weight is per unit, rounded up
+	 * for its thousandths); null when one of them is not known.
 	 * @param {Site} s @param {OrderRecord} order
 	 * @returns {Promise<number | null>}
 	 */
@@ -213,7 +214,7 @@ export const createMoves = (product, service) => {
 			const type = types.get(line.productId);
 			const weight = item?.variants.find((variant) => variant.id === line.variantId)?.parcel?.weightG;
 			if (!type || !elementsOf(type, s.has).parcel || !weight) return null;
-			grams += weight * line.quantity;
+			grams += line.measure ? Math.ceil((weight * line.quantity) / 1000) : weight * line.quantity;
 		}
 		return grams;
 	};

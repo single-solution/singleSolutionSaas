@@ -172,6 +172,8 @@ describe('core/lookup', () => {
 			variantId: 'var_in',
 			grade: 'a',
 			stockLeft: null,
+			stockLeftText: null,
+			measure: null,
 		});
 		expect(productCard({ ...product, variants: [] }, context)).toMatchObject({
 			price: 500,
@@ -370,6 +372,8 @@ describe('Chat lookups', () => {
 			variantId: phone.variants[0]?.id,
 			grade: 'a',
 			stockLeft: null,
+			stockLeftText: null,
+			measure: null,
 		});
 		const galaxy = await shop.api('GET', '/v1/chat/products?q=galaxy&limit=5');
 		expect(galaxy.json.items.map((/** @type {any} */ item) => item.name)).toEqual(['Galaxy S24', 'Old Galaxy']);

@@ -43,14 +43,17 @@ const POLICY_TITLES = Object.freeze({
  * @typedef {object} ContextParts
  * @property {string} business the business name
  * @property {Array<{ key: string, text: string }>} policies plain text
- * @property {Array<{ name: string, url: string, inStock: boolean,
+ * @property {Array<{ id?: string, name: string, url: string, inStock: boolean,
  *   prices: Array<{ grade: string | null, priceText: string, compareAtPriceText: string | null, inStock: boolean }> }>}
  *   products newest first
+ * @property {ReadonlyMap<string, string>} [units] the unit of measure of the products sold in a unit of their own
+ *   (their prices are per unit), by product id
  * @property {Array<{ name: string, discountLabel: string, badgeLabel: string, endsText: string, description: string }>} deals
  * @property {{ name: string, url: string, summary: string, priceRange: { minText: string, maxText: string },
  *   variants: Array<{ options: Record<string, string>, grade: string | null, priceText: string,
- *   compareAtPriceText: string | null, inStock: boolean, stockLeft: number | null, warrantyDays: number | null }> } | null}
- *   product
+ *   compareAtPriceText: string | null, inStock: boolean, stockLeft: number | null, stockLeftText?: string | null,
+ *   warrantyDays: number | null }>, measure?: { unit: string } | null } | null} product `measure`: sold by length, weight
+ *   or volume (prices per unit, stock in its unit)
  * @property {{ firstName: string, city: string, points: number | null } | null} visitor
  * @property {ShopBasics | null} [basics]
  */
@@ -149,13 +152,14 @@ const visitorLines = (visitor) => {
  */
 const productLines = (product) => {
 	if (!product) return [];
+	const per = product.measure ? ` per ${product.measure.unit}` : '';
 	const range =
 		product.priceRange.minText === product.priceRange.maxText
 			? product.priceRange.minText
 			: `${product.priceRange.minText} – ${product.priceRange.maxText}`;
 	return [
 		'## Product the visitor is viewing',
-		`${oneLine(product.name, 160)} (${range}) ${product.url}`,
+		`${oneLine(product.name, 160)} (${range}${per}) ${product.url}`,
 		...(product.summary ? [oneLine(product.summary, 300)] : []),
 		...product.variants.map((variant) => {
 			const options = Object.values(variant.options).join(' / ');
@@ -163,11 +167,11 @@ const productLines = (product) => {
 				? 'out of stock'
 				: variant.stockLeft === null
 					? 'in stock'
-					: `${variant.stockLeft} in stock`;
+					: `${variant.stockLeftText ?? variant.stockLeft} in stock`;
 			const parts = [
 				options || 'Standard',
 				variant.grade ? `grade ${variant.grade}` : '',
-				priceWords(variant),
+				`${priceWords(variant)}${per}`,
 				stock,
 				variant.warrantyDays ? `${warrantyWords(variant.warrantyDays)} warranty` : '',
 			].filter(Boolean);
@@ -236,19 +240,22 @@ const dealLines = (deals) =>
 			];
 
 /**
- * The newest products with their price per grade.
+ * The newest products with their price per grade (per unit for an item sold in a unit of its own).
  * @param {ContextParts['products']} products
+ * @param {ReadonlyMap<string, string>} [units]
  */
-const newestLines = (products) =>
+const newestLines = (products, units = new Map()) =>
 	products.length === 0
 		? []
 		: [
 				'## Newest products',
 				...products.map((item) => {
+					const unit = item.id ? units.get(item.id) : undefined;
+					const per = unit ? ` per ${unit}` : '';
 					const prices = item.prices
 						.map(
 							(price) =>
-								`${price.grade ? `${price.grade} ` : ''}${priceWords(price)}${price.inStock ? '' : ' (out of stock)'}`,
+								`${price.grade ? `${price.grade} ` : ''}${priceWords(price)}${per}${price.inStock ? '' : ' (out of stock)'}`,
 						)
 						.join(', ');
 					return `- ${oneLine(item.name, 120)}: ${oneLine(prices, 240)} ${item.url}`;
@@ -285,7 +292,7 @@ export const contextText = (parts) => {
 	const visitor = fit(visitorLines(parts.visitor), SHARE.visitor);
 	const product = fit(productLines(parts.product), SHARE.product);
 	const deals = fit(dealLines(parts.deals), SHARE.deals);
-	const products = fit(newestLines(parts.products), SHARE.products);
+	const products = fit(newestLines(parts.products, parts.units), SHARE.products);
 	const taken = sizeOf(head) + sizeOf(basics) + sizeOf(visitor) + sizeOf(product) + sizeOf(deals) + sizeOf(products);
 	const policies = policyLines(parts.policies, MAX_CONTEXT - taken);
 	const text = [...head, ...basics, ...policies, ...products, ...deals, ...product, ...visitor].join('\n');

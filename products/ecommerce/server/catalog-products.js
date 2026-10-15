@@ -22,6 +22,7 @@ import {
 	findProduct,
 	freeSlugIn,
 	isDuplicate,
+	measuredScope,
 	productTypes,
 	rewriteProduct,
 	skusTaken,
@@ -43,6 +44,7 @@ import { afterFilter, cursorKey, listOf, staffFilter, variantStockCounts, varian
 import { nextPreviousSlugs } from '../core/links.js';
 import { withDescendants } from '../core/catalog-taxonomy.js';
 import { staffProductOf, staffRowOf } from '../core/catalog-views.js';
+import { sameMeaning } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { productScore } from '../core/seo-score.js';
 import { IMAGE_TYPES, bodyOf, refuse, STAFF_LIMITS } from './catalog-common.js';
@@ -240,7 +242,13 @@ export const createCatalogProducts = (product, service, common) => {
 		if (wanted.length > 0)
 			brandIds = (await brandsOf(data)).filter((b) => wanted.includes(b.id) || wanted.includes(b.slug)).map((b) => b.id);
 		const { lowStock } = await s.values('catalog');
-		const inner = staffFilter(ctx.query, { categoryIds, brandIds, lowStock: Number(lowStock) });
+		const lowAsked = ctx.query.lowStock === 'true' || ctx.query.lowStock === '1';
+		const inner = staffFilter(ctx.query, {
+			categoryIds,
+			brandIds,
+			lowStock: Number(lowStock),
+			measured: lowAsked ? await measuredScope(data, await s.list('item_types')) : null,
+		});
 		const below = seoBelowOf(s, ctx.query);
 		if (below === null) return { s, data, inner };
 		// scored below it (E42): the newest products that match, scored on read
@@ -276,9 +284,10 @@ export const createCatalogProducts = (product, service, common) => {
 				// the offered variants of tracked products not archived, by the catalog's low-stock level (E44)
 				const { s, data, inner } = await staffSource(ctx);
 				const { lowStock } = await s.values('catalog');
+				const measured = await measuredScope(data, await s.list('item_types'));
 				const rows = await data
 					.collection(COLLECTIONS.products)
-					.aggregate(variantStockPipeline(data.websiteId, inner, Number(lowStock)), {
+					.aggregate(variantStockPipeline(data.websiteId, inner, Number(lowStock), measured), {
 						maxTimeMS: 3000,
 					})
 					.toArray();
@@ -439,13 +448,20 @@ export const createCatalogProducts = (product, service, common) => {
 		if (!first.ok) throw refuse(first.errors);
 		if (first.value.replacedBy !== existing.replacedBy) await checkReplacement(data, first.value.replacedBy);
 		// units in stock were numbered by the product's item type: it keeps its type while it has some
-		if (
-			productType(existing, rules).key !== productType(first.value, rules).key &&
-			(await stockedUnits(data, [existing.id])).size > 0
-		)
+		const [typeBefore, typeAfter] = [productType(existing, rules), productType(first.value, rules)];
+		if (typeBefore.key !== typeAfter.key && (await stockedUnits(data, [existing.id])).size > 0)
 			throw problem(
 				'conflict',
 				'This product has units in stock: its item type cannot change until they are sold or removed.',
+			);
+		// its stock is counted in its type's unit of measure (thousandths of it): kept while it has stock
+		if (
+			!sameMeaning(typeBefore.elements.measure, typeAfter.elements.measure) &&
+			existing.variants.some((variant) => variant.stock > 0)
+		)
+			throw problem(
+				'conflict',
+				'This product has stock counted in its unit of measure: its item type cannot change how it is measured until its stock is 0.',
 			);
 		const files = await checkFiles(s, existing, first.value);
 		const done = await rewriteProduct(

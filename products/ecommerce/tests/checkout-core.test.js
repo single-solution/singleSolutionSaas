@@ -115,8 +115,8 @@ describe('cart checks', () => {
 		[
 			{
 				lines: [
-					{ productId: 'p', quantity: 60 },
-					{ productId: 'p', quantity: 60 },
+					{ productId: 'p', quantity: 600_000_000 },
+					{ productId: 'p', quantity: 600_000_000 },
 				],
 			},
 			'lines/1/quantity',

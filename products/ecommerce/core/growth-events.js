@@ -12,9 +12,11 @@
  *   found); a search in the page's address is Growth's to find, so the grid sends none for it.
  *
  * Money is integer minor units with an ISO 4217 currency, as everywhere in Ecommerce. `value` is the sum of price ×
- * quantity of the items, except on `ss:purchase`, where it is the order's total.
+ * quantity of the items, except on `ss:purchase`, where it is the order's total. An item sold by length, weight or
+ * volume is one item (`core/measure.js` `piecesOf`) priced at what its line comes to.
  * @module
  */
+import { grossFits, lineGross } from './measure.js';
 
 /** The event names. */
 export const GROWTH_EVENTS = Object.freeze({
@@ -39,18 +41,31 @@ export const GROWTH_EVENTS = Object.freeze({
 const amountOf = (value) => (Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0);
 
 /**
- * An event item from a cart, quote or order line, or from a product with its variant.
+ * An event item from a cart, quote or order line, or from a product with its variant. A measured line (`measure`
+ * given, its quantity in thousandths of its unit) is one item at what it comes to (`gross` when the line has it).
  * @param {{ productId: string, variantId?: unknown, name?: unknown, price?: unknown, unitPrice?: unknown,
- *   quantity?: unknown }} line `unitPrice` (a priced line) or `price` (a product's variant)
+ *   quantity?: unknown, measure?: unknown, gross?: unknown }} line `unitPrice` (a priced line) or `price` (a product's
+ *   variant)
  * @returns {GrowthItem}
  */
-export const growthItem = (line) => ({
-	id: line.productId,
-	variantId: typeof line.variantId === 'string' ? line.variantId : null,
-	name: typeof line.name === 'string' ? line.name : '',
-	price: amountOf(line.unitPrice ?? line.price),
-	quantity: Number.isSafeInteger(line.quantity) && Number(line.quantity) > 0 ? Number(line.quantity) : 1,
-});
+export const growthItem = (line) => {
+	const price = amountOf(line.unitPrice ?? line.price);
+	const quantity = Number.isSafeInteger(line.quantity) && Number(line.quantity) > 0 ? Number(line.quantity) : 1;
+	const measured = Boolean(line.measure);
+	return {
+		id: line.productId,
+		variantId: typeof line.variantId === 'string' ? line.variantId : null,
+		name: typeof line.name === 'string' ? line.name : '',
+		price: !measured
+			? price
+			: Number.isSafeInteger(line.gross)
+				? amountOf(line.gross)
+				: grossFits(price, quantity, true)
+					? lineGross(price, quantity, true)
+					: 0,
+		quantity: measured ? 1 : quantity,
+	};
+};
 
 /**
  * The detail of `ss:view_item`, `ss:add_to_cart` and `ss:begin_checkout`.

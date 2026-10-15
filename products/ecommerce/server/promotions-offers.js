@@ -12,6 +12,7 @@
 import { randomBytes } from 'node:crypto';
 import { created, defineRoute, paginate, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
+import { productTypes } from '../adapters/catalog-store.js';
 import { bundleView, checkBundleInput } from '../core/bundles.js';
 import { checkBatchInput, checkCouponInput, couponView, drawCode } from '../core/coupons.js';
 import { checkDealInput, dealView } from '../core/deals.js';
@@ -111,6 +112,42 @@ export const createOfferRoutes = (product, service) => {
 				);
 	};
 
+	/**
+	 * Refuse a bundle or buy X get Y naming items sold in a unit of their own (v1: sets are counted in pieces; a
+	 * scope by category or brand simply leaves them out).
+	 * @param {any} ctx @param {import('@ss/app-kit').WebsiteData} data @param {Record<string, any>} value checked fields
+	 */
+	const noMeasured = async (ctx, data, value) => {
+		const named = [
+			...new Set([
+				...(value.items ?? []).map((/** @type {any} */ item) => String(item.productId)),
+				...[value.scope, value.getScope].filter(Boolean).flatMap((scope) => scope.productIds),
+			]),
+		];
+		const types = await (await service.site(ctx)).list('item_types');
+		if (named.length === 0 || !types.some((/** @type {any} */ type) => type.elements.measure)) return;
+		const products = /** @type {Array<{ id: string, kind: string, typeKey: string | null, categoryIds: string[] }>} */ (
+			await data
+				.collection(COLLECTIONS.products)
+				.find(
+					{ websiteId: data.websiteId, id: { $in: named } },
+					{ projection: { _id: 0, id: 1, kind: 1, typeKey: 1, categoryIds: 1 } },
+				)
+				.toArray()
+		);
+		const typed = await productTypes(data, products, types);
+		const measured = products.filter((item) => typed.get(item.id)?.elements.measure);
+		if (measured.length > 0)
+			throw invalid(
+				'items',
+				`Items sold in a unit of their own cannot be in a bundle or buy X get Y: ${measured
+					.slice(0, 10)
+					.map((item) => item.id)
+					.join(', ')}.`,
+				'measured',
+			);
+	};
+
 	/** @param {unknown} error */
 	const codeTaken = (error) => {
 		if (isDuplicate(error)) return problem('coupon_code_taken', 'This code is already used by another coupon.');
@@ -161,6 +198,7 @@ export const createOfferRoutes = (product, service) => {
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		const data = await dataOf(ctx);
 		await checkRefs(data, checked.value);
+		if (kind === 'bundles') await noMeasured(ctx, data, checked.value);
 		if (!(await slugFree(data, kind, checked.value, null))) return problem('slug_taken', 'Another deal uses this slug.');
 		const record = { id: createId(KINDS[kind].prefix), ...checked.value, used: 0 };
 		try {
@@ -189,6 +227,7 @@ export const createOfferRoutes = (product, service) => {
 		);
 		if (!checked.ok) return invalid(checked.field, checked.message);
 		await checkRefs(data, checked.value);
+		if (kind === 'bundles') await noMeasured(ctx, data, checked.value);
 		if (!(await slugFree(data, kind, checked.value, id))) return problem('slug_taken', 'Another deal uses this slug.');
 		/** @type {any} */
 		let changed;

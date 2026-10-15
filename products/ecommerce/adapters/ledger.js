@@ -15,6 +15,7 @@ import { summarize } from '../core/catalog.js';
 import { unitKeys } from '../core/fields.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { lotsByRule } from '../core/loyalty.js';
+import { piecesOf } from '../core/measure.js';
 import { counterIdOf, counterNumbers, numberFormOf, orderNumberOf } from '../core/order-numbers.js';
 import { balanceOf, compactLots, expireLots, spendFromLots, takeFromLots } from '../core/points.js';
 
@@ -650,7 +651,7 @@ const tracked = (taken) =>
 
 /**
  * Add units to the products' `ordered` counts (parity P3-10: units of orders placed and not given back before delivery),
- * one write per product; negative units take them off.
+ * one write per product; negative units take them off. Counted in pieces: a measured line is one (`core/measure.js`).
  * @param {WebsiteData} data @param {ReadonlyArray<{ productId: string, quantity: number }>} lines @param {Session} [session]
  */
 const countOrdered = async (data, lines, session) => {
@@ -742,7 +743,11 @@ export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => 
 					(placement.slots ?? []).map((slot) => ({ ...slot, orderId: order.id })),
 					session,
 				);
-				await countOrdered(data, order.lines, session);
+				await countOrdered(
+					data,
+					order.lines.map((line) => ({ productId: line.productId, quantity: piecesOf(line) })),
+					session,
+				);
 				const record = {
 					...order,
 					number,
@@ -798,7 +803,7 @@ export const swapOrderStock = async (data, order, { lines, ordered, update }) =>
 			await countOrdered(
 				data,
 				[
-					...(order.stockHeld ? order.lines.map((line) => ({ productId: line.productId, quantity: -line.quantity })) : []),
+					...(order.stockHeld ? order.lines.map((line) => ({ productId: line.productId, quantity: -piecesOf(line) })) : []),
 					...ordered,
 				],
 				session,

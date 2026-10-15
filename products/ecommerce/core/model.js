@@ -101,7 +101,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {number} price minor units
  * @property {number | null} compareAtPrice the "was" price, minor units
  * @property {number | null} cost what the merchant paid (margin reports), minor units
- * @property {number} stock units available to sell now (all locations together); reservations take from it
+ * @property {number} stock units available to sell now (all locations together); reservations take from it. An item
+ *   sold in a unit of its own counts thousandths of its unit (`core/measure.js`)
  * @property {Record<string, number>} locations location id → units (multi_location); its values add up to `stock`
  * @property {string | null} grade a grade key of the `grades` list (grades_serials)
  * @property {boolean} active
@@ -371,11 +372,14 @@ export const STATUS_ROLES = Object.freeze([
  * @property {string | null} grade grade key
  * @property {string} gradeLabel
  * @property {string | null} image storage key of the main image
- * @property {number} unitPrice minor units, before discounts
- * @property {number} quantity
+ * @property {number} unitPrice minor units, before discounts: per piece, or per unit of a measured item
+ * @property {number} quantity pieces, or thousandths of the unit of a measured item (`measure`)
+ * @property {import('./measure.js').LineMeasure} [measure] how its item was sold in a unit of its own at
+ *   placement (its unit and step, `core/measure.js`); none: counted in pieces
  * @property {number} discount deals, bundles, coupon and points spread over the line, minor units
  * @property {number} tax minor units (included in `total` when prices exclude tax)
- * @property {number} total unitPrice × quantity − discount (+ tax when prices exclude tax), minor units
+ * @property {number} total what the line comes to (`lineGross`: unitPrice × quantity, a measured line's rounded half
+ *   up) − discount (+ tax when prices exclude tax), minor units
  * @property {number | null} cost unit cost at placement (margin reports)
  * @property {string[]} categoryIds
  * @property {string | null} brandId
@@ -384,7 +388,8 @@ export const STATUS_ROLES = Object.freeze([
  * @property {{ start: Date, end: Date } | null} booking the booked slot
  * @property {string[]} licences license ids given after payment (digital)
  * @property {number} [downloads] downloads made so far (digital)
- * @property {number} returnedQuantity units returned through approved return claims
+ * @property {number} returnedQuantity units returned through approved return claims (thousandths of the unit of a
+ *   measured line)
  * @property {number | null} [warrantyDays] the warranty at placement: the variant's, else the product's, the grade's or
  *   the setting (E12)
  * @property {string | null} [dealId] the line's own deal at placement, else the checkout-level deal (E18)

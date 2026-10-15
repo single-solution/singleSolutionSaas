@@ -636,6 +636,7 @@ describe('Chat lookups (E37)', () => {
 						variantName: '128 GB',
 						gradeLabel: 'Grade A',
 						quantity: 1,
+						measure: null,
 						unitPrice: 120000,
 						unitPriceText: 'USD 1,200.00',
 						total: 120000,

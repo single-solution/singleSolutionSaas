@@ -53,6 +53,7 @@ import {
 	statusOf,
 } from './flow.js';
 import { expiryFor, loyaltyRules, pointsToEarn } from './loyalty.js';
+import { piecesOf } from './measure.js';
 import { ID_PREFIX } from './model.js';
 import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAfterRefund } from './orders.js';
 
@@ -214,7 +215,7 @@ const hasUnits = (order) => order.lines.some((line) => (line.serials ?? []).leng
  */
 const notOrdered = (order) => ({
 	kind: 'count_ordered',
-	lines: order.lines.map((line) => ({ productId: line.productId, quantity: -line.quantity })),
+	lines: order.lines.map((line) => ({ productId: line.productId, quantity: -piecesOf(line) })),
 });
 
 /**
@@ -658,7 +659,8 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 				}
 			}
 			if (BEFORE_DELIVERY.includes(fromStage)) {
-				const lines = order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity }));
+				// counted in pieces: a measured line is one (`core/measure.js`)
+				const lines = order.lines.map((line) => ({ productId: line.productId, quantity: piecesOf(line) }));
 				ledger.push({ kind: 'count_sold', lines });
 				// an order that held no stock (an imported open one) is counted as ordered once delivered (P3-10)
 				if (before.stock !== 'held') ledger.push({ kind: 'count_ordered', lines });

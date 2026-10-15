@@ -19,7 +19,9 @@
  * @module
  */
 import { defineRoute } from '@ss/app-kit';
+import { productTypes } from '../adapters/catalog-store.js';
 import { countsForStock, stockEventOf } from '../core/catalog-query.js';
+import { levelOf } from '../core/measure.js';
 import { notifiesOf, shopperLabelOf, statusOf } from '../core/flow.js';
 import { statusLabel } from '../core/orders.js';
 import { createOrderMessages, messageWords } from './order-messages.js';
@@ -198,6 +200,20 @@ export const createOrderEvents = (product, service) => {
 	/** The catalog setting `lowStock` (E44). @param {Site} s */
 	const lowStockOf = async (s) => Number((await s.values('catalog')).lowStock ?? 0);
 
+	/**
+	 * The products sold in a unit of their own among some (their stock counts thousandths of their unit, so the
+	 * low-stock level is compared in their units).
+	 * @param {Site} s @param {import('@ss/app-kit').WebsiteData} data
+	 * @param {Array<{ id: string, kind: string, typeKey?: string | null, categoryIds: string[] }>} rows
+	 * @returns {Promise<Set<string>>}
+	 */
+	const measuredIds = async (s, data, rows) => {
+		const types = await s.list('item_types');
+		if (rows.length === 0 || !types.some((/** @type {any} */ type) => type.elements.measure)) return new Set();
+		const typed = await productTypes(data, rows, types);
+		return new Set([...typed].filter(([, type]) => type.elements.measure).map(([id]) => id));
+	};
+
 	// catalog writes: the product changed, and a variant counting for stock the write left with fewer units may be low
 	// or out (its units before come with the write; stock given back has none, and only rises)
 	service.on('products.changed', async (s, { productIds, before }) => {
@@ -215,11 +231,24 @@ export const createOrderEvents = (product, service) => {
 						slug: 1,
 						status: 1,
 						trackStock: 1,
+						kind: 1,
+						typeKey: 1,
+						categoryIds: 1,
 						variants: { id: 1, stock: 1, active: 1, soldOut: 1 },
 					},
 				},
 			)
 			.toArray();
+		const measured = await measuredIds(
+			s,
+			data,
+			rows.map((row) => ({
+				id: String(row.id),
+				kind: String(row.kind),
+				typeKey: row.typeKey ?? null,
+				categoryIds: (row.categoryIds ?? []).map(String),
+			})),
+		);
 		for (const row of rows) {
 			await publish(s, 'catalog.changed', { kind: 'product', id: row.id, slug: row.slug });
 			/** @type {Map<string, number> | undefined} */
@@ -227,7 +256,10 @@ export const createOrderEvents = (product, service) => {
 			if (!units) continue;
 			for (const variant of row.variants) {
 				const was = units.get(variant.id);
-				const type = was === undefined || !countsForStock(row, variant) ? null : stockEventOf(was, variant.stock, level);
+				const type =
+					was === undefined || !countsForStock(row, variant)
+						? null
+						: stockEventOf(was, variant.stock, levelOf(level, measured.has(String(row.id))));
 				if (type) await publish(s, type, { productId: row.id, variantId: variant.id, stock: variant.stock });
 			}
 		}
@@ -243,8 +275,29 @@ export const createOrderEvents = (product, service) => {
 	service.on('stock.taken', async (s, { lines }) => {
 		if (!s.has('events') || !Array.isArray(lines) || lines.length === 0) return;
 		const level = await lowStockOf(s);
-		for (const line of /** @type {import('../adapters/ledger.js').TakenStock[]} */ (lines)) {
-			const type = stockEventOf(line.left + line.quantity, line.left, level);
+		const taken = /** @type {import('../adapters/ledger.js').TakenStock[]} */ (lines);
+		const data = await s.data();
+		const products = (await s.list('item_types')).some((/** @type {any} */ type) => type.elements.measure)
+			? await data
+					.collection('products')
+					.find(
+						{ websiteId: s.websiteId, id: { $in: [...new Set(taken.map((line) => line.productId))] } },
+						{ projection: { _id: 0, id: 1, kind: 1, typeKey: 1, categoryIds: 1 } },
+					)
+					.toArray()
+			: [];
+		const measured = await measuredIds(
+			s,
+			data,
+			products.map((row) => ({
+				id: String(row.id),
+				kind: String(row.kind),
+				typeKey: row.typeKey ?? null,
+				categoryIds: (row.categoryIds ?? []).map(String),
+			})),
+		);
+		for (const line of taken) {
+			const type = stockEventOf(line.left + line.quantity, line.left, levelOf(level, measured.has(line.productId)));
 			if (type) await publish(s, type, { productId: line.productId, variantId: line.variantId, stock: line.left });
 		}
 	});

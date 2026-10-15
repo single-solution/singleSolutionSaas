@@ -10,6 +10,7 @@ import { factsOf } from './facts.js';
 import { phoneSearchOf } from './guests.js';
 import { CLOSED_ROLES, moveOf, nextStatuses, statusOf } from './flow.js';
 import { ID_PREFIX, STATUS_ROLES } from './model.js';
+import { MAX_MEASURED, piecesOf } from './measure.js';
 import { isAmount } from './money.js';
 import { MAX_TRACKING, cleanTracking, hasControl } from './couriers.js';
 
@@ -775,9 +776,9 @@ const VIDEO_ROLES = Object.freeze(/** @type {StatusRole[]} */ (['packed', 'shipp
  *   address?: NonNullable<OrderRecord['address']> }} WaitingEdit
  */
 
-/** An edited order has at most this many lines and units per line (the checkout's own limits apply too). */
+/** An edited order has at most this many lines (the checkout's own limits apply too: 99 pieces of one item, a measured
+ * item's steps and limits, `core/checkout.js` `resolveLines`). */
 const MAX_EDIT_LINES = 50;
-const MAX_EDIT_QUANTITY = 99;
 
 /**
  * Check the lines, payment method and delivery staff send for a waiting order (E29).
@@ -799,8 +800,11 @@ const waitingEditOf = (input) => {
 			if (lines.some((other) => other.variantId === variantId))
 				return refuse(`lines/${index}/variantId`, 'An item is listed twice.');
 			const quantity = line.quantity;
-			if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > MAX_EDIT_QUANTITY)
-				return refuse(`lines/${index}/quantity`, `A quantity is 1–${MAX_EDIT_QUANTITY}.`);
+			if (!Number.isSafeInteger(quantity) || Number(quantity) < 1 || Number(quantity) > MAX_MEASURED)
+				return refuse(
+					`lines/${index}/quantity`,
+					'A quantity is a whole number from 1: pieces, or thousandths of the unit of a measured item.',
+				);
 			if (line.unitPrice !== undefined && line.unitPrice !== null && !(line.unitPrice === 0 || isAmount(line.unitPrice)))
 				return refuse(`lines/${index}/unitPrice`, 'A unit price is a whole amount in minor units.');
 			lines.push({
@@ -1019,7 +1023,7 @@ export const orderSummary = (order, flow, money) => ({
 	role: order.role,
 	customer: { ...order.customer },
 	city: order.address?.city ?? '',
-	itemCount: order.lines.reduce((sum, line) => sum + line.quantity, 0),
+	itemCount: order.lines.reduce((sum, line) => sum + piecesOf(line), 0),
 	total: order.totals.total,
 	totalText: money(order.totals.total, order.totals.currency),
 	currency: order.totals.currency,

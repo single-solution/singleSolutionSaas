@@ -53,6 +53,7 @@ import { checkGuest, guestRules, phoneDigitsOf, savedAddresses } from '../core/g
 import { earnsAsMember, loyaltyRules, pointsToEarn, takesPart } from '../core/loyalty.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { gradesFor } from '../core/grades.js';
+import { lineMeasureOf, measureView, piecesOf } from '../core/measure.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { byActor, orderMoney, serverNote } from '../core/orders.js';
 import { ORDER_NUMBER } from '../core/order-numbers.js';
@@ -434,6 +435,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						image: await media.mediaUrl(s, line.image),
 						unitPrice: line.unitPrice,
 						quantity: line.quantity,
+						measure: measureView(line.quantity, line.measure),
 						discount: line.discount,
 						tax: line.tax,
 						total: line.total,
@@ -646,6 +648,10 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				image: line.image,
 				unitPrice: line.unitPrice,
 				quantity: line.quantity,
+				// how its item was measured at placement (none: pieces)
+				...(line.measure
+					? { measure: /** @type {import('../core/measure.js').LineMeasure} */ (lineMeasureOf(line.measure)) }
+					: {}),
 				discount: price.discount,
 				tax: price.tax,
 				total: price.total,
@@ -827,7 +833,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			lines: lines
 				.filter((line) => line.kind === 'physical')
 				.map((line) => ({ productId: line.productId, variantId: line.variantId, quantity: line.quantity, locationId: null })),
-			ordered: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+			ordered: lines.map((line) => ({ productId: line.productId, quantity: piecesOf(line) })),
 			update: async (session) => {
 				// it holds its new lines' stock now, also an imported order that held none (its facts say so: a cancel gives
 				// it back), only while its facts are as read
@@ -872,10 +878,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		const s = await service.site(ctx);
 		const checkout = await s.values('checkout');
 		const { shopper, guest } = await buyerOf(s, ctx, checkout);
-		const cart = checkCart(ctx.body, {
-			maxLines: Number(checkout.maxLines ?? 50),
-			maxQuantity: Number(checkout.maxQuantity ?? 99),
-		});
+		const cart = checkCart(ctx.body, { maxLines: Number(checkout.maxLines ?? 50) });
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		const extras = checkOrderExtras(ctx.body);
 		if (!extras.ok) throw service.invalid(extras.field, extras.message);
@@ -1176,7 +1179,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 				total: order.totals.total,
 				currency: order.totals.currency,
 				placedAt: iso(order.placedAt),
-				itemCount: order.lines.reduce((n, line) => n + line.quantity, 0),
+				itemCount: order.lines.reduce((n, line) => n + piecesOf(line), 0),
 				image: await media.mediaUrl(s, order.lines[0]?.image),
 			})),
 		);
@@ -1313,10 +1316,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const quoteCart = async (ctx) => {
 		const s = await service.site(ctx);
 		const checkout = await s.values('checkout');
-		const cart = checkCart(ctx.body, {
-			maxLines: Number(checkout.maxLines ?? 50),
-			maxQuantity: Number(checkout.maxQuantity ?? 99),
-		});
+		const cart = checkCart(ctx.body, { maxLines: Number(checkout.maxLines ?? 50) });
 		if (!cart.ok) throw service.invalid(cart.field, cart.message);
 		return quoting.view(s, await quoting.quote(s, cart.value, await service.shopper(s)));
 	};

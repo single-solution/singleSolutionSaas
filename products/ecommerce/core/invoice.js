@@ -12,6 +12,7 @@
 import { formatDate, formatMoney } from '@ss/contracts/format';
 import { fieldValuesShown, unitsShown } from './fields.js';
 import { WAITING_ROLES } from './flow.js';
+import { placedGross, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
 
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
@@ -306,7 +307,7 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const rows = order.lines
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}</td><td class="num">${line.quantity}</td><td class="num">${money(line.unitPrice)}</td><td class="num">${money(line.unitPrice * line.quantity)}</td></tr>`,
+				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}</td><td class="num">${esc(quantityLabel(line.quantity, line.measure))}</td><td class="num">${money(line.unitPrice)}${line.measure ? ` / ${esc(line.measure.unit)}` : ''}</td><td class="num">${money(placedGross(line, order.totals.taxIncluded))}</td></tr>`,
 		)
 		.join('');
 	const { subtotal, discount, delivery, tax, total, taxIncluded } = order.totals;
@@ -373,7 +374,7 @@ const slipBody = (order, context, batch) => {
 		.filter((line) => line.kind === 'physical')
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'packingSlip')}${slots(line)}</td><td class="num">${line.quantity}</td></tr>`,
+				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'packingSlip')}${slots(line)}</td><td class="num">${esc(quantityLabel(line.quantity, line.measure))}</td></tr>`,
 		)
 		.join('');
 	const shipTo = order.address
@@ -436,7 +437,7 @@ export const pickListHtml = (orders, context) => {
 			]
 				.filter(Boolean)
 				.join(' · ');
-			return `<tr><td><strong>${esc(line.name)}</strong>${detail ? `<p class="small">${esc(detail)}</p>` : ''}</td><td class="num">${quantity}</td></tr>`;
+			return `<tr><td><strong>${esc(line.name)}</strong>${detail ? `<p class="small">${esc(detail)}</p>` : ''}</td><td class="num">${esc(quantityLabel(quantity, line.measure))}</td></tr>`;
 		})
 		.join('');
 	const numbers = orders.map((order) => order.number).join(', ');

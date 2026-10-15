@@ -9,7 +9,7 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
-import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
+import { attributesOf, findBySlugHistory, productTypes } from '../adapters/catalog-store.js';
 import { mediaSignatureOk } from '../adapters/crypto.js';
 import { valueLabel } from '../core/catalog.js';
 import { toDecimal } from '../core/money.js';
@@ -370,6 +370,9 @@ export const createSeo = (product, service) => {
 		const trail = await trailOf(s, data, media, primary ?? null, true, business.name);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
 		const shown = (await shownPrices(s, data)).of(item);
+		// an item sold in a unit of its own: its prices are per unit (its type's measure, while the feature is on)
+		const type = (await productTypes(data, [item], await s.list('item_types'))).get(item.id);
+		const measure = type ? elementsOf(type, s.has).measure : null;
 		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
 		// description when the product has none of its own nor a written summary, and the variants' names
 		const names = {
@@ -430,6 +433,7 @@ export const createSeo = (product, service) => {
 					grade: conditions.gradeOf(item, variant)?.label ?? '',
 				}),
 			shown,
+			measure,
 			variantUrl: (variant) => variantUrls.get(variant.id) ?? url,
 			variantImage: (variant) => variantImages.get(variant.id) ?? null,
 			// the fields the merchant names in structured data (`show.jsonLd`), and the options they make
@@ -1007,6 +1011,7 @@ export const createSeo = (product, service) => {
 				extraImages: (variant) => perVariant.get(variant.id)?.photos ?? photos,
 				identifierExists: settings.identifierExists === 'no' ? 'no' : 'auto',
 				parcels: elementsOf(typeOf(item, types, tree), s.has).parcel,
+				measure: elementsOf(typeOf(item, types, tree), s.has).measure,
 				wholeUnits: format.format.wholeUnits === true,
 				variantLink: (variant) => perVariant.get(variant.id)?.link ?? '',
 				variantImage: (variant) => perVariant.get(variant.id)?.image ?? '',
