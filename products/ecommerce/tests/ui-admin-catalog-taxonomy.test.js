@@ -581,7 +581,7 @@ describe('catalog admin: fields of units, orders and customers (dynamic model §
 		expect(statuses(dialog)).toContain('Fix the format first: check its lengths, starts and pattern.');
 		await change(fieldIn(dialog, 'Shortest'), '15');
 		await tick(checkIn(dialog, 'Takes several values'), true);
-		expect(fieldIn(dialog, 'Most values').getAttribute('max')).toBe('2');
+		expect(fieldIn(dialog, 'Most values').getAttribute('max')).toBe('10');
 		type(fieldIn(dialog, 'Most values'), '2');
 		await tick(checkIn(dialog, 'Required'), true);
 		await tick(checkIn(dialog, 'Shown to the shopper (order fields: asked at checkout)'), true);

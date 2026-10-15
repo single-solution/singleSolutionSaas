@@ -263,7 +263,7 @@ describe('visitor widgets', () => {
 		const events = growthEvents();
 		const shop = /** @type {any} */ (api);
 		shop.addToCart({ productId: 'prd_1', variantId: 'var_2', quantity: 2 });
-		shop.addToCart({ productId: 'prd_1', quantity: 500 });
+		shop.addToCart({ productId: 'prd_1', quantity: 100_001 });
 		shop.addToCart({ productId: 'prd_9', variantId: 'var_9' });
 		await flush();
 		expect(events.of('ss:add_to_cart')).toEqual([
@@ -274,8 +274,8 @@ describe('visitor widgets', () => {
 			},
 			{
 				currency: 'USD',
-				value: 9900000,
-				items: [{ id: 'prd_1', variantId: null, name: 'Phone One', price: 100000, quantity: 99 }],
+				value: 10_000_000_000,
+				items: [{ id: 'prd_1', variantId: null, name: 'Phone One', price: 100000, quantity: 100_000 }],
 			},
 			{ currency: 'USD', value: 0, items: [{ id: 'prd_9', variantId: 'var_9', name: '', price: 0, quantity: 1 }] },
 		]);
@@ -364,7 +364,7 @@ describe('the cart store', () => {
 		const heard = vi.fn();
 		const stop = cart.onChange(heard);
 		cart.add({ productId: 'p1', variantId: null, quantity: 1 });
-		cart.add({ productId: 'p1', variantId: null, quantity: 500 });
+		cart.add({ productId: 'p1', variantId: null, quantity: 100_001 });
 		cart.add({ productId: 'p2', variantId: 'v', quantity: 0, slot: '2026-10-06T09:00:00.000Z' });
 		expect(cart.state().lines).toEqual([
 			{ productId: 'p1', variantId: null, quantity: MAX_QUANTITY },

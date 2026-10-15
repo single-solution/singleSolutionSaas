@@ -768,7 +768,8 @@ describe('CSV', () => {
 				categories: ['PHONES'],
 				brand: 'ACME',
 				rows: [
-					{ line: 2, variant: { sku: 'S1', stock: 4 } },
+					// stock as read from the file: thousandths of units (4 pieces)
+					{ line: 2, variant: { sku: 'S1', stock: 4000 } },
 					{ line: 3, variant: { id: 'var_none' } },
 				],
 			},
@@ -777,7 +778,7 @@ describe('CSV', () => {
 		);
 		expect(input.ok ? [] : input.errors.map((e) => e.path)).toEqual(['/variant_id']);
 		const fine = importInput(
-			{ ...b, categories: ['phones'], brand: null, rows: [{ line: 2, variant: { sku: 'S1', stock: 4, options: {} } }] },
+			{ ...b, categories: ['phones'], brand: null, rows: [{ line: 2, variant: { sku: 'S1', stock: 4000, options: {} } }] },
 			existing,
 			lookups,
 		);
@@ -807,7 +808,7 @@ describe('CSV', () => {
 		);
 		expect(rows[0]?.slice(5, 7)).toEqual(['cat_1', 'brd_1']);
 		// the location's stock, then the sold-out flag and the product's updated_at (E36)
-		expect(rows[0]?.slice(-3)).toEqual([0, false, '']);
+		expect(rows[0]?.slice(-3)).toEqual(['0', false, '']);
 		const order = /** @type {any} */ ({
 			number: '1',
 			placedAt: new Date(0),
