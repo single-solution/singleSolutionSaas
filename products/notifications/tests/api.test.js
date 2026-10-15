@@ -277,14 +277,14 @@ describe('the send API', () => {
 			'sms:sent',
 		]);
 		// a final error goes to the fallback at once; with no fallback it fails
-		env.providers.respond('https://graph.facebook.com', () => ({ status: 200, body: '{"error":{"message":"bad number"}}' }));
+		env.providers.respond('https://graph.facebook.com', () => ({ status: 400, body: '{"error":{"message":"bad number"}}' }));
 		const failed = await env.send('whatsapp', { template: 'promo', to: { phone: '+15550004444' }, values: { pct: '5' } });
 		// a code with its values, never a sentence (N10); the provider's own answer apart, as technical detail
-		expect(failed.json).toMatchObject({ status: 'failed', reason: 'provider_refused', reasonValues: {} });
+		expect(failed.json).toMatchObject({ status: 'failed', reason: 'provider_status', reasonValues: { status: '400' } });
 		expect(failed.json.attempts.at(-1)).toMatchObject({
 			outcome: 'failed',
-			reason: 'provider_refused',
-			detail: '{"message":"bad number"}',
+			reason: 'provider_status',
+			detail: '{"error":{"message":"bad number"}}',
 		});
 		env.providers.reset('https://graph.facebook.com');
 	});

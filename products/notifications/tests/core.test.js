@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { addressFor, checkRecipient, normaliseLanguage, normalisePhone, normaliseTimeZone } from '../core/channels.js';
-import { gatewayOutcome } from '../core/gateway.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { STATUSES, logFilters } from '../core/log.js';
 import {
@@ -520,33 +519,6 @@ describe('forwarded events', () => {
 });
 
 describe('provider answers, replies and webhook URLs', () => {
-	it('reads gateway answers that report a refusal inside HTTP 200', () => {
-		expect(gatewayOutcome(500, '')).toMatchObject({ ok: false, retryable: true });
-		expect(gatewayOutcome(429, '')).toMatchObject({ ok: false, retryable: true });
-		expect(gatewayOutcome(400, '')).toMatchObject({ ok: false, retryable: false });
-		expect(gatewayOutcome(200, 'OK')).toEqual({ ok: true, id: null });
-		expect(gatewayOutcome(200, '[1]')).toEqual({ ok: true, id: null });
-		expect(gatewayOutcome(200, '{"sid":"SM1"}')).toEqual({ ok: true, id: 'SM1' });
-		expect(gatewayOutcome(200, '{"id":7}')).toEqual({ ok: true, id: '7' });
-		expect(gatewayOutcome(200, '{"error":"no balance"}')).toEqual({
-			ok: false,
-			reason: 'provider_refused',
-			detail: 'no balance',
-			retryable: false,
-		});
-		expect(gatewayOutcome(200, '{"sent":"false","message":"expired"}')).toMatchObject({ detail: 'expired' });
-		expect(gatewayOutcome(200, '{"success":false}')).toMatchObject({ reason: 'provider_refused' });
-		expect(gatewayOutcome(200, '{"status":"Failed"}')).toMatchObject({ detail: 'Failed' });
-		expect(gatewayOutcome(503, 'down')).toEqual({
-			ok: false,
-			reason: 'provider_status',
-			values: { status: '503' },
-			detail: 'down',
-			retryable: true,
-		});
-		expect(gatewayOutcome(200, '{"status":"queued"}')).toEqual({ ok: true, id: null });
-	});
-
 	it('reads forwarded replies and matches unsubscribe keywords', () => {
 		expect(repliesOf('twilio', 'From=whatsapp%3A%2B15550001111&Body=STOP')).toEqual([{ from: '+15550001111', text: 'STOP' }]);
 		expect(repliesOf('twilio', 'Body=STOP')).toEqual([]);

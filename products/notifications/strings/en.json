@@ -112,7 +112,7 @@
 	"reason.switched_off": "this message is switched off on this channel in Notifications",
 	"reason.failed": "every attempt failed (the delivery log shows each one)",
 	"reason.provider_status": "the provider answered HTTP {status}",
-	"reason.provider_refused": "the provider answered that it did not take the message",
+	"reason.provider_refused": "the provider's answer did not have the success value at {path}",
 	"reason.provider_unreachable": "the provider could not be reached ({cause})",
 	"reason.provider_error": "the provider refused the message ({cause})",
 	"reason.connection_unusable": "the {connection} connection does not fit its provider: check it in Connections",

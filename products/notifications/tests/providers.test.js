@@ -12,7 +12,7 @@ const policy = createOutboundPolicy({ resolve: async () => [{ address: '93.184.2
  * A fake outbound `send` recording calls and answering with `answer`.
  * @param {(url: string, init: any) => { status: number, body?: string, headers?: Record<string, string> } | Error} [answer]
  */
-const fakeSend = (answer = () => ({ status: 200, body: '{"id":"x1"}' })) => {
+const fakeSend = (answer = () => ({ status: 200, body: '{"id":"x1"}', headers: { 'x-message-id': 'x1' } })) => {
 	/** @type {Array<{ url: string, init: any }>} */
 	const calls = [];
 	/** @type {import('../adapters/providers.js').OutboundSend} */
@@ -44,7 +44,7 @@ describe('provider values', () => {
 		expect(providerViolation('sms', { provider: 'twilio', secret: 'k', from: '+1', accountSid: 'x' })).toMatch(/AC/);
 		expect(providerViolation('sms', { provider: 'http', url: 'http://x', body: 'b' })).toMatch(/https/);
 		expect(providerViolation('sms', { provider: 'http', url: 'https://x', body: 'b', contentType: 'xml' })).toMatch(
-			/json or form/,
+			/contentType must be/,
 		);
 		expect(providerViolation('sms', { provider: 'http', url: 'https://x', body: 'b', headers: '[1]' })).toMatch(/JSON object/);
 		expect(providerViolation('sms', { provider: 'http', url: 'https://x', body: 'b', headers: '{"a b":"c"}' })).toMatch(
@@ -169,6 +169,7 @@ describe('SMS and WhatsApp providers', () => {
 			contentType: 'form',
 			body: 'account=9&key={secret}&to={toDigits}&message={text}&priority=0',
 			secret: 'k&ey',
+			idPath: 'id',
 		};
 		const sms = { ...MESSAGE, to: '+447700900123', text: 'Your code: 12 & more' };
 		expect(await providers.sendMessage('whatsapp', form, sms)).toEqual({ ok: true, id: 'g1', provider: 'http' });

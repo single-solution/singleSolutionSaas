@@ -19,11 +19,17 @@ const FROM = { name: 'from' };
 const TWILIO = [{ name: 'accountSid' }, SECRET, { name: 'from' }];
 /** @type {Field[]} */
 const HTTP = [
+	{ name: 'method', type: 'select', options: ['POST', 'GET', 'PUT', 'PATCH'] },
 	{ name: 'url' },
-	{ name: 'contentType', type: 'select', options: ['json', 'form'] },
+	{ name: 'contentType', type: 'select', options: ['json', 'form', 'text', 'none'] },
 	{ name: 'headers', type: 'textarea', optional: true },
-	{ name: 'body', type: 'textarea' },
+	{ name: 'body', type: 'textarea', optional: true },
 	{ ...SECRET, optional: true },
+	{ name: 'from', optional: true },
+	{ name: 'successStatus', optional: true },
+	{ name: 'successPath', optional: true },
+	{ name: 'successValue', optional: true },
+	{ name: 'idPath', optional: true },
 ];
 
 /** The providers of each connection and their fields. @type {Record<string, Record<string, Field[]>>} */

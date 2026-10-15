@@ -9,14 +9,18 @@
  * - `sms`: `twilio` `{ accountSid, secret, from }` · `http` (below)
  * - `whatsapp`: `meta` `{ phoneNumberId, secret, appSecret?, verifyToken? }` · `twilio` `{ accountSid, secret, from }` ·
  *   `http` (below)
- * - `http` (any SMS or WhatsApp gateway with an HTTP API that takes a POST): `{ url, contentType: json | form, headers?
- *   (JSON object text), body (template), secret? }`. In `headers` and `body`, `{to}` (international number),
- *   `{toDigits}` (digits only), `{text}` and `{secret}` are filled, encoded for the content type.
+ * - `http` (any SMS or WhatsApp gateway with an HTTP API, fixed-choices N1): the merchant builds the request — `{ method?:
+ *   POST | GET | PUT | PATCH, url (template), contentType?: json | form | text | none, headers? (JSON object text), body?
+ *   (template; none for GET or none), secret?, from? }` — and its success rule — `{ successStatus? (codes, ranges or
+ *   classes: 200, 200-204, 2xx; default 2xx), successPath? (a JSON path such as result.code), successValue? (the value
+ *   it must have, as text), idPath? (where the message id is) }`. Never words in the answer. In the URL, headers and
+ *   body, `{to}` (international number, +…), `{toDigits}` (digits only), `{text}`, `{from}` and `{secret}` are filled,
+ *   encoded for where they go (URL, JSON string, form field or plain text).
  * @module
  */
 import { isObject } from '@ss/contracts/util';
 import { checkUrl, isNetError, signV4 } from '@ss/net';
-import { detailOf, failed, failureMessage, gatewayOutcome } from '../core/gateway.js';
+import { JSON_PATH, SUCCESS_2XX, detailOf, failed, failureMessage, httpOutcome, parseStatusRule } from '../core/gateway.js';
 import { createSmtpMessaging } from './smtp.js';
 import { isMailbox } from './util.js';
 
@@ -58,8 +62,21 @@ const REQUIRED = Object.freeze({
 	ses: ['region', 'accessKeyId', 'secret', 'from'],
 	twilio: ['accountSid', 'secret', 'from'],
 	meta: ['phoneNumberId', 'secret'],
-	http: ['url', 'body'],
+	http: ['url'],
 });
+
+/** Methods a gateway request may use. */
+const GATEWAY_METHODS = Object.freeze(['POST', 'GET', 'PUT', 'PATCH']);
+/** Body types of a gateway request. */
+const GATEWAY_BODIES = Object.freeze(['json', 'form', 'text', 'none']);
+/** The content type each body type is sent with. */
+const BODY_TYPES = Object.freeze({
+	json: 'application/json',
+	form: 'application/x-www-form-urlencoded',
+	text: 'text/plain; charset=utf-8',
+});
+/** Where each known provider answers the message id (they answer a refusal with an HTTP error status). */
+const ID_PATHS = Object.freeze({ resend: 'id', mailgun: 'id', ses: 'MessageId', twilio: 'sid', meta: 'messages.0.id' });
 
 /**
  * Why a provider connection value is not usable, or null.
@@ -81,10 +98,21 @@ export const providerViolation = (name, value) => {
 	if (provider === 'twilio' && !/^AC[0-9a-f]{32}$/i.test(String(value.accountSid))) return 'accountSid starts with AC.';
 	if (provider === 'http') {
 		if (!/^https:\/\/\S+$/.test(String(value.url))) return 'url must be an https address.';
-		if (value.contentType !== undefined && value.contentType !== 'json' && value.contentType !== 'form')
-			return 'contentType must be json or form.';
+		const method = value.method ?? 'POST';
+		if (!GATEWAY_METHODS.includes(String(method))) return `method must be ${GATEWAY_METHODS.join(', ')}.`;
+		const type = value.contentType ?? 'json';
+		if (!GATEWAY_BODIES.includes(String(type))) return `contentType must be ${GATEWAY_BODIES.join(', ')}.`;
+		if (method !== 'GET' && type !== 'none' && (typeof value.body !== 'string' || value.body.trim() === ''))
+			return 'Fill out: body (or pick the body type none).';
 		if (value.headers !== undefined && headersOf(value.headers) === null)
 			return 'headers must be a JSON object of text values.';
+		if (value.successStatus !== undefined && parseStatusRule(value.successStatus) === null)
+			return 'successStatus lists codes, ranges or classes, for example 200, 200-204 or 2xx.';
+		for (const field of /** @type {const} */ (['successPath', 'idPath']))
+			if (value[field] !== undefined && value[field] !== '' && !JSON_PATH.test(String(value[field])))
+				return `${field} must be a JSON path such as result.code or data.0.id.`;
+		if (value.successPath && String(value.successValue ?? '').trim() === '')
+			return 'successValue is the value successPath must have, for example true, 0 or queued.';
 	}
 	return null;
 };
@@ -112,13 +140,24 @@ const headersOf = (text) => {
 };
 
 /**
- * Fill a gateway template: `{to}`, `{toDigits}`, `{text}` and `{secret}`, each encoded by `encode`.
+ * Fill a gateway template: `{to}`, `{toDigits}`, `{text}`, `{from}` and `{secret}`, each encoded by `encode`.
  * @param {string} template
  * @param {Record<string, string>} values
  * @param {(value: string) => string} encode
  */
 const fillGateway = (template, values, encode) =>
-	template.replace(/\{(to|toDigits|text|secret)\}/g, (_, name) => encode(values[name] ?? ''));
+	template.replace(/\{(to|toDigits|text|from|secret)\}/g, (_, name) => encode(values[name] ?? ''));
+
+/**
+ * The success rule of a gateway connection (fixed-choices N1).
+ * @param {ProviderValue} v
+ * @returns {import('../core/gateway.js').SuccessRule}
+ */
+const gatewayRule = (v) => ({
+	statuses: parseStatusRule(v.successStatus) ?? SUCCESS_2XX,
+	...(v.successPath ? { path: String(v.successPath), value: String(v.successValue ?? '') } : {}),
+	...(v.idPath ? { idPath: String(v.idPath) } : {}),
+});
 
 /** @param {string} value text inside a JSON string literal */
 const jsonInner = (value) => JSON.stringify(value).slice(1, -1);
@@ -129,12 +168,14 @@ const jsonInner = (value) => JSON.stringify(value).slice(1, -1);
  */
 export const createProviders = ({ send, policy, now, createTransport }) => {
 	/**
-	 * One HTTP call to a provider, as a send outcome.
+	 * One HTTP call to a provider, as a send outcome by its success rule (default: any 2xx; no id). `idHeader` names a
+	 * response header holding the message id (SendGrid's X-Message-Id).
 	 * @param {string} url
-	 * @param {{ method?: string, headers?: Record<string, string>, body?: string }} init
+	 * @param {{ method?: string, headers?: Record<string, string>, body?: string,
+	 *   rule?: import('../core/gateway.js').SuccessRule, idHeader?: string }} init
 	 * @returns {Promise<SendOutcome>}
 	 */
-	const call = async (url, { method = 'POST', headers = {}, body } = {}) => {
+	const call = async (url, { method = 'POST', headers = {}, body, rule = { statuses: SUCCESS_2XX }, idHeader } = {}) => {
 		try {
 			const response = await send(url, {
 				method,
@@ -143,7 +184,9 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 				timeoutMs: PROVIDER_TIMEOUT_MS,
 				redirect: 'error',
 			});
-			return gatewayOutcome(response.status, response.body.toString('utf8'));
+			const outcome = httpOutcome(response.status, response.body.toString('utf8'), rule);
+			const headerId = idHeader ? response.headers[idHeader] : undefined;
+			return outcome.ok && headerId ? { ok: true, id: headerId } : outcome;
 		} catch (error) {
 			const cause = isNetError(error) ? error.code : 'network';
 			return failed('provider_unreachable', { values: { cause }, retryable: cause !== 'ssrf_blocked' });
@@ -193,6 +236,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 		}
 		if (v.provider === 'resend')
 			return call('https://api.resend.com/emails', {
+				rule: { statuses: SUCCESS_2XX, idPath: ID_PATHS.resend },
 				headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
 				body: JSON.stringify({
 					from,
@@ -206,6 +250,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 		if (v.provider === 'sendgrid') {
 			const match = /^(.*?)\s*<([^>]+)>$/.exec(from);
 			return call('https://api.sendgrid.com/v3/mail/send', {
+				idHeader: 'x-message-id',
 				headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
 				body: JSON.stringify({
 					personalizations: [{ to: [{ email: m.to }] }],
@@ -224,6 +269,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 			if (m.replyTo) fields['h:Reply-To'] = m.replyTo;
 			for (const [name, val] of Object.entries(headers)) fields[`h:${name}`] = val;
 			return call(`https://${host}/v3/${encodeURIComponent(String(v.domain))}/messages`, {
+				rule: { statuses: SUCCESS_2XX, idPath: ID_PATHS.mailgun },
 				headers: { authorization: basic('api', secret), 'content-type': 'application/x-www-form-urlencoded' },
 				body: form(fields),
 			});
@@ -256,7 +302,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 			now: now(),
 			contentSha256Header: false,
 		});
-		return call(url, { headers: signed, body });
+		return call(url, { headers: signed, body, rule: { statuses: SUCCESS_2XX, idPath: ID_PATHS.ses } });
 	};
 
 	/**
@@ -266,14 +312,24 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 	 * @returns {Promise<SendOutcome>}
 	 */
 	const gateway = async (v, m) => {
-		const values = { to: m.to, toDigits: m.to.replace(/\D/g, ''), text: m.text, secret: String(v.secret ?? '') };
-		const json = v.contentType !== 'form';
+		const values = {
+			to: m.to,
+			toDigits: m.to.replace(/\D/g, ''),
+			text: m.text,
+			from: String(v.from ?? ''),
+			secret: String(v.secret ?? ''),
+		};
+		const method = String(v.method ?? 'POST');
+		const type = /** @type {'json' | 'form' | 'text' | 'none'} */ (method === 'GET' ? 'none' : (v.contentType ?? 'json'));
 		const extra = Object.fromEntries(
 			Object.entries(headersOf(v.headers) ?? {}).map(([name, val]) => [name.toLowerCase(), fillGateway(val, values, String)]),
 		);
-		return call(String(v.url), {
-			headers: { 'content-type': json ? 'application/json' : 'application/x-www-form-urlencoded', ...extra },
-			body: fillGateway(String(v.body), values, json ? jsonInner : encodeURIComponent),
+		const encode = type === 'json' ? jsonInner : type === 'form' ? encodeURIComponent : String;
+		return call(fillGateway(String(v.url), values, encodeURIComponent), {
+			method,
+			headers: { ...(type === 'none' ? {} : { 'content-type': BODY_TYPES[type] }), ...extra },
+			...(type === 'none' ? {} : { body: fillGateway(String(v.body ?? ''), values, encode) }),
+			rule: gatewayRule(v),
 		});
 	};
 
@@ -292,6 +348,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 		if (!whatsapp && /^MG[0-9a-f]{32}$/i.test(from)) fields.MessagingServiceSid = from;
 		else fields.From = `${prefix}${from}`;
 		return call(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`, {
+			rule: { statuses: SUCCESS_2XX, idPath: ID_PATHS.twilio },
 			headers: { authorization: basic(sid, String(v.secret)), 'content-type': 'application/x-www-form-urlencoded' },
 			body: form(fields),
 		});
@@ -322,6 +379,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 	const meta = (v, m) => {
 		const components = metaComponents(m);
 		return call(`https://graph.facebook.com/${META_API_VERSION}/${encodeURIComponent(String(v.phoneNumberId))}/messages`, {
+			rule: { statuses: SUCCESS_2XX, idPath: ID_PATHS.meta },
 			headers: { authorization: `Bearer ${String(v.secret)}`, 'content-type': 'application/json' },
 			body: JSON.stringify({
 				messaging_product: 'whatsapp',
@@ -388,7 +446,13 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 			}
 		}
 		if (v.provider === 'http') {
-			const checked = checkUrl(String(v.url), policy);
+			// the address with sample values in its placeholders (a gateway cannot be checked without sending)
+			const sample = fillGateway(
+				String(v.url),
+				{ to: '+10000000000', toDigits: '10000000000', text: 'test' },
+				encodeURIComponent,
+			);
+			const checked = checkUrl(sample, policy);
 			return checked.ok ? { ok: true } : { ok: false, message: `The gateway address is refused (${checked.reason}).` };
 		}
 		if (v.provider === 'resend')
