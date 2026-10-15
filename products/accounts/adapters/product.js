@@ -32,6 +32,7 @@ import messages from '../schemas/messages.json' with { type: 'json' };
 import ordersTab from '../schemas/orders_tab.settings.json' with { type: 'json' };
 import phoneCode from '../schemas/phone_code.settings.json' with { type: 'json' };
 import phonePassword from '../schemas/phone_password.settings.json' with { type: 'json' };
+import passwordsShared from '../schemas/passwords.shared.json' with { type: 'json' };
 import phoneShared from '../schemas/phone.shared.json' with { type: 'json' };
 import profileShared from '../schemas/profile.shared.json' with { type: 'json' };
 import roleRequests from '../schemas/role_requests.settings.json' with { type: 'json' };
@@ -81,6 +82,7 @@ const SETTINGS = {
  */
 const SHARED_SETTINGS = {
 	phone: { name: 'Phone numbers', features: ['phone_code', 'phone_password'], settings: phoneShared },
+	passwords: { name: 'Passwords', features: ['email_password', 'phone_password'], settings: passwordsShared },
 	profile: { name: 'Profile', features: [...SIGN_IN_METHODS], settings: profileShared },
 };
 

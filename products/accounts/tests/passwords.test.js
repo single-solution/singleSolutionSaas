@@ -316,7 +316,7 @@ describe('Forgot password by email: only a proven address or the one the account
 
 describe('A9: password and lock options', () => {
 	it('a growing lock: free failures, then 1, 2, 4 … up to 60 minutes; a good password resets it', async () => {
-		await env.setting('email_password', 'lockMode', 'growing');
+		await env.setting('passwords', 'lockMode', 'growing');
 		await env.setting('email_password', 'maxAttempts', 4);
 		await env.visitor('POST', '/v1/sign-up/password', { email: 'grow@example.com', password: 'growing password 1' });
 		for (let i = 0; i < 4; i += 1) expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
@@ -336,7 +336,7 @@ describe('A9: password and lock options', () => {
 		expect((await signIn('grow@example.com', 'growing password 1')).json.status).toBe('signed_in');
 		expect(code(await signIn('grow@example.com', 'bad'))).toBe('sign_in_failed');
 		expect((await signIn('grow@example.com', 'growing password 1')).json.status).toBe('signed_in');
-		await env.setting('email_password', 'lockMode', 'fixed');
+		await env.setting('passwords', 'lockMode', 'fixed');
 	});
 
 	it('wrong passwords are forgotten after a quiet day: only recent ones lead to a lock (K-27)', async () => {
@@ -363,7 +363,7 @@ describe('A9: password and lock options', () => {
 		expect(code(await signIn('slow@example.com', 'bad'))).toBe('sign_in_failed');
 		expect(code(await signIn('slow@example.com', 'slow password 1'))).toBe('locked');
 		// a growing lock grows again from its free failures after a quiet day
-		await env.setting('email_password', 'lockMode', 'growing');
+		await env.setting('passwords', 'lockMode', 'growing');
 		await env.setting('email_password', 'maxAttempts', 3);
 		await env.visitor('POST', '/v1/sign-up/password', { email: 'regrow@example.com', password: 'regrow password 1' });
 		for (let i = 0; i < 5; i += 1) {
@@ -373,7 +373,7 @@ describe('A9: password and lock options', () => {
 		env.advance(DAY);
 		for (let i = 0; i < 3; i += 1) expect(code(await signIn('regrow@example.com', 'bad'))).toBe('sign_in_failed');
 		expect((await signIn('regrow@example.com', 'regrow password 1')).json.status).toBe('signed_in');
-		await env.setting('email_password', 'lockMode', 'fixed');
+		await env.setting('passwords', 'lockMode', 'fixed');
 		await env.setting('email_password', 'maxAttempts', 5);
 	});
 
@@ -462,7 +462,7 @@ describe('A9: password and lock options', () => {
 	});
 
 	it('a network limit per address, minimum lengths up to 128 and the personal check', async () => {
-		await env.setting('email_password', 'networkLimit', 3);
+		await env.setting('passwords', 'networkLimit', 3);
 		env.setNetwork('198.51.100.7');
 		for (let i = 0; i < 3; i += 1) expect(code(await signIn('limit@example.com', 'x'))).toBe('sign_in_failed');
 		expect(code(await signIn('limit@example.com', 'x'))).toBe('rate_limited');
@@ -481,10 +481,10 @@ describe('A9: password and lock options', () => {
 		for (let i = 0; i < 3; i += 1) expect(code(await signIn('often@example.com', 'x'))).toBe('sign_in_failed');
 		expect(code(await signIn('often@example.com', 'often password 1'))).toBe('rate_limited');
 		env.setNetwork(null);
-		await env.setting('email_password', 'networkLimit', 0);
+		await env.setting('passwords', 'networkLimit', 0);
 		await env.setting('email_password', 'minLength', 128);
 		await env.setting('email_password', 'minLength', 12);
-		await env.setting('email_password', 'personalCheck', true);
+		await env.setting('passwords', 'personalCheck', true);
 		/** @param {string} password */
 		const tryPassword = (password) =>
 			env.visitor('POST', '/v1/sign-up/password', { email: 'jordan.blake@example.com', name: 'Jordan Blake', password });
@@ -493,7 +493,44 @@ describe('A9: password and lock options', () => {
 			expect([code(refused), refused.json.rule], password).toEqual(['weak_password', 'personal']);
 		}
 		expect((await tryPassword('correct horse battery')).json.status).toBe('signed_in');
-		await env.setting('email_password', 'personalCheck', false);
+		await env.setting('passwords', 'personalCheck', false);
 		await env.setting('email_password', 'minLength', 8);
+	});
+
+	it('the lock mode, the network limit and the personal check are shared by both methods, also with Phone + password alone', async () => {
+		await env.switchOn(['phone_password']);
+		// the merchant cannot change Email + password's own settings while it is off, but the shared Passwords ones
+		const cookie = await env.merchantSession();
+		/** @param {string} key @param {unknown} value */
+		const save = async (key, value) =>
+			(await env.dashboard(cookie, 'PUT', `/v1/dashboard/websites/${env.websiteId}/settings/${key}`, { value })).status;
+		expect(await save('email_password.minLength', 10)).toBe(403);
+		expect(await save('passwords.personalCheck', true)).toBe(204);
+		expect(await save('passwords.networkLimit', 2)).toBe(204);
+		expect(await save('passwords.lockMode', 'growing')).toBe(204);
+		/** @param {Record<string, unknown>} body */
+		const phoneUp = (body) => env.visitor('POST', '/v1/sign-up/phone-password', body);
+		const personal = await phoneUp({ phone: '+447700900341', name: 'Morgan Lee', password: 'morgan secret 1' });
+		expect([code(personal), personal.json.rule]).toEqual(['weak_password', 'personal']);
+		expect((await phoneUp({ phone: '+447700900341', name: 'Morgan Lee', password: 'quiet river 77' })).json.status).toBe(
+			'signed_in',
+		);
+		/** @param {string} password */
+		const phoneIn = (password) => env.visitor('POST', '/v1/sign-in/phone-password', { phone: '+447700900341', password });
+		env.setNetwork('198.51.100.9');
+		for (let i = 0; i < 2; i += 1) expect(code(await phoneIn('bad'))).toBe('sign_in_failed');
+		expect(code(await phoneIn('bad'))).toBe('rate_limited');
+		env.setNetwork(null);
+		// growing: after the 5 free failures (Phone + password's maxAttempts), a 1-minute lock
+		await env.setting('passwords', 'networkLimit', 0);
+		for (let i = 0; i < 4; i += 1) expect(code(await phoneIn('bad'))).toBe('sign_in_failed');
+		expect(Date.parse((await phoneIn('quiet river 77')).json.lockedUntil) - env.now()).toBe(60_000);
+		for (const [name, value] of /** @type {const} */ ([
+			['personalCheck', false],
+			['lockMode', 'fixed'],
+		]))
+			await env.setting('passwords', name, value);
+		env.advance(60_000);
+		await env.switchOn(['email_password', 'phone_password']);
 	});
 });

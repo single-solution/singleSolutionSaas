@@ -207,13 +207,13 @@ export const createFlows = (product, service) => {
 	/**
 	 * The password rules of a method (A2, A9, ST-26, K-27): each of Email + password and Phone + password has its own
 	 * lengths, letter-and-digit, breached-password and lock settings (how many failures, how long, and after how many
-	 * quiet hours they are forgotten); the lock mode, the network limit and the personal check are Email + password's,
-	 * for both.
+	 * quiet hours they are forgotten); the lock mode, the network limit and the personal check are the shared Passwords
+	 * settings, set while either method is on.
 	 * @param {Site} s @param {string} method
 	 */
 	const passwordRules = async (s, method) => {
-		const email = await service.settings(s, 'email_password');
-		const own = method === 'phone_password' ? await service.settings(s, 'phone_password') : email;
+		const own = await service.settings(s, method === 'phone_password' ? 'phone_password' : 'email_password');
+		const shared = await service.settings(s, 'passwords');
 		return {
 			minLength: Number(own.minLength),
 			maxLength: Number(own.maxLength),
@@ -222,9 +222,9 @@ export const createFlows = (product, service) => {
 			maxAttempts: Number(own.maxAttempts),
 			lockMinutes: Number(own.lockMinutes),
 			forgetMs: Number(own.forgetHours) * HOUR_MS,
-			lockMode: String(email.lockMode),
-			networkLimit: Number(email.networkLimit),
-			personalCheck: email.personalCheck === true,
+			lockMode: String(shared.lockMode),
+			networkLimit: Number(shared.networkLimit),
+			personalCheck: shared.personalCheck === true,
 		};
 	};
 
