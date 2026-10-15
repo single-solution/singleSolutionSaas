@@ -16,6 +16,7 @@ import {
 	checkTemplate,
 	checkValues,
 	fillText,
+	fitValues,
 	languageOfSegment,
 	pickVersion,
 	placeholdersOf,
@@ -300,6 +301,111 @@ describe('templates', () => {
 		expect(checkValues({ unsubscribeUrl: 'x' })).toEqual({ ok: false });
 		expect(checkValues({ a: {} })).toEqual({ ok: false });
 		expect(checkValues(Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`v${i}`, 'x'])))).toEqual({ ok: false });
+		// 1,000 characters a value, 50,000 for a long one, 100,000 in all
+		expect(checkValues({ a: 'x'.repeat(1000) }).ok).toBe(true);
+		expect(checkValues({ a: 'x'.repeat(1001) }).ok).toBe(false);
+		expect(checkValues({ a: 'x'.repeat(50_000) }, ['a']).ok).toBe(true);
+		expect(checkValues({ a: 'x'.repeat(50_001) }, ['a']).ok).toBe(false);
+		expect(checkValues({ a: 'x'.repeat(1001) }, ['b']).ok).toBe(false);
+		expect(checkValues({ a: 'x'.repeat(50_000), b: 'y'.repeat(50_000) }, ['a', 'b']).ok).toBe(true);
+		expect(checkValues({ a: 'x'.repeat(50_000), b: 'y'.repeat(50_000), c: 1 }, ['a', 'b']).ok).toBe(false);
+	});
+
+	it('keeps long values in the text of a template, and cuts them to fit where the channel or the part is short', () => {
+		const long = ['body'];
+		const LONG_PROBLEM = '{body} is long text: use it in the message only.';
+		expect(checkTemplate({ key: 'n.copy', channel: 'email', subject: 'Note {body}', text: '{body}' }, long)).toEqual({
+			ok: false,
+			field: 'subject',
+			message: LONG_PROBLEM,
+		});
+		const atMeta = { key: 'n.copy', channel: 'whatsapp', text: '{body}', providerTemplate: 'copy' };
+		expect(checkTemplate({ ...atMeta, buttons: [{ index: 0, type: 'url', value: 'n/{body}' }] }, long)).toEqual({
+			ok: false,
+			field: 'buttons/0/value',
+			message: LONG_PROBLEM,
+		});
+		expect(checkTemplate({ key: 'n.copy', channel: 'email', subject: 'Note {body}', text: '{body}' }).ok).toBe(true);
+
+		const note = '… (shortened)';
+		const lines = Array.from({ length: 100 }, (_, i) => `line ${i} ${'x'.repeat(40)}`).join('\n');
+		// a text that fits keeps its values; one that does not cuts only the long values, at a line end
+		expect(fitValues('{title}: {body}', { title: 'T', body: 'short' }, { longValues: long, limit: 50, note })).toEqual({
+			title: 'T',
+			body: 'short',
+		});
+		const fitted = fitValues('{title}: {body}', { title: 'Mine', body: lines }, { longValues: long, limit: 500, note });
+		expect(fitted.title).toBe('Mine');
+		expect(`Mine: ${fitted.body}`.length).toBeLessThanOrEqual(500);
+		expect(fitted.body).toBe(`${lines.split('\n').slice(0, 10).join('\n')}${note}`);
+		// no line end near the room's end: a word end, else exactly there, never inside a character
+		expect(fitValues('{body}', { body: `${'a'.repeat(25)} ${'b'.repeat(80)}` }, { longValues: long, limit: 40, note })).toEqual(
+			{ body: `${'a'.repeat(25)}${note}` },
+		);
+		expect(fitValues('{body}', { body: 'a'.repeat(100) }, { longValues: long, limit: 20, note })).toEqual({
+			body: `${'a'.repeat(7)}${note}`,
+		});
+		expect(
+			fitValues('{body}', { body: `${'a'.repeat(6)}😀${'b'.repeat(90)}` }, { longValues: long, limit: 20, note }).body,
+		).toBe(`${'a'.repeat(6)}${note}`);
+		// two long values share the room; a short one keeps its whole length and leaves the rest to the other
+		const shared = fitValues(
+			'{a}|{b}',
+			{ a: 'x'.repeat(30), b: 'y'.repeat(300) },
+			{ longValues: ['a', 'b'], limit: 100, note: '…' },
+		);
+		expect(shared).toEqual({ a: 'x'.repeat(30), b: `${'y'.repeat(68)}…` });
+		const even = fitValues(
+			'{a}|{b}',
+			{ a: 'x'.repeat(300), b: 'y'.repeat(300) },
+			{ longValues: ['a', 'b'], limit: 101, note: '…' },
+		);
+		expect([even.a, even.b]).toEqual([`${'x'.repeat(49)}…`, `${'y'.repeat(49)}…`]);
+		// a value used twice counts twice; when not even the note fits, the long value is left out
+		const twice = fitValues('{a} {a}', { a: 'z'.repeat(100) }, { longValues: ['a'], limit: 21, note: '…' });
+		expect(fillText('{a} {a}', twice).length).toBeLessThanOrEqual(21);
+		expect(
+			fitValues('{title}{body}', { title: 'x'.repeat(20), body: 'y'.repeat(50) }, { longValues: long, limit: 25, note }),
+		).toEqual({ title: 'x'.repeat(20), body: '' });
+
+		// rendering: email keeps a long value whole; SMS, WhatsApp parameters, push, subjects and buttons get it cut
+		const template = {
+			key: 'n.copy',
+			channel: /** @type {const} */ ('email'),
+			language: '',
+			subject: 'About {body}',
+			text: 'Copy:\n{body}',
+			required: true,
+			urgent: false,
+			providerTemplate: '',
+			buttons: /** @type {any[]} */ ([]),
+			sensitive: false,
+		};
+		const values = { body: lines };
+		const fit = { longValues: long, note };
+		const email = renderTemplate(template, values, fit);
+		expect(email.text).toBe(`Copy:\n${lines}`);
+		expect(email.subject.length).toBeLessThanOrEqual(200);
+		expect(email.subject.endsWith(note)).toBe(true);
+		expect(renderTemplate(template, values).subject).toBe(`About ${lines}`);
+		const sms = renderTemplate({ ...template, channel: 'sms', subject: '' }, values, fit);
+		expect([sms.text.length <= 1600, sms.text.endsWith(note)]).toEqual([true, true]);
+		const push = renderTemplate({ ...template, channel: 'push', subject: 'Copy' }, values, fit);
+		expect(push.text.length).toBeLessThanOrEqual(500);
+		const whatsapp = renderTemplate(
+			{
+				...template,
+				channel: 'whatsapp',
+				subject: '',
+				providerTemplate: 'copy',
+				buttons: [{ index: 0, type: 'url', value: 'notes/{body}' }],
+			},
+			values,
+			fit,
+		);
+		expect(whatsapp.text.length).toBeLessThanOrEqual(4096);
+		expect(whatsapp.parameters).toEqual([whatsapp.text.slice('Copy:\n'.length)]);
+		expect(whatsapp.buttons[0]?.value.length).toBeLessThanOrEqual(2000);
 	});
 });
 

@@ -27,7 +27,7 @@ import {
 	TextArea,
 	describeProblem,
 } from '@ss/ui';
-import { isTitled } from '@ss/contracts/templates';
+import { LONG_VALUE_LIMIT, VALUE_LIMIT, isTitled } from '@ss/contracts/templates';
 import { CHANNELS } from '../../core/channels.js';
 import { MAX_BUTTONS, fillText, templateRows, valueNamesOf } from '../../core/templates.js';
 import { call, fill, useLoad } from './api.js';
@@ -114,11 +114,11 @@ function ButtonsEditor({ buttons, onChange }) {
 }
 
 /**
- * A live preview of the template's words: a sample for every value it uses, and the subject, message and buttons as a
- * recipient gets them (optional sections shown only with a sample).
- * @param {{ template: Template }} props
+ * A live preview of the template's words: a sample for every value it uses (a long value in a larger box), and the
+ * subject, message and buttons as a recipient gets them (optional sections shown only with a sample).
+ * @param {{ template: Template, longValues: string[] }} props
  */
-function TemplatePreview({ template }) {
+function TemplatePreview({ template, longValues }) {
 	const [samples, setSamples] = useState(/** @type {Record<string, string>} */ ({}));
 	const titled = isTitled(template.channel);
 	const buttons = template.channel === 'whatsapp' && template.providerTemplate.trim() !== '' ? template.buttons : [];
@@ -138,15 +138,25 @@ function TemplatePreview({ template }) {
 			</div>
 			{names.length > 0 ? (
 				<FieldGrid>
-					{names.map((name) => (
-						<Input
-							key={name}
-							label={name}
-							value={samples[name] ?? ''}
-							maxLength={1000}
-							onChange={(event) => setSamples({ ...samples, [name]: event.target.value })}
-						/>
-					))}
+					{names.map((name) =>
+						longValues.includes(name) ? (
+							<TextArea
+								key={name}
+								label={name}
+								value={samples[name] ?? ''}
+								maxLength={LONG_VALUE_LIMIT}
+								onChange={(event) => setSamples({ ...samples, [name]: event.target.value })}
+							/>
+						) : (
+							<Input
+								key={name}
+								label={name}
+								value={samples[name] ?? ''}
+								maxLength={VALUE_LIMIT}
+								onChange={(event) => setSamples({ ...samples, [name]: event.target.value })}
+							/>
+						),
+					)}
 				</FieldGrid>
 			) : null}
 			<div className="space-y-2 rounded-xl bg-surface p-3 text-sm text-fg" aria-live="polite">
@@ -168,8 +178,8 @@ function TemplatePreview({ template }) {
 
 /**
  * A draft in the template dialog: `fixed` for a product's message (its key, channel and default language are set),
- * with its name and values; `isNew` until the merchant's version exists.
- * @typedef {Template & { isNew: boolean, fixed: boolean, name?: string, values?: string[] }} Draft
+ * with its name, values and long values; `isNew` until the merchant's version exists.
+ * @typedef {Template & { isNew: boolean, fixed: boolean, name?: string, values?: string[], longValues?: string[] }} Draft
  */
 
 /** Badge tone of each state of a product's message. */
@@ -239,12 +249,12 @@ export function TemplatesSection({ websiteId }) {
 			buttons: words?.buttons ?? [],
 			isNew: row.template === null,
 			fixed: true,
-			...(message ? { name: message.name, values: message.values } : {}),
+			...(message ? { name: message.name, values: message.values, longValues: message.longValues ?? [] } : {}),
 		});
 	};
 	const save = async () => {
 		if (!draft) return;
-		const { isNew: _isNew, fixed: _fixed, name: _name, values: _values, ...template } = draft;
+		const { isNew: _isNew, fixed: _fixed, name: _name, values: _values, longValues: _longValues, ...template } = draft;
 		const atMeta = template.channel === 'whatsapp' && template.providerTemplate.trim() !== '';
 		const next = await call('PUT', base, { ...template, buttons: atMeta ? template.buttons : [] });
 		if (!next.ok) return setProblem(next.problem);
@@ -492,6 +502,9 @@ export function TemplatesSection({ websiteId }) {
 								{draft.values?.length
 									? ` ${fill(T.valuesHelp, { values: draft.values.map((v) => `{${v}}`).join(', ') })}`
 									: ''}
+								{draft.longValues?.length
+									? ` ${fill(T.longValuesHelp, { values: draft.longValues.map((v) => `{${v}}`).join(', ') })}`
+									: ''}
 							</p>
 						) : (
 							<>
@@ -553,7 +566,7 @@ export function TemplatesSection({ websiteId }) {
 							checked={draft.sensitive}
 							onChange={(event) => edit({ sensitive: event.target.checked })}
 						/>
-						<TemplatePreview template={draft} />
+						<TemplatePreview template={draft} longValues={draft.longValues ?? []} />
 						{problem ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
 						<div className="flex flex-wrap gap-2">
 							<Button type="submit">{TEXTS.save}</Button>

@@ -55,6 +55,8 @@ import { LEASE_MS } from '../core/timing.js';
  *   has attempts to make; null once it is sent, failed or skipped. Never in a delivery-log read
  * @property {Partial<Record<Channel, Template>> | null} [defaults] a product's message: the defaults its send carried,
  *   kept while it may still move to its fallback channel (parity P1); null once it is sent, failed, skipped or moved
+ * @property {string[]} [longValues] a product's message with long values: their names (they are cut to fit on a channel
+ *   with a shorter limit, the fallback channel too)
  * @property {boolean} required
  * @property {boolean} urgent
  * @property {import('../core/log.js').MessageStatus} status

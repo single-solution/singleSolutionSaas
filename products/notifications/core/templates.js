@@ -4,14 +4,24 @@
  * text, and shows an optional section `{?name}…{/name}` only when the value `name` is not empty (PLAN 0.8.10 N2).
  * The rules of the words are `@ss/contracts/templates`, which products' default templates follow too (parity P1): a
  * send of a product's message carries its defaults, used while the website has no template of its own for the channel.
+ * A product's message may have long values (`longValues`, up to 50,000 characters each, for example a chat
+ * transcript): they go only in the message's text; email sends them whole, and a channel with a shorter limit (SMS,
+ * WhatsApp, push) gets them cut to fit, at a line or word end, with a note.
  * No I/O: the API, the dashboard and the widgets share it.
  * @module
  */
 import {
 	BUILT_IN_VALUES,
+	LONG_VALUE_LIMIT,
+	MAX_VALUES,
+	SUBJECT_LIMIT,
 	TEMPLATE_KEY,
+	TEXT_LIMITS,
+	VALUES_TOTAL_LIMIT,
+	VALUE_LIMIT,
 	VALUE_NAME,
 	isTitled,
+	longValueProblem,
 	placeholdersOf,
 	sectionProblem,
 	valueNamesOf,
@@ -31,8 +41,6 @@ const ACCOUNT_KEY_PREFIX = 'accounts.';
 /** The language of a template every recipient falls back to (written as `default` in paths). */
 export const DEFAULT_LANGUAGE = '';
 
-/** Most values of a send. */
-const MAX_VALUES = 50;
 /** What the delivery log keeps instead of a hidden value that is not empty: a link, else any other value. */
 const HIDDEN = Object.freeze({ link: '[link hidden]', value: '******' });
 /** A value that is a link: an address with a scheme, or a path. */
@@ -166,11 +174,13 @@ export const checkButtons = (input, { channel, providerTemplate }) => {
 };
 
 /**
- * Check a template the merchant saves.
+ * Check a template the merchant saves (or a product's default words): with the long values of its product's message,
+ * which go only in the text, never in the subject or a button.
  * @param {unknown} input
+ * @param {ReadonlyArray<string>} [longValues]
  * @returns {{ ok: true, value: Template } | { ok: false, field: string, message: string }}
  */
-export const checkTemplate = (input) => {
+export const checkTemplate = (input, longValues = []) => {
 	const body = typeof input === 'object' && input !== null ? /** @type {Record<string, unknown>} */ (input) : {};
 	/** @param {string} field @param {string} message */
 	const fail = (field, message) => /** @type {const} */ ({ ok: false, field, message });
@@ -191,6 +201,12 @@ export const checkTemplate = (input) => {
 		return fail('providerTemplate', 'Only WhatsApp templates have a provider template name (lower case, digits and _).');
 	const buttons = checkButtons(body.buttons, { channel, providerTemplate });
 	if (!buttons.ok) return buttons;
+	const longSubject = longValueProblem(subject, longValues);
+	if (longSubject) return fail('subject', longSubject);
+	for (const [at, button] of buttons.value.entries()) {
+		const longButton = longValueProblem(button.value, longValues);
+		if (longButton) return fail(`buttons/${at}/value`, longButton);
+	}
 	return {
 		ok: true,
 		value: {
@@ -211,12 +227,14 @@ export const checkTemplate = (input) => {
 /**
  * Check the defaults a send carries (parity P1; the kit adds them to every send of a product's declared message): for
  * each channel but WhatsApp, the default words `{ subject?, text, required?, urgent?, sensitive? }`, checked as a
- * template the merchant saves. WhatsApp never has a default (it sends only templates approved at Meta).
+ * template the merchant saves, with the send's long values. WhatsApp never has a default (it sends only templates
+ * approved at Meta).
  * @param {unknown} input
  * @param {string} key the send's template key
+ * @param {ReadonlyArray<string>} [longValues] the send's long values
  * @returns {{ ok: true, value: Partial<Record<Channel, Template>> } | { ok: false, field: string, message: string }}
  */
-export const checkDefaults = (input, key) => {
+export const checkDefaults = (input, key, longValues = []) => {
 	/** @param {string} field @param {string} message */
 	const fail = (field, message) => /** @type {const} */ ({ ok: false, field, message });
 	if (input === undefined || input === null) return { ok: true, value: {} };
@@ -229,15 +247,18 @@ export const checkDefaults = (input, key) => {
 			return fail('defaults/whatsapp', 'WhatsApp has no default: it sends only templates approved at Meta.');
 		if (!CHANNELS.includes(/** @type {Channel} */ (channel))) return fail(`defaults/${channel}`, 'This is not a channel.');
 		const words = typeof given === 'object' && given !== null ? /** @type {Record<string, unknown>} */ (given) : {};
-		const checked = checkTemplate({
-			key,
-			channel,
-			subject: words.subject,
-			text: words.text,
-			required: words.required,
-			urgent: words.urgent,
-			sensitive: words.sensitive,
-		});
+		const checked = checkTemplate(
+			{
+				key,
+				channel,
+				subject: words.subject,
+				text: words.text,
+				required: words.required,
+				urgent: words.urgent,
+				sensitive: words.sensitive,
+			},
+			longValues,
+		);
 		if (!checked.ok) return fail(`defaults/${channel}/${checked.field}`, checked.message);
 		value[/** @type {Channel} */ (channel)] = checked.value;
 	}
@@ -272,32 +293,36 @@ export const fillText = (text, values) =>
 	);
 
 /**
- * Check the values of a send: up to 50 names, each a string or a number of at most 1000 characters.
+ * Check the values of a send: up to 50 names, each a string or a number of at most 1,000 characters — 50,000 for a
+ * long value of the send's product message — and 100,000 characters in all.
  * @param {unknown} input
+ * @param {ReadonlyArray<string>} [longValues] the send's long values
  * @returns {{ ok: true, value: Record<string, string> } | { ok: false }}
  */
-export const checkValues = (input) => {
+export const checkValues = (input, longValues = []) => {
 	if (input === undefined || input === null) return { ok: true, value: {} };
 	if (typeof input !== 'object' || Array.isArray(input)) return { ok: false };
 	const entries = Object.entries(/** @type {Record<string, unknown>} */ (input));
 	if (entries.length > MAX_VALUES) return { ok: false };
 	/** @type {Record<string, string>} */
 	const value = {};
+	let total = 0;
 	for (const [name, raw] of entries) {
 		if (!VALUE_NAME.test(name) || BUILT_IN_VALUES.includes(name)) return { ok: false };
-		if (typeof raw === 'number' && Number.isFinite(raw)) value[name] = String(raw);
-		else if (typeof raw === 'string' && raw.length <= 1000) value[name] = raw;
-		else return { ok: false };
+		const text = typeof raw === 'number' && Number.isFinite(raw) ? String(raw) : typeof raw === 'string' ? raw : null;
+		if (text === null || text.length > (longValues.includes(name) ? LONG_VALUE_LIMIT : VALUE_LIMIT)) return { ok: false };
+		total += text.length;
+		value[name] = text;
 	}
-	return { ok: true, value };
+	return total > VALUES_TOTAL_LIMIT ? { ok: false } : { ok: true, value };
 };
 
 /**
- * Check the names of a send's secret values (`secretValues`): up to 50 value names, kept once each.
+ * Check a send's list of value names (`secretValues`, `longValues`): up to 50 value names, kept once each.
  * @param {unknown} input
  * @returns {{ ok: true, value: string[] } | { ok: false }}
  */
-export const checkSecretValues = (input) => {
+export const checkValueNames = (input) => {
 	if (input === undefined || input === null) return { ok: true, value: [] };
 	if (!Array.isArray(input) || input.length > MAX_VALUES) return { ok: false };
 	if (!input.every((name) => typeof name === 'string' && VALUE_NAME.test(name))) return { ok: false };
@@ -349,19 +374,83 @@ export const pickVersion = (versions, language, multiLanguage) => {
 	);
 };
 
+/** A value cut to fit ends at a line end, else a word end, found in its last fifth, else exactly where room ends. */
+const BREAK_ZONE = 0.8;
+
 /**
- * The message a template makes for one send.
+ * A long value cut to at most `max` characters, ending with `note`: at the last line end in its last fifth, else the
+ * last word end there, else at `max`, never between the two halves of a character; empty when not even the note fits.
+ * @param {string} value
+ * @param {number} max
+ * @param {string} note
+ */
+const cutValue = (value, max, note) => {
+	if (value.length <= max) return value;
+	let end = max - note.length;
+	if (end <= 0) return '';
+	const last = value.charCodeAt(end - 1);
+	if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+	const head = value.slice(0, end);
+	const at = [head.lastIndexOf('\n'), head.lastIndexOf(' ')].find((index) => index >= end * BREAK_ZONE) ?? end;
+	return `${head.slice(0, at).trimEnd()}${note}`;
+};
+
+/**
+ * The values that fill a text within `limit` characters: when the filled text is longer, the long values it shows are
+ * cut (each to its share of the room the rest of the text leaves, a short one keeping its whole length) with `note` at
+ * their end; every other value stays whole. A text that fits keeps its values.
+ * @param {string} text
+ * @param {Readonly<Record<string, string>>} values
+ * @param {{ longValues: ReadonlyArray<string>, limit: number, note: string }} fit
+ * @returns {Readonly<Record<string, string>>}
+ */
+export const fitValues = (text, values, { longValues, limit, note }) => {
+	const shown = showSections(text, values);
+	/** How often each long value that is not empty shows. @type {Map<string, number>} */
+	const uses = new Map();
+	for (const [, name] of shown.matchAll(PLACEHOLDER))
+		if (longValues.includes(/** @type {string} */ (name)) && hasValue(values, /** @type {string} */ (name)))
+			uses.set(/** @type {string} */ (name), (uses.get(/** @type {string} */ (name)) ?? 0) + 1);
+	if (uses.size === 0 || fillText(text, values).length <= limit) return values;
+	const rest = shown.replace(PLACEHOLDER, (match, name) =>
+		uses.has(name) ? '' : Object.hasOwn(values, name) ? /** @type {string} */ (values[name]) : match,
+	);
+	let room = Math.max(0, limit - rest.length);
+	let left = [...uses.values()].reduce((sum, count) => sum + count, 0);
+	/** @type {Record<string, string>} */
+	const fitted = { ...values };
+	for (const [name, count] of [...uses].sort(([a], [b]) => String(values[a]).length - String(values[b]).length)) {
+		const share = Math.floor(room / left);
+		fitted[name] = cutValue(/** @type {string} */ (values[name]), share, note);
+		room -= fitted[name].length * count;
+		left -= count;
+	}
+	return fitted;
+};
+
+/**
+ * The message a template makes for one send. Long values (`fit.longValues`) fill the text whole on email; elsewhere,
+ * and in a subject, title or button, they are cut to fit with `fit.note` (`fitValues`).
  * @param {Template} template
  * @param {Readonly<Record<string, string>>} values the send's values plus the built-in ones
+ * @param {{ longValues: ReadonlyArray<string>, note: string }} [fit]
  * @returns {{ subject: string, text: string, parameters: string[], buttons: Button[] }} `parameters`: the values in the
  *   order the text uses them (a WhatsApp provider template's body parameters); `buttons`: their values filled
  */
-export const renderTemplate = (template, values) => ({
-	subject: fillText(template.subject, values),
-	text: fillText(template.text, values),
-	parameters: placeholdersOf(template.text).map((name) => values[name] ?? ''),
-	buttons: template.buttons.map((button) => ({ ...button, value: fillText(button.value, values) })),
-});
+export const renderTemplate = (template, values, fit = { longValues: [], note: '' }) => {
+	/** @param {string} text @param {number} limit */
+	const valuesFor = (text, limit) => (fit.longValues.length === 0 ? values : fitValues(text, values, { ...fit, limit }));
+	const textValues = template.channel === 'email' ? values : valuesFor(template.text, TEXT_LIMITS[template.channel]);
+	return {
+		subject: fillText(template.subject, valuesFor(template.subject, SUBJECT_LIMIT)),
+		text: fillText(template.text, textValues),
+		parameters: placeholdersOf(template.text).map((name) => textValues[name] ?? ''),
+		buttons: template.buttons.map((button) => ({
+			...button,
+			value: fillText(button.value, valuesFor(button.value, BUTTON_VALUE_LIMIT)),
+		})),
+	};
+};
 
 /**
  * A template as the API answers it.
@@ -383,9 +472,10 @@ export const templateView = (template) => ({
 
 /**
  * A message a product declares (its `GET /v1/message-defaults`), with the product's id: `channels` holds the default
- * words of each channel it is sent on (`null` for WhatsApp, which has no default).
- * @typedef {{ productId: string, key: string, name: string, description?: string, values: string[], required?: boolean,
- *   urgent?: boolean, sensitive?: boolean,
+ * words of each channel it is sent on (`null` for WhatsApp, which has no default); `longValues` the values that hold
+ * long text.
+ * @typedef {{ productId: string, key: string, name: string, description?: string, values: string[],
+ *   longValues?: string[], required?: boolean, urgent?: boolean, sensitive?: boolean,
  *   channels: Partial<Record<Channel, { subject?: string, text: string } | null>> }} ProductMessage
  */
 /**
@@ -422,15 +512,18 @@ export const templateRows = ({ messages, templates, off }) => {
 			const template = saved.get(id(message.key, channel, 'default')) ?? null;
 			shown.add(id(message.key, channel, 'default'));
 			const checked = words
-				? checkTemplate({
-						key: message.key,
-						channel,
-						subject: words.subject,
-						text: words.text,
-						required: message.required,
-						urgent: message.urgent,
-						sensitive: message.sensitive,
-					})
+				? checkTemplate(
+						{
+							key: message.key,
+							channel,
+							subject: words.subject,
+							text: words.text,
+							required: message.required,
+							urgent: message.urgent,
+							sensitive: message.sensitive,
+						},
+						message.longValues,
+					)
 				: null;
 			const defaults = checked?.ok ? checked.value : null;
 			rows.push({

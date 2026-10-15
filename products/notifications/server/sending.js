@@ -17,6 +17,10 @@
  * (reason `switched_off`). A send may name a `fallbackTemplate`: the website's template for that key is used when it has
  * none of its own for the send's key, before the defaults (a product's message per status falls back to its general
  * message); the message is skipped when either key is switched off on the channel.
+ *
+ * Long values (a product's message names them in `longValues`, up to 50,000 characters each): email sends them whole;
+ * on SMS, WhatsApp and push, and in a subject, title or button, they are cut to fit, ending with the website's text
+ * `message.shortened`. A waiting message keeps their names for its fallback channel.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -74,6 +78,7 @@ import { createStore } from '../adapters/store.js';
  *   channel (parity P1), `{}` for none
  * @property {string | null} fallbackTemplate the template key whose website template is used when the website has none
  *   of its own for `template`, before the defaults (null: none)
+ * @property {string[]} longValues the values of a product's message that hold long text (`[]`: none)
  */
 /** @typedef {import('../core/templates.js').Template} Template */
 
@@ -153,13 +158,18 @@ export const createSending = (product) => {
 	 * as the delivery log keeps them, with every value of a sensitive template and the values named secret hidden.
 	 * The website's own template comes first (the recipient's language, else its default version), then its template
 	 * for the send's fallback key, else the product's default words on that channel (parity P1). Accounts' templates are
-	 * always required and urgent.
+	 * always required and urgent. Long values are cut to fit where the channel or the part needs it, ending with the
+	 * website's text `message.shortened`.
 	 * @param {Site} s
 	 * @param {{ key: string, fallbackKey: string | null, channel: Channel, address: string, values: Record<string, string>,
-	 *   language: string | null, secretValues: string[], defaults: Partial<Record<Channel, Template>> }} input
+	 *   language: string | null, secretValues: string[], defaults: Partial<Record<Channel, Template>>,
+	 *   longValues: string[] }} input
 	 * @returns {Promise<({ required: boolean, urgent: boolean } & Made) | null>} null when there is no template
 	 */
-	const fromTemplate = async (s, { key, fallbackKey, channel, address, values, language, secretValues, defaults }) => {
+	const fromTemplate = async (
+		s,
+		{ key, fallbackKey, channel, address, values, language, secretValues, defaults, longValues },
+	) => {
 		/** @param {string} templateKey */
 		const ownOf = async (templateKey) =>
 			pickVersion(await s.store.templates.versions(templateKey, channel), language, s.on.includes('multi_language'));
@@ -169,9 +179,13 @@ export const createSending = (product) => {
 		const builtIn = version.required
 			? {}
 			: { unsubscribeUrl: `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(address)}` };
+		const fit = {
+			longValues,
+			note: longValues.length === 0 ? '' : ((await product.settings.texts(s.websiteId))['message.shortened'] ?? ''),
+		};
 		/** @param {Record<string, string>} filled @returns {Words} */
 		const wordsOf = (filled) => ({
-			...renderTemplate(version, { ...filled, ...builtIn }),
+			...renderTemplate(version, { ...filled, ...builtIn }, fit),
 			providerTemplate: version.providerTemplate,
 			language: version.language,
 		});
@@ -426,6 +440,7 @@ export const createSending = (product) => {
 			language: message.to.language,
 			secretValues: message.hidden,
 			defaults: message.defaults ?? {},
+			longValues: message.longValues ?? [],
 		});
 		return made
 			? { channel: target, address, ...keep(s, { channel: target, address, values: message.values, ...made }) }
@@ -584,6 +599,7 @@ export const createSending = (product) => {
 				language: input.language,
 				secretValues: input.secretValues,
 				defaults: input.defaults,
+				longValues: input.longValues,
 			});
 			if (found) made = found;
 			else if (input.channel === 'whatsapp' && (await product.defaults.ownerOf(input.template)) !== null) {
@@ -630,6 +646,7 @@ export const createSending = (product) => {
 			address,
 			...keep(s, { channel: input.channel, address, values: input.values, ...made }),
 			defaults: declared.length > 0 ? input.defaults : null,
+			...(input.longValues.length > 0 ? { longValues: input.longValues } : {}),
 			required: made.required || input.required,
 			urgent: made.urgent,
 			status: 'queued',

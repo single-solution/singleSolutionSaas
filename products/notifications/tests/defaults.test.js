@@ -629,3 +629,178 @@ describe('rules of defaults and rows (core)', () => {
 		expect(rows[3]?.defaults).toBeNull();
 	});
 });
+
+describe('long values of a product’s message (a chat transcript)', () => {
+	/** What Chat's kit attaches to a transcript: its defaults and its long value. */
+	const TRANSCRIPT = {
+		template: 'chat.transcript',
+		longValues: ['transcript'],
+		required: true,
+		defaults: {
+			email: {
+				subject: 'Your chat with {business}',
+				text: 'Here is your chat with {business}:\n\n{transcript}',
+				required: true,
+				urgent: true,
+				sensitive: false,
+			},
+			sms: { text: 'Your chat with {business}:\n{transcript}', required: true, urgent: true, sensitive: false },
+		},
+	};
+	/** A chat of about 49,000 characters, a line per message. */
+	const CHAT = Array.from({ length: 500 }, (_, i) => `You: message ${String(i).padStart(3, '0')} ${'x'.repeat(80)}`).join('\n');
+	const NOTE = '… (shortened)';
+	/** @type {Awaited<ReturnType<typeof setup>>} */
+	let own;
+	const sms = () => new URLSearchParams(own.providers.callsTo('https://api.twilio.com').at(-1)?.body).get('Body') ?? '';
+	/** @param {string} channel @param {Record<string, unknown>} [more] */
+	const send = (channel, more = {}) =>
+		own.send(channel, {
+			...TRANSCRIPT,
+			to: { email: 'ana@example.com', phone: '+15550004444' },
+			values: { transcript: CHAT, business: 'Shop' },
+			...more,
+		});
+
+	beforeAll(async () => {
+		own = await setup();
+		await own.switchOn(['email', 'sms', 'fallback', 'send_api']);
+		await own.connectDatabase();
+		expect((await own.connect('email', RESEND)).status).toBe('connected');
+		expect((await own.connect('sms', TWILIO)).status).toBe('connected');
+	});
+
+	it('email sends a long value whole; values over the limits, and long values of the merchant’s own keys, are refused', async () => {
+		expect(CHAT.length).toBeGreaterThan(45_000);
+		const sent = await send('email');
+		expect(sent).toMatchObject({ status: 201, json: { status: 'sent', subject: 'Your chat with Shop' } });
+		expect(JSON.parse(own.providers.callsTo('https://api.resend.com').at(-1)?.body ?? '{}').text).toBe(
+			`Here is your chat with Shop:\n\n${CHAT}`,
+		);
+		/** @param {Record<string, unknown>} body */
+		const refused = async (body) => {
+			const answer = await send('email', body);
+			expect(answer.status).toBe(422);
+			return answer.json.errors[0];
+		};
+		// only a value the send names long may pass 1,000 characters, up to 50,000; 100,000 for all the values
+		expect(await refused({ longValues: undefined })).toMatchObject({ path: '/values' });
+		expect(await refused({ values: { transcript: 'x'.repeat(50_001), business: 'Shop' } })).toMatchObject({
+			path: '/values',
+		});
+		expect(
+			await refused({
+				longValues: ['transcript', 'summary'],
+				values: { transcript: 'x'.repeat(50_000), summary: 'y'.repeat(50_000), business: 'Shop' },
+			}),
+		).toMatchObject({ path: '/values' });
+		expect(await refused({ longValues: 'transcript' })).toMatchObject({ path: '/longValues' });
+		expect(await refused({ template: 'order_ready', defaults: undefined })).toMatchObject({
+			path: '/longValues',
+			message: 'Only the messages of products have long values.',
+		});
+		// a long value goes in the message only
+		expect(
+			await refused({
+				defaults: { email: { ...TRANSCRIPT.defaults.email, subject: 'Chat: {transcript}' } },
+			}),
+		).toMatchObject({ path: '/defaults/email/subject', message: '{transcript} is long text: use it in the message only.' });
+	});
+
+	it('SMS gets a long value cut to fit at a line end, with the website’s note; so does the fallback channel', async () => {
+		/** The chat lines an SMS kept, after checking it fits, cuts at a line end and ends with the note. */
+		const kept = (/** @type {string} */ body, /** @type {string} */ note) => {
+			expect(body.length).toBeLessThanOrEqual(1600);
+			expect(body.endsWith(note)).toBe(true);
+			const lines = body.slice('Your chat with Shop:\n'.length, -note.length);
+			expect(CHAT.startsWith(lines)).toBe(true);
+			expect(CHAT[lines.length]).toBe('\n');
+			return lines;
+		};
+		expect((await send('sms')).json).toMatchObject({ status: 'sent' });
+		expect(kept(sms(), NOTE).split('\n')).toHaveLength(15);
+		// the note is a website text the merchant may change
+		const cookie = await own.adminSession();
+		const texts = `/v1/dashboard/websites/${own.websiteId}/texts/message.shortened`;
+		expect((await own.dashboard(cookie, 'PUT', texts, { value: ' [the rest is in your email]' })).status).toBe(204);
+		expect((await send('sms')).json).toMatchObject({ status: 'sent' });
+		kept(sms(), ' [the rest is in your email]');
+		expect((await own.dashboard(cookie, 'DELETE', texts)).status).toBe(204);
+
+		// an email that fails moves to SMS, where its long value is cut too
+		await own.setting('fallback', 'email', 'sms');
+		own.providers.respond('https://api.resend.com', () => ({ status: 503 }));
+		const waiting = await send('email');
+		expect(waiting.json.status).toBe('retrying');
+		const messages = await own.merchantCollection('messages');
+		expect(await messages.findOne({ websiteId: own.websiteId, id: waiting.json.id })).toMatchObject({
+			longValues: ['transcript'],
+		});
+		own.advance(61_000);
+		await own.call('GET', '/v1/messages?limit=1', { token: own.server });
+		own.advance(5 * 60_000 + 1000);
+		await own.call('GET', '/v1/messages?limit=1', { token: own.server });
+		const done = await (await own.merchantCollection('messages')).findOne({ websiteId: own.websiteId, id: waiting.json.id });
+		expect(done).toMatchObject({ status: 'sent', channel: 'sms' });
+		kept(String(done?.text), NOTE);
+		expect(sms()).toBe(done?.text);
+		own.providers.reset('https://api.resend.com');
+	});
+
+	it('a template the merchant saves for a product’s message keeps its long values out of the subject and buttons', async () => {
+		const CHAT_BASE = 'https://chat.example.dev';
+		own.handlers[CHAT_BASE] = async () =>
+			new Response(
+				JSON.stringify({
+					productId: 'chat',
+					messages: [
+						{
+							key: 'chat.transcript',
+							name: 'Chat transcript',
+							values: ['transcript', 'business'],
+							longValues: ['transcript'],
+							required: true,
+							channels: { email: { subject: 'Your chat with {business}', text: '{transcript}' } },
+						},
+					],
+				}),
+				{ headers: { 'content-type': 'application/json' } },
+			);
+		const cookie = await own.adminSession();
+		const base = `/v1/dashboard/websites/${own.websiteId}/templates`;
+		const titled = await own.dashboard(cookie, 'PUT', base, {
+			key: 'chat.transcript',
+			channel: 'email',
+			subject: 'Chat {transcript}',
+			text: 'Your chat:\n\n{transcript}',
+			required: true,
+		});
+		expect(titled.status).toBe(422);
+		expect((await titled.json()).errors[0]).toMatchObject({
+			path: '/subject',
+			message: '{transcript} is long text: use it in the message only.',
+		});
+		const saved = await own.dashboard(cookie, 'PUT', base, {
+			key: 'chat.transcript',
+			channel: 'email',
+			subject: 'Your chat with {business}',
+			text: 'Your chat:\n\n{transcript}',
+			required: true,
+		});
+		expect(saved.status).toBe(200);
+		// the dashboard's list shows the long values of the message
+		const listed = await (await own.dashboard(cookie, 'GET', `/v1/dashboard/websites/${own.websiteId}/messages`)).json();
+		expect(listed.items.find((/** @type {any} */ m) => m.key === 'chat.transcript')?.longValues).toEqual(['transcript']);
+		// the merchant's own keys have no long values
+		expect(
+			(
+				await own.dashboard(cookie, 'PUT', base, {
+					key: 'chat_copy',
+					channel: 'email',
+					subject: 'Chat {transcript}',
+					text: '{transcript}',
+				})
+			).status,
+		).toBe(200);
+	});
+});

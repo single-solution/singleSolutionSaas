@@ -6,7 +6,7 @@
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSealer, messageAadOf, resealWebsite } from '../adapters/crypto.js';
-import { checkSecretValues, hideValues, hiddenNamesOf } from '../core/templates.js';
+import { checkValueNames, hideValues, hiddenNamesOf } from '../core/templates.js';
 import { ADMIN_ORIGIN, HOOK_URL, setup } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof setup>>} */
@@ -47,10 +47,10 @@ afterAll(async () => {
 
 describe('secrets never reach the delivery log (D11, SE-3)', () => {
 	it('names the hidden values and replaces them: links, other values, never empty ones', () => {
-		expect(checkSecretValues(undefined)).toEqual({ ok: true, value: [] });
-		expect(checkSecretValues(['code', 'code', 'link'])).toEqual({ ok: true, value: ['code', 'link'] });
+		expect(checkValueNames(undefined)).toEqual({ ok: true, value: [] });
+		expect(checkValueNames(['code', 'code', 'link'])).toEqual({ ok: true, value: ['code', 'link'] });
 		for (const bad of ['code', [1], ['a b'], Array.from({ length: 51 }, (_, i) => `v${i}`)])
-			expect(checkSecretValues(bad).ok).toBe(false);
+			expect(checkValueNames(bad).ok).toBe(false);
 		const values = { code: '123456', link: 'https://shop.example.com/a#t=1', path: '/reset?t=9', pin: ' ', order: '7' };
 		expect(hiddenNamesOf(values, { sensitive: true, secretValues: [] })).toEqual(Object.keys(values));
 		expect(hiddenNamesOf(values, { sensitive: false, secretValues: ['pin', 'code', 'missing'] })).toEqual(['code', 'pin']);

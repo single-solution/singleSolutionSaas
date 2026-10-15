@@ -85,13 +85,13 @@ const TEMPLATES = {
 
 /** @type {Array<{ path: string, method: string, body: unknown }>} */
 let calls = [];
-const serve = () => {
+const serve = (catalog = CATALOG) => {
 	calls = [];
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
 			calls.push({ path, method: init.method ?? 'GET', body: init.body ? JSON.parse(String(init.body)) : undefined });
-			const body = path === `${BASE}/messages` ? CATALOG : path === `${BASE}/templates` ? TEMPLATES : {};
+			const body = path === `${BASE}/messages` ? catalog : path === `${BASE}/templates` ? TEMPLATES : {};
 			return new Response(init.method === 'DELETE' ? null : JSON.stringify(body), {
 				status: init.method === 'DELETE' ? 204 : 200,
 				headers: { 'content-type': 'application/json' },
@@ -144,6 +144,39 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 		expect(dialog.textContent).toContain('Values it can use: {link}, {minutes}, {business}.');
 		expect(/** @type {HTMLTextAreaElement} */ (dialog.querySelector('textarea')).value).toBe('Choose a new password: {link}');
 		expect(dialog.querySelector('select')).toBeNull();
+	});
+
+	it('names a message’s long values, and takes a long sample for them in the preview', async () => {
+		serve({
+			...CATALOG,
+			items: [
+				{
+					productId: 'chat',
+					key: 'chat.transcript',
+					name: 'Chat transcript',
+					values: ['transcript', 'date', 'business'],
+					longValues: ['transcript'],
+					required: true,
+					channels: { email: { subject: 'Your chat with {business}', text: 'Your chat from {date}:\n\n{transcript}' } },
+				},
+			],
+			off: [],
+		});
+		const { container } = render(<TemplatesSection websiteId={WEBSITE} />);
+		await settle();
+		await click(byText(/** @type {HTMLElement} */ (container.querySelector('li')), T.edit, 'button'));
+		await settle();
+		const dialog = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]'));
+		expect(dialog.textContent).toContain(T.longValuesHelp.replace('{values}', '{transcript}'));
+		// the long value's sample is a text box of up to 50,000 characters; the others stay one line of 1,000
+		const sample = /** @type {HTMLTextAreaElement} */ (
+			[...dialog.querySelectorAll('textarea')].find((box) => box.labels?.[0]?.textContent?.includes('transcript'))
+		);
+		expect(sample.maxLength).toBe(50_000);
+		const date = /** @type {HTMLInputElement} */ (
+			[...dialog.querySelectorAll('input')].find((box) => box.labels?.[0]?.textContent === 'date')
+		);
+		expect(date.maxLength).toBe(1000);
 	});
 
 	it('More: Reset to default for an edited message, Switch off and on again, nothing to switch for Accounts', async () => {

@@ -125,6 +125,8 @@ export const TEXTS = Object.freeze({
 				'The messages of {products} cannot be listed right now. Their sends still use their default words; open this page again later.',
 			fixed: 'Template {key} by {channel}, in the default language.',
 			valuesHelp: 'Values it can use: {values}.',
+			longValuesHelp:
+				'{values} can be long (up to 50,000 characters): use them in the message only. Email sends them whole; SMS, WhatsApp and push get them shortened to fit.',
 			preview: 'Preview',
 			previewHelp: 'Type a sample for each value: the preview shows the words as a recipient gets them.',
 			previewNoValues: 'This template uses no values.',

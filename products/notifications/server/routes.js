@@ -17,8 +17,8 @@ import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import {
 	checkDefaults,
-	checkSecretValues,
 	checkTemplate,
+	checkValueNames,
 	checkValues,
 	isAccountKey,
 	languageOfSegment,
@@ -111,9 +111,16 @@ export const createRoutes = (product) => {
 			return invalid('template', 'Name the template key.');
 		const to = checkRecipient(body.to);
 		if (!to.ok) return invalid(to.field, 'The recipient is not valid.');
-		const values = checkValues(body.values);
-		if (!values.ok) return invalid('values', 'values must map up to 50 names to text or numbers (at most 1000 characters).');
-		const secretValues = checkSecretValues(body.secretValues);
+		// a product's message names its long values (up to 50,000 characters each)
+		const longValues = checkValueNames(body.longValues);
+		if (!longValues.ok) return invalid('longValues', 'longValues lists up to 50 value names.');
+		const values = checkValues(body.values, longValues.value);
+		if (!values.ok)
+			return invalid(
+				'values',
+				'values must map up to 50 names to text or numbers of at most 1000 characters (50000 for a value named in longValues), 100000 in all.',
+			);
+		const secretValues = checkValueNames(body.secretValues);
 		if (!secretValues.ok) return invalid('secretValues', 'secretValues lists up to 50 value names.');
 		if (body.required !== undefined && typeof body.required !== 'boolean')
 			return invalid('required', 'required is true or false.');
@@ -128,10 +135,13 @@ export const createRoutes = (product) => {
 		)
 			return invalid('fallbackTemplate', 'fallbackTemplate is another template key.');
 		// a product's message carries its default words (parity P1), checked as a template the merchant saves
-		const defaults = checkDefaults(body.defaults, body.template);
+		const defaults = checkDefaults(body.defaults, body.template, longValues.value);
 		if (!defaults.ok) return invalid(defaults.field, defaults.message);
 		const s = await siteOf(ctx);
-		if (!s.on.includes('send_api') && (await product.defaults.ownerOf(body.template)) === null)
+		const owner = await product.defaults.ownerOf(body.template);
+		if (owner === null && longValues.value.length > 0)
+			return invalid('longValues', 'Only the messages of products have long values.');
+		if (!s.on.includes('send_api') && owner === null)
 			return problem('feature_off', 'Your own template keys need the Merchant send API feature (send_api).');
 		/** @type {number | null} */
 		let sendAt = null;
@@ -155,6 +165,7 @@ export const createRoutes = (product) => {
 			source: 'api',
 			defaults: defaults.value,
 			fallbackTemplate: body.fallbackTemplate ?? null,
+			longValues: longValues.value,
 		});
 		if (!result.ok) return result.problem;
 		return created(messageView(result.message));
@@ -178,8 +189,21 @@ export const createRoutes = (product) => {
 	});
 
 	/**
+	 * The long values a product declares for its message (they go only in a template's text), when its list can be read
+	 * now; none for the merchant's own keys.
+	 * @param {string} key
+	 * @returns {Promise<string[]>}
+	 */
+	const longValuesOf = async (key) => {
+		if ((await product.defaults.ownerOf(key)) === null) return [];
+		const listed = await product.defaults.all().catch(() => null);
+		return listed?.messages.find((message) => message.key === key)?.longValues ?? [];
+	};
+
+	/**
 	 * Templates: list, save and delete (dashboard, the template editor widget and the merchant's server). The server's
-	 * routes work per channel while its feature is on (PLAN 0.8.10 N4).
+	 * routes work per channel while its feature is on (PLAN 0.8.10 N4). A product's message is checked with its long
+	 * values.
 	 * @param {'dashboard' | 'widget' | 'server'} via
 	 */
 	const templateHandlers = (via) => {
@@ -248,7 +272,8 @@ export const createRoutes = (product) => {
 			},
 			/** @param {any} ctx */
 			save: async (ctx) => {
-				const checked = checkTemplate(ctx.body);
+				const key = typeof ctx.body?.key === 'string' ? ctx.body.key : '';
+				const checked = checkTemplate(ctx.body, await longValuesOf(key));
 				if (!checked.ok) return invalid(checked.field, checked.message);
 				if (!(await channelOn(ctx, checked.value.channel))) return channelOff(checked.value.channel);
 				const saved = await (await storeOf(ctx)).templates.save(checked.value);
@@ -601,6 +626,7 @@ export const createRoutes = (product) => {
 						source: 'staff',
 						defaults: {},
 						fallbackTemplate: null,
+						longValues: [],
 					});
 				} else {
 					const text = typeof body.text === 'string' ? body.text.trim() : '';
@@ -622,6 +648,7 @@ export const createRoutes = (product) => {
 						source: 'staff',
 						defaults: {},
 						fallbackTemplate: null,
+						longValues: [],
 					});
 				}
 				if (!result.ok) return result.problem;

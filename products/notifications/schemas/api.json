@@ -144,9 +144,9 @@
 			},
 			"additionalProperties": {
 				"type": ["string", "number"],
-				"maxLength": 1000
+				"maxLength": 50000
 			},
-			"description": "The template's {placeholders}: up to 50 names (a letter, then letters, digits and _; not unsubscribeUrl, which Notifications fills) with texts of at most 1000 characters or numbers."
+			"description": "The template's {placeholders}: up to 50 names (a letter, then letters, digits and _; not unsubscribeUrl, which Notifications fills) with texts of at most 1000 characters (50000 for a value named in longValues) or numbers, 100000 characters in all."
 		},
 		"DefaultWords": {
 			"type": "object",
@@ -521,6 +521,15 @@
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
 				},
+				"longValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "A product's message: the values that hold long text (up to 50,000 characters each, for example a chat transcript), as the product declares them. They go only in the message: email sends them whole; SMS, WhatsApp and push get them cut to fit, ending with your text message.shortened. Not for your own template keys."
+				},
 				"required": {
 					"type": "boolean",
 					"default": false,
@@ -576,6 +585,15 @@
 						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"longValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "A product's message: the values that hold long text (up to 50,000 characters each, for example a chat transcript), as the product declares them. They go only in the message: email sends them whole; SMS, WhatsApp and push get them cut to fit, ending with your text message.shortened. Not for your own template keys."
 				},
 				"required": {
 					"type": "boolean",
@@ -633,6 +651,15 @@
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
 				},
+				"longValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "A product's message: the values that hold long text (up to 50,000 characters each, for example a chat transcript), as the product declares them. They go only in the message: email sends them whole; SMS, WhatsApp and push get them cut to fit, ending with your text message.shortened. Not for your own template keys."
+				},
 				"required": {
 					"type": "boolean",
 					"default": false,
@@ -689,6 +716,15 @@
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
 				},
+				"longValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "A product's message: the values that hold long text (up to 50,000 characters each, for example a chat transcript), as the product declares them. They go only in the message: email sends them whole; SMS, WhatsApp and push get them cut to fit, ending with your text message.shortened. Not for your own template keys."
+				},
 				"required": {
 					"type": "boolean",
 					"default": false,
@@ -744,6 +780,15 @@
 						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
 					},
 					"description": "Names of values the delivery log hides, for example [\"code\", \"link\"]."
+				},
+				"longValues": {
+					"type": "array",
+					"maxItems": 50,
+					"items": {
+						"type": "string",
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"description": "A product's message: the values that hold long text (up to 50,000 characters each, for example a chat transcript), as the product declares them. They go only in the message: email sends them whole; SMS, WhatsApp and push get them cut to fit, ending with your text message.shortened. Not for your own template keys."
 				},
 				"required": {
 					"type": "boolean",
