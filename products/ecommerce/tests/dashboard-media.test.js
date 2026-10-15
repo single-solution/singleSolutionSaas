@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
  * The dashboard's setup prompt for the public address of the images (SEO audit G1): once storage is connected, Overview
- * asks for the catalog setting mediaBaseUrl until it is set (images then keep one address, browsers keep them), with a
- * link to the settings; nothing while storage is not connected.
+ * asks for the catalog setting mediaBaseUrl in Needs you until it is set (images then keep one address, browsers keep
+ * them), with a button to the settings, and ticks it in the setup list once set; nothing while storage is not
+ * connected.
  */
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,7 @@ const serve = ({ storage, mediaBaseUrl }) => {
 	/** @type {Record<string, unknown>} */
 	const answers = {
 		[`${BASE}/overview`]: {
+			website: { domain: 'shop.example.com' },
 			status: { status: 'active', graceEndsAt: null },
 			featuresOn: ['catalog'],
 			todayMillicredits: 0,
@@ -47,11 +49,14 @@ const settle = async () => {
 	for (let i = 0; i < 6; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 };
 
+/** @type {string[]} the sections the Overview's buttons opened */
+const opened = [];
 const props = {
 	websiteId: WEBSITE,
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { email: 'help@example.com', phone: '' },
 	portal: 'https://portal.example.com',
+	open: (/** @type {string} */ tab) => void opened.push(tab),
 };
 
 afterEach(() => {
@@ -60,17 +65,17 @@ afterEach(() => {
 });
 
 describe('Overview: the public address of the images', () => {
-	it('asks for it once storage is connected, with a link to the settings', async () => {
+	it('asks for it once storage is connected, with a button to the settings', async () => {
 		serve({ storage: 'connected', mediaBaseUrl: '' });
 		const Overview = TABS.overview;
 		const { container } = render(<Overview {...props} />);
 		await settle();
 		const text = container.textContent ?? '';
-		expect(text).toContain('Public address of your images');
-		expect(text).toContain('Not set');
-		expect(text).toContain('Set it in Settings → Catalog right after connecting storage');
-		const link = [...container.querySelectorAll('a')].find((node) => node.textContent === 'Set it');
-		expect(link?.getAttribute('href')).toBe(`?websiteId=${WEBSITE}&view=settings`);
+		expect(text).toContain('The public address of your images is not set');
+		expect(text).toContain('Set it in Settings → Catalog: a public bucket, or a CDN in front of it.');
+		const button = [...container.querySelectorAll('button')].find((node) => node.textContent === 'Set it');
+		await act(async () => button?.click());
+		expect(opened).toEqual(['settings']);
 	});
 
 	it('shows the address once set, and nothing before storage is connected', async () => {
@@ -78,12 +83,12 @@ describe('Overview: the public address of the images', () => {
 		const Overview = TABS.overview;
 		const set = render(<Overview {...props} />);
 		await settle();
-		expect(set.container.textContent).toContain('Public address of your imageshttps://cdn.shop.example.comSet');
-		expect(set.container.textContent).not.toContain('Not set');
+		expect(set.container.textContent).toContain('Set the public address of your imageshttps://cdn.shop.example.com');
+		expect(set.container.textContent).not.toContain('is not set');
 		cleanup();
 		serve({ storage: 'not_connected', mediaBaseUrl: '' });
 		const before = render(<Overview {...props} />);
 		await settle();
-		expect(before.container.textContent).not.toContain('Public address of your images');
+		expect(before.container.textContent).not.toContain('public address of your images');
 	});
 });

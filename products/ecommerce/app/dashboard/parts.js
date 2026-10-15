@@ -1,9 +1,8 @@
 'use client';
 /**
- * Pieces the dashboard's tabs share: loading and outcome states, Recent changes, the status banner and the kit's
- * settings, texts, theme and Format forms (a website's values or the global defaults). Times are computed in UTC and
- * shown in the viewer's local time (the kit's `LocalTime` and `useViewerTimeZone`; UTC on the server and in the first
- * render).
+ * Pieces the dashboard's tabs share: loading and outcome states and the kit's settings, texts, theme and Format forms
+ * (a website's values or the global defaults). Times are computed in UTC and shown in the viewer's local time (the
+ * kit's `useViewerTimeZone`; UTC on the server and in the first render).
  * @module
  */
 import { ViewTransition, useState } from 'react';
@@ -15,17 +14,14 @@ import {
 	ErrorState,
 	FieldGrid,
 	Input,
-	LocalTime,
 	SchemaForm,
 	Select,
 	Skeleton,
 	SoftBreaks,
 	TextArea,
 	describeProblem,
-	formatDateTime,
-	useViewerTimeZone,
 } from '@ss/ui';
-import { call, fill } from './api.js';
+import { call } from './api.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ key: string, name: string, on?: boolean, schema: any, values: Record<string, { value: unknown, source: string }> }} FeatureSettings */
@@ -37,11 +33,12 @@ import { TEXTS } from './texts.js';
 export const hasSettings = (feature) => Object.keys(feature.schema?.properties ?? {}).length > 0;
 
 /**
- * Skeleton while loading, the problem when it failed, else the content (it fades in).
- * @param {{ answer: import('./api.js').Answer | null, children: (data: any) => import('react').ReactNode }} props
+ * Its skeleton while loading (`skeleton`, else a few lines), the problem when it failed, else the content (it fades in).
+ * @param {{ answer: import('./api.js').Answer | null, skeleton?: import('react').ReactNode,
+ *   children: (data: any) => import('react').ReactNode }} props
  */
-export function Loaded({ answer, children }) {
-	if (!answer) return <Skeleton lines={3} label={TEXTS.loading} />;
+export function Loaded({ answer, skeleton, children }) {
+	if (!answer) return skeleton ?? <Skeleton lines={3} label={TEXTS.loading} />;
 	if (!answer.ok) return <ErrorState title={TEXTS.failed} message={describeProblem(answer.problem)} />;
 	// fades and slides in when it replaces the skeleton; a refresh of shown content changes it in place
 	return (
@@ -62,41 +59,6 @@ export function Outcome({ result }) {
 	) : (
 		<Callout tone="danger">{describeProblem(result.problem)}</Callout>
 	);
-}
-
-/**
- * Recent changes; `titled` gives the card its own title (Defaults, Prices) where no section heading names it.
- * @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }>, titled?: boolean }} props
- */
-export function RecentChanges({ items, titled = true }) {
-	return (
-		<Card {...(titled ? { title: TEXTS.overview.recent } : {})}>
-			{items.length === 0 ? (
-				<p className="text-sm text-muted">{TEXTS.overview.noChanges}</p>
-			) : (
-				<ul className="space-y-2 text-sm">
-					{items.map((item) => (
-						<li key={`${item.at}-${item.detail}`}>
-							<span className="font-semibold">{item.who.name}</span> · {item.detail}{' '}
-							<span className="text-muted">
-								<LocalTime value={item.at} />
-							</span>
-						</li>
-					))}
-				</ul>
-			)}
-		</Card>
-	);
-}
-
-/** @param {{ status: { status: string, graceEndsAt: string | null } }} props */
-export function StatusBanner({ status }) {
-	const timeZone = useViewerTimeZone();
-	const text = fill(TEXTS.status[/** @type {keyof typeof TEXTS.status} */ (status.status)] ?? status.status, {
-		time: formatDateTime(status.graceEndsAt, { timeZone }),
-	});
-	const tone = status.status === 'active' ? 'success' : status.status === 'grace' ? 'warning' : 'danger';
-	return <Callout tone={tone}>{text}</Callout>;
 }
 
 /**

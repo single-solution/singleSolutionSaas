@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * The dashboard's times in the browser (jsdom), on a faked dashboard API: computed in UTC and shown in the viewer's
- * local time (owner 2026-10-14). Overview's grace end, a connection's last test, the search index's last answer, the
- * widget's last visit and Recent changes print UTC on the server and in the first render, then the same style in the
- * viewer's time zone, with UTC on hover.
+ * local time (owner 2026-10-14). Overview's grace end, the search index's last answer, the widget's last visit and
+ * Recent changes print UTC on the server and in the first render, then the same style in the viewer's time zone, with
+ * UTC on hover.
  */
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -17,6 +17,7 @@ const BASE = `/v1/dashboard/websites/${WEBSITE}`;
 /** The answers of the overview's loads, at known instants (UTC). @type {Record<string, unknown>} */
 const ANSWERS = {
 	[`${BASE}/overview`]: {
+		website: { domain: 'shop.example.com' },
 		status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' },
 		featuresOn: ['catalog'],
 		todayMillicredits: 0,
@@ -85,6 +86,7 @@ const props = {
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { email: 'help@example.com', phone: '' },
 	portal: 'https://portal.example.com',
+	open: () => undefined,
 };
 
 afterEach(() => {
@@ -101,11 +103,10 @@ describe('Ecommerce’s dashboard times', () => {
 		const { container } = render(<Overview {...props} />);
 		await settle();
 		const text = container.textContent ?? '';
-		expect(text).toContain('In grace until Oct 4, 2026, 10:30 AM EDT');
-		expect(text).toContain('Last test passed Oct 3, 2026, 5:45 AM EDT');
-		expect(text).toContain('Atlas Search index products_search answered Oct 2, 2026, 2:05 PM EDT');
+		expect(text).toContain('Ecommerce is in grace until Oct 4, 2026, 10:30 AM EDT');
+		expect(text).toContain('Create the Atlas Search index products_searchAnswered Oct 2, 2026, 2:05 PM EDT');
 		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
-		const change = container.querySelector('time');
+		const change = container.querySelector('time[datetime="2026-10-06T08:00:00.000Z"]');
 		expect([change?.textContent, change?.getAttribute('title'), change?.getAttribute('datetime')]).toEqual([
 			'Oct 6, 2026, 4:00 AM EDT',
 			'Oct 6, 2026, 8:00 AM UTC',
@@ -128,10 +129,10 @@ describe('Ecommerce’s dashboard times', () => {
 		// the answers this page already loaded show at once, as the server would print them
 		const html = renderToString(<Overview {...props} />);
 		for (const words of [
-			'In grace until Oct 4, 2026, 2:30 PM UTC',
-			'Last test passed Oct 3, 2026, 9:45 AM UTC',
-			'answered Oct 2, 2026, 6:05 PM UTC',
-			'Last seen Oct 5, 2026, 11:15 PM UTC',
+			'in grace until <time',
+			'>Oct 4, 2026, 2:30 PM UTC</time>',
+			'>Oct 2, 2026, 6:05 PM UTC</time>',
+			'>Oct 5, 2026, 11:15 PM UTC</time>',
 			'>Oct 6, 2026, 8:00 AM UTC</time>',
 		])
 			expect(html).toContain(words);

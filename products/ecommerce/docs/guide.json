@@ -254,7 +254,7 @@
 					{
 						"code": "searchIndex"
 					},
-					"A new index is built first: wait until Atlas shows it ready (Status: Active / Queryable) before you switch search to atlas, for example when you move a shop's catalog. If the search fails, or finds nothing while the index finds none of your active products (Atlas answers nothing, without an error, for an index that is missing, named differently or still building), basic search answers instead, and the dashboard's Overview shows Search index missing until a search works again."
+					"A new index is built first: wait until Atlas shows it ready (Status: Active / Queryable) before you switch search to atlas, for example when you move a shop's catalog. If the search fails, or finds nothing while the index finds none of your active products (Atlas answers nothing, without an error, for an index that is missing, named differently or still building), basic search answers instead, and the dashboard's Overview lists the missing index under Needs you until a search works again."
 				],
 				"routes": [["GET /v1/shop/products?q=<words>", "catalog"]]
 			},

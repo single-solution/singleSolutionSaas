@@ -5,10 +5,11 @@
  * features; Owners alone edit Defaults and Prices.
  * @module
  */
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
 	Badge,
 	Button,
+	ButtonLink,
 	Callout,
 	Card,
 	Checkbox,
@@ -16,27 +17,32 @@ import {
 	ConfirmDialog,
 	FieldGrid,
 	Input,
+	LocalTime,
 	Masonry,
+	OverviewSkeleton,
+	ProductOverview,
+	RecentChanges,
 	Section,
 	Stat,
-	StatGrid,
-	formatCredits,
 	formatCreditsPerHour,
-	formatDateTime,
 	parseCredits,
-	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { SEARCH_INDEX_DEFINITION } from '../../core/search.js';
 import { SITE_ROUTES, createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
 import { ConnectionForm, FORMS } from './forms.js';
-import { FormatForm, Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
+import { FormatForm, Loaded, Outcome, SettingsForms, TextsForm, ThemeForm } from './parts.js';
 import { SettingsSections, SettingsTab, settingsNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
-/** @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string }} TabProps */
+/**
+ * What every tab gets: the website, the viewer, the support contact, the Portal's address, and `open`, which shows
+ * another section of the dashboard (the Overview's buttons).
+ * @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string,
+ *   open: (tab: import('@ss/ui').OverviewTab) => void }} TabProps
+ */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 /** @typedef {{ name: string, label: string, neededBy: string[], status: string, message?: string, last4?: string | null, testedAt?: string | null }} Connection */
 
@@ -59,49 +65,17 @@ const namesOf = (keys, max = Infinity) => {
 const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
 
 /**
- * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
- * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
- *   children?: import('react').ReactNode }} props
+ * Fill `{name}` placeholders with text or elements (a `<LocalTime>`), as children.
+ * @param {string} text
+ * @param {Record<string, import('react').ReactNode>} values
+ * @returns {import('react').ReactNode}
  */
-function CheckRow({ tone, badge, label, detail, children }) {
-	return (
-		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-			<span className="min-w-0 flex-[1_1_16rem]">
-				<span className="block font-semibold text-fg">{label}</span>
-				{detail ? <span className="block text-muted">{detail}</span> : null}
-			</span>
-			<span className="flex flex-wrap items-center gap-2">
-				<Badge tone={tone} dot>
-					{badge}
-				</Badge>
-				{children}
-			</span>
-		</li>
-	);
-}
-
-/**
- * A connection on the checklist: its status, what needs it and, when connected, when its last test passed.
- * @param {{ item: Connection, why: string, extra?: string }} props
- */
-function ConnectionRow({ item, why, extra }) {
-	const timeZone = useViewerTimeZone();
-	const detail =
-		item.status === 'connected'
-			? item.testedAt
-				? fill(TEXTS.overview.lastTest, { time: formatDateTime(item.testedAt, { timeZone }) })
-				: null
-			: (item.message ?? null);
-	return (
-		<CheckRow
-			tone={toneOf(item.status)}
-			badge={TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-			label={item.label}
-			detail={[why ? fill(TEXTS.overview.neededBy, { features: why }) : '', detail ?? ''].filter(Boolean).join(' · ')}>
-			{extra ? <Badge tone="neutral">{extra}</Badge> : null}
-		</CheckRow>
-	);
-}
+const say = (text, values) =>
+	text
+		.split(/\{(\w+)\}/g)
+		.map((part, i) =>
+			i % 2 === 0 ? part : Object.hasOwn(values, part) ? <Fragment key={i}>{values[part]}</Fragment> : `{${part}}`,
+		);
 
 /**
  * @typedef {{ search: 'basic' | 'atlas', index: string,
@@ -109,182 +83,224 @@ function ConnectionRow({ item, why, extra }) {
  */
 
 /**
- * The Atlas Search index on the checklist (E14): ready when it answered the last search, missing (basic search answers
- * meanwhile) or not checked before the first shop search; the docs say how to create it.
- * @param {{ found: SearchIndex }} props
+ * A setting's value and whether the merchant set it (`source` `website`) in the dashboard's settings answer.
+ * @param {import('./api.js').Answer | null} answer @param {string} feature @param {string} key
+ * @returns {{ value: unknown, set: boolean } | null} null while not loaded or the feature is not shown
  */
-function SearchIndexRow({ found }) {
-	const O = TEXTS.overview;
-	const { state, index } = found;
-	const timeZone = useViewerTimeZone();
-	const time = state ? formatDateTime(state.at, { timeZone }) : '';
-	const detail = !state
-		? fill(O.searchUncheckedDetail, { index })
-		: state.missing
-			? [fill(O.searchMissingDetail, { index, time }), state.message ? fill(O.searchMessage, { message: state.message }) : '']
-					.filter(Boolean)
-					.join(' ')
-			: fill(O.searchReadyDetail, { index, time });
-	return (
-		<CheckRow
-			tone={!state ? 'neutral' : state.missing ? 'warning' : 'success'}
-			badge={!state ? O.searchUnchecked : state.missing ? O.searchMissing : O.searchReady}
-			label={O.searchIndex}
-			detail={detail}>
-			{state && !state.missing ? null : (
-				<a className="text-sm font-semibold text-primary hover:underline" href="/docs#atlas-search">
-					{O.searchDocs}
-				</a>
-			)}
-		</CheckRow>
-	);
-}
+const settingOf = (answer, feature, key) => {
+	if (!answer?.ok) return null;
+	/** @type {{ key: string, values: Record<string, { value: unknown, source: string }> } | undefined} */
+	const found = answer.data.features.find((/** @type {{ key: string }} */ item) => item.key === feature);
+	const entry = found?.values?.[key];
+	return entry ? { value: entry.value, set: entry.source === 'website' } : null;
+};
 
-/** @param {TabProps} props */
-function OverviewTab({ websiteId }) {
-	const timeZone = useViewerTimeZone();
+/**
+ * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview from `@ss/ui` (greeting, Needs you, setup,
+ * numbers, Recent changes), with Ecommerce's own part, judged from setup only (no business data): with checkout,
+ * Payments (recommended) and Notifications (optional, when no feature needs it), bank transfer offered with staff
+ * recording transfers but no bank details for shoppers; with the catalog, the shop's currency until the merchant sets
+ * it (USD by default, Claude's decision 9), the Atlas Search index while the shop or Chat searches with Atlas and the
+ * public address of the images once storage is connected; with Staff alerts, someone to alert and the admin page they
+ * link to; and how many of the connections the features need are ready. `/connections` is read only with checkout or
+ * Staff alerts, `/search-index` and `/settings` only with the catalog.
+ * @param {TabProps} props
+ */
+function OverviewTab({ websiteId, who, support, portal, open }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
-	const connections = useLoad(`${base}/connections`);
-	const search = useLoad(`${base}/search-index`);
-	const settings = useLoad(`${base}/settings`);
-	const [busy, setBusy] = useState(false);
+	/** @type {string[]} */
+	const on = answer?.ok ? answer.data.featuresOn : [];
+	const shop = on.includes('checkout');
+	const catalog = on.includes('catalog');
+	const alertsOn = on.includes('staff_alerts');
+	const connections = useLoad(shop || alertsOn ? `${base}/connections` : null);
+	const search = useLoad(catalog ? `${base}/search-index` : null);
+	const settings = useLoad(catalog ? `${base}/settings` : null);
+	const O = TEXTS.overview;
+	/** @param {string} label @param {import('@ss/ui').OverviewTab} tab */
+	const go = (label, tab) => (
+		<Button size="sm" variant="secondary" onClick={() => open(tab)}>
+			{label}
+		</Button>
+	);
 	return (
-		<Loaded answer={answer}>
+		<Loaded answer={answer} skeleton={<OverviewSkeleton />}>
 			{(data) => {
 				/** @type {Connection[]} */
 				const needed = data.checklist.connections;
-				/** @type {string[]} */
-				const on = data.featuresOn;
 				/** @type {Connection[]} */
 				const all = connections.answer?.ok ? connections.answer.data.connections : [];
-				const shop = on.includes('checkout');
+				/** @param {string} name */
+				const connection = (name) => [...needed, ...all].find((item) => item.name === name) ?? null;
 				// not required by a feature, but what a shop with checkout normally wants
-				const payments = shop ? (all.find((item) => item.name === 'payments') ?? null) : null;
-				const messages =
-					shop && !needed.some((item) => item.name === 'notifications')
-						? (all.find((item) => item.name === 'notifications') ?? null)
-						: null;
+				const payments = shop && !needed.some((item) => item.name === 'payments') ? connection('payments') : null;
+				const messages = shop && !needed.some((item) => item.name === 'notifications') ? connection('notifications') : null;
 				const ready = needed.filter((item) => item.status === 'connected').length;
-				// the setup prompt for the public address of the images, once storage is connected (SEO audit G1)
-				const storage = [...needed, ...all].find((item) => item.name === 'storage');
-				/** @type {Array<{ key: string, values: Record<string, { value: unknown }> }>} */
-				const features = settings.answer?.ok ? settings.answer.data.features : [];
-				const mediaBase = features.find((feature) => feature.key === 'catalog')?.values.mediaBaseUrl?.value;
+				/** @type {import('@ss/ui').Need[]} */
+				const needs = [];
+				/** @type {NonNullable<Parameters<typeof ProductOverview>[0]['steps']>} */
+				const steps = [];
+				if (payments) {
+					if (payments.status !== 'connected')
+						needs.push({
+							key: 'payments',
+							tone: 'warning',
+							title: O.payments.title,
+							effect: O.payments.effect,
+							action: go(O.payments.action, 'connections'),
+						});
+					steps.push({
+						key: 'payments',
+						label: O.payments.step,
+						done: payments.status === 'connected',
+						onSelect: () => open('connections'),
+					});
+				}
+				if (messages)
+					steps.push({
+						key: 'notifications',
+						label: O.notificationsStep,
+						done: messages.status === 'connected',
+						onSelect: () => open('connections'),
+					});
+				// the shop's currency, until the merchant sets it (decision 9: USD stays the default)
+				const currency = catalog ? settingOf(settings.answer, 'catalog', 'currency') : null;
+				if (currency) {
+					const code = String(currency.value ?? '');
+					if (!currency.set)
+						needs.push({
+							key: 'currency',
+							tone: 'warning',
+							title: O.currency.title,
+							effect: fill(O.currency.effect, { currency: code }),
+							action: go(O.currency.action, 'settings'),
+						});
+					steps.push({
+						key: 'currency',
+						label: O.currency.step,
+						done: currency.set,
+						detail: fill(O.currency.now, { currency: code }),
+						onSelect: () => open('settings'),
+					});
+				}
+				// the Atlas Search index, while the shop or Chat searches with Atlas (E14)
+				/** @type {SearchIndex | null} */
+				const atlas = catalog && search.answer?.ok && search.answer.data?.search === 'atlas' ? search.answer.data : null;
+				if (atlas) {
+					const { state, index } = atlas;
+					const docs = (
+						<ButtonLink size="sm" href="/docs#atlas-search">
+							{O.search.docs}
+						</ButtonLink>
+					);
+					if (state?.missing)
+						needs.push({
+							key: 'search',
+							tone: 'warning',
+							title: fill(O.search.title, { index }),
+							effect: [
+								say(O.search.effect, { time: <LocalTime value={state.at} /> }),
+								state.message ? ` ${fill(O.search.message, { message: state.message })}` : '',
+							],
+							action: docs,
+						});
+					steps.push({
+						key: 'search',
+						label: fill(O.search.step, { index }),
+						done: state !== null && !state.missing,
+						detail: !state
+							? O.search.unchecked
+							: say(state.missing ? O.search.missing : O.search.ready, { time: <LocalTime value={state.at} /> }),
+						href: '/docs#atlas-search',
+					});
+				}
+				// the public address of the images, once storage is connected (SEO audit G1)
 				const media =
-					on.includes('catalog') && storage?.status === 'connected' && settings.answer?.ok ? String(mediaBase ?? '') : null;
-				/** @type {SearchIndex | null} the index, while the catalog searches with Atlas */
-				const atlas =
-					on.includes('catalog') && search.answer?.ok && search.answer.data?.search === 'atlas' ? search.answer.data : null;
+					catalog && connection('storage')?.status === 'connected'
+						? settingOf(settings.answer, 'catalog', 'mediaBaseUrl')
+						: null;
+				if (media) {
+					const address = String(media.value ?? '');
+					if (!address)
+						needs.push({
+							key: 'media',
+							tone: 'warning',
+							title: O.media.title,
+							effect: O.media.effect,
+							action: go(O.media.action, 'settings'),
+						});
+					steps.push({
+						key: 'media',
+						label: O.media.step,
+						done: address !== '',
+						...(address ? { detail: address } : {}),
+						onSelect: () => open('settings'),
+					});
+				}
+				// someone to alert, and the admin page alerts link to (shop health P5-18, setup part)
+				if (alertsOn && settings.answer?.ok) {
+					const recipients = settingOf(settings.answer, 'staff_alerts', 'recipients')?.value;
+					const permission = String(settingOf(settings.answer, 'staff_alerts', 'staffPermission')?.value ?? '');
+					const listed = Array.isArray(recipients) && recipients.length > 0;
+					const staff = permission !== '' && connection('accounts')?.status === 'connected';
+					if (!listed && !staff)
+						needs.push({
+							key: 'alerts',
+							tone: 'warning',
+							title: O.alerts.title,
+							effect: O.alerts.effect,
+							action: go(O.alerts.action, 'settings'),
+						});
+					if (!String(settingOf(settings.answer, 'staff_alerts', 'adminUrl')?.value ?? '').trim())
+						needs.push({
+							key: 'admin-url',
+							tone: 'warning',
+							title: O.adminUrl.title,
+							effect: O.adminUrl.effect,
+							action: go(O.adminUrl.action, 'settings'),
+						});
+				}
+				// bank transfer offered, recorded by staff, with nothing telling shoppers where to pay
+				if (shop && settings.answer?.ok) {
+					const methods = settingOf(settings.answer, 'checkout', 'paymentMethods')?.value;
+					const manual = settingOf(settings.answer, 'checkout', 'bankTransferVia')?.value === 'manual';
+					const note = String(settingOf(settings.answer, 'checkout', 'noteBankTransfer')?.value ?? '').trim();
+					if (Array.isArray(methods) && methods.includes('bank_transfer') && manual && !note)
+						needs.push({
+							key: 'bank',
+							tone: 'warning',
+							title: O.bank.title,
+							effect: O.bank.effect,
+							action: go(O.bank.action, 'settings'),
+						});
+				}
 				return (
-					<div className="space-y-6">
-						<StatusBanner status={data.status} />
-						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<StatGrid>
-								<Stat
-									label={TEXTS.overview.today}
-									value={formatCredits(data.todayMillicredits)}
-									icon="coins"
-									kind="credit"
-								/>
-								<Stat
-									label={TEXTS.overview.features}
-									value={on.length}
-									hint={on.length > 0 ? namesOf(on, 3) : TEXTS.overview.noFeatures}
-									icon="zap"
-									kind="feature"
-								/>
-								<Stat
-									label={TEXTS.overview.connectionsReady}
-									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
-									tone={ready < needed.length ? 'warning' : 'success'}
-									icon="plug"
-									kind="connection"
-								/>
-							</StatGrid>
-						</Section>
-						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
-							<Card>
-								<ul className="divide-y divide-line-soft text-sm">
-									{needed.map((item) => (
-										<ConnectionRow
-											key={item.name}
-											item={item}
-											why={
-												item.name === 'database'
-													? ''
-													: namesOf(
-															item.neededBy.filter((key) => on.includes(key)),
-															3,
-														)
-											}
-										/>
-									))}
-									{payments ? (
-										<ConnectionRow
-											item={payments}
-											why={TEXTS.overview.paymentsWhy}
-											extra={TEXTS.overview.recommended}
-										/>
-									) : null}
-									{messages ? (
-										<ConnectionRow item={messages} why={TEXTS.overview.messagesWhy} extra={TEXTS.overview.optional} />
-									) : null}
-									{atlas ? <SearchIndexRow found={atlas} /> : null}
-									{media === null ? null : (
-										<CheckRow
-											tone={media ? 'success' : 'warning'}
-											badge={media ? TEXTS.overview.mediaSet : TEXTS.overview.mediaMissing}
-											label={TEXTS.overview.mediaAddress}
-											detail={media || TEXTS.overview.mediaMissingDetail}>
-											{media ? null : (
-												<a
-													className="text-sm font-semibold text-primary hover:underline"
-													href={`?${new URLSearchParams({ websiteId: String(websiteId), view: 'settings' })}`}>
-													{TEXTS.overview.mediaSetIt}
-												</a>
-											)}
-										</CheckRow>
-									)}
-									{data.checklist.widget ? (
-										<CheckRow
-											tone={data.checklist.widget.installed ? 'success' : 'warning'}
-											badge={
-												data.checklist.widget.installed
-													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
-														})
-													: TEXTS.overview.widgetMissing
-											}
-											label={TEXTS.overview.widget}
-										/>
-									) : null}
-									<CheckRow
-										tone={data.checklist.business.found ? 'success' : 'warning'}
-										badge={
-											data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing
-										}
-										label={TEXTS.overview.business}>
-										<Button
-											size="sm"
-											variant="secondary"
-											loading={busy}
-											onClick={async () => {
-												setBusy(true);
-												await call('POST', `${base}/business/refresh`);
-												setBusy(false);
-												reload();
-											}}>
-											{TEXTS.overview.refresh}
-										</Button>
-									</CheckRow>
-								</ul>
-							</Card>
-						</Section>
-						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
-							<RecentChanges items={data.recentChanges} titled={false} />
-						</Section>
-					</div>
+					<ProductOverview
+						data={data}
+						who={who}
+						product={TEXTS.title}
+						support={support}
+						portal={portal}
+						namesOf={namesOf}
+						open={open}
+						recheck={async () => {
+							await call('POST', `${base}/business/refresh`);
+							reload();
+						}}
+						needs={needs}
+						steps={steps}
+						numbers={
+							<Stat
+								label={O.connectionsReady}
+								value={fill(O.ofTotal, { count: ready, total: needed.length })}
+								hint={O.connectionsHint}
+								tone={ready < needed.length ? 'warning' : 'success'}
+								icon="plug"
+								kind="connection"
+							/>
+						}
+					/>
 				);
 			}}
 		</Loaded>
