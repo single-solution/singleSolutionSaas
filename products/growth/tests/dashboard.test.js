@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The dashboard in the browser (jsdom), on a faked dashboard API: Overview's setup at a glance and the Settings notes
+ * The dashboard in the browser (jsdom), on a faked dashboard API: Overview's own part (PLAN 0.6 "Overviews talk": the
+ * tags ready, the tag features with no id asked for, the setup at a glance) and the Settings notes
  * of the store-conversion options (PLAN 0.8.10 G1, G4–G7): the law warning while tags need no consent, tag ids that are
  * not loaded, Tag Manager missing for GA4, what robots.txt, the verification tags and the IndexNow key file serve, the
  * notice bar now, and Web Vitals to Google Analytics without Google tags. Setup only: no business data. Times are
@@ -9,7 +10,7 @@
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render } from '@ss/ui/testing';
+import { byText, cleanup, click, render } from '@ss/ui/testing';
 import { manifest, SHARED_SETTINGS } from '../adapters/product.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
@@ -89,6 +90,7 @@ const serve = (on, overview = {}) =>
 			const body =
 				path === `${base}/overview`
 					? {
+							website: { websiteId: WEBSITE, domain: DOMAIN, merchantId: 'm_1', merchantName: 'Merchant' },
 							status: { status: 'active', graceEndsAt: null },
 							featuresOn: on,
 							todayMillicredits: 0,
@@ -128,6 +130,7 @@ const props = {
 	who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 	support: { email: 'help@example.com', phone: '' },
 	portal: 'https://portal.example.com',
+	open: vi.fn(),
 };
 
 afterEach(() => {
@@ -186,6 +189,35 @@ describe('the dashboard (setup only)', () => {
 			expect(await glance()).toContain(`${TEXTS.setup.sitemaps}0`);
 		} finally {
 			VALUES.robots_verification = saved;
+		}
+	});
+
+	it('Overview asks for the ids of tag features that have none, counts the tags ready and opens Settings', async () => {
+		const saved = { meta_pixel: VALUES.meta_pixel ?? {}, google_tags: VALUES.google_tags ?? {} };
+		try {
+			VALUES.meta_pixel = { pixelId: '' };
+			VALUES.google_tags = { ga4Id: '' };
+			serve(['meta_pixel', 'google_tags']);
+			const Overview = TABS.overview;
+			props.open.mockClear();
+			const { container } = render(<Overview {...props} />);
+			await settle();
+			const needs = [...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map(
+				(p) => p.textContent,
+			);
+			expect(needs).toContain('2 tag features have no id or script yet');
+			expect(byText(container, TEXTS.overview.tags, 'span').parentElement?.parentElement?.textContent).toContain('0 of 2');
+			click(byText(container, 'Open Settings', 'button'));
+			click(byText(container, TEXTS.overview.tagsStep, 'button'));
+			expect(props.open.mock.calls).toEqual([['settings'], ['settings']]);
+			cleanup();
+			VALUES.meta_pixel = { pixelId: '1234567890' };
+			serve(['meta_pixel', 'google_tags']);
+			const one = render(<Overview {...props} />);
+			await settle();
+			expect(one.container.textContent).toContain('A tag feature has no id or script yet');
+		} finally {
+			Object.assign(VALUES, saved);
 		}
 	});
 
@@ -270,11 +302,11 @@ describe("times: computed in UTC, shown in the viewer's local time (owner 2026-1
 		const { container } = render(<Overview {...props} />);
 		await settle();
 		const text = container.textContent ?? '';
-		expect(text).toContain('In grace until Oct 4, 2026, 10:30 AM EDT');
+		expect(text).toContain('Growth is in grace until Oct 4, 2026, 10:30 AM EDT');
 		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
 		// midnight UTC on Nov 1 is still Oct 31 in New York
 		expect(text).toContain('Starts Oct 31, 2026, 8:00 PM EDT');
-		const change = container.querySelector('time');
+		const change = container.querySelector('ol time');
 		expect([change?.textContent, change?.getAttribute('title'), change?.getAttribute('datetime')]).toEqual([
 			'Oct 6, 2026, 4:00 AM EDT',
 			'Oct 6, 2026, 8:00 AM UTC',
@@ -283,8 +315,9 @@ describe("times: computed in UTC, shown in the viewer's local time (owner 2026-1
 		// the server (and the first render in the browser) print UTC, with the answers this page already loaded
 		const html = renderToString(<Overview {...props} />);
 		for (const words of [
-			'In grace until Oct 4, 2026, 2:30 PM UTC',
-			'Last seen Oct 5, 2026, 11:15 PM UTC',
+			' is in grace until ',
+			'Oct 4, 2026, 2:30 PM UTC',
+			'Oct 5, 2026, 11:15 PM UTC',
 			'Starts Nov 1, 2026, 12:00 AM UTC',
 			'>Oct 6, 2026, 8:00 AM UTC</time>',
 		])

@@ -17,20 +17,19 @@ import {
 	ErrorState,
 	FieldGrid,
 	Input,
-	LocalTime,
 	Masonry,
+	OverviewSkeleton,
+	ProductOverview,
+	RecentChanges,
 	SchemaForm,
 	Section,
 	Select,
 	Skeleton,
 	SoftBreaks,
 	Stat,
-	StatGrid,
 	TextArea,
 	describeProblem,
-	formatCredits,
 	formatCreditsPerHour,
-	formatDateTime,
 	parseCredits,
 	useViewerTimeZone,
 } from '@ss/ui';
@@ -44,16 +43,19 @@ import { TEXTS } from './texts.js';
 
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
 /**
- * @typedef {{ websiteId: string | null, domain: string, who: Who, support: { email: string, phone: string }, portal: string }} TabProps
+ * `open` shows another section of the dashboard (the Overview's buttons).
+ * @typedef {{ websiteId: string | null, domain: string, who: Who, support: { email: string, phone: string },
+ *   portal: string, open: (tab: import('@ss/ui').OverviewTab) => void }} TabProps
  */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 
 /**
- * Skeleton while loading, the problem when it failed, else the content (it fades in).
- * @param {{ answer: import('./api.js').Answer | null, children: (data: any) => import('react').ReactNode }} props
+ * Its skeleton while loading (`skeleton`, else a few lines), the problem when it failed, else the content (it fades in).
+ * @param {{ answer: import('./api.js').Answer | null, skeleton?: import('react').ReactNode,
+ *   children: (data: any) => import('react').ReactNode }} props
  */
-function Loaded({ answer, children }) {
-	if (!answer) return <Skeleton lines={3} label={TEXTS.loading} />;
+function Loaded({ answer, skeleton, children }) {
+	if (!answer) return skeleton ?? <Skeleton lines={3} label={TEXTS.loading} />;
 	if (!answer.ok) return <ErrorState title={TEXTS.failed} message={describeProblem(answer.problem)} />;
 	// fades and slides in when it replaces the skeleton; a refresh of shown content changes it in place
 	return (
@@ -95,63 +97,6 @@ const namesOf = (keys, max = Infinity) => {
 const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
 
 /**
- * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
- * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
- *   children?: import('react').ReactNode }} props
- */
-function CheckRow({ tone, badge, label, detail, children }) {
-	return (
-		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-			<span className="min-w-0 flex-[1_1_16rem]">
-				<span className="block font-semibold text-fg">{label}</span>
-				{detail ? <span className="block text-muted">{detail}</span> : null}
-			</span>
-			<span className="flex flex-wrap items-center gap-2">
-				<Badge tone={tone} dot>
-					{badge}
-				</Badge>
-				{children}
-			</span>
-		</li>
-	);
-}
-
-/**
- * Recent changes; `titled` gives the card its own title (Defaults, Prices) where no section heading names it.
- * @param {{ items: Array<{ who: { name: string }, what: string, detail: string, at: string }>, titled?: boolean }} props
- */
-function RecentChanges({ items, titled = true }) {
-	return (
-		<Card {...(titled ? { title: TEXTS.overview.recent } : {})}>
-			{items.length === 0 ? (
-				<p className="text-sm text-muted">{TEXTS.overview.noChanges}</p>
-			) : (
-				<ul className="space-y-2 text-sm">
-					{items.map((item) => (
-						<li key={`${item.at}-${item.detail}`}>
-							<span className="font-semibold">{item.who.name}</span> · {item.detail}{' '}
-							<span className="text-muted">
-								<LocalTime value={item.at} />
-							</span>
-						</li>
-					))}
-				</ul>
-			)}
-		</Card>
-	);
-}
-
-/** @param {{ status: { status: string, graceEndsAt: string | null } }} props */
-function StatusBanner({ status }) {
-	const timeZone = useViewerTimeZone();
-	const text = fill(TEXTS.status[/** @type {keyof typeof TEXTS.status} */ (status.status)] ?? status.status, {
-		time: formatDateTime(status.graceEndsAt, { timeZone }),
-	});
-	const tone = status.status === 'active' ? 'success' : status.status === 'grace' ? 'warning' : 'danger';
-	return <Callout tone={tone}>{text}</Callout>;
-}
-
-/**
  * The settings of each switched-on feature, from the settings screen's answer.
  * @param {{ features: Array<{ key: string, on?: boolean, values: Record<string, { value: unknown }> }> }} data
  */
@@ -163,112 +108,77 @@ const valuesOf = (data) =>
 		]),
 	);
 
-/** @param {TabProps} props */
-function OverviewTab({ websiteId, domain }) {
+/**
+ * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview from `@ss/ui`, with Growth's own part from the
+ * website's settings: the tags ready (while a tag feature is on), the tag features with no id or script yet, and the
+ * setup of the switched-on features at a glance.
+ * @param {TabProps} props
+ */
+function OverviewTab({ websiteId, who, support, portal, open }) {
 	const timeZone = useViewerTimeZone();
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
 	const settings = useLoad(`${base}/settings`);
-	const [busy, setBusy] = useState(false);
+	const O = TEXTS.overview;
 	return (
-		<Loaded answer={answer}>
+		<Loaded answer={answer} skeleton={<OverviewSkeleton />}>
 			{(data) => {
-				/** @type {Array<{ name: string, label: string, status: string, message?: string }>} */
-				const needed = data.checklist.connections;
-				const ready = needed.filter((item) => item.status === 'connected').length;
-				const tags = settings.answer?.ok ? tagsReady(data.featuresOn, valuesOf(settings.answer.data)) : null;
+				const values = settings.answer?.ok ? valuesOf(settings.answer.data) : null;
+				const tags = values ? tagsReady(data.featuresOn, values) : null;
+				const missing = tags ? tags.total - tags.ready : 0;
 				return (
-					<div className="space-y-6">
-						<StatusBanner status={data.status} />
-						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<StatGrid>
+					<ProductOverview
+						data={data}
+						who={who}
+						product={TEXTS.title}
+						support={support}
+						portal={portal}
+						namesOf={namesOf}
+						open={open}
+						recheck={async () => {
+							await call('POST', `${base}/business/refresh`);
+							reload();
+						}}
+						needs={
+							missing > 0
+								? [
+										{
+											key: 'tags',
+											tone: 'warning',
+											title: missing === 1 ? O.noTag.one : fill(O.noTag.many, { count: missing }),
+											effect: O.noTag.effect,
+											action: (
+												<Button size="sm" variant="secondary" onClick={() => open('settings')}>
+													{O.noTag.action}
+												</Button>
+											),
+										},
+									]
+								: []
+						}
+						steps={
+							tags && tags.total > 0
+								? [{ key: 'tags', label: O.tagsStep, done: missing === 0, onSelect: () => open('settings') }]
+								: []
+						}
+						numbers={
+							tags && tags.total > 0 ? (
 								<Stat
-									label={TEXTS.overview.today}
-									value={formatCredits(data.todayMillicredits)}
-									icon="coins"
-									kind="credit"
-								/>
-								<Stat
-									label={TEXTS.overview.features}
-									value={data.featuresOn.length}
-									hint={data.featuresOn.length > 0 ? namesOf(data.featuresOn, 3) : TEXTS.overview.noFeatures}
+									label={O.tags}
+									value={fill(O.ofTotal, { count: tags.ready, total: tags.total })}
+									hint={O.tagsHelp}
 									icon="zap"
-									kind="feature"
-								/>
-								<Stat
-									label={TEXTS.overview.connectionsReady}
-									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
-									tone={ready < needed.length ? 'warning' : 'success'}
-									icon="plug"
 									kind="connection"
 								/>
-								<Stat
-									label={TEXTS.overview.tags}
-									value={tags ? fill(TEXTS.overview.ofTotal, { count: tags.ready, total: tags.total }) : '—'}
-									hint={TEXTS.overview.tagsHelp}
-									tone={tags && tags.ready < tags.total ? 'warning' : undefined}
-									icon="zap"
-									kind="connection"
-								/>
-							</StatGrid>
-						</Section>
-						{settings.answer?.ok ? (
+							) : null
+						}>
+						{values ? (
 							<AtAGlance
-								values={valuesOf(settings.answer.data)}
-								context={{ on: data.featuresOn, domain, now: Date.now(), timeZone }}
+								values={values}
+								context={{ on: data.featuresOn, domain: data.website.domain, now: Date.now(), timeZone }}
 							/>
 						) : null}
-						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
-							<Card>
-								<ul className="divide-y divide-line-soft text-sm">
-									{needed.map((item) => (
-										<CheckRow
-											key={item.name}
-											tone={toneOf(item.status)}
-											badge={TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-											label={item.label}
-											detail={item.message}
-										/>
-									))}
-									{data.checklist.widget ? (
-										<CheckRow
-											tone={data.checklist.widget.installed ? 'success' : 'warning'}
-											badge={
-												data.checklist.widget.installed
-													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
-														})
-													: TEXTS.overview.widgetMissing
-											}
-											label={TEXTS.overview.widget}
-										/>
-									) : null}
-									<CheckRow
-										tone={data.checklist.business.found ? 'success' : 'warning'}
-										badge={
-											data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing
-										}
-										label={TEXTS.overview.business}>
-										<Button
-											size="sm"
-											variant="secondary"
-											loading={busy}
-											onClick={async () => {
-												setBusy(true);
-												await call('POST', `${base}/business/refresh`);
-												setBusy(false);
-												reload();
-											}}>
-											{TEXTS.overview.refresh}
-										</Button>
-									</CheckRow>
-								</ul>
-							</Card>
-						</Section>
-						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
-							<RecentChanges items={data.recentChanges} titled={false} />
-						</Section>
-					</div>
+					</ProductOverview>
 				);
 			}}
 		</Loaded>

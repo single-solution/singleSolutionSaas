@@ -157,6 +157,7 @@ export default function Dashboard() {
 							who={who}
 							support={support}
 							portal={portalUrl}
+							open={(tab) => go(href(tab))}
 						/>
 					)}
 				</SwapTransition>
