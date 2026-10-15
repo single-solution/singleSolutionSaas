@@ -262,6 +262,20 @@ describe('default templates: no template written, messages still go (parity P1)'
 		);
 		const reset = listed.json.items.find((/** @type {any} */ m) => m.key === 'accounts.password_reset');
 		expect(reset.channels.email.subject).toBe('Reset your password for {business}');
+		// Chat's transcript is one long value; a template of the merchant's keeps it out of the subject
+		expect(listed.json.items.find((/** @type {any} */ m) => m.key === 'chat.transcript')).toMatchObject({
+			values: ['transcript', 'date', 'business'],
+			longValues: ['transcript'],
+		});
+		const titled = await dash('notifications', 'PUT', '/templates', {
+			key: 'chat.transcript',
+			channel: 'email',
+			subject: 'Chat {transcript}',
+			text: '{transcript}',
+			required: true,
+		});
+		expect(titled.status).toBe(422);
+		expect(titled.json.errors[0]).toMatchObject({ path: '/subject' });
 		expect(keys).toEqual(expect.arrayContaining(['ecommerce:ecommerce.order_status', 'ecommerce:ecommerce.staff_placed']));
 		// the products are the ones connected to this Portal (its directory), named as their manifests say; Payments and
 		// Growth are not in this system, so they are not listed at all, and every listed product answered its list

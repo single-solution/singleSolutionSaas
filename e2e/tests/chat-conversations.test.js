@@ -709,14 +709,17 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 	it('transcripts go whole through the real Notifications; merchants delete one lead or every lead', async () => {
 		await configure('chat', { 'guest_chat.messageLimit': 0, 'staff_alerts.recipients': [] });
 		const guest = device();
-		const texts = ['A', 'B', 'C', 'D'].map((letter) => `${letter}${'x'.repeat(3999)}`);
+		const texts = 'ABCDEFGHIJKL'.split('').map((letter) => `${letter}${'x'.repeat(3999)}`);
 		for (const text of texts) await guest('POST', '/v1/chat/messages', { text });
 		const before = mails.length;
 		expect((await guest('POST', '/v1/chat/transcript', { email: 'copy@example.com' })).status).toBe(202);
 		const [copy] = mails.slice(before);
-		// Chat's default words: the 16,000 characters of the chat in one email, never cut to 1,000
+		// Chat's default words: the whole chat (over 48,000 characters, past the 45,000 of the old parts) as one long
+		// value in one email, never cut
 		expect(copy).toMatchObject({ to: ['copy@example.com'], subject: expect.stringContaining('Your chat with') });
 		for (const text of texts) expect(copy.text).toContain(`You: ${text}`);
+		expect(copy.text.length).toBeGreaterThan(48_000);
+		expect(copy.text).not.toContain('earlier ones are left out');
 		expect(copy.text).not.toContain('{transcript');
 
 		// leads: one by id, then every lead (the conversations stay)
