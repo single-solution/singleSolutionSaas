@@ -755,12 +755,17 @@ describe('CSV', () => {
 				)
 			).rows,
 		);
-		const read = importGroups(file, { currency: 'USD', locationIds: new Set() });
+		const read = importGroups(file, { currency: 'USD', locationIds: new Set(), fieldSlugs: new Set() });
 		expect(read.errors.map((e) => `${e.line}${e.path}`)).toEqual(['2/option2_value', '2/cost', '2/track_stock', '3/name']);
 		const b = /** @type {any} */ (read.groups[1]);
 		expect(b.fields).toEqual({ name: 'B', trackStock: false });
 		expect(b.rows[0].variant).toEqual({ options: { Size: 'M' }, compareAtPrice: null, cost: null, grade: 'a' });
-		const lookups = { categoryIds: new Map([['phones', 'cat_1']]), brandIds: new Map([['acme', 'brd_1']]) };
+		const lookups = {
+			categoryIds: new Map([['phones', 'cat_1']]),
+			brandIds: new Map([['acme', 'brd_1']]),
+			fields: [],
+			categories: new Map(),
+		};
 		const existing = record({ sku: 'S1' });
 		const input = importInput(
 			{
@@ -786,7 +791,10 @@ describe('CSV', () => {
 		expect(fine.ok && [...fine.stock.values()]).toEqual([{ stock: 4 }]);
 		const fresh = importInput({ ...b, fields: {}, rows: [{ line: 2, variant: {} }] }, null, lookups);
 		expect(fresh.ok ? [] : fresh.errors.map((e) => e.path)).toEqual(['/name', '/price']);
-		expect(importGroups({ header: ['x'], records: [] }, { currency: 'USD', locationIds: new Set() }).errors[0]?.line).toBe(1);
+		expect(
+			importGroups({ header: ['x'], records: [] }, { currency: 'USD', locationIds: new Set(), fieldSlugs: new Set() })
+				.errors[0]?.line,
+		).toBe(1);
 	});
 
 	it('writes product and order rows', () => {
@@ -804,6 +812,8 @@ describe('CSV', () => {
 				categorySlugs: new Map(),
 				brandSlugs: new Map(),
 				locationIds: ['loc_1'],
+				fields: [],
+				categories: new Map(),
 			},
 		);
 		expect(rows[0]?.slice(5, 7)).toEqual(['cat_1', 'brd_1']);
@@ -819,7 +829,7 @@ describe('CSV', () => {
 			totals: { currency: 'JPY' },
 			payment: { method: 'cod', kind: 'on_delivery', state: 'unpaid' },
 		});
-		expect(orderRows([order])[0]).toEqual([
+		expect(orderRows([order], [])[0]).toEqual([
 			'1',
 			'1970-01-01T00:00:00.000Z',
 			's',

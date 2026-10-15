@@ -23,10 +23,13 @@ import { LIMITS, changedPrice, changedStock, checkPriceChange, checkProduct, sum
 import { aiPrompt, checkAiRequest, readSuggestions } from '../core/catalog-ai.js';
 import {
 	CUSTOMER_COLUMNS,
+	FIELD_COLUMN,
 	MAX_IMPORT_ROWS,
 	ORDER_COLUMNS,
 	ORDER_TOTAL_COLUMNS,
 	customerRows,
+	fieldColumns,
+	fieldHeader,
 	importGroups,
 	importInput,
 	orderRows,
@@ -70,6 +73,9 @@ const IMPORT_BYTES = 8 * 1024 * 1024;
 
 const BULK_ACTIONS = Object.freeze(['status', 'price', 'stock', 'add_category', 'remove_category']);
 
+/** Where the product check names a field value: `/specs/<id>` or `/variants/<n>/attributes/<id>`. */
+const FIELD_PATH = /^\/(?:specs|variants\/(\d+)\/attributes)\/([^/]+)$/;
+
 /**
  * A CSV file answer.
  * @param {string} name @param {string} csv
@@ -94,6 +100,12 @@ export const createCatalogTools = (product, service, common) => {
 	/** @param {Site} s */
 	const delimiterOf = async (s) => ((await s.values('csv')).delimiter === ';' ? ';' : ',');
 
+	/**
+	 * The field columns of the fields on `on` (E22), inactive ones too (their values stay readable).
+	 * @param {WebsiteData} data @param {ReadonlyArray<import('../core/model.js').AttributeRecord['on']>} on
+	 */
+	const columnsOn = async (data, on) => fieldColumns(await attributesOf(data), on);
+
 	// ------------------------------------------------------------------------------------------------- export
 
 	/** GET …/csv/products. @param {any} ctx */
@@ -107,7 +119,12 @@ export const createCatalogTools = (product, service, common) => {
 				.limit(MAX_EXPORT_PRODUCTS)
 				.toArray()
 		);
-		const [categories, brands, locations] = await Promise.all([categoriesOf(data), brandsOf(data), locationsOf(data)]);
+		const [categories, brands, locations, fields] = await Promise.all([
+			categoriesOf(data),
+			brandsOf(data),
+			locationsOf(data),
+			columnsOn(data, ['product', 'variant']),
+		]);
 		const locationIds = s.has('multi_location') ? locations.map((location) => location.id) : [];
 		const measured = await measuredOf(s, categories);
 		const rows = productRows(products, {
@@ -116,12 +133,14 @@ export const createCatalogTools = (product, service, common) => {
 			brandSlugs: new Map(brands.map((b) => [b.id, b.slug])),
 			locationIds,
 			measured,
+			fields,
+			categories: new Map(categories.map((c) => [c.id, c])),
 		});
 		await service.log(ctx, 'csv.products_exported', 'products', {
 			label: 'products.csv',
 			detail: `${products.length} products`,
 		});
-		return csvFile('products.csv', toCsv(productHeader(locationIds), rows, { delimiter: await delimiterOf(s) }));
+		return csvFile('products.csv', toCsv(productHeader(locationIds, fields), rows, { delimiter: await delimiterOf(s) }));
 	};
 
 	/**
@@ -141,13 +160,14 @@ export const createCatalogTools = (product, service, common) => {
 		if ((await orders.countDocuments(filter, { limit: MAX_EXPORT_ORDERS + 1 })) > MAX_EXPORT_ORDERS)
 			throw refuse([{ path: '/from', message: `More than ${MAX_EXPORT_ORDERS} orders: choose shorter dates.` }]);
 		const found = /** @type {OrderRecord[]} */ (await orders.find(filter, NO_ID).sort({ placedAt: 1, id: 1 }).toArray());
+		const fields = await columnsOn(data, ['order']);
 		await service.log(ctx, 'csv.orders_exported', 'orders', { label: 'orders.csv', detail: `${found.length} orders` });
 		const delimiter = await delimiterOf(s);
 		return csvFile(
 			'orders.csv',
 			per === 'order'
-				? toCsv(ORDER_TOTAL_COLUMNS, orderTotalRows(found), { delimiter })
-				: toCsv(ORDER_COLUMNS, orderRows(found), { delimiter }),
+				? toCsv([...ORDER_TOTAL_COLUMNS, ...fieldHeader(fields)], orderTotalRows(found, fields), { delimiter })
+				: toCsv([...ORDER_COLUMNS, ...fieldHeader(fields)], orderRows(found, fields), { delimiter }),
 		);
 	};
 
@@ -162,14 +182,19 @@ export const createCatalogTools = (product, service, common) => {
 				.limit(MAX_EXPORT_CUSTOMERS)
 				.toArray()
 		);
-		const spent = await createFulfilmentStore(data).orders.spent(customers);
+		const [spent, fields] = await Promise.all([
+			createFulfilmentStore(data).orders.spent(customers),
+			columnsOn(data, ['customer']),
+		]);
 		await service.log(ctx, 'csv.customers_exported', 'customers', {
 			label: 'customers.csv',
 			detail: `${customers.length} customers`,
 		});
 		return csvFile(
 			'customers.csv',
-			toCsv(CUSTOMER_COLUMNS, customerRows(customers, spent, s.currency), { delimiter: await delimiterOf(s) }),
+			toCsv([...CUSTOMER_COLUMNS, ...fieldHeader(fields)], customerRows(customers, spent, s.currency, fields), {
+				delimiter: await delimiterOf(s),
+			}),
 		);
 	};
 
@@ -188,13 +213,16 @@ export const createCatalogTools = (product, service, common) => {
 	};
 
 	/**
-	 * Plan an import: every product of the file found or new, checked like an API change.
+	 * Plan an import: every product of the file found or new, checked like an API change; the product check's refusals of
+	 * values the file's field columns give are reported at their column (E22).
 	 * @param {Site} s @param {WebsiteData} data @param {ImportGroup[]} groups
+	 * @param {ReadonlyArray<import('../core/catalog-csv.js').FieldColumn>} fields the product and variant field columns
 	 */
-	const plan = async (s, data, groups) => {
+	const plan = async (s, data, groups, fields) => {
 		const rules = await common.rulesOf(s, data);
 		const [categories, brands] = await Promise.all([categoriesOf(data), brandsOf(data)]);
 		const measured = await measuredOf(s, categories);
+		const categoryById = new Map(categories.map((c) => [c.id, c]));
 		/** @type {Map<string, string>} */
 		const categoryIds = new Map();
 		for (const c of categories) categoryIds.set(c.id, c.id).set(c.slug, c.id);
@@ -233,11 +261,14 @@ export const createCatalogTools = (product, service, common) => {
 				)
 			).map((p) => [p.id, p]),
 		);
+		/** @type {Array<{ group: ImportGroup, id: string | null }>} */
+		const resolved = [];
 		for (const group of groups) {
 			/** @param {string} path @param {RowProblem['code']} code @param {string} message @param {Record<string, string>} [values] */
 			const fail = (path, code, message, values) =>
 				errors.push({ line: group.line, path, message, code, ...(values ? { values } : {}) });
 			const owners = new Set(group.skus.map((sku) => bySku.get(sku)).filter(Boolean));
+			/** @type {string | null} */
 			let id = group.productId;
 			if (id && !ids.has(id)) {
 				fail('/product_id', 'unknown_product', 'There is no such product.');
@@ -255,10 +286,26 @@ export const createCatalogTools = (product, service, common) => {
 					fail('/sku', 'sku_twice', `The SKU ${sku} is in two products of the file.`, { sku });
 				fileSkus.set(sku, group.key);
 			}
+			// rows of one product (say, one row per SKU) make one product
+			const known = id === null ? undefined : resolved.find((entry) => entry.id === id);
+			if (known)
+				known.group = {
+					...known.group,
+					skus: [...known.group.skus, ...group.skus],
+					rows: [...known.group.rows, ...group.rows],
+				};
+			else resolved.push({ group, id });
+		}
+		for (const { group, id } of resolved) {
+			/** @param {string} path @param {RowProblem['code']} code @param {string} message @param {Record<string, string>} [values] */
+			const fail = (path, code, message, values) =>
+				errors.push({ line: group.line, path, message, code, ...(values ? { values } : {}) });
 			const before = id ? (existing.get(id) ?? null) : null;
 			const built = importInput(group, before, {
 				categoryIds,
 				brandIds,
+				fields,
+				categories: categoryById,
 				// the product as the file gives it, over what it was: its item type says whether it is measured
 				measured: (input) =>
 					measured({
@@ -271,11 +318,25 @@ export const createCatalogTools = (product, service, common) => {
 				errors.push(...built.errors);
 				continue;
 			}
+			errors.push(...built.problems);
 			const checked = checkProduct(built.input, rules, before);
 			if (!checked.ok) {
-				for (const error of checked.errors) fail(error.path, 'invalid', error.message);
+				for (const error of checked.errors) {
+					const match = FIELD_PATH.exec(error.path);
+					const field = match ? rules.attributes.get(String(match[2])) : undefined;
+					if (match && field && built.given.has(field.id))
+						errors.push({
+							line: match[1] === undefined ? group.line : (built.lines[Number(match[1])] ?? group.line),
+							path: `/${FIELD_COLUMN}${field.slug}`,
+							message: error.message,
+							code: 'field_value',
+							values: { field: field.slug },
+						});
+					else fail(error.path, 'invalid', error.message);
+				}
 				continue;
 			}
+			if (built.problems.length > 0) continue;
 			if (rules.locations)
 				for (const [variantId, units] of built.stock)
 					if (units.stock !== undefined && !units.locations)
@@ -427,8 +488,13 @@ export const createCatalogTools = (product, service, common) => {
 			]);
 		if (mode === 'update') return updateProducts(ctx, s, data, parsed.rows, dryRun);
 		const locationIds = s.has('multi_location') ? (await locationsOf(data)).map((location) => location.id) : [];
-		const read = importGroups(recordsOf(parsed.rows), { currency: s.currency, locationIds: new Set(locationIds) });
-		const planned = read.errors.some((error) => error.line === 1) ? null : await plan(s, data, read.groups);
+		const fields = await columnsOn(data, ['product', 'variant']);
+		const read = importGroups(recordsOf(parsed.rows), {
+			currency: s.currency,
+			locationIds: new Set(locationIds),
+			fieldSlugs: new Set(fields.map((column) => column.slug)),
+		});
+		const planned = read.errors.some((error) => error.line === 1) ? null : await plan(s, data, read.groups, fields);
 		const errors = [...read.errors, ...(planned?.errors ?? [])].sort((a, b) => a.line - b.line);
 		const creating = planned?.plans.filter((p) => p.id === null).length ?? 0;
 		const updating = planned?.plans.filter((p) => p.id !== null).length ?? 0;

@@ -237,7 +237,7 @@
 		{
 			"key": "csv",
 			"name": "CSV",
-			"description": "Import and export products and stock, export orders, as CSV.",
+			"description": "Import and export products and stock, export orders and customers, as CSV, with a column for each of your fields.",
 			"dependsOn": ["catalog"],
 			"settings": {
 				"$ref": "schemas/csv.settings.json"

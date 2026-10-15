@@ -5,11 +5,17 @@
  * (E36 `mode=update`) change only the price, stock and sold-out flag of the variants they name, and only from rows whose
  * `updated_at` is not older than the product's. Prices are decimals of the shop's currency in the files and minor
  * units inside. Empty cells keep a value (name, price, stock …) or clear it (texts, lists, the "was" price, cost,
- * grade, GTIN, MPN); a column left out keeps the value. Import never deletes variants. No I/O.
+ * grade, GTIN, MPN); a column left out keeps the value. Import never deletes variants. Merchant fields (E22) have one
+ * `field:<slug>` column each, as Shopify's metafield columns: product and variant fields in the products file (a
+ * product field's value on each of its variant rows, several values joined with `|`, yes/no as true/false), order
+ * fields in both orders files and customer fields in the customers file. An import merges them into the product's
+ * values: an empty cell clears that one value, a column left out keeps it. No I/O.
  * @module
  */
 import { LIMITS, isObject, slugify } from './catalog.js';
 import { MILLI, quantityText } from './measure.js';
+import { attributeOf } from './catalog-query.js';
+import { lineageOf } from './catalog-taxonomy.js';
 import { fromDecimal, toDecimal } from './money.js';
 import { spentKey } from './orders.js';
 
@@ -17,6 +23,7 @@ import { spentKey } from './orders.js';
 /** @typedef {import('./model.js').VariantRecord} VariantRecord */
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {import('./model.js').CustomerRecord} CustomerRecord */
+/** @typedef {import('./model.js').AttributeRecord} AttributeRecord */
 /** @typedef {import('./csv.js').Cell} Cell */
 
 /** Most data rows of an import. */
@@ -25,6 +32,51 @@ export const MAX_IMPORT_ROWS = 5000;
 const OPTION_COLUMNS = 3;
 /** A location's stock column: `stock@<location id>`. */
 const LOCATION_COLUMN = 'stock@';
+/** A merchant field's column: `field:<slug>` (E22). */
+export const FIELD_COLUMN = 'field:';
+
+/**
+ * One column per field slug, in the fields' order: the fields with that slug (several only for per-category
+ * definitions, E45).
+ * @typedef {{ slug: string, fields: AttributeRecord[] }} FieldColumn
+ */
+
+/**
+ * The field columns of the fields that live where `on` says.
+ * @param {ReadonlyArray<AttributeRecord>} fields in their order (sort, name, id)
+ * @param {ReadonlyArray<AttributeRecord['on']>} on
+ * @returns {FieldColumn[]}
+ */
+export const fieldColumns = (fields, on) => {
+	/** @type {Map<string, AttributeRecord[]>} */
+	const bySlug = new Map();
+	for (const field of fields) if (on.includes(field.on)) bySlug.set(field.slug, [...(bySlug.get(field.slug) ?? []), field]);
+	return [...bySlug].map(([slug, named]) => ({ slug, fields: named }));
+};
+
+/** The header cells of field columns. @param {ReadonlyArray<FieldColumn>} columns */
+export const fieldHeader = (columns) => columns.map((column) => `${FIELD_COLUMN}${column.slug}`);
+
+/**
+ * A field value as a cell: several values joined with `|`, yes/no as true/false, numbers as numbers, '' for none.
+ * @param {unknown} value
+ * @returns {Cell}
+ */
+const fieldCell = (value) =>
+	value === undefined || value === null ? '' : Array.isArray(value) ? value.map(String).join('|') : /** @type {Cell} */ (value);
+
+/**
+ * The cell of a field column for a record whose values `valueOf` reads, by field.
+ * @param {FieldColumn} column @param {(field: AttributeRecord) => unknown} valueOf
+ * @param {AttributeRecord} [first] the field to read first (the one that applies to a product)
+ */
+const columnCell = (column, valueOf, first) => {
+	for (const field of first ? [first, ...column.fields.filter((other) => other !== first)] : column.fields) {
+		const value = valueOf(field);
+		if (value !== undefined && value !== null) return fieldCell(value);
+	}
+	return '';
+};
 
 /** Columns of the products file (location stock columns follow). */
 const PRODUCT_COLUMNS = Object.freeze([
@@ -67,7 +119,8 @@ const UPDATE_COLUMNS = Object.freeze(['sold_out', 'updated_at']);
  * to two products; `sku_taken` and `sku_twice` (`sku`) another product or another product of the file has the SKU;
  * `slug_taken`; `invalid` the product check refused the field `path` names. A price and stock update (E36) adds
  * `no_variant`, `no_updated_at`, `unknown_variant`, `sku_ambiguous` (use `variant_id`) and `stale` (the product changed
- * after the export).
+ * after the export). Merchant field columns (E22) add `unknown_field` (line 1: no product or variant field has the slug,
+ * `field`) and `field_value` (the value does not fit the field, `field`).
  */
 export const CSV_PROBLEMS = Object.freeze(
 	/** @type {const} */ ([
@@ -95,6 +148,8 @@ export const CSV_PROBLEMS = Object.freeze(
 		'unknown_variant',
 		'sku_ambiguous',
 		'stale',
+		'unknown_field',
+		'field_value',
 	]),
 );
 /**
@@ -112,6 +167,8 @@ export const CSV_PROBLEMS = Object.freeze(
  * @property {string[]} locationIds
  * @property {(product: ProductRecord) => boolean} [measured] whether a product is sold in a unit of its own (its stock
  *   is in units in the file, thousandths in the shop)
+ * @property {ReadonlyArray<FieldColumn>} fields the product and variant field columns (E22)
+ * @property {ReadonlyMap<string, { path: string[] }>} categories the categories by id, for the fields that apply
  */
 
 /**
@@ -134,13 +191,15 @@ const stockMilli = (text) => {
 export const storedStock = (milli, measured) => (measured ? milli : milli % MILLI === 0 ? milli / MILLI : null);
 
 /**
- * The products file's header (with a stock column per location when multi-location stock is on, then the sold-out
- * flag and the product's `updated_at`).
+ * The products file's header (with a stock column per location when multi-location stock is on, a column per product
+ * and variant field slug, then the sold-out flag and the product's `updated_at`).
  * @param {string[]} locationIds
+ * @param {ReadonlyArray<FieldColumn>} fields
  */
-export const productHeader = (locationIds) => [
+export const productHeader = (locationIds, fields) => [
 	...PRODUCT_COLUMNS,
 	...locationIds.map((id) => `${LOCATION_COLUMN}${id}`),
+	...fieldHeader(fields),
 	...UPDATE_COLUMNS,
 ];
 
@@ -150,12 +209,21 @@ export const productHeader = (locationIds) => [
  * @param {CsvLookups} lookups
  * @returns {Cell[][]}
  */
-export const productRows = (products, { currency, categorySlugs, brandSlugs, locationIds, measured = () => false }) => {
+export const productRows = (
+	products,
+	{ currency, categorySlugs, brandSlugs, locationIds, fields, categories, measured = () => false },
+) => {
 	/** @type {Cell[][]} */
 	const rows = [];
 	/** @param {number | null} amount */
 	const money = (amount) => (amount === null ? '' : toDecimal(amount, currency));
-	for (const product of products)
+	const named = fields.map((column) => new Map(column.fields.map((field) => [field.id, field])));
+	for (const product of products) {
+		// the definition of a slug for the product's categories first (E45)
+		const lineage = lineageOf(product.categoryIds, categories);
+		const applying = fields.map((column, index) =>
+			attributeOf(/** @type {Map<string, AttributeRecord>} */ (named[index]), column.slug, lineage),
+		);
 		for (const variant of product.variants) {
 			// stock in units: an item sold in a unit of its own keeps thousandths of it
 			const units = (/** @type {number} */ stock) => quantityText(stock, measured(product));
@@ -189,10 +257,18 @@ export const productRows = (products, { currency, categorySlugs, brandSlugs, loc
 				variant.grade ?? '',
 				variant.active,
 				...locationIds.map((id) => units(variant.locations[id] ?? 0)),
+				...fields.map((column, index) =>
+					columnCell(
+						column,
+						(field) => (field.on === 'product' ? product.specs?.[field.id] : variant.attributes?.[field.id]),
+						applying[index],
+					),
+				),
 				variant.soldOut,
 				product.updatedAt ? new Date(product.updatedAt).toISOString() : '',
 			]);
 		}
+	}
 	return rows;
 };
 
@@ -218,15 +294,17 @@ export const ORDER_COLUMNS = Object.freeze([
 ]);
 
 /**
- * One row per order line.
+ * One row per order line, then a column per order field (E22).
  * @param {Iterable<OrderRecord>} orders
+ * @param {ReadonlyArray<FieldColumn>} fields the order field columns
  * @returns {Cell[][]}
  */
-export const orderRows = (orders) => {
+export const orderRows = (orders, fields) => {
 	/** @type {Cell[][]} */
 	const rows = [];
 	for (const order of orders) {
 		const currency = order.totals.currency;
+		const values = fields.map((column) => columnCell(column, (field) => order.fields?.[field.id]));
 		for (const line of order.lines)
 			rows.push([
 				order.number,
@@ -246,6 +324,7 @@ export const orderRows = (orders) => {
 				currency,
 				order.payment.method,
 				order.payment.state,
+				...values,
 			]);
 	}
 	return rows;
@@ -276,11 +355,12 @@ export const ORDER_TOTAL_COLUMNS = Object.freeze([
 ]);
 
 /**
- * One row per order (E36 `per=order`).
+ * One row per order (E36 `per=order`), then a column per order field (E22).
  * @param {Iterable<OrderRecord>} orders
+ * @param {ReadonlyArray<FieldColumn>} fields the order field columns
  * @returns {Cell[][]}
  */
-export const orderTotalRows = (orders) => {
+export const orderTotalRows = (orders, fields) => {
 	/** @type {Cell[][]} */
 	const rows = [];
 	for (const order of orders) {
@@ -309,6 +389,7 @@ export const orderTotalRows = (orders) => {
 			order.payment.state,
 			money(order.payment.paid),
 			money(order.payment.refunded),
+			...fields.map((column) => columnCell(column, (field) => order.fields?.[field.id])),
 		]);
 	}
 	return rows;
@@ -340,9 +421,10 @@ export const CUSTOMER_COLUMNS = Object.freeze([
  * @param {ReadonlyMap<string, { total: number, count: number }>} spent what they spent, by `spentKey` (`core/orders.js`:
  *   a member by user id, a guest by customer id)
  * @param {string} currency
+ * @param {ReadonlyArray<FieldColumn>} fields the customer field columns (E22), after the fixed ones
  * @returns {Cell[][]}
  */
-export const customerRows = (customers, spent, currency) => {
+export const customerRows = (customers, spent, currency, fields) => {
 	/** @type {Cell[][]} */
 	const rows = [];
 	for (const customer of customers) {
@@ -363,6 +445,7 @@ export const customerRows = (customers, spent, currency) => {
 			customer.rtoCount ?? 0,
 			customer.note ?? '',
 			customer.lastOrderAt ? new Date(customer.lastOrderAt).toISOString() : '',
+			...fields.map((column) => columnCell(column, (field) => customer.fields?.[field.id])),
 		]);
 	}
 	return rows;
@@ -398,7 +481,8 @@ export const customerRows = (customers, spent, currency) => {
  * @property {Record<string, any>} fields product fields in API shape (categories and brand still as slugs)
  * @property {string[] | undefined} categories slugs or ids (undefined = keep)
  * @property {string | null | undefined} brand slug, id or name (null = none, undefined = keep)
- * @property {Array<{ line: number, variant: VariantRow }>} rows
+ * @property {Array<{ line: number, variant: VariantRow, cells?: Record<string, string> }>} rows `cells`: the text of
+ *   each field column by slug (E22)
  */
 
 /** @param {string} value */
@@ -415,10 +499,11 @@ const amountOf = (value, currency) => (/^0+(\.0+)?$/.test(value) ? 0 : fromDecim
 /**
  * Read the rows of a products file into products.
  * @param {{ header: string[], records: Array<{ line: number, values: Record<string, string> }> }} file
- * @param {{ currency: string, locationIds: ReadonlySet<string> }} context
+ * @param {{ currency: string, locationIds: ReadonlySet<string>, fieldSlugs: ReadonlySet<string> }} context
+ *   `fieldSlugs`: the slugs of the product and variant fields (E22)
  * @returns {{ groups: ImportGroup[], errors: RowProblem[] }}
  */
-export const importGroups = ({ header, records }, { currency, locationIds }) => {
+export const importGroups = ({ header, records }, { currency, locationIds, fieldSlugs }) => {
 	/** @type {RowProblem[]} */
 	const errors = [];
 	const has = (/** @type {string} */ column) => header.includes(column);
@@ -431,6 +516,18 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 	for (const column of locationColumns)
 		if (!locationIds.has(column.slice(LOCATION_COLUMN.length)))
 			errors.push({ line: 1, path: `/${column}`, message: 'There is no such location.', code: 'unknown_location' });
+	const fieldColumnsOf = header.filter((column) => column.startsWith(FIELD_COLUMN));
+	for (const column of fieldColumnsOf) {
+		const slug = column.slice(FIELD_COLUMN.length);
+		if (!fieldSlugs.has(slug))
+			errors.push({
+				line: 1,
+				path: `/${column}`,
+				message: `No product or variant field has the slug ${slug}.`,
+				code: 'unknown_field',
+				values: { field: slug },
+			});
+	}
 	/** @type {Map<string, ImportGroup>} */
 	const groups = new Map();
 	for (const { line, values } of records) {
@@ -543,7 +640,17 @@ export const importGroups = ({ header, records }, { currency, locationIds }) => 
 			groups.set(key, group);
 		}
 		if (sku) group.skus.push(sku);
-		group.rows.push({ line, variant });
+		group.rows.push({
+			line,
+			variant,
+			...(fieldColumnsOf.length > 0
+				? {
+						cells: Object.fromEntries(
+							fieldColumnsOf.map((column) => [column.slice(FIELD_COLUMN.length), (values[column] ?? '').trim()]),
+						),
+					}
+				: {}),
+		});
 	}
 	return { groups: [...groups.values()], errors };
 };
@@ -562,14 +669,59 @@ const names = (row, variant) => {
 };
 
 /**
+ * A field column's text as the field's value (E22): '' none; several values split at `|` when the field takes several
+ * (always a list then); numbers and yes/no (true, false, yes, no, 1, 0) read; texts, choices and dates as written (the
+ * product check judges them).
+ * @param {AttributeRecord} field @param {string} text
+ * @returns {{ ok: true, value: string | number | boolean | Array<string | number> | null } | { ok: false }}
+ */
+const fieldValueOf = (field, text) => {
+	const several = field.multiple && field.type !== 'yes_no';
+	const parts = (several ? text.split('|') : [text]).map((part) => part.trim()).filter(Boolean);
+	/** @type {Array<string | number | boolean>} */
+	const values = [];
+	for (const part of parts) {
+		if (field.type === 'number') {
+			if (!/^-?\d{1,13}(\.\d{1,6})?$/.test(part)) return { ok: false };
+			values.push(Number(part));
+		} else if (field.type === 'yes_no') {
+			const value = flag(part);
+			if (value === null) return { ok: false };
+			values.push(value);
+		} else values.push(part);
+	}
+	if (values.length === 0) return { ok: true, value: null };
+	return {
+		ok: true,
+		value: several ? /** @type {Array<string | number>} */ (values) : /** @type {string | number | boolean} */ (values[0]),
+	};
+};
+
+/** A field value that does not fit its field (E22). @param {number} line @param {string} slug */
+const fieldProblem = (line, slug) =>
+	/** @type {RowProblem} */ ({
+		line,
+		path: `/${FIELD_COLUMN}${slug}`,
+		message: `This is not a valid value of the field ${slug}.`,
+		code: 'field_value',
+		values: { field: slug },
+	});
+
+/**
  * The API input of a group (for the catalog's product check) and the stock to set on variants that already existed.
+ * Field columns (E22) are merged into the product's values (`specs`) and each named variant's (`attributes`); a slug is
+ * the field defined for the product's categories (nearest first), else the one for every category. `lines` gives each
+ * input variant's row and `given` the fields the file sets, so the product check's refusals of their values can be
+ * reported at their column; `problems` are values that could not be read (left out of the input).
  * @param {ImportGroup} group
  * @param {ProductRecord | null} existing
  * @param {{ categoryIds: ReadonlyMap<string, string>, brandIds: ReadonlyMap<string, string>,
- *   measured?: (input: Record<string, any>) => boolean }} lookups slug, id or lowercase name → id; `measured`: whether
- *   the product as given is sold in a unit of its own (its stock cells are units, kept as thousandths)
- * @returns {{ ok: true, input: Record<string, any>, stock: Map<string, { stock?: number, locations?: Record<string, number> }> }
- *   | { ok: false, errors: RowProblem[] }}
+ *   fields: ReadonlyArray<FieldColumn>, categories: ReadonlyMap<string, { path: string[] }>,
+ *   measured?: (input: Record<string, any>) => boolean }} lookups slug, id or lowercase name → id; the product and
+ *   variant field columns and the categories by id; `measured`: whether the product as given is sold in a unit of its
+ *   own (its stock cells are units, kept as thousandths)
+ * @returns {{ ok: true, input: Record<string, any>, stock: Map<string, { stock?: number, locations?: Record<string, number> }>,
+ *   lines: number[], given: Set<string>, problems: RowProblem[] } | { ok: false, errors: RowProblem[] }}
  */
 export const importInput = (group, existing, lookups) => {
 	const measured = lookups.measured ?? (() => false);
@@ -606,26 +758,76 @@ export const importInput = (group, existing, lookups) => {
 				values: { brand: String(group.brand) },
 			});
 	}
+	// merchant field columns (E22): the definition of each slug for the product's categories
+	/** @type {RowProblem[]} */
+	const problems = [];
+	/** @type {Set<string>} */
+	const given = new Set();
+	const lineage = lineageOf(
+		Array.isArray(input.categoryIds) ? input.categoryIds.filter(Boolean) : (existing?.categoryIds ?? []),
+		lookups.categories,
+	);
+	/** @type {Map<string, AttributeRecord>} */
+	const fieldOf = new Map(
+		lookups.fields.flatMap((column) => {
+			const field = attributeOf(new Map(column.fields.map((entry) => [entry.id, entry])), column.slug, lineage);
+			return field ? [[column.slug, field]] : [];
+		}),
+	);
+	/**
+	 * The values of the fields on `on` a row's cells give (null = clear).
+	 * @param {number} line @param {Record<string, string> | undefined} cells @param {'product' | 'variant'} on
+	 */
+	const valuesOf = (line, cells, on) => {
+		/** @type {Record<string, unknown>} */
+		const out = {};
+		for (const [slug, text] of Object.entries(cells ?? {})) {
+			const field = fieldOf.get(slug);
+			if (field?.on !== on) continue;
+			const read = fieldValueOf(field, text);
+			if (!read.ok) problems.push(fieldProblem(line, slug));
+			else {
+				out[field.id] = read.value;
+				given.add(field.id);
+			}
+		}
+		return out;
+	};
+	const specs = valuesOf(group.line, group.rows[0]?.cells, 'product');
+	if (Object.keys(specs).length > 0) input.specs = { ...(existing?.specs ?? {}), ...specs };
+
 	/** @type {Map<string, { stock?: number, locations?: Record<string, number> }>} */
 	const stock = new Map();
 	/** @type {Array<Record<string, any>>} */
 	const variants = (existing?.variants ?? []).map((variant) => ({ id: variant.id }));
-	for (const { line, variant: row } of group.rows) {
+	/** @type {number[]} each input variant's row (the product's first row for a variant no row names) */
+	const lines = variants.map(() => group.line);
+	for (const { line, variant: row, cells } of group.rows) {
 		const found = existing?.variants.find((variant) => names(row, variant));
 		if (row.id && !found) {
 			errors.push({ line, path: '/variant_id', message: 'This variant is not part of the product.', code: 'not_its_variant' });
 			continue;
 		}
 		const { stock: units, locations, ...rest } = row;
+		const attributes = valuesOf(line, cells, 'variant');
 		if (found) {
-			const entry = /** @type {Record<string, any>} */ (variants.find((variant) => variant.id === found.id));
+			const index = variants.findIndex((variant) => variant.id === found.id);
+			const entry = /** @type {Record<string, any>} */ (variants[index]);
 			Object.assign(entry, rest, { id: found.id });
+			if (Object.keys(attributes).length > 0) entry.attributes = { ...(found.attributes ?? {}), ...attributes };
+			lines[index] = line;
 			if (units !== undefined || locations !== undefined)
 				stock.set(found.id, { ...(units === undefined ? {} : { stock: units }), ...(locations ? { locations } : {}) });
 		} else {
 			if (rest.price === undefined)
 				errors.push({ line, path: '/price', message: 'A new variant needs a price.', code: 'new_variant_price' });
-			variants.push({ ...rest, ...(units === undefined ? {} : { stock: units }), ...(locations ? { locations } : {}) });
+			variants.push({
+				...rest,
+				...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+				...(units === undefined ? {} : { stock: units }),
+				...(locations ? { locations } : {}),
+			});
+			lines.push(line);
 		}
 	}
 	// option axes from every variant's options, in the order they appear
@@ -669,7 +871,9 @@ export const importInput = (group, existing, lookups) => {
 	};
 	input.variants = variants.map(convert);
 	for (const [id, entry] of stock) stock.set(id, /** @type {any} */ (convert(entry)));
-	return errors.length > 0 ? { ok: false, errors } : { ok: true, input, stock };
+	return errors.length > 0
+		? { ok: false, errors: [...errors, ...problems] }
+		: { ok: true, input, stock, lines, given, problems };
 };
 
 // ------------------------------------------------------------------------------------------------ update (E36)

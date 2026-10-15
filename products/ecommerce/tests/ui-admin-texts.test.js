@@ -112,7 +112,7 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 				);
 		expect(strayValues('ordersAdmin.historyNote.', ['amount', 'reason', 'reference'])).toEqual([]);
 		expect(strayValues('ordersAdmin.warning.', ['amount'])).toEqual([]);
-		expect(strayValues('customersAdmin.csvProblem.', ['currency', 'category', 'brand', 'sku'])).toEqual([]);
+		expect(strayValues('customersAdmin.csvProblem.', ['currency', 'category', 'brand', 'sku', 'field'])).toEqual([]);
 		// every status has its tone
 		expect(STATUS_ROLES.filter((role) => !Object.hasOwn(ROLE_TONES, role))).toEqual([]);
 		expect(CLAIM_STATUSES.filter((status) => !Object.hasOwn(CLAIM_TONES, status))).toEqual([]);

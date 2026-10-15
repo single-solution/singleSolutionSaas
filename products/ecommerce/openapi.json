@@ -2503,7 +2503,7 @@
 		"/v1/admin/csv/customers": {
 			"get": {
 				"summary": "Export the customers as CSV (Customers admin widget)",
-				"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders and what they spent. The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders and what they spent, then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "csv",
 				"x-ss-permission": "csv.run",
@@ -2533,7 +2533,7 @@
 		"/v1/admin/csv/orders": {
 			"get": {
 				"summary": "Export orders as CSV (Orders and Customers admin widgets)",
-				"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters. 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters; then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "csv",
 				"x-ss-permission": "csv.run",
@@ -2706,7 +2706,7 @@
 		"/v1/admin/csv/products": {
 			"get": {
 				"summary": "Export the products as CSV (Customers admin widget)",
-				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does); prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does), then one field:<slug> column per product and variant field (inactive ones too; a product field's value on each of its variant rows, a variant field's per row, several values joined with |, yes/no as true or false), then sold_out and updated_at; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "csv",
 				"x-ss-permission": "csv.run",
@@ -2734,7 +2734,7 @@
 			},
 			"post": {
 				"summary": "Import products from CSV, or update prices and stock (Customers admin widget)",
-				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
+				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A field:<slug> column sets that field's value (the field defined for the product's category, nearest first, else the one for every category; several values separated by |; yes/no as true, false, yes, no, 1 or 0): an empty cell clears that one value and a column left out keeps the values; an unknown slug is a header problem (unknown_field) and a value that does not fit is a row problem (field_value). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "csv",
 				"x-ss-permission": "csv.run",
@@ -16825,7 +16825,7 @@
 		"/v1/csv/customers": {
 			"get": {
 				"summary": "Export the customers as CSV",
-				"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders and what they spent. The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named customers.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. Every customer record A to Z (at most 20,000), with their orders and what they spent, then one field:<slug> column per customer field (inactive ones too). The admin twin needs the csv.run permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "csv",
 				"security": [
@@ -16867,7 +16867,7 @@
 		"/v1/csv/orders": {
 			"get": {
 				"summary": "Export orders as CSV",
-				"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters. 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named orders.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per order line, or per order with per=order, oldest first, with the order list's filters; then one field:<slug> column per order field (inactive ones too). 422 validation_failed for an invalid filter, or more than 10,000 orders (choose shorter dates). The admin twin needs the csv.run permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "csv",
 				"security": [
@@ -17051,7 +17051,7 @@
 		"/v1/csv/products": {
 			"get": {
 				"summary": "Export the products as CSV",
-				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does); prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
+				"description": "Answers text/csv (an attachment named products.csv), not JSON, separated by the csv setting's delimiter. Needs CSV. One row per variant (at most 20,000 products), with its sku, gtin and mpn, with stock per location (stock@<location id> columns) under multi-location stock (an item sold in a unit of its own counts thousandths of its unit, as the API does), then one field:<slug> column per product and variant field (inactive ones too; a product field's value on each of its variant rows, a variant field's per row, several values joined with |, yes/no as true or false), then sold_out and updated_at; prices in the shop currency's main unit. The admin twin needs the csv.run permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "csv",
 				"security": [
@@ -17091,7 +17091,7 @@
 			},
 			"post": {
 				"summary": "Import products from CSV, or update prices and stock",
-				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
+				"description": "Rows are grouped into products (by product_id, sku, slug or name); each product is checked like POST/PATCH /v1/products (an empty gtin or mpn cell clears it). A field:<slug> column sets that field's value (the field defined for the product's category, nearest first, else the one for every category; several values separated by |; yes/no as true, false, yes, no, 1 or 0): an empty cell clears that one value and a column left out keeps the values; an unknown slug is a header problem (unknown_field) and a value that does not fit is a row problem (field_value). A dry run (the default) changes nothing and lists every row's problems; a real import with problems answers 422 validation_failed (errors at /csv/<line>/<field>) and imports nothing. With mode=update only price, stock and sold out change per variant (by variant_id or sku): rows whose updated_at is older than the product are reported as failed, the rest are applied. Stock cells are units: whole pieces, or for an item sold in a unit of its own an amount with up to three decimals (12.5), as the export writes them. At most 5,000 rows and 8 MB. Needs CSV; the admin twin needs the csv.run permission.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "csv",
 				"security": [
@@ -41006,9 +41006,11 @@
 							"no_updated_at",
 							"unknown_variant",
 							"sku_ambiguous",
-							"stale"
+							"stale",
+							"unknown_field",
+							"field_value"
 						],
-						"description": "Why, for your own words: columns (the header names no product), unknown_location (a stock@ column), no_name, option_pair (an option without its value or name), not_price (values.currency), not_stock, not_true_false, new_product_name, unknown_category (values.category), unknown_brand (values.brand), not_its_variant, new_variant_price, stock_per_location, unknown_product, skus_of_two (the row's SKUs belong to two products), sku_taken and sku_twice (values.sku: another product, or another product of the file, has it), slug_taken, invalid (the product check refused the field path names); a price and stock update also no_variant, no_updated_at, unknown_variant, sku_ambiguous (use variant_id) and stale (the product changed after the export)."
+						"description": "Why, for your own words: columns (the header names no product), unknown_location (a stock@ column), no_name, option_pair (an option without its value or name), not_price (values.currency), not_stock, not_true_false, new_product_name, unknown_category (values.category), unknown_brand (values.brand), not_its_variant, new_variant_price, stock_per_location, unknown_product, skus_of_two (the row's SKUs belong to two products), sku_taken and sku_twice (values.sku: another product, or another product of the file, has it), slug_taken, invalid (the product check refused the field path names); a price and stock update also no_variant, no_updated_at, unknown_variant, sku_ambiguous (use variant_id) and stale (the product changed after the export); field columns add unknown_field (values.field: no product or variant field has this slug) and field_value (values.field: the value does not fit the field)."
 					},
 					"values": {
 						"type": "object",
@@ -41026,6 +41028,10 @@
 							},
 							"sku": {
 								"type": "string"
+							},
+							"field": {
+								"type": "string",
+								"description": "A field's slug."
 							}
 						},
 						"description": "The values the code's words take (as the code says)."
