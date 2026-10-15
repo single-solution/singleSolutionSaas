@@ -11,10 +11,18 @@
  * shown to merchants, while any of its features is on.
  * @module
  */
-import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation, validateSettingValue } from '@ss/contracts';
+import { validateSettingValue } from '@ss/contracts';
+import { DEFAULT_FORMAT, FORMAT_FIELDS, formatViolation } from '@ss/contracts/format';
+import { placeholdersOf } from '@ss/contracts/templates';
 import { problem } from './http/results.js';
-import { samePlaceholders } from './text.js';
 import { isObject } from './util.js';
+
+/**
+ * True when two texts carry exactly the same placeholders (in any order, each any number of times).
+ * @param {string} a
+ * @param {string} b
+ */
+const samePlaceholders = (a, b) => placeholdersOf(a).sort().join('\n') === placeholdersOf(b).sort().join('\n');
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 /** @typedef {import('@ss/contracts').ManifestFeature} ManifestFeature */

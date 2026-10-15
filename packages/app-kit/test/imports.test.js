@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IMPORT_LIMITS, defineRoute } from '../src/index.js';
-import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
-
-/** @type {{ product: any }} */
-const holder = { product: null };
+import { DOMAIN, manifest, openDb, productRoutes, setup } from './helpers.js';
 
 /** Notes import: the product's own check in import mode (given ids and past times allowed). */
 const IMPORTS = {
@@ -60,46 +57,28 @@ const IMPORTS = {
 	totals: async () => ({ 'notes.words': 3 }),
 };
 
-const routes = () => [
-	...productRoutes(),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/import/:collection',
-		auth: 'server',
-		feature: 'notes',
-		rawBody: true,
-		maxBodyBytes: IMPORT_LIMITS.bytes + 1024,
-		handler: (ctx) => holder.product.imports.upsert(ctx),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/import/:collection/prune',
-		auth: 'server',
-		feature: 'notes',
-		rawBody: true,
-		maxBodyBytes: IMPORT_LIMITS.bytes + 1024,
-		handler: (ctx) => holder.product.imports.prune(ctx),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/import/finish',
-		auth: 'server',
-		feature: 'notes',
-		handler: (ctx) => holder.product.imports.finish(ctx),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/import/status',
-		auth: 'server',
-		feature: 'notes',
-		handler: (ctx) => holder.product.imports.status(ctx),
-	}),
-];
+/** The sample manifest with the feature the import routes belong to. */
+const importManifest = () => {
+	const value = manifest();
+	value.features = [
+		...value.features,
+		{
+			key: 'import',
+			name: 'Import',
+			description: 'Bring records over from another system.',
+			dependsOn: [],
+			settings: { type: 'object', additionalProperties: false, properties: {} },
+		},
+	];
+	return value;
+};
+
+/** A product that imports notes. @param {Record<string, unknown>} [options] */
+const setupImports = (options = {}) => setup({ manifest: importManifest(), ...options });
 
 const start = async () => {
-	const ctx = await setup({ routes: routes(), imports: IMPORTS });
-	holder.product = ctx.product;
-	await ctx.switchOn(['notes']);
+	const ctx = await setupImports({ routes: productRoutes(), imports: IMPORTS });
+	await ctx.switchOn(['notes', 'import']);
 	const dbName = await ctx.connectDatabase();
 	/** @param {string} collection @param {string} body @param {{ dryRun?: boolean, type?: string, headers?: Record<string, string> }} [options] */
 	const send = async (collection, body, { dryRun = false, type = 'application/x-ndjson', headers = {} } = {}) => {
@@ -401,18 +380,49 @@ describe('import routes (K10)', () => {
 		expect((await prune('nope', { keep: [] })).status).toBe(404);
 	});
 
+	it('are served by the kit with the feature import, which the manifest must have', async () => {
+		const ctx = await setupImports({ imports: IMPORTS });
+		await ctx.switchOn(['notes']);
+		await ctx.connectDatabase();
+		const status = () => ctx.call('GET', '/v1/import/status', { token: ctx.server.token });
+		expect(await (await status()).json()).toMatchObject({ status: 403, detail: 'The feature import is off.' });
+		await ctx.switchOn(['notes', 'import']);
+		expect((await status()).status).toBe(200);
+		await expect(setup({ imports: IMPORTS })).rejects.toMatchObject({ code: 'invalid_config' });
+		// without imports, no import route
+		const plain = await setup({ manifest: importManifest() });
+		expect((await plain.call('GET', '/v1/import/status', { token: plain.server.token })).status).toBe(404);
+	});
+
+	it("give way to a product's own route of the same method and path (until every product has dropped its copy)", async () => {
+		const own = defineRoute({
+			method: 'GET',
+			path: '/v1/import/status',
+			auth: 'server',
+			feature: 'notes',
+			handler: () => ({ own: true }),
+		});
+		const ctx = await setupImports({ routes: [...productRoutes(), own], imports: IMPORTS });
+		await ctx.switchOn(['notes']);
+		await ctx.connectDatabase();
+		expect(await (await ctx.call('GET', '/v1/import/status', { token: ctx.server.token })).json()).toEqual({ own: true });
+		// a kit route that is not replaceable stays a duplicate
+		const twin = defineRoute({ method: 'GET', path: '/v1/features', auth: 'server', handler: () => ({}) });
+		await expect(setupImports({ routes: [twin], imports: IMPORTS })).rejects.toThrow(/duplicate route/);
+	});
+
 	it('refuse definitions that cannot work', async () => {
 		await expect(
-			setup({ imports: { collections: { 'Bad Name': { check: () => ({ ok: true, value: {} }) } } } }),
+			setupImports({ imports: { collections: { 'Bad Name': { check: () => ({ ok: true, value: {} }) } } } }),
 		).rejects.toThrow(/import collection names/);
-		await expect(setup({ imports: { collections: { notes: {} } } })).rejects.toThrow(/needs a check/);
+		await expect(setupImports({ imports: { collections: { notes: {} } } })).rejects.toThrow(/needs a check/);
 		const check = () => ({ ok: /** @type {const} */ (true), value: {} });
 		for (const key of [[], ['a', 'b', 'c', 'd', 'e'], ['totals.visits'], 'id'])
-			await expect(setup({ imports: { collections: { notes: { check, key: /** @type {any} */ (key) } } } })).rejects.toThrow(
-				/key is 1–4 top-level field names/,
-			);
-		await expect(setup({ imports: { collections: { notes: { check, prepare: /** @type {any} */ ('x') } } } })).rejects.toThrow(
-			/prepare is a function/,
-		);
+			await expect(
+				setupImports({ imports: { collections: { notes: { check, key: /** @type {any} */ (key) } } } }),
+			).rejects.toThrow(/key is 1–4 top-level field names/);
+		await expect(
+			setupImports({ imports: { collections: { notes: { check, prepare: /** @type {any} */ ('x') } } } }),
+		).rejects.toThrow(/prepare is a function/);
 	});
 });

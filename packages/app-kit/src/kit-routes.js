@@ -13,8 +13,8 @@
  *   Notifications with their default words (`{ productId, messages }`, parity P1), which Notifications' dashboard shows;
  * - `GET /v1/widget/config` (browser token, Origin required) and `GET /v1/widget/admin/config` (ticket): what the
  *   product's `widget.js` needs for a website (0.4.10): widget texts, theme, custom CSS, the Format and the business
- *   time zone (PLAN 0.8.10 K7, K8), the switched-on features and the product's own widget settings
- *   (`hooks.widgetConfig`). No feature gate; the status and the merchant database are checked as on every website
+ *   time zone (PLAN 0.8.10 K7, K8), the switched-on features, the widgets whose feature is on (`widgets`, their keys)
+ *   and the product's own widget settings (`hooks.widgetConfig`). No feature gate; the status and the merchant database are checked as on every website
  *   route, so a stopped product or a missing database renders nothing.
  * @module
  */
@@ -185,7 +185,13 @@ export const createKitRoutes = (kit, hooks) => {
 			hooks.widgetConfig ? hooks.widgetConfig(ctx) : {},
 		]);
 		const { customCss, ...look } = theme;
-		return { texts, theme: look, customCss, format, timeZone: business.timeZone ?? 'UTC', features: on, settings };
+		// the widgets whose feature (one, or a list: any of them) is on, so a widget bundle needs no copy of the manifest
+		const widgets = manifest.widgets
+			.filter((/** @type {{ feature: string | string[] }} */ widget) =>
+				[widget.feature].flat().some((key) => on.includes(key)),
+			)
+			.map((/** @type {{ key: string }} */ widget) => widget.key);
+		return { texts, theme: look, customCss, format, timeZone: business.timeZone ?? 'UTC', features: on, widgets, settings };
 	};
 
 	return [

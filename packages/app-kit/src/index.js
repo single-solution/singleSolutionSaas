@@ -2,7 +2,9 @@
  * @ss/app-kit — the kit every product is built on. See README.md and API.md.
  */
 export { configFromEnv } from './config.js';
-export { createProduct } from './product.js';
+export { createProduct, createProductBase } from './product.js';
+export { activityFilter } from './activity.js';
+export { verifyIdentityToken } from './identity.js';
 export { defineRoute } from './http/routes.js';
 export { ok, created, noContent, problem, paginate } from './http/results.js';
 export { toNextRoute } from './http/next.js';
@@ -16,8 +18,21 @@ export { actorOf } from './actor.js';
 export { countHandlers } from './counts.js';
 export { KIT_GUIDE } from './guide.js';
 export { apiAnchor, renderApiReference } from './api-reference.js';
+export {
+	docsBlock,
+	docsFeatureSections,
+	docsList,
+	docsOperations,
+	docsParagraph,
+	docsRouteTable,
+	operationFeatures,
+	renderDocsPage,
+} from './docs.js';
 export { PRODUCT_DATABASE_OPTIONS } from './data.js';
-export { IMPORT_LIMITS, formatMoney, zonedParts } from '@ss/contracts';
+// kept only until Ecommerce switches (E-S): Format helpers come from `@ss/contracts/format`, and the import routes are
+// the kit's (no product needs IMPORT_LIMITS)
+export { IMPORT_LIMITS } from '@ss/contracts';
+export { formatMoney, zonedParts } from '@ss/contracts/format';
 
 /** @typedef {import('./product.js').ProductOptions} ProductOptions */
 /** @typedef {import('./http/routes.js').RouteDefinition} RouteDefinition */
@@ -35,4 +50,7 @@ export { IMPORT_LIMITS, formatMoney, zonedParts } from '@ss/contracts';
 /** @typedef {import('./server-api.js').ListDefinition} ListDefinition */
 /** @typedef {import('./imports.js').ImportCollection} ImportCollection */
 /** @typedef {import('./imports.js').ImportOptions} ImportOptions */
+/** @typedef {import('./identity.js').IdentityResult} IdentityResult */
+/** @typedef {import('./docs.js').DocsGuide} DocsGuide */
+/** @typedef {import('./docs.js').DocsRow} DocsRow */
 /** @typedef {import('@ss/contracts').Format} Format */

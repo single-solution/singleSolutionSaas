@@ -32,7 +32,10 @@ import { isObject } from './util.js';
 /** @typedef {{ $schemas?: Record<string, Schema> } & Record<string, unknown>} ApiDescription */
 /** @typedef {{ pointer: string, message: string }} ApiProblem `pointer`: JSON Pointer into the description */
 
-/** The kit's own routes (tickets, data rights, permissions, features, settings, texts, theme, Format, lists, connections, activity). */
+/**
+ * The kit's own routes (widget config, tickets, data rights, permissions, features, settings, texts, theme, Format,
+ * lists, connections, activity).
+ */
 export const KIT_API = /** @type {ApiDescription} */ (/** @type {unknown} */ (KIT_API_JSON));
 
 /** A request header's name, as the route's own headers are named (`SS-Guest`, `SS-Order-Key` …). */
@@ -81,6 +84,43 @@ export const apiEntries = (api) => (isObject(api) ? Object.entries(api).filter((
  */
 export const sharedSchemas = (api) =>
 	isObject(api) && isObject(api.$schemas) ? /** @type {Record<string, Schema>} */ (api.$schemas) : {};
+
+/** Kit routes whose auth is not the server token. */
+const KIT_ROUTE_AUTH = Object.freeze({ 'GET /v1/widget/config': 'browser', 'GET /v1/widget/admin/config': 'ticket' });
+
+/**
+ * A documented route the kit serves: its method, path and auth (`browser`, `server` or `ticket`), and its feature when
+ * it has one.
+ * @typedef {{ method: string, path: string, auth: string, feature?: string }} KitRoute
+ */
+
+/** The routes the kit serves for every product, as `kit-api.json` describes them, with their auth (no feature). */
+export const KIT_ROUTES = /** @type {ReadonlyArray<KitRoute>} */ (
+	Object.freeze(
+		apiEntries(KIT_API).map(([key]) =>
+			Object.freeze({
+				.../** @type {{ method: string, path: string }} */ (parseRouteKey(key)),
+				auth: KIT_ROUTE_AUTH[/** @type {keyof typeof KIT_ROUTE_AUTH} */ (key)] ?? 'server',
+			}),
+		),
+	)
+);
+
+/**
+ * The import routes (PLAN 0.8.10 K10) the kit serves for a product that passes `imports` (its manifest has the feature
+ * `import`): server token, feature `import`. The product describes them in its own `schemas/api.json` (its
+ * collections, its finish and its totals).
+ */
+export const KIT_IMPORT_ROUTES = /** @type {ReadonlyArray<KitRoute>} */ (
+	Object.freeze(
+		[
+			['POST', '/v1/import/:collection'],
+			['POST', '/v1/import/:collection/prune'],
+			['POST', '/v1/import/finish'],
+			['GET', '/v1/import/status'],
+		].map(([method, path]) => Object.freeze({ method, path, auth: 'server', feature: 'import' })),
+	)
+);
 
 /**
  * What is wrong with an API description: its shape, its route keys, its entries' members and their schemas (in the

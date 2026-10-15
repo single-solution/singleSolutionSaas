@@ -9,15 +9,19 @@
  *   only of switched-on features, null for the others. `PUT /v1/settings/<feature>.<key>` with `{ value }` answers
  *   `{ key, value, source }`, 422 `validation_failed` with `errors`, or 403 `feature_off`; `DELETE` resets it.
  * - `GET /v1/texts`, `PUT|DELETE /v1/texts/:key`; `GET|PUT /v1/theme`; `GET|PUT /v1/format` (K7).
- * - `GET|PUT /v1/lists/:list` with `{ value }`: the whole list, checked by the product's own list check (422).
+ * - `GET|PUT /v1/lists/:list` with `{ value }`: the whole list, checked by the product's own list check (422), only
+ *   while one of its features is on (403 `feature_off`). Its dashboard twin, `GET|PUT
+ *   /v1/dashboard/websites/:websiteId/lists/:list` (dashboard session), follows the same rules, except that Owner and
+ *   Support may prepare the list of a switched-off feature (as the dashboard's settings).
  * - `GET /v1/connections` → `{ connections: [{ name, label, kind, neededBy, state, last4, message, testedAt }] }`;
  *   `PUT /v1/connections/:name` with `{ value }` (checked and tested live), `DELETE`, `POST …/test`. Secrets never
  *   come back.
  * - `GET /v1/activity?actor=&action=&target=&q=&from=&to=&cursor=&limit=` (newest first) and its counts.
  *
- * Every write is a Recent change by the acting user (K2), else `Server`; a setting, text, theme, Format or list save is
- * also an activity-log entry (`settings.changed`) and raises the `settings.changed` event. At most 60 writes per minute
- * per website, and 3,000 reads per minute per route per website (the window of SEO reads, SG-31: a storefront rendered
+ * Every write is a Recent change by the acting user (K2), else `Server` (on the dashboard twin: the session's merchant
+ * or admin); a setting, text, theme, Format or list save is also an activity-log entry (`settings.changed`) and raises
+ * the `settings.changed` event. At most 60 writes per minute per website (the dashboard's list saves in a window of
+ * their own), and 3,000 reads per minute per route per website (the window of SEO reads, SG-31: a storefront rendered
  * on the merchant's server reads its settings on every page).
  * @module
  */
@@ -47,6 +51,9 @@ export const SETTINGS_WRITE_LIMIT = Object.freeze({
 	per: /** @type {const} */ ('website'),
 	bucket: 'kit-settings-writes',
 });
+/** List saves in the product dashboard per website (code constant; a window of their own, so the merchant's server
+ * cannot use up the dashboard's). */
+export const DASHBOARD_LIST_WRITE_LIMIT = Object.freeze({ ...SETTINGS_WRITE_LIMIT, bucket: 'kit-dashboard-list-writes' });
 /** Reads of the merchant's server per route per website (code constant; the window SEO reads have, SG-31). */
 export const SETTINGS_READ_LIMIT = Object.freeze({ limit: 3000, windowSeconds: 60, per: /** @type {const} */ ('website') });
 
@@ -61,6 +68,9 @@ const withPage = (filter, keyset) =>
 /** The merchant's server as the one who changed something. @type {Who} */
 const SERVER = Object.freeze({ kind: 'server', id: 'server', name: 'Server' });
 
+/** The dashboard twin of `/v1/lists/:list`. */
+const DASHBOARD_LIST_PATH = '/v1/dashboard/websites/:websiteId/lists/:list';
+
 /**
  * @param {import('./product.js').Kit} kit
  * @param {Record<string, ListDefinition>} lists
@@ -71,11 +81,17 @@ export const createServerApi = (kit, lists) => {
 
 	/** @param {RequestContext} ctx */
 	const website = (ctx) => /** @type {string} */ (ctx.websiteId);
-	/** Who changed it: the acting user, else the server. @param {RequestContext} ctx @returns {Who} */
-	const whoOf = (ctx) =>
-		ctx.actor
-			? { kind: 'user', id: ctx.actor.id, name: ctx.actor.name, ...(ctx.actor.role ? { role: ctx.actor.role } : {}) }
-			: SERVER;
+	/**
+	 * Who changed it: on the dashboard, the session's merchant or admin; else the acting user, else the server.
+	 * @param {RequestContext} ctx
+	 * @returns {Who}
+	 */
+	const whoOf = (ctx) => {
+		const { session, actor } = ctx;
+		if (session)
+			return { kind: session.kind, id: session.subject, name: session.name, ...(session.role ? { role: session.role } : {}) };
+		return actor ? { kind: 'user', id: actor.id, name: actor.name, ...(actor.role ? { role: actor.role } : {}) } : SERVER;
+	};
 	/** @param {unknown} body @returns {Record<string, any>} */
 	const objectBody = (body) => {
 		if (!isObject(body)) throw problem('bad_request', 'Send a JSON object.');
@@ -154,6 +170,37 @@ export const createServerApi = (kit, lists) => {
 		return { name, definition };
 	};
 
+	/** A list, whole (`{ value }`). @param {RequestContext} ctx */
+	const readList = async (ctx) => ({ value: await listOf(ctx).definition.get(website(ctx)) });
+
+	/**
+	 * Save a list whole: only while one of its features is on (Owner and Support on the dashboard may prepare it), checked
+	 * by the product (422 `validation_failed` with every error, the first as the detail), then a Recent change, an
+	 * activity-log entry and the `settings.changed` event.
+	 * @param {RequestContext} ctx
+	 */
+	const saveList = async (ctx) => {
+		const { name, definition } = listOf(ctx);
+		const features = [definition.feature].flat();
+		const preparing = ctx.session?.kind === 'admin';
+		const { on } = await kit.reports.switches(website(ctx));
+		if (!preparing && !features.some((key) => on.includes(key)))
+			throw problem('feature_off', `The feature ${features.join(' or ')} is off: its lists cannot be changed.`);
+		const list = await definition.save(website(ctx), valueOf(ctx));
+		if (!list.ok) {
+			const errors = list.errors.map((error) =>
+				typeof error === 'string'
+					? { path: '/value', message: error }
+					: { path: error.path ?? '/value', message: error.message },
+			);
+			throw problem('validation_failed', errors[0]?.message ?? 'The list is not valid.', { errors });
+		}
+		const who = whoOf(ctx);
+		await kit.recent.record({ websiteId: website(ctx), who, what: 'settings', detail: `${definition.title}: changed` });
+		await kit.settingsChanged(ctx, { what: 'list', key: name, who, label: definition.title, detail: 'changed' });
+		return { value: list.value };
+	};
+
 	/** @param {import('./connections.js').ConnectionView} view */
 	const connectionView = (view) => ({
 		name: view.name,
@@ -173,10 +220,10 @@ export const createServerApi = (kit, lists) => {
 	const activitySource = async (ctx) => {
 		const status = /** @type {import('@ss/contracts').StatusResponse} */ (ctx.status);
 		const { business } = await kit.business.get(website(ctx), status.domain);
-		const built = activityFilter(website(ctx), ctx.query, business.timeZone ?? 'UTC');
+		const built = activityFilter(ctx.query, business.timeZone ?? 'UTC');
 		if (!built.ok)
 			throw problem('validation_failed', built.message, { errors: [{ path: `/${built.field}`, message: built.message }] });
-		return { collection: (await ctx.data()).collection('activity'), filter: built.filter };
+		return { collection: (await ctx.data()).collection('activity'), filter: { websiteId: website(ctx), ...built.filter } };
 	};
 	const activityCounts = countHandlers({
 		source: activitySource,
@@ -268,48 +315,15 @@ export const createServerApi = (kit, lists) => {
 				return kit.settings.formatOf(website(ctx));
 			},
 		}),
-		route({
-			method: 'GET',
-			path: '/v1/lists/:list',
-			handler: async (ctx) => {
-				const { definition } = listOf(ctx);
-				return { value: await definition.get(website(ctx)) };
-			},
-		}),
-		route({
+		route({ method: 'GET', path: '/v1/lists/:list', handler: readList }),
+		route({ method: 'PUT', path: '/v1/lists/:list', rateLimit: writes, handler: saveList }),
+		defineRoute({ method: 'GET', path: DASHBOARD_LIST_PATH, auth: 'dashboard', handler: readList }),
+		defineRoute({
 			method: 'PUT',
-			path: '/v1/lists/:list',
-			rateLimit: writes,
-			handler: async (ctx) => {
-				const { name, definition } = listOf(ctx);
-				const features = [definition.feature].flat();
-				const { on } = await kit.reports.switches(website(ctx));
-				if (!features.some((key) => on.includes(key)))
-					throw problem('feature_off', `The feature ${features.join(' or ')} is off: its lists cannot be changed.`);
-				const list = await definition.save(website(ctx), valueOf(ctx));
-				if (!list.ok) {
-					const errors = list.errors.map((error) =>
-						typeof error === 'string'
-							? { path: '/value', message: error }
-							: { path: error.path ?? '/value', message: error.message },
-					);
-					throw problem('validation_failed', errors[0]?.message ?? 'The list is not valid.', { errors });
-				}
-				await kit.recent.record({
-					websiteId: website(ctx),
-					who: whoOf(ctx),
-					what: 'settings',
-					detail: `${definition.title}: changed`,
-				});
-				await kit.settingsChanged(ctx, {
-					what: 'list',
-					key: name,
-					who: whoOf(ctx),
-					label: definition.title,
-					detail: 'changed',
-				});
-				return { value: list.value };
-			},
+			path: DASHBOARD_LIST_PATH,
+			auth: 'dashboard',
+			rateLimit: DASHBOARD_LIST_WRITE_LIMIT,
+			handler: saveList,
 		}),
 		route({
 			method: 'GET',

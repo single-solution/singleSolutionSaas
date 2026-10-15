@@ -29,10 +29,13 @@ The exact API is in [API.md](./API.md).
   `/v1/theme`, `/v1/format`, `/v1/lists`, `/v1/connections`; 3,000 reads per minute per route and 60 writes per
   minute per website) with a merchant's rights; the acting user named by
   `SS-Actor-*` headers; visitor calls with the server token (`SS-Visitor-IP`, their own rate window); counts of lists
-  (`countHandlers`); the activity log (`GET /v1/activity`).
+  (`countHandlers`); the activity log (`GET /v1/activity`; `activityFilter` for a product's own copies of entries).
+  The product dashboard edits the same lists (`GET|PUT /v1/dashboard/websites/:websiteId/lists/:list`) with the same
+  rules.
 - **Events, staff alerts and imports** (K5, K6, K10) — events kept 30 days and forwarded through Notifications; staff
   alerts to recipients, Accounts staff with a permission (or `all_staff`: every staff member with the alert's own
-  permission) and the assignee; checked, idempotent NDJSON import routes.
+  permission) and the assignee; checked, idempotent NDJSON import routes, which the kit serves (feature `import`)
+  when the product passes `imports`.
 - **Default message templates** (parity P1) — the product declares the messages it sends through Notifications with
   their US-English default words (`schemas/messages.json`, checked with the contract at start); the kit attaches them
   to every send to Notifications, which uses them while the website has no template of its own, and serves them at
@@ -68,10 +71,18 @@ The exact API is in [API.md](./API.md).
   Support admin through the usual feature report.
 - **Widgets** — the product serves one public `widget.js` (the same bytes for every website). With the page's
   `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
-  `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's
-  widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS, and
+  `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features, the widgets whose
+  feature is on and the product's widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS, and
   holds what every widget builds with: the element builder, JSON calls, the admin widgets' ticket and calls, and the
   admin blocks (badges, dots, value grids, list and detail, the More menu, dialogs with typed confirmation).
+- **Public docs** — `renderDocsPage` writes a product's whole `/docs` page around its own sections: the title, intro
+  and localhost note, the kit's sections for the merchant's server, business.json and the API reference from
+  `openapi.json`; `docsFeatureSections` writes one section per feature (its words, what it needs, what the website
+  builds, its widgets and routes); `docsParagraph`, `docsBlock`, `docsList` and `docsRouteTable` write the rest.
+- **Start-up** — `createProductBase(options)` builds the store, the outbound policy and `send` as `createProduct` does,
+  for the product's own adapters (list settings, AI, gateways, providers) before it calls `createProduct`.
+- **Shared helpers** — Format helpers come from `@ss/contracts/format` (server and widgets), HTML escaping from
+  `@ss/contracts/text` `escapeHtml`; `verifyIdentityToken` checks a sign-in token offline.
 - **Logging** — `createLogger()` writes JSON lines to standard output, which the host keeps: every request (method,
   path, status, time), a failed route (500, with its route and request id), a misconfiguration (503, naming the
   variables) and the kit's warnings. Members named like credentials, signed tokens and the user part of addresses are

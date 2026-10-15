@@ -171,6 +171,52 @@ describe('settings API for the merchant’s server (K1)', () => {
 		});
 	});
 
+	it('serves the dashboard twin of the lists with the same rules; Owner and Support may prepare a switched-off one', async () => {
+		const { call, session, dash, websiteId, switchOn, clock, settle } = await setup({ lists: memoryLists() });
+		const path = `/v1/dashboard/websites/${websiteId}/lists/labels`;
+		const merchant = await session({ kind: 'merchant' });
+		expect(await body(await dash(merchant, 'GET', path))).toEqual({ status: 200, json: { value: [] } });
+		expect(await body(await dash(merchant, 'PUT', path, { value: ['vip'] }))).toMatchObject({
+			status: 403,
+			json: { detail: 'The feature inbox is off: its lists cannot be changed.' },
+		});
+		const owner = await session({ kind: 'admin', role: 'owner' });
+		clock.advance(1000);
+		expect(await body(await dash(owner, 'PUT', path, { value: ['prepared'] }))).toEqual({
+			status: 200,
+			json: { value: ['prepared'] },
+		});
+		await switchOn(['notes', 'inbox']);
+		clock.advance(1000);
+		expect(await body(await dash(merchant, 'PUT', path, { value: ['vip', 'late'] }))).toEqual({
+			status: 200,
+			json: { value: ['vip', 'late'] },
+		});
+		const invalid = await body(await dash(merchant, 'PUT', path, { value: [1] }));
+		expect(invalid).toMatchObject({ status: 422, json: { errors: [{ path: '/value/0', message: 'Each label is text.' }] } });
+		expect((await dash(merchant, 'PUT', path, { items: [] })).status).toBe(422);
+		expect((await dash(merchant, 'GET', `/v1/dashboard/websites/${websiteId}/lists/nope`)).status).toBe(404);
+		// a session is needed, and writes come from the product's own address
+		expect((await call('GET', path)).status).toBe(401);
+		expect((await call('PUT', path, { cookie: merchant, body: { value: [] } })).status).toBe(403);
+		await settle();
+		const overview = await (await dash(owner, 'GET', `/v1/dashboard/websites/${websiteId}/overview`)).json();
+		expect(overview.recentChanges.slice(0, 2)).toMatchObject([
+			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'merchant' } },
+			{ what: 'settings', detail: 'Labels: changed', who: { kind: 'admin', role: 'owner' } },
+		]);
+	});
+
+	it('takes at most 60 dashboard list saves per minute per website, in a window of their own', async () => {
+		const { session, dash, websiteId, switchOn, call, server } = await setup({ lists: memoryLists() });
+		await switchOn(['notes', 'inbox']);
+		const merchant = await session({ kind: 'merchant' });
+		const path = `/v1/dashboard/websites/${websiteId}/lists/labels`;
+		for (let i = 0; i < 60; i += 1) expect((await dash(merchant, 'PUT', path, { value: [] })).status).toBe(200);
+		expect((await dash(merchant, 'PUT', path, { value: [] })).status).toBe(429);
+		expect((await call('PUT', '/v1/lists/labels', { token: server.token, body: { value: [] } })).status).toBe(200);
+	});
+
 	it('manages connections without ever answering secrets', async () => {
 		const { call, server } = await setup({
 			connections: {

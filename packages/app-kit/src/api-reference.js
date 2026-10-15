@@ -5,12 +5,9 @@
  * build-time JSON.
  * @module
  */
-import { isObject } from './util.js';
+import { escapeHtml as escape, isObject } from './util.js';
 
 /** @typedef {Record<string, any>} Node */
-
-/** @param {unknown} value */
-const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
 
 /** The shared schema a `$ref` names, or null. @param {unknown} ref */
 const refName = (ref) => (typeof ref === 'string' ? (/^#\/components\/schemas\/(.+)$/.exec(ref)?.[1] ?? null) : null);

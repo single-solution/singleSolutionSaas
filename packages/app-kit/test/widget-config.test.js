@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { DOMAIN, setup } from './helpers.js';
+import { DOMAIN, manifest, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;
 const ADMIN = 'https://admin.shop.example.com';
@@ -22,6 +22,7 @@ describe('widget config', () => {
 		const off = await (await call('GET', '/v1/widget/config', { token: browser.token, origin: SITE })).json();
 		expect(off).toMatchObject({
 			features: [],
+			widgets: [],
 			settings: { maxNotes: 5 },
 			customCss: '',
 			texts: { 'form.title': 'Leave a note' },
@@ -30,7 +31,7 @@ describe('widget config', () => {
 		await switchOn(['notes']);
 		const on = await call('GET', '/v1/widget/config', { token: browser.token, origin: SITE });
 		expect(on.headers.get('access-control-allow-origin')).toBe(SITE);
-		expect((await on.json()).features).toEqual(['notes']);
+		expect(await on.json()).toMatchObject({ features: ['notes'], widgets: ['note_form'] });
 		await settle();
 		expect(await store.get('widget', websiteId)).toMatchObject({ websiteId });
 		// Origin required, browser token only
@@ -46,8 +47,23 @@ describe('widget config', () => {
 		const admin = await call('GET', '/v1/widget/admin/config', { token: ticket, origin: ADMIN });
 		expect(admin.status).toBe(200);
 		expect(admin.headers.get('access-control-allow-origin')).toBe(ADMIN);
-		expect(await admin.json()).toMatchObject({ features: ['notes'], settings: { maxNotes: 5 } });
+		expect(await admin.json()).toMatchObject({ features: ['notes'], widgets: ['note_form'], settings: { maxNotes: 5 } });
 		expect((await call('GET', '/v1/widget/admin/config', { token: ticket, origin: SITE })).status).toBe(401);
+	});
+
+	it('lists a widget of several features while any of them is on', async () => {
+		const shared = manifest();
+		shared.widgets = [...shared.widgets, { key: 'either', feature: ['inbox', 'notes'], kind: 'visitor' }];
+		const env = await setup({ manifest: shared });
+		opened.push(env);
+		await env.connectDatabase();
+		const widgetsOf = async () =>
+			(await (await env.call('GET', '/v1/widget/config', { token: env.browser.token, origin: SITE })).json()).widgets;
+		expect(await widgetsOf()).toEqual([]);
+		await env.switchOn(['notes']);
+		expect(await widgetsOf()).toEqual(['note_form', 'either']);
+		await env.switchOn(['notes', 'inbox']);
+		expect(await widgetsOf()).toEqual(['note_form', 'inbox', 'either']);
 	});
 
 	it('answers empty settings without the hook', async () => {

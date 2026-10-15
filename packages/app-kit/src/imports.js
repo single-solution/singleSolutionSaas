@@ -24,16 +24,13 @@
  * - `GET /v1/import/status` → `{ collections: { <name>: <records> }, imported: { <name>: <records an import wrote> },
  *   totals: { <name>: <number> } }` (`totals`: the product's verification sums, for `ss-import verify`).
  *
- * The product writes the routes as literal `defineRoute` calls with its `import` feature and the server token, with
- * the handlers `product.imports` gives (`upsert`, `prune`, `finish`, `status`):
- *
- *   defineRoute({ method: 'POST', path: '/v1/import/:collection', auth: 'server', feature: 'import', rawBody: true,
- *     maxBodyBytes: IMPORT_LIMITS.bytes, handler: product.imports.upsert })
- *   defineRoute({ method: 'POST', path: '/v1/import/:collection/prune', auth: 'server', feature: 'import',
- *     rawBody: true, maxBodyBytes: IMPORT_LIMITS.bytes, handler: product.imports.prune })
+ * The kit serves the four routes (server token, feature `import`, which the manifest must have) when the product passes
+ * `imports`; the product describes them in its `schemas/api.json` (its collections, its finish and its totals), and
+ * `ss app assets` documents them for every manifest with the `import` feature (`KIT_IMPORT_ROUTES`, `@ss/app-kit/api`).
  * @module
  */
 import { IMPORT_LIMITS, isId } from '@ss/contracts';
+import { defineRoute } from './http/routes.js';
 import { problem } from './http/results.js';
 import { isObject, omit } from './util.js';
 
@@ -68,6 +65,11 @@ import { isObject, omit } from './util.js';
  * @property {(ctx: any) => Promise<Record<string, unknown>>} [finish] recomputes derived values after an import
  * @property {(ctx: any) => Promise<Record<string, number>>} [totals] verification sums (`GET /v1/import/status`)
  */
+
+/** The feature of the import routes. */
+export const IMPORT_FEATURE = 'import';
+/** Room for the request around the largest NDJSON body (a body a little too large gets the clear 413 of the handler). */
+const ENVELOPE = 64 * 1024;
 
 /** Import collection names. */
 const NAME = /^[a-z][a-z0-9_]{0,40}$/;
@@ -462,12 +464,37 @@ export const createImports = ({ options, now, record, business }) => {
 		return { collections: counts, imported, totals };
 	};
 
+	/** The import routes (server token, feature `import`). */
+	const routes = Object.freeze([
+		defineRoute({
+			method: 'POST',
+			path: '/v1/import/:collection',
+			auth: 'server',
+			feature: IMPORT_FEATURE,
+			rawBody: true,
+			maxBodyBytes: IMPORT_LIMITS.bytes + ENVELOPE,
+			handler: upsert,
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/import/:collection/prune',
+			auth: 'server',
+			feature: IMPORT_FEATURE,
+			rawBody: true,
+			maxBodyBytes: IMPORT_LIMITS.bytes + ENVELOPE,
+			handler: prune,
+		}),
+		defineRoute({ method: 'POST', path: '/v1/import/finish', auth: 'server', feature: IMPORT_FEATURE, handler: finish }),
+		defineRoute({ method: 'GET', path: '/v1/import/status', auth: 'server', feature: IMPORT_FEATURE, handler: status }),
+	]);
+
 	return Object.freeze({
 		names: Object.keys(collections),
 		upsert,
 		prune,
 		finish,
 		status,
+		routes,
 	});
 };
 

@@ -11,6 +11,13 @@ import { createHash } from 'node:crypto';
 export const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * Text as HTML text or an attribute value: `& < > " '` escaped.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
+
+/**
  * SHA-256 hex digest.
  * @param {string | Uint8Array} data
  * @returns {string}

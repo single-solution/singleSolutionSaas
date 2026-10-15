@@ -232,6 +232,9 @@ describe('settings, texts, theme and defaults', () => {
 		const owner = await session();
 		const texts = `/v1/dashboard/websites/${websiteId}/texts`;
 		expect((await dash(merchant, 'PUT', `${texts}/form.count`, { value: 'Du hast {count} Notizen' })).status).toBe(422);
+		expect((await dash(merchant, 'PUT', `${texts}/form.count`, { value: '{count} {name} {extra}' })).status).toBe(422);
+		// in any order, each any number of times
+		expect((await dash(merchant, 'PUT', `${texts}/form.count`, { value: '{name}, {name}: {count}' })).status).toBe(204);
 		expect((await dash(merchant, 'PUT', `${texts}/form.count`, { value: '{name}: {count} Notizen' })).status).toBe(204);
 		expect((await dash(merchant, 'PUT', `${texts}/form.title`, { value: '' })).status).toBe(422);
 		expect((await dash(merchant, 'PUT', `${texts}/form.title`, {})).status).toBe(422);

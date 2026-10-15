@@ -15,7 +15,8 @@
  * (`settings.changed`, written by the kit's `settingsChanged`).
  * @module
  */
-import { createId, validateActivityCopy, zonedDayStart } from '@ss/contracts';
+import { createId, validateActivityCopy } from '@ss/contracts';
+import { zonedDayStart } from '@ss/contracts/format';
 import { ObjectId } from 'mongodb';
 import { kitError } from './util.js';
 
@@ -85,15 +86,18 @@ const boundOf = (value, timeZone, end) => {
 };
 
 /**
- * The merchant database filter of `GET /v1/activity` (and its counts) for a website.
- * @param {string} websiteId
- * @param {Record<string, string>} query
+ * The database filter of an activity list and its counts (`GET /v1/activity`; also a product's own copies of activity
+ * entries, such as Accounts' activity-log copies), without the website: `actor` (an actor id), `action` (one, or
+ * several separated by commas), `target`, `q` (a search in the label, the detail, the actor's name and the target) and
+ * `from`/`to` (ISO-8601 times, or days in the business time zone; `to` takes its whole day). A query value that does
+ * not fit answers which one and why.
+ * @param {Record<string, string | undefined>} query the request's query
  * @param {string} timeZone the business.json time zone (days are business days, PLAN 0.8.10 K8)
  * @returns {{ ok: true, filter: Record<string, unknown> } | { ok: false, field: string, message: string }}
  */
-export const activityFilter = (websiteId, query, timeZone) => {
+export const activityFilter = (query, timeZone) => {
 	/** @type {Record<string, unknown>} */
-	const filter = { websiteId };
+	const filter = {};
 	if (query.actor !== undefined && query.actor !== '') {
 		if (query.actor.length > 256) return { ok: false, field: 'actor', message: 'actor is an actor id.' };
 		filter['actor.id'] = query.actor;

@@ -8,14 +8,8 @@
  * randomness, logger, store, outbound calls).
  * @module
  */
-import {
-	BUILD_TEXT_MAX,
-	checkSettingsSchema,
-	createProblemFactory,
-	formatDate,
-	formatMoney,
-	validateManifest,
-} from '@ss/contracts';
+import { BUILD_TEXT_MAX, checkSettingsSchema, createProblemFactory, validateManifest } from '@ss/contracts';
+import { formatDate, formatMoney } from '@ss/contracts/format';
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { ACTIVITY_INDEXES, createActivity } from './activity.js';
@@ -26,7 +20,7 @@ import { checkConnectionDefinitions, createConnections } from './connections.js'
 import { createDashboard } from './dashboard.js';
 import { PRODUCT_DATABASE_OPTIONS, createData } from './data.js';
 import { EVENT_INDEXES, createEvents } from './events.js';
-import { createImports } from './imports.js';
+import { IMPORT_FEATURE, createImports } from './imports.js';
 import { createMessages } from './messages.js';
 import { createRequestHandler } from './http/handler.js';
 import { defineRoute } from './http/routes.js';
@@ -83,10 +77,12 @@ import { verifyToken } from '@ss/protocol';
  *   (PLAN 0.8.10 A2, A11): `{ <group>: { name, features, settings } }`, stored once as `<group>.<setting>`, read with
  *   `product.settings.values(websiteId, '<group>')` and shown while any of `features` is on
  * @property {Record<string, import('./server-api.js').ListDefinition>} [lists] the product's list settings, which the
- *   settings API serves at `GET|PUT /v1/lists/:list` (K1)
+ *   settings API serves at `GET|PUT /v1/lists/:list` (K1) and the dashboard at `GET|PUT
+ *   /v1/dashboard/websites/:websiteId/lists/:list`
  * @property {boolean} [events] the product publishes events (K5): `product.events.emit`, forwarded through
  *   Notifications right after the request
- * @property {import('./imports.js').ImportOptions} [imports] what the product's `import` feature takes (K10)
+ * @property {import('./imports.js').ImportOptions} [imports] what the product's `import` feature takes (K10): the kit
+ *   serves the import routes (`/v1/import/…`, server token, feature `import`, which the manifest must have)
  * @property {unknown} [messages] the messages the product sends through Notifications with their default words (its
  *   `schemas/messages.json`, `{ messages: [...] }`; parity P1): attached to every send to Notifications and served at
  *   `GET /v1/message-defaults`
@@ -137,6 +133,60 @@ const KIT_PROBLEM_CODES = Object.freeze({
 });
 
 /**
+ * The start-up pieces of a product, built from its options as `createProduct` builds them, for the product's own
+ * adapters before it calls `createProduct` (list settings in the product database, AI, gateway or provider calls to
+ * addresses merchants enter):
+ *
+ * - `store`: `options.store`, else MongoDB on `config.mongodbUri` with the kit's pool and deadlines
+ *   (`PRODUCT_DATABASE_OPTIONS`, so a database that cannot be reached answers 503 `database_unavailable`), else in
+ *   memory (development only: a warning is logged). Only a healthy configuration (no `problems`) opens MongoDB.
+ * - `policy`: the `@ss/net` outbound policy of `options.outbound` (`allowHosts` is ignored in production).
+ * - `send`: `options.outboundSend`, else `safeFetch` on that policy.
+ *
+ * Pass `store` on to `createProduct` (with the same `outbound` and `outboundSend`), so the kit and the product share it.
+ * @param {Pick<ProductOptions, 'config' | 'problems' | 'store' | 'now' | 'logger' | 'nodeEnv' | 'outbound' | 'outboundSend'>} options
+ * @returns {{ store: import('./stores/types.js').Store, policy: import('@ss/net').OutboundPolicy, send: OutboundSend }}
+ */
+export const createProductBase = (options) => {
+	const { now = Date.now, logger = noopLogger } = options;
+	const uri = (options.problems ?? []).length === 0 ? options.config?.mongodbUri : undefined;
+	const store =
+		options.store ??
+		(uri
+			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
+			: createMemoryStore({ now }));
+	if (!options.store && !uri) logger.warn('using the in-memory store: development only');
+	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
+	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
+	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
+	/** @type {OutboundSend} */
+	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	return { store, policy, send };
+};
+
+/**
+ * Kit routes a product's own route of the same method and path still replaces: the dashboard list twin and the import
+ * routes, which products wrote themselves before the kit served them. Only until the last product has dropped its copy
+ * (Ecommerce); then this goes.
+ */
+const REPLACEABLE_ROUTES = new Set([
+	'GET /v1/dashboard/websites/:/lists/:',
+	'PUT /v1/dashboard/websites/:/lists/:',
+	'POST /v1/import/:',
+	'POST /v1/import/:/prune',
+	'POST /v1/import/finish',
+	'GET /v1/import/status',
+]);
+
+/** A route with every parameter alike (`GET /v1/import/:`). @param {{ method: string, path: string }} route */
+const routeShape = ({ method, path }) =>
+	`${method} /${path
+		.split('/')
+		.filter(Boolean)
+		.map((segment) => (segment.startsWith(':') ? ':' : segment))
+		.join('/')}`;
+
+/**
  * @param {ProductOptions} options
  */
 export const createProduct = (options) => {
@@ -157,22 +207,8 @@ export const createProduct = (options) => {
 	if (healthy && (!config || typeof config.connectSecret !== 'string' || typeof config.encryptionKey !== 'string'))
 		throw kitError('invalid_config', 'config is required (configFromEnv)');
 	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
-	const production = nodeEnv === 'production';
 
-	const store =
-		options.store ??
-		(healthy && config?.mongodbUri
-			? createMongoStore({
-					db: new MongoClient(config.mongodbUri, { ...PRODUCT_DATABASE_OPTIONS }).db(),
-					now,
-				})
-			: createMemoryStore({ now }));
-	if (!options.store && !(healthy && config?.mongodbUri)) logger.warn('using the in-memory store: development only');
-
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
-	/** @type {OutboundSend} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	const { store, policy, send } = createProductBase(options);
 	const problems = createProblemFactory({
 		baseUri: `${manifest.endpoints.base.replace(/\/+$/, '')}/problems/`,
 		codes: { ...KIT_PROBLEM_CODES, ...(options.problemCodes ?? {}) },
@@ -302,6 +338,11 @@ export const createProduct = (options) => {
 		await events.settingsChanged(ctx, { what, ...(key === undefined ? {} : { key }) });
 	};
 	const staffAlerts = createStaffAlerts({ productId: manifest.id, settings, connections, data, now, logger });
+	if (options.imports !== undefined && !manifest.features.some((/** @type {{ key: string }} */ f) => f.key === IMPORT_FEATURE))
+		throw kitError(
+			'invalid_config',
+			`imports need the feature ${IMPORT_FEATURE} in the manifest (the import routes belong to it)`,
+		);
 	const imports = createImports({
 		options: options.imports,
 		now,
@@ -383,6 +424,7 @@ export const createProduct = (options) => {
 		...createKitRoutes(kit, hooks),
 		...kit.dashboard.routes,
 		...createServerApi(kit, lists),
+		...(options.imports === undefined ? [] : imports.routes),
 		...blueprint.routes,
 		// the product's OpenAPI document: public, the same for every website
 		...(openapi === null
@@ -427,7 +469,11 @@ export const createProduct = (options) => {
 		 * @param {ReadonlyArray<import('./http/routes.js').RouteDefinition>} routes
 		 * @param {{ after?: (task: () => Promise<unknown>) => void }} [handlerOptions]
 		 */
-		handler: (routes, handlerOptions) => createRequestHandler(kit, [...kitRoutes, ...routes], handlerOptions),
+		handler: (routes, handlerOptions) => {
+			const own = new Set(routes.map(routeShape));
+			const served = kitRoutes.filter((route) => !(REPLACEABLE_ROUTES.has(routeShape(route)) && own.has(routeShape(route))));
+			return createRequestHandler(kit, [...served, ...routes], handlerOptions);
+		},
 		/** Whether the product serves a website now (status checks). */
 		serving: status.serving,
 		/** @param {string} websiteId @returns {Promise<string[]>} switched-on feature keys */
