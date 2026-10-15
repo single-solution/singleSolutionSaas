@@ -3794,9 +3794,8 @@ shop tool is off. Bug fixed: a wrong-typed language or keyword list is refused (
 
 **Chat gaps closed (2026-10-15; 88c43752, 64fabe77, ba45954a, c71381f5, 8210d3c6, 052e4759, e2e 94d066bf):** the law
 warning shows whenever the AI label is hidden (label off, or Never disclose on; C1); a transcript goes whole by email in
-the values `transcript` … `transcript45` (Notifications takes values of up to 1,000 characters, 50 a message: 45,000
-characters), and a longer chat sends its latest messages after a line saying how many (`transcript.earlier`), never cut
-silently; outside office hours a guest who left no contact is offered the lead form (`leadOffered`, once a session);
+the one long value `transcript` (up to 50,000 characters; "Long message values" below), and a longer chat sends its
+latest messages after a line saying how many (`transcript.earlier`), never cut silently; outside office hours a guest who left no contact is offered the lead form (`leadOffered`, once a session);
 leads are deleted one at a time (`DELETE /v1/leads/:id` and its ticket twin, inbox.manage, audited `lead.deleted`) or
 all (C20 scope `leads`), and the inbox widget lists them with Open the chat and Delete; the staff list and assignment
 picker hold every Accounts user who may answer chats (read through Accounts, kept 5 minutes; CH-6) and staff alerts
@@ -3804,6 +3803,19 @@ reach the assignee's phone from Accounts (CH-12); the inbox widget has Delete (a
 editor, the AI pause with a typed reason through `PUT …/ai` (a 403 hides only those controls) and Show earlier messages
 (C8, C11). Bugs fixed: each check put the saved custom field values back into fields staff were typing in; the widget
 script carried the unused list of message templates.
+
+**Long message values and list saves in the activity log (2026-10-15; 9398bc5b contracts, 12b40dbd app-kit, b8ba9b0b +
+bfc5976f + 52af607f Notifications, 911d3088 + ee0cb07c Chat, e2e 67c8880d):** a product may declare values of its
+message long (`longValues` in `schemas/messages.json`, checked by `@ss/contracts`): each holds up to 50,000 characters
+instead of 1,000 (a send: at most 50 values, 100,000 characters in all; the limits live in `@ss/contracts/templates`),
+only in the message's text, never in a subject, title or WhatsApp button. The kit names them on every send; Notifications
+takes them only for a product's message, sends them whole by email (plain text, line breaks kept) and cuts them to fit
+on SMS, WhatsApp and push (and in any subject or button) at a line end, else a word end, ending with the website text
+`message.shortened` ("… (shortened)"), on the fallback channel too; the delivery log keeps its rules. The template
+editor names a message's long values and takes a long sample; a template of a product's message using one in its
+subject or a button is refused. Chat's transcript is one `{transcript}` (the 45 parts are gone). Chat's and
+Notifications' own dashboard list routes now call the kit's `settingsChanged` (activity `settings.changed`, target
+`list.<list>`); bug fixed: Notifications' webhook URL list had the same gap as Chat's.
 
 #### Growth
 
