@@ -14,7 +14,7 @@
  * @module
  */
 import KIT_API_JSON from './kit-api.json' with { type: 'json' };
-import { escapeToken, schemaProblems, validateValue } from './api-schema.js';
+import { escapeToken, schemaProblems } from './api-schema.js';
 import { isObject } from './util.js';
 
 /** @typedef {import('./api-schema.js').Schema} Schema */
@@ -159,108 +159,4 @@ export const checkApiDescription = (api, { schemas: base = {} } = {}) => {
 	return out;
 };
 
-/**
- * One description from the kit's and a product's (the product's shared schemas next to the kit's).
- * @param {ApiDescription} kit
- * @param {ApiDescription} api
- * @returns {ApiDescription}
- */
-export const mergeApi = (kit, api) => ({
-	...Object.fromEntries(apiEntries(kit)),
-	...Object.fromEntries(apiEntries(api)),
-	$schemas: { ...sharedSchemas(kit), ...sharedSchemas(api) },
-});
-
-/**
- * Checks answers against an API description, for a product's tests: hand it every answer the tests see. Routes the
- * description does not name (pages, the dashboard API) and answers other than 2xx are not checked.
- *
- *   const api = apiChecker(apiJson); // schemas/api.json, plus the kit's routes
- *   api.assert({ method: 'GET', path: '/v1/payments/pay_…', status: 200, body }); // throws on a mismatch
- * @param {unknown} api the product's description (`schemas/api.json`)
- * @param {{ kit?: boolean }} [options] `kit: false` leaves out the kit's own routes
- */
-export const apiChecker = (api, { kit = true } = {}) => {
-	const base = kit ? sharedSchemas(KIT_API) : {};
-	const invalid = checkApiDescription(api, { schemas: base });
-	if (invalid.length > 0)
-		throw new TypeError(
-			`the API description is invalid:\n${invalid.map((problem) => `${problem.pointer}: ${problem.message}`).join('\n')}`,
-		);
-	const description = kit ? mergeApi(KIT_API, /** @type {ApiDescription} */ (api)) : /** @type {ApiDescription} */ (api);
-	const schemas = sharedSchemas(description);
-	const routes = apiEntries(description).map(([key, entry]) => {
-		const route = /** @type {{ method: string, path: string }} */ (parseRouteKey(key));
-		const segments = route.path.split('/').filter(Boolean);
-		return {
-			...route,
-			segments,
-			literals: segments.filter((segment) => !segment.startsWith(':')).length,
-			entry: /** @type {ApiEntry} */ (entry),
-		};
-	});
-
-	/**
-	 * The described route of a request, or null (literal segments win over parameters).
-	 * @param {string} method
-	 * @param {string} path a path or an address (the query is ignored)
-	 */
-	const routeOf = (method, path) => {
-		const parts = new URL(path, 'http://localhost').pathname.split('/').filter(Boolean);
-		const found = routes
-			.filter(
-				(route) =>
-					route.method === method.toUpperCase() &&
-					route.segments.length === parts.length &&
-					route.segments.every((segment, index) => segment.startsWith(':') || segment === parts[index]),
-			)
-			.sort((a, b) => b.literals - a.literals);
-		return found[0] ?? null;
-	};
-
-	/**
-	 * What is wrong with an answer (an empty list when it fits, or when nothing describes it).
-	 * @param {{ method: string, path: string, status: number, body: unknown }} answer `body`: the parsed JSON, or
-	 *   null/undefined when the answer had none
-	 * @returns {string[]}
-	 */
-	const check = ({ method, path, status, body }) => {
-		const route = routeOf(method, path);
-		if (!route || status < 200 || status > 299) return [];
-		const name = `${route.method} ${route.path} (${status})`;
-		const expected = route.entry.status ?? 200;
-		/** @type {string[]} */
-		const out = [];
-		if (status !== expected) out.push(`${name}: answered ${status}, described ${expected}`);
-		const has = body !== null && body !== undefined;
-		if (route.entry.response === undefined) {
-			if (has) out.push(`${name}: answered a JSON body, but the description has no response`);
-			return out;
-		}
-		// a JSON `null` is an answer when the description allows it (e.g. "no notice right now")
-		if (body === null && validateValue(route.entry.response, null, { schemas }).length === 0) return out;
-		if (!has) return [...out, `${name}: answered no JSON body, but the description has a response`];
-		for (const problem of validateValue(route.entry.response, body, { schemas }))
-			out.push(`${name}: ${problem.path || '(the body)'} ${problem.message}`);
-		return out;
-	};
-
-	return Object.freeze({
-		check,
-		/**
-		 * Throw when an answer does not fit its description (for a test helper's `call()`).
-		 * @param {Parameters<typeof check>[0]} answer
-		 */
-		assert: (answer) => {
-			const problems = check(answer);
-			if (problems.length > 0) throw new Error(`the answer does not fit schemas/api.json:\n${problems.join('\n')}`);
-		},
-		/** The described route of a request, or null. @param {string} method @param {string} path */
-		described: (method, path) => {
-			const route = routeOf(method, path);
-			return route ? `${route.method} ${route.path}` : null;
-		},
-	});
-};
-
-export { schemaProblems, validateValue };
+export { validateValue } from './api-schema.js';

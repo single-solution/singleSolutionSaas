@@ -1,14 +1,7 @@
 import { manifest as manifestFixture } from '@ss/contracts/testing';
 import { MongoClient } from 'mongodb';
 import { createProduct, defineRoute } from '../src/index.js';
-import {
-	apiChecker,
-	createAccountsDouble,
-	createFakePortal,
-	createMemoryStore,
-	createNetwork,
-	createNotificationsDouble,
-} from '../src/testing.js';
+import { apiChecker, createAccountsDouble, createFakePortal, createMemoryStore, createNetwork } from '../src/testing.js';
 
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 /** The kit's own routes as kit-api.json describes them: every answer of `call()` is checked against it. */
@@ -281,4 +274,61 @@ export const setup = async (options = {}) => {
 export const openDb = async (dbName) => {
 	const client = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	return { client, db: client.db(dbName) };
+};
+
+/** @param {number} status @param {unknown} body */
+const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+/** @param {string} base @param {string} code @param {number} status */
+const fail = (base, code, status) =>
+	new Response(JSON.stringify({ type: `${base}/problems/${code}`, title: code, status }), {
+		status,
+		headers: { 'content-type': 'application/problem+json' },
+	});
+
+/**
+ * Notifications as products see it (PLAN 0.3, 0.8.10 K5, K6): `POST /v1/events` (an event to the merchant's webhook
+ * URLs; a repeated `Idempotency-Key` answers 409) and `POST /v1/messages/<channel>` (a template to a recipient). It
+ * keeps what it was sent; `setFailing(true)` answers 503.
+ * @param {{ url?: string }} [options]
+ */
+const createNotificationsDouble = ({ url = 'https://notifications.test' } = {}) => {
+	/** @type {Array<{ token: string, key: string | null, body: any }>} */
+	const events = [];
+	/** @type {Array<{ token: string, channel: string, body: any }>} */
+	const messages = [];
+	const keys = new Set();
+	let failing = false;
+
+	/** @param {Request} request @returns {Promise<Response>} */
+	const handle = async (request) => {
+		const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
+		const path = new URL(request.url).pathname;
+		if (request.method !== 'POST') return fail(url, 'not_found', 404);
+		if (!token) return fail(url, 'invalid_token', 401);
+		if (failing) return fail(url, 'unavailable', 503);
+		const body = await request.json().catch(() => null);
+		if (path === '/v1/events') {
+			const key = request.headers.get('idempotency-key');
+			if (key && keys.has(key)) return fail(url, 'duplicate_request', 409);
+			if (key) keys.add(key);
+			events.push({ token, key, body });
+			return json(202, { queued: 1 });
+		}
+		const channel = /^\/v1\/messages\/([a-z-]+)$/.exec(path)?.[1];
+		if (!channel) return fail(url, 'not_found', 404);
+		messages.push({ token, channel, body });
+		return json(202, { id: `msg_${messages.length}`, status: 'queued' });
+	};
+
+	return Object.freeze({
+		url,
+		handle,
+		events,
+		messages,
+		/** @param {boolean} value answer 503 while true */
+		setFailing: (value) => {
+			failing = value;
+		},
+	});
 };

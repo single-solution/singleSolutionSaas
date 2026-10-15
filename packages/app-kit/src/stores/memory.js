@@ -80,9 +80,6 @@ export const createMemoryStore = ({ now = Date.now } = {}) => {
 			replay.set(id, expiresAtMs);
 			return false;
 		},
-		forget: async (id) => {
-			replay.delete(id);
-		},
 		hit: async (key, windowMs, t) => {
 			const start = Math.floor(t / windowMs) * windowMs;
 			const id = `${key}|${start}`;

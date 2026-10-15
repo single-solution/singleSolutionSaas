@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { KIT_API, checkApiDescription, mergeApi, parseRouteKey, schemaProblems, validateValue } from '../src/api.js';
+import { KIT_API, checkApiDescription, parseRouteKey, validateValue } from '../src/api.js';
+import { schemaProblems } from '../src/api-schema.js';
 import { apiAnchor, renderApiReference } from '../src/index.js';
 import { apiChecker } from '../src/testing.js';
 
@@ -186,10 +187,6 @@ describe('API descriptions', () => {
 			{ pointer: '/GET ~1v1~1g/headers', message: 'headers is an object schema whose properties are the request headers' },
 		]);
 		expect(checkApiDescription({ 'GET /v1/a': { response: { $ref: '#/components/schemas/Count' } } })).toHaveLength(1);
-		expect(mergeApi({ 'GET /v1/a': { summary: 'kit' } }, { 'GET /v1/a': { summary: 'own' } })).toEqual({
-			'GET /v1/a': { summary: 'own' },
-			$schemas: {},
-		});
 	});
 
 	it('checks answers by route: status, body and schema, literal segments first; others are left alone', () => {
@@ -361,7 +358,6 @@ describe('the API reference', () => {
 		);
 		expect(html).toContain('<h4>Answer 204</h4><p>Done</p>');
 		expect(html).toContain('<section class="ss-api-schema" id="schema-Payment"><h4>Payment</h4><p>A payment.</p><table>');
-		expect(renderApiReference(openapi, { only: (method) => method === 'DELETE' })).not.toContain('GET /v1/payments');
 		expect(renderApiReference(null)).toBe('<div class="ss-api">\n\n</div>');
 	});
 });

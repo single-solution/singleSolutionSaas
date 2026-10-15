@@ -49,15 +49,21 @@ describe('message defaults (parity P1)', () => {
 	it('checks the declaration with the contract and the product id', () => {
 		const none = createMessages({ productId: 'notes' });
 		expect(none.declaration).toEqual({ productId: 'notes', messages: [] });
-		expect(none.defaultsFor('notes.code')).toBeNull();
+		const alertSend = { method: 'POST', body: { template: 'notes.staff_note_created' } };
+		expect(none.attach('notifications', '/v1/messages/email', alertSend)).toBe(alertSend);
 		const declared = createMessages({ productId: 'notes', declaration: DECLARATION });
 		expect(declared.declaration.productId).toBe('notes');
 		expect(declared.declaration.messages).toEqual(DECLARATION.messages);
 		expect(Object.isFrozen(declared.declaration.messages[0]?.channels.email)).toBe(true);
-		expect(declared.defaultsFor('notes.staff_note_created')).toEqual(ALERT_DEFAULTS);
+		expect(declared.attach('notifications', '/v1/messages/email', alertSend).body).toEqual({
+			...alertSend.body,
+			defaults: ALERT_DEFAULTS,
+		});
 		// WhatsApp never has a default: a message sent only there has none
-		expect(declared.defaultsFor('notes.code')).toBeNull();
-		expect(declared.defaultsFor('notes.unknown')).toBeNull();
+		for (const template of ['notes.code', 'notes.unknown']) {
+			const send = { method: 'POST', body: { template } };
+			expect(declared.attach('notifications', '/v1/messages/email', send)).toBe(send);
+		}
 		expect(() => createMessages({ productId: 'other', declaration: DECLARATION })).toThrow(/must start with 'other\.'/);
 		expect(() => createMessages({ productId: 'notes', declaration: { messages: [{ key: 'notes.x' }] } })).toThrow(
 			/messages are invalid/,
@@ -93,9 +99,10 @@ describe('message defaults (parity P1)', () => {
 			body: { ...send.body, defaults: ALERT_DEFAULTS },
 		});
 		expect(attach('notifications', '/v1/messages/staff-push', send).body).toHaveProperty('defaults');
-		// the caller's own defaults, another product, another route, a read, no template or one without defaults: as given
+		// the declared words always win over a body's own; another product, another route, a read, no template or one
+		// without defaults: as given
 		const own = { ...send, body: { ...send.body, defaults: {} } };
-		expect(attach('notifications', '/v1/messages/email', own)).toBe(own);
+		expect(attach('notifications', '/v1/messages/email', own).body).toEqual({ ...send.body, defaults: ALERT_DEFAULTS });
 		expect(attach('accounts', '/v1/messages/email', send)).toBe(send);
 		expect(attach('notifications', '/v1/events', send)).toBe(send);
 		expect(attach('notifications', '/v1/messages/fax', send)).toBe(send);
@@ -117,14 +124,11 @@ describe('message defaults (parity P1)', () => {
 			defaults: { email: { subject: 'Your note {title}', text: '{body}', required: true, urgent: false, sensitive: false } },
 			longValues: ['body'],
 		});
-		// with the caller's own defaults, the long values still go; the caller's own long values are kept
-		expect(attach('notifications', '/v1/messages/sms', { ...copy, body: { ...copy.body, defaults: {} } }).body).toEqual({
-			...copy.body,
-			defaults: {},
-			longValues: ['body'],
-		});
+		// the declared words and long values win over a body's own
 		const own = { ...copy, body: { ...copy.body, defaults: {}, longValues: [] } };
-		expect(attach('notifications', '/v1/messages/email', own)).toBe(own);
+		expect(attach('notifications', '/v1/messages/email', own).body).toEqual(
+			attach('notifications', '/v1/messages/email', copy).body,
+		);
 		// a key made per case carries those of the message it falls back to; a message without long values names none
 		const perCase = { method: 'POST', body: { template: 'notes.copy.weekly', fallbackTemplate: 'notes.copy' } };
 		expect(attach('notifications', '/v1/messages/email', perCase).body).toMatchObject({ longValues: ['body'] });
@@ -182,8 +186,6 @@ describe('message defaults (parity P1)', () => {
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe('public, max-age=300');
 		expect(await response.json()).toEqual({ productId: 'notes', ...DECLARATION });
-		expect(ctx.product.messages.declaration).toEqual({ productId: 'notes', ...DECLARATION });
-		expect(ctx.product.messages.defaultsFor('notes.staff_note_created')).toEqual(ALERT_DEFAULTS);
 		expect(await ctx.product.addressOf('notifications')).toBe(ctx.notifications.url);
 
 		await ctx.switchOn(['notes']);

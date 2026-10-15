@@ -1,6 +1,6 @@
 /**
  * What every product's public docs say about the kit's routes for the merchant's server (PLAN 0.4.10 docs; 0.8.10 K1–K9):
- * the settings API, the acting user, visitor calls from the server, counts, the activity log, events and the Format.
+ * the settings API, the acting user, visitor calls from the server, counts, the activity log and the Format.
  * Plain text; each product renders the sections in its own `/docs` page (escaped like the rest of the page).
  * @module
  */

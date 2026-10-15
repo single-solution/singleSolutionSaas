@@ -6,8 +6,6 @@
  *   launches, notices and Portal calls (`signCall`, `callAsPortal`: `GET /v1/blueprint`, `POST /v1/blueprint/features`);
  * - `createAccountsDouble()`: Accounts as products see it: it receives activity copies, serves sign-in keys and the
  *   users with a permission (staff alerts), and calls a product's data-rights routes with a pasted server token;
- * - `createNotificationsDouble()`: Notifications as products see it: it takes events (`POST /v1/events`) and messages
- *   (`POST /v1/messages/<channel>`) and keeps them;
  * - `createNetwork(handlers)`: routes `fetch` and outbound calls (`outboundSend`) to in-process handlers by origin;
  * - `productKeyOf({ store, encryptionKey })`: the product's own private key from its store (kept sealed, K-21), for
  *   tests that sign as the product;
@@ -35,12 +33,13 @@ import {
 	verifyConnectResponse,
 } from '@ss/protocol';
 import { createMemoryReplayStore } from '@ss/protocol/testing';
+import { KIT_API, apiEntries, checkApiDescription, parseRouteKey, sharedSchemas } from './api.js';
+import { validateValue } from './api-schema.js';
 import { PRODUCT_KEY_AAD } from './connection.js';
 import { createSealer, openKey } from './sealing.js';
 import { createMemoryStore } from './stores/memory.js';
 
 export { createMemoryStore };
-export { apiChecker } from './api.js';
 
 /**
  * The product's own private key as its product database keeps it (sealed with `ENCRYPTION_KEY`, K-21), for tests that
@@ -629,49 +628,109 @@ export const createAccountsDouble = ({ url = 'https://accounts.test', now = Date
 	});
 };
 
-/**
- * Notifications as products see it (PLAN 0.3, 0.8.10 K5, K6): `POST /v1/events` (an event to the merchant's webhook
- * URLs; a repeated `Idempotency-Key` answers 409) and `POST /v1/messages/<channel>` (a template to a recipient). It
- * keeps what it was sent; `setFailing(true)` answers 503.
- * @param {{ url?: string }} [options]
- */
-export const createNotificationsDouble = ({ url = 'https://notifications.test' } = {}) => {
-	/** @type {Array<{ token: string, key: string | null, body: any }>} */
-	const events = [];
-	/** @type {Array<{ token: string, channel: string, body: any }>} */
-	const messages = [];
-	const keys = new Set();
-	let failing = false;
+/** @typedef {import('./api.js').ApiDescription} ApiDescription */
+/** @typedef {import('./api.js').ApiEntry} ApiEntry */
 
-	/** @type {Handler} */
-	const handle = async (request) => {
-		const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
-		const path = new URL(request.url).pathname;
-		if (request.method !== 'POST') return fail(url, 'not_found', 404);
-		if (!token) return fail(url, 'invalid_token', 401);
-		if (failing) return fail(url, 'unavailable', 503);
-		const body = await request.json().catch(() => null);
-		if (path === '/v1/events') {
-			const key = request.headers.get('idempotency-key');
-			if (key && keys.has(key)) return fail(url, 'duplicate_request', 409);
-			if (key) keys.add(key);
-			events.push({ token, key, body });
-			return json(202, { queued: 1 });
+/**
+ * One description from the kit's and a product's (the product's shared schemas next to the kit's).
+ * @param {ApiDescription} kit
+ * @param {ApiDescription} api
+ * @returns {ApiDescription}
+ */
+const mergeApi = (kit, api) => ({
+	...Object.fromEntries(apiEntries(kit)),
+	...Object.fromEntries(apiEntries(api)),
+	$schemas: { ...sharedSchemas(kit), ...sharedSchemas(api) },
+});
+
+/**
+ * Checks answers against an API description, for a product's tests: hand it every answer the tests see. Routes the
+ * description does not name (pages, the dashboard API) and answers other than 2xx are not checked.
+ *
+ *   const api = apiChecker(apiJson); // schemas/api.json, plus the kit's routes
+ *   api.assert({ method: 'GET', path: '/v1/payments/pay_…', status: 200, body }); // throws on a mismatch
+ * @param {unknown} api the product's description (`schemas/api.json`)
+ * @param {{ kit?: boolean }} [options] `kit: false` leaves out the kit's own routes
+ */
+export const apiChecker = (api, { kit = true } = {}) => {
+	const base = kit ? sharedSchemas(KIT_API) : {};
+	const invalid = checkApiDescription(api, { schemas: base });
+	if (invalid.length > 0)
+		throw new TypeError(
+			`the API description is invalid:\n${invalid.map((problem) => `${problem.pointer}: ${problem.message}`).join('\n')}`,
+		);
+	const description = kit ? mergeApi(KIT_API, /** @type {ApiDescription} */ (api)) : /** @type {ApiDescription} */ (api);
+	const schemas = sharedSchemas(description);
+	const routes = apiEntries(description).map(([key, entry]) => {
+		const route = /** @type {{ method: string, path: string }} */ (parseRouteKey(key));
+		const segments = route.path.split('/').filter(Boolean);
+		return {
+			...route,
+			segments,
+			literals: segments.filter((segment) => !segment.startsWith(':')).length,
+			entry: /** @type {ApiEntry} */ (entry),
+		};
+	});
+
+	/**
+	 * The described route of a request, or null (literal segments win over parameters).
+	 * @param {string} method
+	 * @param {string} path a path or an address (the query is ignored)
+	 */
+	const routeOf = (method, path) => {
+		const parts = new URL(path, 'http://localhost').pathname.split('/').filter(Boolean);
+		const found = routes
+			.filter(
+				(route) =>
+					route.method === method.toUpperCase() &&
+					route.segments.length === parts.length &&
+					route.segments.every((segment, index) => segment.startsWith(':') || segment === parts[index]),
+			)
+			.sort((a, b) => b.literals - a.literals);
+		return found[0] ?? null;
+	};
+
+	/**
+	 * What is wrong with an answer (an empty list when it fits, or when nothing describes it).
+	 * @param {{ method: string, path: string, status: number, body: unknown }} answer `body`: the parsed JSON, or
+	 *   null/undefined when the answer had none
+	 * @returns {string[]}
+	 */
+	const check = ({ method, path, status, body }) => {
+		const route = routeOf(method, path);
+		if (!route || status < 200 || status > 299) return [];
+		const name = `${route.method} ${route.path} (${status})`;
+		const expected = route.entry.status ?? 200;
+		/** @type {string[]} */
+		const out = [];
+		if (status !== expected) out.push(`${name}: answered ${status}, described ${expected}`);
+		const has = body !== null && body !== undefined;
+		if (route.entry.response === undefined) {
+			if (has) out.push(`${name}: answered a JSON body, but the description has no response`);
+			return out;
 		}
-		const channel = /^\/v1\/messages\/([a-z-]+)$/.exec(path)?.[1];
-		if (!channel) return fail(url, 'not_found', 404);
-		messages.push({ token, channel, body });
-		return json(202, { id: `msg_${messages.length}`, status: 'queued' });
+		// a JSON `null` is an answer when the description allows it (e.g. "no notice right now")
+		if (body === null && validateValue(route.entry.response, null, { schemas }).length === 0) return out;
+		if (!has) return [...out, `${name}: answered no JSON body, but the description has a response`];
+		for (const problem of validateValue(route.entry.response, body, { schemas }))
+			out.push(`${name}: ${problem.path || '(the body)'} ${problem.message}`);
+		return out;
 	};
 
 	return Object.freeze({
-		url,
-		handle,
-		events,
-		messages,
-		/** @param {boolean} value answer 503 while true */
-		setFailing: (value) => {
-			failing = value;
+		check,
+		/**
+		 * Throw when an answer does not fit its description (for a test helper's `call()`).
+		 * @param {Parameters<typeof check>[0]} answer
+		 */
+		assert: (answer) => {
+			const problems = check(answer);
+			if (problems.length > 0) throw new Error(`the answer does not fit schemas/api.json:\n${problems.join('\n')}`);
+		},
+		/** The described route of a request, or null. @param {string} method @param {string} path */
+		described: (method, path) => {
+			const route = routeOf(method, path);
+			return route ? `${route.method} ${route.path}` : null;
 		},
 	});
 };

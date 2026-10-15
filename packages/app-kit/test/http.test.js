@@ -221,8 +221,8 @@ describe('handler results and the Next.js adapter', () => {
 		await next.GET(new Request(`${BASE}/api/v1/server/open`, { headers: { authorization: `Bearer ${server.token}` } }));
 		expect(later.length).toBeGreaterThan(0);
 		for (const task of later) await task();
-		const raw = toNextRoute(handler, { stripPrefix: false });
-		expect((await raw.GET(new Request(`${BASE}/api/docs`))).status).toBe(404);
+		// only a whole first segment is stripped
+		expect((await next.GET(new Request(`${BASE}/apidocs`))).status).toBe(404);
 	});
 
 	it('runs work that after-work adds, before the Portal fetch of an old status copy', async () => {

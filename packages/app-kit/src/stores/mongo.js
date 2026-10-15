@@ -155,10 +155,6 @@ export const createMongoStore = ({ db, prefix = 'kit_', now = Date.now }) => {
 			});
 			return taken.modifiedCount === 0;
 		},
-		forget: async (id) => {
-			const c = await col('replay');
-			await c.deleteOne(/** @type {any} */ ({ _id: id }));
-		},
 		hit: async (key, windowMs, t) => {
 			await ensureIndexes();
 			const start = Math.floor(t / windowMs) * windowMs;

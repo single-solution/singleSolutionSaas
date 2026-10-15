@@ -2,8 +2,7 @@
  * S3-compatible storage of the merchant's own bucket (PLAN 0.4.3 Connections → Storage), from the website's `storage`
  * connection `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }`.
  * Objects are namespaced `<prefix><product id>/<websiteId>/<key>` so a product reaches only its own area of the bucket.
- * Callers pass and receive **relative** keys; `fullKey(key)` gives the absolute object key. Browser uploads use a short
- * presigned PUT that fixes the type and size (`@ss/net` SigV4); server-side calls go through the outbound `send`
+ * Callers pass and receive **relative** keys. Browser uploads use a short presigned PUT that fixes the type and size (`@ss/net` SigV4); server-side calls go through the outbound `send`
  * (`@ss/net` `safeFetch` under the product's outbound policy), so a connection cannot point the product at an internal
  * address.
  * @module
@@ -122,8 +121,6 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		kind: 'storage',
 		provider: 's3',
 		bucket: d.bucket,
-		/** Absolute object key of a relative key (for public CDN links, logs, lifecycle rules). */
-		fullKey,
 		/**
 		 * Presigned PUT for a direct browser upload. `content-type` and `content-length` (when given) are signed headers:
 		 * the client must send exactly the returned `headers`, so the bucket refuses another type or size.

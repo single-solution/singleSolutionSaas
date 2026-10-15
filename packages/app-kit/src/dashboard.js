@@ -254,7 +254,6 @@ export const createDashboard = (kit) => {
 						portalUrl: kit.connection.active().portalUrl,
 						branding: session.branding,
 						support: session.support,
-						expiresAt: new Date(session.expiresAt).toISOString(),
 						switcher: await switcher(session),
 					};
 				} catch {

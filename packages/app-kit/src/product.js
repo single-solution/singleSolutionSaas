@@ -10,7 +10,6 @@
  */
 import {
 	BUILD_TEXT_MAX,
-	PROBLEM_CODES,
 	checkSettingsSchema,
 	createProblemFactory,
 	formatDate,
@@ -31,7 +30,7 @@ import { createImports } from './imports.js';
 import { createMessages } from './messages.js';
 import { createRequestHandler } from './http/handler.js';
 import { defineRoute } from './http/routes.js';
-import { createAccountsSignIns, createIdentity } from './identity.js';
+import { createAccountsSignIns } from './identity.js';
 import { createKitRoutes } from './kit-routes.js';
 import { noopLogger } from './logger.js';
 import { createRecentChanges } from './recent.js';
@@ -176,10 +175,7 @@ export const createProduct = (options) => {
 	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const problems = createProblemFactory({
 		baseUri: `${manifest.endpoints.base.replace(/\/+$/, '')}/problems/`,
-		codes: {
-			...Object.fromEntries(Object.entries(KIT_PROBLEM_CODES).filter(([code]) => !Object.hasOwn(PROBLEM_CODES, code))),
-			...(options.problemCodes ?? {}),
-		},
+		codes: { ...KIT_PROBLEM_CODES, ...(options.problemCodes ?? {}) },
 	});
 
 	const sealer = createSealer({
@@ -320,7 +316,6 @@ export const createProduct = (options) => {
 		)
 			throw kitError('invalid_config', `list ${name} must name features of the manifest`);
 	const tickets = createTickets({ store, productId: manifest.id, sealer, now, randomBytes });
-	const identity = createIdentity({ connections, send, now });
 	const accounts = createAccountsSignIns({ connections, now });
 	const hooks = options.hooks ?? {};
 	const reseal = createReseal({
@@ -437,8 +432,6 @@ export const createProduct = (options) => {
 		serving: status.serving,
 		/** @param {string} websiteId @returns {Promise<string[]>} switched-on feature keys */
 		featuresOn: async (websiteId) => (await reports.switches(websiteId)).on,
-		reportPrices: reports.reportPrices,
-		reportFeatures: reports.reportFeatures,
 		settings: Object.freeze({
 			values: settings.values,
 			texts: settings.texts,
@@ -453,8 +446,6 @@ export const createProduct = (options) => {
 		 * last good copy while the Portal cannot answer; throws when it was never read).
 		 */
 		products: connections.products,
-		/** The messages the product sends through Notifications, with their default words (parity P1). */
-		messages: Object.freeze({ declaration: messages.declaration, defaultsFor: messages.defaultsFor }),
 		data: Object.freeze({ forWebsite: data.forWebsite }),
 		business: businessOf,
 		format: formatOf,
@@ -476,7 +467,6 @@ export const createProduct = (options) => {
 		staffAlerts: Object.freeze({ send: staffAlerts.send, forget: staffAlerts.forget }),
 		imports: Object.freeze({ upsert: imports.upsert, prune: imports.prune, finish: imports.finish, status: imports.status }),
 		recentChanges: Object.freeze({ record: recent.record, list: recent.list }),
-		identity,
 		/** Accounts sign-ins of a website, verified offline with its pasted Accounts token (PLAN 0.4.6). */
 		accounts,
 		/** This product's own address (the base URL it was connected with), or null before the first connect. */

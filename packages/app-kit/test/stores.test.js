@@ -70,13 +70,11 @@ describe.each(kinds)('%s store', (_name, make) => {
 		expect(await store.list('changes', {})).toHaveLength(2);
 	});
 
-	it('records replays, forgets them and counts fixed windows', async () => {
+	it('records replays and counts fixed windows', async () => {
 		let t = 1000;
 		const store = make(() => t);
 		expect(await store.seen('n1', 2000)).toBe(false);
 		expect(await store.seen('n1', 2000)).toBe(true);
-		await store.forget('n1');
-		expect(await store.seen('n1', 2000)).toBe(false);
 		t = 2500;
 		expect(await store.seen('n1', 9000)).toBe(false);
 		expect(await store.hit('k', 60_000, 1000)).toEqual({ count: 1, resetAt: 60_000 });

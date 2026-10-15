@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SERVER_VISITOR_LIMIT } from '../src/http/handler.js';
-import { ACTOR_HEADERS, actorOf, defineRoute, parseActor } from '../src/index.js';
+import { actorOf, defineRoute } from '../src/index.js';
+import { ACTOR_HEADERS, parseActor } from '../src/actor.js';
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 
 const SITE = `https://${DOMAIN}`;

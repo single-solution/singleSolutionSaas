@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_FORMAT, defineRoute } from '../src/index.js';
+import { DEFAULT_FORMAT } from '@ss/contracts/format';
+import { defineRoute } from '../src/index.js';
 import { SETTINGS_READ_LIMIT, SETTINGS_WRITE_LIMIT } from '../src/server-api.js';
 import { DOMAIN, openDb, productRoutes, setup } from './helpers.js';
 

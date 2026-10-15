@@ -4,16 +4,25 @@ import { IDENTITY_MAX_AGE_MS, verifyIdentityToken } from '../src/identity.js';
 import { T0, setup } from './helpers.js';
 
 const NOW_S = Math.floor(T0 / 1000);
-const ISSUER = 'https://login.shop.example.com/';
+const ISSUER = 'https://accounts.example.dev/';
+const AUDIENCE = 'web_1';
 /** @param {Record<string, unknown>} [over] */
-const claims = (over = {}) => ({ iss: ISSUER, sub: 'cust-42', email: 'a@example.com', iat: NOW_S, exp: NOW_S + 600, ...over });
+const claims = (over = {}) => ({
+	iss: ISSUER,
+	aud: AUDIENCE,
+	sub: 'cust-42',
+	email: 'a@example.com',
+	iat: NOW_S,
+	exp: NOW_S + 600,
+	...over,
+});
 const now = () => T0;
 
 /**
- * A merchant's own login for tests: a key pair, the issuer settings and `sign(claims, header?)`.
- * @param {{ alg?: 'EdDSA' | 'ES256' | 'RS256', kid?: string, audience?: string }} [options]
+ * An issuer for tests: a key pair, the issuer settings and `sign(claims, header?)`.
+ * @param {{ alg?: 'EdDSA' | 'ES256' | 'RS256', kid?: string }} [options]
  */
-const createIssuer = ({ alg = 'EdDSA', kid = 'site-key-1', audience } = {}) => {
+const createIssuer = ({ alg = 'EdDSA', kid = 'site-key-1' } = {}) => {
 	const pair =
 		alg === 'EdDSA'
 			? generateKeyPairSync('ed25519')
@@ -21,12 +30,7 @@ const createIssuer = ({ alg = 'EdDSA', kid = 'site-key-1', audience } = {}) => {
 				? generateKeyPairSync('ec', { namedCurve: 'P-256' })
 				: generateKeyPairSync('rsa', { modulusLength: 2048 });
 	const jwk = /** @type {Record<string, string>} */ (pair.publicKey.export({ format: 'jwk' }));
-	const section = {
-		issuer: ISSUER,
-		jwks: [{ ...jwk, kid, alg, use: 'sig' }],
-		...(audience ? { audience } : {}),
-		claimMap: { subject: 'sub', email: 'email', phone: 'phone_number' },
-	};
+	const section = { issuer: ISSUER, jwks: [{ ...jwk, kid, alg, use: 'sig' }], audience: AUDIENCE };
 	/** @param {unknown} value */
 	const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
 	return {
@@ -47,7 +51,7 @@ const createIssuer = ({ alg = 'EdDSA', kid = 'site-key-1', audience } = {}) => {
 describe('verifyIdentityToken', () => {
 	it.each(/** @type {const} */ (['EdDSA', 'ES256', 'RS256']))('accepts %s tokens and maps the claims', (alg) => {
 		const issuer = createIssuer({ alg });
-		const payload = claims({ phone_number: '+96550000000', tier: { name: 'gold' } });
+		const payload = claims({ phone: '+96550000000', tier: { name: 'gold' } });
 		const result = verifyIdentityToken(issuer.sign(payload), issuer.section, { now });
 		expect(result).toEqual({
 			ok: true,
@@ -56,9 +60,9 @@ describe('verifyIdentityToken', () => {
 	});
 
 	it('refuses every malformed, mismatched, expired or forged token with a stable code', () => {
-		const issuer = createIssuer({ audience: 'shop-web' });
+		const issuer = createIssuer();
 		const other = createIssuer({ kid: 'site-key-1' });
-		const ok = issuer.sign(claims({ aud: ['x', 'shop-web'] }));
+		const ok = issuer.sign(claims({ aud: ['x', AUDIENCE] }));
 		expect(verifyIdentityToken(ok, issuer.section, { now }).ok).toBe(true);
 		const [h, p] = ok.split('.');
 		/** @type {Array<[unknown, string]>} */
@@ -75,68 +79,27 @@ describe('verifyIdentityToken', () => {
 			[issuer.sign(claims(), { alg: 'HS256' }), 'algorithm'],
 			[issuer.sign(claims(), { alg: 'ES256' }), 'unknown_key'],
 			[issuer.sign(claims(), { kid: 'other' }), 'unknown_key'],
-			[other.sign(claims({ aud: 'shop-web' })), 'signature'],
-			[issuer.sign(claims({ iss: 'https://evil.example/', aud: 'shop-web' })), 'issuer'],
+			[other.sign(claims()), 'signature'],
+			[issuer.sign(claims({ iss: 'https://evil.example/' })), 'issuer'],
 			[issuer.sign(claims({ aud: 'other' })), 'audience'],
-			[issuer.sign(claims({ aud: 'shop-web', exp: NOW_S - 61 })), 'expired'],
-			[issuer.sign(claims({ aud: 'shop-web', exp: undefined })), 'expired'],
-			[issuer.sign(claims({ aud: 'shop-web', nbf: NOW_S + 120 })), 'not_yet_valid'],
-			[issuer.sign(claims({ aud: 'shop-web', nbf: 'soon' })), 'not_yet_valid'],
-			[issuer.sign(claims({ aud: 'shop-web', iat: NOW_S + 120 })), 'not_yet_valid'],
-			[issuer.sign(claims({ aud: 'shop-web', iat: undefined })), 'not_yet_valid'],
-			[issuer.sign(claims({ aud: 'shop-web', iat: NOW_S - IDENTITY_MAX_AGE_MS / 1000 - 1 })), 'too_old'],
-			[issuer.sign(claims({ aud: 'shop-web', sub: '' })), 'subject'],
-			[issuer.sign(claims({ aud: 'shop-web', sub: 'x'.repeat(300) })), 'subject'],
+			[issuer.sign(claims({ aud: undefined })), 'audience'],
+			[issuer.sign(claims({ exp: NOW_S - 61 })), 'expired'],
+			[issuer.sign(claims({ exp: undefined })), 'expired'],
+			[issuer.sign(claims({ nbf: NOW_S + 120 })), 'not_yet_valid'],
+			[issuer.sign(claims({ nbf: 'soon' })), 'not_yet_valid'],
+			[issuer.sign(claims({ iat: NOW_S + 120 })), 'not_yet_valid'],
+			[issuer.sign(claims({ iat: undefined })), 'not_yet_valid'],
+			[issuer.sign(claims({ iat: NOW_S - IDENTITY_MAX_AGE_MS / 1000 - 1 })), 'too_old'],
+			[issuer.sign(claims({ sub: '' })), 'subject'],
+			[issuer.sign(claims({ sub: 'x'.repeat(300) })), 'subject'],
 		];
 		for (const [token, code] of cases)
 			expect(verifyIdentityToken(token, issuer.section, { now }), String(code)).toEqual({ ok: false, code });
-		expect(verifyIdentityToken(ok, null)).toEqual({ ok: false, code: 'identity_not_configured' });
 		// a numeric subject is stringified; a key without kid matches when it is the only compatible key
-		const kidless = issuer.sign(claims({ aud: 'shop-web', sub: 42 }), { kid: undefined });
+		const kidless = issuer.sign(claims({ sub: 42 }), { kid: undefined });
 		expect(verifyIdentityToken(kidless, issuer.section, { now })).toMatchObject({ ok: true, identity: { subject: '42' } });
 		// a corrupted signature never throws
 		expect(verifyIdentityToken(`${h}.${p}.AAAA`, issuer.section, { now })).toEqual({ ok: false, code: 'signature' });
-	});
-});
-
-describe('identity.verify (issuer from Connections)', () => {
-	it('verifies sign-ins with the keys of the issuer kept in a connection', async () => {
-		const issuer = createIssuer({ audience: 'shop-web' });
-		const connections = { login: { label: 'Your login', kind: 'secret', neededBy: ['notes'], secretField: 'audience' } };
-		const { product, websiteId, session, dash, handlers } = await setup({ connections });
-		let keysServed = 0;
-		handlers['https://login.shop.example.com'] = async () => {
-			keysServed += 1;
-			return new Response(JSON.stringify({ keys: issuer.section.jwks }), { status: 200 });
-		};
-		const token = issuer.sign(claims({ aud: 'shop-web' }));
-		expect(await product.identity.verify({ websiteId, token, connection: 'login' })).toEqual({
-			ok: false,
-			code: 'identity_not_configured',
-		});
-		const cookie = await session({ kind: 'merchant' });
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/login`, {
-			value: {
-				issuer: ISSUER,
-				jwksUrl: 'https://login.shop.example.com/jwks.json',
-				audience: 'shop-web',
-				emailClaim: 'email',
-				phoneClaim: 'phone',
-			},
-		});
-		expect(await product.identity.verify({ websiteId, token, connection: 'login' })).toMatchObject({
-			ok: true,
-			identity: { subject: 'cust-42', email: 'a@example.com' },
-		});
-		expect(await product.identity.verify({ websiteId, token: 'x.y.z', connection: 'login' })).toMatchObject({ ok: false });
-		expect(keysServed).toBe(1);
-		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/login`, {
-			value: { issuer: ISSUER, jwksUrl: 'https://unknown.example.com/jwks.json', subjectClaim: 'email' },
-		});
-		expect(await product.identity.verify({ websiteId, token, connection: 'login' })).toEqual({
-			ok: false,
-			code: 'unknown_key',
-		});
 	});
 });
 

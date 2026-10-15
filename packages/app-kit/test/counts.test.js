@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COUNT_CAP, COUNT_TIMEOUT_MS, MAX_GROUPS, countHandlers, defineRoute, problem } from '../src/index.js';
+import { countHandlers, defineRoute, problem } from '../src/index.js';
+import { COUNT_CAP, COUNT_TIMEOUT_MS, MAX_GROUPS } from '../src/counts.js';
 import { productRoutes, setup } from './helpers.js';
 
 /** A list of notes with a status filter, and its counts by status and by whether it is long. */

@@ -26,7 +26,6 @@ describe('S3 storage adapter', () => {
 		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'coupon-box', send: noSend, now: () => AWS_NOW });
 		const put = storage.presignPut({ key: 'img/a b.png', contentType: 'image/png', expiresIn: 120 });
 		expect(put.key).toBe('img/a b.png');
-		expect(storage.fullKey(put.key)).toBe(`site/coupon-box/${WEBSITE}/img/a b.png`);
 
 		expect(
 			put.url.startsWith(`https://merchant-bucket.s3.eu-central-1.amazonaws.com/site/coupon-box/${WEBSITE}/img/a%20b.png?`),
@@ -39,10 +38,10 @@ describe('S3 storage adapter', () => {
 		expect(new URL(get.url).pathname).toBe(`/site/coupon-box/${WEBSITE}/img/a.png`);
 		expect(new URL(get.url).searchParams.get('response-content-disposition')).toBe('attachment; filename="a_b.png"');
 		for (const key of ['', '/abs', 'a/../b', 'a//b', './a', 'a\\b', 'a\u0000b', 'x'.repeat(901)]) {
-			expect(() => storage.fullKey(key)).toThrow();
+			expect(() => storage.presignGet({ key })).toThrow();
 		}
 		// an absolute key handed back is refused rather than prefixed twice
-		expect(() => storage.presignGet({ key: storage.fullKey('img/a.png') })).toThrow(/relative object key/);
+		expect(() => storage.presignGet({ key: `site/coupon-box/${WEBSITE}/img/a.png` })).toThrow(/relative object key/);
 		expect(() => storage.presignGet({ key: 'a', expiresIn: 10 ** 7 })).toThrow();
 	});
 

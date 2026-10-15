@@ -62,15 +62,8 @@ export const createMessages = ({ productId, declaration }) => {
 	const answer = Object.freeze({ productId, messages });
 
 	/**
-	 * The default words of a message on every channel that has them, or null when the product declares none.
-	 * @param {string} key
-	 * @returns {Readonly<Record<string, DefaultWords>> | null}
-	 */
-	const defaultsFor = (key) => defaults.get(key) ?? null;
-
-	/**
 	 * A call to another product with the defaults and long values of its message added: only a send to Notifications
-	 * whose template (else whose `fallbackTemplate`) the product declares, each when the caller gave none of its own.
+	 * whose template (else whose `fallbackTemplate`) the product declares.
 	 * @template {{ method?: string, body?: unknown, headers?: Record<string, string> }} T
 	 * @param {string} otherProductId
 	 * @param {string} path
@@ -85,13 +78,13 @@ export const createMessages = ({ productId, declaration }) => {
 		const fallback = typeof body.fallbackTemplate === 'string' ? body.fallbackTemplate : null;
 		/** @template V @param {Map<string, V>} map @returns {V | null} */
 		const declared = (map) => map.get(key) ?? (fallback === null ? null : (map.get(fallback) ?? null));
-		const words = body.defaults === undefined ? declared(defaults) : null;
-		const long = body.longValues === undefined ? declared(longValues) : null;
+		const words = declared(defaults);
+		const long = declared(longValues);
 		if (!words && !long) return init;
 		return { ...init, body: { ...body, ...(words ? { defaults: words } : {}), ...(long ? { longValues: long } : {}) } };
 	};
 
-	return Object.freeze({ declaration: answer, defaultsFor, attach });
+	return Object.freeze({ declaration: answer, attach });
 };
 
 /** @typedef {ReturnType<typeof createMessages>} Messages */

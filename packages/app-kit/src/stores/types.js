@@ -31,7 +31,6 @@
  *   `at` first
  * @property {(collection: Collection, filter: Filter) => Promise<number>} deleteWhere
  * @property {(id: string, expiresAtMs: number) => Promise<boolean>} seen records an id; true when already recorded
- * @property {(id: string) => Promise<void>} forget
  * @property {(key: string, windowMs: number, now: number) => Promise<{ count: number, resetAt: number }>} hit
  *   fixed-window counter
  */

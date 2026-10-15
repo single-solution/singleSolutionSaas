@@ -192,13 +192,12 @@ const operationHtml = (method, path, operation, openapi) => {
 };
 
 /**
- * The API reference as HTML: every operation (or those `only` keeps), then the shared objects. Errors are RFC 9457
- * problems (`application/problem+json`) whose `type` ends with a stable code.
+ * The API reference as HTML: every operation, then the shared objects. Errors are RFC 9457 problems
+ * (`application/problem+json`) whose `type` ends with a stable code.
  * @param {unknown} openapi the product's `openapi.json`
- * @param {{ only?: (method: string, path: string, operation: Node) => boolean }} [options]
  * @returns {string}
  */
-export const renderApiReference = (openapi, { only = () => true } = {}) => {
+export const renderApiReference = (openapi) => {
 	const doc = /** @type {Node} */ (isObject(openapi) ? openapi : {});
 	const operations = Object.entries(isObject(doc.paths) ? doc.paths : {}).flatMap(([path, methods]) =>
 		Object.entries(isObject(methods) ? methods : {})
@@ -208,9 +207,7 @@ export const renderApiReference = (openapi, { only = () => true } = {}) => {
 	const schemas = isObject(doc.components?.schemas) ? doc.components.schemas : {};
 	return [
 		'<div class="ss-api">',
-		...operations
-			.filter(([method, path, operation]) => only(method, path, operation))
-			.map(([method, path, operation]) => operationHtml(method, path, operation, doc)),
+		...operations.map(([method, path, operation]) => operationHtml(method, path, operation, doc)),
 		Object.keys(schemas).length > 0 ? '<h3>Objects</h3>' : '',
 		...Object.entries(schemas).map(
 			([name, schema]) =>
