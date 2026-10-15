@@ -161,7 +161,14 @@ export const createFlows = (product, service) => {
 		const networkHash = sha256Hex(`${s.websiteId}|network|${how.network}`);
 		if (s.on.includes('risk_checks')) {
 			const rules = await service.settings(s, 'risk_checks');
-			if (email && emailRefused(email, { blockDisposable: rules.blockDisposable, blockedDomains: rules.blockedDomains }))
+			if (
+				email &&
+				emailRefused(email, {
+					blockDisposable: rules.blockDisposable,
+					blockedDomains: rules.blockedDomains,
+					allowedDomains: rules.allowedDomains,
+				})
+			)
 				throw problem('risk_refused', 'This email address cannot be used here.');
 			if (deviceHash && (await s.store.signups.byDevice(deviceHash)) >= rules.maxAccountsPerDevice)
 				throw problem('risk_refused', 'Too many accounts were made on this device.');

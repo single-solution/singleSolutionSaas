@@ -181,6 +181,12 @@ describe('roles and rules', () => {
 		expect(passwordProblem('12345678', { minLength: 8, letterAndDigit: true })).toBe('letter_and_digit');
 		expect(emailRefused('a@mailinator.com', { blockDisposable: false, blockedDomains: ['', '.example.org'] })).toBe(false);
 		expect(emailRefused('a@x.example.org', { blockDisposable: false, blockedDomains: ['.example.org'] })).toBe(true);
+		// A11: domains the merchant always allows are never refused as disposable; their own refused list still applies
+		const rules = { blockDisposable: true, blockedDomains: ['spam.example'], allowedDomains: ['maildrop.cc', 'spam.example'] };
+		expect(emailRefused('a@mailinator.com', rules)).toBe(true);
+		expect(emailRefused('a@maildrop.cc', rules)).toBe(false);
+		expect(emailRefused('a@eu.maildrop.cc', rules)).toBe(false);
+		expect(emailRefused('a@spam.example', rules)).toBe(true);
 		expect(returnAddress('https://shop.example.com:8443/', 'shop.example.com')).toBeNull();
 		expect(returnAddress('https://u:p@shop.example.com/', 'shop.example.com')).toBeNull();
 		expect(returnAddress('not a url', 'shop.example.com')).toBeNull();

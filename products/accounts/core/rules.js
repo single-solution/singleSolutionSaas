@@ -227,7 +227,10 @@ export const newUserNameOf = (template, phone) => template.replaceAll('{last4}',
 
 // -------------------------------------------------------------------------------------------------- risk checks
 
-/** Common disposable email domains (the merchant adds their own in Settings). */
+/**
+ * Common disposable email domains, the built-in list (A11): the merchant adds their own refused domains and the domains
+ * always allowed in Settings.
+ */
 const DISPOSABLE_DOMAINS = Object.freeze([
 	'10minutemail.com',
 	'discard.email',
@@ -248,16 +251,25 @@ const DISPOSABLE_DOMAINS = Object.freeze([
 ]);
 
 /**
- * Whether an address's domain (or a parent domain) is refused.
- * @param {string} email canonical address
- * @param {{ blockDisposable: boolean, blockedDomains: ReadonlyArray<string> }} rules
+ * Whether a domain is a domain of the list or below one (`eu.maildrop.cc` is below `maildrop.cc`).
+ * @param {string} domain @param {ReadonlyArray<string>} list
  */
-export const emailRefused = (email, { blockDisposable, blockedDomains }) => {
-	const domain = emailDomain(email);
-	return [...blockedDomains, ...(blockDisposable ? DISPOSABLE_DOMAINS : [])].some((entry) => {
+const domainIn = (domain, list) =>
+	list.some((entry) => {
 		const d = String(entry).trim().toLowerCase().replace(/^\.+/, '');
 		return d.length > 0 && (domain === d || domain.endsWith(`.${d}`));
 	});
+
+/**
+ * Whether an address's domain (or a parent domain) is refused: one of the merchant's refused domains, or, with
+ * `blockDisposable`, one of the built-in disposable domains the merchant does not always allow (A11).
+ * @param {string} email canonical address
+ * @param {{ blockDisposable: boolean, blockedDomains: ReadonlyArray<string>, allowedDomains?: ReadonlyArray<string> }} rules
+ */
+export const emailRefused = (email, { blockDisposable, blockedDomains, allowedDomains = [] }) => {
+	const domain = emailDomain(email);
+	if (domainIn(domain, blockedDomains)) return true;
+	return blockDisposable && domainIn(domain, DISPOSABLE_DOMAINS) && !domainIn(domain, allowedDomains);
 };
 
 // -------------------------------------------------------------------------------------------- return addresses

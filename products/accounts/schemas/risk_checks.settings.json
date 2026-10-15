@@ -5,11 +5,22 @@
 		"blockDisposable": {
 			"type": "boolean",
 			"title": "Refuse disposable email addresses",
-			"default": true
+			"default": true,
+			"description": "The built-in list of common disposable email domains."
 		},
 		"blockedDomains": {
 			"type": "array",
 			"title": "More refused email domains",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 253
+			}
+		},
+		"allowedDomains": {
+			"type": "array",
+			"title": "Always allowed email domains",
+			"description": "Never refused as disposable, for example a domain of the built-in list your customers use (your own refused domains still apply).",
 			"default": [],
 			"items": {
 				"type": "string",

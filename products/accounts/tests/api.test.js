@@ -941,6 +941,9 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 
 	it('risk checks: disposable domains, accounts per device and per network', async () => {
 		expect(code(await signUp('x@mailinator.com', undefined, { custom: { size: 'S' } }))).toBe('risk_refused');
+		await env.setting('risk_checks', 'allowedDomains', ['mailinator.com']);
+		expect((await signUp('allowed@mailinator.com', undefined, { custom: { size: 'S' } })).json.status).toBe('signed_in');
+		await env.setting('risk_checks', 'allowedDomains', []);
 		await env.setting('risk_checks', 'blockedDomains', ['spam.example']);
 		expect(code(await signUp('x@sub.spam.example', undefined, { custom: { size: 'S' } }))).toBe('risk_refused');
 		await env.setting('risk_checks', 'maxAccountsPerDevice', 1);
