@@ -602,19 +602,39 @@ export const createStore = (data, { now }) => {
 		}),
 
 		fields: Object.freeze({
-			/** @returns {Promise<CustomField[]>} */
+			/**
+			 * The fields in the merchant's order (A6; fields never placed, such as imported ones, first, oldest first).
+			 * @returns {Promise<CustomField[]>}
+			 */
 			list: async () =>
 				as(
 					await fields
-						.find({ websiteId }, { projection: { _id: 0, key: 1, label: 1, type: 1, options: 1, required: 1 } })
-						.sort({ createdAt: 1, _id: 1 })
+						.find(
+							{ websiteId },
+							{
+								projection: { _id: 0, key: 1, label: 1, type: 1, options: 1, required: 1, visibility: 1, help: 1 },
+							},
+						)
+						.sort({ position: 1, createdAt: 1, _id: 1 })
 						.limit(MAX_CUSTOM_FIELDS)
 						.toArray(),
 				),
 			count: () => fields.countDocuments({ websiteId }),
-			/** @param {CustomField} field */
+			/** Save a field; a new one goes last. @param {CustomField} field */
 			save: async (field) => {
-				await fields.updateOne({ websiteId, key: field.key }, { $set: { ...field } }, { upsert: true });
+				const position = await fields.countDocuments({ websiteId });
+				await fields.updateOne(
+					{ websiteId, key: field.key },
+					{ $set: { ...field }, $setOnInsert: { position } },
+					{ upsert: true },
+				);
+			},
+			/**
+			 * Place the fields in this order (every key of the website once).
+			 * @param {string[]} keys
+			 */
+			reorder: async (keys) => {
+				for (const [position, key] of keys.entries()) await fields.updateOne({ websiteId, key }, { $set: { position } });
 			},
 			/** @param {string} key */
 			remove: async (key) => (await fields.deleteOne({ websiteId, key })).deletedCount === 1,

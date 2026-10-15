@@ -22,6 +22,7 @@ import {
 	resetsByEmail,
 	selfView,
 	staffView,
+	ownCustom,
 } from '../core/profile.js';
 import { checkOwnPermissions, checkRole, permissionCatalog, remembered, sessionEnd } from '../core/roles.js';
 import {
@@ -57,21 +58,53 @@ describe('profile', () => {
 		expect(checkFieldDefinition('a', { label: 'A', type: 'choice', options: ['x', ''] }).ok).toBe(false);
 		expect(checkFieldDefinition('a', { label: 'A', type: 'text', options: ['x'] })).toEqual({
 			ok: true,
-			value: { key: 'a', label: 'A', type: 'text', options: [], required: false },
+			value: { key: 'a', label: 'A', type: 'text', options: [], required: false, visibility: 'edit', help: '' },
 		});
 		expect(checkFieldDefinition('a', { label: 5, type: 'text' }).ok).toBe(false);
+		expect(checkFieldDefinition('a', { label: 'A', type: 'text', help: 'x'.repeat(201) }).ok).toBe(false);
+		expect(checkFieldDefinition('a', { label: 'A', type: 'text', visibility: 'hidden' }).ok).toBe(false);
 		const fields = /** @type {any[]} */ ([
-			{ key: 'size', label: 'Size', type: 'choice', options: ['S'], required: true },
-			{ key: 'note', label: 'Note', type: 'text', options: [], required: false },
+			{ key: 'size', label: 'Size', type: 'choice', options: ['S'], required: true, visibility: 'edit', help: '' },
+			{ key: 'note', label: 'Note', type: 'text', options: [], required: false, visibility: 'edit', help: '' },
+			{ key: 'tier', label: 'Tier', type: 'text', options: [], required: true, visibility: 'view', help: '' },
+			{ key: 'risk', label: 'Risk', type: 'text', options: [], required: true, visibility: 'staff', help: '' },
+			{ key: 'news', label: 'News', type: 'boolean', options: [], required: false, visibility: 'edit', help: '' },
+			{
+				key: 'likes',
+				label: 'Likes',
+				type: 'multi_choice',
+				options: ['a', 'b'],
+				required: false,
+				visibility: 'edit',
+				help: '',
+			},
 		]);
-		expect(checkCustomValues([...fields], 'x', { complete: false }).ok).toBe(false);
-		expect(checkCustomValues([...fields], [], { complete: false }).ok).toBe(false);
-		expect(checkCustomValues([...fields], undefined, { complete: true }).ok).toBe(false);
-		expect(checkCustomValues([...fields], { note: 'x'.repeat(2000) }, { complete: false }).ok).toBe(false);
-		expect(checkCustomValues([...fields], { note: '' }, { complete: false, current: { note: 'a' } })).toEqual({
+		const user = /** @type {const} */ ({ complete: false, by: 'user' });
+		expect(checkCustomValues([...fields], 'x', user).ok).toBe(false);
+		expect(checkCustomValues([...fields], [], user).ok).toBe(false);
+		expect(checkCustomValues([...fields], undefined, { complete: true, by: 'user' }).ok).toBe(false);
+		// a sign-up asks only the fields the user edits
+		expect(checkCustomValues([...fields], { size: 'S' }, { complete: true, by: 'user' })).toEqual({
+			ok: true,
+			value: { size: 'S' },
+		});
+		expect(checkCustomValues([...fields], { size: 'S' }, { complete: true, by: 'staff' }).ok).toBe(false);
+		expect(checkCustomValues([...fields], { note: 'x'.repeat(2000) }, user).ok).toBe(false);
+		expect(checkCustomValues([...fields], { note: '' }, { ...user, current: { note: 'a' } })).toEqual({ ok: true, value: {} });
+		expect(checkCustomValues([...fields], { tier: 'Gold' }, user).ok).toBe(false);
+		expect(checkCustomValues([...fields], { risk: 'x' }, user)).toMatchObject({
+			ok: false,
+			message: 'There is no such field.',
+		});
+		expect(checkCustomValues([...fields], { news: false, likes: ['b', 'a', 'b'] }, user)).toEqual({
+			ok: true,
+			value: { news: false, likes: ['a', 'b'] },
+		});
+		expect(checkCustomValues([...fields], { likes: [] }, { ...user, current: { likes: ['a'] } })).toEqual({
 			ok: true,
 			value: {},
 		});
+		expect(ownCustom({ size: 'S', risk: 'x', gone: 1 }, fields)).toEqual({ size: 'S', gone: 1 });
 	});
 
 	it('checks addresses and shows users', () => {
@@ -102,7 +135,7 @@ describe('profile', () => {
 			roleSince: new Date(1000),
 			createdAt: new Date(0),
 		});
-		expect(selfView(user)).toMatchObject({
+		expect(selfView(user, [])).toMatchObject({
 			providers: [],
 			deletion: { dueAt: null },
 			terms: { version: '1' },

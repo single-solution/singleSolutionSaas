@@ -1271,6 +1271,56 @@
 				}
 			}
 		},
+		"/v1/admin/fields": {
+			"get": {
+				"summary": "The custom fields",
+				"description": "Every custom field in your order, staff-only ones too, for the Users admin widget.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "custom_fields",
+				"x-ss-permission": "users.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 100,
+											"items": {
+												"$ref": "#/components/schemas/CustomField"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/role-requests": {
 			"get": {
 				"summary": "The role requests, newest first (Users admin widget)",
@@ -3718,6 +3768,68 @@
 														"minimum": 0
 													}
 												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/fields": {
+			"get": {
+				"summary": "The custom fields",
+				"description": "Every custom field in your order, staff-only ones too (the visitor widgets get only the fields the user sees).",
+				"x-ss-auth": "server",
+				"x-ss-feature": "custom_fields",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"items"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"items": {
+											"type": "array",
+											"maxItems": 100,
+											"items": {
+												"$ref": "#/components/schemas/CustomField"
 											}
 										}
 									}
@@ -11254,34 +11366,131 @@
 					}
 				}
 			},
+			"CustomField": {
+				"type": "object",
+				"description": "A custom field (dashboard → Custom fields), in your order.",
+				"required": [
+					"key",
+					"label",
+					"type",
+					"options",
+					"required",
+					"visibility",
+					"help"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"label": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 80
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"text",
+							"textarea",
+							"number",
+							"date",
+							"choice",
+							"multi_choice",
+							"boolean",
+							"email",
+							"url"
+						],
+						"description": "text, textarea (long text), number, date, choice (one option), multi_choice (several options), boolean (yes/no), email or url."
+					},
+					"options": {
+						"type": "array",
+						"maxItems": 200,
+						"items": {
+							"type": "string",
+							"maxLength": 80
+						},
+						"description": "The options of a choice or multi_choice field (your Custom fields setting maxChoices)."
+					},
+					"required": {
+						"type": "boolean",
+						"description": "Never left empty; sign-up asks it when the user edits the field."
+					},
+					"visibility": {
+						"type": "string",
+						"enum": [
+							"edit",
+							"view",
+							"staff"
+						],
+						"description": "edit: the user sees and changes it; view: the user sees it, only staff change it; staff: only staff and your server see it."
+					},
+					"help": {
+						"type": "string",
+						"maxLength": 200,
+						"description": "A short help text shown with the field."
+					}
+				}
+			},
 			"CustomValues": {
 				"type": "object",
-				"maxProperties": 50,
+				"maxProperties": 100,
 				"propertyNames": {
 					"pattern": "^[a-z][a-z0-9_]{0,39}$"
 				},
 				"additionalProperties": {
-					"type": [
-						"string",
-						"number"
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "number"
+						},
+						{
+							"type": "boolean"
+						},
+						{
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"maxItems": 200
+						}
 					]
 				},
-				"description": "Your custom fields (dashboard → Custom fields): key → value, text (a date as YYYY-MM-DD) or a number."
+				"description": "Your custom fields (dashboard → Custom fields): key → value: text (a date as YYYY-MM-DD; long text keeps its line breaks), a number, true or false (yes/no), or the chosen options of a several-choices field. The user’s own views leave out staff-only fields."
 			},
 			"CustomValuesInput": {
 				"type": "object",
-				"maxProperties": 50,
+				"maxProperties": 100,
 				"propertyNames": {
 					"pattern": "^[a-z][a-z0-9_]{0,39}$"
 				},
 				"additionalProperties": {
-					"type": [
-						"string",
-						"number",
-						"null"
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "number"
+						},
+						{
+							"type": "boolean"
+						},
+						{
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"maxItems": 200
+						},
+						{
+							"type": "null"
+						}
 					]
 				},
-				"description": "Custom field key → value: text of at most 1000 characters, a date as YYYY-MM-DD, one of a choice field’s options, or a number; null or an empty text clears it. An unknown key or a value that does not fit answers 422 validation_failed for custom/<key>."
+				"description": "Custom field key → value by the field’s type: text (at most 1,000 characters; long text 5,000 with line breaks), a date as YYYY-MM-DD, one of a choice field’s options, a list of a several-choices field’s options, a number, true or false, an email address, or a web address (https:// or http://); null, an empty text or an empty list clears it. The user changes only fields set to edit (a view field answers 422; a staff-only field does not exist for them); staff and your server change every field. An unknown key or a value that does not fit answers 422 validation_failed for custom/<key>."
 			},
 			"Deleted": {
 				"type": "object",

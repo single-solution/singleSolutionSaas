@@ -56,7 +56,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'signUp',
 		'membership',
 	]),
-	fields: Object.freeze(['key', 'label', 'type', 'options', 'required', 'createdAt']),
+	fields: Object.freeze(['key', 'label', 'type', 'options', 'required', 'visibility', 'help', 'createdAt']),
 	users: Object.freeze([
 		'id',
 		'name',
@@ -289,9 +289,16 @@ export const checkImportedRole = (record) => {
 export const checkImportedField = (record, limits = {}) => {
 	const errors = [
 		...unknownFields(record, IMPORT_FIELDS.fields, 'a custom field'),
-		...wrongTypes(record, { label: 'string', type: 'string', options: 'array', required: 'boolean' }),
+		...wrongTypes(record, {
+			label: 'string',
+			type: 'string',
+			options: 'array',
+			required: 'boolean',
+			visibility: 'string',
+			help: 'string',
+		}),
 	];
-	if (record.type !== 'choice' && Array.isArray(record.options) && record.options.length > 0)
+	if (record.type !== 'choice' && record.type !== 'multi_choice' && Array.isArray(record.options) && record.options.length > 0)
 		errors.push({ path: '/options', message: 'Only a choice field has options.' });
 	const createdAt = optionalTime(record, 'createdAt', errors);
 	if (errors.length > 0) return { ok: false, errors };
@@ -451,7 +458,7 @@ export const checkImportedUser = (record, rules) => {
 		if (at && reason !== null) blocked = { at, reason };
 	} else if (!absent(record.blocked)) errors.push({ path: '/blocked', message: 'blocked is { at, reason } or null.' });
 	const addresses = addressesOf(record.addresses, id, errors);
-	const custom = checkCustomValues(rules.fields, record.custom, { complete: false });
+	const custom = checkCustomValues(rules.fields, record.custom, { complete: false, by: 'staff' });
 	if (!custom.ok) errors.push({ path: `/${custom.field}`, message: custom.message });
 	const providers = providersOf(record.providers, errors);
 	const identity = identityOf(record.identity, { email, phone, providers }, errors);

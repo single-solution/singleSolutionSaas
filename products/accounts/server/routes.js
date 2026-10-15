@@ -544,6 +544,13 @@ export const createRoutes = (product) => {
 			feature: 'data_rights',
 			handler: manage.rejectDeletion,
 		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/fields',
+			auth: 'server',
+			feature: 'custom_fields',
+			handler: manage.customFields,
+		}),
 		defineRoute({ method: 'GET', path: '/v1/roles', auth: 'server', feature: 'roles', handler: manage.listRoles }),
 		defineRoute({ method: 'GET', path: '/v1/roles/permissions', auth: 'server', feature: 'roles', handler: manage.catalog }),
 		defineRoute({
@@ -779,6 +786,14 @@ export const createRoutes = (product) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: '/v1/admin/fields',
+			auth: 'ticket',
+			permission: 'users.read',
+			feature: 'custom_fields',
+			handler: manage.customFields,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/admin/roles',
 			auth: 'ticket',
 			permission: 'users.read',
@@ -819,6 +834,12 @@ export const createRoutes = (product) => {
 			path: '/v1/dashboard/websites/:websiteId/fields',
 			auth: 'dashboard',
 			handler: manage.listFields,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/dashboard/websites/:websiteId/fields',
+			auth: 'dashboard',
+			handler: manage.orderFields,
 		}),
 		defineRoute({
 			method: 'PUT',

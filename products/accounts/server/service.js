@@ -256,7 +256,7 @@ export const createService = (product) => {
 			refreshToken: `${session.id}.${secret}`,
 			sessionExpiresAt: expiresAt.toISOString(),
 			remember,
-			user: selfView(fresh),
+			user: selfView(fresh, await s.store.fields.list()),
 			...extra,
 		};
 	};
@@ -630,7 +630,7 @@ export const createService = (product) => {
 		/** @type {Record<string, unknown>} */
 		const records = {
 			accounts: {
-				user: selfView(user),
+				user: selfView(user, await s.store.fields.list()),
 				devices: sessions.map((x) => ({
 					device: x.device,
 					method: x.method,

@@ -1,7 +1,8 @@
 /**
  * Profiles (PLAN 0.8.6), pure: the standard fields (name, email, phone, addresses, merchant-only notes, blocked flag
- * and reason), the merchant's custom fields (text, number, date, choice) and the views of a user: what the user
- * sees in My account, and what the merchant's server and staff see.
+ * and reason), the merchant's custom fields (A6: text, long text, number, date, choice, several choices, yes/no, email
+ * address and web address, each with a help text and who sees it) and the views of a user: what the user sees in My
+ * account, and what the merchant's server and staff see.
  * @module
  */
 import { ADDRESS_LIMITS } from './widgets.js';
@@ -13,7 +14,20 @@ import { ADDRESS_LIMITS } from './widgets.js';
 export const MAX_ADDRESSES = 50;
 export const MAX_CUSTOM_FIELDS = 100;
 export const MAX_CHOICES = 200;
-const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'date', 'choice']));
+const FIELD_TYPES = Object.freeze(
+	/** @type {const} */ (['text', 'textarea', 'number', 'date', 'choice', 'multi_choice', 'boolean', 'email', 'url']),
+);
+/**
+ * Who sees a custom field (A6): `edit` the user sees and changes it (sign-up asks the required ones), `view` the user
+ * sees it and only staff change it, `staff` only staff and the merchant's server see it.
+ */
+export const FIELD_VISIBILITY = Object.freeze(/** @type {const} */ (['edit', 'view', 'staff']));
+/** The types whose fields have options. */
+const CHOICE_TYPES = Object.freeze(['choice', 'multi_choice']);
+/** Longest value of a long-text field, and of the other text values. */
+const LONG_TEXT = 5000;
+const SHORT_TEXT = 1000;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COUNTRY = /^[A-Z]{2}$/;
@@ -22,10 +36,13 @@ const COUNTRY = /^[A-Z]{2}$/;
  * @typedef {object} CustomField
  * @property {string} key
  * @property {string} label
- * @property {'text' | 'number' | 'date' | 'choice'} type
- * @property {string[]} options choices (type choice)
- * @property {boolean} required asked at sign-up and never left empty
+ * @property {typeof FIELD_TYPES[number]} type
+ * @property {string[]} options choices (types choice and multi_choice)
+ * @property {boolean} required never left empty; sign-up asks it when the user edits the field
+ * @property {typeof FIELD_VISIBILITY[number]} visibility who sees and changes it (A6)
+ * @property {string} help a short help text shown with the field ('' for none)
  */
+/** A custom value: text, a number, yes/no or several choices. @typedef {string | number | boolean | string[]} CustomValue */
 
 /**
  * @typedef {object} Address
@@ -76,52 +93,104 @@ export const checkFieldDefinition = (key, input, { maxChoices = 50 } = {}) => {
 	const label = text(body.label, 80);
 	if (!label) return { ok: false, field: 'label', message: 'Write the label (at most 80 characters).' };
 	const type = FIELD_TYPES.find((t) => t === body.type);
-	if (!type) return { ok: false, field: 'type', message: 'The type is text, number, date or choice.' };
+	if (!type) return { ok: false, field: 'type', message: `The type is one of ${FIELD_TYPES.join(', ')}.` };
 	const options = Array.isArray(body.options)
 		? [...new Set(body.options.map((o) => (typeof o === 'string' ? o.trim() : '')))]
 		: [];
-	if (type === 'choice' && (options.length === 0 || options.length > most || options.some((o) => o === '' || o.length > 80)))
+	const choices = CHOICE_TYPES.includes(type);
+	if (choices && (options.length === 0 || options.length > most || options.some((o) => o === '' || o.length > 80)))
 		return { ok: false, field: 'options', message: `A choice needs 1 to ${most} options of at most 80 characters.` };
-	return { ok: true, value: { key, label, type, options: type === 'choice' ? options : [], required: body.required === true } };
+	const visibility = body.visibility === undefined ? 'edit' : FIELD_VISIBILITY.find((v) => v === body.visibility);
+	if (!visibility) return { ok: false, field: 'visibility', message: 'Visibility is edit, view or staff.' };
+	const help = text(body.help, 200);
+	if (help === null) return { ok: false, field: 'help', message: 'The help text is at most 200 characters on one line.' };
+	return {
+		ok: true,
+		value: { key, label, type, options: choices ? options : [], required: body.required === true, visibility, help },
+	};
 };
 
 /**
+ * One custom value checked against its field, or a refusal message (`raw` is not empty).
+ * @param {CustomField} field @param {unknown} raw
+ * @returns {{ ok: true, value: CustomValue } | { ok: false, message: string }}
+ */
+const customValueOf = (field, raw) => {
+	const refuse = (/** @type {string} */ message) => ({ ok: /** @type {const} */ (false), message });
+	switch (field.type) {
+		case 'number':
+			return typeof raw === 'number' && Number.isFinite(raw)
+				? { ok: true, value: raw }
+				: refuse(`${field.label} must be a number.`);
+		case 'boolean':
+			return typeof raw === 'boolean' ? { ok: true, value: raw } : refuse(`${field.label} is true or false.`);
+		case 'multi_choice': {
+			const list = Array.isArray(raw) ? [...new Set(raw)] : null;
+			return list && list.every((item) => typeof item === 'string' && field.options.includes(item))
+				? { ok: true, value: field.options.filter((option) => list.includes(option)) }
+				: refuse(`${field.label} must be a list of the choices.`);
+		}
+		case 'textarea': {
+			const value = typeof raw === 'string' && raw.length <= LONG_TEXT ? raw.replace(/\r\n?/g, '\n').trim() : null;
+			return value && ![...value].some((ch) => ch.charCodeAt(0) < 32 && ch !== '\n' && ch !== '\t')
+				? { ok: true, value }
+				: refuse(`${field.label} is not valid.`);
+		}
+		default: {
+			const value = text(raw, SHORT_TEXT);
+			if (value === null || value === '') return refuse(`${field.label} is not valid.`);
+			if (field.type === 'date' && (!DATE.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))))
+				return refuse(`${field.label} must be a date (YYYY-MM-DD).`);
+			if (field.type === 'choice' && !field.options.includes(value))
+				return refuse(`${field.label} must be one of the choices.`);
+			if (field.type === 'email' && !EMAIL.test(value)) return refuse(`${field.label} must be an email address.`);
+			if (field.type === 'url' && !/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(value))
+				return refuse(`${field.label} must be a web address starting with https:// or http://.`);
+			return { ok: true, value };
+		}
+	}
+};
+
+/**
+ * A user's custom values as the user may see them: without the staff-only fields (A6).
+ * @param {Record<string, CustomValue>} custom @param {ReadonlyArray<CustomField>} fields
+ */
+export const ownCustom = (custom, fields) =>
+	Object.fromEntries(
+		Object.entries(custom).filter(([key]) => fields.find((field) => field.key === key)?.visibility !== 'staff'),
+	);
+
+/**
  * Check custom field values against the definitions. Unknown keys are refused; `complete` also refuses a missing
- * required field (sign-up); otherwise only the fields sent are checked (an update).
+ * required field (sign-up); otherwise only the fields sent are checked (an update). The user (`by: 'user'`) changes
+ * only the fields they edit (A6): a field they only see is refused, and a staff-only field does not exist for them.
  * @param {ReadonlyArray<CustomField>} fields
  * @param {unknown} input
- * @param {{ complete: boolean, current?: Record<string, string | number> }} options
- * @returns {{ ok: true, value: Record<string, string | number> } | { ok: false, field: string, message: string }}
+ * @param {{ complete: boolean, current?: Record<string, CustomValue>, by: 'user' | 'staff' }} options
+ * @returns {{ ok: true, value: Record<string, CustomValue> } | { ok: false, field: string, message: string }}
  */
-export const checkCustomValues = (fields, input, { complete, current = {} }) => {
+export const checkCustomValues = (fields, input, { complete, current = {}, by }) => {
 	const body = input === undefined || input === null ? {} : input;
 	if (typeof body !== 'object' || Array.isArray(body))
 		return { ok: false, field: 'custom', message: 'Send the fields as an object.' };
-	/** @type {Record<string, string | number>} */
+	const usable = by === 'user' ? fields.filter((field) => field.visibility !== 'staff') : fields;
+	/** @type {Record<string, CustomValue>} */
 	const out = { ...current };
 	for (const [key, raw] of Object.entries(body)) {
-		const field = fields.find((f) => f.key === key);
+		const field = usable.find((f) => f.key === key);
 		if (!field) return { ok: false, field: `custom/${key}`, message: 'There is no such field.' };
-		if (raw === null || raw === '') {
+		if (by === 'user' && field.visibility === 'view')
+			return { ok: false, field: `custom/${key}`, message: `${field.label} is changed by the business only.` };
+		if (raw === null || raw === '' || (Array.isArray(raw) && raw.length === 0)) {
 			delete out[key];
 			continue;
 		}
-		if (field.type === 'number') {
-			if (typeof raw !== 'number' || !Number.isFinite(raw))
-				return { ok: false, field: `custom/${key}`, message: `${field.label} must be a number.` };
-			out[key] = raw;
-		} else {
-			const value = text(raw, 1000);
-			if (value === null || value === '')
-				return { ok: false, field: `custom/${key}`, message: `${field.label} is not valid.` };
-			if (field.type === 'date' && (!DATE.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))))
-				return { ok: false, field: `custom/${key}`, message: `${field.label} must be a date (YYYY-MM-DD).` };
-			if (field.type === 'choice' && !field.options.includes(value))
-				return { ok: false, field: `custom/${key}`, message: `${field.label} must be one of the choices.` };
-			out[key] = value;
-		}
+		const checked = customValueOf(field, raw);
+		if (!checked.ok) return { ok: false, field: `custom/${key}`, message: checked.message };
+		out[key] = checked.value;
 	}
-	for (const field of fields)
+	const asked = by === 'user' ? usable.filter((field) => field.visibility === 'edit') : fields;
+	for (const field of asked)
 		if (field.required && (complete || Object.hasOwn(body, field.key)) && out[field.key] === undefined)
 			return { ok: false, field: `custom/${field.key}`, message: `${field.label} is required.` };
 	return { ok: true, value: out };
@@ -216,7 +285,7 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  * @property {boolean} phoneVerified
  * @property {string} name
  * @property {Address[]} addresses
- * @property {Record<string, string | number>} custom
+ * @property {Record<string, CustomValue>} custom
  * @property {string} notes
  * @property {{ at: Date, reason: string } | null} blocked
  * @property {'active' | 'pending' | 'invited'} status
@@ -244,10 +313,11 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  */
 
 /**
- * What the user sees of themselves (My account): never notes, password or secrets.
+ * What the user sees of themselves (My account): never notes, password, secrets or staff-only custom fields (A6).
  * @param {UserRecord} user
+ * @param {ReadonlyArray<CustomField> | null} fields the website's custom fields (null: every value, for staff views)
  */
-export const selfView = (user) => ({
+export const selfView = (user, fields) => ({
 	id: user.id,
 	email: user.email,
 	emailVerified: user.emailVerified,
@@ -255,7 +325,7 @@ export const selfView = (user) => ({
 	phoneVerified: user.phoneVerified,
 	name: user.name,
 	addresses: user.addresses,
-	custom: user.custom,
+	custom: fields ? ownCustom(user.custom, fields) : user.custom,
 	role: user.role,
 	providers: Object.keys(user.providers).sort(),
 	hasPassword: Boolean(user.passwordHash),
@@ -273,7 +343,7 @@ export const selfView = (user) => ({
  * @param {UserRecord} user
  */
 export const staffView = (user) => ({
-	...selfView(user),
+	...selfView(user, null),
 	notes: user.notes,
 	blocked: user.blocked ? { at: user.blocked.at.toISOString(), reason: user.blocked.reason } : null,
 	status: user.status,

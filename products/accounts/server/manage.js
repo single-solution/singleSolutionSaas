@@ -275,7 +275,7 @@ export const createManage = (product, service, flows) => {
 		await guard(ctx, s, /** @type {any} */ ({ id: '', role: signUpRole, blocked: null }), { role });
 		if (body.notes !== undefined && (typeof body.notes !== 'string' || body.notes.length > 5000))
 			throw invalid('notes', 'Notes are text of at most 5000 characters.');
-		const custom = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false });
+		const custom = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false, by: 'staff' });
 		if (!custom.ok) throw invalid(custom.field, custom.message);
 		const draft = {
 			email: /** @type {string | null} */ (contacts.email ?? null),
@@ -465,7 +465,11 @@ export const createManage = (product, service, flows) => {
 			changes.push({ action: 'user.name_changed', ...(user.name ? { detail: `Was: ${user.name}` } : {}) });
 		}
 		if (body.custom !== undefined) {
-			const checked = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false, current: user.custom });
+			const checked = checkCustomValues(await s.store.fields.list(), body.custom, {
+				complete: false,
+				current: user.custom,
+				by: 'staff',
+			});
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			set.custom = checked.value;
 			changes.push({ action: 'user.custom_changed', detail: `Fields: ${Object.keys(bodyOf(body.custom)).join(', ')}` });
@@ -1177,6 +1181,33 @@ export const createManage = (product, service, flows) => {
 			throw problem('feature_off', 'Custom fields are off.');
 	};
 
+	/**
+	 * Place the custom fields in the merchant's order (A6): `{ order: [every key once] }`.
+	 * @param {any} ctx
+	 */
+	const orderFields = async (ctx) => {
+		await editable(ctx);
+		const store = await fieldsStore(ctx);
+		const keys = (await store.fields.list()).map((field) => field.key);
+		const order = bodyOf(ctx.body).order;
+		if (
+			!Array.isArray(order) ||
+			order.length !== keys.length ||
+			new Set(order).size !== keys.length ||
+			order.some((key) => !keys.includes(key))
+		)
+			throw invalid('order', 'Send every field key once, in the new order.');
+		await store.fields.reorder(order);
+		await recordChange(ctx, 'Fields: order saved');
+		return { items: await store.fields.list() };
+	};
+
+	/**
+	 * The custom fields, every one with who sees it (A6), for the merchant's server and the Users admin widget.
+	 * @param {any} ctx
+	 */
+	const customFields = async (ctx) => ({ items: await (await service.site(ctx)).store.fields.list() });
+
 	/** @param {any} ctx */
 	const saveField = async (ctx) => {
 		await editable(ctx);
@@ -1203,6 +1234,8 @@ export const createManage = (product, service, flows) => {
 
 	return Object.freeze({
 		listUsers,
+		customFields,
+		orderFields,
 		countUsers: userCounts.count,
 		countUsersBy: userCounts.counts,
 		getUser,

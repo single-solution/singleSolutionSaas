@@ -541,7 +541,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								other === 'email' ? { type: 'email', autocomplete: 'email' } : { type: 'tel', autocomplete: 'tel' },
 							)
 						: null;
-					const custom = customInputs(doc, make, t, settings.customFields);
+					const custom = customInputs(doc, make, t, settings.customFields, { signUp: true });
 					const details = element(doc, 'div', { class: 'details' });
 					details.append(para(t('code.newHere'), 'meta'), name.wrap, ...(extra ? [extra.wrap] : []), ...custom.nodes);
 					form.append(details);

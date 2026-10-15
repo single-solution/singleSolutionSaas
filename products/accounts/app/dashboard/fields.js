@@ -1,7 +1,9 @@
 'use client';
 /**
- * Settings → Custom fields (PLAN 0.8.6): the merchant's own profile fields (text, number, date, choice), shown at
- * sign-up (required ones must be filled) and in My account. They live in the merchant database, so they need it
+ * Settings → Custom fields (PLAN 0.8.6, A6): the merchant's own profile fields of any type (text, long text, number,
+ * date, one or several choices, yes/no, email address, web address), each with a help text and who sees it (the user
+ * edits it, the user only sees it, or staff only), in the merchant's order. The fields the user edits are asked at
+ * sign-up (required ones must be filled) and shown in My account. They live in the merchant database, so they need it
  * connected, and merchants edit them only while the Custom fields feature is on.
  * @module
  */
@@ -25,13 +27,17 @@ import {
 import { Outcome, call, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
 
-/** @typedef {'text' | 'number' | 'date' | 'choice'} FieldType */
-/** @typedef {{ key: string, label: string, type: FieldType, options: string[], required: boolean }} CustomField */
-/** A field being edited: options as one text, `isNew` while its key can still change. @typedef {{ key: string, label: string, type: FieldType, options: string, required: boolean, isNew: boolean }} Draft */
+/** @typedef {'text' | 'textarea' | 'number' | 'date' | 'choice' | 'multi_choice' | 'boolean' | 'email' | 'url'} FieldType */
+/** @typedef {'edit' | 'view' | 'staff'} Visibility */
+/** @typedef {{ key: string, label: string, type: FieldType, options: string[], required: boolean, visibility: Visibility, help: string }} CustomField */
+/** A field being edited: options as one text, `isNew` while its key can still change. @typedef {Omit<CustomField, 'options'> & { options: string, isNew: boolean }} Draft */
 
-const TYPES = /** @type {const} */ (['text', 'number', 'date', 'choice']);
+const TYPES = /** @type {const} */ (['text', 'textarea', 'number', 'date', 'choice', 'multi_choice', 'boolean', 'email', 'url']);
+const VISIBILITY = /** @type {const} */ (['edit', 'view', 'staff']);
+/** The types whose fields have options. */
+const CHOICES = ['choice', 'multi_choice'];
 /** @type {Draft} */
-const EMPTY = { key: '', label: '', type: 'text', options: '', required: false, isNew: true };
+const EMPTY = { key: '', label: '', type: 'text', options: '', required: false, visibility: 'edit', help: '', isNew: true };
 const T = TEXTS.settings.field;
 
 /**
@@ -63,12 +69,25 @@ export function FieldsSection({ websiteId }) {
 		const next = await call('PUT', `${base}/${encodeURIComponent(draft.key)}`, {
 			label: draft.label.trim(),
 			type: draft.type,
-			options: draft.type === 'choice' ? splitOptions(draft.options) : [],
+			options: CHOICES.includes(draft.type) ? splitOptions(draft.options) : [],
 			required: draft.required,
+			visibility: draft.visibility,
+			help: draft.help.trim(),
 		});
 		if (!next.ok) return setProblem(next.problem);
 		setResult(next);
 		setDraft(null);
+		reload();
+	};
+	/**
+	 * Move a field one place up or down: the whole order is saved.
+	 * @param {CustomField[]} items @param {number} index @param {-1 | 1} by
+	 */
+	const move = async (items, index, by) => {
+		const keys = items.map((item) => item.key);
+		const [moved] = keys.splice(index, 1);
+		keys.splice(index + by, 0, /** @type {string} */ (moved));
+		setResult(await call('PUT', base, { order: keys }));
 		reload();
 	};
 	return (
@@ -91,35 +110,54 @@ export function FieldsSection({ websiteId }) {
 			) : (
 				<Card>
 					<ul className="divide-y divide-line-soft">
-						{answer.data.items.map((/** @type {CustomField} */ item) => (
-							<li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
-								<span className="min-w-0 flex-[1_1_12rem]">
-									<span className="block break-words text-sm font-semibold text-fg">{item.label}</span>
-									<code className="block break-all text-xs text-muted">{item.key}</code>
-								</span>
-								<span className="flex flex-wrap gap-1.5">
-									<Badge kind="settings">{TEXTS.settings.fieldTypes[item.type]}</Badge>
-									{item.required ? <Badge>{T.required_badge}</Badge> : null}
-								</span>
-								<span className="flex flex-wrap gap-2">
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={() => open({ ...item, options: item.options.join('\n'), isNew: false })}>
-										{T.edit}
-									</Button>
-									<Button
-										size="sm"
-										variant="ghost"
-										onClick={async () => {
-											setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
-											reload();
-										}}>
-										{T.delete}
-									</Button>
-								</span>
-							</li>
-						))}
+						{answer.data.items.map(
+							(/** @type {CustomField} */ item, /** @type {number} */ index, /** @type {CustomField[]} */ items) => (
+								<li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0">
+									<span className="min-w-0 flex-[1_1_12rem]">
+										<span className="block break-words text-sm font-semibold text-fg">{item.label}</span>
+										<code className="block break-all text-xs text-muted">{item.key}</code>
+									</span>
+									<span className="flex flex-wrap gap-1.5">
+										<Badge kind="settings">{TEXTS.settings.fieldTypes[item.type]}</Badge>
+										<Badge>{TEXTS.settings.fieldVisibility[item.visibility]}</Badge>
+										{item.required ? <Badge>{T.required_badge}</Badge> : null}
+									</span>
+									<span className="flex flex-wrap gap-2">
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={index === 0}
+											aria-label={`${T.up}: ${item.label}`}
+											onClick={() => move(items, index, -1)}>
+											{T.up}
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											disabled={index === items.length - 1}
+											aria-label={`${T.down}: ${item.label}`}
+											onClick={() => move(items, index, 1)}>
+											{T.down}
+										</Button>
+										<Button
+											size="sm"
+											variant="secondary"
+											onClick={() => open({ ...item, options: item.options.join('\n'), isNew: false })}>
+											{T.edit}
+										</Button>
+										<Button
+											size="sm"
+											variant="ghost"
+											onClick={async () => {
+												setResult(await call('DELETE', `${base}/${encodeURIComponent(item.key)}`));
+												reload();
+											}}>
+											{T.delete}
+										</Button>
+									</span>
+								</li>
+							),
+						)}
 					</ul>
 				</Card>
 			)}
@@ -147,12 +185,24 @@ export function FieldsSection({ websiteId }) {
 							options={TYPES.map((value) => ({ value, label: TEXTS.settings.fieldTypes[value] }))}
 							onChange={(event) => edit({ type: /** @type {FieldType} */ (event.target.value) })}
 						/>
+						<Select
+							label={T.visibility}
+							value={draft.visibility}
+							options={VISIBILITY.map((value) => ({ value, label: TEXTS.settings.fieldVisibility[value] }))}
+							onChange={(event) => edit({ visibility: /** @type {Visibility} */ (event.target.value) })}
+						/>
+						<Input
+							label={T.help}
+							value={draft.help}
+							maxLength={200}
+							onChange={(event) => edit({ help: event.target.value })}
+						/>
 						<Checkbox
 							label={T.required}
 							checked={draft.required}
 							onChange={(event) => edit({ required: event.target.checked })}
 						/>
-						{draft.type === 'choice' ? (
+						{CHOICES.includes(draft.type) ? (
 							<TextArea
 								label={T.options}
 								rows={4}

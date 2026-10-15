@@ -24,9 +24,11 @@ import { element, formatDate, formatMoney, formatText, viewerOf } from '@ss/app-
  * @typedef {object} CustomField
  * @property {string} key
  * @property {string} label
- * @property {'text' | 'number' | 'date' | 'choice'} type
+ * @property {'text' | 'textarea' | 'number' | 'date' | 'choice' | 'multi_choice' | 'boolean' | 'email' | 'url'} type
  * @property {string[]} options
  * @property {boolean} required
+ * @property {'edit' | 'view' | 'staff'} visibility who sees and changes it (A6)
+ * @property {string} help
  */
 
 /** Problem codes with a widget text of their own (`error.<code>`). */
@@ -221,45 +223,95 @@ export const fieldMaker = (doc, prefix) => {
 
 /** @typedef {ReturnType<typeof fieldMaker>} FieldMaker */
 
+/** Input attributes per custom field type (A6). @type {Record<string, Record<string, string>>} */
+const INPUT_TYPES = {
+	number: { type: 'number', step: 'any' },
+	date: { type: 'date' },
+	email: { type: 'email', autocomplete: 'off' },
+	url: { type: 'url', inputmode: 'url' },
+};
+
 /**
- * The inputs of the merchant's custom fields.
+ * The inputs of the merchant's custom fields (A6): one control per type, the help text under it, and for the user
+ * (`by: 'user'`) the fields they only see shown read-only (left out at sign-up, `required`), never read back.
  * @param {Document} doc
  * @param {FieldMaker} make
  * @param {Texts} t
  * @param {ReadonlyArray<CustomField>} fields
- * @param {{ values?: Record<string, unknown>, required?: boolean }} [options] `required`: mark required fields
+ * @param {{ values?: Record<string, unknown>, required?: boolean, signUp?: boolean, by?: 'user' | 'staff' }} [options]
+ *   `signUp`: a sign-up (fields the user only sees are left out); `required`: a sign-up that marks required fields
  */
-export const customInputs = (doc, make, t, fields, { values = {}, required = false } = {}) => {
-	const inputs = fields.map((definition) => {
-		const attributes = /** @type {Record<string, string>} */ (
-			definition.type === 'number' ? { type: 'number', step: 'any' } : definition.type === 'date' ? { type: 'date' } : {}
-		);
-		if (required && definition.required) attributes.required = '';
-		const made = make.field(definition.type === 'choice' ? 'select' : 'input', definition.label, attributes);
-		if (definition.type === 'choice')
-			made.input.append(
-				element(doc, 'option', { value: '' }, t('fields.choose')),
-				...definition.options.map((option) => element(doc, 'option', { value: option }, option)),
-			);
+export const customInputs = (doc, make, t, fields, { values = {}, required = false, signUp = required, by = 'user' } = {}) => {
+	const shown = fields.filter(
+		(field) => by === 'staff' || (field.visibility !== 'staff' && !(signUp && field.visibility === 'view')),
+	);
+	const inputs = shown.map((definition) => {
+		const readOnly = by === 'user' && definition.visibility === 'view';
 		const value = values[definition.key];
-		made.input.value = value === undefined || value === null ? '' : String(value);
-		return { definition, ...made };
+		/** @type {{ wrap: HTMLElement, input: HTMLInputElement, boxes?: HTMLInputElement[] }} */
+		let made;
+		if (definition.type === 'boolean') {
+			const box = make.check(definition.label);
+			box.input.checked = value === true;
+			const wrap = element(doc, 'div', { class: 'field' });
+			wrap.append(box.wrap);
+			made = { wrap, input: box.input };
+		} else if (definition.type === 'multi_choice') {
+			const wrap = element(doc, 'fieldset', { class: 'choices' });
+			wrap.append(element(doc, 'legend', {}, definition.label));
+			const chosen = Array.isArray(value) ? value : [];
+			const boxes = definition.options.map((option) => {
+				const box = make.check(option);
+				box.input.value = option;
+				box.input.checked = chosen.includes(option);
+				wrap.append(box.wrap);
+				return box.input;
+			});
+			made = { wrap, input: /** @type {HTMLInputElement} */ (boxes[0]), boxes };
+		} else {
+			const attributes = { ...(INPUT_TYPES[definition.type] ?? {}) };
+			if (definition.type === 'textarea') attributes.rows = '3';
+			if (required && definition.required) attributes.required = '';
+			const tag = definition.type === 'choice' ? 'select' : definition.type === 'textarea' ? 'textarea' : 'input';
+			made = make.field(tag, definition.label, attributes);
+			if (definition.type === 'choice')
+				made.input.append(
+					element(doc, 'option', { value: '' }, t('fields.choose')),
+					...definition.options.map((option) => element(doc, 'option', { value: option }, option)),
+				);
+			made.input.value = value === undefined || value === null ? '' : String(value);
+		}
+		if (readOnly) for (const input of made.boxes ?? [made.input]) input.setAttribute('disabled', '');
+		if (definition.help) {
+			const hint = element(doc, 'p', { class: 'meta', id: `${made.input?.id || definition.key}-help` }, definition.help);
+			made.wrap.append(hint);
+			if (made.input?.id) made.input.setAttribute('aria-describedby', hint.id);
+		}
+		return { definition, readOnly, ...made };
 	});
 	return {
 		nodes: inputs.map((made) => made.wrap),
 		/**
-		 * The values: numbers as numbers; `keepEmpty` sends '' for an emptied field (an update clears it).
+		 * The values the user may change: numbers as numbers, yes/no as true or false, several choices as a list;
+		 * `keepEmpty` sends '' (or []) for an emptied field (an update clears it).
 		 * @param {boolean} [keepEmpty]
-		 * @returns {Record<string, string | number>}
+		 * @returns {Record<string, string | number | boolean | string[]>}
 		 */
 		read: (keepEmpty = false) => {
-			/** @type {Record<string, string | number>} */
+			/** @type {Record<string, string | number | boolean | string[]>} */
 			const out = {};
-			for (const { definition, input } of inputs) {
-				const raw = input.value.trim();
-				if (raw === '') {
-					if (keepEmpty) out[definition.key] = '';
-				} else out[definition.key] = definition.type === 'number' ? Number(raw) : raw;
+			for (const { definition, input, boxes, readOnly } of inputs) {
+				if (readOnly) continue;
+				if (definition.type === 'boolean') out[definition.key] = input.checked;
+				else if (boxes) {
+					const chosen = boxes.filter((box) => box.checked).map((box) => box.value);
+					if (chosen.length > 0 || keepEmpty) out[definition.key] = chosen;
+				} else {
+					const raw = input.value.trim();
+					if (raw === '') {
+						if (keepEmpty) out[definition.key] = '';
+					} else out[definition.key] = definition.type === 'number' ? Number(raw) : raw;
+				}
 			}
 			return out;
 		},

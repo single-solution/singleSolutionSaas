@@ -45,6 +45,8 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			const make = fieldMaker(doc, 'ss-users');
 			/** @type {Array<{ key: string, name: string, permissions: string[] }>} */
 			let roles = [];
+			/** Every custom field, staff-only ones too (A6). @type {import('./common.js').CustomField[]} */
+			let fields = [];
 			/** @type {string | null} */
 			let cursor = null;
 			let chip = '';
@@ -407,12 +409,19 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						[t('users.termsLabel'), user.terms ? `${user.terms.version} · ${date(user.terms.acceptedAt)}` : ''],
 					]),
 				);
-				const custom = (config.settings.customFields ?? []).map(
-					(field) =>
-						/** @type {[string, string]} */ ([
-							field.label,
-							user.custom?.[field.key] === undefined ? '' : String(user.custom[field.key]),
-						]),
+				/** @param {unknown} value */
+				const valueText = (value) =>
+					value === undefined || value === null
+						? ''
+						: value === true
+							? t('users.yes')
+							: value === false
+								? t('users.no')
+								: Array.isArray(value)
+									? value.join(', ')
+									: String(value);
+				const custom = fields.map(
+					(field) => /** @type {[string, string]} */ ([field.label, valueText(user.custom?.[field.key])]),
 				);
 				if (custom.some(([, value]) => value !== '')) cards.append(card(doc, t('users.profile'), custom));
 				if ((user.addresses ?? []).length > 0)
@@ -479,7 +488,7 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 				email.input.value = user?.email ?? '';
 				phone.input.value = user?.phone ?? '';
 				notes.input.value = user?.notes ?? '';
-				const custom = customInputs(doc, make, t, config.settings.customFields ?? [], { values: user?.custom ?? {} });
+				const custom = customInputs(doc, make, t, fields, { values: user?.custom ?? {}, by: 'staff' });
 				return {
 					nodes: [name.wrap, email.wrap, phone.wrap, role.wrap, password.wrap, ...custom.nodes, notes.wrap],
 					/** The body: unchanged contacts are left out of an edit; an emptied one is removed. */
@@ -841,6 +850,10 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 			void (async () => {
 				const answer = await call('GET', '/v1/admin/roles');
 				roles = answer.ok && Array.isArray(answer.data?.items) ? answer.data.items : [];
+				if (on('custom_fields')) {
+					const listed = await call('GET', '/v1/admin/fields');
+					fields = listed.ok && Array.isArray(listed.data?.items) ? listed.data.items : [];
+				}
 				fillRoleFilters();
 				await load(true);
 				if (on('role_requests')) await loadRequests(true);

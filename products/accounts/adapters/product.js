@@ -136,8 +136,10 @@ const ownDataRights = (now) => ({
 			phone: normalisePhone(user.phone),
 		});
 		const devices = await Promise.all(found.map((u) => store.sessions.ofUser(u.id)));
+		// staff-only custom fields stay out of the export, like the merchant's notes (A6)
+		const fields = await store.fields.list();
 		return {
-			users: found.map(selfView),
+			users: found.map((u) => selfView(u, fields)),
 			devices: devices.flat().map((s) => ({
 				device: s.device,
 				method: s.method,
@@ -287,7 +289,10 @@ export const createProductInstance = (options) => {
 				const roleNames = requests ? await store.roles.list() : [];
 				return {
 					signUp: { mode: rules.mode, requiredFields: rules.requiredFields },
-					customFields: on.includes('custom_fields') ? await store.fields.list() : [],
+					// the fields the user sees (A6): staff-only ones never reach the browser
+					customFields: on.includes('custom_fields')
+						? (await store.fields.list()).filter((field) => field.visibility !== 'staff')
+						: [],
 					// each password method's own minimum, for the browser's own check of a new password (A2)
 					passwordMinLength: emailPassword ? emailPassword.minLength : null,
 					phonePassword: phonePassword

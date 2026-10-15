@@ -134,10 +134,10 @@ export const createFlows = (product, service) => {
 						field,
 						`The ${field === 'name' ? 'name' : field === 'email' ? 'email address' : 'phone number'} is required.`,
 					);
-		/** @type {Record<string, string | number>} */
+		/** @type {Record<string, import('../core/profile.js').CustomValue>} */
 		let custom = {};
 		if (s.on.includes('custom_fields')) {
-			const checked = checkCustomValues(await s.store.fields.list(), body.custom, { complete: !known.social });
+			const checked = checkCustomValues(await s.store.fields.list(), body.custom, { complete: !known.social, by: 'user' });
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			custom = checked.value;
 		}
@@ -976,7 +976,7 @@ export const createFlows = (product, service) => {
 			refreshToken: `${session.id}.${secret}`,
 			sessionExpiresAt: session.expiresAt.toISOString(),
 			remember: session.remember,
-			user: selfView(user),
+			user: selfView(user, await s.store.fields.list()),
 		};
 	};
 

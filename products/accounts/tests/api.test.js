@@ -972,6 +972,85 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		expect(code(await env.dashboard(cookie, 'DELETE', `${base}/kids`))).toBe('not_found');
 	});
 
+	it('A6: custom fields: more types, a help text and who sees them; the merchant orders them', async () => {
+		const cookie = await env.adminSession();
+		const base = `/v1/dashboard/websites/${env.websiteId}/fields`;
+		/** @param {string} key @param {Record<string, unknown>} field */
+		const put = (key, field) => env.dashboard(cookie, 'PUT', `${base}/${key}`, field);
+		expect((await put('bio', { label: 'About you', type: 'textarea', help: 'A few lines about you.' })).json).toEqual({
+			key: 'bio',
+			label: 'About you',
+			type: 'textarea',
+			options: [],
+			required: false,
+			visibility: 'edit',
+			help: 'A few lines about you.',
+		});
+		await put('news', { label: 'Newsletter', type: 'boolean' });
+		await put('likes', { label: 'Interests', type: 'multi_choice', options: ['Books', 'Music', 'Travel'] });
+		await put('site', { label: 'Website', type: 'url' });
+		await put('work_email', { label: 'Work email', type: 'email' });
+		await put('tier', { label: 'Tier', type: 'choice', options: ['Gold', 'Silver'], visibility: 'view' });
+		await put('risk', { label: 'Risk note', type: 'text', visibility: 'staff', required: true });
+		expect(code(await put('bad', { label: 'Bad', type: 'text', visibility: 'secret' }))).toBe('validation_failed');
+		expect(code(await put('bad', { label: 'Bad', type: 'multi_choice', options: [] }))).toBe('validation_failed');
+		// the browser never learns of a staff-only field
+		const keys = (await env.visitor('GET', '/v1/widget/config')).json.settings.customFields.map(
+			(/** @type {any} */ f) => f.key,
+		);
+		expect(keys).toEqual(expect.arrayContaining(['bio', 'tier']));
+		expect(keys).not.toContain('risk');
+		// sign-up asks only the fields the user edits (the required staff-only field is not theirs to give)
+		const up = await signUp('a6@example.com', undefined, {
+			custom: {
+				size: 'S',
+				bio: 'Line one\r\nLine two',
+				news: true,
+				likes: ['Travel', 'Books'],
+				site: 'https://a6.example.com',
+				work_email: 'a6@work.example.com',
+			},
+		});
+		expect(up.json.user.custom).toEqual({
+			size: 'S',
+			bio: 'Line one\nLine two',
+			news: true,
+			likes: ['Books', 'Travel'],
+			site: 'https://a6.example.com',
+			work_email: 'a6@work.example.com',
+		});
+		/** @param {Record<string, unknown>} custom */
+		const patchMe = (custom) => env.visitor('PATCH', '/v1/me', { custom }, up.json.signIn);
+		for (const custom of [
+			{ tier: 'Gold' },
+			{ risk: 'x' },
+			{ news: 'yes' },
+			{ likes: ['Cars'] },
+			{ site: 'ftp://files.example.com' },
+			{ work_email: 'not an address' },
+		])
+			expect(code(await patchMe(custom)), JSON.stringify(custom)).toBe('validation_failed');
+		// staff set them; the user sees a view field, never a staff-only one
+		const id = up.json.user.id;
+		const staffSet = await env.serverCall('PATCH', `/v1/users/${id}`, { custom: { tier: 'Gold', risk: 'Asked twice' } });
+		expect(staffSet.json.custom).toMatchObject({ tier: 'Gold', risk: 'Asked twice' });
+		expect(code(await env.serverCall('PATCH', `/v1/users/${id}`, { custom: { risk: null } }))).toBe('validation_failed');
+		const me = (await env.visitor('GET', '/v1/me', undefined, up.json.signIn)).json;
+		expect(me.custom.tier).toBe('Gold');
+		expect(me.custom).not.toHaveProperty('risk');
+		expect((await env.serverCall('GET', '/v1/fields')).json.items.map((/** @type {any} */ f) => f.key)).toContain('risk');
+		// the merchant's order
+		const all = (await env.dashboard(cookie, 'GET', base)).json.items.map((/** @type {any} */ f) => f.key);
+		const reversed = [...all].reverse();
+		expect(
+			(await env.dashboard(cookie, 'PUT', base, { order: reversed })).json.items.map((/** @type {any} */ f) => f.key),
+		).toEqual(reversed);
+		expect(code(await env.dashboard(cookie, 'PUT', base, { order: reversed.slice(1) }))).toBe('validation_failed');
+		await env.dashboard(cookie, 'PUT', base, { order: all });
+		for (const key of ['bio', 'news', 'likes', 'site', 'work_email', 'tier', 'risk'])
+			await env.dashboard(cookie, 'DELETE', `${base}/${key}`);
+	});
+
 	it('risk checks: disposable domains, accounts per device and per network', async () => {
 		expect(code(await signUp('x@mailinator.com', undefined, { custom: { size: 'S' } }))).toBe('risk_refused');
 		await env.setting('risk_checks', 'allowedDomains', ['mailinator.com']);

@@ -457,10 +457,34 @@ describe('email and password', () => {
 					passwordMinLength: 10,
 					terms: { version: 'v1', url: 'javascript:alert(1)' },
 					customFields: [
-						{ key: 'size', label: 'Size', type: 'choice', options: ['S', 'M'], required: true },
-						{ key: 'age', label: 'Age', type: 'number', options: [], required: false },
-						{ key: 'birthday', label: 'Birthday', type: 'date', options: [], required: false },
-						{ key: 'nickname', label: 'Nickname', type: 'text', options: [], required: false },
+						{
+							key: 'size',
+							label: 'Size',
+							type: 'choice',
+							options: ['S', 'M'],
+							required: true,
+							visibility: 'edit',
+							help: '',
+						},
+						{ key: 'age', label: 'Age', type: 'number', options: [], required: false, visibility: 'edit', help: '' },
+						{
+							key: 'birthday',
+							label: 'Birthday',
+							type: 'date',
+							options: [],
+							required: false,
+							visibility: 'edit',
+							help: '',
+						},
+						{
+							key: 'nickname',
+							label: 'Nickname',
+							type: 'text',
+							options: [],
+							required: false,
+							visibility: 'edit',
+							help: '',
+						},
 					],
 				},
 			},
@@ -556,7 +580,9 @@ describe('codes', () => {
 				features: ['phone_code', 'email_code'],
 				settings: {
 					signUp: { mode: 'open', requiredFields: ['email'] },
-					customFields: [{ key: 'size', label: 'Size', type: 'choice', options: ['S'], required: true }],
+					customFields: [
+						{ key: 'size', label: 'Size', type: 'choice', options: ['S'], required: true, visibility: 'edit', help: '' },
+					],
 				},
 			},
 		);
@@ -962,7 +988,9 @@ describe('My account', () => {
 	const ACCOUNT_FEATURES = ['email_password', 'two_step', 'data_rights', 'orders_tab', 'terms', 'custom_fields'];
 	const SETTINGS = {
 		terms: { version: 'v2', url: 'https://example.com/terms' },
-		customFields: [{ key: 'size', label: 'Size', type: 'choice', options: ['S', 'M'], required: false }],
+		customFields: [
+			{ key: 'size', label: 'Size', type: 'choice', options: ['S', 'M'], required: false, visibility: 'edit', help: '' },
+		],
 	};
 	const ME = {
 		...USER,
@@ -1000,6 +1028,63 @@ describe('My account', () => {
 		);
 		return { host, ...started };
 	};
+
+	it('A6: custom fields of every type with their help texts; a field the user only sees is read-only', async () => {
+		const fields = [
+			{
+				key: 'bio',
+				label: 'About you',
+				type: 'textarea',
+				options: [],
+				required: false,
+				visibility: 'edit',
+				help: 'A few lines.',
+			},
+			{ key: 'news', label: 'Newsletter', type: 'boolean', options: [], required: false, visibility: 'edit', help: '' },
+			{
+				key: 'likes',
+				label: 'Interests',
+				type: 'multi_choice',
+				options: ['Books', 'Music'],
+				required: false,
+				visibility: 'edit',
+				help: '',
+			},
+			{ key: 'site', label: 'Website', type: 'url', options: [], required: false, visibility: 'edit', help: '' },
+			{ key: 'tier', label: 'Tier', type: 'text', options: [], required: false, visibility: 'view', help: '' },
+		];
+		const me = { ...ME, custom: { bio: 'Hi', news: true, likes: ['Music'], tier: 'Gold' } };
+		/** @type {any[]} */
+		const patches = [];
+		window.sessionStorage.setItem(REFRESH_STORAGE_KEY, 'ref-0');
+		const host = place('my_account');
+		await start(
+			{
+				'POST /v1/session/refresh': () => answer(200, signedIn({ user: me })),
+				'GET /v1/me': () => answer(200, me),
+				'GET /v1/me/sessions': () => answer(200, { items: [] }),
+				'GET /v1/me/orders': () => answer(200, { items: [] }),
+				'PATCH /v1/me': ({ body }) => {
+					patches.push(body);
+					return answer(200, { ...me, ...body });
+				},
+			},
+			{ features: ACCOUNT_FEATURES, settings: { ...SETTINGS, customFields: fields } },
+		);
+		const profile = part(host, strings['account.profile']);
+		expect(fieldIn(profile, 'About you').tagName).toBe('TEXTAREA');
+		expect(fieldIn(profile, 'About you').getAttribute('aria-describedby')).toBeTruthy();
+		expect(profile.textContent).toContain('A few lines.');
+		expect(fieldIn(profile, 'Website').type).toBe('url');
+		expect(checkIn(profile, 'Newsletter').checked).toBe(true);
+		expect(checkIn(profile, 'Music').checked).toBe(true);
+		expect(fieldIn(profile, 'Tier').value).toBe('Gold');
+		expect(fieldIn(profile, 'Tier').disabled).toBe(true);
+		checkIn(profile, 'Books').checked = true;
+		checkIn(profile, 'Newsletter').checked = false;
+		await submit(buttonIn(profile, strings['account.save']));
+		expect(patches[0].custom).toEqual({ bio: 'Hi', news: false, likes: ['Books', 'Music'], site: '' });
+	});
 
 	it('saves the profile and the addresses with the sign-in header', async () => {
 		/** @type {any[]} */

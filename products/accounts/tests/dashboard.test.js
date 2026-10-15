@@ -187,3 +187,39 @@ describe("Accounts's dashboard Overview", () => {
 		expect(html).not.toContain('EDT');
 	});
 });
+
+describe('Settings → Custom fields (A6)', () => {
+	it('lists the fields with their type and who sees them, and saves a new order', async () => {
+		const { FieldsSection } = await import('../app/dashboard/fields.js');
+		const field = (/** @type {string} */ key, /** @type {string} */ visibility) => ({
+			key,
+			label: key.toUpperCase(),
+			type: 'boolean',
+			options: [],
+			required: false,
+			visibility,
+			help: '',
+		});
+		serve({ featuresOn: ['custom_fields'], fields: [field('first', 'edit'), field('second', 'staff')] });
+		const { container } = render(
+			<DashboardProvider manifest={manifest} texts={TEXTS}>
+				<FieldsSection websiteId={`web_${(website += 1)}`} />
+			</DashboardProvider>,
+		);
+		await settle();
+		expect(container.textContent).toContain(TEXTS.settings.fieldTypes.boolean);
+		expect(container.textContent).toContain(TEXTS.settings.fieldVisibility.staff);
+		const down = /** @type {HTMLButtonElement} */ (
+			container.querySelector(`button[aria-label="${TEXTS.settings.field.down}: FIRST"]`)
+		);
+		expect(
+			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.field.up}: FIRST"]`))
+				.disabled,
+		).toBe(true);
+		click(down);
+		await settle();
+		const put = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'PUT');
+		expect(String(put?.[0])).toMatch(/\/fields$/);
+		expect(JSON.parse(String(put?.[1]?.body))).toEqual({ order: ['second', 'first'] });
+	});
+});

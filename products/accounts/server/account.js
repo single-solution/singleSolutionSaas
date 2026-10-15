@@ -31,7 +31,11 @@ export const createAccount = (product, service, flows) => {
 	 */
 	const meView = async (s, user) => {
 		const role = s.on.includes('roles') ? await service.roleOf(s, user) : null;
-		return { ...selfView(user), roleName: role?.name ?? null, membership: role?.membership === true };
+		return {
+			...selfView(user, await s.store.fields.list()),
+			roleName: role?.name ?? null,
+			membership: role?.membership === true,
+		};
 	};
 
 	/** @param {any} ctx */
@@ -53,7 +57,11 @@ export const createAccount = (product, service, flows) => {
 		}
 		if (body.custom !== undefined) {
 			if (!s.on.includes('custom_fields')) throw problem('feature_off', 'Custom fields are off.');
-			const checked = checkCustomValues(await s.store.fields.list(), body.custom, { complete: false, current: user.custom });
+			const checked = checkCustomValues(await s.store.fields.list(), body.custom, {
+				complete: false,
+				current: user.custom,
+				by: 'user',
+			});
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			set.custom = checked.value;
 		}
@@ -273,7 +281,7 @@ export const createAccount = (product, service, flows) => {
 			dueAt: deleteAfterDays > 0 ? new Date(now() + deleteAfterDays * 86_400_000) : null,
 		};
 		const updated = user.deletion ? user : await s.store.users.update(user.id, { deletion });
-		return new Response(JSON.stringify(selfView(updated ?? user).deletion), {
+		return new Response(JSON.stringify(selfView(updated ?? user, []).deletion), {
 			status: 202,
 			headers: { 'content-type': 'application/json' },
 		});

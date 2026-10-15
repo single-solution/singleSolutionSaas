@@ -20,7 +20,7 @@ export const TEXTS = dashboardTexts({
 	settings: {
 		fieldsTitle: 'Custom fields',
 		fieldsHelp:
-			'Your own profile fields. They are shown at sign-up (required ones must be filled) and in My account, and need the Custom fields feature.',
+			'Your own profile fields, in your order. Each one says who sees it: the user (who edits it, or only sees it) or only your staff. The fields users edit are asked at sign-up (required ones must be filled) and shown in My account. They need the Custom fields feature.',
 		looksHelp:
 			'Every word of the sign-in, My account, role request and admin widgets, their theme, and how money and dates look.',
 		field: {
@@ -28,7 +28,11 @@ export const TEXTS = dashboardTexts({
 			label: 'Label',
 			type: 'Type',
 			options: 'Options (comma-separated or one per line)',
-			required: 'Required at sign-up',
+			required: 'Required (asked at sign-up when the user edits it)',
+			help: 'Help text (shown with the field)',
+			visibility: 'Who sees it',
+			up: 'Move up',
+			down: 'Move down',
 			add: 'New field',
 			editTitle: 'Edit field',
 			edit: 'Edit',
@@ -39,9 +43,19 @@ export const TEXTS = dashboardTexts({
 		},
 		fieldTypes: {
 			text: 'Text',
+			textarea: 'Long text',
 			number: 'Number',
 			date: 'Date',
-			choice: 'Choice',
+			choice: 'Choice (one)',
+			multi_choice: 'Choices (several)',
+			boolean: 'Yes / no',
+			email: 'Email address',
+			url: 'Web address',
+		},
+		fieldVisibility: {
+			edit: 'The user sees and edits it',
+			view: 'The user sees it; only staff edit it',
+			staff: 'Only staff see it',
 		},
 	},
 	connections: {

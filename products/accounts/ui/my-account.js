@@ -153,7 +153,9 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 					void run(save, async () => {
 						const answer = await session.me('PATCH', '/v1/me', {
 							name: name.input.value.trim(),
-							...(settings.customFields.length > 0 ? { custom: custom.read(true) } : {}),
+							...(settings.customFields.some((/** @type {any} */ field) => field.visibility === 'edit')
+								? { custom: custom.read(true) }
+								: {}),
 						});
 						if (answer.ok) session.setUser(answer.data);
 						note.textContent = answer.ok ? t('account.saved') : errorText(t, answer, when);

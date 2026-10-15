@@ -416,7 +416,17 @@ describe('import checks', () => {
 	const rules = {
 		roles: new Set(['customer', 'member']),
 		signUpRole: 'customer',
-		fields: [{ key: 'size', label: 'Size', type: /** @type {const} */ ('choice'), options: ['S'], required: true }],
+		fields: [
+			{
+				key: 'size',
+				label: 'Size',
+				type: /** @type {const} */ ('choice'),
+				options: ['S'],
+				required: true,
+				visibility: /** @type {const} */ ('edit'),
+				help: '',
+			},
+		],
 		phoneFormat: { defaultCallingCode: '+44', trunkPrefix: '0' },
 		isPasswordHash,
 	};
