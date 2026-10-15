@@ -91,7 +91,7 @@ describe('customers without an account (E46)', () => {
 		const account = await api('GET', `/v1/loyalty/accounts/${made.json.id}`);
 		expect(account).toMatchObject({
 			balance: 250,
-			history: [expect.objectContaining({ points: 250, note: 'Opening points' })],
+			history: [expect.objectContaining({ points: 250, kind: 'adjust', note: '' })],
 		});
 		// one record per phone, however it is typed
 		const again = await shop.api('POST', '/v1/customers', { name: 'Olive', phone: '+1 555 000 3001' });

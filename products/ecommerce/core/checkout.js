@@ -303,7 +303,8 @@ const PROBLEM_TEXT = {
 };
 
 /** The problems a cart line can have (each has its widget text `cart.problem.<code>`). */
-export const LINE_PROBLEMS = Object.freeze(Object.keys(PROBLEM_TEXT));
+// `too_many` (more pieces of one item than an order takes, Sell in any unit) carries its own message
+export const LINE_PROBLEMS = Object.freeze([...Object.keys(PROBLEM_TEXT), 'too_many']);
 
 /** @param {string} code @returns {LineProblem} */
 const problemOf = (code) => ({ code, message: PROBLEM_TEXT[code] ?? code });

@@ -220,7 +220,6 @@ describe('texts', () => {
 				(key) => `checkout.field.${key}`,
 			),
 			...['cod', 'online', 'bank_transfer', 'pickup'].map((key) => `checkout.method.${key}`),
-			...['shipping', 'returns', 'warranty', 'privacy', 'terms'].map((key) => `checkout.policy.${key}`),
 			...['earn', 'redeem', 'refund', 'expire', 'adjust', 'reverse'].map((key) => `orders.points.kind.${key}`),
 			...['unpaid', 'pending', 'paid', 'partially_refunded', 'refunded'].map((key) => `orders.payment.${key}`),
 			...['return', 'warranty'].map((key) => `returns.kind.${key}`),

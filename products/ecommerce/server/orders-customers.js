@@ -316,7 +316,8 @@ export const createCustomers = (service) => {
 					orderId: null,
 					kind: 'adjust',
 					expiresAt: expiryFor(now, await s.values('loyalty')),
-					note: 'Opening points',
+					// no words stored: the history reads the kind in the website's texts (E33)
+					note: '',
 				},
 				{ now },
 			);

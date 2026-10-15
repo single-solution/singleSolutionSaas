@@ -152,7 +152,8 @@ describe('offers', () => {
 				variant({ id: 'var_l', options: { Size: 'L' } }),
 			],
 		});
-		const group = nodeOf(productJsonLd(page(mixed)), 'ProductGroup');
+		// the option names schema.org's size through its variant field's mapping (E34)
+		const group = nodeOf(productJsonLd(page(mixed, { axes: new Map([['Size', 'size']]) })), 'ProductGroup');
 		expect(group.hasVariant.map((/** @type {any} */ v) => v.size)).toEqual(['M', 'L']);
 		// one sellable variant left: a plain Product
 		const one = productJsonLd(page({ ...mixed, variants: mixed.variants.slice(0, 2) }));
