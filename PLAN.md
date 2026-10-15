@@ -1991,6 +1991,27 @@ product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
   race drops the voided payment (one transaction); a staff refund Payments finishes later moves the order and keeps the
   claim true; checkout never stops on an order number already used (the counter catches up). Medium and low findings:
   E-L2.
+- **Ecommerce review fixes, medium and low, and the orders and customers parity work built (2026-10-15; E-L2:
+  c394d780, 42792055, 0aadf90e, 2a036739, 2bd16636, 3e590408, 5a3c29b4; importer SaaS defaults to review when the
+  owner asks: `loyalty.memberFlag` off, `checkout.placeLimit` 0):** a staff cancel note stays with staff (the shopper
+  and Payments get the note for the shopper, else plain words; owner answer 3); a guest order on a member's phone is
+  linked to the member's record and enters their account only at a sign-in that proves the phone (owner answer 2);
+  staff-only field values never show through `attr.*` filters or variant addresses; a folded guest keeps its note,
+  fields, addresses and member flag; a shipped order cannot be deleted; feeds ship only physical goods; the sitemap
+  leaves out landing pages whose head says noindex or 404; shown prices read categories once per request; ETags stay
+  stable while only signed image links change; optional checkout fields keep their names; unit numbers are unique
+  across fields (`num:` keys); all-zero GTINs, bad imported field values and private files as imported photos are
+  refused; SEO heads date old products, llms files use shown prices, `priceValidUntil` is a business-time day, a
+  sitemap file holds at most 15,000 addresses, the SEO score judges the page title (and a brand's own page uses its own
+  SEO title), the cache route never crashes on a forged signature and `catalog.changed` also covers categories, brands
+  and deals; E46 customers without an account (opening points, addresses, newest first, delete without orders), E47
+  loyalty members (`memberFlag` off | manual | first_order); E29 an edited order keeps its bundles and
+  `after_item_deals` counts bundles; E58 the cart sends `expectedTotal`; late money gets the `refund_due` staff alert
+  and the `refundDue=1` list filter (no Payments callback exists: the watch on use stays); order numbers are found by
+  any part; `checkout.placeLimit` stops order bursts; a brand can be hidden in one category (`hiddenIn`). Moved to other
+  helpers: admin widgets catching up (EW1, with the brand editor's Hidden-in picker), Chat shop basics (EW2), digital
+  file and key removal (EW1). Review L1 was FX's; L2 needs no code (no live units: re-import any scratch database made
+  before 192c9cdd).
 - **SEO S10–S12 (Ecommerce part), E42 and the rest of the search and catalog work built (2026-10-15; e7fcaef9,
   711b16e2, 657c17d2, 0bff5636, 70356d52, 0d041434, d8f4008e, 19153d4d, 5df51224, dc715742; importer 9aac9f69,
   dc71da75 and the gradeTitle/gradeDescription lines in 6228074f — SaaS defaults to review when the owner asks):**
