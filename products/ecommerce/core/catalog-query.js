@@ -176,18 +176,33 @@ export const storedValues = (attribute, values) => {
  * @property {string[] | null} categoryIds the category with its descendants (an unknown category is [])
  * @property {string[] | null} brandIds the brands asked for (unknown ones are dropped; [] matches nothing)
  * @property {ReadonlyMap<string, AttributeRecord>} attributes every attribute by id
- * @property {ReadonlyArray<string>} [lineage] the listing's own category and those above it, nearest first
- *   (`core/catalog-taxonomy.js` `lineageOf`): an attribute named by slug is the one defined for the nearest of them, then
- *   the one for every category (E45)
  * @property {{ categoryIds: string[], brandIds: string[] }} [hidden] categories and brands whose products shoppers do
  *   not see (E1)
  * @property {Record<string, unknown> | null} [deal] the products a deal applies to (E8)
  * @property {'words' | 'phrase'} [match] how the search's words match (the `catalog` setting `searchMatch`, SF-10)
  */
 
+/** Most filters by a field on the product and on variants at once that are matched exactly (2^n branches). */
+const MAX_MIXED = 3;
+
+/**
+ * The fields an `attr.<ref>` filter names (parity P3-6): by id, that field; by slug, every product or variant field
+ * with that slug (E45 keeps one per category, and each product keeps values only for the fields that apply to it, so
+ * a listing with or without a category matches each product by its own field).
+ * @param {ReadonlyMap<string, AttributeRecord>} attributes
+ * @param {string} ref
+ * @returns {AttributeRecord[]}
+ */
+export const fieldsNamed = (attributes, ref) => {
+	const found = attributes.get(ref);
+	const named = found ? [found] : [...attributes.values()].filter((attribute) => attribute.slug === ref);
+	return named.filter((attribute) => attribute.on === 'product' || attribute.on === 'variant');
+};
+
 /**
  * The listing's filter (the caller adds `websiteId`). One active variant must match the price range, the variant
- * attributes, the grade and stock together (E8); product attributes are matched on the product.
+ * fields, the grade and stock together (E8); product fields are matched on the product. A filter by slug matches any
+ * field with that slug: a product's own value, or one on the same variant as the other conditions.
  * @param {ShopQuery} query
  * @param {Resolved} resolved
  * @returns {Record<string, unknown>}
@@ -210,21 +225,59 @@ export const shopFilter = (query, resolved) => {
 			...(query.maxPrice !== null ? { $lte: query.maxPrice } : {}),
 		};
 	if (query.grades.length > 0) variant.grade = { $in: query.grades };
+	/** each filter's conditions on a variant, matched together @type {Record<string, unknown>[]} */
+	const onVariant = [];
+	/** filters by fields on the product and on variants @type {Array<{ product: Record<string, unknown>, variant: Record<string, unknown> }>} */
+	const mixed = [];
+	/** @param {Record<string, unknown>[]} any */
+	const either = (any) => (any.length === 1 ? /** @type {Record<string, unknown>} */ (any[0]) : { $or: any });
 	for (const { id, values } of query.attributes) {
-		const attribute = attributeOf(resolved.attributes, id, resolved.lineage);
-		const stored = storedValues(attribute, values);
-		if (attribute?.on === 'variant') variant[`attributes.${attribute.id}`] = { $in: stored };
-		else and.push({ [`specs.${attribute?.id ?? id}`]: { $in: stored } });
+		const fields = fieldsNamed(resolved.attributes, id);
+		/** @param {'product' | 'variant'} on @param {string} prefix */
+		const conditions = (on, prefix) =>
+			fields
+				.filter((field) => field.on === on)
+				.map((field) => ({ [`${prefix}.${field.id}`]: { $in: storedValues(field, values) } }));
+		const product = conditions('product', 'specs');
+		const variants = conditions('variant', 'attributes');
+		if (fields.length === 0) and.push({ id: { $in: [] } });
+		else if (variants.length === 0) and.push(either(product));
+		else if (product.length === 0) onVariant.push(either(variants));
+		else if (mixed.length < MAX_MIXED) mixed.push({ product: either(product), variant: either(variants) });
+		// past the exact ones: the product's own value, or any active variant's
+		else and.push({ $or: [...product, { variants: { $elemMatch: { active: true, $or: variants } } }] });
 	}
-	if (query.inStock) {
-		const selling = { ...variant, soldOut: { $ne: true } };
-		and.push({
+	/**
+	 * Some active variant matches the price, grade, stock and these conditions together.
+	 * @param {Record<string, unknown>[]} conditions
+	 */
+	const someVariant = (conditions) => {
+		const match = { ...variant, ...(conditions.length > 0 ? { $and: conditions } : {}) };
+		if (!query.inStock) return { variants: { $elemMatch: match } };
+		const selling = { ...match, soldOut: { $ne: true } };
+		return {
 			$or: [
 				{ trackStock: false, variants: { $elemMatch: selling } },
 				{ variants: { $elemMatch: { ...selling, stock: { $gt: 0 } } } },
 			],
-		});
-	} else if (Object.keys(variant).length > 1) and.push({ variants: { $elemMatch: variant } });
+		};
+	};
+	if (mixed.length > 0) {
+		// each filter by a field on both: the product's own value, or the same variant as the rest (every choice)
+		/** @type {Record<string, unknown>[]} */
+		const branches = [];
+		for (let chosen = 0; chosen < 2 ** mixed.length; chosen += 1) {
+			const fromProduct = mixed.filter((_, index) => (chosen >> index) & 1);
+			const fromVariant = mixed.filter((_, index) => !((chosen >> index) & 1));
+			branches.push({
+				$and: [
+					...fromProduct.map((filter) => filter.product),
+					someVariant([...onVariant, ...fromVariant.map((f) => f.variant)]),
+				],
+			});
+		}
+		and.push({ $or: branches });
+	} else if (query.inStock || onVariant.length > 0 || Object.keys(variant).length > 1) and.push(someVariant(onVariant));
 	return and.length === 1 ? /** @type {Record<string, unknown>} */ (and[0]) : { $and: and };
 };
 
@@ -239,8 +292,9 @@ const visibleFilter = (hidden) => [
 ];
 
 /**
- * An attribute by id or slug; by slug, the one defined for the nearest of the categories (a category's definition
- * applies to the categories below it), then the one for every category, else the first (E45).
+ * The field that names a slug on a listing (its facet's name, unit and labels): by id, that field; by slug, the one
+ * defined for the nearest of the listing's categories (a category's definition applies to the categories below it),
+ * then the one for every category, else the first (E45).
  * @param {ReadonlyMap<string, AttributeRecord>} attributes
  * @param {string} ref
  * @param {ReadonlyArray<string>} [lineage] a category and those above it, nearest first (`lineageOf`)
@@ -332,40 +386,63 @@ export const afterFilter = (sort, after, { dates = ['publishedAt', 'createdAt', 
 };
 
 /**
- * The facet counts of a listing, as one `$facet` stage (after the listing's `$match`). Attribute values count the
- * products that have them, on the product or on an active variant (several values each count).
- * @param {string[]} filterable ids of filterable attributes
+ * The facet counts of a listing, as one `$facet` stage (after the listing's `$match`). Field values are counted by
+ * slug (parity P3-6: every field with one slug is one filter): the products that have a value, on the product or on an
+ * active variant, each product once per value (several values each count).
+ * @param {ReadonlyArray<Pick<AttributeRecord, 'id' | 'slug'>>} filterable the fields shoppers filter by
  */
-export const facetStage = (filterable) => ({
-	$facet: {
-		categories: [{ $unwind: '$categoryIds' }, { $group: { _id: '$categoryIds', count: { $sum: 1 } } }],
-		brands: [{ $match: { brandId: { $type: 'string' } } }, { $group: { _id: '$brandId', count: { $sum: 1 } } }],
-		price: [{ $group: { _id: null, min: { $min: '$price' }, max: { $max: { $ifNull: ['$priceMax', '$price'] } } } }],
-		attributes: [
-			{ $project: { s: { $objectToArray: { $ifNull: ['$specs', {}] } } } },
-			{ $unwind: '$s' },
-			{ $match: { 's.k': { $in: filterable } } },
-			{ $unwind: '$s.v' },
-			{ $group: { _id: { k: '$s.k', v: '$s.v' }, count: { $sum: 1 } } },
-		],
-		variantAttributes: [
-			{ $unwind: '$variants' },
-			{ $match: { 'variants.active': true } },
-			{ $project: { p: '$id', a: { $objectToArray: { $ifNull: ['$variants.attributes', {}] } } } },
-			{ $unwind: '$a' },
-			{ $match: { 'a.k': { $in: filterable } } },
-			{ $unwind: '$a.v' },
-			{ $group: { _id: { k: '$a.k', v: '$a.v', p: '$p' } } },
-			{ $group: { _id: { k: '$_id.k', v: '$_id.v' }, count: { $sum: 1 } } },
-		],
-		grades: [
-			{ $unwind: '$variants' },
-			{ $match: { 'variants.active': true, 'variants.grade': { $type: 'string' } } },
-			{ $group: { _id: { g: '$variants.grade', p: '$id' } } },
-			{ $group: { _id: '$_id.g', count: { $sum: 1 } } },
-		],
-	},
-});
+export const facetStage = (filterable) => {
+	const ids = filterable.map((field) => field.id);
+	const slugOf = {
+		$arrayElemAt: [{ $literal: filterable.map((field) => field.slug) }, { $indexOfArray: [{ $literal: ids }, '$f.k'] }],
+	};
+	return {
+		$facet: {
+			categories: [{ $unwind: '$categoryIds' }, { $group: { _id: '$categoryIds', count: { $sum: 1 } } }],
+			brands: [{ $match: { brandId: { $type: 'string' } } }, { $group: { _id: '$brandId', count: { $sum: 1 } } }],
+			price: [{ $group: { _id: null, min: { $min: '$price' }, max: { $max: { $ifNull: ['$priceMax', '$price'] } } } }],
+			attributes: [
+				{
+					$project: {
+						id: 1,
+						f: {
+							$concatArrays: [
+								{ $objectToArray: { $ifNull: ['$specs', {}] } },
+								{
+									$reduce: {
+										input: {
+											$filter: { input: { $ifNull: ['$variants', []] }, cond: { $eq: ['$$this.active', true] } },
+										},
+										initialValue: [],
+										in: { $concatArrays: ['$$value', { $objectToArray: { $ifNull: ['$$this.attributes', {}] } }] },
+									},
+								},
+							],
+						},
+					},
+				},
+				{ $unwind: '$f' },
+				{ $match: { 'f.k': { $in: ids } } },
+				{ $unwind: '$f.v' },
+				{ $group: { _id: { g: slugOf, s: { $toString: '$f.v' }, p: '$id' }, v: { $first: '$f.v' }, k: { $first: '$f.k' } } },
+				{
+					$group: {
+						_id: { g: '$_id.g', s: '$_id.s' },
+						v: { $first: '$v' },
+						count: { $sum: 1 },
+						ids: { $addToSet: '$k' },
+					},
+				},
+			],
+			grades: [
+				{ $unwind: '$variants' },
+				{ $match: { 'variants.active': true, 'variants.grade': { $type: 'string' } } },
+				{ $group: { _id: { g: '$variants.grade', p: '$id' } } },
+				{ $group: { _id: '$_id.g', count: { $sum: 1 } } },
+			],
+		},
+	};
+};
 
 /**
  * @typedef {object} Facets
@@ -373,15 +450,19 @@ export const facetStage = (filterable) => ({
  * @property {Array<{ id: string, slug: string, name: string, count: number }>} brands
  * @property {{ min: number, max: number } | null} price
  * @property {Array<{ id: string, slug: string, name: string, unit: string, type: string,
- *   values: Array<{ value: string | number | boolean, label: string, count: number }> }>} attributes
+ *   values: Array<{ value: string | number | boolean, label: string, count: number }> }>} attributes one per slug
  * @property {Array<{ key: string, label: string, count: number }>} grades
  */
 
 /**
- * The facets for shoppers from the `$facet` answer: names added, unknown records dropped, values sorted.
+ * The facets for shoppers from the `$facet` answer: names added, unknown records dropped, values sorted. A slug's
+ * facet is named by the field the listing's category defines for it ({@link attributeOf}); a value is labeled by that
+ * field when it holds the value, else by the field that does.
  * @param {any} raw the single document the `$facet` stage answers
  * @param {{ categories: ReadonlyMap<string, { slug: string, name: string }>, brands: ReadonlyMap<string, { slug: string, name: string }>,
- *   attributes: ReadonlyMap<string, AttributeRecord>, grades: ReadonlyMap<string, { label: string }> }} names
+ *   attributes: ReadonlyMap<string, AttributeRecord>, grades: ReadonlyMap<string, { label: string }>,
+ *   lineage?: ReadonlyArray<string> }} names `attributes`: the fields shoppers filter by; `lineage`: the listing's
+ *   category and those above it, nearest first
  * @returns {Facets}
  */
 export const facetsOf = (raw, names) => {
@@ -395,32 +476,36 @@ export const facetsOf = (raw, names) => {
 			})
 			.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 	const price = raw?.price?.[0];
-	/** @type {Map<string, Array<{ value: string | number | boolean, count: number }>>} */
-	const values = new Map();
-	for (const row of [...(raw?.attributes ?? []), ...(raw?.variantAttributes ?? [])]) {
-		if (!names.attributes.has(row._id.k)) continue;
-		values.set(row._id.k, [...(values.get(row._id.k) ?? []), { value: row._id.v, count: Number(row.count) }]);
+	/** @type {Map<string, { field: AttributeRecord, list: Array<{ value: string | number | boolean, label: string, count: number }> }>} */
+	const groups = new Map();
+	for (const row of raw?.attributes ?? []) {
+		const slug = row._id.g;
+		const field = attributeOf(names.attributes, slug, names.lineage);
+		/** @type {string[]} */
+		const ids = row.ids ?? [];
+		const owner = ids.includes(field?.id ?? '') ? field : ids.map((id) => names.attributes.get(id)).find(Boolean);
+		if (!field || !owner || field.slug !== slug) continue;
+		const group = groups.get(slug) ?? { field, list: [] };
+		group.list.push({ value: row.v, label: valueLabel(owner, row.v), count: Number(row.count) });
+		groups.set(slug, group);
 	}
 	return {
 		categories: named(raw?.categories, names.categories),
 		brands: named(raw?.brands, names.brands),
 		price: price && typeof price.min === 'number' ? { min: price.min, max: price.max } : null,
-		attributes: [...values.entries()]
-			.map(([id, list]) => ({ attribute: /** @type {AttributeRecord} */ (names.attributes.get(id)), list }))
-			.sort((a, b) => a.attribute.sort - b.attribute.sort || a.attribute.name.localeCompare(b.attribute.name))
-			.map(({ attribute, list }) => ({
-				id: attribute.id,
-				slug: attribute.slug,
-				name: attribute.name,
-				unit: attribute.unit,
-				type: attribute.type,
-				values: list
-					.sort((a, b) =>
-						typeof a.value === 'number' && typeof b.value === 'number'
-							? a.value - b.value
-							: String(a.value).localeCompare(String(b.value)),
-					)
-					.map((entry) => ({ ...entry, label: valueLabel(attribute, entry.value) })),
+		attributes: [...groups.values()]
+			.sort((a, b) => a.field.sort - b.field.sort || a.field.name.localeCompare(b.field.name))
+			.map(({ field, list }) => ({
+				id: field.id,
+				slug: field.slug,
+				name: field.name,
+				unit: field.unit,
+				type: field.type,
+				values: list.sort((a, b) =>
+					typeof a.value === 'number' && typeof b.value === 'number'
+						? a.value - b.value
+						: String(a.value).localeCompare(String(b.value)),
+				),
 			})),
 		// in the order of the grades list
 		grades: [...names.grades.entries()].flatMap(([key, grade]) => {

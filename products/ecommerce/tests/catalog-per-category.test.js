@@ -415,3 +415,95 @@ describe('attributes per category (E45)', () => {
 		expect(stored.map((/** @type {any} */ a) => a.categoryId).sort()).toEqual([ids.dresses.id, null].sort());
 	});
 });
+
+describe('one slug, several fields (parity P3-6)', () => {
+	/** @type {Record<string, any>} */
+	const weave = {};
+	/** @param {string} query */
+	const names = async (query) =>
+		(await shop.visitor('GET', `/v1/shop/products?q=Weave&sort=name&${query}`)).json.items.map(
+			(/** @type {any} */ item) => item.name,
+		);
+	/** @param {string} query */
+	const facet = async (query) =>
+		(await shop.visitor('GET', `/v1/shop/products?q=Weave&${query}`)).json.facets.attributes.filter(
+			(/** @type {any} */ group) => group.slug === 'weave',
+		);
+
+	beforeAll(async () => {
+		weave.kids = await api('POST', '/v1/categories', { name: 'Kids dresses', parentId: ids.dresses.id });
+		const field = (/** @type {Record<string, unknown>} */ input) =>
+			api('POST', '/v1/attributes', { slug: 'weave', show: { filter: true }, ...input });
+		weave.all = await field({ name: 'Weave' });
+		weave.dress = await field({
+			name: 'Dress weave',
+			categoryId: ids.dresses.id,
+			type: 'choice',
+			choices: [{ value: 'twill', label: 'Twill weave' }, 'plain'],
+		});
+		weave.kidsField = await field({ name: 'Kids weave', categoryId: weave.kids.id });
+		// on the variants in one category, on the product elsewhere
+		weave.shirt = await field({ name: 'Shirt weave', categoryId: ids.shirts.id, on: 'variant' });
+		await shop.seedProduct({ name: 'Weave dress', categoryIds: [ids.dresses.id], specs: { [weave.dress.id]: 'twill' } });
+		await shop.seedProduct({ name: 'Weave plain dress', categoryIds: [ids.dresses.id], specs: { [weave.dress.id]: 'plain' } });
+		await shop.seedProduct({
+			name: 'Weave kids dress',
+			categoryIds: [weave.kids.id],
+			specs: { [weave.kidsField.id]: 'twill' },
+		});
+		await shop.seedProduct({ name: 'Weave scarf', specs: { [weave.all.id]: 'twill' } });
+		await shop.seedProduct({
+			name: 'Weave shirt',
+			categoryIds: [ids.shirts.id],
+			variants: [
+				{ ...variant(null), price: 3000, attributes: { [weave.shirt.id]: 'twill' } },
+				{ ...variant(null), price: 500, attributes: { [weave.shirt.id]: 'plain' } },
+			],
+		});
+	});
+
+	it('filters a listing without a category by every field with the slug', async () => {
+		expect(await names('attr.weave=twill')).toEqual(['Weave dress', 'Weave kids dress', 'Weave scarf', 'Weave shirt']);
+		expect(await names('attr.weave=plain')).toEqual(['Weave plain dress', 'Weave shirt']);
+		// a field named by id is that field only
+		expect(await names(`attr.${weave.dress.id}=twill`)).toEqual(['Weave dress']);
+		// one variant matches the price and its own field together: the twill shirt costs 3000
+		expect(await names('attr.weave=twill&maxPrice=1000')).toEqual(['Weave dress', 'Weave kids dress', 'Weave scarf']);
+		expect(await names('attr.weave=plain&maxPrice=1000&inStock=1')).toEqual(['Weave plain dress', 'Weave shirt']);
+		expect(await names('attr.weave=nothing')).toEqual([]);
+	});
+
+	it('filters a category listing by the fields of the categories below it too', async () => {
+		expect(await names(`category=${ids.dresses.slug}&attr.weave=twill`)).toEqual(['Weave dress', 'Weave kids dress']);
+		expect(await names(`category=${weave.kids.slug}&attr.weave=twill`)).toEqual(['Weave kids dress']);
+	});
+
+	it('groups the facets by slug, named as the listing defines the slug, each product counted once', async () => {
+		expect(await facet('')).toEqual([
+			{
+				id: weave.all.id,
+				slug: 'weave',
+				name: 'Weave',
+				unit: '',
+				type: 'text',
+				values: [
+					{ value: 'plain', label: 'plain', count: 2 },
+					{ value: 'twill', label: 'twill', count: 4 },
+				],
+			},
+		]);
+		expect(await facet(`category=${ids.dresses.slug}`)).toEqual([
+			{
+				id: weave.dress.id,
+				slug: 'weave',
+				name: 'Dress weave',
+				unit: '',
+				type: 'choice',
+				values: [
+					{ value: 'plain', label: 'plain', count: 1 },
+					{ value: 'twill', label: 'Twill weave', count: 2 },
+				],
+			},
+		]);
+	});
+});

@@ -30777,7 +30777,7 @@
 		"/v1/shop/products": {
 			"get": {
 				"summary": "The product grid: active products with filters, search and facets",
-				"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value] (one active variant must match the price range, variant attributes, grade and stock together). Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+				"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value]: by id that attribute, by slug every product or variant attribute with that slug (the same slug may be defined once per category; each product matches by the attribute it holds values of); one active variant must match the price range, variant attributes, grade and stock together. Facets have one entry per slug, named as the listing's category (or the nearest one above it) defines it, else as the one for every category; each product counts once per value. Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -33106,7 +33106,7 @@
 						"type": "string",
 						"maxLength": 120,
 						"pattern": "^[\\p{Ll}\\p{Lo}\\p{N}]+(?:-[\\p{Ll}\\p{Lo}\\p{N}]+)*$",
-						"description": "Unique among the attributes for the same category (and among those for every category); listings filter by attr.<slug>, taking the listing's category's attribute first, then the one for every category."
+						"description": "Unique among the attributes for the same category (and among those for every category); listings filter by attr.<slug>, which matches every attribute with that slug (each product by the attribute it holds values of); a listing's facet for the slug is named by its category's attribute first, then the one for every category."
 					},
 					"on": {
 						"type": "string",
@@ -47740,7 +47740,7 @@
 								},
 								"slug": {
 									"type": "string",
-									"description": "Filter with attr.<slug>=value."
+									"description": "Filter with attr.<slug>=value (every attribute with this slug)."
 								},
 								"name": {
 									"type": "string"

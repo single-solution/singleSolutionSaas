@@ -224,7 +224,6 @@ export const createListingFilter = (service) => {
 		}
 		const resolved = {
 			categoryIds,
-			lineage,
 			brandIds:
 				query.brands.length > 0
 					? brands.filter((b) => query.brands.includes(b.id) || query.brands.includes(b.slug)).map((b) => b.id)
@@ -279,8 +278,9 @@ export const createCatalogShop = (product, service, common) => {
 			categories: byCategory,
 			brands: new Map(brands.map((b) => [b.id, b])),
 			attributes: new Map(filterable.map((a) => [a.id, a])),
-			// a category's listing names grades as that category (or the nearest one above it) defines them (E45)
+			// a category's listing names grades and fields as that category (or the nearest one above it) defines them (E45)
 			grades: gradesFor(await common.gradeListOf(s), lineage),
+			lineage,
 		};
 		const first = page.after === null && (query.page === null || query.page === 1);
 
@@ -296,7 +296,7 @@ export const createCatalogShop = (product, service, common) => {
 				skip: offset,
 				limit: page.fetchLimit,
 				count: query.count,
-				facets: first ? facetStage(filterable.map((attribute) => attribute.id)).$facet : null,
+				facets: first ? facetStage(filterable).$facet : null,
 				project: { _id: 0, websiteId: 0, merchantId: 0 },
 			});
 			if (found.ok) {
@@ -327,7 +327,7 @@ export const createCatalogShop = (product, service, common) => {
 		const body = page.page(found, (item) => cursorKey(item, sort));
 		let facets = null;
 		if (first) {
-			const [raw] = await products.aggregate([{ $match: filter }, facetStage(filterable.map((a) => a.id))]).toArray();
+			const [raw] = await products.aggregate([{ $match: filter }, facetStage(filterable)]).toArray();
 			facets = facetsOf(raw, names);
 		}
 		/** @type {Record<string, unknown>} */

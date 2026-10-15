@@ -500,7 +500,12 @@ describe('listings', () => {
 				deal: { id: { $in: ['p'] } },
 			},
 		);
-		const selling = { active: true, price: { $gte: 5, $lte: 9 }, grade: { $in: ['a'] }, 'attributes.att_v': { $in: ['red'] } };
+		const selling = {
+			active: true,
+			price: { $gte: 5, $lte: 9 },
+			grade: { $in: ['a'] },
+			$and: [{ 'attributes.att_v': { $in: ['red'] } }],
+		};
 		expect(filter).toEqual({
 			$and: [
 				{ status: 'active' },
@@ -526,6 +531,56 @@ describe('listings', () => {
 				attributes,
 			}),
 		).toEqual({ $and: [{ status: 'active' }, { variants: { $elemMatch: { active: true, price: { $gte: 1 } } } }] });
+		// a slug on the product in one category and on variants in another: the product's own value, or the same variant
+		const both = new Map(
+			/** @type {Array<[string, any]>} */ ([
+				['att_p', { id: 'att_p', slug: 'fit', type: 'text', on: 'product' }],
+				['att_q', { id: 'att_q', slug: 'fit', type: 'text', on: 'variant' }],
+				['att_u', { id: 'att_u', slug: 'fit', type: 'text', on: 'unit' }],
+			]),
+		);
+		const mixed = shopFilter(
+			/** @type {any} */ ({
+				q: '',
+				minPrice: null,
+				maxPrice: 9,
+				inStock: false,
+				attributes: [{ id: 'fit', values: ['slim'] }],
+				grades: [],
+			}),
+			{ categoryIds: null, brandIds: null, attributes: both },
+		);
+		const cheap = { active: true, price: { $lte: 9 } };
+		expect(mixed).toEqual({
+			$and: [
+				{ status: 'active' },
+				{
+					$or: [
+						{ $and: [{ variants: { $elemMatch: { ...cheap, $and: [{ 'attributes.att_q': { $in: ['slim'] } }] } } }] },
+						{ $and: [{ 'specs.att_p': { $in: ['slim'] } }, { variants: { $elemMatch: cheap } }] },
+					],
+				},
+			],
+		});
+		// past three such filters the rest match the product's own value or any active variant's
+		const four = shopFilter(
+			/** @type {any} */ ({
+				q: '',
+				minPrice: null,
+				maxPrice: null,
+				inStock: false,
+				attributes: ['a', 'b', 'c', 'd'].map((value) => ({ id: 'fit', values: [value] })),
+				grades: [],
+			}),
+			{ categoryIds: null, brandIds: null, attributes: both },
+		);
+		expect(/** @type {any} */ (four).$and[1]).toEqual({
+			$or: [
+				{ 'specs.att_p': { $in: ['d'] } },
+				{ variants: { $elemMatch: { active: true, $or: [{ 'attributes.att_q': { $in: ['d'] } }] } } },
+			],
+		});
+		expect(/** @type {any} */ (four).$and[2].$or).toHaveLength(8);
 		expect(scopeFilter({ productIds: [], categoryIds: [], brandIds: [] }, (id) => [id])).toBeNull();
 		expect(scopeFilter({ productIds: ['p'], categoryIds: ['c'], brandIds: ['b'] }, (id) => [id, `${id}2`])).toEqual({
 			$or: [{ id: { $in: ['p'] } }, { categoryIds: { $in: ['c', 'c2'] } }, { brandId: { $in: ['b'] } }],
@@ -577,9 +632,9 @@ describe('listings', () => {
 				brands: [],
 				price: [],
 				attributes: [
-					{ _id: { k: 'att_x', v: 1 }, count: 1 },
-					{ _id: { k: 'att_c', v: 'b' }, count: 1 },
-					{ _id: { k: 'att_c', v: 'a' }, count: 2 },
+					{ _id: { g: 'x', s: '1' }, v: 1, count: 1, ids: ['att_x'] },
+					{ _id: { g: 'c', s: 'b' }, v: 'b', count: 1, ids: ['att_c'] },
+					{ _id: { g: 'c', s: 'a' }, v: 'a', count: 2, ids: ['att_c'] },
 				],
 				grades: [{ _id: 'gone', count: 1 }],
 			},
