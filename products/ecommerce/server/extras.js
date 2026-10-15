@@ -7,6 +7,7 @@
  * @module
  */
 import { MAX_COMPARE } from '../core/compare.js';
+import { guestRules } from '../core/guests.js';
 import { createAlerts } from './extras-alerts.js';
 import { createCards } from './extras-cards.js';
 import { createReports } from './extras-reports.js';
@@ -70,7 +71,9 @@ export const createExtras = (product, service) => {
 			if (s.has('alerts')) {
 				// a guest gives a phone; a price-drop alert may name its price (EN-1)
 				const { guests, targetPrice } = await s.values('alerts');
-				settings.alerts = { guests: guests === true, targetPrice: targetPrice === true };
+				// what a guest gives: the contact guests are known by (checkout.guestIdentity, E15)
+				const contact = guestRules(await s.values('checkout')).identity;
+				settings.alerts = { guests: guests === true, targetPrice: targetPrice === true, contact };
 			}
 			if (s.has('compare')) {
 				const { maxProducts } = await s.values('compare');

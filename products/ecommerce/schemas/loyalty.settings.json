@@ -55,7 +55,7 @@
 		"guests": {
 			"type": "string",
 			"title": "Guests",
-			"description": "None: guests do not earn. Earn: guests earn on their phone number and redeem once they sign in.",
+			"description": "None: guests do not earn. Earn: guests earn on the contact they are known by (Checkout: Guests check out by) and redeem once they sign in.",
 			"default": "none",
 			"enum": ["none", "earn"]
 		},

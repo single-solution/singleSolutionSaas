@@ -118,7 +118,14 @@ export const settingsOf = (config) => {
 			pageSize: Number(raw.reviews?.pageSize) || 10,
 		},
 		/** guests set alerts with a phone; a price-drop alert names a price (EN-1) */
-		alerts: { guests: raw.alerts?.guests === true, targetPrice: raw.alerts?.targetPrice === true },
+		alerts: {
+			guests: raw.alerts?.guests === true,
+			targetPrice: raw.alerts?.targetPrice === true,
+			/** what a guest gives: the contact guests are known by (checkout.guestIdentity, E15) */
+			contact: /** @type {'phone' | 'email' | 'either'} */ (
+				['email', 'either'].includes(raw.alerts?.contact) ? raw.alerts.contact : 'phone'
+			),
+		},
 	};
 };
 

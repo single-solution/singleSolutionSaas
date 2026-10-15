@@ -110,20 +110,34 @@ export const checkGuest = (body, rules, guests = { identity: 'phone', phoneRequi
 	const name = typeof input.name === 'string' ? input.name.trim() : '';
 	if (!name || name.length > 120)
 		return { ok: false, field: 'customer/name', message: 'Give your name (at most 120 characters).' };
+	const contact = checkGuestContact(input, rules, guests);
+	if (!contact.ok) return { ...contact, field: `customer/${contact.field}` };
+	return { ok: true, value: { name, ...contact.value } };
+};
+
+/**
+ * Check the contact a guest is known by everywhere guests are known — checkout, alerts, customers staff add (E15):
+ * `{ phone?, email? }` as {@link checkGuest} reads them, by the website's one setting `checkout.guestIdentity`.
+ * @param {Record<string, unknown>} input
+ * @param {PhoneRules} rules the website's phone rules
+ * @param {{ identity: GuestIdentity, phoneRequired: boolean }} guests the website's guest rules
+ * @returns {{ ok: true, value: { phone: string, email: string, guestKey: string } }
+ *   | { ok: false, field: 'phone' | 'email', message: string, code?: string }}
+ */
+export const checkGuestContact = (input, rules, guests) => {
 	const typedPhone = input.phone !== undefined && input.phone !== null && input.phone !== '';
 	const phone = typedPhone ? normalisePhone(input.phone, rules) : null;
-	if (typedPhone && !phone)
-		return { ok: false, field: 'customer/phone', message: 'Give your phone number with its country code.' };
-	if (phone && !phoneAllowed(phone, rules)) return { ok: false, field: 'customer/phone', ...COUNTRY_REFUSED };
+	if (typedPhone && !phone) return { ok: false, field: 'phone', message: 'Give your phone number with its country code.' };
+	if (phone && !phoneAllowed(phone, rules)) return { ok: false, field: 'phone', ...COUNTRY_REFUSED };
 	const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
 	if (input.email !== undefined && input.email !== null && input.email !== '' && !EMAIL.test(email))
-		return { ok: false, field: 'customer/email', message: 'Give a valid email address or none.' };
+		return { ok: false, field: 'email', message: 'Give a valid email address or none.' };
 	if (!phone && (guests.identity === 'phone' || guests.phoneRequired))
-		return { ok: false, field: 'customer/phone', message: 'Give your phone number with its country code.' };
-	if (!email && guests.identity === 'email') return { ok: false, field: 'customer/email', message: 'Give your email address.' };
-	const value = { name, phone: phone ?? '', email };
+		return { ok: false, field: 'phone', message: 'Give your phone number with its country code.' };
+	if (!email && guests.identity === 'email') return { ok: false, field: 'email', message: 'Give your email address.' };
+	const value = { phone: phone ?? '', email };
 	const guestKey = guestKeyOf(value, guests.identity);
-	if (!guestKey) return { ok: false, field: 'customer/phone', message: 'Give your phone number or email address.' };
+	if (!guestKey) return { ok: false, field: 'phone', message: 'Give your phone number or email address.' };
 	return { ok: true, value: { ...value, guestKey } };
 };
 
@@ -133,21 +147,23 @@ export const MAX_ADDRESSES = 6;
 const MAX_OPENING_POINTS = 1_000_000_000;
 
 /**
- * Check a customer staff add without an account (E46): a guest record by phone, `{ name, phone, email?, city?, note?,
- * points?, loyaltyMember? }` — `points`: the opening loyalty points; `loyaltyMember`: the loyalty member flag (E47).
+ * Check a customer staff add without an account (E46): a guest record by the contact guests are known by (E15,
+ * `checkout.guestIdentity`), `{ name, phone?, email?, city?, note?, points?, loyaltyMember? }` — `points`: the opening
+ * loyalty points; `loyaltyMember`: the loyalty member flag (E47).
  * @param {unknown} body
  * @param {PhoneRules} rules the website's phone rules
+ * @param {{ identity: GuestIdentity, phoneRequired: boolean }} guests the website's guest rules
  * @returns {{ ok: true, value: { name: string, phone: string, email: string, guestKey: string, city: string,
  *   note: string, points: number, loyaltyMember: boolean } } | { ok: false, field: string, message: string, code?: string }}
  */
-export const checkNewCustomer = (body, rules) => {
+export const checkNewCustomer = (body, rules, guests) => {
 	const input = typeof body === 'object' && body !== null ? /** @type {Record<string, unknown>} */ (body) : {};
-	const who = checkGuest(input, rules);
+	const who = checkGuest(input, rules, guests);
 	if (!who.ok)
 		return {
 			...who,
 			field: who.field.replace(/^customer\/?/, '') || 'name',
-			message: who.message.replace('your name', 'the name').replace('your phone', 'the phone'),
+			message: who.message.replace(/\byour (name|phone|email)\b/, 'the $1'),
 		};
 	const city = typeof input.city === 'string' ? input.city.trim() : input.city === undefined ? '' : null;
 	if (city === null || city.length > 80) return { ok: false, field: 'city', message: 'city is at most 80 characters.' };

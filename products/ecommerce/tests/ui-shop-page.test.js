@@ -477,7 +477,19 @@ describe('product page', () => {
 			variantId: 'var_r1',
 			phone: '+44 7700 900123',
 		});
-		expect(textOf(host)).toContain(text('alerts.checkPhone'));
+		expect(textOf(host)).toContain(text('alerts.checkContact'));
+		// a website that knows guests by email asks for it instead of a phone (checkout.guestIdentity, E15)
+		alertAnswer = ok({ id: 'alr_2' }, 201);
+		const byEmail = await mountPage(fake, 'phone', { alerts: { guests: true, targetPrice: false, contact: 'email' } });
+		expect($(byEmail, '#ss-page-alert-phone')).toBeNull();
+		await setValue($(byEmail, '#ss-page-alert-email'), 'guest@example.com', 'input');
+		await click(buttonOf(byEmail, text('alerts.priceDrop')));
+		expect(fake.last('POST /v1/shop/alerts')?.body).toEqual({
+			kind: 'price_drop',
+			productId: 'prd_1',
+			variantId: 'var_b1',
+			email: 'guest@example.com',
+		});
 		// a guest without the setting is asked to sign in, and a price field shows only with targetPrice
 		const plain = await mountPage(makeShop({ features: ['catalog', 'alerts'], routes: fake.routes }), 'phone');
 		expect(textOf(plain)).toContain(text('alerts.signIn'));

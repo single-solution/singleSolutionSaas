@@ -2,8 +2,9 @@
  * Back-in-stock and price-drop alerts (feature `alerts`, PLAN 0.8.8: via Notifications). A signed-in shopper sets an
  * alert on a product (or one variant); the contact is the email and phone of their sign-in, and a price-drop alert
  * stores the price at that moment, with an optional target price (E34). While the `guests` setting allows, a guest
- * sets one with a phone, read as checkout reads it (E21, K12), and the alert keeps the guest's customer id so it moves
- * to them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
+ * sets one with the contact guests are known by everywhere (the one setting `checkout.guestIdentity`: a phone, an email
+ * address or either, read as checkout reads them; E15, E21, K12), and the alert keeps the guest's customer id so it
+ * moves to them at sign-in. When the catalog changes (`products.changed`: catalog writes, an import, a return's restock, and
  * stock an order gives back on a cancel, an ended window or a return to origin) the alerts that became due are marked
  * and sent at once, at most {@link SEND_BATCH} per change; the rest go out on later uses of the website
  * (`service.whenUsed`). Each alert is sent once (`ecommerce.back_in_stock` / `ecommerce.price_drop`) on each of the
@@ -16,7 +17,6 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { normalisePhone } from '@ss/contracts/phone';
 import { created, defineRoute, noContent, problem } from '@ss/app-kit';
 import { newOrderKey, orderKeyHash } from '../adapters/crypto.js';
 import { isDuplicate, userIdsOf } from '../adapters/extras-store.js';
@@ -32,7 +32,7 @@ import {
 	priceOf,
 	stopLink,
 } from '../core/alerts.js';
-import { COUNTRY_REFUSED, ORDER_KEY_LENGTH, phoneAllowed } from '../core/guests.js';
+import { ORDER_KEY_LENGTH, checkGuestContact, guestRules, phoneAllowed } from '../core/guests.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { phoneRulesOf } from './guests.js';
 import { VISITOR_LIMITS, VISITOR_WRITE_LIMITS } from './service.js';
@@ -214,8 +214,8 @@ export const createAlerts = (_product, service, cards) => {
 	});
 
 	/**
-	 * Who an alert is for: the signed-in shopper (the email and phone of their sign-in), else a guest's normalized
-	 * phone while the `guests` setting allows (E34); with their customer record's id when they have one (E21). A phone
+	 * Who an alert is for: the signed-in shopper (the email and phone of their sign-in), else a guest's contact by
+	 * `checkout.guestIdentity` while the `guests` setting allows (E34, E15); with their customer record's id when they have one (E21). A phone
 	 * of a country the website does not serve (`checkout.countries`, SE-5) is refused for a guest and left out for a
 	 * member.
 	 * @param {Site} s @param {WebsiteData} data @param {Record<string, unknown>} body
@@ -233,12 +233,14 @@ export const createAlerts = (_product, service, cards) => {
 			return { userId: shopper.id, email: shopper.email, phone, customerId: customer?.id ?? null };
 		}
 		if ((await s.values('alerts')).guests !== true) throw problem('sign_in_required', 'Sign in to continue.');
-		const phone = normalisePhone(body.phone, rules);
-		if (!phone) throw service.invalid('phone', 'Give your phone number with its country code.');
-		if (!phoneAllowed(phone, rules)) throw service.invalid('phone', COUNTRY_REFUSED.message, COUNTRY_REFUSED.code);
-		// the guest's customer record by this phone (`p:` key: a phone guest; an email guest's record keeps its own key)
-		const customer = await store.guestCustomer(`p:${phone}`);
-		return { userId: '', email: '', phone, customerId: customer?.id ?? null };
+		// a guest gives the contact guests are known by (the one setting checkout.guestIdentity, E15), and their customer
+		// record is the one of that contact's key
+		const { identity } = guestRules(await s.values('checkout'));
+		const checked = checkGuestContact(body, rules, { identity, phoneRequired: false });
+		if (!checked.ok) throw service.invalid(checked.field, checked.message, checked.code);
+		const { phone, email, guestKey } = checked.value;
+		const customer = await store.guestCustomer(guestKey);
+		return { userId: '', email, phone, customerId: customer?.id ?? null };
 	};
 
 	/** @param {any} ctx */
@@ -269,8 +271,12 @@ export const createAlerts = (_product, service, cards) => {
 			status: /** @type {const} */ ('waiting'),
 			dueAt: null,
 		};
-		// a member's alerts are theirs; a guest's are their phone's
-		const owner = contact.userId ? { userId: contact.userId } : { userId: '', phone: contact.phone };
+		// a member's alerts are theirs; a guest's are their contact's (the phone, else the email address, as their key)
+		const owner = contact.userId
+			? { userId: contact.userId }
+			: contact.phone && guestRules(await s.values('checkout')).identity !== 'email'
+				? { userId: '', phone: contact.phone }
+				: { userId: '', email: contact.email };
 		const filter = { websiteId: data.websiteId, ...owner, kind, productId, variantId, status: 'waiting' };
 		// the same waiting alert set again is answered as it is (201, as a new one: the shopper's alert is set)
 		const existing = /** @type {StoredAlert | null} */ (await alerts(data).findOne(filter, NO_ID));

@@ -433,6 +433,38 @@ describe('alerts', () => {
 		await shop.setting('alerts', 'channels', ['email']);
 	});
 
+	it('take a guest by the one contact guests are known by (checkout.guestIdentity, E15)', async () => {
+		const item = await twoVariants();
+		const [small] = /** @type {import('../core/model.js').VariantRecord[]} */ (item.variants);
+		const subscribe = (/** @type {Record<string, unknown>} */ body) =>
+			visit('POST', '/v1/shop/alerts', { body: { kind: 'price_drop', productId: item.id, variantId: small?.id, ...body } });
+		await shop.setting('alerts', 'guests', true);
+		await shop.setting('checkout', 'guestIdentity', 'email');
+		try {
+			// the widget asks for what guests are known by
+			const config = await shop.visitor('GET', '/v1/widget/config');
+			expect(config.json.settings.alerts).toMatchObject({ guests: true, contact: 'email' });
+			const refused = await subscribe({ phone: '+15550004444' });
+			expect(refused.json.errors[0]).toMatchObject({ path: '/email' });
+			const byEmail = await subscribe({ email: ' Guest@Example.com ' });
+			expect(byEmail.status).toBe(201);
+			const stored = await (
+				await shop.db()
+			)
+				.collection(COLLECTIONS.alerts)
+				.findOne({ websiteId: shop.websiteId, id: byEmail.json.id });
+			expect(stored).toMatchObject({ userId: '', email: 'guest@example.com', phone: '' });
+			// the same guest, the same alert
+			expect((await subscribe({ email: 'guest@example.com' })).json.id).toBe(byEmail.json.id);
+			await shop.setting('checkout', 'guestIdentity', 'either');
+			expect((await subscribe({ email: 'other@example.com' })).status).toBe(201);
+			expect((await subscribe({})).json.errors[0]).toMatchObject({ path: '/phone' });
+		} finally {
+			await shop.setting('checkout', 'guestIdentity', 'phone');
+			await shop.setting('alerts', 'guests', false);
+		}
+	});
+
 	it('fire when stock comes back through the order ledger or an import', async () => {
 		/** An out-of-stock product with Sara's back-in-stock alert. @param {string} name */
 		const watched = async (name) => {
@@ -543,10 +575,14 @@ describe('alerts', () => {
 
 	it('link to the stop page the setting names, and tell the widgets what guests and prices may do (EN-1)', async () => {
 		const defaults = await visit('GET', '/v1/widget/config');
-		expect(defaults.json.settings.alerts).toEqual({ guests: false, targetPrice: false });
+		expect(defaults.json.settings.alerts).toEqual({ guests: false, targetPrice: false, contact: 'phone' });
 		await shop.setting('alerts', 'guests', true);
 		await shop.setting('alerts', 'targetPrice', true);
-		expect((await visit('GET', '/v1/widget/config')).json.settings.alerts).toEqual({ guests: true, targetPrice: true });
+		expect((await visit('GET', '/v1/widget/config')).json.settings.alerts).toEqual({
+			guests: true,
+			targetPrice: true,
+			contact: 'phone',
+		});
 
 		/** Sara watches a sold-out product; it comes back by an import; the link of the message sent. */
 		const linkOf = async () => {

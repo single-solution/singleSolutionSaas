@@ -469,8 +469,9 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				};
 
 				/**
-				 * The alert buttons: set one, or see the one already set with Stop. A guest gives a phone while guests may
-				 * (they cannot list their alerts); a price-drop alert names an optional price while the setting allows (EN-1).
+				 * The alert buttons: set one, or see the one already set with Stop. A guest gives the contact guests are known by
+				 * (`settings.alerts.contact`: a phone, an email address or either, E15) while guests may (they cannot list
+				 * their alerts); a price-drop alert names an optional price while the setting allows (EN-1).
 				 * @param {PageVariant | null} current
 				 */
 				const alertRow = async (current) => {
@@ -502,7 +503,8 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 										kind,
 										productId: item.id,
 										variantId: variant()?.id ?? null,
-										...(member ? {} : { phone: typed.get('alert-phone') ?? '' }),
+										...(member || settings.alerts.contact === 'email' ? {} : { phone: typed.get('alert-phone') ?? '' }),
+										...(member || settings.alerts.contact === 'phone' ? {} : { email: typed.get('alert-email') ?? '' }),
 										...(targetPrice === null ? {} : { targetPrice }),
 									},
 									idempotencyKey: shop.newKey(),
@@ -511,7 +513,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								said.textContent = answer.ok
 									? t(kind === 'back_in_stock' ? 'alerts.stockSet' : 'alerts.priceSet')
 									: !member && codeOf(answer) === 'validation_failed'
-										? t('alerts.checkPhone')
+										? t('alerts.checkContact')
 										: problemText(config, 'alerts.problem.', codeOf(answer), 'alerts.failed');
 								if (answer.ok && member) {
 									alerts.forget();
@@ -548,7 +550,12 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						doc,
 						'div',
 						{ class: 'actions' },
-						member ? null : alertField('alert-phone', t('alerts.phone'), { type: 'tel', autocomplete: 'tel' }),
+						member || settings.alerts.contact === 'email'
+							? null
+							: alertField('alert-phone', t('alerts.phone'), { type: 'tel', autocomplete: 'tel' }),
+						member || settings.alerts.contact === 'phone'
+							? null
+							: alertField('alert-email', t('alerts.email'), { type: 'email', autocomplete: 'email' }),
 						priceAlert || !settings.alerts.targetPrice
 							? null
 							: alertField('alert-target', t('alerts.targetPrice'), { inputmode: 'decimal' }),

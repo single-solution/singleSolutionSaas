@@ -102,6 +102,16 @@ describe('customers without an account (E46)', () => {
 		expect(await paths({ name: 'Nobody' })).toEqual(['/phone']);
 		expect(await paths({ name: 'N', phone: '+15550003002', points: -1 })).toEqual(['/points']);
 		expect(await paths({ name: 'N', phone: '+15550003002', email: 'nope' })).toEqual(['/email']);
+		// the one guest contact (checkout.guestIdentity, E15): a website that knows guests by email adds them by email
+		await shop.setting('checkout', 'guestIdentity', 'email');
+		try {
+			expect(await paths({ name: 'Nobody', phone: '+15550003009' })).toEqual(['/email']);
+			const byEmail = await shop.api('POST', '/v1/customers', { name: 'Eve', email: 'Eve@Example.com' });
+			expect(byEmail.status).toBe(201);
+			expect(byEmail.json).toMatchObject({ email: 'eve@example.com', phone: '' });
+		} finally {
+			await shop.setting('checkout', 'guestIdentity', 'phone');
+		}
 		// the widget, with customers.manage
 		const ticket = await shop.ticket(['customers.manage']);
 		const widget = await shop.admin(ticket, 'POST', '/v1/admin/customers', { name: 'Wendy', phone: '+15550003003' });

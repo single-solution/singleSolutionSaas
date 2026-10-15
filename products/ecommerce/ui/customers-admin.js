@@ -119,7 +119,8 @@ const customersTab = (kit, panel) => {
 	/** Add a customer without an account (E46). */
 	const add = () => {
 		const name = kit.input('', { maxlength: '120', required: '' });
-		const phone = kit.input('', { type: 'tel', maxlength: '40', required: '' });
+		// the contact the website knows guests by (checkout.guestIdentity, E15) is checked by the server
+		const phone = kit.input('', { type: 'tel', maxlength: '40' });
 		const email = kit.input('', { type: 'email', maxlength: '254' });
 		const city = kit.input('', { maxlength: '80' });
 		const points = kit.input('0', { type: 'number', min: '0', step: '1' });

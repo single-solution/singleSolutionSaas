@@ -331,11 +331,17 @@ export const createFulfilmentStore = (data) => {
 				);
 			},
 			/**
-			 * Add a customer record (a guest staff add, E46); false when one of that phone is there already.
+			 * Add a customer record (a guest staff add, E46); false when one is there already for the same person: the same
+			 * guest key, phone, or email address of an email guest (E15; an empty phone or email address matches nothing).
 			 * @param {CustomerRecord & { createdAt: Date }} record
 			 */
 			create: async (record) => {
-				const taken = await customers.findOne({ websiteId, phone: record.phone }, { projection: { _id: 0, id: 1 } });
+				const same = [
+					...(record.guestKey ? [{ guestKey: record.guestKey }] : []),
+					...(record.phone ? [{ phone: record.phone }] : []),
+					...(record.email && record.guestKey?.startsWith('e:') ? [{ email: record.email }] : []),
+				];
+				const taken = await customers.findOne({ websiteId, $or: same }, { projection: { _id: 0, id: 1 } });
 				if (taken) return false;
 				try {
 					await customers.insertOne({ ...record });

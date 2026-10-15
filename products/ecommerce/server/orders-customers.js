@@ -15,7 +15,7 @@ import { givePoints } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { checkAddress } from '../core/checkout.js';
 import { checkFieldValues } from '../core/fields.js';
-import { MAX_ADDRESSES, checkNewCustomer, phoneDigitsOf, phoneSearchOf } from '../core/guests.js';
+import { MAX_ADDRESSES, checkNewCustomer, guestRules, phoneDigitsOf, phoneSearchOf } from '../core/guests.js';
 import { expiryFor, loyaltyRules } from '../core/loyalty.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { addressRulesOf, phoneRulesOf } from './guests.js';
@@ -269,14 +269,16 @@ export const createCustomers = (service) => {
 	};
 
 	/**
-	 * POST /v1/customers (E46): a customer without an account, added by staff — a guest record by phone (one per phone:
-	 * 409 conflict when a customer has it), with the opening loyalty points given (while Loyalty is on) and the loyalty
+	 * POST /v1/customers (E46): a customer without an account, added by staff — a guest record by the contact guests are
+	 * known by (E15, `checkout.guestIdentity`; one per phone or email address: 409 conflict when a customer has it), with the opening loyalty points given (while Loyalty is on) and the loyalty
 	 * member flag (E47).
 	 * @param {any} ctx
 	 */
 	const create = async (ctx) => {
 		const s = await service.site(ctx);
-		const checked = checkNewCustomer(ctx.body, await phoneRulesOf(s));
+		// staff add a customer by the contact guests are known by (E15); a phone only as that asks
+		const { identity } = guestRules(await s.values('checkout'));
+		const checked = checkNewCustomer(ctx.body, await phoneRulesOf(s), { identity, phoneRequired: false });
 		if (!checked.ok) throw service.invalid(checked.field, checked.message, checked.code);
 		const { points, ...who } = checked.value;
 		if (points > 0 && !s.has('loyalty')) throw service.invalid('points', 'Opening points need Loyalty on.');
@@ -285,8 +287,8 @@ export const createCustomers = (service) => {
 			id: createId(ID_PREFIX.customer),
 			userId: null,
 			guest: true,
-			// staff add a customer by phone: the key a phone guest has (dynamic model §5)
-			guestKey: `p:${who.phone}`,
+			// the key a guest with this contact has (dynamic model §5, E15)
+			guestKey: who.guestKey,
 			name: who.name,
 			email: who.email,
 			phone: who.phone,
@@ -304,7 +306,7 @@ export const createCustomers = (service) => {
 		};
 		const store = await storeOf(s);
 		if (!(await store.customers.create(record)))
-			throw problem('conflict', 'A customer with this phone number is there already: open them instead.');
+			throw problem('conflict', 'A customer with this phone number or email address is there already: open them instead.');
 		if (points > 0)
 			await givePoints(
 				await s.data(),

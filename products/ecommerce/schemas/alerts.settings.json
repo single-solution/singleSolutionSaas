@@ -15,7 +15,7 @@
 		"guests": {
 			"type": "boolean",
 			"title": "Guests may ask for alerts",
-			"description": "With a phone number, without signing in: the product page asks for it.",
+			"description": "Without signing in, with the contact guests are known by (Checkout: Guests check out by: a phone, an email address or either): the product page asks for it.",
 			"default": false
 		},
 		"targetPrice": {

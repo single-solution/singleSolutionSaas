@@ -7,7 +7,7 @@
  * offers) or of the goods' full price (`capBase: goods`); `redeemMode: maximum` redeems the most with one switch.
  * Earned points expire `expiryDays` days (or calendar months in the business time zone, `expiryUnit: months`) after
  * they are earned (0 = never); with `expiryRule: current` the expiry follows today's setting, past points included.
- * Only signed-in shoppers with one of `roles` take part ([] = everyone signed in); guests earn on their phone with
+ * Only signed-in shoppers with one of `roles` take part ([] = everyone signed in); guests earn on their contact with
  * `guests: earn` and redeem once signed in. Checkout and orders call these; the ledger moves the points. No I/O.
  * @module
  */

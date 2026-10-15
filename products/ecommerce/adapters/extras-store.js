@@ -32,10 +32,10 @@ export const INDEXES = [
 	{ collection: COLLECTIONS.alerts, keys: { websiteId: 1, userId: 1 }, name: 'by_user' },
 	{ collection: COLLECTIONS.alerts, keys: { websiteId: 1, productId: 1, status: 1 }, name: 'by_product' },
 	{ collection: COLLECTIONS.alerts, keys: { websiteId: 1, status: 1, dueAt: 1 }, name: 'due' },
-	// one waiting alert of a kind per shopper (a guest: per phone, E34) and product (or variant)
+	// one waiting alert of a kind per shopper (a guest: per phone or email address, E34, E15) and product (or variant)
 	{
 		collection: COLLECTIONS.alerts,
-		keys: { websiteId: 1, userId: 1, phone: 1, kind: 1, productId: 1, variantId: 1 },
+		keys: { websiteId: 1, userId: 1, phone: 1, email: 1, kind: 1, productId: 1, variantId: 1 },
 		name: 'one_waiting_per_contact',
 		unique: true,
 		partialFilterExpression: { status: 'waiting' },
