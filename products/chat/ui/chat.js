@@ -3,8 +3,9 @@
  * screen on phones when set) with the welcome text, messages (AI and staff answers formatted, the visitor's own text
  * plain; AI label, staff names, human-like typing pace, typing and Seen with typing receipts, product cards with Add to
  * cart; earlier messages on request, and times with a divider for each day when the website shows them), the composer
- * with attachments, flows, contact and lead forms, the guest limit, handoff, the paused notice, queue position, office
- * hours, ratings, transcripts and End chat, plus the proactive messages. Live updates come from the back-off checks of
+ * with attachments, flows, contact and lead forms (at the guest limit, and outside office hours for a guest who left
+ * no contact, once a session), the guest limit, handoff, the paused notice, queue position, office hours, ratings,
+ * transcripts and End chat, plus the proactive messages. Live updates come from the back-off checks of
  * `transport.js`.
  * @module
  */
@@ -54,6 +55,7 @@ const NO_CHAT = Object.freeze({
 	conversation: null,
 	visitor: { kind: 'none', name: null, email: null },
 	guestLimit: null,
+	leadOffered: false,
 	lastSeq: 0,
 });
 
@@ -408,23 +410,26 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 
 	// the parts above the composer
 	const kit = { doc, t, make };
+	/** The lead form; `sent` runs once the lead is saved. @param {() => void} sent */
+	const leadNode = (sent) =>
+		leadPart({
+			...kit,
+			leads: s.leads,
+			customFields: on('custom_fields') ? s.customFields : [],
+			send: async (fields, consent) => {
+				const answer = await call('POST', '/v1/chat/leads', { fields, ...(consent ? { consent } : {}) });
+				if (!answer.ok) return failure(answer, 'chat.leadInvalid');
+				leadSent = true;
+				memory.leadSent();
+				sent();
+				paint();
+				return '';
+			},
+		});
 	const limitNode = () => {
 		if (limit === 'sign_in') return signInPart({ ...kit, signInUrl: s.signInUrl, here: here() });
 		if (limit === 'lead' && on('leads_flows'))
-			return leadSent
-				? element(doc, 'p', { class: 'notice' }, t('chat.leadThanks'))
-				: leadPart({
-						...kit,
-						leads: s.leads,
-						customFields: on('custom_fields') ? s.customFields : [],
-						send: async (fields, consent) => {
-							const answer = await call('POST', '/v1/chat/leads', { fields, ...(consent ? { consent } : {}) });
-							if (!answer.ok) return failure(answer, 'chat.leadInvalid');
-							leadSent = true;
-							paint();
-							return '';
-						},
-					});
+			return leadSent ? element(doc, 'p', { class: 'notice' }, t('chat.leadThanks')) : leadNode(() => undefined);
 		return element(doc, 'p', { class: 'notice' }, t('chat.limitReached'));
 	};
 	const contactNode = () =>
@@ -502,6 +507,9 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 		if (wantsTranscript) return ['transcript', transcriptNode];
 		const flow = chat.conversation?.flow;
 		if (flow?.step) return [`flow:${JSON.stringify(flow)}`, () => flowNode(flow)];
+		// no staff are in: a guest who left no contact may leave a lead, once a session (PLAN 0.8.3 Lead capture)
+		if (chat.leadOffered === true && on('leads_flows') && isGuest() && !leadSent && !memory.leadWasSent())
+			return ['lead', () => leadNode(() => say(t('chat.leadThanks')))];
 		if (wantsRating()) return ['rating', ratingNode];
 		return ['', null];
 	};

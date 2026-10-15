@@ -79,7 +79,7 @@
 		"Chat": {
 			"type": "object",
 			"description": "The visitor's chat.",
-			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "lastSeq"],
+			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "leadOffered", "lastSeq"],
 			"additionalProperties": false,
 			"properties": {
 				"conversation": {
@@ -136,6 +136,10 @@
 				"guestMessagesLeft": {
 					"type": ["integer", "null"],
 					"minimum": 0
+				},
+				"leadOffered": {
+					"type": "boolean",
+					"description": "Outside office hours (no staff are in, Human handoff's setting), a guest who left no email or phone is offered the lead form (Lead capture and flows on); false otherwise."
 				},
 				"lastSeq": {
 					"type": "integer",
@@ -1575,7 +1579,7 @@
 		},
 		"response": {
 			"type": "object",
-			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "lastSeq", "messages"],
+			"required": ["conversation", "visitor", "guestLimit", "guestMessagesLeft", "leadOffered", "lastSeq", "messages"],
 			"additionalProperties": false,
 			"properties": {
 				"conversation": {
@@ -1632,6 +1636,10 @@
 				"guestMessagesLeft": {
 					"type": ["integer", "null"],
 					"minimum": 0
+				},
+				"leadOffered": {
+					"type": "boolean",
+					"description": "Outside office hours (no staff are in, Human handoff's setting), a guest who left no email or phone is offered the lead form (Lead capture and flows on); false otherwise."
 				},
 				"lastSeq": {
 					"type": "integer",

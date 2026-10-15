@@ -419,10 +419,10 @@ export const createService = (product) => {
 		const { showPaused } = await s.values('visitor_chat');
 		const guestChat = s.on.includes('guest_chat');
 		const limit = visitor?.kind !== 'user' && guestChat ? await guestLimit(s.websiteId, await s.values('guest_chat')) : 0;
+		const hours = await officeHours(s);
 		/** @type {Record<string, unknown> | null} */
 		let conversation = null;
 		if (c) {
-			const hours = await officeHours(s);
 			const queue =
 				s.on.includes('presence_queue') &&
 				(await s.values('presence_queue')).queuePosition &&
@@ -458,6 +458,14 @@ export const createService = (product) => {
 				: { kind: 'none', name: null, email: null },
 			guestLimit: limit > 0 ? { limit, used: c?.visitorMessages ?? 0 } : null,
 			guestMessagesLeft: limit > 0 ? Math.max(0, limit - (c?.visitorMessages ?? 0)) : null,
+			// no staff are in (outside office hours): a guest who left no contact is offered the lead form (PLAN 0.8.3)
+			leadOffered:
+				s.on.includes('leads_flows') &&
+				guestChat &&
+				visitor?.kind !== 'user' &&
+				hours?.open === false &&
+				!c?.email &&
+				!c?.phone,
 			lastSeq: c?.lastSeq ?? 0,
 		};
 	};

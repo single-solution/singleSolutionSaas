@@ -232,7 +232,10 @@ describe('inbox', () => {
 		expect((await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: null })).status).toBe(403);
 		const ticket = await sys.ticket(['inbox.read', 'inbox.reply']);
 		await sys.admin(ticket, 'POST', `/v1/admin/conversations/${id}/messages`, { text: 'From Sam.' });
-		const copies = sys.accounts.copies.map((c) => [c.copy.action, c.copy.actor.kind]);
+		// the conversation's copies (settings saves reach Accounts too)
+		const copies = sys.accounts.copies
+			.filter((c) => c.copy.action.startsWith('conversation.'))
+			.map((c) => [c.copy.action, c.copy.actor.kind]);
 		expect(copies).toEqual([
 			['conversation.replied', 'server'],
 			['conversation.replied', 'staff'],

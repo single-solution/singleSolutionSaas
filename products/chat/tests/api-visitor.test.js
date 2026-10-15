@@ -213,6 +213,30 @@ describe('handoff, office hours and failures', () => {
 		expect(state.json.messages[1].text).toBe('Our team is away right now. They are back Oct 6, 2026, 9:00 AM.');
 	});
 
+	it('outside office hours a guest who left no contact is offered the lead form, not only after a handoff', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'leads_flows']);
+		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
+		const v = sys.visitor();
+		const sent = await v('POST', '/v1/chat/messages', { text: 'hi' });
+		expect(sent.json.chat).toMatchObject({ leadOffered: true, conversation: { waiting: false } });
+		// a guest key without a conversation yet is offered it too
+		expect((await sys.visitor({ guestKey: 'k'.repeat(20) })('GET', '/v1/chat')).json.leadOffered).toBe(true);
+		// while staff are in, no
+		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-17:00']);
+		expect((await v('GET', '/v1/chat')).json.leadOffered).toBe(false);
+		await sys.setting('handoff', 'officeHours', ['mon-fri 09:00-10:00']);
+		// once the guest left an email or phone, no
+		expect((await v('POST', '/v1/chat/leads', { fields: { name: 'Ann', email: 'ann@example.com' } })).status).toBe(201);
+		expect((await v('GET', '/v1/chat')).json.leadOffered).toBe(false);
+		// a signed-in visitor, or a website without lead capture: never
+		await sys.paste('accounts');
+		await sys.switchOn(['visitor_chat', 'guest_chat', 'signed_in_chat', 'inbox', 'handoff', 'leads_flows']);
+		const signIn = await sys.accounts.signIn({ websiteId: sys.websiteId, sub: 'usr_ann', name: 'Ann' });
+		expect((await sys.visitor({ signIn })('GET', '/v1/chat')).json.leadOffered).toBe(false);
+		await sys.switchOn(['visitor_chat', 'guest_chat', 'inbox', 'handoff']);
+		expect((await sys.visitor()('GET', '/v1/chat')).json.leadOffered).toBe(false);
+	});
+
 	it('when the AI fails: the backup answers; then the message and a handoff', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'ai_backup', 'inbox', 'handoff']);
 		await sys.connect('ai', AI_KEY);

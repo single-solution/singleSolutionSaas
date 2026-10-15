@@ -443,6 +443,39 @@ describe('contact', () => {
 	});
 });
 
+describe('lead form outside office hours', () => {
+	it('is offered to a guest who left no contact while no staff are in, once a session, the composer still open', async () => {
+		keepGuest();
+		const routes = {
+			'GET /v1/chat': () => answer(200, { ...view({ leadOffered: true }), messages: [] }),
+			'POST /v1/chat/leads': () => answer(201, { lead: { id: 'l1' } }),
+		};
+		const features = ['visitor_chat', 'guest_chat', 'leads_flows'];
+		const settings = { leads: { fields: ['name', 'email'], customFields: [], consentText: '' } };
+		const { $, root, server } = await start({ features, settings, routes });
+		await click($('.launcher'));
+		expect($('.slot').textContent).toContain(TEXTS['chat.leaveContact']);
+		expect($('.composer').hidden).toBe(false);
+		fieldIn(root, TEXTS['chat.name']).value = 'Ana';
+		fieldIn(root, TEXTS['chat.email']).value = 'ana@x.co';
+		await submit($('.slot form'));
+		expect(server.last('POST /v1/chat/leads')?.body).toEqual({ fields: { name: 'Ana', email: 'ana@x.co' } });
+		expect($('.slot').textContent).toBe('');
+		expect(root.textContent).toContain(TEXTS['chat.leadThanks']);
+		// the next page of the same session does not offer it again
+		document.body.replaceChildren();
+		const next = await start({ features, settings, routes });
+		await click(next.$('.launcher'));
+		expect(next.$('.slot').textContent).toBe('');
+		// a website without lead capture never offers it
+		resetPage();
+		keepGuest();
+		const off = await start({ routes });
+		await click(off.$('.launcher'));
+		expect(off.$('.slot').textContent).toBe('');
+	});
+});
+
 describe('flows', () => {
 	it('starts the page flow on open and walks its steps', async () => {
 		/** @type {any[]} */

@@ -2653,6 +2653,7 @@
 										"visitor",
 										"guestLimit",
 										"guestMessagesLeft",
+										"leadOffered",
 										"lastSeq",
 										"messages"
 									],
@@ -2732,6 +2733,10 @@
 												"null"
 											],
 											"minimum": 0
+										},
+										"leadOffered": {
+											"type": "boolean",
+											"description": "Outside office hours (no staff are in, Human handoff's setting), a guest who left no email or phone is offered the lead form (Lead capture and flows on); false otherwise."
 										},
 										"lastSeq": {
 											"type": "integer",
@@ -8763,6 +8768,7 @@
 					"visitor",
 					"guestLimit",
 					"guestMessagesLeft",
+					"leadOffered",
 					"lastSeq"
 				],
 				"additionalProperties": false,
@@ -8841,6 +8847,10 @@
 							"null"
 						],
 						"minimum": 0
+					},
+					"leadOffered": {
+						"type": "boolean",
+						"description": "Outside office hours (no staff are in, Human handoff's setting), a guest who left no email or phone is offered the lead form (Lead capture and flows on); false otherwise."
 					},
 					"lastSeq": {
 						"type": "integer",

@@ -20,7 +20,7 @@ const ACTIVITY_EVENTS = Object.freeze(['pointermove', 'pointerdown', 'keydown', 
 /** @typedef {import('./common.js').ChatSettings['proactive']} Proactive */
 
 /**
- * The visitor's proactive memory.
+ * The visitor's memory of this session and of dismissals: proactive messages and flows shown, and a lead left.
  * @param {{ win: Window, now: () => number }} input
  */
 export const createMemory = ({ win, now }) => {
@@ -58,6 +58,9 @@ export const createMemory = ({ win, now }) => {
 		flowStarted: (id) => has('flows', id),
 		/** @param {string} id */
 		startFlow: (id) => add('flows', id),
+		/** The visitor left a lead this session (the lead form outside office hours is offered once). */
+		leadSent: () => add('leads', 'sent'),
+		leadWasSent: () => has('leads', 'sent'),
 	});
 };
 
