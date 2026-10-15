@@ -193,6 +193,34 @@ describe('roles and rules', () => {
 		expect(parseSecret(5)).toBeNull();
 	});
 
+	it('the personal check knows keyboard rows of many layouts and scripts, digits of every script and sequences (A10)', () => {
+		const personal = { name: 'Ana Lima', email: 'ana@example.com' };
+		/** @param {string} password */
+		const problem = (password) => passwordProblem(password, { minLength: 8, personal });
+		for (const password of [
+			'my long qwer secret',
+			'long azerty secret',
+			'tzui long secret',
+			'long secret йцукен',
+			'фыва пароль длинный',
+			'long ασδφ secret',
+			'סוד ארוך שדגכ',
+			'سر طويل ضصثق',
+			'long ğüşi secret'.replace('ğüşi', 'şlkj'),
+			'long secret ١٢٣٤',
+			'long secret ۴۳۲۱',
+			'long secret १२३४',
+			'long secret １２３４',
+			'long abcd secret',
+			'long secret абвг',
+			'long secret wxyz',
+			'long secret ana lima',
+		])
+			expect(problem(password), password).toBe('personal');
+		for (const password of ['correct horse battery', 'длинный пароль конь', 'long secret ١٣٥٧', 'quiet river 2468'])
+			expect(problem(password), password).toBeNull();
+	});
+
 	it('a setup link’s state for a setup page: from its live record and its trace (A3, P4)', () => {
 		const end = new Date(10_000);
 		const live = { expireAt: end };

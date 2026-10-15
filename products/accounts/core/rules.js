@@ -68,19 +68,92 @@ export const normaliseCode = (input, length) => {
 const PASSWORD_MAX = 256;
 /** Personal words shorter than this are not refused (PLAN 0.8.10 A9). */
 const MIN_PERSONAL_WORD = 4;
-/** A run this long of keyboard or number steps is refused (A9). */
+/** A run this long of keyboard, number or alphabet steps is refused (A9, A10). */
 const STEP_RUN = 4;
-/** Keyboard rows and the digits, each read both ways (A9). */
-const STEP_ROWS = Object.freeze(['1234567890', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm']);
+/**
+ * The letter rows of the usual keyboard layouts, each read both ways (A10): QWERTY, AZERTY, QWERTZ, Dvorak, Turkish Q,
+ * Russian ЙЦУКЕН, Ukrainian, Greek, Hebrew, Arabic and Persian. Digits of every script and runs of the alphabet
+ * (consecutive letters, `abcd`, `абвг`, `αβγδ`) are found without rows (`hasSequence`).
+ */
+const STEP_ROWS = Object.freeze([
+	'qwertyuiop',
+	'asdfghjkl',
+	'zxcvbnm',
+	'azertyuiop',
+	'qsdfghjklm',
+	'wxcvbn',
+	'qwertzuiop',
+	'yxcvbnm',
+	'pyfgcrl',
+	'aoeuidhtns',
+	'qjkxbmwvz',
+	'ertyuıopğü',
+	'asdfghjklşi',
+	'zxcvbnmöç',
+	'йцукенгшщзхъ',
+	'фывапролджэ',
+	'ячсмитьбю',
+	'йцукенгшщзхї',
+	'фівапролджє',
+	'ςερτυθιοπ',
+	'ασδφγηξκλ',
+	'ζχψωβνμ',
+	'קראטוןםפ',
+	'שדגכעיחלךף',
+	'זסבהנמצתץ',
+	'ضصثقفغعهخحجد',
+	'شسيبلاتنمكط',
+	'ئءؤرلاىةوزظ',
+	'ضصثقفغعهخحجچ',
+	'شسیبلاتنمکگ',
+	'ظطزرذدپو',
+]);
 
 /**
- * Whether a password holds a run of `STEP_RUN` keyboard or number steps (`1234`, `4321`, `qwer`, `lkjh`).
+ * The value of a decimal digit of any script (`7`, `٧`, `۷`, `७`, `７` …), or -1: Unicode encodes each script's digits
+ * 0 to 9 in a row, so the digits before it in its row give its value.
+ * @param {string} char one code point
+ */
+const digitValue = (char) => {
+	if (!/^\p{Nd}$/u.test(char)) return -1;
+	let point = /** @type {number} */ (char.codePointAt(0));
+	let value = 0;
+	while (/^\p{Nd}$/u.test(String.fromCodePoint(point - 1))) {
+		point -= 1;
+		value += 1;
+	}
+	return value % 10;
+};
+
+/**
+ * Whether a run of `STEP_RUN` characters steps by one, up or down: digits of any script by their value (`1234`,
+ * `٤٣٢١`), letters by their place in the alphabet (`abcd`, `абвг`, `zyxw`).
+ * @param {string[]} chars
+ */
+const hasSequence = (chars) => {
+	/** @param {string} char */
+	const rank = (char) => {
+		const digit = digitValue(char);
+		return digit >= 0 ? digit : /^\p{L}$/u.test(char) ? /** @type {number} */ (char.codePointAt(0)) : NaN;
+	};
+	for (let at = 0; at + STEP_RUN <= chars.length; at += 1) {
+		const ranks = chars.slice(at, at + STEP_RUN).map(rank);
+		const step = Number(ranks[1]) - Number(ranks[0]);
+		if ((step === 1 || step === -1) && ranks.every((value, i) => i === 0 || value - Number(ranks[i - 1]) === step)) return true;
+	}
+	return false;
+};
+
+/**
+ * Whether a password holds a run of `STEP_RUN` keyboard, number or alphabet steps (`qwer`, `azer`, `йцук`, `1234`,
+ * `٤٣٢١`, `abcd`).
  * @param {string} password
  */
 const hasStepRun = (password) => {
-	const lower = password.toLowerCase();
-	for (let at = 0; at + STEP_RUN <= lower.length; at += 1) {
-		const run = lower.slice(at, at + STEP_RUN);
+	const chars = [...password.toLowerCase()];
+	if (hasSequence(chars)) return true;
+	for (let at = 0; at + STEP_RUN <= chars.length; at += 1) {
+		const run = chars.slice(at, at + STEP_RUN).join('');
 		if (STEP_ROWS.some((row) => row.includes(run) || [...row].reverse().join('').includes(run))) return true;
 	}
 	return false;
@@ -97,8 +170,9 @@ const personalWords = ({ name, email }) =>
 
 /**
  * Why a new password is refused, or null: `too_short`, `too_long` (beyond `maxLength`, at most 256), `letter_and_digit`
- * (A2, ST-26: a letter and a digit are required) or `personal` (A9: it holds the name, the email's local part, or a
- * run of 4 keyboard or number steps). The breached-password check runs in adapters.
+ * (A2, ST-26: a letter and a digit are required) or `personal` (A9, A10: it holds the name, the email's local part, or a
+ * run of 4 keyboard, number or alphabet steps in any of the usual layouts and scripts). The breached-password check
+ * runs in adapters.
  * @param {unknown} password
  * @param {{ minLength: number, maxLength?: number, letterAndDigit?: boolean,
  *   personal?: { name?: string | null, email?: string | null } | null }} rules
