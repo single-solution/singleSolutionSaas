@@ -177,10 +177,12 @@ const counts = (call) => {
 };
 
 /** @param {Record<string, any>} [routes] @param {string[]} [features] @param {Record<string, any>} [settings] */
-const start = (routes = {}, features = FEATURES, settings = SETTINGS) =>
+/** @param {Record<string, any>} [routes] @param {string[]} [features] @param {Record<string, any>} [settings] @param {any} [format] */
+const start = (routes = {}, features = FEATURES, settings = SETTINGS, format = undefined) =>
 	mountWith(mountOrdersAdmin, {
 		features,
 		settings,
+		format,
 		routes: {
 			'GET /v1/admin/orders': (/** @type {any} */ call) =>
 				call.url.searchParams.get('cursor')
@@ -412,6 +414,25 @@ describe('orders admin: the list', () => {
 });
 
 describe('orders admin: one order', () => {
+	it('takes amounts typed with the decimal sign the Format shows', async () => {
+		const format = { locale: 'de-DE', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
+		const { root, server } = await start(
+			{
+				'POST /v1/admin/orders/ord_1/refunds': () =>
+					answer(201, { order: detail(), refund: {}, warnings: [], warningCodes: [] }),
+			},
+			FEATURES,
+			SETTINGS,
+			format,
+		);
+		const pane = detailOf(panelOf(root, 'orders'));
+		await click(buttonIn(pane, 'Refund'));
+		type(fieldIn(dialogOf(root), 'Amount (USD)'), '10,50');
+		type(fieldIn(dialogOf(root), 'Reason'), 'damaged');
+		await submitDialog(root);
+		expect(server.last('POST /v1/admin/orders/ord_1/refunds')?.body).toEqual({ amount: 1050, reason: 'damaged' });
+	});
+
 	it('shows the order in a grid and cards with its claims', async () => {
 		const { root, server } = await start({
 			'GET /v1/admin/returns': () =>

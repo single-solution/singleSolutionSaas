@@ -18,6 +18,7 @@ import { checkGroup } from './admin-fields.js';
 import { variantPhotosDialog } from './admin-media.js';
 import { fieldsOf } from './admin-screen.js';
 import { variantLabel } from './admin-taxonomy.js';
+import { convertAmount } from '../core/units.js';
 
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {import('./admin-taxonomy.js').Lookups} Lookups */
@@ -238,8 +239,10 @@ export const generateDialog = (kit, { productId, before, done, measure = null })
  * @property {Photo[]} media
  */
 
-/** The parts of a package, in the order they are typed. */
+/** The parts of a package, in the order they are typed (kept in grams and millimeters). */
 const PARCEL_PARTS = Object.freeze(/** @type {const} */ (['weightG', 'lengthMm', 'widthMm', 'heightMm']));
+/** The units the parts are kept in. */
+const PARCEL_BASE = Object.freeze({ weightG: 'g', lengthMm: 'mm', widthMm: 'mm', heightMm: 'mm' });
 
 /**
  * The variants table of the product editor. `type()`: the product's item type as the form stands (its elements decide
@@ -268,6 +271,21 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 	// sold in a unit of its own: stock is typed in its unit (thousandths in the API)
 	const measureOf = () => type().elements.measure ?? null;
 	const parcelOn = () => has('delivery_zones') && type().elements.parcel;
+	// a package is typed and shown in the shop's units (Catalog settings, E13), kept in grams and millimeters
+	const catalogSettings = kit.settings.catalog ?? {};
+	/** @param {(typeof PARCEL_PARTS)[number]} part */
+	const unitOfPart = (part) =>
+		String((part === 'weightG' ? catalogSettings.weightUnit : catalogSettings.sizeUnit) ?? PARCEL_BASE[part]);
+	/** @param {(typeof PARCEL_PARTS)[number]} part @param {unknown} kept */
+	const parcelShown = (part, kept) =>
+		typeof kept === 'number' ? kit.numberText(convertAmount(kept, PARCEL_BASE[part], unitOfPart(part))) : '';
+	/** @param {(typeof PARCEL_PARTS)[number]} part @param {string} text @returns {number | null} NaN when not a size */
+	const parcelKept = (part, text) => {
+		const typed = kit.number(text);
+		if (typed === null || Number.isNaN(typed)) return typed;
+		const kept = Math.round(convertAmount(typed, unitOfPart(part), PARCEL_BASE[part]) ?? Number.NaN);
+		return kept >= 1 ? kept : Number.NaN;
+	};
 	/** The variant fields shown: those of the type. */
 	const attributesOf = () => (many() ? every.filter((attribute) => typeTakes(type(), attribute.id)) : []);
 	const box = h('div');
@@ -389,12 +407,10 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 				Object.fromEntries(
 					PARCEL_PARTS.map((part) => [
 						part,
-						kit.input(variant.parcel?.[part] ?? '', {
-							type: 'number',
-							min: '1',
-							step: '1',
-							placeholder: t(`catalogAdmin.parcel.${part}`),
-							'aria-label': t(`catalogAdmin.parcelOf.${part}`, { variant: label }),
+						kit.input(parcelShown(part, variant.parcel?.[part]), {
+							inputmode: 'decimal',
+							placeholder: t(`catalogAdmin.parcel.${part}`, { unit: unitOfPart(part) }),
+							'aria-label': t(`catalogAdmin.parcelOf.${part}`, { variant: label, unit: unitOfPart(part) }),
 						}),
 					]),
 				)
@@ -554,7 +570,7 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 				);
 				const warranty = wholeOf(entry.warranty.value);
 				if (Number.isNaN(warranty)) bad = true;
-				const parcel = Object.fromEntries(PARCEL_PARTS.map((part) => [part, wholeOf(entry.parcel[part].value)]));
+				const parcel = Object.fromEntries(PARCEL_PARTS.map((part) => [part, parcelKept(part, entry.parcel[part].value)]));
 				if (Object.values(parcel).some((part) => Number.isNaN(part))) bad = true;
 				// a GTIN ends in its check digit: a mistyped barcode number is caught before saving
 				const gtin = entry.gtin.value.trim() ? gtinOf(entry.gtin.value) : '';

@@ -580,6 +580,9 @@ describe('catalog admin: a product by its item type', () => {
 						{ key: 'mint', label: 'Mint', typeKeys: ['used_phone'] },
 					],
 					types: [plain, USED_PHONE],
+					// packages typed in the shop's units, kept in grams and millimeters (E13)
+					weightUnit: 'kg',
+					sizeUnit: 'cm',
 				},
 			},
 		);
@@ -594,13 +597,14 @@ describe('catalog admin: a product by its item type', () => {
 		expect(fieldIn(editor, 'Screen (in)').value).toBe('6.1');
 		expect(() => fieldIn(editor, 'Model')).toThrow();
 		expect(() => fieldIn(editor, 'Size chart')).toThrow();
-		type(labelled(editor, 'Package weight in grams of Red'), '250');
+		type(labelled(editor, 'Package weight in kg of Red'), '0.25');
+		type(labelled(editor, 'Package length in cm of Red'), '12.5');
 		await click(buttonIn(editor, 'Save'));
 		expect(patches[0]).toMatchObject({ typeKey: 'plain_box', specs: { att_1: 6.1 } });
 		expect(patches[0]).not.toHaveProperty('options');
 		expect(patches[0]).not.toHaveProperty('sizeChartId');
 		expect(patches[0]).not.toHaveProperty('returnDays');
-		expect(patches[0].variants[0]).toMatchObject({ parcel: { weightG: 250, lengthMm: null, widthMm: null, heightMm: null } });
+		expect(patches[0].variants[0]).toMatchObject({ parcel: { weightG: 250, lengthMm: 125, widthMm: null, heightMm: null } });
 		expect(patches[0].variants[0]).not.toHaveProperty('grade');
 		// as its category says (Phones: the used phone type, with grades and its own days)
 		await click(buttonIn(detailOf(panel), 'Edit'));

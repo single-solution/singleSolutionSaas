@@ -51,6 +51,20 @@
 			"default": "/media",
 			"maxLength": 100
 		},
+		"weightUnit": {
+			"type": "string",
+			"title": "Package weight unit",
+			"description": "The unit staff type and read package weights in (kept in grams for couriers and feeds).",
+			"default": "g",
+			"enum": ["g", "kg", "oz", "lb"]
+		},
+		"sizeUnit": {
+			"type": "string",
+			"title": "Package size unit",
+			"description": "The unit staff type and read package lengths, widths and heights in (kept in millimeters).",
+			"default": "mm",
+			"enum": ["mm", "cm", "in"]
+		},
 		"pageSize": {
 			"type": "integer",
 			"title": "Products per page",

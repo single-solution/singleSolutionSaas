@@ -94,6 +94,18 @@ export const entriesOf = (text, commas = false) =>
 		.filter(Boolean);
 
 /**
+ * The decimal sign of a language (`.` in en-US, `,` in de-DE).
+ * @param {string} locale
+ */
+const decimalSign = (locale) => {
+	try {
+		return new Intl.NumberFormat(locale).formatToParts(1.5).find((part) => part.type === 'decimal')?.value ?? '.';
+	} catch {
+		return '.';
+	}
+};
+
+/**
  * A whole number typed in an input, null when empty, NaN when not a whole number.
  * @param {string} text
  */
@@ -141,18 +153,43 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	 */
 	const money = (minor, inCurrency = currency) =>
 		typeof minor === 'number' ? formatMoney(minor, inCurrency || currency, format, viewer) : '';
-	/** An amount in an input. @param {number | null | undefined} minor */
-	const decimal = (minor) => (typeof minor === 'number' ? toDecimal(minor, currency) : '');
+	/** The decimal sign people read numbers with (the Format's language, else the viewer's): inputs show it. */
+	const sign = decimalSign(format.locale || viewer?.locale || 'en-US');
+	/** A number in an input, with the shown decimal sign. @param {string} text a plain decimal */
+	const shown = (text) => (sign === '.' ? text : text.replace('.', sign));
 	/**
-	 * An amount typed in an input: minor units, 0, null when empty, NaN when it is not an amount.
+	 * A decimal typed in an input as a plain decimal: the shown decimal sign (or a dot) as a dot.
+	 * @param {string} text
+	 */
+	const plainDecimal = (text) => {
+		const value = text.trim();
+		return sign === '.' || !value.includes(sign) ? value : value.replace(sign, '.');
+	};
+	/** An amount in an input. @param {number | null | undefined} minor */
+	const decimal = (minor) => (typeof minor === 'number' ? shown(toDecimal(minor, currency)) : '');
+	/**
+	 * An amount typed in an input (the shown decimal sign or a dot): minor units, 0, null when empty, NaN when it is not
+	 * an amount.
 	 * @param {string} text
 	 */
 	const amount = (text) => {
-		const value = text.trim();
+		const value = plainDecimal(text);
 		if (value === '') return null;
 		if (/^0+(\.0+)?$/.test(value)) return 0;
 		return fromDecimal(value, currency) ?? Number.NaN;
 	};
+	/**
+	 * A decimal number typed in an input (the shown decimal sign or a dot): null when empty, NaN when it is not a plain
+	 * non-negative number.
+	 * @param {string} text
+	 */
+	const number = (text) => {
+		const value = plainDecimal(text);
+		if (value === '') return null;
+		return /^\d{1,12}(\.\d{1,6})?$/.test(value) ? Number(value) : Number.NaN;
+	};
+	/** A number for an input, with the shown decimal sign. @param {number | null | undefined} value */
+	const numberText = (value) => (typeof value === 'number' && Number.isFinite(value) ? shown(String(value)) : '');
 
 	// ------------------------------------------------------------------------------------------------- calls
 
@@ -706,6 +743,8 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		money,
 		decimal,
 		amount,
+		number,
+		numberText,
 		call,
 		fetchText,
 		refusal,
