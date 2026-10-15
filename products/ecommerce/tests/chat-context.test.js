@@ -5,7 +5,7 @@
  */
 import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MAX_CONTEXT, contextText, oneLine } from '../core/chat-context.js';
+import { MAX_CONTEXT, contextText, oneLine, warrantyWords } from '../core/chat-context.js';
 import { chatFilters, filtersGiven, gradePrices, matchingVariant, variantFilter, warrantyOf } from '../core/lookup.js';
 import { shipmentLink } from '../core/couriers.js';
 import { COLLECTIONS } from '../core/model.js';
@@ -216,11 +216,44 @@ describe('core: Chat filters, warranties and the context text', () => {
 				],
 			},
 			visitor: { firstName: 'Alex', city: 'London', points: 120 },
+			basics: {
+				payments: [
+					{ method: 'cod', note: 'Pay the courier in cash.' },
+					{ method: 'bank_transfer', note: '' },
+				],
+				codFeePercent: 2,
+				delivery: { fee: 500, feeText: '$5', freeOver: 5000, freeOverText: '$50' },
+				zones: [
+					{ name: 'City', fee: 0, feeText: '$0', freeOver: 0, freeOverText: '$0' },
+					{ name: 'Far away', fee: 900, feeText: '$9', freeOver: 0, freeOverText: '$0' },
+				],
+				pickup: [{ name: 'Main shop', address: '1 Road', hours: 'Mon–Fri 9–5' }],
+				earnPercent: 1,
+				categories: ['Phones', 'Cases'],
+				returnDays: 7,
+				warrantyDays: 90,
+			},
 		});
 		expect(text.length).toBeLessThanOrEqual(MAX_CONTEXT);
+		// the shop basics come first after the business (parity P5-17)
+		expect(text.indexOf('## Shop basics')).toBeLessThan(text.indexOf('## Store policies'));
+		for (const part of [
+			'- Payment: Cash on delivery (Pay the courier in cash.); Bank transfer',
+			'- Cash on delivery adds a 2% cash handling fee',
+			'- Delivery: $5, free over $50',
+			'- Delivery to City: free',
+			'- Delivery to Far away: $9',
+			'- Pickup: Main shop, 1 Road, hours Mon–Fri 9–5',
+			'- Loyalty: 1% back in points',
+			'- Categories: Phones, Cases',
+			'- Returns: within 7 days of delivery',
+			'- Warranty: 3 months',
+		])
+			expect(text).toContain(part);
 		expect(text).toContain('first name Alex; city London; 120 loyalty points');
 		expect(text).toContain('Viewed phone ($1 – $2)');
-		expect(text).toContain('- Standard, $1 (was $1.50), 3 in stock, 30 days warranty');
+		// warranties read as the widgets show them: whole months when the days make them
+		expect(text).toContain('- Standard, $1 (was $1.50), 3 in stock, 1 month warranty');
 		expect(text).toContain('- Red, grade A, $2, out of stock');
 		expect(text).toContain('| Deal 0 (Hot) | 10% off | no end date |');
 		expect(text).toContain('A $1,000 (was $1,200) https://shop.example.com/p/0');
@@ -245,6 +278,29 @@ describe('core: Chat filters, warranties and the context text', () => {
 		});
 		expect(quiet).toContain('One ($1) u');
 		expect(quiet).not.toContain('Signed-in visitor');
+		expect(quiet).not.toContain('Shop basics');
+		const none = contextText({
+			business: 'Shop',
+			policies: [],
+			products: [],
+			deals: [],
+			product: null,
+			visitor: null,
+			basics: {
+				payments: [],
+				codFeePercent: 0,
+				delivery: null,
+				zones: [],
+				pickup: [],
+				earnPercent: null,
+				categories: [],
+				returnDays: 0,
+				warrantyDays: 0,
+			},
+		});
+		expect(none).toContain('- Returns: not accepted');
+		expect(none).toContain('- Warranty: none');
+		expect([30, 60, 45, 1, 0, null, 1.5].map(warrantyWords)).toEqual(['1 month', '2 months', '45 days', '1 day', '', '', '']);
 	});
 });
 
@@ -630,6 +686,7 @@ describe('Chat lookups (E37)', () => {
 	});
 
 	it('serves the store context with policies, newest products, deals, the viewed product and the visitor', async () => {
+		await shop.setting('checkout', 'noteCod', 'Have cash ready.');
 		const guest = await shop.api('GET', '/v1/chat/context?productId=iphone-13');
 		expect(guest.status).toBe(200);
 		expect(guest.json).toMatchObject({
@@ -672,6 +729,15 @@ describe('Chat lookups (E37)', () => {
 		expect(guest.json.text).toContain('## Product the visitor is viewing');
 		expect(guest.json.text).toContain('- USB cable: USD 10.00 (was USD 15.00) ');
 		expect(guest.json.text).toContain('256 GB, grade Grade B, USD 990.00 (was USD 1,100.00), 4 in stock');
+		// the shop basics: payment methods with their notes, delivery, categories shoppers see, returns and warranty
+		expect(guest.json.basics).toMatchObject({
+			delivery: { fee: 30000, feeText: 'USD 300.00', freeOver: 0 },
+			categories: ['Phones', 'Accessories'],
+			warrantyDays: 7,
+		});
+		expect(guest.json.basics.payments).toContainEqual({ method: 'cod', note: 'Have cash ready.' });
+		for (const part of ['## Shop basics', '- Categories: Phones, Accessories', '- Delivery: USD 300.00', '- Warranty: 7 days'])
+			expect(guest.json.text).toContain(part);
 		const token = await shop.signIn({ id: sara, name: 'Sara Shopper' });
 		const signed = await shop.api('GET', '/v1/chat/context', undefined, { 'ss-sign-in': token });
 		expect(signed.json).toMatchObject({ product: null, visitor: { firstName: 'Sara', city: 'Boston', points: 0 } });
@@ -680,7 +746,12 @@ describe('Chat lookups (E37)', () => {
 		expect((await shop.api('GET', '/v1/chat/context?productId=a%20b')).status).toBe(422);
 		await shop.switchOn(['catalog']);
 		const bare = await shop.api('GET', '/v1/chat/context', undefined, { 'ss-sign-in': token });
-		expect(bare.json).toMatchObject({ policies: [], deals: [], visitor: { points: null } });
+		expect(bare.json).toMatchObject({
+			policies: [],
+			deals: [],
+			visitor: { points: null },
+			basics: { payments: [], delivery: null, returnDays: null, warrantyDays: null, earnPercent: null },
+		});
 		expect((await shop.api('GET', '/v1/chat/products/iphone-13/quote')).status).toBe(403);
 	});
 });

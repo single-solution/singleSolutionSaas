@@ -14620,7 +14620,7 @@
 		"/v1/chat/context": {
 			"get": {
 				"summary": "Chat’s live store context",
-				"description": "What Chat’s AI replies add to their instructions: the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. 422 validation_failed at /productId.",
+				"description": "What Chat’s AI replies add to their instructions: the shop basics (payment methods and notes, delivery fees and free-delivery amounts, pickup points, the cash handling fee, the loyalty earn rate, top categories, the return window and warranty), the policies (checkout), the 10 newest products with their price per grade, the deals (deals), the product asked for and, with a forwarded Accounts sign-in in SS-Sign-In, the visitor’s first name, city and points. 422 validation_failed at /productId.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -36688,6 +36688,7 @@
 					"text",
 					"business",
 					"currency",
+					"basics",
 					"policies",
 					"products",
 					"deals",
@@ -36706,6 +36707,172 @@
 					},
 					"currency": {
 						"type": "string"
+					},
+					"basics": {
+						"type": "object",
+						"description": "The shop basics: each part empty or null while its feature is off.",
+						"required": [
+							"payments",
+							"codFeePercent",
+							"delivery",
+							"zones",
+							"pickup",
+							"earnPercent",
+							"categories",
+							"returnDays",
+							"warrantyDays"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"payments": {
+								"type": "array",
+								"description": "The payment methods offered, in your order, with your note for each (checkout).",
+								"items": {
+									"type": "object",
+									"required": [
+										"method",
+										"note"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"method": {
+											"type": "string",
+											"enum": [
+												"cod",
+												"online",
+												"bank_transfer",
+												"pickup"
+											]
+										},
+										"note": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"codFeePercent": {
+								"type": "number",
+								"description": "Cash on delivery's cash handling fee (0 = none)."
+							},
+							"delivery": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": [
+											"fee",
+											"feeText",
+											"freeOver",
+											"freeOverText"
+										],
+										"additionalProperties": false,
+										"properties": {
+											"fee": {
+												"type": "integer",
+												"description": "Minor units."
+											},
+											"feeText": {
+												"type": "string"
+											},
+											"freeOver": {
+												"type": "integer",
+												"description": "Delivery is free over it (0 = never). Minor units."
+											},
+											"freeOverText": {
+												"type": "string"
+											}
+										}
+									},
+									{
+										"type": "null"
+									}
+								],
+								"description": "The fee where no zone matches (delivery_zones)."
+							},
+							"zones": {
+								"type": "array",
+								"description": "The delivery zones (at most 20), each with its fee.",
+								"items": {
+									"type": "object",
+									"required": [
+										"name",
+										"fee",
+										"feeText",
+										"freeOver",
+										"freeOverText"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"fee": {
+											"type": "integer"
+										},
+										"feeText": {
+											"type": "string"
+										},
+										"freeOver": {
+											"type": "integer"
+										},
+										"freeOverText": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"pickup": {
+								"type": "array",
+								"description": "The pickup points: the delivery_zones pickup point, or the stock locations that take pickups (multi_location).",
+								"items": {
+									"type": "object",
+									"required": [
+										"name",
+										"address",
+										"hours"
+									],
+									"additionalProperties": false,
+									"properties": {
+										"name": {
+											"type": "string"
+										},
+										"address": {
+											"type": "string"
+										},
+										"hours": {
+											"type": "string"
+										}
+									}
+								}
+							},
+							"earnPercent": {
+								"type": [
+									"number",
+									"null"
+								],
+								"description": "Loyalty points earned, as a percent back (null without loyalty)."
+							},
+							"categories": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								},
+								"description": "The top categories shoppers see (at most 20)."
+							},
+							"returnDays": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"description": "The return window (0 = no returns; null without returns)."
+							},
+							"warrantyDays": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"description": "The store's warranty in days (0 = none; null without returns); the text says whole months when the days make them."
+							}
+						}
 					},
 					"policies": {
 						"type": "array",

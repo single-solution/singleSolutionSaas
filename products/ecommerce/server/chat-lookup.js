@@ -11,7 +11,7 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
-import { categoriesOf } from '../adapters/catalog-store.js';
+import { categoriesOf, locationsOf } from '../adapters/catalog-store.js';
 import { ADDRESS_LIMITS } from '../core/address.js';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
@@ -20,7 +20,8 @@ import { htmlToText } from '../core/catalog-content.js';
 import { topField } from '../core/catalog-query.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
-import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
+import { CONTEXT_BASICS, CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
+import { paymentOptions } from '../core/checkout.js';
 import { shipmentLink } from '../core/couriers.js';
 import { byShowOrder } from '../core/deals.js';
 import { gradesFor } from '../core/grades.js';
@@ -675,7 +676,99 @@ export const createChatLookup = (product, service, media) => {
 	};
 
 	/**
-	 * GET /v1/chat/context?productId=: the live store context of Chat's AI replies (E37, C1): the policies, the 10
+	 * The shop basics of the context (parity P5-17): the payment methods offered (in the merchant's order, as a cart
+	 * with delivery lists them) with the merchant's notes, the cash handling fee, the delivery fee where no zone matches
+	 * and each zone's (with its free-delivery amount), the pickup points, the loyalty earn rate, the top categories
+	 * shoppers see, the return window and the warranty. Each part is there only while its feature is on.
+	 * @param {Site} s @param {WebsiteData} data
+	 * @returns {Promise<import('../core/chat-context.js').ShopBasics>}
+	 */
+	const basicsOf = async (s, data) => {
+		const checkoutOn = s.has('checkout');
+		const zonesOn = checkoutOn && s.has('delivery_zones');
+		const [checkout, cod, zones, zoneList, locations, loyalty, returns, categories, payments, { money }] = await Promise.all([
+			checkoutOn ? s.values('checkout') : Promise.resolve(null),
+			checkoutOn && s.has('cod') ? s.values('cod') : Promise.resolve(null),
+			zonesOn ? s.values('delivery_zones') : Promise.resolve(null),
+			zonesOn ? s.list('delivery_zones') : Promise.resolve([]),
+			zonesOn && s.has('multi_location') ? locationsOf(data) : Promise.resolve([]),
+			s.has('loyalty') ? s.values('loyalty') : Promise.resolve(null),
+			s.has('returns') ? s.values('returns') : Promise.resolve(null),
+			data
+				.collection(COLLECTIONS.categories)
+				.find(
+					{ websiteId: data.websiteId, parentId: null, status: { $ne: 'hidden' } },
+					{ projection: { _id: 0, name: 1 }, sort: { sort: 1, name: 1 }, limit: CONTEXT_BASICS },
+				)
+				.toArray(),
+			checkoutOn ? product.connections.value(s.websiteId, 'payments') : Promise.resolve(null),
+			s.format(),
+		]);
+		/** @param {number} amount */
+		const text = (amount) => money(amount, s.currency);
+		/** @param {unknown} fee @param {unknown} freeOver */
+		const feeOf = (fee, freeOver) => ({
+			fee: Number(fee) || 0,
+			feeText: text(Number(fee) || 0),
+			freeOver: Number(freeOver) || 0,
+			freeOverText: text(Number(freeOver) || 0),
+		});
+		// one pickup point of the settings while stock has no locations, else the stock locations that take pickups (E22)
+		const pickup = s.has('multi_location')
+			? /** @type {import('../core/model.js').LocationRecord[]} */ (locations)
+					.filter((location) => location.pickup)
+					.sort((a, b) => a.sort - b.sort)
+					.map((location) => ({ name: location.name, address: '', hours: '' }))
+			: zones?.pickupEnabled === true
+				? [
+						{
+							name: String(zones.pickupName ?? ''),
+							address: String(zones.pickupAddress ?? ''),
+							hours: String(zones.pickupHours ?? ''),
+						},
+					]
+				: [];
+		/** @type {Record<string, unknown>} */
+		const notes = checkout
+			? {
+					cod: checkout.noteCod,
+					online: checkout.noteOnline,
+					bank_transfer: checkout.noteBankTransfer,
+					pickup: checkout.notePickup,
+				}
+			: {};
+		const codOn = cod !== null && cod.enabled !== false;
+		const methods = checkout
+			? paymentOptions({
+					offered: checkout.paymentMethods,
+					order: checkout.paymentOrder,
+					paymentsConnected: payments !== null,
+					bankManual: checkout.bankTransferVia === 'manual',
+					cod: { on: codOn, settings: /** @type {any} */ (cod ?? {}) },
+					pickupPossible: pickup.length > 0,
+					deliveryMethod: 'delivery',
+					digital: false,
+					total: 0,
+					rtoCount: 0,
+				}).map((option) => ({ method: option.method, note: String(notes[option.method] ?? '') }))
+			: [];
+		return {
+			payments: methods,
+			codFeePercent: codOn ? Number(cod?.feePercent) || 0 : 0,
+			delivery: zones ? feeOf(zones.defaultFee, zones.defaultFreeOver) : null,
+			zones: /** @type {Array<{ name: string, fee: number, freeOver: number }>} */ (zoneList)
+				.slice(0, CONTEXT_BASICS)
+				.map((zone) => ({ name: String(zone.name), ...feeOf(zone.fee, zone.freeOver) })),
+			pickup,
+			earnPercent: loyalty ? Number(loyalty.earnPercent) || 0 : null,
+			categories: categories.map((category) => String(category.name)),
+			returnDays: returns ? Number(returns.returnDays) || 0 : null,
+			warrantyDays: returns ? Number(returns.warrantyDays) || 0 : null,
+		};
+	};
+
+	/**
+	 * GET /v1/chat/context?productId=: the live store context of Chat's AI replies (E37, C1): the shop basics, the policies, the 10
 	 * newest products with their shown price per grade, the deals table, the product named (id or slug) and, with a forwarded
 	 * sign-in, the visitor's first name, city and points; `text` (at most 6,000 characters) holds all of it for the AI's
 	 * instructions. Each part is there only while its feature is on.
@@ -688,7 +781,7 @@ export const createChatLookup = (product, service, media) => {
 		const ref = typeof ctx.query.productId === 'string' && ctx.query.productId ? ctx.query.productId : null;
 		if (ref !== null && !/^[A-Za-z0-9_-]{1,120}$/.test(ref))
 			throw service.invalid('productId', 'productId is a product id or slug.');
-		const [business, rules, shownOf, filled, newest, dealList, viewed, shopper] = await Promise.all([
+		const [business, rules, shownOf, filled, newest, dealList, viewed, shopper, basics] = await Promise.all([
 			s.business(),
 			cardRules(s),
 			pricesFor(s, data),
@@ -702,6 +795,7 @@ export const createChatLookup = (product, service, media) => {
 			s.has('deals') ? dealRows(s, data, CONTEXT_DEALS) : Promise.resolve([]),
 			ref === null ? Promise.resolve(null) : shownProduct(s, data, ref).catch(() => null),
 			service.shopper(s),
+			basicsOf(s, data),
 		]);
 		const product = viewed ? await detailsOf(s, data, viewed, await shownOf(viewed)) : null;
 		/** @param {number} amount */
@@ -735,9 +829,10 @@ export const createChatLookup = (product, service, media) => {
 			visitor = { firstName: firstNameOf(shopper.name), city: await cityOf(data, shopper.id, profile), points };
 		}
 		return {
-			text: contextText({ business: business.name, policies, products, deals: dealList, product, visitor }),
+			text: contextText({ business: business.name, basics, policies, products, deals: dealList, product, visitor }),
 			business: business.name,
 			currency: s.currency,
+			basics,
 			policies,
 			products,
 			deals: dealList,
