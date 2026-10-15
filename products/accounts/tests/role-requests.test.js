@@ -50,7 +50,7 @@ const DAY = 86_400_000;
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	await env.connectDatabase();
 	await env.paste('notifications');
 	await env.setting('phone', 'defaultCallingCode', '+44');
@@ -424,10 +424,10 @@ describe('the setup-link lookup', () => {
 		expect((await lookup(linkCode)).json.status).toBe('valid');
 		// with Staff sign-in codes and setup links and Role requests both off, there is no lookup (as no accept)
 		await env.switchOn(
-			ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks', 'staff_links', 'role_requests'].includes(key)),
+			ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks', 'staff_links', 'role_requests'].includes(key)),
 		);
 		expect(code(await lookup(linkCode))).toBe('feature_off');
-		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+		await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	});
 });
 

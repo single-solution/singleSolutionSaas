@@ -16,10 +16,10 @@ const lastMessage = () => env.messages().at(-1);
 
 /** @param {string} email @param {string} [password] @param {Record<string, unknown>} [extra] */
 const signUp = (email, password = 'correct horse battery', extra = {}) =>
-	env.visitor('POST', '/v1/sign-up/password', { email, password, name: 'Ana Buyer', acceptTerms: true, ...extra });
+	env.visitor('POST', '/v1/sign-up/password', { email, password, name: 'Ana Buyer', consents: { terms: true }, ...extra });
 /** @param {string} email @param {string} [password] @param {Record<string, unknown>} [extra] */
 const signIn = (email, password = 'correct horse battery', extra = {}) =>
-	env.visitor('POST', '/v1/sign-in/password', { email, password, acceptTerms: true, ...extra });
+	env.visitor('POST', '/v1/sign-in/password', { email, password, consents: { terms: true }, ...extra });
 
 beforeAll(async () => {
 	env = await setup();
@@ -59,7 +59,7 @@ describe('before setup', () => {
 			'<td><code>email</code></td><td>string (email)</td><td>yes</td><td>Kept in lower case.</td>',
 			'<h4>Answer 200 (JSON)</h4><p><a href="#schema-SignInAnswer">SignInAnswer</a></p>',
 			'<a href="#schema-SignedIn">SignedIn</a> or <a href="#schema-TwoStep">TwoStep</a>',
-			'<td><code>terms.acceptedAt</code></td><td>string (date-time)</td><td>yes</td>',
+			'<td><code>consents</code></td>',
 			'<td><code>status</code></td><td>query</td><td>&#34;pending&#34; | &#34;invited&#34;',
 			'<a href="#op-post-v1-import-collection"><code>POST /v1/import/{collection}</code></a>',
 			'id="schema-StaffUser"',
@@ -69,7 +69,7 @@ describe('before setup', () => {
 		expect(config.json).toMatchObject({
 			features: ['email_password'],
 			widgets: ['sign_in', 'my_account'],
-			settings: { signUp: { mode: 'open', requiredFields: [] }, customFields: [], passwordMinLength: 8, terms: null },
+			settings: { signUp: { mode: 'open', requiredFields: [] }, customFields: [], passwordMinLength: 8, consents: [] },
 		});
 	});
 
@@ -684,7 +684,7 @@ describe('Google, Apple and Facebook', () => {
 	});
 });
 
-describe('roles, two-step, terms, approval and risk checks', () => {
+describe('roles, two-step, consents, approval and risk checks', () => {
 	it('roles: the ready-made roles, permission catalog with pasted products, own permissions and role claims', async () => {
 		await env.switchOn(ALL);
 		await env.paste('chat');
@@ -837,20 +837,65 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		expect((await signIn('ana@example.com', 'another long one')).json.status).toBe('signed_in');
 	});
 
-	it('terms: sign-up and sign-in ask for the current version', async () => {
-		await env.setting('terms', 'version', '2');
-		await env.setting('terms', 'url', 'https://shop.example.com/terms');
+	it('A2 consents: a list in the merchant’s order; required agreements asked again in a new version; marketing apart', async () => {
+		const cookie = await env.adminSession();
+		const base = `/v1/dashboard/websites/${env.websiteId}/consents`;
+		/** @param {string} key @param {Record<string, unknown>} consent */
+		const put = (key, consent) => env.dashboard(cookie, 'PUT', `${base}/${key}`, consent);
+		// the terms consent is there from the start
+		const seeded = (await env.dashboard(cookie, 'GET', base)).json.items;
+		expect(seeded).toEqual([
+			{ key: 'terms', label: 'I accept the terms', url: '', version: '1', required: true, purpose: 'agreement' },
+		]);
+		await put('terms', { ...seeded[0], version: '2', url: 'https://shop.example.com/terms' });
+		await put('news', { label: 'Send me offers by email', purpose: 'marketing' });
+		expect(code(await put('bad', { label: 'Offers', purpose: 'marketing', required: true }))).toBe('validation_failed');
+		expect((await env.serverCall('GET', '/v1/consents')).json.items.map((/** @type {any} */ c) => c.key)).toEqual([
+			'terms',
+			'news',
+		]);
 		const asked = await env.visitor('POST', '/v1/sign-in/password', { email: 'ana@example.com', password: 'another long one' });
-		expect(code(asked)).toBe('terms_required');
-		expect(asked.json).toMatchObject({ version: '2', url: 'https://shop.example.com/terms' });
-		const accepted = await signIn('ana@example.com', 'another long one');
-		expect(accepted.json.user.terms.version).toBe('2');
+		expect(code(asked)).toBe('consent_required');
+		expect(asked.json.consents).toEqual([
+			{ key: 'terms', label: 'I accept the terms', url: 'https://shop.example.com/terms', version: '2' },
+		]);
+		const accepted = await env.visitor('POST', '/v1/sign-in/password', {
+			email: 'ana@example.com',
+			password: 'another long one',
+			consents: { terms: true, news: true },
+		});
+		expect(accepted.json.user.consents).toMatchObject({ terms: { version: '2', given: true }, news: { given: true } });
 		expect(
 			code(await env.visitor('POST', '/v1/sign-up/password', { email: 'te@example.com', password: 'long enough pass' })),
-		).toBe('terms_required');
-		await env.setting('terms', 'version', '3');
-		expect(code(await env.visitor('POST', '/v1/me/terms', {}, accepted.json.signIn))).toBe('validation_failed');
-		expect((await env.visitor('POST', '/v1/me/terms', { accept: true }, accepted.json.signIn)).json.terms.version).toBe('3');
+		).toBe('consent_required');
+		// marketing is withdrawn at any time; a required agreement is not
+		const me = accepted.json.signIn;
+		expect(code(await env.visitor('POST', '/v1/me/consents', {}, me))).toBe('validation_failed');
+		expect(code(await env.visitor('POST', '/v1/me/consents', { consents: { terms: false } }, me))).toBe('validation_failed');
+		const withdrawn = await env.visitor('POST', '/v1/me/consents', { consents: { news: false } }, me);
+		expect(withdrawn.json.consents.news).toMatchObject({ given: false });
+		const ana = (await env.serverCall('GET', '/v1/users?q=ana@')).json.items[0];
+		expect(
+			(await env.serverCall('GET', '/v1/users?consent=news')).json.items.map((/** @type {any} */ u) => u.id),
+		).not.toContain(ana.id);
+		await env.visitor('POST', '/v1/me/consents', { consents: { news: true } }, me);
+		expect((await env.serverCall('GET', '/v1/users?consent=news')).json.items.map((/** @type {any} */ u) => u.id)).toContain(
+			ana.id,
+		);
+		expect(code(await env.serverCall('GET', '/v1/users?consent=Not!'))).toBe('validation_failed');
+		// a new version of a required agreement waits for the user
+		await put('terms', { ...seeded[0], version: '3', url: 'https://shop.example.com/terms' });
+		expect(
+			code(await env.visitor('POST', '/v1/sign-in/password', { email: 'ana@example.com', password: 'another long one' })),
+		).toBe('consent_required');
+		expect((await env.visitor('POST', '/v1/me/consents', { consents: { terms: true } }, me)).json.consents.terms).toMatchObject(
+			{ version: '3', given: true },
+		);
+		// the merchant’s order; a deleted consent stays deleted (the terms one is not made again)
+		const order = await env.dashboard(cookie, 'PUT', base, { order: ['news', 'terms'] });
+		expect(order.json.items.map((/** @type {any} */ c) => c.key)).toEqual(['news', 'terms']);
+		expect((await env.dashboard(cookie, 'DELETE', `${base}/news`)).status).toBe(204);
+		expect((await env.dashboard(cookie, 'GET', base)).json.items.map((/** @type {any} */ c) => c.key)).toEqual(['terms']);
 	});
 
 	it('approval: sign-ups wait until a staff member approves; invite-only refuses them; invites work', async () => {
@@ -892,7 +937,7 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		const joined = await env.visitor('POST', '/v1/invites/accept', {
 			token,
 			password: 'my invite password',
-			acceptTerms: true,
+			consents: { terms: true },
 		});
 		expect(joined.json).toMatchObject({ status: 'signed_in', user: { email: 'inv@example.com', role: 'support_staff' } });
 		expect((await signIn('inv@example.com', 'my invite password')).json.status).toBe('signed_in');
@@ -1246,13 +1291,13 @@ describe('edges', () => {
 	it('refuses what does not apply and reports missing connections', async () => {
 		env.advance(31_000);
 		await env.visitor('POST', '/v1/sign-in/phone/code', { phone: '+447700900567' });
-		// a terms step does not use the code up
+		// a consent step does not use the code up
 		const asked = await env.visitor('POST', '/v1/sign-in/phone', { phone: '+447700900567', code: lastMessage().values.code });
-		expect(code(asked)).toBe('terms_required');
+		expect(code(asked)).toBe('consent_required');
 		const pat = await env.visitor('POST', '/v1/sign-in/phone', {
 			phone: '+447700900567',
 			code: lastMessage().values.code,
-			acceptTerms: true,
+			consents: { terms: true },
 		});
 		const t = pat.json.signIn;
 		// a phone user sets a password while Phone + password is on (PLAN 0.8.10 A2)

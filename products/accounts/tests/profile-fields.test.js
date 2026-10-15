@@ -20,7 +20,7 @@ const server = (method, path, body) => env.serverCall(method, path, body);
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	await env.connectDatabase();
 	await env.setting('phone', 'defaultCallingCode', '+44');
 	await env.setting('phone', 'trunkPrefix', '0');
@@ -86,7 +86,9 @@ describe('a City on the member profile (custom fields)', () => {
 		);
 
 		// with the feature off, My account cannot change it and the widgets show none; staff keep what is stored
-		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks', 'custom_fields'].includes(key)));
+		await env.switchOn(
+			ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks', 'custom_fields'].includes(key)),
+		);
 		expect(code(await env.visitor('PATCH', '/v1/me', { custom: { city: 'Rome' } }, signIn))).toBe('feature_off');
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.customFields).toEqual([]);
 		expect((await server('GET', `/v1/users/${sam.json.id}`)).json.custom).toEqual({ city: 'New York' });

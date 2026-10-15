@@ -14,6 +14,7 @@ import { normalizeEmail } from '@ss/contracts/email';
 import { nationalNumberOf } from '@ss/contracts/phone';
 import { randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
+import { MAX_CONSENTS, checkConsent } from '../core/consents.js';
 import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
 import {
 	MAX_ROLES,
@@ -138,8 +139,8 @@ export const createManage = (product, service, flows) => {
 	 * `blocked` (true or false), `deletion=1`, `phone` (exact, as typed in the website's phone format), `phoneDigits`
 	 * (the end of a national number, A7: a whole number typed any usual way counts by its national number, so its trunk
 	 * prefix or calling code does not matter; else at least 4 digits the number ends with) and `createdAfter`
-	 * (ISO-8601). A role or status that does not fit is ignored; a phone, permission or time that does not fit answers
-	 * 422.
+	 * (ISO-8601), and `consent` (the key of a consent the user gives now, A2: for example the users who want offers). A
+	 * role or status that does not fit is ignored; a phone, permission, consent or time that does not fit answers 422.
 	 * @param {any} ctx @param {import('./service.js').Site} s
 	 * @returns {Promise<import('../adapters/store.js').UserQuery>}
 	 */
@@ -149,7 +150,7 @@ export const createManage = (product, service, flows) => {
 			const whole = await service.phoneOf(site, typed);
 			return (whole && nationalNumberOf(whole)) ?? typed.replace(/\D/g, '');
 		};
-		const { q, role, roles, status, deletion, blocked, phone, phoneDigits, permission, createdAfter } = ctx.query;
+		const { q, role, roles, status, deletion, blocked, phone, phoneDigits, permission, consent, createdAfter } = ctx.query;
 		const named = [role, ...(typeof roles === 'string' ? roles.split(',') : [])]
 			.filter((key) => typeof key === 'string')
 			.map((key) => key.trim())
@@ -167,6 +168,8 @@ export const createManage = (product, service, flows) => {
 		const end = typeof phoneDigits === 'string' && phoneDigits !== '' ? await phoneEndOf(s, phoneDigits) : '';
 		if (typeof phoneDigits === 'string' && phoneDigits !== '' && end.length < MIN_PHONE_END)
 			throw invalid('phoneDigits', `phoneDigits is a number, or at least ${MIN_PHONE_END} digits it ends with.`);
+		if (typeof consent === 'string' && consent !== '' && !/^[a-z][a-z0-9_]{0,39}$/.test(consent))
+			throw invalid('consent', 'consent is the key of a consent.');
 		const after = typeof createdAfter === 'string' && createdAfter !== '' ? new Date(createdAfter) : null;
 		if (after && Number.isNaN(after.getTime())) throw invalid('createdAfter', 'createdAfter is an ISO-8601 time.');
 		return {
@@ -176,6 +179,7 @@ export const createManage = (product, service, flows) => {
 			...(blocked === 'true' || blocked === 'false' ? { blocked: blocked === 'true' } : {}),
 			...(exact ? { phone: exact } : {}),
 			...(end ? { phoneEnd: end } : {}),
+			...(typeof consent === 'string' && consent !== '' ? { consent } : {}),
 			...(after ? { createdAfter: after } : {}),
 			deletion: deletion === '1',
 		};
@@ -1179,6 +1183,60 @@ export const createManage = (product, service, flows) => {
 			throw problem('feature_off', 'Custom fields are off.');
 	};
 
+	// ------------------------------------------------------------------------------------------------- consents (A2)
+
+	/** Merchants edit the consent list only while the feature is on (admins may prepare it). @param {any} ctx */
+	const consentsEditable = async (ctx) => {
+		if (ctx.session.kind === 'merchant' && !(await product.featuresOn(ctx.websiteId)).includes('consents'))
+			throw problem('feature_off', 'Consents are off.');
+	};
+
+	/** The consent list, for the dashboard. @param {any} ctx */
+	const listConsents = async (ctx) => ({ items: await (await fieldsStore(ctx)).consents.list() });
+
+	/** The consent list, for the merchant's server. @param {any} ctx */
+	const consentList = async (ctx) => ({ items: await (await service.site(ctx)).store.consents.list() });
+
+	/** Save a consent (A2). @param {any} ctx */
+	const saveConsent = async (ctx) => {
+		await consentsEditable(ctx);
+		const checked = checkConsent(ctx.params.key, ctx.body);
+		if (!checked.ok) throw invalid(checked.field, checked.message);
+		const store = await fieldsStore(ctx);
+		const existing = (await store.consents.list()).some((c) => c.key === checked.value.key);
+		if (!existing && (await store.consents.count()) >= MAX_CONSENTS)
+			throw problem('validation_failed', `A website can ask for at most ${MAX_CONSENTS} consents.`);
+		await store.consents.save(checked.value);
+		await recordChange(ctx, `Consent ${checked.value.key}: saved`);
+		return checked.value;
+	};
+
+	/** Delete a consent (the answers users gave stay on their records). @param {any} ctx */
+	const deleteConsent = async (ctx) => {
+		await consentsEditable(ctx);
+		if (!(await (await fieldsStore(ctx)).consents.remove(ctx.params.key))) throw problem('not_found', 'No such consent.');
+		await recordChange(ctx, `Consent ${ctx.params.key}: deleted`);
+		return undefined;
+	};
+
+	/** Place the consents in the merchant's order: `{ order: [every key once] }`. @param {any} ctx */
+	const orderConsents = async (ctx) => {
+		await consentsEditable(ctx);
+		const store = await fieldsStore(ctx);
+		const keys = (await store.consents.list()).map((c) => c.key);
+		const order = bodyOf(ctx.body).order;
+		if (
+			!Array.isArray(order) ||
+			order.length !== keys.length ||
+			new Set(order).size !== keys.length ||
+			order.some((k) => !keys.includes(k))
+		)
+			throw invalid('order', 'Send every consent key once, in the new order.');
+		await store.consents.reorder(order);
+		await recordChange(ctx, 'Consents: order saved');
+		return { items: await store.consents.list() };
+	};
+
 	/**
 	 * Place the custom fields in the merchant's order (A6): `{ order: [every key once] }`.
 	 * @param {any} ctx
@@ -1232,6 +1290,11 @@ export const createManage = (product, service, flows) => {
 
 	return Object.freeze({
 		listUsers,
+		listConsents,
+		consentList,
+		saveConsent,
+		deleteConsent,
+		orderConsents,
 		customFields,
 		orderFields,
 		countUsers: userCounts.count,

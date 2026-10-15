@@ -6,7 +6,7 @@
  *   background work).
  * - Sign-ins: the website's Ed25519 key (made on first use, sealed in the merchant database), sign-ins of 15 minutes
  *   (`iss` = Accounts' address, `aud` = the website id), sessions with a rotating refresh token whose reuse ends the
- *   session (after a 30-second grace for parallel renewals), and `finish()`: blocked, approval, terms and two-step
+ *   session (after a 30-second grace for parallel renewals), and `finish()`: blocked, approval, consents and two-step
  *   checks after the first step of any method.
  * - Messages through Notifications (pasted token): a Forgot password message that cannot go now is kept and sent
  *   again right after later requests; the data-rights fan-out to every connected product and the export.
@@ -18,6 +18,7 @@ import { normalisePhone, websiteCallingCode } from '@ss/contracts/phone';
 import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { labelOf, valuesOf } from '../core/activity.js';
 import { ROLE_TEMPLATES, SIGN_UP_TEMPLATE, remembered, sessionEnd, signInRefusal } from '../core/roles.js';
+import { answerConsents, consentsToAsk } from '../core/consents.js';
 import { checkAddresses, selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP, deviceIdOf, deviceOf } from '../core/rules.js';
 import { OTHER_PRODUCTS, SIGN_IN_HEADER, SIGN_IN_METHODS, SIGN_IN_SECONDS } from '../core/widgets.js';
@@ -262,22 +263,42 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * After the first step of any method: blocked, waiting for approval, terms, then two-step; else the session.
+	 * The consents a user's answers give (A2): the answers sent are recorded in each consent's current version; with
+	 * `ask`, every required agreement must then be given in its current version, else 403 consent_required lists those
+	 * still asked ({ key, label, url, version }).
+	 * @param {Site} s @param {Record<string, import('../core/consents.js').ConsentAnswer>} given what the user gave so far
+	 * @param {unknown} answers `{ [key]: true | false }` @param {{ ask: boolean }} options
+	 */
+	const consentsFor = async (s, given, answers, { ask }) => {
+		const list = await s.store.consents.list();
+		const recorded = answerConsents(list, given, answers, new Date(now()));
+		if (!recorded.ok)
+			throw problem('validation_failed', recorded.message, {
+				errors: [{ path: `/${recorded.field}`, message: recorded.message, code: 'invalid' }],
+			});
+		const missing = ask ? consentsToAsk(list, recorded.value) : [];
+		if (missing.length > 0)
+			throw problem('consent_required', 'Accept the required consents to continue.', {
+				extensions: { consents: missing.map(({ key, label, url, version }) => ({ key, label, url, version })) },
+			});
+		return recorded.value;
+	};
+
+	/**
+	 * After the first step of any method: blocked, waiting for approval, consents, then two-step; else the session.
 	 * @param {Site} s @param {UserRecord} user
-	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string }, acceptTerms?: unknown }} how
+	 * @param {{ method: string, remember: boolean, device: { browser: string, system: string }, consents?: unknown }} how
 	 */
 	const finish = async (s, user, how) => {
 		if (user.blocked) throw problem('blocked', 'This account is blocked.');
 		if (user.status === 'pending') throw problem('pending_approval', 'This account is waiting for approval.');
 		await allowSignIn(s, await roleOf(s, user), how.method);
 		let current = user;
-		if (s.on.includes('terms')) {
-			const { version, url } = await settings(s, 'terms');
-			if (current.terms?.version !== version) {
-				if (how.acceptTerms !== true)
-					throw problem('terms_required', 'Accept the terms to continue.', { extensions: { version, url } });
-				current = (await s.store.users.update(current.id, { terms: { version, acceptedAt: new Date(now()) } })) ?? current;
-			}
+		if (s.on.includes('consents')) {
+			const given = current.consents ?? {};
+			const next = await consentsFor(s, given, how.consents, { ask: true });
+			if (JSON.stringify(next) !== JSON.stringify(given))
+				current = (await s.store.users.update(current.id, { consents: next })) ?? current;
 		}
 		if (s.on.includes('two_step')) {
 			const role = await roleOf(s, current);
@@ -668,6 +689,7 @@ export const createService = (product) => {
 		signUpRules,
 		roleOf,
 		signUpRole,
+		consentsFor,
 		signingKey,
 		signInFor,
 		issue,

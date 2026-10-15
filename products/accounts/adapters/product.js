@@ -39,7 +39,7 @@ import roleRequests from '../schemas/role_requests.settings.json' with { type: '
 import staffLinks from '../schemas/staff_links.settings.json' with { type: 'json' };
 import riskChecks from '../schemas/risk_checks.settings.json' with { type: 'json' };
 import roles from '../schemas/roles.settings.json' with { type: 'json' };
-import terms from '../schemas/terms.settings.json' with { type: 'json' };
+import consents from '../schemas/consents.settings.json' with { type: 'json' };
 import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
 import { selfView } from '../core/profile.js';
 import { OPEN_SIGN_UP } from '../core/rules.js';
@@ -63,7 +63,7 @@ const SETTINGS = {
 	two_step: twoStep,
 	approval,
 	risk_checks: riskChecks,
-	terms,
+	consents,
 	data_rights: dataRights,
 	activity_copies: activityCopies,
 	orders_tab: ordersTab,
@@ -101,7 +101,7 @@ const PROBLEM_CODES = Object.freeze({
 	blocked: Object.freeze({ status: 403, title: 'Blocked' }),
 	pending_approval: Object.freeze({ status: 403, title: 'Waiting for approval' }),
 	sign_up_closed: Object.freeze({ status: 403, title: 'Sign-up is closed' }),
-	terms_required: Object.freeze({ status: 403, title: 'Terms not accepted' }),
+	consent_required: Object.freeze({ status: 403, title: 'Consent required' }),
 	risk_refused: Object.freeze({ status: 403, title: 'Refused by the risk checks' }),
 	already_exists: Object.freeze({ status: 409, title: 'Already exists' }),
 	contact_unverified: Object.freeze({ status: 409, title: 'Phone number or email address not proven' }),
@@ -269,7 +269,7 @@ export const createProductInstance = (options) => {
 			...ownDataRights(now),
 			// the Owner's Re-seal (RT-14): the signing key, two-step secrets and kept messages of each website
 			resealWebsite: (data) => resealWebsite(sealer, data),
-			// what the widgets need (GET /v1/widget/config): sign-up rules, custom fields and terms, never a secret
+			// what the widgets need (GET /v1/widget/config): sign-up rules, custom fields and consents, never a secret
 			widgetConfig: async (ctx) => {
 				const websiteId = /** @type {string} */ (ctx.websiteId);
 				const on = await product.featuresOn(websiteId);
@@ -278,7 +278,6 @@ export const createProductInstance = (options) => {
 				const emailPassword = on.includes('email_password')
 					? await product.settings.values(websiteId, 'email_password')
 					: null;
-				const termsSettings = on.includes('terms') ? await product.settings.values(websiteId, 'terms') : null;
 				const phonePassword = on.includes('phone_password')
 					? await product.settings.values(websiteId, 'phone_password')
 					: null;
@@ -303,7 +302,7 @@ export const createProductInstance = (options) => {
 								forgotUrl: phonePassword.forgotUrl,
 							}
 						: null,
-					terms: termsSettings ? { version: termsSettings.version, url: termsSettings.url } : null,
+					consents: on.includes('consents') ? await store.consents.list() : [],
 					remember: signUpRole?.remember ?? 'ask',
 					signInPaused: signUpRole?.signIn === 'paused',
 					profile: {

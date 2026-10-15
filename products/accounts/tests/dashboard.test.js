@@ -223,3 +223,42 @@ describe('Settings → Custom fields (A6)', () => {
 		expect(JSON.parse(String(put?.[1]?.body))).toEqual({ order: ['second', 'first'] });
 	});
 });
+
+describe('Settings → Consents (A2)', () => {
+	it('lists the consents with their purpose, and saves a new order', async () => {
+		const { ConsentsSection } = await import('../app/dashboard/consents.js');
+		const consent = (/** @type {string} */ key, /** @type {'agreement' | 'marketing'} */ purpose) => ({
+			key,
+			label: key.toUpperCase(),
+			url: '',
+			version: '1',
+			required: purpose === 'agreement',
+			purpose,
+		});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path, /** @type {RequestInit | undefined} */ init) =>
+				path.endsWith('/consents') && init?.method !== 'PUT'
+					? new Response(JSON.stringify({ items: [consent('terms', 'agreement'), consent('news', 'marketing')] }), {
+							status: 200,
+						})
+					: new Response(JSON.stringify({ items: [] }), { status: 200 }),
+			),
+		);
+		const { container } = render(
+			<DashboardProvider manifest={manifest} texts={TEXTS}>
+				<ConsentsSection websiteId={`web_${(website += 1)}`} />
+			</DashboardProvider>,
+		);
+		await settle();
+		expect(container.textContent).toContain(TEXTS.settings.consentPurposes.marketing);
+		expect(container.textContent).toContain(TEXTS.settings.consent.required_badge);
+		click(
+			/** @type {HTMLButtonElement} */ (container.querySelector(`button[aria-label="${TEXTS.settings.consent.down}: TERMS"]`)),
+		);
+		await settle();
+		const put = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === 'PUT');
+		expect(String(put?.[0])).toMatch(/\/consents$/);
+		expect(JSON.parse(String(put?.[1]?.body))).toEqual({ order: ['news', 'terms'] });
+	});
+});

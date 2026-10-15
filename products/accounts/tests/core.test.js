@@ -129,7 +129,7 @@ describe('profile', () => {
 			providers: {},
 			passwordHash: null,
 			twoStep: null,
-			terms: { version: '1', acceptedAt: new Date(0) },
+			consents: { terms: { version: '1', given: true, at: new Date(0) } },
 			deletion: { requestedAt: new Date(0), dueAt: null },
 			lastSignInAt: null,
 			roleSince: new Date(1000),
@@ -138,7 +138,7 @@ describe('profile', () => {
 		expect(selfView(user, [])).toMatchObject({
 			providers: [],
 			deletion: { dueAt: null },
-			terms: { version: '1' },
+			consents: { terms: { version: '1', given: true, at: '1970-01-01T00:00:00.000Z' } },
 			roleSince: '1970-01-01T00:00:01.000Z',
 			createdAt: '1970-01-01T00:00:00.000Z',
 		});

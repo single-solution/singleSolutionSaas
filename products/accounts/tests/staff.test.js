@@ -38,7 +38,7 @@ const people = {};
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	await env.connectDatabase();
 	await env.paste('notifications');
 	await env.setting('phone', 'defaultCallingCode', '+44');
@@ -327,7 +327,7 @@ describe('A3: staff-issued sign-in codes and setup links', () => {
 	});
 
 	it('invites can answer the link instead of sending it', async () => {
-		await env.switchOn(ALL.filter((key) => !['terms', 'two_step', 'risk_checks'].includes(key)));
+		await env.switchOn(ALL.filter((key) => !['consents', 'two_step', 'risk_checks'].includes(key)));
 		await env.setting('approval', 'invitePageUrl', `${ORIGIN}/join`);
 		const before = env.messages().length;
 		const invited = await server('POST', '/v1/users/invite', { phone: '+447700900099', name: 'Ivy', deliver: 'return' });

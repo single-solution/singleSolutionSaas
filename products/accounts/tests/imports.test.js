@@ -96,7 +96,7 @@ const users = () => [
 		passwordHash: `$2y$${bcrypt.hashSync('member secret 1', 4).slice(4)}`,
 		addresses: [{ label: 'Home', line1: '1 Garden Road', city: 'Springfield' }],
 		custom: { birthday: '1990-04-02', size: 'M' },
-		terms: { version: '1', acceptedAt: '2024-01-01T00:00:00Z' },
+		consents: { terms: { version: '1', given: true, at: '2024-01-01T00:00:00Z' } },
 		createdAt: '2023-12-01T00:00:00Z',
 	},
 	{
@@ -244,7 +244,7 @@ describe('import routes', () => {
 			createdAt: '2023-12-01T00:00:00.000Z',
 			hasPassword: true,
 			custom: { birthday: '1990-04-02', size: 'M' },
-			terms: { version: '1', acceptedAt: '2024-01-01T00:00:00.000Z' },
+			consents: { terms: { version: '1', given: true, at: '2024-01-01T00:00:00.000Z' } },
 			status: 'active',
 			blocked: null,
 		});
@@ -454,7 +454,7 @@ describe('import checks', () => {
 		const user = { id: usr('0e01'), email: 'u@example.com', custom: { size: 'S' } };
 		expect(checkImportedUser(user, rules)).toMatchObject({
 			ok: true,
-			value: { role: 'customer', status: 'active', identity: 'email', name: '', twoStep: null, terms: null },
+			value: { role: 'customer', status: 'active', identity: 'email', name: '', twoStep: null, consents: {} },
 		});
 		const both = checkImportedUser({ ...user, phone: '+447700900000', identity: 'phone' }, rules);
 		expect(both).toMatchObject({ ok: true, value: { identity: 'phone' } });
@@ -475,7 +475,7 @@ describe('import checks', () => {
 						identity: 'provider',
 						passwordHash: 42,
 						twoStep: { secret: SECRET, recoveryHashes: ['abc'], issuer: 'x' },
-						terms: { version: '', acceptedAt: 'x' },
+						consents: { terms: { version: '', given: true, at: 'x' } },
 						lastSignInAt: 'x',
 						createdAt: '2024-01-01',
 						roleSince: 5,
@@ -501,7 +501,7 @@ describe('import checks', () => {
 			'/passwordHash',
 			'/twoStep/issuer',
 			'/twoStep/recoveryHashes',
-			'/terms/version',
+			'/consents/terms/version',
 			'/lastSignInAt',
 			'/createdAt',
 			'/roleSince',
@@ -515,16 +515,21 @@ describe('import checks', () => {
 						addresses: 'home',
 						providers: 'google',
 						twoStep: 'on',
-						terms: true,
+						consents: true,
 						custom: { size: 'XL' },
 					},
 					rules,
 				),
 			),
-		).toEqual(['/blocked', '/addresses', '/custom/size', '/providers', '/twoStep', '/terms']);
+		).toEqual(['/blocked', '/addresses', '/custom/size', '/providers', '/twoStep', '/consents']);
 		expect(
-			paths(checkImportedUser({ ...user, terms: { version: '2', acceptedAt: 'soon' }, identity: 'phone' }, rules)),
-		).toEqual(['/identity', '/terms/acceptedAt']);
+			paths(
+				checkImportedUser(
+					{ ...user, consents: { terms: { version: '2', given: true, at: 'soon' } }, identity: 'phone' },
+					rules,
+				),
+			),
+		).toEqual(['/identity', '/consents/terms/at']);
 		expect(
 			checkImportedUser(
 				{

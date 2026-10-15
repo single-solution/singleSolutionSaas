@@ -1,7 +1,8 @@
 'use client';
 /**
  * Accounts' own parts of the shared dashboard tabs (`@ss/ui/dashboard`, PLAN 0.4.3): the custom fields in the Overview
- * (how many there are while Custom fields is on, and a field to add while there is none) and on top of Settings; the
+ * (how many there are while Custom fields is on, and a field to add while there is none) and, with the consent list
+ * (A2), on top of Settings; the
  * social sign-in key forms and the help line of each connection; and the developer sections (offline sign-in
  * verification, widget and ticket snippets, social sign-in return addresses and the message templates).
  * @module
@@ -12,6 +13,7 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import messages from '../../schemas/messages.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { OTHER_PRODUCTS } from '../../core/widgets.js';
+import { ConsentsSection } from './consents.js';
 import { FieldsSection } from './fields.js';
 import { KEY_FORMS, KeyForm } from './forms.js';
 import { TEXTS } from './texts.js';
@@ -66,7 +68,18 @@ function AccountsOverview(props) {
 
 /** @param {TabProps} props */
 function AccountsSettings(props) {
-	return <SettingsTab {...props} sections={<FieldsSection websiteId={/** @type {string} */ (props.websiteId)} />} />;
+	const websiteId = /** @type {string} */ (props.websiteId);
+	return (
+		<SettingsTab
+			{...props}
+			sections={
+				<>
+					<FieldsSection websiteId={websiteId} />
+					<ConsentsSection websiteId={websiteId} />
+				</>
+			}
+		/>
+	);
 }
 
 /**

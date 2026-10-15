@@ -206,7 +206,7 @@
 				"providers",
 				"hasPassword",
 				"twoStep",
-				"terms",
+				"consents",
 				"deletion",
 				"roleSince",
 				"createdAt"
@@ -270,21 +270,33 @@
 					"type": "boolean",
 					"description": "Two-step sign-in is on."
 				},
-				"terms": {
-					"type": ["object", "null"],
-					"required": ["version", "acceptedAt"],
-					"additionalProperties": false,
-					"properties": {
-						"version": {
-							"type": "string",
-							"maxLength": 40
-						},
-						"acceptedAt": {
-							"type": "string",
-							"format": "date-time"
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "object",
+						"required": ["version", "given", "at"],
+						"additionalProperties": false,
+						"properties": {
+							"version": {
+								"type": "string",
+								"maxLength": 40
+							},
+							"given": {
+								"type": "boolean",
+								"description": "false: refused or withdrawn."
+							},
+							"at": {
+								"type": "string",
+								"format": "date-time",
+								"description": "When it was given or withdrawn."
+							}
 						}
 					},
-					"description": "The terms version the user accepted last (null: none)."
+					"description": "What the user answered to each consent (Consents), by key, with the version and the time ({} when none)."
 				},
 				"deletion": {
 					"type": ["object", "null"],
@@ -330,7 +342,7 @@
 				"providers",
 				"hasPassword",
 				"twoStep",
-				"terms",
+				"consents",
 				"deletion",
 				"roleSince",
 				"createdAt",
@@ -396,21 +408,33 @@
 					"type": "boolean",
 					"description": "Two-step sign-in is on."
 				},
-				"terms": {
-					"type": ["object", "null"],
-					"required": ["version", "acceptedAt"],
-					"additionalProperties": false,
-					"properties": {
-						"version": {
-							"type": "string",
-							"maxLength": 40
-						},
-						"acceptedAt": {
-							"type": "string",
-							"format": "date-time"
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "object",
+						"required": ["version", "given", "at"],
+						"additionalProperties": false,
+						"properties": {
+							"version": {
+								"type": "string",
+								"maxLength": 40
+							},
+							"given": {
+								"type": "boolean",
+								"description": "false: refused or withdrawn."
+							},
+							"at": {
+								"type": "string",
+								"format": "date-time",
+								"description": "When it was given or withdrawn."
+							}
 						}
 					},
-					"description": "The terms version the user accepted last (null: none)."
+					"description": "What the user answered to each consent (Consents), by key, with the version and the time ({} when none)."
 				},
 				"deletion": {
 					"type": ["object", "null"],
@@ -464,7 +488,7 @@
 				"providers",
 				"hasPassword",
 				"twoStep",
-				"terms",
+				"consents",
 				"deletion",
 				"roleSince",
 				"createdAt",
@@ -534,21 +558,33 @@
 					"type": "boolean",
 					"description": "Two-step sign-in is on."
 				},
-				"terms": {
-					"type": ["object", "null"],
-					"required": ["version", "acceptedAt"],
-					"additionalProperties": false,
-					"properties": {
-						"version": {
-							"type": "string",
-							"maxLength": 40
-						},
-						"acceptedAt": {
-							"type": "string",
-							"format": "date-time"
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "object",
+						"required": ["version", "given", "at"],
+						"additionalProperties": false,
+						"properties": {
+							"version": {
+								"type": "string",
+								"maxLength": 40
+							},
+							"given": {
+								"type": "boolean",
+								"description": "false: refused or withdrawn."
+							},
+							"at": {
+								"type": "string",
+								"format": "date-time",
+								"description": "When it was given or withdrawn."
+							}
 						}
 					},
-					"description": "The terms version the user accepted last (null: none)."
+					"description": "What the user answered to each consent (Consents), by key, with the version and the time ({} when none)."
 				},
 				"deletion": {
 					"type": ["object", "null"],
@@ -634,7 +670,7 @@
 				"providers",
 				"hasPassword",
 				"twoStep",
-				"terms",
+				"consents",
 				"deletion",
 				"roleSince",
 				"createdAt",
@@ -704,21 +740,33 @@
 					"type": "boolean",
 					"description": "Two-step sign-in is on."
 				},
-				"terms": {
-					"type": ["object", "null"],
-					"required": ["version", "acceptedAt"],
-					"additionalProperties": false,
-					"properties": {
-						"version": {
-							"type": "string",
-							"maxLength": 40
-						},
-						"acceptedAt": {
-							"type": "string",
-							"format": "date-time"
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "object",
+						"required": ["version", "given", "at"],
+						"additionalProperties": false,
+						"properties": {
+							"version": {
+								"type": "string",
+								"maxLength": 40
+							},
+							"given": {
+								"type": "boolean",
+								"description": "false: refused or withdrawn."
+							},
+							"at": {
+								"type": "string",
+								"format": "date-time",
+								"description": "When it was given or withdrawn."
+							}
 						}
 					},
-					"description": "The terms version the user accepted last (null: none)."
+					"description": "What the user answered to each consent (Consents), by key, with the version and the time ({} when none)."
 				},
 				"deletion": {
 					"type": ["object", "null"],
@@ -1537,11 +1585,49 @@
 					"description": "A short help text shown with the field."
 				}
 			}
+		},
+		"Consent": {
+			"type": "object",
+			"description": "A consent of your list (dashboard → Consents), in your order.",
+			"required": ["key", "label", "url", "version", "required", "purpose"],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"pattern": "^[a-z][a-z0-9_]{0,39}$"
+				},
+				"label": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 200,
+					"description": "Your words next to the box."
+				},
+				"url": {
+					"type": "string",
+					"maxLength": 2048,
+					"description": "The page to read ('' for none)."
+				},
+				"version": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 40,
+					"description": "A new version asks a required agreement again at the next sign-in."
+				},
+				"required": {
+					"type": "boolean",
+					"description": "Asked before sign-up and sign-in go on (agreements only)."
+				},
+				"purpose": {
+					"type": "string",
+					"enum": ["agreement", "marketing"],
+					"description": "agreement (terms, privacy policy …) or marketing (kept apart: never required, given or withdrawn by the user at any time)."
+				}
+			}
 		}
 	},
 	"POST /v1/sign-up/password": {
 		"summary": "Sign up with an email address and a password",
-		"description": "Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. The address is not proven by this. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["email", "password"],
@@ -1566,9 +1652,16 @@
 				"custom": {
 					"$ref": "#/components/schemas/CustomValuesInput"
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				},
 				"remember": {
 					"type": "boolean",
@@ -1587,7 +1680,7 @@
 	},
 	"POST /v1/sign-in/password": {
 		"summary": "Sign in with an email address and a password",
-		"description": "401 sign_in_failed for a wrong address or password (the same answer for both); 423 locked (with lockedUntil) after too many wrong passwords; 429 rate_limited when networkLimit tries from this network ran out. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+		"description": "401 sign_in_failed for a wrong address or password (the same answer for both); 423 locked (with lockedUntil) after too many wrong passwords; 429 rate_limited when networkLimit tries from this network ran out. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 		"body": {
 			"type": "object",
 			"required": ["email", "password"],
@@ -1608,9 +1701,16 @@
 					"pattern": "^[A-Za-z0-9_-]{16,64}$",
 					"description": "A random id the browser keeps (risk checks count accounts per device)."
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true accepts the current terms version when the user has not accepted it yet (else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				}
 			}
 		},
@@ -1659,7 +1759,7 @@
 	},
 	"POST /v1/sign-up/phone-password": {
 		"summary": "Sign up with a phone number and a password",
-		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Only while the Phone + password signUp setting is on (else 403 sign_up_closed). The number is not proven by this. Makes the account (with the role for new sign-ups) and signs it in, or answers status pending while sign-ups wait for approval. 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "password"],
@@ -1683,9 +1783,16 @@
 				"custom": {
 					"$ref": "#/components/schemas/CustomValuesInput"
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				},
 				"remember": {
 					"type": "boolean",
@@ -1704,7 +1811,7 @@
 	},
 	"POST /v1/sign-in/phone-password": {
 		"summary": "Sign in with a phone number and a password",
-		"description": "password also takes a sign-in code your staff made (Staff sign-in codes and setup links). 401 sign_in_failed for a wrong number or password; 423 locked (with lockedUntil); 429 rate_limited (networkLimit). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+		"description": "password also takes a sign-in code your staff made (Staff sign-in codes and setup links). 401 sign_in_failed for a wrong number or password; 423 locked (with lockedUntil); 429 rate_limited (networkLimit). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "password"],
@@ -1725,9 +1832,16 @@
 					"pattern": "^[A-Za-z0-9_-]{16,64}$",
 					"description": "A random id the browser keeps (risk checks count accounts per device)."
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true accepts the current terms version when the user has not accepted it yet (else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				}
 			}
 		},
@@ -1772,7 +1886,7 @@
 	},
 	"POST /v1/setup-links/accept": {
 		"summary": "Choose a password with a setup link and sign in",
-		"description": "The link’s code comes from POST /v1/users/:id/setup-link or a role-request invite (?ss_setup=<code>). Proves the user’s phone number, activates an invited user, completes their invited role request (and gives its role now when Role requests → giveRoleAt is completion) and signs their other devices out; the link’s lookup says used from then on. 422 code_invalid (not valid, used or expired), weak_password; 403 blocked. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+		"description": "The link’s code comes from POST /v1/users/:id/setup-link or a role-request invite (?ss_setup=<code>). Proves the user’s phone number, activates an invited user, completes their invited role request (and gives its role now when Role requests → giveRoleAt is completion) and signs their other devices out; the link’s lookup says used from then on. 422 code_invalid (not valid, used or expired), weak_password; 403 blocked. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 		"body": {
 			"type": "object",
 			"required": ["code", "password"],
@@ -1793,9 +1907,16 @@
 					"pattern": "^[A-Za-z0-9_-]{16,64}$",
 					"description": "A random id the browser keeps (risk checks count accounts per device)."
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true accepts the current terms version when the user has not accepted it yet (else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				}
 			}
 		},
@@ -1923,7 +2044,7 @@
 	},
 	"POST /v1/sign-in/phone": {
 		"summary": "Sign in (or up) with the phone code",
-		"description": "Proves the number. A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a terms or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Proves the number. A number without an account signs up with the sign-up members (a new user without a name gets your newUserName). 422 code_invalid (5 wrong codes use the code up). The right code is used up once the sign-in passed, so a consent or profile step can be retried with it. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"required": ["phone", "code"],
@@ -1946,9 +2067,16 @@
 				"custom": {
 					"$ref": "#/components/schemas/CustomValuesInput"
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				},
 				"remember": {
 					"type": "boolean",
@@ -1999,7 +2127,7 @@
 	},
 	"POST /v1/sign-in/email": {
 		"summary": "Sign in (or up) with the email code or the magic link",
-		"description": "Send { email, code } or { link }. Proves the address; opens only an account whose address was proven before (an address only typed on another account counts as unknown, and its sign-up answers 409 already_exists). A sign-in code your staff made opens its user but proves nothing. 422 code_invalid. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), terms_required (with version and url), risk_refused, sign_in_paused or method_refused (the customer role); 409 already_exists.",
+		"description": "Send { email, code } or { link }. Proves the address; opens only an account whose address was proven before (an address only typed on another account counts as unknown, and its sign-up answers 409 already_exists). A sign-in code your staff made opens its user but proves nothing. 422 code_invalid. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents. A sign-up: 422 validation_failed (for the field), weak_password (with rule: too_short and minLength, too_long and maxLength, letter_and_digit, personal or breached); 403 sign_up_closed (invite only), consent_required (with the consents still asked), risk_refused, sign_in_paused or method_refused (the role for new sign-ups); 409 already_exists.",
 		"body": {
 			"type": "object",
 			"properties": {
@@ -2026,9 +2154,16 @@
 				"custom": {
 					"$ref": "#/components/schemas/CustomValuesInput"
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true when the visitor checked the terms box (Terms acceptance; else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				},
 				"remember": {
 					"type": "boolean",
@@ -2155,7 +2290,7 @@
 	},
 	"POST /v1/sign-in/exchange": {
 		"summary": "Exchange a Google, Apple or Facebook hand-over code for the sign-in",
-		"description": "The provider proved the address: a known provider account, or an account whose address was proven before, is opened; else an account is made. 422 code_invalid when the code is not valid, used or older than 5 minutes. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+		"description": "The provider proved the address: a known provider account, or an account whose address was proven before, is opened; else an account is made. 422 code_invalid when the code is not valid, used or older than 5 minutes. 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 		"body": {
 			"type": "object",
 			"required": ["code"],
@@ -2165,9 +2300,16 @@
 					"pattern": "^[a-z]{3}_[0-9a-z]{26}\\.[A-Za-z0-9_-]{32,}$",
 					"description": "The ss_accounts_code value of the address fragment."
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true accepts the current terms version when the user has not accepted it yet (else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				}
 			}
 		},
@@ -2203,7 +2345,7 @@
 	},
 	"POST /v1/invites/accept": {
 		"summary": "Accept an invite and sign in",
-		"description": "The invite’s token comes from the link (#ss_accounts_invite=<token>). The account becomes active, its email address (else phone number) proven; a password is set when the method is on (Email + password for a user with an email address, Phone + password for one with a phone number). 422 code_invalid (not valid, used or expired), weak_password, validation_failed (name). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 terms_required (with version and url) until acceptTerms: true.",
+		"description": "The invite’s token comes from the link (#ss_accounts_invite=<token>). The account becomes active, its email address (else phone number) proven; a password is set when the method is on (Email + password for a user with an email address, Phone + password for one with a phone number). 422 code_invalid (not valid, used or expired), weak_password, validation_failed (name). 403 blocked, pending_approval, sign_in_paused (the detail is your paused text) or method_refused (the user’s role); 403 consent_required (with the consents still asked) until they are given in consents.",
 		"body": {
 			"type": "object",
 			"required": ["token"],
@@ -2229,9 +2371,16 @@
 					"pattern": "^[A-Za-z0-9_-]{16,64}$",
 					"description": "A random id the browser keeps (risk checks count accounts per device)."
 				},
-				"acceptTerms": {
-					"type": "boolean",
-					"description": "true accepts the current terms version when the user has not accepted it yet (else 403 terms_required)."
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					},
+					"description": "The consents the visitor checked, { key: true } (Consents): every required agreement not given in its current version must be true, else 403 consent_required with consents: [{ key, label, url, version }]; false refuses an optional one."
 				}
 			}
 		},
@@ -2459,15 +2608,23 @@
 			}
 		}
 	},
-	"POST /v1/me/terms": {
-		"summary": "Accept the current terms",
-		"description": "Send the sign-in in SS-Sign-In (401 signed_out when it is not valid, its session ended or the user is blocked). 422 validation_failed without accept: true.",
+	"POST /v1/me/consents": {
+		"summary": "Give or withdraw consents",
+		"description": "{ consents: { key: true | false } }: each answer is recorded in the consent’s current version with the time; a required agreement cannot be withdrawn (422 validation_failed for consents/<key>). Answers the user as GET /v1/me does.",
 		"body": {
 			"type": "object",
-			"required": ["accept"],
+			"required": ["consents"],
+			"additionalProperties": false,
 			"properties": {
-				"accept": {
-					"const": true
+				"consents": {
+					"type": "object",
+					"maxProperties": 20,
+					"propertyNames": {
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"additionalProperties": {
+						"type": "boolean"
+					}
 				}
 			}
 		},
@@ -2609,6 +2766,10 @@
 					"type": "string",
 					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
+				"consent": {
+					"type": "string",
+					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
+				},
 				"createdAfter": {
 					"type": "string",
 					"description": "An ISO-8601 time (422 otherwise)."
@@ -2662,6 +2823,10 @@
 				"phoneDigits": {
 					"type": "string",
 					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
+				},
+				"consent": {
+					"type": "string",
+					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -2722,6 +2887,10 @@
 				"phoneDigits": {
 					"type": "string",
 					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
+				},
+				"consent": {
+					"type": "string",
+					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -3108,6 +3277,24 @@
 		"description": "It becomes pending. 409 conflict otherwise; 404 not_found.",
 		"response": {
 			"$ref": "#/components/schemas/RoleRequest"
+		}
+	},
+	"GET /v1/consents": {
+		"summary": "The consent list",
+		"description": "Your consents in your order (the terms consent is made on first use).",
+		"response": {
+			"type": "object",
+			"required": ["items"],
+			"additionalProperties": false,
+			"properties": {
+				"items": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"$ref": "#/components/schemas/Consent"
+					}
+				}
+			}
 		}
 	},
 	"GET /v1/fields": {
@@ -3648,6 +3835,10 @@
 					"type": "string",
 					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
 				},
+				"consent": {
+					"type": "string",
+					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
+				},
 				"createdAfter": {
 					"type": "string",
 					"description": "An ISO-8601 time (422 otherwise)."
@@ -3701,6 +3892,10 @@
 				"phoneDigits": {
 					"type": "string",
 					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
+				},
+				"consent": {
+					"type": "string",
+					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
 				"createdAfter": {
 					"type": "string",
@@ -3761,6 +3956,10 @@
 				"phoneDigits": {
 					"type": "string",
 					"description": "The end of a phone number (A7): a whole number typed any usual way matches by its national number (its own country’s, so a trunk prefix or calling code does not matter); otherwise at least 4 digits the national number ends with (422 otherwise)."
+				},
+				"consent": {
+					"type": "string",
+					"description": "The key of a consent: the users who give it now (for example those who want offers; 422 when it is not a key)."
 				},
 				"createdAfter": {
 					"type": "string",

@@ -1,11 +1,21 @@
 /**
  * The visitor widget `my_account` (PLAN 0.8.6), for the signed-in user: the profile (name, custom fields, addresses),
- * the password, two-step sign-in, the devices signed in, the terms when there is a new version, Download my data and
- * Delete my account (Data rights) and the orders (Orders tab). Each part shows only while its feature is on.
+ * the consents (first while a required one waits for them), the password, two-step sign-in, the devices signed in,
+ * Download my data and Delete my account (Data rights) and the orders (Orders tab). Each part shows only while its feature is on.
  * @module
  */
 import { element, formatText, mountWidget } from '@ss/app-kit/widget';
-import { customInputs, datesOf, errorText, fieldMaker, moneyText, setHidden, termsBox, textsOf, webAddress } from './common.js';
+import {
+	customInputs,
+	datesOf,
+	errorText,
+	fieldMaker,
+	moneyText,
+	setHidden,
+	consentBoxes,
+	textsOf,
+	webAddress,
+} from './common.js';
 import { ADDRESS_LIMITS } from '../core/widgets.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -98,30 +108,51 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 
 			// ------------------------------------------------------------------------------------------- parts
 
-			/** @param {Record<string, any>} user */
-			const termsPart = (user) => {
-				const { section, note } = part(t('account.termsTitle'));
-				const terms = termsBox(doc, t, settings.terms);
-				const accept = button(t('account.termsAccept'));
-				section.append(para(t('account.termsAsk')), terms.wrap, accept, note);
-				accept.addEventListener('click', () => {
-					if (!terms.input.checked) {
-						note.textContent = t('terms.tick');
+			/**
+			 * Consents (A2): each one of the website's list with the user's answer; a required agreement updated since the
+			 * user gave it waits for them, one given in its current version cannot be withdrawn here; marketing and other
+			 * optional consents are given or withdrawn at any time.
+			 * @param {Record<string, any>} user
+			 */
+			const consentsPart = (user) => {
+				const { section, note } = part(t('account.consentsTitle'));
+				/** @type {import('./common.js').ConsentView[]} */
+				const list = settings.consents ?? [];
+				const given = user.consents ?? {};
+				/** @param {import('./common.js').ConsentView} consent */
+				const current = (consent) => given[consent.key]?.given === true && given[consent.key]?.version === consent.version;
+				const boxes = consentBoxes(doc, t, list);
+				const inputs = /** @type {HTMLInputElement[]} */ ([...boxes.wrap.querySelectorAll('input')]);
+				for (const [index, consent] of list.entries()) {
+					const input = /** @type {HTMLInputElement} */ (inputs[index]);
+					input.checked = current(consent);
+					if (consent.required && current(consent)) input.setAttribute('disabled', '');
+				}
+				const asked = list.some((consent) => consent.required && !current(consent));
+				const save = button(t('account.consentsSave'));
+				section.append(...(asked ? [para(t('account.consentsAsk'))] : []), boxes.wrap, save, note);
+				save.addEventListener('click', () => {
+					if (boxes.missing()) {
+						note.textContent = t('consent.tick');
 						return;
 					}
-					void run(accept, async () => {
-						const answer = await session.me('POST', '/v1/me/terms', { accept: true });
+					/** @type {Record<string, boolean>} */
+					const answers = {};
+					for (const [index, consent] of list.entries()) {
+						const input = /** @type {HTMLInputElement} */ (inputs[index]);
+						if (!input.disabled && (input.checked || !consent.required)) answers[consent.key] = input.checked;
+					}
+					void run(save, async () => {
+						const answer = await session.me('POST', '/v1/me/consents', { consents: answers });
 						if (!answer.ok) {
 							note.textContent = errorText(t, answer, when);
 							return;
 						}
 						if (answer.data?.id) session.setUser(answer.data);
-						else session.setUser({ ...user, terms: { version: settings.terms?.version } });
-						setHidden(terms.wrap, true);
-						setHidden(accept, true);
-						note.textContent = t('account.termsDone');
+						note.textContent = t('account.consentsDone');
 					});
 				});
+				boxes.require();
 				return section;
 			};
 
@@ -565,8 +596,14 @@ export const mountMyAccount = ({ host, win, config, session }) => {
 			/** @param {Record<string, any>} user */
 			const paint = (user) => {
 				const parts = [];
-				if (on('terms') && settings.terms && user.terms?.version !== settings.terms.version) parts.push(termsPart(user));
+				const consents = on('consents') ? (settings.consents ?? []) : [];
+				const waiting = consents.some(
+					(/** @type {any} */ c) =>
+						c.required && !(user.consents?.[c.key]?.given === true && user.consents[c.key].version === c.version),
+				);
+				if (waiting) parts.push(consentsPart(user));
 				parts.push(profilePart(user), addressesPart(user));
+				if (consents.length > 0 && !waiting) parts.push(consentsPart(user));
 				// passwords go with an email address (Email + password) or a phone number (Phone + password, A2)
 				if ((on('email_password') && user.email) || (on('phone_password') && user.phone)) parts.push(passwordPart(user));
 				if (on('two_step')) parts.push(twoStepPart(user));

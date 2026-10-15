@@ -5,6 +5,7 @@
  * account, and what the merchant's server and staff see.
  * @module
  */
+import { ownConsents } from './consents.js';
 import { ADDRESS_LIMITS } from './widgets.js';
 
 /**
@@ -305,7 +306,7 @@ export const resetsByEmail = (user) => user.emailVerified || identityOf(user) ==
  *   a number (A7)
  * @property {Date} roleSince when the role was last set (A5: "Member since"; an import gives the source's, else
  *   `createdAt`)
- * @property {{ version: string, acceptedAt: Date } | null} terms
+ * @property {Record<string, import('./consents.js').ConsentAnswer>} consents what the user gave, by consent key (A2)
  * @property {{ requestedAt: Date, dueAt: Date | null } | null} deletion
  * @property {string | null} deviceHash
  * @property {Date | null} lastSignInAt
@@ -330,7 +331,7 @@ export const selfView = (user, fields) => ({
 	providers: Object.keys(user.providers).sort(),
 	hasPassword: Boolean(user.passwordHash),
 	twoStep: Boolean(user.twoStep?.enabledAt),
-	terms: user.terms ? { version: user.terms.version, acceptedAt: user.terms.acceptedAt.toISOString() } : null,
+	consents: ownConsents(user.consents),
 	deletion: user.deletion
 		? { requestedAt: user.deletion.requestedAt.toISOString(), dueAt: user.deletion.dueAt?.toISOString() ?? null }
 		: null,

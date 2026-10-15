@@ -126,12 +126,12 @@
 			}
 		},
 		{
-			"key": "terms",
-			"name": "Terms acceptance",
-			"description": "Sign-up and sign-in ask the user to accept the current terms version, which is recorded on the user.",
+			"key": "consents",
+			"name": "Consents",
+			"description": "The merchant's consent list (terms, privacy policy, marketing …): sign-up and sign-in ask the required agreements again when their version changes; marketing consent stays apart, given or withdrawn by the user in My account; each answer is recorded on the user with its version and time.",
 			"dependsOn": [],
 			"settings": {
-				"$ref": "schemas/terms.settings.json"
+				"$ref": "schemas/consents.settings.json"
 			}
 		},
 		{

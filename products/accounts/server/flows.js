@@ -1,7 +1,7 @@
 /**
  * Sign-up and sign-in (PLAN 0.8.6), one handler per method, plus sessions (renew, sign out), two-step, invites and
  * social sign-ins (start, the provider's callback, the hand-over). Every method ends in `service.finish()`, which runs
- * the blocked, approval, terms and two-step checks before a session starts.
+ * the blocked, approval, consent and two-step checks before a session starts.
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -99,7 +99,7 @@ const blankUser = (role) => ({
 	failedLogins: 0,
 	lockedUntil: null,
 	lockLevel: 0,
-	terms: null,
+	consents: {},
 	deletion: null,
 	deviceHash: null,
 	lastSignInAt: null,
@@ -113,7 +113,7 @@ export const createFlows = (product, service) => {
 	const { now, providers } = product;
 
 	/**
-	 * The profile a sign-up gives: the required standard fields, the custom fields and accepted terms, checked
+	 * The profile a sign-up gives: the required standard fields, the custom fields and the consents (A2), checked
 	 * against the website's rules. `known` holds the address the method proved.
 	 * @param {Site} s @param {Record<string, any>} body @param {{ email?: string, phone?: string, social?: boolean }} known
 	 */
@@ -141,15 +141,8 @@ export const createFlows = (product, service) => {
 			if (!checked.ok) throw invalid(checked.field, checked.message);
 			custom = checked.value;
 		}
-		/** @type {{ version: string, acceptedAt: Date } | null} */
-		let terms = null;
-		if (s.on.includes('terms')) {
-			const { version, url } = await service.settings(s, 'terms');
-			if (body.acceptTerms !== true && !known.social)
-				throw problem('terms_required', 'Accept the terms to continue.', { extensions: { version, url } });
-			if (body.acceptTerms === true) terms = { version: String(version), acceptedAt: new Date(now()) };
-		}
-		return { mode: rules.mode, name, email, phone, custom, terms };
+		const consents = s.on.includes('consents') ? await service.consentsFor(s, {}, body.consents, { ask: !known.social }) : {};
+		return { mode: rules.mode, name, email, phone, custom, consents };
 	};
 
 	/**
@@ -194,7 +187,7 @@ export const createFlows = (product, service) => {
 			phone: profile.phone,
 			name: profile.name ?? '',
 			custom: profile.custom,
-			terms: profile.terms,
+			consents: profile.consents,
 			status: profile.mode === 'approval' ? 'pending' : 'active',
 			deviceHash: risk.deviceHash,
 			identity: identityOfMethod(method),
@@ -207,7 +200,7 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * The answer to a sign-up waiting for approval, else the sign-in.
-	 * @param {Site} s @param {UserRecord} user @param {{ method: string, remember: boolean, device: { browser: string, system: string }, acceptTerms?: unknown }} how
+	 * @param {Site} s @param {UserRecord} user @param {{ method: string, remember: boolean, device: { browser: string, system: string }, consents?: unknown }} how
 	 */
 	const afterSignUp = async (s, user, how) => (user.status === 'pending' ? { status: 'pending' } : service.finish(s, user, how));
 
@@ -307,7 +300,7 @@ export const createFlows = (product, service) => {
 			throw failed();
 		}
 		if (tries) await s.store.counters.clear(tries, NETWORK_WINDOW_MS);
-		const answer = await service.finish(s, user, { method, ...service.howOf(ctx), acceptTerms: body.acceptTerms });
+		const answer = await service.finish(s, user, { method, ...service.howOf(ctx), consents: body.consents });
 		if (staffCode) await s.store.codes.consume(staffCode);
 		return answer;
 	};
@@ -376,7 +369,7 @@ export const createFlows = (product, service) => {
 
 	/**
 	 * Check a code the user typed against the newest one sent to the address (used up after too many wrong tries);
-	 * the right one is used up by `codeSignIn` once the sign-in passed its checks, so a terms or profile step can be
+	 * the right one is used up by `codeSignIn` once the sign-in passed its checks, so a consent or profile step can be
 	 * retried with the same code.
 	 * @param {Site} s @param {'phone' | 'email' | 'phone_reset'} kind @param {string} target @param {unknown} typed
 	 * @returns {Promise<{ id: string, staff: boolean }>} the code record's id; `staff`: it is a sign-in code staff made
@@ -422,7 +415,7 @@ export const createFlows = (product, service) => {
 		const how = {
 			method: kind === 'phone' ? 'phone_code' : 'email_code',
 			...service.howOf(ctx),
-			acceptTerms: body.acceptTerms,
+			consents: body.consents,
 		};
 		const verified = kind === 'phone' ? 'phoneVerified' : 'emailVerified';
 		const existing =
@@ -448,7 +441,7 @@ export const createFlows = (product, service) => {
 			}
 			answer = await afterSignUp(s, await createUser(s, profile, { [verified]: true }, service.howOf(ctx), how.method), how);
 		}
-		// used up only now: a terms or profile step can be retried with the same code or link
+		// used up only now: a consent or profile step can be retried with the same code or link
 		if (!(await s.store.codes.consume(recordId))) throw problem('code_invalid', 'The code is not valid or has expired.');
 		return answer;
 	};
@@ -465,7 +458,7 @@ export const createFlows = (product, service) => {
 		const passwordHash = await newPassword(s, body.password, { who: { name: profile.name, email } });
 		const how = service.howOf(ctx);
 		const user = await createUser(s, profile, { passwordHash }, how, 'email_password');
-		return afterSignUp(s, user, { method: 'email_password', ...how, acceptTerms: body.acceptTerms });
+		return afterSignUp(s, user, { method: 'email_password', ...how, consents: body.consents });
 	};
 
 	/** @param {any} ctx */
@@ -497,7 +490,7 @@ export const createFlows = (product, service) => {
 		});
 		const how = service.howOf(ctx);
 		const user = await createUser(s, profile, { passwordHash }, how, 'phone_password');
-		return afterSignUp(s, user, { method: 'phone_password', ...how, acceptTerms: body.acceptTerms });
+		return afterSignUp(s, user, { method: 'phone_password', ...how, consents: body.consents });
 	};
 
 	/** Sign in with a phone number and a password, or a sign-in code from staff (A2, A3). @param {any} ctx */
@@ -830,7 +823,7 @@ export const createFlows = (product, service) => {
 			method: String(record.data.method),
 			remember: record.data.remember === true,
 			device: service.howOf(ctx).device,
-			acceptTerms: body.acceptTerms,
+			consents: body.consents,
 		});
 		await s.store.codes.consume(record.id);
 		return answer;
@@ -1024,7 +1017,7 @@ export const createFlows = (product, service) => {
 		await s.store.sessions.revokeAll(user.id);
 		const request = await s.store.requests.invitedFor(user.id);
 		if (request) active = (await service.completeRequest(s, request, active)).user;
-		return service.finish(s, active, { method: 'setup_link', ...service.howOf(ctx), acceptTerms: body.acceptTerms });
+		return service.finish(s, active, { method: 'setup_link', ...service.howOf(ctx), consents: body.consents });
 	};
 
 	/**
@@ -1079,7 +1072,7 @@ export const createFlows = (product, service) => {
 			set.passwordHash = await newPassword(s, body.password, { method: 'phone_password', who: { name: name || user.name } });
 		if (!(await s.store.codes.consume(record.id))) throw problem('code_invalid', 'This invite is not valid or has expired.');
 		const active = (await s.store.users.update(user.id, set)) ?? user;
-		return service.finish(s, active, { method: 'invite', ...service.howOf(ctx), acceptTerms: body.acceptTerms });
+		return service.finish(s, active, { method: 'invite', ...service.howOf(ctx), consents: body.consents });
 	};
 
 	return Object.freeze({

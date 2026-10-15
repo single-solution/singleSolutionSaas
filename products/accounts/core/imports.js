@@ -2,7 +2,7 @@
  * Import mode of Accounts' records (PLAN 0.8.10 K10, Migration; A1, A5, A8), pure: the checks of the `import` feature
  * for each record ss-import sends, built on the product's own checks (roles, custom fields, names, addresses, custom
  * values, activity copies) with what an import needs on top: given ids and past times, password hashes from another system and
- * history (blocked users, accepted terms, requests already invited, completed or declined).
+ * history (blocked users, consents given, requests already invited, completed or declined).
  *
  * - Strict: a field a collection does not take is refused by name, so a mapping mistake shows in the dry run; the
  *   website never comes from the record (`websiteId` and `merchantId` are unknown fields).
@@ -76,7 +76,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'identity',
 		'passwordHash',
 		'twoStep',
-		'terms',
+		'consents',
 		'lastSignInAt',
 		'createdAt',
 	]),
@@ -122,7 +122,8 @@ const MAX_RECOVERY_HASHES = 20;
 const MAX_NOTES = 5000;
 const MAX_BLOCKED_REASON = 300;
 const MAX_NOTE = 1000;
-const MAX_TERMS_VERSION = 40;
+const MAX_CONSENT_VERSION = 40;
+const CONSENT_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const MAX_SUBJECT = 255;
 const IDENTITIES = Object.freeze(/** @type {const} */ (['email', 'phone', 'provider']));
 const USER_STATUSES = Object.freeze(['active', 'pending', 'invited']);
@@ -471,17 +472,24 @@ export const checkImportedUser = (record, rules) => {
 				'Not a hash Accounts checks: bcrypt ($2a$, $2b$, $2y$), pbkdf2$<iterations>$<salt>$<hash> or scrypt$<salt>$<hash>.',
 		});
 	const twoStep = twoStepOf(record.twoStep, errors);
-	/** @type {{ version: string, acceptedAt: Date } | null} */
-	let terms = null;
-	if (isObject(record.terms)) {
-		errors.push(...unknownFields(record.terms, ['version', 'acceptedAt'], 'terms', '/terms'));
-		const version = record.terms.version;
-		const acceptedAt = timeOf(record.terms.acceptedAt);
-		if (typeof version !== 'string' || version === '' || version.length > MAX_TERMS_VERSION)
-			errors.push({ path: '/terms/version', message: `terms.version is text of 1 to ${MAX_TERMS_VERSION} characters.` });
-		else if (!acceptedAt) errors.push({ path: '/terms/acceptedAt', message: 'terms.acceptedAt is an ISO-8601 time.' });
-		else terms = { version, acceptedAt };
-	} else if (!absent(record.terms)) errors.push({ path: '/terms', message: 'terms is { version, acceptedAt } or null.' });
+	/** @type {Record<string, import('./consents.js').ConsentAnswer>} */
+	const consents = {};
+	if (isObject(record.consents))
+		for (const [key, answer] of Object.entries(record.consents)) {
+			const path = `/consents/${key}`;
+			if (!CONSENT_KEY.test(key) || !isObject(answer)) {
+				errors.push({ path, message: 'consents is { key: { version, given, at } }.' });
+				continue;
+			}
+			errors.push(...unknownFields(answer, ['version', 'given', 'at'], 'a consent', path));
+			const at = timeOf(answer.at);
+			if (typeof answer.version !== 'string' || answer.version === '' || answer.version.length > MAX_CONSENT_VERSION)
+				errors.push({ path: `${path}/version`, message: `version is text of 1 to ${MAX_CONSENT_VERSION} characters.` });
+			else if (typeof answer.given !== 'boolean') errors.push({ path: `${path}/given`, message: 'given is true or false.' });
+			else if (!at) errors.push({ path: `${path}/at`, message: 'at is an ISO-8601 time.' });
+			else consents[key] = { version: answer.version, given: answer.given, at };
+		}
+	else if (!absent(record.consents)) errors.push({ path: '/consents', message: 'consents is { key: { version, given, at } }.' });
 	const lastSignInAt = optionalTime(record, 'lastSignInAt', errors);
 	const createdAt = optionalTime(record, 'createdAt', errors);
 	const roleSince = optionalTime(record, 'roleSince', errors) ?? createdAt;
@@ -505,7 +513,7 @@ export const checkImportedUser = (record, rules) => {
 		failedLogins: 0,
 		lockedUntil: null,
 		lockLevel: 0,
-		terms,
+		consents,
 		deletion: null,
 		deviceHash: null,
 		lastSignInAt,

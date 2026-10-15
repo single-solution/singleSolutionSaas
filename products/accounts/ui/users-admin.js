@@ -406,9 +406,20 @@ export const mountUsersAdmin = ({ host, api, config }) => {
 						],
 						[t('users.lockedUntil'), user.lockedUntil ? date(user.lockedUntil) : ''],
 						[t('users.providers'), (user.providers ?? []).map((/** @type {string} */ p) => t(`method.${p}`)).join(', ')],
-						[t('users.termsLabel'), user.terms ? `${user.terms.version} · ${date(user.terms.acceptedAt)}` : ''],
 					]),
 				);
+				// the consents the user answered (A2), named as the website's list names them
+				const consentRows = Object.entries(user.consents ?? {}).map(
+					([key, answer]) =>
+						/** @type {[string, string]} */ ([
+							(config.settings.consents ?? []).find((/** @type {any} */ c) => c.key === key)?.label ?? key,
+							formatText(t(answer.given ? 'users.consentGiven' : 'users.consentWithdrawn'), {
+								version: answer.version,
+								date: date(answer.at),
+							}),
+						]),
+				);
+				if (consentRows.length > 0) cards.append(card(doc, t('users.consents'), consentRows));
 				/** @param {unknown} value */
 				const valueText = (value) =>
 					value === undefined || value === null

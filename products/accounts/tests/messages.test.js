@@ -27,7 +27,7 @@ const defaultsOf = (key) => {
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	await env.connectDatabase();
 	await env.paste('notifications');
 });

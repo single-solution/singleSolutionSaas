@@ -1,7 +1,7 @@
 /**
  * Helpers the Accounts widgets share: the widget texts, dates in the website's Format and business time zone, the
  * problem answers of the API turned into widget texts (never the server's English detail), and labeled fields (custom
- * fields and the terms checkbox included). Text is always set as text, never as HTML.
+ * fields and the consent boxes included). Text is always set as text, never as HTML.
  * @module
  */
 import { element, formatDate, formatMoney, formatText, viewerOf } from '@ss/app-kit/widget';
@@ -37,7 +37,7 @@ export const OWN_TEXT = new Set([
 	'blocked',
 	'pending_approval',
 	'sign_up_closed',
-	'terms_required',
+	'consent_required',
 	'risk_refused',
 	'already_exists',
 	'contact_unverified',
@@ -72,7 +72,7 @@ export const FIELD_TEXT = new Set([
 	'returnTo',
 	'custom',
 	'addresses',
-	'accept',
+	'consents',
 	'role',
 	'note',
 	'notes',
@@ -319,23 +319,67 @@ export const customInputs = (doc, make, t, fields, { values = {}, required = fal
 };
 
 /**
- * The terms checkbox with a link to the terms.
+ * @typedef {object} ConsentView
+ * @property {string} key
+ * @property {string} label the merchant's words next to the box
+ * @property {string} url the page to read ('' for none)
+ * @property {string} version
+ * @property {boolean} [required]
+ * @property {'agreement' | 'marketing'} [purpose]
+ */
+
+/**
+ * The consent boxes (A2): one checkbox per consent with the merchant's words and a link to its page; a required one
+ * must be checked. `show` limits them to the consents a refusal lists (consent_required), `read` gives the checked ones.
  * @param {Document} doc
  * @param {Texts} t
- * @param {{ url?: unknown } | null | undefined} terms
+ * @param {ReadonlyArray<ConsentView> | null | undefined} consents
  */
-export const termsBox = (doc, t, terms) => {
-	const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox' }));
-	const wrap = element(doc, 'label', { class: 'check' });
-	wrap.append(input, doc.createTextNode(t('terms.accept')));
-	const link = element(doc, 'a', { target: '_blank', rel: 'noopener noreferrer' }, t('terms.read'));
-	/** @param {unknown} url */
-	const point = (url) => {
-		const address = webAddress(url);
-		if (address) link.setAttribute('href', address);
-		setHidden(link, !address);
+export const consentBoxes = (doc, t, consents) => {
+	const wrap = element(doc, 'div', { class: 'consents' });
+	/** @type {Map<string, { row: HTMLElement, input: HTMLInputElement, required: boolean }>} */
+	const boxes = new Map();
+	/** @param {ConsentView} consent */
+	const add = (consent) => {
+		const input = /** @type {HTMLInputElement} */ (element(doc, 'input', { type: 'checkbox', value: consent.key }));
+		const row = element(doc, 'label', { class: 'check' });
+		row.append(input, doc.createTextNode(consent.label));
+		const address = webAddress(consent.url);
+		if (address) {
+			row.append(doc.createTextNode(' '));
+			row.append(element(doc, 'a', { target: '_blank', rel: 'noopener noreferrer', href: address }, t('consent.read')));
+		}
+		boxes.set(consent.key, { row, input, required: consent.required === true });
+		wrap.append(row);
 	};
-	point(terms?.url);
-	wrap.append(link);
-	return { wrap, input, point };
+	for (const consent of consents ?? []) add(consent);
+	return {
+		wrap,
+		/** Whether there is any box. */
+		any: () => boxes.size > 0,
+		/** Mark the required boxes required (a sign-up form). */
+		require: () => {
+			for (const { input, required } of boxes.values()) if (required) input.setAttribute('required', '');
+		},
+		/**
+		 * Show only the consents a refusal lists, as required (added when the widget did not know them yet).
+		 * @param {unknown} asked `consents` of a consent_required problem
+		 */
+		show: (asked) => {
+			const list = Array.isArray(asked) ? /** @type {ConsentView[]} */ (asked) : [];
+			for (const consent of list) if (!boxes.has(consent.key)) add(consent);
+			const keys = new Set(list.map((consent) => consent.key));
+			for (const [key, box] of boxes) {
+				setHidden(box.row, keys.size > 0 && !keys.has(key));
+				if (keys.has(key)) {
+					box.required = true;
+					box.input.setAttribute('required', '');
+				}
+			}
+		},
+		/** Whether a required box shown is unchecked. */
+		missing: () => [...boxes.values()].some(({ row, input, required }) => required && !row.hidden && !input.checked),
+		/** The consents checked, as the API takes them. @returns {Record<string, boolean>} */
+		read: () => Object.fromEntries([...boxes].filter(([, { input }]) => input.checked).map(([key]) => [key, true])),
+	};
 };

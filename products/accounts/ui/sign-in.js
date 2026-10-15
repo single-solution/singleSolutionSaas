@@ -17,7 +17,7 @@ import {
 	problemCode,
 	say,
 	setHidden,
-	termsBox,
+	consentBoxes,
 	textsOf,
 	webAddress,
 } from './common.js';
@@ -128,13 +128,13 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			/**
 			 * Carry on after an answer of a sign-in call.
 			 * @param {Answer} answer @param {HTMLElement} note
-			 * @param {ReturnType<typeof termsBox> | null} terms shown when the terms must be accepted first
+			 * @param {ReturnType<typeof consentBoxes> | null} consents the consent boxes, shown when consents must be given first
 			 */
-			const handle = (answer, note, terms) => {
+			const handle = (answer, note, consents) => {
 				if (!answer.ok) {
-					if (terms && problemCode(answer.data) === 'terms_required') {
-						terms.point(answer.data?.url ?? settings.terms?.url);
-						setHidden(terms.wrap, false);
+					if (consents && problemCode(answer.data) === 'consent_required') {
+						consents.show(answer.data?.consents);
+						setHidden(consents.wrap, false);
 					}
 					say(note, errorText(t, answer, when));
 					return;
@@ -254,8 +254,8 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					required: '',
 					...(creating ? minimumOf(['email_password']) : {}),
 				});
-				const terms = termsBox(doc, t, settings.terms);
-				setHidden(terms.wrap, !(creating && settings.terms));
+				const consents = consentBoxes(doc, t, settings.consents);
+				setHidden(consents.wrap, !(creating && consents.any()));
 				const submit = element(doc, 'button', { type: 'submit' }, t(creating ? 'signUp.submit' : 'signIn.submit'));
 				if (creating) {
 					const name = make.field('input', t('fields.name'), {
@@ -267,14 +267,14 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						? make.field('input', t('fields.phone'), { type: 'tel', autocomplete: 'tel', required: '' })
 						: null;
 					const custom = customInputs(doc, make, t, settings.customFields, { required: true });
-					if (settings.terms) terms.input.setAttribute('required', '');
+					consents.require();
 					form.append(
 						name.wrap,
 						email.wrap,
 						...(phone ? [phone.wrap] : []),
 						...custom.nodes,
 						password.wrap,
-						terms.wrap,
+						consents.wrap,
 						submit,
 					);
 					form.addEventListener('submit', (event) => {
@@ -288,18 +288,18 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 									...(name.input.value.trim() ? { name: name.input.value.trim() } : {}),
 									...(phone?.input.value.trim() ? { phone: phone.input.value.trim() } : {}),
 									...(Object.keys(values).length > 0 ? { custom: values } : {}),
-									acceptTerms: terms.input.checked,
+									consents: consents.read(),
 									...extras(),
 								}),
 								note,
-								terms,
+								consents,
 							),
 						);
 					});
 				} else {
 					const forgot = button(t('signIn.forgot'), { class: 'link' });
 					forgot.addEventListener('click', () => forgotView(email.input.value));
-					form.append(email.wrap, password.wrap, terms.wrap, submit, forgot);
+					form.append(email.wrap, password.wrap, consents.wrap, submit, forgot);
 					form.addEventListener('submit', (event) => {
 						event.preventDefault();
 						void run(submit, note, async () =>
@@ -307,11 +307,11 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								await session.call('POST', '/v1/sign-in/password', {
 									email: email.input.value.trim(),
 									password: password.input.value,
-									acceptTerms: terms.input.checked,
+									consents: consents.read(),
 									...extras(),
 								}),
 								note,
-								terms,
+								consents,
 							),
 						);
 					});
@@ -350,8 +350,8 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					required: '',
 					...(creating ? minimumOf(['phone_password']) : {}),
 				});
-				const terms = termsBox(doc, t, settings.terms);
-				setHidden(terms.wrap, !(creating && settings.terms));
+				const consents = consentBoxes(doc, t, settings.consents);
+				setHidden(consents.wrap, !(creating && consents.any()));
 				const submit = element(doc, 'button', { type: 'submit' }, t(creating ? 'signUp.submit' : 'signIn.submit'));
 				/** @type {() => Record<string, unknown>} */
 				let profile = () => ({});
@@ -365,14 +365,14 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						? make.field('input', t('fields.email'), { type: 'email', autocomplete: 'email', required: '' })
 						: null;
 					const custom = customInputs(doc, make, t, settings.customFields, { required: true });
-					if (settings.terms) terms.input.setAttribute('required', '');
+					consents.require();
 					form.append(
 						name.wrap,
 						phone.wrap,
 						...(email ? [email.wrap] : []),
 						...custom.nodes,
 						password.wrap,
-						terms.wrap,
+						consents.wrap,
 						submit,
 					);
 					profile = () => {
@@ -384,7 +384,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						};
 					};
 				} else {
-					form.append(phone.wrap, password.wrap, terms.wrap, submit);
+					form.append(phone.wrap, password.wrap, consents.wrap, submit);
 					// Forgot password: a code by SMS or WhatsApp, or the merchant's own page (for example a WhatsApp chat)
 					const page = rules?.selfReset === 'off' ? webAddress(rules.forgotUrl) : null;
 					if (rules?.selfReset === 'code') {
@@ -409,11 +409,11 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								phone: phone.input.value.trim(),
 								password: password.input.value,
 								...profile(),
-								acceptTerms: terms.input.checked,
+								consents: consents.read(),
 								...extras(),
 							}),
 							note,
-							terms,
+							consents,
 						),
 					);
 				});
@@ -554,12 +554,12 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 						};
 					};
 				}
-				const terms = termsBox(doc, t, settings.terms);
-				setHidden(terms.wrap, !settings.terms);
+				const consents = consentBoxes(doc, t, settings.consents);
+				setHidden(consents.wrap, !consents.any());
 				const submit = element(doc, 'button', { type: 'submit' }, t('code.submit'));
 				const again = button(t('code.again'), { class: 'link' });
 				const back = button(t('code.back'), { class: 'link' });
-				form.append(terms.wrap, submit, again, back);
+				form.append(consents.wrap, submit, again, back);
 				form.addEventListener('submit', (event) => {
 					event.preventDefault();
 					void run(submit, note, async () =>
@@ -568,11 +568,11 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								[kind]: value,
 								code: code.input.value.trim(),
 								...profile(),
-								acceptTerms: terms.input.checked,
+								consents: consents.read(),
 								...extras(),
 							}),
 							note,
-							terms,
+							consents,
 						),
 					);
 				});
@@ -702,14 +702,14 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								...minimumOf(['email_password', 'phone_password']),
 							})
 						: null;
-				const terms = termsBox(doc, t, settings.terms);
-				setHidden(terms.wrap, !settings.terms);
+				const consents = consentBoxes(doc, t, settings.consents);
+				setHidden(consents.wrap, !consents.any());
 				const submit = element(doc, 'button', { type: 'submit' }, t('invite.submit'));
 				form.append(
 					para(t('invite.help')),
 					name.wrap,
 					...(password ? [password.wrap] : []),
-					terms.wrap,
+					consents.wrap,
 					remember.wrap,
 					submit,
 				);
@@ -722,11 +722,11 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 								token,
 								...(name.input.value.trim() ? { name: name.input.value.trim() } : {}),
 								...(password?.input.value ? { password: password.input.value } : {}),
-								acceptTerms: terms.input.checked,
+								consents: consents.read(),
 								...extras(),
 							}),
 							note,
-							terms,
+							consents,
 						),
 					);
 				});
@@ -748,10 +748,10 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 					autocomplete: 'new-password',
 					required: '',
 				});
-				const terms = termsBox(doc, t, settings.terms);
-				setHidden(terms.wrap, !settings.terms);
+				const consents = consentBoxes(doc, t, settings.consents);
+				setHidden(consents.wrap, !consents.any());
 				const submit = element(doc, 'button', { type: 'submit' }, t('setup.submit'));
-				form.append(help, phone, password.wrap, terms.wrap, remember.wrap, submit);
+				form.append(help, phone, password.wrap, consents.wrap, remember.wrap, submit);
 				const note = view('setup', t('setup.title'), [form]);
 				let sent = false;
 				void session.call('POST', '/v1/setup-links/lookup', { code }).then((answer) => {
@@ -777,11 +777,11 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 							await session.call('POST', '/v1/setup-links/accept', {
 								code,
 								password: password.input.value,
-								acceptTerms: terms.input.checked,
+								consents: consents.read(),
 								...extras(),
 							}),
 							note,
-							terms,
+							consents,
 						),
 					);
 				});
@@ -789,31 +789,36 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 
 			/**
 			 * A sign-in from a link: a social sign-in's hand-over code or a magic link.
-			 * @param {'handoff' | 'magic'} kind @param {string} value @param {boolean} acceptTerms
+			 * @param {'handoff' | 'magic'} kind @param {string} value @param {Record<string, boolean> | null} answers the
+			 *   consents given in the consent step
 			 */
-			const linkSignIn = async (kind, value, acceptTerms) => {
+			const linkSignIn = async (kind, value, answers) => {
 				const note = view('link', t('signIn.title'), [], t('signIn.working'));
-				const terms = acceptTerms ? { acceptTerms: true } : {};
+				const given = answers ? { consents: answers } : {};
 				const answer =
 					kind === 'handoff'
-						? await session.call('POST', '/v1/sign-in/exchange', { code: value, ...terms })
-						: await session.call('POST', '/v1/sign-in/email', { link: value, ...terms, ...extras() });
-				if (!answer.ok && problemCode(answer.data) === 'terms_required')
-					termsStep(answer.data, () => void linkSignIn(kind, value, true));
+						? await session.call('POST', '/v1/sign-in/exchange', { code: value, ...given })
+						: await session.call('POST', '/v1/sign-in/email', { link: value, ...given, ...extras() });
+				if (!answer.ok && problemCode(answer.data) === 'consent_required')
+					consentStep(answer.data, (next) => void linkSignIn(kind, value, next));
 				else if (!answer.ok) start(errorText(t, answer, when));
 				else handle(answer, note, null);
 			};
 
-			/** Accept the terms before a link sign-in goes on. @param {Record<string, any>} data @param {() => void} retry */
-			const termsStep = (data, retry) => {
-				const terms = termsBox(doc, t, data);
-				const go = button(t('terms.continue'));
+			/**
+			 * Give the consents a refusal asks before a link sign-in goes on (A2).
+			 * @param {Record<string, any>} data @param {(answers: Record<string, boolean>) => void} retry
+			 */
+			const consentStep = (data, retry) => {
+				const boxes = consentBoxes(doc, t, data?.consents);
+				boxes.show(data?.consents);
+				const go = button(t('consent.continue'));
 				const back = button(t('signIn.back'), { class: 'link' });
 				back.addEventListener('click', () => start());
-				const note = view('terms', t('terms.title'), [para(t('error.terms_required')), terms.wrap, go, back]);
+				const note = view('consents', t('consent.title'), [para(t('error.consent_required')), boxes.wrap, go, back]);
 				go.addEventListener('click', () => {
-					if (terms.input.checked) retry();
-					else say(note, t('terms.tick'));
+					if (boxes.missing()) say(note, t('consent.tick'));
+					else retry(boxes.read());
 				});
 			};
 
@@ -823,7 +828,7 @@ export const mountSignIn = ({ host, win, config, session, link = null }) => {
 			if (link?.kind === 'reset') resetView(link.value);
 			else if (link?.kind === 'invite') inviteView(link.value);
 			else if (link?.kind === 'setup') setupView(link.value);
-			else if (link?.kind === 'handoff' || link?.kind === 'magic') void linkSignIn(link.kind, link.value, false);
+			else if (link?.kind === 'handoff' || link?.kind === 'magic') void linkSignIn(link.kind, link.value, null);
 			else if (link?.kind === 'error')
 				home(errorText(t, { ok: false, status: 0, data: { type: `/problems/${link.value}` } }, when));
 			else home();

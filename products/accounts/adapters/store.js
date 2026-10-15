@@ -11,7 +11,8 @@
  *   or "expired" (A3)
  * - `oauth`: social sign-ins in progress (state, PKCE verifier, nonce), TTL
  * - `roles` (the ready-made templates are made once, on first use, with Owner; a template the merchant deletes stays
- *   deleted), `fields` (custom fields), `permissions` (the merchant's own permission names)
+ *   deleted), `fields` (custom fields), `permissions` (the merchant's own permission names), `consents` (the merchant's
+ *   consent list, A2: the terms consent is made once, on first use; one deleted stays deleted)
  * - `keys`: the website's sign-in signing key (private part sealed with `ENCRYPTION_KEY`)
  * - `signups`: hashed device and network of each sign-up (risk checks), TTL 30 days
  * - `deletions`: users erased here whose erasure some connected products have not confirmed yet
@@ -25,6 +26,7 @@
  */
 import { createId } from '@ss/contracts';
 import { nationalNumberOf } from '@ss/contracts/phone';
+import { CONSENT_TEMPLATES, MAX_CONSENTS } from '../core/consents.js';
 import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
 import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 
@@ -32,6 +34,7 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
 /** @typedef {import('../core/roles.js').Role} Role */
 /** @typedef {import('../core/profile.js').CustomField} CustomField */
+/** @typedef {import('../core/consents.js').Consent} Consent */
 
 /**
  * @typedef {object} SessionRecord
@@ -61,9 +64,10 @@ import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core
 /**
  * The filters of the users list (and its counts): text in the name, email or phone; roles (one or several); a status
  * (`active`, `pending`, `invited`, or `blocked` for blocked users); blocked or not; users who asked to be deleted; an
- * exact phone, the end of a national number (digits, A7), and users made after a time (PLAN 0.8.10 A4).
+ * exact phone, the end of a national number (digits, A7), users who gave a consent now (A2), and users made after a
+ * time (PLAN 0.8.10 A4).
  * @typedef {{ q?: string, roles?: string[], status?: string, blocked?: boolean, deletion?: boolean, phone?: string,
- *   phoneEnd?: string, createdAfter?: Date }} UserQuery
+ *   phoneEnd?: string, consent?: string, createdAfter?: Date }} UserQuery
  */
 
 /**
@@ -118,6 +122,7 @@ const CODES = 'codes';
 const OAUTH = 'oauth';
 const ROLES = 'roles';
 const FIELDS = 'fields';
+const CONSENTS = 'consents';
 const PERMISSIONS = 'permissions';
 const KEYS = 'keys';
 const SIGNUPS = 'signups';
@@ -163,6 +168,7 @@ export const INDEXES = [
 	{ collection: OAUTH, keys: { expireAt: 1 }, name: 'expire', expireAfterSeconds: 0 },
 	{ collection: ROLES, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: FIELDS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
+	{ collection: CONSENTS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: PERMISSIONS, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: KEYS, keys: { websiteId: 1 }, name: 'by_website', unique: true },
 	{ collection: SIGNUPS, keys: { websiteId: 1, deviceHash: 1 }, name: 'by_device' },
@@ -214,6 +220,7 @@ export const createStore = (data, { now }) => {
 	const oauth = data.collection(OAUTH);
 	const roles = data.collection(ROLES);
 	const fields = data.collection(FIELDS);
+	const consents = data.collection(CONSENTS);
 	const permissions = data.collection(PERMISSIONS);
 	const keys = data.collection(KEYS);
 	const signups = data.collection(SIGNUPS);
@@ -226,7 +233,7 @@ export const createStore = (data, { now }) => {
 	 * The filter of the users list and of its counts (one builder, so a count always equals the list).
 	 * @param {UserQuery} query
 	 */
-	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneEnd, createdAfter }) => {
+	const usersFilter = ({ q, roles: anyRole, status, blocked, deletion, phone, phoneEnd, consent, createdAfter }) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
 		/** @type {Record<string, unknown>[]} */
@@ -243,6 +250,7 @@ export const createStore = (data, { now }) => {
 		if (deletion) filter.deletion = { $ne: null };
 		if (phone) filter.phone = phone;
 		if (phoneEnd) filter.phoneReversed = { $regex: `^${[...phoneEnd].reverse().join('')}` };
+		if (consent) filter[`consents.${consent}.given`] = true;
 		if (createdAfter) filter.createdAt = { $gt: createdAfter };
 		return { ...filter, ...(and.length > 0 ? { $and: and } : {}), websiteId };
 	};
@@ -639,6 +647,51 @@ export const createStore = (data, { now }) => {
 			},
 			/** @param {string} key */
 			remove: async (key) => (await fields.deleteOne({ websiteId, key })).deletedCount === 1,
+		}),
+
+		consents: Object.freeze({
+			/**
+			 * The consent list in the merchant's order (A2); the terms consent is made once, on first use (a marker in
+			 * `counters` without an end), so one the merchant deletes stays deleted.
+			 * @returns {Promise<Consent[]>}
+			 */
+			list: async () => {
+				const seeded = await counters.updateOne(
+					{ websiteId, key: 'seeded|consents' },
+					{ $setOnInsert: { at: at() } },
+					{ upsert: true },
+				);
+				if (seeded.upsertedCount === 1)
+					for (const [position, consent] of CONSENT_TEMPLATES.entries())
+						await consents.updateOne(
+							{ websiteId, key: consent.key },
+							{ $setOnInsert: { ...consent, position } },
+							{ upsert: true },
+						);
+				return as(
+					await consents
+						.find({ websiteId }, { projection: { _id: 0, key: 1, label: 1, url: 1, version: 1, required: 1, purpose: 1 } })
+						.sort({ position: 1, key: 1 })
+						.limit(MAX_CONSENTS)
+						.toArray(),
+				);
+			},
+			count: () => consents.countDocuments({ websiteId }),
+			/** Save a consent; a new one goes last. @param {Consent} consent */
+			save: async (consent) => {
+				const position = await consents.countDocuments({ websiteId });
+				await consents.updateOne(
+					{ websiteId, key: consent.key },
+					{ $set: { ...consent }, $setOnInsert: { position } },
+					{ upsert: true },
+				);
+			},
+			/** Place the consents in this order (every key once). @param {string[]} keys */
+			reorder: async (keys) => {
+				for (const [position, key] of keys.entries()) await consents.updateOne({ websiteId, key }, { $set: { position } });
+			},
+			/** @param {string} key */
+			remove: async (key) => (await consents.deleteOne({ websiteId, key })).deletedCount === 1,
 		}),
 
 		permissions: Object.freeze({

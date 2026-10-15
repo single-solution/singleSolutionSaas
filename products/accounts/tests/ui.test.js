@@ -43,7 +43,7 @@ const at = (ms) => new Date(START + ms).toISOString();
  * @property {{ mode: 'open' | 'invite' | 'approval', requiredFields: Array<'name' | 'email' | 'phone'> }} [signUp]
  * @property {any[]} [customFields]
  * @property {number | null} [passwordMinLength]
- * @property {{ version: string, url: string } | null} [terms]
+ * @property {any[]} [consents]
  * @property {any} [phonePassword]
  * @property {string} [remember]
  * @property {boolean} [signInPaused]
@@ -85,7 +85,7 @@ const configOf = (features, settings = {}) => ({
 		customFields: [],
 		passwordMinLength: 8,
 		phonePassword: null,
-		terms: null,
+		consents: [],
 		profile: { maxAddresses: 10, keepOneAddress: false, addressRequired: ['line1', 'city'] },
 		...settings,
 	},
@@ -104,7 +104,7 @@ const USER = Object.freeze({
 	providers: [],
 	hasPassword: true,
 	twoStep: false,
-	terms: null,
+	consents: {},
 	deletion: null,
 	createdAt: at(0),
 });
@@ -322,7 +322,7 @@ describe('starting the widget', () => {
 	it('renders nothing while the sign-in methods are off or the config cannot be loaded', async () => {
 		const signIn = place('sign_in');
 		const account = place('my_account');
-		await start({}, { features: ['roles', 'terms'] });
+		await start({}, { features: ['roles', 'consents'] });
 		expect(signIn.shadowRoot).toBeNull();
 		expect(account.shadowRoot).toBeNull();
 		vi.restoreAllMocks();
@@ -373,7 +373,7 @@ describe('email and password', () => {
 		checkIn(root, strings['signIn.remember']).checked = true;
 		await submit(buttonIn(root, strings['signIn.submit']));
 		const body = server.last('POST /v1/sign-in/password')?.body;
-		expect(body).toMatchObject({ email: 'ana@example.com', password: 'secret-pass', remember: true, acceptTerms: false });
+		expect(body).toMatchObject({ email: 'ana@example.com', password: 'secret-pass', remember: true, consents: {} });
 		expect(body.deviceId).toMatch(/^[A-Za-z0-9_-]{16,64}$/);
 		expect(window.localStorage.getItem(DEVICE_STORAGE_KEY)).toBe(body.deviceId);
 		expect(events.in).toEqual([{ user: USER }]);
@@ -406,21 +406,37 @@ describe('email and password', () => {
 		expect(heading(host)).toBe(strings['signIn.title']);
 	});
 
-	it('shows why a sign-in failed and asks for the terms when needed', async () => {
+	it('shows why a sign-in failed and asks for the required consents when needed (A2)', async () => {
 		const host = place('sign_in');
 		const outcomes = [
 			problem(401, 'sign_in_failed'),
 			problem(423, 'locked', { lockedUntil: at(10 * 60_000) }),
 			problem(423, 'locked'),
-			problem(403, 'terms_required', { version: 'v3', url: 'https://example.com/terms-v3' }),
+			problem(403, 'consent_required', {
+				consents: [{ key: 'terms', label: 'I accept the terms', url: 'https://example.com/terms-v3', version: 'v3' }],
+			}),
 			answer(200, signedIn()),
 		];
 		const { server } = await start(
 			{ 'POST /v1/sign-in/password': () => /** @type {Response} */ (outcomes.shift()) },
-			{ settings: { terms: { version: 'v3', url: 'https://example.com/terms' } } },
+			{
+				settings: {
+					consents: [
+						{
+							key: 'terms',
+							label: 'I accept the terms',
+							url: 'https://example.com/terms',
+							version: 'v3',
+							required: true,
+							purpose: 'agreement',
+						},
+						{ key: 'news', label: 'Send me offers', url: '', version: '1', required: false, purpose: 'marketing' },
+					],
+				},
+			},
 		);
 		const root = shadow(host);
-		const terms = /** @type {HTMLElement} */ (root.querySelector('label.check:has(a)'));
+		const terms = /** @type {HTMLElement} */ (root.querySelector('.consents'));
 		expect(terms.hidden).toBe(true);
 		const send = buttonIn(root, strings['signIn.submit']);
 		await submit(send);
@@ -430,16 +446,18 @@ describe('email and password', () => {
 		await submit(send);
 		expect(statusIn(root)).toBe(strings['error.rate_limited']);
 		await submit(send);
-		expect(statusIn(root)).toBe(strings['error.terms_required']);
+		expect(statusIn(root)).toBe(strings['error.consent_required']);
 		expect(terms.hidden).toBe(false);
-		expect(terms.querySelector('a')?.getAttribute('href')).toBe('https://example.com/terms-v3');
-		checkIn(root, strings['terms.accept']).checked = true;
+		// only the consent the refusal lists is asked
+		expect(checkIn(root, 'Send me offers').closest('label')?.hidden).toBe(true);
+		expect(terms.querySelector('a')?.getAttribute('href')).toBe('https://example.com/terms');
+		checkIn(root, 'I accept the terms').checked = true;
 		await submit(send);
-		expect(server.last('POST /v1/sign-in/password')?.body.acceptTerms).toBe(true);
+		expect(server.last('POST /v1/sign-in/password')?.body.consents).toEqual({ terms: true });
 		expect(events.in).toHaveLength(1);
 	});
 
-	it('signs up with the required fields, custom fields and the terms; an approval sign-up waits', async () => {
+	it('signs up with the required fields, custom fields and the consents; an approval sign-up waits', async () => {
 		const host = place('sign_in');
 		const outcomes = [
 			problem(422, 'weak_password', { rule: 'too_short', minLength: 10 }),
@@ -455,7 +473,17 @@ describe('email and password', () => {
 				settings: {
 					signUp: { mode: 'approval', requiredFields: ['name', 'phone'] },
 					passwordMinLength: 10,
-					terms: { version: 'v1', url: 'javascript:alert(1)' },
+					consents: [
+						{
+							key: 'terms',
+							label: 'I accept the terms',
+							url: 'javascript:alert(1)',
+							version: 'v1',
+							required: true,
+							purpose: 'agreement',
+						},
+						{ key: 'news', label: 'Send me offers', url: '', version: '1', required: false, purpose: 'marketing' },
+					],
 					customFields: [
 						{
 							key: 'size',
@@ -492,9 +520,12 @@ describe('email and password', () => {
 		const root = shadow(host);
 		await click(buttonIn(root, strings['signIn.toSignUp']));
 		expect(heading(host)).toBe(strings['signUp.title']);
-		const terms = /** @type {HTMLElement} */ (root.querySelector('label.check:has(a)'));
+		const terms = /** @type {HTMLElement} */ (root.querySelector('.consents'));
 		expect(terms.hidden).toBe(false);
-		expect(terms.querySelector('a')?.hidden).toBe(true);
+		// a page that is not a web address gets no link
+		expect(terms.querySelector('a')).toBeNull();
+		expect(checkIn(root, 'I accept the terms').required).toBe(true);
+		expect(checkIn(root, 'Send me offers').required).toBe(false);
 		expect(fieldIn(root, strings['fields.name']).required).toBe(true);
 		expect(fieldIn(root, strings['fields.password']).getAttribute('minlength')).toBe('10');
 		const size = fieldIn(root, 'Size');
@@ -508,7 +539,7 @@ describe('email and password', () => {
 		size.value = 'M';
 		fieldIn(root, 'Age').value = '30';
 		fieldIn(root, 'Birthday').value = '1990-05-01';
-		checkIn(root, strings['terms.accept']).checked = true;
+		checkIn(root, 'I accept the terms').checked = true;
 		const send = buttonIn(root, strings['signUp.submit']);
 		await submit(send);
 		expect(server.last('POST /v1/sign-up/password')?.body).toMatchObject({
@@ -517,7 +548,7 @@ describe('email and password', () => {
 			name: 'Ana',
 			phone: '+15550001111',
 			custom: { size: 'M', age: 30, birthday: '1990-05-01' },
-			acceptTerms: true,
+			consents: { terms: true },
 			remember: false,
 		});
 		// the website's words, never the server's English detail
@@ -612,7 +643,7 @@ describe('codes', () => {
 			name: 'Ana',
 			email: 'ana@example.com',
 			custom: { size: 'S' },
-			acceptTerms: false,
+			consents: {},
 			remember: false,
 		});
 		expect(events.in).toHaveLength(1);
@@ -740,10 +771,12 @@ describe('social sign-in and links', () => {
 		expect(window.location.hash).toBe('#at-provider');
 	});
 
-	it('exchanges a hand-over code from the address, removes it, and asks for the terms first when needed', async () => {
+	it('exchanges a hand-over code from the address, removes it, and asks for the consents first when needed', async () => {
 		const host = place('sign_in');
 		const outcomes = [
-			problem(403, 'terms_required', { version: 'v1', url: 'https://example.com/terms' }),
+			problem(403, 'consent_required', {
+				consents: [{ key: 'terms', label: 'I accept the terms', url: 'https://example.com/terms', version: 'v1' }],
+			}),
 			answer(200, signedIn()),
 		];
 		const { server } = await start(
@@ -754,13 +787,13 @@ describe('social sign-in and links', () => {
 		expect(`${window.location.pathname}${window.location.search}`).toBe(PAGE);
 		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'hand.over' });
 		const root = shadow(host);
-		expect(heading(host)).toBe(strings['terms.title']);
+		expect(heading(host)).toBe(strings['consent.title']);
 		expect(root.querySelector('a')?.getAttribute('href')).toBe('https://example.com/terms');
-		await click(buttonIn(root, strings['terms.continue']));
-		expect(statusIn(root)).toBe(strings['terms.tick']);
-		checkIn(root, strings['terms.accept']).checked = true;
-		await click(buttonIn(root, strings['terms.continue']));
-		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'hand.over', acceptTerms: true });
+		await click(buttonIn(root, strings['consent.continue']));
+		expect(statusIn(root)).toBe(strings['consent.tick']);
+		checkIn(root, 'I accept the terms').checked = true;
+		await click(buttonIn(root, strings['consent.continue']));
+		expect(server.last('POST /v1/sign-in/exchange')?.body).toEqual({ code: 'hand.over', consents: { terms: true } });
 		expect(events.in).toHaveLength(1);
 		expect(heading(host)).toBe(strings['signedIn.title']);
 	});
@@ -837,21 +870,32 @@ describe('social sign-in and links', () => {
 			{
 				features: ['email_password'],
 				hash: 'ss_accounts_invite=invite.token',
-				settings: { terms: { version: 'v1', url: 'https://example.com/terms' } },
+				settings: {
+					consents: [
+						{
+							key: 'terms',
+							label: 'I accept the terms',
+							url: 'https://example.com/terms',
+							version: 'v1',
+							required: true,
+							purpose: 'agreement',
+						},
+					],
+				},
 			},
 		);
 		const root = shadow(host);
 		expect(heading(host)).toBe(strings['invite.title']);
 		fieldIn(root, strings['fields.name']).value = 'Bo';
 		fieldIn(root, strings['invite.password']).value = 'pass-word-1';
-		checkIn(root, strings['terms.accept']).checked = true;
+		checkIn(root, 'I accept the terms').checked = true;
 		checkIn(root, strings['signIn.remember']).checked = true;
 		await submit(buttonIn(root, strings['invite.submit']));
 		expect(server.last('POST /v1/invites/accept')?.body).toMatchObject({
 			token: 'invite.token',
 			name: 'Bo',
 			password: 'pass-word-1',
-			acceptTerms: true,
+			consents: { terms: true },
 			remember: true,
 		});
 		expect(window.localStorage.getItem(REFRESH_STORAGE_KEY)).toBe('ref-1');
@@ -985,9 +1029,19 @@ describe('the session kept in the browser', () => {
 });
 
 describe('My account', () => {
-	const ACCOUNT_FEATURES = ['email_password', 'two_step', 'data_rights', 'orders_tab', 'terms', 'custom_fields'];
+	const ACCOUNT_FEATURES = ['email_password', 'two_step', 'data_rights', 'orders_tab', 'consents', 'custom_fields'];
 	const SETTINGS = {
-		terms: { version: 'v2', url: 'https://example.com/terms' },
+		consents: [
+			{
+				key: 'terms',
+				label: 'I accept the terms',
+				url: 'https://example.com/terms',
+				version: 'v2',
+				required: true,
+				purpose: 'agreement',
+			},
+			{ key: 'news', label: 'Send me offers', url: '', version: '1', required: false, purpose: 'marketing' },
+		],
 		customFields: [
 			{ key: 'size', label: 'Size', type: 'choice', options: ['S', 'M'], required: false, visibility: 'edit', help: '' },
 		],
@@ -1148,10 +1202,14 @@ describe('My account', () => {
 		expect(addresses.querySelector('li')?.textContent).toBe(strings['account.noAddresses']);
 	});
 
-	it('accepts new terms, changes the password, turns two-step on and off', async () => {
+	it('gives the consents (a required one updated waits first), changes the password, turns two-step on and off', async () => {
 		const passwords = [problem(422, 'weak_password', { rule: 'personal' }), answer(204)];
 		const { host, server } = await open({
-			'POST /v1/me/terms': () => answer(200, { ...ME, terms: { version: 'v2', acceptedAt: at(0) } }),
+			'POST /v1/me/consents': () =>
+				answer(200, {
+					...ME,
+					consents: { terms: { version: 'v2', given: true, at: at(0) }, news: { version: '1', given: true, at: at(0) } },
+				}),
 			'PUT /v1/me/password': () => /** @type {Response} */ (passwords.shift()),
 			'POST /v1/me/two-step/setup': () => answer(200, { challenge: 'su1', secret: 'SECRET', otpauthUrl: 'otpauth://totp/x' }),
 			'POST /v1/me/two-step/enable': ({ body }) =>
@@ -1160,13 +1218,17 @@ describe('My account', () => {
 			'POST /v1/me/two-step/recovery-codes': ({ body }) =>
 				body.code === '000000' ? problem(400, 'code_invalid') : answer(200, { recoveryCodes: ['n-1', 'n-2'] }),
 		});
-		const terms = part(host, strings['account.termsTitle']);
-		await click(buttonIn(terms, strings['account.termsAccept']));
-		expect(statusIn(terms)).toBe(strings['terms.tick']);
-		checkIn(terms, strings['terms.accept']).checked = true;
-		await click(buttonIn(terms, strings['account.termsAccept']));
-		expect(server.last('POST /v1/me/terms')?.body).toEqual({ accept: true });
-		expect(statusIn(terms)).toBe(strings['account.termsDone']);
+		const terms = part(host, strings['account.consentsTitle']);
+		// waiting for the user, so it comes first
+		expect(host.shadowRoot?.querySelector('section.part h3, section h3')?.textContent).toBe(strings['account.consentsTitle']);
+		expect(terms.textContent).toContain(strings['account.consentsAsk']);
+		await click(buttonIn(terms, strings['account.consentsSave']));
+		expect(statusIn(terms)).toBe(strings['consent.tick']);
+		checkIn(terms, 'I accept the terms').checked = true;
+		checkIn(terms, 'Send me offers').checked = true;
+		await click(buttonIn(terms, strings['account.consentsSave']));
+		expect(server.last('POST /v1/me/consents')?.body).toEqual({ consents: { terms: true, news: true } });
+		expect(statusIn(terms)).toBe(strings['account.consentsDone']);
 
 		const password = part(host, strings['account.password']);
 		fieldIn(password, strings['account.currentPassword']).value = 'old-pass';
@@ -1359,12 +1421,16 @@ describe('My account', () => {
 			{
 				...ME,
 				deletion: { requestedAt: at(0), dueAt: null },
-				terms: { version: 'v2', acceptedAt: at(0) },
+				consents: { terms: { version: 'v2', given: true, at: at(0) } },
 				email: null,
 				hasPassword: false,
 			},
 		);
-		expect(() => part(host, strings['account.termsTitle'])).toThrow();
+		// given in its current version: nothing waits, and a required agreement is not withdrawn here
+		const given = part(host, strings['account.consentsTitle']);
+		expect(given.textContent).not.toContain(strings['account.consentsAsk']);
+		expect(checkIn(given, 'I accept the terms').disabled).toBe(true);
+		expect(checkIn(given, 'Send me offers').checked).toBe(false);
 		expect(() => part(host, strings['account.password'])).toThrow();
 		const privacy = part(host, strings['account.privacy']);
 		expect(privacy.textContent).toContain(strings['account.deletionWaiting']);
@@ -1387,7 +1453,7 @@ describe('My account', () => {
 				'POST /v1/me/two-step/recovery-codes': () => answer(200, {}),
 				'POST /v1/me/delete': () => problem(500, 'internal'),
 				'POST /v1/me/sign-out-everywhere': () => answer(500, {}),
-				'POST /v1/me/terms': () => answer(204),
+				'POST /v1/me/consents': () => answer(204),
 				'GET /v1/me/orders': () => answer(200, { items: [] }),
 			},
 			{ ...ME, hasPassword: false, twoStep: true },
@@ -1411,10 +1477,10 @@ describe('My account', () => {
 		await click(buttonIn(devices, strings['account.signOutEverywhere']));
 		expect(statusIn(devices)).toBe(strings['error.generic']);
 		expect(statusIn(part(host, strings['account.orders']))).toBe(strings['account.ordersEmpty']);
-		const terms = part(host, strings['account.termsTitle']);
-		checkIn(terms, strings['terms.accept']).checked = true;
-		await click(buttonIn(terms, strings['account.termsAccept']));
-		expect(statusIn(terms)).toBe(strings['account.termsDone']);
+		const terms = part(host, strings['account.consentsTitle']);
+		checkIn(terms, 'I accept the terms').checked = true;
+		await click(buttonIn(terms, strings['account.consentsSave']));
+		expect(statusIn(terms)).toBe(strings['account.consentsDone']);
 		vi.restoreAllMocks();
 		document.body.replaceChildren();
 		const off = await open({ 'POST /v1/me/two-step/setup': () => problem(409, 'conflict') }, { ...ME, twoStep: false });
@@ -1526,7 +1592,7 @@ describe('admin widgets', () => {
 			twoStep: true,
 			lockedUntil: at(60_000),
 			providers: ['google'],
-			terms: { version: '2', acceptedAt: at(0) },
+			consents: { terms: { version: '2', given: true, at: at(0) } },
 			custom: { size: 'M' },
 			addresses: [{ id: 'adr_1', label: 'Home', line1: '1 Main St', area: 'Camden', city: 'London', default: true }],
 			deletion: { requestedAt: at(0), dueAt: at(86_400_000) },
@@ -1590,10 +1656,13 @@ describe('admin widgets', () => {
 		expect(cards).toEqual([
 			strings['users.contact'],
 			strings['users.account'],
+			strings['users.consents'],
 			strings['users.addresses'],
 			strings['users.notesCard'],
 			strings['users.deletionCard'],
 		]);
+		// A2: each consent the user answered, with its version and time
+		expect(detail.textContent).toContain('termsGiven (version 2, ');
 		expect(detail.textContent).toContain('ana@example.com (verified)');
 		expect(detail.textContent).toContain('On, 3 recovery codes left');
 		expect(detail.textContent).toContain('1 Main St, Camden, London');

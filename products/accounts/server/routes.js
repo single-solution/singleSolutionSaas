@@ -383,11 +383,11 @@ export const createRoutes = (product) => {
 		}),
 		defineRoute({
 			method: 'POST',
-			path: '/v1/me/terms',
+			path: '/v1/me/consents',
 			auth: 'browser',
-			feature: 'terms',
+			feature: 'consents',
 			rateLimit: VISITOR_LIMITS,
-			handler: account.acceptTerms,
+			handler: account.saveConsents,
 		}),
 		defineRoute({
 			method: 'POST',
@@ -543,6 +543,13 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			feature: 'data_rights',
 			handler: manage.rejectDeletion,
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/consents',
+			auth: 'server',
+			feature: 'consents',
+			handler: manage.consentList,
 		}),
 		defineRoute({
 			method: 'GET',
@@ -826,6 +833,32 @@ export const createRoutes = (product) => {
 			auth: 'ticket',
 			permission: 'roles.manage',
 			handler: manage.deleteRole,
+		}),
+
+		// ----------------------------------------------------------------------------- dashboard: consents (A2)
+		defineRoute({
+			method: 'GET',
+			path: '/v1/dashboard/websites/:websiteId/consents',
+			auth: 'dashboard',
+			handler: manage.listConsents,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/dashboard/websites/:websiteId/consents',
+			auth: 'dashboard',
+			handler: manage.orderConsents,
+		}),
+		defineRoute({
+			method: 'PUT',
+			path: '/v1/dashboard/websites/:websiteId/consents/:key',
+			auth: 'dashboard',
+			handler: manage.saveConsent,
+		}),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/dashboard/websites/:websiteId/consents/:key',
+			auth: 'dashboard',
+			handler: manage.deleteConsent,
 		}),
 
 		// ------------------------------------------------------------------------- dashboard: custom fields (setup)

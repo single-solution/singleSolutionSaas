@@ -1,6 +1,6 @@
 /**
  * My account (PLAN 0.8.6): what a signed-in user does with their own account through the browser token plus their
- * sign-in (`SS-Sign-In` header): profile and addresses, devices, password, two-step, terms, download my data, delete
+ * sign-in (`SS-Sign-In` header): profile and addresses, devices, password, two-step, consents, download my data, delete
  * my account and the Orders tab.
  * @module
  */
@@ -233,12 +233,18 @@ export const createAccount = (product, service, flows) => {
 		return { recoveryCodes: codes };
 	};
 
-	/** Accept the current terms version; answers the user as `GET /v1/me` does. @param {any} ctx */
-	const acceptTerms = async (ctx) => {
+	/**
+	 * Give or withdraw consents (A2): `{ consents: { [key]: true | false } }`, each recorded in its current version with
+	 * the time; a required agreement cannot be withdrawn. Answers the user as `GET /v1/me` does.
+	 * @param {any} ctx
+	 */
+	const saveConsents = async (ctx) => {
 		const { s, user } = await service.signedIn(ctx);
-		const { version } = await service.settings(s, 'terms');
-		if (bodyOf(ctx.body).accept !== true) throw invalid('accept', 'Send { accept: true }.');
-		return meView(s, (await s.store.users.update(user.id, { terms: { version, acceptedAt: new Date(now()) } })) ?? user);
+		const answers = bodyOf(ctx.body).consents;
+		if (typeof answers !== 'object' || answers === null)
+			throw invalid('consents', 'Send { consents: { key: true or false } }.');
+		const next = await service.consentsFor(s, user.consents ?? {}, answers, { ask: false });
+		return meView(s, (await s.store.users.update(user.id, { consents: next })) ?? user);
 	};
 
 	/** Download my data: Accounts' records and every connected product's, as one single-use link (15 minutes). @param {any} ctx */
@@ -320,7 +326,7 @@ export const createAccount = (product, service, flows) => {
 		twoStepEnable,
 		twoStepDisable,
 		newRecoveryCodes,
-		acceptTerms,
+		saveConsents,
 		exportData,
 		download,
 		requestDeletion,

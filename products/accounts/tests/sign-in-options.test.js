@@ -31,7 +31,7 @@ const activity = async (query) => (await env.serverCall('GET', `/v1/activity?${q
 
 beforeAll(async () => {
 	env = await setup();
-	await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+	await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 	await env.connectDatabase();
 	await env.paste('notifications');
 });
@@ -227,11 +227,11 @@ describe('A6: per-role sign-in options', () => {
 		expect(Date.parse(renewed.json.sessionExpiresAt) - env.now()).toBe(3 * 86_400_000);
 		// the role's remember applies only while Roles and permissions is on: off, the box decides again
 		await env.switchOn(
-			ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks', 'roles', 'role_requests'].includes(key)),
+			ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks', 'roles', 'role_requests'].includes(key)),
 		);
 		expect((await signIn('never@example.com', undefined, { remember: true })).json.remember).toBe(true);
 		expect((await env.visitor('GET', '/v1/widget/config')).json.settings.remember).toBe('ask');
-		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+		await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 		await env.serverCall('PUT', '/v1/roles/customer', customer);
 		expect((await signIn('never@example.com', undefined, { remember: true })).json.remember).toBe(true);
 	});
@@ -391,7 +391,7 @@ describe('A10: sign-in events in the activity log', () => {
 
 describe('A8: imported two-step and old recovery codes', () => {
 	it('an imported TOTP secret signs in, and an old recovery code works once', async () => {
-		await env.switchOn([...ALL.filter((key) => !['terms', 'approval', 'risk_checks'].includes(key))]);
+		await env.switchOn([...ALL.filter((key) => !['consents', 'approval', 'risk_checks'].includes(key))]);
 		const user = (
 			await env.serverCall('POST', '/v1/users', {
 				name: 'Ira Imported',
@@ -473,7 +473,7 @@ describe('A8: imported two-step and old recovery codes', () => {
 
 describe('A11: profile options', () => {
 	it('area and a default address; at most N; required fields; the last address stays', async () => {
-		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'two_step', 'risk_checks'].includes(key)));
+		await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'two_step', 'risk_checks'].includes(key)));
 		const me = (await signIn('rem@example.com')).json.signIn;
 		const save = (/** @type {unknown[]} */ addresses) => env.visitor('PATCH', '/v1/me', { addresses }, me);
 		const two = await save([
@@ -556,7 +556,7 @@ describe('K-27: rolling sessions, new recovery codes and reset links to another 
 	const renew = (refreshToken) => env.visitor('POST', '/v1/session/refresh', { refreshToken });
 
 	it('a role’s sessions roll: each renewal moves the end to the role’s length from then; off by default', async () => {
-		await env.switchOn(ALL.filter((key) => !['terms', 'approval', 'risk_checks'].includes(key)));
+		await env.switchOn(ALL.filter((key) => !['consents', 'approval', 'risk_checks'].includes(key)));
 		const customer = (await env.serverCall('GET', '/v1/roles')).json.items.find((/** @type {any} */ r) => r.key === 'customer');
 		expect(customer.sessionRolling).toBe(false);
 		await signUp('roll@example.com');

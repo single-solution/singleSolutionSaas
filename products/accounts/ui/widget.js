@@ -46,7 +46,7 @@ const ERROR_PARAM = LINK_PARAMS.error;
  * @property {{ mode: 'open' | 'invite' | 'approval', requiredFields: Array<'name' | 'email' | 'phone'> }} signUp
  * @property {import('./common.js').CustomField[]} customFields
  * @property {number | null} passwordMinLength Email + password's minimum length; null while it is off
- * @property {{ version: string, url: string } | null} terms
+ * @property {import('./common.js').ConsentView[]} consents the website's consent list (A2)
  * @property {{ signUp: boolean, minLength: number, selfReset: 'code' | 'off', forgotUrl: string } | null} phonePassword
  *   Phone + password's options; null while it is off
  * @property {'ask' | 'ask_ticked' | 'always' | 'never'} [remember] "Remember me" of the role sign-ups get (A6, A14)
