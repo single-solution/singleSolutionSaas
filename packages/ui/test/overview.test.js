@@ -1,0 +1,316 @@
+// @vitest-environment jsdom
+/**
+ * The Overview pattern (PLAN 0.6 "Overviews talk"): a product dashboard's Overview from the kit's overview answer —
+ * the greeting and its one sentence, "Needs you" (red first, each with its button), the setup checklist, the numbers
+ * and Recent changes in the viewer's local time — and the pieces the Portal's Overviews share.
+ */
+import { renderToString } from 'react-dom/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+	NeedsList,
+	OverviewSkeleton,
+	ProductOverview,
+	RecentChanges,
+	SetupChecklist,
+	Stat,
+	Timeline,
+	initialsOf,
+} from '../src/index.js';
+import { act, allByRole, byText, cleanup, click, render } from '../src/testing.js';
+
+/** @typedef {import('../src/overview.js').DashboardOverview} DashboardOverview */
+
+afterEach(() => {
+	cleanup();
+	vi.restoreAllMocks();
+});
+
+/**
+ * The viewer's browser in a time zone (what `Intl.DateTimeFormat().resolvedOptions()` answers there).
+ * @param {string} timeZone
+ */
+const viewerIn = (timeZone) => {
+	const real = Intl.DateTimeFormat.prototype.resolvedOptions;
+	vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(
+		/** @this {Intl.DateTimeFormat} */
+		function () {
+			return { ...real.call(this), timeZone };
+		},
+	);
+};
+
+/**
+ * A kit overview answer: everything ready unless `parts` say otherwise.
+ * @param {Partial<DashboardOverview>} [parts]
+ * @returns {DashboardOverview}
+ */
+const answer = (parts = {}) => ({
+	website: { domain: 'shop.example.com' },
+	status: { status: 'active', graceEndsAt: null },
+	featuresOn: ['notes', 'inbox'],
+	todayMillicredits: 1250,
+	checklist: {
+		connections: [{ name: 'database', label: 'Merchant database', neededBy: ['notes'], status: 'connected' }],
+		widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' },
+		business: { found: true },
+	},
+	recentChanges: [{ who: { name: 'Alex Morgan' }, detail: 'Settings: notes', at: '2026-10-06T08:00:00.000Z' }],
+	...parts,
+});
+
+/** @param {string[]} keys @param {number} [max] */
+const namesOf = (keys, max = Infinity) =>
+	keys.length > max ? `${keys.slice(0, max).join(', ')} and ${keys.length - max} more` : keys.join(', ');
+
+/**
+ * Render a product Overview; `open` and `recheck` are spies.
+ * @param {DashboardOverview} data
+ * @param {Partial<import('react').ComponentProps<typeof ProductOverview>>} [props]
+ */
+const show = (data, props = {}) => {
+	const open = vi.fn();
+	const recheck = vi.fn(async () => undefined);
+	const view = render(
+		<ProductOverview
+			data={data}
+			who={{ kind: 'merchant', name: 'Acme Store' }}
+			product="Notes"
+			support={{ email: 'help@example.com' }}
+			portal="https://portal.example.com"
+			namesOf={namesOf}
+			open={open}
+			recheck={recheck}
+			{...props}
+		/>,
+	);
+	return { ...view, open, recheck, text: view.container.textContent ?? '' };
+};
+
+/** @param {HTMLElement} container the titles of the "Needs you" items, in order */
+const needTitles = (container) =>
+	[...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
+
+describe('a product dashboard Overview', () => {
+	it('greets by name, says nothing needs the viewer, and shows the setup done, the numbers and the changes', () => {
+		viewerIn('America/New_York');
+		const { container, text } = show(answer());
+		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Acme Store');
+		expect(text).toContain('Everything on shop.example.com is ready, and nothing needs you right now.');
+		expect(byText(container, 'Active').closest('span')?.className).toContain('bg-success-soft');
+		expect(text).toContain('Nothing needs you right now.');
+		expect(text).not.toContain('Each item says what happens if it waits.');
+		// the setup checklist: a feature on, the database, the widget with its last visit, business.json
+		expect(text).toContain('4 of 4 done');
+		expect(allByRole(container, 'progressbar')[0]?.getAttribute('aria-valuenow')).toBe('4');
+		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
+		expect(byText(container, 'Connect Merchant database').className).toContain('line-through');
+		// the numbers: today's cost and the features on, with their names
+		expect(text).toContain('1.25 credits');
+		expect(text).toContain('So far today (UTC)');
+		expect(text).toContain('notes, inbox');
+		// Recent changes: who, what and when in the viewer's time, UTC on hover
+		expect(text).toContain('Alex Morgan · Settings: notes');
+		expect(byText(container, 'AM', 'span').getAttribute('aria-hidden')).toBe('true');
+		const times = [...container.querySelectorAll('time')].map((time) => [time.textContent, time.getAttribute('title')]);
+		expect(times).toContainEqual(['Oct 6, 2026, 4:00 AM EDT', 'Oct 6, 2026, 8:00 AM UTC']);
+	});
+
+	it('lists what needs the viewer, red first, with the right buttons, and names the most urgent in its sentence', async () => {
+		viewerIn('America/New_York');
+		const data = answer({
+			featuresOn: ['notes', 'inbox'],
+			checklist: {
+				connections: [
+					{ name: 'database', label: 'Merchant database', neededBy: ['notes', 'off_feature'], status: 'not_connected' },
+					{
+						name: 'mail',
+						label: 'Mail key',
+						neededBy: ['inbox'],
+						status: 'test_failed',
+						message: 'The key was refused.',
+					},
+					{ name: 'sms', label: 'SMS key', neededBy: ['inbox'], status: 'test_failed' },
+				],
+				widget: { installed: false, lastSeenAt: null },
+				business: { found: false },
+			},
+			recentChanges: [],
+		});
+		const product = { key: 'own', tone: /** @type {const} */ ('warning'), title: 'No note form yet', effect: 'Add one.' };
+		const { container, text, open, recheck } = show(data, {
+			needs: [product],
+			steps: [{ key: 'own', label: 'Add a note form', done: false }],
+		});
+		expect(needTitles(container)).toEqual([
+			'Mail key failed its last test',
+			'SMS key failed its last test',
+			'Merchant database is not connected',
+			'No note form yet',
+			'The widget has not been seen on shop.example.com',
+			'business.json was not found on shop.example.com',
+		]);
+		expect(text).toContain('Mail key failed its last test, and 5 more things need you.');
+		expect(text).toContain('Each item says what happens if it waits.');
+		// a failed test says why; only the switched-on features that need it are named
+		expect(text).toContain('The key was refused. Needed by inbox: charged, but not working until it passes.');
+		expect(text).toContain('Needed by notes: charged, but not working until it is connected.');
+		expect(text).toContain(
+			'Your business name shows as the domain, and times use UTC, until https://shop.example.com/.well-known/business.json is published.',
+		);
+		click(byText(container, 'Fix it', 'button'));
+		click(byText(container, 'Connect', 'button'));
+		click(byText(container, 'Get the script', 'button'));
+		expect(open.mock.calls).toEqual([['connections'], ['connections'], ['developers']]);
+		click(byText(container, 'Check again', 'button'));
+		expect(recheck).toHaveBeenCalledTimes(1);
+		// the button is busy until business.json was read again
+		expect(byText(container, 'Check again', 'button').getAttribute('aria-busy')).toBe('true');
+		await act(async () => undefined);
+		expect(byText(container, 'Check again', 'button').getAttribute('aria-busy')).toBeNull();
+		// setup: a feature on is done; the connections, the product's step, the widget and business.json are to do
+		expect(text).toContain('1 of 7 done');
+		expect(text).toContain('Add a note form');
+		click(byText(container, 'Put the widget on your pages', 'button'));
+		expect(open).toHaveBeenLastCalledWith('developers');
+		expect(text).toContain('No changes yet.');
+	});
+
+	it('the status comes first: stopped and in grace send merchants to support, admins to the Portal', () => {
+		viewerIn('America/New_York');
+		const stopped = show(answer({ status: { status: 'stopped', graceEndsAt: null } }));
+		expect(needTitles(stopped.container)).toEqual(['Notes is stopped because the credits ran out']);
+		expect(stopped.text).toContain('Notes is stopped because the credits ran out.');
+		expect(stopped.text).toContain('It starts again as soon as credits are added: contact help@example.com.');
+		expect(byText(stopped.container, 'Contact support', 'a').getAttribute('href')).toBe('mailto:help@example.com');
+		expect(byText(stopped.container, 'Stopped').closest('span')?.className).toContain('bg-danger-soft');
+		cleanup();
+
+		const grace = show(answer({ status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' } }), {
+			who: { kind: 'admin', name: 'Sam Lee' },
+			needs: [{ key: 'own', tone: 'warning', title: 'One more', effect: '.' }],
+		});
+		expect(grace.container.querySelector('h1')?.textContent).toBe('Welcome back, Sam Lee');
+		expect(grace.text).toContain('Notes is in grace until Oct 4, 2026, 10:30 AM EDT, and one more thing needs you.');
+		expect(grace.text).toContain('Add credits in the Portal.');
+		expect(byText(grace.container, 'Open the Portal', 'a').getAttribute('href')).toBe('https://portal.example.com');
+		cleanup();
+
+		const suspended = show(answer({ status: { status: 'suspended', graceEndsAt: null } }), {
+			who: { kind: 'admin', name: 'Sam Lee' },
+		});
+		expect(needTitles(suspended.container)).toEqual(['This merchant is suspended']);
+		expect(suspended.text).toContain('until the merchant is resumed in the Portal');
+	});
+
+	it('with no feature on, says so and opens Features; the setup starts there', () => {
+		const data = answer({
+			featuresOn: [],
+			checklist: { connections: [], widget: null, business: { found: true } },
+		});
+		const { container, text, open } = show(data);
+		expect(text).toContain('No features are on yet.');
+		expect(text).toContain('Nothing is charged, and nothing shows on shop.example.com, until a feature is switched on.');
+		expect(text).toContain('None yet');
+		expect(text).toContain('1 of 2 done');
+		click(byText(container, 'See features', 'button'));
+		click(byText(container, 'Switch on a feature', 'button'));
+		expect(open.mock.calls).toEqual([['features'], ['features']]);
+	});
+
+	it('prints UTC on the server and in the first render', () => {
+		viewerIn('America/New_York');
+		const html = renderToString(
+			<ProductOverview
+				data={answer({ status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' } })}
+				who={{ kind: 'merchant', name: 'Acme Store' }}
+				product="Notes"
+				support={{ email: 'help@example.com' }}
+				portal="https://portal.example.com"
+				namesOf={namesOf}
+				open={() => undefined}
+				recheck={async () => undefined}
+				numbers={<Stat label="Notes" value={3} />}>
+				<p>Own section</p>
+			</ProductOverview>,
+		);
+		for (const words of ['Oct 4, 2026, 2:30 PM UTC', 'Last seen ', 'Oct 5, 2026, 11:15 PM UTC', 'Own section', '>Notes<'])
+			expect(html).toContain(words);
+		expect(html).not.toContain('EDT');
+	});
+});
+
+describe('the shared pieces', () => {
+	it('a setup checklist links, calls or just names a step to do; done steps are ticked', () => {
+		/** @param {{ href: string, className?: string, children?: import('react').ReactNode }} props */
+		const Link = ({ href, className, children }) => (
+			<a href={href} data-router="yes" className={className}>
+				{children}
+			</a>
+		);
+		const select = vi.fn();
+		const { container } = render(
+			<SetupChecklist
+				title="Get ready"
+				progress="1 of 4 done"
+				labels={{ done: 'Done', todo: 'To do' }}
+				linkAs={Link}
+				steps={[
+					{ key: 'a', label: 'Linked', done: false, href: '/products' },
+					{ key: 'b', label: 'Called', done: false, onSelect: select },
+					{ key: 'c', label: 'Named', done: false },
+					{ key: 'd', label: 'Finished', done: true },
+				]}
+			/>,
+		);
+		expect(byText(container, 'Linked', 'a').dataset.router).toBe('yes');
+		click(byText(container, 'Called', 'button'));
+		expect(select).toHaveBeenCalledTimes(1);
+		expect(byText(container, 'Named', 'span').className).toContain('font-medium');
+		expect(byText(container, 'Finished', 'span').className).toContain('line-through');
+		expect([...container.querySelectorAll('.sr-only')].map((el) => el.textContent)).toEqual([
+			'To do',
+			'To do',
+			'To do',
+			'Done',
+		]);
+		const bar = /** @type {HTMLElement} */ (allByRole(container, 'progressbar')[0]?.firstElementChild);
+		expect(bar.style.width).toBe('25%');
+		cleanup();
+		const empty = render(
+			<SetupChecklist title={<b>Ready</b>} progress="" labels={{ done: 'Done', todo: 'To do' }} steps={[]} />,
+		);
+		const full = /** @type {HTMLElement} */ (allByRole(empty.container, 'progressbar')[0]);
+		expect([full.getAttribute('aria-label'), /** @type {HTMLElement} */ (full.firstElementChild).style.width]).toEqual([
+			null,
+			'100%',
+		]);
+	});
+
+	it('Needs you shows its calm line when nothing needs the viewer; the timeline its empty state', () => {
+		const { container } = render(
+			<>
+				<NeedsList items={[]} none="All good." />
+				<Timeline items={[]} empty="Nothing yet." />
+				<RecentChanges items={[]} />
+			</>,
+		);
+		expect(container.textContent).toContain('All good.');
+		expect(container.textContent).toContain('Nothing yet.');
+		expect(container.textContent).toContain('No changes yet.');
+	});
+
+	it('initials of a name, an email address or nothing', () => {
+		expect(initialsOf('Alex Morgan')).toBe('AM');
+		expect(initialsOf('support@shop.example')).toBe('SS');
+		expect(initialsOf('Cher')).toBe('CH');
+		expect(initialsOf('  ')).toBe('·');
+		expect(initialsOf(null)).toBe('·');
+	});
+
+	it('the loading skeleton is shaped like the Overview and announced', () => {
+		const { container } = render(<OverviewSkeleton />);
+		const status = allByRole(container, 'status')[0];
+		expect([status?.getAttribute('aria-label'), status?.getAttribute('aria-busy')]).toEqual(['Loading…', 'true']);
+		expect(container.querySelectorAll('.ss-shimmer').length).toBe(8);
+	});
+});

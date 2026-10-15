@@ -75,6 +75,23 @@ move. With `prefers-reduced-motion` nothing moves.
 - `PageTransition` and `SwapTransition` animate page and section changes with React's `ViewTransition` (navigations and
   other transitions only); browsers without view transitions get a CSS enter animation.
 
+## Overviews that talk
+
+One Overview pattern for the Portal and every product dashboard (PLAN.md 0.6 "Overviews talk", `overview.js`): a
+greeting with one sentence of what matters now, **Needs you** (each item says what happens if it waits and carries its
+button), a setup checklist, the key numbers and the latest activity as a timeline in the viewer's local time.
+
+- The pieces take the caller's words: `NeedItem` and `NeedsList` (with `NothingNeeded` when nothing needs the viewer),
+  `SetupChecklist` (progress bar; a step to do is a link drawn with `linkAs`, a button or plain text), `Timeline`
+  (initials from `initialsOf`, times with `LocalTime`).
+- `<ProductOverview data who product support portal namesOf open recheck needs? steps? numbers?>` is a product
+  dashboard's whole Overview from the kit's overview answer, with the words of `overview-texts.js` (US English): the
+  status, no feature on, each missing or failed connection, the widget not seen and business.json not found are "Needs
+  you" items and setup steps on their own; the product adds its own `needs`, `steps`, `numbers` (`Stat` tiles) and
+  sections (`children`). Red items come first; the sentence names the most urgent one. `open(tab)` shows a dashboard
+  section (Features, Settings, Connections or Developers); credits send merchants to support and admins to the Portal.
+  `OverviewSkeleton` is its loading state; `RecentChanges` is the timeline card also shown under Defaults and Prices.
+
 ## SchemaForm
 
 `<SchemaForm schema values onChange errors? overridden? onReset? disabled? />` renders each setting of a settings schema
