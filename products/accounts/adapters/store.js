@@ -25,7 +25,8 @@
  */
 import { createId } from '@ss/contracts';
 import { nationalNumberOf } from '@ss/contracts/phone';
-import { OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
+import { MAX_CUSTOM_FIELDS } from '../core/profile.js';
+import { MAX_ROLES, OWNER_ROLE, ROLE_TEMPLATES, SIGN_UP_TEMPLATE } from '../core/roles.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/profile.js').UserRecord} UserRecord */
@@ -560,7 +561,7 @@ export const createStore = (data, { now }) => {
 			list: async () => {
 				await seedRoles();
 				/** @type {Role[]} */
-				const all = as(await roles.find({ websiteId }, NO_ID).limit(200).toArray());
+				const all = as(await roles.find({ websiteId }, NO_ID).limit(MAX_ROLES).toArray());
 				return all.sort((a, b) => a.rank - b.rank || a.key.localeCompare(b.key));
 			},
 			/** @param {string} key @returns {Promise<Role | null>} */
@@ -607,7 +608,7 @@ export const createStore = (data, { now }) => {
 					await fields
 						.find({ websiteId }, { projection: { _id: 0, key: 1, label: 1, type: 1, options: 1, required: 1 } })
 						.sort({ createdAt: 1, _id: 1 })
-						.limit(100)
+						.limit(MAX_CUSTOM_FIELDS)
 						.toArray(),
 				),
 			count: () => fields.countDocuments({ websiteId }),

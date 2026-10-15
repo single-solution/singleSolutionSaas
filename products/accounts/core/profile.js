@@ -6,9 +6,13 @@
  */
 import { ADDRESS_LIMITS } from './widgets.js';
 
-/** Most addresses a user can keep (the Profile setting `maxAddresses` may lower it, PLAN 0.8.10 A11). */
-export const MAX_ADDRESSES = 10;
-export const MAX_CUSTOM_FIELDS = 50;
+/**
+ * System ceilings (A12): the website's settings choose the caps below them (Profile `maxAddresses`, Custom fields
+ * `maxFields` and `maxChoices`).
+ */
+export const MAX_ADDRESSES = 50;
+export const MAX_CUSTOM_FIELDS = 100;
+export const MAX_CHOICES = 200;
 const FIELD_TYPES = Object.freeze(/** @type {const} */ (['text', 'number', 'date', 'choice']));
 const FIELD_KEY = /^[a-z][a-z0-9_]{0,39}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -62,9 +66,11 @@ export const checkName = (value) => text(value, 120);
  * Check a custom field definition as the merchant saves it (the key comes from the path).
  * @param {string} key
  * @param {unknown} input
+ * @param {{ maxChoices?: number }} [limits] the website's Custom fields setting (at most `MAX_CHOICES`)
  * @returns {{ ok: true, value: CustomField } | { ok: false, field: string, message: string }}
  */
-export const checkFieldDefinition = (key, input) => {
+export const checkFieldDefinition = (key, input, { maxChoices = 50 } = {}) => {
+	const most = Math.min(maxChoices, MAX_CHOICES);
 	const body = typeof input === 'object' && input !== null ? /** @type {Record<string, unknown>} */ (input) : {};
 	if (!FIELD_KEY.test(key)) return { ok: false, field: 'key', message: 'Use 1–40 lower-case letters, digits or _.' };
 	const label = text(body.label, 80);
@@ -74,8 +80,8 @@ export const checkFieldDefinition = (key, input) => {
 	const options = Array.isArray(body.options)
 		? [...new Set(body.options.map((o) => (typeof o === 'string' ? o.trim() : '')))]
 		: [];
-	if (type === 'choice' && (options.length === 0 || options.length > 50 || options.some((o) => o === '' || o.length > 80)))
-		return { ok: false, field: 'options', message: 'A choice needs 1 to 50 options of at most 80 characters.' };
+	if (type === 'choice' && (options.length === 0 || options.length > most || options.some((o) => o === '' || o.length > 80)))
+		return { ok: false, field: 'options', message: `A choice needs 1 to ${most} options of at most 80 characters.` };
 	return { ok: true, value: { key, label, type, options: type === 'choice' ? options : [], required: body.required === true } };
 };
 

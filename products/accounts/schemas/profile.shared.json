@@ -7,7 +7,7 @@
 			"title": "Addresses per user",
 			"default": 10,
 			"minimum": 1,
-			"maximum": 10
+			"maximum": 50
 		},
 		"keepOneAddress": {
 			"type": "boolean",

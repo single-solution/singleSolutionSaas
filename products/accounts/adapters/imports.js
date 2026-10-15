@@ -101,20 +101,24 @@ const phoneFormatOf = async (deps, websiteId) => {
 };
 
 /**
- * A collection of records found by `key` with a most count per website (roles, custom fields): a new key past the
- * limit is refused.
- * @param {{ keysOf: (ctx: { data: WebsiteData, websiteId: string }) => Promise<Set<string>>, max: number, what: string,
- *   check: (record: Record<string, unknown>) => ({ ok: true, value: Record<string, unknown> & { key: string } } | { ok: false, errors: ImportError[] }) }} input
+ * A collection of records found by `key` with a most count per website (roles, custom fields; the website's setting,
+ * A12): a new key past the limit is refused.
+ * @param {{ keysOf: (ctx: { data: WebsiteData, websiteId: string }) => Promise<Set<string>>,
+ *   limitsOf: (websiteId: string) => Promise<{ max: number } & Record<string, number>>, what: string,
+ *   check: (record: Record<string, unknown>, limits: Record<string, number>) => ({ ok: true, value: Record<string, unknown> & { key: string } } | { ok: false, errors: ImportError[] }) }} input
  * @returns {ImportCollection}
  */
-const keyedCollection = ({ keysOf, max, what, check }) => ({
+const keyedCollection = ({ keysOf, limitsOf, what, check }) => ({
 	key: ['key'],
-	prepare: keysOf,
+	prepare: async (ctx) => ({ keys: await keysOf(ctx), limits: await limitsOf(ctx.websiteId) }),
 	check: (record, ctx) => {
-		const checked = check(record);
+		const { keys, limits } = /** @type {{ keys: Set<string>, limits: { max: number } & Record<string, number> }} */ (
+			ctx.prepared
+		);
+		const { max } = limits;
+		const checked = check(record, limits);
 		if (!checked.ok) return checked;
 		// the keys of this call count too
-		const keys = /** @type {Set<string>} */ (ctx.prepared);
 		if (!keys.has(checked.value.key)) {
 			if (keys.size >= max) return { ok: false, errors: [{ path: '/key', message: `A website has at most ${max} ${what}.` }] };
 			keys.add(checked.value.key);
@@ -179,12 +183,22 @@ const createdAtOf = async (ctx, collection, id) => {
  */
 export const createImportOptions = (deps) => ({
 	collections: {
-		roles: keyedCollection({ keysOf: roleKeysOf, max: MAX_ROLES, what: 'roles', check: checkImportedRole }),
+		roles: keyedCollection({
+			keysOf: roleKeysOf,
+			limitsOf: async (websiteId) => ({
+				max: Math.min(Number((await deps.settings(websiteId, 'roles')).maxRoles), MAX_ROLES),
+			}),
+			what: 'roles',
+			check: checkImportedRole,
+		}),
 		fields: keyedCollection({
 			keysOf: fieldKeysOf,
-			max: MAX_CUSTOM_FIELDS,
+			limitsOf: async (websiteId) => {
+				const { maxFields, maxChoices } = await deps.settings(websiteId, 'custom_fields');
+				return { max: Math.min(Number(maxFields), MAX_CUSTOM_FIELDS), maxChoices: Number(maxChoices) };
+			},
 			what: 'custom fields',
-			check: checkImportedField,
+			check: (record, limits) => checkImportedField(record, { maxChoices: Number(limits.maxChoices) }),
 		}),
 		users: {
 			prepare: async (ctx) => ({

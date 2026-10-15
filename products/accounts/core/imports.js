@@ -283,9 +283,10 @@ export const checkImportedRole = (record) => {
 /**
  * A custom field (`fields`, found by `key`); `createdAt` keeps the order of the fields list.
  * @param {Record<string, unknown>} record
+ * @param {{ maxChoices?: number }} [limits] the website's Custom fields setting (A12)
  * @returns {ImportChecked<CustomField & { createdAt?: Date }>}
  */
-export const checkImportedField = (record) => {
+export const checkImportedField = (record, limits = {}) => {
 	const errors = [
 		...unknownFields(record, IMPORT_FIELDS.fields, 'a custom field'),
 		...wrongTypes(record, { label: 'string', type: 'string', options: 'array', required: 'boolean' }),
@@ -294,7 +295,7 @@ export const checkImportedField = (record) => {
 		errors.push({ path: '/options', message: 'Only a choice field has options.' });
 	const createdAt = optionalTime(record, 'createdAt', errors);
 	if (errors.length > 0) return { ok: false, errors };
-	const checked = checkFieldDefinition(String(record.key), record);
+	const checked = checkFieldDefinition(String(record.key), record, limits);
 	if (!checked.ok) return { ok: false, errors: [{ path: `/${checked.field}`, message: checked.message }] };
 	return { ok: true, value: { ...checked.value, ...(createdAt ? { createdAt } : {}) } };
 };
@@ -321,8 +322,8 @@ export const checkImportedField = (record) => {
  */
 
 /**
- * Addresses of an imported user: the product's address check without the Profile settings (history: at most 10, and
- * only the first line is needed); an address without an id gets one from the user id and its place, so a re-run
+ * Addresses of an imported user: the product's address check without the Profile settings (history: up to the system
+ * ceiling `MAX_ADDRESSES`, and only the first line is needed); an address without an id gets one from the user id and its place, so a re-run
  * keeps it.
  * @param {unknown} input @param {string} userId @param {ImportError[]} errors
  */

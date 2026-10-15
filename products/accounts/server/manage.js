@@ -994,8 +994,9 @@ export const createManage = (product, service, flows) => {
 		const checked = checkRole(ctx.params.key, ctx.body);
 		if (!checked.ok) throw invalid(checked.field, checked.message);
 		const existing = await s.store.roles.get(checked.value.key);
-		if (!existing && (await s.store.roles.count()) >= MAX_ROLES)
-			throw problem('validation_failed', `A website can have at most ${MAX_ROLES} roles.`);
+		const most = Math.min(Number((await service.settings(s, 'roles')).maxRoles), MAX_ROLES);
+		if (!existing && (await s.store.roles.count()) >= most)
+			throw problem('validation_failed', `A website can have at most ${most} roles.`);
 		const given = bodyOf(ctx.body).signUp;
 		const signUp = given === undefined ? existing?.signUp === true : checked.value.signUp;
 		if (existing?.signUp && !signUp)
@@ -1179,12 +1180,14 @@ export const createManage = (product, service, flows) => {
 	/** @param {any} ctx */
 	const saveField = async (ctx) => {
 		await editable(ctx);
-		const checked = checkFieldDefinition(ctx.params.key, ctx.body);
+		const { maxFields, maxChoices } = await product.settings.values(ctx.websiteId, 'custom_fields');
+		const checked = checkFieldDefinition(ctx.params.key, ctx.body, { maxChoices: Number(maxChoices) });
 		if (!checked.ok) throw invalid(checked.field, checked.message);
 		const store = await fieldsStore(ctx);
 		const existing = (await store.fields.list()).some((f) => f.key === checked.value.key);
-		if (!existing && (await store.fields.count()) >= MAX_CUSTOM_FIELDS)
-			throw problem('validation_failed', `A website can have at most ${MAX_CUSTOM_FIELDS} custom fields.`);
+		const most = Math.min(Number(maxFields), MAX_CUSTOM_FIELDS);
+		if (!existing && (await store.fields.count()) >= most)
+			throw problem('validation_failed', `A website can have at most ${most} custom fields.`);
 		await store.fields.save(checked.value);
 		await recordChange(ctx, `Field ${checked.value.key}: saved`);
 		return checked.value;

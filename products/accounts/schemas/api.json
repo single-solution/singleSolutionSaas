@@ -205,7 +205,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/Address"
 					}
@@ -331,7 +331,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/Address"
 					}
@@ -469,7 +469,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/Address"
 					}
@@ -639,7 +639,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/Address"
 					}
@@ -2191,7 +2191,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/AddressInput"
 					},
@@ -2725,7 +2725,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/AddressInput"
 					},
@@ -3088,7 +3088,7 @@
 	},
 	"PUT /v1/roles/:key": {
 		"summary": "Save a role",
-		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for the 101st role.",
+		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s Roles setting maxRoles (default 100).",
 		"body": {
 			"$ref": "#/components/schemas/RoleInput"
 		},
@@ -3738,7 +3738,7 @@
 				},
 				"addresses": {
 					"type": "array",
-					"maxItems": 10,
+					"maxItems": 50,
 					"items": {
 						"$ref": "#/components/schemas/AddressInput"
 					},
@@ -4101,7 +4101,7 @@
 	},
 	"PUT /v1/admin/roles/:key": {
 		"summary": "Save a role (Roles admin widget)",
-		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for the 101st role.",
+		"description": "Creates the role or replaces it; the key is the path’s (2–40 lower-case letters, digits or _). Owner keeps every permission and rank 100. 422 validation_failed for the field, or for a role past the website’s Roles setting maxRoles (default 100).",
 		"body": {
 			"$ref": "#/components/schemas/RoleInput"
 		},

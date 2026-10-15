@@ -906,6 +906,39 @@ describe('roles, two-step, terms, approval and risk checks', () => {
 		await env.setting('approval', 'requiredFields', []);
 	});
 
+	it('A12: the caps are settings: custom fields, choices per field, roles and addresses per user', async () => {
+		const cookie = await env.adminSession();
+		const base = `/v1/dashboard/websites/${env.websiteId}/fields`;
+		await env.setting('custom_fields', 'maxChoices', 3);
+		const four = { label: 'Four', type: 'choice', options: ['a', 'b', 'c', 'd'] };
+		expect(code(await env.dashboard(cookie, 'PUT', `${base}/four`, four))).toBe('validation_failed');
+		await env.setting('custom_fields', 'maxChoices', 60);
+		const many = { label: 'Many', type: 'choice', options: Array.from({ length: 60 }, (_, i) => `o${i}`) };
+		expect((await env.dashboard(cookie, 'PUT', `${base}/many`, many)).status).toBe(200);
+		const count = (await env.dashboard(cookie, 'GET', base)).json.items.length;
+		await env.setting('custom_fields', 'maxFields', count);
+		expect(code(await env.dashboard(cookie, 'PUT', `${base}/one_more`, { label: 'One more', type: 'text' }))).toBe(
+			'validation_failed',
+		);
+		// a field already there can still change
+		expect((await env.dashboard(cookie, 'PUT', `${base}/many`, { ...many, label: 'Many choices' })).status).toBe(200);
+		expect((await env.dashboard(cookie, 'DELETE', `${base}/many`)).status).toBe(204);
+		await env.setting('custom_fields', 'maxFields', 50);
+		await env.setting('custom_fields', 'maxChoices', 50);
+		const roles = (await env.serverCall('GET', '/v1/roles')).json.items.length;
+		await env.setting('roles', 'maxRoles', roles);
+		expect(code(await env.serverCall('PUT', '/v1/roles/one_more', { name: 'One more' }))).toBe('validation_failed');
+		await env.setting('roles', 'maxRoles', 100);
+		// addresses: up to 50 per user when the merchant allows it (was at most 10)
+		await env.setting('profile', 'maxAddresses', 20);
+		const user = (await env.serverCall('GET', '/v1/users?q=ana@')).json.items[0];
+		const addresses = Array.from({ length: 12 }, (_, i) => ({ label: `A${i}`, line1: `${i} Main St`, city: 'Springfield' }));
+		const saved = await env.serverCall('PATCH', `/v1/users/${user.id}`, { addresses });
+		expect(saved.json.addresses).toHaveLength(12);
+		await env.serverCall('PATCH', `/v1/users/${user.id}`, { addresses: [] });
+		await env.setting('profile', 'maxAddresses', 10);
+	});
+
 	it('custom fields: set in the dashboard, required at sign-up, edited in My account', async () => {
 		const cookie = await env.adminSession();
 		const base = `/v1/dashboard/websites/${env.websiteId}/fields`;
