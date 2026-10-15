@@ -101,7 +101,7 @@ const probeModule = ({ productJwks = /** @type {any} */ (null) } = {}) =>
 					ok({
 						authMode: c.authMode,
 						actor: c.actor,
-						...(c.session ? { session: { kind: c.session.kind, mfa: c.session.mfa } } : {}),
+						...(c.session ? { session: { kind: c.session.kind } } : {}),
 						...(c.product ? { product: c.product } : {}),
 					}),
 			}),
@@ -204,15 +204,15 @@ describe('Portal end to end', () => {
 
 	it('admin sessions: Require two-step, RBAC, CSRF against PORTAL_URL, audit', async () => {
 		const { portal, call } = await boot({ dbName: 'it_staff' });
-		const admin = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
-		const support = await login(portal, { kind: 'admin', subject: 'adm_support', mfa: true });
-		const halfway = await login(portal, { kind: 'admin', subject: 'adm_owner_pending', mfa: true });
+		const admin = await login(portal, { kind: 'admin', subject: 'adm_owner' });
+		const support = await login(portal, { kind: 'admin', subject: 'adm_support' });
+		const halfway = await login(portal, { kind: 'admin', subject: 'adm_owner_pending' });
 
 		const who = await call('GET', '/v1/probe/whoami', { headers: { cookie: admin.cookie } });
 		expect(who.json).toMatchObject({
 			authMode: 'admin',
 			actor: { type: 'admin', id: 'adm_owner', role: 'owner' },
-			session: { kind: 'admin', mfa: true },
+			session: { kind: 'admin' },
 		});
 		// Require two-step for admins: only the setup routes open (`mfa: false`)
 		const pending = await call('GET', '/v1/probe/whoami', { headers: { cookie: halfway.cookie } });
@@ -452,60 +452,51 @@ describe('background (unit)', () => {
 });
 
 describe('sessions (Mongo)', () => {
-	it('create, touch, one lifetime from sign-in (Session length), rotation, revocation', async () => {
+	it('create, one lifetime from sign-in (Session length), reads that write nothing, rotation, revocation', async () => {
 		const { portal, clock, config } = await boot({ dbName: 'it_sessions', modules: [] });
 		const sessions = portal.shared.sessions;
-		expect(config.sessions.admin).toEqual({ idleMs: 12 * 3_600_000, absoluteMs: 12 * 3_600_000 });
-		const { token, session } = await sessions.create({
-			kind: 'admin',
-			subject: 'adm_1',
-			mfa: false,
-			ip: '192.0.2.1',
-			userAgent: 'x'.repeat(400),
-		});
+		expect(config.sessionMs).toBe(12 * 3_600_000);
+		const { token, session } = await sessions.create({ kind: 'admin', subject: 'adm_1' });
 		expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
 		expect(session.id).not.toContain(token);
-		const stored = await mongo.db('it_sessions').collection(COLLECTIONS.sessions).findOne({});
+		const collection = mongo.db('it_sessions').collection(COLLECTIONS.sessions);
+		const stored = await collection.findOne({});
 		expect(JSON.stringify(stored)).not.toContain(token);
-		expect(stored?.userAgent).toHaveLength(256);
+		expect(Object.keys(stored ?? {}).sort()).toEqual(['_id', 'createdAt', 'expireAt', 'kind', 'subject']);
+		expect(session.expiresAt).toEqual(new Date(clock.now() + config.sessionMs));
 
+		// using a session changes nothing in the database
 		clock.advance(29 * 60_000);
-		expect((await sessions.get(token))?.lastSeenAt).toEqual(new Date(clock.now())); // touched → idle window extended
-		clock.advance(29 * 60_000);
-		expect(await sessions.get(token)).not.toBeNull();
-		clock.advance(10_000);
-		expect((await sessions.get(token))?.lastSeenAt).not.toEqual(new Date(clock.now())); // throttled touch
+		expect(await sessions.get(token)).toEqual(session);
+		clock.advance(3 * 60 * 60_000);
+		expect(await sessions.get(token)).toEqual(session);
+		expect(await collection.findOne({})).toEqual(stored);
 
-		const rotated = await sessions.rotate(token, { mfa: true });
-		expect(rotated?.session).toMatchObject({
-			mfa: true,
-			createdAt: session.createdAt,
-			absoluteExpiresAt: session.absoluteExpiresAt,
-		});
+		const rotated = await sessions.rotate(token);
+		expect(rotated?.session).toMatchObject({ createdAt: session.createdAt, expiresAt: session.expiresAt });
+		expect(rotated?.token).not.toBe(token);
 		expect(await sessions.get(token)).toBeNull();
 		expect(await sessions.rotate(token)).toBeNull();
 		const live = /** @type {string} */ (rotated?.token);
 		expect(await sessions.get(live)).not.toBeNull();
 
-		clock.advance(config.sessions.admin.absoluteMs + 1);
+		clock.advance(config.sessionMs);
 		expect(await sessions.get(live)).toBeNull(); // the sign-in's lifetime ended
 
 		const a = await sessions.create({ kind: 'merchant', subject: MERCHANT });
 		expect((await sessions.get(a.token))?.merchantId).toBe(MERCHANT);
-		clock.advance(config.sessions.merchant.absoluteMs + 1);
-		expect(await sessions.get(a.token)).toBeNull(); // absolute expiry
+		clock.advance(config.sessionMs + 1);
+		expect(await sessions.get(a.token)).toBeNull();
 
 		const s1 = await sessions.create({ kind: 'merchant', subject: 'usr_2' });
 		const s2 = await sessions.create({ kind: 'merchant', subject: 'usr_2' });
 		const s3 = await sessions.create({ kind: 'merchant', subject: 'usr_2' });
-		expect((await sessions.list('merchant', 'usr_2')).length).toBe(3);
 		expect(await sessions.revoke(s1.token)).toBe(true);
 		expect(await sessions.revoke(s1.token)).toBe(false);
 		expect(await sessions.revoke('bad')).toBe(false);
 		expect(await sessions.revokeAll('merchant', 'usr_2', { exceptToken: s3.token })).toBe(1);
 		expect(await sessions.get(s2.token)).toBeNull();
-		expect(await sessions.revokeById(s3.session.id, { kind: 'merchant', subject: 'usr_other' })).toBe(false);
-		expect(await sessions.revokeById(s3.session.id, { kind: 'merchant', subject: 'usr_2' })).toBe(true);
+		expect(await sessions.get(s3.token)).not.toBeNull();
 		expect(await sessions.get(undefined)).toBeNull();
 		await expect(sessions.create(/** @type {any} */ ({ kind: 'robot', subject: 'x' }))).rejects.toThrow();
 		await expect(sessions.create({ kind: 'admin', subject: '' })).rejects.toThrow();
@@ -585,8 +576,8 @@ describe('Settings (stored in the database, never in the environment; Owner only
 		const db = mongo.db('it_settings');
 		const system = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
 		const { portal, call } = await boot({ dbName: 'it_settings', db, system });
-		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
-		const support = await login(portal, { kind: 'admin', subject: 'adm_support', mfa: true });
+		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner' });
+		const support = await login(portal, { kind: 'admin', subject: 'adm_support' });
 		/** @param {{ cookie: string }} who */
 		const as = (who) => ({ cookie: who.cookie, ...SAME_ORIGIN });
 
@@ -715,7 +706,7 @@ describe('Settings (stored in the database, never in the environment; Owner only
 
 	it('serves the public branding, and without a settings store the Settings API answers 503', async () => {
 		const { portal, call } = await boot({ dbName: 'it_settings_none' });
-		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
+		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner' });
 		expect((await call('GET', '/v1/admin/settings', { headers: { cookie: owner.cookie, ...SAME_ORIGIN } })).status).toBe(503);
 		const branding = await call('GET', '/v1/branding');
 		expect(branding.json).toEqual({

@@ -8,7 +8,8 @@
  * - Setup links work only while the login has no password; a suspended merchant's links never sign them in.
  * - Changing the email or password, or turning two-step off, needs the current password plus a two-step or recovery
  *   code while two-step is on. A new email takes effect only once confirmed from the new address; the old address
- *   gets a notice. A password change ends every other session of the login.
+ *   gets a notice. A password change ends every other session of the login; turning two-step on gives the session a
+ *   new token.
  * - Anti-enumeration: Forgot password answers the same whether the login exists; sign-in failures are one generic
  *   401; unknown logins burn a dummy scrypt verification.
  * @module
@@ -49,10 +50,12 @@ export const createAccounts = (deps) => {
 	const { ctx, repo, audit } = deps;
 	/** @param {Kind} kind */
 	const logins = (kind) => (kind === 'admin' ? repo.admins : repo.merchants);
-	/** @param {Kind} kind */
-	const maxAge = (kind) => Math.floor(ctx.config.sessions[kind].absoluteMs / 1000);
-	/** @param {Kind} kind @param {string} token */
-	const cookie = (kind, token) => ctx.cookies.set(kind, token, maxAge(kind));
+	/**
+	 * The session cookie, kept as long as the session lasts.
+	 * @param {{ token: string, session: Session }} started
+	 */
+	const cookie = ({ token, session }) =>
+		ctx.cookies.set(session.kind, token, Math.floor((session.expiresAt.getTime() - ctx.now()) / 1000));
 	/** @param {string} password */
 	const hash = (password) => hashPassword(password, { randomBytes: ctx.randomBytes });
 	/** @param {Kind} kind @param {Record<string, any>} doc */
@@ -97,13 +100,7 @@ export const createAccounts = (deps) => {
 	 * @param {Meta} meta
 	 */
 	const startSession = async (kind, doc, meta) => {
-		const { token } = await ctx.sessions.create({
-			kind,
-			subject: String(doc._id),
-			mfa: true,
-			ip: meta.ip ?? null,
-			userAgent: meta.userAgent ?? null,
-		});
+		const started = await ctx.sessions.create({ kind, subject: String(doc._id) });
 		await logins(kind).updateOne({ _id: doc._id }, { $set: { lastSignInAt: new Date(ctx.now()) } });
 		await ctx.loginThrottle.recordSuccess({ account: throttleKey(kind, doc.email) });
 		await audit(actorOf(kind, doc), 'login.signed_in', targetOf(kind, doc), { meta });
@@ -111,7 +108,7 @@ export const createAccounts = (deps) => {
 			status: /** @type {'ok'} */ ('ok'),
 			console: kind,
 			[kind]: present(kind, doc),
-			cookie: cookie(kind, token),
+			cookie: cookie(started),
 		};
 	};
 
@@ -518,12 +515,13 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
-		 * Confirm two-step with a first code: turns it on and returns 10 recovery codes (shown once).
+		 * Confirm two-step with a first code: turns it on and returns 10 recovery codes (shown once). The session that
+		 * turned it on gets a new token (the old one stops working).
 		 * @param {Kind} kind
-		 * @param {{ id: string, code: string }} input
+		 * @param {{ id: string, code: string, token: string }} input
 		 * @param {Meta} meta
 		 */
-		twoStepConfirm: async (kind, { id, code }, meta) => {
+		twoStepConfirm: async (kind, { id, code, token }, meta) => {
 			const doc = await loadLogin(kind, id);
 			if (doc.totp) throw problem('conflict', 'Two-step sign-in is already on.');
 			const secret = doc.pendingTotp ? openTotpSecret(ctx, doc.pendingTotp.secret, id) : null;
@@ -546,7 +544,8 @@ export const createAccounts = (deps) => {
 			if (enabled.modifiedCount !== 1) throw problem('conflict', 'Two-step sign-in is already on.');
 			await ctx.loginThrottle.recordSuccess({ account: key });
 			await audit(actorOf(kind, doc), 'two_step.turned_on', targetOf(kind, doc), { meta });
-			return { recoveryCodes: codes };
+			const rotated = await ctx.sessions.rotate(token);
+			return { recoveryCodes: codes, ...(rotated ? { cookie: cookie(rotated) } : {}) };
 		},
 
 		/**

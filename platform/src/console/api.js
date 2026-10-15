@@ -40,7 +40,7 @@ const parse = (text) => {
 /**
  * @param {{ handle: (request: Request, options?: { memo?: Map<string, unknown> }) => Promise<Response>, baseUrl: string,
  *   cookie?: string | null | (() => string | null), onSetCookie?: (setCookies: string[]) => void,
- *   forwardedFor?: string | null, userAgent?: string | null, randomUUID?: () => string, perRender?: boolean }} options
+ *   forwardedFor?: string | null, randomUUID?: () => string, perRender?: boolean }} options
  *   `cookie` is the request's Cookie header (or a getter, for a client that follows `Set-Cookie` through
  *   `onSetCookie`, e.g. tests and scripts). `perRender`: the client serves one page render (one browser request), so
  *   its reads are made once each (the same GET twice answers from the first call) and share one in-request memo with
@@ -54,7 +54,6 @@ export const createConsoleApi = ({
 	cookie = null,
 	onSetCookie,
 	forwardedFor = null,
-	userAgent = null,
 	randomUUID = () => globalThis.crypto.randomUUID(),
 	perRender = false,
 }) => {
@@ -75,7 +74,6 @@ export const createConsoleApi = ({
 		const cookieHeader = typeof cookie === 'function' ? cookie() : cookie;
 		if (cookieHeader) headers.cookie = cookieHeader;
 		if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
-		if (userAgent) headers['user-agent'] = userAgent;
 		if (method !== 'GET' && method !== 'HEAD') {
 			headers.origin = origin;
 			headers['sec-fetch-site'] = 'same-origin';

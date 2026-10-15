@@ -60,7 +60,7 @@ export const createPortal = ({
 	const sessions = createSessions({
 		repo: repos.mutable(COLLECTIONS.sessions),
 		secret: config.sessionSecret,
-		policies: config.sessions,
+		lifetimeMs: config.sessionMs,
 		now,
 		randomBytes,
 	});

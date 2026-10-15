@@ -20,12 +20,6 @@ import { platformError } from './errors.js';
 /** @typedef {'production' | 'development' | 'test'} PortalEnv */
 
 /**
- * @typedef {object} SessionPolicy
- * @property {number} idleMs session ends after this much inactivity
- * @property {number} absoluteMs session ends this long after login, whatever the activity
- */
-
-/**
  * @typedef {object} EnvConfig
  * @property {PortalEnv} env
  * @property {boolean} isProduction
@@ -84,7 +78,7 @@ import { platformError } from './errors.js';
  * @property {string} problemBaseUri RFC 9457 type base (`<url>/problems/`)
  * @property {string} logLevel
  * @property {number} maxBodyBytes default JSON body cap
- * @property {{ admin: SessionPolicy, merchant: SessionPolicy }} sessions from Settings → Security → Session length
+ * @property {number} sessionMs how long a sign-in lasts, admins and merchants alike (Settings → Security → Session length)
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound
  * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify email, resets, invites)
  */
@@ -119,18 +113,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
 		lowBalanceDays: SETTINGS_BOUNDS.lowBalanceDays.default,
 	}),
 });
-
-/**
- * Session lifetimes from Settings → Security → Session length: one absolute lifetime from sign-in, the same for admins
- * and merchants, with no separate idle timeout (PLAN 0.2).
- * @param {number} hours
- * @returns {{ admin: SessionPolicy, merchant: SessionPolicy }}
- */
-export const sessionPolicies = (hours) => {
-	const ms = hours * 3_600_000;
-	const policy = Object.freeze({ idleMs: ms, absoluteMs: ms });
-	return Object.freeze({ admin: policy, merchant: policy });
-};
 
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
 /** Hosts outbound calls may reach over loopback and plain http outside production (products run locally). */
@@ -274,7 +256,7 @@ export const buildConfig = (envConfig, system, { overrides = {} } = {}) => {
 		...envConfig,
 		cookieSecure: envConfig.portalUrl.startsWith('https:'),
 		settings,
-		sessions: sessionPolicies(settings.security.sessionHours),
+		sessionMs: settings.security.sessionHours * 3_600_000,
 		signingKeys: Object.freeze([...system.signingKeys]),
 		tokenSigningKeys: Object.freeze([...system.tokenSigningKeys]),
 		publishedOnly: Object.freeze({

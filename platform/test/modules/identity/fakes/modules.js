@@ -129,7 +129,7 @@ export const whoamiModule = defineModule({
 				ok({
 					authMode: c.authMode,
 					actor: c.actor,
-					...(c.session ? { session: { kind: c.session.kind, mfa: c.session.mfa } } : {}),
+					...(c.session ? { session: { kind: c.session.kind } } : {}),
 				}),
 		},
 	],

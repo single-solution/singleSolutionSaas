@@ -151,6 +151,20 @@ describe('two-step sign-in (PLAN 0.2)', () => {
 		expect(await h.activity('two_step.turned_off')).toHaveLength(1);
 	});
 
+	it('turning two-step on replaces the session: a new cookie, and the old one stops working', async () => {
+		const h = await boot();
+		const m = await h.merchant('sam@shop.test');
+		const other = await h.signIn('sam@shop.test');
+		const before = m.client.cookie;
+		await h.enableTwoStep(m.client);
+		expect(m.client.cookie).toMatch(/^__Host-ss_merchant=/);
+		expect(m.client.cookie).not.toBe(before);
+		expect((await m.client.get('/v1/me')).status).toBe(200);
+		expect((await h.call('GET', '/v1/me', { cookie: before })).status).toBe(401);
+		// only the session that turned it on is replaced
+		expect((await other.get('/v1/me')).status).toBe(200);
+	});
+
 	it('Require two-step for admins: an admin without it reaches only the setup until it is on', async () => {
 		const h = await boot({ settings: { security: { requireTwoStepForAdmins: true } } });
 		const o = await h.owner();

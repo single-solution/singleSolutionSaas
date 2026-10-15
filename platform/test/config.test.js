@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { issueToken, verifyToken } from '@ss/protocol';
-import { DEFAULT_SETTINGS, buildConfig, loadConfig, loadEnv, parsePortalUrl, sessionPolicies } from '../src/infra/config.js';
+import { DEFAULT_SETTINGS, buildConfig, loadConfig, loadEnv, parsePortalUrl } from '../src/infra/config.js';
 import { createPortalKeys } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { createSystemStore, generateSecrets, secretsOf } from '../src/infra/system.js';
@@ -119,7 +119,7 @@ describe('buildConfig: environment + system state', () => {
 		expect(config.tokenSigningKeys.map((k) => k.kid)).toEqual(['token-2026-10']);
 		expect(config.mail).toEqual({ smtp: null, from: null });
 		expect(config.settings).toEqual(DEFAULT_SETTINGS);
-		expect(config.sessions).toEqual(sessionPolicies(12));
+		expect(config.sessionMs).toBe(12 * 3_600_000);
 	});
 
 	it('the Portal address is PORTAL_URL only: https, an origin with nothing after it (PLAN 0.8.1, 0.11)', async () => {
@@ -151,15 +151,14 @@ describe('buildConfig: environment + system state', () => {
 		expect(parsePortalUrl(undefined, true)).toEqual({ ok: false, message: 'PORTAL_URL is required' });
 	});
 
-	it('takes the recorded settings over the defaults; Session length sets both session lifetimes', async () => {
+	it('takes the recorded settings over the defaults; Session length sets the one session lifetime', async () => {
 		const config = loadConfig(
 			await testEnv(),
 			await testSystem({ settings: { security: { sessionHours: 2 }, branding: { name: 'Acme' } } }),
 		);
 		expect(config.settings.security).toEqual({ sessionHours: 2, requireTwoStepForAdmins: false });
 		expect(config.settings.branding.name).toBe('Acme');
-		expect(config.sessions.admin).toEqual({ idleMs: 2 * 3_600_000, absoluteMs: 2 * 3_600_000 });
-		expect(config.sessions.merchant).toEqual(config.sessions.admin);
+		expect(config.sessionMs).toBe(2 * 3_600_000);
 	});
 
 	it('validates the mail sender; tests may replace fixed values', async () => {

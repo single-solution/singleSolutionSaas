@@ -8,8 +8,8 @@
  * - **TOTP** (RFC 6238 over RFC 4226 HOTP, `node:crypto`): base32 secrets, ±1 step window, replay refusal via the
  *   last accepted step; **recovery codes** shown once and stored as HMAC hashes.
  * - **Sessions**: opaque 256-bit tokens, stored only as HMAC-SHA-256(session secret, token); one lifetime from sign-in
- *   (Settings → Security → Session length; TTL index on `expireAt`); rotation on privilege change (new token, old one
- *   deleted); revoke one / revoke all.
+ *   (Settings → Security → Session length; TTL index on `expireAt`); rotation when two-step is turned on (new token,
+ *   old one deleted); revoke one / revoke all.
  *   Cookies are `HttpOnly; Secure; SameSite=Lax; Path=/` with the `__Host-` prefix whenever Secure.
  * - **Login throttling** per account and per IP (Mongo documents with TTL), with progressive account lockouts.
  * - **CSRF** for cookie-authenticated mutations: strict `Sec-Fetch-Site` and `Origin` checks (see `checkCsrf`).
@@ -276,27 +276,21 @@ export const findRecoveryCode = (code, hashes, secret) => {
 
 /**
  * @typedef {object} Session
- * @property {string} id stable non-secret identifier (the stored hash) — safe for audit logs and session lists
+ * @property {string} id stable non-secret identifier (the stored hash)
  * @property {SessionKind} kind
  * @property {string} subject admin id or merchant id (one login = one admin or one merchant, PLAN 0.2)
  * @property {string | null} merchantId the merchant id of a merchant session, else null
- * @property {boolean} mfa false while an admin must still set two-step up (Require two-step for admins)
  * @property {Date} createdAt
- * @property {Date} lastSeenAt
- * @property {Date} expiresAt min(idle expiry, absolute expiry)
- * @property {Date} absoluteExpiresAt
+ * @property {Date} expiresAt the sign-in's one lifetime (Settings → Security → Session length)
  */
 
 /**
  * @typedef {object} SessionInput
  * @property {SessionKind} kind
  * @property {string} subject
- * @property {boolean} [mfa]
- * @property {string | null} [ip]
- * @property {string | null} [userAgent]
  */
 
-const TOUCH_INTERVAL_MS = 60_000;
+const SESSION_KINDS = Object.freeze(['admin', 'merchant']);
 
 /**
  * @param {Record<string, any>} doc
@@ -308,19 +302,17 @@ const toSession = (doc) =>
 		kind: doc.kind,
 		subject: doc.subject,
 		merchantId: doc.kind === 'merchant' ? doc.subject : null,
-		mfa: doc.mfa === true,
 		createdAt: doc.createdAt,
-		lastSeenAt: doc.lastSeenAt,
 		expiresAt: doc.expireAt,
-		absoluteExpiresAt: doc.absoluteExpiresAt,
 	});
 
 /**
- * Session store over the `platform_sessions` collection.
- * @param {{ repo: MutableOps, secret: Uint8Array, policies: Record<SessionKind, { idleMs: number, absoluteMs: number }>,
- *   now?: () => number, randomBytes?: (n: number) => Uint8Array }} options
+ * Session store over the `platform_sessions` collection. A session lasts `lifetimeMs` from sign-in, the same for
+ * admins and merchants; using it writes nothing.
+ * @param {{ repo: MutableOps, secret: Uint8Array, lifetimeMs: number, now?: () => number,
+ *   randomBytes?: (n: number) => Uint8Array }} options
  */
-export const createSessions = ({ repo, secret, policies, now = Date.now, randomBytes = defaultRandomBytes }) => {
+export const createSessions = ({ repo, secret, lifetimeMs, now = Date.now, randomBytes = defaultRandomBytes }) => {
 	if (!secret || secret.length < 32) throw platformError('config_invalid', 'the session secret must be at least 32 bytes');
 	/** @param {string} token */
 	const idOf = (token) => hmacHex(secret, `ss-session.v1|${token}`);
@@ -328,28 +320,21 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 	const validToken = (token) => typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token);
 
 	/**
-	 * @param {SessionInput & { createdAt?: Date, absoluteExpiresAt?: Date }} input
+	 * @param {{ kind: SessionKind, subject: string, createdAt?: Date, expireAt?: Date }} input
 	 * @returns {Promise<{ token: string, session: Session }>}
 	 */
 	const insert = async (input) => {
-		const policy = policies[input.kind];
-		if (!policy) throw platformError('invalid_argument', `unknown session kind ${input.kind}`);
+		if (!SESSION_KINDS.includes(input.kind)) throw platformError('invalid_argument', `unknown session kind ${input.kind}`);
 		if (typeof input.subject !== 'string' || input.subject.length === 0)
 			throw platformError('invalid_argument', 'subject is required');
 		const t = now();
-		const absolute = input.absoluteExpiresAt ?? new Date(t + policy.absoluteMs);
 		const token = randomToken(randomBytes, 32);
 		const doc = {
 			_id: idOf(token),
 			kind: input.kind,
 			subject: input.subject,
-			mfa: input.mfa === true,
-			ip: input.ip ?? null,
-			userAgent: input.userAgent ? String(input.userAgent).slice(0, 256) : null,
 			createdAt: input.createdAt ?? new Date(t),
-			lastSeenAt: new Date(t),
-			absoluteExpiresAt: absolute,
-			expireAt: new Date(Math.min(t + policy.idleMs, absolute.getTime())),
+			expireAt: input.expireAt ?? new Date(t + lifetimeMs),
 		};
 		await repo.insertOne(doc);
 		return { token, session: toSession(doc) };
@@ -362,66 +347,43 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 	const load = async (token) => {
 		if (!validToken(token)) return null;
 		const doc = await repo.findOne({ _id: idOf(/** @type {string} */ (token)) });
-		if (!doc) return null;
-		const t = now();
-		if (doc.expireAt.getTime() <= t || doc.absoluteExpiresAt.getTime() <= t) return null;
+		if (!doc || doc.expireAt.getTime() <= now()) return null;
 		return doc;
 	};
 
 	return Object.freeze({
-		/** Create a session (login). Returns the token to put in the cookie — never stored. */
-		create: (/** @type {SessionInput} */ input) => insert(input),
 		/**
-		 * Resolve a token; extends the idle expiry (at most once a minute).
+		 * Create a session (sign-in). Returns the token to put in the cookie — never stored.
+		 * @param {SessionInput} input
+		 */
+		create: ({ kind, subject }) => insert({ kind, subject }),
+		/**
+		 * Resolve a token (null when unknown or expired).
 		 * @param {unknown} token
 		 * @returns {Promise<Session | null>}
 		 */
 		get: async (token) => {
 			const doc = await load(token);
-			if (!doc) return null;
-			const t = now();
-			if (t - doc.lastSeenAt.getTime() >= TOUCH_INTERVAL_MS) {
-				const policy = /** @type {{ idleMs: number }} */ (policies[/** @type {SessionKind} */ (doc.kind)]);
-				const expireAt = new Date(Math.min(t + policy.idleMs, doc.absoluteExpiresAt.getTime()));
-				await repo.updateOne({ _id: doc._id }, { $set: { lastSeenAt: new Date(t), expireAt } });
-				return toSession({ ...doc, lastSeenAt: new Date(t), expireAt });
-			}
-			return toSession(doc);
+			return doc ? toSession(doc) : null;
 		},
 		/**
-		 * Replace the session with a new token (two-step set up). The absolute expiry is kept; the old token stops
-		 * working immediately.
+		 * Replace the session with a new token (two-step turned on). The lifetime is kept; the old token stops working at
+		 * once.
 		 * @param {unknown} token
-		 * @param {Partial<Pick<SessionInput, 'mfa'>>} [changes]
 		 * @returns {Promise<{ token: string, session: Session } | null>}
 		 */
-		rotate: async (token, changes = {}) => {
+		rotate: async (token) => {
 			const doc = await load(token);
 			if (!doc) return null;
 			const deleted = await repo.deleteOne({ _id: doc._id });
 			if (deleted.deletedCount !== 1) return null; // a concurrent rotation won
-			return insert({
-				kind: doc.kind,
-				subject: doc.subject,
-				mfa: changes.mfa ?? doc.mfa,
-				ip: doc.ip,
-				userAgent: doc.userAgent,
-				createdAt: doc.createdAt,
-				absoluteExpiresAt: doc.absoluteExpiresAt,
-			});
+			return insert({ kind: doc.kind, subject: doc.subject, createdAt: doc.createdAt, expireAt: doc.expireAt });
 		},
 		/** @param {unknown} token */
 		revoke: async (token) => {
 			if (!validToken(token)) return false;
 			return (await repo.deleteOne({ _id: idOf(/** @type {string} */ (token)) })).deletedCount === 1;
 		},
-		/**
-		 * Revoke a session by its public id (session list "sign out this device").
-		 * @param {string} id
-		 * @param {{ kind: SessionKind, subject: string }} owner
-		 */
-		revokeById: async (id, owner) =>
-			(await repo.deleteOne({ _id: id, kind: owner.kind, subject: owner.subject })).deletedCount === 1,
 		/**
 		 * Revoke every session of a user (password change, compromise, offboarding).
 		 * @param {SessionKind} kind
@@ -433,20 +395,6 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 			const filter = { kind, subject, ...(exceptToken && validToken(exceptToken) ? { _id: { $ne: idOf(exceptToken) } } : {}) };
 			return (await repo.deleteMany(filter)).deletedCount;
 		},
-		/**
-		 * Active sessions of a user.
-		 * @param {SessionKind} kind
-		 * @param {string} subject
-		 * @returns {Promise<Session[]>}
-		 */
-		list: async (kind, subject) =>
-			(
-				await repo
-					.find({ kind, subject, expireAt: { $gt: new Date(now()) } })
-					.sort({ lastSeenAt: -1 })
-					.limit(100)
-					.toArray()
-			).map(toSession),
 	});
 };
 /** @typedef {ReturnType<typeof createSessions>} Sessions */

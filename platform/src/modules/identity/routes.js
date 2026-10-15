@@ -42,7 +42,7 @@ const valid = (parsed) => {
 };
 
 /** @param {RequestContext} c */
-const metaOf = (c) => ({ requestId: c.requestId, ip: c.ip, userAgent: c.headers.get('user-agent') });
+const metaOf = (c) => ({ requestId: c.requestId, ip: c.ip });
 
 /** @param {RequestContext} c */
 const actorOf = (c) => /** @type {Actor} */ (c.actor);
@@ -261,14 +261,16 @@ export const identityRoutes = (ctx, service) => {
 			mfa: false,
 			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
-			handler: async (c) =>
-				ok(
+			handler: async (c) => {
+				const kind = kindOf(c);
+				return withCookie(
 					await accounts.twoStepConfirm(
-						kindOf(c),
-						{ ...valid(inputs.twoStepConfirm(c.body)), id: sessionOf(c).subject },
+						kind,
+						{ ...valid(inputs.twoStepConfirm(c.body)), id: sessionOf(c).subject, token: tokenOf(c, kind) },
 						metaOf(c),
 					),
-				),
+				);
+			},
 		},
 		{
 			method: 'POST',

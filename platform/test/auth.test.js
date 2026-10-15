@@ -164,14 +164,7 @@ describe('CSRF', () => {
 });
 
 describe('actorFromSession', () => {
-	const base = {
-		id: 'h',
-		mfa: true,
-		createdAt: new Date(),
-		lastSeenAt: new Date(),
-		expiresAt: new Date(),
-		absoluteExpiresAt: new Date(),
-	};
+	const base = { id: 'h', createdAt: new Date(), expiresAt: new Date() };
 	it('maps admin and merchant sessions (one login = one admin or one merchant)', () => {
 		expect(actorFromSession({ ...base, kind: 'admin', subject: 'adm_1', merchantId: null })).toEqual({
 			type: 'admin',

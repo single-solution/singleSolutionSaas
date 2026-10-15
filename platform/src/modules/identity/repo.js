@@ -19,8 +19,8 @@ import { C } from './schema.js';
 /** @typedef {import('../../infra/mailer.js').Mailer} Mailer */
 
 /**
- * Request metadata carried into audit entries and sessions.
- * @typedef {{ requestId?: string | null, ip?: string | null, userAgent?: string | null }} Meta
+ * Request metadata carried into audit entries and the login throttle.
+ * @typedef {{ requestId?: string | null, ip?: string | null }} Meta
  */
 
 /**

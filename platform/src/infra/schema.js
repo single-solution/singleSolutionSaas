@@ -23,7 +23,7 @@ export const INFRA_COLLECTIONS = Object.freeze([
 		description: 'Console sessions (admins and merchants); `_id` = HMAC of the opaque token.',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 0 },
-		indexes: [{ keys: { kind: 1, subject: 1, lastSeenAt: -1 } }],
+		indexes: [{ keys: { kind: 1, subject: 1 } }],
 	}),
 	defineCollection({
 		module: 'platform',
