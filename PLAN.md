@@ -2087,6 +2087,24 @@ names none (the default stays `q, s, search, query`); retention comes from its s
 empty route table. Left for the shared-code batch (N7): Accounts' activity filter and `verifyJwt` (need kit exports)
 and the one email check (X9).
 
+**Shared code N7 (2026-10-15/16; 42 commits 7fc6f65e…4b1a98da; `audit/necessity-audit-2026-10-15.md` §3 X1–X13):**
+each piece every unit copied now lives once: the whole product dashboard in `@ss/ui/dashboard` (`ProductDashboard`, the
+standard tabs and forms; a product passes its manifest, its words through `dashboardTexts` and its own tabs); the widget
+helpers in `@ss/app-kit/widget` (`element`, `requestJson`, the ticket source and `adminCall`, `badge`, `dot`,
+`fieldGrid`, `splitView`, `moreMenu`, `openDialog`); the `/docs` page, the dashboard list twin, the import routes,
+`createProductBase`, `activityFilter` and `verifyIdentityToken` in the kit, whose widget config also answers `widgets`
+(no hand copy of the manifest); `@ss/contracts` `text` (escape, entities, page patterns, Luhn, the install snippet),
+`email` (one email rule), `csv`, `format` money checks and `util`, and settings may give a text a `pattern`;
+`@ss/protocol` the hashes, constant-time compare, random tokens and the `t=…,v1=…` webhook signature; `@ss/net` the
+logger, the database client rules and the static security headers. Accounts, Notifications, Chat, Payments, Growth,
+the Portal, the CLI template and the Notes fixture use them (about 13,000 lines of copies removed); every `@ss` package
+has one version (0.2.0) and `ss app init` outside a workspace links `^0.2.0`. Bugs fixed: one email rule (Accounts took
+addresses Notifications refused, so such users got no codes; the Portal and Payments had their own), a ticket without
+an expiry made admin widgets ask again and again, the logger threw on big integers, Chat's page patterns matched too
+much, Growth's entity decoding could print code, the CSV guard was lossy, `/docs` showed empty tables. Ecommerce
+switches in E-S (`audit/briefs/next-helpers.md` § E-S); the kit keeps only for it the root `zonedParts`,
+`IMPORT_LIMITS`, `PRODUCT_DATABASE_OPTIONS` and the route-replace rule, removed right after.
+
 **Review of the new features (2026-10-15; `audit/review-new-features-2026-10-15.md`; fixes 26d2dbf4 Chat, 6cf9c47a
 app-kit, fcbb5b4f Growth, then f7c901c9 Chat, 75711a1c Portal):** nine confirmed problems fixed, each with a failing-first
 test: Growth's robots.txt matching and HTML/sitemap scanning could run for minutes on hostile input (now linear, one
