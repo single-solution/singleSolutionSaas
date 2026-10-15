@@ -1075,6 +1075,7 @@ const claim = (over = {}) => ({
 	refundId: null,
 	restockedAt: null,
 	history: [{ at: AT, status: 'requested', by: 'Ana', note: '' }],
+	notes: [],
 	actions: ['approve', 'reject'],
 	order: {
 		id: 'ord_1',
@@ -1197,6 +1198,7 @@ describe('orders admin: returns', () => {
 			'Close',
 			'Claims of this order',
 			'Claims of this customer',
+			'Add a staff note',
 			'Reject',
 		]);
 		await click(buttonIn(pane, 'Mark received'));
@@ -1268,6 +1270,7 @@ describe('orders admin: returns', () => {
 			'Close',
 			'Claims of this order',
 			'Claims of this customer',
+			'Add a staff note',
 			'Reject',
 		]);
 		await click(buttonIn(pane, 'Mark repaired'));
@@ -1280,6 +1283,49 @@ describe('orders admin: returns', () => {
 		expect(statuses(pane)).toContain('Marked replaced.');
 		expect(pane.querySelector('.detail-head .badge')?.textContent).toBe('Replaced');
 		expect(textOf(rowOf(panel, 'ret_1'))).toContain('Warranty · Replaced');
+	});
+
+	it('adds staff notes to a claim, never shown to the shopper', async () => {
+		/** @type {any[]} */
+		const posts = [];
+		let reply = () => invalid('/text');
+		const { root, panel } = await startReturns({
+			'POST /v1/admin/returns/ret_1/notes': (/** @type {any} */ call) => {
+				posts.push(call.body);
+				return reply();
+			},
+		});
+		const pane = detailOf(panel);
+		expect(textOf(pane)).not.toContain('Staff notes');
+		await pickMenu(pane, 'Add a staff note');
+		await submitDialog(root);
+		expect(dialogStatus(root)).toBe(TEXTS['ordersAdmin.claimNoteEmpty']);
+		expect(posts).toHaveLength(0);
+		type(fieldIn(dialogOf(root), 'Only staff see this note'), '  Box was opened  ');
+		await submitDialog(root);
+		expect(posts).toEqual([{ text: 'Box was opened' }]);
+		expect(dialogStatus(root)).toBe(TEXTS['problem.field.text']);
+		reply = () =>
+			answer(
+				201,
+				claim({
+					notes: [
+						{ at: AT, by: 'Sam', text: 'Box was opened' },
+						{ at: AT, by: 'Lee', text: 'Called' },
+					],
+				}),
+			);
+		await submitDialog(root);
+		expect(hasDialog(root)).toBe(false);
+		expect(statuses(pane)).toContain('Note added.');
+		const notes = [...pane.querySelectorAll('section')].find(
+			(section) => section.querySelector('h4')?.textContent === 'Staff notes',
+		);
+		// newest first, with who wrote them
+		expect([...(notes?.querySelectorAll('li') ?? [])].map((item) => item.textContent)).toEqual([
+			expect.stringMatching(/^Oct 1, 2026, .+ · Lee · Called$/),
+			expect.stringMatching(/^Oct 1, 2026, .+ · Sam · Box was opened$/),
+		]);
 	});
 
 	it('refuses claim actions the ticket does not allow', async () => {
@@ -1563,7 +1609,8 @@ describe('orders admin: payments, edits, deletes and batches the API has', () =>
 		await change(from, 'confirmed');
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/orders/restatus')?.body).toEqual({ from: 'confirmed', to: 'checked' });
-		expect(dialogStatus(root)).toBe(TEXTS['problem.field.to']);
+		// a date's field names (from, to) are not the statuses': the general words
+		expect(dialogStatus(root)).toBe(TEXTS['problem.validation_failed']);
 		reply = () => answer(200, { from: 'confirmed', to: 'checked', role: 'open', moved: 4 });
 		await submitDialog(root);
 		expect(hasDialog(root)).toBe(false);

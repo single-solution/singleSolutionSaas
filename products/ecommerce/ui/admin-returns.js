@@ -5,7 +5,8 @@
  * beside one claim: its figures, lines, the shopper's photos (short presigned links) and history, with the actions its
  * status and kind allow as dialogs: approve, mark received, mark replaced (exchange and warranty) or repaired (warranty;
  * E33), refund (through Payments when paid online, else recorded), restock (exactly once) and close as buttons or in
- * the More menu, and reject last, in danger text behind its typed confirmation (it needs a note for the shopper).
+ * the More menu, Add a staff note (never shown to the shopper; the notes as a card), and reject last, in danger text
+ * behind its typed confirmation (it needs a note for the shopper).
  * @module
  */
 import { CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
@@ -171,6 +172,7 @@ const renderClaim = (kit, claim, detail, list, message) => {
 								list.narrow('userId', claim.userId, t('ordersAdmin.claimsOf', { name: customer || claim.userId })),
 						}
 					: null,
+				{ label: t('ordersAdmin.addClaimNote'), onSelect: () => noteDialog(kit, claim, done) },
 				actions.has('reject') ? { label: t('ordersAdmin.claimAction.reject'), onSelect: run('reject'), danger: true } : null,
 			]),
 		],
@@ -213,6 +215,19 @@ const renderClaim = (kit, claim, detail, list, message) => {
 										h('img', { src: photo.url, alt: t('ordersAdmin.photoNumber', { number: index + 1 }) }),
 									]),
 								),
+							),
+						])
+					: null,
+				claim.notes.length > 0
+					? card(kit, t('ordersAdmin.claimNotes'), [
+							h(
+								'ul',
+								{},
+								[...claim.notes]
+									.reverse()
+									.map((/** @type {any} */ entry) =>
+										kit.text('li', {}, [kit.when(entry.at), entry.by, entry.text].filter(Boolean).join(' · ')),
+									),
 							),
 						])
 					: null,
@@ -319,6 +334,27 @@ const restockDialog = (kit, claim, done) => {
 			const answer = await kit.call('POST', `/v1/admin/returns/${claim.id}/restock`);
 			if (!answer.ok) return kit.reason(answer);
 			done(answer.data, t('ordersAdmin.restocked'));
+			return null;
+		},
+	});
+};
+
+/**
+ * Add a staff note to the claim (never shown to the shopper).
+ * @param {Kit} kit @param {any} claim @param {(claim: any, text: string) => void} done
+ */
+const noteDialog = (kit, claim, done) => {
+	const { t } = kit;
+	const text = kit.area('', { maxlength: '1000', rows: '4' });
+	kit.dialog({
+		title: t('ordersAdmin.addClaimNote'),
+		body: [kit.field(t('ordersAdmin.staffNoteLabel'), text)],
+		submitLabel: t('ordersAdmin.saveNote'),
+		onSubmit: async () => {
+			if (!text.value.trim()) return t('ordersAdmin.claimNoteEmpty');
+			const answer = await kit.call('POST', `/v1/admin/returns/${claim.id}/notes`, { text: text.value.trim() });
+			if (!answer.ok) return kit.reason(answer);
+			done(answer.data, t('ordersAdmin.claimNoteAdded'));
 			return null;
 		},
 	});

@@ -531,6 +531,7 @@ describe('customers admin: reports and CSV', () => {
 			'GET /v1/admin/reports/margin': () => problem(403, 'forbidden'),
 		});
 		const panel = await openTab(root, 'reports');
+		await change(fieldIn(panel, 'Report'), 'sales_product');
 		await change(fieldIn(panel, 'From'), '2026-09-01');
 		await change(fieldIn(panel, 'To'), '2026-09-30');
 		await click(buttonIn(panel, 'Show'));
@@ -653,7 +654,7 @@ describe('customers admin: reports and CSV', () => {
 			},
 		});
 		const panel = await openTab(root, 'csv');
-		expect(panel.querySelectorAll('.masonry > .card')).toHaveLength(3);
+		expect(panel.querySelectorAll('.masonry > .card')).toHaveLength(4);
 		await click(buttonIn(panel, 'Export products'));
 		expect(saved[0]).toEqual({ name: 'products.csv', text: '﻿name\r\nPhone\r\n' });
 		expect(statuses(panel)).toContain('products.csv is ready.');

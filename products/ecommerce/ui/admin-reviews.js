@@ -2,8 +2,9 @@
  * Reviews moderation in the customers admin widget (feature `reviews`, ticket with `reviews.moderate`; PLAN 0.8.8
  * Reviews, 0.6): a list-and-detail screen — the count of matching reviews as a badge, status chips (waiting first) with
  * their counts, and the reviews of one product (set from a review's More menu, removable) — beside one review: its
- * rating, text, figures (its product by name) and reply, with Approve and Reject as buttons, and Reply, the product's
- * reviews and Delete (last, in danger text, behind its typed confirmation) in the More menu. Newest first.
+ * rating, text, figures (its product by name) and reply, with Approve and Reject as buttons, and Reply, Back to waiting
+ * (an approved or rejected review is hidden again until approved), the product's reviews and Delete (last, in danger
+ * text, behind its typed confirmation) in the More menu. Newest first.
  * @module
  */
 import { query } from './admin-kit.js';
@@ -138,6 +139,7 @@ const renderReview = (kit, review, detail, message, ofProduct) => {
 				review.status === 'rejected' ? null : kit.button(t('customersAdmin.reject'), moderate('/reject')),
 				kit.moreMenu([
 					{ label: t(review.reply ? 'customersAdmin.editReply' : 'customersAdmin.replyTitle'), onSelect: reply },
+					review.status === 'pending' ? null : { label: t('customersAdmin.backToPending'), onSelect: moderate('/pending') },
 					{ label: t('customersAdmin.productReviews'), onSelect: () => ofProduct(review) },
 					{ label: t('customersAdmin.deleteReview'), onSelect: remove, danger: true },
 				]),

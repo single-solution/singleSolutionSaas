@@ -1,11 +1,12 @@
 /**
  * Customers, reviews, reports and CSV (admin widget `customers_admin`; PLAN 0.8.8 Admin widgets, 0.6): a section for
  * each switched-on feature — customers (Cart and checkout, `customers.manage`) as a list-and-detail screen: the count
- * of matching customers as a badge, search, Blocked / Not blocked chips with their counts, A to Z or newest first, Add
- * customer (a customer without an account by phone, with opening points, E46), and one customer with their figures,
- * staff note, addresses, latest orders and return claims, Block (with a reason) or Unblock and Edit note as buttons,
- * and in the More menu Reset returned packages, Edit fields, Add address, Mark (or unmark) as a loyalty member (E47)
- * and Delete customer (without orders); reviews moderation (Reviews, `./admin-reviews.js`); reports (Reports,
+ * of matching customers as a badge, search, Blocked / Not blocked chips with their counts, A to Z or newest first, only
+ * the customers this staff member has not opened, Add customer (a customer without an account by phone, with opening
+ * points, E46), and one customer (marked opened by the staff member) with their figures, staff note, addresses, latest
+ * orders and return claims, Block (with a reason) or Unblock and Edit note as buttons, and in the More menu Reset
+ * returned packages, Edit fields, Add address, Mark (or unmark) as a loyalty member (E47) and Delete customer (without
+ * orders); reviews moderation (Reviews, `./admin-reviews.js`); reports (Reports,
  * `reports.read`) and CSV (CSV, `csv.run`) from `./admin-reports.js`.
  * @module
  */
@@ -71,11 +72,14 @@ const customersTab = (kit, panel) => {
 		],
 		onChange: reload,
 	});
+	const unseen = kit.check(t('customersAdmin.unseenOnly'));
+	unseen.box.addEventListener('change', reload);
 	const counts = async () => {
 		const q = search.value.trim();
+		const mine = unseen.box.checked;
 		const [total, byBlocked] = await Promise.all([
-			kit.call('GET', `/v1/admin/customers/count${query({ q, blocked: chips.value() })}`),
-			kit.call('GET', `/v1/admin/customers/counts${query({ q, by: 'blocked' })}`),
+			kit.call('GET', `/v1/admin/customers/count${query({ q, blocked: chips.value(), unseen: mine })}`),
+			kit.call('GET', `/v1/admin/customers/counts${query({ q, unseen: mine, by: 'blocked' })}`),
 		]);
 		screen.count(total);
 		// customers without the flag count as not blocked
@@ -147,7 +151,7 @@ const customersTab = (kit, panel) => {
 	const screen = listScreen(kit, panel, {
 		title: t('customersAdmin.customers'),
 		path: (cursor) =>
-			`/v1/admin/customers${query({ q: search.value.trim(), blocked: chips.value(), sort: sort.value === 'name' ? '' : sort.value, cursor })}`,
+			`/v1/admin/customers${query({ q: search.value.trim(), blocked: chips.value(), unseen: unseen.box.checked, sort: sort.value === 'name' ? '' : sort.value, cursor })}`,
 		row: (customer) => ({
 			name: nameOf(customer),
 			figure: kit.money(customer.totalSpent),
@@ -171,7 +175,7 @@ const customersTab = (kit, panel) => {
 		empty: t('customersAdmin.noCustomers'),
 		nothing: t('customersAdmin.nothing'),
 		actions: [kit.button(t('customersAdmin.add'), add, { primary: true })],
-		filters: [form, chips.node],
+		filters: [form, chips.node, unseen.node],
 		counts,
 	});
 	void screen.reload();
@@ -187,8 +191,10 @@ const customerDetail = async (kit, ref, detail) => {
 	kit.say(line, kit.t('customersAdmin.loading'));
 	const answer = await kit.call('GET', `/v1/admin/customers/${encodeURIComponent(ref)}`);
 	if (!detail.current()) return;
-	if (answer.ok) renderCustomer(kit, answer.data, detail, '');
-	else kit.fail(line, answer);
+	if (!answer.ok) return void kit.fail(line, answer);
+	renderCustomer(kit, answer.data, detail, '');
+	// opened by this staff member (E31): a marker only, so a refusal changes nothing shown
+	await kit.call('POST', `/v1/admin/customers/${encodeURIComponent(ref)}/seen`);
 };
 
 /**

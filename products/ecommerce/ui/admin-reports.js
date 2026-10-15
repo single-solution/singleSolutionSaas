@@ -1,10 +1,11 @@
 /**
  * Reports and CSV in the customers admin widget (PLAN 0.8.8 Admin tools, 0.6: plain pages of cards and tables): reports
  * (feature `reports`, `reports.read`) — the shop health card (E41: each check with its count and state, read when the
- * section opens and again on request), then sales by product, category, brand or city, stock age, return rate and
- * margin over a date range, with their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature
- * `csv`, `csv.run`) as cards — export products, import products (a dry run lists every problem per row, in the
- * website's words, before anything is written), export orders by date range and status.
+ * section opens and again on request), then the sales summary (its totals and the orders per day), sales by product,
+ * category, brand or city, sell-through, stock age, oldest stock (now), return rate and margin over a date range, with
+ * their totals as figures and their rows as a table, downloadable as CSV; and CSV (feature `csv`, `csv.run`) as cards —
+ * export products, import products (a dry run lists every problem per row, in the website's words, before anything is
+ * written), export orders by date range and status, export customers.
  * @module
  */
 import { toCsv } from '../core/csv.js';
@@ -14,15 +15,18 @@ import { card } from './admin-lists.js';
 /** @typedef {import('./admin-kit.js').Kit} Kit */
 /** @typedef {{ label: string, value: (row: any) => string | number | null, money?: boolean }} Column */
 
-/** The reports: their address and, for sales, the grouping. */
+/** The reports: their address, for sales the grouping, and whether they cover a date range (else they are now). */
 const REPORTS = Object.freeze({
-	sales_product: { path: '/v1/admin/reports/sales', by: 'product' },
-	sales_category: { path: '/v1/admin/reports/sales', by: 'category' },
-	sales_brand: { path: '/v1/admin/reports/sales', by: 'brand' },
-	sales_city: { path: '/v1/admin/reports/sales', by: 'city' },
-	stock_age: { path: '/v1/admin/reports/stock-age', by: '' },
-	return_rate: { path: '/v1/admin/reports/returns', by: '' },
-	margin: { path: '/v1/admin/reports/margin', by: '' },
+	summary: { path: '/v1/admin/reports/summary', by: '', range: true },
+	sales_product: { path: '/v1/admin/reports/sales', by: 'product', range: true },
+	sales_category: { path: '/v1/admin/reports/sales', by: 'category', range: true },
+	sales_brand: { path: '/v1/admin/reports/sales', by: 'brand', range: true },
+	sales_city: { path: '/v1/admin/reports/sales', by: 'city', range: true },
+	sell_through: { path: '/v1/admin/reports/sell-through', by: '', range: true },
+	stock_age: { path: '/v1/admin/reports/stock-age', by: '', range: false },
+	oldest_stock: { path: '/v1/admin/reports/oldest-stock', by: '', range: false },
+	return_rate: { path: '/v1/admin/reports/returns', by: '', range: true },
+	margin: { path: '/v1/admin/reports/margin', by: '', range: true },
 });
 
 /** @typedef {keyof typeof REPORTS} ReportKey */
@@ -44,6 +48,30 @@ const rowProblem = (kit, problem) =>
  */
 const columnsOf = (kit, key) => {
 	const { t } = kit;
+	/** @param {number | null} rate */
+	const percent = (rate) => (rate === null ? '' : `${Math.round(rate * 1000) / 10} %`);
+	if (key === 'summary')
+		return [
+			{ label: t('customersAdmin.day'), value: (row) => row.day },
+			{ label: t('customersAdmin.orders'), value: (row) => row.orders },
+			{ label: t('customersAdmin.revenue'), value: (row) => row.total, money: true },
+		];
+	if (key === 'sell_through')
+		return [
+			{ label: t('customersAdmin.product'), value: (row) => row.name },
+			{ label: t('customersAdmin.sold'), value: (row) => row.sold },
+			{ label: t('customersAdmin.stock'), value: (row) => row.stock },
+			{ label: t('customersAdmin.sellThrough'), value: (row) => percent(row.rate) },
+		];
+	if (key === 'oldest_stock')
+		return [
+			{ label: t('customersAdmin.product'), value: (row) => row.name },
+			{ label: t('customersAdmin.variant'), value: (row) => row.variantName },
+			{ label: t('customersAdmin.sku'), value: (row) => row.sku },
+			{ label: t('customersAdmin.stock'), value: (row) => row.stock },
+			{ label: t('customersAdmin.waitingSince'), value: (row) => row.since.slice(0, 10) },
+			{ label: t('customersAdmin.daysWaiting'), value: (row) => row.days },
+		];
 	if (key === 'stock_age')
 		return [
 			{ label: t('customersAdmin.product'), value: (row) => row.name },
@@ -58,10 +86,7 @@ const columnsOf = (kit, key) => {
 			{ label: t('customersAdmin.product'), value: (row) => row.name },
 			{ label: t('customersAdmin.sold'), value: (row) => row.sold },
 			{ label: t('customersAdmin.claimed'), value: (row) => row.claimed },
-			{
-				label: t('customersAdmin.returnRate'),
-				value: (row) => (row.rate === null ? '' : `${Math.round(row.rate * 1000) / 10} %`),
-			},
+			{ label: t('customersAdmin.returnRate'), value: (row) => percent(row.rate) },
 		];
 	if (key === 'margin')
 		return [
@@ -131,7 +156,7 @@ export const reportsTab = (kit, panel) => {
 	const to = kit.input('', { type: 'date' });
 	const dates = h('div', { class: 'row' }, [kit.field(t('admin.from'), from), kit.field(t('admin.to'), to)]);
 	report.addEventListener('change', () => {
-		dates.hidden = report.value === 'stock_age';
+		dates.hidden = !REPORTS[/** @type {ReportKey} */ (report.value)].range;
 	});
 	/** @type {{ key: string, header: string[], rows: Array<Array<string | number>> } | null} */
 	let last = null;
@@ -143,11 +168,8 @@ export const reportsTab = (kit, panel) => {
 		t('customersAdmin.run'),
 		async () => {
 			const key = /** @type {ReportKey} */ (report.value);
-			const { path, by } = REPORTS[key];
-			const answer = await kit.call(
-				'GET',
-				`${path}${query({ by, ...(key === 'stock_age' ? {} : { from: from.value, to: to.value }) })}`,
-			);
+			const { path, by, range } = REPORTS[key];
+			const answer = await kit.call('GET', `${path}${query({ by, ...(range ? { from: from.value, to: to.value } : {}) })}`);
 			result.replaceChildren();
 			download.hidden = true;
 			if (!answer.ok) {
@@ -155,9 +177,10 @@ export const reportsTab = (kit, panel) => {
 				return answer;
 			}
 			const columns = columnsOf(kit, key);
+			// the summary's rows are its days, its totals the answer itself
 			/** @type {any[]} */
-			const rows = answer.data.rows ?? [];
-			const totals = answer.data.totals;
+			const rows = (key === 'summary' ? answer.data.days : answer.data.rows) ?? [];
+			const totals = key === 'summary' ? answer.data : answer.data.totals;
 			kit.say(line, rows.length === 0 ? t('customersAdmin.noRows') : '');
 			kit.put(result, [
 				answer.data.from
@@ -169,18 +192,29 @@ export const reportsTab = (kit, panel) => {
 					: null,
 				totals
 					? kit.fieldGrid(
-							key === 'margin'
+							key === 'summary'
 								? [
-										[t('customersAdmin.revenue'), kit.money(totals.revenue)],
-										[t('customersAdmin.cost'), kit.money(totals.cost)],
-										[t('customersAdmin.margin'), kit.money(totals.margin)],
-									]
-								: [
 										[t('customersAdmin.orders'), String(totals.orders)],
 										[t('customersAdmin.units'), String(totals.units)],
-										[t('customersAdmin.revenue'), kit.money(totals.revenue)],
+										[t('customersAdmin.revenue'), kit.money(totals.total)],
+										[t('customersAdmin.goods'), kit.money(totals.goods)],
+										[t('customersAdmin.deliveryFees'), kit.money(totals.delivery)],
+										[t('customersAdmin.fees'), kit.money(totals.fees)],
 										[t('customersAdmin.discount'), kit.money(totals.discount)],
-									],
+										[t('customersAdmin.refunded'), kit.money(totals.refunded)],
+									]
+								: key === 'margin'
+									? [
+											[t('customersAdmin.revenue'), kit.money(totals.revenue)],
+											[t('customersAdmin.cost'), kit.money(totals.cost)],
+											[t('customersAdmin.margin'), kit.money(totals.margin)],
+										]
+									: [
+											[t('customersAdmin.orders'), String(totals.orders)],
+											[t('customersAdmin.units'), String(totals.units)],
+											[t('customersAdmin.revenue'), kit.money(totals.revenue)],
+											[t('customersAdmin.discount'), kit.money(totals.discount)],
+										],
 						)
 					: null,
 				kit.table(
@@ -217,7 +251,8 @@ export const reportsTab = (kit, panel) => {
 };
 
 /**
- * The CSV section, as cards: export products, export orders by date range and status, import products (dry run first).
+ * The CSV section, as cards: export products, export orders by date range and status, export customers, import
+ * products (dry run first).
  * @param {Kit} kit @param {HTMLElement} panel
  */
 export const csvTab = (kit, panel) => {
@@ -327,6 +362,13 @@ export const csvTab = (kit, panel) => {
 					)(),
 				),
 			]),
+			// customers come with orders (Cart and checkout)
+			kit.has('checkout')
+				? card(kit, t('customersAdmin.customers'), [
+						kit.text('p', { class: 'muted' }, t('customersAdmin.exportCustomersHint')),
+						kit.button(t('customersAdmin.exportCustomers'), exporter('/v1/admin/csv/customers', 'customers.csv')),
+					])
+				: null,
 			card(kit, t('customersAdmin.importProducts'), [
 				kit.text('p', { class: 'muted' }, t('customersAdmin.importHint')),
 				kit.field(t('customersAdmin.csvFile'), file),
