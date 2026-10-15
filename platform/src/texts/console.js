@@ -399,6 +399,7 @@ export const PROFILE = Object.freeze({
 		marketing: 'How do you market the website?',
 		offers: 'What do you offer shoppers?',
 		moving: 'Are you moving from another website or system?',
+		taxes: 'Do you charge tax (VAT, GST or sales tax) at checkout?',
 		countries: 'Countries you sell in',
 		languages: 'Languages of the website',
 	}),
@@ -419,6 +420,7 @@ export const PROFILE = Object.freeze({
 		}),
 		delivers: Object.freeze({
 			courier: 'By courier',
+			courier_api: 'By courier, booked from your admin (the courier’s API)',
 			zones: 'Own delivery, fees by area',
 			pickup: 'Pickup',
 			none: 'Nothing to deliver',
@@ -447,12 +449,23 @@ export const PROFILE = Object.freeze({
 		}),
 		offers: Object.freeze({
 			loyalty: 'Loyalty points',
-			discounts: 'Coupons and sales',
+			discounts: 'Sales and automatic deals',
+			coupons: 'Coupon codes',
+			bundles: 'Bundles and buy X get Y',
 			reviews: 'Reviews',
 			member_prices: 'Member or wholesale prices',
+			wishlist: 'Wishlists',
+			alerts: 'Back-in-stock and price-drop alerts',
+			returns: 'Returns and warranty claims',
+			invoices: 'Invoices and packing slips',
 			none: 'None of these',
 		}),
 	}),
+	other: 'Other',
+	otherHelp: 'Your own answers, separated by commas, for example Mobile wallet, Store credit.',
+	otherLabel: (/** @type {string} */ question) => `Other answers: ${question}`,
+	otherTooMany: (/** @type {number} */ most) => `At most ${most} own answers.`,
+	otherTooLong: (/** @type {number} */ most) => `Each own answer has at most ${most} characters.`,
 	yes: 'Yes',
 	no: 'No',
 	languagesHelp: 'Language codes, separated by commas, for example en, fr, es.',
@@ -460,8 +473,12 @@ export const PROFILE = Object.freeze({
 	/** What a tag says, as part of a sentence (`@ss/contracts/profile` tags; codes are kept as written). */
 	tag: (/** @type {string} */ tag) => {
 		const [question = '', option = ''] = tag.split('.');
-		if (question === 'countries')
-			return option === 'many' ? 'you sell in more than one country' : `your countries include ${option.toUpperCase()}`;
+		if (question === 'countries') {
+			if (option === 'many') return 'you sell in more than one country';
+			if (option === 'eea') return 'you sell in the European Economic Area, the UK or Switzerland, where tracking needs consent';
+			return `your countries include ${option.toUpperCase()}`;
+		}
+		if (option === 'other') return `you gave your own answer to “${PROFILE.questions[/** @type {'pays'} */ (question)] ?? question}”`;
 		if (question === 'languages')
 			return option === 'many' ? 'your website has more than one language' : `your languages include ${option}`;
 		return PROFILE_TAGS[tag] ?? tag;
@@ -491,6 +508,7 @@ const PROFILE_TAGS = Object.freeze(
 		'pays.pickup': 'shoppers pay at pickup',
 		'pays.*': 'you take payments',
 		'delivers.courier': 'orders go out by courier',
+		'delivers.courier_api': 'you book couriers from your admin through their API',
 		'delivers.zones': 'you deliver orders yourself with fees by area',
 		'delivers.pickup': 'shoppers pick up their orders',
 		'delivers.none': 'you have nothing to deliver',
@@ -518,13 +536,21 @@ const PROFILE_TAGS = Object.freeze(
 		'marketing.none': 'you do no marketing',
 		'marketing.*': 'you market the website',
 		'offers.loyalty': 'you reward repeat shoppers with points',
-		'offers.discounts': 'you offer coupons and sales',
+		'offers.discounts': 'you run sales and automatic deals',
+		'offers.coupons': 'you give coupon codes',
+		'offers.bundles': 'you sell bundles or buy X get Y offers',
 		'offers.reviews': 'shoppers review what they bought',
 		'offers.member_prices': 'members or wholesale buyers get their own prices',
+		'offers.wishlist': 'shoppers keep wishlists',
+		'offers.alerts': 'shoppers get back-in-stock and price-drop alerts',
+		'offers.returns': 'you take returns and warranty claims',
+		'offers.invoices': 'you give invoices and packing slips',
 		'offers.none': 'you offer no extras',
 		'offers.*': 'you offer shoppers extras',
 		'moving.yes': 'you are moving from another website or system',
 		'moving.no': 'you are not moving from another system',
+		'taxes.yes': 'you charge tax at checkout',
+		'taxes.no': 'you do not charge tax at checkout',
 	}),
 );
 

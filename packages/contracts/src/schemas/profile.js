@@ -3,7 +3,15 @@
  * shape of a feature's recommendation rules (`recommendFor` in the manifest and in a product's Setup part).
  * @module
  */
-import { PROFILE_CHOICES, PROFILE_CODES, PROFILE_LISTS, PROFILE_YES_NO, RULE_MAX_TAGS } from '../profile.js';
+import {
+	OTHER_MAX,
+	PROFILE_CHOICES,
+	PROFILE_CODES,
+	PROFILE_LISTS,
+	PROFILE_OTHER,
+	PROFILE_YES_NO,
+	RULE_MAX_TAGS,
+} from '../profile.js';
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 
@@ -22,7 +30,10 @@ export const recommendForSchema = deepFreeze({
 	},
 });
 
-/** A website's business profile: every answer optional; `profileProblems` adds that `none` stands alone. */
+/**
+ * A website's business profile: every answer optional; `other` holds the merchant's own answers to the choices of
+ * `PROFILE_OTHER`; `profileProblems` adds that `none` stands alone and each own answer is given once.
+ */
 export const businessProfileSchema = deepFreeze({
 	$schema: 'https://json-schema.org/draft/2020-12/schema',
 	$id: SCHEMA_IDS.businessProfile,
@@ -36,6 +47,20 @@ export const businessProfileSchema = deepFreeze({
 				{ type: 'array', maxItems: options.length, uniqueItems: true, items: { type: 'string', enum: [...options] } },
 			]),
 		),
+		other: {
+			type: 'object',
+			additionalProperties: false,
+			properties: Object.fromEntries(
+				PROFILE_OTHER.map((question) => [
+					question,
+					{
+						type: 'array',
+						maxItems: OTHER_MAX.answers,
+						items: { type: 'string', minLength: 1, maxLength: OTHER_MAX.length },
+					},
+				]),
+			),
+		},
 		...Object.fromEntries(PROFILE_YES_NO.map((question) => [question, { type: 'boolean' }])),
 		...Object.fromEntries(
 			Object.entries(PROFILE_LISTS).map(([question, most]) => [

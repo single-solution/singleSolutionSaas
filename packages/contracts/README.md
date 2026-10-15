@@ -124,19 +124,25 @@ domain, status, business, profile }, access: { allowedOrigins, testingOrigins, s
 
 A website's business profile is a few optional answers kept by the Portal: what it sells, how shoppers pay, how
 orders reach them, how shoppers sign in, who answers the chat, how it messages customers, marketing, what it offers
-shoppers (`PROFILE_CHOICES`, each a list of options; `none` stands alone), whether it is moving from another website
-or system (`moving`, yes or no), and its countries (ISO 3166-1 alpha-2, capitals) and languages (ISO 639, two or three
-small letters). `validateBusinessProfile(value)` checks it (`profileAnswer` for `none` with other options;
-`PROFILE_NONE` is that option).
+shoppers (`PROFILE_CHOICES`, each a list of options; `none` stands alone), the merchant's own answers where the
+options cannot list everything (`other: { <question>: [text] }` for the questions of `PROFILE_OTHER`, at most
+`OTHER_MAX.answers` of at most `OTHER_MAX.length` characters, each once), whether it is moving from another website or
+system and whether it charges tax at checkout (`moving`, `taxes`, yes or no), and its countries (ISO 3166-1 alpha-2,
+capitals) and languages (ISO 639, two or three small letters). `validateBusinessProfile(value)` checks it
+(`profileAnswer` for `none` with other options or own answers, and an own answer twice; `PROFILE_NONE` is that option).
 
-A profile's tags are `<question>.<option>` (`pays.cod`, `moving.yes`, `countries.us`, `languages.fr`) and
-`<question>.many` for two countries or languages or more; a rule's `<choice>.*` holds for any option but `none`. A
-feature is `recommended` (with the tags of the first rule that holds), `ruled_out` (every rule fails on a question the
-profile answered; `missing` one tag per rule) or `neutral` (no rules, or an open question could still make a rule
-hold): `adviseFeatures(features, profile)` → `{ recommended, notRecommended }` for a product's features
-(`notRecommended`: ruled out and on). The root entry has `PROFILE_CHOICES`, `adviseFeatures` and
-`validateBusinessProfile` for servers; `@ss/contracts/profile` has `PROFILE_CHOICES`, `PROFILE_NONE` and
-`adviseFeatures` for the browser.
+A profile's tags are `<question>.<option>` (`pays.cod`, `moving.yes`, `countries.us`, `languages.fr`),
+`<question>.other` for own answers, `<question>.many` for two countries or languages or more, and `countries.<region>`
+when a country of a region is answered (`PROFILE_REGIONS`: `eea`, the European Economic Area with the UK and
+Switzerland, where tracking needs consent); a rule's `<choice>.*` holds for any option but `none`, own answers
+included. A rule names the answer that asks for the feature (`offers.coupons` for coupon codes, `delivers.courier_api`
+for courier booking, `taxes.yes` for tax rules), never a broad one that does not, so the advisor recommends only what
+the profile asks for. A feature is `recommended` (with the tags of the first rule that holds), `ruled_out` (every rule
+fails on a question the profile answered; `missing` one tag per rule) or `neutral` (no rules, or an open question could
+still make a rule hold): `adviseFeatures(features, profile)` → `{ recommended, notRecommended }` for a product's
+features (`notRecommended`: ruled out and on). The root entry has `PROFILE_CHOICES`, `adviseFeatures` and
+`validateBusinessProfile` for servers; `@ss/contracts/profile` has the whole vocabulary and `adviseFeatures` for the
+browser.
 
 ## Message templates (`@ss/contracts/templates`)
 

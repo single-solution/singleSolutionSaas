@@ -293,11 +293,14 @@ describe('Setup sheet (end to end)', () => {
 		expect(partOf(saved.json, 'accounts').notRecommended).toContainEqual(
 			expect.objectContaining({ feature: 'phone_code', missing: ['signIn.phone'] }),
 		);
-		// Ecommerce: the shop of physical goods with what it needs; digital goods and bookings are on but not called for
+		// Ecommerce: the shop of physical goods with what it needs, and only what the profile asks for (it says nothing
+		// about returns, wishlists, alerts, coupons, tax or courier booking); digital goods and bookings are on but not
+		// called for
 		const shop = partOf(saved.json, 'ecommerce');
-		expect(shop.recommended.map((/** @type {any} */ entry) => entry.feature)).toEqual(
-			expect.arrayContaining(['catalog', 'checkout', 'variants', 'returns', 'wishlist', 'alerts', 'staff_alerts', 'import']),
-		);
+		const recommended = shop.recommended.map((/** @type {any} */ entry) => entry.feature);
+		expect(recommended).toEqual(expect.arrayContaining(['catalog', 'checkout', 'variants', 'staff_alerts', 'import']));
+		for (const feature of ['returns', 'wishlist', 'alerts', 'coupons', 'bundles', 'taxes', 'courier_apis', 'invoices'])
+			expect(recommended).not.toContain(feature);
 		expect(shop.notRecommended.map((/** @type {any} */ entry) => entry.feature)).toEqual(
 			expect.arrayContaining(['digital_goods', 'bookings']),
 		);

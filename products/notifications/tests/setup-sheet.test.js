@@ -1,4 +1,4 @@
-import { validateManifest, validateProductBlueprint } from '@ss/contracts';
+import { adviseFeatures, validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { describe, expect, it } from 'vitest';
 import guide from '../docs/guide.json' with { type: 'json' };
 import nextConfig from '../next.config.js';
@@ -28,6 +28,24 @@ describe('the website Setup sheet', () => {
 		expect(manifest.features.find((feature) => feature.key === 'quiet_hours')?.recommendFor).toBeUndefined();
 	});
 
+	it('recommends a channel only when the profile messages customers on it', () => {
+		const features = manifest.features.map((feature) => ({
+			key: feature.key,
+			on: false,
+			recommendFor: feature.recommendFor ?? [],
+		}));
+		// phone sign-in with WhatsApp messages: WhatsApp, not SMS; two languages: templates per language
+		const whatsapp = adviseFeatures(features, { signIn: ['phone'], messages: ['whatsapp'], languages: ['en', 'ur'] });
+		expect(whatsapp.recommended.map((entry) => entry.feature)).toEqual(['whatsapp', 'multi_language']);
+		// one language, or no messages at all: no templates per language
+		expect(adviseFeatures(features, { messages: ['sms'], languages: ['en'] }).recommended.map((e) => e.feature)).toEqual([
+			'sms',
+		]);
+		expect(
+			adviseFeatures(features, { messages: ['none'], languages: ['en', 'fr'] }).recommended.map((e) => e.feature),
+		).toEqual([]);
+	});
+
 	it('answers its part: the OpenAPI document, the channels on, the webhook events and URLs by host, what to build', async () => {
 		const env = await setup();
 		const off = await partOf(env);
@@ -36,7 +54,7 @@ describe('the website Setup sheet', () => {
 		expect(off.events).toEqual([]);
 		expect(off.summaries).toEqual([{ title: 'Channels', text: 'None is on yet, so nothing can be sent to customers.' }]);
 		expect(off.build).toEqual([]);
-		expect(off.features.find((/** @type {any} */ f) => f.key === 'sms').recommendFor).toEqual(['messages.sms', 'signIn.phone']);
+		expect(off.features.find((/** @type {any} */ f) => f.key === 'sms').recommendFor).toEqual(['messages.sms']);
 
 		await env.switchOn(['whatsapp', 'email', 'staff_push', 'webhooks', 'send_api']);
 		const value = [

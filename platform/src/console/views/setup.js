@@ -12,7 +12,7 @@
  * @module
  */
 import { useEffect, useState } from 'react';
-import { PROFILE_CHOICES, PROFILE_NONE } from '@ss/contracts/profile';
+import { OTHER_MAX, PROFILE_CHOICES, PROFILE_NONE, PROFILE_OTHER } from '@ss/contracts/profile';
 import {
 	Badge,
 	Button,
@@ -80,6 +80,26 @@ import { api } from '../paths.js';
 /** Choice questions in the order people see them. */
 const CHOICES = /** @type {Array<keyof typeof PROFILE_CHOICES>} */ (Object.keys(PROFILE_CHOICES));
 const LANGUAGE = /^[a-z]{2,3}$/;
+/** Yes-or-no questions in the order people see them. */
+const YES_NO = /** @type {const} */ (['moving', 'taxes']);
+
+/** @param {string} question */
+const takesOther = (question) => /** @type {readonly string[]} */ (PROFILE_OTHER).includes(question);
+
+/**
+ * Own answers typed as one line, separated by commas: trimmed, empty ones dropped, each once (any case).
+ * @param {string} line
+ * @returns {string[]}
+ */
+export const ownAnswersOf = (line) => {
+	/** @type {string[]} */
+	const out = [];
+	for (const part of line.split(',')) {
+		const text = part.trim().replace(/\s+/g, ' ');
+		if (text !== '' && !out.some((kept) => kept.toLowerCase() === text.toLowerCase())) out.push(text);
+	}
+	return out;
+};
 
 /**
  * A business profile in words: each answered question with its answer, in the order people see them.
@@ -87,15 +107,21 @@ const LANGUAGE = /^[a-z]{2,3}$/;
  * @returns {Array<{ question: string, answer: string }>}
  */
 export const profileLines = (profile) => [
-	...CHOICES.filter((question) => (profile[question] ?? []).length > 0).map((question) => ({
+	...CHOICES.filter((question) => (profile[question] ?? []).length + (profile.other?.[question] ?? []).length > 0).map(
+		(question) => ({
+			question: PROFILE.questions[question],
+			answer: [
+				...(profile[question] ?? []).map(
+					(option) => /** @type {Record<string, string>} */ (PROFILE.options[question])[option] ?? option,
+				),
+				...(profile.other?.[question] ?? []),
+			].join(', '),
+		}),
+	),
+	...YES_NO.filter((question) => typeof profile[question] === 'boolean').map((question) => ({
 		question: PROFILE.questions[question],
-		answer: (profile[question] ?? [])
-			.map((option) => /** @type {Record<string, string>} */ (PROFILE.options[question])[option] ?? option)
-			.join(', '),
+		answer: profile[question] ? PROFILE.yes : PROFILE.no,
 	})),
-	...(typeof profile.moving === 'boolean'
-		? [{ question: PROFILE.questions.moving, answer: profile.moving ? PROFILE.yes : PROFILE.no }]
-		: []),
 	...((profile.countries ?? []).length > 0
 		? [
 				{
@@ -529,6 +555,11 @@ function Recommendations({ sheet, actions }) {
 function ProfileDialog({ manage, profile, onClose, onSaved }) {
 	const [answers, setAnswers] = useState(/** @type {BusinessProfile} */ ({ ...(profile ?? {}) }));
 	const [languages, setLanguages] = useState((profile?.languages ?? []).join(', '));
+	const [own, setOwn] = useState(
+		/** @type {Record<string, string>} */ (
+			Object.fromEntries(PROFILE_OTHER.map((question) => [question, (profile?.other?.[question] ?? []).join(', ')]))
+		),
+	);
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
@@ -538,23 +569,34 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 		const added = next.find((option) => !(answers[question] ?? []).includes(option));
 		const kept = added === PROFILE_NONE ? [PROFILE_NONE] : next.filter((option) => option !== PROFILE_NONE || !added);
 		setAnswers({ ...answers, [question]: kept });
+		// none stands alone: it clears the own answers too
+		if (added === PROFILE_NONE && takesOther(question)) setOwn({ ...own, [question]: '' });
 	};
 	const save = async () => {
 		const codes = languages
 			.split(',')
 			.map((code) => code.trim().toLowerCase())
 			.filter((code) => code !== '');
+		/** @type {Record<string, string>} */
+		const found = {};
 		const wrong = codes.filter((code) => !LANGUAGE.test(code));
-		if (wrong.length > 0) {
-			setErrors({ languages: PROFILE.languagesInvalid(wrong.join(', ')) });
-			return;
+		if (wrong.length > 0) found.languages = PROFILE.languagesInvalid(wrong.join(', '));
+		/** @type {Record<string, string[]>} */
+		const other = {};
+		for (const question of PROFILE_OTHER) {
+			const answers = ownAnswersOf(own[question] ?? '');
+			if (answers.length > OTHER_MAX.answers) found[`other.${question}`] = PROFILE.otherTooMany(OTHER_MAX.answers);
+			else if (answers.some((text) => text.length > OTHER_MAX.length))
+				found[`other.${question}`] = PROFILE.otherTooLong(OTHER_MAX.length);
+			if (answers.length > 0) other[question] = answers;
 		}
-		setErrors({});
+		setErrors(found);
+		if (Object.keys(found).length > 0) return;
 		setBusy(true);
 		setProblem(null);
 		const result = await apiFetch(api.setupProfile(manage.merchantId, manage.websiteId), {
 			method: 'PUT',
-			body: { ...answers, languages: [...new Set(codes)] },
+			body: { ...answers, other, languages: [...new Set(codes)] },
 		});
 		setBusy(false);
 		if (!result.ok) {
@@ -568,31 +610,45 @@ function ProfileDialog({ manage, profile, onClose, onSaved }) {
 			<div className="space-y-5">
 				<FieldGrid>
 					{CHOICES.map((question) => (
-						<CheckboxGroup
+						<div key={question} className="min-w-0 space-y-2">
+							<CheckboxGroup
+								legend={PROFILE.questions[question]}
+								options={PROFILE_CHOICES[question].map((option) => ({
+									value: option,
+									label: /** @type {Record<string, string>} */ (PROFILE.options[question])[option] ?? option,
+								}))}
+								value={answers[question] ?? []}
+								onChange={(next) => choose(question, next)}
+							/>
+							{takesOther(question) ? (
+								<Input
+									label={PROFILE.other}
+									aria-label={PROFILE.otherLabel(PROFILE.questions[question])}
+									help={PROFILE.otherHelp}
+									value={own[question] ?? ''}
+									onChange={(event) => setOwn({ ...own, [question]: event.currentTarget.value })}
+									error={errors[`other.${question}`]}
+								/>
+							) : null}
+						</div>
+					))}
+					{YES_NO.map((question) => (
+						<RadioGroup
 							key={question}
 							legend={PROFILE.questions[question]}
-							options={PROFILE_CHOICES[question].map((option) => ({
-								value: option,
-								label: /** @type {Record<string, string>} */ (PROFILE.options[question])[option] ?? option,
-							}))}
-							value={answers[question] ?? []}
-							onChange={(next) => choose(question, next)}
+							inline
+							options={[
+								{ value: 'yes', label: PROFILE.yes },
+								{ value: 'no', label: PROFILE.no },
+								{ value: '', label: PROFILE.notAnswered },
+							]}
+							value={answers[question] === undefined ? '' : answers[question] ? 'yes' : 'no'}
+							onChange={(value) => {
+								const { [question]: _answer, ...rest } = answers;
+								setAnswers(value === '' ? rest : { ...rest, [question]: value === 'yes' });
+							}}
 						/>
 					))}
-					<RadioGroup
-						legend={PROFILE.questions.moving}
-						inline
-						options={[
-							{ value: 'yes', label: PROFILE.yes },
-							{ value: 'no', label: PROFILE.no },
-							{ value: '', label: PROFILE.notAnswered },
-						]}
-						value={answers.moving === undefined ? '' : answers.moving ? 'yes' : 'no'}
-						onChange={(value) => {
-							const { moving: _moving, ...rest } = answers;
-							setAnswers(value === '' ? rest : { ...rest, moving: value === 'yes' });
-						}}
-					/>
 					<ChoicePicker
 						legend={PROFILE.questions.countries}
 						options={[...COUNTRY_CHOICES]}

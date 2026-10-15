@@ -283,6 +283,18 @@ describe('business profile and advisor', () => {
 
 	it('parses a profile and words the advice', () => {
 		expect(parseProfile({ offers: [], moving: false })).toEqual({ ok: true, value: { moving: false } });
+		// own answers where the options cannot list everything: trimmed, kept in the order given; the tax question
+		expect(
+			parseProfile({ pays: ['cod'], other: { pays: ['  Mobile   wallet ', 'Store credit'], offers: [] }, taxes: true }),
+		).toEqual({ ok: true, value: { pays: ['cod'], other: { pays: ['Mobile wallet', 'Store credit'] }, taxes: true } });
+		expect(parseProfile({ other: { pays: [' '] } })).toMatchObject({
+			ok: false,
+			errors: [{ path: '/other/pays', message: 'each own answer once, not empty' }],
+		});
+		expect(parseProfile({ delivers: ['none'], other: { delivers: ['Drone'] } })).toMatchObject({
+			ok: false,
+			errors: [{ path: '/delivers', message: 'none stands alone' }],
+		});
 		expect(parseProfile({})).toEqual({ ok: true, value: null });
 		expect(parseProfile([])).toMatchObject({ ok: false });
 		const features = [
@@ -316,6 +328,21 @@ describe('business profile and advisor', () => {
 				languages: ['af'],
 			}).recommended[0]?.why,
 		).toBe('Shoppers pay online and your countries include ZA and your languages include af.');
+		// a region, an own answer and the tax question in words
+		expect(
+			adviceOf([{ key: 'banner', on: false, recommendFor: ['marketing.google+countries.eea', 'pays.other+taxes.yes'] }], {
+				marketing: ['google'],
+				countries: ['DE'],
+			}).recommended[0]?.why,
+		).toBe(
+			'You advertise on Google and you sell in the European Economic Area, the UK or Switzerland, where tracking needs consent.',
+		);
+		expect(
+			adviceOf([{ key: 'banner', on: false, recommendFor: ['pays.other+taxes.yes'] }], {
+				other: { pays: ['Mobile wallet'] },
+				taxes: true,
+			}).recommended[0]?.why,
+		).toBe('You gave your own answer to “How do shoppers pay?” and you charge tax at checkout.');
 	});
 });
 

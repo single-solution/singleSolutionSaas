@@ -4,7 +4,7 @@
  * redirect rules (one count, only while Redirects is on and the merchant database is connected) and what the website
  * builds for each feature that is on, also shown in each feature of the docs.
  */
-import { validateManifest, validateProductBlueprint } from '@ss/contracts';
+import { adviseFeatures, validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { afterAll, describe, expect, it } from 'vitest';
 import guide from '../docs/guide.json' with { type: 'json' };
 import nextConfig from '../next.config.js';
@@ -44,6 +44,26 @@ describe('the website Setup sheet', () => {
 			'marketing.analytics',
 		]);
 		expect(manifest.features.find((feature) => feature.key === 'custom_scripts')?.recommendFor).toBeUndefined();
+	});
+
+	it('recommends the consent banner only where tracking needs consent (EEA, UK, Switzerland)', () => {
+		const features = manifest.features.map((feature) => ({
+			key: feature.key,
+			on: true,
+			recommendFor: feature.recommendFor ?? [],
+		}));
+		const outside = adviseFeatures(features, { marketing: ['google', 'meta'], countries: ['PK', 'US'] });
+		expect(outside.recommended.map((entry) => entry.feature)).toEqual(['meta_pixel', 'google_tags']);
+		expect(outside.notRecommended.find((entry) => entry.feature === 'consent_banner')?.missing).toContain('countries.eea');
+		const inside = adviseFeatures(features, { marketing: ['google'], countries: ['US', 'FR'] });
+		expect(inside.recommended.find((entry) => entry.feature === 'consent_banner')?.because).toEqual([
+			'marketing.google',
+			'countries.eea',
+		]);
+		// a coupon shop gets the notice bar for its codes
+		expect(adviseFeatures(features, { offers: ['coupons'] }).recommended.map((entry) => entry.feature)).toEqual([
+			'notice_bar',
+		]);
 	});
 
 	it('answers its part: the OpenAPI document, the tags after consent, and what to build for each feature on', async () => {

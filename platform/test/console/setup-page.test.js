@@ -299,6 +299,11 @@ describe('Setup page (jsdom)', () => {
 			await pressDialog('Save profile');
 			expect(dialog().textContent).toContain('Not a language code: english.');
 			await type(byLabel(dialog(), 'Languages of the website'), 'en, FR');
+			// own answers where the options cannot list everything, typed once each
+			const ownPays = /** @type {HTMLInputElement} */ (
+				dialog().querySelector('[aria-label="Other answers: How do shoppers pay?"]')
+			);
+			await type(ownPays, 'Mobile wallet, mobile wallet , Store credit');
 			await pressDialog('Save profile');
 			const saved = await b.waitCall(
 				'PUT',
@@ -309,6 +314,7 @@ describe('Setup page (jsdom)', () => {
 				sells: ['physical'],
 				chat: ['people'],
 				messages: ['sms'],
+				other: { pays: ['Mobile wallet', 'Store credit'] },
 				moving: false,
 				languages: ['en', 'fr'],
 			});
@@ -370,10 +376,22 @@ describe('Setup page (jsdom)', () => {
 
 	it('words a business profile and finds the features a feature needs that are off', () => {
 		expect(
-			profileLines({ chat: ['ai', 'people'], moving: true, countries: ['US', 'ZZ'], languages: ['en'], pays: [] }),
+			profileLines({
+				chat: ['ai', 'people'],
+				moving: true,
+				taxes: false,
+				countries: ['US', 'ZZ'],
+				languages: ['en'],
+				pays: [],
+				delivers: ['courier'],
+				other: { delivers: ['Drone'], offers: ['Gift wrapping'] },
+			}),
 		).toEqual([
+			{ question: 'How do orders reach shoppers?', answer: 'By courier, Drone' },
 			{ question: 'Who answers visitors in chat?', answer: 'An AI assistant, Your staff' },
+			{ question: 'What do you offer shoppers?', answer: 'Gift wrapping' },
 			{ question: 'Are you moving from another website or system?', answer: 'Yes' },
+			{ question: 'Do you charge tax (VAT, GST or sales tax) at checkout?', answer: 'No' },
 			{ question: 'Countries you sell in', answer: 'United States, ZZ' },
 			{ question: 'Languages of the website', answer: 'en' },
 		]);

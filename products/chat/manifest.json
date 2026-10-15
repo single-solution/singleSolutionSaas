@@ -168,7 +168,7 @@
 			"name": "Shop tools: deals and savings quotes",
 			"description": "The AI lists your active deals and quotes a product's price after them, with the pasted Ecommerce token.",
 			"dependsOn": ["ai_replies"],
-			"recommendFor": ["chat.ai+offers.discounts"],
+			"recommendFor": ["chat.ai+offers.discounts", "chat.ai+offers.coupons", "chat.ai+offers.bundles"],
 			"settings": {
 				"$ref": "schemas/shop_deals.settings.json"
 			}

@@ -7,8 +7,9 @@ every product's features, settings, connections state, widgets, install snippets
 what the website builds and docs, gathered from the products on request, as a page and as JSON (Download, Copy), and
 read-only share links for a client or a developer (`/shared-setup#key=…`, 1–30 days, revocable, never secrets). Its
 setup advisor recommends features from the website's short business profile (what it sells, how shoppers pay,
-delivery, sign-in, chat, messages, marketing, offers, moving, countries, languages) by the `recommendFor` tags of each
-product's features, points out features that are on but not called for, and lets Owner and Support switch a
+delivery, sign-in, chat, messages, marketing, offers, each with the merchant's own answers where the options cannot list
+everything; moving, tax at checkout, countries, languages) by the `recommendFor` tags of each product's features (only
+what the profile asks for), points out features that are on but not called for, and lets Owner and Support switch a
 recommended feature on with one click. It holds control-plane records only; business data lives in each merchant's own database, inside the
 products. Next.js 16, React 19, MongoDB. The modules and their services are described in `src/modules/README.md` and
 `src/modules/INTERFACES.md`.

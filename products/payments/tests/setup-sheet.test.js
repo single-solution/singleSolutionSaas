@@ -1,4 +1,4 @@
-import { validateManifest, validateProductBlueprint } from '@ss/contracts';
+import { adviseFeatures, validateManifest, validateProductBlueprint } from '@ss/contracts';
 import { describe, expect, it } from 'vitest';
 import guide from '../docs/guide.json' with { type: 'json' };
 import nextConfig from '../next.config.js';
@@ -22,6 +22,18 @@ describe('the website Setup sheet', () => {
 		expect(manifest.features.find((feature) => feature.key === 'payfast_pk')?.recommendFor).toEqual([
 			'pays.online+countries.pk',
 		]);
+	});
+
+	it('recommends the payment API only for online payments, never for cash or bank transfer alone', () => {
+		const features = manifest.features.map((feature) => ({
+			key: feature.key,
+			on: false,
+			recommendFor: feature.recommendFor ?? [],
+		}));
+		const manual = adviseFeatures(features, { pays: ['cod', 'bank_transfer'], countries: ['PK'] });
+		expect(manual.recommended.map((entry) => entry.feature)).toEqual(['bank_transfer']);
+		const online = adviseFeatures(features, { pays: ['online'], countries: ['US'] });
+		expect(online.recommended.map((entry) => entry.feature)).toEqual(['stripe', 'paypal', 'payment_api', 'refunds']);
 	});
 
 	it('answers its part: the OpenAPI document, events, gateways on, and what to build for each feature on', async () => {

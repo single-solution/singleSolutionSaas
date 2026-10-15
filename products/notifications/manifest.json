@@ -34,7 +34,7 @@
 			"name": "SMS",
 			"description": "Sends SMS through the merchant's own provider: Twilio, or any SMS gateway with an HTTP API.",
 			"dependsOn": [],
-			"recommendFor": ["messages.sms", "signIn.phone"],
+			"recommendFor": ["messages.sms"],
 			"settings": {
 				"$ref": "schemas/sms.settings.json"
 			}
@@ -110,7 +110,7 @@
 			"name": "Multi-language templates",
 			"description": "Each template can have a version per language; recipients get their language, else the default version.",
 			"dependsOn": [],
-			"recommendFor": ["languages.many"],
+			"recommendFor": ["languages.many+messages.*"],
 			"settings": {
 				"$ref": "schemas/multi_language.settings.json"
 			}

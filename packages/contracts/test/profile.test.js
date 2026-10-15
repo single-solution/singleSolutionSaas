@@ -26,6 +26,7 @@ describe('business profile vocabulary', () => {
 			'marketing',
 			'offers',
 			'moving',
+			'taxes',
 			'countries',
 			'languages',
 		]);
@@ -43,6 +44,15 @@ describe('business profile vocabulary', () => {
 		['languages.fr', true],
 		['languages.many', true],
 		['offers.none', true],
+		['offers.coupons', true],
+		['delivers.courier_api', true],
+		['taxes.yes', true],
+		['pays.other', true],
+		['offers.other', true],
+		['chat.other', false],
+		['countries.eea', true],
+		['languages.eea', true],
+		['countries.europe', false],
 		['pays.barter', false],
 		['moving.maybe', false],
 		['moving.*', false],
@@ -92,6 +102,19 @@ describe('profile tags and rules', () => {
 		expect(profileTags({ moving: true, languages: ['en', 'fr'] })).toEqual(
 			new Set(['moving.yes', 'languages.en', 'languages.fr', 'languages.many']),
 		);
+	});
+
+	it('tags own answers as <question>.other and a country of a region as the region', () => {
+		const tags = profileTags({ pays: ['cod'], other: { pays: ['Mobile wallet'], offers: [] }, countries: ['DE'], taxes: true });
+		expect([...tags].sort()).toEqual(['countries.de', 'countries.eea', 'pays.cod', 'pays.other', 'taxes.yes']);
+		expect(ruleHolds('offers.*', profileTags({ other: { offers: ['Gift wrapping'] } }))).toBe(true);
+		expect(profileTags({ countries: ['PK', 'US'] }).has('countries.eea')).toBe(false);
+		// an own answer alone answers its question
+		expect([...answeredQuestions({ other: { delivers: ['Drone'] } })]).toEqual(['delivers']);
+		expect(featureFit(['delivers.courier_api'], { other: { delivers: ['Drone'] } })).toEqual({
+			fit: 'ruled_out',
+			missing: ['delivers.courier_api'],
+		});
 	});
 
 	it('knows which questions are answered (an empty list is not an answer)', () => {
@@ -168,7 +191,9 @@ describe('validateBusinessProfile', () => {
 		expect(validateBusinessProfile({}).ok).toBe(true);
 		const full = {
 			...Object.fromEntries(Object.entries(PROFILE_CHOICES).map(([question, options]) => [question, options.slice(0, 2)])),
+			other: { pays: ['Mobile wallet', 'Store credit'], marketing: ['Pinterest'] },
 			moving: true,
+			taxes: false,
 			countries: ['US', 'GB'],
 			languages: ['en', 'fil'],
 		};
@@ -182,6 +207,11 @@ describe('validateBusinessProfile', () => {
 		['an unknown option', { pays: ['gold'] }, '/pays/0', 'enum'],
 		['an option twice', { pays: ['cod', 'cod'] }, '/pays', 'uniqueItems'],
 		['none with other options', { sells: ['physical', 'none'] }, '/sells', RULES.profileAnswer],
+		['none with an own answer', { sells: ['none'], other: { sells: ['Tickets'] } }, '/sells', RULES.profileAnswer],
+		['an own answer twice', { other: { pays: ['Wallet', 'wallet '] } }, '/other/pays', RULES.profileAnswer],
+		['an own answer to a closed question', { other: { chat: ['Bots'] } }, '/other/chat', 'additionalProperties'],
+		['an empty own answer', { other: { pays: [''] } }, '/other/pays/0', 'minLength'],
+		['six own answers', { other: { pays: ['a', 'b', 'c', 'd', 'e', 'f'] } }, '/other/pays', 'maxItems'],
 		['a yes or no as text', { moving: 'yes' }, '/moving', 'type'],
 		['a country in small letters', { countries: ['us'] }, '/countries/0', 'pattern'],
 		['a language with a region', { languages: ['en-US'] }, '/languages/0', 'pattern'],

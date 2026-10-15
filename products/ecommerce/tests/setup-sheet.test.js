@@ -31,12 +31,14 @@ describe('the website Setup sheet: tags and what the website builds', () => {
 		for (const text of Object.values(build)) expect(text.length).toBeLessThanOrEqual(1000);
 	});
 
-	it('recommends the shop a typical physical-goods merchant needs, and flags what does not fit', () => {
+	it('recommends only what the profile asks for, and flags what does not fit', () => {
 		const features = manifest.features.map((feature) => ({
 			key: feature.key,
 			on: true,
 			recommendFor: feature.recommendFor ?? [],
 		}));
+		// a shop of physical goods that said nothing about coupons, bundles, wishlists, alerts, returns, invoices, tax
+		// or courier booking gets none of them
 		const advice = adviseFeatures(features, {
 			sells: ['physical'],
 			pays: ['online', 'cod'],
@@ -45,22 +47,15 @@ describe('the website Setup sheet: tags and what the website builds', () => {
 			messages: ['email', 'whatsapp'],
 			marketing: ['google', 'seo'],
 			offers: ['discounts', 'reviews'],
+			taxes: false,
 		});
 		expect(advice.recommended.map((entry) => entry.feature)).toEqual([
 			'catalog',
 			'variants',
 			'checkout',
 			'delivery_zones',
-			'courier_apis',
-			'taxes',
-			'coupons',
 			'deals',
-			'bundles',
 			'reviews',
-			'wishlist',
-			'alerts',
-			'returns',
-			'invoices',
 			'staff_alerts',
 			'seo',
 			'landing_pages',
@@ -68,30 +63,42 @@ describe('the website Setup sheet: tags and what the website builds', () => {
 			'llms_txt',
 		]);
 		expect(advice.recommended.find((entry) => entry.feature === 'seo')?.because).toEqual(['marketing.seo']);
-		expect(advice.notRecommended).toEqual([
-			{ feature: 'digital_goods', missing: ['sells.digital'] },
-			{ feature: 'bookings', missing: ['sells.services'] },
-			{ feature: 'loyalty', missing: ['offers.loyalty'] },
-			{ feature: 'role_pricing', missing: ['offers.member_prices'] },
+		expect(advice.notRecommended.map((entry) => entry.feature)).toEqual([
+			'digital_goods',
+			'bookings',
+			'courier_apis',
+			'taxes',
+			'coupons',
+			'loyalty',
+			'role_pricing',
+			'bundles',
+			'wishlist',
+			'alerts',
+			'returns',
+			'invoices',
 		]);
+		expect(advice.notRecommended.find((entry) => entry.feature === 'taxes')?.missing).toEqual(['taxes.yes']);
+
+		// each of them once the profile asks for it
+		const asked = adviseFeatures(features, {
+			sells: ['physical'],
+			delivers: ['courier_api'],
+			offers: ['coupons', 'bundles', 'wishlist', 'alerts', 'returns', 'invoices'],
+			taxes: true,
+		});
+		expect(asked.recommended.map((entry) => entry.feature)).toEqual(
+			expect.arrayContaining(['courier_apis', 'taxes', 'coupons', 'bundles', 'wishlist', 'alerts', 'returns', 'invoices']),
+		);
+		expect(asked.recommended.find((entry) => entry.feature === 'courier_apis')?.because).toEqual(['delivers.courier_api']);
 
 		// a services business that takes no deliveries: bookings, not shipping
 		const services = adviseFeatures(features, { sells: ['services'], pays: ['online'], delivers: ['none'] });
-		expect(services.recommended.map((entry) => entry.feature)).toEqual([
-			'catalog',
-			'bookings',
-			'checkout',
-			'taxes',
-			'invoices',
-		]);
+		expect(services.recommended.map((entry) => entry.feature)).toEqual(['catalog', 'bookings', 'checkout']);
 		expect(services.notRecommended.map((entry) => entry.feature)).toEqual([
 			'variants',
 			'digital_goods',
 			'delivery_zones',
 			'courier_apis',
-			'wishlist',
-			'alerts',
-			'returns',
 			'feeds',
 		]);
 	});

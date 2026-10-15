@@ -113,7 +113,7 @@
 			"name": "Merchant payment API",
 			"description": "The merchant's server (and Ecommerce through a pasted token) creates, reads and verifies payments; the Payments admin widget.",
 			"dependsOn": [],
-			"recommendFor": ["pays.online", "pays.link", "pays.bank_transfer"],
+			"recommendFor": ["pays.online"],
 			"settings": {
 				"$ref": "schemas/payment_api.settings.json"
 			}

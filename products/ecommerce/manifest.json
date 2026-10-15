@@ -110,7 +110,7 @@
 			"name": "Courier APIs",
 			"description": "Book shipments with a courier's API using the merchant's own keys and read the latest tracking status.",
 			"dependsOn": ["checkout"],
-			"recommendFor": ["delivers.courier"],
+			"recommendFor": ["delivers.courier_api"],
 			"settings": {
 				"$ref": "schemas/courier_apis.settings.json"
 			}
@@ -120,7 +120,7 @@
 			"name": "Taxes",
 			"description": "Tax rules by region (country, region, city or postcode) and category, each a percentage; prices shown with or without tax.",
 			"dependsOn": ["checkout"],
-			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
+			"recommendFor": ["taxes.yes"],
 			"settings": {
 				"$ref": "schemas/taxes.settings.json"
 			}
@@ -130,7 +130,7 @@
 			"name": "Coupons",
 			"description": "Codes for a percentage or fixed amount off, with limits, dates and conditions.",
 			"dependsOn": ["checkout"],
-			"recommendFor": ["offers.discounts"],
+			"recommendFor": ["offers.coupons"],
 			"settings": {
 				"$ref": "schemas/coupons.settings.json"
 			}
@@ -170,7 +170,7 @@
 			"name": "Bundles",
 			"description": "Bundles and buy X get Y offers applied in the cart.",
 			"dependsOn": ["checkout"],
-			"recommendFor": ["offers.discounts"],
+			"recommendFor": ["offers.bundles"],
 			"settings": {
 				"$ref": "schemas/bundles.settings.json"
 			}
@@ -190,7 +190,7 @@
 			"name": "Wishlist",
 			"description": "Shoppers save products to their wishlist.",
 			"dependsOn": ["catalog"],
-			"recommendFor": ["sells.physical+signIn.*", "sells.digital+signIn.*"],
+			"recommendFor": ["offers.wishlist"],
 			"settings": {
 				"$ref": "schemas/wishlist.settings.json"
 			}
@@ -200,7 +200,7 @@
 			"name": "Alerts",
 			"description": "Back-in-stock and price-drop alerts sent through Notifications.",
 			"dependsOn": ["catalog"],
-			"recommendFor": ["sells.physical+messages.*"],
+			"recommendFor": ["offers.alerts"],
 			"settings": {
 				"$ref": "schemas/alerts.settings.json"
 			}
@@ -219,7 +219,7 @@
 			"name": "Returns",
 			"description": "Return and warranty claims with time windows per item and grade, photos, approval, refunds and restocking exactly once.",
 			"dependsOn": ["checkout"],
-			"recommendFor": ["sells.physical"],
+			"recommendFor": ["offers.returns"],
 			"settings": {
 				"$ref": "schemas/returns.settings.json"
 			}
@@ -229,7 +229,7 @@
 			"name": "Invoices",
 			"description": "Invoices and packing slips, with the serial numbers on each line.",
 			"dependsOn": ["checkout"],
-			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
+			"recommendFor": ["offers.invoices"],
 			"settings": {
 				"$ref": "schemas/invoices.settings.json"
 			}
