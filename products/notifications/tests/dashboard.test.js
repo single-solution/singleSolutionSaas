@@ -85,6 +85,7 @@ const TEMPLATES = {
 
 /** @type {Array<{ path: string, method: string, body: unknown }>} */
 let calls = [];
+/** @param {{ items: object[], off: object[], products: object[], unavailable: string[] }} [catalog] */
 const serve = (catalog = CATALOG) => {
 	calls = [];
 	vi.stubGlobal(
