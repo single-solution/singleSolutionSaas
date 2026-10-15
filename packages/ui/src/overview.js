@@ -83,11 +83,12 @@ function NeedItem({ tone, title, effect, action }) {
 				aria-hidden="true"
 				className={cx('size-2.5 shrink-0 rounded-full', tone === 'danger' ? 'bg-danger' : 'bg-warning')}
 			/>
-			<div className="min-w-0 flex-1">
+			{/* on a narrow card the button goes under the words (lined up with them) instead of squeezing them */}
+			<div className="min-w-0 flex-[1_1_14rem]">
 				<p className="text-sm font-semibold break-words text-fg">{title}</p>
 				<p className="mt-0.5 text-[13px] leading-relaxed text-muted">{effect}</p>
 			</div>
-			{action ? <div className="shrink-0">{action}</div> : null}
+			{action ? <div className="shrink-0 pl-[1.625rem] @lg:pl-0">{action}</div> : null}
 		</li>
 	);
 }
