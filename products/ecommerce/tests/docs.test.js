@@ -442,7 +442,16 @@ describe('the messages, staff alerts and events the code sends', () => {
 			// stock without locations, so a restock is one number
 			shop = await readyShop({ features: ALL.filter((key) => key !== 'multi_location') });
 			await shop.setting('staff_alerts', 'recipients', ['team@shop.example.com']);
-			await shop.setting('staff_alerts', 'events', Object.keys(STAFF_ALERT_EVENTS));
+			await shop.setting(
+				'staff_alerts',
+				'events',
+				Object.keys(STAFF_ALERT_EVENTS).filter((event) => event !== 'status'),
+			);
+			// a move into a status alerts by the status's own switch (E36)
+			await shop.flow((flow) => ({
+				...flow,
+				statuses: flow.statuses.map((/** @type {any} */ status) => ({ ...status, staffAlert: true })),
+			}));
 			await shop.setting('staff_alerts', 'adminUrl', 'https://admin.shop.example.com/orders/{id}');
 			await shop.setting('checkout', 'orderUrl', `${ORIGIN}/orders/{number}`);
 		});
