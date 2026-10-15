@@ -12,7 +12,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { MAX_RULES } from '../core/redirects.js';
+import { MAX_RULES, MAX_WILDCARDS } from '../core/redirects.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/redirects.js').Rule} Rule */
@@ -28,6 +28,8 @@ const VERSIONS = 'redirect_versions';
 export const REDIRECT_INDEXES = [
 	{ collection: RULES, keys: { websiteId: 1, from: 1 }, name: 'by_from', unique: true },
 	{ collection: RULES, keys: { websiteId: 1, createdAt: -1, id: -1 }, name: 'newest' },
+	// the wildcard rules every match reads (G14)
+	{ collection: RULES, keys: { websiteId: 1, match: 1, from: 1 }, name: 'by_match' },
 	{ collection: VERSIONS, keys: { websiteId: 1 }, name: 'by_website', unique: true },
 ];
 
@@ -86,12 +88,20 @@ export const createRedirectStore = (data, { merchantId }) => {
 		},
 
 		/**
-		 * The rules that may answer a path: those whose `from` is the path or a path above it (one read).
+		 * The rules that may answer a path: those whose `from` is the path or a path above it, and the wildcard rules
+		 * (G14; at most {@link MAX_WILDCARDS}), in one read.
 		 * @param {string[]} paths the path and every path above it
 		 * @returns {Promise<Rule[]>}
 		 */
 		candidates: async (paths) =>
-			/** @type {Rule[]} */ (/** @type {unknown} */ (await rules.find({ websiteId, from: { $in: paths } }, FIELDS).toArray())),
+			/** @type {Rule[]} */ (
+				/** @type {unknown} */ (
+					await rules
+						.find({ websiteId, $or: [{ from: { $in: paths } }, { match: 'wildcard' }] }, FIELDS)
+						.limit(paths.length + MAX_WILDCARDS)
+						.toArray()
+				)
+			),
 
 		/**
 		 * A page of rules, newest first.

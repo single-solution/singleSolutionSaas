@@ -14,6 +14,9 @@ import { WIDGET_CSS } from './styles.js';
 
 /** Rules per page of the list. */
 const PAGE = 50;
+/** The answers a rule may give, in the order they are offered (G14: 302 and 307 are temporary). */
+const CODE_CHOICES = Object.freeze(['301', '308', '302', '307', '410']);
+
 /** Changes of a checked file listed in the import dialog (the rest are counted). */
 const LISTED_CHANGES = 100;
 /** The days of the 404 log the suggestions read (the route's default). */
@@ -34,7 +37,7 @@ export const REDIRECT_PROBLEMS = Object.freeze({
 });
 
 /**
- * @typedef {{ id: string, from: string, match: 'exact' | 'prefix', to: string | null, code: 301 | 308 | 410,
+ * @typedef {{ id: string, from: string, match: 'exact' | 'prefix' | 'wildcard', to: string | null, code: 301 | 302 | 307 | 308 | 410,
  *   note: string, createdAt: string, updatedAt: string }} Rule
  */
 /** @typedef {{ line: number, path: string, code: string, steps?: string[] }} RowProblem */
@@ -143,7 +146,8 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 						t('redirects.filter'),
 						[
 							{ value: '', label: t('redirects.all'), count: total },
-							...['301', '308', '410'].map((code) => ({
+							// only the answers some rule gives (or the one picked)
+							...CODE_CHOICES.filter((code) => (groups[code] ?? 0) > 0 || view.code === code).map((code) => ({
 								value: code,
 								label: t(`redirects.code.${code}`),
 								count: groups[code] ?? 0,
@@ -175,10 +179,11 @@ export const mountRedirects = ({ host, api, config, viewer, download }) => {
 				);
 				from.value = rule?.from ?? preset?.from ?? '';
 				const match = /** @type {HTMLSelectElement} */ (h('select'));
-				for (const value of ['exact', 'prefix']) match.append(h('option', { value }, t(`redirects.match.${value}`)));
+				for (const value of ['exact', 'prefix', 'wildcard'])
+					match.append(h('option', { value }, t(`redirects.match.${value}`)));
 				match.value = rule?.match ?? 'exact';
 				const code = /** @type {HTMLSelectElement} */ (h('select'));
-				for (const value of ['301', '308', '410']) code.append(h('option', { value }, t(`redirects.code.${value}`)));
+				for (const value of CODE_CHOICES) code.append(h('option', { value }, t(`redirects.code.${value}`)));
 				code.value = String(rule?.code ?? 301);
 				const to = /** @type {HTMLInputElement} */ (h('input', { type: 'text', placeholder: t('redirects.field.toHint') }));
 				to.value = rule?.to ?? preset?.to ?? '';

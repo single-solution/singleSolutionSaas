@@ -857,8 +857,8 @@ export const soft404Check = (probe, pattern = null) => {
 };
 
 /**
- * Old paths with a redirect rule answer it on the live site: a permanent redirect (301 or 308) to the rule's address,
- * or gone (410; 404 counts the same for search engines).
+ * Old paths with a redirect rule answer it on the live site: a redirect of the rule's kind to the rule's address
+ * (permanent 301 or 308, or temporary 302 or 307, G14), or gone (410; 404 counts the same for search engines).
  * @param {Array<{ read: Fetched, code: number, location: string | null }>} probes each rule's old path as read, with
  *   what its rule answers
  * @param {string} origin the website's `https://<domain>`
@@ -868,7 +868,8 @@ export const redirectsLiveCheck = (probes, origin) => {
 	if (probes.length === 0) return null;
 	const wrong = probes.filter(({ read, code, location }) => {
 		if (code === 410) return read.status !== 410 && read.status !== 404;
-		if (read.status !== 301 && read.status !== 308) return true;
+		const kind = code === 301 || code === 308 ? [301, 308] : [302, 307];
+		if (read.status === null || !kind.includes(read.status)) return true;
 		try {
 			return new URL(read.headers.location ?? '', read.url).href !== new URL(String(location), origin).href;
 		} catch {

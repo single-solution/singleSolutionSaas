@@ -66,6 +66,8 @@ export const MIN_INTERVAL_MS = 5 * 60_000;
 const MAX_SITEMAP_FILES = 3;
 /** Redirect rules whose old path is tried on the live site. */
 const MAX_RULE_PROBES = 3;
+/** The segment a wildcard rule is tried with on the live site (G14). */
+const WILDCARD_SAMPLE = 'ss-growth-check';
 /** Days of Web Vitals (as Google's own field data) and of the 404 log a run reads. */
 const VITAL_DAYS = 28;
 const NOT_FOUND_DAYS = 90;
@@ -203,15 +205,26 @@ export const seoCheckRoutes = (product, { log }) => {
 		const robots = await web.read(`${origin}/robots.txt`, { until });
 		const sitemap = await readSitemap(robots, domain, until);
 		const candidates = sample ? candidatesOf(sitemap.entries, { domain, skip: typed.map(comparableOf) }) : [];
+		// a wildcard rule is tried on a sample path: each * and ** made one segment (G14)
 		const probes = [...rules]
 			.sort(
 				(a, b) =>
 					(a.match === 'exact' ? 0 : 1) - (b.match === 'exact' ? 0 : 1) ||
 					(b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
 			)
-			.slice(0, MAX_RULE_PROBES);
+			.slice(0, MAX_RULE_PROBES)
+			.map((rule) => ({
+				rule,
+				path:
+					rule.match === 'wildcard'
+						? rule.from
+								.split('/')
+								.map((segment) => (segment === '*' || segment === '**' ? WILDCARD_SAMPLE : segment))
+								.join('/')
+						: rule.from,
+			}));
 		const [reads, totals, keptOut] = await Promise.all([
-			web.readAll([...typed, ...candidates, ...probes.map((rule) => `${origin}${rule.from}`)], { until }),
+			web.readAll([...typed, ...candidates, ...probes.map((probe) => `${origin}${probe.path}`)], { until }),
 			totalsOf(ctx, on),
 			keptOutOf(ctx, on),
 		]);
@@ -268,10 +281,10 @@ export const seoCheckRoutes = (product, { log }) => {
 			sitemapUrlsCheck({ reads: candidateReads, entries: sitemap.entries, domain }),
 			soft404Check(missing.read, missing.pattern),
 			redirectsLiveCheck(
-				probes.map((rule, index) => ({
+				probes.map(({ rule, path }, index) => ({
 					read: /** @type {Fetched} */ (ruleReads[index]),
 					code: rule.code,
-					location: locationOf(rule, rule.from),
+					location: locationOf(rule, path),
 				})),
 				origin,
 			),

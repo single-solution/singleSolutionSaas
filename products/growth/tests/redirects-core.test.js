@@ -31,7 +31,7 @@ let ids = 0;
  * A stored rule.
  * @param {string} from
  * @param {string | null} to
- * @param {{ match?: 'exact' | 'prefix', code?: 301 | 308 | 410, note?: string }} [more]
+ * @param {{ match?: 'exact' | 'prefix' | 'wildcard', code?: 301 | 302 | 307 | 308 | 410, note?: string }} [more]
  * @returns {Rule}
  */
 const rule = (from, to, { match = 'exact', code = to === null ? 410 : 301, note = '' } = {}) => {
@@ -136,7 +136,7 @@ describe('checking a rule', () => {
 
 	it('names every field that is wrong', () => {
 		const checked = checkRule(
-			{ from: '/old?x=1', match: 'starts', code: 302, to: 'http://new.example.com', note: 'x'.repeat(201) },
+			{ from: '/old?x=1', match: 'starts', code: 303, to: 'http://new.example.com', note: 'x'.repeat(201) },
 			DOMAIN,
 		);
 		expect(checked.ok).toBe(false);
@@ -233,6 +233,102 @@ describe('matching', () => {
 		expect(requestOf('a')).toBe(null);
 		expect(requestOf('/a\n')).toBe(null);
 		expect(requestOf(undefined)).toBe(null);
+	});
+});
+
+describe('temporary redirects and wildcard rules (G14)', () => {
+	it('takes 302 and 307 besides 301, 308 and 410', () => {
+		expect(checkRule({ from: '/sale', to: '/summer-sale', code: 302 }, DOMAIN)).toMatchObject({
+			ok: true,
+			rule: { code: 302 },
+		});
+		expect(checkRule({ from: '/form', to: '/new-form', code: '307' }, DOMAIN)).toMatchObject({ ok: true, rule: { code: 307 } });
+		expect(checkRule({ from: '/x', to: '/y', code: 303 }, DOMAIN)).toMatchObject({ ok: false, errors: [{ code: 'not_code' }] });
+	});
+
+	it('checks a wildcard rule: whole segments of * or **, and $1 to $9 in the target', () => {
+		expect(checkRule({ from: '/blog/*/*', match: 'wildcard', to: '/news/$2?y=$1' }, DOMAIN)).toEqual({
+			ok: true,
+			rule: { from: '/blog/*/*', match: 'wildcard', to: '/news/$2?y=$1', code: 301, note: '' },
+		});
+		expect(checkRule({ from: '/docs/**', match: 'wildcard', to: 'https://docs.example.com/$1' }, DOMAIN)).toMatchObject({
+			ok: true,
+		});
+		/** @param {Record<string, unknown>} input */
+		const codes = (input) => {
+			const checked = checkRule(input, DOMAIN);
+			return checked.ok ? [] : checked.errors.map((error) => `${error.path}:${error.code}`);
+		};
+		// a wildcard rule needs a wildcard; a star inside a segment is not one
+		expect(codes({ from: '/blog', match: 'wildcard', to: '/news' })).toEqual(['/from:no_wildcard']);
+		expect(codes({ from: '/blog-*', match: 'wildcard', to: '/news' })).toEqual(['/from:bad_wildcard']);
+		// an exact or prefix rule never holds a star segment
+		expect(codes({ from: '/blog/*', to: '/news' })).toEqual(['/from:wildcard_match']);
+		// the target names only the parts the old path has
+		expect(codes({ from: '/blog/*', match: 'wildcard', to: '/news/$2' })).toEqual(['/to:unknown_part']);
+		expect(codes({ from: '/a/*/b', to: '/c/$1' })).toEqual(['/from:wildcard_match', '/to:unknown_part']);
+		expect(codes({ from: '/a/b', to: '/c/$1' })).toEqual(['/to:unknown_part']);
+	});
+
+	it('answers with the exact rule, else the rule with the most fixed segments (a wildcard on a tie)', () => {
+		const rules = [
+			rule('/blog', '/news', { match: 'prefix' }),
+			rule('/blog/*', '/stories/$1', { match: 'wildcard' }),
+			rule('/blog/2019', '/archive', { match: 'prefix' }),
+			rule('/shop/*/item/*', '/p/$2', { match: 'wildcard' }),
+			rule('/docs/**', 'https://docs.example.com/$1', { match: 'wildcard' }),
+			rule('/blog/hello', '/hi'),
+		];
+		const index = createIndex(rules);
+		/** @param {string} path */
+		const from = (path) => index.match(path)?.from ?? null;
+		expect(from('/blog/hello')).toBe('/blog/hello');
+		expect(from('/blog/a')).toBe('/blog/*');
+		expect(from('/blog/a/b')).toBe('/blog');
+		expect(from('/blog')).toBe('/blog');
+		expect(from('/blog/2019')).toBe('/blog/2019');
+		expect(from('/shop/men/item/42')).toBe('/shop/*/item/*');
+		expect(from('/shop/men/item')).toBe(null);
+		expect(from('/docs')).toBe('/docs/**');
+		expect(locationOf(/** @type {Rule} */ (index.match('/blog/a')), '/blog/a', 'q=1')).toBe('/stories/a?q=1');
+		expect(locationOf(/** @type {Rule} */ (rules[3]), '/shop/men/item/42')).toBe('/p/42');
+		expect(locationOf(/** @type {Rule} */ (rules[4]), '/docs/a/b')).toBe('https://docs.example.com/a/b');
+		expect(locationOf(/** @type {Rule} */ (rules[4]), '/docs')).toBe('https://docs.example.com/');
+	});
+
+	it('finds loops and chains through wildcard rules', () => {
+		const loop = findProblems([rule('/a/*', '/a/$1', { match: 'wildcard' })]);
+		expect(loop[0]?.kind).toBe('loop');
+		const chain = findProblems([
+			rule('/old/*', '/mid/$1', { match: 'wildcard' }),
+			rule('/mid/*', '/new/$1', { match: 'wildcard' }),
+		]);
+		expect(chain[0]?.kind).toBe('chain');
+		expect(findProblems([rule('/old/*', '/new/$1', { match: 'wildcard' })])).toEqual([]);
+	});
+
+	it('sends temporary and wildcard rules in the docs’ middleware example as GET /v1/redirects/match does', async () => {
+		const rules = [
+			rule('/blog/*', '/stories/$1', { match: 'wildcard', code: 302 }),
+			rule('/blog', '/news', { match: 'prefix', code: 307 }),
+			rule('/docs/**', 'https://docs.example.com/$1', { match: 'wildcard' }),
+		];
+		const code = createSnippets({ base: 'https://growth.example.dev', widgets: [], permissions: [] }).redirects;
+		const fetch = async () => ({ status: 200, headers: { get: () => '"v1"' }, json: async () => ({ rules }) });
+		const redirectFor = /** @type {(url: URL) => Promise<unknown>} */ (
+			new Function('fetch', 'process', `${code.replace('export async function', 'async function')}\nreturn redirectFor;`)(
+				fetch,
+				{ env: { SS_SERVER_TOKEN: 'token' } },
+			)
+		);
+		const index = createIndex(rules);
+		for (const address of ['/blog/a?x=1', '/blog/a/b', '/blog', '/docs', '/docs/x/y', '/other']) {
+			const url = new URL(address, 'https://shop.example.com');
+			const asked = /** @type {{ path: string, query: string }} */ (requestOf(`${url.pathname}${url.search}`));
+			const found = index.match(asked.path);
+			const expected = found === null ? null : { status: found.code, location: locationOf(found, asked.path, asked.query) };
+			expect({ address, answer: await redirectFor(url) }).toEqual({ address, answer: expected });
+		}
 	});
 });
 

@@ -857,6 +857,22 @@ describe('checks of the whole site', () => {
 			finding: 'not_applied',
 			detail: { count: 4, path: '/old', status: 302, expected: 301 },
 		});
+		// a temporary rule (G14) is applied when the site answers a temporary redirect to its address
+		expect(
+			redirectsLiveCheck(
+				[
+					{ read: read('/sale', { status: 302, headers: { location: '/summer' } }), code: 302, location: '/summer' },
+					{ read: read('/form', { status: 307, headers: { location: '/new-form' } }), code: 307, location: '/new-form' },
+				],
+				ORIGIN,
+			),
+		).toMatchObject({ status: 'pass' });
+		expect(
+			redirectsLiveCheck(
+				[{ read: read('/sale', { status: 301, headers: { location: '/summer' } }), code: 302, location: '/summer' }],
+				ORIGIN,
+			),
+		).toMatchObject({ status: 'fail', detail: { expected: 302 } });
 		expect(redirectsLiveCheck([{ read: read('/x', { status: null }), code: 301, location: '/y' }], ORIGIN)).toMatchObject({
 			detail: { status: 0 },
 		});

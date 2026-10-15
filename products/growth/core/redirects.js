@@ -8,13 +8,18 @@
  *   characters outside URLs percent-encoded with upper-case hex, no trailing slash except for `/`, letter case kept
  *   (`/Old` and `/old` are two paths). Rules match the path only: a `from` with `?` or `#` is
  *   refused, and the query string of an address asked about is ignored for matching and passed on (below).
- * - `match`: `exact` (the path itself) or `prefix` (the path and every path under it, segment by segment: `/blog`
- *   matches `/blog` and `/blog/news`, never `/blogger`). An exact rule wins; else the longest prefix wins.
+ * - `match`: `exact` (the path itself), `prefix` (the path and every path under it, segment by segment: `/blog`
+ *   matches `/blog` and `/blog/news`, never `/blogger`) or `wildcard` (G14: whole segments `*`, one segment, and `**`,
+ *   any number of segments, for example `/blog/*` or `/docs/**`; at most {@link MAX_WILDCARDS} such rules per website). An
+ *   exact rule wins; else the prefix or wildcard rule with the most fixed segments (a prefix rule's are all of its
+ *   segments; on a tie the wildcard rule; among wildcard rules the one with fewer `**`, then A to Z).
  * - `to`: where the visitor goes, a path on the website (with its own query string and fragment if wanted) or an https
  *   address on another site (an https address on the website's own domain is kept as its path); null for 410. A prefix
  *   rule keeps the rest of the path: `/blog` → `/news` sends `/blog/a/b` to `/news/a/b`. The query string of the
- *   address asked about is added after the target's own (`/old?utm_source=x` → `/new?ref=a&utm_source=x`).
- * - `code`: 301 or 308 (permanent; 308 keeps the request method), or 410 (gone, no `to`).
+ *   address asked about is added after the target's own (`/old?utm_source=x` → `/new?ref=a&utm_source=x`). A
+ *   wildcard rule's `to` may hold `$1` to `$9`: the parts its `*` and `**` matched, in order (`/blog/*` → `/news/$1`).
+ * - `code`: 301 or 308 (permanent; 308 keeps the request method), 302 or 307 (temporary, G14: search engines keep the
+ *   old address; 307 keeps the request method), or 410 (gone, no `to`).
  * - `note`: the staff's own words, at most 200 characters.
  *
  * At most {@link MAX_RULES} rules per website, one per `from`. A rule set never holds a loop or a chain: an address
@@ -28,9 +33,15 @@ import { isObject } from '@ss/contracts/util';
 /** Most rules of one website. */
 export const MAX_RULES = 5000;
 /** How a rule matches. */
-export const MATCHES = Object.freeze(/** @type {const} */ (['exact', 'prefix']));
-/** The answers a rule gives. */
-export const CODES = Object.freeze(/** @type {const} */ ([301, 308, 410]));
+export const MATCHES = Object.freeze(/** @type {const} */ (['exact', 'prefix', 'wildcard']));
+/** The answers a rule gives: permanent (301, 308), temporary (302, 307, G14) or gone (410). */
+export const CODES = Object.freeze(/** @type {const} */ ([301, 302, 307, 308, 410]));
+/** The permanent redirects (search engines move the old address's standing to the new one). */
+export const PERMANENT = Object.freeze(/** @type {const} */ ([301, 308]));
+/** Most wildcard rules of one website: a request is tried against each of them (G14). */
+export const MAX_WILDCARDS = 100;
+/** Most parts (`*` and `**`) of one wildcard rule: `$1` to `$9`. */
+const MAX_PARTS = 9;
 /** Longest `from`, in characters (after normalization). */
 const MAX_FROM = 1000;
 /** Longest `to`, in characters (after normalization). */
@@ -58,8 +69,8 @@ const ANY_CHILD = '%E2%80%A6';
 /** The base of relative URLs (never fetched). */
 const BASE = 'https://redirect.invalid';
 
-/** @typedef {'exact' | 'prefix'} Match */
-/** @typedef {301 | 308 | 410} Code */
+/** @typedef {'exact' | 'prefix' | 'wildcard'} Match */
+/** @typedef {301 | 302 | 307 | 308 | 410} Code */
 /** @typedef {{ from: string, match: Match, to: string | null, code: Code, note: string }} RuleInput a checked rule */
 /** @typedef {RuleInput & { id: string, createdAt?: Date, updatedAt?: Date }} Rule a stored rule */
 /** @typedef {{ path: string, code: string, message: string }} FieldProblem `path`: the field as a JSON pointer */
@@ -184,13 +195,17 @@ const MESSAGES = Object.freeze({
 	'from:other_host': 'from is an address on this website, not on another site.',
 	'from:query': 'from is a path only (rules match the path): leave out ? and #.',
 	'from:too_long': `from is at most ${MAX_FROM} characters.`,
-	'match:not_match': 'match is exact or prefix.',
-	'code:not_code': 'code is 301, 308 or 410.',
+	'from:no_wildcard': 'A wildcard rule has a segment * (one segment) or ** (any number of segments) in from.',
+	'from:bad_wildcard': `A wildcard is a whole segment, * or **, at most ${MAX_PARTS} of them (/blog/* matches /blog/a).`,
+	'from:wildcard_match': 'from holds a segment * or **: set match to wildcard.',
+	'match:not_match': 'match is exact, prefix or wildcard.',
+	'code:not_code': 'code is 301, 302, 307, 308 or 410.',
 	'to:required': 'to is the new path or an https address (only a 410 rule has none).',
 	'to:not_target': 'to is a path on this website or an https address.',
 	'to:not_https': 'to is a path on this website or an https address (not http or another scheme).',
 	'to:too_long': `to is at most ${MAX_TO} characters.`,
 	'to:gone': 'A 410 rule answers the page as gone, so it has no to.',
+	'to:unknown_part': 'to names a part ($1 to $9) the old path does not have: each * or ** of a wildcard rule is one part.',
 	'note:not_text': 'note is a text.',
 	'note:too_long': `note is at most ${MAX_NOTE} characters.`,
 });
@@ -208,6 +223,12 @@ const fieldProblem = (field, code) => ({
 });
 
 /**
+ * The highest part (`$1` to `$9`) a target names, 0 for none.
+ * @param {string} to
+ */
+const partsNamed = (to) => Math.max(0, ...[...to.matchAll(/\$([1-9])/g)].map((found) => Number(found[1])));
+
+/**
  * A rule as staff or a file give it, checked and normalized: `from` and `to` as strings (an address or a path),
  * `match` (default exact), `code` (default 301; a number, or digits from a file) and `note` (default empty).
  * @param {{ from?: unknown, match?: unknown, to?: unknown, code?: unknown, note?: unknown }} input
@@ -222,6 +243,13 @@ export const checkRule = (input, domain) => {
 	else if (from.path.length > MAX_FROM) errors.push(fieldProblem('from', 'too_long'));
 	const match = input.match === undefined || input.match === '' ? 'exact' : String(input.match).toLowerCase();
 	if (!MATCHES.includes(/** @type {Match} */ (match))) errors.push(fieldProblem('match', 'not_match'));
+	// G14: a wildcard rule's parts are whole segments * and **; an exact or prefix rule has none
+	const starred = from.ok ? from.path.split('/').filter((segment) => segment.includes('*')) : [];
+	const parts = starred.filter((segment) => segment === '*' || segment === '**').length;
+	if (from.ok && match === 'wildcard') {
+		if (starred.length === 0) errors.push(fieldProblem('from', 'no_wildcard'));
+		else if (parts !== starred.length || parts > MAX_PARTS) errors.push(fieldProblem('from', 'bad_wildcard'));
+	} else if (from.ok && parts > 0) errors.push(fieldProblem('from', 'wildcard_match'));
 	const code =
 		input.code === undefined || input.code === ''
 			? 301
@@ -238,6 +266,7 @@ export const checkRule = (input, domain) => {
 		const target = normalizeTarget(input.to, domain);
 		if (!target.ok) errors.push(fieldProblem('to', target.code));
 		else if (target.to.length > MAX_TO) errors.push(fieldProblem('to', 'too_long'));
+		else if (partsNamed(target.to) > (match === 'wildcard' ? parts : 0)) errors.push(fieldProblem('to', 'unknown_part'));
 		else to = target.to;
 	}
 	const note = input.note === undefined || input.note === null ? '' : input.note;
@@ -315,6 +344,50 @@ const restOf = (from, path) => (from === '/' ? (path === '/' ? '' : path) : path
  */
 const joinPath = (base, rest) => (rest === '' ? base : base === '/' ? rest : `${base.replace(/\/$/, '')}${rest}`);
 
+/** @param {string} path */
+const segmentsOf = (path) => path.split('/').filter((segment) => segment.length > 0);
+
+/**
+ * The fixed segments of a rule's `from`: every segment of a prefix rule, the segments that are not `*` or `**` of a
+ * wildcard rule.
+ * @param {string} from
+ */
+const fixedOf = (from) => segmentsOf(from).filter((segment) => segment !== '*' && segment !== '**').length;
+
+/**
+ * The parts a wildcard rule's `from` matches in a normalized path (`*` one segment, `**` any number, joined by `/`,
+ * the longest first), or null when it does not match (G14).
+ * @param {string} from
+ * @param {string} path
+ * @returns {string[] | null}
+ */
+export const wildcardParts = (from, path) => {
+	const pattern = segmentsOf(from);
+	const segments = segmentsOf(path);
+	/** @type {string[]} */
+	const parts = [];
+	/** @param {number} i @param {number} j @returns {boolean} */
+	const walk = (i, j) => {
+		if (i === pattern.length) return j === segments.length;
+		const part = pattern[i];
+		if (part === '**') {
+			for (let end = segments.length; end >= j; end -= 1) {
+				parts.push(segments.slice(j, end).join('/'));
+				if (walk(i + 1, end)) return true;
+				parts.pop();
+			}
+			return false;
+		}
+		if (j === segments.length) return false;
+		if (part !== '*') return part === segments[j] && walk(i + 1, j + 1);
+		parts.push(/** @type {string} */ (segments[j]));
+		if (walk(i + 1, j + 1)) return true;
+		parts.pop();
+		return false;
+	};
+	return walk(0, 0) ? parts : null;
+};
+
 /**
  * The rules of a website, indexed for matching.
  * @template {RuleInput} R
@@ -325,21 +398,38 @@ export const createIndex = (rules) => {
 	const exact = new Map();
 	/** @type {Map<string, R>} */
 	const prefix = new Map();
-	for (const rule of rules) (rule.match === 'prefix' ? prefix : exact).set(rule.from, rule);
+	for (const rule of rules) if (rule.match !== 'wildcard') (rule.match === 'prefix' ? prefix : exact).set(rule.from, rule);
+	/** @param {string} from */
+	const anywhere = (from) => segmentsOf(from).filter((segment) => segment === '**').length;
+	// the most fixed segments first, then the fewest `**`, then A to Z
+	const wildcards = rules
+		.filter((rule) => rule.match === 'wildcard')
+		.sort(
+			(a, b) =>
+				fixedOf(b.from) - fixedOf(a.from) ||
+				anywhere(a.from) - anywhere(b.from) ||
+				(a.from < b.from ? -1 : a.from > b.from ? 1 : 0),
+		);
 	const sorted = [...rules].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0));
 	return Object.freeze({
 		/**
 		 * The rule that answers a normalized path: the exact rule of the path, else the prefix rule of the longest path
-		 * above it (the path itself included), else null.
+		 * above it (the path itself included) or the first wildcard rule that matches, whichever has more fixed segments
+		 * (the wildcard rule on a tie), else null.
 		 * @param {string} path
 		 * @returns {R | null}
 		 */
-		match: (path) =>
-			exact.get(path) ??
-			ancestorsOf(path)
-				.map((above) => prefix.get(above))
-				.find(Boolean) ??
-			null,
+		match: (path) => {
+			const found = exact.get(path);
+			if (found) return found;
+			const longest =
+				ancestorsOf(path)
+					.map((above) => prefix.get(above))
+					.find(Boolean) ?? null;
+			const wildcard = wildcards.find((rule) => wildcardParts(rule.from, path) !== null) ?? null;
+			if (wildcard === null) return longest;
+			return longest === null || fixedOf(wildcard.from) >= fixedOf(longest.from) ? wildcard : longest;
+		},
 		/**
 		 * The rules strictly under a path (`from` starts with `<path>/`; every rule but `/` under `/`).
 		 * @param {string} path
@@ -373,10 +463,12 @@ export const createIndex = (rules) => {
  */
 export const locationOf = (rule, path, query = '') => {
 	if (rule.to === null) return null;
-	const url = new URL(rule.to, BASE);
+	const parts = rule.match === 'wildcard' ? (wildcardParts(rule.from, path) ?? []) : [];
+	const to = rule.to.replace(/\$([1-9])/g, (_, n) => parts[Number(n) - 1] ?? '');
+	const url = new URL(to, BASE);
 	if (rule.match === 'prefix') url.pathname = joinPath(url.pathname, restOf(rule.from, path));
 	url.search = [url.search.slice(1), query].filter(Boolean).join('&');
-	return rule.to.startsWith('/') ? `${url.pathname}${url.search}${url.hash}` : url.href;
+	return to.startsWith('/') ? `${url.pathname}${url.search}${url.hash}` : url.href;
 };
 
 /**
@@ -466,7 +558,15 @@ export const findProblems = (rules) => {
 	for (const rule of rules) {
 		if (rule.to === null || !rule.to.startsWith('/')) continue;
 		const target = /** @type {string} */ (pathOfLocation(rule.to));
-		const candidates = [rule.from];
+		// a wildcard rule's parts stand for any segment (`…`)
+		const candidates = [
+			rule.match === 'wildcard'
+				? rule.from
+						.split('/')
+						.map((segment) => (segment === '*' || segment === '**' ? ANY_CHILD : segment))
+						.join('/')
+				: rule.from,
+		];
 		if (rule.match === 'prefix') {
 			candidates.push(joinPath(rule.from, CHILD));
 			// the rule itself under its target (a prefix moved up, `/old` → `/`) only meets itself on made-up paths
@@ -617,6 +717,14 @@ export const planImport = ({ csv, existing, domain }) => {
 			message: `The website would have ${next.size} rules; it may have at most ${MAX_RULES}.`,
 		});
 	const after = [...next.values()];
+	const wildcards = after.filter((rule) => rule.match === 'wildcard').length;
+	if (wildcards > MAX_WILDCARDS && wildcards > existing.filter((rule) => rule.match === 'wildcard').length)
+		errors.push({
+			line: 1,
+			path: '',
+			code: 'too_many_wildcards',
+			message: `The website would have ${wildcards} wildcard rules; it may have at most ${MAX_WILDCARDS}.`,
+		});
 	for (const problem of newProblems(existing, after))
 		errors.push({
 			line: lines.get(problem.first) ?? lines.get(problem.second) ?? 1,

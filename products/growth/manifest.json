@@ -131,7 +131,7 @@
 		{
 			"key": "redirects",
 			"name": "Redirects",
-			"description": "Rules that send old addresses of the website to their new page (301 or 308) or answer them as gone (410), read by the website's server; suggestions from the 404 log, and CSV import and export.",
+			"description": "Rules that send old addresses of the website (exact paths, paths under a prefix, or wildcard patterns) to their new page, for good (301 or 308) or for now (302 or 307), or answer them as gone (410), read by the website's server; suggestions from the 404 log, and CSV import and export.",
 			"dependsOn": [],
 			"recommendFor": ["moving.yes", "marketing.seo"],
 			"settings": {

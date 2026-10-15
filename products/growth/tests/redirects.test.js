@@ -74,7 +74,7 @@ describe('rules', () => {
 	});
 
 	it('names every wrong field, refuses unknown members and a path that has a rule', async () => {
-		const wrong = await create({ from: '/x?id=1', to: 'http://new.example.com', code: 302 });
+		const wrong = await create({ from: '/x?id=1', to: 'http://new.example.com', code: 303 });
 		expect(wrong.status).toBe(422);
 		expect(wrong.json.errors.map((/** @type {{ path: string }} */ error) => error.path)).toEqual(['/from', '/code', '/to']);
 		expect((await create({ from: '/x', to: '/y', target: '/z' })).json.errors).toMatchObject([
@@ -175,7 +175,7 @@ describe('rules', () => {
 		expect(found.json.items.map((/** @type {{ from: string }} */ rule) => rule.from)).toEqual(['/gone-page']);
 		expect((await server('GET', '/v1/redirects?q=contact')).json.items).toHaveLength(1);
 		expect((await server('GET', '/v1/redirects/count?code=308')).json.count).toBe(1);
-		expect((await server('GET', '/v1/redirects?code=302')).json.items).toHaveLength(5);
+		expect((await server('GET', '/v1/redirects?code=303')).json.items).toHaveLength(5);
 		expect((await server('GET', '/v1/redirects?limit=0')).status).toBe(400);
 	});
 });
@@ -216,6 +216,32 @@ describe('the website reads the rules', () => {
 		expect((await match('blog')).status).toBe(422);
 		const ops = await env.operationsDuring(() => match('/blog/2019/best/more'));
 		expect(ops.names).toEqual(['find ss_growth_redirects']);
+	});
+
+	it('answers wildcard and temporary rules too, in the same one read (G14)', async () => {
+		/** @param {string} path */
+		const match = (path) => server('GET', `/v1/redirects/match?path=${encodeURIComponent(path)}`);
+		expect((await create({ from: '/shop/*/item/*', match: 'wildcard', to: '/product/$2?from=$1', code: 302 })).status).toBe(
+			201,
+		);
+		expect((await create({ from: '/docs/**', match: 'wildcard', to: 'https://docs.example.com/$1', code: 307 })).status).toBe(
+			201,
+		);
+		expect((await match('/shop/men/item/42?x=1')).json).toEqual({
+			from: '/shop/*/item/*',
+			match: 'wildcard',
+			to: '/product/$2?from=$1',
+			code: 302,
+			location: '/product/42?from=men&x=1',
+		});
+		expect((await match('/docs/a/b')).json).toMatchObject({ code: 307, location: 'https://docs.example.com/a/b' });
+		// the prefix rule with more fixed segments still wins over a wildcard
+		expect((await match('/blog/2019/x')).json.location).toBe('https://archive.example.com/2019/x');
+		const ops = await env.operationsDuring(() => match('/shop/men/item/42'));
+		expect(ops.names).toEqual(['find ss_growth_redirects']);
+		const loop = await create({ from: '/a/*', match: 'wildcard', to: '/a/$1' });
+		expect(loop.status).toBe(409);
+		expect(loop.json.type).toMatch(/redirect_loop$/);
 	});
 
 	it('answers the whole list with an ETag, and 304 for one small read while it did not change', async () => {

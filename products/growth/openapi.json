@@ -744,6 +744,8 @@
 							"type": "string",
 							"enum": [
 								"301",
+								"302",
+								"307",
 								"308",
 								"410"
 							],
@@ -884,6 +886,8 @@
 							"type": "string",
 							"enum": [
 								"301",
+								"302",
+								"307",
 								"308",
 								"410"
 							],
@@ -959,6 +963,8 @@
 							"type": "string",
 							"enum": [
 								"301",
+								"302",
+								"307",
 								"308",
 								"410"
 							],
@@ -3316,6 +3322,8 @@
 							"type": "string",
 							"enum": [
 								"301",
+								"302",
+								"307",
 								"308",
 								"410"
 							],
@@ -3536,6 +3544,8 @@
 							"type": "string",
 							"enum": [
 								"301",
+								"302",
+								"307",
 								"308",
 								"410"
 							],
@@ -3621,6 +3631,8 @@
 							"type": "string",
 							"enum": [
 								"301",
+								"302",
+								"307",
 								"308",
 								"410"
 							],
@@ -3791,7 +3803,7 @@
 		"/v1/redirects/match": {
 			"get": {
 				"summary": "The rule of one address (your website's server, before it answers)",
-				"description": "Answers the rule that answers the path (an exact rule, else the longest prefix rule) with location, where to send the visitor: answer code with that Location header (410: answer 410 Gone). 204 with no body when no rule answers it. Ask before answering a page your site does not have, or for every request; one read of your database each time (for edge middleware, GET /v1/redirects/all is cheaper). 422 validation_failed when path is not a path. 3,000 calls a minute per website.",
+				"description": "Answers the rule that answers the path (an exact rule, else the prefix or wildcard rule with the most fixed segments) with location, where to send the visitor: answer code with that Location header (410: answer 410 Gone). 204 with no body when no rule answers it. Ask before answering a page your site does not have, or for every request; one read of your database each time (for edge middleware, GET /v1/redirects/all is cheaper). 422 validation_failed when path is not a path. 3,000 calls a minute per website.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "redirects",
 				"security": [
@@ -6165,9 +6177,10 @@
 						"type": "string",
 						"enum": [
 							"exact",
-							"prefix"
+							"prefix",
+							"wildcard"
 						],
-						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z)."
 					},
 					"to": {
 						"type": [
@@ -6181,10 +6194,12 @@
 						"type": "integer",
 						"enum": [
 							301,
+							302,
+							307,
 							308,
 							410
 						],
-						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to)."
 					},
 					"note": {
 						"type": "string",
@@ -6213,9 +6228,10 @@
 						"type": "string",
 						"enum": [
 							"exact",
-							"prefix"
+							"prefix",
+							"wildcard"
 						],
-						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix.",
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z).",
 						"default": "exact"
 					},
 					"to": {
@@ -6229,10 +6245,12 @@
 						"type": "integer",
 						"enum": [
 							301,
+							302,
+							307,
 							308,
 							410
 						],
-						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to).",
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to).",
 						"default": 301
 					},
 					"note": {
@@ -6312,9 +6330,10 @@
 									"type": "string",
 									"enum": [
 										"exact",
-										"prefix"
+										"prefix",
+										"wildcard"
 									],
-									"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+									"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z)."
 								},
 								"to": {
 									"type": [
@@ -6326,10 +6345,12 @@
 									"type": "integer",
 									"enum": [
 										301,
+										302,
+										307,
 										308,
 										410
 									],
-									"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+									"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to)."
 								},
 								"note": {
 									"type": "string"
@@ -6345,9 +6366,10 @@
 											"type": "string",
 											"enum": [
 												"exact",
-												"prefix"
+												"prefix",
+												"wildcard"
 											],
-											"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+											"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z)."
 										},
 										"to": {
 											"type": [
@@ -6359,10 +6381,12 @@
 											"type": "integer",
 											"enum": [
 												301,
+												302,
+												307,
 												308,
 												410
 											],
-											"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+											"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to)."
 										},
 										"note": {
 											"type": "string"
@@ -6396,9 +6420,10 @@
 						"type": "string",
 						"enum": [
 							"exact",
-							"prefix"
+							"prefix",
+							"wildcard"
 						],
-						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix.",
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z).",
 						"default": "exact"
 					},
 					"to": {
@@ -6412,10 +6437,12 @@
 						"type": "integer",
 						"enum": [
 							301,
+							302,
+							307,
 							308,
 							410
 						],
-						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to).",
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to).",
 						"default": 301
 					},
 					"note": {
@@ -6464,9 +6491,10 @@
 									"type": "string",
 									"enum": [
 										"exact",
-										"prefix"
+										"prefix",
+										"wildcard"
 									],
-									"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+									"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z)."
 								},
 								"to": {
 									"type": [
@@ -6478,10 +6506,12 @@
 									"type": "integer",
 									"enum": [
 										301,
+										302,
+										307,
 										308,
 										410
 									],
-									"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+									"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to)."
 								}
 							}
 						}
@@ -6507,9 +6537,10 @@
 						"type": "string",
 						"enum": [
 							"exact",
-							"prefix"
+							"prefix",
+							"wildcard"
 						],
-						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a). An exact rule wins, else the longest prefix."
+						"description": "exact: the path itself; prefix: the path and every path under it, segment by segment (/blog matches /blog and /blog/news, not /blogger), keeping the rest of the path (/blog → /news sends /blog/a to /news/a); wildcard: from has whole segments * (one segment) and ** (any number), and to may name what they matched as $1 to $9 in order (/shop/*/item/* → /p/$2), at most 100 wildcard rules. An exact rule wins, else the prefix or wildcard rule with the most fixed segments (the wildcard rule on a tie; among wildcard rules the one with fewer **, then A to Z)."
 					},
 					"to": {
 						"type": [
@@ -6521,17 +6552,19 @@
 						"type": "integer",
 						"enum": [
 							301,
+							302,
+							307,
 							308,
 							410
 						],
-						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 410: gone for good (no to)."
+						"description": "301 or 308: moved for good (308 keeps the request method, for forms); 302 or 307: moved for now, search engines keep the old address (307 keeps the request method); 410: gone for good (no to)."
 					},
 					"location": {
 						"type": [
 							"string",
 							"null"
 						],
-						"description": "Send it as the Location header with code: the new page, with the rest of a prefix rule's path and the visitor's query string added after the target's own (/old?utm_source=x → /new?ref=a&utm_source=x); a path on your website or an https address. null for 410: answer 410 Gone."
+						"description": "Send it as the Location header with code: the new page, with the rest of a prefix rule's path or a wildcard rule's parts and the visitor's query string added after the target's own (/old?utm_source=x → /new?ref=a&utm_source=x); a path on your website or an https address. null for 410: answer 410 Gone."
 					}
 				}
 			},

@@ -15,6 +15,7 @@ import { isObject } from '@ss/contracts/util';
 import {
 	CODES,
 	MAX_RULES,
+	MAX_WILDCARDS,
 	ancestorsOf,
 	changeActivity,
 	createIndex,
@@ -73,6 +74,19 @@ const taken = (from) => problem('redirect_taken', `Another rule redirects ${from
 
 const full = () =>
 	problem('redirects_full', `A website has at most ${MAX_RULES} rules: delete some first.`, { extensions: { max: MAX_RULES } });
+/** The most wildcard rules (G14): every request is tried against each of them. */
+const fullWildcards = () =>
+	problem('redirects_full', `A website has at most ${MAX_WILDCARDS} wildcard rules: delete some first.`, {
+		extensions: { max: MAX_WILDCARDS },
+	});
+/**
+ * Whether a change would take the wildcard rules past {@link MAX_WILDCARDS}.
+ * @param {ReadonlyArray<{ id?: string, match: string }>} current
+ * @param {{ id?: string, match: string }} rule the new or changed rule
+ */
+const tooManyWildcards = (current, rule) =>
+	rule.match === 'wildcard' &&
+	current.filter((other) => other.match === 'wildcard' && other.id !== rule.id).length >= MAX_WILDCARDS;
 
 /**
  * A change refused, with its problem.
@@ -191,6 +205,7 @@ export const redirectRoutes = (product, { log }) => {
 		).change((current) => {
 			if (current.some((other) => other.from === rule.from)) return no(taken(rule.from));
 			if (current.length >= MAX_RULES) return no(full());
+			if (tooManyWildcards(current, rule)) return no(fullWildcards());
 			const [found] = newProblems(current, [...current, rule]);
 			if (found) return no(setProblem(found));
 			return { ok: /** @type {const} */ (true), writes: { create: [rule] } };
@@ -218,6 +233,7 @@ export const redirectRoutes = (product, { log }) => {
 			const rule = { ...stored, ...checked.rule, updatedAt: at };
 			if (sameRule(stored, rule)) return { ok: /** @type {const} */ (true), rule: stored, before: null };
 			if (current.some((other) => other.id !== rule.id && other.from === rule.from)) return no(taken(rule.from));
+			if (stored.match !== 'wildcard' && tooManyWildcards(current, rule)) return no(fullWildcards());
 			const [found] = newProblems(
 				current,
 				current.map((other) => (other.id === rule.id ? rule : other)),
