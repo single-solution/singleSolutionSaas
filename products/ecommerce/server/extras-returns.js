@@ -635,10 +635,12 @@ export const createReturns = (product, service) => {
 	/**
 	 * Refund a claim (a top-up refunds more) as an order refund (OR-3): through Payments for what Payments took when the
 	 * method is `online` or none is given, else recorded with its method and reference (E33), never more than was paid
-	 * and not refunded yet; the order's refund entries carry the claim's id, and with `autoRefundedStatus` an order whose
-	 * refunds reach what was paid moves to its refunded status (its message, events and points as that move does). The
-	 * units count as returned on the first refund; loyalty points go back as the `pointsBack` setting says, never more
-	 * than the order earned and was not taken back yet (OR-10).
+	 * and not refunded yet; the order's refund entries carry the claim's id, and with the flow's `refundsCover` trigger an
+	 * order whose refunds reach what was paid moves to its refunded status (its message, events and points as that move
+	 * does; staff need that move's permission). The units count as returned on the first refund; loyalty points go back
+	 * as the `pointsBack` setting says, never more than the order earned and was not taken back yet (OR-10). A refund
+	 * through Payments that Payments then refuses, or that is not sent, gives the claim its refund back
+	 * (`server/transitions.js` `claimBack`): refunded again, its units and points are counted once.
 	 * @param {any} ctx
 	 */
 	const refund = async (ctx) => {
@@ -659,7 +661,8 @@ export const createReturns = (product, service) => {
 		const amount = body.amount;
 		if (!Number.isSafeInteger(amount) || amount < 1 || amount > cap)
 			throw service.invalid('amount', `The refund is a whole amount in minor units from 1 to ${cap}.`);
-		const first = claim.refundAmount === 0;
+		// the claim's first refund (one Payments refused after all gave the claim its refund back, its units counted)
+		const first = claim.refundAmount === 0 && !claim.history.some((entry) => entry.status === 'refunded');
 		const total = claim.refundAmount + amount;
 		const money = (await s.format()).money(amount, order.totals.currency);
 		const at = new Date(service.now());
@@ -685,6 +688,17 @@ export const createReturns = (product, service) => {
 				method,
 				reference: how.reference,
 				claimId: claim.id,
+				claim: {
+					id: claim.id,
+					refundAmount: total,
+					before: {
+						status: claim.status,
+						refundAmount: claim.refundAmount,
+						refundId: claim.refundId ?? null,
+						refundMethod: claim.refundMethod ?? null,
+						refundReference: claim.refundReference ?? null,
+					},
+				},
 			});
 		} catch (error) {
 			await claims(data).updateOne(

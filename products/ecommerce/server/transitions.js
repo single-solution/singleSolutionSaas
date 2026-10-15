@@ -18,7 +18,9 @@
  * other refund pending — as an effect already taken (`runningAt`), then sent with its id as the Idempotency-Key and
  * recorded together with the part recorded by hand and its history entry (`record`). Of two refunds at once one wins
  * (the other 409 `conflict`), and a refund Payments made is always recorded: done now, or, when Payments' answer did
- * not come, pending and sent again with the same key on use.
+ * not come, pending and sent again with the same key on use. One done later tells the caller (`refunded`: the flow's
+ * `refundsCover` trigger then moves the order); a claim's that is refused or not sent later gives the claim back what
+ * it reserved (`claimBack`), so a claim never says it refunded money that did not go back.
  * @module
  */
 import { problem } from '@ss/app-kit';
@@ -108,12 +110,44 @@ const refundSkipped = (effect) => ({
 /**
  * @param {Product} product
  * @param {Service} service
+ * @param {{ refunded?: (s: Site, order: OrderRecord) => Promise<OrderRecord> }} [hooks] `refunded`: a staff refund
+ *   Payments did not answer at once is done now (given the order as it is after it, returns it as it is then)
  */
-export const createTransitions = (product, service) => {
+export const createTransitions = (product, service, { refunded } = {}) => {
 	const changed = () => problem('conflict', 'The order changed meanwhile; reload it and try again.');
 
 	/** @param {Site} s */
 	const ordersOf = async (s) => (await s.data()).collection(COLLECTIONS.orders);
+
+	/**
+	 * A claim's refund through Payments that did not happen (refused by Payments, or not sent because the order was
+	 * refunded otherwise) gives the claim back what it reserved: its refund as it was before, and the status it had when
+	 * it had refunded nothing before, with an entry by the shop itself; only while the claim is as that refund left it.
+	 * Its units stay counted as returned and its points as taken back, so refunded again it counts them once.
+	 * @param {Site} s @param {OrderEffect} effect
+	 */
+	const claimBack = async (s, effect) => {
+		const claim = effect.record?.claim;
+		if (!claim) return;
+		const { before } = claim;
+		const status = before.refundAmount > 0 ? 'refunded' : before.status;
+		/** @type {Record<string, unknown>} */
+		const set = { status, refundAmount: before.refundAmount, refundId: before.refundId };
+		/** @type {Record<string, ''>} */
+		const unset = {};
+		if (before.refundMethod === null) unset.refundMethod = '';
+		else set.refundMethod = before.refundMethod;
+		if (before.refundReference === null) unset.refundReference = '';
+		else set.refundReference = before.refundReference;
+		await (await s.data()).collection(COLLECTIONS.returns).updateOne(
+			{ websiteId: s.websiteId, id: claim.id, status: 'refunded', refundAmount: claim.refundAmount },
+			{
+				$set: set,
+				...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+				$push: { history: { at: new Date(product.now()), status, by: 'system', note: '' } },
+			},
+		);
+	};
 
 	/** @param {Site} s @param {string} id @returns {Promise<OrderRecord | null>} */
 	const read = async (s, id) =>
@@ -156,19 +190,21 @@ export const createTransitions = (product, service) => {
 	/**
 	 * Change one effect of an order while it is still as it was read (its state, and nobody running it).
 	 * @param {Site} s @param {string} orderId @param {OrderEffect} effect @param {Record<string, unknown>} patch
+	 * @returns {Promise<boolean>} whether it changed it
 	 */
-	const mark = async (s, orderId, effect, patch) => {
-		await (
-			await ordersOf(s)
-		).updateOne(
-			{
-				websiteId: s.websiteId,
-				id: orderId,
-				effects: { $elemMatch: { id: effect.id, state: effect.state, runningAt: effect.runningAt ?? null } },
-			},
-			{ $set: Object.fromEntries(Object.entries(patch).map(([key, value]) => [`effects.$.${key}`, value])) },
-		);
-	};
+	const mark = async (s, orderId, effect, patch) =>
+		(
+			await (
+				await ordersOf(s)
+			).updateOne(
+				{
+					websiteId: s.websiteId,
+					id: orderId,
+					effects: { $elemMatch: { id: effect.id, state: effect.state, runningAt: effect.runningAt ?? null } },
+				},
+				{ $set: Object.fromEntries(Object.entries(patch).map(([key, value]) => [`effects.$.${key}`, value])) },
+			)
+		).modifiedCount === 1;
 
 	/**
 	 * Take an effect to run it: only while the order's refunds are as read (the check that the refund is still due
@@ -278,7 +314,8 @@ export const createTransitions = (product, service) => {
 	 * effect was written already taken (`runningAt`, a staff refund's lock), so it is sent at once. An effect asked of
 	 * Payments before is first looked for in what Payments shows (`payment`: read already): a refund Payments made that
 	 * the order does not record is recorded as this one's, not asked again; Payments that cannot be read leaves it
-	 * pending. Skipped when the order was refunded meanwhile (warning `refund_skipped`).
+	 * pending. Skipped when the order was refunded meanwhile (warning `refund_skipped`). A claim's refund skipped, or
+	 * refused on a later try, gives the claim back its refund (`claimBack`).
 	 * @param {Site} s @param {OrderRecord} order as read @param {OrderEffect} effect
 	 * @param {{ claimed?: boolean, payment?: import('./service.js').PaymentFacts }} [how]
 	 * @returns {Promise<EffectOutcome>}
@@ -293,7 +330,8 @@ export const createTransitions = (product, service) => {
 			// only while what Payments holds of the order still covers it: staff may have refunded it meanwhile
 			const { online } = refundSplit(order, refundable(order));
 			if (!order.payment.paymentId || online < effect.amount) {
-				await mark(s, order.id, effect, { state: 'skipped', triedAt: now, runningAt: null, detail: 'Refunded meanwhile' });
+				const skipped = { state: 'skipped', triedAt: now, runningAt: null, detail: 'Refunded meanwhile' };
+				if (await mark(s, order.id, effect, skipped)) await claimBack(s, effect);
 				return { effect, state: 'skipped', amount: 0, done: null, warning: refundSkipped(effect) };
 			}
 			// taken while the order's refunds are as read, so a refund staff record meanwhile stops it (or waits for it)
@@ -333,7 +371,7 @@ export const createTransitions = (product, service) => {
 			const detail = String(failed?.detail ?? 'Payments cannot be reached right now.');
 			// refused by Payments: not done (staff refund it from the order); else it may have been done: tried again
 			const state = failed?.code === 'payments_refused' ? 'failed' : 'pending';
-			await mark(
+			const marked = await mark(
 				s,
 				order.id,
 				{ ...effect, runningAt: running },
@@ -345,6 +383,9 @@ export const createTransitions = (product, service) => {
 					detail,
 				},
 			);
+			// a claim's refund refused on a later try gives the claim back its refund (a staff refund's first ask is
+			// refused to the staff member, whose claim is put back as it was)
+			if (marked && state === 'failed' && !claimed) await claimBack(s, effect);
 			return {
 				effect,
 				state,
@@ -420,7 +461,7 @@ export const createTransitions = (product, service) => {
 	 * shows money refunded that the order does not record (an answer that never came), the pending refund is sent again
 	 * with its Idempotency-Key, which gets Payments' first answer if it was done (recorded now, or refused when it would be
 	 * too much): `changed`, staff reload. `running`: one runs at Payments right now (it records itself); `unavailable`:
-	 * Payments cannot be reached to tell.
+	 * Payments cannot be reached to tell. A claim's refund not sent any more gives the claim back its refund.
 	 * @param {Site} s @param {OrderRecord} order as read
 	 * @returns {Promise<'ok' | 'changed' | 'running' | 'unavailable'>}
 	 */
@@ -475,18 +516,23 @@ export const createTransitions = (product, service) => {
 			},
 			{ arrayFilters: pending.map((effect, index) => ({ [`e${index}.id`]: effect.id })) },
 		);
-		return result.modifiedCount === 1 ? 'ok' : 'changed';
+		if (result.modifiedCount !== 1) return 'changed';
+		// a claim's refund not sent any more gives the claim back its refund
+		for (const effect of pending) await claimBack(s, effect);
+		return 'ok';
 	};
 
 	/**
 	 * Tell what a retried effect did: the refund in the activity log (named after the staff member whose move asked for
-	 * it) and the `order.refunded` hook.
+	 * it) and the `order.refunded` hook (with the claim a claim's refund is for); a staff refund done now tells the
+	 * caller too (`refunded`, which may move the order).
 	 * @param {Site} s @param {OrderRecord} order @param {EffectOutcome[]} outcomes
+	 * @returns {Promise<OrderRecord>} the order as it is now
 	 */
 	const announce = async (s, order, outcomes) => {
 		const { money } = await s.format();
-		for (const outcome of outcomes) {
-			if (outcome.state !== 'done') continue;
+		const done = outcomes.filter((outcome) => outcome.state === 'done');
+		for (const outcome of done) {
 			await product.activity.record(
 				{ websiteId: s.websiteId, merchantId: s.merchantId, after: s.ctx.after },
 				{
@@ -497,8 +543,13 @@ export const createTransitions = (product, service) => {
 					detail: `Refunded ${money(outcome.amount, order.totals.currency)}`,
 				},
 			);
-			await service.emit('order.refunded', s, { order, amount: outcome.amount, claimId: null });
+			await service.emit('order.refunded', s, {
+				order,
+				amount: outcome.amount,
+				claimId: outcome.effect.record?.claimId ?? null,
+			});
 		}
+		return refunded && done.some((outcome) => outcome.effect.record) ? refunded(s, order) : order;
 	};
 
 	/**
@@ -508,8 +559,7 @@ export const createTransitions = (product, service) => {
 	 */
 	const settle = async (s, order) => {
 		const { order: after, outcomes } = await runEffects(s, order);
-		await announce(s, after, outcomes);
-		return after;
+		return announce(s, after, outcomes);
 	};
 
 	/**

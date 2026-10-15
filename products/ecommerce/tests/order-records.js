@@ -1,9 +1,10 @@
 /**
- * Orders written straight into a test shop's database, for the order engine's tests (`transitions*.test.js`): an order
- * in the shape checkout writes, its record and its product's stock read back, a move through the API, and Payments'
- * refunds answered as a test says.
+ * Orders written straight into a test shop's database, for the order engine's tests (`transitions*.test.js`, the money
+ * tests): an order in the shape checkout writes (or delivered with earned points and an approved return claim), its
+ * record, claim and product's stock read back, a move through the API, and Payments' refunds answered as a test says.
  */
 import { createId } from '@ss/contracts';
+import { givePoints } from '../adapters/ledger.js';
 import { COLLECTIONS } from '../core/model.js';
 import { PAYMENTS } from './helpers.js';
 
@@ -131,6 +132,74 @@ export const orderRecords = (shop) => {
 		return { order: await recordOf(id), product, paymentId };
 	};
 
+	/** The facts and dates of a delivered order (paid, its stock sold). */
+	const delivered = () => ({
+		facts: { stock: 'sold', offers: 'counted', redeemed: 'spent', earned: 'none', units: 'none' },
+		deliveredAt: new Date(shop.now()),
+	});
+
+	/**
+	 * A delivered order paid online (1000) that earned 20 points (credited to its member), with an approved return claim
+	 * of its one unit.
+	 * @param {{ role?: string }} [options] `role`: the step the order is in (as the flow had it)
+	 */
+	const seedClaimed = async ({ role = 'delivered' } = {}) => {
+		const { order, paymentId } = await seedOrder({
+			status: 'delivered',
+			role,
+			patch: {
+				...delivered(),
+				facts: { stock: 'sold', offers: 'counted', redeemed: 'spent', earned: 'credited', units: 'none' },
+				promotions: {
+					couponId: null,
+					couponCode: '',
+					dealIds: [],
+					bundleIds: [],
+					pointsRedeemed: 0,
+					pointsValue: 0,
+					pointsEarned: 20,
+					pointsFixed: true,
+					pointsCredited: true,
+					released: false,
+				},
+			},
+		});
+		const data = await shop.db();
+		await givePoints(
+			data,
+			{ userId: order.customer.userId, points: 20, orderId: order.id, kind: 'earn', expiresAt: null },
+			{ now: shop.now() },
+		);
+		const claimId = createId('ret');
+		await data.collection(COLLECTIONS.returns).insertOne({
+			id: claimId,
+			orderId: order.id,
+			orderNumber: order.number,
+			userId: order.customer.userId,
+			kind: 'return',
+			lines: [{ lineId: order.lines[0].id, quantity: 1, serials: [] }],
+			reason: 'Broken',
+			photos: [],
+			status: 'approved',
+			refundAmount: 0,
+			refundId: null,
+			restockedAt: null,
+			history: [],
+			notes: [],
+		});
+		return { order, paymentId, claimId };
+	};
+
+	/** @param {string} id */
+	const claimOf = async (id) =>
+		/** @type {any} */ (
+			await (
+				await shop.db()
+			)
+				.collection(COLLECTIONS.returns)
+				.findOne({ websiteId: shop.websiteId, id }, { projection: { _id: 0 } })
+		);
+
 	/** @param {string} id @param {string} to @param {Record<string, unknown>} [extra] */
 	const moveTo = (id, to, extra = {}) => shop.api('POST', `/v1/orders/${id}/move`, { to, ...extra });
 
@@ -149,5 +218,5 @@ export const orderRecords = (shop) => {
 	/** Payments' refund calls of a payment. @param {string} paymentId */
 	const refundCalls = (paymentId) => shop.callsTo(`${PAYMENTS}/v1/payments/${paymentId}/refunds`);
 
-	return { orders, recordOf, stockOf, seedOrder, moveTo, refundsAnswer, refundCalls };
+	return { orders, recordOf, stockOf, seedOrder, delivered, seedClaimed, claimOf, moveTo, refundsAnswer, refundCalls };
 };

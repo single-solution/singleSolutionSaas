@@ -144,10 +144,18 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  */
 
 /**
- * What a staff refund records with its refund through Payments (see {@link OrderEffect}).
+ * What a staff refund records with its refund through Payments (see {@link OrderEffect}); a claim's (`claim`) also
+ * what the claim gets back when that refund does not happen.
  * @typedef {{ manual: number, entries: Record<string, unknown>[], reference: string, claimId: string | null,
- *   history: Record<string, unknown>, note: Record<string, unknown>, recordedNote: Record<string, unknown> }}
- *   StaffRefundRecord
+ *   history: Record<string, unknown>, note: Record<string, unknown>, recordedNote: Record<string, unknown>,
+ *   claim?: ClaimRefundUndo }} StaffRefundRecord
+ */
+
+/**
+ * A claim's refund as the claim reserved it: `refundAmount` what the claim says it refunded with it, and `before` the
+ * claim's refund and status before it (`refundMethod` and `refundReference` null when it had none).
+ * @typedef {{ id: string, refundAmount: number, before: { status: string, refundAmount: number, refundId: string | null,
+ *   refundMethod: string | null, refundReference: string | null } }} ClaimRefundUndo
  */
 
 /**

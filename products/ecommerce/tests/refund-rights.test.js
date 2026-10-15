@@ -5,10 +5,8 @@
  * back (a cancel after delivery, or before it, with `refund: auto`) needs the refund permission whatever permission the
  * move names.
  */
-import { createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { givePoints, loyaltyAccount } from '../adapters/ledger.js';
-import { COLLECTIONS } from '../core/model.js';
+import { loyaltyAccount } from '../adapters/ledger.js';
 import { readyShop } from './helpers.js';
 import { orderRecords } from './order-records.js';
 
@@ -42,73 +40,10 @@ const covered = (flow) => ({ ...flow, triggers: { ...flow.triggers, refundsCover
 
 const balanceOf = async () => (await loyaltyAccount(await shop.db(), MEMBER, { now: shop.now() })).balance;
 
-/** @param {string} id */
-const claimOf = async (id) =>
-	/** @type {any} */ (
-		await (
-			await shop.db()
-		)
-			.collection(COLLECTIONS.returns)
-			.findOne({ websiteId: shop.websiteId, id }, { projection: { _id: 0 } })
-	);
-
-/** Delivered, as the engine's facts say. */
-const DELIVERED = () => ({
-	facts: { stock: 'sold', offers: 'counted', redeemed: 'spent', earned: 'none', units: 'none' },
-	deliveredAt: new Date(shop.now()),
-});
-
-/**
- * A delivered order paid online (1000) that earned 20 points, with an approved return claim of its one line.
- * @param {{ role?: string }} [options] `role`: the step the order is in (as the flow had it)
- */
-const claimed = async ({ role = 'delivered' } = {}) => {
-	const { order, paymentId } = await records.seedOrder({
-		status: 'delivered',
-		role,
-		patch: {
-			...DELIVERED(),
-			facts: { stock: 'sold', offers: 'counted', redeemed: 'spent', earned: 'credited', units: 'none' },
-			promotions: {
-				couponId: null,
-				couponCode: '',
-				dealIds: [],
-				bundleIds: [],
-				pointsRedeemed: 0,
-				pointsValue: 0,
-				pointsEarned: 20,
-				pointsFixed: true,
-				pointsCredited: true,
-				released: false,
-			},
-		},
-	});
-	const data = await shop.db();
-	await givePoints(data, { userId: MEMBER, points: 20, orderId: order.id, kind: 'earn', expiresAt: null }, { now: shop.now() });
-	const claimId = createId('ret');
-	await data.collection(COLLECTIONS.returns).insertOne({
-		id: claimId,
-		orderId: order.id,
-		orderNumber: order.number,
-		userId: MEMBER,
-		kind: 'return',
-		lines: [{ lineId: order.lines[0].id, quantity: 1, serials: [] }],
-		reason: 'Broken',
-		photos: [],
-		status: 'approved',
-		refundAmount: 0,
-		refundId: null,
-		restockedAt: null,
-		history: [],
-		notes: [],
-	});
-	return { order, paymentId, claimId };
-};
-
 describe('a claim refund that covers the payments (H1)', () => {
 	it('needs the permission of the move it triggers before any money moves', async () => {
 		await withFlow(covered, async () => {
-			const { order, paymentId, claimId } = await claimed();
+			const { order, paymentId, claimId } = await records.seedClaimed();
 			const start = await balanceOf();
 			const returnsOnly = await shop.ticket(['returns.manage', 'orders.read']);
 			/** @param {string} ticket @param {Record<string, unknown>} body */
@@ -118,7 +53,7 @@ describe('a claim refund that covers the payments (H1)', () => {
 			expect(refused.status).toBe(403);
 			expect(records.refundCalls(paymentId)).toHaveLength(0);
 			expect(await records.recordOf(order.id)).toMatchObject({ status: 'delivered', payment: { refunded: 0 }, refunds: [] });
-			expect(await claimOf(claimId)).toMatchObject({ status: 'approved', refundAmount: 0 });
+			expect(await records.claimOf(claimId)).toMatchObject({ status: 'approved', refundAmount: 0 });
 			expect(await balanceOf()).toBe(start);
 			// a part that leaves the order where it is needs only the claims permission
 			const part = await refund(returnsOnly, { amount: 400 });
@@ -144,7 +79,7 @@ describe('a claim refund that covers the payments (H1)', () => {
 	it('never undoes the refund once the money is recorded: a move the order cannot make is left to staff', async () => {
 		await withFlow(covered, async () => {
 			// the order's step is not the flow's step of its status any more, so no move can be made for it
-			const { order, paymentId, claimId } = await claimed({ role: 'shipped' });
+			const { order, paymentId, claimId } = await records.seedClaimed({ role: 'shipped' });
 			const start = await balanceOf();
 			const done = await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1000 });
 			expect(done.status).toBe(200);
@@ -159,7 +94,7 @@ describe('a claim refund that covers the payments (H1)', () => {
 
 	it('the staff refund route reports the refund even when the move after it cannot be made', async () => {
 		await withFlow(covered, async () => {
-			const { order, paymentId } = await claimed({ role: 'shipped' });
+			const { order, paymentId } = await records.seedClaimed({ role: 'shipped' });
 			const done = await shop.api('POST', `/v1/orders/${order.id}/refunds`, { amount: 1000, reason: 'Broken' });
 			expect(done.status).toBe(201);
 			expect(done.json.order).toMatchObject({ status: 'delivered', payment: { refunded: 1000 } });
@@ -172,7 +107,7 @@ describe('a move that gives money back (H2)', () => {
 	/** @param {string} ticket @param {string} id @param {string} to */
 	const moveAs = (ticket, id, to) => shop.admin(ticket, 'POST', `/v1/admin/orders/${id}/move`, { to });
 	/** A delivered order paid online (1000). */
-	const delivered = () => records.seedOrder({ status: 'delivered', role: 'delivered', patch: DELIVERED() });
+	const delivered = () => records.seedOrder({ status: 'delivered', role: 'delivered', patch: records.delivered() });
 
 	it('needs the refund permission, whatever permission the move names', async () => {
 		await withFlow(

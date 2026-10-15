@@ -58,6 +58,7 @@ import { checkTransition, planTransition } from '../core/transitions.js';
 import { createMedia } from './catalog-media.js';
 import { createGuests, phoneRulesOf } from './guests.js';
 import { RECHECK_MS, createOrderPayments, expectedOf } from './order-payments.js';
+import { createMoves } from './orders-moves.js';
 import { createTransitions, rulesOf } from './transitions.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -110,6 +111,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 	const guests = createGuests(product);
 	const payments = createOrderPayments(product, service);
 	const transitions = createTransitions(product, service);
+	const moves = createMoves(product, service);
 
 	/** @param {Site} s @returns {Promise<OrderFlow>} */
 	const flowOf = async (s) => /** @type {OrderFlow} */ (/** @type {unknown} */ (await s.list('order_flow')));
@@ -321,8 +323,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		for (const order of await store.toRecheck(now, RECHECK_MS)) await payments.recheck(s, order);
 		for (const order of await store.expired(WAITING_ROLES, now)) await expire(s, order);
 		await payments.sweep(s);
-		// refunds of canceled orders Payments could not take yet (the order engine's pending effects)
-		await transitions.sweep(s);
+		// refunds Payments could not take yet (the order engine's pending effects: a cancel's, a staff refund's)
+		await moves.sweep(s);
 	};
 
 	// --------------------------------------------------------------------------------------------------- views

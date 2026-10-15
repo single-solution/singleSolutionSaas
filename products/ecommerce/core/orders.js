@@ -544,8 +544,10 @@ export const MAX_REFERENCE = 120;
 
 /**
  * @typedef {{ amount: number, reason: string, method: 'online' | 'bank_transfer' | 'cash' | 'other' | null,
- *   reference: string, claimId: string | null, claimReference?: string }} RefundInput `method` null: through Payments
- *   first, the rest recorded; `claimReference`: a claim's refund without a note (its reason is then `Claim <reference>`)
+ *   reference: string, claimId: string | null, claimReference?: string,
+ *   claim?: import('./transitions.js').ClaimRefundUndo }} RefundInput `method` null: through Payments first, the rest
+ *   recorded; `claimReference`: a claim's refund without a note (its reason is then `Claim <reference>`); `claim`: what
+ *   the claim gets back when its refund through Payments does not happen
  */
 
 /** @param {unknown} value @returns {{ ok: true, value: string } | Refusal} */

@@ -93,7 +93,8 @@ const changed = () => problem('conflict', 'The order changed meanwhile; reload i
  */
 export const createMoves = (product, service) => {
 	const payments = createOrderPayments(product, service);
-	const transitions = createTransitions(product, service);
+	// a staff refund Payments finishes later moves the order as one done at once does
+	const transitions = createTransitions(product, service, { refunded: (s, order) => coverLater(s, order) });
 
 	/**
 	 * Cancel at Payments the open payment of an order about to be canceled or refunded before delivery (K-13): what
@@ -660,6 +661,24 @@ export const createMoves = (product, service) => {
 	};
 
 	/**
+	 * A staff refund Payments did not answer at once is done now (staff opened the order, or on use): refunds that reach
+	 * what was paid move the order as `cover` does, for the staff member who refunded it.
+	 * @param {Site} s @param {OrderRecord} order after the refund
+	 * @returns {Promise<OrderRecord>}
+	 */
+	const coverLater = async (s, order) => {
+		const by = (order.effects ?? []).findLast((effect) => effect.record && effect.state === 'done')?.by;
+		const ctx = {
+			websiteId: s.websiteId,
+			merchantId: s.merchantId,
+			after: s.ctx.after,
+			ticket: null,
+			...(by ? { actor: by } : {}),
+		};
+		return (await cover(s, ctx, order, await flowOf(s))).order;
+	};
+
+	/**
 	 * Refund part of what was paid without a status change (E26): through Payments for what Payments took (or as asked),
 	 * the rest recorded as given back by `method`, with its reference and the claim it is for (a claim refunded without
 	 * a note gives `Claim <reference>` as the reason). The part through Payments goes through the order's refund lock
@@ -762,6 +781,7 @@ export const createMoves = (product, service) => {
 					history,
 					note: noteOf(false),
 					recordedNote: noteOf(true),
+					...(input.claim ? { claim: input.claim } : {}),
 				},
 			});
 			after = locked.order;
@@ -957,6 +977,7 @@ export const createMoves = (product, service) => {
 		unitRulesFor,
 		recheck: payments.recheck,
 		settle: transitions.settle,
+		sweep: transitions.sweep,
 	});
 };
 
