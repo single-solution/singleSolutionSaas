@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { GATEWAYS, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import manifest from '../manifest.json' with { type: 'json' };
+import strings from '../strings/en.json' with { type: 'json' };
+import { GATEWAYS, GATEWAY_FEATURES, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
 import {
 	BANK_ROW_LABELS,
 	METHOD_KINDS,
@@ -423,5 +425,22 @@ describe('snippets', () => {
 		expect(snippets.admin).toContain('data-ss-payments="payments_admin"');
 		expect(snippets.create).toContain('https://p/v1/payments');
 		expect(snippets.ticketCurl).toContain('payments.read');
+	});
+});
+
+describe('payer texts', () => {
+	it('names each gateway to payers by its brand: a place in its dashboard name stays out (P10)', () => {
+		for (const gateway of GATEWAYS) {
+			const feature = manifest.features.find((entry) => entry.key === GATEWAY_FEATURES[gateway]);
+			const qualifier = /\(([^)]+)\)$/.exec(feature?.name ?? '')?.[1];
+			const label = /** @type {Record<string, string>} */ (strings)[`gateway.${gateway}`];
+			expect(label).toBeTruthy();
+			if (qualifier) expect(label).not.toContain(qualifier);
+		}
+		expect(strings['gateway.payfast']).toBe('PayFast');
+		expect(strings['gateway.payfast_pk']).toBe('PayFast');
+		expect(strings['gateway.jazzcash']).toBe('JazzCash');
+		expect(strings['gateway.easypaisa']).toBe('Easypaisa');
+		expect(strings['gateway.rapid']).toBe('Rapid Gateway');
 	});
 });

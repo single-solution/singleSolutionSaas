@@ -855,6 +855,24 @@ describe('Payment links admin widget', () => {
 		expect(statusText(host)).toBe('');
 	});
 
+	it('tells gateways with the same brand apart by their currencies (P10)', async () => {
+		const host = place('links_admin');
+		const client = adminApi({ 'GET /v1/admin/links': () => answer(200, { items: [], nextCursor: null, hasMore: false }) });
+		mountLinksAdmin({
+			host,
+			api: client,
+			config: configOf(['payment_links', 'stripe', 'payfast', 'payfast_pk']),
+			open: vi.fn(),
+		});
+		await flush();
+		button(host, strings['links.new']).click();
+		await flush();
+		const labels = [.../** @type {HTMLFormElement} */ (dialog(host)).querySelectorAll('label.check')].map(
+			(label) => label.textContent,
+		);
+		expect(labels).toEqual(['Card (Stripe)', 'PayFast (ZAR)', 'PayFast (PKR)']);
+	});
+
 	it('says when links cannot load and when signed out', async () => {
 		const failing = place('links_admin');
 		mountLinksAdmin({ host: failing, api: adminApi({}), config: configOf(['payment_links']), open: vi.fn() });

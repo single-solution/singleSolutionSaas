@@ -518,7 +518,7 @@ describe('the other gateways', () => {
 		const form = await page(`/pay/${env.websiteId}/${payment.id}`);
 		expect(form.text).toContain('https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction');
 		expect(form.text).toContain(`${BASE}/v1/gateways/payfast_pk/${env.websiteId}`);
-		expect(form.text).toContain('Continue to PayFast (Pakistan)');
+		expect(form.text).toContain('Continue to PayFast<');
 		/** PayFast's signed answer. @param {string} basket @param {string} code */
 		const signed = (basket, code) =>
 			new URLSearchParams({

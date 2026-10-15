@@ -18,7 +18,7 @@ import {
 	openDialog,
 	splitView,
 } from '@ss/app-kit/widget';
-import { GATEWAYS, GATEWAY_FEATURES } from '../core/gateways.js';
+import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways.js';
 import { fromDecimal } from '../core/money.js';
 import { field } from './admin-kit.js';
 import { formattersOf } from './format.js';
@@ -217,11 +217,18 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				const returnUrl = input('returnUrl', { type: 'url', maxlength: '2048' });
 				const reference = input('reference', { maxlength: '120' });
 				const choices = GATEWAYS.filter((id) => config.features.includes(GATEWAY_FEATURES[id]));
+				const names = choices.map((id) => formatText(t(`gateway.${id}`), { name: id }));
 				const gateways = element(doc, 'fieldset', { class: 'wide' });
 				gateways.append(element(doc, 'legend', {}, t('links.field.gateways')));
 				/** @type {Array<[string, string]>} */
 				const offered = [
-					...choices.map((id) => /** @type {[string, string]} */ ([id, formatText(t(`gateway.${id}`), { name: id })])),
+					...choices.map((id, index) => {
+						// payers see a gateway's brand only (P10): two with the same brand are told apart by their currencies
+						const name = /** @type {string} */ (names[index]);
+						const currencies = GATEWAY_CURRENCIES[id];
+						const twin = names.filter((other) => other === name).length > 1 && currencies !== null;
+						return /** @type {[string, string]} */ ([id, twin ? `${name} (${currencies.join(', ')})` : name]);
+					}),
 					...methods.map((method) => /** @type {[string, string]} */ ([method.key, method.name])),
 				];
 				for (const [id, name] of offered) {
