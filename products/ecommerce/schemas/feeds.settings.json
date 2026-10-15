@@ -18,16 +18,23 @@
 		"itemTitle": {
 			"type": "string",
 			"title": "Item titles",
-			"description": "{name} is the product, {brand} its brand, {variant} the variant's options on products with several variants, {options} the variant's options always. Empty brackets and separators left over are dropped.",
+			"description": "{name} is the product, {brand} its brand, {variant} the variant's options on products with several variants, {options} the variant's options always, {grade} its grade, and {attr.<slug>} a field's value (the variant's, else the product's; fields shoppers see only). Empty brackets and separators left over are dropped; [ … ] around words with a placeholder drops them when it is empty.",
 			"default": "{name} - {variant}",
 			"maxLength": 160
 		},
 		"itemDescription": {
 			"type": "string",
 			"title": "Item descriptions",
-			"description": "The product's description (else its summary), or its SEO description first.",
+			"description": "The product's description (else its summary), its SEO description first, or the pattern below.",
 			"default": "body",
-			"enum": ["body", "seo"]
+			"enum": ["body", "seo", "pattern"]
+		},
+		"descriptionPattern": {
+			"type": "string",
+			"title": "Item description pattern",
+			"description": "With item descriptions at pattern: the item title's placeholders, {description} (the product's description, else its summary) and {summary}. Empty, or a pattern that gives no text: the description.",
+			"default": "{description}",
+			"maxLength": 1000
 		},
 		"skuAs": {
 			"type": "string",
@@ -46,7 +53,7 @@
 		"googleCategory": {
 			"type": "string",
 			"title": "Google product category",
-			"description": "The Google product category of your items (an id or a path), sent with every item.",
+			"description": "The Google product category of your items (an id or a path), sent with every item whose category (or one above it) names none of its own.",
 			"default": "",
 			"maxLength": 250
 		},
@@ -55,6 +62,12 @@
 			"title": "Grade as custom label 0",
 			"description": "Send each item's grade label as custom_label_0.",
 			"default": false
+		},
+		"shipping": {
+			"type": "boolean",
+			"title": "Send shipping",
+			"description": "Each item carries the delivery fee to your business.json country (free from the free-delivery amount) and, once both are set, the handling and transit days of Delivery zones. Off when you set shipping in the catalog's own account.",
+			"default": true
 		}
 	}
 }

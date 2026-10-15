@@ -187,6 +187,8 @@ export const ID_PREFIX = Object.freeze({
  * @property {string | null} sizeChartId (E5)
  * @property {string | null} typeKey the item type its products have unless they name their own (`core/item-types.js`);
  *   null = its parent's
+ * @property {string} googleCategory the Google product category of its products' feed items (an id or a path; SEO audit
+ *   G11.3); '' = the nearest category above it that names one, else the `feeds` setting `googleCategory`
  * @property {string[]} previousSlugs (E13)
  */
 /**

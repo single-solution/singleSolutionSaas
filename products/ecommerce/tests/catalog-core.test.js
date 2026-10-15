@@ -81,6 +81,7 @@ const STORED_CATEGORY = Object.freeze({
 	faqs: [],
 	sizeChartId: null,
 	typeKey: null,
+	googleCategory: '',
 	previousSlugs: [],
 });
 

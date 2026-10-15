@@ -12,6 +12,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
 import { mediaSignatureOk } from '../adapters/crypto.js';
 import { categoryTrail } from '../adapters/promotions-store.js';
+import { valueLabel } from '../core/catalog.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { shownRange, specsOf } from '../core/catalog-views.js';
@@ -184,14 +185,22 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * The delivery fee where no zone matches and the amount it is free from, to the business's country, for feeds (E17,
-	 * SG-2); null without delivery zones.
-	 * @param {Site} s
+	 * The delivery fee where no zone matches and the amount it is free from, to the business's country, with the delivery
+	 * days once both are set, for feeds (E17, SG-2, G11); null without delivery zones or with the `feeds` setting
+	 * `shipping` off (shipping set in the catalog's own account).
+	 * @param {Site} s @param {Record<string, unknown>} settings the `feeds` settings
 	 */
-	const shippingOf = async (s) => {
-		if (!s.has('delivery_zones')) return null;
-		const [{ defaultFee, defaultFreeOver }, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
-		return { fee: Number(defaultFee ?? 0), freeOver: Number(defaultFreeOver ?? 0), country: String(business.country ?? '') };
+	const shippingOf = async (s, settings) => {
+		if (!s.has('delivery_zones') || settings.shipping === false) return null;
+		const [zones, business] = await Promise.all([s.values('delivery_zones'), s.business()]);
+		const handling = daysRange(zones.handlingDays);
+		const transit = daysRange(zones.transitDays);
+		return {
+			fee: Number(zones.defaultFee ?? 0),
+			freeOver: Number(zones.defaultFreeOver ?? 0),
+			country: String(business.country ?? ''),
+			deliveryTime: handling && transit ? { handling, transit } : null,
+		};
 	};
 
 	/**
@@ -829,7 +838,31 @@ export const createSeo = (product, service) => {
 		const types = await s.list('item_types');
 		const tree = typeTree(categories);
 		const conditions = await conditionsOf(s, byId);
-		const shipping = await shippingOf(s);
+		const shipping = await shippingOf(s, settings);
+		// {attr.<slug>} in the patterns: the value of the field with that slug the item holds (the variant's, else the
+		// product's), as shoppers read it; '' for fields shoppers never see (staff-only values never leave)
+		const catalogFields = [
+			...attributes.filter((field) => field.on === 'product'),
+			...attributes.filter((field) => field.on === 'variant'),
+		];
+		/** @param {ProductRecord} item @param {VariantRecord} variant */
+		const placeholders = (item, variant) => {
+			/** @type {Record<string, string>} */
+			const out = {};
+			for (const field of catalogFields) {
+				const key = `attr.${field.slug}`;
+				const value = field.on === 'variant' ? variant.attributes?.[field.id] : item.specs[field.id];
+				const seen = field.active && (field.show.page || field.show.feeds !== 'none');
+				if (seen && value !== undefined && value !== null) out[key] = valueLabel(field, value);
+				else out[key] ??= '';
+			}
+			return out;
+		};
+		// each category's Google product category: its own, else the nearest one above it, else the shop's (G11.3)
+		/** @param {CategoryRecord | undefined} category */
+		const googleCategoryOf = (category) =>
+			(category ? lineage(category, byId).reverse() : []).map((step) => step.googleCategory).find(Boolean) ??
+			String(settings.googleCategory ?? '');
 		// prices after the deals that hold all day (feeds are read at the catalogs' own pace; G4)
 		const prices = await shownPrices(s, data, { allDay: true });
 		const now = service.now();
@@ -855,14 +888,21 @@ export const createSeo = (product, service) => {
 		for await (const row of rows) {
 			const item = /** @type {ProductRecord} */ (/** @type {unknown} */ (row));
 			const primary = byId.get(item.categoryIds[0] ?? '');
-			const image = (await media.stableUrl(s, item.media[0]?.key)) ?? '';
-			/** @type {Map<string, { link: string, image: string }>} */
+			/** @param {Array<{ key: string }> | undefined} files */
+			const addresses = async (files) =>
+				(await Promise.all((files ?? []).map((file) => media.stableUrl(s, file.key)))).filter((address) => address !== null);
+			const photos = await addresses(item.media);
+			const image = photos[0] ?? '';
+			/** @type {Map<string, { link: string, image: string, photos: string[] }>} */
 			const perVariant = new Map();
-			for (const variant of item.variants.filter((v) => v.active))
+			for (const variant of item.variants.filter((v) => v.active)) {
+				const own = await addresses(variant.media);
 				perVariant.set(variant.id, {
 					link: await media.variantUrl(s, item, variant, bySlug),
-					image: variant.media?.[0] ? ((await media.stableUrl(s, variant.media[0].key)) ?? '') : '',
+					image: own[0] ?? '',
+					photos: [...own, ...photos],
 				});
+			}
 			const made = feedRows(item, {
 				link: await media.productUrl(s, item),
 				image,
@@ -878,11 +918,16 @@ export const createSeo = (product, service) => {
 				now,
 				skuAs: settings.skuAs,
 				includeOutOfStock: settings.includeOutOfStock !== false,
-				googleCategory: String(settings.googleCategory ?? ''),
+				googleCategory: googleCategoryOf(primary),
+				grade: (variant) => conditions.gradeOf(item, variant)?.label ?? '',
 				gradeLabel: (variant) => (settings.gradeLabel === true ? (conditions.gradeOf(item, variant)?.label ?? '') : ''),
 				shipping,
 				title: String(settings.itemTitle ?? ''),
-				description: settings.itemDescription === 'seo' ? 'seo' : 'body',
+				description:
+					settings.itemDescription === 'seo' || settings.itemDescription === 'pattern' ? settings.itemDescription : 'body',
+				descriptionPattern: String(settings.descriptionPattern ?? ''),
+				placeholders: (variant) => placeholders(item, variant),
+				extraImages: (variant) => perVariant.get(variant.id)?.photos ?? photos,
 				identifierExists: settings.identifierExists === 'no' ? 'no' : 'auto',
 				parcels: elementsOf(typeOf(item, types, tree), s.has).parcel,
 				wholeUnits: format.format.wholeUnits === true,

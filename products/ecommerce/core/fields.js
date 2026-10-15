@@ -252,7 +252,10 @@ export const FIELD_DATES = Object.freeze(/** @type {const} */ (['any', 'past', '
 export const REQUIRED_AT = Object.freeze(/** @type {const} */ (['checkout', 'packed', 'shipped', 'delivered']));
 /** How product cards show a field's values. */
 export const CARD_MODES = Object.freeze(/** @type {const} */ (['none', 'image', 'chips']));
-/** Where the product feeds send a field's value. */
+/**
+ * Where the product feeds send a field's value: a custom label, an attribute of the item, the apparel attributes (sent
+ * only with the catalogs' own values), each value as a product highlight, or the field as a product detail (G11).
+ */
 export const FEED_TARGETS = Object.freeze(
 	/** @type {const} */ ([
 		'none',
@@ -265,6 +268,11 @@ export const FEED_TARGETS = Object.freeze(
 		'material',
 		'size',
 		'pattern',
+		'gender',
+		'age_group',
+		'size_system',
+		'product_highlight',
+		'product_detail',
 	]),
 );
 /** Where structured data names a field's value. */

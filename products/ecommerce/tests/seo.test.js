@@ -182,7 +182,7 @@ describe('core/feeds and core/llms', () => {
 		const [withCodes] = feedRows(coded, { ...context, skuAs: 'none', identifierExists: 'no' });
 		expect(withCodes).toMatchObject({ identifierExists: '' });
 		expect(googleItem(/** @type {any} */ (withCodes))).toContain('<g:gtin>4006381333931</g:gtin><g:mpn>MX-100</g:mpn>');
-		expect(metaLine(/** @type {any} */ (withCodes))).toContain(',Brand,4006381333931,MX-100,prd_1,');
+		expect(metaLine(/** @type {any} */ (withCodes))).toContain(',Brand,4006381333931,MX-100,,prd_1,');
 		const single = feedRows({ ...product, variants: [variant({ id: 'var_s' })], description: 'Long' }, context);
 		expect(single[0]).toMatchObject({ itemGroupId: '', title: 'Phone', description: 'Long' });
 		// E17: imported feed ids, the Google category, the grade label, shipping, whole units, variant links and photos
@@ -223,15 +223,16 @@ describe('core/feeds and core/llms', () => {
 		const [labelled] = feedRows(product, {
 			...context,
 			gradeLabel: () => 'Grade A',
-			values: () => [
-				{ target: 'custom_label_0', name: 'Season', value: 'Summer' },
-				{ target: 'custom_label_2', name: 'Season', value: 'Summer' },
-				{ target: 'color', name: 'Color', value: 'Red' },
-				{ target: 'color', name: 'Shade', value: 'Dark red' },
-				{ target: 'material', name: 'Material', value: 'Cotton' },
-				{ target: 'size', name: 'Size', value: 'M' },
-				{ target: 'pattern', name: 'Pattern', value: 'x'.repeat(150) },
-			],
+			values: () =>
+				[
+					{ target: 'custom_label_0', name: 'Season', value: 'Summer' },
+					{ target: 'custom_label_2', name: 'Season', value: 'Summer' },
+					{ target: 'color', name: 'Color', value: 'Red' },
+					{ target: 'color', name: 'Shade', value: 'Dark red' },
+					{ target: 'material', name: 'Material', value: 'Cotton' },
+					{ target: 'size', name: 'Size', value: 'M' },
+					{ target: 'pattern', name: 'Pattern', value: 'x'.repeat(150) },
+				].map((entry) => ({ ...entry, values: [entry.value], raw: [entry.value] })),
 		});
 		expect(labelled).toMatchObject({
 			customLabels: ['Grade A', '', 'Summer', '', ''],
@@ -266,7 +267,7 @@ describe('core/feeds and core/llms', () => {
 		expect(out).toContain('out_of_stock');
 		// Meta gets the regular price and the sale price in their own columns (G4)
 		expect(metaLine(/** @type {any} */ (row))).toBe(
-			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,Brand,,SKU-A,prd_1,,,,,,,,,,,\r\n',
+			'var_a,Phone - Red,Summary,in stock,refurbished,12.00 USD,9.00 USD,,https://shop.example/p,https://cdn.example/i.jpg,,Brand,,SKU-A,,prd_1,,,,,,,,,,,,,\r\n',
 		);
 		// a variant's package weight goes out as its shipping weight when its item type has packages
 		expect(row?.shippingWeight).toBe('');
@@ -540,7 +541,7 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(csv.headers.get('content-type')).toContain('text/csv');
 		const lines = csv.text.trim().split('\r\n');
 		expect(lines[0]).toBe(
-			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,brand,gtin,mpn,item_group_id,color,material,size,pattern,google_product_category,shipping_weight,custom_label_0,custom_label_1,custom_label_2,custom_label_3,custom_label_4',
+			'id,title,description,availability,condition,price,sale_price,sale_price_effective_date,link,image_link,additional_image_link,brand,gtin,mpn,identifier_exists,item_group_id,color,material,size,pattern,gender,age_group,google_product_category,shipping_weight,custom_label_0,custom_label_1,custom_label_2,custom_label_3,custom_label_4',
 		);
 		expect(lines).toHaveLength(3);
 		expect(lines[2]).toContain('out of stock');

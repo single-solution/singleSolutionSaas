@@ -88,6 +88,8 @@ const boolOf = (v) => (typeof v === 'boolean' ? v : null);
 
 const NAME_MESSAGE = `Give a name of 1 to ${TAXONOMY_LIMITS.name} characters.`;
 const SLUG_MESSAGE = 'Use lowercase letters, digits and dashes.';
+/** Longest Google product category (an id or a path), as the `feeds` setting takes it. */
+const GOOGLE_CATEGORY_LENGTH = 250;
 const SORT_MESSAGE = 'Sort is a whole number.';
 
 /** @typedef {'active' | 'coming_soon' | 'hidden'} CategoryStatus */
@@ -95,7 +97,8 @@ const SORT_MESSAGE = 'Sort is a whole number.';
  * The editable fields of a category.
  * @typedef {Pick<CategoryRecord, 'name' | 'slug' | 'description' | 'seo' | 'sort'> & { parentId: string | null,
  *   status: CategoryStatus, icon: string, content: import('./catalog-content.js').Content,
- *   faqs: import('./catalog-content.js').Faq[], sizeChartId: string | null, typeKey: string | null }} CategoryFields
+ *   faqs: import('./catalog-content.js').Faq[], sizeChartId: string | null, typeKey: string | null,
+ *   googleCategory: string }} CategoryFields
  */
 
 /** An id of another record, or null to clear it (the route checks it exists). @param {unknown} v */
@@ -166,6 +169,13 @@ export const checkCategory = (body, existing) => {
 		/** @type {string | null} */ (null),
 		'Pick an item type, or null for its parent’s.',
 	);
+	// its products' Google product category in the feeds (G11.3): '' = the one above it, else the shop's
+	const googleCategory = read(
+		'googleCategory',
+		(v) => (typeof v === 'string' && v.trim().length <= GOOGLE_CATEGORY_LENGTH ? v.trim() : null),
+		'',
+		`A Google product category is an id or a path of at most ${GOOGLE_CATEGORY_LENGTH} characters, or empty.`,
+	);
 	if (errors.length > 0) return { ok: false, errors };
 	return {
 		ok: true,
@@ -182,6 +192,7 @@ export const checkCategory = (body, existing) => {
 			faqs,
 			sizeChartId: sizeChartId || null,
 			typeKey: typeKey || null,
+			googleCategory,
 		},
 	};
 };

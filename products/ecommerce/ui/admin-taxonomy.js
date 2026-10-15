@@ -1,9 +1,9 @@
 /**
  * The catalog's lists for the catalog admin widget (PLAN 0.8.8 Catalog; PLAN 0.8.10 E1, E5, E11, E13, E16), each a
- * list-and-detail screen (PLAN 0.6): the category tree (status, icon, content, FAQs, size chart, item type, SEO, image,
- * earlier addresses), brands (status, categories, size chart, SEO, logo) and stock locations. Also the lookups other
- * admin parts use (categories, brands, attributes, locations, size charts and grades) and the searches of products,
- * categories and brands for pickers.
+ * list-and-detail screen (PLAN 0.6): the category tree (status, icon, content, FAQs, size chart, item type, Google
+ * product category, SEO, image, earlier addresses), brands (status, categories, size chart, SEO, logo) and stock
+ * locations. Also the lookups other admin parts use (categories, brands, attributes, locations, size charts and
+ * grades) and the searches of products, categories and brands for pickers.
  * @module
  */
 import { query } from './admin-kit.js';
@@ -323,6 +323,8 @@ export const categoriesTab = (kit, panel, lookups) => {
 		const typed = showsTypes(kit, item?.typeKey);
 		const type = kit.select(typeChoices(kit, null, item?.typeKey ?? null, t('catalogAdmin.typeAsParent')), item?.typeKey ?? '');
 		const chart = kit.select(chartChoices(kit, lookups.state.charts), item?.sizeChartId ?? '');
+		// its products' Google product category in the feeds (G11): empty = the one above it, else the shop's
+		const googleCategory = kit.input(item?.googleCategory ?? '', { maxlength: '250' });
 		const description = kit.area(item?.description ?? '', { rows: '4', maxlength: '5000' });
 		const content = contentEditor(kit, item?.content);
 		const faqs = faqsEditor(kit, item?.faqs ?? []);
@@ -342,6 +344,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 					kit.field(t('catalogAdmin.sort'), sort),
 					typed ? kit.field(t('catalogAdmin.itemType'), type) : null,
 					has('size_charts') ? kit.field(t('catalogAdmin.sizeChart'), chart) : null,
+					has('feeds') ? kit.field(t('catalogAdmin.googleCategory'), googleCategory) : null,
 				]),
 				earlierSlugs(kit, item?.previousSlugs),
 				kit.field(t('catalogAdmin.description'), description),
@@ -362,6 +365,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 				seo: seo.value(),
 				...(typed ? { typeKey: type.value || null } : {}),
 				...(has('size_charts') ? { sizeChartId: chart.value || null } : {}),
+				...(has('feeds') ? { googleCategory: googleCategory.value.trim() } : {}),
 			}),
 			saved: after,
 		});
@@ -393,6 +397,7 @@ export const categoriesTab = (kit, panel, lookups) => {
 					showsTypes(kit, item.typeKey) ? typeLabel(kit, item.typeKey, t('catalogAdmin.typeAsParent')) : '',
 				],
 				[t('catalogAdmin.sizeChart'), has('size_charts') ? lookups.nameOf('charts', item.sizeChartId) : ''],
+				[t('catalogAdmin.googleCategoryTitle'), has('feeds') ? (item.googleCategory ?? '') : ''],
 			]),
 			earlierSlugs(kit, item.previousSlugs),
 			kit.masonry([

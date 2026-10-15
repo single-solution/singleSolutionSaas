@@ -98,6 +98,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'faqs',
 		'sizeChartId',
 		'typeKey',
+		'googleCategory',
 		'previousSlugs',
 		...STAMPS,
 	]),

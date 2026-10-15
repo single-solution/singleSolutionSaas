@@ -112,10 +112,12 @@ describe('catalog admin: categories', () => {
 		expect(textOf(detailOf(none))).toContain('No categories yet.');
 	});
 
-	it('creates and edits categories with status, icon, content, FAQs, size chart, serials and SEO', async () => {
+	it('creates and edits categories with status, icon, content, FAQs, size chart, Google category, serials and SEO', async () => {
 		/** @type {any[]} */
 		const bodies = [];
-		const { root, server } = await start(ALL, {
+		const { root, server } = await start([...ALL, 'feeds'], {
+			'GET /v1/admin/categories': () =>
+				answer(200, { items: CATEGORIES.map((item) => (item.id === 'cat_b' ? { ...item, googleCategory: '1604' } : item)) }),
 			'POST /v1/admin/categories': (/** @type {any} */ call) => {
 				bodies.push(call.body);
 				return call.body.name
@@ -125,6 +127,8 @@ describe('catalog admin: categories', () => {
 			'PATCH /v1/admin/categories/cat_b': (/** @type {any} */ call) => answer(200, { ...CATEGORIES[0], ...call.body }),
 		});
 		const panel = await openTab(root, 'categories');
+		await pick(panel, 'Phones');
+		expect(textOf(detailOf(panel))).toContain('Google product category1604');
 		await click(buttonIn(panel, 'New category'));
 		await submitDialog(root);
 		expect(statuses(dialogOf(root))).toContain(TEXTS['problem.field.name']);
@@ -155,6 +159,7 @@ describe('catalog admin: categories', () => {
 			},
 			typeKey: null,
 			sizeChartId: null,
+			googleCategory: '',
 		});
 		expect(hasDialog(root)).toBe(false);
 		// edit Phones: its parent cannot be itself or below it
@@ -175,6 +180,7 @@ describe('catalog admin: categories', () => {
 		type(fieldIn(edit, 'Icon name'), 'mobile');
 		await change(fieldIn(edit, 'Item type'), 'physical');
 		await change(fieldIn(edit, 'Size chart'), 'szc_2');
+		type(fieldIn(edit, 'Google product category (empty = as above it)'), ' 267 ');
 		type(fieldIn(edit, 'Summary'), 'Best phones');
 		await click(buttonIn(edit, 'Remove', 0));
 		await click(buttonIn(edit, 'Add a bullet'));
@@ -190,6 +196,7 @@ describe('catalog admin: categories', () => {
 			icon: 'mobile',
 			typeKey: 'physical',
 			sizeChartId: 'szc_2',
+			googleCategory: '267',
 			content: {
 				summary: 'Best phones',
 				bullets: [

@@ -76,10 +76,13 @@ export const clip = (value, max) => {
 /** A word that only separates others in a title (`|`, `-`, `·` …). */
 const SEPARATOR = /^[|\-–—·:/,•]+$/;
 
-/** A placeholder of a pattern, or an optional group (`[ by {brand}]`, no group inside another). */
-const PIECE = /\[([^[\]]*)\]|\{([A-Za-z][A-Za-z0-9]*)\}/g;
+/**
+ * A placeholder of a pattern (`{name}`, or a field's `{attr.<slug>}`), or an optional group (`[ by {brand}]`, no group
+ * inside another).
+ */
+const PIECE = /\[([^[\]]*)\]|\{([A-Za-z][A-Za-z0-9]*(?:\.[a-z0-9-]+)?)\}/g;
 /** A placeholder. */
-const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
+const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9]*(?:\.[a-z0-9-]+)?)\}/g;
 
 /**
  * A merchant's pattern filled (SG-5, SG-21, G6): each `{placeholder}` of `values` replaced (in one pass: what a value
@@ -340,8 +343,9 @@ export const daysRange = (list) => {
  */
 
 /**
- * A field value a place names (structured data or a feed): where it goes and its value as shoppers read it.
- * @typedef {{ target: string, name: string, value: string }} FieldTarget
+ * A field value a place names (structured data or a feed): where it goes, its value as shoppers read it, each of its
+ * values so (`values`) and as stored (`raw`, as text).
+ * @typedef {{ target: string, name: string, value: string, values: string[], raw: string[] }} FieldTarget
  */
 
 /**
@@ -359,7 +363,17 @@ export const fieldTargets = (values, fields, place) =>
 			return field && field.active && field.show[place] !== 'none' ? [field] : [];
 		})
 		.sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
-		.map((field) => ({ target: field.show[place], name: field.name, value: valueLabel(field, values[field.id]) }));
+		.map((field) => {
+			const value = values[field.id];
+			const each = Array.isArray(value) ? value : [value];
+			return {
+				target: field.show[place],
+				name: field.name,
+				value: valueLabel(field, value),
+				values: each.map((entry) => valueLabel(field, entry)),
+				raw: each.map(String),
+			};
+		});
 
 /**
  * Structured data properties of field values: `color`, `material`, `size` and `pattern` as such (the first of each),

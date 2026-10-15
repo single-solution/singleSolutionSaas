@@ -377,9 +377,14 @@
 								"color",
 								"material",
 								"size",
-								"pattern"
+								"pattern",
+								"gender",
+								"age_group",
+								"size_system",
+								"product_highlight",
+								"product_detail"
 							],
-							"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+							"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0): gender, age_group and size_system are sent only with the catalogs' own values (male, female, unisex; newborn, infant, toddler, kids, adult; US, UK, EU, DE, FR, JP, CN, IT, BR, MEX, AU), from the stored value or its label in any case; product_highlight sends each value as one highlight (up to 150 characters), product_detail the field's name and value."
 						},
 						"jsonLd": {
 							"type": "string",
@@ -1624,6 +1629,7 @@
 				"faqs",
 				"sizeChartId",
 				"typeKey",
+				"googleCategory",
 				"image",
 				"previousSlugs"
 			],
@@ -1696,6 +1702,11 @@
 				"typeKey": {
 					"type": ["string", "null"],
 					"description": "The item type its products have unless they name their own (a key of the item_types list, or a built-in type); null: its parent's."
+				},
+				"googleCategory": {
+					"type": "string",
+					"maxLength": 250,
+					"description": "The Google product category of its products' feed items (an id or a path; G11): '' = the nearest category above it that names one, else the feeds setting googleCategory."
 				},
 				"image": {
 					"oneOf": [
@@ -1849,6 +1860,11 @@
 				"typeKey": {
 					"type": ["string", "null"],
 					"description": "A key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service); null or '': its parent's. A change of its type or place that would give products with units in stock another item type is refused (409 conflict)."
+				},
+				"googleCategory": {
+					"type": "string",
+					"maxLength": 250,
+					"description": "The Google product category of its products' feed items (an id or a path; G11): '' = the nearest category above it that names one, else the feeds setting googleCategory."
 				}
 			}
 		},
@@ -14642,9 +14658,14 @@
 						"color",
 						"material",
 						"size",
-						"pattern"
+						"pattern",
+						"gender",
+						"age_group",
+						"size_system",
+						"product_highlight",
+						"product_detail"
 					],
-					"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+					"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0): gender, age_group and size_system are sent only with the catalogs' own values (male, female, unisex; newborn, infant, toddler, kids, adult; US, UK, EU, DE, FR, JP, CN, IT, BR, MEX, AU), from the stored value or its label in any case; product_highlight sends each value as one highlight (up to 150 characters), product_detail the field's name and value."
 				},
 				"jsonLd": {
 					"type": "string",
@@ -18645,6 +18666,11 @@
 				"typeKey": {
 					"type": ["string", "null"],
 					"description": "A key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service); null or '': its parent's. A change of its type or place that would give products with units in stock another item type is refused (409 conflict)."
+				},
+				"googleCategory": {
+					"type": "string",
+					"maxLength": 250,
+					"description": "The Google product category of its products' feed items (an id or a path; G11): '' = the nearest category above it that names one, else the feeds setting googleCategory."
 				}
 			},
 			"required": ["name"]
@@ -18755,6 +18781,11 @@
 				"typeKey": {
 					"type": ["string", "null"],
 					"description": "A key of the item_types list (an offered type, or the one it has) or a built-in type (physical, digital, service); null or '': its parent's. A change of its type or place that would give products with units in stock another item type is refused (409 conflict)."
+				},
+				"googleCategory": {
+					"type": "string",
+					"maxLength": 250,
+					"description": "The Google product category of its products' feed items (an id or a path; G11): '' = the nearest category above it that names one, else the feeds setting googleCategory."
 				}
 			},
 			"required": ["name"]
@@ -19177,9 +19208,14 @@
 								"color",
 								"material",
 								"size",
-								"pattern"
+								"pattern",
+								"gender",
+								"age_group",
+								"size_system",
+								"product_highlight",
+								"product_detail"
 							],
-							"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+							"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0): gender, age_group and size_system are sent only with the catalogs' own values (male, female, unisex; newborn, infant, toddler, kids, adult; US, UK, EU, DE, FR, JP, CN, IT, BR, MEX, AU), from the stored value or its label in any case; product_highlight sends each value as one highlight (up to 150 characters), product_detail the field's name and value."
 						},
 						"jsonLd": {
 							"type": "string",
@@ -19494,9 +19530,14 @@
 								"color",
 								"material",
 								"size",
-								"pattern"
+								"pattern",
+								"gender",
+								"age_group",
+								"size_system",
+								"product_highlight",
+								"product_detail"
 							],
-							"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0)."
+							"description": "The feed attribute its value fills (the grade label, with feeds gradeLabel, keeps custom_label_0): gender, age_group and size_system are sent only with the catalogs' own values (male, female, unisex; newborn, infant, toddler, kids, adult; US, UK, EU, DE, FR, JP, CN, IT, BR, MEX, AU), from the stored value or its label in any case; product_highlight sends each value as one highlight (up to 150 characters), product_detail the field's name and value."
 						},
 						"jsonLd": {
 							"type": "string",
