@@ -5,6 +5,7 @@
  * and offers `window.SSEcommerce`:
  *
  * - `identify(signIn | null)`: the shopper's Accounts sign-in (PLAN 0.4.6), sent in `SS-Sign-In` on visitor calls;
+ *   a guest's order keys (E21) are kept in the browser and each goes in `SS-Order-Key` with the calls about its order;
  * - `addToCart({ productId, variantId?, quantity? })`: adds to the cart kept in the browser;
  * - `cart.count()`, `cart.onChange(listener)`: the cart for the merchant's own header;
  * - `admin({ getTicket })`: on the merchant's admin pages (no `data-token`), mounts the admin widgets with tickets.
@@ -34,6 +35,7 @@ import { mountProductGrid } from './product-grid.js';
 import { mountProductPage } from './product-page.js';
 import { mountPromotionsAdmin } from './promotions-admin.js';
 import { announce } from './shop-common.js';
+import { createOrderKeys } from './order-keys.js';
 import { createTicketSource } from './tickets.js';
 import { mountWishlist } from './wishlist.js';
 
@@ -84,6 +86,8 @@ const retryAfterSeconds = (header) => {
  * @property {() => string} newKey a fresh Idempotency-Key
  * @property {(path: string) => Promise<{ ok: boolean, status: number, text: string }>} document a visitor route that
  *   answers a document (the invoice's HTML), with the same headers as `call`; status 0 when unreachable
+ * @property {(orderId: string, key: string) => void} keepOrderKey keep a guest order's key (its answer's `orderKey`, E21)
+ * @property {() => string[]} guestOrders the ids of the guest orders whose keys this browser keeps, the newest first
  */
 
 /**
@@ -163,6 +167,19 @@ export const startWidget = ({ window: win, script }) => {
 		);
 
 	const cart = createCartStore({ storage: storageOf(win) });
+	const orderKeys = createOrderKeys({ storage: storageOf(win) });
+	/**
+	 * The `SS-Order-Key` header of a call about a guest order whose key the browser keeps: its path names the order
+	 * (`/v1/shop/orders/<id>…`) or its body does (`orderId`, a review of an item).
+	 * @param {string} path @param {unknown} [body]
+	 * @returns {Record<string, string>}
+	 */
+	const orderKeyHeader = (path, body) => {
+		const named = /^\/v1\/shop\/orders\/(ord_[A-Za-z0-9_-]{1,64})(?:[/?]|$)/.exec(path)?.[1];
+		const id = named ?? (typeof (/** @type {any} */ (body)?.orderId) === 'string' ? /** @type {any} */ (body).orderId : null);
+		const key = id ? orderKeys.keyOf(id) : null;
+		return key ? { 'ss-order-key': key } : {};
+	};
 	/** @type {string | null} */
 	let signIn = null;
 	/** @type {Set<(signIn: string | null) => void>} */
@@ -182,6 +199,7 @@ export const startWidget = ({ window: win, script }) => {
 					headers: {
 						authorization: `Bearer ${token}`,
 						...(signIn ? { 'ss-sign-in': signIn } : {}),
+						...orderKeyHeader(path, init.body),
 						...(init.idempotencyKey ? { 'idempotency-key': init.idempotencyKey } : {}),
 						...(init.body === undefined ? {} : { 'content-type': 'application/json' }),
 					},
@@ -205,7 +223,11 @@ export const startWidget = ({ window: win, script }) => {
 	const fetchDocument = async (path) => {
 		try {
 			const response = await request(`${base}${path}`, {
-				headers: { authorization: `Bearer ${token}`, ...(signIn ? { 'ss-sign-in': signIn } : {}) },
+				headers: {
+					authorization: `Bearer ${token}`,
+					...(signIn ? { 'ss-sign-in': signIn } : {}),
+					...orderKeyHeader(path),
+				},
 			});
 			return { ok: response.ok, status: response.status, text: await response.text() };
 		} catch {
@@ -265,6 +287,8 @@ export const startWidget = ({ window: win, script }) => {
 			location: () => new URL(win.location.href),
 			newKey: () =>
 				typeof win.crypto?.randomUUID === 'function' ? win.crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+			keepOrderKey: orderKeys.keep,
+			guestOrders: orderKeys.ids,
 		};
 		win.addEventListener(ADD_TO_CART_EVENT, (event) => {
 			const detail = /** @type {CustomEvent} */ (event).detail;

@@ -103,13 +103,22 @@ const SETTINGS = {
 
 /**
  * @param {{ quote?: (call: any) => any, routes?: Record<string, any>, signIn?: string | null, url?: string,
- *   settings?: Record<string, any>, lines?: any[] }} [options]
+ *   settings?: Record<string, any>, lines?: any[], guestOrders?: string[] }} [options]
  */
-const setup = async ({ quote = () => ok(quoteOf()), routes = {}, signIn = null, url, settings = SETTINGS, lines } = {}) => {
+const setup = async ({
+	quote = () => ok(quoteOf()),
+	routes = {},
+	signIn = null,
+	url,
+	settings = SETTINGS,
+	lines,
+	guestOrders = [],
+} = {}) => {
 	const fake = makeShop({
 		features: ['checkout'],
 		signIn,
 		routes: { 'POST /v1/shop/cart/quote': quote, ...routes },
+		guestOrders,
 		...(url ? { url } : {}),
 	});
 	for (const entry of lines ?? [{ productId: 'prd_1', variantId: 'var_1', quantity: 2 }]) fake.cart.add(entry);
@@ -631,6 +640,66 @@ describe('checkout', () => {
 		await timers.run();
 		expect(textOf(host)).toContain(text('cart.title'));
 		expect($(host, '.box h2').closest('[hidden]')).not.toBeNull();
+	});
+
+	it('lets a guest order with their name and contact while the shop allows it, keeping the order key (E21)', async () => {
+		/** @type {any} */
+		let answerOf = fail(403, 'sign_in_required', { signIn: 'member_phone' });
+		const pickupOnly = () =>
+			ok(
+				quoteOf({
+					deliveryOptions: [PICKUP],
+					delivery: PICKUP,
+					paymentMethods: [{ method: 'pickup', available: true, reason: null, advance: 0 }],
+				}),
+			);
+		const { fake, host } = await setup({
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: 'on' } },
+			quote: pickupOnly,
+			routes: { 'POST /v1/shop/orders': () => answerOf },
+		});
+		expect($(host, '#ss-cart-guest-name').closest('fieldset').hidden).toBe(false);
+		expect(textOf(host)).toContain(text('checkout.guest.title'));
+		expect(textOf(host)).toContain(text('checkout.guest.signIn'));
+		expect(textOf(host)).not.toContain(text('checkout.signIn'));
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.missing', { field: text('checkout.guest.name') }));
+		expect(fake.all('POST /v1/shop/orders')).toHaveLength(0);
+		$(host, '#ss-cart-guest-name').value = ' Gina Guest ';
+		$(host, '#ss-cart-guest-phone').value = '555 000 7777';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.body.customer).toEqual({ name: 'Gina Guest', phone: '555 000 7777', email: '' });
+		// a contact of a member with a password signs in instead
+		expect(textOf(host)).toContain(text('checkout.guest.member'));
+		answerOf = fail(422, 'validation_failed', { errors: [{ path: '/customer/phone', message: 'Give your phone number.' }] });
+		await click(buttonOf(host, text('checkout.place')));
+		expect(textOf(host)).toContain(text('checkout.problem.guest'));
+		answerOf = ok({ order: ORDER, next: { kind: 'done' }, orderKey: 'k'.repeat(32) }, 201);
+		$(host, '#ss-cart-guest-email').value = 'gina@example.com';
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.body.customer.email).toBe('gina@example.com');
+		expect(fake.kept).toEqual([['ord_1', 'k'.repeat(32)]]);
+		expect(textOf(host)).toContain(text('success.title'));
+
+		// signed in: no guest details
+		resetPage();
+		const member = await setup({
+			signIn: 's1',
+			settings: { ...SETTINGS, checkout: { ...SETTINGS.checkout, guests: 'on' } },
+			quote: pickupOnly,
+		});
+		expect($(member.host, '#ss-cart-guest-name').closest('fieldset').hidden).toBe(true);
+		expect(buttonOf(member.host, text('checkout.place'))).toBeTruthy();
+	});
+
+	it('reads a guest’s order back from Payments with the key kept in the browser (E21)', async () => {
+		const { fake, host } = await setup({
+			url: 'https://shop.example.com/cart?ss_order=ord_1',
+			routes: { 'GET /v1/shop/orders/ord_1': () => ok(ORDER) },
+			guestOrders: ['ord_1'],
+		});
+		expect(fake.last('GET /v1/shop/orders/ord_1')).toBeTruthy();
+		expect(textOf(host)).toContain(text('success.number', { number: 'SO2026-1' }));
 	});
 
 	it('shows the bank details of a transfer, then takes the transfer proof on the success page (E24)', async () => {

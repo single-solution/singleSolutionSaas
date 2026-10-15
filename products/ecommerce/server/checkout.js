@@ -118,6 +118,8 @@ export const createCheckout = (product, service) => {
 				digital: s.has('digital_goods'),
 				coupons: s.has('coupons'),
 				loyalty: s.has('loyalty'),
+				// whether shoppers may order without signing in (E21): off, on or unless_password
+				guests: checkout.guests,
 				address: {
 					required: [
 						'name',

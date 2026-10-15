@@ -143,6 +143,32 @@ describe('my orders', () => {
 		expect(buttonOf(host, text('orders.more')).hidden).toBe(true);
 	});
 
+	it('lists a guest’s orders kept in this browser, each opened with its key, and asks to sign in for the rest (E21)', async () => {
+		const fake = makeShop({
+			features: ['checkout'],
+			guestOrders: ['ord_2', 'ord_1', 'ord_gone'],
+			routes: {
+				'GET /v1/shop/orders/ord_1': () => ok(detail()),
+				'GET /v1/shop/orders/ord_2': () => ok(detail({ id: 'ord_2', number: 'SO-2', canCancel: false })),
+				'GET /v1/shop/orders/ord_gone': () => fail(404, 'not_found'),
+			},
+		});
+		const host = await mountOrders(fake);
+		expect(textOf(host)).toContain(text('orders.guestTitle'));
+		expect(textOf(host)).toContain(text('orders.signIn'));
+		const opens = $$(host, 'li button').map((node) => node.textContent);
+		expect(opens).toEqual([text('orders.open', { number: 'SO-2' }), text('orders.open', { number: 'SO-1' })]);
+		expect(textOf(host)).toContain(
+			text('orders.row', { date: 'Oct 1, 2026', status: 'Placed', total: 'GBP 2,200.00', count: 3 }),
+		);
+		expect(fake.all('GET /v1/shop/orders')).toHaveLength(0);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		expect(textOf(host)).toContain(text('orders.number', { number: 'SO-1' }));
+		expect(textOf(host)).toContain(text('orders.cancel'));
+		await click(buttonOf(host, text('orders.back')));
+		expect(textOf(host)).toContain(text('orders.guestTitle'));
+	});
+
 	it('shows each line’s serial numbers, the unit fields shown to shoppers, the order fields and warranty', async () => {
 		const fake = makeShop({
 			signIn: 's1',

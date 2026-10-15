@@ -72,6 +72,8 @@ export const settingsOf = (config) => {
 			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
 			coupons: checkout.coupons === true,
 			loyalty: checkout.loyalty === true,
+			/** whether shoppers may order without signing in (E21) */
+			guests: checkout.guests === 'on' || checkout.guests === 'unless_password',
 			address: {
 				required: /** @type {string[]} */ (checkout.address?.required ?? ['name', 'phone', 'line1', 'city']),
 				optional: /** @type {string[]} */ (

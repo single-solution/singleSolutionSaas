@@ -1,6 +1,7 @@
 /**
  * Parts of the cart widget's checkout (PLAN 0.8.8: cart + checkout + success page): the delivery address form (the
- * fields the merchant requires, from the `checkout` settings), the success page of a placed order (its number,
+ * fields the merchant requires, from the `checkout` settings), a guest's details (E21: their name, phone and email
+ * address; the server says which contact the shop needs), the success page of a placed order (its number,
  * status, totals and, while it waits for a payment, the way to pay) and paying an order again.
  * @module
  */
@@ -110,6 +111,57 @@ export const addressForm = ({ doc, t, settings, onPlace }) => {
 		values: () => Object.fromEntries(ADDRESS_FIELDS.map((name) => [name, value(name)])),
 		/** The first required field left empty, or null. */
 		missing: () => required.find((name) => inputs.has(name) && value(name) === '') ?? null,
+		/** @param {string} name */
+		focus: (name) => inputs.get(name)?.focus(),
+	};
+};
+
+/** A guest's details in order, with their longest text, the input type and the browser's autofill name. */
+const GUEST_FIELDS = Object.freeze(
+	/** @type {Array<[string, number, string, string]>} */ ([
+		['name', 120, 'text', 'name'],
+		['phone', 30, 'tel', 'tel'],
+		['email', 254, 'email', 'email'],
+	]),
+);
+
+/**
+ * A guest's details (E21): the name, needed, and the phone and email address the shop checks out guests by (the server
+ * refuses a missing one at its field, `/customer/<field>`).
+ * @param {{ doc: Document, t: Texts }} input
+ */
+export const guestForm = ({ doc, t }) => {
+	/** @type {Map<string, HTMLInputElement>} */
+	const inputs = new Map();
+	const fields = GUEST_FIELDS.map(([name, max, type, autocomplete]) => {
+		const control = /** @type {HTMLInputElement} */ (
+			h(doc, 'input', {
+				type,
+				maxlength: String(max),
+				autocomplete,
+				...(type === 'tel' ? { inputmode: 'tel' } : {}),
+				...(name === 'name' ? { required: '', 'aria-required': 'true' } : {}),
+			})
+		);
+		inputs.set(name, control);
+		return field(doc, `ss-cart-guest-${name}`, t(`checkout.guest.${name}`), control);
+	});
+	const node = h(
+		doc,
+		'fieldset',
+		{ class: 'box' },
+		h(doc, 'legend', {}, t('checkout.guest.title')),
+		h(doc, 'p', { class: 'hint' }, t('checkout.guest.signIn')),
+		...fields,
+	);
+	/** @param {string} name */
+	const value = (name) => inputs.get(name)?.value.trim() ?? '';
+	return {
+		node,
+		/** The guest as the order takes it (`customer`). */
+		values: () => ({ name: value('name'), phone: value('phone'), email: value('email') }),
+		/** The name when it is left empty, else null. */
+		missing: () => (value('name') === '' ? 'name' : null),
 		/** @param {string} name */
 		focus: (name) => inputs.get(name)?.focus(),
 	};

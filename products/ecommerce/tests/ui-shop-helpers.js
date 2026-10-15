@@ -53,8 +53,9 @@ const memoryStorage = () => {
 /**
  * A fake `Shop`.
  * @param {{ features?: string[], signIn?: string | null, routes?: Record<string, Route>, url?: string,
- *   documents?: Record<string, { ok: boolean, status: number, text: string }> | null }} [options] `documents`: answers
- *   of `shop.document(path)` (null: the runtime has no `document`)
+ *   documents?: Record<string, { ok: boolean, status: number, text: string }> | null, guestOrders?: string[] }} [options]
+ *   `documents`: answers of `shop.document(path)` (null: the runtime has no `document`); `guestOrders`: the ids of the
+ *   guest orders whose keys the browser keeps
  */
 export const makeShop = ({
 	features = [],
@@ -62,9 +63,13 @@ export const makeShop = ({
 	routes = {},
 	url = 'https://shop.example.com/cart',
 	documents = null,
+	guestOrders = [],
 } = {}) => {
 	/** @type {Call[]} */
 	const calls = [];
+	/** The order keys kept, as `[orderId, key]`. @type {Array<[string, string]>} */
+	const kept = [];
+	const guests = [...guestOrders];
 	/** @type {string[]} */
 	const went = [];
 	let identity = signIn;
@@ -100,6 +105,11 @@ export const makeShop = ({
 		go: (/** @type {string} */ to) => void went.push(to),
 		location: () => new URL(page),
 		newKey: () => `key-${(keys += 1)}`,
+		keepOrderKey: (/** @type {string} */ id, /** @type {string} */ key) => {
+			kept.push([id, key]);
+			guests.unshift(id);
+		},
+		guestOrders: () => [...guests],
 	};
 	if (documents)
 		shop.document = async (/** @type {string} */ path) => {
@@ -112,6 +122,7 @@ export const makeShop = ({
 		shop: /** @type {import('../ui/widget.js').Shop} */ (shop),
 		calls,
 		went,
+		kept,
 		cart,
 		routes,
 		all,

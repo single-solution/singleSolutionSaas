@@ -6,7 +6,8 @@
  * E11, E12), Cancel while the order allows it, return or warranty claims (`returns`) with their own list and, with
  * reviews per order line, a review of each delivered item (`reviews`, E34; the line's `canReview`). Above the
  * orders, the loyalty points balance with the points expiring soon and the points history (`loyalty`,
- * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows.
+ * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows, under the guest orders this browser keeps the keys of (E21),
+ * which open with their key (paying, canceling, the transfer proof, the invoice, downloads and reviews of items).
  * @module
  */
 import {
@@ -146,9 +147,9 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				claimsBox.hidden = false;
 				pointsBox.hidden = false;
 				if (!shop.signIn()) {
-					listBox.replaceChildren(h(doc, 'p', { class: 'hint' }, t('orders.signIn')));
 					claimsBox.replaceChildren();
 					pointsBox.replaceChildren();
+					await showGuestOrders(mine);
 					return;
 				}
 				if (shop.has('loyalty')) void showPoints(mine);
@@ -174,6 +175,39 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				};
 				await page();
 				if (shop.has('returns') && mine === seq) await renderClaims({ box: claimsBox, t, shop, config, settings, win });
+			};
+
+			/**
+			 * Signed out: the guest orders whose keys this browser keeps (E21), each read with its key, and the sign-in hint.
+			 * @param {number} mine
+			 */
+			const showGuestOrders = async (mine) => {
+				const ids = shop.guestOrders().slice(0, PAGE);
+				const hint = h(doc, 'p', { class: 'hint' }, t('orders.signIn'));
+				if (ids.length === 0) {
+					listBox.replaceChildren(hint);
+					return;
+				}
+				const list = h(doc, 'ul', { 'aria-label': t('orders.guestTitle') });
+				listBox.replaceChildren(h(doc, 'h2', {}, t('orders.guestTitle')), list, hint);
+				const found = await Promise.all(ids.map((id) => shop.call(`/v1/shop/orders/${encodeURIComponent(id)}`)));
+				if (mine !== seq) return;
+				for (const answer of found)
+					if (answer.ok)
+						list.append(
+							rowOf({
+								id: answer.data.id,
+								number: answer.data.number,
+								placedAt: answer.data.placedAt,
+								statusLabel: answer.data.statusLabel,
+								total: answer.data.totals.total,
+								currency: answer.data.totals.currency,
+								itemCount: answer.data.lines.reduce(
+									(/** @type {number} */ sum, /** @type {any} */ line) => sum + line.quantity,
+									0,
+								),
+							}),
+						);
 			};
 
 			/** @param {any} order */
@@ -474,7 +508,8 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							{ class: 'secondary' },
 						),
 					);
-				if (shop.has('returns') && CLAIMABLE_ROLES.includes(order.role))
+				// claims need a sign-in (E21)
+				if (shop.has('returns') && shop.signIn() && CLAIMABLE_ROLES.includes(order.role))
 					actions.push(
 						button(
 							doc,

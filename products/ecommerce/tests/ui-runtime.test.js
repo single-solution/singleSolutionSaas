@@ -124,6 +124,48 @@ describe('visitor widgets', () => {
 		expect(await shop.call('/v1/shop/thing')).toEqual({ ok: false, status: 0, data: null });
 	});
 
+	it('keep a guest’s order keys in the browser and send each with the calls about its order (E21)', async () => {
+		place('cart');
+		const fetch = vi.spyOn(window, 'fetch').mockImplementation(async (input) => {
+			const url = new URL(String(input));
+			if (url.pathname === CONFIG_PATH) return answer(200, configOf(['checkout']));
+			return answer(200, { ok: 1 });
+		});
+		const { ready } = startWidget({ window, script: script('browser-token') });
+		await ready;
+		const shop = mounts.visitor[0][1].shop;
+		expect(shop.guestOrders()).toEqual([]);
+		const first = 'k'.repeat(32);
+		const second = 'm'.repeat(32);
+		shop.keepOrderKey('ord_1', first);
+		shop.keepOrderKey('ord_2', second);
+		shop.keepOrderKey('bad id', second);
+		shop.keepOrderKey('ord_3', 'short');
+		expect(shop.guestOrders()).toEqual(['ord_2', 'ord_1']);
+		const headersOf = () => /** @type {any} */ (fetch.mock.calls.at(-1))[1].headers;
+		await shop.call('/v1/shop/orders/ord_1/pay', { method: 'POST', body: {} });
+		expect(headersOf()['ss-order-key']).toBe(first);
+		await shop.call('/v1/shop/reviews', { method: 'POST', body: { orderId: 'ord_2', lineId: 'oln_1', rating: 5 } });
+		expect(headersOf()['ss-order-key']).toBe(second);
+		await shop.document('/v1/shop/orders/ord_2/invoice');
+		expect(headersOf()['ss-order-key']).toBe(second);
+		for (const path of ['/v1/shop/orders/ord_9', '/v1/shop/orders', '/v1/shop/products/ord_1']) {
+			await shop.call(path);
+			expect(headersOf()['ss-order-key']).toBeUndefined();
+		}
+		// kept for the next pages: the newest 20
+		for (let n = 3; n <= 25; n += 1) shop.keepOrderKey(`ord_${n}`, first);
+		const kept = JSON.parse(String(window.localStorage.getItem(STORAGE_KEYS.orderKeys)));
+		expect(kept).toHaveLength(20);
+		expect(kept[0]).toEqual({ id: 'ord_25', key: first });
+		window.localStorage.setItem(STORAGE_KEYS.orderKeys, '{broken');
+		document.body.replaceChildren();
+		mounts.visitor.length = 0;
+		place('cart');
+		await startWidget({ window, script: script('browser-token') }).ready;
+		expect(mounts.visitor[0][1].shop.guestOrders()).toEqual([]);
+	});
+
 	it('send a call still in progress again with the same key after its Retry-After, a few times (K-14)', async () => {
 		place('cart');
 		/** @type {Array<{ status: number, retryAfter?: string }>} */
