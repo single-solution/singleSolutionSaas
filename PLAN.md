@@ -1973,6 +1973,18 @@ anything unused or left over (files, folders, exports, settings, texts, generate
 sitemaps and the new site answer (E49) — is served whenever the catalog is on; the priced `seo` feature is the SEO
 product (patterns, score, automatic copy, IndexNow, glossary and landing pages).
 
+- **SEO S5–S9 built (2026-10-15; a1454526, 00fb34ac, ed9f5693, 7a07e1f1, d0bfc2b9, aeb8d520; importer 55196021,
+  24b34880 — SaaS defaults to review when the owner asks):** basic SEO comes with the catalog (product, category,
+  listing and home heads and sitemaps follow the SEO settings' defaults while `seo` is off; `seo` is the SEO product,
+  recommended for `marketing.seo`); `GET /v1/seo/site` answers an OnlineStore or LocalBusiness plus a WebSite with
+  store-wide return and shipping policies that offers point to by `@id`; settings home title and description, other
+  site name, site type, social profiles, empty-category choice, handling and transit days, return method and fee,
+  returns accepted without the Returns feature; health checks business country, logo and delivery days; thin pages out
+  of the index and sitemap; listing `total`/`empty`/`status` (404); landing pages stay indexed once indexed
+  (`landing_index`); `contentUpdatedAt` dates the sitemap (stock changes never move it), the home page is in it and
+  index files are dated; Growth's robots.txt names `/sitemap.xml` by default; a `?html=1` server HTML core printed by
+  the snippets, the widget's h1 (`data-heading`) and card image sizes; ETag, Cache-Control and 304 on SEO and shop
+  reads, `lastModified`, and a webhook route that clears the cache. Left for S-C: feeds send handling/transit days.
 - **SEO S1–S4 built (2026-10-15; 3ea19105, 2ff59f39, 5136a716, f22e29f1, e2e c5947c07; SB mapping mechanical
   9f3272a7, 480aa3c7, cd4cb1c0 — to review when the owner asks):** structured data meets Google's merchant-listing
   rules (variant images and unique ids, no zero-price offers, no Product node without offers, return windows per item,
