@@ -3,7 +3,9 @@
  * 1000 millicredits), with at most 3 decimals and no rounding beyond that (millicredits are exact).
  * Dates are US English (`Oct 4, 2026`; `Oct 4, 2026, 2:30 PM UTC`) and render in UTC, so server and browser output
  * agree (no hydration drift); `formatDateTime(value, { timeZone })` shows the same style in another time zone, with
- * its short name (the viewer's local time once the page runs in a browser). Codes read as words with `humanize`.
+ * its short name (the viewer's local time once the page runs in a browser). A product dashboard shows dates and
+ * numbers in its website's Format (`locale`, fixed-choices audit K2: `15 Oct 2026, 14:30 GMT+5`, `1.234,5`), while its
+ * words stay US English. Codes read as words with `humanize`.
  * @module
  */
 
@@ -23,33 +25,64 @@ const DATE = new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short',
 const NO_BREAK_SPACES = /[\u00a0\u202f]/g;
 
 /**
- * Credits from millicredits as a plain number string (`12.345`); `—` for null/undefined/NaN.
+ * Credits from millicredits as a plain number string (`12.345`; with `locale`, that locale's separators); `—` for
+ * null/undefined/NaN.
  * @param {number | null | undefined} millicredits
+ * @param {{ locale?: string | null }} [options]
  * @returns {string}
  */
-export const creditsNumber = (millicredits) => {
+export const creditsNumber = (millicredits, { locale } = {}) => {
 	if (typeof millicredits !== 'number' || !Number.isFinite(millicredits)) return '—';
 	// integer millicredits divide exactly into ≤ 3 decimals
-	return CREDITS.format(Math.trunc(millicredits) / 1000);
+	return numberIn(locale)
+		.format(Math.trunc(millicredits) / 1000)
+		.replace(NO_BREAK_SPACES, ' ');
 };
 
 /**
- * `12.345 credits` (or `1 credit`).
- * @param {number | null | undefined} millicredits
+ * A number in a locale's digits and separators (the website Format's `locale`; US English when none or unknown).
+ * @param {number | null | undefined} value
+ * @param {{ locale?: string | null, maximumFractionDigits?: number }} [options]
  * @returns {string}
  */
-export const formatCredits = (millicredits) => {
-	const text = creditsNumber(millicredits);
+export const formatNumber = (value, { locale, maximumFractionDigits = 3 } = {}) =>
+	typeof value === 'number' && Number.isFinite(value)
+		? numberIn(locale, maximumFractionDigits).format(value).replace(NO_BREAK_SPACES, ' ')
+		: '—';
+
+/**
+ * The number format of a locale (US English for none or an unknown one).
+ * @param {string | null | undefined} locale
+ * @param {number} [maximumFractionDigits]
+ */
+const numberIn = (locale, maximumFractionDigits = 3) => {
+	if ((!locale || locale === 'en-US') && maximumFractionDigits === 3) return CREDITS;
+	try {
+		return new Intl.NumberFormat(locale || 'en-US', { minimumFractionDigits: 0, maximumFractionDigits });
+	} catch {
+		return CREDITS;
+	}
+};
+
+/**
+ * `12.345 credits` (or `1 credit`); with `locale`, the number in that locale (`12,345 credits`).
+ * @param {number | null | undefined} millicredits
+ * @param {{ locale?: string | null }} [options]
+ * @returns {string}
+ */
+export const formatCredits = (millicredits, options = {}) => {
+	const text = creditsNumber(millicredits, options);
 	if (text === '—') return text;
 	return `${text} ${Math.abs(/** @type {number} */ (millicredits)) === 1000 ? 'credit' : 'credits'}`;
 };
 
 /**
- * `1.25 credits/h`.
+ * `1.25 credits/h`; with `locale`, the number in that locale.
  * @param {number | null | undefined} millicredits per hour
+ * @param {{ locale?: string | null }} [options]
  */
-export const formatCreditsPerHour = (millicredits) =>
-	creditsNumber(millicredits) === '—' ? '—' : `${creditsNumber(millicredits)} credits/h`;
+export const formatCreditsPerHour = (millicredits, options = {}) =>
+	creditsNumber(millicredits, options) === '—' ? '—' : `${creditsNumber(millicredits, options)} credits/h`;
 
 /**
  * Parse a credits amount typed by a person (`12`, `12.5`, `0.125`) into integer millicredits.
@@ -71,35 +104,51 @@ const toDate = (value) => {
 };
 
 /**
- * The en-US date and time format of a time zone; UTC for UTC, a missing or an unknown zone.
+ * The date and time format of a time zone and a locale (US English by default); UTC for UTC, a missing or an unknown
+ * zone; US English for an unknown locale.
  * @param {string | null | undefined} timeZone IANA time zone
+ * @param {string | null | undefined} [locale] BCP 47 language tag (the website Format's `locale`)
  */
-const dateTimeIn = (timeZone) => {
-	if (!timeZone || timeZone === 'UTC') return DATE_TIME;
+const dateTimeIn = (timeZone, locale) => {
+	const zone = !timeZone ? 'UTC' : timeZone;
+	if (zone === 'UTC' && (!locale || locale === 'en-US')) return DATE_TIME;
 	try {
-		return new Intl.DateTimeFormat('en-US', { ...DATE_TIME_PARTS, timeZone });
+		return new Intl.DateTimeFormat(locale || 'en-US', { ...DATE_TIME_PARTS, timeZone: zone });
 	} catch {
-		return DATE_TIME;
+		try {
+			return new Intl.DateTimeFormat('en-US', { ...DATE_TIME_PARTS, timeZone: zone });
+		} catch {
+			return DATE_TIME;
+		}
 	}
 };
 
 /**
- * `Oct 1, 2026, 10:00 AM UTC`; with `timeZone`, the same style in that zone (`Oct 1, 2026, 6:00 AM EDT`).
+ * `Oct 1, 2026, 10:00 AM UTC`; with `timeZone`, the same style in that zone (`Oct 1, 2026, 6:00 AM EDT`); with
+ * `locale`, that locale's order and clock (`en-GB`: `1 Oct 2026, 10:00 UTC`).
  * @param {string | number | Date | null | undefined} value
- * @param {{ timeZone?: string | null }} [options] IANA time zone (default UTC)
+ * @param {{ timeZone?: string | null, locale?: string | null }} [options] IANA time zone (default UTC), BCP 47 locale
+ *   (default en-US)
  */
-export const formatDateTime = (value, { timeZone } = {}) => {
+export const formatDateTime = (value, { timeZone, locale } = {}) => {
 	const d = toDate(value);
-	return d ? dateTimeIn(timeZone).format(d).replace(NO_BREAK_SPACES, ' ') : '—';
+	return d ? dateTimeIn(timeZone, locale).format(d).replace(NO_BREAK_SPACES, ' ') : '—';
 };
 
 /**
- * `Oct 1, 2026` (UTC).
+ * `Oct 1, 2026` (UTC); with `locale`, that locale's order (`en-GB`: `1 Oct 2026`).
  * @param {string | number | Date | null | undefined} value
+ * @param {{ locale?: string | null }} [options]
  */
-export const formatDate = (value) => {
+export const formatDate = (value, { locale } = {}) => {
 	const d = toDate(value);
-	return d ? DATE.format(d) : '—';
+	if (!d) return '—';
+	if (!locale || locale === 'en-US') return DATE.format(d);
+	try {
+		return new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d);
+	} catch {
+		return DATE.format(d);
+	}
 };
 
 /** Short words written in capitals (or with their own casing) when a choice's value is shown as a label. */

@@ -20,7 +20,8 @@ import { Callout, Skeleton } from './display.js';
 import { Select } from './fields.js';
 import { SwapTransition } from './motion.js';
 import { describeProblem } from './problems.js';
-import { call, fill } from './dashboard-api.js';
+import { call, fill, useLoad } from './dashboard-api.js';
+import { DisplayLocale } from './time.js';
 import { DashboardProvider, useDashboard } from './dashboard-parts.js';
 import {
 	ConnectionsTab,
@@ -137,6 +138,17 @@ function SectionLink({ href, onClick, children, ...rest }) {
 }
 
 /**
+ * The picked website's dates and numbers in its Format's `locale` (fixed-choices audit K2; the words stay US English);
+ * US English on the global tabs and until the Format is read.
+ * @param {{ websiteId: string | null, children: import('react').ReactNode }} props
+ */
+function WebsiteLocale({ websiteId, children }) {
+	const format = useLoad(websiteId ? `/v1/dashboard/websites/${websiteId}/format` : null);
+	const locale = format.answer?.ok ? /** @type {{ format?: { locale?: string } }} */ (format.answer.data).format?.locale : '';
+	return <DisplayLocale locale={locale}>{children}</DisplayLocale>;
+}
+
+/**
  * The whole dashboard of a product: its manifest (feature names), its words (`dashboardTexts`: the title and its own
  * words over the shared ones) and its tabs — a standard tab's key with a component puts the product's section in its
  * place (often the standard tab with the product's props); a new key with `{ component, icon, kind, global? }` adds a
@@ -241,14 +253,16 @@ function DashboardPage({ tabs: own }) {
 					{needsWebsite && !site ? (
 						<Callout tone="info">{texts.pickWebsite}</Callout>
 					) : (
-						<Tab
-							websiteId={site ? site.websiteId : null}
-							domain={site ? site.domain : ''}
-							who={who}
-							support={support}
-							portal={portalUrl}
-							open={(tab) => go(href(tab))}
-						/>
+						<WebsiteLocale websiteId={site ? site.websiteId : null}>
+							<Tab
+								websiteId={site ? site.websiteId : null}
+								domain={site ? site.domain : ''}
+								who={who}
+								support={support}
+								portal={portalUrl}
+								open={(tab) => go(href(tab))}
+							/>
+						</WebsiteLocale>
 					)}
 				</SwapTransition>
 			</AppShell>

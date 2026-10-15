@@ -30,7 +30,7 @@ import {
 	useLoad,
 	withDependents,
 } from '../src/dashboard.js';
-import { DASHBOARD_TEXTS, dashboardTexts } from '../src/index.js';
+import { DASHBOARD_TEXTS, dashboardTexts, formatCredits, useDisplayLocale } from '../src/index.js';
 import { act, allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 /** @typedef {import('../src/dashboard.js').TabProps} TabProps */
@@ -916,6 +916,28 @@ describe('ProductDashboard', () => {
 		await act(async () => window.dispatchEvent(new PopStateEvent('popstate')));
 		await settle();
 		expect(current()).toBe('Overview');
+	});
+
+	it("shows a website's dates and numbers in its Format locale (the words stay US English)", async () => {
+		function Probe() {
+			const locale = useDisplayLocale();
+			return <p>{`locale ${locale}: ${formatCredits(1234500, { locale })}`}</p>;
+		}
+		serve({
+			'GET /v1/dashboard/session': session(MERCHANT),
+			'GET /v1/dashboard/websites/p1/format': ok({ format: { locale: 'de-DE' }, sources: {} }),
+			'GET /v1/dashboard/websites/p2/format': ok({ format: { locale: '' }, sources: {} }),
+		});
+		window.history.replaceState(null, '', '?websiteId=p1&view=overview');
+		render(<ProductDashboard manifest={MANIFEST} texts={TEXTS} tabs={{ overview: Probe }} />);
+		await settle();
+		await settle();
+		expect(document.body.textContent).toContain('locale de-DE: 1.234,5 credits');
+		window.history.replaceState(null, '', '?websiteId=p2&view=overview');
+		await act(async () => window.dispatchEvent(new PopStateEvent('popstate')));
+		await settle();
+		await settle();
+		expect(document.body.textContent).toContain('locale en-US: 1,234.5 credits');
 	});
 
 	it('an Owner gets Defaults and Prices (no website needed), the merchant names, the Admin view banner and new tabs', async () => {

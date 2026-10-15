@@ -20,7 +20,7 @@ import { Card, EmptyState, PageHeader, STAT_GRID, SkeletonBlock, Stat, StatGrid,
 import { formatCredits, supportContact } from './format.js';
 import { Icon } from './icons.js';
 import { OVERVIEW_TEXTS } from './overview-texts.js';
-import { LocalTime } from './time.js';
+import { LocalTime, useDisplayLocale } from './time.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 
@@ -289,6 +289,7 @@ export function ProductOverview({
 	const on = data.featuresOn;
 	const status = data.status.status;
 	const merchant = who.kind === 'merchant';
+	const locale = useDisplayLocale();
 	const { widget, business } = data.checklist;
 	/** @param {string} label @param {OverviewTab} tab */
 	const go = (label, tab) => (
@@ -433,7 +434,13 @@ export function ProductOverview({
 				</div>
 			</div>
 			<StatGrid label={T.numbers}>
-				<Stat label={T.today} value={formatCredits(data.todayMillicredits)} hint={T.todayHint} icon="coins" kind="credit" />
+				<Stat
+					label={T.today}
+					value={formatCredits(data.todayMillicredits, { locale })}
+					hint={T.todayHint}
+					icon="coins"
+					kind="credit"
+				/>
 				<Stat
 					label={T.features}
 					value={on.length}

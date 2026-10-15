@@ -16,6 +16,7 @@ import { ActionMenu } from './Menu.js';
 import { ConfirmDialog } from './overlay.js';
 import { OverviewSkeleton, ProductOverview, RecentChanges } from './overview.js';
 import { formatCreditsPerHour, parseCredits, supportContact } from './format.js';
+import { useDisplayLocale } from './time.js';
 import { call, fill, useLoad } from './dashboard-api.js';
 import {
 	FormatForm,
@@ -103,6 +104,7 @@ export function OverviewTab(props) {
  */
 export function FeaturesTab({ websiteId, who, support, warnings }) {
 	const { texts, namesOf } = useDashboard();
+	const locale = useDisplayLocale();
 	const F = texts.features;
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/features`);
@@ -146,7 +148,7 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 										key={feature.key}
 										bodyClassName="space-y-3"
 										title={feature.name}
-										subtitle={fill(F.price, { price: formatCreditsPerHour(feature.millicreditsPerHour) })}
+										subtitle={fill(F.price, { price: formatCreditsPerHour(feature.millicreditsPerHour, { locale }) })}
 										actions={
 											<a className="text-sm font-semibold text-primary" href={`/docs#feature-${feature.key}`}>
 												{F.docs}
@@ -197,7 +199,7 @@ export function FeaturesTab({ websiteId, who, support, warnings }) {
 									reload();
 								}
 							}}>
-							<p>{fill(F.confirmCost, { cost: formatCreditsPerHour(cost) })}</p>
+							<p>{fill(F.confirmCost, { cost: formatCreditsPerHour(cost, { locale }) })}</p>
 							{turnedOff.length > 0 ? <p>{fill(F.alsoOff, { features: namesOf(turnedOff) })}</p> : null}
 							{warned.map((warning) => (
 								<p key={warning}>{warning}</p>

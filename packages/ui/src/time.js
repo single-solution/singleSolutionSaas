@@ -5,8 +5,26 @@
  * viewer's own time zone (`Oct 4, 2026, 2:30 PM UTC` → `Oct 4, 2026, 10:30 AM EDT`), with the UTC time on hover.
  * @module
  */
-import { useSyncExternalStore } from 'react';
+import { createContext, useContext, useSyncExternalStore } from 'react';
 import { formatDateTime } from './format.js';
+
+/**
+ * The locale dates and numbers are shown in (fixed-choices audit K2): a product dashboard gives its website Format's
+ * `locale` (`DisplayLocale`), so a website in `en-GB` or `de-DE` reads its own dates and numbers; the words stay US
+ * English. US English outside a website (Defaults, the Portal) and when the Format leaves it to the viewer.
+ */
+const DisplayLocaleContext = createContext(/** @type {string} */ ('en-US'));
+
+/**
+ * Shows the dates and numbers inside in `locale` (empty: US English).
+ * @param {{ locale: string | null | undefined, children: import('react').ReactNode }} props
+ */
+export function DisplayLocale({ locale, children }) {
+	return <DisplayLocaleContext.Provider value={locale || 'en-US'}>{children}</DisplayLocaleContext.Provider>;
+}
+
+/** The locale dates and numbers are shown in. @returns {string} */
+export const useDisplayLocale = () => useContext(DisplayLocaleContext);
 
 /** The viewer's time zone never changes while a page is open: nothing to subscribe to. */
 const noSubscription = () => () => {};
@@ -27,11 +45,12 @@ export const useViewerTimeZone = () => useSyncExternalStore(noSubscription, brow
  */
 export function LocalTime({ value }) {
 	const timeZone = useViewerTimeZone();
+	const locale = useDisplayLocale();
 	if (value === null || value === undefined || value === '') return <>—</>;
 	const iso = new Date(value).toISOString();
 	return (
-		<time dateTime={iso} title={formatDateTime(value)}>
-			{formatDateTime(value, timeZone ? { timeZone } : {})}
+		<time dateTime={iso} title={formatDateTime(value, { locale })}>
+			{formatDateTime(value, timeZone ? { timeZone, locale } : { locale })}
 		</time>
 	);
 }

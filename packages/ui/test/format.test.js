@@ -5,6 +5,7 @@ import {
 	formatCreditsPerHour,
 	formatDate,
 	formatDateTime,
+	formatNumber,
 	humanize,
 	parseCredits,
 } from '../src/format.js';
@@ -60,6 +61,23 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(humanize('line1')).toBe('Line 1');
 		expect(humanize(30)).toBe('30');
 		expect(humanize(0)).toBe('0');
+	});
+});
+
+describe("a website's Format locale (dates and numbers; the words stay US English)", () => {
+	it('orders dates and writes numbers as the locale does, US English for none or an unknown one', () => {
+		expect(formatDateTime('2026-10-04T14:30:00Z', { locale: 'en-GB' })).toBe('4 Oct 2026, 14:30 UTC');
+		expect(formatDateTime('2026-10-04T14:30:00Z', { timeZone: 'Asia/Karachi', locale: 'en-GB' })).toBe(
+			'4 Oct 2026, 19:30 GMT+5',
+		);
+		expect(formatDate('2026-10-04T14:30:00Z', { locale: 'en-GB' })).toBe('4 Oct 2026');
+		expect(formatDate('2026-10-04T14:30:00Z', { locale: 'not a locale!' })).toBe('Oct 4, 2026');
+		expect(formatDateTime('2026-10-04T14:30:00Z', { locale: '' })).toBe('Oct 4, 2026, 2:30 PM UTC');
+		expect(formatNumber(1234.5, { locale: 'de-DE' })).toBe('1.234,5');
+		expect(formatNumber(1234.5)).toBe('1,234.5');
+		expect(formatNumber(Number.NaN)).toBe('—');
+		expect(formatCredits(1234500, { locale: 'fr-FR' })).toBe('1 234,5 credits');
+		expect(formatCreditsPerHour(1250, { locale: 'de-DE' })).toBe('1,25 credits/h');
 	});
 });
 

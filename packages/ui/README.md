@@ -151,6 +151,9 @@ One style for the Portal and every dashboard, in US English: `formatDate` gives 
 gives `Oct 4, 2026, 2:30 PM UTC` (UTC, so the server and the browser render the same text). With
 `formatDateTime(value, { timeZone })` the same style shows another time zone with its short name
 (`Oct 4, 2026, 10:30 AM EDT`), for the viewer's local time once the page runs. `formatCredits` gives `12.5 credits`.
+On a product dashboard the picked website's Format `locale` sets how dates and numbers read (`DisplayLocale`,
+`useDisplayLocale()`; `LocalTime`, the credits and `formatNumber` follow it: `en-GB` gives `4 Oct 2026, 14:30`, `de-DE`
+gives `1.234,5`); the words stay US English, and the global tabs stay en-US.
 `supportContact(support)` words the Portal's support contact channels in one line (`help@example.com (Email),
 https://wa.me/15550100 (WhatsApp)`), or `support` without channels.
 `humanize` reads a code as words (`low_balance` → `Low balance`, `api_key` → `API key`): status badges and the choices

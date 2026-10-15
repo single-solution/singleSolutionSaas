@@ -51,7 +51,7 @@ export { ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell } from './AppShell.js';
 export { ThemeScript } from './theme-script.js';
-export { LocalTime, useViewerTimeZone } from './time.js';
+export { DisplayLocale, LocalTime, useDisplayLocale, useViewerTimeZone } from './time.js';
 export { BarChart, isEmptySeries } from './charts.js';
 export { NeedsList, SetupChecklist, Timeline, RecentChanges, ProductOverview, OverviewSkeleton, initialsOf } from './overview.js';
 // plain data, not a client module: a product's `texts.js` also gives its server `app/layout.js` the page title
@@ -62,6 +62,7 @@ export {
 	formatCreditsPerHour,
 	formatDate,
 	formatDateTime,
+	formatNumber,
 	humanize,
 	parseCredits,
 	supportContact,
