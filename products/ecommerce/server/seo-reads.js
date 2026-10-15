@@ -1,10 +1,11 @@
 /**
- * Catalog reads shared by the SEO, feeds, llms.txt and Chat lookup routes: an active product or a category by id or
- * slug, brands and categories by id, a category's trail from the home page, the name in titles, and streaming a long text answer
- * (sitemaps and feeds) so its size never matters. Every query pins `websiteId`.
+ * Catalog reads shared by the SEO, feeds, llms.txt and Chat lookup routes: the `seo` settings a page follows, an active
+ * product or a category by id or slug, brands and categories by id, a category's trail from the home page, the name in
+ * titles, and streaming a long text answer (sitemaps and feeds) so its size never matters. Every query pins `websiteId`.
  * @module
  */
 import { problem } from '@ss/app-kit';
+import { SEO_DEFAULTS } from '../adapters/product.js';
 import { COLLECTIONS } from '../core/model.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -15,6 +16,15 @@ import { COLLECTIONS } from '../core/model.js';
 
 /** At most this many categories are read at once (trees, product types). */
 const MAX_CATEGORIES = 5000;
+
+/**
+ * The `seo` settings a page's SEO follows: the merchant's while the SEO feature is on; else the schema's defaults, so
+ * every shop with a catalog gets best-practice SEO (baseline SEO with the catalog; the priced SEO feature is the SEO
+ * product: the merchant's own patterns, site settings, automatic copy, IndexNow, landing and glossary pages).
+ * @param {Site} s
+ * @returns {Promise<Readonly<Record<string, any>>>}
+ */
+export const seoSettingsOf = async (s) => (s.has('seo') ? s.values('seo') : SEO_DEFAULTS);
 
 /**
  * The name `{business}` and `{storeName}` stand for in titles and descriptions: the `seo` setting `brandName`, else the

@@ -27221,7 +27221,7 @@
 				"summary": "A category page's meta tags and structured data",
 				"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty; else its ItemList holds the products of its first page (newest first, the catalog setting pageSize). A FAQPage only with the seo setting faqMarkup on. 404 not_found for an unknown or hidden category.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "seo",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"serverToken": []
@@ -27407,7 +27407,7 @@
 				"summary": "The head of a listing page",
 				"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand or a category coming soon gives noindex, follow. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
 				"x-ss-auth": "server",
-				"x-ss-feature": "seo",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"serverToken": []
@@ -27524,7 +27524,7 @@
 				"summary": "A product page's meta tags and structured data",
 				"description": ":ref is the product's id or slug (any case). An earlier slug answers moved to the product; an archived product answers moved to its first category when the catalog setting retiredUrl is category. 404 not_found for an unknown product, a draft, an archived one otherwise, or one shoppers may not see (a hidden category or brand).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "seo",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"serverToken": []
@@ -27583,12 +27583,61 @@
 				}
 			}
 		},
+		"/v1/seo/site": {
+			"get": {
+				"summary": "The home page's head and structured data",
+				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide return policy (with Returns on and the business.json country), whose @id product offers point to; and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "catalog",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SeoSite"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/seo/sitemap.xml": {
 			"get": {
 				"summary": "The sitemap",
 				"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the categories shoppers see, the indexable landing pages (stored ones, and with the landing_pages setting auto the automatic ones) and glossary pages (Landing pages) and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex and pages whose canonicalUrl is another page (a sitemap lists canonical addresses only), with lastmod. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, whose files are the seo setting sitemapUrl with ?file=categories, ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "seo",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"serverToken": []
@@ -27630,7 +27679,7 @@
 				"summary": "One file of the sitemap index",
 				"description": ":file is categories, landings or products-<n> (.xml may follow). Answers application/xml, not JSON: a urlset of that part (products-<n>: the n-th sitemapSize products by id). 404 not_found for a file the index does not have (an empty part has none).",
 				"x-ss-auth": "server",
-				"x-ss-feature": "seo",
+				"x-ss-feature": "catalog",
 				"security": [
 					{
 						"serverToken": []
@@ -46756,6 +46805,50 @@
 					"noindex, nofollow"
 				],
 				"description": "The robots meta tag."
+			},
+			"SeoSite": {
+				"type": "object",
+				"description": "What the home page puts in its head.",
+				"required": [
+					"title",
+					"description",
+					"canonical",
+					"image",
+					"siteName",
+					"jsonLd"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"title": {
+						"type": "string",
+						"description": "The seo setting homeTitle as written, else the name in titles."
+					},
+					"description": {
+						"type": "string",
+						"description": "The seo setting homeDescription, else defaultDescription, as written ('' = none)."
+					},
+					"canonical": {
+						"type": "string",
+						"format": "uri",
+						"description": "The home page: https://<your domain>/."
+					},
+					"image": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "uri",
+						"description": "The seo setting defaultImage (null: none)."
+					},
+					"siteName": {
+						"type": "string",
+						"description": "The site name (the seo setting brandName, else the business name): use it as og:site_name, as the structured data does."
+					},
+					"jsonLd": {
+						"type": "string",
+						"description": "The JSON-LD (OnlineStore or LocalBusiness with its return policy, and WebSite) as text safe to put in a script tag."
+					}
+				}
 			},
 			"Serial": {
 				"type": "object",

@@ -52,7 +52,7 @@ import {
 import { gradesByKey, gradesFor } from '../core/grades.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
-import { storeNameOf, trailOf } from './seo-reads.js';
+import { seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -463,7 +463,7 @@ export const createLandings = (product, service, media) => {
 	const listing = async (ctx) => {
 		const { s, data } = await open(ctx);
 		const names = await namesOf(s, data);
-		const [settings, business, hidden] = await Promise.all([s.values('seo'), s.business(), hiddenFor(s)]);
+		const [settings, business, hidden] = await Promise.all([seoSettingsOf(s), s.business(), hiddenFor(s)]);
 		/** @type {CategoryRecord | null} */
 		let category = null;
 		if (ctx.query.category) {
@@ -681,7 +681,7 @@ export const createLandings = (product, service, media) => {
 	 *   pattern?: { title: unknown, description: unknown, values: Record<string, string> } }} page
 	 */
 	const glossaryHead = async (s, { name, url, seo, fallback, pattern }) => {
-		const [settings, business] = await Promise.all([s.values('seo'), s.business()]);
+		const [settings, business] = await Promise.all([seoSettingsOf(s), s.business()]);
 		const storeName = storeNameOf(settings, business);
 		const values = { name, storeName, ...pattern?.values };
 		const description = metaDescription(
@@ -1086,7 +1086,7 @@ export const createLandings = (product, service, media) => {
 			method: 'GET',
 			path: '/v1/seo/listing',
 			auth: 'server',
-			feature: 'seo',
+			feature: 'catalog',
 			rateLimit: READ_RATE,
 			handler: listing,
 		}),

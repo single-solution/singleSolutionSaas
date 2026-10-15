@@ -4,7 +4,7 @@
  * the add-to-cart event, the admin widgets with their ticket function, the ticket request (Node.js and cURL), what the
  * merchant's site serves from the API as Next.js route handlers and pages fetching with the server token
  * (`SS_SERVER_TOKEN`): the sitemap index and its files, the media route (stable image addresses, SEO audit G1),
- * feeds, llms.txt and llms-full.txt, the product page (meta,
+ * feeds, llms.txt and llms-full.txt, the home page (the business and website, E49), the product page (meta,
  * structured data and the 308 of a `moved` answer, PLAN 0.8.10 E13), a listing page with `/v1/seo/listing` (E15) and
  * the policy pages; the Accounts Orders lookup, the courier connection and the storage CORS rule. Plain text; no I/O.
  * @module
@@ -39,7 +39,13 @@ export const WIDGET_ATTRIBUTES = Object.freeze({
  */
 export const SITE_ROUTES = Object.freeze([
 	// the sitemap has its own handler (the index's files come from /v1/seo/sitemaps/:file): `sitemapRoute`
-	{ name: 'sitemap', file: 'app/sitemap.xml/route.js', route: '/v1/seo/sitemap.xml', feature: 'seo', type: 'application/xml' },
+	{
+		name: 'sitemap',
+		file: 'app/sitemap.xml/route.js',
+		route: '/v1/seo/sitemap.xml',
+		feature: 'catalog',
+		type: 'application/xml',
+	},
 	// the media route has its own handler (it serves the file of each stable image address): `mediaRoute`
 	{ name: 'media', file: 'app/media/[...key]/route.js', route: '/v1/media', feature: 'catalog', type: 'image/*' },
 	{
@@ -218,6 +224,38 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		"  -H 'Content-Type: application/json' \\",
 		`  -d '${JSON.stringify(ticketBody)}'`,
 	].join('\n');
+	const homePage = [
+		'// app/page.js (Next.js App Router): your home page head, with your business and website for search engines',
+		'const siteOf = async () => {',
+		`  const response = await fetch('${base}/v1/seo/site', {`,
+		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
+		'    next: { revalidate: 300 },',
+		'  });',
+		'  return response.ok ? response.json() : null;',
+		'};',
+		'',
+		'export async function generateMetadata() {',
+		'  const site = await siteOf();',
+		'  if (!site) return {};',
+		'  return {',
+		'    title: site.title,',
+		'    description: site.description,',
+		'    alternates: { canonical: site.canonical },',
+		'    openGraph: { siteName: site.siteName, images: site.image ? [site.image] : undefined },',
+		'  };',
+		'}',
+		'',
+		'export default async function HomePage() {',
+		'  const site = await siteOf();',
+		'  return (',
+		'    <>',
+		'      {/* jsonLd is already a string that is safe inside a script tag */}',
+		'      {site ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: site.jsonLd }} /> : null}',
+		'      {/* the rest of your home page */}',
+		'    </>',
+		'  );',
+		'}',
+	].join('\n');
 	const productMeta = [
 		'// app/products/[slug]/page.js (Next.js App Router): meta tags, structured data and moved addresses from Ecommerce',
 		"import { notFound, permanentRedirect } from 'next/navigation';",
@@ -369,6 +407,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		admin,
 		ticketNode,
 		ticketCurl,
+		homePage,
 		productMeta,
 		listingPage,
 		policies,

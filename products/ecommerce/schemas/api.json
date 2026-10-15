@@ -10869,6 +10869,40 @@
 			"enum": ["index, follow", "index, nofollow", "noindex, follow", "noindex, nofollow"],
 			"description": "The robots meta tag."
 		},
+		"SeoSite": {
+			"type": "object",
+			"description": "What the home page puts in its head.",
+			"required": ["title", "description", "canonical", "image", "siteName", "jsonLd"],
+			"additionalProperties": false,
+			"properties": {
+				"title": {
+					"type": "string",
+					"description": "The seo setting homeTitle as written, else the name in titles."
+				},
+				"description": {
+					"type": "string",
+					"description": "The seo setting homeDescription, else defaultDescription, as written ('' = none)."
+				},
+				"canonical": {
+					"type": "string",
+					"format": "uri",
+					"description": "The home page: https://<your domain>/."
+				},
+				"image": {
+					"type": ["string", "null"],
+					"format": "uri",
+					"description": "The seo setting defaultImage (null: none)."
+				},
+				"siteName": {
+					"type": "string",
+					"description": "The site name (the seo setting brandName, else the business name): use it as og:site_name, as the structured data does."
+				},
+				"jsonLd": {
+					"type": "string",
+					"description": "The JSON-LD (OnlineStore or LocalBusiness with its return policy, and WebSite) as text safe to put in a script tag."
+				}
+			}
+		},
 		"Serial": {
 			"type": "object",
 			"description": "One unit (a numbered item) of a product variant: its serial number and, with unit fields, its values.",
@@ -26138,6 +26172,13 @@
 		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false).",
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
+		}
+	},
+	"GET /v1/seo/site": {
+		"summary": "The home page's head and structured data",
+		"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide return policy (with Returns on and the business.json country), whose @id product offers point to; and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply.",
+		"response": {
+			"$ref": "#/components/schemas/SeoSite"
 		}
 	},
 	"GET /v1/seo/products/:ref": {

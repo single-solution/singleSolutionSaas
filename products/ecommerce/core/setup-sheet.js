@@ -144,7 +144,8 @@ export const LIST_WORDS = Object.freeze({
 });
 
 /**
- * What the summaries read: each feature's settings while it is on (null while off).
+ * What the summaries read: each feature's settings while it is on (null while off); `seo`: the `seo` settings the
+ * pages follow while Catalog is on (the defaults while SEO is off).
  * @typedef {{ on: string[], catalog: Record<string, any> | null, seo: Record<string, any> | null,
  *   landing: Record<string, any> | null, alerts: Record<string, any> | null, llms: Record<string, any> | null }} SetupFacts
  */
@@ -201,24 +202,20 @@ const servedText = ({ on, catalog, seo, llms }) => {
 
 /**
  * Ecommerce's summaries on the Setup sheet while Catalog is on: the pages and their addresses, what the website
- * serves from its own domain and, while SEO is on, the tags of its page heads.
+ * serves from its own domain and the tags of its page heads (baseline SEO comes with the catalog).
  * @param {SetupFacts} facts
  * @returns {Array<{ title: string, text: string }>}
  */
 export const setupSummaries = (facts) => {
 	const { catalog, seo } = facts;
-	if (!catalog) return [];
+	if (!catalog || !seo) return [];
 	const served = servedText({ ...facts, catalog });
 	return [
 		{ title: 'Pages on your website', text: pagesText({ ...facts, catalog }) },
 		...(served ? [{ title: 'Served from your domain', text: served }] : []),
-		...(seo
-			? [
-					{
-						title: 'SEO tags',
-						text: `Each product, category and listing page puts its SEO answer in its head: the title, meta description, canonical link, robots and the JSON-LD script (GET /v1/seo/products/<slug>, /v1/seo/categories/<slug> and /v1/seo/listing); an answer { moved } is a 308 to its url. Page titles follow ${seo.titleTemplate}.`,
-					},
-				]
-			: []),
+		{
+			title: 'SEO tags',
+			text: `Each product, category and listing page puts its SEO answer in its head: the title, meta description, canonical link, robots and the JSON-LD script (GET /v1/seo/products/<slug>, /v1/seo/categories/<slug> and /v1/seo/listing), and the home page the business and website data (GET /v1/seo/site); an answer { moved } is a 308 to its url. Page titles follow ${seo.titleTemplate}.`,
+		},
 	];
 };

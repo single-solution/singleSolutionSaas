@@ -394,6 +394,21 @@ const offerPrice = (shown, currency) => ({
 });
 
 /**
+ * A return policy (G5): a window of `days` after delivery (0 = not returnable) in the country.
+ * @param {string} country
+ * @param {number} days
+ * @param {Record<string, unknown>} [id] its `@id`, for the store-level policy other pages point to
+ */
+const returnPolicyOf = (country, days, id = {}) =>
+	compact({
+		'@type': 'MerchantReturnPolicy',
+		...id,
+		applicableCountry: country,
+		returnPolicyCategory: `${SCHEMA}/${days > 0 ? 'MerchantReturnFiniteReturnWindow' : 'MerchantReturnNotPermitted'}`,
+		merchantReturnDays: days > 0 ? days : null,
+	});
+
+/**
  * The offer details of one variant (E16, SG-2, G5): shipping at the offer's price, only for physical goods and only when
  * complete (a destination country and the delivery days); the item's return policy, only with a country.
  * @param {ProductPage} page
@@ -420,15 +435,7 @@ const offerExtras = ({ product, currency, shipping, returns }, variant, price) =
 						},
 					}
 				: null,
-		hasMerchantReturnPolicy:
-			returns && days !== null
-				? compact({
-						'@type': 'MerchantReturnPolicy',
-						applicableCountry: returns.country,
-						returnPolicyCategory: `${SCHEMA}/${days > 0 ? 'MerchantReturnFiniteReturnWindow' : 'MerchantReturnNotPermitted'}`,
-						merchantReturnDays: days > 0 ? days : null,
-					})
-				: null,
+		hasMerchantReturnPolicy: returns && days !== null ? returnPolicyOf(returns.country, days) : null,
 	};
 };
 
@@ -637,6 +644,102 @@ export const categoryJsonLd = ({ name, description, url, image, trail, items = [
 		faqJsonLd(faqs, url),
 	].filter((entry) => entry !== null),
 });
+
+/**
+ * The `@id`s of the site answer's nodes (E49): on the home page, where other pages point to them.
+ * @param {string} home the home page's address
+ */
+export const siteIds = (home) => ({
+	organization: `${home}#organization`,
+	website: `${home}#website`,
+	returnPolicy: `${home}#return_policy`,
+});
+
+/** A day as schema.org opening hours write it. */
+const DAY = '(?:Mo|Tu|We|Th|Fr|Sa|Su)';
+/** One group of days with its hours, as schema.org `openingHours` takes it (`Mo-Fr 09:00-17:00`, `Sa,Su 10:00-14:00`). */
+const OPENING_HOURS = new RegExp(
+	`^${DAY}(?:-${DAY})?(?:,${DAY}(?:-${DAY})?)*(?: (?:[01]\\d|2[0-3]):[0-5]\\d-(?:[01]\\d|2[0-4]):[0-5]\\d)?$`,
+);
+
+/**
+ * Opening hours as structured data takes them, from text the merchant wrote: one group of days with its hours per line
+ * (`Mo-Fr 09:00-17:00`); none when any line is written another way (hours are never guessed from free text).
+ * @param {unknown} text
+ * @returns {string[]}
+ */
+export const openingHoursOf = (text) => {
+	const lines = String(text ?? '')
+		.split(/\r?\n|;/)
+		.map((line) => line.trim().replace(/\s+/g, ' '))
+		.filter(Boolean);
+	return lines.length > 0 && lines.every((line) => OPENING_HOURS.test(line)) ? lines : [];
+};
+
+/**
+ * What the home page says about the business and the website (E49, SEO audit G2).
+ * @typedef {object} SitePage
+ * @property {string} home the home page's address
+ * @property {string} name the site name (the `seo` setting `brandName`, else the business name)
+ * @property {string} alternateName another name of the site ('' = none)
+ * @property {'OnlineStore' | 'LocalBusiness'} type
+ * @property {string | null} logo
+ * @property {string | null} email
+ * @property {string | null} telephone
+ * @property {{ street: string, country: string }} address the address as written ('' = none) and the country code
+ * @property {string[]} sameAs the business's profiles on other sites
+ * @property {string[]} openingHours a local business's hours ({@link openingHoursOf})
+ * @property {{ country: string, days: number } | null} returns the store's return window (0 = not returnable), null:
+ *   none given
+ */
+
+/**
+ * The home page's structured data as a JSON-LD graph (E49, SEO audit G2): the business as an `OnlineStore` (or a
+ * `LocalBusiness` at its pickup point) with its name, address, logo, contacts, profiles, hours and its store-wide return
+ * policy, which product offers point to by `@id`; and the `WebSite` with its name. Only values the shop has.
+ * @param {SitePage} page
+ */
+export const siteJsonLd = (page) => {
+	const ids = siteIds(page.home);
+	const street = page.address.street
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.join(', ');
+	const address =
+		street || page.address.country
+			? compact({ '@type': 'PostalAddress', streetAddress: street, addressCountry: page.address.country })
+			: null;
+	return {
+		'@context': SCHEMA,
+		'@graph': [
+			compact({
+				'@type': page.type,
+				'@id': ids.organization,
+				name: page.name,
+				alternateName: page.alternateName,
+				url: page.home,
+				logo: page.logo,
+				email: page.email,
+				telephone: page.telephone,
+				address,
+				sameAs: page.sameAs,
+				openingHours: page.openingHours,
+				hasMerchantReturnPolicy: page.returns
+					? returnPolicyOf(page.returns.country, page.returns.days, { '@id': ids.returnPolicy })
+					: null,
+			}),
+			compact({
+				'@type': 'WebSite',
+				'@id': ids.website,
+				name: page.name,
+				alternateName: page.alternateName,
+				url: page.home,
+				publisher: { '@id': ids.organization },
+			}),
+		],
+	};
+};
 
 /**
  * The robots value of a page: `index, follow` unless its SEO fields say otherwise.

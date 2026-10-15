@@ -502,6 +502,6 @@ describe('Chat lookups', () => {
 		expect((await shop.api('GET', '/v1/chat/me/account', undefined, { 'ss-sign-in': token })).json.loyaltyPoints).toBe(0);
 		expect((await shop.api('GET', '/v1/chat/deals')).json.type).toMatch(/feature_off$/);
 		expect((await shop.api('GET', '/v1/chat/products/galaxy-s24')).json.variants[0].grade).toBe('a');
-		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).status).toBe(403);
+		expect((await shop.api('GET', '/v1/feeds/products.xml')).status).toBe(403);
 	});
 });

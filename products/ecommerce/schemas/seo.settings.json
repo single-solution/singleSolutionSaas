@@ -16,6 +16,48 @@
 			"default": "",
 			"maxLength": 120
 		},
+		"alternateName": {
+			"type": "string",
+			"title": "Other site name",
+			"description": "Another name people know your website by (an acronym or a shorter name), given to search engines with the site name. Empty: none.",
+			"default": "",
+			"maxLength": 120
+		},
+		"homeTitle": {
+			"type": "string",
+			"title": "Home page title",
+			"description": "Your home page's title, used as written. Empty: the name in titles (your business name unless Name in titles is set).",
+			"default": "",
+			"maxLength": 200
+		},
+		"homeDescription": {
+			"type": "string",
+			"title": "Home page description",
+			"description": "Your home page's meta description, used as written. Empty: the default description.",
+			"default": "",
+			"maxLength": 500,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
+		"siteType": {
+			"type": "string",
+			"title": "Business type in structured data",
+			"description": "Online store: your home page describes an OnlineStore. Local business: a LocalBusiness at your pickup point (Delivery zones: its address and hours; hours written like Mo-Fr 09:00-17:00, one line per group of days, are also given as opening hours); without a pickup address and hours, an online store.",
+			"default": "online_store",
+			"enum": ["online_store", "local_business"]
+		},
+		"socialProfiles": {
+			"type": "array",
+			"title": "Social profiles",
+			"description": "The https addresses of your business's profiles on other sites (social networks, review sites), given to search engines with your business.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"format": "uri",
+				"maxLength": 300
+			}
+		},
 		"productTitle": {
 			"type": "string",
 			"title": "Product title",

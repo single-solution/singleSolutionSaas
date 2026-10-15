@@ -120,6 +120,15 @@ export const manifest = /** @type {import('@ss/contracts').Manifest} */ (
 
 export { strings };
 
+/**
+ * The `seo` settings as the schema gives them: what a shop's pages follow while the SEO feature is off (baseline SEO
+ * with the catalog; the merchant's own settings are the SEO product's).
+ * @type {Readonly<Record<string, any>>}
+ */
+export const SEO_DEFAULTS = Object.freeze(
+	Object.fromEntries(Object.entries(seoSettings.properties).map(([key, node]) => [key, node.default])),
+);
+
 /** Ecommerce's own problem codes. */
 const PROBLEM_CODES = Object.freeze({
 	sign_in_required: Object.freeze({ status: 403, title: 'Sign in required' }),
@@ -255,7 +264,8 @@ export const createProductInstance = (options) => {
 		const valuesOf = (feature) => (on.includes(feature) ? product.settings.values(websiteId, feature) : null);
 		const [catalog, seo, landing, alerts, llms] = await Promise.all([
 			valuesOf('catalog'),
-			valuesOf('seo'),
+			// the seo settings the pages follow while Catalog is on: the merchant's while SEO is on, else the defaults
+			on.includes('catalog') && !on.includes('seo') ? SEO_DEFAULTS : valuesOf('seo'),
 			valuesOf('landing_pages'),
 			valuesOf('alerts'),
 			valuesOf('llms_txt'),

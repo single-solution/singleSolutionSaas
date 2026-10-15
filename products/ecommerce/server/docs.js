@@ -304,6 +304,9 @@ ${block(snippets.cors)}
 <h2 id="site">Your site serves</h2>
 ${para(guide.site)}
 ${site}
+<h3><code>GET /v1/seo/site</code></h3>
+${para(guide.homePage)}
+${block(snippets.homePage)}
 <h3><code>GET /v1/seo/products/:ref</code></h3>
 ${para(guide.productMeta)}
 ${block(snippets.productMeta)}

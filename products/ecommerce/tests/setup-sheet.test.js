@@ -84,7 +84,6 @@ describe('the website Setup sheet: tags and what the website builds', () => {
 			'checkout',
 			'taxes',
 			'invoices',
-			'seo',
 		]);
 		expect(services.notRecommended.map((entry) => entry.feature)).toEqual([
 			'variants',
@@ -202,7 +201,7 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			},
 			{
 				title: 'SEO tags',
-				text: 'Each product, category and listing page puts its SEO answer in its head: the title, meta description, canonical link, robots and the JSON-LD script (GET /v1/seo/products/<slug>, /v1/seo/categories/<slug> and /v1/seo/listing); an answer { moved } is a 308 to its url. Page titles follow {name} | {business}.',
+				text: 'Each product, category and listing page puts its SEO answer in its head: the title, meta description, canonical link, robots and the JSON-LD script (GET /v1/seo/products/<slug>, /v1/seo/categories/<slug> and /v1/seo/listing), and the home page the business and website data (GET /v1/seo/site); an answer { moved } is a 308 to its url. Page titles follow {name} | {business}.',
 			},
 		]);
 		expect(on.build.map((/** @type {any} */ entry) => entry.feature)).toEqual(ALL);
@@ -212,12 +211,21 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 			docs: `${BASE}/docs#feature-seo`,
 		});
 
-		// with a public media address, images need no route of the website
+		// with a public media address, images need no route of the website; SEO comes with the catalog (baseline SEO),
+		// its titles following the defaults while SEO is off (a saved pattern counts once SEO is on)
 		await env.setting('catalog', 'mediaBaseUrl', 'https://cdn.shop.example.com');
+		await env.setting('seo', 'titleTemplate', '{name} · {business}');
 		await env.switchOn(['catalog', 'variants']);
 		const few = await partOf(env);
 		expect(few.events).toEqual(['ecommerce.settings.changed']);
-		expect(few.summaries).toEqual([{ title: 'Pages on your website', text: expect.stringMatching(/^Product pages at /) }]);
+		expect(few.summaries).toEqual([
+			{ title: 'Pages on your website', text: expect.stringMatching(/^Product pages at /) },
+			{
+				title: 'Served from your domain',
+				text: 'Your server fetches these with the server token, never from the browser, and serves them from your domain: /sitemap.xml (GET /v1/seo/sitemap.xml).',
+			},
+			{ title: 'SEO tags', text: expect.stringMatching(/Page titles follow \{name\} \| \{business\}\.$/) },
+		]);
 	});
 
 	it('leaves a list that cannot be read to the kit’s own count', async () => {

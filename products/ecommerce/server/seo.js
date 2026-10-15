@@ -32,6 +32,7 @@ import {
 	fieldTargets,
 	fillTemplate,
 	metaDescription,
+	openingHoursOf,
 	pageName,
 	pageTitle,
 	patternText,
@@ -39,6 +40,7 @@ import {
 	productJsonLd,
 	robotsOf,
 	scriptJson,
+	siteJsonLd,
 	sitemapEntry,
 	sitemapFileUrl,
 	sitemapFiles,
@@ -54,7 +56,7 @@ import { createLandings } from './seo-landings.js';
 import { createShownPrices } from './shown-prices.js';
 import { policiesOf } from './policies.js';
 import { SEO_LIMITS, VISITOR_LIMITS } from './service.js';
-import { allCategories, brandNames, lineage, storeNameOf, streamed, trailOf } from './seo-reads.js';
+import { allCategories, brandNames, lineage, seoSettingsOf, storeNameOf, streamed, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -264,7 +266,7 @@ export const createSeo = (product, service) => {
 		if ('moved' in found) return found;
 		const { item } = found;
 		const [settings, business, attributes, { money }] = await Promise.all([
-			s.values('seo'),
+			seoSettingsOf(s),
 			s.business(),
 			attributesOf(data),
 			s.format(),
@@ -380,6 +382,54 @@ export const createSeo = (product, service) => {
 		};
 	};
 
+	/**
+	 * The store's return window for structured data (G2, G5.5), with the business's country (no country: none), or null
+	 * while Returns is off: the `returns` setting `returnDays` (0 = not returnable).
+	 * @param {Site} s @param {string} country
+	 */
+	const storeReturnsOf = async (s, country) =>
+		s.has('returns') && country ? { country, days: Number((await s.values('returns')).returnDays ?? 0) } : null;
+
+	/**
+	 * GET /v1/seo/site (E49): the home page's head — its title, description, canonical address, social image and site
+	 * name — and the structured data of the business and the website.
+	 * @param {any} ctx
+	 */
+	const siteSeo = async (ctx) => {
+		const s = await service.site(ctx);
+		const [settings, business] = await Promise.all([seoSettingsOf(s), s.business()]);
+		const home = `https://${s.domain}/`;
+		const name = storeNameOf(settings, business);
+		const country = String(business.country ?? '');
+		// a local business at its pickup point, once the merchant picks it and the point has an address and hours
+		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
+		const pickup = zones && String(zones.pickupAddress ?? '').trim() && String(zones.pickupHours ?? '').trim() ? zones : null;
+		const local = settings.siteType === 'local_business' && pickup !== null;
+		const jsonLd = siteJsonLd({
+			home,
+			name,
+			alternateName: String(settings.alternateName ?? '').trim(),
+			type: local ? 'LocalBusiness' : 'OnlineStore',
+			logo: business.logo ?? null,
+			email: business.email ?? null,
+			telephone: business.phone ?? null,
+			address: { street: String((local ? pickup?.pickupAddress : business.address) ?? ''), country },
+			sameAs: (Array.isArray(settings.socialProfiles) ? settings.socialProfiles : [])
+				.map((address) => String(address).trim())
+				.filter((address) => /^https:\/\/\S+$/.test(address)),
+			openingHours: local ? openingHoursOf(pickup?.pickupHours) : [],
+			returns: await storeReturnsOf(s, country),
+		});
+		return {
+			title: String(settings.homeTitle ?? '').trim() || name,
+			description: metaDescription(asWritten(settings.homeDescription), asWritten(settings.defaultDescription)),
+			canonical: home,
+			image: defaultImageOf(settings, s.domain),
+			siteName: name,
+			jsonLd: scriptJson(jsonLd),
+		};
+	};
+
 	/** GET /v1/seo/categories/:ref. @param {any} ctx */
 	const categorySeo = async (ctx) => {
 		const s = await service.site(ctx);
@@ -393,7 +443,7 @@ export const createSeo = (product, service) => {
 		if (!found || !category || hidden.unlisted.has(category.id)) throw problem('not_found', 'There is no such category.');
 		if (found.moved) return { moved: { kind: 'category', slug: category.slug, url: await media.categoryUrl(s, category) } };
 		const [settings, business, categories, { pageSize }] = await Promise.all([
-			s.values('seo'),
+			seoSettingsOf(s),
 			s.business(),
 			allCategories(data),
 			s.values('catalog'),
@@ -478,7 +528,7 @@ export const createSeo = (product, service) => {
 			data.collection(COLLECTIONS.categories).countDocuments(categoryFilter),
 			data.collection(COLLECTIONS.products).countDocuments(productFilter),
 			landings.sitemapPages(s, data),
-			s.values('seo'),
+			seoSettingsOf(s),
 		]);
 		return {
 			data,
@@ -895,9 +945,17 @@ export const createSeo = (product, service) => {
 		routes: [
 			defineRoute({
 				method: 'GET',
+				path: '/v1/seo/site',
+				auth: 'server',
+				feature: 'catalog',
+				rateLimit: SERVER_RATE,
+				handler: siteSeo,
+			}),
+			defineRoute({
+				method: 'GET',
 				path: '/v1/seo/products/:ref',
 				auth: 'server',
-				feature: 'seo',
+				feature: 'catalog',
 				rateLimit: SERVER_RATE,
 				handler: productSeo,
 			}),
@@ -905,7 +963,7 @@ export const createSeo = (product, service) => {
 				method: 'GET',
 				path: '/v1/seo/categories/:ref',
 				auth: 'server',
-				feature: 'seo',
+				feature: 'catalog',
 				rateLimit: SERVER_RATE,
 				handler: categorySeo,
 			}),
@@ -913,7 +971,7 @@ export const createSeo = (product, service) => {
 				method: 'GET',
 				path: '/v1/seo/sitemap.xml',
 				auth: 'server',
-				feature: 'seo',
+				feature: 'catalog',
 				rateLimit: SERVER_RATE,
 				handler: sitemap,
 			}),
@@ -921,7 +979,7 @@ export const createSeo = (product, service) => {
 				method: 'GET',
 				path: '/v1/seo/sitemaps/:file',
 				auth: 'server',
-				feature: 'seo',
+				feature: 'catalog',
 				rateLimit: SERVER_RATE,
 				handler: sitemapFile,
 			}),

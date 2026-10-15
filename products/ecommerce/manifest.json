@@ -12,7 +12,7 @@
 		{
 			"key": "catalog",
 			"name": "Catalog",
-			"description": "Products, item types (what each item is and which parts it has), categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget.",
+			"description": "Products, item types (what each item is and which parts it has), categories with SEO text, brands, the shop's own fields (product, variant, unit, order and customer), media in the merchant's own storage, search, listings and filters, the product page and the catalog admin widget, with best-practice SEO for every page: meta tags, structured data (products, listings, the business and the website) and sitemaps.",
 			"dependsOn": [],
 			"recommendFor": ["sells.physical", "sells.digital", "sells.services"],
 			"settings": {
@@ -284,9 +284,9 @@
 		{
 			"key": "seo",
 			"name": "SEO",
-			"description": "Meta tags and structured data for products and categories, and sitemaps.",
+			"description": "Your own SEO on top of the catalog's: title and description patterns, your home page and business details for search engines, sitemap and listing choices, SEO copy written on save, IndexNow on save, and landing and glossary pages (Landing pages).",
 			"dependsOn": ["catalog"],
-			"recommendFor": ["marketing.seo", "sells.physical", "sells.digital", "sells.services"],
+			"recommendFor": ["marketing.seo"],
 			"settings": {
 				"$ref": "schemas/seo.settings.json"
 			}
