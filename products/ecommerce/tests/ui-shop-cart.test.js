@@ -674,9 +674,14 @@ describe('checkout', () => {
 		answerOf = fail(422, 'validation_failed', { errors: [{ path: '/customer/phone', message: 'Give your phone number.' }] });
 		await click(buttonOf(host, text('checkout.place')));
 		expect(textOf(host)).toContain(text('checkout.problem.guest'));
-		answerOf = ok({ order: ORDER, next: { kind: 'done' }, orderKey: 'k'.repeat(32) }, 201);
-		$(host, '#ss-cart-guest-email').value = 'gina@example.com';
+		// a lost answer keeps the attempt's key; other details make a new attempt
+		answerOf = fail(500, 'internal_error');
 		await click(buttonOf(host, text('checkout.place')));
+		const lost = fake.last('POST /v1/shop/orders')?.key;
+		answerOf = ok({ order: ORDER, next: { kind: 'done' }, orderKey: 'k'.repeat(32) }, 201);
+		await setValue($(host, '#ss-cart-guest-email'), 'gina@example.com', 'input');
+		await click(buttonOf(host, text('checkout.place')));
+		expect(fake.last('POST /v1/shop/orders')?.key).not.toBe(lost);
 		expect(fake.last('POST /v1/shop/orders')?.body.customer.email).toBe('gina@example.com');
 		expect(fake.kept).toEqual([['ord_1', 'k'.repeat(32)]]);
 		expect(textOf(host)).toContain(text('success.title'));

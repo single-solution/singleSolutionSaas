@@ -111,7 +111,7 @@ export const mountCart = async ({ host, config, shop, win }) => {
 			const note = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '1000', rows: '3' }));
 			// the order fields the shop asks the shopper (the quote's fields)
 			const fields = checkoutFieldsForm({ doc, t });
-			for (const control of [note, fields.node])
+			for (const control of [note, fields.node, guest.node])
 				for (const event of ['input', 'change'])
 					control.addEventListener(event, () => {
 						attemptKey = null;
