@@ -5,8 +5,10 @@
  * saved; its field errors are passed to the form.
  *
  * `x-ui`: `widget` (switch|number|text|textarea|select|radio|url|email|checkboxes|tags; one that does not fit the type
- * is ignored), `group`, `placeholder`, `labels`, `wide` (span the whole row of the field grid; a `textarea` widget and
- * lists are wide anyway). A setting's `description` is its help text.
+ * is ignored), `group`, `placeholder`, `labels` (`country`, or each choice's own words: labels are data, fixed-choices
+ * audit K3), `suggestions` (values a text or a list of texts offers while the merchant may type their own), `wide`
+ * (span the whole row of the field grid; a `textarea` widget and lists are wide anyway). A setting's `description` is
+ * its help text.
  * @module
  */
 import { humanize } from './format.js';
@@ -35,7 +37,8 @@ import { humanize } from './format.js';
  * @property {unknown[]} [enum]
  * @property {string} [format]
  * @property {SettingItem} [items] every list setting has them
- * @property {{ widget?: string, group?: string, placeholder?: string, wide?: boolean, labels?: 'country' }} [x-ui]
+ * @property {{ widget?: string, group?: string, placeholder?: string, wide?: boolean,
+ *   labels?: 'country' | Record<string, string>, suggestions?: string[] }} [x-ui]
  */
 
 /**
@@ -74,13 +77,17 @@ export const countryName = (code) => {
 };
 
 /**
- * The readable label of a choice, by the field's `x-ui.labels` hint: `country` names ISO country codes, anything else
- * goes through {@link humanize}.
+ * The readable label of a choice, by the field's `x-ui.labels` hint: `country` names ISO country codes, a map gives
+ * each choice its own words (labels are data); a choice it does not name goes through {@link humanize}.
  * @param {unknown} value
- * @param {string | undefined} labels
+ * @param {'country' | Record<string, string> | undefined} labels
  * @returns {string}
  */
-export const optionLabel = (value, labels) => (labels === 'country' ? countryName(String(value)) : humanize(value));
+export const optionLabel = (value, labels) => {
+	if (labels === 'country') return countryName(String(value));
+	if (labels && typeof labels === 'object' && Object.hasOwn(labels, String(value))) return labels[String(value)] ?? '';
+	return humanize(value);
+};
 
 /** A list of choices longer than this is a searchable picker, not a group of checkboxes. */
 const PICKER_FROM = 12;
@@ -106,8 +113,12 @@ export const widgetOf = (node) => {
 	if (asked && fits[type].includes(asked)) return asked;
 	if (type === 'boolean') return 'switch';
 	if (type === 'integer' || type === 'number') return 'number';
-	if (type === 'array') return node.items?.enum && node.items.enum.length <= PICKER_FROM ? 'checkboxes' : 'tags';
+	if (type === 'array') {
+		if (!node.items?.enum && node['x-ui']?.suggestions) return 'tags';
+		return node.items?.enum && node.items.enum.length <= PICKER_FROM ? 'checkboxes' : 'tags';
+	}
 	if (node.enum) return node.enum.length <= 4 ? 'radio' : 'select';
+	if (node['x-ui']?.suggestions) return 'suggest';
 	if (node.format === 'email') return 'email';
 	if (node.format === 'uri') return 'url';
 	return 'text';

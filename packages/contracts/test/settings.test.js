@@ -49,6 +49,13 @@ describe('checkSettingsSchema', () => {
 			'x-ui': { labels: 'country' },
 		};
 		expect(checkSettingsSchema(labels)).toEqual([]);
+		// labels as data: each choice's own words, and suggestions a text or a list may take or leave (K3)
+		const data = schema();
+		data.properties.tone['x-ui'] = { labels: { friendly: 'Friendly and warm', formal: 'Formal' } };
+		data.properties.sizes['x-ui'] = { labels: { 1: 'Small', 3: 'Large' } };
+		data.properties.greeting['x-ui'] = { suggestions: ['Hi', 'Hello', 'Welcome'] };
+		data.properties.pages['x-ui'] = { suggestions: ['/', '/cart'] };
+		expect(checkSettingsSchema(data)).toEqual([]);
 		for (const wide of [true, false]) {
 			const value = schema();
 			value.properties.pages['x-ui'] = { wide };
@@ -101,6 +108,18 @@ describe('checkSettingsSchema', () => {
 				]),
 		),
 		[
+			'an empty label',
+			(s) => (s.properties.tone['x-ui'] = { labels: { friendly: '' } }),
+			'/properties/tone/x-ui/labels',
+			'anyOf',
+		],
+		[
+			'a suggestion twice',
+			(s) => (s.properties.greeting['x-ui'] = { suggestions: ['Hi', 'Hi'] }),
+			'/properties/greeting/x-ui/suggestions',
+			'uniqueItems',
+		],
+		[
 			'wide that is not true or false',
 			(s) => (s.properties.pages['x-ui'] = { wide: 'row' }),
 			'/properties/pages/x-ui/wide',
@@ -150,6 +169,30 @@ describe('checkSettingsSchema', () => {
 			RULES.settingKeyword,
 		],
 		['minimum above maximum', (s) => (s.properties.ratio.minimum = 2), '/properties/ratio/minimum', RULES.settingRange],
+		[
+			'a label for a value that is no choice',
+			(s) => (s.properties.tone['x-ui'] = { labels: { friendly: 'Friendly', casual: 'Casual' } }),
+			'/properties/tone/x-ui/labels/casual',
+			RULES.settingLabels,
+		],
+		[
+			'labels on a setting without choices',
+			(s) => (s.properties.greeting['x-ui'] = { labels: { Hi: 'Hi' } }),
+			'/properties/greeting/x-ui/labels',
+			RULES.settingLabels,
+		],
+		[
+			'suggestions on a setting with choices',
+			(s) => (s.properties.tone['x-ui'] = { suggestions: ['friendly'] }),
+			'/properties/tone/x-ui/suggestions',
+			RULES.settingLabels,
+		],
+		[
+			'suggestions on a number',
+			(s) => (s.properties.ratio['x-ui'] = { suggestions: ['0.5'] }),
+			'/properties/ratio/x-ui/suggestions',
+			RULES.settingLabels,
+		],
 	];
 	it.each(rules)('refuses %s', (_name, mutate, path, keyword) => {
 		const value = schema();

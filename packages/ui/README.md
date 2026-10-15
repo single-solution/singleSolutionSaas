@@ -127,7 +127,9 @@ product's `app/dashboard/page.js` is `<ProductDashboard manifest={manifest} text
 chosen by its type, its `format` (`email`, `uri`) and `x-ui.widget`, grouped by `x-ui.group`, with its `description` as
 help. Fields sit in the field grid; long text (a `textarea` widget), lists and fields with `x-ui.wide` span the row. A list of more than 12 choices (or `x-ui.widget: 'tags'`) is a searchable picker
 (`ChoicePicker`: chosen ones as chips, a search box, a scrolling list); `x-ui.labels: 'country'` shows ISO country codes
-by their names. A list without choices is typed one item per line (a list of on/off values as JSON). Bounds
+by their names, and a map (`{ cod: 'Pay on delivery' }`) gives each choice the product's own words. `x-ui.suggestions`
+makes "pick one or type your own": a text is a `SuggestInput` (the suggestions as the browser's list), a list of texts
+a `ChoicePicker` with `allowOwn` (what is typed in its search box is added). A list without choices is typed one item per line (a list of on/off values as JSON). Bounds
 (`minimum`/`maximum`, `maxLength`) are shown on the inputs (number limits, the character counter of a text area). The
 product checks every value when it is saved, and its field errors are passed in `errors`. Settings marked in
 `overridden` get a Reset link that calls `onReset(name)`.

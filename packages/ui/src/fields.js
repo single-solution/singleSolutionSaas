@@ -519,12 +519,34 @@ export function CheckboxGroup({ legend, options, value, onChange, help, error, d
 }
 
 /**
+ * A text field that suggests values while the merchant may type their own (fixed-choices audit K3: "pick one or type
+ * your own"): an {@link Input} with the suggestions as the browser's list.
+ * @param {Parameters<typeof Input>[0] & { suggestions: readonly string[] }} props
+ */
+export function SuggestInput({ suggestions, id, ...rest }) {
+	const own = useId();
+	const listId = `${id ?? own}-suggestions`;
+	return (
+		<>
+			<Input {...(id ? { id } : {})} {...rest} list={listId} autoComplete="off" />
+			<datalist id={listId}>
+				{suggestions.map((suggestion) => (
+					<option key={suggestion} value={suggestion} />
+				))}
+			</datalist>
+		</>
+	);
+}
+
+/**
  * A long list of choices (countries, languages …) for a list value: the chosen ones as chips that remove themselves,
  * a search box, and a scrolling list of checkboxes filtered by it (by label or value; the value shows beside a label
- * that differs). A new choice is added at the end, so the list keeps the order it was picked in.
+ * that differs). A new choice is added at the end, so the list keeps the order it was picked in. With `allowOwn`
+ * the options are suggestions: what is typed in the search box is added as the merchant's own value (`addOwnLabel`).
  * @param {{ legend: ReactNode, options: Option[], value: readonly string[], onChange: (value: string[]) => void,
  *   help?: ReactNode, error?: ReactNode, disabled?: boolean, emptyText?: ReactNode,
- *   searchLabel?: string, noMatchText?: ReactNode, removeLabel?: string, className?: string, wide?: boolean }} props
+ *   searchLabel?: string, noMatchText?: ReactNode, removeLabel?: string, className?: string, wide?: boolean,
+ *   allowOwn?: boolean, addOwnLabel?: (text: string) => string }} props
  *   `wide` defaults to true
  */
 export function ChoicePicker({
@@ -541,6 +563,8 @@ export function ChoicePicker({
 	removeLabel = 'Remove',
 	className,
 	wide = true,
+	allowOwn = false,
+	addOwnLabel = (text) => `Add “${text}”`,
 }) {
 	const ids = useFieldIds(undefined);
 	const [query, setQuery] = useState('');
@@ -555,6 +579,16 @@ export function ChoicePicker({
 		: options;
 	/** @param {string} choice */
 	const toggle = (choice) => onChange(selected.has(choice) ? value.filter((v) => v !== choice) : [...value, choice]);
+	const typed = query.trim().replace(/\s+/g, ' ');
+	const canAdd =
+		allowOwn &&
+		typed !== '' &&
+		![...options.map((o) => o.value), ...value].some((known) => known.toLowerCase() === typed.toLowerCase());
+	const addOwn = () => {
+		if (!canAdd) return;
+		onChange([...value, typed]);
+		setQuery('');
+	};
 	return (
 		<fieldset
 			{...cell(wide)}
@@ -595,10 +629,25 @@ export function ChoicePicker({
 					placeholder={searchLabel}
 					value={query}
 					onChange={(e) => setQuery(e.currentTarget.value)}
+					onKeyDown={(e) => {
+						if (e.key === 'Enter' && canAdd) {
+							e.preventDefault();
+							addOwn();
+						}
+					}}
 					className="h-9 w-full border-b border-line-soft bg-transparent px-3 text-sm text-fg placeholder:text-muted/70 focus:outline-none"
 				/>
 				<div className="max-h-56 overflow-y-auto p-1">
-					{shown.length === 0 ? (
+					{canAdd ? (
+						<button
+							type="button"
+							onClick={addOwn}
+							className="ss-motion flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-medium text-primary hover:bg-surface-2">
+							<Icon name="plus" size={14} />
+							{addOwnLabel(typed)}
+						</button>
+					) : null}
+					{shown.length === 0 && !canAdd ? (
 						<p className="px-2 py-3 text-sm text-muted">{noMatchText}</p>
 					) : (
 						shown.map((o) => {

@@ -32,6 +32,7 @@ export const RULES = Object.freeze({
 	settingPattern: 'settingPattern',
 	settingDefault: 'settingDefault',
 	settingEnum: 'settingEnum',
+	settingLabels: 'settingLabels',
 	settingsSchema: 'settingsSchema',
 	keyPrefix: 'keyPrefix',
 	templateWords: 'templateWords',
@@ -350,6 +351,39 @@ const checkNode = (node, path, out) => {
 		if (!('items' in node) || node.items === undefined)
 			out.push(at([...path, 'items'], RULES.settingItems, 'list settings need items'));
 		else checkNode(node.items, [...path, 'items'], out);
+	}
+	checkHints(node, path, out);
+};
+
+/**
+ * The choice hints of a setting (fixed-choices audit K3): a `labels` map names only its choices (`enum`, or the items'
+ * `enum` of a list); `suggestions` fit a text or a list of texts without choices (the merchant takes one or types
+ * their own).
+ * @param {Record<string, any>} node
+ * @param {Array<string | number>} path
+ * @param {ValidationProblem[]} out
+ */
+const checkHints = (node, path, out) => {
+	const ui = isObject(node['x-ui']) ? node['x-ui'] : {};
+	const choices = /** @type {unknown[] | undefined} */ (node.type === 'array' ? node.items?.enum : node.enum);
+	if (isObject(ui.labels)) {
+		if (!Array.isArray(choices))
+			out.push(at([...path, 'x-ui', 'labels'], RULES.settingLabels, 'labels name choices: this setting has none'));
+		else
+			for (const value of Object.keys(ui.labels))
+				if (!choices.some((choice) => String(choice) === value))
+					out.push(at([...path, 'x-ui', 'labels', value], RULES.settingLabels, `'${value}' is not one of the choices`));
+	}
+	if (ui.suggestions !== undefined) {
+		const texts = node.type === 'string' || (node.type === 'array' && node.items?.type === 'string');
+		if (!texts || Array.isArray(choices))
+			out.push(
+				at(
+					[...path, 'x-ui', 'suggestions'],
+					RULES.settingLabels,
+					'suggestions fit a text or a list of texts without choices',
+				),
+			);
 	}
 };
 

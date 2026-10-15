@@ -20,6 +20,7 @@ export {
 	CheckboxGroup,
 	ChoicePicker,
 	FieldGrid,
+	SuggestInput,
 } from './fields.js';
 export { Form, FormError } from './Form.js';
 export { ListEditor, LIST_EDITOR_TEXTS, moveItem } from './ListEditor.js';

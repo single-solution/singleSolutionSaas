@@ -1,10 +1,12 @@
 'use client';
 /**
  * SchemaForm renders a feature's settings form from its settings schema, in the schema's order, with the `x-ui` hints:
- * `widget`, `group` (fieldsets), `placeholder` (for a list of choices: the text shown while none is chosen), `wide` and
- * `labels` (`country`: ISO country codes shown by name); a setting's `description` is its help text. A list of more
- * than 12 choices (or `widget: 'tags'`) is a searchable picker; a shorter one a group of checkboxes; a list without
- * choices is typed one item per line (a list of on/off values as JSON). Each group lays its fields out in the
+ * `widget`, `group` (fieldsets), `placeholder` (for a list of choices: the text shown while none is chosen), `wide`,
+ * `labels` (`country`: ISO country codes shown by name; or each choice's own words) and `suggestions` (a text offers
+ * them and takes the merchant's own; a list of texts is a picker of them that adds what is typed); a setting's
+ * `description` is its help text. A list of more than 12 choices (or `widget: 'tags'`) is a searchable picker; a
+ * shorter one a group of checkboxes; a list without choices is typed one item per line (a list of on/off values as
+ * JSON). Each group lays its fields out in the
  * responsive field grid (PLAN 0.6): short controls side by side, long text, lists and `wide` fields across the whole
  * row.
  *
@@ -13,7 +15,7 @@
  * @module
  */
 import { useId, useState } from 'react';
-import { CheckboxGroup, ChoicePicker, FieldGrid, Input, RadioGroup, Select, Switch, TextArea } from './fields.js';
+import { CheckboxGroup, ChoicePicker, FieldGrid, Input, RadioGroup, Select, SuggestInput, Switch, TextArea } from './fields.js';
 import { cx } from './cx.js';
 import { fieldsOf, groupFields, optionLabel } from './schema.js';
 
@@ -89,6 +91,19 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
 				<Select {...common} label={label} options={options} value={text} onChange={(e) => onChange(e.currentTarget.value)} />
 			);
 		}
+		const suggestions = node['x-ui']?.suggestions;
+		if (widget === 'suggest' && suggestions)
+			return (
+				<SuggestInput
+					{...common}
+					label={label}
+					suggestions={suggestions}
+					value={text}
+					maxLength={node.maxLength}
+					placeholder={ph}
+					onChange={(e) => onChange(e.currentTarget.value)}
+				/>
+			);
 		if (widget === 'textarea')
 			return (
 				<TextArea
@@ -141,6 +156,21 @@ function NodeControl({ id, label, node, widget, value, onChange, error, help, di
 				<CheckboxGroup {...shared} options={options} />
 			);
 		}
+		const suggestions = node['x-ui']?.suggestions;
+		if (items?.type === 'string' && suggestions)
+			return (
+				<ChoicePicker
+					legend={label}
+					options={suggestions.map((v) => ({ value: v, label: v }))}
+					value={list.map(String)}
+					onChange={(next) => onChange(next)}
+					help={help}
+					error={error}
+					disabled={disabled}
+					allowOwn
+					{...(ph ? { emptyText: ph } : {})}
+				/>
+			);
 		if (items && (items.type === 'string' || items.type === 'integer' || items.type === 'number')) {
 			return (
 				<TextArea

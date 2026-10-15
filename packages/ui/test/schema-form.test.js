@@ -217,6 +217,51 @@ describe('SchemaForm', () => {
 		expect(container.textContent).toContain('Any country');
 	});
 
+	it('shows choice labels from data and lets the merchant pick a suggestion or type their own (K3)', () => {
+		const schema = /** @type {import('../src/schema.js').SettingsSchema} */ ({
+			type: 'object',
+			properties: {
+				method: {
+					type: 'string',
+					title: 'Method',
+					default: 'cod',
+					enum: ['cod', 'online', 'bank_transfer'],
+					'x-ui': { labels: { cod: 'Pay on delivery', bank_transfer: 'Bank or wallet transfer' } },
+				},
+				unit: { type: 'string', title: 'Unit', default: 'piece', 'x-ui': { suggestions: ['piece', 'box', 'meter'] } },
+				sizes: {
+					type: 'array',
+					title: 'Sizes',
+					default: ['S'],
+					items: { type: 'string' },
+					'x-ui': { suggestions: ['S', 'M', 'L'] },
+				},
+			},
+		});
+		expect(widgetOf(/** @type {any} */ (schema.properties.unit))).toBe('suggest');
+		expect(widgetOf(/** @type {any} */ (schema.properties.sizes))).toBe('tags');
+		const onChange = vi.fn();
+		const { container } = render(<Harness schema={schema} initial={defaults(schema)} onChange={onChange} />);
+		// the labels are the product's words, a choice it does not name reads as words
+		expect(container.textContent).toContain('Pay on delivery');
+		expect(container.textContent).toContain('Bank or wallet transfer');
+		expect(container.textContent).toContain('Online');
+		// a text offers its suggestions and takes its own value
+		const unit = byLabel(container, 'Unit');
+		expect([...(unit.list?.options ?? [])].map((o) => o.value)).toEqual(['piece', 'box', 'meter']);
+		type(unit, 'litre');
+		expect(onChange).toHaveBeenLastCalledWith('unit', 'litre');
+		// a list of texts: pick a suggestion, or add what is typed (once, any case)
+		click(/** @type {HTMLElement} */ (container.querySelector('input[id$="-M"]')));
+		expect(onChange).toHaveBeenLastCalledWith('sizes', ['S', 'M']);
+		const search = /** @type {HTMLInputElement} */ (container.querySelector('input[type="search"]'));
+		type(search, ' XXL ');
+		click(byText(container, 'Add “XXL”', 'button'));
+		expect(onChange).toHaveBeenLastCalledWith('sizes', ['S', 'M', 'XXL']);
+		type(search, 'xxl');
+		expect(container.textContent).not.toContain('Add “xxl”');
+	});
+
 	it('edits tag lists and lists of on/off values (JSON)', () => {
 		const schema = hinted();
 		const onChange = vi.fn();
