@@ -17,25 +17,27 @@ import {
 	FieldGrid,
 	Input,
 	Masonry,
+	OverviewSkeleton,
+	ProductOverview,
+	RecentChanges,
 	Section,
-	Stat,
-	StatGrid,
-	formatCredits,
 	formatCreditsPerHour,
-	formatDateTime,
 	parseCredits,
-	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
 import { createSnippets } from '../../core/snippets.js';
 import { call, fill, useLoad } from './api.js';
 import { AiForm, FORMS, StorageForm } from './forms.js';
-import { FormatForm, Loaded, Outcome, RecentChanges, SettingsForms, StatusBanner, TextsForm, ThemeForm } from './parts.js';
+import { FormatForm, Loaded, Outcome, SettingsForms, TextsForm, ThemeForm } from './parts.js';
 import { SettingsTab, aiLabelNotice } from './settings.js';
 import { TEXTS } from './texts.js';
 
 /** @typedef {{ kind: 'merchant' | 'admin', id: string, name: string, role?: 'owner' | 'support' }} Who */
-/** @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string }} TabProps */
+/**
+ * `open` shows another section of the dashboard (the Overview's buttons).
+ * @typedef {{ websiteId: string | null, who: Who, support: { email: string, phone: string }, portal: string,
+ *   open: (tab: import('@ss/ui').OverviewTab) => void }} TabProps
+ */
 /** @typedef {{ key: string, name: string, description: string, dependsOn: string[], millicreditsPerHour: number, on?: boolean }} Feature */
 /** @typedef {{ name: string, label: string, neededBy: string[], status: string, message?: string, last4?: string | null }} Connection */
 
@@ -58,132 +60,61 @@ const namesOf = (keys, max = Infinity) => {
 const toneOf = (status) => (status === 'connected' ? 'success' : status === 'test_failed' ? 'danger' : 'warning');
 
 /**
- * One line of the setup checklist: what is needed (and why it is not ready), then its status and any action.
- * @param {{ tone: 'success' | 'warning' | 'danger' | 'neutral', badge: string, label: string, detail?: string | null,
- *   children?: import('react').ReactNode }} props
+ * Overview (PLAN 0.6 "Overviews talk", 0.4.3): the kit's whole Overview from `@ss/ui`, with Chat's own part while the
+ * Book-a-slot tool is on (the website's settings are read only then): its booking URL to set while there is none.
+ * @param {TabProps} props
  */
-function CheckRow({ tone, badge, label, detail, children }) {
-	return (
-		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
-			<span className="min-w-0 flex-[1_1_16rem]">
-				<span className="block font-semibold text-fg">{label}</span>
-				{detail ? <span className="block text-muted">{detail}</span> : null}
-			</span>
-			<span className="flex flex-wrap items-center gap-2">
-				<Badge tone={tone} dot>
-					{badge}
-				</Badge>
-				{children}
-			</span>
-		</li>
-	);
-}
-
-/** @param {TabProps} props */
-function OverviewTab({ websiteId }) {
-	const timeZone = useViewerTimeZone();
+function OverviewTab({ websiteId, who, support, portal, open }) {
 	const base = `/v1/dashboard/websites/${websiteId}`;
 	const { answer, reload } = useLoad(`${base}/overview`);
-	const settings = useLoad(`${base}/settings`);
-	const [busy, setBusy] = useState(false);
+	const booking = answer?.ok === true && answer.data.featuresOn.includes('book_slot');
+	const settings = useLoad(booking ? `${base}/settings` : null);
+	/** @type {Array<{ key: string, values: Record<string, { value: unknown }> }>} */
+	const features = settings.answer?.ok ? settings.answer.data.features : [];
+	/** Whether the booking URL is set, once the settings are read (null: not read). */
+	const bookingSet = settings.answer?.ok
+		? Boolean(features.find((feature) => feature.key === 'book_slot')?.values.bookingUrl?.value)
+		: null;
+	const O = TEXTS.overview;
 	return (
-		<Loaded answer={answer}>
-			{(data) => {
-				/** @type {Connection[]} */
-				const needed = data.checklist.connections;
-				/** @type {string[]} */
-				const on = data.featuresOn;
-				const ready = needed.filter((item) => item.status === 'connected').length;
-				/** @type {Array<{ key: string, values: Record<string, { value: unknown }> }>} */
-				const features = settings.answer?.ok ? settings.answer.data.features : [];
-				const bookingUrl = features.find((feature) => feature.key === 'book_slot')?.values.bookingUrl?.value;
-				return (
-					<div className="space-y-6">
-						<StatusBanner status={data.status} />
-						<Section title={TEXTS.overview.numbers} description={TEXTS.overview.numbersHelp}>
-							<StatGrid>
-								<Stat
-									label={TEXTS.overview.today}
-									value={formatCredits(data.todayMillicredits)}
-									icon="coins"
-									kind="credit"
-								/>
-								<Stat
-									label={TEXTS.overview.features}
-									value={on.length}
-									hint={on.length > 0 ? namesOf(on, 3) : TEXTS.overview.noFeatures}
-									icon="zap"
-									kind="feature"
-								/>
-								<Stat
-									label={TEXTS.overview.connectionsReady}
-									value={fill(TEXTS.overview.ofTotal, { count: ready, total: needed.length })}
-									tone={ready < needed.length ? 'warning' : 'success'}
-									icon="plug"
-									kind="connection"
-								/>
-							</StatGrid>
-						</Section>
-						<Section title={TEXTS.overview.setup} description={TEXTS.overview.setupHelp}>
-							<Card>
-								<ul className="divide-y divide-line-soft text-sm">
-									{needed.map((item) => (
-										<CheckRow
-											key={item.name}
-											tone={toneOf(item.status)}
-											badge={TEXTS.connections[/** @type {'connected'} */ (item.status)]}
-											label={item.label}
-											detail={item.message}
-										/>
-									))}
-									{on.includes('book_slot') && settings.answer?.ok ? (
-										<CheckRow
-											tone={bookingUrl ? 'success' : 'warning'}
-											badge={bookingUrl ? TEXTS.overview.bookingSet : TEXTS.overview.bookingMissing}
-											label={TEXTS.overview.booking}
-										/>
-									) : null}
-									{data.checklist.widget ? (
-										<CheckRow
-											tone={data.checklist.widget.installed ? 'success' : 'warning'}
-											badge={
-												data.checklist.widget.installed
-													? fill(TEXTS.overview.widgetSeen, {
-															time: formatDateTime(data.checklist.widget.lastSeenAt, { timeZone }),
-														})
-													: TEXTS.overview.widgetMissing
-											}
-											label={TEXTS.overview.widget}
-										/>
-									) : null}
-									<CheckRow
-										tone={data.checklist.business.found ? 'success' : 'warning'}
-										badge={
-											data.checklist.business.found ? TEXTS.overview.businessFound : TEXTS.overview.businessMissing
-										}
-										label={TEXTS.overview.business}>
-										<Button
-											size="sm"
-											variant="secondary"
-											loading={busy}
-											onClick={async () => {
-												setBusy(true);
-												await call('POST', `${base}/business/refresh`);
-												setBusy(false);
-												reload();
-											}}>
-											{TEXTS.overview.refresh}
-										</Button>
-									</CheckRow>
-								</ul>
-							</Card>
-						</Section>
-						<Section title={TEXTS.overview.changes} description={TEXTS.overview.changesHelp}>
-							<RecentChanges items={data.recentChanges} titled={false} />
-						</Section>
-					</div>
-				);
-			}}
+		<Loaded answer={answer} skeleton={<OverviewSkeleton />}>
+			{(data) => (
+				<ProductOverview
+					data={data}
+					who={who}
+					product={TEXTS.title}
+					support={support}
+					portal={portal}
+					namesOf={namesOf}
+					open={open}
+					recheck={async () => {
+						await call('POST', `${base}/business/refresh`);
+						reload();
+					}}
+					needs={
+						bookingSet === false
+							? [
+									{
+										key: 'booking',
+										tone: 'warning',
+										title: O.noBooking.title,
+										effect: O.noBooking.effect,
+										action: (
+											<Button size="sm" variant="secondary" onClick={() => open('settings')}>
+												{O.noBooking.action}
+											</Button>
+										),
+									},
+								]
+							: []
+					}
+					steps={
+						bookingSet === null
+							? []
+							: [{ key: 'booking', label: O.bookingStep, done: bookingSet, onSelect: () => open('settings') }]
+					}
+				/>
+			)}
 		</Loaded>
 	);
 }

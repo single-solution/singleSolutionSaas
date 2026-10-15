@@ -151,7 +151,13 @@ export default function Dashboard() {
 					{needsWebsite && !site ? (
 						<Callout tone="info">{TEXTS.pickWebsite}</Callout>
 					) : (
-						<Tab websiteId={site ? site.websiteId : null} who={who} support={support} portal={portalUrl} />
+						<Tab
+							websiteId={site ? site.websiteId : null}
+							who={who}
+							support={support}
+							portal={portalUrl}
+							open={(tab) => go(href(tab))}
+						/>
 					)}
 				</SwapTransition>
 			</AppShell>

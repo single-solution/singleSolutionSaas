@@ -204,6 +204,7 @@ describe('Settings → Assistant', () => {
 				who={{ kind: 'merchant', id: 'm_1', name: 'Merchant' }}
 				support={{ email: 'help@example.com', phone: '' }}
 				portal="https://portal.example.com"
+				open={() => undefined}
 			/>,
 		);
 		await settle();
