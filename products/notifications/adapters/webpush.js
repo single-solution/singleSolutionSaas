@@ -17,7 +17,7 @@ import {
 	verify,
 } from 'node:crypto';
 import { isNetError } from '@ss/net';
-import { isObject } from './util.js';
+import { isObject } from '@ss/contracts/util';
 
 /** @typedef {import('./providers.js').OutboundSend} OutboundSend */
 /** @typedef {{ endpoint: string, keys: { p256dh: string, auth: string } }} PushSubscription */

@@ -2,9 +2,8 @@ import { createECDH } from 'node:crypto';
 import { createOutboundPolicy, netError } from '@ss/net';
 import { describe, expect, it } from 'vitest';
 import { createProviders, providerViolation } from '../adapters/providers.js';
-import { signWebhook, verifyMeta, verifyTwilio } from '../adapters/signatures.js';
+import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import { checkSubscription, createWebPush, encryptPayload, pushKeysOf } from '../adapters/webpush.js';
-import { verifySignature } from './helpers.js';
 
 const NOW = Date.parse('2026-10-01T10:00:00Z');
 const policy = createOutboundPolicy({ resolve: async () => [{ address: '93.184.215.14', family: 4 }] });
@@ -381,16 +380,6 @@ describe('web push', () => {
 });
 
 describe('signatures', () => {
-	it('signs webhooks and checks them as a receiver does', () => {
-		const header = signWebhook('{"a":1}', 'secret', NOW);
-		expect(header).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
-		expect(verifySignature({ body: '{"a":1}', header, secret: 'secret', now: NOW })).toBe(true);
-		expect(verifySignature({ body: '{"a":2}', header, secret: 'secret', now: NOW })).toBe(false);
-		expect(verifySignature({ body: '{"a":1}', header, secret: 'secret', now: NOW + 301_000 })).toBe(false);
-		expect(verifySignature({ body: '{"a":1}', header: null, secret: 'secret', now: NOW })).toBe(false);
-		expect(verifySignature({ body: '{"a":1}', header: 't=1', secret: 'secret', now: 1000 })).toBe(false);
-	});
-
 	it('checks Twilio and WhatsApp Cloud API signatures', () => {
 		const params = new URLSearchParams({ Body: 'STOP', From: '+1' });
 		expect(verifyTwilio({ url: 'https://x/y', params, signature: null, authToken: 't' })).toBe(false);

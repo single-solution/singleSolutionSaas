@@ -17,16 +17,16 @@
  *   credentials or the server's reply text.
  * @module
  */
+import { isEmailAddress } from '@ss/contracts/email';
+import { isObject } from '@ss/contracts/util';
 import { checkHost, isNetError, resolveVetted } from '@ss/net';
-import { isObject, providerError as kitError } from './util.js';
+import { isMailbox, providerError as kitError } from './util.js';
 
 /** Ports SMTP may use for hosts that are not allowlisted. */
 export const SMTP_PORTS = Object.freeze([25, 465, 587, 2525]);
 
 const DEFAULT_TIMEOUTS = Object.freeze({ connectionMs: 10_000, greetingMs: 10_000, socketMs: 30_000 });
 const MAX_BODY = 1024 * 1024;
-const ADDRESS = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
-const DISPLAY = /^([^<>\r\n"\\]{0,128}?)\s*<([^<>\s]+)>$/;
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
 const RESERVED_HEADERS = new Set([
 	'from',
@@ -84,24 +84,6 @@ const nodemailerTransport = (options) =>
 	import('nodemailer').then((/** @type {any} */ mod) => (mod.default ?? mod).createTransport(options));
 
 /**
- * @param {unknown} value
- * @returns {value is string}
- */
-const isAddress = (value) => typeof value === 'string' && value.length <= 320 && ADDRESS.test(value);
-
-/**
- * `addr` or `Name <addr>`, without CR/LF.
- * @param {unknown} value
- * @returns {boolean}
- */
-const isMailbox = (value) => {
-	if (typeof value !== 'string' || value.length > 400 || /[\r\n]/.test(value)) return false;
-	if (isAddress(value)) return true;
-	const match = DISPLAY.exec(value);
-	return match !== null && isAddress(match[2]);
-};
-
-/**
  * Normalized connection settings of an SMTP descriptor.
  * @param {Record<string, unknown>} descriptor
  * @param {import('@ss/net').OutboundPolicy} policy
@@ -144,7 +126,7 @@ export const smtpSettingsOf = (descriptor, policy) => {
 const mailOf = (message) => {
 	if (!isObject(message)) throw kitError('invalid_argument', 'message must be an object');
 	const { to, subject, text, from, replyTo, headers } = message;
-	if (!isAddress(to)) throw kitError('invalid_argument', 'message.to must be an email address');
+	if (!isEmailAddress(to)) throw kitError('invalid_argument', 'message.to must be an email address');
 	if (typeof subject !== 'string' || subject.length === 0 || subject.length > 998 || /[\r\n]/.test(subject))
 		throw kitError('invalid_argument', 'message.subject must be 1..998 characters on one line');
 	if (typeof text !== 'string' || text.length > MAX_BODY)

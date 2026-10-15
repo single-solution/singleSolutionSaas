@@ -1,6 +1,6 @@
 /**
  * Notifications' routes (the kit adds its own: connect, notices, tickets, data rights, widget config, `/sso`, the
- * dashboard API, the settings API and the activity reads). Every browser-token, server-token and ticket route belongs
+ * dashboard API with its list twin of `webhook_urls`, the settings API and the activity reads). Every browser-token, server-token and ticket route belongs
  * to one feature; `openapi.json` is generated from these definitions (`ss app assets`), so `method`, `path`, `auth`,
  * `feature` and `permission` stay string literals. Every website route sends due messages and webhook events right
  * after it answers (`drain`). Who acts is the ticket's member of staff, else the `SS-Actor-*` user of a server-token
@@ -9,9 +9,10 @@
  * @module
  */
 import { isId } from '@ss/contracts';
+import { normalizeEmail } from '@ss/contracts/email';
 import { TEMPLATE_KEY } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
-import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normaliseEmail, normalisePhone } from '../core/channels.js';
+import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalisePhone } from '../core/channels.js';
 import { isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
@@ -26,7 +27,6 @@ import {
 } from '../core/templates.js';
 import { checkSendAt } from '../core/timing.js';
 import { checkForwardedEvent } from '../core/webhooks.js';
-import { LISTS } from '../adapters/lists.js';
 import { strings } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { checkSubscription } from '../adapters/webpush.js';
@@ -354,41 +354,6 @@ export const createRoutes = (product) => {
 	const serverTemplates = templateHandlers('server');
 
 	/**
-	 * The list a dashboard request names (`webhook_urls`, PLAN 0.8.10 N5).
-	 * @param {any} ctx
-	 * @returns {keyof typeof LISTS}
-	 */
-	const listOf = (ctx) => {
-		if (!Object.hasOwn(LISTS, ctx.params.list)) throw problem('not_found', 'No such list.');
-		return ctx.params.list;
-	};
-	/**
-	 * Save a list whole in the dashboard: merchants only while its feature is on (our admins may prepare it), checked, a
-	 * Recent change and an activity-log entry by the session (as the kit's own settings saves).
-	 * @param {any} ctx
-	 */
-	const saveList = async (ctx) => {
-		const name = listOf(ctx);
-		const { session } = ctx;
-		if (session.kind === 'merchant' && !(await product.featuresOn(ctx.websiteId)).includes(LISTS[name].feature))
-			return problem('feature_off', 'This feature is off.');
-		const body = typeof ctx.body === 'object' && ctx.body !== null ? ctx.body : {};
-		const saved = await product.lists.saveWebhookUrls(ctx.websiteId, body.value);
-		if (!saved.ok)
-			return problem('validation_failed', saved.errors[0]?.message ?? 'The list is not valid.', { errors: saved.errors });
-		const who = {
-			kind: session.kind,
-			id: session.subject,
-			name: session.name,
-			...(session.role ? { role: session.role } : {}),
-		};
-		const { title } = LISTS[name];
-		await product.recentChanges.record({ websiteId: ctx.websiteId, who, what: 'settings', detail: `${title}: changed` });
-		await product.settingsChanged(ctx, { what: 'list', key: name, who, label: title, detail: 'changed' });
-		return { value: saved.value };
-	};
-
-	/**
 	 * A website a public page or a provider names: it must exist, be served and have its merchant database. An old status
 	 * copy is fetched again right after the response (K-19).
 	 * @param {any} ctx
@@ -615,7 +580,7 @@ export const createRoutes = (product) => {
 				const body = ctx.body ?? {};
 				if (!['email', 'sms', 'whatsapp'].includes(body.channel)) return invalid('channel', 'Pick email, SMS or WhatsApp.');
 				const channel = /** @type {'email' | 'sms' | 'whatsapp'} */ (body.channel);
-				const email = channel === 'email' ? normaliseEmail(body.to) : null;
+				const email = channel === 'email' ? normalizeEmail(body.to) : null;
 				const phone = channel === 'email' ? null : normalisePhone(body.to);
 				if (!email && !phone)
 					return invalid(
@@ -769,23 +734,6 @@ export const createRoutes = (product) => {
 			path: '/v1/dashboard/websites/:websiteId/messages/:key/:channel',
 			auth: 'dashboard',
 			handler: switchMessage,
-		}),
-
-		// ---------------------------------------------------------------- dashboard: lists (webhook URLs, PLAN 0.8.10 N5)
-		defineRoute({
-			method: 'GET',
-			path: '/v1/dashboard/websites/:websiteId/lists/:list',
-			auth: 'dashboard',
-			handler: async (ctx) => {
-				listOf(ctx);
-				return { value: await product.lists.webhookUrls(String(ctx.websiteId)) };
-			},
-		}),
-		defineRoute({
-			method: 'PUT',
-			path: '/v1/dashboard/websites/:websiteId/lists/:list',
-			auth: 'dashboard',
-			handler: saveList,
 		}),
 
 		// ------------------------------------------------------------------------------- hosted unsubscribe page

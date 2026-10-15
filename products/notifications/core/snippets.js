@@ -4,6 +4,7 @@
  * signature check and the reply addresses. Plain text; no I/O.
  * @module
  */
+import { widgetScriptTag } from '@ss/contracts/text';
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
@@ -14,12 +15,10 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 	/** @param {'visitor' | 'admin'} kind */
 	const places = (kind) =>
 		widgets.filter((widget) => widget.kind === kind).map((widget) => `<div ${WIDGET_ATTRIBUTE}="${widget.key}"></div>`);
-	const visitorSnippet = [
-		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`,
-		...places('visitor'),
-	].join('\n');
+	const src = `${base}/widget.js`;
+	const visitorSnippet = [widgetScriptTag({ src, token: 'YOUR_BROWSER_TOKEN' }), ...places('visitor')].join('\n');
 	const adminSnippet = [
-		`<script src="${base}/widget.js"></script>`,
+		widgetScriptTag({ src, async: false }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

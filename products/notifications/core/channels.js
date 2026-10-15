@@ -3,6 +3,7 @@
  * address. No I/O: the API, the adapters and the widgets share it.
  * @module
  */
+import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone as normaliseAnyPhone } from '@ss/contracts/phone';
 import { TEMPLATE_CHANNELS } from '@ss/contracts/templates';
 
@@ -41,21 +42,9 @@ const ADDRESS_FIELDS = Object.freeze({
 	staff_push: 'staffId',
 });
 
-const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.[A-Za-z]{2,63}$/;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 /** A language tag (`en`, `fr`, `pt-BR`). */
 export const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
-
-/**
- * An email address in its stored form (lower case), or null.
- * @param {unknown} value
- * @returns {string | null}
- */
-export const normaliseEmail = (value) => {
-	if (typeof value !== 'string') return null;
-	const email = value.trim().toLowerCase();
-	return email.length <= 254 && EMAIL.test(email) ? email : null;
-};
 
 /**
  * A phone number as E.164, or null: the normalizer every product shares (`@ss/contracts/phone`), with no default
@@ -108,7 +97,7 @@ export const checkRecipient = (input) => {
 	const to = /** @type {Record<string, unknown>} */ (input);
 	/** @type {Recipient} */
 	const value = {
-		email: to.email === undefined ? null : normaliseEmail(to.email),
+		email: to.email === undefined ? null : normalizeEmail(to.email),
 		phone: to.phone === undefined ? null : normalisePhone(to.phone),
 		subscriberId:
 			to.subscriberId === undefined

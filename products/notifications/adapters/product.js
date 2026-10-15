@@ -3,7 +3,8 @@
  * manifest (each feature's settings schema from `schemas/` inline), its widget texts, its Connections (providers per
  * channel, push keys, the webhook signing secret and the Accounts token for activity-log copies), the delivery log's
  * shared setting (how long it is kept, PLAN 0.8.10 D11), the merchant database indexes, the data-rights hooks, the
- * widget settings, the list `webhook_urls` (in the product database, whose store it owns) and its part of the website
+ * widget settings, the list `webhook_urls` (in the product database: the kit's `createProductBase` store, shared with the
+ * kit) and its part of the website
  * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, the channels that are on, and
  * while Outgoing webhooks is on the events it sends and its webhook URLs by host only), and adds the sealer of sensitive
  * messages, the providers and web push on the same outbound policy, and the other products from the Portal's directory
@@ -11,9 +12,9 @@
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { MongoClient } from 'mongodb';
-import { PRODUCT_DATABASE_OPTIONS, createMemoryStore, createMongoStore, createProduct } from '@ss/app-kit';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
+import { normalizeEmail } from '@ss/contracts/email';
+import { isObject } from '@ss/contracts/util';
+import { createProduct, createProductBase } from '@ss/app-kit';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -31,7 +32,7 @@ import sms from '../schemas/sms.settings.json' with { type: 'json' };
 import staffPush from '../schemas/staff_push.settings.json' with { type: 'json' };
 import webhooks from '../schemas/webhooks.settings.json' with { type: 'json' };
 import whatsapp from '../schemas/whatsapp.settings.json' with { type: 'json' };
-import { normaliseEmail, normalisePhone } from '../core/channels.js';
+import { normalisePhone } from '../core/channels.js';
 import { WEBHOOK_EVENTS, webhookUrlsSummary } from '../core/webhooks.js';
 import { createSealer, resealWebsite } from './crypto.js';
 import { createDefaults } from './defaults.js';
@@ -95,7 +96,7 @@ const PROBLEM_CODES = Object.freeze({
  * @param {{ email?: string, phone?: string }} user
  */
 const addressesOf = (user) =>
-	/** @type {string[]} */ ([normaliseEmail(user.email), normalisePhone(user.phone)].filter((address) => address !== null));
+	/** @type {string[]} */ ([normalizeEmail(user.email), normalisePhone(user.phone)].filter((address) => address !== null));
 
 /**
  * Data rights (PLAN 0.4.11): a person's messages, unsubscribes and unsubscribe codes are found by their email address
@@ -151,21 +152,10 @@ const dataRights = (now) => ({
 export const createProductInstance = (options) => {
 	const { createTransport, ...kitOptions } = options;
 	const now = options.now ?? Date.now;
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
-	const uri = (options.problems ?? []).length === 0 ? options.config?.mongodbUri : undefined;
-	// Notifications keeps its list setting (webhook URLs) in the product database too, so it owns the store; its client
-	// has the kit's pool and deadlines, so a database that cannot be reached answers 503 database_unavailable (K-16)
-	const store =
-		options.store ??
-		(uri
-			? createMongoStore({ db: new MongoClient(uri, { ...PRODUCT_DATABASE_OPTIONS }).db(), now })
-			: createMemoryStore({ now }));
+	// Notifications keeps its list setting (webhook URLs) in the product database too, and sends to providers and push
+	// services on the policy the kit uses for addresses merchants enter: the kit's start-up pieces, shared with the kit
+	const { store, policy, send } = createProductBase(kitOptions);
 	const lists = createLists({ store, now });
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	// the same policy the kit uses for addresses merchants enter
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
-	/** @type {import('./providers.js').OutboundSend} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
 	const providers = createProviders({ send, policy, now, ...(createTransport ? { createTransport } : {}) });
 	const webpush = createWebPush({ send, now });
 	const keys = (options.problems ?? []).length === 0 ? options.config : undefined;
@@ -250,9 +240,7 @@ export const createProductInstance = (options) => {
 			// what the widgets need (GET /v1/widget/config): the public push key only, never a secret
 			widgetConfig: async (ctx) => {
 				const keys = await product.connections.value(/** @type {string} */ (ctx.websiteId), 'push_keys');
-				const publicKey =
-					typeof keys === 'object' && keys !== null && typeof keys.publicKey === 'string' ? keys.publicKey : null;
-				return { pushPublicKey: publicKey };
+				return { pushPublicKey: isObject(keys) && typeof keys.publicKey === 'string' ? keys.publicKey : null };
 			},
 			blueprint: setupPart,
 		},

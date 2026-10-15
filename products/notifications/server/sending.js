@@ -24,8 +24,10 @@
  * @module
  */
 import { createId } from '@ss/contracts';
+import { normalizeEmail } from '@ss/contracts/email';
 import { problem } from '@ss/app-kit';
-import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor, normaliseEmail } from '../core/channels.js';
+import { signWebhook } from '@ss/protocol';
+import { CHANNEL_CONNECTIONS, CHANNEL_FEATURES, FALLBACK_CHANNELS, addressFor } from '../core/channels.js';
 import {
 	DEFAULT_LANGUAGE,
 	hiddenNamesOf,
@@ -51,7 +53,6 @@ import {
 } from '../core/timing.js';
 import { SIGNATURE_HEADER, urlsFor } from '../core/webhooks.js';
 import { messageAadOf } from '../adapters/crypto.js';
-import { signWebhook } from '../adapters/signatures.js';
 import { createStore } from '../adapters/store.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -340,7 +341,7 @@ export const createSending = (product) => {
 			/** @type {{ replyTo?: string, headers?: Record<string, string> }} */
 			const extra = {};
 			if (channel === 'email') {
-				const replyTo = normaliseEmail((await product.settings.values(s.websiteId, 'email')).replyTo);
+				const replyTo = normalizeEmail((await product.settings.values(s.websiteId, 'email')).replyTo);
 				if (replyTo) extra.replyTo = replyTo;
 				if (!message.required) {
 					const link = `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(message.address)}`;
@@ -730,7 +731,10 @@ export const createSending = (product) => {
 			try {
 				const response = await product.send(event.url, {
 					method: 'POST',
-					headers: { 'content-type': 'application/json', [SIGNATURE_HEADER]: signWebhook(event.body, secret, now()) },
+					headers: {
+						'content-type': 'application/json',
+						[SIGNATURE_HEADER]: signWebhook({ body: event.body, secret, now }),
+					},
 					body: event.body,
 					timeoutMs: 10_000,
 					redirect: 'error',

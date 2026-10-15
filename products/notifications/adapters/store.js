@@ -14,8 +14,8 @@
  * - `webhook_events`: outgoing webhook events and their attempts
  * @module
  */
-import { randomBytes } from 'node:crypto';
 import { createId } from '@ss/contracts';
+import { randomToken } from '@ss/protocol';
 import { LEASE_MS } from '../core/timing.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -358,7 +358,7 @@ export const createStore = (data, { now }) => {
 			codeOf: async (address) => {
 				const found = as(await recipients.findOne({ websiteId, address }, { projection: { _id: 0, code: 1 } }));
 				if (found) return found.code;
-				const code = randomBytes(18).toString('base64url');
+				const code = randomToken(18);
 				await recipients.updateOne({ websiteId, address }, { $setOnInsert: { code, createdAt: at() } }, { upsert: true });
 				return as(await recipients.findOne({ websiteId, address }, { projection: { _id: 0, code: 1 } })).code;
 			},

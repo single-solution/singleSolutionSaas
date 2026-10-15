@@ -14,10 +14,11 @@
  *   `{toDigits}` (digits only), `{text}` and `{secret}` are filled, encoded for the content type.
  * @module
  */
+import { isObject } from '@ss/contracts/util';
 import { checkUrl, isNetError, signV4 } from '@ss/net';
 import { gatewayOutcome } from '../core/gateway.js';
 import { createSmtpMessaging } from './smtp.js';
-import { isObject } from './util.js';
+import { isMailbox } from './util.js';
 
 /** @typedef {import('../core/gateway.js').SendOutcome} SendOutcome */
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
@@ -60,8 +61,6 @@ const REQUIRED = Object.freeze({
 	http: ['url', 'body'],
 });
 
-const MAILBOX = /^(?:[^<>\r\n"\\]{0,128}<[^\s@<>]+@[^\s@<>]+>|[^\s@<>]+@[^\s@<>]+)$/;
-
 /**
  * Why a provider connection value is not usable, or null.
  * @param {'email' | 'sms' | 'whatsapp'} name
@@ -74,7 +73,7 @@ export const providerViolation = (name, value) => {
 	const provider = /** @type {keyof typeof REQUIRED} */ (value.provider);
 	const missing = REQUIRED[provider].filter((field) => typeof value[field] !== 'string' || value[field].trim() === '');
 	if (missing.length > 0) return `Fill out: ${missing.join(', ')}.`;
-	if (name === 'email' && !MAILBOX.test(String(value.from))) return 'from must be an email address or Name <address>.';
+	if (name === 'email' && !isMailbox(value.from)) return 'from must be an email address or Name <address>.';
 	if (provider === 'mailgun' && value.region !== undefined && value.region !== 'us' && value.region !== 'eu')
 		return 'region must be us or eu.';
 	if (provider === 'ses' && !/^[a-z]{2}(-[a-z]+)+-\d$/.test(String(value.region))) return 'region must be an AWS region.';
@@ -100,10 +99,13 @@ const headersOf = (text) => {
 	try {
 		const parsed = JSON.parse(String(text));
 		if (!isObject(parsed) || Object.keys(parsed).length > 20) return null;
-		const entries = Object.entries(parsed);
-		return entries.every(([key, v]) => /^[A-Za-z0-9-]{1,64}$/.test(key) && typeof v === 'string' && !/[\r\n]/.test(v))
-			? Object.fromEntries(entries)
-			: null;
+		/** @type {Array<[string, string]>} */
+		const entries = [];
+		for (const [key, v] of Object.entries(parsed)) {
+			if (!/^[A-Za-z0-9-]{1,64}$/.test(key) || typeof v !== 'string' || /[\r\n]/.test(v)) return null;
+			entries.push([key, v]);
+		}
+		return Object.fromEntries(entries);
 	} catch {
 		return null;
 	}

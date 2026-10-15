@@ -5,8 +5,9 @@
  * is escaped and the page runs no script.
  * @module
  */
-import { themeCss } from '@ss/app-kit/widget';
+import { escapeHtml } from '@ss/contracts/text';
 import { formatText } from '@ss/app-kit';
+import { themeCss } from '@ss/app-kit/widget';
 
 /** Security headers of the hosted page. */
 export const PAGE_HEADERS = Object.freeze({
@@ -17,9 +18,6 @@ export const PAGE_HEADERS = Object.freeze({
 	'x-frame-options': 'DENY',
 	'referrer-policy': 'no-referrer',
 });
-
-/** @param {unknown} value */
-const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
 
 const PAGE_CSS = `
 :root { color-scheme: light dark; }
@@ -48,21 +46,21 @@ export const renderUnsubscribePage = ({ texts, theme, state, business = '', acti
 	const custom = (theme?.customCss ?? '').replace(/</g, '\\3c ');
 	const body =
 		state === 'ask'
-			? `<p>${escape(formatText(t('unsubscribe.question'), { business }))}</p><form method="post" action="${escape(action)}"><button type="submit">${escape(t('unsubscribe.button'))}</button></form>`
-			: `<p>${escape(t(`unsubscribe.${state}`))}</p>`;
+			? `<p>${escapeHtml(formatText(t('unsubscribe.question'), { business }))}</p><form method="post" action="${escapeHtml(action)}"><button type="submit">${escapeHtml(t('unsubscribe.button'))}</button></form>`
+			: `<p>${escapeHtml(t(`unsubscribe.${state}`))}</p>`;
 	return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escape(t('unsubscribe.title'))}</title>
+<title>${escapeHtml(t('unsubscribe.title'))}</title>
 <style>${variables}${mode}${PAGE_CSS}</style>
 <style>${custom}</style>
 </head>
 <body>
 <main class="box">
-<h1>${escape(t('unsubscribe.title'))}</h1>
+<h1>${escapeHtml(t('unsubscribe.title'))}</h1>
 ${body}
 </main>
 </body>
