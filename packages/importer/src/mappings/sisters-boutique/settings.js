@@ -396,10 +396,12 @@ export const settingsPlan = (values) => {
 				'feeds.includeOutOfStock': false,
 				'feeds.itemTitle': '{brand} {name} ({options})',
 				'feeds.itemDescription': 'seo',
+				'feeds.descriptionPattern': '{description}', // SaaS default (store mapping to review when the owner asks)
 				'feeds.skuAs': 'none',
 				'feeds.identifierExists': 'no',
 				'feeds.googleCategory': '',
 				'feeds.gradeLabel': false,
+				'feeds.shipping': true, // SaaS default (store mapping to review when the owner asks)
 				// category × brand pages `?brand=` and glossary pages (`packages/shared/src/seo/intentSurface.ts`:33-36,
 				// `apps/web/src/app/attributes/[category]/[attribute]`)
 				'landing_pages.landingMinProducts': 2,
