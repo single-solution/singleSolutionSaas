@@ -3871,7 +3871,8 @@ changes in the activity log; the guide has a tested middleware example. Also fix
   system family and the city (from edge headers); the analytics widget and `GET /v1/analytics` add sessions, bounce,
   duration, journeys, live visitors (sessions seen in the last 5 minutes, judged on read), vitals per page and 404
   referrers; days follow K8.
-- Data: `ss_growth_events` gain `session`, `browser`, `os` and `city`; daily totals gain those keys.
+- Data: raw events (`ss_growth_analytics_events`) gain `session`, `browser`, `os` and `city`; daily totals gain those
+  keys.
 
 **G4. Robots and verification.**
 
@@ -3905,7 +3906,7 @@ Built after the re-audit (2026-10-13; commits f49adf8d, bce22e2a, 8cf247ea, f956
 second for everything (RT-2). Key: always. API: a batch costs one insert and one update; a page's Web Vitals go in one
 batch (a page view costs 2 operations). Data: daily totals in `ss_growth_totals`, one document per day
 (`totals.<metric>.<key>` `{ c, s }`, keys escaped and prefixed `_`, a next `part` past 16 MB); `ss_growth_daily` is
-still read, never written; Migration step 8 writes the new shape.
+no longer read or written; Migration step 8 writes the new shape.
 
 **G9. Single-page apps.** Why: shops that navigate without page loads were counted once per document (SG-4). Key:
 always. API: pushState and back/forward count a page when the path or query changes, replaceState when the path
@@ -5282,12 +5283,12 @@ currency, createdAt }], loyaltyPoints }`. `context_panel` is not marked Not work
         strings. Source: `utm_source`, else an external referrer host, else `(direct)`. Device: phone, tablet or
         computer from the window width. Country: the first two-letter value of `x-vercel-ip-country`, `cf-ipcountry`,
         `cloudfront-viewer-country` or `x-country-code`, behind the `recordCountry` setting (default on).
-      - **Storage**: raw events in `ss_growth_events` with a TTL index on `expiresAt` (recorded time + the retention
-        setting, 1–25 months, default 13; a change applies to events recorded afterwards); daily totals in
-        `ss_growth_daily` as `{ day, metric, key, count, sum }` `$inc` upserts, UTC days, kept forever, keys not capped
-        (paths cut at 300 characters, search terms at 100). Events are written inside the `POST /v1/collect` request
-        (browser token, at most 25 events and 64 kB, 3,000 per minute per website and 120 per visitor; invalid events
-        are dropped silently).
+      - **Storage**: raw events in `ss_growth_analytics_events` with a TTL index on `expiresAt` (recorded time + the
+        retention setting, 1–25 months, default 13; a change applies to events recorded afterwards); daily totals in
+        `ss_growth_totals`, one document per day (G8) by `$inc` upserts, days of the business time zone (K8), kept
+        forever, keys not capped (paths cut at 300 characters, search terms at 100). Events are written inside the
+        `POST /v1/collect` request (browser token, at most 25 events and 64 kB, 3,000 per minute per website and 120 per
+        visitor; invalid events are dropped silently).
       - **Shop events**: `detail` is `{ items: [{ id, variantId?, name?, price?, quantity? }], value, currency,
 orderId? }` with money in minor units (as everywhere); pixels get major units. Names per pixel: Meta
         ViewContent / AddToCart / InitiateCheckout / Purchase, GA4 `view_item` / `add_to_cart` / `begin_checkout` /
