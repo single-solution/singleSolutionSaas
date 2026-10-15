@@ -69,7 +69,9 @@ The exact API is in [API.md](./API.md).
 - **Widgets** — the product serves one public `widget.js` (the same bytes for every website). With the page's
   `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
   `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's
-  widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS.
+  widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS, and
+  holds what every widget builds with: the element builder, JSON calls, the admin widgets' ticket and calls, and the
+  admin blocks (badges, dots, value grids, list and detail, the More menu, dialogs with typed confirmation).
 - **Logging** — `createLogger()` writes JSON lines to standard output, which the host keeps: every request (method,
   path, status, time), a failed route (500, with its route and request id), a misconfiguration (503, naming the
   variables) and the kit's warnings. Members named like credentials, signed tokens and the user part of addresses are
