@@ -326,6 +326,78 @@ describe('my orders', () => {
 		expect(textOf(host)).toContain(text('orders.title'));
 	});
 
+	it('reviews each delivered item with reviews per item bought (E34)', async () => {
+		/** @type {any} */
+		let post = fail(500, 'internal_error');
+		const lines = detail().lines;
+		const delivered = detail({
+			role: 'delivered',
+			canCancel: false,
+			lines: [
+				{ ...lines[0], canReview: true },
+				{ ...lines[1], canReview: false },
+			],
+		});
+		const fake = makeShop({
+			signIn: 's1',
+			features: ['checkout', 'reviews'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(delivered),
+				'POST /v1/shop/reviews': () => post,
+			},
+		});
+		const host = await mountOrders(fake);
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		// only the item that can still be reviewed has the button
+		expect(() => buttonOf(host, text('orders.reviewLabel', { name: 'E-book' }))).toThrow();
+		await click(buttonOf(host, text('orders.reviewLabel', { name: 'Phone (Blue)' })));
+		const form = () => $(host, 'form.review-form');
+		expect(form()).not.toBeNull();
+		$(host, '#ss-review-oln_1-rating').value = '4';
+		$(host, '#ss-review-oln_1-title').value = ' Solid ';
+		$(host, '#ss-review-oln_1-body').value = 'Works well ';
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.failed'));
+		expect(fake.last('POST /v1/shop/reviews')?.body).toEqual({
+			orderId: 'ord_1',
+			lineId: 'oln_1',
+			rating: 4,
+			title: 'Solid',
+			body: 'Works well',
+		});
+		const firstKey = fake.last('POST /v1/shop/reviews')?.key;
+		expect(firstKey).toBeTruthy();
+		post = ok({ id: 'rev_1', status: 'pending' }, 201);
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.pending'));
+		expect(form()).toBeNull();
+		expect(() => buttonOf(host, text('orders.reviewLabel', { name: 'Phone (Blue)' }))).toThrow();
+
+		// a second look: the item was reviewed meanwhile
+		await click(buttonOf(host, text('orders.back')));
+		await click(buttonOf(host, text('orders.open', { number: 'SO-1' })));
+		post = fail(409, 'already_reviewed');
+		await click(buttonOf(host, text('orders.reviewLabel', { name: 'Phone (Blue)' })));
+		await submit(form());
+		expect(textOf(host)).toContain(text('reviews.itemReviewed'));
+		expect(form()).toBeNull();
+
+		// with reviews off the order page has no review button
+		resetPage();
+		const off = makeShop({
+			signIn: 's1',
+			features: ['checkout'],
+			routes: {
+				'GET /v1/shop/orders': () => ok({ items: [row('ord_1', 'SO-1')], nextCursor: null }),
+				'GET /v1/shop/orders/ord_1': () => ok(delivered),
+			},
+		});
+		const other = await mountOrders(off);
+		await click(buttonOf(other, text('orders.open', { number: 'SO-1' })));
+		expect(() => buttonOf(other, text('orders.reviewLabel', { name: 'Phone (Blue)' }))).toThrow();
+	});
+
 	it('shows a failed invoice, a pickup order and a waiting payment', async () => {
 		let pay = fail(503, 'payments_unavailable');
 		const waiting = detail({

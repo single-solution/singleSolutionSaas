@@ -580,6 +580,48 @@ describe('reviews block', () => {
 		expect(textOf(host)).toContain(text('reviews.problem.already_reviewed'));
 	});
 
+	it('reads "Reviews per page" and, with reviews per item bought, sends shoppers to their orders (no form)', async () => {
+		const fake = makeShop({
+			features: ['catalog', 'reviews'],
+			signIn: 's1',
+			routes: {
+				'GET /v1/shop/products/phone': () => ok(product()),
+				'GET /v1/shop/products/prd_1/reviews': () =>
+					ok({
+						items: [review('rev_1')],
+						nextCursor: null,
+						hasMore: false,
+						summary: { average: 5, count: 1, stars: { 5: 1 } },
+					}),
+				'POST /v1/shop/reviews': () => fail(422, 'validation_failed'),
+			},
+		});
+		const host = await mountPage(fake, 'phone', { reviews: { per: 'order_line', pageSize: 7 } });
+		expect(fake.last('GET /v1/shop/products/prd_1/reviews')?.query.limit).toBe('7');
+		expect($(host, 'form.box')).toBeNull();
+		expect(textOf(host)).toContain(text('reviews.fromOrders'));
+		fake.identify(null);
+		await flush();
+		expect(textOf(host)).toContain(text('reviews.fromOrders'));
+		expect(textOf(host)).not.toContain(text('reviews.signIn'));
+		expect(fake.all('POST /v1/shop/reviews')).toHaveLength(0);
+
+		// the default page size, and per product the form as before
+		resetPage();
+		const plain = makeShop({
+			features: ['catalog', 'reviews'],
+			signIn: 's1',
+			routes: {
+				'GET /v1/shop/products/phone': () => ok(product()),
+				'GET /v1/shop/products/prd_1/reviews': () =>
+					ok({ items: [], nextCursor: null, hasMore: false, summary: { average: 0, count: 0, stars: {} } }),
+			},
+		});
+		const other = await mountPage(plain);
+		expect(plain.last('GET /v1/shop/products/prd_1/reviews')?.query.limit).toBe('10');
+		expect($(other, 'form.box')).not.toBeNull();
+	});
+
 	it('shows no reviews and errors', async () => {
 		const fake = makeShop({
 			features: ['catalog', 'reviews'],

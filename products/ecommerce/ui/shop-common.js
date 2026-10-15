@@ -94,6 +94,11 @@ export const settingsOf = (config) => {
 			photoMaxMb: Number(raw.returns?.photoMaxMb ?? 5),
 		},
 		compare: { max: Number(raw.compare?.max) || 4 },
+		/** reviews per product (the product page's form) or per item bought (the order page's, E34), and the page size */
+		reviews: {
+			per: raw.reviews?.per === 'order_line' ? 'order_line' : 'product',
+			pageSize: Number(raw.reviews?.pageSize) || 10,
+		},
 		/** guests set alerts with a phone; a price-drop alert names a price (EN-1) */
 		alerts: { guests: raw.alerts?.guests === true, targetPrice: raw.alerts?.targetPrice === true },
 	};

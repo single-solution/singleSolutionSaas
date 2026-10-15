@@ -352,6 +352,22 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		order.role === 'awaiting_payment' && order.payment.via === 'manual' && order.payment.state !== 'paid';
 
 	/**
+	 * The lines of a delivered order already reviewed, while reviews are per order line (E34); null when its items are
+	 * not reviewed from the order (reviews off or per product, or the order not delivered).
+	 * @param {Site} s @param {OrderRecord} order
+	 * @returns {Promise<Set<string> | null>}
+	 */
+	const reviewedLines = async (s, order) => {
+		if (!order.deliveredAt || !s.has('reviews') || (await s.values('reviews')).per !== 'order_line') return null;
+		const data = await s.data();
+		const rows = await data
+			.collection(COLLECTIONS.reviews)
+			.find({ websiteId: data.websiteId, orderId: order.id }, { projection: { _id: 0, lineId: 1 } })
+			.toArray();
+		return new Set(rows.map((row) => String(row.lineId)));
+	};
+
+	/**
 	 * What the shopper sees of an order (never staff notes or who moved or paid it).
 	 * @param {Site} s @param {OrderRecord} order @param {OrderFlow} flow
 	 */
@@ -370,7 +386,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 		// the units' numbers the shopper may see: plain serial numbers and the unit fields shown to shoppers
 		const units = order.lines.some((line) => (line.serials ?? []).length > 0);
 		const filled = Object.keys(order.fields ?? {}).length > 0;
-		const [checkout, zones, couriers, invoices, unitValues, unitFields, orderFields] = await Promise.all([
+		const [checkout, zones, couriers, invoices, unitValues, unitFields, orderFields, reviewed] = await Promise.all([
 			s.values('checkout'),
 			s.has('delivery_zones') ? s.values('delivery_zones') : Promise.resolve(null),
 			s.has('checkout') ? s.list('couriers') : Promise.resolve([]),
@@ -378,6 +394,7 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 			units ? s.data().then((data) => unitsOfOrders(data, [order.id])) : Promise.resolve(new Map()),
 			units ? s.data().then((data) => fieldsOn(data, 'unit')) : Promise.resolve([]),
 			filled ? s.data().then((data) => fieldsOn(data, 'order')) : Promise.resolve([]),
+			reviewedLines(s, order),
 		]);
 		// paid, refunded and due counted the one way (a refund never makes a debt, CK-5)
 		const sums = orderMoney(order);
@@ -424,6 +441,8 @@ export const createOrdering = (product, service, { quoting, digital }) => {
 						downloads: extra?.files ?? [],
 						downloadsLeft: extra?.downloadsLeft ?? null,
 						licenceKeys: extra?.licenceKeys ?? [],
+						// with reviews per order line: delivered and not reviewed yet (E34)
+						canReview: reviewed !== null && !reviewed.has(line.id),
 					};
 				}),
 			),

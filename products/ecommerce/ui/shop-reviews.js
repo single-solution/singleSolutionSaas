@@ -1,18 +1,70 @@
 /**
  * The product page's reviews block (feature `reviews`, PLAN 0.8.8: reviews only after delivery): the rating summary,
- * the approved reviews with the shop's replies (more load with the cursor) and, for a signed-in shopper, the form to
- * write one. The server decides who may review: a shopper without a delivered order of the product is told so
- * (`review_not_allowed`), and a second review is refused (`already_reviewed`).
+ * the approved reviews with the shop's replies ("Reviews per page" at a time, more with the cursor) and the form to
+ * write one. Per product, a signed-in shopper writes it here; the server decides who may (`review_not_allowed` without
+ * a delivered order of the product, `already_reviewed` for a second one). Per item bought (`per: order_line`, E34) the
+ * shopper reviews each delivered item from the order page (`ui/my-orders.js`, with {@link reviewForm}), so this block
+ * says so instead of showing a form the server would refuse.
  * @module
  */
-import { button, codeOf, field, formatsOf, h, problemText, select } from './shop-common.js';
+import { button, codeOf, field, formatsOf, h, problemText, select, settingsOf } from './shop-common.js';
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./widget.js').Shop} Shop */
 /** @typedef {import('./widget.js').WidgetConfig} WidgetConfig */
 
-/** Reviews read at once. */
-const PAGE = 10;
+/**
+ * The form to write a review: the rating, a title and the text, sent to `POST /v1/shop/reviews` with `target` (the
+ * product, or the order and its line). A lost answer or a server failure is sent again with the same key.
+ * @param {{ doc: Document, t: Texts, shop: Shop, config: WidgetConfig, target: Record<string, string>, idPrefix: string,
+ *   heading: string, onDone: (status: string) => void, onRefused: (code: string) => void }} input `onDone` gets the
+ *   saved review's status; `onRefused` a code that ends the form (`review_not_allowed`, `already_reviewed`)
+ * @returns {HTMLFormElement}
+ */
+export const reviewForm = ({ doc, t, shop, config, target, idPrefix, heading, onDone, onRefused }) => {
+	const rating = select(
+		doc,
+		['5', '4', '3', '2', '1'].map((star) => /** @type {[string, string]} */ ([star, t('reviews.stars', { rating: star })])),
+		'5',
+	);
+	const title = /** @type {HTMLInputElement} */ (h(doc, 'input', { maxlength: '120' }));
+	const body = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '2000', rows: '4' }));
+	const sent = h(doc, 'p', { class: 'status', role: 'status' });
+	const submit = h(doc, 'button', { type: 'submit' }, t('reviews.submit'));
+	const form = /** @type {HTMLFormElement} */ (
+		h(
+			doc,
+			'form',
+			{ class: 'box review-form' },
+			h(doc, 'h2', {}, heading),
+			field(doc, `${idPrefix}-rating`, t('reviews.rating'), rating),
+			field(doc, `${idPrefix}-title`, t('reviews.titleField'), title),
+			field(doc, `${idPrefix}-body`, t('reviews.body'), body),
+			submit,
+			sent,
+		)
+	);
+	/** @type {string | null} */
+	let attemptKey = null;
+	form.addEventListener('submit', async (event) => {
+		event.preventDefault();
+		submit.setAttribute('disabled', '');
+		attemptKey ??= shop.newKey();
+		const answer = await shop.call('/v1/shop/reviews', {
+			method: 'POST',
+			body: { ...target, rating: Number(rating.value), title: title.value.trim(), body: body.value.trim() },
+			idempotencyKey: attemptKey,
+		});
+		submit.removeAttribute('disabled');
+		const code = codeOf(answer);
+		// a lost answer, a server failure or the first try still running: the same review is sent again with the same key
+		if (answer.status !== 0 && answer.status < 500 && code !== 'in_progress') attemptKey = null;
+		if (answer.ok) return onDone(String(answer.data.status));
+		if (code === 'review_not_allowed' || code === 'already_reviewed') return onRefused(code);
+		sent.textContent = problemText(config, 'reviews.problem.', code, 'reviews.failed');
+	});
+	return form;
+};
 
 /**
  * Fill `box` with the reviews of a product.
@@ -22,6 +74,7 @@ const PAGE = 10;
 export const renderReviews = ({ box, t, shop, config, productId }) => {
 	const doc = /** @type {Document} */ (box.ownerDocument);
 	const { dateText } = formatsOf(config, doc.defaultView);
+	const { per, pageSize } = settingsOf(config).reviews;
 	const summary = h(doc, 'div');
 	const list = h(doc, 'ul', { 'aria-label': t('reviews.list') });
 	const status = h(doc, 'p', { class: 'status', role: 'status' });
@@ -76,7 +129,7 @@ export const renderReviews = ({ box, t, shop, config, productId }) => {
 
 	/** @param {boolean} after */
 	const load = async (after) => {
-		const query = new URLSearchParams({ limit: String(PAGE) });
+		const query = new URLSearchParams({ limit: String(pageSize) });
 		if (after && cursor) query.set('cursor', cursor);
 		more.setAttribute('disabled', '');
 		const answer = await shop.call(`/v1/shop/products/${encodeURIComponent(productId)}/reviews?${query}`);
@@ -96,6 +149,11 @@ export const renderReviews = ({ box, t, shop, config, productId }) => {
 	};
 
 	const renderForm = () => {
+		// per item bought, items are reviewed from the order page (E34)
+		if (per === 'order_line') {
+			write.replaceChildren(h(doc, 'p', { class: 'hint' }, t('reviews.fromOrders')));
+			return;
+		}
 		if (!shop.signIn()) {
 			write.replaceChildren(h(doc, 'p', { class: 'hint' }, t('reviews.signIn')));
 			return;
@@ -104,56 +162,27 @@ export const renderReviews = ({ box, t, shop, config, productId }) => {
 			write.replaceChildren(h(doc, 'p', { class: 'hint' }, refused));
 			return;
 		}
-		const rating = select(
-			doc,
-			['5', '4', '3', '2', '1'].map((star) => /** @type {[string, string]} */ ([star, t('reviews.stars', { rating: star })])),
-			'5',
+		write.replaceChildren(
+			reviewForm({
+				doc,
+				t,
+				shop,
+				config,
+				target: { productId },
+				idPrefix: 'ss-review',
+				heading: t('reviews.write'),
+				onDone: (status) => {
+					write.replaceChildren(
+						h(doc, 'p', { class: 'hint', role: 'status' }, t(status === 'approved' ? 'reviews.thanks' : 'reviews.pending')),
+					);
+					if (status === 'approved') void load(false);
+				},
+				onRefused: (code) => {
+					refused = problemText(config, 'reviews.problem.', code, 'reviews.failed');
+					renderForm();
+				},
+			}),
 		);
-		const title = /** @type {HTMLInputElement} */ (h(doc, 'input', { maxlength: '120' }));
-		const body = /** @type {HTMLTextAreaElement} */ (h(doc, 'textarea', { maxlength: '2000', rows: '4' }));
-		const sent = h(doc, 'p', { class: 'status', role: 'status' });
-		const submit = h(doc, 'button', { type: 'submit' }, t('reviews.submit'));
-		const form = h(
-			doc,
-			'form',
-			{ class: 'box' },
-			h(doc, 'h2', {}, t('reviews.write')),
-			field(doc, 'ss-review-rating', t('reviews.rating'), rating),
-			field(doc, 'ss-review-title', t('reviews.titleField'), title),
-			field(doc, 'ss-review-body', t('reviews.body'), body),
-			submit,
-			sent,
-		);
-		form.addEventListener('submit', async (event) => {
-			event.preventDefault();
-			submit.setAttribute('disabled', '');
-			const answer = await shop.call('/v1/shop/reviews', {
-				method: 'POST',
-				body: { productId, rating: Number(rating.value), title: title.value.trim(), body: body.value.trim() },
-				idempotencyKey: shop.newKey(),
-			});
-			submit.removeAttribute('disabled');
-			if (answer.ok) {
-				write.replaceChildren(
-					h(
-						doc,
-						'p',
-						{ class: 'hint', role: 'status' },
-						t(answer.data.status === 'approved' ? 'reviews.thanks' : 'reviews.pending'),
-					),
-				);
-				if (answer.data.status === 'approved') void load(false);
-				return;
-			}
-			const code = codeOf(answer);
-			if (code === 'review_not_allowed' || code === 'already_reviewed') {
-				refused = problemText(config, 'reviews.problem.', code, 'reviews.failed');
-				renderForm();
-				return;
-			}
-			sent.textContent = problemText(config, 'reviews.problem.', code, 'reviews.failed');
-		});
-		write.replaceChildren(form);
 	};
 
 	void load(false);

@@ -177,6 +177,12 @@ describe('reviews per order line', () => {
 		const [first, second] = /** @type {Array<{ id: string }>} */ (order.lines);
 		const write = (/** @type {Record<string, unknown>} */ body, /** @type {{ signIn?: string, orderKey?: string }} */ who) =>
 			visit('POST', '/v1/shop/reviews', { body: { orderId: order.id, rating: 5, ...body }, ...who });
+		// the order page says which items can still be reviewed
+		const reviewable = async (/** @type {string} */ id) =>
+			(await visit('GET', `/v1/shop/orders/${id}`, { signIn: sara })).json.lines.map(
+				(/** @type {any} */ line) => line.canReview,
+			);
+		expect(await reviewable(order.id)).toEqual([true, true]);
 
 		expect(codeOf(await write({ lineId: first?.id }, {}))).toBe('sign_in_required');
 		expect((await write({}, { signIn: sara })).status).toBe(422);
@@ -191,6 +197,7 @@ describe('reviews per order line', () => {
 			signIn: sara,
 		});
 		expect(codeOf(early)).toBe('review_not_allowed');
+		expect(await reviewable(waiting.id)).toEqual([false]);
 
 		shop.advance(1000);
 		const one = await write({ lineId: first?.id, title: 'Fast' }, { signIn: sara });
@@ -204,10 +211,12 @@ describe('reviews per order line', () => {
 			status: 'approved',
 		});
 		expect(codeOf(await write({ lineId: first?.id, rating: 3 }, { signIn: sara }))).toBe('already_reviewed');
+		expect(await reviewable(order.id)).toEqual([false, true]);
 		// the same product's other line takes its own review
 		shop.advance(1000);
 		const two = await write({ lineId: second?.id, rating: 3 }, { signIn: sara });
 		expect(two.json).toMatchObject({ variantName: '256 GB', status: 'approved' });
+		expect(await reviewable(order.id)).toEqual([false, false]);
 
 		// a guest's order opens with its key
 		const key = newOrderKey();
@@ -239,6 +248,9 @@ describe('reviews per order line', () => {
 		expect((await visit('GET', `/v1/shop/products/${item.id}/reviews`)).json.items[0].name).toBe('Chloé Martin');
 		await shop.setting('reviews', 'moderation', 'manual');
 		await shop.setting('reviews', 'per', 'product');
+		// reviews per product are written on the product page, never from the order
+		const later = await seedOrder({ lines: [{ product: item }] });
+		expect(await reviewable(later.id)).toEqual([false]);
 	});
 
 	it('pages by pageSize, sets reviews back to pending and counts them by status', async () => {

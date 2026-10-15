@@ -3,7 +3,8 @@
  * returns"). Signed in, the shopper sees their orders (newest first, more with Load more) and each order's lines,
  * status history, payment (and the way to pay while it waits), delivery and tracking link, totals, the invoice
  * (`invoices`), downloads and license keys (`digital_goods`), each line's serial numbers and warranty (PLAN 0.8.10
- * E11, E12), Cancel while the order allows it, and return or warranty claims (`returns`) with their own list. Above the
+ * E11, E12), Cancel while the order allows it, return or warranty claims (`returns`) with their own list and, with
+ * reviews per order line, a review of each delivered item (`reviews`, E34; the line's `canReview`). Above the
  * orders, the loyalty points balance with the points expiring soon and the points history (`loyalty`,
  * `GET /v1/shop/loyalty`). Signed out, the sign-in hint shows.
  * @module
@@ -24,6 +25,7 @@ import {
 } from './shop-common.js';
 import { returnUrlOf } from './shop-checkout.js';
 import { renderClaimForm, renderClaims } from './shop-returns.js';
+import { reviewForm } from './shop-reviews.js';
 
 const PAGE = 10;
 /** Roles of an order whose items can be claimed. */
@@ -216,6 +218,39 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 				renderOrder(answer.data);
 			};
 
+			/**
+			 * The review of one delivered item (reviews per order line, E34): a button that opens the form.
+			 * @param {any} order @param {any} line @param {string} name
+			 */
+			const reviewBox = (order, line, name) => {
+				const box = h(doc, 'div');
+				/** @param {string} text */
+				const done = (text) => box.replaceChildren(h(doc, 'p', { class: 'hint', role: 'status' }, text));
+				const open = () =>
+					box.replaceChildren(
+						reviewForm({
+							doc,
+							t,
+							shop,
+							config,
+							target: { orderId: order.id, lineId: line.id },
+							idPrefix: `ss-review-${line.id}`,
+							heading: t('reviews.writeItem', { name }),
+							onDone: (state) => done(t(state === 'approved' ? 'reviews.thanks' : 'reviews.pending')),
+							onRefused: (code) =>
+								done(
+									code === 'already_reviewed'
+										? t('reviews.itemReviewed')
+										: problemText(config, 'reviews.problem.', code, 'reviews.failed'),
+								),
+						}),
+					);
+				box.replaceChildren(
+					button(doc, t('orders.review'), open, { class: 'secondary', 'aria-label': t('orders.reviewLabel', { name }) }),
+				);
+				return box;
+			};
+
 			/** @param {any} order */
 			const renderOrder = (order) => {
 				const currency = currencyOf(settings, order.totals?.currency);
@@ -242,11 +277,12 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 						),
 					);
 					const warranty = warrantyText(t, line.warrantyDays);
+					const lineName = line.variantName ? `${line.name} (${line.variantName})` : line.name;
 					return h(
 						doc,
 						'li',
 						{},
-						h(doc, 'strong', {}, line.variantName ? `${line.name} (${line.variantName})` : line.name),
+						h(doc, 'strong', {}, lineName),
 						line.gradeLabel ? h(doc, 'span', { class: 'meta' }, t('cart.grade', { grade: line.gradeLabel })) : null,
 						Array.isArray(line.serials) && line.serials.length > 0
 							? h(doc, 'span', { class: 'meta' }, t('orders.serials', { serials: line.serials.join(', ') }))
@@ -287,6 +323,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 									...line.licenceKeys.map((/** @type {string} */ key) => h(doc, 'p', {}, h(doc, 'code', {}, key))),
 								)
 							: null,
+						line.canReview === true && shop.has('reviews') ? reviewBox(order, line, lineName) : null,
 					);
 				});
 

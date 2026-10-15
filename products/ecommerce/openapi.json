@@ -50497,7 +50497,8 @@
 					"booking",
 					"downloads",
 					"downloadsLeft",
-					"licenceKeys"
+					"licenceKeys",
+					"canReview"
 				],
 				"additionalProperties": false,
 				"properties": {
@@ -50620,6 +50621,10 @@
 							"type": "string"
 						},
 						"description": "Given when the order is paid."
+					},
+					"canReview": {
+						"type": "boolean",
+						"description": "With the reviews setting per order_line: the order was delivered and this item has no review yet; review it with POST /v1/shop/reviews { orderId, lineId, rating, title?, body? }."
 					}
 				}
 			},
