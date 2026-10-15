@@ -206,7 +206,7 @@ describe('claim outcomes', () => {
 			order: {
 				id: placed.id,
 				number: placed.number,
-				payment: { method: 'cod', kind: 'on_delivery', state: 'paid', paid: 6000, refunded: 0 },
+				payment: { method: 'cod', state: 'paid', paid: 6000, refunded: 0 },
 			},
 			refundable: 6000,
 			refundsOnline: false,

@@ -14,6 +14,9 @@ import { createService } from '../server/service.js';
 import { COLLECTIONS } from '../core/model.js';
 import { ALL_PERMISSIONS, DOMAIN, PAYMENTS, UNIT_TYPES, readyShop, storedUnit } from './helpers.js';
 
+/** Today's payment methods' kinds, by key (the `payment_methods` list's seed). @type {Record<string, any>} */
+const KIND_OF = { cod: 'on_delivery', online: 'gateway', bank_transfer: 'pay_first', pickup: 'at_pickup' };
+
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
 /** @type {import('@ss/app-kit').WebsiteData} */
@@ -81,7 +84,8 @@ const place = async (options = {}) => {
 	// the order's customer record, as checkout makes it (K-6)
 	const customer = await createOrdersStore(data).ensureCustomer({ userId, name, email, phone }, { at: new Date(shop.now()) });
 	const total = price * quantity;
-	const waiting = method === 'cod' || method === 'pickup';
+	// paid later: waits for confirmation
+	const waiting = KIND_OF[method] === 'on_delivery' || KIND_OF[method] === 'at_pickup';
 	const status = options.status ?? (paid ? 'confirmed' : waiting ? 'awaiting_confirmation' : 'pending_payment');
 	const role = options.role ?? (paid ? 'open' : waiting ? 'awaiting_confirmation' : 'awaiting_payment');
 	const placed = await placeOrder(
@@ -134,12 +138,7 @@ const place = async (options = {}) => {
 				},
 				payment: {
 					method,
-					kind: /** @type {any} */ ({
-						cod: 'on_delivery',
-						online: 'gateway',
-						bank_transfer: 'pay_first',
-						pickup: 'at_pickup',
-					})[method],
+					kind: KIND_OF[method],
 					state: paid ? 'paid' : 'unpaid',
 					paymentId: paid || advance > 0 ? createId('pay') : null,
 					advance,

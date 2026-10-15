@@ -12,6 +12,9 @@ import { checkCouriers, cleanTracking, courierOf, fillTemplate, readPath, tracki
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, COURIER, readyShop } from './helpers.js';
 
+/** Today's payment methods' kinds, by key (the `payment_methods` list's seed). @type {Record<string, any>} */
+const KIND_OF = { cod: 'on_delivery', online: 'gateway', bank_transfer: 'pay_first', pickup: 'at_pickup' };
+
 /** @type {Awaited<ReturnType<typeof readyShop>>} */
 let shop;
 /** @type {import('@ss/app-kit').WebsiteData} */
@@ -129,16 +132,11 @@ const packedOrder = async ({ method = 'cod', name = 'Sara "Quotes" Shopper', wei
 				},
 				payment: {
 					method,
-					kind: /** @type {any} */ ({
-						cod: 'on_delivery',
-						online: 'gateway',
-						bank_transfer: 'pay_first',
-						pickup: 'at_pickup',
-					})[method],
-					state: method === 'cod' ? 'unpaid' : 'paid',
-					paymentId: method === 'cod' ? null : 'pay_courier',
+					kind: KIND_OF[method],
+					state: KIND_OF[method] === 'on_delivery' ? 'unpaid' : 'paid',
+					paymentId: KIND_OF[method] === 'on_delivery' ? null : 'pay_courier',
 					advance: 0,
-					paid: method === 'cod' ? 0 : 5000,
+					paid: KIND_OF[method] === 'on_delivery' ? 0 : 5000,
 					refunded: 0,
 					checkedAt: null,
 				},

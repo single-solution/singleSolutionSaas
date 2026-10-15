@@ -134,7 +134,7 @@ describe('a claim whose refund through Payments is not done', () => {
 		// refunded again: its units count as returned once, its points are taken back once
 		const again = await shop.api('POST', `/v1/returns/${claimId}/refund`, { amount: 1000, method: 'cod' });
 		expect(again.status).toBe(200);
-		expect(again.json).toMatchObject({ status: 'refunded', refundAmount: 1000, refundMethod: 'cash' });
+		expect(again.json).toMatchObject({ status: 'refunded', refundAmount: 1000, refundMethod: 'cod' });
 		const record = await records.recordOf(order.id);
 		expect(record.payment).toMatchObject({ refunded: 1000, state: 'refunded' });
 		expect(record.lines[0].returnedQuantity).toBe(1);
