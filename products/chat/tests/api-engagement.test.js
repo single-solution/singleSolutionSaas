@@ -121,14 +121,19 @@ describe('flows and leads', () => {
 describe('ratings, transcripts and attachments', () => {
 	it('ends a chat, asks for a rating and takes it; sends a transcript through Notifications', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'ratings', 'transcripts']);
-		await sys.setting('ratings', 'scale', '2');
+		// one label per point, the merchant's words (C13)
+		await sys.setting('ratings', 'labels', ['Bad', 'Good']);
 		const v = sys.visitor();
 		await v('POST', '/v1/chat/messages', { text: 'thanks, bye' });
 		const ended = await v('POST', '/v1/chat/end');
 		expect(ended.json.chat.conversation).toMatchObject({ status: 'resolved', ratingRequested: true });
 		expect((await v('POST', '/v1/chat/rating', { score: 3 })).status).toBe(422);
+		expect((await v('POST', '/v1/chat/rating', { score: 0 })).status).toBe(422);
 		const rated = await v('POST', '/v1/chat/rating', { score: 2, comment: 'Great' });
-		expect(rated.json.chat.conversation).toMatchObject({ rating: { score: 2, comment: 'Great' }, ratingRequested: false });
+		expect(rated.json.chat.conversation).toMatchObject({
+			rating: { kind: 'csat', score: 2, comment: 'Great' },
+			ratingRequested: false,
+		});
 		const unconnected = await v('POST', '/v1/chat/transcript', { email: 'me@example.com' });
 		expect(unconnected.status).toBe(503);
 		await sys.paste('notifications');

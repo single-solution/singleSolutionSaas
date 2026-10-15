@@ -702,7 +702,7 @@ describe('conversation tools', () => {
 		keepGuest();
 		const { $, root, server } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ratings'],
-			settings: { ratings: { scale: 2, askWhen: 'on_resolve', comment: false } },
+			settings: { ratings: { kind: 'csat', labels: ['Bad', 'Good'], askWhen: 'on_resolve', comment: false } },
 			routes: {
 				'GET /v1/chat': () =>
 					answer(200, { ...view({ conversation: conv({ status: 'resolved', ratingRequested: true }) }), messages: [] }),
@@ -712,7 +712,7 @@ describe('conversation tools', () => {
 		});
 		await click($('.launcher'));
 		expect(root.textContent).toContain(TEXTS['chat.ratingAsk']);
-		await click(buttonIn(root, TEXTS['chat.ratingUp']));
+		await click(buttonIn(root, 'Good'));
 		expect(server.last('POST /v1/chat/rating')?.body).toEqual({ score: 2 });
 		expect($('.slot').textContent).toBe('');
 		expect($('.window > .status').textContent).toBe(TEXTS['chat.ratingThanks']);
@@ -723,7 +723,7 @@ describe('conversation tools', () => {
 		let rating = problem(500, 'x');
 		const { $, root, server } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ratings'],
-			settings: { ratings: { scale: 5, askWhen: 'after_staff', comment: true } },
+			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'after_staff', comment: true } },
 			routes: {
 				'GET /v1/chat': () =>
 					answer(200, {
@@ -750,7 +750,7 @@ describe('conversation tools', () => {
 		keepGuest();
 		const { $, root } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ratings'],
-			settings: { ratings: { scale: 3, askWhen: 'after_staff', comment: false } },
+			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3'], askWhen: 'after_staff', comment: false } },
 			routes: { 'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ status: 'resolved' }) }), messages: [] }) },
 		});
 		await click($('.launcher'));
@@ -759,7 +759,7 @@ describe('conversation tools', () => {
 		keepGuest();
 		const asked = await start({
 			features: ['visitor_chat', 'guest_chat', 'ratings'],
-			settings: { ratings: { scale: 3, askWhen: 'manual' } },
+			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3'], askWhen: 'manual' } },
 			routes: {
 				'GET /v1/chat': () => answer(200, { ...view({ conversation: conv({ ratingRequested: true }) }), messages: [] }),
 			},
@@ -769,11 +769,32 @@ describe('conversation tools', () => {
 		expect($).toBeTruthy();
 	});
 
+	it('asks the NPS question with 0 to 10 and its two ends (C13)', async () => {
+		keepGuest();
+		const { $, root, server } = await start({
+			features: ['visitor_chat', 'guest_chat', 'ratings'],
+			settings: { ratings: { kind: 'nps', labels: [], askWhen: 'on_resolve', comment: false } },
+			routes: {
+				'GET /v1/chat': () =>
+					answer(200, { ...view({ conversation: conv({ status: 'resolved', ratingRequested: true }) }), messages: [] }),
+				'POST /v1/chat/rating': () =>
+					answer(200, { chat: view({ conversation: conv({ status: 'resolved', rating: { score: 0 } }) }) }),
+			},
+		});
+		await click($('.launcher'));
+		expect(root.textContent).toContain(TEXTS['chat.npsAsk']);
+		expect(root.textContent).not.toContain(TEXTS['chat.ratingAsk']);
+		expect(textsIn(root, '.slot .choices button')).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+		expect(textsIn(root, '.slot .ends span')).toEqual([TEXTS['chat.npsLow'], TEXTS['chat.npsHigh']]);
+		await click(buttonIn(root, '0'));
+		expect(server.last('POST /v1/chat/rating')?.body).toEqual({ score: 0 });
+	});
+
 	it('asks only when the chat says so: a resolved chat that was not asked (an imported one) shows no rating', async () => {
 		keepGuest();
 		const { $, root } = await start({
 			features: ['visitor_chat', 'guest_chat', 'ratings'],
-			settings: { ratings: { scale: 5, askWhen: 'on_resolve', comment: false } },
+			settings: { ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: false } },
 			routes: {
 				'GET /v1/chat': () =>
 					answer(200, {

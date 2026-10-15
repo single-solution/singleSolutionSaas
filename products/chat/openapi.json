@@ -3693,9 +3693,9 @@
 								"properties": {
 									"score": {
 										"type": "integer",
-										"minimum": 1,
-										"maximum": 5,
-										"description": "1 up to the scale setting (2, 3 or 5)."
+										"minimum": 0,
+										"maximum": 10,
+										"description": "Rating kind csat: 1 up to the number of the setting Labels, lowest first; nps: 0 to 10. 422 validation_failed outside them."
 									},
 									"comment": {
 										"type": "string",
@@ -10637,16 +10637,25 @@
 				"type": "object",
 				"description": "The visitor's rating.",
 				"required": [
+					"kind",
 					"score",
 					"comment"
 				],
 				"additionalProperties": false,
 				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": [
+							"csat",
+							"nps"
+						],
+						"description": "The setting Rating kind when the visitor rated."
+					},
 					"score": {
 						"type": "integer",
-						"minimum": 1,
-						"maximum": 5,
-						"description": "1 up to the Ratings scale (2, 3 or 5)."
+						"minimum": 0,
+						"maximum": 10,
+						"description": "csat: 1 up to the number of the setting Labels (lowest first); nps: 0 to 10."
 					},
 					"comment": {
 						"type": [
@@ -10672,6 +10681,7 @@
 					"medianFirstReplySeconds",
 					"resolved",
 					"rating",
+					"nps",
 					"leads",
 					"aiTokens"
 				],
@@ -10755,7 +10765,31 @@
 									"number",
 									"null"
 								],
-								"description": "Two decimals."
+								"description": "Satisfaction (csat) ratings: their average score, two decimals."
+							},
+							"count": {
+								"type": "integer",
+								"minimum": 0
+							}
+						}
+					},
+					"nps": {
+						"type": "object",
+						"required": [
+							"score",
+							"count"
+						],
+						"additionalProperties": false,
+						"description": "Net Promoter Score answers (Rating kind nps).",
+						"properties": {
+							"score": {
+								"type": [
+									"integer",
+									"null"
+								],
+								"minimum": -100,
+								"maximum": 100,
+								"description": "The share of 9 and 10 less the share of 0 to 6, in points; null without answers."
 							},
 							"count": {
 								"type": "integer",

@@ -6,6 +6,7 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
+import { ratingScale } from '../core/conversation.js';
 import { reportRange, summarise } from '../core/reports.js';
 import { dayStart } from '../core/time.js';
 import { aiLabelShown } from '../core/widgets.js';
@@ -216,7 +217,12 @@ export const createAdmin = (product, service) => {
 				staffMaxBytes: uploadRules(attachments, 'staff').max,
 				storage: on.includes('attachments') && (await product.connections.storage(websiteId)) !== null,
 			},
-			ratings: { scale: Number(ratings.scale), askWhen: ratings.askWhen, comment: ratings.askComment },
+			ratings: {
+				kind: ratingScale(ratings).kind,
+				labels: ratingScale(ratings).labels,
+				askWhen: ratings.askWhen,
+				comment: ratings.askComment,
+			},
 			// how often the widget checks for messages (C19)
 			checks: { focusedSeconds: look.pollFocusedSeconds, backgroundSeconds: look.pollBackgroundSeconds },
 		};

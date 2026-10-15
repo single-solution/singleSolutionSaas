@@ -80,7 +80,8 @@ export const USER_ID = /^[A-Za-z0-9_.:@-]{1,64}$/;
  * @property {{ id: string, step: number } | null} flow the running flow
  * @property {string[]} flowsRun
  * @property {string | null} summary
- * @property {{ score: number, comment: string | null, at: Date } | null} rating
+ * @property {{ kind: RatingKind, score: number, comment: string | null, at: Date } | null} rating csat: 1 to the number
+ *   of labels; nps: 0 to 10 (C13)
  * @property {boolean} ratingRequested
  * @property {string} preview the last message, short
  * @property {Date} lastMessageAt
@@ -121,6 +122,28 @@ export const pendingStale = (c, now) =>
  * @param {number} limit
  */
 export const guestLimitReached = (conversation, limit) => limit > 0 && (conversation?.visitorMessages ?? 0) >= limit;
+
+/** @typedef {'csat' | 'nps'} RatingKind */
+
+/** The labels of a satisfaction rating when the merchant set fewer than 2 (C13), and the most it takes. */
+const RATING_DEFAULT = Object.freeze(['1', '2', '3', '4', '5']);
+const RATING_MOST = 10;
+
+/**
+ * The rating a visitor is asked for (C13): `csat` with the merchant's labels, lowest first (2–10; fewer than 2: 1 to
+ * 5), or `nps` from 0 to 10.
+ * @param {{ kind?: unknown, labels?: unknown }} settings the ratings settings
+ * @returns {{ kind: RatingKind, labels: string[], min: number, max: number }}
+ */
+export const ratingScale = ({ kind, labels }) => {
+	if (kind === 'nps') return { kind: 'nps', labels: Array.from({ length: 11 }, (_, i) => String(i)), min: 0, max: 10 };
+	const own = (Array.isArray(labels) ? labels : [])
+		.map((label) => (typeof label === 'string' ? label.trim() : ''))
+		.filter((label) => label !== '')
+		.slice(0, RATING_MOST);
+	const used = own.length >= 2 ? own : [...RATING_DEFAULT];
+	return { kind: 'csat', labels: used, min: 1, max: used.length };
+};
 
 /** @typedef {'email' | 'sms' | 'whatsapp'} AlertChannel */
 

@@ -8,7 +8,15 @@
  * @module
  */
 import { created, noContent, problem } from '@ss/app-kit';
-import { deviceOf, guestLimitReached, limitNext, messageText, pageContext, statusAfter } from '../core/conversation.js';
+import {
+	deviceOf,
+	guestLimitReached,
+	limitNext,
+	messageText,
+	pageContext,
+	ratingScale,
+	statusAfter,
+} from '../core/conversation.js';
 import { checkFieldValue, checkLead } from '../core/fields.js';
 import { answerStep, pageFlowMatches } from '../core/flows.js';
 import { moderateInbound } from '../core/moderation.js';
@@ -427,13 +435,16 @@ export const createVisitorApi = (product, service, reply) => {
 	const rate = async (ctx) => {
 		const { s, visitor, c } = await existing(ctx);
 		const body = bodyOf(ctx.body);
-		const { scale, askComment } = await s.values('ratings');
+		const settings = await s.values('ratings');
+		const scale = ratingScale(settings);
 		const score = Number(body.score);
-		if (!Number.isInteger(score) || score < 1 || score > Number(scale)) throw invalid([`Rate from 1 to ${scale}.`]);
+		if (!Number.isInteger(score) || score < scale.min || score > scale.max)
+			throw invalid([`Rate from ${scale.min} to ${scale.max}.`]);
+		const { askComment } = settings;
 		const comment =
 			askComment && typeof body.comment === 'string' && body.comment.trim() ? body.comment.trim().slice(0, 1000) : null;
 		const updated = await s.store.conversations.update(c.id, {
-			set: { rating: { score, comment, at: new Date(now()) }, ratingRequested: false },
+			set: { rating: { kind: scale.kind, score, comment, at: new Date(now()) }, ratingRequested: false },
 		});
 		return { chat: await service.chatView(s, visitor, updated) };
 	};

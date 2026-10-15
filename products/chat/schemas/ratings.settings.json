@@ -2,12 +2,22 @@
 	"type": "object",
 	"additionalProperties": false,
 	"properties": {
-		"scale": {
+		"kind": {
 			"type": "string",
-			"title": "Rating scale",
-			"default": "5",
-			"enum": ["2", "3", "5"],
-			"description": "2 = thumbs up or down."
+			"title": "Rating kind",
+			"default": "csat",
+			"enum": ["csat", "nps"],
+			"description": "csat: the visitor picks one of your labels (satisfaction). nps: How likely are you to recommend us, from 0 to 10 (Net Promoter Score; the words are widget texts)."
+		},
+		"labels": {
+			"type": "array",
+			"title": "Labels, lowest first",
+			"default": ["1", "2", "3", "4", "5"],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			},
+			"description": "For csat: one label per point, from the lowest to the highest, 2 to 10 of them (for example Bad and Good, or 1 to 5). Fewer than 2: 1 to 5."
 		},
 		"askWhen": {
 			"type": "string",

@@ -136,7 +136,7 @@ describe('widgets and docs', () => {
 			},
 			flows: [{ id: 'w', name: 'W', start: { kind: 'page', path: '/', delay: 0 } }],
 			attachments: { visitors: 'off', maxBytes: 5 * 1024 * 1024, storage: true },
-			ratings: { scale: 5, askWhen: 'on_resolve', comment: true },
+			ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: true },
 			// how often the widget checks: the website's own, else the code's (C19)
 			checks: { focusedSeconds: 5, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 		});

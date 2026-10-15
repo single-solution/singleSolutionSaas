@@ -49,7 +49,7 @@ export const reportRange = (query, now, timeZone) => {
  * @property {Date | null} firstVisitorAt
  * @property {Date | null} firstStaffReplyAt
  * @property {string} status
- * @property {{ score: number } | null} rating
+ * @property {{ kind?: string, score: number } | null} rating
  */
 
 /** @param {number[]} values */
@@ -81,7 +81,9 @@ export const summarise = ({ rows, dates, timeZone, leads, aiTokens }) => {
 					1000,
 			),
 		);
-	const rated = rows.filter((row) => row.rating !== null);
+	const rated = rows.filter((row) => row.rating !== null && row.rating.kind !== 'nps');
+	const nps = rows.filter((row) => row.rating?.kind === 'nps').map((row) => /** @type {{ score: number }} */ (row.rating).score);
+	const share = (/** @type {(score: number) => boolean} */ test) => nps.filter(test).length / nps.length;
 	const medianReply = median(replyTimes);
 	return {
 		days: [...perDay].map(([date, conversations]) => ({ date, conversations })),
@@ -100,6 +102,11 @@ export const summarise = ({ rows, dates, timeZone, leads, aiTokens }) => {
 								100,
 						) / 100,
 			count: rated.length,
+		},
+		// Net Promoter Score (C13): the share of 9–10 less the share of 0–6, in points from -100 to 100
+		nps: {
+			score: nps.length === 0 ? null : Math.round((share((score) => score >= 9) - share((score) => score <= 6)) * 100),
+			count: nps.length,
 		},
 		leads,
 		aiTokens,

@@ -979,6 +979,7 @@ describe('reports', () => {
 				medianFirstReplySeconds: 95,
 				resolved: 5,
 				rating: { average: 4.25, count: 4 },
+				nps: { score: 40, count: 10 },
 				leads: 1,
 				aiTokens: 12000,
 			});
@@ -994,6 +995,8 @@ describe('reports', () => {
 		expect(numbers[TEXTS['reports.conversations']]).toBe('6');
 		expect(numbers[TEXTS['reports.firstReply']]).toBe('1 min 35 s');
 		expect(numbers[TEXTS['reports.rating']]).toBe('4.3 from 4 ratings');
+		// the Net Promoter Score (C13)
+		expect(numbers[TEXTS['reports.nps']]).toBe('40 from 10 answers');
 		// counts in the viewer's language when the Format names none (en-US here)
 		expect(numbers[TEXTS['reports.aiTokens']]).toBe('12,000');
 		expect(/** @type {HTMLElement} */ (root.querySelector('.bar')).style.width).toBe('50%');

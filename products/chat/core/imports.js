@@ -425,18 +425,19 @@ const fieldsOf = (value, definitions, read) => {
 };
 
 /**
- * The visitor's rating: `{ score, comment, at }` (score 1–5).
+ * The visitor's rating: `{ kind, score, comment, at }` (kind csat, the default, scores 1–10; nps 0–10; C13).
  * @param {unknown} value
  * @param {ReturnType<typeof reader>} read
  */
 const ratingOf = (value, read) => {
 	if (value === undefined || value === null) return null;
-	if (!isObject(value)) return read.fail('/rating', 'The rating: { score, comment, at }.');
-	read.only(value, ['score', 'comment', 'at'], '/rating');
-	const score = read.whole(value.score ?? null, '/rating/score', 1, 5, 0);
+	if (!isObject(value)) return read.fail('/rating', 'The rating: { kind, score, comment, at }.');
+	read.only(value, ['kind', 'score', 'comment', 'at'], '/rating');
+	const kind = read.oneOf(value.kind, '/rating/kind', /** @type {const} */ (['csat', 'nps']), 'csat') ?? 'csat';
+	const score = read.whole(value.score ?? null, '/rating/score', kind === 'nps' ? 0 : 1, 10, 0);
 	const comment = read.text(value.comment, '/rating/comment', IMPORT_TEXT_LIMITS.comment);
 	const at = read.time(value.at, '/rating/at', { required: true });
-	return { score, comment, at };
+	return { kind, score, comment, at };
 };
 
 /**

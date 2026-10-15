@@ -2,7 +2,7 @@
  * The admin widget `reports` (permission `reports.read`): for a date range (default the last 30 days, in the business
  * time zone like the report itself, K8) the numbers of Chat — conversations per day as a simple bar list (each day in
  * the website's Format, K7), visitor messages, answered only by AI vs handed to a person, median first staff reply,
- * resolved, average rating, leads and AI tokens (numbers in the website's Format too).
+ * resolved, average rating, Net Promoter Score, leads and AI tokens (numbers in the website's Format too).
  * @module
  */
 import { adminCall, element, formatDate, formatText, mountWidget, viewerOf } from '@ss/app-kit/widget';
@@ -79,6 +79,7 @@ export const mountReports = ({ host, win, api, config, now }) => {
 				/** @type {Array<{ date: string, conversations: number }>} */
 				const perDay = Array.isArray(data.days) ? data.days : [];
 				const rating = data.rating ?? {};
+				const nps = data.nps ?? {};
 				/** @type {Array<[string, string]>} */
 				const rows = [
 					[t('reports.conversations'), number(perDay.reduce((sum, day) => sum + day.conversations, 0))],
@@ -94,6 +95,12 @@ export const mountReports = ({ host, win, api, config, now }) => {
 									average: numberText(rating.average, 1),
 									count: number(rating.count),
 								})
+							: t('reports.none'),
+					],
+					[
+						t('reports.nps'),
+						typeof nps.score === 'number'
+							? formatText(t('reports.npsValue'), { score: number(nps.score), count: number(nps.count) })
 							: t('reports.none'),
 					],
 					[t('reports.leads'), number(data.leads)],

@@ -599,9 +599,20 @@ describe('knowledge and reports', () => {
 			medianFirstReplySeconds: 90,
 			resolved: 1,
 			rating: { average: 4, count: 1 },
+			nps: { score: null, count: 0 },
 			leads: 1,
 			aiTokens: 120,
 		});
+		// NPS (C13): 0 to 10; the score is the promoters' share less the detractors'
+		await sys.setting('ratings', 'kind', 'nps');
+		for (const score of [10, 9, 3]) {
+			const visitor = sys.visitor();
+			await visitor('POST', '/v1/chat/messages', { text: 'hi' });
+			await visitor('POST', '/v1/chat/end');
+			expect((await visitor('POST', '/v1/chat/rating', { score })).status).toBe(200);
+		}
+		const nps = await sys.admin(ticket, 'GET', '/v1/admin/reports?from=2026-10-05&to=2026-10-06');
+		expect(nps.json).toMatchObject({ rating: { average: 4, count: 1 }, nps: { score: 33, count: 3 } });
 		expect((await sys.serverCall('GET', '/v1/reports')).json.days).toHaveLength(30);
 		expect((await sys.serverCall('GET', '/v1/reports?from=2026-10-06&to=2026-10-01')).status).toBe(422);
 	});

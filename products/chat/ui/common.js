@@ -37,7 +37,8 @@ import { CHECKS } from '../core/widgets.js';
  * @property {{ visitors: string, types: string[], maxBytes: number, staffTypes: string[], staffMaxBytes: number,
  *   storage: boolean }} attachments what visitors may send (`types`, `maxBytes`) and staff (`staffTypes`,
  *   `staffMaxBytes`), as the server checks it
- * @property {{ scale: number, askWhen: string, comment: boolean }} ratings
+ * @property {{ kind: 'csat' | 'nps', labels: string[], askWhen: string, comment: boolean }} ratings csat: the
+ *   merchant's labels, lowest first; nps: 0 to 10 (C13)
  * @property {{ focusedSeconds: number, backgroundSeconds: number }} checks how often the widget checks for new messages
  *   while the chat window is open, and for unread replies while it is closed (C19)
  */
@@ -82,7 +83,7 @@ const DEFAULTS = {
 	leads: { fields: ['name', 'email'], customFields: [], consentText: '' },
 	customFields: [],
 	attachments: { visitors: 'off', types: [], maxBytes: 0, staffTypes: [], staffMaxBytes: 0, storage: false },
-	ratings: { scale: 5, askWhen: 'on_resolve', comment: false },
+	ratings: { kind: 'csat', labels: ['1', '2', '3', '4', '5'], askWhen: 'on_resolve', comment: false },
 	checks: { focusedSeconds: CHECKS.activeMs / 1000, backgroundSeconds: CHECKS.closedEveryMs / 1000 },
 };
 

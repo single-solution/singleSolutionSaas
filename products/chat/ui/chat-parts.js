@@ -128,34 +128,46 @@ export const flowPart = ({ doc, t, make, step, label, send }) => {
 };
 
 /**
- * The rating prompt: thumbs for a scale of 2, else 1 to the scale; an optional comment.
- * @param {Kit & { scale: number, comment: boolean, send: (score: number, comment: string) => Promise<string> }} input
+ * The rating prompt (C13): csat, a button per merchant label (score 1 to their number); nps, the NPS question with 0 to
+ * 10 and the words of its two ends; an optional comment.
+ * @param {Kit & { kind: 'csat' | 'nps', labels: string[], comment: boolean,
+ *   send: (score: number, comment: string) => Promise<string> }} input
  */
-export const ratingPart = ({ doc, t, make, scale, comment, send }) => {
+export const ratingPart = ({ doc, t, make, kind, labels: own, comment, send }) => {
 	const part = element(doc, 'div', { class: 'part' });
 	const row = element(doc, 'div', { class: 'choices' });
 	const note = element(doc, 'p', { class: 'status', role: 'status' });
 	const text = comment ? make.field('textarea', t('chat.ratingComment'), { rows: '2', maxlength: '1000' }) : null;
-	const labels =
-		scale === 2 ? [t('chat.ratingDown'), t('chat.ratingUp')] : Array.from({ length: scale }, (_, index) => String(index + 1));
-	let score = 0;
+	const nps = kind === 'nps';
+	const labels = nps
+		? Array.from({ length: 11 }, (_, index) => String(index))
+		: own.length >= 2
+			? own.slice(0, 10)
+			: ['1', '2', '3', '4', '5'];
+	const first = nps ? 0 : 1;
+	let score = /** @type {number | null} */ (null);
 	const submit = async () => {
-		note.textContent = await send(score, text?.input.value.trim() ?? '');
+		note.textContent = await send(Number(score), text?.input.value.trim() ?? '');
 	};
 	labels.forEach((label, index) => {
 		const button = buttonOf(doc, label, { class: 'secondary small', 'aria-pressed': 'false' });
 		button.addEventListener('click', () => {
-			score = index + 1;
+			score = index + first;
 			for (const each of row.querySelectorAll('button')) each.setAttribute('aria-pressed', String(each === button));
 			if (!text) void submit();
 		});
 		row.append(button);
 	});
-	part.append(element(doc, 'p', { class: 'ask' }, t('chat.ratingAsk')), row);
+	part.append(element(doc, 'p', { class: 'ask' }, t(nps ? 'chat.npsAsk' : 'chat.ratingAsk')), row);
+	if (nps) {
+		const ends = element(doc, 'p', { class: 'ends' });
+		ends.append(element(doc, 'span', {}, t('chat.npsLow')), element(doc, 'span', {}, t('chat.npsHigh')));
+		part.append(ends);
+	}
 	if (text) {
 		const go = buttonOf(doc, t('chat.ratingSend'));
 		go.addEventListener('click', () => {
-			if (score > 0) void submit();
+			if (score !== null) void submit();
 			else note.textContent = t('chat.ratingPick');
 		});
 		part.append(text.wrap, go);

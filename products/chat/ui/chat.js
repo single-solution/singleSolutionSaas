@@ -456,7 +456,8 @@ export const mountChat = ({ win, host, config, visitor, clock, page, onUnread })
 	const ratingNode = () =>
 		ratingPart({
 			...kit,
-			scale: Number(s.ratings.scale),
+			kind: s.ratings.kind === 'nps' ? 'nps' : 'csat',
+			labels: Array.isArray(s.ratings.labels) ? s.ratings.labels.map(String) : [],
 			comment: Boolean(s.ratings.comment),
 			send: async (score, comment) => {
 				const answer = await call('POST', '/v1/chat/rating', { score, ...(comment ? { comment } : {}) });

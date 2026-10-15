@@ -500,7 +500,7 @@ export const createService = (product) => {
 				paused: showPaused === true && c.aiPaused === true && c.status !== 'resolved',
 				queuePosition: queue,
 				officeHours: hours ? { open: hours.open, backAt: hours.backAt } : null,
-				rating: c.rating ? { score: c.rating.score, comment: c.rating.comment } : null,
+				rating: c.rating ? { kind: c.rating.kind, score: c.rating.score, comment: c.rating.comment } : null,
 				ratingRequested: c.ratingRequested,
 				flow:
 					flow && c.flow ? { id: flow.id, step: waitingView(flow.steps[c.flow.step], await s.list('custom_fields')) } : null,
@@ -576,7 +576,7 @@ export const createService = (product) => {
 						...(single ? { note: c.note ?? '' } : {}),
 						...(s.on.includes('ai_summary') ? { summary: c.summary } : {}),
 						...(s.on.includes('ratings')
-							? { rating: c.rating ? { score: c.rating.score, comment: c.rating.comment } : null }
+							? { rating: c.rating ? { kind: c.rating.kind, score: c.rating.score, comment: c.rating.comment } : null }
 							: {}),
 						...(s.on.includes('context_panel')
 							? {

@@ -245,7 +245,7 @@ describe('import (K10): checks and dry runs', () => {
 					tags: ['vip'],
 					note: 'n'.repeat(4001),
 					fields: { order_ref: 'abc', color: 'red' },
-					rating: { score: 9, at: 'yesterday', extra: 1 },
+					rating: { score: 11, at: 'yesterday', extra: 1 },
 					page: { url: 'ftp://x', kind: 'shelf' },
 					aiPausedBy: { kind: 'user' },
 					lastMessageAt: '2024-02-30T10:00:00Z',

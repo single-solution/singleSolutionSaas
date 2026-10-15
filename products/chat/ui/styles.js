@@ -89,6 +89,7 @@ p { overflow-wrap: anywhere; }
 .notices, .slot, .tools { padding: 0 12px; } .notice { margin: 8px 0; font-size: 0.9em; }
 .tools { display: flex; flex-wrap: wrap; } .ask { margin: 0 0 4px; }
 .choices { display: flex; flex-wrap: wrap; }
+.ends { display: flex; justify-content: space-between; font-size: 0.8em; margin: 2px 0; }
 .composer { display: flex; gap: 8px; align-items: end; padding: 8px 12px; border-top: 1px solid var(--line); }
 .composer textarea { flex: 1; resize: none; } .composer button { margin: 0; }
 .window > .status { padding: 0 12px 8px; }
