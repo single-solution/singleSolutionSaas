@@ -20,7 +20,14 @@ import { checkAddress } from '../core/checkout.js';
 import { phoneSearchOf } from '../core/guests.js';
 import { courierNamed, trackingLink } from '../core/couriers.js';
 import { checkFieldValues } from '../core/fields.js';
-import { invoiceHtml, invoiceTexts, packingSlipHtml, shopperInvoiceReady } from '../core/invoice.js';
+import {
+	documentWordsOf,
+	invoiceColumnsOf,
+	invoiceHtml,
+	invoiceTexts,
+	packingSlipHtml,
+	shopperInvoiceReady,
+} from '../core/invoice.js';
 import {
 	TRACK_EVERY_MS,
 	byActor,
@@ -54,6 +61,32 @@ import { SERVER_LIMITS, VISITOR_LIMITS } from './service.js';
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 
 /** Headers of the printable documents: never cached, no scripts, nothing loaded but images. */
+/**
+ * What an order's documents are printed with (E35, E26): the business, the invoices settings' texts and columns, the
+ * website's payment words (decision 10), its Format and business time zone, and the merchant fields with the values the
+ * orders name.
+ * @param {Site} s @param {OrderRecord[]} orders
+ * @returns {Promise<import('../core/invoice.js').DocumentContext>}
+ */
+export const documentContextOf = async (s, orders) => {
+	const [business, settings, texts, { format, timeZone }, fields] = await Promise.all([
+		s.business(),
+		s.values('invoices'),
+		s.texts(),
+		s.format(),
+		s.data().then((data) => documentFieldsOf(data, orders)),
+	]);
+	return {
+		business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
+		texts: invoiceTexts(settings),
+		words: documentWordsOf(texts),
+		columns: invoiceColumnsOf(settings),
+		format,
+		timeZone,
+		fields,
+	};
+};
+
 export const DOCUMENT_HEADERS = Object.freeze({
 	'content-type': 'text/html; charset=utf-8',
 	'cache-control': 'no-store',
@@ -564,19 +597,7 @@ export const createOrders = (product, service, { ordering }) => {
 	 * @param {import('../core/invoice.js').InvoiceOptions} [options] the shopper's copy has no staff names (E35)
 	 */
 	const document = async (s, order, kind, options) => {
-		const [business, settings, { format, timeZone }, fields] = await Promise.all([
-			s.business(),
-			s.values('invoices'),
-			s.format(),
-			s.data().then((data) => documentFieldsOf(data, [order])),
-		]);
-		const context = {
-			business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
-			texts: invoiceTexts(settings),
-			format,
-			timeZone,
-			fields,
-		};
+		const context = await documentContextOf(s, [order]);
 		const html = kind === 'invoice' ? invoiceHtml(order, context, options) : packingSlipHtml(order, context);
 		return new Response(html, { headers: DOCUMENT_HEADERS });
 	};

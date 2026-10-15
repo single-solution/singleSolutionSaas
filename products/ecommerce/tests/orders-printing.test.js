@@ -315,6 +315,8 @@ describe('document parts (E35)', () => {
 	const context = {
 		business,
 		texts: invoiceTexts({}),
+		words: { methods: {}, states: {} },
+		columns: ['item', 'quantity', 'unitPrice', 'amount'],
 		format: DEFAULT_FORMAT,
 		timeZone: 'UTC',
 		fields: { list: [], units: new Map(), customers: new Map() },

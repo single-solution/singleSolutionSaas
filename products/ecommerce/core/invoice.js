@@ -2,7 +2,12 @@
  * Invoices, packing slips and pick lists (PLAN 0.8.8: invoices and packing slips with the serial numbers on each line;
  * E35) as printable, self-contained HTML: inline `<style>`, no script, every value HTML-escaped. Everything printed
  * comes from the order snapshot, business.json (name, address, email, phone) and the `invoices` settings, whose texts
- * the merchant edits (`INVOICE_TEXTS` are the English defaults). The invoice number is the order number; the invoice
+ * the merchant edits (`INVOICE_TEXTS` are the English defaults); payment methods and states are the website's texts
+ * (`checkout.method.*`, `orders.payment.*`; decision 10), so each word lives in one place. The invoice's line columns
+ * are the merchant's (`columns`, E26): item, SKU, quantity, unit price, discount, tax and amount, and any product or
+ * variant field by `field.<slug>` (an HS code, a material …); the seller details under the business and the footer take
+ * `{business}`, `{email}`, `{phone}`, `{address}`, `{number}`, `{date}` and `{field.<slug>}` of the order's and its
+ * customer's fields ({@link fieldPlaceholders}; a tax number is typed there). The invoice number is the order number; the invoice
  * shows the fee, the role discount and points apart, the payments and refunds (staff names on the staff copy only) and
  * the cash due on delivery. The packing slip has no prices; the batch of slips adds the cash to collect and empty slots
  * for serial numbers still to be written. The pick list adds up the units per variant. Money and dates follow the
@@ -10,7 +15,8 @@
  * @module
  */
 import { formatDate, formatMoney } from '@ss/contracts/format';
-import { fieldValuesShown, unitsShown } from './fields.js';
+import { fieldPlaceholders, fieldValuesShown, unitsShown } from './fields.js';
+import { isSlug } from './catalog.js';
 import { WAITING_ROLES } from './flow.js';
 import { placedGross, quantityLabel } from './measure.js';
 import { orderMoney } from './orders.js';
@@ -18,12 +24,16 @@ import { orderMoney } from './orders.js';
 /** @typedef {import('./model.js').OrderRecord} OrderRecord */
 /** @typedef {{ name: string, email: string | null, phone: string | null, address: string | null }} BusinessLike */
 /**
- * The merchant fields a document may print (PLAN 0.8.10 dynamic model §2): the unit, order and customer fields, the
- * values of the printed orders' units (order id → serial → values by unit field) and of their customers (customer id
- * → values). A field prints where its `show` says (`invoice`, `packingSlip`); the others never print.
+ * The merchant fields a document may print (PLAN 0.8.10 dynamic model §2): the unit, order, customer, product and
+ * variant fields, the values of the printed orders' units (order id → serial → values by unit field), of their
+ * customers (customer id → values) and of their lines' products (product id → its specs and each variant's attributes,
+ * for the invoice's field columns, E26). A unit, order or customer field prints where its `show` says (`invoice`,
+ * `packingSlip`); a product or variant field only as a column the merchant chose.
  * @typedef {{ list: ReadonlyArray<import('./model.js').AttributeRecord>,
  *   units: ReadonlyMap<string, ReadonlyMap<string, Record<string, string[]>>>,
- *   customers: ReadonlyMap<string, Record<string, import('./fields.js').FieldValue>> }} DocumentFields
+ *   customers: ReadonlyMap<string, Record<string, import('./fields.js').FieldValue>>,
+ *   products?: ReadonlyMap<string, { specs: Record<string, import('./fields.js').FieldValue>,
+ *     variants: ReadonlyMap<string, Record<string, import('./fields.js').FieldValue>> }> }} DocumentFields
  */
 
 /**
@@ -46,11 +56,61 @@ const fieldLines = (order, context, place) =>
 		.map((entry) => `<p class="small">${esc(`${entry.name}: ${entry.label}`)}</p>`)
 		.join('');
 /**
- * What a document is printed with: the business, the texts, the website's Format and business time zone, and the
- * merchant fields.
- * @typedef {{ business: BusinessLike, texts: InvoiceTexts, format: import('@ss/contracts/format').Format,
- *   timeZone: string, fields: DocumentFields }} DocumentContext
+ * What a document is printed with: the business, the texts, the payment words of the website's texts
+ * ({@link documentWordsOf}), the invoice's columns ({@link invoiceColumnsOf}), the website's Format and business time
+ * zone, and the merchant fields.
+ * @typedef {{ business: BusinessLike, texts: InvoiceTexts, words: DocumentWords, columns: string[],
+ *   format: import('@ss/contracts/format').Format, timeZone: string, fields: DocumentFields }} DocumentContext
  */
+
+/**
+ * The payment words a document prints, from the website's texts (decision 10): each method's
+ * (`checkout.method.<method>`) and each payment state's (`orders.payment.<state>`).
+ * @typedef {{ methods: Readonly<Record<string, string>>, states: Readonly<Record<string, string>> }} DocumentWords
+ */
+
+/**
+ * The payment words of a website's texts.
+ * @param {Readonly<Record<string, string>>} texts
+ * @returns {DocumentWords}
+ */
+export const documentWordsOf = (texts) => {
+	/** @param {string} prefix */
+	const under = (prefix) =>
+		Object.fromEntries(
+			Object.entries(texts)
+				.filter(([key]) => key.startsWith(prefix))
+				.map(([key, value]) => [key.slice(prefix.length), value]),
+		);
+	return { methods: under('checkout.method.'), states: under('orders.payment.') };
+};
+
+/** The line columns an invoice may have besides fields (`field.<slug>`), and those of a new website. */
+export const INVOICE_COLUMNS = Object.freeze(['item', 'sku', 'quantity', 'unitPrice', 'discount', 'tax', 'amount']);
+export const DEFAULT_COLUMNS = Object.freeze(['item', 'quantity', 'unitPrice', 'amount']);
+/**
+ * The field slug a column names (`field.<slug>`), or null.
+ * @param {string} column
+ */
+const fieldSlugOf = (column) => (column.startsWith('field.') && isSlug(column.slice(6)) ? column.slice(6) : null);
+
+/**
+ * The invoice's line columns from the `invoices` setting `columns`, in its order (each once; the unknown left out; the
+ * defaults when none is left).
+ * @param {Record<string, unknown>} settings
+ * @returns {string[]}
+ */
+export const invoiceColumnsOf = (settings) => {
+	const asked = Array.isArray(settings.columns) ? settings.columns : [];
+	const columns = [
+		...new Set(
+			asked.filter(
+				(column) => typeof column === 'string' && (INVOICE_COLUMNS.includes(column) || fieldSlugOf(column) !== null),
+			),
+		),
+	];
+	return columns.length > 0 ? columns : [...DEFAULT_COLUMNS];
+};
 
 /**
  * Whether a shopper may read their order's invoice (E35; `GET /v1/shop/orders/:id/invoice` and the order's `invoice`):
@@ -92,15 +152,6 @@ export const INVOICE_TEXTS = Object.freeze({
 	labelCourier: 'Courier',
 	labelTracking: 'Tracking number',
 	labelNote: 'Note',
-	methodCod: 'Cash on delivery',
-	methodOnline: 'Paid online',
-	methodBankTransfer: 'Bank transfer',
-	methodPickup: 'Pay at pickup',
-	stateUnpaid: 'Unpaid',
-	statePending: 'Pending',
-	statePaid: 'Paid',
-	statePartiallyRefunded: 'Partially refunded',
-	stateRefunded: 'Refunded',
 	labelFee: 'Cash handling',
 	labelRoleDiscount: 'Member discount',
 	labelPoints: 'Points ({points})',
@@ -108,6 +159,7 @@ export const INVOICE_TEXTS = Object.freeze({
 	labelPayments: 'Payments',
 	labelRefunds: 'Refunds',
 	pickListTitle: 'Pick list',
+	sellerDetails: '',
 });
 
 /** @typedef {Record<keyof typeof INVOICE_TEXTS, string>} InvoiceTexts */
@@ -130,7 +182,9 @@ export const invoiceTexts = (settings) =>
 		Object.fromEntries(
 			Object.entries(INVOICE_TEXTS).map(([key, fallback]) => [
 				key,
-				typeof settings[key] === 'string' && (settings[key] !== '' || key === 'footer') ? settings[key] : fallback,
+				typeof settings[key] === 'string' && (settings[key] !== '' || key === 'footer' || key === 'sellerDetails')
+					? settings[key]
+					: fallback,
 			]),
 		)
 	);
@@ -178,12 +232,12 @@ td { border-bottom: 1px solid; }
 const page = (title, body) =>
 	`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title><style>${CSS}</style></head><body>${body}</body></html>`;
 
-/** @param {BusinessLike} business */
-const businessBlock = (business) =>
+/** @param {BusinessLike} business @param {string} [seller] the seller details, filled and escaped (E26) */
+const businessBlock = (business, seller = '') =>
 	`<div class="end"><p><strong>${esc(business.name)}</strong></p>${[business.address, business.email, business.phone]
 		.filter(Boolean)
 		.map((line) => `<p>${esc(line)}</p>`)
-		.join('')}</div>`;
+		.join('')}${seller}</div>`;
 
 /** @param {NonNullable<OrderRecord['address']>} address */
 const addressLines = (address) =>
@@ -212,7 +266,7 @@ const lineDetail = (order, line, context, place) => {
 	const t = context.texts;
 	const parts = [
 		line.variantName,
-		line.sku ? `${t.labelSku} ${line.sku}` : '',
+		line.sku && !(place === 'invoice' && context.columns.includes('sku')) ? `${t.labelSku} ${line.sku}` : '',
 		line.gradeLabel ? `${t.labelGrade}: ${line.gradeLabel}` : '',
 		// the warranty kept at placement (E12)
 		typeof line.warrantyDays === 'number' && line.warrantyDays > 0
@@ -234,21 +288,114 @@ const lineDetail = (order, line, context, place) => {
 	return `${detail}${serials}${values}`;
 };
 
-/** @type {Record<string, keyof InvoiceTexts>} */
-const METHOD_TEXT = { cod: 'methodCod', online: 'methodOnline', bank_transfer: 'methodBankTransfer', pickup: 'methodPickup' };
 /**
- * How a payment or refund entry was made (E26). Cash is taken by the courier or at the counter, so it reads as the cash
- * method; `other` has no text of its own and shows its reference only.
- * @type {Record<string, keyof InvoiceTexts>}
+ * The payment method an entry was made by (E26), for its words. Cash is taken by the courier or at the counter, so it
+ * reads as the cash method; `other` has no words of its own and shows its reference only.
+ * @type {Record<string, string>}
  */
-const ENTRY_TEXT = { online: 'methodOnline', bank_transfer: 'methodBankTransfer', cash: 'methodCod' };
-/** @type {Record<string, keyof InvoiceTexts>} */
-const STATE_TEXT = {
-	unpaid: 'stateUnpaid',
-	pending: 'statePending',
-	paid: 'statePaid',
-	partially_refunded: 'statePartiallyRefunded',
-	refunded: 'stateRefunded',
+const ENTRY_METHOD = { online: 'online', bank_transfer: 'bank_transfer', cash: 'cod' };
+
+/**
+ * A text with its `{placeholders}` filled ({business}, {email}, {phone}, {address}, {number}, {date} and
+ * `{field.<slug>}`); a placeholder it does not know stays as written.
+ * @param {string} text @param {Readonly<Record<string, string>>} values
+ */
+const filled = (text, values) =>
+	text.replace(/\{([^{}\s]{1,130})\}/gu, (whole, name) => (Object.hasOwn(values, name) ? String(values[name]) : whole));
+
+/**
+ * What the seller details and the footer of an order's documents may name (E26): the business's name and contacts,
+ * the order number and day, and the order's and its customer's fields.
+ * @param {OrderRecord} order @param {DocumentContext} context
+ * @returns {Record<string, string>}
+ */
+const documentValues = (order, context) => ({
+	business: context.business.name,
+	email: context.business.email ?? '',
+	phone: context.business.phone ?? '',
+	address: context.business.address ?? '',
+	number: order.number,
+	date: placedOn(order, context),
+	...fieldPlaceholders([
+		{ values: order.fields ?? {}, fields: context.fields.list.filter((field) => field.on === 'order') },
+		{
+			values: context.fields.customers.get(order.customer.customerId ?? '') ?? {},
+			fields: context.fields.list.filter((field) => field.on === 'customer'),
+		},
+	]),
+});
+
+/**
+ * The seller details printed under the business, and the footer, filled ('' each when not written).
+ * @param {OrderRecord} order @param {DocumentContext} context
+ */
+const sellerAndFooter = (order, context) => {
+	const values = documentValues(order, context);
+	const seller = context.texts.sellerDetails.trim();
+	const footer = context.texts.footer.trim();
+	return {
+		seller: seller ? `<p class="small seller">${esc(filled(seller, values))}</p>` : '',
+		footer: footer ? `<div class="footer small">${esc(filled(footer, values))}</div>` : '',
+	};
+};
+
+/**
+ * A line's value of a product or variant field (`field.<slug>` column, E26): the variant's own, else the product's;
+ * '' without one.
+ * @param {OrderRecord['lines'][number]} line @param {string} slug @param {DocumentContext} context
+ */
+const lineFieldValue = (line, slug, context) => {
+	const field = context.fields.list.find((entry) => entry.slug === slug && (entry.on === 'product' || entry.on === 'variant'));
+	const product = context.fields.products?.get(line.productId);
+	if (!field || !product) return '';
+	const values = field.on === 'variant' ? (product.variants.get(line.variantId) ?? {}) : product.specs;
+	return fieldValuesShown(values, [field], null)[0]?.label ?? '';
+};
+
+/**
+ * The header and the cell of one invoice column for a line.
+ * @param {string} column @param {DocumentContext} context
+ * @returns {{ head: (t: InvoiceTexts) => string, cell: (line: OrderRecord['lines'][number], money: (amount: number) => string,
+ *   order: OrderRecord) => string, num: boolean }}
+ */
+const columnOf = (column, context) => {
+	const slug = fieldSlugOf(column);
+	if (slug !== null) {
+		const field = context.fields.list.find((entry) => entry.slug === slug);
+		return { head: () => field?.name ?? slug, cell: (line) => esc(lineFieldValue(line, slug, context)), num: false };
+	}
+	switch (column) {
+		case 'sku':
+			return { head: (t) => t.labelSku, cell: (line) => `<span class="mono">${esc(line.sku)}</span>`, num: false };
+		case 'quantity':
+			return { head: (t) => t.labelQuantity, cell: (line) => esc(quantityLabel(line.quantity, line.measure)), num: true };
+		case 'unitPrice':
+			return {
+				head: (t) => t.labelUnitPrice,
+				cell: (line, money) => `${money(line.unitPrice)}${line.measure ? ` / ${esc(line.measure.unit)}` : ''}`,
+				num: true,
+			};
+		case 'discount':
+			return {
+				head: (t) => t.labelDiscount,
+				cell: (line, money) => (line.discount > 0 ? `−${money(line.discount)}` : ''),
+				num: true,
+			};
+		case 'tax':
+			return { head: (t) => t.labelTax, cell: (line, money) => (line.tax > 0 ? money(line.tax) : ''), num: true };
+		case 'amount':
+			return {
+				head: (t) => t.labelAmount,
+				cell: (line, money, order) => money(placedGross(line, order.totals.taxIncluded)),
+				num: true,
+			};
+		default:
+			return {
+				head: (t) => t.labelItem,
+				cell: (line, _money, order) => `<strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}`,
+				num: false,
+			};
+	}
 };
 
 /**
@@ -281,11 +428,15 @@ export const cashToCollect = (order) =>
  */
 const entriesBlock = (title, entries, context, money, shopper) => {
 	if (entries.length === 0) return '';
-	const { texts: t, format, timeZone } = context;
+	const { format, timeZone } = context;
 	const rows = entries
 		.map((entry) => {
-			const method = ENTRY_TEXT[entry.method];
-			const detail = [method ? t[method] : '', entry.reference, ...(shopper ? [] : [entry.note, entry.by?.name ?? ''])]
+			const method = ENTRY_METHOD[entry.method];
+			const detail = [
+				method ? (context.words.methods[method] ?? '') : '',
+				entry.reference,
+				...(shopper ? [] : [entry.note, entry.by?.name ?? '']),
+			]
 				.filter(Boolean)
 				.join(' · ');
 			return `<tr><td>${esc(formatDate(entry.at, format, { timeZone, style: 'date' }))}</td><td>${esc(detail)}</td><td class="num">${money(entry.amount)}</td></tr>`;
@@ -304,10 +455,13 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 	const { business, texts: t, format } = context;
 	const { currency } = order.totals;
 	const money = (/** @type {number} */ amount) => esc(formatMoney(amount, currency, format));
+	// the merchant's columns, in their order (E26)
+	const columns = context.columns.map((column) => columnOf(column, context));
+	const head = columns.map((column) => `<th${column.num ? ' class="num"' : ''}>${esc(column.head(t))}</th>`).join('');
 	const rows = order.lines
 		.map(
 			(line) =>
-				`<tr><td><strong>${esc(line.name)}</strong>${lineDetail(order, line, context, 'invoice')}</td><td class="num">${esc(quantityLabel(line.quantity, line.measure))}</td><td class="num">${money(line.unitPrice)}${line.measure ? ` / ${esc(line.measure.unit)}` : ''}</td><td class="num">${money(placedGross(line, order.totals.taxIncluded))}</td></tr>`,
+				`<tr>${columns.map((column) => `<td${column.num ? ' class="num"' : ''}>${column.cell(line, money, order)}</td>`).join('')}</tr>`,
 		)
 		.join('');
 	const { subtotal, discount, delivery, tax, total, taxIncluded } = order.totals;
@@ -338,8 +492,11 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 				`<tr${grand ? ' class="grand"' : ''}><td>${esc(label)}</td><td class="num">${value}</td></tr>`,
 		)
 		.join('');
-	const method = t[METHOD_TEXT[payment.method] ?? 'methodOnline'];
-	const state = t[STATE_TEXT[payment.state] ?? 'stateUnpaid'];
+	// the website's own words for the method and the state (decision 10)
+	const paymentWords = [context.words.methods[payment.method] ?? '', context.words.states[payment.state] ?? '']
+		.filter(Boolean)
+		.join(' · ');
+	const { seller, footer } = sellerAndFooter(order, context);
 	const entries =
 		entriesBlock(t.labelPayments, order.payments ?? [], context, money, shopper) +
 		entriesBlock(t.labelRefunds, order.refunds ?? [], context, money, shopper);
@@ -353,7 +510,7 @@ export const invoiceHtml = (order, context, { shopper = false } = {}) => {
 		: order.delivery.method === 'pickup'
 			? `<div><h2>${esc(t.labelShipTo)}</h2><p>${esc(t.labelPickup)}</p></div>`
 			: '<div></div>';
-	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}${fieldLines(order, context, 'invoice')}</div>${shipTo}</div><table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th><th class="num">${esc(t.labelUnitPrice)}</th><th class="num">${esc(t.labelAmount)}</th></tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table><p>${esc(t.labelPayment)}: ${esc(method)} · ${esc(state)}</p>${entries}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	const body = `<header><div><h1>${esc(t.title)}</h1><p>${esc(t.labelNumber)} <strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${esc(t.labelBilledTo)}</h2>${billed}${fieldLines(order, context, 'invoice')}</div>${shipTo}</div><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table><table class="totals"><tbody>${totalsRows}</tbody></table>${paymentWords ? `<p>${esc(t.labelPayment)}: ${esc(paymentWords)}</p>` : ''}${entries}${footer}`;
 	return page(`${t.title} ${order.number}`, body);
 };
 
@@ -387,7 +544,8 @@ const slipBody = (order, context, batch) => {
 	const collect =
 		cash > 0 ? `<p class="due">${esc(t.labelCashDue)}: ${esc(formatMoney(cash, order.totals.currency, format))}</p>` : '';
 	const note = order.note ? `<p class="small">${esc(t.labelNote)}: ${esc(order.note)}</p>` : '';
-	return `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}${fieldLines(order, context, 'packingSlip')}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${t.footer ? `<div class="footer small">${esc(t.footer)}</div>` : ''}`;
+	const { seller, footer } = sellerAndFooter(order, context);
+	return `<header><div><h1>${esc(t.packingSlipTitle)}</h1><p><strong class="mono">${esc(order.number)}</strong></p><p>${esc(t.labelDate)} ${esc(placedOn(order, context))}</p></div>${businessBlock(business, seller)}</header><div class="grid"><div><h2>${esc(t.labelShipTo)}</h2>${shipTo}${fieldLines(order, context, 'packingSlip')}</div><div class="end">${shipment}</div></div>${collect}<table><thead><tr><th>${esc(t.labelItem)}</th><th class="num">${esc(t.labelQuantity)}</th></tr></thead><tbody>${rows}</tbody></table>${note}${footer}`;
 };
 
 /**

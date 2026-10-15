@@ -24057,22 +24057,22 @@
 	},
 	"GET /v1/orders/:id/invoice": {
 		"summary": "An order's invoice",
-		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. 404 not_found.",
+		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
 		"status": 200
 	},
 	"GET /v1/admin/orders/:id/invoice": {
 		"summary": "An order's invoice (Orders admin widget)",
-		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. 404 not_found.",
+		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
 		"status": 200
 	},
 	"GET /v1/orders/:id/packing-slip": {
 		"summary": "An order's packing slip",
-		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. 404 not_found.",
+		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
 		"status": 200
 	},
 	"GET /v1/admin/orders/:id/packing-slip": {
 		"summary": "An order's packing slip (Orders admin widget)",
-		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts and the website's Format. 404 not_found.",
+		"description": "Needs the invoices feature. Answers text/html (charset utf-8, no-store, a strict Content-Security-Policy), not JSON: a printable document in the invoices settings' texts, columns and seller details, your texts' payment words and the website's Format. 404 not_found.",
 		"status": 200
 	},
 	"GET /v1/shop/orders/:id/invoice": {

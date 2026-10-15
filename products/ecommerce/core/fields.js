@@ -706,6 +706,50 @@ export const fieldValuesShown = (values, fields, place) =>
 		});
 
 /**
+ * The `{field.<slug>}` placeholders of documents (E26) for the values given (an order's, a customer's …): each field
+ * with a value, as people read it ({@link fieldValuesShown}), by its slug.
+ * @param {ReadonlyArray<{ values: Record<string, FieldValue>,
+ *   fields: ReadonlyArray<Parameters<typeof fieldValuesShown>[1][number] & { slug: string }> }>} sources
+ * @returns {Record<string, string>}
+ */
+export const fieldPlaceholders = (sources) => {
+	/** @type {Record<string, string>} */
+	const out = {};
+	for (const { values, fields } of sources) {
+		const slugs = new Map(fields.map((field) => [field.id, field.slug]));
+		for (const entry of fieldValuesShown(values, fields, null)) out[`field.${slugs.get(entry.id)}`] = entry.label;
+	}
+	return out;
+};
+
+/** The longest message value (Notifications takes values of at most 1,000 characters). */
+const MESSAGE_VALUE = 1000;
+/** Message values of fields at most, so a message stays within Notifications' 50 values. */
+const MAX_FIELD_VALUES = 25;
+
+/**
+ * The field values a message carries (E28): `field_<slug>` (the slug's dashes as underscores) for the order's, its
+ * customer's and its lines' fields with a value, each as people read it (a line field: the lines' values, each once,
+ * joined), at most {@link MAX_FIELD_VALUES}. A field whose slug cannot be a message value name (letters a–z, digits and
+ * dashes, at most 58 characters) is left out. Templates use them as `{field_<slug>}`.
+ * @param {Record<string, string>} placeholders `{field.<slug>}` values ({@link fieldPlaceholders}), lines' joined
+ * @returns {Record<string, string>}
+ */
+export const fieldMessageValues = (placeholders) =>
+	Object.fromEntries(
+		Object.entries(placeholders)
+			.map(
+				([key, value]) =>
+					/** @type {[string, string]} */ ([
+						`field_${key.slice('field.'.length).replaceAll('-', '_')}`,
+						value.slice(0, MESSAGE_VALUE),
+					]),
+			)
+			.filter(([name]) => /^field_[a-z0-9_]{1,58}$/.test(name))
+			.slice(0, MAX_FIELD_VALUES),
+	);
+
+/**
  * What a checkout asks of the shopper: the order fields shown to shoppers (active), with what their values take.
  * @param {ReadonlyArray<import('./model.js').AttributeRecord>} fields
  */

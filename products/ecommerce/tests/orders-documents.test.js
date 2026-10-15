@@ -4,7 +4,17 @@
  */
 import { DEFAULT_FORMAT, createId } from '@ss/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { INVOICE_TEXTS, esc, invoiceHtml, invoiceTexts, packingSlipHtml } from '../core/invoice.js';
+import {
+	DEFAULT_COLUMNS,
+	INVOICE_TEXTS,
+	documentWordsOf,
+	esc,
+	invoiceColumnsOf,
+	invoiceHtml,
+	invoiceTexts,
+	packingSlipHtml,
+} from '../core/invoice.js';
+import strings from '../strings/en.json' with { type: 'json' };
 import { COLLECTIONS } from '../core/model.js';
 import { ALL, readyShop } from './helpers.js';
 
@@ -150,7 +160,8 @@ describe('printable documents', () => {
 		expect(html).toContain('Tax');
 		expect(html).toContain('USD 974.50');
 		expect(html).toContain('Balance due');
-		expect(html).toContain('Cash on delivery · Unpaid');
+		// the payment words are the website's texts (decision 10)
+		expect(html).toContain('Cash on delivery · not paid');
 		expect(html).toContain('Shop');
 		expect(html).toContain('hello@shop.example.com');
 		expect(html).not.toContain('Secret staff note');
@@ -225,6 +236,8 @@ describe('document parts', () => {
 		const context = {
 			format: DEFAULT_FORMAT,
 			timeZone: 'Asia/Tokyo',
+			words: documentWordsOf(strings),
+			columns: [...DEFAULT_COLUMNS],
 			fields: { list: [], units: new Map(), customers: new Map() },
 		};
 		const order = orderOf({
@@ -252,7 +265,7 @@ describe('document parts', () => {
 		expect(html).toContain('Store pickup');
 		expect(html).toContain('Tax included');
 		expect(html).toContain('−USD 3.00');
-		expect(html).toContain('Paid online · Partially refunded');
+		expect(html).toContain('Pay online · partly refunded');
 		expect(html).toContain('Oct 5, 2026');
 		expect(html).not.toContain('Balance due');
 		const slip = packingSlipHtml(order, { business, texts, ...context });
@@ -262,7 +275,8 @@ describe('document parts', () => {
 			delivery: { method: 'none', zone: '', fee: 0, locationId: null },
 			payment: { ...order.payment, method: /** @type {any} */ ('other'), state: /** @type {any} */ ('odd') },
 		});
-		expect(invoiceHtml(none, { business, texts, ...context })).toContain('Paid online · Unpaid');
+		// a method or state the texts have no words for prints none: no English is built in
+		expect(invoiceHtml(none, { business, texts, ...context })).not.toContain('Payment:');
 		expect(packingSlipHtml(none, { business, texts, ...context })).toContain('Sara &lt;b&gt;Shopper&lt;/b&gt;');
 		const local = {
 			...context,
@@ -280,5 +294,46 @@ describe('document parts', () => {
 		expect(formatted).toContain('−3 $ US');
 		expect(esc(null)).toBe('');
 		expect(Object.keys(INVOICE_TEXTS)).toContain('labelSerials');
+	});
+
+	it('prints the columns the merchant chose, field columns and the seller details with placeholders (E26)', () => {
+		const business = { name: 'Northwind', email: 'hi@northwind.example', phone: null, address: null };
+		const field = (/** @type {Record<string, unknown>} */ patch) => ({
+			id: `att_${String(patch.slug)}`,
+			name: String(patch.name),
+			sort: 0,
+			show: { invoice: true },
+			type: 'text',
+			unit: '',
+			choices: [],
+			...patch,
+		});
+		const order = orderOf({ fields: { att_po: 'PO-77' } });
+		const line = /** @type {any} */ (order.lines[0]);
+		const context = {
+			format: DEFAULT_FORMAT,
+			timeZone: 'UTC',
+			words: documentWordsOf(strings),
+			columns: invoiceColumnsOf({ columns: ['item', 'field.hs-code', 'sku', 'quantity', 'tax', 'amount', 'bogus', 'sku'] }),
+			fields: {
+				list: /** @type {any} */ ([
+					field({ slug: 'hs-code', name: 'HS code', on: 'product' }),
+					field({ slug: 'po', name: 'Purchase order', on: 'order', show: { invoice: false } }),
+				]),
+				units: new Map(),
+				customers: new Map(),
+				products: new Map([[line.productId, { specs: { 'att_hs-code': '8517.13' }, variants: new Map() }]]),
+			},
+		};
+		expect(context.columns).toEqual(['item', 'field.hs-code', 'sku', 'quantity', 'tax', 'amount']);
+		const texts = invoiceTexts({ sellerDetails: 'VAT GB123 · {business}', footer: 'Order {number}, PO {field.po} {other}' });
+		const html = invoiceHtml(order, { business, texts, ...context });
+		expect(html).toContain('<th>Item</th><th>HS code</th><th>SKU</th><th class="num">Qty</th><th class="num">Tax</th>');
+		expect(html).toContain('<td>8517.13</td>');
+		// the SKU has its own column, so it leaves the line's details
+		expect(html).not.toContain(' · SKU PH-128');
+		expect(html).toContain('VAT GB123 · Northwind');
+		expect(html).toContain(`Order ${order.number}, PO PO-77 {other}`);
+		expect(invoiceColumnsOf({ columns: ['nothing'] })).toEqual([...DEFAULT_COLUMNS]);
 	});
 });

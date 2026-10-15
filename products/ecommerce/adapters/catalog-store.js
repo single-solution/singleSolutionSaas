@@ -289,19 +289,22 @@ export const fieldsOn = async (data, on) =>
 	);
 
 /**
- * The merchant fields printed documents read (`core/invoice.js` `DocumentFields`): the unit, order and customer fields,
- * the values of the orders' units, and the field values of the orders' customers.
+ * The merchant fields printed documents read (`core/invoice.js` `DocumentFields`): the unit, order, customer, product
+ * and variant fields, the values of the orders' units, the field values of the orders' customers, and the specs and
+ * variant attributes of the lines' products (an invoice's field columns, E26).
  * @param {WebsiteData} data
- * @param {ReadonlyArray<{ id: string, lines: ReadonlyArray<{ serials: string[] }>, customer: { customerId?: string } }>} orders
+ * @param {ReadonlyArray<{ id: string, lines: ReadonlyArray<{ serials: string[], productId: string }>,
+ *   customer: { customerId?: string } }>} orders
  * @returns {Promise<import('../core/invoice.js').DocumentFields>}
  */
 export const documentFieldsOf = async (data, orders) => {
 	const withUnits = orders.filter((order) => order.lines.some((line) => line.serials.length > 0)).map((order) => order.id);
 	const customerIds = [...new Set(orders.flatMap((order) => (order.customer.customerId ? [order.customer.customerId] : [])))];
-	const [list, units, customers] = await Promise.all([
+	const productIds = [...new Set(orders.flatMap((order) => order.lines.map((line) => line.productId)))];
+	const [list, units, customers, products] = await Promise.all([
 		data
 			.collection(COLLECTIONS.attributes)
-			.find({ websiteId: data.websiteId, on: { $in: ['unit', 'order', 'customer'] } }, NO_ID)
+			.find({ websiteId: data.websiteId, on: { $in: ['unit', 'order', 'customer', 'product', 'variant'] } }, NO_ID)
 			.sort({ sort: 1, name: 1, id: 1 })
 			.toArray(),
 		unitsOfOrders(data, withUnits),
@@ -311,11 +314,35 @@ export const documentFieldsOf = async (data, orders) => {
 					.find({ websiteId: data.websiteId, id: { $in: customerIds } }, { projection: { _id: 0, id: 1, fields: 1 } })
 					.toArray()
 			: Promise.resolve([]),
+		// the lines' products' field values, for an invoice's field columns (E26)
+		productIds.length > 0
+			? data
+					.collection(COLLECTIONS.products)
+					.find(
+						{ websiteId: data.websiteId, id: { $in: productIds } },
+						{ projection: { _id: 0, id: 1, specs: 1, variants: { id: 1, attributes: 1 } } },
+					)
+					.toArray()
+			: Promise.resolve([]),
 	]);
 	return {
 		list: /** @type {AttributeRecord[]} */ (/** @type {unknown} */ (list)),
 		units,
 		customers: new Map(customers.map((row) => [String(row.id), row.fields ?? {}])),
+		products: new Map(
+			products.map((row) => [
+				String(row.id),
+				{
+					specs: row.specs ?? {},
+					variants: new Map(
+						(Array.isArray(row.variants) ? row.variants : []).map((/** @type {any} */ variant) => [
+							String(variant.id),
+							variant.attributes ?? {},
+						]),
+					),
+				},
+			]),
+		),
 	};
 };
 

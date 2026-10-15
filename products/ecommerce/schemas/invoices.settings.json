@@ -14,10 +14,30 @@
 			"default": "Packing slip",
 			"maxLength": 80
 		},
+		"columns": {
+			"type": "array",
+			"title": "Invoice columns",
+			"description": "The columns of the invoice's lines, in this order: item, sku, quantity, unitPrice, discount, tax, amount, and field.<slug> for a product or variant field (an HS code, a material, a country of origin …). Unknown ones are left out; none left: item, quantity, unitPrice, amount.",
+			"default": ["item", "quantity", "unitPrice", "amount"],
+			"items": {
+				"type": "string",
+				"maxLength": 130
+			}
+		},
+		"sellerDetails": {
+			"type": "string",
+			"title": "Seller details",
+			"description": "Printed under your business on invoices and packing slips: your tax or company number and anything else the law asks. Takes the same placeholders as the footer.",
+			"default": "",
+			"maxLength": 1000,
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
 		"footer": {
 			"type": "string",
 			"title": "Footer",
-			"description": "Printed at the bottom of invoices and packing slips (terms, tax number, thanks).",
+			"description": "Printed at the bottom of invoices and packing slips (terms, thanks). Takes {business}, {email}, {phone}, {address}, {number}, {date} and {field.<slug>} of the order's and its customer's fields.",
 			"default": "",
 			"maxLength": 2000,
 			"x-ui": {
@@ -179,60 +199,6 @@
 			"type": "string",
 			"title": "Label: Note",
 			"default": "Note",
-			"maxLength": 80
-		},
-		"methodCod": {
-			"type": "string",
-			"title": "Payment method: Cash on delivery",
-			"default": "Cash on delivery",
-			"maxLength": 80
-		},
-		"methodOnline": {
-			"type": "string",
-			"title": "Payment method: Paid online",
-			"default": "Paid online",
-			"maxLength": 80
-		},
-		"methodBankTransfer": {
-			"type": "string",
-			"title": "Payment method: Bank transfer",
-			"default": "Bank transfer",
-			"maxLength": 80
-		},
-		"methodPickup": {
-			"type": "string",
-			"title": "Payment method: Pay at pickup",
-			"default": "Pay at pickup",
-			"maxLength": 80
-		},
-		"stateUnpaid": {
-			"type": "string",
-			"title": "Payment state: Unpaid",
-			"default": "Unpaid",
-			"maxLength": 80
-		},
-		"statePending": {
-			"type": "string",
-			"title": "Payment state: Pending",
-			"default": "Pending",
-			"maxLength": 80
-		},
-		"statePaid": {
-			"type": "string",
-			"title": "Payment state: Paid",
-			"default": "Paid",
-			"maxLength": 80
-		},
-		"statePartiallyRefunded": {
-			"type": "string",
-			"title": "Payment state: Partially refunded",
-			"default": "Partially refunded",
-			"maxLength": 80
-		},
-		"stateRefunded": {
-			"type": "string",
-			"title": "Payment state: Refunded",
-			"default": "Refunded",
 			"maxLength": 80
 		},
 		"shopperFrom": {

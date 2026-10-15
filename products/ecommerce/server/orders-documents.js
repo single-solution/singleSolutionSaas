@@ -7,10 +7,10 @@
  * @module
  */
 import { defineRoute, problem } from '@ss/app-kit';
-import { documentFieldsOf, unitRulesOf } from '../adapters/catalog-store.js';
-import { invoiceTexts, packingSlipsHtml, pickListHtml } from '../core/invoice.js';
+import { unitRulesOf } from '../adapters/catalog-store.js';
+import { packingSlipsHtml, pickListHtml } from '../core/invoice.js';
 import { COLLECTIONS } from '../core/model.js';
-import { DOCUMENT_HEADERS } from './orders.js';
+import { DOCUMENT_HEADERS, documentContextOf } from './orders.js';
 import { SERVER_LIMITS } from './service.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -84,21 +84,7 @@ export const createOrderDocuments = (_product, service) => {
 	 * @param {Site} s @param {OrderRecord[]} orders
 	 * @returns {Promise<import('../core/invoice.js').DocumentContext>}
 	 */
-	const contextOf = async (s, orders) => {
-		const [business, settings, { format, timeZone }, fields] = await Promise.all([
-			s.business(),
-			s.values('invoices'),
-			s.format(),
-			s.data().then((data) => documentFieldsOf(data, orders)),
-		]);
-		return {
-			business: /** @type {import('../core/invoice.js').BusinessLike} */ (business),
-			texts: invoiceTexts(settings),
-			format,
-			timeZone,
-			fields,
-		};
-	};
+	const contextOf = documentContextOf;
 
 	/** @param {any} ctx */
 	const packingSlips = async (ctx) => {
