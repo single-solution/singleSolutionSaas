@@ -21,6 +21,7 @@
 import { formatText, problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { callingCodeOf } from '@ss/contracts/phone';
+import { LONG_VALUE_LIMIT } from '@ss/contracts/templates';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import {
@@ -31,9 +32,7 @@ import {
 	pendingStale,
 	previewOf,
 	staffMessageView,
-	TRANSCRIPT_VALUES,
-	VALUE_MAX,
-	transcriptValues,
+	transcriptText,
 	visitorMessageView,
 } from '../core/conversation.js';
 import { waitingView } from '../core/flows.js';
@@ -743,7 +742,7 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * A transcript by email: the whole chat in the parts Notifications takes (45,000 characters); a longer chat sends its
+	 * A transcript by email: the whole chat in the long value `transcript` (50,000 characters); a longer chat sends its
 	 * latest messages after a line that says how many (widget text `transcript.earlier`), never cut silently. Messages
 	 * are read newest first, a page at a time, until more than fits was read.
 	 * @param {Site} s
@@ -769,7 +768,7 @@ export const createService = (product) => {
 		let more = true;
 		/** @type {number | null} */
 		let before = null;
-		while (more && size <= VALUE_MAX * TRANSCRIPT_VALUES.length) {
+		while (more && size <= LONG_VALUE_LIMIT) {
 			const page = await s.store.messages.list(c.id, { before, limit: TRANSCRIPT_PAGE, internal: false });
 			const read = page.map(lineOf);
 			lines = [...read, ...lines];
@@ -784,7 +783,7 @@ export const createService = (product) => {
 			'chat.transcript',
 			'email',
 			{ email },
-			{ ...transcriptValues(lines, { more, earlier }), date },
+			{ transcript: transcriptText(lines, { more, earlier }), date },
 		);
 		if (outcome === 'not_connected')
 			throw problem('notifications_not_connected', 'Notifications not connected: paste its token in Connections.');

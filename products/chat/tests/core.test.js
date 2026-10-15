@@ -5,15 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { runAssistant } from '../core/assistant.js';
 import { alertCrossed, capReached, windowKeys } from '../core/caps.js';
-import {
-	alertRoutes,
-	deviceOf,
-	limitNext,
-	messageText,
-	pageContext,
-	statusAfter,
-	transcriptValues,
-} from '../core/conversation.js';
+import { alertRoutes, deviceOf, limitNext, messageText, pageContext, statusAfter, transcriptText } from '../core/conversation.js';
 import { checkCustomFields, checkFieldValue, checkLead, checkPageRules } from '../core/fields.js';
 import { advance, answerStep, checkFlows, waitingView } from '../core/flows.js';
 import { handoffReason, officeState, parseOfficeHours } from '../core/handoff.js';
@@ -157,25 +149,18 @@ describe('AI wire formats', () => {
 });
 
 describe('conversations, flows and fields', () => {
-	it('a transcript goes whole in the parts Notifications takes; a longer one keeps its latest lines and says so', () => {
+	it('a transcript goes whole in one long value; a longer one keeps its latest lines and says so', () => {
 		const earlier = (/** @type {number} */ count) => `Only the latest ${count}.`;
-		/** @param {Record<string, string>} values */
-		const joined = (values) => Object.values(values).join('');
-		const short = transcriptValues(['You: hi', 'Bo: hello'], { more: false, earlier });
-		expect(Object.keys(short)).toHaveLength(45);
-		expect(Object.keys(short).slice(0, 3)).toEqual(['transcript', 'transcript2', 'transcript3']);
-		expect(short.transcript).toBe('You: hi\nBo: hello');
-		expect(short.transcript45).toBe('');
-		// 12 lines of 3,999 characters: 47,999 characters with the line breaks, more than the 45,000 that fit
-		const lines = Array.from({ length: 12 }, (_, i) => `${String.fromCharCode(65 + i)}${'x'.repeat(3998)}`);
-		const long = transcriptValues(lines, { more: false, earlier });
-		expect(Object.values(long).every((part) => part.length <= 1000)).toBe(true);
-		expect(joined(long)).toBe(['Only the latest 11.', ...lines.slice(1)].join('\n'));
+		expect(transcriptText(['You: hi', 'Bo: hello'], { more: false, earlier })).toBe('You: hi\nBo: hello');
+		// 13 lines of 3,999 characters: 51,999 characters with the line breaks, more than the 50,000 a long value takes
+		const lines = Array.from({ length: 13 }, (_, i) => `${String.fromCharCode(65 + i)}${'x'.repeat(3998)}`);
+		const long = transcriptText(lines, { more: false, earlier });
+		expect(long.length).toBeLessThanOrEqual(50_000);
+		expect(long).toBe(['Only the latest 12.', ...lines.slice(1)].join('\n'));
+		// 12 of them fit whole, earlier ones included (47,999 characters: more than the 45,000 of the old parts)
+		expect(transcriptText(lines.slice(1), { more: false, earlier })).toBe(lines.slice(1).join('\n'));
 		// everything fits, but older messages were not read: the copy still says so
-		expect(transcriptValues(['You: hi'], { more: true, earlier }).transcript).toBe('Only the latest 1.\nYou: hi');
-		// a part never ends between the two halves of a character outside the first plane
-		const emoji = transcriptValues([`${'a'.repeat(999)}😀b`], { more: false, earlier });
-		expect([String(emoji.transcript).length, emoji.transcript2]).toEqual([999, '😀b']);
+		expect(transcriptText(['You: hi'], { more: true, earlier })).toBe('Only the latest 1.\nYou: hi');
 	});
 
 	it('reply alerts go by the channels in the merchant’s order, each once, where the visitor has an address', () => {

@@ -2,9 +2,10 @@
  * Conversations and messages (pure): the statuses Open, Awaiting visitor and Resolved with their moves, the guest
  * message limit, the page a chat started on, the channels of a reply alert, the views each audience gets (visitors
  * never see internal notes, staff ids or the AI pause; staff see everything their features allow), the Notifications
- * templates Chat sends with their values, and a transcript in the parts Notifications takes.
+ * templates Chat sends with their values, and a transcript as one long value.
  * @module
  */
+import { LONG_VALUE_LIMIT } from '@ss/contracts/templates';
 import { cardsOf } from './shop.js';
 import { truncate } from './text.js';
 import { MAX_MESSAGE_LENGTH, PAGE_KINDS } from './widgets.js';
@@ -269,23 +270,12 @@ export const excerptOf = (text, max = 500) =>
 		max,
 	);
 
-/** The longest value Notifications takes (characters); it takes at most 50 values in a message. */
-export const VALUE_MAX = 1000;
-
-/**
- * The values a transcript goes in (`transcript`, `transcript2` … `transcript45`, each up to 1,000 characters, so
- * 45,000 in all): Notifications takes no longer value, and the email shows them one after the other.
- */
-export const TRANSCRIPT_VALUES = Object.freeze(
-	Array.from({ length: 45 }, (_, i) => (i === 0 ? 'transcript' : `transcript${i + 1}`)),
-);
-
 /**
  * The Notifications templates Chat sends and the values each one gets (`business` is always added). Staff alerts go
  * by email, WhatsApp or SMS through the kit's staff alerts (K6), `preview` cut to 140 characters on one line and
  * `message` up to 500 with its line breaks, `phone` only with the staff alert setting `includePhone` (CH-9); the
- * transcript by email, in parts (`TRANSCRIPT_VALUES`); the reply alert (C6) by the first of the setting "Channels, in
- * order" that the visitor has an address for and Notifications takes.
+ * transcript by email, the whole chat in the long value `transcript` (`transcriptText`); the reply alert (C6) by the
+ * first of the setting "Channels, in order" that the visitor has an address for and Notifications takes.
  */
 export const MESSAGE_TEMPLATES = Object.freeze({
 	'chat.staff_new_message': Object.freeze([
@@ -309,43 +299,32 @@ export const MESSAGE_TEMPLATES = Object.freeze({
 		'business',
 	]),
 	'chat.staff_cost_alert': Object.freeze(['used', 'cap', 'percent', 'business']),
-	'chat.transcript': Object.freeze([...TRANSCRIPT_VALUES, 'date', 'business']),
+	'chat.transcript': Object.freeze(['transcript', 'date', 'business']),
 	'chat.staff_reply': Object.freeze(['name', 'staff', 'preview', 'link', 'business']),
 });
 
 /**
- * A transcript as Notifications takes it (`TRANSCRIPT_VALUES`, each up to 1,000 characters, the unused ones empty):
- * the lines one after the other, never cut silently. When they do not all fit, or `more` older messages were not read,
- * the latest lines that fit go, after the line `earlier(count)` that says how many messages the copy holds. A part
- * never ends between the two halves of a character.
+ * A transcript as the long value `transcript` (up to 50,000 characters, the most Notifications takes): the lines one
+ * after the other, never cut silently. When they do not all fit, or `more` older messages were not read, the latest
+ * lines that fit go, after the line `earlier(count)` that says how many messages the copy holds.
  * @param {readonly string[]} lines one per message, oldest first
  * @param {{ more: boolean, earlier: (count: number) => string }} input
- * @returns {Record<string, string>}
+ * @returns {string}
  */
-export const transcriptValues = (lines, { more, earlier }) => {
-	const room = VALUE_MAX * TRANSCRIPT_VALUES.length;
+export const transcriptText = (lines, { more, earlier }) => {
 	/** @type {string[]} */
 	const kept = [];
 	let size = -1;
-	for (let i = lines.length - 1; i >= 0 && size + 1 + String(lines[i]).length <= room; i -= 1) {
+	for (let i = lines.length - 1; i >= 0 && size + 1 + String(lines[i]).length <= LONG_VALUE_LIMIT; i -= 1) {
 		size += 1 + String(lines[i]).length;
 		kept.unshift(String(lines[i]));
 	}
 	if (more || kept.length < lines.length) {
-		while (kept.length > 0 && size + 1 + earlier(kept.length).length > room) size -= 1 + String(kept.shift()).length;
+		while (kept.length > 0 && size + 1 + earlier(kept.length).length > LONG_VALUE_LIMIT)
+			size -= 1 + String(kept.shift()).length;
 		kept.unshift(earlier(kept.length));
 	}
-	const text = kept.join('\n');
-	/** @type {string[]} */
-	const parts = [];
-	for (let at = 0; at < text.length;) {
-		let end = Math.min(at + VALUE_MAX, text.length);
-		const last = text.charCodeAt(end - 1);
-		if (end < text.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
-		parts.push(text.slice(at, end));
-		at = end;
-	}
-	return Object.fromEntries(TRANSCRIPT_VALUES.map((name, i) => [name, parts[i] ?? '']));
+	return kept.join('\n');
 };
 
 /**

@@ -1451,7 +1451,7 @@
 		"/v1/admin/conversations/{id}/transcript": {
 			"post": {
 				"summary": "Email a copy of the conversation",
-				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its values transcript, transcript2 … transcript45 (Notifications takes values of up to 1,000 characters: 45,000 in all); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "transcripts",
 				"x-ss-permission": "inbox.reply",
@@ -3836,7 +3836,7 @@
 		"/v1/chat/transcript": {
 			"post": {
 				"summary": "Email the visitor a copy of the chat",
-				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its values transcript, transcript2 … transcript45 (Notifications takes values of up to 1,000 characters: 45,000 in all); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
+				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed. 404 not_found when the visitor has no chat yet.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "transcripts",
 				"security": [
@@ -5676,7 +5676,7 @@
 		"/v1/conversations/{id}/transcript": {
 			"post": {
 				"summary": "Email a copy of the conversation",
-				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its values transcript, transcript2 … transcript45 (Notifications takes values of up to 1,000 characters: 45,000 in all); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
+				"description": "The template chat.transcript through Notifications (paste its token in Connections) with the whole chat in its value transcript (long text: up to 50,000 characters); a longer chat sends its latest messages after a line that says how many (widget text transcript.earlier). 503 notifications_not_connected; 502 not_sent; 422 validation_failed.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "transcripts",
 				"security": [
