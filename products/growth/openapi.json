@@ -3236,8 +3236,8 @@
 		},
 		"/v1/notice": {
 			"get": {
-				"summary": "The notice bar now, for a bar you draw yourself",
-				"description": "Answers the notice while 'Show the notice bar' is on, it has a text and its dates say so (checked now), else null. 3,000 calls a minute per website and 60 per visitor.",
+				"summary": "The announcement showing now, for a bar you draw yourself",
+				"description": "Answers the first announcement of the list Announcements whose times on your business time zone's clock say it shows now (checked now) and that applies to the page (?path=: its pages name it and its hidden pages do not), while 'Show the notice bar' is on; else null. 3,000 calls a minute per website and 60 per visitor.",
 				"x-ss-auth": "browser",
 				"x-ss-feature": "notice_bar",
 				"security": [
@@ -3253,10 +3253,10 @@
 						"name": "path",
 						"in": "query",
 						"required": false,
-						"description": "The visitor's page: null on a page the bar is hidden on (Hide on pages).",
+						"description": "The visitor's page: the announcement of that page (its pages and hidden pages), or null.",
 						"schema": {
 							"type": "string",
-							"description": "The visitor's page: null on a page the bar is hidden on (Hide on pages)."
+							"description": "The visitor's page: the announcement of that page (its pages and hidden pages), or null."
 						}
 					},
 					{
@@ -6093,8 +6093,9 @@
 			},
 			"Notice": {
 				"type": "object",
-				"description": "The notice bar while it shows.",
+				"description": "The announcement showing (G4): the first of the list Announcements, in its order, whose times on the business time zone's clock say so and that applies to the page.",
 				"required": [
+					"key",
 					"text",
 					"linkText",
 					"linkUrl",
@@ -6102,6 +6103,10 @@
 				],
 				"additionalProperties": false,
 				"properties": {
+					"key": {
+						"type": "string",
+						"description": "The announcement's key (the list's)."
+					},
 					"text": {
 						"type": "string",
 						"minLength": 1
@@ -6115,7 +6120,7 @@
 							"string",
 							"null"
 						],
-						"description": "An https address or a path on your website; null when the setting is neither."
+						"description": "An https address or a path on your website; null without a link."
 					},
 					"dismissible": {
 						"type": "boolean",

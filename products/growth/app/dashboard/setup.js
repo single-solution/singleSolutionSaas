@@ -2,14 +2,14 @@
 /**
  * What the dashboard tells about a website's setup, from its settings only (PLAN 0.4.3: setup, never business data):
  * the notes above a settings card (the law warning while tags need no consent, PLAN 0.8.10 G1; tag ids that are not
- * loaded; what robots.txt, the verification tags and the IndexNow key file serve, G4 and G5; the notice bar now, G6;
+ * loaded; what robots.txt, the verification tags and the IndexNow key file serve, G4 and G5; the notice bar turned off, G4;
  * Web Vitals to Google Analytics without Google tags, G7, and without Visitor analytics, SG-27) and Overview's setup at
  * a glance.
  * @module
  */
-import { Badge, Callout, Card, CodeBlock, KeyValueList, Masonry, Section, formatDateTime } from '@ss/ui';
+import { Badge, Callout, Card, CodeBlock, KeyValueList, Masonry, Section } from '@ss/ui';
 import { fill } from '@ss/ui/dashboard';
-import { noticeOf, tagsOf } from '../../core/config.js';
+import { tagsOf } from '../../core/config.js';
 import { aiCrawlersOf, keyLocationOf, robotsTxtOf, sitemapUrlsOf, verificationOf } from '../../core/seo.js';
 import { TEXTS } from './texts.js';
 
@@ -46,33 +46,6 @@ const malformedIds = (key, values) => {
 			([setting, tag]) => typeof values[setting] === 'string' && String(values[setting]).trim() !== '' && tags[tag] === null,
 		)
 		.map(([setting]) => setting);
-};
-
-/**
- * The notice bar now (G6): showing, turned off (AO-2), waiting for its start, ended, or not shown, and its pages hidden.
- * @param {Record<string, unknown>} values the `notice_bar` settings
- * @param {number} now
- * @param {string} [timeZone] the viewer's, for the start and end times (UTC without it)
- */
-const noticeState = (values, now, timeZone) => {
-	const notice = noticeOf({ notice_bar: values }, now);
-	if (notice) return { tone: /** @type {const} */ ('success'), text: TEXTS.setup.noticeShowing };
-	if (values.enabled === false) return { tone: /** @type {const} */ ('neutral'), text: TEXTS.setup.noticeOff };
-	const text = typeof values.text === 'string' ? values.text.trim() : '';
-	if (text === '') return { tone: /** @type {const} */ ('neutral'), text: TEXTS.setup.noticeEmpty };
-	const startsAt = Date.parse(String(values.startsAt ?? ''));
-	const endsAt = Date.parse(String(values.endsAt ?? ''));
-	if ((values.startsAt && Number.isNaN(startsAt)) || (values.endsAt && Number.isNaN(endsAt)))
-		return { tone: /** @type {const} */ ('danger'), text: TEXTS.setup.noticeBadDates };
-	if (!Number.isNaN(startsAt) && now < startsAt)
-		return {
-			tone: /** @type {const} */ ('warning'),
-			text: fill(TEXTS.setup.noticeStarts, { time: formatDateTime(String(values.startsAt), { timeZone }) }),
-		};
-	return {
-		tone: /** @type {const} */ ('neutral'),
-		text: fill(TEXTS.setup.noticeEnded, { time: formatDateTime(String(values.endsAt), { timeZone }) }),
-	};
 };
 
 /**
@@ -141,16 +114,14 @@ export const settingsNotice = (key, values, context) => {
 			),
 		);
 	}
-	if (context && key === 'notice_bar') {
-		const state = noticeState(values, context.now, context.timeZone);
+	if (context && key === 'notice_bar' && values.enabled === false)
 		notes.push(
 			<p key="notice" className="flex flex-wrap items-center gap-2 text-sm">
-				<Badge tone={state.tone} dot>
-					{state.text}
+				<Badge tone="neutral" dot>
+					{TEXTS.setup.noticeOff}
 				</Badge>
 			</p>,
 		);
-	}
 	return notes.length > 0 ? <div className="mb-4 space-y-3">{notes}</div> : null;
 };
 
@@ -169,7 +140,7 @@ const flag = (yes, yesText = TEXTS.setup.yes, noText = TEXTS.setup.no) => (
  * @param {{ values: Values, context: Context }} props
  */
 export function AtAGlance({ values, context }) {
-	const { on, domain, now, timeZone } = context;
+	const { on, domain } = context;
 	const tags = tagsOf(on, values);
 	const cards = [];
 	const tagFeatures = ['meta_pixel', 'google_tags', 'tiktok_pixel', 'custom_scripts'].filter((key) => on.includes(key));
@@ -298,39 +269,6 @@ export function AtAGlance({ values, context }) {
 									},
 								]
 							: []),
-					]}
-				/>
-			</Card>,
-		);
-	}
-	if (on.includes('notice_bar')) {
-		const notice = values.notice_bar ?? {};
-		const state = noticeState(notice, now, timeZone);
-		const hidden = Array.isArray(notice.hideOnPages) ? notice.hideOnPages.length : 0;
-		cards.push(
-			<Card key="notice" title={TEXTS.setup.noticeTitle}>
-				<KeyValueList
-					columns={1}
-					items={[
-						{
-							label: TEXTS.setup.now,
-							value: (
-								<Badge tone={state.tone} dot>
-									{state.text}
-								</Badge>
-							),
-						},
-						{
-							label: TEXTS.setup.closes,
-							value:
-								notice.dismissible === false
-									? TEXTS.setup.no
-									: TEXTS.setup.closeFor[notice.dismissFor === 'page' ? 'page' : 'visit'],
-						},
-						{
-							label: TEXTS.setup.hiddenOn,
-							value: hidden > 0 ? fill(TEXTS.setup.pages, { count: hidden }) : TEXTS.setup.none,
-						},
 					]}
 				/>
 			</Card>,

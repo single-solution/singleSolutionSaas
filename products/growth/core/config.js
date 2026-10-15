@@ -2,13 +2,14 @@
  * What the page script needs for a website (the kit's `GET /v1/widget/config` → `settings`; PLAN 0.8.9): the consent
  * banner's place, privacy link and how many months a choice holds, what to record and whether it waits for consent, the merchant's tag ids (each
  * checked; a malformed id is left out, so nothing broken is loaded), the custom scripts per consent category, and the
- * notice bar while its dates say it is on. Only switched-on features are given; never a secret (tag ids and the
+ * announcements showing now (G4). Only switched-on features are given; never a secret (tag ids and the
  * merchant's own scripts are public in any page that loads them).
  * @module
  */
 import { pathMatches } from '@ss/contracts/text';
 import { consentMonthsOf } from './consent.js';
-import { readList } from './lists.js';
+import { zonedParts } from '@ss/contracts/format';
+import { readList, zonedTimeOf } from './lists.js';
 import { isIndexNowKey, keyLocationOf } from './seo.js';
 import { BANNER_POSITIONS } from './widgets.js';
 
@@ -69,74 +70,80 @@ export const searchParamsOf = (value) =>
 		.slice(0, 10);
 
 /**
- * A time setting (ISO 8601), or undefined when empty, or NaN when it is not a time.
- * @param {string} value
+ * An announcement showing now (G4), as the page script and `GET /v1/notice` get it.
+ * @typedef {{ key: string, text: string, linkUrl: string | null, linkText: string, dismissible: boolean,
+ *   dismiss: 'page' | 'visit' | 'days', dismissDays: number, pages: string[], hideOnPages: string[] }} Notice
  */
-const timeOf = (value) => (value === '' ? undefined : Date.parse(value));
-
-/** Most `hideOnPages` patterns read (settings schemas have no list limit). */
-const MAX_HIDDEN_PAGES = 50;
 
 /**
- * The `hideOnPages` patterns of the notice bar (G6): path patterns only, at most {@link MAX_HIDDEN_PAGES}.
- * @param {unknown} value
- * @returns {string[]}
- */
-export const hiddenPagesOf = (value) =>
-	(Array.isArray(value) ? value : [])
-		.filter((pattern) => typeof pattern === 'string' && pattern.trim().startsWith('/'))
-		.map((pattern) => String(pattern).trim())
-		.slice(0, MAX_HIDDEN_PAGES);
-
-/**
- * The notice bar now: its text and link while it is shown (the `enabled` setting, AO-2) and the dates say it is on
- * (checked on use), how long a closed bar stays closed and the pages it is hidden on (PLAN 0.8.10 G6), else null.
- * @param {FeatureValues} values
+ * The announcements showing now (G4): none while the notice bar is turned off (AO-2); else the `announcements` list's
+ * entries whose times — wall-clock times on the business time zone's clock — say they are on, in the merchant's order,
+ * each with a safe link (an https address or a path on the website, else none).
+ * @param {FeatureValues} values the `notice_bar` settings (`enabled`)
+ * @param {ReadonlyArray<Record<string, any>>} announcements the `announcements` list, as `readList` gives it
  * @param {number} now
- * @returns {{ text: string, linkUrl: string | null, linkText: string, dismissible: boolean,
- *   dismissFor: 'visit' | 'page', hideOnPages: string[] } | null}
+ * @param {string | null | undefined} timeZone the business time zone (UTC without it)
+ * @returns {Notice[]}
  */
-export const noticeOf = (values, now) => {
-	// switched off by the merchant (AO-2): the text and dates are kept
-	if (values.notice_bar?.enabled === false) return null;
-	const message = text(values, 'notice_bar', 'text');
-	if (message === '') return null;
-	const startsAt = timeOf(text(values, 'notice_bar', 'startsAt'));
-	const endsAt = timeOf(text(values, 'notice_bar', 'endsAt'));
-	if (Number.isNaN(startsAt) || Number.isNaN(endsAt)) return null;
-	if ((startsAt !== undefined && now < startsAt) || (endsAt !== undefined && now >= endsAt)) return null;
-	const linkUrl = linkOf(text(values, 'notice_bar', 'linkUrl'));
-	return {
-		text: message,
-		linkUrl,
-		linkText: linkUrl === null ? '' : text(values, 'notice_bar', 'linkText'),
-		dismissible: values.notice_bar?.dismissible !== false,
-		dismissFor: values.notice_bar?.dismissFor === 'page' ? 'page' : 'visit',
-		hideOnPages: hiddenPagesOf(values.notice_bar?.hideOnPages),
-	};
+export const noticesOf = (values, announcements, now, timeZone) => {
+	if (values.notice_bar?.enabled === false) return [];
+	/** @param {number} at */
+	const partsOf = (at) => zonedParts(at, timeZone ?? 'UTC');
+	return announcements
+		.filter((entry) => {
+			const startsAt = entry.startsAt ? zonedTimeOf(String(entry.startsAt), partsOf) : -Infinity;
+			const endsAt = entry.endsAt ? zonedTimeOf(String(entry.endsAt), partsOf) : Infinity;
+			return !Number.isNaN(startsAt) && !Number.isNaN(endsAt) && now >= startsAt && now < endsAt;
+		})
+		.map((entry) => {
+			const linkUrl = linkOf(String(entry.linkUrl ?? ''));
+			return {
+				key: String(entry.key),
+				text: String(entry.text),
+				linkUrl,
+				linkText: linkUrl === null ? '' : String(entry.linkText ?? ''),
+				dismissible: entry.dismissible !== false,
+				dismiss: entry.dismiss === 'page' || entry.dismiss === 'days' ? entry.dismiss : 'visit',
+				dismissDays: Number(entry.dismissDays) || 1,
+				pages: Array.isArray(entry.pages) ? entry.pages.map(String) : [],
+				hideOnPages: Array.isArray(entry.hideOnPages) ? entry.hideOnPages.map(String) : [],
+			};
+		});
 };
 
 /**
- * Whether the notice bar is hidden on a page: one of its `hideOnPages` patterns matches the page's path (the patterns
- * of `@ss/contracts/text` `pathMatches`: `*` inside one segment, `**` any number of segments).
- * @param {{ hideOnPages: ReadonlyArray<string> }} notice
+ * The announcement a page shows (G4): the first showing now that applies to it — its pages (none: every page) name
+ * the page and its hidden pages do not (the patterns of `@ss/contracts/text` `pathMatches`: `*` inside one segment,
+ * `**` any number of segments).
+ * @param {ReadonlyArray<Notice>} notices
  * @param {string} path
+ * @returns {Notice | null}
  */
-export const noticeHiddenOn = (notice, path) => notice.hideOnPages.some((pattern) => pathMatches(pattern, path));
+export const noticeFor = (notices, path) =>
+	notices.find(
+		(notice) =>
+			(notice.pages.length === 0 || notice.pages.some((pattern) => pathMatches(pattern, path))) &&
+			!notice.hideOnPages.some((pattern) => pathMatches(pattern, path)),
+	) ?? null;
 
 /**
- * What `GET /v1/notice` answers for custom UIs (G6): the notice bar now, or null — also null on a page it is hidden on
- * when the page's `path` is given.
- * @param {FeatureValues} values
- * @param {number} now
+ * What `GET /v1/notice` answers for custom UIs (G4): the announcement showing now (on the page `path` when it is
+ * given), or null.
+ * @param {ReadonlyArray<Notice>} notices
  * @param {unknown} path
- * @returns {{ text: string, linkText: string, linkUrl: string | null, dismissible: boolean } | null}
+ * @returns {{ key: string, text: string, linkText: string, linkUrl: string | null, dismissible: boolean } | null}
  */
-export const noticeAnswer = (values, now, path) => {
-	const notice = noticeOf(values, now);
-	if (notice === null) return null;
-	if (typeof path === 'string' && noticeHiddenOn(notice, path)) return null;
-	return { text: notice.text, linkText: notice.linkText, linkUrl: notice.linkUrl, dismissible: notice.dismissible };
+export const noticeAnswer = (notices, path) => {
+	const notice = typeof path === 'string' ? noticeFor(notices, path) : (notices[0] ?? null);
+	return notice === null
+		? null
+		: {
+				key: notice.key,
+				text: notice.text,
+				linkText: notice.linkText,
+				linkUrl: notice.linkUrl,
+				dismissible: notice.dismissible,
+			};
 };
 
 /**
@@ -227,9 +234,10 @@ export const adminSettings = (on, values, domain) => {
 /**
  * The page script's settings; with `admin` (the admin widgets' config, PLAN 0.4.5) also {@link adminSettings}.
  * @param {{ on: ReadonlyArray<string>, values: FeatureValues, now: number, admin?: { domain: string } | null,
- *   lists?: PageLists }} input `lists`: the merchant's lists (consent categories …)
+ *   lists?: PageLists, timeZone?: string }} input `lists`: the merchant's lists (consent categories …); `timeZone`: the
+ *   business time zone (announcement times are on its clock)
  */
-export const widgetSettings = ({ on, values, now, admin = null, lists = {} }) => {
+export const widgetSettings = ({ on, values, now, admin = null, lists = {}, timeZone = 'UTC' }) => {
 	const analytics = values.visitor_analytics ?? {};
 	const categories = lists.consent_categories ?? readList('consent_categories', undefined);
 	return {
@@ -258,7 +266,10 @@ export const widgetSettings = ({ on, values, now, admin = null, lists = {} }) =>
 			searchParams: searchParamsOf(text(values, 'searches_404s', 'searchParams')),
 		},
 		tags: tagsOf(on, values, categories),
-		notice: on.includes('notice_bar') ? noticeOf(values, now) : null,
+		// G4: the announcements showing now, in the merchant's order (the page script picks the page's)
+		notices: on.includes('notice_bar')
+			? noticesOf(values, lists.announcements ?? readList('announcements', undefined), now, timeZone)
+			: [],
 	};
 };
 

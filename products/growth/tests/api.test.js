@@ -200,65 +200,88 @@ describe('events and totals', () => {
 });
 
 describe('the widget config', () => {
-	it('gives the page script the switched-on tags, consent and the notice bar while its dates say so', async () => {
+	it('gives the page script the switched-on tags, consent and the announcements while their times say so (G4)', async () => {
 		await env.setting('meta_pixel', 'pixelId', '1234567890');
 		await env.setting('google_tags', 'ga4Id', 'G-ABC123');
 		await env.setting('google_tags', 'gtmId', 'not-an-id');
-		await env.setting('notice_bar', 'text', 'Free delivery this week');
-		await env.setting('notice_bar', 'linkUrl', '/deals');
-		await env.setting('notice_bar', 'linkText', 'See deals');
-		await env.setting('notice_bar', 'startsAt', '2026-10-02T00:00:00Z');
+		// times on the business time zone's clock (UTC here, without a time zone in business.json)
+		const saved = await env.call('PUT', '/v1/lists/announcements', {
+			token: env.server,
+			body: {
+				value: [
+					{
+						key: 'deals',
+						text: 'Free delivery this week',
+						linkUrl: '/deals',
+						linkText: 'See deals',
+						startsAt: '2026-10-02T00:00',
+					},
+				],
+			},
+		});
+		expect(saved.status).toBe(200);
 		/** @returns {Promise<any>} */
 		const config = async () =>
 			(await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json()).settings;
 		const before = await config();
 		expect(before.tags).toMatchObject({ meta: '1234567890', ga4: 'G-ABC123', gtm: null });
-		expect(before.notice).toBeNull();
+		expect(before.notices).toEqual([]);
 		expect(before.consent).toMatchObject({ banner: true, position: 'bottom' });
 		env.advance(24 * 3_600_000);
-		expect((await config()).notice).toEqual({
-			text: 'Free delivery this week',
-			linkUrl: '/deals',
-			linkText: 'See deals',
-			dismissible: true,
-			dismissFor: 'visit',
-			hideOnPages: [],
-		});
+		expect((await config()).notices).toEqual([
+			{
+				key: 'deals',
+				text: 'Free delivery this week',
+				linkUrl: '/deals',
+				linkText: 'See deals',
+				dismissible: true,
+				dismiss: 'visit',
+				dismissDays: 7,
+				pages: [],
+				hideOnPages: [],
+			},
+		]);
 	});
 
-	it('answers the notice to custom UIs, with the browser and the server token (G6)', async () => {
-		// a pattern that is not a path would match nothing: refused (X10)
-		const notPath = await env.dashboard(
-			await env.adminSession(),
-			'PUT',
-			`/v1/dashboard/websites/${env.websiteId}/settings/notice_bar.hideOnPages`,
-			{ value: ['/', 'not-a-path'] },
-		);
+	it('answers the announcement to custom UIs, with the browser and the server token (G4)', async () => {
+		// a page that is not a path is refused
+		const notPath = await env.call('PUT', '/v1/lists/announcements', {
+			token: env.server,
+			body: { value: [{ key: 'deals', text: 'Free delivery this week', hideOnPages: ['/', 'not-a-path'] }] },
+		});
 		expect(notPath.status).toBe(422);
-		await env.setting('notice_bar', 'hideOnPages', ['/', '/checkout/**']);
-		await env.setting('notice_bar', 'dismissFor', 'page');
+		/** @param {Record<string, unknown>} more */
+		const save = (more) =>
+			env.call('PUT', '/v1/lists/announcements', {
+				token: env.server,
+				body: {
+					value: [{ key: 'deals', text: 'Free delivery this week', linkUrl: '/deals', linkText: 'See deals', ...more }],
+				},
+			});
+		await save({ hideOnPages: ['/', '/checkout/**'], dismiss: 'page' });
 		const read = async (/** @type {string} */ query, /** @type {any} */ init) =>
 			(await env.call('GET', `/v1/notice${query}`, init)).json();
-		const notice = { text: 'Free delivery this week', linkText: 'See deals', linkUrl: '/deals', dismissible: true };
+		const notice = {
+			key: 'deals',
+			text: 'Free delivery this week',
+			linkText: 'See deals',
+			linkUrl: '/deals',
+			dismissible: true,
+		};
 		expect(await read('', { token: env.browser, origin: ORIGIN })).toEqual(notice);
 		expect(await read('?path=/shop/lamps', { token: env.server })).toEqual(notice);
 		expect(await read('?path=/', { token: env.browser, origin: ORIGIN })).toBeNull();
 		expect(await read('?path=/checkout/pay', { token: env.server })).toBeNull();
-		const settings = (await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json())
-			.settings;
-		expect(settings.notice).toMatchObject({ dismissFor: 'page', hideOnPages: ['/', '/checkout/**'] });
-		await env.setting('notice_bar', 'endsAt', '2026-10-01T00:00:00Z');
+		await save({ endsAt: '2026-10-01T00:00' });
 		expect(await read('', { token: env.server })).toBeNull();
-		await env.setting('notice_bar', 'endsAt', '');
-		// the merchant turns the bar off and on again; the text stays (AO-2)
+		await save({});
+		// the merchant turns the bar off and on again; the announcements stay (AO-2)
 		await env.setting('notice_bar', 'enabled', false);
 		expect(await read('', { token: env.server })).toBeNull();
 		const off = (await (await env.call('GET', '/v1/widget/config', { token: env.browser, origin: ORIGIN })).json()).settings;
-		expect(off.notice).toBeNull();
+		expect(off.notices).toEqual([]);
 		await env.setting('notice_bar', 'enabled', true);
 		expect(await read('', { token: env.server })).toEqual(notice);
-		await env.setting('notice_bar', 'hideOnPages', []);
-		await env.setting('notice_bar', 'dismissFor', 'visit');
 	});
 });
 

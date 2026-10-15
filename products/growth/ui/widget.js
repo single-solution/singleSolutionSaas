@@ -15,7 +15,6 @@
  */
 import { createTicketSource, viewerOf } from '@ss/app-kit/widget';
 import { ANALYTICS_SIGNALS, allows, grantedOf } from '../core/consent.js';
-import { pathMatches } from '@ss/contracts/text';
 import { VITALS } from '../core/events.js';
 import { contactOf, detailOf, funnelEvent, searchOf } from '../core/pixels.js';
 import { BROWSER_EVENTS, SITE_EVENTS, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
@@ -32,7 +31,7 @@ import {
 	watchVitals,
 } from './collect.js';
 import { createConsent, mountConsentBanner, storageOf } from './consent.js';
-import { NOTICE_STORAGE_KEY, mountNoticeBar } from './notice-bar.js';
+import { mountNoticeBar, noticeOnPage } from './notice-bar.js';
 import { mountRedirects } from './redirects.js';
 import { mountSeoChecklist } from './seo-checklist.js';
 import { createTags } from './tags.js';
@@ -202,27 +201,32 @@ export const startWidget = ({ window: win, script }) => {
 		if (config.widgets.includes('consent_banner') && config.settings.consent.banner)
 			banner = mountConsentBanner({ host: hostFor('consent_banner', 'end'), config, consent, gpc });
 
-		/** @type {(() => void) | null} takes the notice bar away while it shows */
+		/** @type {{ key: string, take: () => void } | null} the announcement showing, and how to take it away */
 		let shown = null;
+		const kept = storageOf(win, 'localStorage');
 		/**
-		 * The notice bar on this page: shown unless it is hidden here or closed for the visit (G6); taken away on a page
-		 * it is hidden on.
+		 * The notice bar on this page (G4): the first announcement that applies to it and is not closed; another page
+		 * may show another one, or none.
 		 */
 		const showNotice = () => {
-			const notice = config.settings.notice;
-			if (!config.widgets.includes('notice_bar') || !notice) return;
-			if (notice.hideOnPages.some((pattern) => pathMatches(pattern, path()))) {
-				shown?.();
-				shown = null;
-			} else if (!shown && (notice.dismissFor === 'page' || visits.getItem(NOTICE_STORAGE_KEY) !== notice.text))
-				shown = mountNoticeBar({
-					host: hostFor('notice_bar', 'start'),
-					config,
-					visits,
-					onClose: () => {
-						shown = null;
-					},
-				});
+			if (!config.widgets.includes('notice_bar')) return;
+			const notice = noticeOnPage(config.settings.notices, path(), { visits, kept, now: now() });
+			if (shown && shown.key === notice?.key) return;
+			shown?.take();
+			shown = null;
+			if (notice)
+				shown = {
+					key: notice.key,
+					take: mountNoticeBar({
+						host: hostFor('notice_bar', 'start'),
+						config,
+						notice,
+						stores: { visits, kept, now: now() },
+						onClose: () => {
+							shown = null;
+						},
+					}),
+				};
 		};
 
 		/**

@@ -5,66 +5,8 @@
 		"enabled": {
 			"type": "boolean",
 			"title": "Show the notice bar",
-			"description": "Off: the bar is not shown anywhere and GET /v1/notice answers null; your text, link and dates are kept for next time.",
+			"description": "Off: the bar is not shown anywhere and GET /v1/notice answers null; your announcements (the list Announcements) are kept for next time.",
 			"default": true
-		},
-		"text": {
-			"type": "string",
-			"title": "Notice text",
-			"description": "Shown in the bar while the dates say so; empty shows nothing.",
-			"default": "",
-			"maxLength": 300
-		},
-		"linkText": {
-			"type": "string",
-			"title": "Link text",
-			"default": "",
-			"maxLength": 60
-		},
-		"linkUrl": {
-			"type": "string",
-			"title": "Link address",
-			"description": "An https address or a path on your website.",
-			"default": "",
-			"maxLength": 2048
-		},
-		"startsAt": {
-			"type": "string",
-			"title": "Show from",
-			"description": "An ISO 8601 time such as 2026-11-20T00:00:00Z; empty shows it at once.",
-			"default": "",
-			"maxLength": 40
-		},
-		"endsAt": {
-			"type": "string",
-			"title": "Show until",
-			"description": "An ISO 8601 time; empty keeps it until you change it.",
-			"default": "",
-			"maxLength": 40
-		},
-		"dismissible": {
-			"type": "boolean",
-			"title": "Visitors can close it",
-			"description": "Shows a close button; how long a closed bar stays closed is set below.",
-			"default": true
-		},
-		"dismissFor": {
-			"type": "string",
-			"title": "A closed bar stays closed",
-			"description": "Visit: for the rest of the visit. Page: until the visitor opens another page.",
-			"default": "visit",
-			"enum": ["visit", "page"]
-		},
-		"hideOnPages": {
-			"type": "array",
-			"title": "Hide on pages",
-			"description": "Path patterns where the bar is not shown, each starting with / (/ is the home page): * is any characters inside one segment, ** any number of segments (for example /checkout/** or /sale-*). At most 50.",
-			"default": [],
-			"items": {
-				"type": "string",
-				"maxLength": 200,
-				"pattern": "^/"
-			}
 		}
 	}
 }

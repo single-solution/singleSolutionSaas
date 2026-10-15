@@ -141,7 +141,7 @@
 		{
 			"key": "notice_bar",
 			"name": "Notice bar",
-			"description": "An announcement bar on the website with the merchant's text, a link and the dates it shows.",
+			"description": "An announcement bar on the website: the merchant's announcements, each with its text, link, schedule on the business time zone's clock, pages and how long a closed one stays closed.",
 			"dependsOn": [],
 			"recommendFor": ["offers.discounts"],
 			"settings": {

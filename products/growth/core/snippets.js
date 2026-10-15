@@ -110,7 +110,7 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`  -d '${JSON.stringify({ urls: ['https://shop.example.com/products/desk-lamp'] })}'`,
 	].join('\n');
 	const notice = [
-		'// your own notice bar: the notice while it shows, else null ({ text, linkText, linkUrl, dismissible })',
+		'// your own notice bar: the announcement showing on this page, else null ({ key, text, linkText, linkUrl, dismissible })',
 		`const notice = await fetch('${base}/v1/notice?path=' + encodeURIComponent(location.pathname), {`,
 		"  headers: { authorization: 'Bearer YOUR_BROWSER_TOKEN' },",
 		'}).then((response) => response.json());',

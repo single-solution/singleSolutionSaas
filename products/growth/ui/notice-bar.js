@@ -1,24 +1,69 @@
 /**
- * The notice bar (visitor widget `notice_bar`; PLAN 0.8.9): the merchant's text and optional link, shown while the
- * dates of its settings say so (the server checks them when the page loads), not on the pages it is hidden on (also
- * after a single-page app's own navigation, SG-4). A visitor who closes it does not see the same text again during
- * the visit (sessionStorage), or, with `dismissFor` `page`, until they open another page (PLAN 0.8.10 G6).
+ * The notice bar (visitor widget `notice_bar`; PLAN 0.8.9, G4): the first of the merchant's announcements showing now
+ * (the server checks their times when the page loads) that applies to the page — its pages name it and its hidden
+ * pages do not (also after a single-page app's own navigation, SG-4) — and that the visitor has not closed. A closed
+ * announcement stays closed until the visitor opens another page, for the rest of the visit (sessionStorage) or for
+ * its number of days (localStorage), as the merchant set.
  * @module
  */
 import { element, mountWidget } from '@ss/app-kit/widget';
+import { pathMatches } from '@ss/contracts/text';
 import { WIDGET_CSS } from './styles.js';
 
-/** Where a closed notice is remembered for the visit. */
+/** Where closed announcements are remembered (with their text, so a changed one shows again). */
 export const NOTICE_STORAGE_KEY = 'ss-growth-notice-closed';
 
+const DAY_MS = 86_400_000;
+
+/** @typedef {import('../core/config.js').Notice} Notice */
+
 /**
- * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, visits: import('./consent.js').KeyValue,
- *   onClose: () => void }} input `onClose`: the visitor closed it
- * @returns {(() => void) | null} takes the bar away (its host stays for the next page); null when it is not shown
+ * The closed announcements a store remembers: `{ <key>: { text, until? } }`.
+ * @param {import('./consent.js').KeyValue} store
+ * @returns {Record<string, { text: string, until?: number }>}
  */
-export const mountNoticeBar = ({ host, config, visits, onClose }) => {
-	const notice = config.settings.notice;
-	if (!notice || (notice.dismissFor === 'visit' && visits.getItem(NOTICE_STORAGE_KEY) === notice.text)) return null;
+const closedIn = (store) => {
+	try {
+		const value = JSON.parse(store.getItem(NOTICE_STORAGE_KEY) ?? '{}');
+		return typeof value === 'object' && value !== null ? value : {};
+	} catch {
+		return {};
+	}
+};
+
+/**
+ * Whether the visitor closed this announcement (as it reads now) and it stays closed.
+ * @param {Notice} notice
+ * @param {{ visits: import('./consent.js').KeyValue, kept: import('./consent.js').KeyValue, now: number }} stores
+ */
+export const isClosed = (notice, { visits, kept, now }) => {
+	if (notice.dismiss === 'page') return false;
+	const found = closedIn(notice.dismiss === 'days' ? kept : visits)[notice.key];
+	return found?.text === notice.text && (notice.dismiss !== 'days' || Number(found.until) > now);
+};
+
+/**
+ * The announcement a page shows: the first that applies to it and is not closed.
+ * @param {ReadonlyArray<Notice>} notices
+ * @param {string} path
+ * @param {{ visits: import('./consent.js').KeyValue, kept: import('./consent.js').KeyValue, now: number }} stores
+ * @returns {Notice | null}
+ */
+export const noticeOnPage = (notices, path, stores) =>
+	notices.find(
+		(notice) =>
+			(notice.pages.length === 0 || notice.pages.some((pattern) => pathMatches(pattern, path))) &&
+			!notice.hideOnPages.some((pattern) => pathMatches(pattern, path)) &&
+			!isClosed(notice, stores),
+	) ?? null;
+
+/**
+ * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, notice: Notice,
+ *   stores: { visits: import('./consent.js').KeyValue, kept: import('./consent.js').KeyValue, now: number },
+ *   onClose: () => void }} input `onClose`: the visitor closed it
+ * @returns {() => void} takes the bar away (its host stays for the next page)
+ */
+export const mountNoticeBar = ({ host, config, notice, stores, onClose }) => {
 	/** @param {string} key */
 	const t = (key) => config.texts[key] ?? key;
 	const mounted = mountWidget({
@@ -34,10 +79,22 @@ export const mountNoticeBar = ({ host, config, visits, onClose }) => {
 			if (notice.dismissible) {
 				const close = element(doc, 'button', { type: 'button', 'aria-label': t('notice.close') }, '×');
 				close.addEventListener('click', () => {
-					try {
-						if (notice.dismissFor === 'visit') visits.setItem(NOTICE_STORAGE_KEY, notice.text);
-					} catch {
-						// closed for this page only
+					if (notice.dismiss !== 'page') {
+						const store = notice.dismiss === 'days' ? stores.kept : stores.visits;
+						try {
+							store.setItem(
+								NOTICE_STORAGE_KEY,
+								JSON.stringify({
+									...closedIn(store),
+									[notice.key]: {
+										text: notice.text,
+										...(notice.dismiss === 'days' ? { until: stores.now + notice.dismissDays * DAY_MS } : {}),
+									},
+								}),
+							);
+						} catch {
+							// closed for this page only
+						}
 					}
 					mounted.unmount();
 					host.remove();

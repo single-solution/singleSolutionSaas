@@ -8,7 +8,7 @@ import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
 import { CHECKS } from '../core/seo-checks.js';
-import { DEFAULT_CATEGORIES } from '../core/lists.js';
+import { DEFAULT_CATEGORIES, readList } from '../core/lists.js';
 import {
 	CONSENT_STORAGE_KEY,
 	FUNNEL_STEPS,
@@ -69,6 +69,12 @@ const configOf = (features, values = {}, look = {}) => ({
 		...(look.lists ? { lists: look.lists } : {}),
 	}),
 });
+
+/**
+ * An announcement of the notice bar (G4), as the list reads it.
+ * @param {Record<string, unknown>} entry
+ */
+const announcement = (entry) => readList('announcements', [{ key: 'sale', text: 'Sale', ...entry }])[0];
 
 /** @param {string | null} token */
 const script = (token) => {
@@ -387,13 +393,20 @@ describe('the page script', () => {
 		const placed = place('notice_bar');
 		serve({
 			[`GET ${CONFIG_PATH}`]: () =>
-				answer(200, configOf(['notice_bar'], { notice_bar: { text: 'Sale today', linkUrl: '/sale', linkText: 'Shop now' } })),
+				answer(
+					200,
+					configOf(
+						['notice_bar'],
+						{},
+						{ lists: { announcements: [announcement({ text: 'Sale today', linkUrl: '/sale', linkText: 'Shop now' })] } },
+					),
+				),
 		});
 		await startWidget({ window, script: script('t') }).ready;
 		expect(inside(placed, '.notice span').textContent).toBe('Sale today');
 		expect(inside(placed, 'a').getAttribute('href')).toBe('/sale');
 		inside(placed, 'button').click();
-		expect(window.sessionStorage.getItem(NOTICE_STORAGE_KEY)).toBe('Sale today');
+		expect(JSON.parse(String(window.sessionStorage.getItem(NOTICE_STORAGE_KEY)))).toEqual({ sale: { text: 'Sale today' } });
 		expect(document.body.contains(placed)).toBe(false);
 		await startWidget({ window, script: script('t') }).ready;
 		expect(hostOf('notice_bar')).toBeNull();
@@ -522,11 +535,25 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		]);
 	});
 
-	it('G6: the notice bar closes for the page only and stays off the pages it hides on', async () => {
+	it('G4: the notice bar shows the page’s announcement, closes for the page or for days, and stays off hidden pages', async () => {
 		window.history.replaceState(null, '', '/shop');
 		serve({
 			[`GET ${CONFIG_PATH}`]: () =>
-				answer(200, configOf(['notice_bar'], { notice_bar: { text: 'Sale', dismissFor: 'page', hideOnPages: ['/'] } })),
+				answer(
+					200,
+					configOf(
+						['notice_bar'],
+						{},
+						{
+							lists: {
+								announcements: [
+									announcement({ key: 'blog', text: 'New post', pages: ['/blog/**'], dismiss: 'days', dismissDays: 2 }),
+									announcement({ text: 'Sale', dismiss: 'page', hideOnPages: ['/'] }),
+								],
+							},
+						},
+					),
+				),
 		});
 		await startWidget({ window, script: script('t') }).ready;
 		inside(hostOf('notice_bar'), 'button').click();
@@ -539,6 +566,14 @@ describe('store-conversion options with the real page script (PLAN 0.8.10 G1–G
 		loadDocument('/');
 		await startWidget({ window, script: script('t') }).ready;
 		expect(hostOf('notice_bar')).toBeNull();
+		// the blog shows its own announcement first; closed, it stays closed for its days (localStorage)
+		loadDocument('/blog/hello');
+		await startWidget({ window, script: script('t') }).ready;
+		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('New post');
+		inside(hostOf('notice_bar'), 'button').click();
+		expect(JSON.parse(String(window.localStorage.getItem(NOTICE_STORAGE_KEY))).blog).toMatchObject({ text: 'New post' });
+		await startWidget({ window, script: script('t') }).ready;
+		expect(inside(hostOf('notice_bar'), '.notice span').textContent).toBe('Sale');
 	});
 
 	it('G7: Web Vitals also go to Google Analytics 4 when the merchant asks', async () => {
@@ -837,7 +872,13 @@ describe('single-page apps (SG-4)', () => {
 			[`GET ${CONFIG_PATH}`]: () =>
 				answer(
 					200,
-					configOf(['notice_bar'], { notice_bar: { text: 'Sale', dismissFor: 'page', hideOnPages: ['/checkout/**'] } }),
+					configOf(
+						['notice_bar'],
+						{},
+						{
+							lists: { announcements: [announcement({ text: 'Sale', dismiss: 'page', hideOnPages: ['/checkout/**'] })] },
+						},
+					),
 				),
 		});
 		await startWidget({ window, script: script('t') }).ready;

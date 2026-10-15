@@ -9,7 +9,6 @@
  * the server and in the first render. The tabs render inside the shared dashboard's provider (`@ss/ui/dashboard`).
  */
 import { act } from 'react';
-import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import { byText, cleanup, click, render } from '@ss/ui/testing';
@@ -40,7 +39,7 @@ const VALUES = {
 	searches_404s: { searchParams: 'term' },
 	indexnow: { key: 'abcdefgh', keyPath: '/indexnow-key.txt' },
 	seo_checklist: { paths: ['/', '/shop'] },
-	notice_bar: { text: 'Sale', startsAt: '2026-11-01T00:00:00Z', hideOnPages: ['/'], dismissFor: 'page' },
+	notice_bar: { enabled: true },
 };
 const ON = Object.keys(VALUES).filter((key) => !['tags', 'pixels', 'google_tags', 'web_vitals'].includes(key));
 ON.push('google_tags', 'web_vitals');
@@ -61,20 +60,6 @@ const settingsAnswer = (/** @type {string[]} */ on) => ({
 		),
 	})),
 });
-
-/**
- * The viewer's browser in a time zone (what `Intl.DateTimeFormat().resolvedOptions()` answers there).
- * @param {string} timeZone
- */
-const viewerIn = (timeZone) => {
-	const real = Intl.DateTimeFormat.prototype.resolvedOptions;
-	vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockImplementation(
-		/** @this {Intl.DateTimeFormat} */
-		function () {
-			return { ...real.call(this), timeZone };
-		},
-	);
-};
 
 const THEME = { colors: {}, fontFamily: 'inherit', radius: 8, mode: 'auto', customCss: '' };
 const FORMAT = { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer' };
@@ -181,9 +166,6 @@ describe('the dashboard (setup only)', () => {
 			'yandex-verification',
 			`https://${DOMAIN}/indexnow-key.txt`,
 			'2 pages',
-			'Starts',
-			TEXTS.setup.closeFor.page,
-			'1 pages',
 		])
 			expect(text).toContain(words);
 	});
@@ -315,12 +297,11 @@ describe('the dashboard (setup only)', () => {
 		expect(text).toContain(`Sitemap: https://${DOMAIN}/sitemap.xml`);
 		expect(text).toContain('<meta name="yandex-verification" content="ya-1">');
 		expect(text).toContain(`Your site serves the key abcdefgh as plain text at https://${DOMAIN}/indexnow-key.txt`);
-		expect(text).toContain('Starts');
 	});
 
-	it('Settings say when the key file address is not a path and when the notice shows or has no text', async () => {
+	it('Settings say when the key file address is not a path', async () => {
 		VALUES.indexnow = { key: 'abcdefgh', keyPath: 'nope' };
-		VALUES.notice_bar = { text: 'Sale' };
+		VALUES.notice_bar = { enabled: true };
 		VALUES.robots_verification = {};
 		VALUES.tags = {};
 		serve(['indexnow', 'notice_bar', 'robots_verification']);
@@ -328,13 +309,12 @@ describe('the dashboard (setup only)', () => {
 		await settle();
 		const text = container.textContent ?? '';
 		expect(text).toContain(TEXTS.setup.keyPathBad);
-		expect(text).toContain(TEXTS.setup.noticeShowing);
 		expect(text).toContain(TEXTS.setup.noTags);
 		expect(text).not.toContain(TEXTS.settings.consentWarning);
 	});
 
 	it('Settings say when the merchant turned the notice bar off (AO-2)', async () => {
-		VALUES.notice_bar = { text: 'Sale', enabled: false };
+		VALUES.notice_bar = { enabled: false };
 		serve(['notice_bar']);
 		const { container } = render(<Settings {...props} />);
 		await settle();
@@ -364,33 +344,5 @@ describe('the dashboard (setup only)', () => {
 		expect(text).toContain(TEXTS.settings.consentWarning);
 		expect(text).not.toContain(TEXTS.setup.keyPathBad);
 		expect(text).not.toContain('(GET /v1/robots.txt)');
-	});
-});
-
-describe("times: computed in UTC, shown in the viewer's local time (owner 2026-10-14)", () => {
-	it("Overview: the notice start in the viewer's zone; UTC first", async () => {
-		vi.useFakeTimers({ toFake: ['Date'] });
-		vi.setSystemTime(NOW);
-		VALUES.notice_bar = { text: 'Sale', startsAt: '2026-11-01T00:00:00Z' };
-		viewerIn('America/New_York');
-		serve(['notice_bar']);
-		const { container } = render(<Overview {...props} />);
-		await settle();
-		// midnight UTC on Nov 1 is still Oct 31 in New York
-		expect(container.textContent).toContain('Starts Oct 31, 2026, 8:00 PM EDT');
-		// the server (and the first render in the browser) print UTC, with the answers this page already loaded
-		expect(renderToString(<Overview {...props} />)).toContain('Starts Nov 1, 2026, 12:00 AM UTC');
-	});
-
-	it("Settings: the notice bar's end in the viewer's zone; UTC first", async () => {
-		vi.useFakeTimers({ toFake: ['Date'] });
-		vi.setSystemTime(NOW);
-		VALUES.notice_bar = { text: 'Sale', endsAt: '2026-10-01T03:00:00Z' };
-		viewerIn('Asia/Tokyo');
-		serve(['notice_bar']);
-		const { container } = render(<Settings {...props} />);
-		await settle();
-		expect(container.textContent).toContain('Ended Oct 1, 2026, 12:00 PM GMT+9');
-		expect(renderToString(<Settings {...props} />)).toContain('Ended Oct 1, 2026, 3:00 AM UTC');
 	});
 });

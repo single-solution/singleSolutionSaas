@@ -6,13 +6,7 @@
 			"type": "string",
 			"title": "Banner position",
 			"default": "bottom",
-			"enum": [
-				"bottom",
-				"top",
-				"center",
-				"bottom_left",
-				"bottom_right"
-			],
+			"enum": ["bottom", "top", "center", "bottom_left", "bottom_right"],
 			"description": "Bottom or top: a bar across the page. Center: a dialog in the middle of the page, over it. Bottom left or bottom right: a small box in that corner."
 		},
 		"privacyUrl": {

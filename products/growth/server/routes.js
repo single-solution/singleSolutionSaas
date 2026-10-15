@@ -10,7 +10,7 @@
  */
 import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { JOURNEYS, LIVE_MS, buildReport, rangeOf, shiftDay, topOf } from '../core/analytics.js';
-import { noticeAnswer } from '../core/config.js';
+import { noticeAnswer, noticesOf } from '../core/config.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
 import { zonedDayStart } from '@ss/contracts/format';
@@ -226,9 +226,19 @@ export const createRoutes = (product) => {
 			feature: 'notice_bar',
 			database: false,
 			rateLimit: NOTICE_LIMITS,
-			// `{ text, linkText, linkUrl, dismissible }` while the dates say so, else null; `?path=` leaves out pages it hides on
+			// G4: `{ key, text, linkText, linkUrl, dismissible }` of the announcement showing now (on `?path=`), else null
 			handler: async (ctx) =>
-				ok(noticeAnswer({ notice_bar: await product.settings.values(ctx.websiteId, 'notice_bar') }, now(), ctx.query.path)),
+				ok(
+					noticeAnswer(
+						noticesOf(
+							{ notice_bar: await product.settings.values(ctx.websiteId, 'notice_bar') },
+							await product.lists.recent(ctx.websiteId, 'announcements'),
+							now(),
+							await timeZoneOf(ctx),
+						),
+						ctx.query.path,
+					),
+				),
 		}),
 
 		// --------------------------------------------------------------------------- analytics (server, ticket)

@@ -200,7 +200,13 @@ export const createProductInstance = (options) => {
 				const on = await product.featuresOn(websiteId);
 				// the admin widgets (ticket) also get the checklist's pages, the IndexNow key file and the raw events' keep time
 				const admin = ctx.ticket ? { domain: String(ctx.status?.domain ?? '') } : null;
-				return widgetSettings({ on, values: await valuesOf(websiteId, on), now: now(), admin, lists: await pageLists(websiteId, on) });
+				const [values, lists, business] = await Promise.all([
+					valuesOf(websiteId, on),
+					pageLists(websiteId, on),
+					product.business(websiteId),
+				]);
+				// announcement times are on the business time zone's clock (G4)
+				return widgetSettings({ on, values, now: now(), admin, lists, timeZone: business.timeZone ?? 'UTC' });
 			},
 			blueprint: setupPart,
 		},

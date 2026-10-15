@@ -4,11 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { PRESETS, buildReport, dayStart, daysOf, presetRange, rangeOf, topOf } from '../core/analytics.js';
 import {
 	adminSettings,
-	hiddenPagesOf,
 	linkOf,
 	noticeAnswer,
-	noticeHiddenOn,
-	noticeOf,
+	noticeFor,
+	noticesOf,
 	searchParamsOf,
 	tagsOf,
 	tagsReady,
@@ -422,50 +421,67 @@ describe('page script settings', () => {
 		expect(tagsOf([], { pixels: { searchFromUrl: false } }).searchFromUrl).toBe(false);
 	});
 
-	it('shows the notice bar only between its dates, with a safe link', () => {
-		/** @param {Record<string, unknown>} notice */
-		const at = (notice, now = NOW) => noticeOf({ notice_bar: notice }, now);
-		expect(at({ text: '' })).toBeNull();
-		expect(at({ text: 'Hi', startsAt: 'soon' })).toBeNull();
-		expect(at({ text: 'Hi', startsAt: '2026-10-09T00:00:00Z' })).toBeNull();
-		expect(at({ text: 'Hi', endsAt: '2026-10-08T12:00:00Z' })).toBeNull();
-		expect(at({ text: 'Hi', linkUrl: 'javascript:alert(1)', linkText: 'x', dismissible: false })).toEqual({
-			text: 'Hi',
+	it('shows the announcements whose times on the business clock say so, in the merchant’s order (G4)', () => {
+		/** @param {Record<string, unknown>} entry */
+		const announcement = (entry) => readList('announcements', [{ key: 'a', text: 'Hi', ...entry }])[0];
+		const list = [
+			announcement({ key: 'later', text: 'Black Friday', startsAt: '2026-11-27T00:00' }),
+			announcement({ key: 'now', text: 'Free shipping', linkText: 'x', pages: ['/shop/**'] }),
+			announcement({ key: 'over', text: 'Summer', endsAt: '2026-10-08T12:00' }),
+			announcement({
+				key: 'all',
+				text: 'Hello',
+				dismissible: false,
+				dismiss: 'days',
+				dismissDays: 3,
+				hideOnPages: ['/checkout/**'],
+			}),
+		];
+		// NOW is 2026-10-08 12:00 UTC: in New York it is 08:00, so "over" (until noon there) still shows
+		expect(noticesOf({}, list, NOW, 'UTC').map((notice) => notice.key)).toEqual(['now', 'all']);
+		expect(noticesOf({}, list, NOW, 'America/New_York').map((notice) => notice.key)).toEqual(['now', 'over', 'all']);
+		expect(noticesOf({}, list, NOW, 'UTC')[0]).toEqual({
+			key: 'now',
+			text: 'Free shipping',
 			linkUrl: null,
 			linkText: '',
-			dismissible: false,
-			dismissFor: 'visit',
+			dismissible: true,
+			dismiss: 'visit',
+			dismissDays: 7,
+			pages: ['/shop/**'],
 			hideOnPages: [],
 		});
-		// G6: closed per page, hidden on pages; the answer of GET /v1/notice
-		const hidden = { text: 'Hi', dismissFor: 'page', hideOnPages: ['/', ' /checkout/** ', 'x', 7] };
-		expect(at(hidden)).toMatchObject({ dismissFor: 'page', hideOnPages: ['/', '/checkout/**'] });
-		expect(hiddenPagesOf(Array.from({ length: 60 }, (_, i) => `/p${i}`))).toHaveLength(50);
-		expect(noticeAnswer({ notice_bar: hidden }, NOW, '/checkout/pay')).toBeNull();
-		expect(noticeAnswer({ notice_bar: hidden }, NOW, '/shop')).toEqual({
-			text: 'Hi',
+		// a link that is not safe is refused by the list (and left out when read)
+		expect(checkList('announcements', [{ key: 'x', text: 'Hi', linkUrl: 'javascript:alert(1)' }])).toMatchObject({
+			ok: false,
+			errors: [{ path: '/value/0/linkUrl' }],
+		});
+		expect(
+			checkList('announcements', [{ key: 'x', text: 'Hi', startsAt: '2026-11-02T00:00', endsAt: '2026-11-01T00:00' }]),
+		).toMatchObject({
+			ok: false,
+			errors: [{ path: '/value/0/endsAt' }],
+		});
+		// AO-2: turned off by the merchant, the list kept
+		expect(noticesOf({ notice_bar: { enabled: false } }, list, NOW, 'UTC')).toEqual([]);
+		// the page's announcement: its pages and hidden pages (* inside a segment, ** across segments)
+		const showing = noticesOf({}, list, NOW, 'UTC');
+		expect(noticeFor(showing, '/shop/lamps')?.key).toBe('now');
+		expect(noticeFor(showing, '/about')?.key).toBe('all');
+		expect(noticeFor(showing, '/checkout/pay')).toBeNull();
+		expect(noticeAnswer(showing, '/shop/lamps')).toEqual({
+			key: 'now',
+			text: 'Free shipping',
 			linkText: '',
 			linkUrl: null,
 			dismissible: true,
 		});
-		expect(noticeAnswer({ notice_bar: { text: '' } }, NOW, '/')).toBeNull();
-		// AO-2: turned off by the merchant, its text kept
-		expect(at({ text: 'Hi', enabled: false })).toBeNull();
-		expect(at({ text: 'Hi', enabled: true })).toMatchObject({ text: 'Hi' });
-		// the hidden pages follow the shared page patterns (@ss/contracts/text): * inside a segment, ** across segments
-		/** @param {string[]} hideOnPages @param {string} path */
-		const hiddenOn = (hideOnPages, path) => noticeHiddenOn({ hideOnPages }, path);
-		expect(hiddenOn(['/'], '/')).toBe(true);
-		expect(hiddenOn(['/'], '/shop')).toBe(false);
-		expect(hiddenOn(['/shop/*'], '/shop/lamps?x=1')).toBe(true);
-		expect(hiddenOn(['/shop/*'], '/shop/lamps/blue')).toBe(false);
-		expect(hiddenOn(['/sale-*'], '/sale-summer')).toBe(true);
-		expect(hiddenOn(['/checkout/**'], '/checkout')).toBe(true);
-		expect(hiddenOn(['/a/**/z'], '/a/b/c/z')).toBe(true);
-		expect(hiddenOn([], '/')).toBe(false);
-		expect(
-			at({ text: 'Hi', linkUrl: 'https://x.example/a', startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-11-01T00:00:00Z' }),
-		).toMatchObject({ linkUrl: 'https://x.example/a' });
+		expect(noticeAnswer(showing, undefined)?.key).toBe('now');
+		expect(noticeAnswer([], '/')).toBeNull();
+		expect(noticesOf({}, [announcement({ linkUrl: 'https://x.example/a', linkText: 'More' })], NOW, 'UTC')[0]).toMatchObject({
+			linkUrl: 'https://x.example/a',
+			linkText: 'More',
+		});
 		expect(linkOf('/a b')).toBeNull();
 		expect(linkOf('http://x.example')).toBeNull();
 		expect(searchParamsOf('q, term,  bad param!')).toEqual(['q', 'term', 'bad']);
@@ -479,9 +495,23 @@ describe('page script settings', () => {
 			values: {
 				consent_banner: { position: 'top', privacyUrl: '/privacy' },
 				visitor_analytics: { requireConsent: false },
-				notice_bar: { text: 'Sale' },
 			},
 			now: NOW,
+			lists: {
+				announcements: [
+					{
+						key: 'sale',
+						text: 'Sale',
+						startsAt: '',
+						endsAt: '',
+						pages: [],
+						hideOnPages: [],
+						dismissible: true,
+						dismiss: 'visit',
+						dismissDays: 7,
+					},
+				],
+			},
 		});
 		expect(settings).toMatchObject({
 			consent: {
@@ -498,7 +528,7 @@ describe('page script settings', () => {
 				})),
 			},
 			record: { visits: true, funnel: false, requireConsent: false },
-			notice: { text: 'Sale' },
+			notices: [{ key: 'sale', text: 'Sale' }],
 		});
 		// the admin widgets' part: the checklist's pages, the IndexNow key file, the analytics detail and retention
 		const admin = widgetSettings({
@@ -529,7 +559,7 @@ describe('page script settings', () => {
 		expect(widgetSettings({ on: [], values: {}, now: NOW })).toMatchObject({
 			consent: { banner: false, position: 'bottom', privacyUrl: null, askAgainMonths: 12 },
 			record: { requireConsent: true },
-			notice: null,
+			notices: [],
 		});
 		// G7: the banner in the middle or a corner; a position it does not know is the bottom
 		for (const position of ['center', 'bottom_left', 'bottom_right'])
