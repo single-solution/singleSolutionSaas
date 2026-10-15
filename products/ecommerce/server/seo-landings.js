@@ -49,6 +49,7 @@ import {
 	patternText,
 	robotsOf,
 	scriptJson,
+	socialOf,
 } from '../core/seo.js';
 import { gradesByKey, gradesFor } from '../core/grades.js';
 import { shownRange } from '../core/catalog-views.js';
@@ -59,7 +60,7 @@ import { conditional } from './http-cache.js';
 import { createShownPrices } from './shown-prices.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
-import { newestOf, seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
+import { defaultImageOf, newestOf, seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -789,6 +790,15 @@ export const createLandings = (product, service, media) => {
 							automatic: true,
 						}
 					: null,
+			...socialOf({
+				type: 'website',
+				url: canonical,
+				siteName: storeName,
+				title,
+				description,
+				image: image ? absolute(image, s.domain) : null,
+				imageAlt: category?.image?.alt || h1,
+			}),
 			jsonLd: scriptJson(jsonLd),
 			// the newest change of the page (its category, its stored landing page, the products it shows), for the
 			// website's own Last-Modified (G10)
@@ -861,13 +871,16 @@ export const createLandings = (product, service, media) => {
 			asWritten(settings.defaultDescription),
 		);
 		const at = url ?? `https://${s.domain}/`;
+		const title = fillTitle(String(settings.titleTemplate), {
+			// the title pattern takes the same placeholders as the description ({unit}, {values}, {category}; E45)
+			name: seo?.title || patternText(pattern?.title, values) || name,
+			business: storeName,
+		});
+		const image = defaultImageOf(settings, s.domain);
 		return {
-			title: fillTitle(String(settings.titleTemplate), {
-				// the title pattern takes the same placeholders as the description ({unit}, {values}, {category}; E45)
-				name: seo?.title || patternText(pattern?.title, values) || name,
-				business: storeName,
-			}),
+			title,
 			description,
+			...socialOf({ type: 'website', url, siteName: storeName, title, description, image, imageAlt: name }),
 			body: seo?.body ?? '',
 			faqs: seo?.faqs ?? [],
 			canonical: url,

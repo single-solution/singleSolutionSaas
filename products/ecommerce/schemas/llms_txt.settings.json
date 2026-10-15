@@ -31,6 +31,16 @@
 			"title": "Full product list",
 			"description": "Also serve llms-full.txt: every product in stock with its price range, and the grades of each category.",
 			"default": false
+		},
+		"custom": {
+			"type": "string",
+			"title": "Your own llms.txt",
+			"description": "A file you wrote yourself (Markdown): served as written instead of the one made from your catalog. Empty: the one made from your catalog.",
+			"default": "",
+			"maxLength": 100000,
+			"x-ui": {
+				"widget": "textarea"
+			}
 		}
 	}
 }

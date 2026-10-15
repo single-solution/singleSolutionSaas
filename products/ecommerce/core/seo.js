@@ -325,6 +325,8 @@ export const daysRange = (list) => {
  * @property {(variant: VariantRecord) => string} variantName a variant's name (the `seo` setting `variantTitle`, G6)
  * @property {(variant: VariantRecord) => import('./promotions.js').ShownPrice} shown a variant's shown price
  *   (`shownPrice`, G4)
+ * @property {MemberPrice[]} [memberPrices] member prices (role pricing on, G17): each offer adds its price for each
+ *   tier of the site's member program
  * @property {(variant: VariantRecord) => string} [variantUrl] a variant's page (E13)
  * @property {(variant: VariantRecord) => string | null} [variantImage] a variant's first photo (E6); without one the
  *   variant shows the product's photos
@@ -407,24 +409,55 @@ export const shippingFee = ({ fee, freeOver = 0 }, price) => (freeOver > 0 && pr
 const daysValue = ({ min, max }) => ({ '@type': 'QuantitativeValue', minValue: min, maxValue: max, unitCode: 'DAY' });
 
 /**
+ * A member price of the site's member program (SEO audit G17): a role price's tier (`tierId`, the `@id` the site answer
+ * gives it) and its percent off the price shown, rounded half up to `unit` (whole units with the Format's `wholeUnits`),
+ * as the cart takes it off.
+ * @typedef {{ tierId: string, percent: number, unit: number }} MemberPrice
+ */
+
+/**
+ * A price for a member tier: the price shown less the tier's percent, as the cart computes a role discount (E19).
+ * @param {number} price @param {MemberPrice} member
+ */
+export const memberPriceOf = (price, { percent, unit }) =>
+	price - Math.min(price, Math.round((price * percent) / 100 / unit + 1e-9) * unit);
+
+/**
+ * The price specifications of an offer: none, one, or a list.
+ * @param {Array<Record<string, unknown>>} list
+ */
+const specifications = (list) => (list.length === 0 ? null : list.length === 1 ? list[0] : list);
+
+/**
  * The price of an offer (G4): the shown price; the struck-through price beside it (`StrikethroughPrice`, never on the
- * active price); and for a sale that holds all day with an end, when it started (`validFrom`) and its last day
- * (`priceValidUntil`, the day before an end at midnight; Google may drop a listing whose date is past).
+ * active price); member prices (G17); and for a sale that holds all day with an end, when it started (`validFrom`)
+ * and its last day (`priceValidUntil`, the day before an end at midnight; Google may drop a listing whose date is past).
  * @param {import('./promotions.js').ShownPrice} shown
  * @param {string} currency
+ * @param {MemberPrice[]} [members]
  */
-const offerPrice = (shown, currency) => ({
+const offerPrice = (shown, currency, members = []) => ({
 	price: toDecimal(shown.price, currency),
 	priceCurrency: currency,
-	priceSpecification:
-		shown.was === null
-			? null
-			: {
-					'@type': 'UnitPriceSpecification',
-					priceType: `${SCHEMA}/StrikethroughPrice`,
-					price: toDecimal(shown.was, currency),
-					priceCurrency: currency,
-				},
+	priceSpecification: specifications([
+		...(shown.was === null
+			? []
+			: [
+					{
+						'@type': 'UnitPriceSpecification',
+						priceType: `${SCHEMA}/StrikethroughPrice`,
+						price: toDecimal(shown.was, currency),
+						priceCurrency: currency,
+					},
+				]),
+		// a member's price for each tier (G17): never with a priceType
+		...members.map((member) => ({
+			'@type': 'UnitPriceSpecification',
+			price: toDecimal(memberPriceOf(shown.price, member), currency),
+			priceCurrency: currency,
+			validForMemberTier: { '@id': member.tierId },
+		})),
+	]),
 	validFrom: shown.sale?.until && shown.sale.from ? new Date(shown.sale.from).toISOString() : null,
 	priceValidUntil: shown.sale?.until ? new Date(new Date(shown.sale.until).getTime() - 1).toISOString().slice(0, 10) : null,
 });
@@ -608,7 +641,7 @@ export const productJsonLd = (page) => {
 		compact({
 			'@type': 'Offer',
 			url: page.variantUrl?.(variant) ?? url,
-			...offerPrice(page.shown(variant), currency),
+			...offerPrice(page.shown(variant), currency, page.memberPrices),
 			availability: `${SCHEMA}/${variantInStock(product, variant) ? 'InStock' : 'OutOfStock'}`,
 			itemCondition: (() => {
 				const condition = page.condition(variant);
@@ -740,6 +773,9 @@ export const siteIds = (home) => ({
 	website: `${home}#website`,
 	returnPolicy: `${home}#return_policy`,
 	shippingPolicy: `${home}#shipping_policy`,
+	memberProgram: `${home}#member_program`,
+	/** @param {string} role a role price's Accounts role */
+	memberTier: (role) => `${home}#member_tier_${encodeURIComponent(role)}`,
 });
 
 /** A day as schema.org opening hours write it. */
@@ -781,13 +817,15 @@ export const openingHoursOf = (text) => {
  *   (0 = not returnable) and terms, null: none given
  * @property {{ country: string, fee: number, freeOver: number, deliveryTime: DeliveryTime } | null} shipping the
  *   store's delivery to the business's country, null: not complete
+ * @property {Array<{ role: string, name: string }>} [memberTiers] the member program's tiers (role prices, G17): each
+ *   gives its members a lower price; none = no program
  */
 
 /**
  * The home page's structured data as a JSON-LD graph (E49, SEO audit G2): the business as an `OnlineStore` (or a
- * `LocalBusiness` at its pickup point) with its name, address, logo, contacts, profiles, hours and its store-wide return
- * and shipping policies, which product offers point to by `@id`; and the `WebSite` with its name. Only values the shop
- * has.
+ * `LocalBusiness` at its pickup point) with its name, address, logo, contacts, profiles, hours, its store-wide return
+ * and shipping policies and its member program (G17), which product offers point to by `@id`; and the `WebSite` with
+ * its name. Only values the shop has.
  * @param {SitePage} page
  */
 export const siteJsonLd = (page) => {
@@ -820,6 +858,22 @@ export const siteJsonLd = (page) => {
 					? returnPolicyOf(page.returns, page.returns.days, page.currency, { '@id': ids.returnPolicy })
 					: null,
 				hasShippingService: page.shipping ? shippingServiceOf(page.shipping, page.currency, ids.shippingPolicy) : null,
+				hasMemberProgram:
+					page.memberTiers && page.memberTiers.length > 0
+						? {
+								'@type': 'MemberProgram',
+								'@id': ids.memberProgram,
+								name: page.name,
+								description: page.memberTiers.map((tier) => tier.name).join(', '),
+								url: page.home,
+								hasTiers: page.memberTiers.map((tier) => ({
+									'@type': 'MemberProgramTier',
+									'@id': ids.memberTier(tier.role),
+									name: tier.name,
+									hasTierBenefit: `${SCHEMA}/TierBenefitLoyaltyPrice`,
+								})),
+							}
+						: null,
 			}),
 			compact({
 				'@type': 'WebSite',
@@ -832,6 +886,18 @@ export const siteJsonLd = (page) => {
 		],
 	};
 };
+
+/**
+ * A page's social sharing tags (SEO audit G13): its Open Graph data — the type (`product` for a product page, else
+ * `website`), the canonical address, the site name, title, description, image with its text, and a product's price
+ * shown — and the Twitter card (a large image when there is one). Not a search signal: it makes shared links look right.
+ * @param {{ type: 'website' | 'product', url: string | null, siteName: string, title: string, description: string,
+ *   image: string | null, imageAlt?: string, price?: { amount: string, currency: string } | null }} page
+ */
+export const socialOf = ({ type, url, siteName, title, description, image, imageAlt = '', price = null }) => ({
+	og: { type, url, siteName, title, description, image, imageAlt: image ? imageAlt : '', price },
+	twitter: { card: image ? 'summary_large_image' : 'summary' },
+});
 
 /** Words a category's own text needs to stand as a page without products (G7.1). */
 const OWN_TEXT_WORDS = 50;

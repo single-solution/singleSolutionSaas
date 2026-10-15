@@ -504,7 +504,10 @@ export const createCatalogShop = (product, service, common) => {
 				icon: category.icon,
 				content: category.content,
 				faqs: category.faqs,
-				image: category.image ? { url: await common.media.mediaUrl(s, category.image.key), alt: category.image.alt } : null,
+				// an image without its own text is named by the category (G14)
+				image: category.image
+					? { url: await common.media.mediaUrl(s, category.image.key), alt: category.image.alt || category.name }
+					: null,
 				url: await common.media.categoryUrl(s, category),
 			});
 		const visibleMatch = {
@@ -567,7 +570,9 @@ export const createCatalogShop = (product, service, common) => {
 					description: brand.description,
 					categoryIds: brand.categoryIds,
 					seo: brand.seo,
-					logo: brand.logo ? { url: await common.media.mediaUrl(s, brand.logo.key), alt: brand.logo.alt } : null,
+					logo: brand.logo
+						? { url: await common.media.mediaUrl(s, brand.logo.key), alt: brand.logo.alt || brand.name }
+						: null,
 					count: counts.get(brand.id) ?? 0,
 				})),
 			),

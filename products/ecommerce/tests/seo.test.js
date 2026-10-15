@@ -573,6 +573,14 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		const bare = (await shop.api('GET', '/v1/llms.txt')).text;
 		expect(bare).not.toContain('## Products');
 		expect(bare).not.toContain('## Policies');
+		// a merchant's own llms.txt is served as written (G16)
+		const own = '# Our shop\n\n> Hand-written for assistants.\n';
+		await shop.setting('llms_txt', 'custom', own);
+		const written = await shop.api('GET', '/v1/llms.txt');
+		expect(written.text).toBe(own);
+		expect(written.headers.get('content-type')).toContain('text/plain');
+		await shop.setting('llms_txt', 'custom', '');
+		expect((await shop.api('GET', '/v1/llms.txt')).text).toContain('# ');
 	});
 
 	it('answers the policies to visitors and the server', async () => {

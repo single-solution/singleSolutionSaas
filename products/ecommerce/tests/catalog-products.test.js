@@ -364,7 +364,8 @@ describe('images', () => {
 			method: 'PUT',
 			headers: { 'content-type': 'image/png', 'content-length': '2000' },
 		});
-		expect(first.json.key).toMatch(new RegExp(`^ecommerce/products/${id}/[a-z0-9]+\\.png$`));
+		// a descriptive file name: the product's slug, the photo's number and a short id (SEO audit G14)
+		expect(first.json.key).toMatch(new RegExp(`^ecommerce/products/${id}/${item.json.slug}-1-[a-z0-9]{10}\\.png$`));
 		bucket();
 		const attached = await api('POST', `/v1/products/${id}/media`, { key: first.json.key, alt: 'Front' });
 		expect(attached.json.media[0]).toMatchObject({ key: first.json.key, type: 'image/png', size: 2000, alt: 'Front' });
@@ -372,6 +373,7 @@ describe('images', () => {
 		expect((await api('POST', `/v1/products/${id}/media`, { key: 'ecommerce/products/prd_other/a.png' })).status).toBe(422);
 		expect((await api('POST', `/v1/products/${id}/media`, { key: first.json.key, alt: 'x'.repeat(300) })).status).toBe(422);
 		const second = await upload({ type: 'image/webp' });
+		expect(second.json.key).toMatch(new RegExp(`/${item.json.slug}-2-[a-z0-9]{10}\\.webp$`));
 		bucket({ exists: false });
 		expect((await api('POST', `/v1/products/${id}/media`, { key: second.json.key })).status).toBe(422);
 		bucket({ type: 'text/html' });

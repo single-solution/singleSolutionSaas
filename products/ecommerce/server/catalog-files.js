@@ -125,7 +125,11 @@ export const createCatalogFiles = (product, service, common) => {
 			throw refuse([{ path: '/size', message: `${video ? 'A video' : 'An image'} has at most ${limit} bytes.` }]);
 		const record = await recordOf(data, owner, String(body.id));
 		const storage = await common.storageOf(s);
-		const key = `ecommerce/${OWNERS[owner].folder}/${record.id}/${createId('img').slice(4).toLowerCase()}.${extension}`;
+		// a descriptive name (SEO audit G14): the record's slug, a product photo's number, and a short id that keeps names
+		// apart; keys already stored are never renamed
+		const number = owner === 'product' && !video ? `-${(record.media?.length ?? 0) + 1}` : '';
+		const name = `${record.slug}${number}-${createId('img').slice(-10).toLowerCase()}`;
+		const key = `ecommerce/${OWNERS[owner].folder}/${record.id}/${name}.${extension}`;
 		const signed = storage.presignPut({ key, contentType: type, contentLength: body.size, expiresIn: UPLOAD_SECONDS });
 		return { key, upload: { method: signed.method, url: signed.url, headers: signed.headers, expiresAt: signed.expiresAt } };
 	};

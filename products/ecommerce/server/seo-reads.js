@@ -6,6 +6,8 @@
  */
 import { problem } from '@ss/app-kit';
 import { SEO_DEFAULTS } from '../adapters/product.js';
+import { siteAddress } from '../core/catalog-content.js';
+import { absolute } from '../core/links.js';
 import { COLLECTIONS } from '../core/model.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
@@ -174,4 +176,15 @@ export const streamed = (pieces, type) => {
 		}),
 		{ headers: { 'content-type': type } },
 	);
+};
+
+/**
+ * The seo setting `defaultImage` as an absolute address (a path is on the website), or null without one: the social
+ * image of a page without its own.
+ * @param {Record<string, unknown>} settings the `seo` settings
+ * @param {string} domain
+ */
+export const defaultImageOf = (settings, domain) => {
+	const address = siteAddress(settings.defaultImage);
+	return address ? absolute(address, domain) : null;
 };

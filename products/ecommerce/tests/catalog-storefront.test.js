@@ -222,7 +222,8 @@ describe('E4 product video and E6 photos', () => {
 	it('uploads and keeps a video, takes YouTube ids and https addresses', async () => {
 		const id = ids.shown.id;
 		const upload = await api('POST', '/v1/catalog/uploads', { for: 'product', id, type: 'video/mp4', size: 5_000_000 });
-		expect(upload.key).toMatch(new RegExp(`^ecommerce/products/${id}/[a-z0-9]+\\.mp4$`));
+		// a video file is named by the product too (G14)
+		expect(upload.key).toMatch(new RegExp(`^ecommerce/products/${id}/${ids.shown.slug}-[a-z0-9]{10}\\.mp4$`));
 		expect(
 			(await shop.api('POST', '/v1/catalog/uploads', { for: 'category', id: ids.clothes.id, type: 'video/mp4', size: 5 }))
 				.status,

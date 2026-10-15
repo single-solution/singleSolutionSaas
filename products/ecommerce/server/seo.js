@@ -13,6 +13,7 @@ import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
 import { mediaSignatureOk } from '../adapters/crypto.js';
 import { categoryTrail } from '../adapters/promotions-store.js';
 import { valueLabel } from '../core/catalog.js';
+import { toDecimal } from '../core/money.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { shownRange, specsOf } from '../core/catalog-views.js';
@@ -36,6 +37,7 @@ import {
 	fillTemplate,
 	hasOwnText,
 	metaDescription,
+	offeredVariants,
 	openingHoursOf,
 	pageName,
 	pageTitle,
@@ -50,6 +52,7 @@ import {
 	sitemapFileUrl,
 	sitemapFiles,
 	sitemapIndex,
+	socialOf,
 	variantLabel,
 	writtenSummary,
 } from '../core/seo.js';
@@ -62,7 +65,17 @@ import { createLandings } from './seo-landings.js';
 import { createShownPrices } from './shown-prices.js';
 import { policiesOf } from './policies.js';
 import { SEO_LIMITS, VISITOR_LIMITS } from './service.js';
-import { allCategories, brandNames, lineage, newestOf, seoSettingsOf, storeNameOf, streamed, trailOf } from './seo-reads.js';
+import {
+	allCategories,
+	brandNames,
+	defaultImageOf,
+	lineage,
+	newestOf,
+	seoSettingsOf,
+	storeNameOf,
+	streamed,
+	trailOf,
+} from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -131,17 +144,6 @@ const LISTING_FIELDS = Object.freeze({
 	inStock: 1,
 	updatedAt: 1,
 });
-
-/**
- * The seo setting `defaultImage` as an absolute address (a path is on the website), or null without one: the social
- * image of a page without its own.
- * @param {Record<string, unknown>} settings the `seo` settings
- * @param {string} domain
- */
-const defaultImageOf = (settings, domain) => {
-	const address = siteAddress(settings.defaultImage);
-	return address ? absolute(address, domain) : null;
-};
 
 /**
  * @param {Product} product
@@ -244,6 +246,19 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
+	 * The member program's tiers (SEO audit G17): the role prices while Role pricing is on, each a lower price for the
+	 * signed-in shoppers of an Accounts role (E19); none without any above 0 %.
+	 * @param {Site} s
+	 * @returns {Promise<Array<{ role: string, name: string, percent: number }>>}
+	 */
+	const memberTiersOf = async (s) =>
+		s.has('role_pricing')
+			? /** @type {Array<{ role: string, label: string, percent: number }>} */ (await s.list('role_prices'))
+					.filter((entry) => entry.percent > 0)
+					.map((entry) => ({ role: entry.role, name: entry.label, percent: entry.percent }))
+			: [];
+
+	/**
 	 * Each item's return policy for structured data (G5.1, G5.5), with the store-wide one it points to when its window is
 	 * the store's; null when the shop gives none. With Returns on, physical goods as the cart decides it (the product's,
 	 * else its grade's, else the `returns` setting), digital goods and bookings only when the product names its own (they
@@ -330,6 +345,13 @@ export const createSeo = (product, service) => {
 		const brand = item.brandId ? ((await brandNames(data, [item.brandId])).get(item.brandId) ?? null) : null;
 		const conditions = await conditionsOf(s);
 		const policies = await storePoliciesOf(s);
+		// member prices of the site's member program (G17), rounded as the cart rounds a role discount
+		const { unit } = await service.pricing(s);
+		const memberPrices = (await memberTiersOf(s)).map((tier) => ({
+			tierId: siteIds(`https://${s.domain}/`).memberTier(tier.role),
+			percent: tier.percent,
+			unit,
+		}));
 		const trail = await trailOf(s, data, media, primary ?? null, true, business.name);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
 		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
@@ -413,20 +435,40 @@ export const createSeo = (product, service) => {
 				at: row.createdAt ?? null,
 			})),
 			faqMarkup: settings.faqMarkup === true,
+			memberPrices,
 		});
 		const ogImage = siteAddress(item.seo.ogImage);
+		const title = pageTitle(String(settings.titleTemplate), {
+			own: item.seo.title,
+			mode: item.seo.titleMode,
+			name: pageName(settings.productTitle, names),
+			business: names.storeName,
+		});
+		const canonical = item.seo.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url;
+		const image = ogImage ? absolute(ogImage, s.domain) : (images[0] ?? defaultImageOf(settings, s.domain));
+		// the lowest price shown, as the offers say it (G4)
+		const lowest = Math.min(
+			...offeredVariants(item)
+				.map((variant) => shown(variant).price)
+				.filter((price) => price > 0),
+		);
 		return {
-			title: pageTitle(String(settings.titleTemplate), {
-				own: item.seo.title,
-				mode: item.seo.titleMode,
-				name: pageName(settings.productTitle, names),
-				business: names.storeName,
-			}),
+			title,
 			description,
 			// its own address, for the website's 308 from any other path that finds it (G9)
 			url,
-			canonical: item.seo.canonicalUrl ? absolute(item.seo.canonicalUrl, s.domain) : url,
-			image: ogImage ? absolute(ogImage, s.domain) : (images[0] ?? defaultImageOf(settings, s.domain)),
+			canonical,
+			image,
+			...socialOf({
+				type: 'product',
+				url: canonical,
+				siteName: names.storeName,
+				title,
+				description,
+				image,
+				imageAlt: item.media[0]?.alt || item.name,
+				price: Number.isFinite(lowest) ? { amount: toDecimal(lowest, s.currency), currency: s.currency } : null,
+			}),
 			robots: robotsOf(item.seo),
 			focusKeyword: item.seo.focusKeyword,
 			jsonLd: scriptJson(jsonLd),
@@ -503,6 +545,7 @@ export const createSeo = (product, service) => {
 		const jsonLd = siteJsonLd({
 			home,
 			name,
+			memberTiers: await memberTiersOf(s),
 			alternateName: String(settings.alternateName ?? '').trim(),
 			type: local ? 'LocalBusiness' : 'OnlineStore',
 			logo: business.logo ?? null,
@@ -517,12 +560,16 @@ export const createSeo = (product, service) => {
 			returns: policies.returns,
 			shipping: policies.shipping,
 		});
+		const title = String(settings.homeTitle ?? '').trim() || name;
+		const description = metaDescription(asWritten(settings.homeDescription), asWritten(settings.defaultDescription));
+		const image = defaultImageOf(settings, s.domain);
 		return {
-			title: String(settings.homeTitle ?? '').trim() || name,
-			description: metaDescription(asWritten(settings.homeDescription), asWritten(settings.defaultDescription)),
+			title,
+			description,
 			canonical: home,
-			image: defaultImageOf(settings, s.domain),
+			image,
 			siteName: name,
+			...socialOf({ type: 'website', url: home, siteName: name, title, description, image, imageAlt: name }),
 			jsonLd: scriptJson(jsonLd),
 		};
 	};
@@ -584,16 +631,27 @@ export const createSeo = (product, service) => {
 			faqs: settings.faqMarkup === true ? category.faqs : [],
 		});
 		const ogImage = siteAddress(category.seo.ogImage);
+		const title = pageTitle(String(settings.titleTemplate), {
+			own: category.seo.title,
+			mode: category.seo.titleMode,
+			name: pageName(settings.categoryTitle, names),
+			business: names.storeName,
+		});
+		const shared = ogImage ? absolute(ogImage, s.domain) : (image ?? defaultImageOf(settings, s.domain));
 		return {
-			title: pageTitle(String(settings.titleTemplate), {
-				own: category.seo.title,
-				mode: category.seo.titleMode,
-				name: pageName(settings.categoryTitle, names),
-				business: names.storeName,
-			}),
+			title,
 			description,
 			canonical,
-			image: ogImage ? absolute(ogImage, s.domain) : (image ?? defaultImageOf(settings, s.domain)),
+			image: shared,
+			...socialOf({
+				type: 'website',
+				url: canonical,
+				siteName: names.storeName,
+				title,
+				description,
+				image: shared,
+				imageAlt: category.image?.alt || category.name,
+			}),
 			// a category with no product to show and no text of its own is a thin page: not indexed (G7.1)
 			robots:
 				comingSoon || (items.length === 0 && !hasOwnText(category) && settings.emptyCategories !== 'index')
@@ -984,6 +1042,9 @@ export const createSeo = (product, service) => {
 	/** @param {any} ctx */
 	const llmsTxt = async (ctx) => {
 		const s = await service.site(ctx);
+		// the merchant's own file wins, as written (G16)
+		const own = String((await s.values('llms_txt')).custom ?? '');
+		if (own.trim() !== '') return new Response(own, { headers: { 'content-type': 'text/plain; charset=utf-8' } });
 		const data = await s.data();
 		const [settings, business, { money }, hidden] = await Promise.all([
 			s.values('llms_txt'),

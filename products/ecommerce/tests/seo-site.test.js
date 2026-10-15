@@ -48,6 +48,40 @@ describe('the site structured data', () => {
 		]);
 	});
 
+	it('describes the member program of role prices, each a tier with a lower price (G17)', () => {
+		const [business] = /** @type {any[]} */ (
+			siteJsonLd({
+				...page,
+				memberTiers: [
+					{ role: 'vip', name: 'VIP price' },
+					{ role: 'trade:pro', name: 'Trade price' },
+				],
+			})['@graph']
+		);
+		expect(business.hasMemberProgram).toEqual({
+			'@type': 'MemberProgram',
+			'@id': `${HOME}#member_program`,
+			name: 'Northwind',
+			description: 'VIP price, Trade price',
+			url: HOME,
+			hasTiers: [
+				{
+					'@type': 'MemberProgramTier',
+					'@id': `${HOME}#member_tier_vip`,
+					name: 'VIP price',
+					hasTierBenefit: 'https://schema.org/TierBenefitLoyaltyPrice',
+				},
+				{
+					'@type': 'MemberProgramTier',
+					'@id': `${HOME}#member_tier_trade%3Apro`,
+					name: 'Trade price',
+					hasTierBenefit: 'https://schema.org/TierBenefitLoyaltyPrice',
+				},
+			],
+		});
+		expect(siteJsonLd({ ...page, memberTiers: [] })['@graph'][0]).not.toHaveProperty('hasMemberProgram');
+	});
+
 	it('adds the address on one line, the contacts, profiles and the store-wide return policy', () => {
 		const [business, website] = siteJsonLd({
 			...page,
@@ -235,7 +269,8 @@ describe('baseline SEO with the catalog', () => {
 			title: 'Northwind Goods',
 			description: '',
 			alternates: { canonical: HOME },
-			openGraph: { siteName: 'Northwind Goods', images: undefined },
+			openGraph: { type: 'website', url: HOME, siteName: 'Northwind Goods', images: undefined },
+			twitter: { card: 'summary' },
 		});
 	});
 

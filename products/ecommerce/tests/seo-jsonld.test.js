@@ -167,6 +167,43 @@ describe('offers', () => {
 		}
 	});
 
+	it('adds a member price for each tier of the member program, beside the struck-through price (G17)', () => {
+		const tiers = [
+			{ tierId: 'https://shop.example.com/#member_tier_vip', percent: 10, unit: 1 },
+			{ tierId: 'https://shop.example.com/#member_tier_trade', percent: 25, unit: 100 },
+		];
+		const offer = nodeOf(
+			productJsonLd(page(product({ variants: [variant({ price: 1999, compareAtPrice: 2500 })] }), { memberPrices: tiers })),
+			'Product',
+		).offers;
+		expect(offer.price).toBe('19.99');
+		expect(offer.priceSpecification).toEqual([
+			{
+				'@type': 'UnitPriceSpecification',
+				priceType: 'https://schema.org/StrikethroughPrice',
+				price: '25.00',
+				priceCurrency: 'USD',
+			},
+			// 10 % off 19.99, rounded half up to a cent; 25 % off in whole units
+			{
+				'@type': 'UnitPriceSpecification',
+				price: '17.99',
+				priceCurrency: 'USD',
+				validForMemberTier: { '@id': 'https://shop.example.com/#member_tier_vip' },
+			},
+			{
+				'@type': 'UnitPriceSpecification',
+				price: '14.99',
+				priceCurrency: 'USD',
+				validForMemberTier: { '@id': 'https://shop.example.com/#member_tier_trade' },
+			},
+		]);
+		// one member price alone is one specification
+		const vip = { tierId: 'https://shop.example.com/#member_tier_vip', percent: 10, unit: 1 };
+		const single = nodeOf(productJsonLd(page(product(), { memberPrices: [vip] })), 'Product').offers;
+		expect(single.priceSpecification).toMatchObject({ price: '9.00', validForMemberTier: { '@id': vip.tierId } });
+	});
+
 	it('points physical goods to the store-wide shipping policy, once it is complete', () => {
 		const policy = 'https://shop.example.com/#shipping_policy';
 		const offers = (/** @type {ProductRecord} */ item, /** @type {Partial<ProductPage>} */ input) =>

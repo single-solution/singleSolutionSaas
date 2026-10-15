@@ -10672,7 +10672,9 @@
 				"faqs",
 				"canonical",
 				"robots",
-				"jsonLd"
+				"jsonLd",
+				"og",
+				"twitter"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -10748,6 +10750,12 @@
 					"format": "uri",
 					"description": "The landing_pages setting attributeUrl with {slug} and {category} (the page's category's slug); null without it, or when it names {category} and the page has no category."
 				},
+				"og": {
+					"$ref": "#/components/schemas/SeoOpenGraph"
+				},
+				"twitter": {
+					"$ref": "#/components/schemas/SeoTwitter"
+				},
 				"robots": {
 					"type": "string",
 					"enum": ["index, follow", "noindex, follow"],
@@ -10762,7 +10770,18 @@
 		"SeoCategory": {
 			"type": "object",
 			"description": "What a category page puts in its head.",
-			"required": ["title", "description", "canonical", "image", "robots", "status", "jsonLd", "lastModified"],
+			"required": [
+				"title",
+				"description",
+				"canonical",
+				"image",
+				"robots",
+				"status",
+				"jsonLd",
+				"lastModified",
+				"og",
+				"twitter"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -10782,6 +10801,12 @@
 					"type": ["string", "null"],
 					"format": "uri",
 					"description": "Its ogImage, else its image, else the seo setting defaultImage (null: none)."
+				},
+				"og": {
+					"$ref": "#/components/schemas/SeoOpenGraph"
+				},
+				"twitter": {
+					"$ref": "#/components/schemas/SeoTwitter"
 				},
 				"robots": {
 					"$ref": "#/components/schemas/SeoRobots"
@@ -10821,7 +10846,9 @@
 				"faqs",
 				"canonical",
 				"robots",
-				"jsonLd"
+				"jsonLd",
+				"og",
+				"twitter"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -10921,6 +10948,12 @@
 					"format": "uri",
 					"description": "The landing_pages setting gradeUrl with {key} and {category} (the page's category's slug); null without it, or when it names {category} and the page has no category."
 				},
+				"og": {
+					"$ref": "#/components/schemas/SeoOpenGraph"
+				},
+				"twitter": {
+					"$ref": "#/components/schemas/SeoTwitter"
+				},
 				"robots": {
 					"type": "string",
 					"enum": ["index, follow", "noindex, follow"],
@@ -10948,7 +10981,9 @@
 				"status",
 				"landing",
 				"jsonLd",
-				"lastModified"
+				"lastModified",
+				"og",
+				"twitter"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -10976,6 +11011,12 @@
 				"canonical": {
 					"type": "string",
 					"format": "uri"
+				},
+				"og": {
+					"$ref": "#/components/schemas/SeoOpenGraph"
+				},
+				"twitter": {
+					"$ref": "#/components/schemas/SeoTwitter"
 				},
 				"robots": {
 					"$ref": "#/components/schemas/SeoRobots"
@@ -11071,10 +11112,82 @@
 				}
 			}
 		},
+		"SeoOpenGraph": {
+			"type": "object",
+			"description": "Open Graph data for shared links (G13): og:type, og:url, og:site_name, og:title, og:description, og:image with og:image:alt, and for a product product:price:amount and product:price:currency (its lowest price shown). Not a search signal: it makes shared links show the right title, text and image.",
+			"required": ["type", "url", "siteName", "title", "description", "image", "imageAlt", "price"],
+			"additionalProperties": false,
+			"properties": {
+				"type": {
+					"type": "string",
+					"enum": ["website", "product"]
+				},
+				"url": {
+					"type": ["string", "null"],
+					"format": "uri",
+					"description": "The canonical address (null: the page has none, such as a glossary page without its address)."
+				},
+				"siteName": {
+					"type": "string"
+				},
+				"title": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"image": {
+					"type": ["string", "null"],
+					"format": "uri"
+				},
+				"imageAlt": {
+					"type": "string",
+					"description": "The image's text: its own alternative text, else the page's name ('' without an image)."
+				},
+				"price": {
+					"type": ["object", "null"],
+					"required": ["amount", "currency"],
+					"additionalProperties": false,
+					"properties": {
+						"amount": {
+							"type": "string",
+							"description": "A decimal, as structured data gives it."
+						},
+						"currency": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"SeoTwitter": {
+			"type": "object",
+			"description": "The Twitter (X) card of shared links (G13): summary_large_image with an image, else summary; title, description and image are og's.",
+			"required": ["card"],
+			"additionalProperties": false,
+			"properties": {
+				"card": {
+					"type": "string",
+					"enum": ["summary", "summary_large_image"]
+				}
+			}
+		},
 		"SeoProduct": {
 			"type": "object",
 			"description": "What a product page puts in its head.",
-			"required": ["title", "description", "url", "canonical", "image", "robots", "focusKeyword", "jsonLd", "lastModified"],
+			"required": [
+				"title",
+				"description",
+				"url",
+				"canonical",
+				"image",
+				"robots",
+				"focusKeyword",
+				"jsonLd",
+				"lastModified",
+				"og",
+				"twitter"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -11100,6 +11213,12 @@
 					"format": "uri",
 					"description": "The social image: its ogImage, else its first photo, else the seo setting defaultImage (null: none)."
 				},
+				"og": {
+					"$ref": "#/components/schemas/SeoOpenGraph"
+				},
+				"twitter": {
+					"$ref": "#/components/schemas/SeoTwitter"
+				},
 				"robots": {
 					"$ref": "#/components/schemas/SeoRobots"
 				},
@@ -11108,7 +11227,7 @@
 				},
 				"jsonLd": {
 					"type": "string",
-					"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
+					"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage. While Role pricing has role prices above 0 %, each offer adds a UnitPriceSpecification per role with its member price (the price shown less the role's percent, rounded as the cart rounds it) and validForMemberTier { @id } of the site answer's member program tier (G17)."
 				},
 				"lastModified": {
 					"type": "string",
@@ -11129,7 +11248,7 @@
 		"SeoSite": {
 			"type": "object",
 			"description": "What the home page puts in its head.",
-			"required": ["title", "description", "canonical", "image", "siteName", "jsonLd"],
+			"required": ["title", "description", "canonical", "image", "siteName", "jsonLd", "og", "twitter"],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -11150,13 +11269,19 @@
 					"format": "uri",
 					"description": "The seo setting defaultImage (null: none)."
 				},
+				"og": {
+					"$ref": "#/components/schemas/SeoOpenGraph"
+				},
+				"twitter": {
+					"$ref": "#/components/schemas/SeoTwitter"
+				},
 				"siteName": {
 					"type": "string",
 					"description": "The site name (the seo setting brandName, else the business name): use it as og:site_name, as the structured data does."
 				},
 				"jsonLd": {
 					"type": "string",
-					"description": "The JSON-LD (OnlineStore or LocalBusiness with its return and shipping policies, and WebSite) as text safe to put in a script tag."
+					"description": "The JSON-LD (OnlineStore or LocalBusiness with its return and shipping policies, and WebSite) as text safe to put in a script tag. While Role pricing has role prices above 0 %, the business has a MemberProgram (hasMemberProgram: its tiers are the role prices, each with its label and the benefit TierBenefitLoyaltyPrice; G17), which product offers point to."
 				}
 			}
 		},
@@ -26737,7 +26862,7 @@
 	},
 	"GET /v1/llms.txt": {
 		"summary": "llms.txt of the catalog",
-		"description": "Answers text/plain (Markdown), not JSON: the business name, the llms_txt setting description, the categories shoppers see in tree order (up to 200), the best-selling products (the llms_txt setting products, up to 200, with price and summary) and, unless the setting policies is off, the shop's policies as text."
+		"description": "Answers text/plain (Markdown), not JSON: the llms_txt setting custom as written when you wrote your own file (G16); else the business name, the llms_txt setting description, the categories shoppers see in tree order (up to 200), the best-selling products (the llms_txt setting products, up to 200, with price and summary) and, unless the setting policies is off, the shop's policies as text."
 	},
 	"GET /v1/llms-full.txt": {
 		"summary": "llms-full.txt: every product in stock",

@@ -264,6 +264,13 @@ describe('categories and brands', () => {
 		const cases = (await get('/v1/shop/categories')).json.items[1];
 		expect(cases.image).toEqual({ url: 'https://cdn.shop.example.com/ecommerce/categories/x/a.png', alt: 'Alt' });
 		expect((await get('/v1/shop/brands')).json.items[0].logo.alt).toBe('Alt');
+		// without its own text, the image is named by its category or brand (G14)
+		await data
+			.collection('categories')
+			.updateOne({ websiteId: shop.websiteId, id: ids.cases.id }, { $set: { 'image.alt': '' } });
+		await data.collection('brands').updateOne({ websiteId: shop.websiteId, id: ids.acme.id }, { $set: { 'logo.alt': '' } });
+		expect((await get('/v1/shop/categories')).json.items[1].image.alt).toBe(cases.name);
+		expect((await get('/v1/shop/brands')).json.items[0].logo.alt).toBe('Acme');
 		const page = await get('/v1/shop/products/bestseller');
 		expect(page.json).toMatchObject({ breadcrumb: [], brand: null });
 		await data.collection('brands').updateOne({ websiteId: shop.websiteId, id: ids.acme.id }, { $set: { logo: null } });

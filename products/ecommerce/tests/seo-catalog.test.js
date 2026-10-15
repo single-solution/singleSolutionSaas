@@ -156,11 +156,26 @@ describe('E10 grades and E16 structured data', () => {
 		await api('PATCH', `/v1/products/${ids.other.id}`, {
 			seo: { canonicalUrl: '/phones/acme-two', ogImage: 'https://cdn.example.com/two.jpg', noindex: true, nofollow: true },
 		});
-		expect(await api('GET', `/v1/seo/products/${ids.other.slug}`)).toMatchObject({
+		const other = await api('GET', `/v1/seo/products/${ids.other.slug}`);
+		expect(other).toMatchObject({
 			canonical: `${ORIGIN}/phones/acme-two`,
 			image: 'https://cdn.example.com/two.jpg',
 			robots: 'noindex, nofollow',
 		});
+		// shared links show the page's own title, text, image and price (G13)
+		expect(other.og).toEqual({
+			type: 'product',
+			url: `${ORIGIN}/phones/acme-two`,
+			siteName: expect.any(String),
+			title: other.title,
+			description: other.description,
+			image: 'https://cdn.example.com/two.jpg',
+			imageAlt: 'Acme Two',
+			price: { amount: '300.00', currency: 'USD' },
+		});
+		expect(other.twitter).toEqual({ card: 'summary_large_image' });
+		const site = await api('GET', '/v1/seo/site');
+		expect(site.og).toMatchObject({ type: 'website', url: `${ORIGIN}/`, title: site.title, price: null });
 		expect((await shop.api('PATCH', `/v1/products/${ids.other.id}`, { seo: { canonicalUrl: 'javascript:x' } })).status).toBe(
 			422,
 		);
@@ -170,6 +185,22 @@ describe('E10 grades and E16 structured data', () => {
 		const category = await api('GET', `/v1/seo/categories/${ids.phones.slug}`);
 		expect(node(category.jsonLd, 'FAQPage').mainEntity[0].name).toBe('Unlocked?');
 		expect(node(category.jsonLd, 'ItemList').itemListElement).toHaveLength(2);
+	});
+});
+
+describe('member program markup (SEO audit G17)', () => {
+	it('gives the site a member program and product offers their member prices while role prices are set', async () => {
+		const programOf = async () =>
+			JSON.parse((await api('GET', '/v1/seo/site')).jsonLd)['@graph'].find((/** @type {any} */ node) => node.hasMemberProgram)
+				?.hasMemberProgram;
+		expect(await programOf()).toBeUndefined();
+		await shop.list('role_prices', [{ role: 'vip', percent: 10, label: 'VIP price' }]);
+		expect(await programOf()).toMatchObject({ hasTiers: [{ '@id': `${ORIGIN}/#member_tier_vip`, name: 'VIP price' }] });
+		const group = node((await api('GET', `/v1/seo/products/${ids.phone.slug}`)).jsonLd, 'ProductGroup');
+		expect(group.hasVariant[0].offers.priceSpecification).toMatchObject({
+			validForMemberTier: { '@id': `${ORIGIN}/#member_tier_vip` },
+		});
+		await shop.list('role_prices', []);
 	});
 });
 
