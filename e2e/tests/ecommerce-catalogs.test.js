@@ -286,15 +286,15 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			'catalog.categoryUrl': '/{slug}',
 			'catalog.showStock': 'always',
 			'list.grades': [
-				{ key: 'brand-new', label: 'Brand new', condition: 'new', warrantyDays: 365 },
+				{ key: 'brand-new', label: 'Brand new', condition: 'new', warrantyTime: { amount: 365, unit: 'days' } },
 				{
 					key: 'a-plus',
 					label: 'A+',
 					condition: 'refurbished',
-					warrantyDays: 90,
+					warrantyTime: { amount: 90, unit: 'days' },
 					seo: { title: 'A+ phones', body: 'Like new.' },
 				},
-				{ key: 'b', label: 'B', condition: 'used', warrantyDays: 30 },
+				{ key: 'b', label: 'B', condition: 'used', warrantyTime: { amount: 30, unit: 'days' } },
 			],
 			'landing_pages.gradeUrl': '/grades/{key}',
 		});
@@ -336,7 +336,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 			options: [{ name: 'Storage', values: ['128 GB'] }],
 			variants: [
 				{ options: { Storage: '128 GB' }, price: 15_000_000, stock: 2, grade: 'a-plus' },
-				{ options: { Storage: '128 GB' }, price: 12_000_000, stock: 3, grade: 'b', warrantyDays: 60 },
+				{ options: { Storage: '128 GB' }, price: 12_000_000, stock: 3, grade: 'b', warrantyTime: { amount: 60, unit: 'days' } },
 			],
 		});
 		await write(DEVICES, 'POST', '/v1/landings', {
@@ -351,7 +351,7 @@ describe('Ecommerce catalogs on the real Portal', () => {
 		const page = (await serverCall(DEVICES, 'GET', '/v1/shop/products/pixel-8-pro')).json;
 		expect(page.url).toBe('https://devices.example.com/phones/pixel-8-pro');
 		expect(page.type).toEqual({ key: 'used_phone', kind: 'physical' });
-		expect(page.variants.map((/** @type {any} */ v) => [v.grade.key, v.grade.condition, v.warrantyDays, v.stockLeft])).toEqual([
+		expect(page.variants.map((/** @type {any} */ v) => [v.grade.key, v.grade.condition, v.warrantyTime?.amount, v.stockLeft])).toEqual([
 			['a-plus', 'refurbished', 90, 2],
 			['b', 'used', 60, 3],
 		]);

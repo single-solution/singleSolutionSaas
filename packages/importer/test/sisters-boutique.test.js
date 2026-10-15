@@ -260,7 +260,7 @@ describe('the Sisters Boutique mapping', () => {
 			video: { kind: 'file', key: 'products/lawn-basic/clip.mp4', type: 'video/mp4' },
 			sizeChartId: id('szc', SB_IDS.chart),
 			hideSizeGuide: false,
-			variants: [{ warrantyDays: 0 }],
+			variants: [{ warrantyTime: { amount: 0, unit: 'days' } }],
 		});
 		expect(old).toMatchObject({ status: 'archived' });
 	});
@@ -909,7 +909,7 @@ describe('the Sisters Boutique mapping', () => {
 			variants: [{ stock: 0, attributes: {} }],
 		});
 		expect(product.media[0]).not.toHaveProperty('blur');
-		expect(product.variants[0]).not.toHaveProperty('warrantyDays');
+		expect(product.variants[0]).not.toHaveProperty('warrantyTime');
 		const [, guest] = await records('ecommerce.loyalty');
 		// a transaction without a time is left out; one without an id gets one; SB's lower balance takes points back
 		expect(guest.lots.map((/** @type {any} */ lot) => [lot.points, lot.left])).toEqual([

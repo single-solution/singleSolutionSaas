@@ -257,6 +257,9 @@ export const settingsPlan = (values) => {
 				...(media ? { 'catalog.mediaBaseUrl': media } : {}),
 				'catalog.mediaPath': '/media',
 				'catalog.pageSize': 24, // `apps/web/src/lib/core/queries.ts`:153
+				// mechanical defaults (E13), store mapping to review: SB types no package weights or sizes
+				'catalog.weightUnit': 'g',
+				'catalog.sizeUnit': 'mm',
 				'catalog.lowStock': store.lowStockThreshold,
 				'catalog.topBasis': 'delivered', // SaaS default (store mapping to review when the owner asks)
 				'catalog.imageMaxBytes': 12_582_912, // `apps/admin/src/lib/uploads/limits.ts`:9-10
@@ -284,6 +287,7 @@ export const settingsPlan = (values) => {
 				'checkout.openOrderCap': 0,
 				// the SaaS default (no burst limit; store mapping to review when the owner asks)
 				'checkout.placeLimit': 0,
+				'checkout.placeWindowMinutes': 15, // mechanical default (E39), store mapping to review
 				'checkout.addressRequired': ['line1'],
 				// guests order unless the phone is a member's (`apps/web/src/app/api/orders/route.ts`:195-198)
 				'checkout.guests': 'unless_password',

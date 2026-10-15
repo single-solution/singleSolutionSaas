@@ -442,8 +442,8 @@ beforeAll(async () => {
 			{ key: 'london', name: 'London', match: { cities: ['London'] }, fee: DELIVERY, freeOver: 0, minDays: 1, maxDays: 2 },
 		],
 		'list.grades': [
-			{ key: 'a-plus', label: 'A+', condition: 'refurbished', warrantyDays: 90 },
-			{ key: 'b', label: 'B', condition: 'used', warrantyDays: 30 },
+			{ key: 'a-plus', label: 'A+', condition: 'refurbished', warrantyTime: { amount: 90, unit: 'days' } },
+			{ key: 'b', label: 'B', condition: 'used', warrantyTime: { amount: 30, unit: 'days' } },
 		],
 	});
 

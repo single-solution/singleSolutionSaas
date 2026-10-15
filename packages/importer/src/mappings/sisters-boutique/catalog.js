@@ -435,7 +435,10 @@ export const productStep = {
 				price: paisa(variant.priceRupees),
 				stock: Math.max(0, Math.round(Number(variant.quantity) || 0)),
 				soldOut: variant.forceOutOfStock === true,
-				...(Number.isSafeInteger(warrantyDays) && warrantyDays >= 0 ? { warrantyDays } : {}),
+				// SB keeps whole days; Ecommerce keeps a number and its unit (E14)
+				...(Number.isSafeInteger(warrantyDays) && warrantyDays >= 0
+					? { warrantyTime: { amount: warrantyDays, unit: 'days' } }
+					: {}),
 				attributes,
 				active: true,
 			};
