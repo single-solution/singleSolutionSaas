@@ -257,17 +257,6 @@ const breadcrumbJsonLd = (trail) => ({
 	itemListElement: trail.map((step, index) => ({ '@type': 'ListItem', position: index + 1, name: step.name, item: step.url })),
 });
 
-/** schema.org `variesBy` properties for option names shoppers commonly use (others are named as they are). */
-const VARIES_BY = Object.freeze(
-	/** @type {Record<string, string>} */ ({
-		size: `${SCHEMA}/size`,
-		colour: `${SCHEMA}/color`,
-		color: `${SCHEMA}/color`,
-		material: `${SCHEMA}/material`,
-		pattern: `${SCHEMA}/pattern`,
-	}),
-);
-
 /**
  * A feed item id (E17), also a variant's id in structured data when it has no SKU of its own (G5): the id the shop's
  * earlier product feed listed the variant under, kept by an import (`feedId`), so shopping catalogs keep the items they
@@ -346,7 +335,7 @@ export const daysRange = (list) => {
  * @property {(variant: VariantRecord | null) => FieldTarget[]} [values] the values of the fields structured data names
  *   (`show.jsonLd`): the product's own (null), else a variant's
  * @property {ReadonlyMap<string, string>} [axes] option name → the schema.org property its variant field names (`color`,
- *   `material`, `size`, `pattern`), for `variesBy`
+ *   `material`, `size`, `pattern`), for `variesBy`: only these options are named (E34)
  */
 
 /**
@@ -709,9 +698,10 @@ export const productJsonLd = (page) => {
 			url,
 			productGroupID: feedGroupId(product, true),
 			...propertiesOf(page.values?.(null) ?? []),
-			variesBy: product.options.map((axis) => {
+			// only options whose variant field the merchant mapped to a schema.org property (E34)
+			variesBy: product.options.flatMap((axis) => {
 				const named = page.axes?.get(axis.name);
-				return named ? `${SCHEMA}/${named}` : (VARIES_BY[axis.name.toLowerCase()] ?? axis.name);
+				return named ? [`${SCHEMA}/${named}`] : [];
 			}),
 			...shared,
 			hasVariant: variants.map((variant) =>
@@ -724,7 +714,7 @@ export const productJsonLd = (page) => {
 					image: page.variantImage?.(variant) || images,
 					...Object.fromEntries(
 						Object.entries(variant.options ?? {}).flatMap(([axis, value]) => {
-							const property = page.axes?.get(axis) ?? VARIES_BY[axis.toLowerCase()]?.slice(SCHEMA.length + 1);
+							const property = page.axes?.get(axis);
 							return property ? [[property, value]] : [];
 						}),
 					),
@@ -827,7 +817,7 @@ export const openingHoursOf = (text) => {
  * @property {string} home the home page's address
  * @property {string} name the site name (the `seo` setting `brandName`, else the business name)
  * @property {string} alternateName another name of the site ('' = none)
- * @property {'OnlineStore' | 'LocalBusiness'} type
+ * @property {string} type the schema.org type: `OnlineStore`, or the local business type the merchant picked (E35)
  * @property {string | null} logo
  * @property {string | null} email
  * @property {string | null} telephone
@@ -844,8 +834,8 @@ export const openingHoursOf = (text) => {
  */
 
 /**
- * The home page's structured data as a JSON-LD graph (E49, SEO audit G2): the business as an `OnlineStore` (or a
- * `LocalBusiness` at its pickup point) with its name, address, logo, contacts, profiles, hours, its store-wide return
+ * The home page's structured data as a JSON-LD graph (E49, SEO audit G2): the business as an `OnlineStore` (or the
+ * local business type the merchant picked, at its pickup point, E35) with its name, address, logo, contacts, profiles, hours, its store-wide return
  * and shipping policies and its member program (G17), which product offers point to by `@id`; and the `WebSite` with
  * its name. Only values the shop has.
  * @param {SitePage} page

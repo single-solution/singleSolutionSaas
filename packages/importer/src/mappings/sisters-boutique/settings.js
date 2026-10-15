@@ -384,7 +384,7 @@ export const settingsPlan = (values) => {
 				'seo.alternateName': '',
 				'seo.homeTitle': '',
 				'seo.homeDescription': '',
-				'seo.siteType': 'online_store',
+				'seo.businessType': 'OnlineStore',
 				'seo.socialProfiles': [],
 				'seo.productTitle': '{name}',
 				'seo.categoryTitle': 'Shop {name}',

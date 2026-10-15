@@ -290,7 +290,7 @@ describe('baseline SEO with the catalog', () => {
 	});
 
 	it('describes a local business at the pickup point once the merchant picks it and the point has an address and hours', async () => {
-		await shop.setting('seo', 'siteType', 'local_business');
+		await shop.setting('seo', 'businessType', 'LocalBusiness');
 		await shop.setting('seo', 'alternateName', 'NW');
 		// no pickup hours yet: still an online store
 		await shop.setting('delivery_zones', 'pickupAddress', '5 Market Street\nNew York');
@@ -308,5 +308,19 @@ describe('baseline SEO with the catalog', () => {
 		// hours written in words are shown to shoppers, never guessed into opening hours
 		await shop.setting('delivery_zones', 'pickupHours', 'Weekdays 9 to 6');
 		expect(nodeOf((await read('/v1/seo/site')).json.jsonLd, 'LocalBusiness').openingHours).toBeUndefined();
+	});
+
+	it('describes the business as any schema.org store or local business type the merchant picks (E35)', async () => {
+		await shop.setting('seo', 'businessType', 'ClothingStore');
+		await shop.setting('delivery_zones', 'pickupHours', '');
+		// without a pickup point with an address and hours: an online store
+		expect(nodeOf((await read('/v1/seo/site')).json.jsonLd, 'OnlineStore')).toBeDefined();
+		await shop.setting('delivery_zones', 'pickupAddress', '5 Market Street');
+		await shop.setting('delivery_zones', 'pickupHours', 'Mo-Sa 10:00-19:00');
+		const site = (await read('/v1/seo/site')).json;
+		expect(nodeOf(site.jsonLd, 'ClothingStore')).toMatchObject({ openingHours: ['Mo-Sa 10:00-19:00'] });
+		expect(nodeOf(site.jsonLd, 'OnlineStore')).toBeUndefined();
+		// only schema.org's own type names are taken
+		await expect(shop.setting('seo', 'businessType', 'Shop Of Dreams')).rejects.toThrow(/422|400/);
 	});
 });

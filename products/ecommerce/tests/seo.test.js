@@ -443,17 +443,19 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 			'@type': 'ProductGroup',
 			name: 'Acme </script> Phone',
 			productGroupID: phone.id,
-			variesBy: ['https://schema.org/color'],
 			brand: { '@type': 'Brand', name: 'Acme' },
 			aggregateRating: { ratingValue: 4.4, reviewCount: 3 },
 		});
+		// what the variants vary by comes only from a variant field mapped to a schema.org property, never from the
+		// option's English name (E34): the option Color without such a field names none
+		expect(node.variesBy).toBeUndefined();
 		expect(node.hasVariant).toHaveLength(2);
 		expect(node.hasVariant[0]).toMatchObject({
 			'@type': 'Product',
 			name: 'Acme </script> Phone - Red',
 			sku: 'AP-R',
-			color: 'Red',
 		});
+		expect(node.hasVariant[0].color).toBeUndefined();
 		expect(node.hasVariant[0].offers).toMatchObject({
 			price: '250.00',
 			priceCurrency: 'USD',

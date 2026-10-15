@@ -688,7 +688,7 @@
 													"size",
 													"pattern"
 												],
-												"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+												"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy; an option without such a field is not in variesBy)."
 											},
 											"invoice": {
 												"type": "boolean",
@@ -12898,7 +12898,7 @@
 													"size",
 													"pattern"
 												],
-												"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+												"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy; an option without such a field is not in variesBy)."
 											},
 											"invoice": {
 												"type": "boolean",
@@ -28777,7 +28777,7 @@
 		"/v1/seo/site": {
 			"get": {
 				"summary": "The home page's head and structured data",
-				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnDays, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+				"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting businessType set to any schema.org local business type (LocalBusiness, Store, ClothingStore, Bakery …) and Delivery zones' pickupAddress and pickupHours set, that type at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnDays, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -34836,7 +34836,7 @@
 									"size",
 									"pattern"
 								],
-								"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+								"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy; an option without such a field is not in variesBy)."
 							},
 							"invoice": {
 								"type": "boolean",
@@ -41272,7 +41272,7 @@
 							"size",
 							"pattern"
 						],
-						"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy)."
+						"description": "How structured data names it: as an additionalProperty, or as color, material, size or pattern (a variant field's option then names variesBy; an option without such a field is not in variesBy)."
 					},
 					"invoice": {
 						"type": "boolean",

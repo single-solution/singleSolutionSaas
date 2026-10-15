@@ -133,6 +133,9 @@ const POLICY_TITLES = Object.freeze({
 	warranty: 'Warranty',
 });
 
+/** The business type of an online shop without a pickup point (the `seo` setting `businessType`'s default, E35). */
+const ONLINE_STORE = 'OnlineStore';
+
 /** The schema.org properties a variant field may name, which then name its option in `variesBy`. */
 const SCHEMA_PROPERTIES = Object.freeze(['color', 'material', 'size', 'pattern']);
 
@@ -562,16 +565,17 @@ export const createSeo = (product, service) => {
 		const name = storeNameOf(settings, business);
 		const country = String(business.country ?? '');
 		const policies = await storePoliciesOf(s);
-		// a local business at its pickup point, once the merchant picks it and the point has an address and hours
+		// a local business type at its pickup point, once the merchant picks one and the point has an address and hours (E35)
 		const zones = s.has('delivery_zones') ? await s.values('delivery_zones') : null;
 		const pickup = zones && String(zones.pickupAddress ?? '').trim() && String(zones.pickupHours ?? '').trim() ? zones : null;
-		const local = settings.siteType === 'local_business' && pickup !== null;
+		const businessType = String(settings.businessType ?? ONLINE_STORE);
+		const local = businessType !== ONLINE_STORE && pickup !== null;
 		const jsonLd = siteJsonLd({
 			home,
 			name,
 			memberTiers: await memberTiersOf(s),
 			alternateName: String(settings.alternateName ?? '').trim(),
-			type: local ? 'LocalBusiness' : 'OnlineStore',
+			type: local ? businessType : ONLINE_STORE,
 			logo: business.logo ?? null,
 			email: business.email ?? null,
 			telephone: business.phone ?? null,
