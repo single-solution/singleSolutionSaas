@@ -178,6 +178,13 @@ export const settingsPlan = (values) => {
 				// phone numbers: Pakistan, +92 and the trunk 0 (`packages/shared/src/phone.ts`:21, :56)
 				'phone.defaultCallingCode': PHONE_FORMAT.defaultCallingCode,
 				'phone.trunkPrefix': PHONE_FORMAT.trunkPrefix,
+				// phone codes: the SaaS defaults (SB sends none: Forgot password is its WhatsApp chat); mechanical, to review
+				'phone.channel': 'sms',
+				'phone.codeLength': 6,
+				'phone.codeMinutes': 10,
+				'phone.cooldownSeconds': 30,
+				'phone.perHour': 6,
+				'phone.websitePerHour': 0,
 				// addresses: at most 6, name, phone and city needed (`packages/shared/src/customerAddresses.ts`:4, :55-80)
 				'profile.maxAddresses': 6,
 				'profile.keepOneAddress': false,
