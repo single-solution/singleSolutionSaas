@@ -9,6 +9,7 @@ import {
 	SITE_CHECKS,
 	candidatesOf,
 	keptOutBy,
+	isProductKind,
 	kindOf,
 	pageChecks,
 	pageVitalsOf,
@@ -174,19 +175,28 @@ describe('reading pages', () => {
 		expect(numbersIn('no numbers')).toEqual([]);
 	});
 
-	it('tells the kind of a page from its address and structured data', () => {
+	it('tells the kind of a page from its address and its main schema.org type (G11)', () => {
 		/** @param {unknown} data @param {string} [path] */
 		const kind = (data, path = '/x') => kindOf(`${ORIGIN}${path}`, scanHtml(ld(data)));
 		expect(kind({}, '/')).toBe('home');
-		expect(kind({ '@type': 'Product' }, '/?ref=a')).toBe('product');
-		expect(kind(PRODUCT)).toBe('product');
-		expect(kind({ '@type': 'ItemPage', mainEntity: { '@type': 'ProductGroup' } })).toBe('product');
-		expect(kind({ '@type': 'WebPage', mainEntity: [{ '@type': 'DefinedTerm' }] })).toBe('glossary');
-		expect(kind({ '@graph': [{ '@type': 'CollectionPage' }, { '@type': 'ItemList' }] })).toBe('category');
-		expect(kind({ '@type': 'CollectionPage' }, '/lamps?brand=acme')).toBe('listing');
+		expect(kind({ '@type': 'Product' }, '/?ref=a')).toBe('Product');
+		expect(kind(PRODUCT)).toBe('Product');
+		expect(kind({ '@type': 'ItemPage', mainEntity: { '@type': 'ProductGroup' } })).toBe('ProductGroup');
+		expect(kind({ '@type': 'WebPage', mainEntity: [{ '@type': 'DefinedTerm' }] })).toBe('DefinedTerm');
+		expect(kind({ '@graph': [{ '@type': 'CollectionPage' }, { '@type': 'ItemList' }] })).toBe('CollectionPage');
+		expect(kind({ '@type': 'CollectionPage' }, '/lamps?brand=acme')).toBe('CollectionPage');
 		// products listed in a category's ItemList do not make it a product page
-		expect(kind({ '@type': 'ItemList', itemListElement: [{ item: { '@type': 'Product' } }] })).toBe('category');
-		expect(kind({ '@type': 'AboutPage', mainEntity: 'x' })).toBe('page');
+		expect(kind({ '@type': 'ItemList', itemListElement: [{ item: { '@type': 'Product' } }] })).toBe('ItemList');
+		expect(kind({ '@type': 'AboutPage', mainEntity: 'x' })).toBe('AboutPage');
+		// any kind of site: an article, an event, a service; the site's own nodes never name the page
+		expect(kind({ '@graph': [{ '@type': 'WebSite' }, { '@type': 'Organization' }, { '@type': 'BlogPosting' }] })).toBe(
+			'BlogPosting',
+		);
+		expect(kind({ '@type': 'Event' })).toBe('Event');
+		expect(kind({ '@graph': [{ '@type': 'WebSite' }, { '@type': 'BreadcrumbList' }] })).toBe('WebPage');
+		expect(kind({ '@type': 'Dentist' })).toBe('Dentist');
+		expect(isProductKind('ProductGroup')).toBe(true);
+		expect(isProductKind('CollectionPage')).toBe(false);
 	});
 
 	it('reads the product of a page: a product or each variant of a group', () => {
@@ -225,7 +235,7 @@ describe('checks of a page', () => {
 			html({ jsonLd: ld(PRODUCT), body: '<p class="price">$1,250.00</p><script>window.price = 999</script>' }),
 			{ listed: true, headers: { etag: '"v1"' }, ms: 300 },
 		);
-		expect(checks.kind).toBe('product');
+		expect(checks.kind).toBe('Product');
 		expect(byId(checks.checks)).toEqual({
 			reachable: 'pass ok',
 			noindex: 'pass ok',
@@ -319,7 +329,19 @@ describe('checks of a page', () => {
 			],
 		});
 		expect(byId(checksOf(html({ path: '/', jsonLd: full }), { path: '/' }).checks).site_data).toBe('pass ok');
-		for (const type of ['Corporation', 'ClothingStore', 'OnlineBusiness', 'NewsMediaOrganization'])
+		// every Organization type of schema.org (G10): a bakery, a dentist, a plumber or a school
+		for (const type of [
+			'Corporation',
+			'ClothingStore',
+			'OnlineBusiness',
+			'NewsMediaOrganization',
+			'Bakery',
+			'Dentist',
+			'Plumber',
+			'School',
+			'Library',
+			'Physician',
+		])
 			expect(
 				byId(checksOf(html({ path: '/', jsonLd: ld([{ '@type': type }, { '@type': 'WebSite' }]) }), { path: '/' }).checks)
 					.site_data,
@@ -327,12 +349,12 @@ describe('checks of a page', () => {
 		const category = checksOf(html({ path: '/categories/lamps', jsonLd: ld({ '@type': 'CollectionPage' }) }), {
 			path: '/categories/lamps',
 		});
-		expect(category.kind).toBe('category');
+		expect(category.kind).toBe('CollectionPage');
 		expect(byId(category.checks).breadcrumbs).toBe('warn missing');
 		const glossary = checksOf(html({ path: '/glossary/linen', jsonLd: ld({ '@type': 'DefinedTerm' }) }), {
 			path: '/glossary/linen',
 		});
-		expect(glossary.kind).toBe('glossary');
+		expect(glossary.kind).toBe('DefinedTerm');
 		expect(byId(glossary.checks).breadcrumbs).toBeUndefined();
 	});
 

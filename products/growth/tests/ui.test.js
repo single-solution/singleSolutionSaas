@@ -7,7 +7,7 @@ import searchesSchema from '../schemas/searches_404s.settings.json' with { type:
 import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
-import { CHECKS, PAGE_KINDS } from '../core/seo-checks.js';
+import { CHECKS } from '../core/seo-checks.js';
 import {
 	CONSENT_STORAGE_KEY,
 	FUNNEL_STEPS,
@@ -1540,7 +1540,7 @@ describe('admin widgets', () => {
 			summary: { pass: 2, warn: 1, fail: 1 },
 			pages: [
 				{ url: page, kind: 'home', sampled: false },
-				{ url: shop, kind: 'product', sampled: true },
+				{ url: shop, kind: 'ProductGroup', sampled: true },
 			],
 			checks: [
 				{ id: 'title', status: 'pass', page, title: 'Page title', reason: 'The title has 30 characters.', fix: '' },
@@ -1596,7 +1596,7 @@ describe('admin widgets', () => {
 		expect(cards()).toEqual(['Whole site', '/', '/products/blue-lamp']);
 		expect([...(host.shadowRoot?.querySelectorAll('.masonry .card .kind') ?? [])].map((k) => k.textContent)).toEqual([
 			strings['seo.kind.home'],
-			`${strings['seo.kind.product']} · ${strings['seo.sampled']}`,
+			`Product group · ${strings['seo.sampled']}`,
 		]);
 		const site = /** @type {HTMLElement} */ (host.shadowRoot?.querySelector('.masonry .card'));
 		expect(site.textContent).toContain('Fix');
@@ -1837,7 +1837,7 @@ describe('widget texts (OT-3)', () => {
 			...Object.keys(EVENT_FEATURES).map((type) => `event.${type}`),
 			...['pass', 'warn', 'fail'].flatMap((status) => [`seo.count.${status}`, `seo.status.${status}`]),
 			...checkTexts,
-			...PAGE_KINDS.map((kind) => `seo.kind.${kind}`),
+			'seo.kind.home',
 			// refused calls: the widgets' own texts, never the server's English detail (OT-4)
 			...Object.values(ANALYTICS_PROBLEMS),
 			...Object.values(SEO_PROBLEMS),

@@ -23,11 +23,13 @@ import { searchParamsOf } from '../core/config.js';
 import { dayOf } from '../core/events.js';
 import { createIndex, locationOf, normalizePath, suggestionsOf } from '../core/redirects.js';
 import {
-	SAMPLE_KINDS,
+	MAX_SAMPLES,
 	SITE_CHECKS,
 	candidatesOf,
 	comparableOf,
 	keptOutBy,
+	isCollectionKind,
+	isProductKind,
 	kindOf,
 	pageChecks,
 	pageVitalsOf,
@@ -169,7 +171,7 @@ export const seoCheckRoutes = (product, { log }) => {
 		const removed = notFound
 			? removedProductOf({
 					notFound,
-					products: pages.filter((page) => page.kind === 'product').map((page) => new URL(page.read.url).pathname),
+					products: pages.filter((page) => isProductKind(page.kind)).map((page) => new URL(page.read.url).pathname),
 					listed,
 					answered: (path) => {
 						const found = normalizePath(path);
@@ -180,7 +182,7 @@ export const seoCheckRoutes = (product, { log }) => {
 			: null;
 		if (removed) {
 			const read = await web.read(removed.url, { until });
-			if (read.status !== 200 || kindOf(read.url, scanHtml(read.body)) !== 'product')
+			if (read.status !== 200 || !isProductKind(kindOf(read.url, scanHtml(read.body))))
 				return { read, pattern: removed.pattern };
 		}
 		return { read: await web.read(madeUp, { until }), pattern: null };
@@ -245,9 +247,19 @@ export const seoCheckRoutes = (product, { log }) => {
 		});
 		const own = typedReads.map((read) => checkPage(read, false));
 		const tried = candidateReads.map((read) => checkPage(read, true));
-		const samples = SAMPLE_KINDS.map((kind) => tried.find((page) => page.kind === kind)).filter(
-			/** @returns {page is (typeof tried)[number]} */ (page) => page !== undefined,
-		);
+		// up to four sample pages of different kinds (G11: a filtered list, with a query string, is a kind of its own): a
+		// product first, then a collection, then the rest in the sitemap's order
+		/** @param {(typeof tried)[number]} page */
+		const rank = (page) => (isProductKind(page.kind) ? 0 : isCollectionKind(page.kind) ? 1 : 2);
+		/** @param {(typeof tried)[number]} page */
+		const kindKey = (page) => `${page.kind}${new URL(page.read.url).search === '' ? '' : '?'}`;
+		const samples = tried
+			.filter((page) => page.read.status === 200)
+			.map((page, at) => ({ page, at }))
+			.sort((a, b) => rank(a.page) - rank(b.page) || a.at - b.at)
+			.map(({ page }) => page)
+			.filter((page, at, all) => all.findIndex((other) => kindKey(other) === kindKey(page)) === at)
+			.slice(0, MAX_SAMPLES);
 		const pages = [...own, ...samples];
 		const home = /** @type {(typeof own)[number]} */ (own[0]);
 		const missing = await readMissing({ origin, until, pages, listed, rules, notFound: totals.notFound });
@@ -255,7 +267,7 @@ export const seoCheckRoutes = (product, { log }) => {
 		// what robots.txt must let Google read: the home page, the sitemap, every page (but the merchant's own pages its
 		// robots presets keep out on purpose, such as /cart), and the products' images
 		const images = pages
-			.flatMap((page) => (page.kind === 'product' && page.scan ? (productOf(page.scan.jsonLd.nodes)?.images ?? []) : []))
+			.flatMap((page) => (isProductKind(page.kind) && page.scan ? (productOf(page.scan.jsonLd.nodes)?.images ?? []) : []))
 			.map((image) => {
 				try {
 					const url = new URL(image, origin);

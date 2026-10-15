@@ -158,11 +158,11 @@ describe('SEO checklist: the live site', () => {
 		expect(report.cached).toBe(false);
 		expect(report.pages).toEqual([
 			{ url: `${ORIGIN}/`, kind: 'home', sampled: false },
-			{ url: `${ORIGIN}/cart`, kind: 'page', sampled: false },
-			{ url: `${ORIGIN}/products/blue-lamp`, kind: 'product', sampled: true },
-			{ url: `${ORIGIN}/categories/lamps`, kind: 'category', sampled: true },
-			{ url: `${ORIGIN}/categories/lamps?brand=acme&grade=new`, kind: 'listing', sampled: true },
-			{ url: `${ORIGIN}/glossary/linen`, kind: 'glossary', sampled: true },
+			{ url: `${ORIGIN}/cart`, kind: 'WebPage', sampled: false },
+			{ url: `${ORIGIN}/products/blue-lamp`, kind: 'Product', sampled: true },
+			{ url: `${ORIGIN}/categories/lamps?brand=acme&grade=new`, kind: 'CollectionPage', sampled: true },
+			{ url: `${ORIGIN}/categories/lamps`, kind: 'CollectionPage', sampled: true },
+			{ url: `${ORIGIN}/glossary/linen`, kind: 'DefinedTerm', sampled: true },
 		]);
 		/** @param {string} id @param {string | null} [page] */
 		const result = (id, page) => {
@@ -254,7 +254,7 @@ describe('SEO checklist: the live site', () => {
 		expect(page.cached).toBe(false);
 		expect(page.pages).toEqual([
 			{ url: `${ORIGIN}/`, kind: 'home', sampled: false },
-			{ url: `${ORIGIN}/products/blue-lamp`, kind: 'product', sampled: false },
+			{ url: `${ORIGIN}/products/blue-lamp`, kind: 'Product', sampled: false },
 		]);
 		expect(env.web.calls.length).toBeGreaterThan(before);
 		expect((await (await env.call('GET', '/v1/seo/report', { token: env.server })).json()).checkedAt).toBe(kept.checkedAt);

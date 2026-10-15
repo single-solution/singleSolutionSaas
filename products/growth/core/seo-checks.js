@@ -1,13 +1,14 @@
 /**
  * The SEO health report of the live website (SEO audit §3.2 B; PLAN 0.8.9 SEO checklist): which pages one run reads
- * (the merchant's own paths, and sample pages picked from the sitemap: a product, a category, a landing or listing page
- * and a glossary page when the site has them), what kind each page is (from its structured data), and every check with
+ * (the merchant's own paths, and sample pages picked from the sitemap: up to four of different kinds, a product and a
+ * collection first), what kind each page is (the home page, else its main schema.org type, G11), and every check with
  * its status (pass, warn or fail), its finding (a stable code that names the widget text of the reason) and the figures
  * the texts name. Pure: the fetching and the database reads are done by the caller.
  * @module
  */
 import { VITALS, ratingOf } from './events.js';
 import { allNodesOf, numbersIn, robotsAllows, robotsGroupsOf, scanHtml, typesOf } from './seo-scan.js';
+import { ORGANIZATION_TYPES } from './schema-types.js';
 import { pathOfUrl } from './seo.js';
 
 /** The merchant's own pages one run reads at most (the home page included). */
@@ -16,11 +17,8 @@ const MAX_PAGES = 20;
 /** Sitemap addresses one run reads to find the sample pages. */
 export const MAX_CANDIDATES = 6;
 
-/** The kinds of page a run tells apart. */
-export const PAGE_KINDS = Object.freeze(/** @type {const} */ (['home', 'product', 'category', 'listing', 'glossary', 'page']));
-
-/** The kinds of page sampled from the sitemap, in the report's order. */
-export const SAMPLE_KINDS = Object.freeze(/** @type {const} */ (['product', 'category', 'listing', 'glossary']));
+/** Most sample pages one full run reads from the sitemap, each of another kind. */
+export const MAX_SAMPLES = 4;
 
 /** Title and description lengths search results show without cutting. */
 const TITLE_LENGTH = Object.freeze({ min: 10, max: 60 });
@@ -98,7 +96,7 @@ export const SITE_CHECKS = Object.freeze(
  * @typedef {{ url: string, status: number | null, headers: Record<string, string>, body: string, ms: number | null,
  *   error: ReadError | null }} Fetched
  */
-/** @typedef {(typeof PAGE_KINDS)[number]} PageKind */
+/** @typedef {string} PageKind `home`, else the page's main schema.org type (`Product`, `CollectionPage`, `Article` …) */
 
 /**
  * @param {CheckId} id
@@ -195,14 +193,17 @@ export const candidatesOf = (entries, { domain, skip, limit = MAX_CANDIDATES }) 
 	return picked;
 };
 
-/** schema.org types of a collection page (a category, a landing page, a listing). */
+/** schema.org types of a collection page (a category, a landing page, a listing): they need breadcrumbs. */
 const COLLECTION_TYPES = new Set(['CollectionPage', 'ItemList', 'SearchResultsPage', 'OfferCatalog']);
-/** schema.org types of a glossary page. */
-const GLOSSARY_TYPES = new Set(['DefinedTerm', 'DefinedTermSet']);
-/** schema.org types of a product. */
-const PRODUCT_TYPES = new Set(['Product', 'ProductGroup', 'IndividualProduct', 'ProductModel']);
-/** Organization types of the site data besides those ending in Organization, Store or Business. */
-const ORGANIZATION_TYPES = new Set(['Corporation', 'NGO', 'Airline', 'Consortium', 'Restaurant', 'Hotel']);
+/** schema.org types of a product: the product checks. */
+const PRODUCT_TYPES = new Set(['Product', 'ProductGroup', 'IndividualProduct', 'ProductModel', 'SomeProducts']);
+/** schema.org types every page of a site may carry, which never name what one page is. */
+const SITE_TYPES = new Set(['WebSite', 'BreadcrumbList', 'SiteNavigationElement', 'WPHeader', 'WPFooter', 'WPSideBar']);
+
+/** Whether a page's kind is a product (its main type is one). @param {PageKind} kind */
+export const isProductKind = (kind) => PRODUCT_TYPES.has(kind);
+/** Whether a page's kind is a collection: a category, a landing page or a listing. @param {PageKind} kind */
+export const isCollectionKind = (kind) => COLLECTION_TYPES.has(kind);
 
 /**
  * The main nodes of a page: its top-level nodes and the `mainEntity` of a top-level web page.
@@ -225,8 +226,10 @@ const mainNodesOf = (top) => [
 const findType = (nodes, types) => nodes.find((node) => typesOf(node).some((type) => types.has(type))) ?? null;
 
 /**
- * What kind of page an address is: the home page by its path; else by its main structured data: a product, a glossary
- * term, or a collection (a category; with a query string, a landing or listing page); any other page is `page`.
+ * What kind of page an address is (G11): the home page by its path; else its main schema.org type — a product of its
+ * structured data first, then a page type other than WebPage (CollectionPage, AboutPage, FAQPage …), then the first
+ * other type of its main nodes (its WebPage's `mainEntity`, then its top-level nodes) that the whole site does not
+ * share (WebSite, BreadcrumbList, navigation), an organization last; `WebPage` when it says nothing more.
  * @param {string} url
  * @param {import('./seo-scan.js').Scan} scan
  * @returns {PageKind}
@@ -234,11 +237,22 @@ const findType = (nodes, types) => nodes.find((node) => typesOf(node).some((type
 export const kindOf = (url, scan) => {
 	const parsed = new URL(url);
 	if (parsed.pathname === '/' && parsed.search === '') return 'home';
-	const main = mainNodesOf(scan.jsonLd.nodes);
-	if (findType(main, PRODUCT_TYPES)) return 'product';
-	if (findType(main, GLOSSARY_TYPES)) return 'glossary';
-	if (findType(main, COLLECTION_TYPES)) return parsed.search === '' ? 'category' : 'listing';
-	return 'page';
+	const top = scan.jsonLd.nodes;
+	const main = mainNodesOf(top);
+	/** @param {Record<string, unknown>} node */
+	const firstType = (node) => typesOf(node)[0] ?? null;
+	const product = findType(main, PRODUCT_TYPES);
+	if (product) return /** @type {string} */ (typesOf(product).find((type) => PRODUCT_TYPES.has(type)));
+	const page = top.find((node) => typesOf(node).some((type) => type !== 'WebPage' && type.endsWith('Page')));
+	if (page) return /** @type {string} */ (typesOf(page).find((type) => type !== 'WebPage' && type.endsWith('Page')));
+	const entities = main.slice(top.length);
+	const named = [...entities, ...top].find((node) => {
+		const type = firstType(node);
+		return type !== null && type !== 'WebPage' && !SITE_TYPES.has(type) && !ORGANIZATION_TYPES.has(type);
+	});
+	if (named) return /** @type {string} */ (firstType(named));
+	const organization = top.find((node) => typesOf(node).some((type) => ORGANIZATION_TYPES.has(type)));
+	return organization ? /** @type {string} */ (firstType(organization)) : 'WebPage';
 };
 
 // ----------------------------------------------------------------------------------------------- structured data
@@ -329,7 +343,7 @@ export const productOf = (top) => {
 const hasType = (top, test) => allNodesOf(top).some((node) => typesOf(node).some(test));
 
 /** @param {string} type */
-const isOrganization = (type) => ORGANIZATION_TYPES.has(type) || /(?:Organization|Store|Business)$/.test(type);
+const isOrganization = (type) => ORGANIZATION_TYPES.has(type);
 
 // ----------------------------------------------------------------------------------------------------- page checks
 
@@ -409,8 +423,8 @@ const contentChecks = (page, scan, { domain, kind, listed }) => {
 				: check('site_data', 'warn', 'missing', at, { missing: missing.join(', ') }),
 		);
 	}
-	if (kind === 'product') checks.push(...productChecks(at, scan));
-	if (kind === 'product' || kind === 'category' || kind === 'listing')
+	if (isProductKind(kind)) checks.push(...productChecks(at, scan));
+	if (isProductKind(kind) || isCollectionKind(kind))
 		checks.push(
 			hasType(top, (type) => type === 'BreadcrumbList')
 				? check('breadcrumbs', 'pass', 'ok', at)
@@ -562,7 +576,7 @@ export const pageChecks = (page, { domain, listed, vitals = null }) => {
 	const reachable = reachableCheck(page, listed);
 	if (page.status !== 200) {
 		const parsed = new URL(page.url);
-		return { kind: parsed.pathname === '/' && parsed.search === '' ? 'home' : 'page', checks: [reachable], scan: null };
+		return { kind: parsed.pathname === '/' && parsed.search === '' ? 'home' : 'WebPage', checks: [reachable], scan: null };
 	}
 	const scan = scanHtml(page.body);
 	const kind = kindOf(page.url, scan);

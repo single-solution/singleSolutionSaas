@@ -1050,8 +1050,7 @@
 				},
 				"kind": {
 					"type": "string",
-					"enum": ["home", "product", "category", "listing", "glossary", "page"],
-					"description": "From its address (home) and its structured data: Product or ProductGroup (product), DefinedTerm (glossary), CollectionPage or ItemList (category; with a query string, listing: a landing or listing page), else page."
+					"description": "home for the home page, else the page's main schema.org type (G11): a product type of its structured data first (Product, ProductGroup …), then a page type other than WebPage (CollectionPage, FAQPage, AboutPage …), then the first other type of its main nodes that the whole site does not share (Article, Event, DefinedTerm, Service …), an organization last; WebPage when it says nothing more."
 				},
 				"sampled": {
 					"type": "boolean",

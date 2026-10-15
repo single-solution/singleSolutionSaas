@@ -338,8 +338,12 @@ describe('robots and verification', () => {
 		expect(tags.tags).toContainEqual({ name: 'yandex-verification', content: 'ya-123' });
 		// more verification tags: the merchant's list (G8)
 		expect(
-			(await env.call('PUT', '/v1/lists/verification_tags', { token: env.server, body: { value: [{ name: 'p:domain_verify', content: 'pin-1' }] } }))
-				.status,
+			(
+				await env.call('PUT', '/v1/lists/verification_tags', {
+					token: env.server,
+					body: { value: [{ name: 'p:domain_verify', content: 'pin-1' }] },
+				})
+			).status,
 		).toBe(200);
 		const more = await (await env.call('GET', '/v1/verification', { token: env.server })).json();
 		expect(more.tags.at(-1)).toEqual({ name: 'p:domain_verify', content: 'pin-1' });

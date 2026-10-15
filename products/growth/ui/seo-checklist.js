@@ -86,6 +86,14 @@ const pathOf = (url) => {
 export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, now = Date.now }) => {
 	/** @param {string} key @param {Record<string, string | number>} [values] */
 	const t = (key, values) => formatText(config.texts[key] ?? key, values);
+	/**
+	 * A page's kind in words (G11): the widget text `seo.kind.<kind>` when there is one (the home page), else its schema.org
+	 * type as words (`CollectionPage` → Collection page).
+	 * @param {string} kind
+	 */
+	const kindLabel = (kind) =>
+		config.texts[`seo.kind.${kind}`] ??
+		kind.replace(/(?<=[a-z0-9])(?=[A-Z])/g, ' ').replace(/ ([A-Z])(?=[a-z])/g, (_, letter) => ` ${letter.toLowerCase()}`);
 	const on = (/** @type {string} */ feature) => config.features.includes(feature);
 	const admin = config.settings.admin;
 	return mountWidget({
@@ -253,7 +261,7 @@ export const mountSeoChecklist = ({ host, api, config, viewer, open = () => {}, 
 									h(
 										'span',
 										{ class: 'kind' },
-										page.sampled ? `${t(`seo.kind.${page.kind}`)} · ${t('seo.sampled')}` : t(`seo.kind.${page.kind}`),
+										page.sampled ? `${kindLabel(page.kind)} · ${t('seo.sampled')}` : kindLabel(page.kind),
 									),
 								);
 							top.append(name);
