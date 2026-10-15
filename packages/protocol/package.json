@@ -43,6 +43,7 @@
 		"prepack": "pnpm build:types"
 	},
 	"dependencies": {
+		"@ss/contracts": "workspace:^",
 		"jose": "^6.1.0"
 	},
 	"devDependencies": {

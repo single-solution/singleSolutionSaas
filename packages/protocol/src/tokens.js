@@ -10,8 +10,7 @@
  * (`localhost`, `*.localhost`, `127.0.0.1`, `[::1]`, any port, http or https). Tickets may name any https origin or a
  * local origin.
  */
-import { isIP } from 'node:net';
-import { domainToASCII } from 'node:url';
+import { normaliseDomain } from '@ss/contracts';
 import { createProtocolError, isProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
 import { nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
@@ -31,7 +30,6 @@ const PRODUCT_ID_PATTERN = /^[a-z][a-z0-9-]{1,30}$/;
 const IAT_SKEW_SECONDS = 300;
 const INVALID_TOKEN_MESSAGE = 'token is not valid';
 const MAX_CLAIM_LENGTH = 256;
-const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /** @typedef {typeof TOKEN_KINDS[number]} TokenKind */
 /**
@@ -59,9 +57,10 @@ const hasUnsafeChars = (value) => {
 export const isProductId = (value) => typeof value === 'string' && PRODUCT_ID_PATTERN.test(value);
 
 /**
- * Normalize a website domain to lower-case ASCII (punycode) without a trailing dot. Throws `invalid_argument` on
- * anything that is not a plain public host name: scheme, port, path, userinfo, wildcard, whitespace, IP literals,
- * `localhost` / `*.localhost` and single-label names.
+ * Normalize a website domain to lower-case ASCII (punycode) without a trailing dot, by the one domain rule of
+ * `@ss/contracts` (`normaliseDomain`), and only from a bare host name: a token names exactly the domain the Portal
+ * stored, so nothing is stripped here. Throws `invalid_argument` on anything that is not a plain public host name:
+ * scheme, port, path, userinfo, wildcard, whitespace, IP literals, `localhost` / `*.localhost` and single-label names.
  * @param {unknown} domain
  * @returns {string}
  */
@@ -72,16 +71,9 @@ export const normalizeDomain = (domain) => {
 	if (/[/:@?#*%[\]]/.test(domain) || hasUnsafeChars(domain)) {
 		throw createProtocolError('invalid_argument', 'domain must be a bare host name');
 	}
-	const ascii = domainToASCII(domain.replace(/\.$/, '')).toLowerCase();
-	if (!ascii || ascii.length > 253 || !ascii.split('.').every((label) => LABEL.test(label))) {
-		throw createProtocolError('invalid_argument', 'domain is not a valid host name');
-	}
-	if (isIP(ascii) !== 0 || /^[0-9.]+$/.test(ascii)) throw createProtocolError('invalid_argument', 'domain must not be an IP');
-	if (ascii === 'localhost' || ascii.endsWith('.localhost')) {
-		throw createProtocolError('invalid_argument', 'domain must not be a local host name');
-	}
-	if (!ascii.includes('.')) throw createProtocolError('invalid_argument', 'domain must have at least two labels');
-	return ascii;
+	const result = normaliseDomain(domain);
+	if (!result.ok) throw createProtocolError('invalid_argument', result.message);
+	return result.value;
 };
 
 /**

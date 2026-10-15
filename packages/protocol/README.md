@@ -54,8 +54,9 @@ length is capped before parsing; `jose.compactVerify` runs with `algorithms: ['E
 
 `issueToken({ signer, issuer, websiteId, domain, productId, kind })` signs exactly
 `{ iss, jti, websiteId, domain, productId, kind, iat }`: no expiry, environment, scopes or address. `domain` is
-normalized (lower-case punycode; scheme, port, path, wildcards, IP literals, `localhost` and single-label names
-refused).
+normalized by the one domain rule of `@ss/contracts` (`normaliseDomain`: lower-case punycode; IP literals, wildcards,
+`localhost` and single-label names refused), and must already be a bare host name (a scheme, port, path or userinfo is
+refused, never stripped).
 
 `verifyToken({ token, keyResolver, issuer, productId, kind?, isRevoked? })` checks the signature against the pinned
 Portal keys, `typ`, issuer, product, kind and the revocation list. Every failure throws `invalid_token` with the same
