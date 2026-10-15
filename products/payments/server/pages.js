@@ -9,6 +9,7 @@
  */
 import { formatText } from '@ss/app-kit';
 import { themeCss } from '@ss/app-kit/widget';
+import { escapeHtml } from '@ss/contracts/text';
 import { BANK_DETAILS } from '../core/gateways.js';
 import { PROOF_TYPES } from '../core/widgets.js';
 
@@ -56,9 +57,6 @@ export const PAY_SCRIPT = `(() => {
 })();
 `;
 
-/** @param {unknown} value */
-const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
-
 const PAGE_CSS = `
 :root { color-scheme: light dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; box-sizing: border-box;
@@ -101,7 +99,7 @@ const page = ({ theme, title, body, script = false }) => {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escape(title)}</title>
+<title>${escapeHtml(title)}</title>
 <style>${variables}${mode}${PAGE_CSS}</style>
 <style>${custom}</style>
 </head>
@@ -138,30 +136,30 @@ export const renderLinkPage = ({ texts, theme, money, business, link, gateways, 
 	const t = translator(texts);
 	const amount =
 		link.amount === null
-			? `<label for="amount">${escape(t('link.amount', { currency: link.currency }))}</label>
-<input id="amount" name="amount" inputmode="decimal" required value="${escape(values.amount ?? '')}">
-<p class="muted">${escape(t('link.amountHelp', { min: money(link.minAmount ?? 1, link.currency) }))}</p>`
-			: `<p class="amount">${escape(money(link.amount, link.currency))}</p>`;
+			? `<label for="amount">${escapeHtml(t('link.amount', { currency: link.currency }))}</label>
+<input id="amount" name="amount" inputmode="decimal" required value="${escapeHtml(values.amount ?? '')}">
+<p class="muted">${escapeHtml(t('link.amountHelp', { min: money(link.minAmount ?? 1, link.currency) }))}</p>`
+			: `<p class="amount">${escapeHtml(money(link.amount, link.currency))}</p>`;
 	const methods =
 		gateways.length === 0
-			? `<p>${escape(t('page.noGateway'))}</p>`
-			: `<label for="gateway">${escape(t('link.method'))}</label>
-<select id="gateway" name="gateway">${gateways.map((g) => `<option value="${escape(g.id)}"${values.gateway === g.id ? ' selected' : ''}>${escape(g.name)}</option>`).join('')}</select>
-<button type="submit">${escape(t('link.pay'))}</button>`;
+			? `<p>${escapeHtml(t('page.noGateway'))}</p>`
+			: `<label for="gateway">${escapeHtml(t('link.method'))}</label>
+<select id="gateway" name="gateway">${gateways.map((g) => `<option value="${escapeHtml(g.id)}"${values.gateway === g.id ? ' selected' : ''}>${escapeHtml(g.name)}</option>`).join('')}</select>
+<button type="submit">${escapeHtml(t('link.pay'))}</button>`;
 	return page({
 		texts,
 		theme,
 		title: link.title,
-		body: `<p class="muted">${escape(business)}</p>
-<h1>${escape(link.title)}</h1>
-${link.description ? `<p>${escape(link.description)}</p>` : ''}
-<form method="post" action="${escape(action)}">
+		body: `<p class="muted">${escapeHtml(business)}</p>
+<h1>${escapeHtml(link.title)}</h1>
+${link.description ? `<p>${escapeHtml(link.description)}</p>` : ''}
+<form method="post" action="${escapeHtml(action)}">
 ${amount}
-<label for="name">${escape(t('link.name'))}</label>
-<input id="name" name="name" autocomplete="name" maxlength="120" value="${escape(values.name ?? '')}">
-<label for="email">${escape(t('link.email'))}</label>
-<input id="email" name="email" type="email" autocomplete="email" maxlength="254" value="${escape(values.email ?? '')}">
-${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}
+<label for="name">${escapeHtml(t('link.name'))}</label>
+<input id="name" name="name" autocomplete="name" maxlength="120" value="${escapeHtml(values.name ?? '')}">
+<label for="email">${escapeHtml(t('link.email'))}</label>
+<input id="email" name="email" type="email" autocomplete="email" maxlength="254" value="${escapeHtml(values.email ?? '')}">
+${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
 ${methods}
 </form>`,
 	});
@@ -178,14 +176,14 @@ export const renderChoicePage = ({ texts, theme, money, business, amount, curren
 		texts,
 		theme,
 		title: t('page.title'),
-		body: `<p class="muted">${escape(business)}</p>
-<h1>${escape(description || t('page.title'))}</h1>
-<p class="amount">${escape(money(amount, currency))}</p>
+		body: `<p class="muted">${escapeHtml(business)}</p>
+<h1>${escapeHtml(description || t('page.title'))}</h1>
+<p class="amount">${escapeHtml(money(amount, currency))}</p>
 ${
 	gateways.length === 0
-		? `<p>${escape(t('page.noGateway'))}</p>`
-		: `<p>${escape(t('page.choose'))}</p>
-<form method="post" action="${escape(action)}">${gateways.map((g) => `<button type="submit" name="gateway" value="${escape(g.id)}">${escape(g.name)}</button>`).join('\n')}</form>`
+		? `<p>${escapeHtml(t('page.noGateway'))}</p>`
+		: `<p>${escapeHtml(t('page.choose'))}</p>
+<form method="post" action="${escapeHtml(action)}">${gateways.map((g) => `<button type="submit" name="gateway" value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</button>`).join('\n')}</form>`
 }`,
 	});
 };
@@ -202,12 +200,12 @@ export const renderGatewayForm = ({ texts, theme, money, business, amount, curre
 		theme,
 		title: t('page.title'),
 		script: true,
-		body: `<p class="muted">${escape(business)}</p>
-<p class="amount">${escape(money(amount, currency))}</p>
-<p>${escape(t('page.continueHelp', { gateway }))}</p>
-<form method="post" action="${escape(action)}" data-autosubmit>
-${fields.map(([name, value]) => `<input type="hidden" name="${escape(name)}" value="${escape(value)}">`).join('\n')}
-<button type="submit">${escape(t('page.continue', { gateway }))}</button>
+		body: `<p class="muted">${escapeHtml(business)}</p>
+<p class="amount">${escapeHtml(money(amount, currency))}</p>
+<p>${escapeHtml(t('page.continueHelp', { gateway }))}</p>
+<form method="post" action="${escapeHtml(action)}" data-autosubmit>
+${fields.map(([name, value]) => `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`).join('\n')}
+<button type="submit">${escapeHtml(t('page.continue', { gateway }))}</button>
 </form>`,
 	});
 };
@@ -230,31 +228,31 @@ export const renderBankPage = ({ texts, theme, money, business, amount, currency
 	const account = bank.accountNumber !== '' || bank.iban !== '';
 	const upload =
 		proof && !uploaded
-			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">
-<label for="proof">${escape(t('bank.proof'))}</label>
+			? `<form method="post" action="${escapeHtml(proof.action)}" data-proof data-uploading="${escapeHtml(t('bank.uploading'))}" data-done="${escapeHtml(t('bank.uploaded'))}" data-failed="${escapeHtml(t('bank.uploadFailed'))}">
+<label for="proof">${escapeHtml(t('bank.proof'))}</label>
 <input id="proof" type="file" accept="${Object.keys(PROOF_TYPES).join(',')}" required>
-<label for="proof-reference">${escape(t('bank.proofReference'))}</label>
+<label for="proof-reference">${escapeHtml(t('bank.proofReference'))}</label>
 <input id="proof-reference" name="reference" maxlength="120" autocomplete="off">
-<button type="submit">${escape(t('bank.upload'))}</button>
+<button type="submit">${escapeHtml(t('bank.upload'))}</button>
 <p class="muted" role="status"></p>
 </form>`
 			: uploaded
-				? `<p>${escape(t('bank.uploaded'))}</p>`
+				? `<p>${escapeHtml(t('bank.uploaded'))}</p>`
 				: '';
 	return page({
 		texts,
 		theme,
 		title: t('bank.title'),
 		script: proof !== null && !uploaded,
-		body: `<p class="muted">${escape(business)}</p>
-<h1>${escape(t('bank.title'))}</h1>
-<p>${escape(t(account ? 'bank.intro' : 'bank.introNoDetails', { amount: money(amount, currency) }))}</p>
+		body: `<p class="muted">${escapeHtml(business)}</p>
+<h1>${escapeHtml(t('bank.title'))}</h1>
+<p>${escapeHtml(t(account ? 'bank.intro' : 'bank.introNoDetails', { amount: money(amount, currency) }))}</p>
 <dl>${rows
 			.filter(([, value]) => value !== '')
-			.map(([key, value]) => `<dt>${escape(t(key))}</dt><dd>${escape(value)}</dd>`)
+			.map(([key, value]) => `<dt>${escapeHtml(t(key))}</dt><dd>${escapeHtml(value)}</dd>`)
 			.join('')}</dl>
-${bank.instructions ? `<p>${escape(bank.instructions)}</p>` : ''}
-<p class="muted">${escape(t('bank.waiting'))}</p>
+${bank.instructions ? `<p>${escapeHtml(bank.instructions)}</p>` : ''}
+<p class="muted">${escapeHtml(t('bank.waiting'))}</p>
 ${upload}`,
 	});
 };
@@ -282,10 +280,10 @@ export const renderResultPage = ({
 		texts,
 		theme,
 		title: t('page.title'),
-		body: `${business ? `<p class="muted">${escape(business)}</p>` : ''}
-${amount !== undefined && currency && money ? `<p class="amount">${escape(money(amount, currency))}</p>` : ''}
-<h1>${escape(t(`page.${state}`))}</h1>
-${retry ? `<form method="post" action="${escape(retry)}"><button type="submit" name="retry" value="1">${escape(t('page.tryAgain'))}</button></form>` : ''}
-${backUrl ? `<p><a href="${escape(backUrl)}">${escape(t('page.back', { business }))}</a></p>` : ''}`,
+		body: `${business ? `<p class="muted">${escapeHtml(business)}</p>` : ''}
+${amount !== undefined && currency && money ? `<p class="amount">${escapeHtml(money(amount, currency))}</p>` : ''}
+<h1>${escapeHtml(t(`page.${state}`))}</h1>
+${retry ? `<form method="post" action="${escapeHtml(retry)}"><button type="submit" name="retry" value="1">${escapeHtml(t('page.tryAgain'))}</button></form>` : ''}
+${backUrl ? `<p><a href="${escapeHtml(backUrl)}">${escapeHtml(t('page.back', { business }))}</a></p>` : ''}`,
 	});
 };

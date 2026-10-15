@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { BANK_DETAILS, GATEWAYS, bankTransfer, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
-import { MAX_AMOUNT, formatMoney, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
 	checkCustomer,
@@ -21,35 +20,6 @@ import {
 	subscriptionView,
 } from '../core/payments.js';
 import { callbackUrls, createSnippets } from '../core/snippets.js';
-
-describe('money', () => {
-	it('checks amounts and currencies', () => {
-		expect(isCurrency('EUR')).toBe(true);
-		expect(isCurrency('eur')).toBe(false);
-		expect(isAmount(1)).toBe(true);
-		expect(isAmount(0)).toBe(false);
-		expect(isAmount(1.5)).toBe(false);
-		expect(isAmount(MAX_AMOUNT + 1)).toBe(false);
-	});
-	it('turns minor units into decimals and back, by the currency exponent', () => {
-		expect(toDecimal(1050, 'EUR')).toBe('10.50');
-		expect(toDecimal(5, 'USD')).toBe('0.05');
-		expect(toDecimal(500, 'JPY')).toBe('500');
-		expect(toDecimal(1234, 'KWD')).toBe('1.234');
-		expect(fromDecimal('10.5', 'EUR')).toBe(1050);
-		expect(fromDecimal('10.500', 'EUR')).toBe(1050);
-		expect(fromDecimal(10, 'USD')).toBe(1000);
-		expect(fromDecimal('500', 'JPY')).toBe(500);
-		expect(fromDecimal('10.505', 'EUR')).toBeNull();
-		expect(fromDecimal('abc', 'EUR')).toBeNull();
-		expect(fromDecimal('0', 'EUR')).toBeNull();
-		expect(fromDecimal(undefined, 'EUR')).toBeNull();
-	});
-	it('formats for people without assuming a locale', () => {
-		expect(formatMoney(125000, 'EUR')).toBe('EUR 1,250.00');
-		expect(formatMoney(1234567, 'JPY')).toBe('JPY 1,234,567');
-	});
-});
 
 describe('gateways', () => {
 	it('knows each gateway and its currencies', () => {
@@ -134,6 +104,10 @@ describe('payments', () => {
 		expect(checkCustomer({ id: 'x'.repeat(200) })).toMatchObject({ ok: false, field: 'customer/id' });
 		expect(checkCustomer({ name: 'x'.repeat(200) })).toMatchObject({ ok: false, field: 'customer/name' });
 		expect(checkCustomer({ email: 'nope' })).toMatchObject({ ok: false, field: 'customer/email' });
+		// an address no sending path can deliver to is refused; a Unicode domain is kept in punycode (@ss/contracts/email)
+		for (const email of ['ana@example.c', 'ana..x@example.com', 'ana@exa_mple.com'])
+			expect(checkCustomer({ email })).toMatchObject({ ok: false, field: 'customer/email' });
+		expect(checkCustomer({ email: 'Ana@Bücher.Example' })).toEqual({ ok: true, value: { email: 'ana@xn--bcher-kva.example' } });
 		expect(checkCustomer({ phone: '0123' })).toMatchObject({ ok: false, field: 'customer/phone' });
 	});
 	it('checks metadata', () => {
@@ -272,6 +246,7 @@ describe('payments', () => {
 			date: 'Date',
 			status: 'Status',
 			amount: 'Amount',
+			currency: 'Currency',
 			refunded: 'Refunded',
 			gateway: 'Gateway',
 			reference: 'Reference',
@@ -279,8 +254,9 @@ describe('payments', () => {
 			description: 'Description',
 		});
 		// a byte order mark first: spreadsheet apps then read names in any language right (UTF-8)
-		expect(csv.startsWith('\uFEFFPayment,Date,')).toBe(true);
-		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,EUR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
+		expect(csv.startsWith('\uFEFFPayment,Date,Status,Amount,Currency,Refunded,')).toBe(true);
+		// amounts as plain decimals a spreadsheet can add up, the currency beside them
+		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,10.00,EUR,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
 		expect(paymentsCsv([{ ...view, gateway: null, customer: {} }], /** @type {any} */ ({})).split('\r\n')[1]).toContain(',,');
 	});
 });

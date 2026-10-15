@@ -5,6 +5,7 @@
  * I/O.
  * @module
  */
+import { widgetScriptTag } from '@ss/contracts/text';
 import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from './widgets.js';
 
 /**
@@ -32,14 +33,14 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 	const places = (kind) =>
 		widgets.filter((widget) => widget.kind === kind).map((widget) => `<div ${WIDGET_ATTRIBUTE}="${widget.key}"></div>`);
 	const visitor = [
-		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, token: 'YOUR_BROWSER_TOKEN' }),
 		'<!-- a payment link: the payer picks the gateway (and the amount when the link has none) -->',
 		`<div ${WIDGET_ATTRIBUTE}="pay_button" data-link="link_…"></div>`,
 		'<!-- a payment your server created: the payer pays it -->',
 		`<div ${WIDGET_ATTRIBUTE}="pay_button" data-payment="pay_…"></div>`,
 	].join('\n');
 	const admin = [
-		`<script src="${base}/widget.js"></script>`,
+		widgetScriptTag({ src: `${base}/widget.js`, async: false }),
 		...places('admin'),
 		'<script>',
 		`  window.${WIDGET_GLOBAL}.admin({`,

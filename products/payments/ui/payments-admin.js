@@ -22,8 +22,7 @@ import {
 	openDialog,
 	splitView,
 } from '@ss/app-kit/widget';
-import { fromDecimal, toDecimal } from '../core/money.js';
-import { PAYMENT_STATUSES, paymentsCsv } from '../core/payments.js';
+import { PAYMENT_STATUSES, fromDecimal, paymentsCsv, toDecimal } from '../core/payments.js';
 import { field, listSection } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
@@ -411,6 +410,7 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 						date: t('csv.date'),
 						status: t('csv.status'),
 						amount: t('csv.amount'),
+						currency: t('csv.currency'),
 						refunded: t('csv.refunded'),
 						gateway: t('csv.gateway'),
 						reference: t('csv.reference'),

@@ -11,7 +11,7 @@
 import { isId } from '@ss/contracts';
 import { actorOf, countHandlers, created, defineRoute, formatText, paginate, problem } from '@ss/app-kit';
 import { GATEWAY_FEATURES, bankTransfer, isGateway } from '../core/gateways.js';
-import { fromDecimal } from '../core/money.js';
+import { fromDecimal } from '@ss/contracts/format';
 import {
 	PAYMENT_STATUSES,
 	SUBSCRIPTION_STATUSES,

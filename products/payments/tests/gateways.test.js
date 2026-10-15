@@ -1,6 +1,7 @@
 import { createHash, createHmac, createDecipheriv } from 'node:crypto';
 import { createNetwork } from '@ss/app-kit/testing';
 import { createOutboundPolicy } from '@ss/net';
+import { signWebhook, verifyWebhook } from '@ss/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAdapters, genericCurrencies } from '../adapters/gateways/index.js';
 import { apiSignature, formSignature } from '../adapters/gateways/payfast.js';
@@ -10,7 +11,7 @@ import { payfastAmount, validationHash } from '../adapters/gateways/payfast-pk.j
 import { webhookSignature, wholeUnits } from '../adapters/gateways/rapid.js';
 import { checkoutSignature } from '../adapters/gateways/generic.js';
 import { call, failure } from '../adapters/gateways/types.js';
-import { formFields, phpUrlencode, signTimestamped, verifyTimestamped } from '../adapters/util.js';
+import { formFields, phpUrlencode } from '../adapters/util.js';
 import guide from '../docs/guide.json' with { type: 'json' };
 import { createFakeGateways } from './helpers.js';
 
@@ -43,14 +44,6 @@ const URLS = { return: 'https://pay.test/return', cancel: 'https://pay.test/canc
 const incoming = (headers = {}, rawBody = '', query = {}) => ({ rawBody, headers: new Headers(headers), query });
 
 describe('util', () => {
-	it('signs and checks timestamped signatures (repeated v1 allowed, 5 minutes)', () => {
-		const header = signTimestamped('{"a":1}', 'secret', NOW);
-		expect(verifyTimestamped({ header, body: '{"a":1}', secret: 'secret', now: NOW })).toBe(true);
-		expect(verifyTimestamped({ header: `${header},v1=zz`, body: '{"a":1}', secret: 'secret', now: NOW })).toBe(true);
-		expect(verifyTimestamped({ header, body: '{"a":2}', secret: 'secret', now: NOW })).toBe(false);
-		expect(verifyTimestamped({ header, body: '{"a":1}', secret: 'secret', now: NOW + 301_000 })).toBe(false);
-		expect(verifyTimestamped({ header: null, body: '', secret: 'secret', now: NOW })).toBe(false);
-	});
 	it("encodes like PHP's urlencode and reads forms in order", () => {
 		expect(phpUrlencode("a b!'()*~")).toBe('a+b%21%27%28%29%2A%7E');
 		expect(formFields('b=1&a=2&b=3')).toEqual([
@@ -75,7 +68,7 @@ describe('Stripe', () => {
 	/** @param {object} event */
 	const signed = (event) => {
 		const body = JSON.stringify(event);
-		return incoming({ 'stripe-signature': signTimestamped(body, keys.webhookSecret, NOW) }, body);
+		return incoming({ 'stripe-signature': signWebhook({ body, secret: keys.webhookSecret, now: () => NOW }) }, body);
 	};
 	it('checks the keys', async () => {
 		expect(stripe.violation(null)).toMatch(/secret key/);
@@ -190,7 +183,10 @@ describe('Stripe', () => {
 		});
 		expect(await stripe.notice?.(signed({ type: 'charge.refunded' }), keys, ctx)).toEqual({ ok: true, news: [] });
 		expect(await stripe.notice?.(incoming({}, '{}'), keys, ctx)).toEqual({ ok: false });
-		const bad = incoming({ 'stripe-signature': signTimestamped('nope', keys.webhookSecret, NOW) }, 'nope');
+		const bad = incoming(
+			{ 'stripe-signature': signWebhook({ body: 'nope', secret: keys.webhookSecret, now: () => NOW }) },
+			'nope',
+		);
 		expect(await stripe.notice?.(bad, keys, ctx)).toEqual({ ok: false });
 	});
 	it('expires the Checkout Session of a payment the merchant canceled, so Stripe’s page refuses it', async () => {
@@ -1128,7 +1124,7 @@ describe('generic adapter', () => {
 		/** @param {unknown} body */
 		const post = (body) => {
 			const text = JSON.stringify(body);
-			return incoming({ 'ss-signature': signTimestamped(text, keys.secret, NOW) }, text);
+			return incoming({ 'ss-signature': signWebhook({ body: text, secret: keys.secret, now: () => NOW }) }, text);
 		};
 		expect(
 			await generic.notice?.(
@@ -1164,7 +1160,11 @@ describe('generic adapter', () => {
 				news: [{ outcome: status }],
 			});
 		expect(
-			await generic.notice?.(incoming({ 'ss-signature': signTimestamped('x', keys.secret, NOW) }, 'x'), keys, ctx),
+			await generic.notice?.(
+				incoming({ 'ss-signature': signWebhook({ body: 'x', secret: keys.secret, now: () => NOW }) }, 'x'),
+				keys,
+				ctx,
+			),
 		).toEqual({ ok: false });
 		expect(await generic.notice?.(incoming({}, '{}'), keys, ctx)).toEqual({ ok: false });
 	});
@@ -1180,11 +1180,11 @@ describe('generic adapter', () => {
 		});
 		const sent = fake.calls.at(-1);
 		expect(
-			verifyTimestamped({
+			verifyWebhook({
 				header: sent?.headers['ss-signature'] ?? null,
 				body: sent?.body ?? '',
 				secret: keys.secret,
-				now: NOW,
+				now: () => NOW,
 			}),
 		).toBe(true);
 		fake.respond('https://gateway.example.org', () => ({ status: 200, body: 'ok' }));

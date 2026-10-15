@@ -1,59 +1,13 @@
 /**
- * Small helpers of the adapters: object checks, timing-safe comparison, HMAC, form encoding and reading gateway
- * answers.
+ * Small helpers of the gateway adapters: form encoding and reading gateway answers (comparing and signing are
+ * `@ss/protocol`'s).
  * @module
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend */
 
 /** Timeout of one gateway call. */
 export const GATEWAY_TIMEOUT_MS = 15_000;
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-export const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
-
-/**
- * Timing-safe equality of two texts.
- * @param {string} a
- * @param {string} b
- */
-export const same = (a, b) => {
-	const left = Buffer.from(a);
-	const right = Buffer.from(b);
-	return left.length === right.length && timingSafeEqual(left, right);
-};
-
-/**
- * Hex HMAC-SHA256.
- * @param {string} key
- * @param {string} text
- */
-export const hmacHex = (key, text) => createHmac('sha256', key).update(text).digest('hex');
-
-/**
- * Check an `SS-Signature`-style header (`t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`; Stripe's
- * `Stripe-Signature` has the same shape and may repeat `v1`).
- * @param {{ header: string | null, body: string, secret: string, now: number, toleranceSeconds?: number }} input
- */
-export const verifyTimestamped = ({ header, body, secret, now, toleranceSeconds = 300 }) => {
-	const parts = (header ?? '').split(',').map((part) => part.trim().split('=', 2));
-	const t = Number(parts.find(([name]) => name === 't')?.[1]);
-	if (!Number.isInteger(t) || Math.abs(now / 1000 - t) > toleranceSeconds) return false;
-	const expected = hmacHex(secret, `${t}.${body}`);
-	return parts.some(([name, value]) => name === 'v1' && typeof value === 'string' && same(value, expected));
-};
-
-/**
- * The header value of a body signed as {@link verifyTimestamped} checks it.
- * @param {string} body
- * @param {string} secret
- * @param {number} now epoch ms
- */
-export const signTimestamped = (body, secret, now) => {
-	const t = Math.floor(now / 1000);
-	return `t=${t},v1=${hmacHex(secret, `${t}.${body}`)}`;
-};
 
 /**
  * `application/x-www-form-urlencoded` body of fields in the given order (nested names as given, e.g. `a[b]`).

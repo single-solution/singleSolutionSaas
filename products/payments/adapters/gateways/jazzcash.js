@@ -9,8 +9,9 @@
  * Connection `jazzcash`: `{ merchantId, password, integritySalt, sandbox? }`.
  * @module
  */
-import { createHmac } from 'node:crypto';
-import { formFields, isObject, same } from '../util.js';
+import { isObject } from '@ss/contracts/util';
+import { constantTimeEqual, hmacSha256Hex } from '@ss/protocol';
+import { formFields } from '../util.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
 
@@ -43,10 +44,7 @@ export const secureHash = (fields, salt) => {
 		.filter((name) => name.toLowerCase().startsWith('pp') && name !== 'pp_SecureHash' && fields[name] !== '')
 		.sort()
 		.map((name) => fields[name]);
-	return createHmac('sha256', salt)
-		.update([salt, ...values].join('&'))
-		.digest('hex')
-		.toUpperCase();
+	return hmacSha256Hex(salt, [salt, ...values].join('&')).toUpperCase();
 };
 
 /** @param {string} text @param {number} max */
@@ -103,7 +101,7 @@ export const jazzcash = {
 	returned: async (incoming, payment, keys) => {
 		const data = Object.fromEntries(formFields(incoming.rawBody));
 		const given = data.pp_SecureHash ?? '';
-		if (!given || !same(given.toUpperCase(), secureHash(data, String(keys.integritySalt)))) return { news: null };
+		if (!given || !constantTimeEqual(given.toUpperCase(), secureHash(data, String(keys.integritySalt)))) return { news: null };
 		if (data.pp_TxnRefNo !== payment.gatewayRef) return { news: null };
 		const code = data.pp_ResponseCode;
 		return {

@@ -3,8 +3,14 @@
  * API and widgets answer, and the CSV the Payments admin widget exports. No I/O.
  * @module
  */
+import { toCsv } from '@ss/contracts/csv';
+import { normalizeEmail } from '@ss/contracts/email';
+import { isCurrency, isPositiveAmount, toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
 import { isGateway, SUBSCRIPTION_GATEWAYS } from './gateways.js';
-import { formatMoney, isAmount, isCurrency, toDecimal } from './money.js';
+
+// the decimal amounts the admin widgets take and show (widgets reach @ss/contracts through core/)
+export { fromDecimal, toDecimal } from '@ss/contracts/format';
 
 /**
  * Payment statuses. `pending`: waiting for the payer or the gateway; `cancelled`: the payer canceled at the gateway
@@ -39,9 +45,6 @@ export const EVENT_DATA_LIMIT = 16 * 1024;
 /** @typedef {{ id?: string, name?: string, email?: string, phone?: string }} Customer */
 /** @typedef {{ ok: true, value: any } | { ok: false, field: string, message: string }} Checked */
 
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /**
  * Plain one-line text: trimmed, control characters removed, at most `max` characters; '' when absent.
  * @param {unknown} value
@@ -56,7 +59,6 @@ export const cleanText = (value, max) => {
 	return text.length > max ? null : text;
 };
 
-const EMAIL = /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}\.[^\s@<>"]{1,63}$/;
 const PHONE = /^\+[1-9]\d{6,14}$/;
 
 /**
@@ -76,8 +78,8 @@ export const checkCustomer = (value) => {
 	if (name === null) return { ok: false, field: 'customer/name', message: 'customer.name is at most 120 characters.' };
 	if (name) customer.name = name;
 	if (value.email !== undefined && value.email !== '') {
-		const email = typeof value.email === 'string' ? value.email.trim().toLowerCase() : '';
-		if (!EMAIL.test(email)) return { ok: false, field: 'customer/email', message: 'customer.email is not an email address.' };
+		const email = normalizeEmail(value.email);
+		if (email === null) return { ok: false, field: 'customer/email', message: 'customer.email is not an email address.' };
 		customer.email = email;
 	}
 	if (value.phone !== undefined && value.phone !== '') {
@@ -120,7 +122,7 @@ export const checkMetadata = (value) => {
  */
 export const checkPaymentInput = (body) => {
 	const input = isObject(body) ? body : {};
-	if (!isAmount(input.amount))
+	if (!isPositiveAmount(input.amount))
 		return { ok: false, field: 'amount', message: 'amount is a whole number of minor units (cents, pence …), at least 1.' };
 	if (!isCurrency(input.currency))
 		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, EUR …).' };
@@ -168,14 +170,15 @@ export const checkLinkInput = (body) => {
 	if (!isCurrency(input.currency))
 		return { ok: false, field: 'currency', message: 'currency is an ISO 4217 code (USD, EUR …).' };
 	const amount = input.amount ?? null;
-	if (amount !== null && !isAmount(amount))
+	if (amount !== null && !isPositiveAmount(amount))
 		return {
 			ok: false,
 			field: 'amount',
 			message: 'amount is a whole number of minor units, or null to let the payer enter it.',
 		};
 	const minAmount = input.minAmount ?? 1;
-	if (!isAmount(minAmount)) return { ok: false, field: 'minAmount', message: 'minAmount is a whole number of minor units.' };
+	if (!isPositiveAmount(minAmount))
+		return { ok: false, field: 'minAmount', message: 'minAmount is a whole number of minor units.' };
 	const gateways = input.gateways ?? [];
 	if (!Array.isArray(gateways) || !gateways.every(isGateway))
 		return { ok: false, field: 'gateways', message: 'gateways lists gateway ids.' };
@@ -243,7 +246,7 @@ export const refundAmount = (payment, amount) => {
 		return { ok: false, code: 'not_refundable', message: 'Only a paid payment can be refunded.' };
 	const left = payment.amount - payment.refunded;
 	const wanted = amount === undefined || amount === null ? left : amount;
-	if (!isAmount(wanted) || Number(wanted) > left)
+	if (!isPositiveAmount(wanted) || Number(wanted) > left)
 		return { ok: false, code: 'invalid', message: `amount is a whole number of minor units, at most ${left}.` };
 	return { ok: true, amount: Number(wanted) };
 };
@@ -434,49 +437,37 @@ export const mirrorStatus = (gateway, status) => {
 	return typeof status === 'string' && Object.hasOwn(table, status) ? /** @type {SubscriptionStatus} */ (table[status]) : null;
 };
 
-/** @param {unknown} value */
-const csvCell = (value) => {
-	const text = value === null || value === undefined ? '' : String(value);
-	// a leading = + - @ would run as a formula in spreadsheets
-	const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
-	return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-};
-
-/** The byte order mark that tells spreadsheet apps a CSV file is UTF-8 (names in any language read right). */
-const CSV_BOM = '\uFEFF';
-
 /**
- * Payments as CSV (the Payments admin widget's export): a byte order mark, then one row per payment with the given
- * column titles.
+ * Payments as CSV (the Payments admin widget's export, `@ss/contracts/csv`): one row per payment with the given column
+ * titles, the amount and the refunded amount as plain decimals with the payment's currency beside them.
  * @param {ReadonlyArray<any>} payments views
- * @param {{ id: string, date: string, status: string, amount: string, refunded: string, gateway: string, reference: string,
- *   email: string, description: string }} titles
+ * @param {{ id: string, date: string, status: string, amount: string, currency: string, refunded: string, gateway: string,
+ *   reference: string, email: string, description: string }} titles
  */
 export const paymentsCsv = (payments, titles) =>
-	CSV_BOM +
-	[
+	toCsv(
 		[
 			titles.id,
 			titles.date,
 			titles.status,
 			titles.amount,
+			titles.currency,
 			titles.refunded,
 			titles.gateway,
 			titles.reference,
 			titles.email,
 			titles.description,
 		],
-		...payments.map((payment) => [
+		payments.map((payment) => [
 			payment.id,
 			payment.createdAt,
 			payment.status,
-			formatMoney(payment.amount, payment.currency),
-			formatMoney(payment.refunded, payment.currency).replace(/^\S+ /, ''),
-			payment.gateway ?? '',
+			toDecimal(payment.amount, payment.currency),
+			payment.currency,
+			toDecimal(payment.refunded, payment.currency),
+			payment.gateway,
 			payment.reference,
-			payment.customer?.email ?? '',
+			payment.customer?.email,
 			payment.description,
 		]),
-	]
-		.map((row) => row.map(csvCell).join(','))
-		.join('\r\n');
+	);

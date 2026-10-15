@@ -381,7 +381,7 @@ describe('Payments admin widget', () => {
 		expect(save).toHaveBeenCalledTimes(1);
 		const [name, csv] = save.mock.calls[0] ?? [];
 		expect(name).toBe('payments.csv');
-		expect(csv.split('\r\n')).toHaveLength(3);
+		expect(csv.trimEnd().split('\r\n')).toHaveLength(3);
 		expect(queries.at(-1)).toContain('limit=100');
 	});
 
@@ -405,7 +405,7 @@ describe('Payments admin widget', () => {
 		await flush();
 		const [, csv] = save.mock.calls[0] ?? [];
 		expect(csv.split('\r\n')[1]).toBe(
-			'pay_1,2026-10-01T10:00:00.000Z,paid,"USD 2,500.00",500.00,bank_transfer,o-1,ana@example.com,Order 1',
+			'pay_1,2026-10-01T10:00:00.000Z,paid,2500.00,USD,500.00,bank_transfer,o-1,ana@example.com,Order 1',
 		);
 	});
 

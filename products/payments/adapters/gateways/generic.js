@@ -16,8 +16,9 @@
  * @module
  */
 import { checkUrl, createOutboundPolicy } from '@ss/net';
-import { isAmount, isCurrency } from '../../core/money.js';
-import { hmacHex, isObject, signTimestamped, verifyTimestamped } from '../util.js';
+import { isCurrency, isPositiveAmount } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
+import { hmacSha256Hex, signWebhook, verifyWebhook } from '@ss/protocol';
 import { call, failure, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */
@@ -31,7 +32,7 @@ const SIGNATURE_HEADER = 'ss-signature';
  * @param {string} secret
  */
 export const checkoutSignature = (fields, secret) =>
-	hmacHex(
+	hmacSha256Hex(
 		secret,
 		Object.keys(fields)
 			.filter((name) => name !== 'signature')
@@ -97,11 +98,11 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 			return { kind: 'form', action: String(keys.url), fields: Object.entries(fields), ref: payment.id };
 		},
 		notice: async (incoming, keys, ctx) => {
-			const signed = verifyTimestamped({
+			const signed = verifyWebhook({
 				header: incoming.headers.get(SIGNATURE_HEADER),
 				body: incoming.rawBody,
 				secret: String(keys.secret),
-				now: ctx.now(),
+				now: ctx.now,
 			});
 			if (!signed) return { ok: false };
 			/** @type {any} */
@@ -111,8 +112,9 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 			} catch {
 				return { ok: false };
 			}
-			if (!isObject(body) || typeof body.paymentId !== 'string' || !['paid', 'failed', 'cancelled'].includes(body.status))
-				return { ok: false };
+			if (!isObject(body) || typeof body.paymentId !== 'string') return { ok: false };
+			const outcome = body.status;
+			if (outcome !== 'paid' && outcome !== 'failed' && outcome !== 'cancelled') return { ok: false };
 			return {
 				ok: true,
 				news: [
@@ -120,8 +122,8 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 						kind: 'payment',
 						paymentId: body.paymentId,
 						ref: typeof body.reference === 'string' ? body.reference.slice(0, 200) : null,
-						outcome: body.status,
-						...(isAmount(body.amount) ? { amount: body.amount } : {}),
+						outcome,
+						...(isPositiveAmount(body.amount) ? { amount: body.amount } : {}),
 						...(isCurrency(body.currency) ? { currency: body.currency } : {}),
 						capture: typeof body.reference === 'string' ? body.reference.slice(0, 200) : null,
 					},
@@ -142,7 +144,7 @@ export const createGeneric = (policy = createOutboundPolicy()) => {
 				method: 'POST',
 				headers: {
 					'content-type': 'application/json',
-					[SIGNATURE_HEADER]: signTimestamped(body, String(keys.secret), ctx.now()),
+					[SIGNATURE_HEADER]: signWebhook({ body, secret: String(keys.secret), now: ctx.now }),
 				},
 				body,
 			});

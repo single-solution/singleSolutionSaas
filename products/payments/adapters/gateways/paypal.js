@@ -8,8 +8,9 @@
  * Connection `paypal`: `{ clientId, secret, webhookId, sandbox? }` (`sandbox`: the merchant's PayPal sandbox app).
  * @module
  */
-import { fromDecimal, toDecimal } from '../../core/money.js';
-import { formBody, isObject } from '../util.js';
+import { fromDecimal, toDecimal } from '@ss/contracts/format';
+import { isObject } from '@ss/contracts/util';
+import { formBody } from '../util.js';
 import { call, failure, ok2xx } from './types.js';
 
 /** @typedef {import('./types.js').GatewayAdapter} GatewayAdapter */

@@ -119,6 +119,7 @@
 	"csv.date": "Date",
 	"csv.status": "Status",
 	"csv.amount": "Amount",
+	"csv.currency": "Currency",
 	"csv.refunded": "Refunded",
 	"csv.gateway": "Gateway",
 	"csv.reference": "Reference",

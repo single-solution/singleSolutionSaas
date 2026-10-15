@@ -19,7 +19,7 @@ import {
 	splitView,
 } from '@ss/app-kit/widget';
 import { GATEWAYS, GATEWAY_FEATURES } from '../core/gateways.js';
-import { fromDecimal } from '../core/money.js';
+import { fromDecimal } from '../core/payments.js';
 import { field } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
