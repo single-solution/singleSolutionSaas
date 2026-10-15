@@ -170,6 +170,14 @@ describe('inbox', () => {
 		expect((await sys.serverCall('POST', `/v1/conversations/${id}/summary`)).json).toEqual({
 			summary: 'Asked about a package.',
 		});
+		// what the summary says is the merchant's (C15)
+		expect(String(sys.aiCalls().at(-1).messages[0].content)).toContain('in at most five short lines');
+		await sys.setting('ai_summary', 'instructions', 'One line: what the visitor still needs.');
+		sys.ai({ text: 'Needs a package.' });
+		await sys.serverCall('POST', `/v1/conversations/${id}/summary`);
+		expect(sys.aiCalls().at(-1).messages[0].content).toBe(
+			'One line: what the visitor still needs.\nDo not add anything that is not in the chat.',
+		);
 		const copy = await sys.serverCall('POST', `/v1/conversations/${id}/transcript`, { email: 'ann@example.com' });
 		expect([copy.status, copy.json]).toEqual([202, { sent: true }]);
 		expect((await sys.serverCall('POST', `/v1/conversations/${id}/rating-request`)).status).toBe(204);

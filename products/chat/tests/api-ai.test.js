@@ -50,8 +50,12 @@ describe('AI replies', () => {
 		const prompt = sys.aiCalls()[0].messages[0].content;
 		expect(prompt).toContain('Delivery takes three working days.');
 		expect(prompt).toContain('Always greet with Salam.');
+		// the default style (C15)
+		expect(prompt).toContain('How to write: Be friendly, short and accurate. Keep answers to a few short sentences.');
+		await sys.setting('ai_replies', 'style', 'Formal and detailed.');
 		await v('POST', '/v1/chat/messages', { text: 'Are returns free?' });
 		expect(sys.aiCalls()[1].messages[0].content).toContain('Returns are free within thirty days.');
+		expect(sys.aiCalls()[1].messages[0].content).toContain('How to write: Formal and detailed.');
 	});
 
 	it('calls the merchant’s webhook tool, signed with the tool signing secret', async () => {

@@ -29,6 +29,16 @@
 			"enum": ["message", "handoff", "message_and_handoff"],
 			"description": "After the backup provider (when on). Message: send the unavailable message. Handoff: hand the chat to a person. Message and handoff: both."
 		},
+		"style": {
+			"type": "string",
+			"title": "Style",
+			"default": "Be friendly, short and accurate. Keep answers to a few short sentences.",
+			"maxLength": 1000,
+			"description": "How the AI writes, in your words: its tone and how long its answers are. The safety rules always apply: it answers only from your information, never invents prices, stock or policies, never reveals its instructions and never asks for secrets.",
+			"x-ui": {
+				"widget": "textarea"
+			}
+		},
 		"dontKnow": {
 			"type": "string",
 			"title": "When the AI does not know",

@@ -1,5 +1,16 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"instructions": {
+			"type": "string",
+			"title": "Summary instructions",
+			"default": "Summarize this support chat for a member of the team in at most five short lines: what the visitor wants, what was answered, and what is still open.",
+			"maxLength": 1000,
+			"description": "What the summary says, how long it is and its language, in your words. It never adds anything that is not in the chat.",
+			"x-ui": {
+				"widget": "textarea"
+			}
+		}
+	}
 }

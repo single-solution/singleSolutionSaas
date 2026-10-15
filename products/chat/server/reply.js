@@ -39,10 +39,10 @@ import {
 	PASSAGE_CHARS,
 	HISTORY_TURNS,
 	MAX_TOOL_ROUNDS,
-	SUMMARY_PROMPT,
 	buildSystemPrompt,
 	disclosesBot,
 	languageRetry,
+	summaryPrompt,
 } from '../core/prompt.js';
 import { RETRIEVAL, passages, queryTerms, rank } from '../core/knowledge.js';
 import { detectLanguage, languageForms, markerSetsOf, replyMatchesLanguage, translationOf } from '../core/language.js';
@@ -845,6 +845,7 @@ export const createReply = (product, service) => {
 				instructions: s.on.includes('ai_instructions')
 					? String((await s.values('ai_instructions')).instructions) || null
 					: null,
+				style: String(settings.style),
 				dontKnow: String(settings.dontKnow),
 				language,
 				languageAlso: language ? (languageForms(language, check.latinFor ?? [])[1] ?? null) : null,
@@ -979,7 +980,7 @@ export const createReply = (product, service) => {
 		const transcript = messages.map((m) => `${m.author}: ${m.text}`).join('\n');
 		const result = await complete(s, connections, {
 			messages: [
-				{ role: 'system', content: SUMMARY_PROMPT },
+				{ role: 'system', content: summaryPrompt(String((await s.values('ai_summary')).instructions)) },
 				{ role: 'user', content: transcript.slice(-24_000) },
 			],
 			tools: [],
