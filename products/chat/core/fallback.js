@@ -35,9 +35,9 @@ const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/;
  * @property {string} text markdown with placeholders
  */
 /**
- * What is wrong with an answer: a field, or `compareKeywords` (`{comparison}` needs keywords: the words between the two
- * products).
- * @typedef {'item' | 'language' | 'keywords' | 'compareKeywords' | 'text'} FallbackProblem
+ * What is wrong with an answer: a field, `compareKeywords` (`{comparison}` needs keywords: the words between the two
+ * products) or `budgetKeywords` (`{products_under}` needs keywords: the words before a budget, C18).
+ * @typedef {'item' | 'language' | 'keywords' | 'compareKeywords' | 'budgetKeywords' | 'text'} FallbackProblem
  */
 
 /**
@@ -85,6 +85,7 @@ export const fallbackProblems = (item) => {
 	)
 		problems.push('keywords');
 	else if (keywords.length === 0 && text.includes('{comparison}')) problems.push('compareKeywords');
+	else if (keywords.length === 0 && text.includes('{products_under}')) problems.push('budgetKeywords');
 	if (text === '' || text.length > FALLBACK_LIMITS.text) problems.push('text');
 	return problems;
 };
@@ -95,6 +96,7 @@ const PROBLEM_TEXTS = Object.freeze({
 	language: 'the language is empty (any) or a code such as en.',
 	keywords: `the keywords are a list of up to ${FALLBACK_LIMITS.keywords} words or phrases of up to ${FALLBACK_LIMITS.keywordLength} characters.`,
 	compareKeywords: '{comparison} needs keywords: the words between the two products, such as vs.',
+	budgetKeywords: '{products_under} needs keywords: the words before a budget, such as under.',
 	text: `write the answer (up to ${FALLBACK_LIMITS.text} characters).`,
 });
 
@@ -130,18 +132,113 @@ export const matchingFallbacks = (items, { message, language }) => {
 	);
 };
 
+/** A multiplier word of the setting Budget words (C18): `k = 1000`; the word in any language and script. */
+const MULTIPLIER = /^(.{1,40}?)\s*=\s*(\d[\d,._ ]{0,20})$/u;
+/** A written amount: digits in groups (`15,000`, `1,50,000`, `12 500`) or with a decimal part (`1.5`). */
+const AMOUNT = /\d{1,3}(?:[,. ]\d{2,3})*[,. ]\d{3}(?!\d)|\d+(?:[.,]\d+)?/gu;
+const LETTER = /[\p{L}\p{N}]/u;
+const UNSPACED =
+	/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Hangul}]/u;
+
 /**
- * A budget in a message: the first number (separators allowed, `k` = thousand), in whole units; null when none.
- * @param {string} message
+ * The multiplier words of the setting Budget words (`k = 1000`, `lakh = 100000`, `万 = 10000`), longest first; lines
+ * that are not `word = number` (a whole number of at least 2) are left out.
+ * @param {unknown} lines
+ * @returns {Array<{ word: string, factor: number }>}
  */
-export const budgetOf = (message) => {
-	const match = /(\d{1,3}(?:[,. ]\d{3})+|\d+(?:[.,]\d+)?)\s*(k)?(?![\p{L}\d])/iu.exec(message);
-	if (!match) return null;
-	const raw = String(match[1]);
-	const grouped = /^\d{1,3}(?:[,. ]\d{3})+$/.test(raw);
-	const number = grouped ? Number(raw.replace(/[,. ]/g, '')) : Number(raw.replace(',', '.'));
-	const amount = match[2] ? number * 1000 : number;
-	return Number.isFinite(amount) && amount > 0 ? Math.round(amount) : null;
+export const multipliersOf = (lines) =>
+	(Array.isArray(lines) ? lines : [])
+		.map((line) => MULTIPLIER.exec(typeof line === 'string' ? line.trim() : ''))
+		.filter((match) => match !== null)
+		.map((match) => ({ word: normalise(match[1]), factor: Number(String(match[2]).replace(/[,._ ]/g, '')) }))
+		.filter(({ word, factor }) => word !== '' && Number.isSafeInteger(factor) && factor >= 2)
+		.sort((a, b) => b.word.length - a.word.length);
+
+/**
+ * Where the first of the keywords ends in the message (whole words, case and accents aside; a keyword in a script
+ * written without spaces anywhere), or -1 when none is there.
+ * @param {string} message
+ * @param {string[]} keywords
+ */
+const keywordEnd = (message, keywords) => {
+	const words = [...message.matchAll(/[\p{L}\p{N}]+/gu)].map((m) => ({
+		key: normalise(m[0]),
+		start: m.index ?? 0,
+		end: (m.index ?? 0) + m[0].length,
+	}));
+	let best = { start: Infinity, end: -1 };
+	for (const keyword of keywords) {
+		if (UNSPACED.test(keyword)) {
+			const at = message.indexOf(keyword.trim());
+			if (at >= 0 && at < best.start) best = { start: at, end: at + keyword.trim().length };
+			continue;
+		}
+		const needle = tokenize(keyword, { minLength: 1 });
+		if (needle.length === 0) continue;
+		for (let i = 0; i + needle.length <= words.length; i += 1)
+			if (needle.every((word, j) => words[i + j]?.key === word)) {
+				const first = /** @type {{ start: number }} */ (words[i]);
+				const last = /** @type {{ end: number }} */ (words[i + needle.length - 1]);
+				if (first.start < best.start) best = { start: first.start, end: last.end };
+				break;
+			}
+	}
+	return best.end;
+};
+
+/**
+ * The amounts written in a text, in order: the number (in groups, or with a decimal part), times a multiplier word
+ * right after it (`20k`, `2 lakh`, `5万`), and whether it stands right after a word (`iPhone 15`, `S24`: part of a
+ * name). A number with other letters right after it (`15pro`) is none.
+ * @param {string} text
+ * @param {Array<{ word: string, factor: number }>} multipliers
+ */
+const amountsOf = (text, multipliers) => {
+	/** @type {Array<{ amount: number, multiplied: boolean, afterWord: boolean }>} */
+	const found = [];
+	for (const match of text.matchAll(AMOUNT)) {
+		const raw = match[0];
+		const start = match.index ?? 0;
+		let end = start + raw.length;
+		const grouped = /^\d{1,3}(?:[,. ]\d{2,3})*[,. ]\d{3}$/.test(raw);
+		let amount = grouped ? Number(raw.replace(/[,. ]/g, '')) : Number(raw.replace(',', '.'));
+		const rest = text.slice(end);
+		const spaces = /^\s*/u.exec(rest)?.[0].length ?? 0;
+		const after = normalise(rest.slice(spaces, spaces + 41));
+		const multiplier = multipliers.find(
+			({ word }) =>
+				after.startsWith(word) && (UNSPACED.test([...word].at(-1) ?? '') || !LETTER.test(after.charAt(word.length))),
+		);
+		if (multiplier) {
+			amount *= multiplier.factor;
+			end += spaces + multiplier.word.length;
+		} else if (LETTER.test(text.charAt(end))) continue;
+		const before = text.slice(0, start);
+		const afterWord = LETTER.test(before.trimEnd().slice(-1)) && !UNSPACED.test(before.trimEnd().slice(-1));
+		if (Number.isFinite(amount) && amount > 0) found.push({ amount, multiplied: multiplier !== undefined, afterWord });
+	}
+	return found;
+};
+
+/**
+ * A budget in a message, in whole units (C18), or null: the first amount after one of the answer's keywords (`under
+ * 15,000`), else one written with a multiplier word of the setting Budget words (`20k`) or standing on its own. A
+ * number right after a word is part of a name (`iPhone 15`, `Galaxy S24`), never a budget, unless a keyword comes
+ * just before it (`budget is 50000`).
+ * @param {string} message
+ * @param {{ keywords?: string[], words?: unknown }} [options] `keywords`: the answer's; `words`: the setting Budget words
+ */
+export const budgetOf = (message, { keywords = [], words = [] } = {}) => {
+	const text = String(message ?? '').normalize('NFKC');
+	const multipliers = multipliersOf(words);
+	const end = keywordEnd(text, keywords);
+	if (end >= 0) {
+		const after = amountsOf(text.slice(end), multipliers);
+		const chosen = after.find((a) => !a.afterWord) ?? after[0];
+		if (chosen) return Math.round(chosen.amount);
+	}
+	const chosen = amountsOf(text, multipliers).find((a) => a.multiplied || !a.afterWord);
+	return chosen ? Math.round(chosen.amount) : null;
 };
 
 /**

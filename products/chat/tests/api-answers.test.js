@@ -234,6 +234,14 @@ describe('fallback answers (C3)', () => {
 		);
 		const search = sys.shopCalls().find((c) => c.url.includes('/v1/chat/products?'));
 		expect(new URL(String(search?.url)).searchParams.get('maxPrice')).toBe('150000');
+		// the multiplier words are the merchant's (C18); a number in a product's name is no budget
+		await sys.setting('fallback_answers', 'budgetWords', ['k = 1000', 'mil = 1000']);
+		sys.ai(fail);
+		await v('POST', '/v1/chat/messages', { text: 'an iPhone 15 under 2 mil' });
+		expect(new URL(String(sys.shopCalls().at(-1)?.url)).searchParams.get('maxPrice')).toBe('200000');
+		sys.ai(fail);
+		await v('POST', '/v1/chat/messages', { text: 'is the iPhone 15 within budget' });
+		expect(texts((await v('GET', '/v1/chat')).json).at(-1)).toEqual(['system', 'Sorry, I cannot answer right now.']);
 		// a guest's order question skips the my-orders entry (no sign-in): nothing else matches
 		sys.ai(fail);
 		await v('POST', '/v1/chat/messages', { text: 'where is my order' });

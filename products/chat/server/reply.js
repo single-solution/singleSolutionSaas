@@ -710,7 +710,7 @@ export const createReply = (product, service) => {
 		}
 		if (name === 'top_products') return products(await shopRead(s, 'get_top_products', { kind: 'top' }, null));
 		if (name === 'products_under') {
-			const budget = budgetOf(message);
+			const budget = budgetOf(message, { keywords, words: (await s.values('fallback_answers')).budgetWords });
 			if (budget === null) return null;
 			return products(await shopRead(s, 'search_catalog', { query: '', maxPrice: budget, inStock: true }, null));
 		}

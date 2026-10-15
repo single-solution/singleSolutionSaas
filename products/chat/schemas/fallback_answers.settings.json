@@ -1,5 +1,16 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"budgetWords": {
+			"type": "array",
+			"title": "Budget words",
+			"default": ["k = 1000"],
+			"items": {
+				"type": "string",
+				"maxLength": 60
+			},
+			"description": "For {products_under}: words written after a number that multiply it, one per line as word = number (for example k = 1000, thousand = 1000, million = 1000000), in each language your visitors write in. The budget is the number after one of the answer's keywords, or one written with these words; a number right after a word, such as iPhone 15, is part of a name."
+		}
+	}
 }

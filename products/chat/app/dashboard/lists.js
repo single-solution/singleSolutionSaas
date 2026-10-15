@@ -631,7 +631,7 @@ export function FallbackAnswersEditor({ websiteId, off, languages, on }) {
 							rows={3}
 							value={(answer.keywords ?? []).join('\n')}
 							help={fill(A.keywordsHelp, limits)}
-							error={problem('keywords', limits) ?? problem('compareKeywords')}
+							error={problem('keywords', limits) ?? problem('compareKeywords') ?? problem('budgetKeywords')}
 							onChange={(event) => set({ keywords: toLines(event.target.value) })}
 						/>
 						<TextArea

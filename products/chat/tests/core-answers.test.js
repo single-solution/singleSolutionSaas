@@ -164,11 +164,26 @@ describe('fallback answers (C3)', () => {
 		expect(matchingFallbacks(items, { message: 'Bonjour !', language: 'fr-CA' }).map((i) => i.text)).toEqual(['a', 'c']);
 		expect(matchingFallbacks(items, { message: 'well hi there', language: null }).map((i) => i.text)).toEqual(['b', 'c']);
 		expect(matchingFallbacks(items, { message: 'this', language: null }).map((i) => i.text)).toEqual(['c']);
-		expect(budgetOf('under 15,000')).toBe(15000);
-		expect(budgetOf('around 20k')).toBe(20000);
-		expect(budgetOf('1.5k max')).toBe(1500);
+		// a budget (C18): the number after one of the answer's keywords, or one with a multiplier word of the setting
+		const words = ['k = 1000', 'lakh = 100,000', '万 = 10000', 'bad line', 'm = x', 'zero = 0'];
+		expect(budgetOf('under 15,000', { keywords: ['under'] })).toBe(15000);
+		expect(budgetOf('around 20k', { words })).toBe(20000);
+		expect(budgetOf('around 20k')).toBeNull();
+		expect(budgetOf('1.5k max', { words })).toBe(1500);
 		expect(budgetOf('12 500 please')).toBe(12500);
 		expect(budgetOf('no number')).toBeNull();
+		// numbers that belong to a product's name are not a budget
+		expect(budgetOf('Do you have the iPhone 15?', { keywords: ['under'], words })).toBeNull();
+		expect(budgetOf('iPhone 15 under 1000', { keywords: ['under'], words })).toBe(1000);
+		expect(budgetOf('Galaxy S24 under 2 lakh', { keywords: ['under'], words })).toBe(200000);
+		expect(budgetOf('Galaxy S24 please', { words })).toBeNull();
+		expect(budgetOf('budget is 50000', { keywords: ['budget'] })).toBe(50000);
+		expect(budgetOf('50k budget for a phone', { keywords: ['budget'], words })).toBe(50000);
+		expect(budgetOf('Under 1,50,000 please', { keywords: ['under'] })).toBe(150000);
+		expect(budgetOf('5万以下', { words })).toBe(50000);
+		// {products_under} needs keywords: the words before a budget
+		expect(fallbackProblems({ language: '', keywords: [], text: 'Here: {products_under}' })).toEqual(['budgetKeywords']);
+		expect(fallbackProblems({ language: '', keywords: ['under'], text: 'Here: {products_under}' })).toEqual([]);
 		expect(placeholdersOf('{deals_table} {my_orders} {other}')).toEqual(['deals_table', 'my_orders']);
 		expect(fillFallback('x {top_products}', { top_products: 'T' })).toBe('x T');
 		expect(fillFallback('x {top_products}', { top_products: null })).toBeNull();

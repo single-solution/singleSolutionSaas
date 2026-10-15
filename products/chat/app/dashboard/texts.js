@@ -139,7 +139,7 @@ export const TEXTS = dashboardTexts({
 				'Sent when the message contains one of them; none = any message. Up to {max} of up to {length} characters. For {comparison}, the words between the two products, such as vs or versus.',
 			text: 'Answer',
 			textHelp:
-				'Markdown, up to {max} characters. Placeholders, filled by the shop tools that are on: {deals_table} the active deals, {top_products} the top products, {products_under} products under the budget in the message, {my_orders} the visitor’s orders, {comparison} the two products the message names before and after a keyword side by side (Lamp Max vs Lamp Mini). An answer whose placeholder cannot be filled is skipped.',
+				'Markdown, up to {max} characters. Placeholders, filled by the shop tools that are on: {deals_table} the active deals, {top_products} the top products, {products_under} products under the budget the message names after a keyword (such as under 15,000) or with a budget word of the settings (20k), {my_orders} the visitor’s orders, {comparison} the two products the message names before and after a keyword side by side (Lamp Max vs Lamp Mini). An answer whose placeholder cannot be filled is skipped.',
 			needsOff: 'Skipped while these are off: {features}.',
 			placeholderFeatures: {
 				deals_table: 'Shop tools: deals and savings quotes',
@@ -152,6 +152,7 @@ export const TEXTS = dashboardTexts({
 				language: 'Pick a language, or Any language.',
 				keywords: 'Up to {max} keywords of up to {length} characters each.',
 				compareKeywords: 'Add the words between the two products, such as vs, for {comparison}.',
+				budgetKeywords: 'Add the words before a budget, such as under or budget, for {products_under}.',
 				text: 'Write the answer (up to {max} characters).',
 			},
 		},
