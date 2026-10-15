@@ -156,15 +156,28 @@ export const checkPaymentInput = (body) => {
 			reference,
 			customer: customer.value,
 			metadata: metadata.value,
+			answers: [],
 			returnUrl: input.returnUrl ?? null,
 			cancelUrl: input.cancelUrl ?? null,
 		},
 	};
 };
 
+/** Whether a payment link asks the payer's phone (P3). */
+export const LINK_PHONE = Object.freeze(/** @type {const} */ (['off', 'optional', 'required']));
+
+/** Engine caps of a link's own questions (P3, code constants). */
+export const LINK_FIELDS = Object.freeze({ max: 3, label: 60, answer: 200 });
+
+/** The longest a link may say it ends after (payments). */
+const MAX_LINK_PAYMENTS = 1_000_000;
+
 /**
  * A new payment link: a title, an optional description, a fixed amount (or `null`: the payer enters it, at least
- * `minAmount`), the currency, the gateways it offers (empty: every ready one) and where payers return afterwards.
+ * `minAmount`), the currency, the gateways it offers (empty: every ready one), where payers return afterwards, and
+ * (P3) whether it asks the payer's phone (`off`, `optional`, `required`), up to 3 questions of the merchant's own
+ * (`fields`: `{ label, required }`), and when it ends by itself: on a date (`expiresAt`, an ISO time) or after a number
+ * of payments (`maxPayments`).
  * @param {unknown} body
  * @returns {Checked}
  */
@@ -192,6 +205,27 @@ export const checkLinkInput = (body) => {
 		return { ok: false, field: 'returnUrl', message: 'returnUrl is an address of at most 2048 characters.' };
 	const reference = cleanText(input.reference, 120);
 	if (reference === null) return { ok: false, field: 'reference', message: 'reference is at most 120 characters.' };
+	const phone = input.phone ?? 'off';
+	if (!(/** @type {readonly unknown[]} */ (LINK_PHONE).includes(phone)))
+		return { ok: false, field: 'phone', message: `phone is ${LINK_PHONE.join(', ')}.` };
+	const fieldsIn = input.fields ?? [];
+	const fieldMessage = `fields lists up to ${LINK_FIELDS.max} questions { label (at most ${LINK_FIELDS.label} characters), required }.`;
+	if (!Array.isArray(fieldsIn) || fieldsIn.length > LINK_FIELDS.max)
+		return { ok: false, field: 'fields', message: fieldMessage };
+	/** @type {Array<{ label: string, required: boolean }>} */
+	const fields = [];
+	for (const item of fieldsIn) {
+		const label = isObject(item) ? cleanText(item.label, LINK_FIELDS.label) : null;
+		if (!label || (item.required !== undefined && typeof item.required !== 'boolean'))
+			return { ok: false, field: 'fields', message: fieldMessage };
+		fields.push({ label, required: item.required === true });
+	}
+	const expiresAt = input.expiresAt ?? null;
+	if (expiresAt !== null && (typeof expiresAt !== 'string' || Number.isNaN(Date.parse(expiresAt))))
+		return { ok: false, field: 'expiresAt', message: 'expiresAt is an ISO 8601 time, or null for no end date.' };
+	const maxPayments = input.maxPayments ?? null;
+	if (maxPayments !== null && !(Number.isSafeInteger(maxPayments) && maxPayments >= 1 && maxPayments <= MAX_LINK_PAYMENTS))
+		return { ok: false, field: 'maxPayments', message: 'maxPayments is a whole number from 1, or null for no limit.' };
 	return {
 		ok: true,
 		value: {
@@ -203,8 +237,49 @@ export const checkLinkInput = (body) => {
 			gateways: [...new Set(gateways)],
 			returnUrl: input.returnUrl ?? null,
 			reference,
+			phone,
+			fields,
+			expiresAt: expiresAt === null ? null : new Date(expiresAt),
+			maxPayments,
 		},
 	};
+};
+
+/**
+ * Why a link no longer takes payments by itself (P3): its end date passed (`expired`) or it has its number of payments
+ * (`full`); null while it is open (the merchant's own switch is `active`).
+ * @param {{ expiresAt?: Date | string | null, maxPayments?: number | null, paidCount: number }} link
+ * @param {number} now
+ * @returns {'expired' | 'full' | null}
+ */
+export const linkClosed = (link, now) => {
+	if (link.expiresAt && new Date(link.expiresAt).getTime() <= now) return 'expired';
+	if (link.maxPayments && link.paidCount >= link.maxPayments) return 'full';
+	return null;
+};
+
+/**
+ * What a payer gave a link beyond the amount (P3): the phone it asks (international format; required or optional), and
+ * the answers to its questions (each at most 200 characters, the required ones not empty).
+ * @param {{ phone: string, fields: Array<{ label: string, required: boolean }> }} link
+ * @param {{ phone?: unknown, answers?: unknown }} input `answers`: one text per question, in order
+ * @returns {{ ok: true, phone: string, answers: Array<{ label: string, value: string }> } |
+ *   { ok: false, field: string, index?: number }}
+ */
+export const checkLinkAnswers = (link, input) => {
+	const typed = link.phone === 'off' || typeof input.phone !== 'string' ? '' : input.phone.trim();
+	const checked = checkCustomer({ phone: typed });
+	if (!checked.ok || (link.phone === 'required' && typed === '')) return { ok: false, field: 'phone' };
+	const phone = typeof checked.value.phone === 'string' ? checked.value.phone : '';
+	const given = Array.isArray(input.answers) ? input.answers : [];
+	/** @type {Array<{ label: string, value: string }>} */
+	const answers = [];
+	for (const [index, field] of link.fields.entries()) {
+		const value = cleanText(given[index] ?? '', LINK_FIELDS.answer);
+		if (value === null || (field.required && value === '')) return { ok: false, field: 'answers', index };
+		if (value !== '') answers.push({ label: field.label, value });
+	}
+	return { ok: true, phone, answers };
 };
 
 /**
@@ -324,6 +399,7 @@ export const paymentView = (payment, checkoutUrl) => ({
 	gateway: payment.gateway,
 	kind: payment.gateway === null ? null : (payment.manual?.kind ?? 'gateway'),
 	methodName: payment.manual?.name ?? '',
+	answers: payment.answers,
 	description: payment.description,
 	reference: payment.reference,
 	customer: payment.customer,
@@ -369,11 +445,12 @@ export const paymentEventData = (view, extra = {}) => {
 };
 
 /**
- * A payment link as the API answers it.
+ * A payment link as the API answers it, with why it ended by itself (`closed`, P3).
  * @param {any} link
  * @param {string} url the hosted link page
+ * @param {number} now
  */
-export const linkView = (link, url) => ({
+export const linkView = (link, url, now) => ({
 	id: link.id,
 	title: link.title,
 	description: link.description,
@@ -385,6 +462,11 @@ export const linkView = (link, url) => ({
 	reference: link.reference,
 	active: link.active,
 	paidCount: link.paidCount,
+	phone: link.phone,
+	fields: link.fields,
+	expiresAt: link.expiresAt ? iso(link.expiresAt) : null,
+	maxPayments: link.maxPayments,
+	closed: linkClosed(link, now),
 	url,
 	createdAt: iso(link.createdAt),
 });

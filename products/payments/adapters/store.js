@@ -30,6 +30,7 @@ import { createId } from '@ss/contracts';
  * @property {string} reference the merchant's own reference
  * @property {import('../core/payments.js').Customer} customer
  * @property {Record<string, string>} metadata
+ * @property {Array<{ label: string, value: string }>} answers the payer's answers to a payment link's questions (P3)
  * @property {string | null} returnUrl
  * @property {string | null} cancelUrl
  * @property {string | null} gateway a gateway id, or a manual payment method's key (then `manual` says which)
@@ -52,7 +53,9 @@ import { createId } from '@ss/contracts';
  */
 /**
  * @typedef {{ id: string, title: string, description: string, amount: number | null, minAmount: number | null, currency: string,
- *   gateways: string[], returnUrl: string | null, reference: string, active: boolean, paidCount: number, createdAt: Date }} LinkRecord
+ *   gateways: string[], returnUrl: string | null, reference: string, active: boolean, paidCount: number, createdAt: Date,
+ *   phone: 'off' | 'optional' | 'required', fields: Array<{ label: string, required: boolean }>, expiresAt: Date | null,
+ *   maxPayments: number | null }} LinkRecord
  */
 /**
  * @typedef {{ id: string, gateway: 'stripe' | 'paypal', plan: string, customer: import('../core/payments.js').Customer,

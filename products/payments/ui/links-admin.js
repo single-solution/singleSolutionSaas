@@ -92,6 +92,9 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 			void manual.then((methods) => {
 				for (const method of methods) manualNames.set(method.key, method.name);
 			});
+			/** Whether a link takes payments: off, ended by itself (its date, its payments; P3), or active. @param {any} link */
+			const stateOf = (link) =>
+				!link.active ? t('links.off') : link.closed ? t(`links.closed.${link.closed}`) : t('links.active');
 			/** A gateway's or a manual method's name. @param {string} id */
 			const nameOf = (id) => manualNames.get(id) ?? formatText(t(`gateway.${id}`), { name: id });
 
@@ -142,7 +145,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				const actions = element(doc, 'div', { class: 'actions' });
 				actions.append(...(link.active ? [copyLink] : []), moreMenu(doc, t('links.moreActions'), menu));
 				const heading = element(doc, 'h3', {}, link.title);
-				heading.append(badge(doc, t(link.active ? 'links.active' : 'links.off'), link.active ? 'success' : 'neutral'));
+				heading.append(badge(doc, stateOf(link), link.active && !link.closed ? 'success' : 'neutral'));
 				const top = element(doc, 'div', { class: 'head' });
 				top.append(heading, actions);
 				view.detail.replaceChildren(
@@ -160,6 +163,13 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 								: t('links.allGateways'),
 						],
 						[t('links.field.reference'), link.reference],
+						[t('links.field.phone'), t(`links.phone.${link.phone}`)],
+						[
+							t('links.field.questions'),
+							link.fields.map((/** @type {{ label: string, required: boolean }} */ question) => question.label).join(', '),
+						],
+						[t('links.field.expiresAt'), link.expiresAt ? date(link.expiresAt) : ''],
+						[t('links.field.maxPayments'), link.maxPayments === null ? '' : String(link.maxPayments)],
 						[t('links.field.description'), link.description],
 						[t('links.field.returnUrl'), link.returnUrl],
 						[t('links.field.created'), date(link.createdAt)],
@@ -173,7 +183,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 			/** @param {any} link @param {HTMLElement} item */
 			const row = (link, item) => {
 				item.replaceChildren(
-					dot(doc, link.active ? 'success' : 'neutral', t(link.active ? 'links.active' : 'links.off')),
+					dot(doc, link.active && !link.closed ? 'success' : 'neutral', stateOf(link)),
 					element(doc, 'span', { class: 'name' }, link.title),
 					element(
 						doc,
@@ -185,11 +195,9 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						doc,
 						'span',
 						{ class: 'meta' },
-						[
-							t(link.active ? 'links.active' : 'links.off'),
-							formatText(t('links.paidCount'), { count: String(link.paidCount) }),
-							date(link.createdAt),
-						].join(' · '),
+						[stateOf(link), formatText(t('links.paidCount'), { count: String(link.paidCount) }), date(link.createdAt)].join(
+							' · ',
+						),
 					),
 				);
 			};
@@ -261,6 +269,24 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					label.append(box, name);
 					gateways.append(label);
 				}
+				// what the link asks beyond the amount, and when it ends by itself (P3)
+				const phone = /** @type {HTMLSelectElement} */ (element(doc, 'select', { name: 'phone' }));
+				phone.append(
+					...['off', 'optional', 'required'].map((value) => element(doc, 'option', { value }, t(`links.phone.${value}`))),
+				);
+				const questions = [0, 1, 2].map((index) => ({
+					label: input(`field_${index}`, { maxlength: '60' }),
+					required: input(`field_${index}_required`, { type: 'checkbox' }),
+				}));
+				const asked = element(doc, 'fieldset', { class: 'wide' });
+				asked.append(element(doc, 'legend', {}, t('links.field.questions')));
+				questions.forEach((question, index) => {
+					const check = element(doc, 'label', { class: 'check' });
+					check.append(question.required, formatText(t('links.field.questionRequired'), { n: index + 1 }));
+					asked.append(field(doc, formatText(t('links.field.question'), { n: index + 1 }), question.label), check);
+				});
+				const expiresAt = input('expiresAt', { type: 'datetime-local' });
+				const maxPayments = input('maxPayments', { type: 'number', min: '1', step: '1', inputmode: 'numeric' });
 				const grid = element(doc, 'div', { class: 'grid' });
 				const wide = (/** @type {HTMLElement} */ node) => {
 					node.classList.add('wide');
@@ -275,6 +301,10 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					wide(field(doc, t('links.field.returnUrl'), returnUrl)),
 					wide(field(doc, t('links.field.description'), description)),
 					gateways,
+					field(doc, t('links.field.phone'), phone),
+					asked,
+					field(doc, t('links.field.expiresAt'), expiresAt),
+					field(doc, t('links.field.maxPayments'), maxPayments),
 				);
 				openDialog(root, {
 					title: t('links.new'),
@@ -291,6 +321,14 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 						const picked = [...gateways.querySelectorAll('input:checked')].map(
 							(box) => /** @type {HTMLInputElement} */ (box).value,
 						);
+						// the end date in the viewer's own time, sent as an ISO time; a whole number of payments from 1
+						const ends = expiresAt.value ? new Date(expiresAt.value) : null;
+						const most = maxPayments.value.trim() ? Number(maxPayments.value) : null;
+						if (
+							(ends !== null && (Number.isNaN(ends.getTime()) || ends.getTime() <= Date.now())) ||
+							(most !== null && (!Number.isSafeInteger(most) || most < 1))
+						)
+							return t('links.invalidEnds');
 						const answer = await adminCall(api, 'POST', '/v1/admin/links', {
 							title: title.value.trim(),
 							description: description.value.trim(),
@@ -300,6 +338,12 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 							gateways: picked,
 							...(returnUrl.value.trim() ? { returnUrl: returnUrl.value.trim() } : {}),
 							reference: reference.value.trim(),
+							phone: phone.value,
+							fields: questions
+								.filter((question) => question.label.value.trim() !== '')
+								.map((question) => ({ label: question.label.value.trim(), required: question.required.checked })),
+							expiresAt: ends ? ends.toISOString() : null,
+							maxPayments: most,
 						});
 						if (!answer.ok) return formatText(t('links.createFailed'), { reason: answer.data?.detail ?? '' });
 						lastCurrency = answer.data.currency;

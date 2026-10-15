@@ -1083,6 +1083,66 @@ describe('payment links and the pay button routes', () => {
 		expect((await page(`/l/${env.websiteId}/${fixed.id}`)).status).toBe(404);
 		expect((await page(`/l/web_nope/${fixed.id}`)).status).toBe(404);
 	});
+
+	it('asks the phone and the merchant’s own questions, and ends on its date or after its payments (P3)', async () => {
+		const bad = await env.api('POST', '/v1/links', { title: 'x', currency: 'USD', phone: 'always' });
+		expect(bad.json.errors[0].path).toBe('/phone');
+		const made = await env.api('POST', '/v1/links', {
+			title: 'Workshop seat',
+			currency: 'USD',
+			amount: 5000,
+			gateways: ['bank_transfer'],
+			phone: 'required',
+			fields: [{ label: 'Company', required: true }, { label: 'Dietary needs' }],
+			maxPayments: 1,
+		});
+		expect(made.status).toBe(201);
+		expect(made.json).toMatchObject({ phone: 'required', maxPayments: 1, expiresAt: null, closed: null });
+		const link = made.json;
+		const shown = await page(`/l/${env.websiteId}/${link.id}`);
+		for (const text of ['Your phone', 'name="phone"', 'Company', 'name="field_0"', 'Dietary needs'])
+			expect(shown.text).toContain(text);
+		const path = `/l/${env.websiteId}/${link.id}`;
+		const noPhone = await env.call('POST', path, { form: { gateway: 'bank_transfer', field_0: 'Northwind' } });
+		expect(noPhone.status).toBe(422);
+		expect(noPhone.text).toContain('Enter your phone number with its country code');
+		const noAnswer = await env.call('POST', path, { form: { gateway: 'bank_transfer', phone: '+44 7700 900123' } });
+		expect(noAnswer.text).toContain('Fill in Company');
+		// the pay button routes ask the same
+		const asked = await env.call('GET', `/v1/checkout/links/${link.id}`, { token: env.browser, origin: ORIGIN });
+		expect(asked.json).toMatchObject({ phone: 'required', fields: link.fields });
+		const button = await env.call('POST', `/v1/checkout/links/${link.id}`, {
+			token: env.browser,
+			origin: ORIGIN,
+			body: { gateway: 'bank_transfer', customer: { phone: '+447700900123' }, answers: [''] },
+		});
+		expect(button.json.errors[0]).toMatchObject({ path: '/answers/0', message: expect.stringContaining('Company') });
+		const paid = await env.call('POST', path, {
+			form: { gateway: 'bank_transfer', phone: '+44 7700 900123', field_0: ' Northwind ', field_1: '' },
+		});
+		expect(paid.status).toBe(303);
+		const paymentId = String(paid.headers.get('location')).split('/').at(-1);
+		const payment = (await env.api('GET', `/v1/payments/${paymentId}`)).json;
+		expect(payment).toMatchObject({
+			customer: { phone: '+447700900123' },
+			answers: [{ label: 'Company', value: 'Northwind' }],
+		});
+		// one payment made: the link ended by itself
+		await env.api('POST', `/v1/payments/${paymentId}/confirm`, {});
+		expect((await env.api('GET', `/v1/links/${link.id}`)).json).toMatchObject({ active: true, closed: 'full' });
+		expect((await page(path)).status).toBe(404);
+		// a link with an end date: gone once it passed
+		const dated = await env.api('POST', '/v1/links', {
+			title: 'Early bird',
+			currency: 'USD',
+			amount: 1000,
+			expiresAt: new Date(env.now() + 60_000).toISOString(),
+		});
+		expect((await page(`/l/${env.websiteId}/${dated.json.id}`)).status).toBe(200);
+		env.advance(61_000);
+		expect((await page(`/l/${env.websiteId}/${dated.json.id}`)).status).toBe(404);
+		expect((await env.api('GET', `/v1/links/${dated.json.id}`)).json.closed).toBe('expired');
+	});
 });
 
 describe('subscriptions', () => {

@@ -267,6 +267,13 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 					: '';
 				const fields = fieldGrid(doc, [
 					[t('admin.field.gateway'), gatewayName(payment.gateway, payment.methodName)],
+					// the payer's answers to the link's own questions (P3)
+					[
+						t('admin.field.answers'),
+						payment.answers
+							.map((/** @type {{ label: string, value: string }} */ answer) => `${answer.label}: ${answer.value}`)
+							.join('\n'),
+					],
 					[t('admin.field.reference'), payment.reference],
 					[t('admin.field.description'), payment.description],
 					[t('admin.field.name'), customer.name],

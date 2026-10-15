@@ -506,6 +506,52 @@
 									"reference": {
 										"type": "string",
 										"maxLength": 120
+									},
+									"phone": {
+										"type": "string",
+										"enum": [
+											"off",
+											"optional",
+											"required"
+										],
+										"description": "Whether the link asks the payer's phone (default off)."
+									},
+									"fields": {
+										"type": "array",
+										"maxItems": 3,
+										"description": "Up to 3 questions of your own the payer answers (at most 200 characters each).",
+										"items": {
+											"type": "object",
+											"required": [
+												"label"
+											],
+											"properties": {
+												"label": {
+													"type": "string",
+													"maxLength": 60
+												},
+												"required": {
+													"type": "boolean",
+													"description": "Default false."
+												}
+											}
+										}
+									},
+									"expiresAt": {
+										"type": [
+											"string",
+											"null"
+										],
+										"format": "date-time",
+										"description": "When the link ends by itself (ISO 8601; null or left out: no end date)."
+									},
+									"maxPayments": {
+										"type": [
+											"integer",
+											"null"
+										],
+										"minimum": 1,
+										"description": "After how many paid payments the link ends by itself (null or left out: no limit)."
 									}
 								}
 							}
@@ -1373,7 +1419,9 @@
 										"amount",
 										"minAmount",
 										"currency",
-										"gateways"
+										"gateways",
+										"phone",
+										"fields"
 									],
 									"additionalProperties": false,
 									"properties": {
@@ -1426,6 +1474,37 @@
 													"details": {
 														"type": "string",
 														"description": "A manual payment method's details ('' for a gateway)."
+													}
+												}
+											}
+										},
+										"phone": {
+											"type": "string",
+											"enum": [
+												"off",
+												"optional",
+												"required"
+											],
+											"description": "Whether the link asks the payer's phone (international format)."
+										},
+										"fields": {
+											"type": "array",
+											"maxItems": 3,
+											"description": "Up to 3 questions of your own the payer answers (at most 200 characters each).",
+											"items": {
+												"type": "object",
+												"required": [
+													"label",
+													"required"
+												],
+												"additionalProperties": false,
+												"properties": {
+													"label": {
+														"type": "string",
+														"maxLength": 60
+													},
+													"required": {
+														"type": "boolean"
 													}
 												}
 											}
@@ -1515,7 +1594,21 @@
 											"email": {
 												"type": "string",
 												"format": "email"
+											},
+											"phone": {
+												"type": "string",
+												"maxLength": 20,
+												"description": "When the link asks it: international format (+…)."
 											}
+										}
+									},
+									"answers": {
+										"type": "array",
+										"maxItems": 3,
+										"description": "One text per question of the link, in order (P3).",
+										"items": {
+											"type": "string",
+											"maxLength": 200
 										}
 									}
 								}
@@ -2734,6 +2827,52 @@
 									"reference": {
 										"type": "string",
 										"maxLength": 120
+									},
+									"phone": {
+										"type": "string",
+										"enum": [
+											"off",
+											"optional",
+											"required"
+										],
+										"description": "Whether the link asks the payer's phone (default off)."
+									},
+									"fields": {
+										"type": "array",
+										"maxItems": 3,
+										"description": "Up to 3 questions of your own the payer answers (at most 200 characters each).",
+										"items": {
+											"type": "object",
+											"required": [
+												"label"
+											],
+											"properties": {
+												"label": {
+													"type": "string",
+													"maxLength": 60
+												},
+												"required": {
+													"type": "boolean",
+													"description": "Default false."
+												}
+											}
+										}
+									},
+									"expiresAt": {
+										"type": [
+											"string",
+											"null"
+										],
+										"format": "date-time",
+										"description": "When the link ends by itself (ISO 8601; null or left out: no end date)."
+									},
+									"maxPayments": {
+										"type": [
+											"integer",
+											"null"
+										],
+										"minimum": 1,
+										"description": "After how many paid payments the link ends by itself (null or left out: no limit)."
 									}
 								}
 							}
@@ -5583,6 +5722,11 @@
 					"reference",
 					"active",
 					"paidCount",
+					"phone",
+					"fields",
+					"expiresAt",
+					"maxPayments",
+					"closed",
 					"url",
 					"createdAt"
 				],
@@ -5648,6 +5792,64 @@
 					"paidCount": {
 						"type": "integer",
 						"minimum": 0
+					},
+					"phone": {
+						"type": "string",
+						"enum": [
+							"off",
+							"optional",
+							"required"
+						],
+						"description": "Whether the link asks the payer's phone (international format)."
+					},
+					"fields": {
+						"type": "array",
+						"maxItems": 3,
+						"description": "Up to 3 questions of your own the payer answers (at most 200 characters each).",
+						"items": {
+							"type": "object",
+							"required": [
+								"label",
+								"required"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"label": {
+									"type": "string",
+									"maxLength": 60
+								},
+								"required": {
+									"type": "boolean"
+								}
+							}
+						}
+					},
+					"expiresAt": {
+						"type": [
+							"string",
+							"null"
+						],
+						"format": "date-time",
+						"description": "The link ends by itself at this time (null: no end date)."
+					},
+					"maxPayments": {
+						"type": [
+							"integer",
+							"null"
+						],
+						"description": "The link ends by itself after this many paid payments (null: no limit)."
+					},
+					"closed": {
+						"type": [
+							"string",
+							"null"
+						],
+						"enum": [
+							"expired",
+							"full",
+							null
+						],
+						"description": "Why the link ended by itself: expired (its date passed) or full (its payments were made); null while it is open. active is your own switch."
 					},
 					"url": {
 						"type": "string",
@@ -5933,6 +6135,7 @@
 					"reference",
 					"customer",
 					"metadata",
+					"answers",
 					"source",
 					"linkId",
 					"gatewayReference",
@@ -6039,6 +6242,27 @@
 							"maxLength": 500
 						},
 						"description": "Your own labels: up to 20 names (letters, digits, _ . -) with texts of at most 500 characters."
+					},
+					"answers": {
+						"type": "array",
+						"description": "The payer's answers to the payment link's own questions (P3), in the link's order; only the ones answered.",
+						"items": {
+							"type": "object",
+							"required": [
+								"label",
+								"value"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"label": {
+									"type": "string",
+									"description": "The question as the link asked it."
+								},
+								"value": {
+									"type": "string"
+								}
+							}
+						}
 					},
 					"source": {
 						"type": "string",

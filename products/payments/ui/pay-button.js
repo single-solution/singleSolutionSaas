@@ -89,6 +89,31 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 			const email = /** @type {HTMLInputElement} */ (
 				element(doc, 'input', { id: 'ss-pay-email', type: 'email', autocomplete: 'email', maxlength: '254' })
 			);
+			// what the link asks beyond the amount (P3): the phone, and the merchant's own questions
+			const phone =
+				data.phone !== 'optional' && data.phone !== 'required'
+					? null
+					: /** @type {HTMLInputElement} */ (
+							element(doc, 'input', {
+								id: 'ss-pay-phone',
+								type: 'tel',
+								autocomplete: 'tel',
+								maxlength: '20',
+								...(data.phone === 'required' ? { required: '' } : {}),
+							})
+						);
+			/** @type {Array<{ label: string, required: boolean }>} */
+			const questions = data.fields ?? [];
+			const answers = questions.map(
+				(question, index) =>
+					/** @type {HTMLInputElement} */ (
+						element(doc, 'input', {
+							id: `ss-pay-field-${index}`,
+							maxlength: '200',
+							...(question.required ? { required: '' } : {}),
+						})
+					),
+			);
 			const method = /** @type {HTMLSelectElement} */ (element(doc, 'select', { id: 'ss-pay-method' }));
 			method.append(
 				...data.gateways.map((/** @type {{ id: string, name: string }} */ g) =>
@@ -101,6 +126,21 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 				name,
 				element(doc, 'label', { for: 'ss-pay-email' }, t('link.email')),
 				email,
+				...(phone
+					? [
+							element(
+								doc,
+								'label',
+								{ for: 'ss-pay-phone' },
+								t(data.phone === 'required' ? 'link.phone' : 'link.phoneOptional'),
+							),
+							phone,
+						]
+					: []),
+				...questions.flatMap((question, index) => [
+					element(doc, 'label', { for: `ss-pay-field-${index}` }, question.label),
+					/** @type {HTMLInputElement} */ (answers[index]),
+				]),
 				element(doc, 'label', { for: 'ss-pay-method' }, t('link.method')),
 				method,
 				button,
@@ -126,20 +166,30 @@ export const mountPayButton = async ({ host, config, call, go }) => {
 					body: {
 						...(typed === null ? {} : { amount: toDecimal(typed, data.currency) }),
 						gateway: method.value,
-						customer: { name: name.value.trim(), email: email.value.trim() },
+						customer: {
+							name: name.value.trim(),
+							email: email.value.trim(),
+							...(phone ? { phone: phone.value.trim() } : {}),
+						},
+						...(answers.length > 0 ? { answers: answers.map((answer) => answer.value.trim()) } : {}),
 					},
 				});
 				button.removeAttribute('disabled');
 				if (made.ok) return go(made.data.checkoutUrl);
-				const field = made.data?.errors?.[0]?.path;
+				const field = String(made.data?.errors?.[0]?.path ?? '');
+				const question = /^\/answers\/(\d+)$/.exec(field);
 				status.textContent =
 					field === '/amount'
 						? invalidAmount()
 						: field === '/email'
 							? t('link.invalidEmail')
-							: field === '/gateway'
-								? t('link.invalidMethod')
-								: t('button.failed');
+							: field === '/phone'
+								? t('link.invalidPhone')
+								: question
+									? formatText(t('link.invalidAnswer'), { label: questions[Number(question[1])]?.label ?? '' })
+									: field === '/gateway'
+										? t('link.invalidMethod')
+										: t('button.failed');
 			});
 			root.append(box);
 		},

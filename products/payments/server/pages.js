@@ -129,10 +129,11 @@ export const gatewayName = (texts, gateway, genericName = '') =>
 	translator(texts)(`gateway.${gateway}`, gateway === 'generic' ? { name: genericName } : {});
 
 /**
- * The payment-link page: amount (when the link has none), the payer's name and email, the payment method.
+ * The payment-link page: amount (when the link has none), the payer's name and email, the phone and the questions the
+ * link asks (P3), the payment method.
  * @param {PageLook & { business: string, link: { title: string, description: string, amount: number | null, minAmount: number | null,
- *   currency: string }, gateways: Array<{ id: string, name: string }>, action: string, error?: string,
- *   values?: Record<string, string> }} input
+ *   currency: string, phone: 'off' | 'optional' | 'required', fields: Array<{ label: string, required: boolean }> },
+ *   gateways: Array<{ id: string, name: string }>, action: string, error?: string, values?: Record<string, string> }} input
  */
 export const renderLinkPage = ({ texts, theme, money, business, link, gateways, action, error = '', values = {} }) => {
 	const t = translator(texts);
@@ -142,6 +143,21 @@ export const renderLinkPage = ({ texts, theme, money, business, link, gateways, 
 <input id="amount" name="amount" inputmode="decimal" required value="${escape(values.amount ?? '')}">
 <p class="muted">${escape(t('link.amountHelp', { min: money(link.minAmount ?? 1, link.currency) }))}</p>`
 			: `<p class="amount">${escape(money(link.amount, link.currency))}</p>`;
+	// what the link asks beyond the amount (P3): the phone, and the merchant's own questions
+	const phone =
+		link.phone === 'off'
+			? ''
+			: `<label for="phone">${escape(t(link.phone === 'required' ? 'link.phone' : 'link.phoneOptional'))}</label>
+<input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="20"${link.phone === 'required' ? ' required' : ''} value="${escape(values.phone ?? '')}">`;
+	const asked = [
+		phone,
+		...link.fields.map(
+			(field, index) => `<label for="field_${index}">${escape(field.label)}</label>
+<input id="field_${index}" name="field_${index}" maxlength="200"${field.required ? ' required' : ''} value="${escape(values[`field_${index}`] ?? '')}">`,
+		),
+	]
+		.filter(Boolean)
+		.join('\n');
 	const methods =
 		gateways.length === 0
 			? `<p>${escape(t('page.noGateway'))}</p>`
@@ -161,6 +177,7 @@ ${amount}
 <input id="name" name="name" autocomplete="name" maxlength="120" value="${escape(values.name ?? '')}">
 <label for="email">${escape(t('link.email'))}</label>
 <input id="email" name="email" type="email" autocomplete="email" maxlength="254" value="${escape(values.email ?? '')}">
+${asked}
 ${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}
 ${methods}
 </form>`,

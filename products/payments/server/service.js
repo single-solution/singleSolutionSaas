@@ -190,8 +190,9 @@ export const createService = (product) => {
 	 * Create a payment (API or a payment link).
 	 * @param {Site} s
 	 * @param {{ amount: number, currency: string, gateway: string | null, description: string, reference: string,
-	 *   customer: import('../core/payments.js').Customer, metadata: Record<string, string>, returnUrl: string | null,
-	 *   cancelUrl: string | null }} input checked by `checkPaymentInput`
+	 *   customer: import('../core/payments.js').Customer, metadata: Record<string, string>,
+	 *   answers: Array<{ label: string, value: string }>, returnUrl: string | null, cancelUrl: string | null }} input
+	 *   checked by `checkPaymentInput` (a link's answers: `checkLinkAnswers`)
 	 * @param {{ source: 'api' | 'link', linkId?: string | null }} from
 	 */
 	const createPayment = async (s, input, { source, linkId = null }) => {

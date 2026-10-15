@@ -18,6 +18,7 @@ import {
 	PAYMENT_STATUSES,
 	SUBSCRIPTION_STATUSES,
 	checkCustomer,
+	checkLinkAnswers,
 	checkLinkInput,
 	checkPaymentInput,
 	checkSubscriptionInput,
@@ -26,6 +27,7 @@ import {
 	isConfirmedFor,
 	isPaymentMethod,
 	isRefundDue,
+	linkClosed,
 	linkView,
 	subscriptionView,
 } from '../core/payments.js';
@@ -389,7 +391,7 @@ export const createRoutes = (product) => {
 			link.title,
 			link.amount === null ? link.currency : money(link.amount, link.currency),
 		);
-		return created(linkView(link, service.linkUrl(s, link.id)));
+		return created(linkView(link, service.linkUrl(s, link.id), product.now()));
 	};
 
 	/**
@@ -401,7 +403,7 @@ export const createRoutes = (product) => {
 		const s = await siteOf(ctx);
 		const rows = await s.store.links.list({ after: page.after, limit: page.fetchLimit });
 		return page.respond(
-			rows.map((link) => linkView(link, service.linkUrl(s, link.id))),
+			rows.map((link) => linkView(link, service.linkUrl(s, link.id), product.now())),
 			(view) => [view.createdAt, view.id],
 		);
 	};
@@ -410,7 +412,7 @@ export const createRoutes = (product) => {
 	const readLink = async (ctx) => {
 		const s = await siteOf(ctx);
 		const link = isId(ctx.params.id, 'link') ? await s.store.links.get(ctx.params.id) : null;
-		return link ? linkView(link, service.linkUrl(s, link.id)) : problem('not_found', 'No such link.');
+		return link ? linkView(link, service.linkUrl(s, link.id), product.now()) : problem('not_found', 'No such link.');
 	};
 
 	/**
@@ -423,26 +425,28 @@ export const createRoutes = (product) => {
 		const link = isId(ctx.params.id, 'link') ? await s.store.links.setActive(ctx.params.id, ctx.body.active) : null;
 		if (!link) return problem('not_found', 'No such link.');
 		await log(ctx, link.active ? 'link.turned_on' : 'link.turned_off', link.id, link.title, '');
-		return linkView(link, service.linkUrl(s, link.id));
+		return linkView(link, service.linkUrl(s, link.id), product.now());
 	};
 
 	/**
-	 * A payment link of the website that is active and on, or null.
+	 * A payment link of the website that is on, active and has not ended by itself (its date, its payments; P3), or null.
 	 * @param {Site} s @param {unknown} id
 	 */
 	const activeLink = async (s, id) => {
 		if (!s.on.includes('payment_links') || !isId(id, 'link')) return null;
 		const link = await s.store.links.get(id);
-		return link?.active ? link : null;
+		return link?.active && linkClosed(link, product.now()) === null ? link : null;
 	};
 
 	/**
 	 * A payment from a link, with what the payer entered.
 	 * @param {Site} s
 	 * @param {import('../adapters/store.js').LinkRecord} link
-	 * @param {{ amount: number | null, gateway: unknown, name: unknown, email: unknown }} input `amount`: what the payer
-	 *   entered, in minor units (null when it is not an amount)
-	 * @returns {Promise<{ ok: true, payment: import('../adapters/store.js').PaymentRecord } | { ok: false, field: string, key: string }>}
+	 * @param {{ amount: number | null, gateway: unknown, name: unknown, email: unknown, phone: unknown, answers: unknown }} input
+	 *   `amount`: what the payer entered, in minor units (null when it is not an amount); `phone` and `answers` what the
+	 *   link asks (P3)
+	 * @returns {Promise<{ ok: true, payment: import('../adapters/store.js').PaymentRecord } |
+	 *   { ok: false, field: string, key: string, label?: string }>}
 	 */
 	const payLink = async (s, link, input) => {
 		const amount = link.amount ?? input.amount;
@@ -450,6 +454,17 @@ export const createRoutes = (product) => {
 			return { ok: false, field: 'amount', key: 'link.invalidAmount' };
 		const customer = checkCustomer({ name: input.name ?? '', email: input.email ?? '' });
 		if (!customer.ok) return { ok: false, field: 'email', key: 'link.invalidEmail' };
+		// what the link asks beyond the amount (P3)
+		const asked = checkLinkAnswers(link, { phone: input.phone, answers: input.answers });
+		if (!asked.ok)
+			return asked.field === 'phone'
+				? { ok: false, field: 'phone', key: 'link.invalidPhone' }
+				: {
+						ok: false,
+						field: `answers/${asked.index}`,
+						key: 'link.invalidAnswer',
+						label: link.fields[Number(asked.index)]?.label ?? '',
+					};
 		const gateways = await service.available(s, link.currency, link.gateways);
 		if (!isPaymentMethod(input.gateway) || !gateways.includes(input.gateway))
 			return { ok: false, field: 'gateway', key: 'link.invalidMethod' };
@@ -461,8 +476,9 @@ export const createRoutes = (product) => {
 				gateway: input.gateway,
 				description: link.title,
 				reference: link.reference,
-				customer: customer.value,
+				customer: { ...customer.value, ...(asked.phone ? { phone: asked.phone } : {}) },
 				metadata: {},
+				answers: asked.answers,
 				returnUrl: link.returnUrl,
 				cancelUrl: null,
 			},
@@ -736,9 +752,14 @@ export const createRoutes = (product) => {
 			gateway: form.gateway,
 			name: form.name,
 			email: form.email,
+			phone: form.phone,
+			answers: link.fields.map((_, index) => form[`field_${index}`] ?? ''),
 		});
 		if (made.ok) return seeOther(`/pay/${websiteId}/${made.payment.id}`);
-		const error = formatText(look.texts[made.key] ?? made.key, { min: look.money(Number(link.minAmount ?? 1), link.currency) });
+		const error = formatText(look.texts[made.key] ?? made.key, {
+			min: look.money(Number(link.minAmount ?? 1), link.currency),
+			label: made.label ?? '',
+		});
 		return html(renderLinkPage({ ...look, business, link, gateways, action, error, values: form }), 422);
 	};
 
@@ -949,6 +970,8 @@ export const createRoutes = (product) => {
 					amount: link.amount,
 					minAmount: link.minAmount,
 					currency: link.currency,
+					phone: link.phone,
+					fields: link.fields,
 					gateways: await choices(s, texts, link.currency, link.gateways),
 				};
 			},
@@ -969,8 +992,14 @@ export const createRoutes = (product) => {
 					gateway: body.gateway,
 					name: body.customer?.name,
 					email: body.customer?.email,
+					phone: body.customer?.phone,
+					answers: body.answers,
 				});
-				if (!made.ok) return invalid(made.field, strings[/** @type {keyof typeof strings} */ (made.key)] ?? made.key);
+				if (!made.ok)
+					return invalid(
+						made.field,
+						formatText(strings[/** @type {keyof typeof strings} */ (made.key)] ?? made.key, { label: made.label ?? '' }),
+					);
 				return created({ paymentId: made.payment.id, checkoutUrl: service.payUrl(s, made.payment.id) });
 			},
 		}),

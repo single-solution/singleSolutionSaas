@@ -113,6 +113,7 @@ const PAYMENT = {
 	reference: 'o-1',
 	customer: { email: 'ana@example.com' },
 	metadata: {},
+	answers: [{ label: 'Company', value: 'Northwind' }],
 	proof: { type: 'image/png', size: 10 },
 	refunds: [],
 	history: [
@@ -160,6 +161,8 @@ describe('pay button', () => {
 					amount: null,
 					minAmount: 500,
 					currency: 'USD',
+					phone: 'required',
+					fields: [{ label: 'Company', required: true }],
 					gateways: [{ id: 'stripe', name: 'Card (Stripe)' }],
 				});
 			},
@@ -176,12 +179,22 @@ describe('pay button', () => {
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
 		expect(statusText(host)).toBe('Enter an amount of at least USD 5.00.');
-		expect(posted[0]).toEqual({ amount: '1.00', gateway: 'stripe', customer: { name: '', email: '' } });
+		expect(posted[0]).toEqual({
+			amount: '1.00',
+			gateway: 'stripe',
+			customer: { name: '', email: '', phone: '' },
+			answers: [''],
+		});
+		// the link asks the phone and its own question (P3)
+		expect(host.shadowRoot?.textContent).toContain('Your phone');
+		expect(host.shadowRoot?.textContent).toContain('Company');
+		inside(host, '#ss-pay-phone').value = ' +447700900123 ';
+		inside(host, '#ss-pay-field-0').value = ' Northwind ';
 		// the shown decimal sign or a comma that cannot be a thousands separator; the API gets a plain decimal (P6)
 		inside(host, '#ss-pay-amount').value = '12,5';
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
-		expect(posted[1]).toMatchObject({ amount: '12.50' });
+		expect(posted[1]).toMatchObject({ amount: '12.50', customer: { phone: '+447700900123' }, answers: ['Northwind'] });
 		inside(host, '#ss-pay-amount').value = '1,250';
 		inside(host, 'form').dispatchEvent(new window.Event('submit'));
 		await flush();
@@ -190,6 +203,8 @@ describe('pay button', () => {
 		inside(host, '#ss-pay-amount').value = '10';
 		for (const [path, text] of [
 			['/email', strings['link.invalidEmail']],
+			['/phone', strings['link.invalidPhone']],
+			['/answers/0', strings['link.invalidAnswer'].replace('{label}', 'Company')],
 			['/gateway', strings['link.invalidMethod']],
 			['/other', strings['button.failed']],
 		]) {
@@ -490,6 +505,8 @@ describe('Payments admin widget', () => {
 		expect(detailStatus(host)).toBe(strings['admin.failed']);
 		expect(menuItem(host, strings['admin.copyPayLink'])).toBeUndefined();
 
+		// the payer's answers to the link's questions (P3)
+		expect(detailText(host)).toContain('Company: Northwind');
 		rows(host)[1]?.click();
 		await flush();
 		expect(inside(host, '.split').getAttribute('data-view')).toBe('detail');
@@ -748,6 +765,11 @@ describe('Payment links admin widget', () => {
 		reference: 'inv-42',
 		active: true,
 		paidCount: 2,
+		phone: 'optional',
+		fields: [{ label: 'Company', required: true }],
+		expiresAt: null,
+		maxPayments: null,
+		closed: null,
 		url: 'https://payments.example.dev/l/web_1/link_1',
 		createdAt: '2026-10-01T10:00:00.000Z',
 	};
@@ -849,7 +871,7 @@ describe('Payment links admin widget', () => {
 		const set = (/** @type {string} */ name, /** @type {string} */ value) => {
 			/** @type {HTMLInputElement} */ (form.querySelector(`[name="${name}"]`)).value = value;
 		};
-		const boxes = [...form.querySelectorAll('input[type="checkbox"]')].map((box) => /** @type {HTMLInputElement} */ (box));
+		const boxes = [...form.querySelectorAll('input[name="gateway"]')].map((box) => /** @type {HTMLInputElement} */ (box));
 		// the gateways, then the merchant's manual payment methods by their names (P1)
 		expect(boxes.map((box) => box.value)).toEqual(['stripe', 'bank_transfer']);
 		expect(form.textContent).toContain('Bank transfer');
@@ -872,6 +894,14 @@ describe('Payment links admin widget', () => {
 		reply = answer(201, OPEN);
 		set('returnUrl', '');
 		set('amount', '');
+		// what the link asks and when it ends (P3)
+		/** @type {HTMLSelectElement} */ (form.querySelector('select[name="phone"]')).value = 'required';
+		set('field_1', ' Company ');
+		/** @type {HTMLInputElement} */ (form.querySelector('input[name="field_1_required"]')).checked = true;
+		set('maxPayments', '0');
+		await submitDialog(host);
+		expect(form.querySelector('[role="status"]')?.textContent).toBe(strings['links.invalidEnds']);
+		set('maxPayments', '50');
 		await submitDialog(host);
 		expect(bodies.at(-1)).toEqual({
 			title: 'Donations',
@@ -881,6 +911,10 @@ describe('Payment links admin widget', () => {
 			minAmount: 10000,
 			gateways: ['bank_transfer'],
 			reference: '',
+			phone: 'required',
+			fields: [{ label: 'Company', required: true }],
+			expiresAt: null,
+			maxPayments: 50,
 		});
 		expect(dialog(host)).toBeNull();
 		expect(rows(host)[0]?.textContent).toContain('Donations');
@@ -951,9 +985,9 @@ describe('Payment links admin widget', () => {
 		await flush();
 		button(host, strings['links.new']).click();
 		await flush();
-		const labels = [.../** @type {HTMLFormElement} */ (dialog(host)).querySelectorAll('label.check')].map(
-			(label) => label.textContent,
-		);
+		const labels = [
+			.../** @type {HTMLFormElement} */ (dialog(host)).querySelectorAll('fieldset:first-of-type label.check'),
+		].map((label) => label.textContent);
 		expect(labels).toEqual(['Card (Stripe)', 'PayFast (ZAR)', 'PayFast (PKR)']);
 	});
 

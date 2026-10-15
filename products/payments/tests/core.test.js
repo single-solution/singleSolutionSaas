@@ -17,7 +17,9 @@ import { MAX_AMOUNT, amountOf, amountText, decimalSignOf, fromDecimal, isAmount,
 import {
 	EVENT_DATA_LIMIT,
 	checkCustomer,
+	checkLinkAnswers,
 	checkLinkInput,
+	linkClosed,
 	checkMetadata,
 	checkPaymentInput,
 	checkSubscriptionInput,
@@ -101,6 +103,76 @@ describe('gateways', () => {
 		expect(gatewaysFor({ on, ready, currency: 'PKR', only: ['jazzcash'] })).toEqual(['jazzcash']);
 		// a manual payment method is the merchant's, not a gateway
 		expect(isGateway('bank_transfer')).toBe(false);
+	});
+});
+
+describe('payment links ask more and end by themselves (P3)', () => {
+	const base = { title: 'Workshop', currency: 'EUR', amount: 5000 };
+	it('takes the phone setting, up to 3 questions, an end date and a number of payments', () => {
+		const checked = checkLinkInput({
+			...base,
+			phone: 'required',
+			fields: [{ label: ' Company ', required: true }, { label: 'VAT number' }],
+			expiresAt: '2026-12-31T23:00:00Z',
+			maxPayments: 20,
+		});
+		expect(checked).toMatchObject({
+			ok: true,
+			value: {
+				phone: 'required',
+				fields: [
+					{ label: 'Company', required: true },
+					{ label: 'VAT number', required: false },
+				],
+				expiresAt: new Date('2026-12-31T23:00:00Z'),
+				maxPayments: 20,
+			},
+		});
+		expect(checkLinkInput(base)).toMatchObject({ value: { phone: 'off', fields: [], expiresAt: null, maxPayments: null } });
+		for (const [change, field] of /** @type {Array<[Record<string, unknown>, string]>} */ ([
+			[{ phone: 'yes' }, 'phone'],
+			[{ fields: [{ label: 'a' }, { label: 'b' }, { label: 'c' }, { label: 'd' }] }, 'fields'],
+			[{ fields: [{ label: '' }] }, 'fields'],
+			[{ fields: [{ label: 'x'.repeat(61) }] }, 'fields'],
+			[{ fields: [{ label: 'a', required: 'yes' }] }, 'fields'],
+			[{ expiresAt: 'next week' }, 'expiresAt'],
+			[{ maxPayments: 0 }, 'maxPayments'],
+			[{ maxPayments: 1.5 }, 'maxPayments'],
+		]))
+			expect(checkLinkInput({ ...base, ...change })).toMatchObject({ ok: false, field });
+	});
+	it('ends on its date or once it has its payments', () => {
+		const now = Date.parse('2026-10-16T00:00:00Z');
+		expect(linkClosed({ expiresAt: null, maxPayments: null, paidCount: 99 }, now)).toBeNull();
+		expect(linkClosed({ expiresAt: new Date(now), maxPayments: null, paidCount: 0 }, now)).toBe('expired');
+		expect(linkClosed({ expiresAt: new Date(now + 1000), maxPayments: 2, paidCount: 1 }, now)).toBeNull();
+		expect(linkClosed({ expiresAt: null, maxPayments: 2, paidCount: 2 }, now)).toBe('full');
+	});
+	it('checks the payer’s phone and answers as the link asks', () => {
+		const link = {
+			phone: /** @type {const} */ ('required'),
+			fields: [
+				{ label: 'Company', required: true },
+				{ label: 'Note', required: false },
+			],
+		};
+		expect(checkLinkAnswers(link, { phone: '+44 7700 900123', answers: [' Northwind ', ''] })).toEqual({
+			ok: true,
+			phone: '+447700900123',
+			answers: [{ label: 'Company', value: 'Northwind' }],
+		});
+		expect(checkLinkAnswers(link, { phone: '', answers: ['Northwind'] })).toEqual({ ok: false, field: 'phone' });
+		expect(checkLinkAnswers(link, { phone: '07700', answers: ['Northwind'] })).toEqual({ ok: false, field: 'phone' });
+		expect(checkLinkAnswers(link, { phone: '+447700900123', answers: [''] })).toEqual({
+			ok: false,
+			field: 'answers',
+			index: 0,
+		});
+		expect(checkLinkAnswers(link, { phone: '+447700900123', answers: ['x'.repeat(201)] })).toMatchObject({ ok: false });
+		// optional: empty is fine, a wrong one is not; off: whatever is sent is ignored
+		expect(checkLinkAnswers({ phone: 'optional', fields: [] }, {})).toEqual({ ok: true, phone: '', answers: [] });
+		expect(checkLinkAnswers({ phone: 'optional', fields: [] }, { phone: 'abc' })).toEqual({ ok: false, field: 'phone' });
+		expect(checkLinkAnswers({ phone: 'off', fields: [] }, { phone: 'abc' })).toEqual({ ok: true, phone: '', answers: [] });
 	});
 });
 
@@ -393,7 +465,12 @@ describe('payments', () => {
 		});
 		expect(paymentView({ ...record, voidedAt: at }, '')).toMatchObject({ refundDue: true, voidedAt: at.toISOString() });
 		expect(paymentView({ ...record, proof: null, refunds: [], history: [], paidAt: null }, '').refunds).toEqual([]);
-		expect(linkView({ id: 'link_1', createdAt: at }, 'u')).toMatchObject({ url: 'u', createdAt: at.toISOString() });
+		expect(linkView({ id: 'link_1', createdAt: at, paidCount: 0, expiresAt: null }, 'u', at.getTime())).toMatchObject({
+			url: 'u',
+			createdAt: at.toISOString(),
+			expiresAt: null,
+			closed: null,
+		});
 		expect(
 			subscriptionView({
 				id: 'sub_1',
