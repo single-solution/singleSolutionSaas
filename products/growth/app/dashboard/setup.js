@@ -15,8 +15,9 @@ import { TEXTS } from './texts.js';
 
 /** @typedef {Record<string, Record<string, unknown>>} Values settings by feature or shared group */
 /**
- * @typedef {{ on: string[], domain: string, now: number, timeZone?: string | undefined }} Context the switched-on features,
- *   the domain, the time and the viewer's time zone (UTC without it: on the server and in the first render)
+ * @typedef {{ on: string[], domain: string, now: number, timeZone?: string | undefined, searchParams?: string[] }} Context
+ *   the switched-on features, the domain, the time, the viewer's time zone (UTC without it: on the server and in the
+ *   first render) and the search parameters of Searches and 404s (robots.txt keeps their result pages out)
  */
 
 /** The tag id settings of each tag feature, with the tag they load. @type {Record<string, Array<[string, string]>>} */
@@ -120,7 +121,7 @@ export const settingsNotice = (key, values, context) => {
 		notes.push(
 			<div key="robots" className="space-y-2">
 				<p className="text-sm text-muted">{fill(TEXTS.setup.robotsPreview, { domain: context.domain })}</p>
-				<CodeBlock code={robotsTxtOf(values, context.domain)} />
+				<CodeBlock code={robotsTxtOf(values, context.domain, context.searchParams ?? [])} />
 				<p className="text-sm text-muted">{TEXTS.setup.tagsPreview}</p>
 				<CodeBlock code={tags.html || TEXTS.setup.noTags} />
 			</div>,

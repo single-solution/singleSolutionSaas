@@ -10,7 +10,7 @@
  */
 import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { JOURNEYS, LIVE_MS, buildReport, rangeOf, shiftDay, topOf } from '../core/analytics.js';
-import { noticeAnswer } from '../core/config.js';
+import { noticeAnswer, searchParamsOf } from '../core/config.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
 import { zonedDayStart } from '@ss/contracts/format';
@@ -280,11 +280,17 @@ export const createRoutes = (product) => {
 			auth: 'server',
 			feature: 'robots_verification',
 			database: false,
-			handler: async (ctx) =>
-				new Response(
-					robotsTxtOf(await product.settings.values(ctx.websiteId, 'robots_verification'), String(ctx.status.domain)),
-					{ headers: { 'content-type': 'text/plain; charset=utf-8' } },
-				),
+			// the presets keep out the search results of Searches and 404s' search parameters (G12)
+			handler: async (ctx) => {
+				const [values, searches] = await Promise.all([
+					product.settings.values(ctx.websiteId, 'robots_verification'),
+					product.settings.values(ctx.websiteId, 'searches_404s'),
+				]);
+				const searchParams = searchParamsOf(String(searches.searchParams ?? ''));
+				return new Response(robotsTxtOf(values, String(ctx.status.domain), searchParams), {
+					headers: { 'content-type': 'text/plain; charset=utf-8' },
+				});
+			},
 		}),
 		defineRoute({
 			method: 'GET',

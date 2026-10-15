@@ -4038,7 +4038,7 @@
 		"/v1/robots.txt": {
 			"get": {
 				"summary": "The robots.txt your site serves",
-				"description": "Answers text/plain, not JSON: serve it as https://<your domain>/robots.txt. Your rules (control characters and their own Sitemap lines left out), then with 'Block AI training crawlers' a group keeping those crawlers off the whole site, then a Sitemap line per sitemap address on your domain (at most 50).",
+				"description": "Answers text/plain, not JSON: serve it as https://<your domain>/robots.txt. Your rules (control characters and their own Sitemap lines left out) with the presets' Disallow lines in each group, right after its User-agent lines (a User-agent: * group of them first when your rules have none): search results (the search parameters of Searches and 404s), sort and filter parameters and private pages, as set; then with 'Block AI training crawlers' a group keeping those crawlers off the whole site, then a Sitemap line per sitemap address on your domain (at most 50; none set: /sitemap.xml).",
 				"x-ss-auth": "server",
 				"x-ss-feature": "robots_verification",
 				"security": [

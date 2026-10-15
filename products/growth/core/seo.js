@@ -83,32 +83,149 @@ export const siteUrlOf = (value, domain) => {
 };
 
 /**
- * The robots.txt the merchant's site serves: their rules (control characters removed), with `blockAiCrawlers` a group
- * that keeps the AI training crawlers off the whole site (G4), and a `Sitemap:` line per sitemap URL on the website's
- * domain; with none set, the website's `/sitemap.xml` (where Ecommerce's sitemap route serves it, SEO audit G8), so
- * search engines find the sitemap.
+ * The sitemaps robots.txt names: each sitemap URL set on the website's domain (at most 50); with none set, the
+ * website's `/sitemap.xml` (where Ecommerce's sitemap route serves it, SEO audit G8), so search engines find it.
  * @param {Record<string, unknown>} values the `robots_verification` settings
  * @param {string} domain
  */
-export const robotsTxtOf = (values, domain) => {
+const sitemapUrlsOf = (values, domain) => {
+	const listed = Array.isArray(values.sitemaps) ? values.sitemaps : [];
+	return (listed.length > 0 ? listed : [`https://${domain}/sitemap.xml`])
+		.map((url) => siteUrlOf(url, domain))
+		.filter((url) => url !== null)
+		.slice(0, 50);
+};
+
+/** Most sort and filter parameters, and most private pages, robots.txt keeps out (settings schemas have no list limit). */
+const MAX_PRESETS = 20;
+
+/**
+ * The query parameters of sorted and filtered lists robots.txt keeps out (G12): names of letters, digits, `_`, `.` and
+ * `-` separated by commas or spaces, a final `*` for every parameter that starts with the name (`attr.*`), at most
+ * {@link MAX_PRESETS}.
+ * @param {unknown} value the `blockParameters` setting
+ * @returns {string[]}
+ */
+const blockedParametersOf = (value) =>
+	typeof value === 'string'
+		? [...new Set(value.split(/[\s,]+/).filter((name) => /^[A-Za-z0-9_.-]{1,40}\*?$/.test(name)))].slice(0, MAX_PRESETS)
+		: [];
+
+/**
+ * The private pages robots.txt keeps out (G12): paths from `/` without patterns (`*`, `$`), a query, a fragment or
+ * spaces, the trailing slash dropped, letters outside ASCII percent-encoded (NFC); never `/` (the whole site) nor a
+ * path that would keep out a sitemap; at most {@link MAX_PRESETS}.
+ * @param {unknown} value the `blockPaths` setting
+ * @param {string[]} sitemapPaths the paths of the sitemaps robots.txt names
+ * @returns {string[]}
+ */
+const blockedPathsOf = (value, sitemapPaths) => {
+	/** @type {string[]} */
+	const paths = [];
+	for (const raw of Array.isArray(value) ? value : []) {
+		const text = typeof raw === 'string' ? raw.trim().replace(/\/+$/, '') : '';
+		// eslint-disable-next-line no-control-regex
+		if (!/^\/[^/]/.test(text) || /[*$?#\s\u0000-\u001f\u007f]/.test(text)) continue;
+		const path = text.normalize('NFC').replace(/[^\u0021-\u007e]/gu, (char) => encodeURIComponent(char));
+		/** @param {string} other */
+		const covers = (other) => other === path || other.startsWith(`${path}/`) || other.startsWith(`${path}?`);
+		if (!sitemapPaths.some(covers) && !paths.includes(path)) paths.push(path);
+	}
+	return paths.slice(0, MAX_PRESETS);
+};
+
+/**
+ * The robots.txt presets (SEO audit G12; Google: keep crawlers out of pages that need no indexing, such as internal
+ * search results and sorted or filtered lists, rather than relying on noindex or canonical links): `Disallow:` lines for
+ * addresses with a search parameter of Searches and 404s (`blockSearchPages`), a sort or filter parameter
+ * (`blockParameters`), and the private pages (`blockPaths`: the page, the pages under it and its query strings, never
+ * a longer name: `/cart` keeps out `/cart`, `/cart/…` and `/cart?…`, never `/cartoons`). They name no product,
+ * category, image or sitemap address by themselves; the merchant matches them to the storefront's own names.
+ * @param {Record<string, unknown>} values the `robots_verification` settings
+ * @param {string} domain
+ * @param {ReadonlyArray<string>} searchParams the search parameters of Searches and 404s
+ * @returns {string[]}
+ */
+export const robotsPresetsOf = (values, domain, searchParams) => {
+	const names = [
+		...(values.blockSearchPages === true ? searchParams : []),
+		...blockedParametersOf(values.blockParameters),
+	].filter((name, at, all) => all.indexOf(name) === at);
+	const sitemapPaths = sitemapUrlsOf(values, domain).map((url) => pathOfUrl(url));
+	return [
+		...names.flatMap((name) => {
+			const start = name.endsWith('*') ? name.slice(0, -1) : `${name}=`;
+			return [`Disallow: /*?${start}`, `Disallow: /*&${start}`];
+		}),
+		...blockedPathsOf(values.blockPaths, sitemapPaths).flatMap((path) => [
+			`Disallow: ${path}$`,
+			`Disallow: ${path}/`,
+			`Disallow: ${path}?`,
+		]),
+	];
+};
+
+/**
+ * A robots.txt line's field (lower case) and value, comments left out; null for a line without one.
+ * @param {string} line
+ */
+export const robotsDirectiveOf = (line) => {
+	const text = (line.split('#')[0] ?? '').trim();
+	const colon = text.indexOf(':');
+	return colon < 1 ? null : { field: text.slice(0, colon).trim().toLowerCase(), value: text.slice(colon + 1).trim() };
+};
+
+/**
+ * The merchant's rules with the presets in every group, right after its user-agent lines (before its first rule, so
+ * crawlers that take the first matching rule see them first); without a group for every crawler (`User-agent: *`),
+ * one holding the presets comes first.
+ * @param {string[]} lines
+ * @param {string[]} presets
+ */
+const withPresets = (lines, presets) => {
+	if (presets.length === 0) return lines;
+	/** @type {string[]} */
+	const out = [];
+	let agents = false;
+	let everyone = false;
+	for (const line of lines) {
+		const directive = robotsDirectiveOf(line);
+		if (directive?.field === 'user-agent') {
+			agents = true;
+			if (directive.value === '*') everyone = true;
+		} else if (agents && (directive?.field === 'allow' || directive?.field === 'disallow')) {
+			out.push(...presets);
+			agents = false;
+		}
+		out.push(line);
+	}
+	if (agents) out.push(...presets);
+	return everyone ? out : ['User-agent: *', ...presets, ...(out.length > 0 ? ['', ...out] : [])];
+};
+
+/**
+ * The robots.txt the merchant's site serves: their rules (control characters removed) with the presets in every group
+ * ({@link robotsPresetsOf}), with `blockAiCrawlers` a group that keeps the AI training crawlers off the whole site (G4),
+ * and a `Sitemap:` line per sitemap ({@link sitemapUrlsOf}).
+ * @param {Record<string, unknown>} values the `robots_verification` settings
+ * @param {string} domain
+ * @param {ReadonlyArray<string>} [searchParams] the search parameters of Searches and 404s
+ */
+export const robotsTxtOf = (values, domain, searchParams = []) => {
 	const rules = typeof values.robotsRules === 'string' ? values.robotsRules : '';
-	const lines = rules
+	const own = rules
 		.split(/\r?\n/)
 		// eslint-disable-next-line no-control-regex
 		.map((line) => line.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trimEnd())
 		.filter((line) => !/^\s*sitemap\s*:/i.test(line));
-	const listed = Array.isArray(values.sitemaps) ? values.sitemaps : [];
-	const sitemaps = (listed.length > 0 ? listed : [`https://${domain}/sitemap.xml`])
-		.map((url) => siteUrlOf(url, domain))
-		.filter((url) => url !== null)
-		.slice(0, 50);
-	while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+	while (own.length > 0 && own[own.length - 1] === '') own.pop();
+	const lines = withPresets(own, robotsPresetsOf(values, domain, searchParams));
 	const blocked =
 		values.blockAiCrawlers === true
 			? [...(lines.length > 0 ? [''] : []), ...AI_TRAINING_CRAWLERS.map((name) => `User-agent: ${name}`), 'Disallow: /']
 			: [];
 	const before = [...lines, ...blocked];
-	const after = sitemaps.map((url) => `Sitemap: ${url}`);
+	const after = sitemapUrlsOf(values, domain).map((url) => `Sitemap: ${url}`);
 	return `${[...before, ...(before.length > 0 && after.length > 0 ? [''] : []), ...after].join('\n')}\n`;
 };
 

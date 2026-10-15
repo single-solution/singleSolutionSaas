@@ -34,12 +34,15 @@ import {
 	indexNowSubmission,
 	keyLocationOf,
 	keyPathOf,
+	robotsPresetsOf,
 	robotsTxtOf,
 	siteUrlOf,
 	tokenOf,
 	verificationOf,
 } from '../core/seo.js';
+import { robotsAllows, robotsGroupsOf } from '../core/seo-scan.js';
 import { createSnippets } from '../core/snippets.js';
+import robotsSchema from '../schemas/robots_verification.settings.json' with { type: 'json' };
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const DOMAIN = 'shop.example.com';
@@ -656,6 +659,164 @@ describe('SEO', () => {
 		expect(siteUrlOf('https://shop.example.com:8443/', DOMAIN)).toBeNull();
 		expect(siteUrlOf('not a url', DOMAIN)).toBeNull();
 		expect(siteUrlOf(1, DOMAIN)).toBeNull();
+	});
+
+	it('keeps search results, sorted and filtered lists and private pages out by default (G12), never what search needs', () => {
+		const defaults = Object.fromEntries(Object.entries(robotsSchema.properties).map(([name, field]) => [name, field.default]));
+		const searchParams = searchParamsOf('');
+		const presets = [
+			...['q', 's', 'search', 'query', 'sort', 'minPrice', 'maxPrice', 'inStock'].flatMap((name) => [
+				`Disallow: /*?${name}=`,
+				`Disallow: /*&${name}=`,
+			]),
+			...['/cart', '/checkout', '/account'].flatMap((path) => [
+				`Disallow: ${path}$`,
+				`Disallow: ${path}/`,
+				`Disallow: ${path}?`,
+			]),
+		];
+		expect(robotsPresetsOf(defaults, DOMAIN, searchParams)).toEqual(presets);
+		const served = robotsTxtOf(defaults, DOMAIN, searchParams);
+		// inside the merchant's own group, before its rules (crawlers that take the first matching rule see them first)
+		expect(served).toBe(['User-agent: *', ...presets, 'Allow: /', '', `Sitemap: https://${DOMAIN}/sitemap.xml`, ''].join('\n'));
+		// as the SEO checklist reads robots.txt (Google's rules): what search engines need stays open
+		const groups = robotsGroupsOf(served);
+		/** @param {string} path @param {string[]} [tokens] */
+		const allowed = (path, tokens = ['googlebot']) => robotsAllows(groups, tokens, path).allowed;
+		for (const path of [
+			'/',
+			'/sitemap.xml',
+			'/products/blue-lamp',
+			'/categories/lamps',
+			'/categories/lamps?page=2',
+			'/categories/lamps?brand=acme&grade=new',
+			'/cartoons',
+			'/cart-covers/blue',
+			'/accounting-books',
+			'/checkouts-guide',
+			'/search',
+			'/products/blue-lamp?size=s',
+		])
+			expect({ path, allowed: allowed(path) }).toEqual({ path, allowed: true });
+		expect(allowed('/media/blue.jpg', ['googlebot-image', 'googlebot'])).toBe(true);
+		for (const path of [
+			'/search?q=lamp',
+			'/?s=lamp',
+			'/categories/lamps?brand=acme&sort=price_asc',
+			'/categories/lamps?minPrice=1000&maxPrice=5000',
+			'/categories/lamps?inStock=1',
+			'/cart',
+			'/cart/',
+			'/cart?step=2',
+			'/checkout/pay',
+			'/account',
+			'/account/orders/12',
+		])
+			expect({ path, allowed: allowed(path) }).toEqual({ path, allowed: false });
+
+		// the merchant's own names and paths; off, nothing is added
+		expect(
+			robotsPresetsOf(
+				{ blockSearchPages: false, blockParameters: 'order, attr.*, bad!, *, sort', blockPaths: ['/Kasse/', '/çart'] },
+				DOMAIN,
+				searchParams,
+			),
+		).toEqual([
+			'Disallow: /*?order=',
+			'Disallow: /*&order=',
+			'Disallow: /*?attr.',
+			'Disallow: /*&attr.',
+			'Disallow: /*?sort=',
+			'Disallow: /*&sort=',
+			'Disallow: /Kasse$',
+			'Disallow: /Kasse/',
+			'Disallow: /Kasse?',
+			'Disallow: /%C3%A7art$',
+			'Disallow: /%C3%A7art/',
+			'Disallow: /%C3%A7art?',
+		]);
+		// never the home page, a pattern, a query, a host or the sitemap
+		for (const path of ['/', '//cart', 'cart', '/a b', '/x*', '/x$', '/x?y', '/x#y', '/sitemap.xml', 3])
+			expect(robotsPresetsOf({ blockPaths: [path] }, DOMAIN, [])).toEqual([]);
+		expect(robotsPresetsOf({ blockPaths: ['/maps'], sitemaps: [`https://${DOMAIN}/maps/sitemap.xml`] }, DOMAIN, [])).toEqual(
+			[],
+		);
+		expect(robotsPresetsOf({ blockSearchPages: true, blockParameters: 7, blockPaths: 'cart' }, DOMAIN, ['q'])).toEqual([
+			'Disallow: /*?q=',
+			'Disallow: /*&q=',
+		]);
+		expect(
+			robotsTxtOf({ ...defaults, blockSearchPages: false, blockParameters: '', blockPaths: [] }, DOMAIN, searchParams),
+		).toBe(`User-agent: *\nAllow: /\n\nSitemap: https://${DOMAIN}/sitemap.xml\n`);
+
+		// every group of the merchant's rules gets them; without a group for every crawler, one is added first
+		const own = { blockSearchPages: true, blockPaths: ['/cart'] };
+		expect(
+			robotsTxtOf(
+				{
+					...own,
+					robotsRules:
+						'User-agent: Googlebot\nUser-agent: Bingbot # big ones\nCrawl-delay: 1\nAllow: /\n\nUser-agent: *\nDisallow: /admin',
+				},
+				DOMAIN,
+				['q'],
+			),
+		).toBe(
+			[
+				'User-agent: Googlebot',
+				'User-agent: Bingbot # big ones',
+				'Crawl-delay: 1',
+				'Disallow: /*?q=',
+				'Disallow: /*&q=',
+				'Disallow: /cart$',
+				'Disallow: /cart/',
+				'Disallow: /cart?',
+				'Allow: /',
+				'',
+				'User-agent: *',
+				'Disallow: /*?q=',
+				'Disallow: /*&q=',
+				'Disallow: /cart$',
+				'Disallow: /cart/',
+				'Disallow: /cart?',
+				'Disallow: /admin',
+				'',
+				`Sitemap: https://${DOMAIN}/sitemap.xml`,
+				'',
+			].join('\n'),
+		);
+		expect(
+			robotsTxtOf({ ...own, robotsRules: 'User-agent: Googlebot\nDisallow: /tmp\nUser-agent: AdsBot-Google' }, DOMAIN, ['q']),
+		).toBe(
+			[
+				'User-agent: *',
+				'Disallow: /*?q=',
+				'Disallow: /*&q=',
+				'Disallow: /cart$',
+				'Disallow: /cart/',
+				'Disallow: /cart?',
+				'',
+				'User-agent: Googlebot',
+				'Disallow: /*?q=',
+				'Disallow: /*&q=',
+				'Disallow: /cart$',
+				'Disallow: /cart/',
+				'Disallow: /cart?',
+				'Disallow: /tmp',
+				'User-agent: AdsBot-Google',
+				'Disallow: /*?q=',
+				'Disallow: /*&q=',
+				'Disallow: /cart$',
+				'Disallow: /cart/',
+				'Disallow: /cart?',
+				'',
+				`Sitemap: https://${DOMAIN}/sitemap.xml`,
+				'',
+			].join('\n'),
+		);
+		expect(robotsTxtOf({ ...own, robotsRules: '' }, DOMAIN, [])).toBe(
+			`User-agent: *\nDisallow: /cart$\nDisallow: /cart/\nDisallow: /cart?\n\nSitemap: https://${DOMAIN}/sitemap.xml\n`,
+		);
 	});
 
 	it('checks IndexNow submissions', () => {

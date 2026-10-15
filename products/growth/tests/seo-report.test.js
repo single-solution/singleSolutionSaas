@@ -36,7 +36,7 @@ const BREADCRUMBS = { '@type': 'BreadcrumbList', itemListElement: [] };
 const SITE = {
 	'/robots.txt': {
 		status: 200,
-		body: `User-agent: *\nDisallow: /cart\n\nSitemap: ${ORIGIN}/sitemaps/index.xml\n`,
+		body: `User-agent: *\nDisallow: /cart\nDisallow: /glossary/\n\nSitemap: ${ORIGIN}/sitemaps/index.xml\n`,
 	},
 	'/sitemaps/index.xml': {
 		status: 200,
@@ -190,11 +190,12 @@ describe('SEO checklist: the live site', () => {
 			verification: 'pass ok',
 			web_vitals_site: 'warn needs_improvement',
 		});
+		// a sample page blocked fails; /cart, one of the checklist's pages, is kept out on purpose (robots presets, G12)
 		expect(find(report, 'robots_blocks')).toMatchObject({
 			page: `${ORIGIN}/robots.txt`,
-			detail: { count: 1, path: '/cart', rule: 'Disallow: /cart' },
+			detail: { count: 1, path: '/glossary/linen', rule: 'Disallow: /glossary/' },
 			title: 'robots.txt lets Google read your pages',
-			reason: 'robots.txt keeps Google from 1 of the addresses checked, for example /cart (Disallow: /cart).',
+			reason: 'robots.txt keeps Google from 1 of the addresses checked, for example /glossary/linen (Disallow: /glossary/).',
 			fix: expect.stringContaining('Remove or narrow that rule'),
 			test: null,
 		});

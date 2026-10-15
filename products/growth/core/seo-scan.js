@@ -5,7 +5,7 @@
  * (an index or a list of addresses with their images). Pure: the fetching is done by the caller.
  * @module
  */
-import { VERIFICATION_NAMES } from './seo.js';
+import { VERIFICATION_NAMES, robotsDirectiveOf } from './seo.js';
 
 /** Most addresses one sitemap file may list (the sitemap protocol's limit). */
 const MAX_SITEMAP_ENTRIES = 50_000;
@@ -361,11 +361,9 @@ export const robotsGroupsOf = (text) => {
 	let current = null;
 	let collecting = false;
 	for (const raw of text.split(/\r?\n|\r/)) {
-		const line = (raw.split('#')[0] ?? '').trim();
-		const colon = line.indexOf(':');
-		if (colon < 1) continue;
-		const field = line.slice(0, colon).trim().toLowerCase();
-		const value = line.slice(colon + 1).trim();
+		const directive = robotsDirectiveOf(raw);
+		if (directive === null) continue;
+		const { field, value } = directive;
 		if (field === 'user-agent') {
 			if (!collecting || current === null) {
 				current = { agents: [], rules: [] };

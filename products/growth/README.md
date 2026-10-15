@@ -8,7 +8,9 @@ redirects and a notice bar. Feature keys are in `manifest.json`, the public docs
 More options (PLAN.md 0.8.10 G1–G7) are settings with safe defaults: tags without a consent step and
 GA4 inside Tag Manager, search and contact pixel events with product or variant ids, detailed analytics with sessions,
 the AI crawler block and Yandex verification, the IndexNow key file path, the notice bar's close and hidden pages with
-`GET /v1/notice`, and Web Vitals to GA4.
+`GET /v1/notice`, and Web Vitals to GA4. robots.txt keeps internal search results, sorted and filtered lists and private
+pages (cart, checkout, account) out of crawling by default (SEO audit G12), with names the merchant matches to the
+storefront.
 
 ## SEO checklist
 

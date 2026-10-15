@@ -8,6 +8,7 @@ import {
 	MAX_CANDIDATES,
 	SITE_CHECKS,
 	candidatesOf,
+	keptOutBy,
 	kindOf,
 	pageChecks,
 	pageVitalsOf,
@@ -563,6 +564,19 @@ Disallow: /été`;
 		);
 		for (let i = 0; i < 30; i += 1) robotsAllows(many, ['googlebot-image', 'googlebot'], `/media/${i}.jpg`);
 		expect(performance.now() - started).toBeLessThan(1000);
+	});
+
+	it('tells the pages the robots presets keep out on purpose (G12), as Google reads them', () => {
+		const keptOut = keptOutBy([
+			'Disallow: /*?q=',
+			'Disallow: /*&q=',
+			'Disallow: /cart$',
+			'Disallow: /cart/',
+			'Disallow: /cart?',
+		]);
+		for (const path of ['/cart', '/cart/', '/cart?step=1', '/search?q=lamp', '/x?a=1&q=2']) expect(keptOut(path)).toBe(true);
+		for (const path of ['/', '/cartoons', '/search', '/x?qq=1']) expect(keptOut(path)).toBe(false);
+		expect(keptOutBy([])('/cart')).toBe(false);
 	});
 
 	it('checks robots.txt: it answers, names the sitemap and lets Google in', () => {

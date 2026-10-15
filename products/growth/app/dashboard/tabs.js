@@ -35,7 +35,7 @@ import {
 	useViewerTimeZone,
 } from '@ss/ui';
 import manifest from '../../manifest.json' with { type: 'json' };
-import { tagsReady } from '../../core/config.js';
+import { searchParamsOf, tagsReady } from '../../core/config.js';
 import { createSnippets } from '../../core/snippets.js';
 import { BROWSER_EVENTS, SITE_EVENTS } from '../../core/widgets.js';
 import { call, fill, useLoad } from './api.js';
@@ -670,6 +670,13 @@ function SettingsTab({ websiteId, domain }) {
 									domain,
 									now: Date.now(),
 									timeZone,
+									// what robots.txt keeps out of search results: the search parameters of Searches and 404s
+									searchParams: searchParamsOf(
+										String(
+											data.features.find((/** @type {{ key: string }} */ f) => f.key === 'searches_404s')?.values
+												.searchParams?.value ?? '',
+										),
+									),
 								}}
 							/>
 						)}

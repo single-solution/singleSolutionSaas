@@ -5,11 +5,34 @@
 		"robotsRules": {
 			"type": "string",
 			"title": "robots.txt rules",
-			"description": "Your rules; the Sitemap lines are added from the sitemaps below.",
+			"description": "Your rules; the lines that keep pages out (below) are added to each group, and the Sitemap lines come from the sitemaps below.",
 			"default": "User-agent: *\nAllow: /",
 			"maxLength": 10000,
 			"x-ui": {
 				"widget": "textarea"
+			}
+		},
+		"blockSearchPages": {
+			"type": "boolean",
+			"title": "Keep search results out",
+			"description": "Adds Disallow lines for addresses with a search parameter of Searches and 404s (q, s, search and query unless you set yours there), so search engines do not crawl endless result pages.",
+			"default": true
+		},
+		"blockParameters": {
+			"type": "string",
+			"title": "Sort and filter parameters to keep out",
+			"description": "Query parameters of your sorted and filtered lists, comma-separated, as your storefront names them; a name ending in * covers every parameter that starts with it (attr.* covers attr.color). Adds Disallow lines for addresses that carry one. Never list a parameter of pages you want in search results, such as page numbers or a landing page's brand and grade. At most 20.",
+			"default": "sort, minPrice, maxPrice, inStock",
+			"maxLength": 300
+		},
+		"blockPaths": {
+			"type": "array",
+			"title": "Private pages to keep out",
+			"description": "Paths of pages made for one visitor, such as the cart, checkout and account pages, as your storefront names them: each one, the pages under it and its query strings get Disallow lines (/cart keeps out /cart, /cart/… and /cart?…, never /cartoons). / and a path holding your sitemap are never kept out. At most 20.",
+			"default": ["/cart", "/checkout", "/account"],
+			"items": {
+				"type": "string",
+				"maxLength": 200
 			}
 		},
 		"blockAiCrawlers": {

@@ -255,6 +255,48 @@ describe('the widget config', () => {
 });
 
 describe('robots and verification', () => {
+	it('serves robots.txt with the presets of the settings (G12) to the server token', async () => {
+		const read = async () => (await env.call('GET', '/v1/robots.txt', { token: env.server })).text();
+		// by default: search results (Searches and 404s' parameters), sorted and filtered lists and private pages kept out
+		const served = await read();
+		expect(served).toMatch(/^User-agent: \*\nDisallow: \/\*\?q=\nDisallow: \/\*&q=\n/);
+		for (const line of [
+			'Disallow: /*?query=',
+			'Disallow: /*&sort=',
+			'Disallow: /*?inStock=',
+			'Disallow: /checkout/',
+			'Disallow: /account?',
+		])
+			expect(served).toContain(`\n${line}\n`);
+		expect(served).toContain('Disallow: /account?\nAllow: /\n');
+		// the merchant's own search parameter, parameters and paths
+		await env.setting('searches_404s', 'searchParams', 'term');
+		await env.setting('robots_verification', 'blockParameters', 'order, attr.*');
+		await env.setting('robots_verification', 'blockPaths', ['/basket/']);
+		expect(await read()).toBe(
+			[
+				'User-agent: *',
+				'Disallow: /*?term=',
+				'Disallow: /*&term=',
+				'Disallow: /*?order=',
+				'Disallow: /*&order=',
+				'Disallow: /*?attr.',
+				'Disallow: /*&attr.',
+				'Disallow: /basket$',
+				'Disallow: /basket/',
+				'Disallow: /basket?',
+				'Allow: /',
+				'',
+				`Sitemap: ${ORIGIN}/sitemap.xml`,
+				'',
+			].join('\n'),
+		);
+		await env.setting('robots_verification', 'blockSearchPages', false);
+		await env.setting('robots_verification', 'blockParameters', '');
+		await env.setting('robots_verification', 'blockPaths', []);
+		expect(await read()).toBe(`User-agent: *\nAllow: /\n\nSitemap: ${ORIGIN}/sitemap.xml\n`);
+	});
+
 	it('serves robots.txt and the verification tags to the server token', async () => {
 		await env.setting('robots_verification', 'robotsRules', 'User-agent: *\nDisallow: /admin\nSitemap: https://evil.example/x');
 		await env.setting('robots_verification', 'sitemaps', [`${ORIGIN}/sitemap.xml`, 'https://other.example/s.xml']);

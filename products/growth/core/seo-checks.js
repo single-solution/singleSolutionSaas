@@ -688,6 +688,17 @@ export const siteVitalsCheck = (rows) => {
 // ----------------------------------------------------------------------------------------------------- site checks
 
 /**
+ * Whether the robots.txt presets keep a path out on purpose (G12), as Google reads them: a page of the checklist's own
+ * that they keep out is not one robots.txt must let Google read.
+ * @param {ReadonlyArray<string>} presets the presets' Disallow lines
+ * @returns {(path: string) => boolean}
+ */
+export const keptOutBy = (presets) => {
+	const groups = robotsGroupsOf(['User-agent: *', ...presets].join('\n'));
+	return (path) => !robotsAllows(groups, ['googlebot'], path).allowed;
+};
+
+/**
  * The robots.txt checks: it answers with plain text (a server error stops Google crawling the site; an HTML page in its
  * place, as a site that answers every address with its app gives, has no rules), it names a sitemap, and it lets
  * Google read the home page, the sitemap, every page read and the product images.

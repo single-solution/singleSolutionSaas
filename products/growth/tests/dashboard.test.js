@@ -27,6 +27,7 @@ const VALUES = {
 	visitor_analytics: { detail: 'sessions', retentionMonths: 6 },
 	web_vitals: { toGa4: true },
 	robots_verification: { blockAiCrawlers: true, sitemaps: [`https://${DOMAIN}/sitemap.xml`], yandexVerification: 'ya-1' },
+	searches_404s: { searchParams: 'term' },
 	indexnow: { key: 'abcdefgh', keyPath: '/indexnow-key.txt' },
 	seo_checklist: { paths: ['/', '/shop'] },
 	notice_bar: { text: 'Sale', startsAt: '2026-11-01T00:00:00Z', hideOnPages: ['/'], dismissFor: 'page' },
@@ -187,6 +188,9 @@ describe('the dashboard (setup only)', () => {
 		expect(text).toContain(TEXTS.settings.gtmMissing);
 		expect(text).toContain(TEXTS.setup.vitalsNoGoogle);
 		expect(text).toContain('User-agent: GPTBot');
+		// the presets (G12), with the search parameters of Searches and 404s
+		expect(text).toContain('Disallow: /*?term=');
+		expect(text).toContain('Disallow: /cart$');
 		expect(text).toContain(`Sitemap: https://${DOMAIN}/sitemap.xml`);
 		expect(text).toContain('<meta name="yandex-verification" content="ya-1">');
 		expect(text).toContain(`Your site serves the key abcdefgh as plain text at https://${DOMAIN}/indexnow-key.txt`);

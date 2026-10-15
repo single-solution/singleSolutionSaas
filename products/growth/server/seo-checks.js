@@ -18,6 +18,7 @@
  */
 import { defineRoute, formatText, ok, problem } from '@ss/app-kit';
 import { shiftDay } from '../core/analytics.js';
+import { searchParamsOf } from '../core/config.js';
 import { dayOf } from '../core/events.js';
 import { locationOf, suggestionsOf } from '../core/redirects.js';
 import {
@@ -25,6 +26,7 @@ import {
 	SITE_CHECKS,
 	candidatesOf,
 	comparableOf,
+	keptOutBy,
 	pageChecks,
 	pageVitalsOf,
 	pagesOf,
@@ -41,7 +43,7 @@ import {
 	verificationCheck,
 } from '../core/seo-checks.js';
 import { sitemapOf, sitemapsIn } from '../core/seo-scan.js';
-import { checksActivity, pathOfUrl, siteUrlOf } from '../core/seo.js';
+import { checksActivity, pathOfUrl, robotsPresetsOf, siteUrlOf } from '../core/seo.js';
 import { createRedirectStore } from '../adapters/redirects.js';
 import { createReportStore } from '../adapters/seo-reports.js';
 import { createStore } from '../adapters/store.js';
@@ -124,6 +126,21 @@ export const seoCheckRoutes = (product, { log }) => {
 	};
 
 	/**
+	 * What the robots.txt presets keep out on purpose (G12) while robots and verification is on, else nothing.
+	 * @param {any} ctx
+	 * @param {string[]} on
+	 * @returns {Promise<(path: string) => boolean>}
+	 */
+	const keptOutOf = async (ctx, on) => {
+		if (!on.includes('robots_verification')) return () => false;
+		const [values, searches] = await Promise.all([
+			product.settings.values(ctx.websiteId, 'robots_verification'),
+			product.settings.values(ctx.websiteId, 'searches_404s'),
+		]);
+		return keptOutBy(robotsPresetsOf(values, String(ctx.status.domain), searchParamsOf(String(searches.searchParams ?? ''))));
+	};
+
+	/**
 	 * One run: read the site, then check it.
 	 * @param {any} ctx
 	 * @param {string[]} typed the pages to check (the home page first)
@@ -150,9 +167,10 @@ export const seoCheckRoutes = (product, { log }) => {
 			)
 			.slice(0, MAX_RULE_PROBES);
 		const missingUrl = `${origin}/this-page-does-not-exist-${crypto.randomUUID().slice(0, 8)}`;
-		const [reads, totals] = await Promise.all([
+		const [reads, totals, keptOut] = await Promise.all([
 			web.readAll([...typed, ...candidates, missingUrl, ...probes.map((rule) => `${origin}${rule.from}`)], { until }),
 			totalsOf(ctx, on),
+			keptOutOf(ctx, on),
 		]);
 		const typedReads = reads.slice(0, typed.length);
 		const candidateReads = reads.slice(typed.length, typed.length + candidates.length);
@@ -178,7 +196,8 @@ export const seoCheckRoutes = (product, { log }) => {
 		const pages = [...own, ...samples];
 		const home = /** @type {(typeof own)[number]} */ (own[0]);
 
-		// what robots.txt must let Google read: the home page, the sitemap, every page, and the products' images
+		// what robots.txt must let Google read: the home page, the sitemap, every page (but the merchant's own pages its
+		// robots presets keep out on purpose, such as /cart), and the products' images
 		const images = pages
 			.flatMap((page) => (page.kind === 'product' && page.scan ? (productOf(page.scan.jsonLd.nodes)?.images ?? []) : []))
 			.map((image) => {
@@ -192,9 +211,11 @@ export const seoCheckRoutes = (product, { log }) => {
 			.filter((path) => path !== null)
 			.slice(0, 5);
 		const sitemapPath = new URL(sitemap.read.url).host === domain ? [pathOfUrl(sitemap.read.url)] : [];
-		const paths = [...new Set(['/', ...sitemapPath, ...pages.map((page) => pathOfUrl(page.read.url))])].map((path) => ({
-			path,
-		}));
+		const readable = pages
+			.map((page) => ({ path: pathOfUrl(page.read.url), sampled: page.sampled }))
+			.filter((page) => page.sampled || !keptOut(page.path))
+			.map((page) => page.path);
+		const paths = [...new Set(['/', ...sitemapPath, ...readable])].map((path) => ({ path }));
 
 		const vitals = totals.vitals ? siteVitalsCheck(totals.vitals) : null;
 		/** @type {Array<Check | null>} */
