@@ -103,6 +103,17 @@ export const dynamic = 'force-dynamic';
 export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(createRoutes(product)), { after });
 ```
 
+The dashboard page gets its security headers from `next.config.js` (`@ss/app-kit/headers`): it refuses every frame
+(`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`) and gets the Portal's other static
+headers (HTTPS only, no type sniffing, referrer, permissions and opener policies).
+
+```js
+// next.config.js
+import { dashboardHeaders } from '@ss/app-kit/headers';
+
+const config = { /* … */ headers: async () => dashboardHeaders() };
+```
+
 ## Checks
 
 `pnpm check` runs Prettier, ESLint, `tsc --checkJs --strict` and the tests with coverage (90 % lines and functions,

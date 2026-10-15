@@ -1,7 +1,8 @@
 # @ss/app-kit API
 
-Four entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js imports), `@ss/app-kit/testing` and
-`@ss/app-kit/api` (API descriptions, for `ss` and tests; never loaded in production).
+Five entries: `@ss/app-kit` (server), `@ss/app-kit/widget` (browser, no Node.js imports), `@ss/app-kit/headers`
+(`next.config.js`), `@ss/app-kit/testing` and `@ss/app-kit/api` (API descriptions, for `ss` and tests; never loaded in
+production).
 
 ## `@ss/app-kit`
 
@@ -221,6 +222,14 @@ page.
 | `normaliseFormat(format)`, `DEFAULT_FORMAT`                                                                                   | the widget config's `format` with every field valid, and the default Format   |
 
 The host gets `data-ss-mode="light" | "dark"` (`auto` follows the device).
+
+## `@ss/app-kit/headers`
+
+`dashboardHeaders()` → the `headers()` answer of a product's `next.config.js`: the dashboard page (`/dashboard` and
+below) refuses every frame (`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'; object-src
+'none'; base-uri 'none'; form-action 'self'`) and gets the Portal's other static headers (`Strict-Transport-Security`,
+`X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`,
+`X-DNS-Prefetch-Control`, `X-Permitted-Cross-Domain-Policies`).
 
 ## `@ss/app-kit/testing`
 

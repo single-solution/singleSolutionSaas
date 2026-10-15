@@ -9,6 +9,7 @@
 		"./testing": "./src/testing.js",
 		"./api": "./src/api.js",
 		"./widget": "./src/widget.js",
+		"./headers": "./src/http/headers.js",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -37,6 +38,10 @@
 			"./widget": {
 				"types": "./types/src/widget.d.ts",
 				"default": "./src/widget.js"
+			},
+			"./headers": {
+				"types": "./types/src/http/headers.d.ts",
+				"default": "./src/http/headers.js"
 			},
 			"./package.json": "./package.json"
 		}
