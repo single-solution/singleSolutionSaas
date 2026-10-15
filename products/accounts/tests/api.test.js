@@ -68,6 +68,7 @@ describe('before setup', () => {
 		const config = await env.visitor('GET', '/v1/widget/config');
 		expect(config.json).toMatchObject({
 			features: ['email_password'],
+			widgets: ['sign_in', 'my_account'],
 			settings: { signUp: { mode: 'open', requiredFields: [] }, customFields: [], passwordMinLength: 8, terms: null },
 		});
 	});
@@ -155,6 +156,18 @@ describe('email + password', () => {
 		env.responders.set('https://api.pwnedpasswords.com', () => ({ status: 503 }));
 		expect((await signUp('bo@example.com', 'password123456')).status).toBe(200);
 		env.responders.delete('https://api.pwnedpasswords.com');
+	});
+
+	it('email addresses follow the rule every product shares, so Notifications can send to each one Accounts takes (X9)', async () => {
+		// a Unicode domain is kept as punycode, and signing in with either spelling finds the account
+		const unicode = await signUp('Uma@Пример.РФ');
+		expect(unicode.status).toBe(200);
+		expect(unicode.json.user.email).toBe('uma@xn--e1afmkfd.xn--p1ai');
+		expect((await signIn('uma@xn--e1afmkfd.xn--p1ai')).status).toBe(200);
+		expect((await signUp('ida@example.xn--p1ai')).json.user.email).toBe('ida@example.xn--p1ai');
+		// two dots in a row and a one-letter top-level domain are refused
+		expect(code(await signUp('ana..b@example.com'))).toBe('validation_failed');
+		expect(code(await signUp('cy@shop.c'))).toBe('validation_failed');
 	});
 
 	it('locks after repeated wrong passwords and tells nothing about unknown addresses', async () => {

@@ -7,10 +7,11 @@
  * server; PLAN 0.8.10 K2), the target's label and a short detail (K9).
  * @module
  */
-import { actorOf, countHandlers, paginate, problem } from '@ss/app-kit';
+import { activityFilter, actorOf, countHandlers, paginate, problem } from '@ss/app-kit';
 import { createId, validateActivityCopy } from '@ss/contracts';
-import { copyFilter, detailOf, labelOf } from '../core/activity.js';
-import { normaliseEmail } from '../core/identifiers.js';
+import { normalizeEmail } from '@ss/contracts/email';
+import { randomToken, sha256Hex } from '@ss/protocol';
+import { detailOf, labelOf } from '../core/activity.js';
 import { MAX_CUSTOM_FIELDS, checkCustomValues, checkFieldDefinition, checkName, staffView } from '../core/profile.js';
 import {
 	DEFAULT_ROLE,
@@ -25,7 +26,7 @@ import {
 } from '../core/roles.js';
 import { SETUP_TRACE_DAYS, generateCode, returnAddress } from '../core/rules.js';
 import { LINK_PARAMS, SETUP_PARAM } from '../core/widgets.js';
-import { randomBytes, randomSecret, sha256 } from '../adapters/crypto.js';
+import { randomBytes } from '../adapters/crypto.js';
 import { manifest } from '../adapters/product.js';
 import { createStore } from '../adapters/store.js';
 import { STAFF_CODE_LENGTH, invalid } from './flows.js';
@@ -38,6 +39,8 @@ import { bodyOf } from './service.js';
 const PERMISSIONS_TTL_MS = 5 * 60_000;
 /** The users list's statuses (`blocked`: blocked users, whatever their status). */
 const USER_STATUSES = Object.freeze(['active', 'pending', 'invited', 'blocked']);
+/** A product id, as the activity copies' `productId` filter takes it. */
+const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
 /** A permission as the users list's `permission` filter takes it (`<product>:<key>`, PLAN 0.8.10 A4, K6). */
 const PERMISSION_FILTER = /^[a-z][a-z0-9-]{1,30}:[a-z][a-z0-9_.]{0,63}$/;
 /** Role requests' statuses (`expired`: invited, and the setup link has expired; judged on read, A5). */
@@ -231,7 +234,7 @@ export const createManage = (product, service, flows) => {
 		/** @type {Record<string, unknown>} */
 		const set = {};
 		if (body.email !== undefined) {
-			const email = body.email === null || body.email === '' ? null : normaliseEmail(body.email);
+			const email = body.email === null || body.email === '' ? null : normalizeEmail(body.email);
 			if (email === null && body.email !== null && body.email !== '') throw invalid('email', 'Enter a valid email address.');
 			Object.assign(set, { email, emailVerified: email !== null });
 		}
@@ -339,7 +342,7 @@ export const createManage = (product, service, flows) => {
 			id,
 			kind: 'staff_code',
 			target: user.id,
-			hash: sha256(`${id}:${code}`),
+			hash: sha256Hex(`${id}:${code}`),
 			expireAt,
 			data: { length: STAFF_CODE_LENGTH },
 			replace: true,
@@ -363,8 +366,8 @@ export const createManage = (product, service, flows) => {
 		const template = String(setupPageUrl) || `https://${s.domain}/`;
 		const page = returnAddress(template.replaceAll('{code}', 'code'), s.domain);
 		if (!page) throw invalid('setupPageUrl', 'Set the setup page (a page of your website) in Settings first.');
-		const secret = randomSecret(32);
-		const hash = sha256(secret);
+		const secret = randomToken(32);
+		const hash = sha256Hex(secret);
 		const expireAt = new Date(now() + Number(setupDays) * 86_400_000);
 		await s.store.codes.cancelSetups(user.id);
 		const id = await s.store.codes.add({ kind: 'setup', target: user.id, hash, expireAt, replace: true });
@@ -529,7 +532,7 @@ export const createManage = (product, service, flows) => {
 		const { invitePageUrl, inviteDays } = await service.settings(s, 'approval');
 		const page = returnAddress(invitePageUrl, s.domain);
 		if (!page) throw invalid('invitePageUrl', 'Set the invite page (a page of your website) in Settings first.');
-		const email = body.email === undefined ? null : normaliseEmail(body.email);
+		const email = body.email === undefined ? null : normalizeEmail(body.email);
 		const phone = body.phone === undefined ? null : await service.phoneOf(s, body.phone);
 		const deliver = body.deliver ?? 'send';
 		if (deliver !== 'send' && deliver !== 'return') throw invalid('deliver', 'deliver is send or return.');
@@ -550,11 +553,11 @@ export const createManage = (product, service, flows) => {
 			identity: email ? 'email' : 'phone',
 		});
 		if (!user) throw problem('already_exists', 'Someone with this email address or phone number has an account.');
-		const secret = randomSecret(32);
+		const secret = randomToken(32);
 		const id = await s.store.codes.add({
 			kind: 'invite',
 			target: user.id,
-			hash: sha256(secret),
+			hash: sha256Hex(secret),
 			expireAt: new Date(now() + inviteDays * 86_400_000),
 			replace: true,
 		});
@@ -681,7 +684,7 @@ export const createManage = (product, service, flows) => {
 		const phone = body.phone === undefined || body.phone === '' ? null : await service.phoneOf(s, body.phone);
 		if (phone === null && body.phone !== undefined && body.phone !== '')
 			throw invalid('phone', 'Enter the phone number with its country code.');
-		const email = body.email === undefined || body.email === '' ? null : normaliseEmail(body.email);
+		const email = body.email === undefined || body.email === '' ? null : normalizeEmail(body.email);
 		if (email === null && body.email !== undefined && body.email !== '') throw invalid('email', 'Enter a valid email address.');
 		if (!phone && !email) throw invalid('phone', 'Enter a phone number or an email address.');
 		const note = typeof body.note === 'string' ? body.note.trim() : '';
@@ -1075,15 +1078,19 @@ export const createManage = (product, service, flows) => {
 	};
 
 	/**
-	 * The website and the copies filter of a request (`productId`, `actor`, `action`, `target`, `q`, `from`, `to`; days in
-	 * the business time zone); a filter that does not fit answers 422.
+	 * The website and the copies filter of a request: the kit's activity filter (`actor`, `action`, `target`, `q`,
+	 * `from`, `to`; days in the business time zone) and the product the copy came from (`productId`); a filter that
+	 * does not fit answers 422.
 	 * @param {any} ctx
 	 */
 	const copySource = async (ctx) => {
 		const s = await service.site(ctx);
-		const built = copyFilter(ctx.query, (await product.business(s.websiteId)).timeZone ?? 'UTC');
+		const { productId, ...query } = ctx.query;
+		if (productId !== undefined && productId !== '' && !PRODUCT_ID.test(productId))
+			throw invalid('productId', 'productId is a product id.');
+		const built = activityFilter(query, (await product.business(s.websiteId)).timeZone ?? 'UTC');
 		if (!built.ok) throw invalid(built.field, built.message);
-		return { s, filter: built.filter };
+		return { s, filter: productId ? { ...built.filter, productId } : built.filter };
 	};
 
 	/** `?productId=&actor=&action=&target=&q=&from=&to=&cursor=&limit=`, newest first. @param {any} ctx */

@@ -235,7 +235,7 @@ export const createStore = (data, { now }) => {
 	};
 
 	/**
-	 * A copies filter (`core/activity.js`) for this website.
+	 * A copies filter (the kit's `activityFilter` with `productId`, `server/manage.js`) for this website.
 	 * @param {Record<string, unknown>} filter
 	 */
 	const copiesFilter = (filter) => ({ ...filter, websiteId });
@@ -753,7 +753,7 @@ export const createStore = (data, { now }) => {
 				await copies.insertOne({ ...copy, id: createId('act') });
 			},
 			/**
-			 * A page of copies, newest first (cursor: time and id), with a filter of `core/activity.js` `copyFilter`.
+			 * A page of copies, newest first (cursor: time and id), with the copies filter of `server/manage.js`.
 			 * @param {{ after: [string, string] | null, limit: number, filter: Record<string, unknown> }} query
 			 * @returns {Promise<CopyRecord[]>}
 			 */

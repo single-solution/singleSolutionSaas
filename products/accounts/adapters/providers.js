@@ -9,7 +9,8 @@
  *   password's SHA-1 leave the server). When it cannot be reached, the password is not refused for it.
  * @module
  */
-import { createHash, createHmac, createPrivateKey, sign as cryptoSign } from 'node:crypto';
+import { createHash, createPrivateKey, sign as cryptoSign } from 'node:crypto';
+import { hmacSha256Hex } from '@ss/protocol';
 import { sha1Upper } from './crypto.js';
 
 /** @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} Send */
@@ -214,7 +215,7 @@ export const createProviders = ({ send, now }) => {
 			);
 			const accessToken = jsonOf(token).access_token;
 			if (token.status !== 200 || typeof accessToken !== 'string') return null;
-			const proof = createHmac('sha256', String(key.appSecret)).update(accessToken).digest('hex');
+			const proof = hmacSha256Hex(String(key.appSecret), accessToken);
 			const me = await send(
 				`${FACEBOOK.graph}/me?${new URLSearchParams({ fields: 'id,name,email', access_token: accessToken, appsecret_proof: proof }).toString()}`,
 				{ redirect: 'error', headers: { accept: 'application/json' } },

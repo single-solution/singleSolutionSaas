@@ -6,14 +6,14 @@
  * settings, the `import` feature's collections (`imports.js`, PLAN 0.8.10 K10), the messages it sends through
  * Notifications with their US-English default words (`schemas/messages.json`, parity P1) and its part of the website
  * Setup sheet (the OpenAPI document, the guide's "What your website builds" per feature, and the sign-in methods that
- * are on and who can sign up), and adds the sealer, the outside services and the website signing keys on the same
- * outbound policy.
+ * are on and who can sign up), and adds the sealer and the outside services (Google, Apple, Facebook) on the kit's
+ * outbound policy (`createProductBase`, whose store the kit shares).
  * Public entry `./product` of this package, so a system test can compose the product with `./routes`.
  * @module
  */
-import { createProduct } from '@ss/app-kit';
+import { createProduct, createProductBase } from '@ss/app-kit';
+import { normalizeEmail } from '@ss/contracts/email';
 import { normalisePhone } from '@ss/contracts/phone';
-import { createOutboundPolicy, safeFetch } from '@ss/net';
 import guide from '../docs/guide.json' with { type: 'json' };
 import manifestFile from '../manifest.json' with { type: 'json' };
 import openapi from '../openapi.json' with { type: 'json' };
@@ -41,7 +41,6 @@ import riskChecks from '../schemas/risk_checks.settings.json' with { type: 'json
 import roles from '../schemas/roles.settings.json' with { type: 'json' };
 import terms from '../schemas/terms.settings.json' with { type: 'json' };
 import twoStep from '../schemas/two_step.settings.json' with { type: 'json' };
-import { normaliseEmail } from '../core/identifiers.js';
 import { selfView } from '../core/profile.js';
 import { DEFAULT_ROLE } from '../core/roles.js';
 import { OPEN_SIGN_UP } from '../core/rules.js';
@@ -135,7 +134,7 @@ const ownDataRights = (now) => ({
 		const store = createStore(await ctx.data(), { now });
 		const found = await store.users.matching({
 			...(user.id ? { id: user.id } : {}),
-			email: normaliseEmail(user.email),
+			email: normalizeEmail(user.email),
 			phone: normalisePhone(user.phone),
 		});
 		const devices = await Promise.all(found.map((u) => store.sessions.ofUser(u.id)));
@@ -153,7 +152,7 @@ const ownDataRights = (now) => ({
 		const store = createStore(await ctx.data(), { now });
 		const found = await store.users.matching({
 			...(user.id ? { id: user.id } : {}),
-			email: normaliseEmail(user.email),
+			email: normalizeEmail(user.email),
 			phone: normalisePhone(user.phone),
 		});
 		let deleted = 0;
@@ -204,11 +203,8 @@ const setupPart = ({ on, signUp }) => {
  */
 export const createProductInstance = (options) => {
 	const now = options.now ?? Date.now;
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
-	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
-	const policy = createOutboundPolicy({ ...outboundRest, allowHosts: production ? [] : allowHosts });
-	/** @type {import('./providers.js').Send} */
-	const send = options.outboundSend ?? ((url, init) => safeFetch(url, init, policy));
+	// the kit's start-up pieces: the store (shared with the kit), and the outside services on its outbound policy
+	const { store, send } = createProductBase(options);
 	const providers = createProviders({ send, now });
 	// a misconfigured product answers 503 everywhere; the sealer still needs a key to be built
 	const keys = (options.problems ?? []).length === 0 ? options.config : undefined;
@@ -232,6 +228,7 @@ export const createProductInstance = (options) => {
 
 	const product = createProduct({
 		...options,
+		store,
 		manifest,
 		strings,
 		problemCodes: PROBLEM_CODES,

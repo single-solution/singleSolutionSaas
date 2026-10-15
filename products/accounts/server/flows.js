@@ -7,7 +7,8 @@
 import { problem } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
 import { phoneInCountries } from '@ss/contracts/phone';
-import { normaliseEmail } from '../core/identifiers.js';
+import { normalizeEmail } from '@ss/contracts/email';
+import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { checkCustomValues, checkName, identityOfMethod, resetsByEmail, selfView } from '../core/profile.js';
 import { DEFAULT_ROLE, sessionEnd } from '../core/roles.js';
 import {
@@ -30,9 +31,6 @@ import {
 	hashPassword,
 	matchRecoveryCode,
 	randomBytes,
-	randomSecret,
-	safeEqual,
-	sha256,
 	verifyTotp,
 } from '../adapters/crypto.js';
 import { bodyOf, parseSecret } from './service.js';
@@ -122,7 +120,7 @@ export const createFlows = (product, service) => {
 		if (rules.mode === 'invite') throw problem('sign_up_closed', 'Sign-up is by invitation only.');
 		const name = checkName(body.name);
 		if (name === null) throw invalid('name', 'The name is too long.');
-		const email = known.email ?? (body.email === undefined || body.email === '' ? null : normaliseEmail(body.email));
+		const email = known.email ?? (body.email === undefined || body.email === '' ? null : normalizeEmail(body.email));
 		if (email === null && body.email !== undefined && body.email !== '') throw invalid('email', 'Enter a valid email address.');
 		const phone = known.phone ?? (body.phone === undefined || body.phone === '' ? null : await service.phoneOf(s, body.phone));
 		if (phone === null && body.phone !== undefined && body.phone !== '')
@@ -157,8 +155,8 @@ export const createFlows = (product, service) => {
 	 * @param {Site} s @param {string | null} email @param {ReturnType<Service['howOf']>} how
 	 */
 	const riskCheck = async (s, email, how) => {
-		const deviceHash = how.deviceId ? sha256(`${s.websiteId}|device|${how.deviceId}`) : null;
-		const networkHash = sha256(`${s.websiteId}|network|${how.network}`);
+		const deviceHash = how.deviceId ? sha256Hex(`${s.websiteId}|device|${how.deviceId}`) : null;
+		const networkHash = sha256Hex(`${s.websiteId}|network|${how.network}`);
 		if (s.on.includes('risk_checks')) {
 			const rules = await service.settings(s, 'risk_checks');
 			if (email && emailRefused(email, { blockDisposable: rules.blockDisposable, blockedDomains: rules.blockedDomains }))
@@ -279,7 +277,7 @@ export const createFlows = (product, service) => {
 				'sign_in_failed',
 				method === 'phone_password' ? 'The phone number or password is wrong.' : 'The email address or password is wrong.',
 			);
-		const tries = identifier && rules.networkLimit > 0 ? `tries|${sha256(`${s.ip}|${identifier}`)}` : null;
+		const tries = identifier && rules.networkLimit > 0 ? `tries|${sha256Hex(`${s.ip}|${identifier}`)}` : null;
 		if (tries && !(await s.store.counters.take(tries, NETWORK_WINDOW_MS, rules.networkLimit)))
 			throw problem('rate_limited', 'Too many tries from this network. Try again later.');
 		if (!user || typeof body.password !== 'string' || body.password.length > 1024) {
@@ -314,7 +312,7 @@ export const createFlows = (product, service) => {
 		if (!s.on.includes('staff_links')) return null;
 		const record = await s.store.codes.latest('staff_code', user.id);
 		const code = record ? normaliseCode(typed, STAFF_CODE_LENGTH) : null;
-		return record && code !== null && safeEqual(record.hash, sha256(`${record.id}:${code}`)) ? record.id : null;
+		return record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)) ? record.id : null;
 	};
 
 	/**
@@ -344,16 +342,16 @@ export const createFlows = (product, service) => {
 				throw problem('code_limit', 'Too many codes were asked for. Try again later.');
 		}
 		const code = generateCode({ length, randomBytes });
-		const linkSecret = linkTo ? randomSecret(32) : null;
+		const linkSecret = linkTo ? randomToken(32) : null;
 		const expireAt = new Date(now() + minutes * 60_000);
 		const id = createId('cod');
 		await s.store.codes.add({
 			id,
 			kind,
 			target,
-			hash: sha256(`${id}:${code}`),
+			hash: sha256Hex(`${id}:${code}`),
 			expireAt,
-			data: { length, ...(linkSecret ? { linkHash: sha256(linkSecret) } : {}) },
+			data: { length, ...(linkSecret ? { linkHash: sha256Hex(linkSecret) } : {}) },
 		});
 		const link = linkTo && linkSecret ? `${linkTo}#${LINK_PARAMS.magic}=${id}.${linkSecret}` : null;
 		try {
@@ -381,7 +379,7 @@ export const createFlows = (product, service) => {
 		const staff = user && s.on.includes('staff_links') ? await s.store.codes.latest('staff_code', user.id) : null;
 		for (const record of [sent, staff]) {
 			const code = record ? normaliseCode(typed, Number(record.data.length)) : null;
-			if (record && code !== null && safeEqual(record.hash, sha256(`${record.id}:${code}`)))
+			if (record && code !== null && constantTimeEqual(record.hash, sha256Hex(`${record.id}:${code}`)))
 				return { id: record.id, staff: record === staff };
 		}
 		for (const record of [sent, staff])
@@ -448,7 +446,7 @@ export const createFlows = (product, service) => {
 	const passwordSignUp = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
-		const email = normaliseEmail(body.email);
+		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
 		const profile = await signUpProfile(s, body, { email });
 		const passwordHash = await newPassword(s, body.password, { who: { name: profile.name, email } });
@@ -460,7 +458,7 @@ export const createFlows = (product, service) => {
 	/** @param {any} ctx */
 	const passwordSignIn = async (ctx) => {
 		const s = await service.site(ctx);
-		const email = normaliseEmail(bodyOf(ctx.body).email);
+		const email = normalizeEmail(bodyOf(ctx.body).email);
 		const user = email ? await s.store.users.byEmail(email) : null;
 		return passwordSignInOf(s, ctx, { method: 'email_password', identifier: email, user });
 	};
@@ -557,7 +555,7 @@ export const createFlows = (product, service) => {
 	const forgotPassword = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
-		const email = normaliseEmail(body.email);
+		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
 		const { resetMinutes, resetLimit, resetHosts } = await service.settings(s, 'email_password');
 		// a page of the website, or of a host of the merchant's listed for reset links (an admin on its own host, K-27)
@@ -567,14 +565,14 @@ export const createFlows = (product, service) => {
 				'returnTo',
 				'returnTo must be a page of your website or of a host listed for reset links (or a local page while testing).',
 			);
-		if (!(await s.store.counters.take(`resets|${sha256(email)}`, RESET_WINDOW_MS, Number(resetLimit))))
+		if (!(await s.store.counters.take(`resets|${sha256Hex(email)}`, RESET_WINDOW_MS, Number(resetLimit))))
 			throw problem('rate_limited', 'Too many reset requests for this address. Try again later.');
 		afterAnswer(ctx, async () => {
 			const user = await s.store.users.byEmail(email);
 			if (!user?.passwordHash || user.blocked || !resetsByEmail(user)) return;
-			const secret = randomSecret(32);
+			const secret = randomToken(32);
 			const expireAt = new Date(now() + resetMinutes * 60_000);
-			const id = await s.store.codes.add({ kind: 'reset', target: user.id, hash: sha256(secret), expireAt, replace: true });
+			const id = await s.store.codes.add({ kind: 'reset', target: user.id, hash: sha256Hex(secret), expireAt, replace: true });
 			await service.deliver(
 				s,
 				'email',
@@ -643,7 +641,7 @@ export const createFlows = (product, service) => {
 	const emailCodeRequest = async (ctx) => {
 		const s = await service.site(ctx);
 		const body = bodyOf(ctx.body);
-		const email = normaliseEmail(body.email);
+		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
 		const returnTo = body.returnTo === undefined ? null : returnAddress(body.returnTo, s.domain);
 		if (body.returnTo !== undefined && !returnTo)
@@ -671,7 +669,7 @@ export const createFlows = (product, service) => {
 			if (!record) throw problem('code_invalid', 'This link is not valid or has expired.');
 			return codeSignIn(s, ctx, 'email', record.target, { id: record.id, staff: false });
 		}
-		const email = normaliseEmail(body.email);
+		const email = normalizeEmail(body.email);
 		if (!email) throw invalid('email', 'Enter a valid email address.');
 		return codeSignIn(s, ctx, 'email', email, await checkCode(s, 'email', email, body.code));
 	};
@@ -694,9 +692,9 @@ export const createFlows = (product, service) => {
 		if (typeof key !== 'object' || key === null)
 			throw problem('provider_failed', `Connect the ${provider} keys in the product dashboard first.`);
 		const how = service.howOf(ctx);
-		const state = `${s.websiteId}.${randomSecret(24)}`;
-		const nonce = randomSecret(24);
-		const verifier = randomSecret(48);
+		const state = `${s.websiteId}.${randomToken(24)}`;
+		const nonce = randomToken(24);
+		const verifier = randomToken(48);
 		await s.store.oauth.add({
 			state,
 			provider,
@@ -764,7 +762,7 @@ export const createFlows = (product, service) => {
 			identity = null;
 		}
 		if (!identity) return back(`${LINK_PARAMS.error}=provider_failed`);
-		const email = identity.email ? normaliseEmail(identity.email) : null;
+		const email = identity.email ? normalizeEmail(identity.email) : null;
 		// the provider proved the address: it links only an account whose address was proven before
 		let user = (await s.store.users.byProvider(provider, identity.subject)) ?? (email ? await provenHolderOf(s, email) : null);
 		try {
@@ -793,11 +791,11 @@ export const createFlows = (product, service) => {
 			const reason = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : 'failed';
 			return back(`${LINK_PARAMS.error}=${encodeURIComponent(reason)}`);
 		}
-		const secret = randomSecret(32);
+		const secret = randomToken(32);
 		const id = await s.store.codes.add({
 			kind: 'handoff',
 			target: user.id,
-			hash: sha256(secret),
+			hash: sha256Hex(secret),
 			expireAt: new Date(now() + 5 * 60_000),
 			data: { method: provider, remember: pending.data.remember === '1' },
 		});
@@ -901,7 +899,9 @@ export const createFlows = (product, service) => {
 
 	/** Whether a refresh token was rotated away from the session within the grace period. @param {SessionRecord} session @param {string} hash */
 	const rotatedLately = (session, hash) =>
-		(session.rotated ?? []).some((entry) => entry.at.getTime() > now() - REFRESH_GRACE_MS && safeEqual(entry.hash, hash));
+		(session.rotated ?? []).some(
+			(entry) => entry.at.getTime() > now() - REFRESH_GRACE_MS && constantTimeEqual(entry.hash, hash),
+		);
 
 	/**
 	 * The session's current refresh secret, for a token rotated away within the grace period; null otherwise.
@@ -910,7 +910,7 @@ export const createFlows = (product, service) => {
 	const currentSecret = (s, session, hash) => {
 		if (!rotatedLately(session, hash)) return null;
 		const secret = product.sealer.open(session.sealedRefresh, refreshAad(s, session.id));
-		return secret && safeEqual(session.refreshHash, sha256(secret)) ? secret : null;
+		return secret && constantTimeEqual(session.refreshHash, sha256Hex(secret)) ? secret : null;
 	};
 
 	/**
@@ -921,9 +921,9 @@ export const createFlows = (product, service) => {
 	 * @returns {Promise<{ session: SessionRecord | null, secret: string | null }>}
 	 */
 	const rotateOrJoin = async (s, session, hash, until) => {
-		const next = randomSecret(32);
+		const next = randomToken(32);
 		const sealed = product.sealer.seal(next, refreshAad(s, session.id));
-		if (await s.store.sessions.rotate(session.id, hash, sha256(next), sealed, until))
+		if (await s.store.sessions.rotate(session.id, hash, sha256Hex(next), sealed, until))
 			return { session: until ? { ...session, expiresAt: until } : session, secret: next };
 		const again = await s.store.sessions.get(session.id);
 		return { session: again, secret: live(again) ? currentSecret(s, again, hash) : null };
@@ -941,8 +941,8 @@ export const createFlows = (product, service) => {
 		const found = parsed ? await s.store.sessions.get(parsed.id) : null;
 		const out = () => problem('signed_out', 'Sign in again.');
 		if (!parsed || !live(found)) throw out();
-		const hash = sha256(parsed.secret);
-		const current = safeEqual(found.refreshHash, hash);
+		const hash = sha256Hex(parsed.secret);
+		const current = constantTimeEqual(found.refreshHash, hash);
 		const lately = current ? null : currentSecret(s, found, hash);
 		if (!current && !lately) {
 			if (found.previousHashes.includes(hash)) await s.store.sessions.revoke(found.userId, found.id);
@@ -972,8 +972,8 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const parsed = parseSecret(bodyOf(ctx.body).refreshToken);
 		const session = parsed ? await s.store.sessions.get(parsed.id) : null;
-		const hash = parsed ? sha256(parsed.secret) : '';
-		if (session && (safeEqual(session.refreshHash, hash) || rotatedLately(session, hash)))
+		const hash = parsed ? sha256Hex(parsed.secret) : '';
+		if (session && (constantTimeEqual(session.refreshHash, hash) || rotatedLately(session, hash)))
 			await s.store.sessions.revoke(session.userId, session.id);
 		return undefined;
 	};
@@ -1026,10 +1026,10 @@ export const createFlows = (product, service) => {
 		const s = await service.site(ctx);
 		const parsed = parseSecret(bodyOf(ctx.body).code);
 		if (!parsed) return { status: 'invalid' };
-		const hash = sha256(parsed.secret);
+		const hash = sha256Hex(parsed.secret);
 		const [record, traced] = await Promise.all([s.store.codes.get(parsed.id), s.store.codes.latest('setup_trace', parsed.id)]);
-		const live = record?.kind === 'setup' && safeEqual(record.hash, hash) ? record : null;
-		const trace = traced && safeEqual(traced.hash, hash) ? traced : null;
+		const live = record?.kind === 'setup' && constantTimeEqual(record.hash, hash) ? record : null;
+		const trace = traced && constantTimeEqual(traced.hash, hash) ? traced : null;
 		const state = setupLinkState({ live, trace, now: now() });
 		if (state.status !== 'valid' || !live) return { status: state.status };
 		const user = await s.store.users.get(live.target);

@@ -15,19 +15,18 @@
  * @module
  */
 import { createSealer as createKitSealer, resealEach, sumCounts } from '@ss/app-kit';
+import { constantTimeEqual, sha256Hex } from '@ss/protocol';
 import bcrypt from 'bcryptjs';
 import {
 	createHash,
 	createHmac,
 	createPrivateKey,
-	createPublicKey,
 	generateKeyPairSync,
 	pbkdf2 as pbkdf2Callback,
 	randomBytes as nodeRandomBytes,
 	scrypt as scryptCallback,
 	sign as cryptoSign,
 	timingSafeEqual,
-	verify as cryptoVerify,
 } from 'node:crypto';
 import { promisify } from 'node:util';
 
@@ -38,19 +37,6 @@ const pbkdf2 = promisify(pbkdf2Callback);
 
 /** @param {number} n */
 export const randomBytes = (n) => new Uint8Array(nodeRandomBytes(n));
-
-/** A URL-safe random secret of `bytes` bytes. @param {number} [bytes] */
-export const randomSecret = (bytes = 32) => nodeRandomBytes(bytes).toString('base64url');
-
-/** SHA-256 hex. @param {string} text */
-export const sha256 = (text) => createHash('sha256').update(text).digest('hex');
-
-/** @param {string} a @param {string} b */
-export const safeEqual = (a, b) => {
-	const x = Buffer.from(a);
-	const y = Buffer.from(b);
-	return x.length === y.length && timingSafeEqual(x, y);
-};
 
 // ------------------------------------------------------------------------------------------------------- sealing
 
@@ -93,7 +79,7 @@ export const verifyPassword = async (password, stored, { pepper = null } = {}) =
 	const [kind, salt, hash] = stored.split('$');
 	if (kind === 'scrypt' && salt && hash) {
 		const candidate = await scrypt(password.normalize('NFKC'), Buffer.from(salt, 'base64url'), 32, SCRYPT);
-		return safeEqual(candidate.toString('base64url'), hash);
+		return constantTimeEqual(candidate.toString('base64url'), hash);
 	}
 	if (BCRYPT.test(stored)) return bcrypt.compare(password, stored);
 	const peppered = PBKDF2.exec(stored);
@@ -238,7 +224,7 @@ export const verifyTotp = (secret, code, { now, lastStep }) => {
 	/** @type {number | null} */
 	let matched = null;
 	for (let delta = -1; delta <= 1; delta += 1)
-		if (safeEqual(hotp(key, current + delta), code.trim()) && matched === null) matched = current + delta;
+		if (constantTimeEqual(hotp(key, current + delta), code.trim()) && matched === null) matched = current + delta;
 	if (matched === null || (lastStep !== null && matched <= lastStep)) return { ok: false };
 	return { ok: true, step: matched };
 };
@@ -254,7 +240,7 @@ export const totpUri = ({ secret, issuer, account }) =>
 	}).toString()}`;
 
 /** @param {string} code */
-const recoveryHash = (code) => sha256(`ss-accounts-recovery.v1|${code.toLowerCase().replace(/[\s-]/g, '')}`);
+const recoveryHash = (code) => sha256Hex(`ss-accounts-recovery.v1|${code.toLowerCase().replace(/[\s-]/g, '')}`);
 
 /** 10 recovery codes `xxxxx-xxxxx` (50 bits each): the codes, shown once, and their hashes, stored. */
 export const generateRecoveryCodes = () => {
@@ -270,7 +256,7 @@ export const generateRecoveryCodes = () => {
  * without spaces or dashes, in capitals.
  * @param {string} code
  */
-const importedRecoveryHash = (code) => sha256(`recovery:${code.replace(/[\s-]/g, '').toUpperCase()}`);
+const importedRecoveryHash = (code) => sha256Hex(`recovery:${code.replace(/[\s-]/g, '').toUpperCase()}`);
 
 /**
  * A stored recovery code: its hash and format (`v1`, Accounts' own; `sha256_prefixed`, imported, A8).
@@ -287,7 +273,7 @@ export const matchRecoveryCode = (code, items) => {
 	const hashes = { v1: recoveryHash(code), sha256_prefixed: importedRecoveryHash(code) };
 	let found = -1;
 	items.forEach(({ hash, format }, index) => {
-		if (found === -1 && format in hashes && safeEqual(hash, hashes[format])) found = index;
+		if (found === -1 && format in hashes && constantTimeEqual(hash, hashes[format])) found = index;
 	});
 	return found;
 };
@@ -362,32 +348,3 @@ export const importedTwoStep = (sealer, { secret, recoveryHashes, aad, now }) =>
 	recovery: recoveryHashes.map((hash) => ({ hash: hash.toLowerCase(), format: /** @type {const} */ ('sha256_prefixed') })),
 	enabledAt: new Date(now),
 });
-
-/**
- * Verify a compact EdDSA JWS against public JWKs (by `kid`) and return its claims, or null. Header-borne keys and
- * `crit` are refused.
- * @param {unknown} token
- * @param {ReadonlyArray<Record<string, string>>} keys
- * @returns {Record<string, unknown> | null}
- */
-export const verifyJwt = (token, keys) => {
-	if (typeof token !== 'string' || token.length > 8192) return null;
-	const parts = token.split('.');
-	if (parts.length !== 3 || !parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part))) return null;
-	const [h, p, s] = /** @type {[string, string, string]} */ (parts);
-	try {
-		const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8'));
-		const claims = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
-		if (typeof claims !== 'object' || claims === null || Array.isArray(claims)) return null;
-		if (header.alg !== 'EdDSA' || ['jwk', 'jku', 'x5u', 'x5c', 'crit'].some((name) => Object.hasOwn(header, name))) return null;
-		const jwk = keys.find((key) => key.kid === header.kid);
-		if (!jwk) return null;
-		const key = createPublicKey({
-			key: /** @type {import('node:crypto').JsonWebKey} */ ({ kty: 'OKP', crv: 'Ed25519', x: jwk.x }),
-			format: 'jwk',
-		});
-		return cryptoVerify(null, Buffer.from(`${h}.${p}`), key, Buffer.from(s, 'base64url')) ? claims : null;
-	} catch {
-		return null;
-	}
-};

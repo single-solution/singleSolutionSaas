@@ -63,11 +63,3 @@ export const DEVICE_STORAGE_KEY = 'ss-accounts-device';
 /** DOM events on `window`: `ss-accounts:signed-in` (`detail: { user }`) and `ss-accounts:signed-out`. */
 export const SIGNED_IN_EVENT = 'ss-accounts:signed-in';
 export const SIGNED_OUT_EVENT = 'ss-accounts:signed-out';
-
-/** Template keys Accounts sends through Notifications, and the values each gets. */
-export const MESSAGE_TEMPLATES = Object.freeze({
-	'accounts.phone_code': ['code', 'minutes', 'business'],
-	'accounts.email_code': ['code', 'link', 'minutes', 'business'],
-	'accounts.password_reset': ['link', 'minutes', 'business'],
-	'accounts.invite': ['link', 'name', 'days', 'business'],
-});

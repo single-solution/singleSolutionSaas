@@ -5,18 +5,10 @@
  * @module
  */
 import { problem } from '@ss/app-kit';
+import { constantTimeEqual, randomToken, sha256Hex } from '@ss/protocol';
 import { checkCustomValues, checkName, selfView } from '../core/profile.js';
 import { CODE_ATTEMPTS } from '../core/rules.js';
-import {
-	generateRecoveryCodes,
-	generateTotpSecret,
-	matchRecoveryCode,
-	randomSecret,
-	safeEqual,
-	sha256,
-	totpUri,
-	verifyTotp,
-} from '../adapters/crypto.js';
+import { generateRecoveryCodes, generateTotpSecret, matchRecoveryCode, totpUri, verifyTotp } from '../adapters/crypto.js';
 import { invalid } from './flows.js';
 import { bodyOf, parseSecret } from './service.js';
 
@@ -128,11 +120,11 @@ export const createAccount = (product, service, flows) => {
 		if (user.twoStep?.enabledAt && sealer.open(user.twoStep.sealed, service.totpAad(s.websiteId, user.id)) !== null)
 			throw problem('conflict', 'Two-step sign-in is already on.');
 		const secret = generateTotpSecret();
-		const challenge = randomSecret(32);
+		const challenge = randomToken(32);
 		const id = await s.store.codes.add({
 			kind: 'step',
 			target: user.id,
-			hash: sha256(challenge),
+			hash: sha256Hex(challenge),
 			expireAt: new Date(now() + 10 * 60_000),
 			data: { setup: sealer.seal(secret, service.totpAad(s.websiteId, user.id)), userId: user.id, enable: true },
 			replace: true,
@@ -156,7 +148,7 @@ export const createAccount = (product, service, flows) => {
 			!record ||
 			record.kind !== 'step' ||
 			record.target !== user.id ||
-			!safeEqual(record.hash, sha256(parsed.secret))
+			!constantTimeEqual(record.hash, sha256Hex(parsed.secret))
 		)
 			throw problem('code_invalid', 'Start the setup again.');
 		const secret = sealer.open(record.data.setup, service.totpAad(s.websiteId, user.id));
