@@ -1,6 +1,17 @@
 /**
  * Structured logging. The kit never writes to the console itself: callers inject a logger, or use `createLogger`
- * with a `write` sink. Fields whose names look like credentials are redacted before they reach the sink.
+ * (JSON lines to standard output, or to a `write` sink). Each product passes `createLogger()` to the kit in its
+ * `app/api/[...path]/route.js`, so a failed route (500), a misconfiguration (503) and the kit's warnings reach the host's
+ * logs.
+ *
+ * Redaction, applied to every field, recursively (the Portal's rules, plus the names of stored connection secrets):
+ * - members whose name, in lower case with `_` and `-` removed, contains `secret`, `token`, `password`, `passwd`,
+ *   `passphrase`, `authorization`, `cookie`, `apikey`, `accesskey`, `privatekey`, `privatejwk`, `signingkey`,
+ *   `credential`, `connectionstring`, `descriptor`, `kek`, `pepper` or `sealed`, that end in `uri`, or that equal `d`
+ *   (a JWK's private member);
+ * - in every text, error messages too: signed tokens (compact JWS, `eyJ….….…`) and the user part of addresses
+ *   (`mongodb+srv://user:pass@host` → `mongodb+srv://[redacted]@host`);
+ * - errors become `{ name, message, code? }` (no stacks), dates ISO texts.
  * @module
  */
 import { isObject } from './util.js';
@@ -17,46 +28,45 @@ import { isObject } from './util.js';
 
 const LEVELS = Object.freeze({ debug: 10, info: 20, warn: 30, error: 40, silent: 100 });
 
-/** Field names that are always redacted (case-insensitive). */
-const REDACTED_FIELDS = Object.freeze([
-	'authorization',
-	'cookie',
-	'password',
-	'secret',
-	'secretaccesskey',
-	'accesskeyid',
-	'sessiontoken',
-	'apikey',
-	'token',
-	'uri',
-	'url_with_credentials',
-	'connectionstring',
-	'signingkey',
-	'privatejwk',
-	'd',
-	'descriptor',
-	'credentials',
-]);
-const REDACT = new Set(REDACTED_FIELDS);
+const SENSITIVE_KEY =
+	/secret|token|password|passwd|passphrase|authorization|cookie|apikey|accesskey|privatekey|privatejwk|signingkey|credential|connectionstring|descriptor|kek|pepper|sealed/;
+const SIGNED_TOKEN = /eyJ[\w-]*\.[\w-]+\.[\w-]+/g;
+const USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^/?#@\s]+@/gi;
 
 /**
- * Deep-copy `value`, replacing credential-like fields with `[redacted]` and errors with `{ name, code, message }`.
+ * @param {string} key
+ * @returns {boolean}
+ */
+const isSensitiveKey = (key) => {
+	const k = key.toLowerCase().replace(/[_-]/g, '');
+	return k === 'd' || k.endsWith('uri') || SENSITIVE_KEY.test(k);
+};
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+const redactText = (text) => text.replace(SIGNED_TOKEN, '[redacted]').replace(USERINFO, '$1[redacted]@');
+
+/**
+ * Deep-copy `value` with credential-like members and texts replaced by `[redacted]`.
  * @param {unknown} value
  * @param {number} [depth]
  * @returns {unknown}
  */
 export const redact = (value, depth = 0) => {
-	if (depth > 6) return '[depth]';
+	if (depth > 8) return '[depth]';
+	if (typeof value === 'string') return redactText(value);
 	if (value instanceof Error) {
-		return { name: value.name, message: value.message, ...('code' in value ? { code: /** @type {any} */ (value).code } : {}) };
+		const code = /** @type {{ code?: unknown }} */ (value).code;
+		return { name: value.name, message: redactText(value.message), ...(code === undefined ? {} : { code }) };
 	}
+	if (value instanceof Date) return value.toISOString();
 	if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
 	if (isObject(value)) {
 		/** @type {Record<string, unknown>} */
 		const out = {};
-		for (const [key, item] of Object.entries(value)) {
-			out[key] = REDACT.has(key.toLowerCase()) ? '[redacted]' : redact(item, depth + 1);
-		}
+		for (const [key, item] of Object.entries(value)) out[key] = isSensitiveKey(key) ? '[redacted]' : redact(item, depth + 1);
 		return out;
 	}
 	return value;

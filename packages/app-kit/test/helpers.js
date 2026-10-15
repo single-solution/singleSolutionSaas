@@ -138,11 +138,14 @@ export const productRoutes = () => [
  * A connected product with one website, its tokens and helpers.
  * @param {{ store?: any, connections?: Record<string, any>, hooks?: any, strings?: Record<string, string>, connect?: boolean,
  *   nodeEnv?: string, routes?: any[], manifest?: any, lists?: Record<string, any>, events?: boolean, imports?: any,
- *   sharedSettings?: Record<string, any>, data?: any, messages?: unknown, openapi?: unknown, build?: Record<string, string> }} [options]
+ *   sharedSettings?: Record<string, any>, data?: any, messages?: unknown, openapi?: unknown, build?: Record<string, string>,
+ *   logger?: any }} [options] `logger`: replaces the recording logger (its `entries` stay empty)
  */
 export const setup = async (options = {}) => {
 	const clock = createClock();
-	const { logger, entries } = createTestLogger();
+	const recording = createTestLogger();
+	const { entries } = recording;
+	const logger = options.logger ?? recording.logger;
 	const portal = await createFakePortal({ now: clock.now });
 	const accounts = createAccountsDouble({ now: clock.now });
 	const notifications = createNotificationsDouble();

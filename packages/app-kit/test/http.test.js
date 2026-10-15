@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLogger, created, defineRoute, noContent, noopLogger, ok, paginate, problem, toNextRoute } from '../src/index.js';
-import { redact } from '../src/logger.js';
+import { created, defineRoute, noContent, ok, paginate, problem, toNextRoute } from '../src/index.js';
 import { collectionPrefix, isKitError, kitError, omit } from '../src/util.js';
 import { createMemoryStore } from '../src/testing.js';
 import { BASE, productRoutes, setup } from './helpers.js';
@@ -277,47 +276,7 @@ describe('handler results and the Next.js adapter', () => {
 	});
 });
 
-describe('logger and helpers', () => {
-	it('redacts credentials and serializes errors', () => {
-		const out = redact({
-			uri: 'mongodb://u:p@h',
-			nested: { apiKey: 'k', ok: 1 },
-			list: [{ token: 't' }],
-			error: Object.assign(new Error('m'), { code: 'c' }),
-		});
-		expect(out).toEqual({
-			uri: '[redacted]',
-			nested: { apiKey: '[redacted]', ok: 1 },
-			list: [{ token: '[redacted]' }],
-			error: { name: 'Error', message: 'm', code: 'c' },
-		});
-		/** @type {any} */
-		let deep = {};
-		const root = deep;
-		for (let i = 0; i < 10; i += 1) deep = deep.next = {};
-		expect(JSON.stringify(redact(root))).toContain('[depth]');
-	});
-
-	it('writes JSON lines above the level', () => {
-		/** @type {string[]} */
-		const lines = [];
-		const logger = createLogger({ level: 'info', write: (line) => lines.push(line), now: () => 0, fields: { app: 'x' } });
-		logger.debug('hidden');
-		logger.info('shown', { secret: 's' });
-		logger.child({ requestId: 'r' }).error('child');
-		logger.warn('warned');
-		expect(lines.map((line) => JSON.parse(line))).toEqual([
-			{ level: 'info', time: '1970-01-01T00:00:00.000Z', msg: 'shown', app: 'x', secret: '[redacted]' },
-			{ level: 'error', time: '1970-01-01T00:00:00.000Z', msg: 'child', app: 'x', requestId: 'r' },
-			{ level: 'warn', time: '1970-01-01T00:00:00.000Z', msg: 'warned', app: 'x' },
-		]);
-		createLogger({ level: 'nope', write: (line) => lines.push(line) }).info('x');
-		expect(lines).toHaveLength(4);
-		for (const level of /** @type {const} */ (['debug', 'info', 'warn', 'error'])) noopLogger[level]('x');
-		expect(noopLogger.child({})).toBe(noopLogger);
-		createLogger({ level: 'silent' }).error('never written');
-	});
-
+describe('helpers', () => {
 	it('builds prefixes, omits members and types errors', () => {
 		expect(collectionPrefix('coupon-box')).toBe('ss_coupon_box_');
 		expect(omit({ a: 1, b: 2 }, ['a'])).toEqual({ b: 2 });

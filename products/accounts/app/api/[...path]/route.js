@@ -5,13 +5,14 @@
  * finishes its work after the response with Next.js `after`.
  */
 import { after } from 'next/server.js';
-import { configFromEnv, toNextRoute } from '@ss/app-kit';
+import { configFromEnv, createLogger, toNextRoute } from '@ss/app-kit';
 import { createProductInstance } from '../../../adapters/product.js';
 import { createRoutes } from '../../../server/routes.js';
 
 // a missing or invalid variable is named (never its value) and every route answers 503 until it is fixed
 const { config, problems } = configFromEnv();
-const product = createProductInstance({ config, problems });
+// JSON lines in the host's logs (a failed route, a misconfiguration, the kit's warnings), secrets redacted
+const product = createProductInstance({ config, problems, logger: createLogger() });
 
 export const dynamic = 'force-dynamic';
 export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(createRoutes(product)), { after });
