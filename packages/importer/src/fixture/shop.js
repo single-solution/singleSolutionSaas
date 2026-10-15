@@ -407,8 +407,9 @@ const STATUS = Object.freeze({
 });
 /** @param {string} status */
 const statusOf = (status) => /** @type {Record<string, string>} */ (STATUS)[status] ?? status;
-/** The old shop's payment methods → Ecommerce's (IMP-32). */
+/** The old shop's payment methods → the keys of Ecommerce's payment methods list (IMP-32), with each one's kind. */
 const METHODS = Object.freeze({ cod: 'cod', 'bank-transfer': 'bank_transfer', card: 'online' });
+const KINDS = Object.freeze({ cod: 'on_delivery', bank_transfer: 'pay_first', online: 'gateway' });
 /** The old shop's staff roles → Accounts' ready-made roles. */
 const STAFF_ROLES = Object.freeze({ admin: 'owner', staff: 'support_staff' });
 
@@ -426,7 +427,7 @@ const paymentsOf = (doc, total, ctx) => {
 	return [
 		{
 			id: ctx.id('opy', doc._id),
-			method: method === 'cod' ? 'cash' : 'bank_transfer',
+			method: method === 'cod' ? 'cod' : 'bank_transfer',
 			amount: total,
 			note: 'Imported',
 			at: iso(entry.at),
@@ -689,7 +690,10 @@ export const SHOP_MAPPING = defineMapping({
 						released: doc.status === 'cancelled',
 						...(doc.pointsEarned ? { pointsEarned: doc.pointsEarned, pointsCredited: true } : {}),
 					},
-					payment: { method: /** @type {Record<string, string>} */ (METHODS)[doc.payment] ?? 'cod' },
+					payment: (() => {
+						const method = /** @type {Record<string, string>} */ (METHODS)[doc.payment] ?? 'cod';
+						return { method, kind: /** @type {Record<string, string>} */ (KINDS)[method] };
+					})(),
 					payments: paymentsOf(doc, total, ctx),
 					status: statusOf(doc.status),
 					history: steps.map((step, index) => ({

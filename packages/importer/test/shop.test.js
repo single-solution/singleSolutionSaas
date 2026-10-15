@@ -121,7 +121,7 @@ describe('the example shop (fixture)', () => {
 		expect(delivered).toMatchObject({
 			customer: { userId: `usr_${SHOP_IDS.member}`, customerId: `cus_${SHOP_IDS.member}` },
 			totals: { subtotal: 2500, delivery: 500, total: 3000 },
-			payments: [{ method: 'cash', amount: 3000, at: '2026-07-04T12:00:00.000Z' }],
+			payments: [{ method: 'cod', amount: 3000, at: '2026-07-04T12:00:00.000Z' }],
 			history: [
 				{ from: null, to: 'confirmed' },
 				{ to: 'packed' },
