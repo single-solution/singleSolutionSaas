@@ -22,7 +22,7 @@ import {
 	scopeFilter,
 	shopFilter,
 	sortDocument,
-	SORTS,
+	sortOf,
 } from '../core/catalog-query.js';
 import { categoryTree, lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import { youtubeId } from '../core/catalog-content.js';
@@ -258,7 +258,7 @@ export const createCatalogShop = (product, service, common) => {
 	/** GET /v1/shop/products. @param {any} ctx */
 	const listing = async (ctx) => {
 		const { s, data } = await common.open(ctx);
-		const { pageSize } = await s.values('catalog');
+		const { pageSize, topBasis } = await s.values('catalog');
 		// pages by cursor like every other list (`nextCursor`, `hasMore`)
 		const page = paginate(
 			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
@@ -270,7 +270,8 @@ export const createCatalogShop = (product, service, common) => {
 		// variants=1: each card carries its active variants, for websites that draw their own cards (SF-6)
 		const withVariants = ctx.query.variants === '1' || ctx.query.variants === 'true';
 		const { filter, resolved, brands, attributes, byCategory, lineage } = await listingFilter(s, data, query);
-		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);
+		// top and sold_asc by the shop's count of top products (P3-10)
+		const sort = sortOf(query.sort, topBasis);
 		const filterable = attributes.filter(
 			(attribute) => (attribute.on === 'product' || attribute.on === 'variant') && attribute.show.filter && attribute.active,
 		);

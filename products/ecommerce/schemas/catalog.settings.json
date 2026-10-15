@@ -67,6 +67,13 @@
 			"minimum": 0,
 			"maximum": 1000000
 		},
+		"topBasis": {
+			"type": "string",
+			"title": "Top products count",
+			"description": "What ranks products as top (the top sort, Chat's top products and llms.txt): delivered units, or the units of orders placed and not canceled, open ones included.",
+			"default": "delivered",
+			"enum": ["delivered", "ordered"]
+		},
 		"imageMaxBytes": {
 			"type": "integer",
 			"title": "Largest image (bytes)",

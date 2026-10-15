@@ -546,10 +546,12 @@ describe('import of shoppers and orders (K10)', () => {
 		});
 		expect(people.find((c) => c.id === CUS_GUEST)).toMatchObject({ orderCount: 2, rtoCount: 1 });
 		const products = await all(COLLECTIONS.products);
-		// order lines and reviews moved: both derived (the pending review counts as a review, not in the rating)
-		expect(products.find((p) => p.id === PRODUCT)).toMatchObject({ sold: 1, rating: { average: 4, count: 1 } });
-		// order lines but no review: units derived, the given rating kept
-		expect(products.find((p) => p.id === OTHER)).toMatchObject({ sold: 3, rating: { average: 3.5, count: 4 } });
+		// order lines and reviews moved: both derived (the pending review counts as a review, not in the rating); units
+		// ordered: the delivered order, not the one sent back before delivery (P3-10)
+		expect(products.find((p) => p.id === PRODUCT)).toMatchObject({ sold: 1, ordered: 1, rating: { average: 4, count: 1 } });
+		// order lines but no review: units derived (ordered: the two open orders' and the delivered one's), the given rating
+		// kept
+		expect(products.find((p) => p.id === OTHER)).toMatchObject({ sold: 3, ordered: 6, rating: { average: 3.5, count: 4 } });
 		// neither: the given numbers kept
 		expect(products.find((p) => p.id === idOf('prd', 3))).toMatchObject({ sold: 7, rating: { average: 4.5, count: 2 } });
 		expect((await all(COLLECTIONS.serials)).map((s) => [s.serial, s.status, s.orderId, s.lineId])).toEqual([

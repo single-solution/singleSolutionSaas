@@ -259,12 +259,20 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		const cancelled = planOf(
 			plan(order(), 'cancelled', { note: 'Out of stock', payments: { 'payment.voidedAt': new Date(NOW) } }),
 		);
-		expect(kinds(cancelled)).toEqual(['release_stock', 'release_slots', 'release_offers', 'give_points']);
+		expect(kinds(cancelled)).toEqual(['release_stock', 'release_slots', 'count_ordered', 'release_offers', 'give_points']);
 		expect(cancelled.ledger[0]).toEqual({
 			kind: 'release_stock',
 			lines: [{ productId: 'prd_1', variantId: 'var_1', quantity: 2, locationId: null }],
 		});
-		expect(cancelled.ledger[3]).toMatchObject({ owner: { userId: 'usr_1' }, points: 50, reason: 'refund' });
+		// its units are no longer ordered, every line's (P3-10)
+		expect(cancelled.ledger[2]).toEqual({
+			kind: 'count_ordered',
+			lines: [
+				{ productId: 'prd_1', quantity: -2 },
+				{ productId: 'prd_2', quantity: -1 },
+			],
+		});
+		expect(cancelled.ledger[4]).toMatchObject({ owner: { userId: 'usr_1' }, points: 50, reason: 'refund' });
 		expect(cancelled.set).toMatchObject({ stockHeld: false, 'promotions.released': true, 'payment.voidedAt': new Date(NOW) });
 		expect(cancelled.facts.after).toEqual({
 			stock: 'back',
@@ -315,7 +323,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 	it('takes packages back: restocked or kept out, an RTO counted, points of a customer’s return', () => {
 		const shipped = order({ status: 'dispatched', role: 'shipped' });
 		const rto = planOf(plan(shipped, 'returned'));
-		expect(kinds(rto)).toEqual(['release_units', 'restock_return', 'count_rto']);
+		expect(kinds(rto)).toEqual(['release_units', 'count_ordered', 'restock_return', 'count_rto']);
 		expect(rto.set).toMatchObject({ stockHeld: false, returnRestocked: true });
 		expect(rto.history).toMatchObject({ reason: 'rto' });
 		const keptOut = {
@@ -325,7 +333,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 			),
 		};
 		const kept = planOf(plan(shipped, 'returned', { reason: 'customer_return' }, {}, keptOut));
-		expect(kinds(kept)).toEqual(['release_units']);
+		expect(kinds(kept)).toEqual(['release_units', 'count_ordered']);
 		expect(kept.facts.after.stock).toBe('none');
 		expect(kept.set.returnRestocked).toBeUndefined();
 
@@ -367,7 +375,7 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 			],
 		});
 		const before = planOf(plan(split, 'refunded', {}, {}, flow));
-		expect(kinds(before)).toEqual(['release_stock', 'release_slots', 'release_offers', 'give_points']);
+		expect(kinds(before)).toEqual(['release_stock', 'release_slots', 'count_ordered', 'release_offers', 'give_points']);
 		expect(before.refunded).toBe(1000);
 		expect(before.set).toMatchObject({ 'payment.refunded': 1000, 'payment.state': 'partially_refunded' });
 		expect(/** @type {any} */ (before.push.refunds).$each).toEqual([
@@ -444,7 +452,14 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 	it('plans a delete as a release without a status, once', () => {
 		expect(planRelease({ order: order({ status: 'delivered', role: 'delivered' }) })).toBeNull();
 		const release = /** @type {import('../core/transitions.js').TransitionPlan} */ (planRelease({ order: order() }));
-		expect(kinds(release)).toEqual(['release_units', 'release_stock', 'release_slots', 'release_offers', 'give_points']);
+		expect(kinds(release)).toEqual([
+			'release_units',
+			'release_stock',
+			'release_slots',
+			'count_ordered',
+			'release_offers',
+			'give_points',
+		]);
 		expect(release.set).toMatchObject({ stockHeld: false, 'promotions.released': true });
 		expect(release.history).toBeNull();
 		const back = order({ facts: { stock: 'back', offers: 'released', redeemed: 'given_back', earned: 'none', units: 'none' } });
@@ -617,7 +632,9 @@ describe('property: random flows × random transitions never give back or take t
 						const key =
 							effect.kind === 'give_points'
 								? `give_${effect.reason}_${p.stage === 'delivered' ? 'earn' : 'redeemed'}`
-								: effect.kind;
+								: effect.kind === 'count_ordered'
+									? `count_ordered_${(effect.lines[0]?.quantity ?? 0) < 0 ? 'out' : 'in'}`
+									: effect.kind;
 						counted[key] = (counted[key] ?? 0) + 1;
 					}
 					counted.external = (counted.external ?? 0) + p.external.length;
@@ -647,6 +664,8 @@ describe('property: random flows × random transitions never give back or take t
 					'take_points',
 					'give_earn_earn',
 					'count_sold',
+					'count_ordered_out',
+					'count_ordered_in',
 					'count_rto',
 					'external',
 				])

@@ -20,7 +20,7 @@ import { created, defineRoute, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
-import { SORTS, listOf, readShopQuery, shopFilter, sortDocument } from '../core/catalog-query.js';
+import { SORTS, listOf, readShopQuery, shopFilter, sortDocument, sortOf, topField } from '../core/catalog-query.js';
 import { lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import {
 	NO_STOCK,
@@ -514,7 +514,7 @@ export const createLandings = (product, service, media) => {
 			const sample = await data
 				.collection(COLLECTIONS.products)
 				.find(await filterOf(s, names, landing, false), { projection: { _id: 0, name: 1 } })
-				.sort({ sold: -1, id: 1 })
+				.sort({ [topField((await s.values('catalog')).topBasis)]: -1, id: 1 })
 				.limit(20)
 				.toArray();
 			const settings = await s.values('ai_copy');
@@ -618,7 +618,7 @@ export const createLandings = (product, service, media) => {
 		// the grid's order: newest first, or the sort asked for (a sorted list is not indexed, but its items are known)
 		const sortKey = String(ctx.query.sort ?? '');
 		const sorted = Object.hasOwn(SORTS, sortKey)
-			? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[/** @type {keyof typeof SORTS} */ (sortKey)])
+			? sortOf(/** @type {keyof typeof SORTS} */ (sortKey), (await s.values('catalog')).topBasis)
 			: null;
 		const itemsKnown = named && filters.every((key) => key === 'sort' && sorted !== null);
 		const combination = { categoryId: category?.id ?? null, brandId: brand?.id ?? null, grade: grade?.key ?? null };

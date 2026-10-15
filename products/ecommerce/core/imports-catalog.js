@@ -175,6 +175,7 @@ const IMPORT_FIELDS = Object.freeze({
 		'warrantyDays',
 		'feedGroupId',
 		'sold',
+		'ordered',
 		'rating',
 		'publishedAt',
 		...STAMPS,
@@ -717,6 +718,10 @@ export const checkImportedProduct = (record, context) => {
 	const previousSlugs = previousSlugsOf(record.previousSlugs, slug, errors);
 	const sold = record.sold ?? 0;
 	if (!Number.isSafeInteger(sold) || Number(sold) < 0) errors.push({ path: '/sold', message: 'Sold is a whole number from 0.' });
+	// units ordered (P3-10): as given, else the units sold (the earlier shop's open orders are not known)
+	const ordered = record.ordered ?? (Number.isSafeInteger(sold) && Number(sold) >= 0 ? sold : 0);
+	if (!Number.isSafeInteger(ordered) || Number(ordered) < 0)
+		errors.push({ path: '/ordered', message: 'Ordered is a whole number from 0.' });
 	const rating = /** @type {Record<string, any>} */ (record.rating ?? { average: 0, count: 0 });
 	if (
 		!isObject(rating) ||
@@ -740,6 +745,7 @@ export const checkImportedProduct = (record, context) => {
 			media,
 			previousSlugs,
 			sold,
+			ordered,
 			rating: { average: rating.average, count: rating.count },
 			...summarize(value.variants, value.trackStock),
 			// first time on sale: as given, else when it was made (Migration: publishedAt = createdAt)

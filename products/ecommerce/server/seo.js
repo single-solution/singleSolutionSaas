@@ -21,7 +21,7 @@ import { gradeCondition, gradesFor } from '../core/grades.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { absolute } from '../core/links.js';
 import { buildLlmsFull, buildLlmsTxt, MAX_LLMS_CATEGORIES, treeOrder } from '../core/llms.js';
-import { SORTS, sortDocument } from '../core/catalog-query.js';
+import { SORTS, sortDocument, topField } from '../core/catalog-query.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { windowDays } from '../core/returns.js';
 import { shownName } from '../core/reviews.js';
@@ -1002,7 +1002,7 @@ export const createSeo = (product, service) => {
 								{ websiteId: data.websiteId, status: 'active', ...visibleMatch(hidden) },
 								{ projection: { _id: 0, id: 1, slug: 1, name: 1, summary: 1, price: 1, categoryIds: 1, brandId: 1 } },
 							)
-							.sort({ sold: -1, publishedAt: -1, id: 1 })
+							.sort({ [topField((await s.values('catalog')).topBasis)]: -1, publishedAt: -1, id: 1 })
 							.limit(count)
 							.toArray()
 					);

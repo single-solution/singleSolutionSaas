@@ -126,6 +126,7 @@ import { CASH_METHODS, earnedLeft, pointsOwner, refundSplit, refundable, stateAf
  *   | { kind: 'take_points', owner: PointsOwner, points: number, note: string }
  *   | { kind: 'restock_return', lines: Array<StockLine & { lineId: string }> }
  *   | { kind: 'count_sold', lines: Array<{ productId: string, quantity: number }> }
+ *   | { kind: 'count_ordered', lines: Array<{ productId: string, quantity: number }> }
  *   | { kind: 'count_rto', customerId: string }
  *   | { kind: 'release_units' }
  *   | { kind: 'capture_units', plan: UnitsPlan }} LedgerEffect
@@ -193,6 +194,19 @@ const stockLines = (order) =>
 
 /** @param {OrderRecord} order */
 const hasUnits = (order) => order.lines.some((line) => (line.serials ?? []).length > 0);
+
+/**
+ * An order's units no longer ordered (parity P3-10, `catalog.topBasis: ordered`: the units of orders that hold their
+ * stock or were delivered): its held stock went back before delivery (a cancel, a refund before delivery, a package
+ * back from a dispatch, a delete), so its lines leave the products' `ordered` counts; delivered orders stay counted, as
+ * their units sold do.
+ * @param {OrderRecord} order
+ * @returns {LedgerEffect}
+ */
+const notOrdered = (order) => ({
+	kind: 'count_ordered',
+	lines: order.lines.map((line) => ({ productId: line.productId, quantity: -line.quantity })),
+});
 
 /**
  * Whether a transition may happen, before anything is called or read for it: the flow's moves, who may make them and
@@ -483,6 +497,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		after.units = 'none';
 		if (before.stock === 'held' || before.stock === 'sold') {
 			ledger.push({ kind: 'release_stock', lines: stockLines(order) }, { kind: 'release_slots' });
+			if (before.stock === 'held') ledger.push(notOrdered(order));
 			after.stock = 'back';
 		}
 		releaseOffers();
@@ -513,6 +528,7 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 		set.stockHeld = false;
 		ledger.push({ kind: 'release_units' });
 		after.units = 'none';
+		if (before.stock === 'held') ledger.push(notOrdered(order));
 		if (before.stock === 'held' || before.stock === 'sold') {
 			if (choices.restock) {
 				set.returnRestocked = true;
@@ -632,11 +648,12 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 					after.earned = 'credited';
 				}
 			}
-			if (BEFORE_DELIVERY.includes(fromStage))
-				ledger.push({
-					kind: 'count_sold',
-					lines: order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
-				});
+			if (BEFORE_DELIVERY.includes(fromStage)) {
+				const lines = order.lines.map((line) => ({ productId: line.productId, quantity: line.quantity }));
+				ledger.push({ kind: 'count_sold', lines });
+				// an order that held no stock (an imported open one) is counted as ordered once delivered (P3-10)
+				if (before.stock !== 'held') ledger.push({ kind: 'count_ordered', lines });
+			}
 			if (before.stock === 'held') after.stock = 'sold';
 			break;
 		}
@@ -800,6 +817,7 @@ export const planRelease = ({ order, all = false }) => {
 		set['promotions.released'] = true;
 		if (before.stock === 'held' || before.stock === 'sold') {
 			ledger.push({ kind: 'release_stock', lines: stockLines(order) }, { kind: 'release_slots' });
+			if (before.stock === 'held') ledger.push(notOrdered(order));
 			after.stock = 'back';
 		}
 		releaseOffers();

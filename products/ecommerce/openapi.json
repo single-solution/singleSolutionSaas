@@ -14669,7 +14669,7 @@
 		"/v1/chat/products/top": {
 			"get": {
 				"summary": "Best-selling or newest products for Chat",
-				"description": "422 validation_failed at /kind for another kind.",
+				"description": "Top products rank by units sold, or by units ordered with the catalog setting topBasis ordered (P3-10). 422 validation_failed at /kind for another kind.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "catalog",
 				"security": [
@@ -17874,7 +17874,7 @@
 		"/v1/import/finish": {
 			"post": {
 				"summary": "Finish an import: derive what the shop keeps",
-				"description": "Run after the imports (and again whenever more is imported): it derives every category's path from the parents, products' price, price range, stock state and grades, customers' order and RTO counts and last order, loyalty balances and lifetime points, products' sold count (from delivered order lines) and rating (from approved reviews) where their order lines or reviews were imported too (otherwise the imported numbers stay), serials sold through order lines, and the order-number counters. One call works on at most 200 records: while more is true, call again with ?after=<next>. It writes only what differs, so a second run changes nothing. 422 validation_failed for another after.",
+				"description": "Run after the imports (and again whenever more is imported): it derives every category's path from the parents, products' price, price range, stock state and grades, customers' order and RTO counts and last order, loyalty balances and lifetime points, products' sold count (from delivered order lines), ordered count (from the lines of orders that hold their stock or were delivered) and rating (from approved reviews) where their order lines or reviews were imported too (otherwise the imported numbers stay), serials sold through order lines, and the order-number counters. One call works on at most 200 records: while more is true, call again with ?after=<next>. It writes only what differs, so a second run changes nothing. 422 validation_failed for another after.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "import",
 				"security": [
@@ -31061,6 +31061,7 @@
 						"name": "sort",
 						"in": "query",
 						"required": false,
+						"description": "top: the most first, sold_asc: the fewest first, by units sold (delivered orders) or, with the catalog setting topBasis ordered, by units ordered (open and delivered orders; P3-10).",
 						"schema": {
 							"type": "string",
 							"enum": [
@@ -31073,7 +31074,8 @@
 								"name",
 								"updated"
 							],
-							"default": "newest"
+							"default": "newest",
+							"description": "top: the most first, sold_asc: the fewest first, by units sold (delivered orders) or, with the catalog setting topBasis ordered, by units ordered (open and delivered orders; P3-10)."
 						}
 					},
 					{
@@ -40045,7 +40047,7 @@
 					"productsSoldRatingUpdated": {
 						"type": "integer",
 						"minimum": 0,
-						"description": "Products whose sold count (from delivered order lines, when they have any) or rating (from approved reviews, when they have any) changed."
+						"description": "Products whose sold count (from delivered order lines, when they have any), ordered count (from the lines of open and delivered orders) or rating (from approved reviews, when they have any) changed."
 					},
 					"serialsSold": {
 						"type": "integer",
@@ -44003,6 +44005,7 @@
 					"previousSlugs",
 					"replacedBy",
 					"sold",
+					"ordered",
 					"rating",
 					"price",
 					"priceMax",
@@ -44441,6 +44444,11 @@
 						"type": "integer",
 						"minimum": 0,
 						"description": "Units sold (delivered orders)."
+					},
+					"ordered": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Units of orders that hold their stock or were delivered (open and delivered orders): what ranks top products with the catalog setting topBasis ordered (P3-10)."
 					},
 					"rating": {
 						"type": "object",

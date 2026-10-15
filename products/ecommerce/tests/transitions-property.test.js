@@ -531,6 +531,13 @@ describe('property: random flows × every way an order moves, retries, two at on
 				await data.collection(COLLECTIONS.products).findOne({ websiteId: shop.websiteId, id: product.id })
 			);
 			expect(stored.sold, `sold of ${product.id} (seed ${SEED})`).toBe(sold);
+			// ordered = the units of orders that hold their stock or were delivered (P3-10)
+			const ordered = all
+				.filter((record) => factsOf(record).stock === 'held' || record.deliveredAt)
+				.flatMap((record) => record.lines)
+				.filter((line) => line.productId === product.id)
+				.reduce((sum, line) => sum + line.quantity, 0);
+			expect(stored.ordered, `ordered of ${product.id} (seed ${SEED})`).toBe(ordered);
 		}
 		for (const record of records) {
 			const label = `${record.id} (seed ${SEED})`;

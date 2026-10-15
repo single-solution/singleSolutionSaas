@@ -159,6 +159,8 @@ export const ID_PREFIX = Object.freeze({
  *   `returns` setting)
  * @property {number | null} warrantyDays this item's warranty in days after delivery (null = the grade's, else the setting)
  * @property {number} sold units sold (delivered orders), for top products
+ * @property {number} ordered units of orders placed and not given back before delivery (open and delivered orders), for
+ *   top products by the `catalog` setting `topBasis: ordered` (parity P3-10)
  * @property {{ average: number, count: number }} rating approved reviews
  * @property {number} price lowest active variant price (listings, sorting)
  * @property {boolean} inStock some active variant can be sold now

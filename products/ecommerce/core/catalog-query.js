@@ -30,6 +30,25 @@ export const SORTS = Object.freeze({
 });
 
 /** @typedef {keyof typeof SORTS} SortKey */
+
+/**
+ * The count top products are ranked by (the `catalog` setting `topBasis`, parity P3-10): units sold (delivered
+ * orders), or units ordered (orders that hold their stock or were delivered).
+ * @param {unknown} basis
+ * @returns {'sold' | 'ordered'}
+ */
+export const topField = (basis) => (basis === 'ordered' ? 'ordered' : 'sold');
+
+/**
+ * A listing's sort by its key, `top` and `sold_asc` by the shop's {@link topField}.
+ * @param {SortKey} key
+ * @param {unknown} basis the `catalog` setting `topBasis`
+ * @returns {Sort}
+ */
+export const sortOf = (key, basis) => {
+	const sort = /** @type {Sort} */ (SORTS[key]);
+	return key === 'top' || key === 'sold_asc' ? { ...sort, field: topField(basis) } : sort;
+};
 /** @typedef {{ field: string, dir: 1 | -1, then?: ReadonlyArray<{ field: string, dir: 1 | -1 }> }} Sort */
 
 /** Most values of one filter (brands, grades, attribute values). */

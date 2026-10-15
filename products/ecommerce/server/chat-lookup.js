@@ -16,6 +16,7 @@ import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
 import { categoryTrail, dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
+import { topField } from '../core/catalog-query.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
 import { stockLeftOf } from '../core/catalog-views.js';
 import { CONTEXT_DEALS, CONTEXT_PRODUCTS, contextText } from '../core/chat-context.js';
@@ -366,7 +367,7 @@ export const createChatLookup = (product, service, media) => {
 			await data
 				.collection(COLLECTIONS.products)
 				.find(all.length > 0 ? { ...base, $and: all } : base, { projection: CARD_FIELDS })
-				.sort({ inStock: -1, sold: -1, id: 1 })
+				.sort({ inStock: -1, [topField((await s.values('catalog')).topBasis)]: -1, id: 1 })
 				.limit(filters.limit)
 				.toArray()
 		);
@@ -387,7 +388,11 @@ export const createChatLookup = (product, service, media) => {
 					{ websiteId: data.websiteId, status: 'active', ...visibleMatch(await hiddenFor(s)) },
 					{ projection: CARD_FIELDS },
 				)
-				.sort(kind === 'new' ? { publishedAt: -1, id: -1 } : { sold: -1, publishedAt: -1, id: -1 })
+				.sort(
+					kind === 'new'
+						? { publishedAt: -1, id: -1 }
+						: { [topField((await s.values('catalog')).topBasis)]: -1, publishedAt: -1, id: -1 },
+				)
 				.limit(limitOf(ctx.query.limit, 5, 12))
 				.toArray()
 		);
