@@ -7,13 +7,11 @@
  * a test with those samples. A refused call shows the website's text for its problem, never the server's English.
  * @module
  */
-import { formatText, mountWidget } from '@ss/app-kit/widget';
+import { adminCall, element, formatText, mountWidget } from '@ss/app-kit/widget';
 import { CHANNELS } from '../core/channels.js';
 import { MAX_BUTTONS, fillText, isTitled, valueNamesOf } from '../core/templates.js';
-import { element } from './dom.js';
 import { problemText } from './problems.js';
 import { WIDGET_CSS } from './styles.js';
-import { adminCall } from './tickets.js';
 
 /** @typedef {{ index: number, type: string, value: string }} ButtonView */
 /**
@@ -22,7 +20,7 @@ import { adminCall } from './tickets.js';
  */
 
 /**
- * @param {{ host: HTMLElement, api: import('./tickets.js').AdminApi, config: import('./widget.js').WidgetConfig }} input
+ * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig }} input
  */
 export const mountTemplateEditor = ({ host, api, config }) => {
 	/** @param {string} key */

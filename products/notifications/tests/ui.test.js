@@ -1,24 +1,28 @@
 // @vitest-environment jsdom
 /* global document, window */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
 import { SUBSCRIBED_EVENT, SUBSCRIBER_STORAGE_KEY, WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
 import { BUTTON_TYPES } from '../core/templates.js';
 import { CHANNELS } from '../core/channels.js';
 import { STATUSES } from '../core/log.js';
 import { codeOf, logReason, notSentText, problemText } from '../ui/problems.js';
-import { REFRESH_BEFORE_MS, adminCall, createTicketSource } from '../ui/tickets.js';
 import { ADMIN_CONFIG_PATH, CONFIG_PATH, startWidget } from '../ui/widget.js';
 
 const BASE = 'https://notifications.example.dev';
 const KEY = Buffer.alloc(65, 4).toString('base64url');
 
-/** @param {string[]} features @param {string | null} [pushPublicKey] */
+/**
+ * The widget config the kit answers: the widgets whose feature is on are named in `widgets`.
+ * @param {string[]} features @param {string | null} [pushPublicKey]
+ */
 const configOf = (features, pushPublicKey = KEY) => ({
 	texts: { ...strings },
 	theme: { mode: /** @type {const} */ ('light') },
 	customCss: '',
 	features,
+	widgets: manifest.widgets.filter((widget) => features.includes(widget.feature)).map((widget) => widget.key),
 	settings: { pushPublicKey },
 });
 
@@ -687,41 +691,6 @@ describe('admin widgets', () => {
 });
 
 describe('tickets', () => {
-	it('are renewed a minute before they expire; a failed renewal signs the widgets out', async () => {
-		vi.useFakeTimers();
-		const now = Date.parse('2026-10-01T10:00:00Z');
-		vi.setSystemTime(now);
-		const getTicket = vi
-			.fn()
-			.mockResolvedValueOnce({ ticket: 't2', expiresAt: new Date(now + 30 * 60_000).toISOString() })
-			.mockRejectedValueOnce(new Error('signed out'));
-		const tickets = createTicketSource({
-			first: { ticket: 't1', expiresAt: new Date(now + 15 * 60_000).toISOString() },
-			getTicket,
-			schedule: (task, ms) => /** @type {any} */ (setTimeout(task, ms)),
-			cancel: (id) => clearTimeout(id),
-			now: () => Date.now(),
-		});
-		/** @type {boolean[]} */
-		const seen = [];
-		const off = tickets.onChange((signedIn) => seen.push(signedIn));
-		expect(tickets.current()).toBe('t1');
-		await vi.advanceTimersByTimeAsync(15 * 60_000 - REFRESH_BEFORE_MS);
-		expect(tickets.current()).toBe('t2');
-		await vi.advanceTimersByTimeAsync(30 * 60_000);
-		expect(tickets.current()).toBeNull();
-		expect(seen).toEqual([true, false]);
-		off();
-		tickets.stop();
-		const fetch = vi.fn();
-		expect(await adminCall({ base: BASE, tickets, fetch }, 'GET', '/v1/admin/messages')).toEqual({
-			ok: false,
-			status: 0,
-			data: null,
-		});
-		expect(fetch).not.toHaveBeenCalled();
-	});
-
 	it('a widget shows Signed out when the page cannot give a new ticket', async () => {
 		vi.useFakeTimers();
 		const host = place('delivery_log');
@@ -746,15 +715,6 @@ describe('tickets', () => {
 		/** @type {HTMLFormElement} */ (inside(editor, 'form')).dispatchEvent(new window.Event('submit', { cancelable: true }));
 		await vi.advanceTimersByTimeAsync(0);
 		expect(statusOf(editor)).toBe(strings['templates.signedOut']);
-		const fetch = vi.fn().mockRejectedValue(new Error('offline'));
-		const source = createTicketSource({
-			first: { ticket: 'x', expiresAt: new Date().toISOString() },
-			getTicket: async () => ({ ticket: 'y', expiresAt: '' }),
-			schedule: () => 0,
-			cancel: () => {},
-			now: () => 0,
-		});
-		expect(await adminCall({ base: BASE, tickets: source, fetch }, 'GET', '/x')).toEqual({ ok: false, status: 0, data: null });
 	});
 });
 
