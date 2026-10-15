@@ -236,7 +236,7 @@ describe('renderDocs', () => {
 		expect(atlas).toContain(`<pre><code>${escape(JSON.stringify(SEARCH_INDEX_DEFINITION, null, 2))}</code></pre>`);
 		expect(atlas).toContain('ss_ecommerce_products');
 		expect(atlas).toContain('searchIndex');
-		expect(atlas).toContain('Search index missing');
+		expect(atlas).toContain('lists the missing index under Needs you');
 	});
 
 	it('names only routes that exist, each with a feature it runs under', () => {
