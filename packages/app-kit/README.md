@@ -81,8 +81,9 @@ The exact API is in [API.md](./API.md).
   builds, its widgets and routes); `docsParagraph`, `docsBlock`, `docsList` and `docsRouteTable` write the rest.
 - **Start-up** — `createProductBase(options)` builds the store, the outbound policy and `send` as `createProduct` does,
   for the product's own adapters (list settings, AI, gateways, providers) before it calls `createProduct`.
-- **Shared helpers** — Format helpers come from `@ss/contracts/format` (server and widgets), HTML escaping from
-  `@ss/contracts/text` `escapeHtml`; `verifyIdentityToken` checks a sign-in token offline.
+- **Shared helpers** — Format helpers come from `@ss/contracts/format` in `core/`, `server/` and `adapters/`, and
+  from `@ss/app-kit/widget` in `ui/` (the one package widget code may import); HTML escaping from `@ss/contracts/text`
+  `escapeHtml`; `verifyIdentityToken` checks a sign-in token offline.
 - **Logging** — `createLogger()` writes JSON lines to standard output, which the host keeps: every request (method,
   path, status, time), a failed route (500, with its route and request id), a misconfiguration (503, naming the
   variables) and the kit's warnings. Members named like credentials, signed tokens and the user part of addresses are
