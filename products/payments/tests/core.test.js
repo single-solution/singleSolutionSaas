@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import manifest from '../manifest.json' with { type: 'json' };
 import strings from '../strings/en.json' with { type: 'json' };
-import { GATEWAYS, GATEWAY_FEATURES, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import { GATEWAYS, GATEWAY_FEATURES, gatewaysFor, isGateway, orderedWays, takesCurrency } from '../core/gateways.js';
 import {
 	BANK_ROW_LABELS,
 	METHOD_KINDS,
@@ -101,6 +101,32 @@ describe('gateways', () => {
 		expect(gatewaysFor({ on, ready, currency: 'PKR', only: ['jazzcash'] })).toEqual(['jazzcash']);
 		// a manual payment method is the merchant's, not a gateway
 		expect(isGateway('bank_transfer')).toBe(false);
+	});
+});
+
+describe('the order payers see (P5)', () => {
+	const ways = ['stripe', 'paypal', 'jazzcash', 'bank_transfer', 'cod'];
+	it('keeps the usual order without the merchant’s', () => {
+		expect(orderedWays(ways, { order: [], preferred: '' })).toEqual(ways);
+	});
+	it('lists the merchant’s order first, the rest after in the usual order, and the preferred one before all', () => {
+		expect(orderedWays(ways, { order: ['cod', 'paypal'], preferred: '' })).toEqual([
+			'cod',
+			'paypal',
+			'stripe',
+			'jazzcash',
+			'bank_transfer',
+		]);
+		expect(orderedWays(ways, { order: ['cod', 'paypal'], preferred: 'bank_transfer' })).toEqual([
+			'bank_transfer',
+			'cod',
+			'paypal',
+			'stripe',
+			'jazzcash',
+		]);
+	});
+	it('ignores names that are not offered now, and repeats', () => {
+		expect(orderedWays(['stripe', 'cod'], { order: ['payfast', 'cod', 'cod'], preferred: 'rapid' })).toEqual(['cod', 'stripe']);
 	});
 });
 

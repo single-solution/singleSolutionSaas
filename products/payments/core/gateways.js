@@ -116,3 +116,20 @@ export const gatewaysFor = ({ on, ready, currency, own = null, only = null }) =>
 			takesCurrency(gateway, currency, own) &&
 			ready(gateway),
 	);
+
+/**
+ * The ways to pay in the order payers see them (P5): the merchant's preferred way first (the link page and the pay
+ * button preselect it), then the ones of the merchant's order, then the rest in their usual order (gateways in
+ * {@link GATEWAYS} order, then the merchant's manual payment methods in their list's order). Names not offered now
+ * are ignored.
+ * @param {readonly string[]} ways the ways offered now, in their usual order
+ * @param {{ order: readonly unknown[], preferred: unknown }} merchant `payment_api.methodOrder` and
+ *   `payment_api.preferredMethod`
+ * @returns {string[]}
+ */
+export const orderedWays = (ways, { order, preferred }) => {
+	const first = [preferred, ...order].filter(
+		(id, index, all) => typeof id === 'string' && ways.includes(id) && all.indexOf(id) === index,
+	);
+	return [.../** @type {string[]} */ (first), ...ways.filter((id) => !first.includes(id))];
+};

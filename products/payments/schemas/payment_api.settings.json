@@ -9,6 +9,26 @@
 			"default": 24,
 			"minimum": 1,
 			"maximum": 168
+		},
+		"methodOrder": {
+			"type": "array",
+			"title": "Order of the ways to pay",
+			"description": "Gateway ids (stripe, paypal …) and your manual payment methods' keys in the order payers see them on the pay page, payment links and the pay button. The ones you leave out follow in the usual order: gateways, then your manual payment methods.",
+			"default": [],
+			"items": {
+				"type": "string",
+				"maxLength": 40
+			},
+			"x-ui": {
+				"widget": "tags"
+			}
+		},
+		"preferredMethod": {
+			"type": "string",
+			"title": "Preferred way to pay",
+			"description": "A gateway id or a manual payment method's key, shown first and picked for the payer on payment links and the pay button (empty: the first one).",
+			"default": "",
+			"maxLength": 40
 		}
 	}
 }

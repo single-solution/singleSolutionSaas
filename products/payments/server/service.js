@@ -8,7 +8,15 @@
  */
 import { problem } from '@ss/app-kit';
 import { originAllowed } from '@ss/protocol';
-import { GATEWAY_CONNECTIONS, GATEWAY_FEATURES, GATEWAYS, gatewaysFor, isGateway, takesCurrency } from '../core/gateways.js';
+import {
+	GATEWAY_CONNECTIONS,
+	GATEWAY_FEATURES,
+	GATEWAYS,
+	gatewaysFor,
+	isGateway,
+	orderedWays,
+	takesCurrency,
+} from '../core/gateways.js';
 import { methodReady } from '../core/methods.js';
 import {
 	mirrorStatus,
@@ -116,7 +124,8 @@ export const createService = (product) => {
 
 	/**
 	 * The ways a payer may pay now for a currency: the gateways switched on, connected and taking the currency, then the
-	 * manual methods that are ready for it (see `methodReady`); `only` narrows them (a payment link's own choice).
+	 * manual methods that are ready for it (see `methodReady`), in the merchant's order with their preferred way first
+	 * (P5, see `orderedWays`); `only` narrows them (a payment link's own choice).
 	 * @param {Site} s @param {string} currency @param {readonly string[] | null} [only]
 	 * @returns {Promise<string[]>} gateway ids and manual methods' keys
 	 */
@@ -135,7 +144,11 @@ export const createService = (product) => {
 		const manual = (await methodsOf(s))
 			.filter((method) => picked(method.key) && methodReady(method, currency).ready)
 			.map((method) => method.key);
-		return [...gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, own, only }), ...manual];
+		const { methodOrder, preferredMethod } = await product.settings.values(s.websiteId, 'payment_api');
+		return orderedWays([...gatewaysFor({ on: s.on, ready: (gateway) => ready.has(gateway), currency, own, only }), ...manual], {
+			order: Array.isArray(methodOrder) ? methodOrder : [],
+			preferred: preferredMethod,
+		});
 	};
 
 	/**

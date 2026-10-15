@@ -781,6 +781,14 @@ describe('manual payment methods (P1, P2)', () => {
 		const html = (await page(`/pay/${env.websiteId}/${choice.id}`)).text;
 		const offered = [...html.matchAll(/name="gateway" value="([^"]+)"/g)].map(([, id]) => id);
 		expect(offered.slice(-3)).toEqual(['bank_transfer', 'cod', 'counter']);
+		// the merchant's order and preferred way (P5): the preferred first, then their order, then the rest
+		await env.api('PUT', '/v1/settings/payment_api.methodOrder', { value: ['counter', 'stripe'] });
+		await env.api('PUT', '/v1/settings/payment_api.preferredMethod', { value: 'cod' });
+		const sorted = (await page(`/pay/${env.websiteId}/${choice.id}`)).text;
+		const order = [...sorted.matchAll(/name="gateway" value="([^"]+)"/g)].map(([, id]) => id);
+		expect(order.slice(0, 3)).toEqual(['cod', 'counter', 'stripe']);
+		expect(order.slice(-1)).toEqual(['bank_transfer']);
+		for (const name of ['methodOrder', 'preferredMethod']) await env.api('DELETE', `/v1/settings/payment_api.${name}`);
 		expect(html).toContain('Cash or card at our counter.');
 		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'sepa' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
