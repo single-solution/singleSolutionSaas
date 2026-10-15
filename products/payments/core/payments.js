@@ -5,7 +5,7 @@
  */
 import { isGateway, SUBSCRIPTION_GATEWAYS } from './gateways.js';
 import { isMethodKey } from './methods.js';
-import { formatMoney, isAmount, isCurrency, toDecimal } from './money.js';
+import { isAmount, isCurrency, toDecimal } from './money.js';
 
 /**
  * Payment statuses. `pending`: waiting for the payer or the gateway; `cancelled`: the payer canceled at the gateway
@@ -457,13 +457,17 @@ const csvCell = (value) => {
 const CSV_BOM = '\uFEFF';
 
 /**
- * Payments as CSV (the Payments admin widget's export): a byte order mark, then one row per payment with the given
- * column titles.
+ * Payments as CSV (the Payments admin widget's export, P8): a byte order mark, then one row per payment with the given
+ * column titles. The status and the gateway are the website's words for them; amounts are plain decimals (a dot, no
+ * thousands separators, the currency's decimals) with the currency in a column of its own, so spreadsheets read them
+ * as numbers; the date is the stored time (ISO 8601, UTC).
  * @param {ReadonlyArray<any>} payments views
- * @param {{ id: string, date: string, status: string, amount: string, refunded: string, gateway: string, reference: string,
- *   email: string, description: string }} titles
+ * @param {{ id: string, date: string, status: string, amount: string, currency: string, refunded: string, gateway: string,
+ *   reference: string, email: string, description: string }} titles
+ * @param {{ status: (status: string) => string, gateway: (gateway: string, methodName: string) => string }} names the
+ *   words for a status and a gateway (a manual payment method's own name as the payment took it)
  */
-export const paymentsCsv = (payments, titles) =>
+export const paymentsCsv = (payments, titles, names) =>
 	CSV_BOM +
 	[
 		[
@@ -471,6 +475,7 @@ export const paymentsCsv = (payments, titles) =>
 			titles.date,
 			titles.status,
 			titles.amount,
+			titles.currency,
 			titles.refunded,
 			titles.gateway,
 			titles.reference,
@@ -480,10 +485,11 @@ export const paymentsCsv = (payments, titles) =>
 		...payments.map((payment) => [
 			payment.id,
 			payment.createdAt,
-			payment.status,
-			formatMoney(payment.amount, payment.currency),
-			formatMoney(payment.refunded, payment.currency).replace(/^\S+ /, ''),
-			payment.gateway ?? '',
+			names.status(payment.status),
+			toDecimal(payment.amount, payment.currency),
+			payment.currency,
+			toDecimal(payment.refunded, payment.currency),
+			payment.gateway ? names.gateway(payment.gateway, payment.methodName ?? '') : '',
 			payment.reference,
 			payment.customer?.email ?? '',
 			payment.description,

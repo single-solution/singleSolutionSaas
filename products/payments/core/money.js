@@ -97,14 +97,3 @@ export const amountOf = (text, currency, sign = '.') => {
  * @param {string} [sign]
  */
 export const amountText = (amount, currency, sign = '.') => toDecimal(amount, currency).replace('.', sign);
-
-/**
- * An amount for people: the currency code and the decimal with thousands grouped by commas (`USD 1,250.00`).
- * @param {number} amount
- * @param {string} currency
- */
-export const formatMoney = (amount, currency) => {
-	const [whole = '0', fraction] = toDecimal(amount, currency).split('.');
-	const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-	return `${currency} ${fraction === undefined ? grouped : `${grouped}.${fraction}`}`;
-};

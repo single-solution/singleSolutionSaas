@@ -6,8 +6,8 @@
  * `payments.refund`) and Confirm transfer received (with the transfer's reference and a note, `payments.confirm`, PLAN
  * 0.8.10 P3; also for a transfer that arrives after the payment was canceled) as buttons, a Refund due mark on money
  * that arrived after the merchant canceled the payment (K-13), and View proof, Copy pay link, Open pay page and Copy payment id in its More menu; forms open
- * in dialogs. Amounts and times follow the website's Format and time zone; the CSV keeps the stored times and the
- * amounts with their currency codes.
+ * in dialogs. Amounts and times follow the website's Format and time zone; the CSV keeps the stored times, has the
+ * statuses and gateways in the website's words, and plain decimal amounts with the currency in its own column (P8).
  * @module
  */
 import {
@@ -414,17 +414,22 @@ export const mountPaymentsAdmin = ({ host, api, config, save, open, copy = () =>
 				}
 				save(
 					'payments.csv',
-					paymentsCsv(rows, {
-						id: t('csv.id'),
-						date: t('csv.date'),
-						status: t('csv.status'),
-						amount: t('csv.amount'),
-						refunded: t('csv.refunded'),
-						gateway: t('csv.gateway'),
-						reference: t('csv.reference'),
-						email: t('csv.email'),
-						description: t('csv.description'),
-					}),
+					paymentsCsv(
+						rows,
+						{
+							id: t('csv.id'),
+							date: t('csv.date'),
+							status: t('csv.status'),
+							amount: t('csv.amount'),
+							currency: t('csv.currency'),
+							refunded: t('csv.refunded'),
+							gateway: t('csv.gateway'),
+							reference: t('csv.reference'),
+							email: t('csv.email'),
+							description: t('csv.description'),
+						},
+						{ status: (value) => t(`status.${value}`), gateway: gatewayName },
+					),
 				);
 			});
 			const stop = api.tickets.onChange((signedIn) => {

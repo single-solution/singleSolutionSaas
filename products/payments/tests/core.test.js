@@ -13,17 +13,7 @@ import {
 	methodReady,
 	methodView,
 } from '../core/methods.js';
-import {
-	MAX_AMOUNT,
-	amountOf,
-	amountText,
-	decimalSignOf,
-	formatMoney,
-	fromDecimal,
-	isAmount,
-	isCurrency,
-	toDecimal,
-} from '../core/money.js';
+import { MAX_AMOUNT, amountOf, amountText, decimalSignOf, fromDecimal, isAmount, isCurrency, toDecimal } from '../core/money.js';
 import {
 	EVENT_DATA_LIMIT,
 	checkCustomer,
@@ -89,10 +79,6 @@ describe('money', () => {
 			expect(amountOf(text, 'USD', '.')).toBeNull();
 		expect(amountText(255050, 'USD', ',')).toBe('2550,50');
 		expect(amountText(2500, 'JPY', ',')).toBe('2500');
-	});
-	it('formats for people without assuming a locale', () => {
-		expect(formatMoney(125000, 'EUR')).toBe('EUR 1,250.00');
-		expect(formatMoney(1234567, 'JPY')).toBe('JPY 1,234,567');
 	});
 });
 
@@ -394,21 +380,30 @@ describe('payments', () => {
 		expect(mirrorStatus('stripe', 'trialing')).toBe('active');
 		expect(mirrorStatus('paypal', 'SUSPENDED')).toBe('paused');
 		expect(mirrorStatus('paypal', 'NOPE')).toBeNull();
-		const csv = paymentsCsv([view], {
+		const titles = {
 			id: 'Payment',
 			date: 'Date',
 			status: 'Status',
 			amount: 'Amount',
+			currency: 'Currency',
 			refunded: 'Refunded',
 			gateway: 'Gateway',
 			reference: 'Reference',
 			email: 'Email',
 			description: 'Description',
-		});
+		};
+		const names = {
+			status: (/** @type {string} */ status) => `S:${status}`,
+			gateway: (/** @type {string} */ gateway) => `G:${gateway}`,
+		};
+		const csv = paymentsCsv([{ ...view, amount: 125050, refunded: 1000 }], titles, names);
 		// a byte order mark first: spreadsheet apps then read names in any language right (UTF-8)
-		expect(csv.startsWith('\uFEFFPayment,Date,')).toBe(true);
-		expect(csv.split('\r\n')[1]).toBe(`pay_1,${at.toISOString()},paid,EUR 10.00,0.00,stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`);
-		expect(paymentsCsv([{ ...view, gateway: null, customer: {} }], /** @type {any} */ ({})).split('\r\n')[1]).toContain(',,');
+		expect(csv.startsWith('\uFEFFPayment,Date,Status,Amount,Currency,Refunded,Gateway,')).toBe(true);
+		// labels from the texts, plain decimals (no grouping) with the currency in its own column (P8)
+		expect(csv.split('\r\n')[1]).toBe(
+			`pay_1,${at.toISOString()},S:paid,1250.50,EUR,10.00,G:stripe,"o-1, ""x""",a@b.co,'=SUM(A1)`,
+		);
+		expect(paymentsCsv([{ ...view, gateway: null, customer: {} }], titles, names).split('\r\n')[1]).toContain(',0.00,,"o-1');
 	});
 });
 

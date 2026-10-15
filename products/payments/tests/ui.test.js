@@ -418,8 +418,10 @@ describe('Payments admin widget', () => {
 		button(host, strings['admin.export']).click();
 		await flush();
 		const [, csv] = save.mock.calls[0] ?? [];
+		// the CSV: labels from the texts, plain decimals and the currency in its own column (P8)
+		expect(csv.split('\r\n')[0]).toBe('\uFEFFPayment,Date,Status,Amount,Currency,Refunded,Gateway,Reference,Email,Description');
 		expect(csv.split('\r\n')[1]).toBe(
-			'pay_1,2026-10-01T10:00:00.000Z,paid,"USD 2,500.00",500.00,bank_transfer,o-1,ana@example.com,Order 1',
+			'pay_1,2026-10-01T10:00:00.000Z,Paid,2500.00,USD,500.00,Bank transfer,o-1,ana@example.com,Order 1',
 		);
 	});
 
