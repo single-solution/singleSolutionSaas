@@ -55,7 +55,8 @@ export const mountAnalyticsDashboard = ({ host, api, config, viewer, now }) => {
 			: t('analytics.duration', { minutes: Math.floor(seconds / 60), seconds: seconds % 60 });
 	/** @param {string} key @param {string} prefix */
 	const label = (key, prefix) => (config.texts[`${prefix}.${key}`] === undefined ? key : t(`${prefix}.${key}`));
-	const retention = config.settings.admin?.retentionMonths ?? 13;
+	// the dashboard mounts only with Visitor analytics, whose retention the admin config always carries
+	const retention = Number(config.settings.admin?.retentionMonths);
 
 	return mountWidget({
 		host,

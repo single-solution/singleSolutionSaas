@@ -43,6 +43,7 @@ import {
 import { robotsAllows, robotsGroupsOf } from '../core/seo-scan.js';
 import { createSnippets } from '../core/snippets.js';
 import robotsSchema from '../schemas/robots_verification.settings.json' with { type: 'json' };
+import searchesSchema from '../schemas/searches_404s.settings.json' with { type: 'json' };
 
 const NOW = Date.parse('2026-10-08T12:00:00Z');
 const DOMAIN = 'shop.example.com';
@@ -444,7 +445,8 @@ describe('page script settings', () => {
 		expect(linkOf('/a b')).toBeNull();
 		expect(linkOf('http://x.example')).toBeNull();
 		expect(searchParamsOf('q, term,  bad param!')).toEqual(['q', 'term', 'bad']);
-		expect(searchParamsOf('')).toEqual(['q', 's', 'search', 'query']);
+		// an empty setting means no search parameters at all (the setting's own default names q, s, search and query)
+		expect(searchParamsOf('')).toEqual([]);
 	});
 
 	it('assembles what the page script needs', () => {
@@ -478,9 +480,10 @@ describe('page script settings', () => {
 			indexNow: { keySet: true, keyLocation: `https://${DOMAIN}/abcdefgh.txt` },
 			retentionMonths: 6,
 		});
+		// no retention without Visitor analytics (the analytics dashboard needs it)
 		expect(adminSettings(['indexnow'], { indexnow: { keyPath: 'x' } }, DOMAIN)).toMatchObject({
 			indexNow: { keySet: false, keyLocation: null },
-			retentionMonths: 13,
+			retentionMonths: null,
 		});
 		expect(adminSettings(['indexnow'], { indexnow: { keyPath: '/k.txt' } }, DOMAIN).indexNow?.keyLocation).toBe(
 			`https://${DOMAIN}/k.txt`,
@@ -663,7 +666,7 @@ describe('SEO', () => {
 
 	it('keeps search results, sorted and filtered lists and private pages out by default (G12), never what search needs', () => {
 		const defaults = Object.fromEntries(Object.entries(robotsSchema.properties).map(([name, field]) => [name, field.default]));
-		const searchParams = searchParamsOf('');
+		const searchParams = searchParamsOf(String(searchesSchema.properties.searchParams.default));
 		const presets = [
 			...['q', 's', 'search', 'query', 'sort', 'minPrice', 'maxPrice', 'inStock'].flatMap((name) => [
 				`Disallow: /*?${name}=`,

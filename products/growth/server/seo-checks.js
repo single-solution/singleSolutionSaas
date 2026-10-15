@@ -77,6 +77,19 @@ export const invalid = (field, message) =>
 	problem('validation_failed', message, { errors: [{ path: `/${field}`, message, code: 'invalid' }] });
 
 /**
+ * The robots.txt settings of a website and the search parameters of Searches and 404s that its presets keep out (G12).
+ * @param {Product} product
+ * @param {string} websiteId
+ */
+export const robotsInputOf = async (product, websiteId) => {
+	const [values, searches] = await Promise.all([
+		product.settings.values(websiteId, 'robots_verification'),
+		product.settings.values(websiteId, 'searches_404s'),
+	]);
+	return { values, searchParams: searchParamsOf(String(searches.searchParams)) };
+};
+
+/**
  * @param {Product} product
  * @param {{ log: Log }} options `log`: writes an action to the activity log
  */
@@ -136,11 +149,8 @@ export const seoCheckRoutes = (product, { log }) => {
 	 */
 	const keptOutOf = async (ctx, on) => {
 		if (!on.includes('robots_verification')) return () => false;
-		const [values, searches] = await Promise.all([
-			product.settings.values(ctx.websiteId, 'robots_verification'),
-			product.settings.values(ctx.websiteId, 'searches_404s'),
-		]);
-		return keptOutBy(robotsPresetsOf(values, String(ctx.status.domain), searchParamsOf(String(searches.searchParams ?? ''))));
+		const { values, searchParams } = await robotsInputOf(product, ctx.websiteId);
+		return keptOutBy(robotsPresetsOf(values, String(ctx.status.domain), searchParams));
 	};
 
 	/**

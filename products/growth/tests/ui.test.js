@@ -2,6 +2,7 @@
 /* global document, window */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import strings from '../strings/en.json' with { type: 'json' };
+import searchesSchema from '../schemas/searches_404s.settings.json' with { type: 'json' };
 import { PRESETS } from '../core/analytics.js';
 import { widgetSettings } from '../core/config.js';
 import { BROWSERS, DEVICES, EVENT_FEATURES, SYSTEMS, VITALS, ratingOf } from '../core/events.js';
@@ -49,7 +50,12 @@ const configOf = (features, values = {}, look = {}) => ({
 	format: { locale: '', currencyDisplay: 'code', currencySymbol: '', wholeUnits: false, times: 'viewer', ...look.format },
 	timeZone: look.timeZone ?? 'UTC',
 	features,
-	settings: widgetSettings({ on: features, values, now: NOW }),
+	// the kit fills a switched-on feature's settings with their defaults (here the search parameters q, s, search, query)
+	settings: widgetSettings({
+		on: features,
+		values: { searches_404s: { searchParams: searchesSchema.properties.searchParams.default }, ...values },
+		now: NOW,
+	}),
 });
 
 /** @param {string | null} token */

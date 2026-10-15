@@ -21,8 +21,8 @@ The `seo_checklist` feature is the live website's SEO health report (SEO audit Â
   and the checklist's pages (or the paths asked for), the old paths of up to 3 redirect rules and an address the site
   does not have (a removed product's from the 404 log when one is known, else a made-up one); a full run (no paths) adds
   sample pages from the sitemap (a product, a category, a landing or listing page, a glossary page), told apart by their
-  structured data. With Web Vitals or Searches and 404s on it also reads the
-  daily totals (28 days of vitals, 90 days of 404s). Reads (`adapters/web.js`, through `@ss/net`) never follow a
+  structured data. With Web Vitals (and Visitor analytics, which keeps them) or Searches and 404s on it also reads
+  the daily totals (28 days of vitals, 90 days of 404s). Reads (`adapters/web.js`, through `@ss/net`) never follow a
   redirect, run 4 at a time, each at most 8 s and 2 MB (a sitemap file 16 MB), the whole run at most 25 s.
 - Each check (`core/seo-checks.js`; reading HTML, JSON-LD, robots.txt rules and sitemaps in `core/seo-scan.js`) is
   pass, warn or fail with a finding code; the answer adds the title, reason and fix from the widget texts

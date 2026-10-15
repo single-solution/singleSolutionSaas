@@ -137,6 +137,9 @@ describe('the website Setup sheet', () => {
 		);
 		// every value is escaped
 		expect(html).toContain('or where you place &#60;div data-ss-growth=&#34;notice_bar&#34;&#62;&#60;/div&#62;.');
+		// a feature with no route or widget of its own (5 of the 15) shows no empty table or list
+		expect(html).not.toContain('<tbody></tbody>');
+		expect(html).not.toContain('<ul></ul>');
 	});
 
 	it('reaches the docs and the OpenAPI document through the Next.js rewrites', async () => {

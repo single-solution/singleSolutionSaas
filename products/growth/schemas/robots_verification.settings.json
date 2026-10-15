@@ -21,7 +21,7 @@
 		"blockParameters": {
 			"type": "string",
 			"title": "Sort and filter parameters to keep out",
-			"description": "Query parameters of your sorted and filtered lists, comma-separated, as your storefront names them; a name ending in * covers every parameter that starts with it (attr.* covers attr.color). Adds Disallow lines for addresses that carry one. Never list a parameter of pages you want in search results, such as page numbers or a landing page's brand and grade. At most 20.",
+			"description": "Query parameters of your sorted and filtered lists, comma-separated, as your storefront names them; a name ending in * covers every parameter that starts with it (attr.* covers attr.color). Adds Disallow lines for addresses that carry one. Never list a parameter of pages you want in search results, such as page numbers or a landing page's own filters. At most 20.",
 			"default": "sort, minPrice, maxPrice, inStock",
 			"maxLength": 300
 		},

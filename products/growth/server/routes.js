@@ -10,7 +10,7 @@
  */
 import { actorOf, countHandlers, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { JOURNEYS, LIVE_MS, buildReport, rangeOf, shiftDay, topOf } from '../core/analytics.js';
-import { noticeAnswer, searchParamsOf } from '../core/config.js';
+import { noticeAnswer } from '../core/config.js';
 import { COLLECT_FEATURES, EVENT_FEATURES, checkBatch, cityOf, countryOf, dayOf, expiryOf, mergeTotals } from '../core/events.js';
 import { indexNowActivity, indexNowSubmission, robotsTxtOf, verificationOf } from '../core/seo.js';
 import { zonedDayStart } from '@ss/contracts/format';
@@ -18,7 +18,7 @@ import { createStore } from '../adapters/store.js';
 import { renderDocs } from './docs.js';
 import { importRoutes } from './imports.js';
 import { redirectRoutes } from './redirects.js';
-import { invalid, seoCheckRoutes } from './seo-checks.js';
+import { invalid, robotsInputOf, seoCheckRoutes } from './seo-checks.js';
 import { WIDGET_SCRIPT } from './widget-script.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -212,7 +212,7 @@ export const createRoutes = (product) => {
 				).record(kept, {
 					at,
 					day: dayOf(at, timeZone),
-					expiresAt: expiryOf(at, Number(retentionMonths) || 13),
+					expiresAt: expiryOf(at, Number(retentionMonths)),
 					totals: mergeTotals(kept),
 				});
 				return ok({ accepted: kept.length }, { status: 202 });
@@ -282,11 +282,7 @@ export const createRoutes = (product) => {
 			database: false,
 			// the presets keep out the search results of Searches and 404s' search parameters (G12)
 			handler: async (ctx) => {
-				const [values, searches] = await Promise.all([
-					product.settings.values(ctx.websiteId, 'robots_verification'),
-					product.settings.values(ctx.websiteId, 'searches_404s'),
-				]);
-				const searchParams = searchParamsOf(String(searches.searchParams ?? ''));
+				const { values, searchParams } = await robotsInputOf(product, ctx.websiteId);
 				return new Response(robotsTxtOf(values, String(ctx.status.domain), searchParams), {
 					headers: { 'content-type': 'text/plain; charset=utf-8' },
 				});

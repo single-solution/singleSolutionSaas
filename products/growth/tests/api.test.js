@@ -291,9 +291,13 @@ describe('robots and verification', () => {
 				'',
 			].join('\n'),
 		);
-		await env.setting('robots_verification', 'blockSearchPages', false);
+		// an empty Search query parameters names none: no search parameter is kept out
+		await env.setting('searches_404s', 'searchParams', '');
 		await env.setting('robots_verification', 'blockParameters', '');
 		await env.setting('robots_verification', 'blockPaths', []);
+		expect(await read()).toBe(`User-agent: *\nAllow: /\n\nSitemap: ${ORIGIN}/sitemap.xml\n`);
+		await env.setting('searches_404s', 'searchParams', 'q');
+		await env.setting('robots_verification', 'blockSearchPages', false);
 		expect(await read()).toBe(`User-agent: *\nAllow: /\n\nSitemap: ${ORIGIN}/sitemap.xml\n`);
 	});
 

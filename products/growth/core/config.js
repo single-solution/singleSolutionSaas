@@ -19,9 +19,6 @@ const TAG_IDS = Object.freeze({
 	tiktok: /^[A-Z0-9]{10,30}$/,
 });
 
-/** Search parameters read when the merchant names none. */
-const DEFAULT_SEARCH_PARAMS = Object.freeze(['q', 's', 'search', 'query']);
-
 /** @typedef {Record<string, Record<string, unknown>>} FeatureValues settings of each switched-on feature */
 
 /**
@@ -58,16 +55,15 @@ export const linkOf = (value) => {
 };
 
 /**
- * The query parameters that hold a site search (`q, s, search`), at most 10.
+ * The query parameters that hold a site search (the setting Search query parameters, for example `q, s, search`), at
+ * most 10; an empty setting names none.
  * @param {string} value
  */
-export const searchParamsOf = (value) => {
-	const names = value
+export const searchParamsOf = (value) =>
+	value
 		.split(/[\s,]+/)
 		.filter((name) => /^[A-Za-z0-9_.-]{1,40}$/.test(name))
 		.slice(0, 10);
-	return names.length > 0 ? names : [...DEFAULT_SEARCH_PARAMS];
-};
 
 /**
  * A time setting (ISO 8601), or undefined when empty, or NaN when it is not a time.
@@ -185,7 +181,8 @@ export const tagsReady = (on, values) => {
 
 /**
  * What the admin widgets also show (never to visitors): the pages the SEO checklist checks by default (paths; the home
- * page first), where the merchant's site serves the IndexNow key and how long raw events are kept.
+ * page first), where the merchant's site serves the IndexNow key and, with Visitor analytics, how long raw events are
+ * kept (null without it).
  * @param {ReadonlyArray<string>} on
  * @param {FeatureValues} values
  * @param {string} domain
@@ -204,7 +201,7 @@ export const adminSettings = (on, values, domain) => {
 					keyLocation: keyLocationOf({ key: key || '<key>', keyPath: values.indexnow?.keyPath }, domain),
 				}
 			: null,
-		retentionMonths: Number(values.visitor_analytics?.retentionMonths) || 13,
+		retentionMonths: on.includes('visitor_analytics') ? Number(values.visitor_analytics?.retentionMonths) : null,
 	};
 };
 
