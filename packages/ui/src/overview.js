@@ -5,8 +5,8 @@
  * carrying its button; a setup checklist; the key numbers; and the latest activity as a timeline in the viewer's local
  * time.
  *
- * - The pieces take their words from the caller: `NeedItem`, `NeedsList` (with `NothingNeeded` when the list is
- *   empty), `SetupChecklist`, `Timeline` and `initialsOf` (the Portal's Overviews use them).
+ * - The pieces take their words from the caller: `NeedsList` (each item a `NeedItem`, or the calm `NothingNeeded` line
+ *   when the list is empty), `SetupChecklist`, `Timeline` and `initialsOf` (the Portal's Overviews use them).
  * - `ProductOverview` is a product dashboard's whole Overview, built from the kit's overview answer
  *   (`GET /v1/dashboard/websites/:websiteId/overview`) with the words of `overview-texts.js`, plus the product's own
  *   items, setup steps, number tiles and sections. `OverviewSkeleton` is its loading state and `RecentChanges` the
@@ -72,7 +72,7 @@ export const initialsOf = (name) => {
  * One "Needs you" item.
  * @param {Omit<Need, 'key'>} props
  */
-export function NeedItem({ tone, title, effect, action }) {
+function NeedItem({ tone, title, effect, action }) {
 	return (
 		<li
 			className={cx(
@@ -96,7 +96,7 @@ export function NeedItem({ tone, title, effect, action }) {
  * The calm line of "Needs you" when nothing does.
  * @param {{ children: ReactNode }} props
  */
-export function NothingNeeded({ children }) {
+function NothingNeeded({ children }) {
 	return (
 		<p className="flex items-center gap-2 text-sm text-muted">
 			<span className="flex size-5 items-center justify-center rounded-full bg-success-soft text-on-success-soft">

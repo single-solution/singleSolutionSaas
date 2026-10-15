@@ -60,17 +60,7 @@ export { AppShell } from './AppShell.js';
 export { ThemeScript } from './theme-script.js';
 export { LocalTime, useViewerTimeZone } from './time.js';
 export { BarChart, isEmptySeries } from './charts.js';
-export {
-	NeedItem,
-	NeedsList,
-	NothingNeeded,
-	SetupChecklist,
-	Timeline,
-	RecentChanges,
-	ProductOverview,
-	OverviewSkeleton,
-	initialsOf,
-} from './overview.js';
+export { NeedsList, SetupChecklist, Timeline, RecentChanges, ProductOverview, OverviewSkeleton, initialsOf } from './overview.js';
 export { SchemaForm } from './SchemaForm.js';
 export { formatCredits, formatCreditsPerHour, formatDate, formatDateTime, humanize, parseCredits } from './format.js';
 export { describeProblem, fieldErrors, problemCode } from './problems.js';
@@ -81,5 +71,4 @@ export { describeProblem, fieldErrors, problemCode } from './problems.js';
 /** @typedef {import('./Menu.js').MenuItem} MenuItem */
 /** @typedef {import('./problems.js').Problem} Problem */
 /** @typedef {import('./overview.js').Need} Need */
-/** @typedef {import('./overview.js').SetupStep} SetupStep */
 /** @typedef {import('./overview.js').OverviewTab} OverviewTab */

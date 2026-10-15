@@ -81,9 +81,9 @@ One Overview pattern for the Portal and every product dashboard (PLAN.md 0.6 "Ov
 greeting with one sentence of what matters now, **Needs you** (each item says what happens if it waits and carries its
 button), a setup checklist, the key numbers and the latest activity as a timeline in the viewer's local time.
 
-- The pieces take the caller's words: `NeedItem` and `NeedsList` (with `NothingNeeded` when nothing needs the viewer),
-  `SetupChecklist` (progress bar; a step to do is a link drawn with `linkAs`, a button or plain text), `Timeline`
-  (initials from `initialsOf`, times with `LocalTime`).
+- The pieces take the caller's words: `NeedsList` (each item says what is wrong, what happens if it waits and carries
+  its button; a calm line when nothing needs the viewer), `SetupChecklist` (progress bar; a step to do is a link drawn
+  with `linkAs`, a button or plain text) and `Timeline` (initials from `initialsOf`, times with `LocalTime`).
 - `<ProductOverview data who product support portal namesOf open recheck needs? steps? numbers?>` is a product
   dashboard's whole Overview from the kit's overview answer, with the words of `overview-texts.js` (US English): the
   status, no feature on, each missing or failed connection, the widget not seen and business.json not found are "Needs
