@@ -5,12 +5,12 @@
  * unread counts, replies (markdown, PLAN 0.8.10 C2) and attachments (staff types up to 100 MB, C12), internal notes
  * (a timeline, or one note per conversation, C11), status, AI pause (with who, when and why; by reply or manage
  * rights as the inbox setting says, C11; resuming hands a waiting chat back to the AI, CH-3), assignment with presence
- * and max chats (the first replier, C11; anyone Accounts allows to reply in the inbox, CH-6), custom field values,
- * the AI summary, transcripts, rating requests, delete (one, or every conversation, C20), saved replies, the staff
- * list and leads (read, delete one, or every lead). Older messages page by
- * sequence (C8). Guest chats can stay hidden until handed to a person (C11), or always (CH-13). A staff reply alerts a
- * visitor who left (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
- * a short detail, never message contents.
+ * and max chats (the first replier, C11; anyone Accounts allows to reply in the inbox, listed for the picker, CH-6),
+ * custom field values, the AI summary, transcripts, rating requests, delete (one, or every conversation, C20), saved
+ * replies, the staff list and leads (read, delete one, or every lead). Older messages page by sequence (C8). Guest
+ * chats can stay hidden until handed to a person (C11), or always (CH-13). A staff reply alerts a visitor who left
+ * (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and a short detail,
+ * never message contents.
  * @module
  */
 import { actorOf as kitActorOf, countHandlers, created, noContent, paginate, problem } from '@ss/app-kit';
@@ -39,10 +39,6 @@ const DELETE_BUDGET_MS = 8_000;
 const LEAD_BATCH = 1000;
 /** Attachments deleted from the website's storage at once. */
 const STORAGE_DELETES_AT_ONCE = 8;
-/** What an assignee from Accounts must be allowed (CH-6), and how many pages of 100 users are read to find them. */
-const ASSIGNEE_PERMISSION = 'chat:inbox.reply';
-const ASSIGNEE_PAGES = 5;
-
 /** The merchant's server when no member of staff is named: the team. */
 const TEAM = Object.freeze({ kind: 'server', id: 'server', name: 'Team' });
 
@@ -314,34 +310,18 @@ export const createInbox = (product, service, reply) => {
 
 	/**
 	 * A member of staff Chat has not seen yet, from Accounts (pasted token): an unblocked user whose role may reply in
-	 * the inbox, added to the staff list so a chat can be assigned to them (CH-6); else null.
+	 * the inbox (Accounts is asked again when the kept list does not have them), added to the staff list so a chat can
+	 * be assigned to them (CH-6); else null.
 	 * @param {Site} s
 	 * @param {string} id
 	 */
 	const staffFromAccounts = async (s, id) => {
-		/** @type {string | null} */
-		let cursor = null;
-		for (let page = 0; page < ASSIGNEE_PAGES; page += 1) {
-			const answer = await product.callProduct(
-				s.websiteId,
-				'accounts',
-				`/v1/users?permission=${encodeURIComponent(ASSIGNEE_PERMISSION)}&blocked=false&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
-			);
-			if (!answer.ok) return null;
-			const body = bodyOf(answer.body);
-			const user = (Array.isArray(body.items) ? body.items : [])
-				.map(bodyOf)
-				.find((/** @type {Record<string, unknown>} */ each) => each.id === id);
-			if (user) {
-				const email = typeof user.email === 'string' && user.email ? user.email : null;
-				const name = typeof user.name === 'string' && user.name.trim() ? user.name.trim() : (email ?? id);
-				await s.store.staff.add({ id, name, ...(email ? { email } : {}) });
-				return s.store.staff.get(id);
-			}
-			if (body.hasMore !== true || typeof body.nextCursor !== 'string') return null;
-			cursor = body.nextCursor;
-		}
-		return null;
+		const user =
+			(await service.staffOfAccounts(s.websiteId)).find((each) => each.id === id) ??
+			(await service.staffOfAccounts(s.websiteId, { fresh: true })).find((each) => each.id === id);
+		if (!user) return null;
+		await s.store.staff.add({ id, name: user.name, ...(user.email ? { email: user.email } : {}) });
+		return s.store.staff.get(id);
 	};
 
 	/**
@@ -531,7 +511,11 @@ export const createInbox = (product, service, reply) => {
 
 	// ------------------------------------------------------------------------------------------------ staff
 
-	/** @param {any} ctx */
+	/**
+	 * The staff list by name: everyone Chat has seen, and with Assignment every Accounts user who may answer chats
+	 * (CH-6; Offline until their inbox checks in).
+	 * @param {any} ctx
+	 */
 	const staff = async (ctx) => {
 		const s = await service.site(ctx);
 		const presence = s.on.includes('presence_queue');
@@ -539,7 +523,16 @@ export const createInbox = (product, service, reply) => {
 		const defaultMax = presence ? Number((await s.values('presence_queue')).maxChats) || null : null;
 		const actor = actorOf(ctx);
 		const me = actor.kind === TEAM.kind ? null : actor.id;
-		const items = (await s.store.staff.list()).map((m) => {
+		const seen = await s.store.staff.list();
+		const known = new Set(seen.map((m) => m.id));
+		/** @type {import('../adapters/store.js').StaffRecord[]} */
+		const accounts = s.on.includes('assignment')
+			? (await service.staffOfAccounts(s.websiteId))
+					.filter((user) => !known.has(user.id))
+					.map((user) => ({ id: user.id, name: user.name, ...(user.email ? { email: user.email } : {}) }))
+			: [];
+		const members = [...seen, ...accounts].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+		const items = members.map((m) => {
 			const checkedIn = m.checkedInAt ? new Date(m.checkedInAt).getTime() : 0;
 			const max = presence ? (m.maxChats ?? defaultMax) : null;
 			return {

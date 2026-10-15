@@ -1357,7 +1357,7 @@
 		},
 		"Staff": {
 			"type": "object",
-			"description": "A member of staff: everyone named in a ticket or by SS-Actor headers, or assigned from Accounts.",
+			"description": "A member of staff: everyone named in a ticket or by SS-Actor headers, and with Assignment every unblocked Accounts user whose role may reply in the inbox (Accounts token; read from Accounts and kept 5 minutes; Offline until their inbox checks in).",
 			"required": ["id", "name", "email", "presence", "maxChats", "open", "full"],
 			"additionalProperties": false,
 			"properties": {
@@ -2661,7 +2661,7 @@
 	},
 	"GET /v1/admin/staff": {
 		"summary": "The staff list",
-		"description": "By name, with presence, open chats and limits (Staff presence and max chats).",
+		"description": "By name, with presence, open chats and limits (Staff presence and max chats); with Assignment, every Accounts user who may answer chats too, so any of them can be picked.",
 		"response": {
 			"type": "object",
 			"required": ["items"],
@@ -3489,7 +3489,7 @@
 	},
 	"GET /v1/staff": {
 		"summary": "The staff list",
-		"description": "By name, with presence, open chats and limits (Staff presence and max chats).",
+		"description": "By name, with presence, open chats and limits (Staff presence and max chats); with Assignment, every Accounts user who may answer chats too, so any of them can be picked.",
 		"response": {
 			"type": "object",
 			"required": ["items"],

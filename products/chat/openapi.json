@@ -2344,7 +2344,7 @@
 		"/v1/admin/staff": {
 			"get": {
 				"summary": "The staff list",
-				"description": "By name, with presence, open chats and limits (Staff presence and max chats).",
+				"description": "By name, with presence, open chats and limits (Staff presence and max chats); with Assignment, every Accounts user who may answer chats too, so any of them can be picked.",
 				"x-ss-auth": "ticket",
 				"x-ss-feature": "inbox",
 				"x-ss-permission": "inbox.read",
@@ -8113,7 +8113,7 @@
 		"/v1/staff": {
 			"get": {
 				"summary": "The staff list",
-				"description": "By name, with presence, open chats and limits (Staff presence and max chats).",
+				"description": "By name, with presence, open chats and limits (Staff presence and max chats); with Assignment, every Accounts user who may answer chats too, so any of them can be picked.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "inbox",
 				"security": [
@@ -10849,7 +10849,7 @@
 			},
 			"Staff": {
 				"type": "object",
-				"description": "A member of staff: everyone named in a ticket or by SS-Actor headers, or assigned from Accounts.",
+				"description": "A member of staff: everyone named in a ticket or by SS-Actor headers, and with Assignment every unblocked Accounts user whose role may reply in the inbox (Accounts token; read from Accounts and kept 5 minutes; Offline until their inbox checks in).",
 				"required": [
 					"id",
 					"name",

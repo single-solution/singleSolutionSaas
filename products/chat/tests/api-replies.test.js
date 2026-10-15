@@ -240,12 +240,22 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		const path = `/v1/conversations/${id}`;
 		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_new' })).status).toBe(422);
 		await sys.paste('accounts');
-		sys.accounts.setUsers([
+		const users = [
 			{ id: 'usr_new', name: 'Nia New', email: 'nia@shop.example.com', permissions: ['chat:inbox.reply'] },
 			{ id: 'usr_mail', email: 'mo@shop.example.com', permissions: ['chat:inbox.reply'] },
 			{ id: 'usr_view', name: 'Vic', permissions: ['chat:inbox.read'] },
+		];
+		sys.accounts.setUsers(users);
+		// the picker lists every Accounts user who may answer chats before any is assigned, read once and kept
+		const listed = (await sys.serverCall('GET', '/v1/staff')).json.items;
+		expect(listed.map((/** @type {any} */ m) => [m.id, m.name, m.presence])).toEqual([
+			['usr_new', 'Nia New', 'offline'],
+			['usr_mail', 'mo@shop.example.com', 'offline'],
 		]);
+		await sys.serverCall('GET', '/v1/staff');
+		expect(sys.accounts.userReads).toEqual(['chat:inbox.reply']);
 		const assigned = await sys.serverCall('PATCH', path, { assignedTo: 'usr_new' });
+		expect(sys.accounts.userReads).toHaveLength(1);
 		expect(assigned.status).toBe(200);
 		expect(assigned.json.conversation.assignedTo).toEqual({ id: 'usr_new', name: 'Nia New' });
 		const staff = (await sys.serverCall('GET', '/v1/staff')).json.items;
@@ -257,6 +267,48 @@ describe('handoffs, assignment, sign-in claims and staff alerts (CH-3, CH-5, CH-
 		);
 		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_view' })).status).toBe(422);
 		expect((await sys.serverCall('PATCH', path, { assignedTo: 'bad id!' })).status).toBe(422);
+		// someone Accounts lets answer chats since the list was read: asked again when assigned
+		sys.accounts.setUsers([...users, { id: 'usr_late', name: 'Lou', permissions: ['chat:inbox.reply'] }]);
+		expect((await sys.serverCall('PATCH', path, { assignedTo: 'usr_late' })).json.conversation.assignedTo.name).toBe('Lou');
+		// without Assignment the list is the staff Chat keeps (those assigned were kept), by name
+		await sys.switchOn(['visitor_chat', 'guest_chat', 'inbox']);
+		expect((await sys.serverCall('GET', '/v1/staff')).json.items.map((/** @type {any} */ m) => m.name)).toEqual([
+			'Lou',
+			'Nia New',
+			'mo@shop.example.com',
+		]);
+	});
+
+	it('staff alerts reach the assigned person’s email and their phone from Accounts (CH-12)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'staff_alerts', 'assignment']);
+		await sys.paste('notifications');
+		await sys.paste('accounts');
+		sys.accounts.setUsers([
+			{ id: 'usr_ana', name: 'Ana', email: 'ana@shop.example.com', phone: '+12025550143', permissions: ['chat:inbox.reply'] },
+		]);
+		await sys.setting('staff_alerts', 'recipients', ['boss@shop.example.com']);
+		const v = sys.visitor();
+		const id = (await v('POST', '/v1/chat/messages', { text: 'hello' })).json.chat.conversation.id;
+		expect(sys.messages().map((m) => m.to)).toEqual([{ email: 'boss@shop.example.com' }]);
+		await sys.serverCall('PATCH', `/v1/conversations/${id}`, { assignedTo: 'usr_ana' });
+		await sys.serverCall('POST', `/v1/conversations/${id}/read`);
+		await v('POST', '/v1/chat/messages', { text: 'still there?' });
+		expect(
+			sys
+				.messages()
+				.slice(1)
+				.map((m) => [m.channel, m.to]),
+		).toEqual([
+			['email', { email: 'boss@shop.example.com' }],
+			['email', { email: 'ana@shop.example.com' }],
+			['whatsapp', { phone: '+12025550143' }],
+		]);
+		// later, while Accounts cannot be reached, the phone read last still gets the alert
+		sys.advance(6 * 60_000);
+		sys.accounts.setFailing(true);
+		await sys.serverCall('POST', `/v1/conversations/${id}/read`);
+		await v('POST', '/v1/chat/messages', { text: 'hello again' });
+		expect(sys.messages().at(-1)?.to).toEqual({ phone: '+12025550143' });
 	});
 
 	it('a sign-in fills the moved guest chat’s name and phone, and a merged chat with a new question is open', async () => {

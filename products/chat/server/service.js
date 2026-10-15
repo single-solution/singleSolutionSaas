@@ -5,6 +5,7 @@
  *   once per request).
  * - `guestLimit(websiteId, settings)`: a guest's message limit, lifted while the Customer role's sign-in is paused at
  *   Accounts and the Guest chat setting says so (C17).
+ * - `staffOfAccounts(websiteId)`: the Accounts users who may answer chats, kept 5 minutes (CH-6, CH-12).
  * - `visitorOf(site)`: who is chatting — the Accounts user of a sign-in verified on this request (signed-in chat on),
  *   else the guest of the device's guest key (any key of 16–128 characters, so imported store cookies work); a device
  *   showing both moves the guest's chats to the account, merged by time into the account's own conversation when it has
@@ -23,6 +24,7 @@ import { callingCodeOf } from '@ss/contracts/phone';
 import { capReached, windowKeys, alertCrossed } from '../core/caps.js';
 import { customerOrdersPath, shopInfoOf } from '../core/shop.js';
 import {
+	USER_ID,
 	alertRoutes,
 	excerptOf,
 	iso,
@@ -71,6 +73,7 @@ import { createStore } from '../adapters/store.js';
  *   | { kind: 'guest', id: string, name: null, email: null, phone: null }} Visitor
  */
 /** @typedef {{ kind: string, id: string, name: string, role?: string, email?: string }} Actor */
+/** @typedef {{ id: string, name: string, email: string | null, phone: string | null }} AccountsStaff */
 
 /** How long a storage link to an attachment lasts (seconds); Chat's own links to it never expire (CH-8). */
 const LINK_SECONDS = 600;
@@ -84,8 +87,15 @@ const TRANSCRIPT_PAGE = 500;
 const CUSTOMER_ROLE = 'customer';
 /** How long Accounts' answer whether the Customer role's sign-in is paused is kept per website (C17). */
 const SIGN_IN_STATE_MS = 60_000;
-/** Most websites whose sign-in state an instance keeps (the oldest is dropped first). */
-const SIGN_IN_STATES_MAX = 500;
+/** Most websites whose sign-in state, or Accounts staff, an instance keeps (the oldest is dropped first). */
+const WEBSITES_KEPT = 500;
+/**
+ * What an Accounts user must be allowed to answer chats (CH-6), how many pages of 100 users are read, and how long the
+ * list is kept per website.
+ */
+const ANSWERS_CHATS = 'chat:inbox.reply';
+const STAFF_PAGES = 5;
+const ACCOUNTS_STAFF_MS = 5 * 60_000;
 
 /**
  * The permission the staff alert setting `staffPermission: all_staff` stands for: every staff member who may see the
@@ -135,8 +145,56 @@ export const createService = (product) => {
 			: answer.reason === 'unreachable' && kept?.paused === true;
 		signInStates.delete(websiteId);
 		signInStates.set(websiteId, { at: now(), paused });
-		if (signInStates.size > SIGN_IN_STATES_MAX) signInStates.delete(/** @type {string} */ (signInStates.keys().next().value));
+		if (signInStates.size > WEBSITES_KEPT) signInStates.delete(/** @type {string} */ (signInStates.keys().next().value));
 		return paused;
+	};
+
+	/** @type {Map<string, { at: number, users: AccountsStaff[] }>} */
+	const accountsStaff = new Map();
+
+	/**
+	 * The unblocked Accounts users whose role may answer chats (`chat:inbox.reply`), read with the pasted Accounts token
+	 * (up to 500) and kept 5 minutes per website, so the assignment picker (CH-6) and the assignee's alerts (CH-12) cost
+	 * no call each time; `fresh` reads again. While Accounts cannot be reached, the last list stands; without the token
+	 * or refused, none.
+	 * @param {string} websiteId
+	 * @param {{ fresh?: boolean }} [options]
+	 * @returns {Promise<AccountsStaff[]>}
+	 */
+	const staffOfAccounts = async (websiteId, { fresh = false } = {}) => {
+		const kept = accountsStaff.get(websiteId);
+		if (kept && !fresh && now() - kept.at < ACCOUNTS_STAFF_MS) return kept.users;
+		/** @type {AccountsStaff[]} */
+		const users = [];
+		/** @type {string | null} */
+		let cursor = null;
+		for (let page = 0; page < STAFF_PAGES; page += 1) {
+			const answer = await product.callProduct(
+				websiteId,
+				'accounts',
+				`/v1/users?permission=${encodeURIComponent(ANSWERS_CHATS)}&blocked=false&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+			);
+			if (!answer.ok) {
+				if (answer.reason === 'unreachable') return kept?.users ?? [];
+				accountsStaff.delete(websiteId);
+				return [];
+			}
+			const body = bodyOf(answer.body);
+			for (const item of Array.isArray(body.items) ? body.items : []) {
+				const user = bodyOf(item);
+				if (typeof user.id !== 'string' || !USER_ID.test(user.id) || user.blocked) continue;
+				const email = typeof user.email === 'string' && user.email ? user.email : null;
+				const phone = typeof user.phone === 'string' && user.phone ? user.phone : null;
+				const name = typeof user.name === 'string' && user.name.trim() ? user.name.trim() : (email ?? phone ?? user.id);
+				users.push({ id: user.id, name, email, phone });
+			}
+			if (body.hasMore !== true || typeof body.nextCursor !== 'string') break;
+			cursor = body.nextCursor;
+		}
+		accountsStaff.delete(websiteId);
+		accountsStaff.set(websiteId, { at: now(), users });
+		if (accountsStaff.size > WEBSITES_KEPT) accountsStaff.delete(/** @type {string} */ (accountsStaff.keys().next().value));
+		return users;
 	};
 
 	/**
@@ -606,10 +664,11 @@ export const createService = (product) => {
 
 	/**
 	 * A staff alert through the kit's staff alerts (K6; the recipients setting with email addresses and phones, Accounts
-	 * staff with the permission setting, and the assigned person): `new_message` on a visitor message — with frequency
-	 * `first_unanswered` at most once until staff reply or open it, with `every_message` every time — and `needs_you`
-	 * on handoff. Besides the short `preview`, the values carry the visitor's `name` and latest `message` (up to 500
-	 * characters with its line breaks), and their `phone` with the setting `includePhone` (CH-9). Sent after the answer.
+	 * staff with the permission setting, and the assigned person: their email, and their phone from Accounts, CH-12):
+	 * `new_message` on a visitor message — with frequency `first_unanswered` at most once until staff reply or open it,
+	 * with `every_message` every time — and `needs_you` on handoff. Besides the short `preview`, the values carry the
+	 * visitor's `name` and latest `message` (up to 500 characters with its line breaks), and their `phone` with the
+	 * setting `includePhone` (CH-9). Sent after the answer.
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {'new_message' | 'needs_you'} kind
@@ -621,7 +680,9 @@ export const createService = (product) => {
 			const claimed = await s.store.conversations.update(c.id, { set: { alerted: true }, unless: { alerted: false } });
 			if (!claimed) return;
 		}
+		// the assigned person by their email, and their phone from Accounts (CH-12)
 		const assigned = c.assignedTo ? await s.store.staff.get(c.assignedTo) : null;
+		const account = c.assignedTo ? (await staffOfAccounts(s.websiteId)).find((user) => user.id === c.assignedTo) : undefined;
 		const recent = await s.store.messages.list(c.id, { limit: 20, internal: false });
 		const latest = [...recent].reverse().find((m) => m.author === 'visitor');
 		await product.staffAlerts.send(s.ctx, {
@@ -637,7 +698,8 @@ export const createService = (product) => {
 				conversationId: c.id,
 				business: (await s.business()).name,
 			},
-			assignee: assigned?.email ? { email: assigned.email } : null,
+			assignee:
+				assigned || account ? { email: assigned?.email ?? account?.email ?? null, phone: account?.phone ?? null } : null,
 			allStaff: ALL_STAFF_PERMISSION,
 		});
 	};
@@ -802,6 +864,7 @@ export const createService = (product) => {
 	return Object.freeze({
 		site,
 		guestLimit,
+		staffOfAccounts,
 		visitorOf,
 		newGuest,
 		append,
