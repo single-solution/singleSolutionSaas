@@ -3819,6 +3819,21 @@ Notifications' own dashboard list routes now call the kit's `settingsChanged` (a
 
 #### Growth
 
+**Growth SEO completed (2026-10-15; b30159ff, 3a9fc226, fee7409f, 086c2093, da383536):** redirect paths are compared and
+stored in Unicode NFC (also when percent-encoded), so a path typed composed or decomposed is one rule; robots.txt presets
+(SEO audit G12): `blockSearchPages` (on; the search parameters of Searches and 404s), `blockParameters` (`sort, minPrice,
+maxPrice, inStock`; `name*` covers a prefix) and `blockPaths` (`/cart`, `/checkout`, `/account` as `path$`, `path/`,
+`path?`), added to every group of the merchant's rules, never `/` or a sitemap path, matched to the storefront by the
+merchant (Setup sheet); `attr.*` left out of the defaults (landing pages by attribute); the SEO checklist does not try
+pages the presets block on purpose; `caching` warns on `Cache-Control: no-store`; `soft_404` tries the 404 log's most
+visited removed product address (else a made-up one), and a permanent redirect to another product passes as `moved`;
+old Ecommerce slugs are not tried (not public; Growth does not read Ecommerce). Bug fixed: Overview counted 0 sitemaps
+while robots.txt names `/sitemap.xml`.
+
+**Notifications audit trail (2026-10-15; edcd3f4a):** every template save and delete and every message switched off or on
+is an activity entry by who made it (dashboard session, a server call's acting user else Server, or the widget's staff
+member), not only the widget's; Recent changes as before.
+
 **SEO health report built (2026-10-15; 19710c15, e2e 6a2c2a18, 26d0f83c; SEO audit §3.2 B, S12 Growth side).** The SEO
 checklist reads the live website as a search engine does, when staff ask (never on a timer): robots.txt, the sitemap
 and its index files, the checklist's pages and samples from the sitemap (product, category, landing or listing,
