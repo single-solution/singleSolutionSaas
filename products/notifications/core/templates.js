@@ -235,14 +235,24 @@ export const checkTemplate = (input, longValues = []) => {
 };
 
 /**
+ * A product's default words on one channel, with its words in other languages (fixed-choices N11): each a version in
+ * its language.
+ * @typedef {Template & { translations?: Template[] }} DefaultTemplate
+ */
+
+/** Most languages a product's default words have, besides US English. */
+const MAX_TRANSLATIONS = 20;
+
+/**
  * Check the defaults a send carries (parity P1; the kit adds them to every send of a product's declared message): for
- * each channel but WhatsApp, the default words `{ subject?, text, required?, urgent?, sensitive? }`, checked as a
- * template the merchant saves, with the send's long values. WhatsApp never has a default (it sends only templates
- * approved at Meta).
+ * each channel but WhatsApp, the default words `{ subject?, text, required?, urgent?, sensitive?, translations? }`,
+ * checked as a template the merchant saves, with the send's long values; `translations` maps a language code (`fr`,
+ * `pt-BR`) to the words in that language, checked the same (fixed-choices N11). WhatsApp never has a default (it sends
+ * only templates approved at Meta).
  * @param {unknown} input
  * @param {string} key the send's template key
  * @param {ReadonlyArray<string>} [longValues] the send's long values
- * @returns {{ ok: true, value: Partial<Record<Channel, Template>> } | { ok: false, field: string, message: string }}
+ * @returns {{ ok: true, value: Partial<Record<Channel, DefaultTemplate>> } | { ok: false, field: string, message: string }}
  */
 export const checkDefaults = (input, key, longValues = []) => {
 	/** @param {string} field @param {string} message */
@@ -250,7 +260,7 @@ export const checkDefaults = (input, key, longValues = []) => {
 	if (input === undefined || input === null) return { ok: true, value: {} };
 	if (typeof input !== 'object' || Array.isArray(input))
 		return fail('defaults', 'defaults maps channels to the default words { subject?, text }.');
-	/** @type {Partial<Record<Channel, Template>>} */
+	/** @type {Partial<Record<Channel, DefaultTemplate>>} */
 	const value = {};
 	for (const [channel, given] of Object.entries(/** @type {Record<string, unknown>} */ (input))) {
 		if (channel === 'whatsapp')
@@ -270,7 +280,29 @@ export const checkDefaults = (input, key, longValues = []) => {
 			longValues,
 		);
 		if (!checked.ok) return fail(`defaults/${channel}/${checked.field}`, checked.message);
-		value[/** @type {Channel} */ (channel)] = checked.value;
+		/** @type {Template[]} */
+		const translations = [];
+		const languages = words.translations;
+		if (languages !== undefined) {
+			if (
+				typeof languages !== 'object' ||
+				languages === null ||
+				Array.isArray(languages) ||
+				Object.keys(languages).length > MAX_TRANSLATIONS
+			)
+				return fail(`defaults/${channel}/translations`, 'translations maps up to 20 language codes to { subject?, text }.');
+			for (const [language, raw] of Object.entries(languages)) {
+				const other = typeof raw === 'object' && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+				const version = checkTemplate({ ...checked.value, language, subject: other.subject, text: other.text }, longValues);
+				if (!version.ok || version.value.language === DEFAULT_LANGUAGE)
+					return fail(
+						`defaults/${channel}/translations/${language}${version.ok ? '' : `/${version.field}`}`,
+						version.ok ? 'Use a language code such as fr or pt-BR.' : version.message,
+					);
+				translations.push(version.value);
+			}
+		}
+		value[/** @type {Channel} */ (channel)] = translations.length > 0 ? { ...checked.value, translations } : checked.value;
 	}
 	return { ok: true, value };
 };

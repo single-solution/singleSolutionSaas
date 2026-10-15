@@ -71,7 +71,7 @@ import { failed } from '../core/gateway.js';
  * @property {string | null} language
  * @property {number | null} sendAt
  * @property {'api' | 'staff'} source
- * @property {Partial<Record<Channel, Template>>} defaults a product's message: the default words its send carries per
+ * @property {Partial<Record<Channel, import('../core/templates.js').DefaultTemplate>>} defaults a product's message: the default words its send carries per
  *   channel (parity P1), `{}` for none
  * @property {string | null} fallbackTemplate the template key whose website template is used when the website has none
  *   of its own for `template`, before the defaults (null: none)
@@ -199,7 +199,7 @@ export const createSending = (product) => {
 	 * website's text `message.shortened`.
 	 * @param {Site} s
 	 * @param {{ key: string, fallbackKey: string | null, channel: Channel, address: string, values: Record<string, string>,
-	 *   language: string | null, secretValues: string[], defaults: Partial<Record<Channel, Template>>,
+	 *   language: string | null, secretValues: string[], defaults: Partial<Record<Channel, import('../core/templates.js').DefaultTemplate>>,
 	 *   longValues: string[], topic: string | null }} input
 	 * @returns {Promise<({ required: boolean, urgent: boolean } & Made) | null>} null when there is no template
 	 */
@@ -210,7 +210,13 @@ export const createSending = (product) => {
 		/** @param {string} templateKey */
 		const ownOf = async (templateKey) =>
 			pickVersion(await s.store.templates.versions(templateKey, channel), language, s.on.includes('multi_language'));
-		const version = (await ownOf(key)) ?? (fallbackKey ? await ownOf(fallbackKey) : null) ?? defaults[channel] ?? null;
+		// the product's default words: in the recipient's language when the product has them (exact, then its base
+		// language), else its US-English words (fixed-choices N11)
+		const declared = defaults[channel];
+		const fromDefaults = declared
+			? pickVersion([{ ...declared, translations: undefined }, ...(declared.translations ?? [])], language, true)
+			: null;
+		const version = (await ownOf(key)) ?? (fallbackKey ? await ownOf(fallbackKey) : null) ?? fromDefaults ?? null;
 		if (!version) return null;
 		/** @type {Record<string, string>} */
 		const builtIn = version.required ? {} : { unsubscribeUrl: await unsubscribeLinkOf(s, address, topic) };

@@ -128,6 +128,41 @@ describe('template rules (@ss/contracts/templates)', () => {
 	});
 });
 
+describe('message defaults in other languages (fixed-choices N11)', () => {
+	const message = {
+		key: 'notes.ready',
+		name: 'Ready',
+		values: ['name'],
+		required: true,
+		channels: { email: { subject: 'Hi {name}', text: 'Ready' }, sms: { text: 'Ready' }, whatsapp: null },
+	};
+	it('takes the words of each channel per language, checked as the US-English ones', () => {
+		const translated = {
+			...message,
+			translations: { fr: { email: { subject: 'Bonjour {name}', text: 'Prêt' } }, 'pt-BR': { sms: { text: 'Pronto' } } },
+		};
+		expect(validateMessageDefaults({ messages: [translated] })).toMatchObject({ ok: true });
+	});
+	it('refuses a language that is no code, a channel the message is not sent on, WhatsApp, and unknown values', () => {
+		expectProblem(
+			validateMessageDefaults({ messages: [{ ...message, translations: { French: { sms: { text: 'Prêt' } } } }] }),
+			'/messages/0/translations',
+		);
+		expectProblem(
+			validateMessageDefaults({ messages: [{ ...message, translations: { fr: { whatsapp: { text: 'x' } } } }] }),
+			'/messages/0/translations/fr/whatsapp',
+		);
+		expectProblem(
+			validateMessageDefaults({ messages: [{ ...message, translations: { fr: { push: { subject: 'a', text: 'b' } } } }] }),
+			'/messages/0/translations/fr/push',
+		);
+		expectProblem(
+			validateMessageDefaults({ messages: [{ ...message, translations: { fr: { sms: { text: 'Prêt {code}' } } } }] }),
+			'/messages/0/translations/fr/sms',
+		);
+	});
+});
+
 describe('message defaults (validateMessageDefaults)', () => {
 	it('accepts a declaration with every channel kind, with or without the product id', () => {
 		expect(validateMessageDefaults(declaration())).toMatchObject({ ok: true });

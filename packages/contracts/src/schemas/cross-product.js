@@ -95,6 +95,17 @@ const titledWords = Object.freeze({
 /** Most messages one product declares. */
 const MAX_DECLARED_MESSAGES = 200;
 
+/** Default words of SMS: text only. */
+const smsWords = Object.freeze({
+	type: 'object',
+	required: ['text'],
+	additionalProperties: false,
+	properties: { text: { type: 'string', minLength: 1 } },
+});
+
+/** Most languages a message has default words in, besides US English. */
+const MAX_TRANSLATIONS = 20;
+
 /** A product's message defaults (`schemas/messages.json`; the kit's `GET /v1/message-defaults` adds `productId`). */
 export const messageDefaultsSchema = deepFreeze({
 	$schema: draft,
@@ -137,15 +148,23 @@ export const messageDefaultsSchema = deepFreeze({
 						additionalProperties: false,
 						properties: {
 							email: titledWords,
-							sms: {
-								type: 'object',
-								required: ['text'],
-								additionalProperties: false,
-								properties: { text: { type: 'string', minLength: 1 } },
-							},
+							sms: smsWords,
 							whatsapp: { type: 'null' },
 							push: titledWords,
 							staff_push: titledWords,
+						},
+					},
+					// the default words in other languages (a language code such as fr or pt-BR), per channel the
+					// message is sent on; a recipient in another language gets the US-English words (fixed-choices N11)
+					translations: {
+						type: 'object',
+						maxProperties: MAX_TRANSLATIONS,
+						propertyNames: { pattern: '^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$' },
+						additionalProperties: {
+							type: 'object',
+							minProperties: 1,
+							additionalProperties: false,
+							properties: { email: titledWords, sms: smsWords, push: titledWords, staff_push: titledWords },
 						},
 					},
 				},

@@ -4374,6 +4374,25 @@
 					"sensitive": {
 						"type": "boolean",
 						"default": false
+					},
+					"translations": {
+						"type": "object",
+						"description": "The words in other languages, by language code (fr, pt-BR): { subject?, text }. The recipient's language (language, else to.language) picks them, exact then its base language; else the words above (US English) are sent.",
+						"additionalProperties": {
+							"type": "object",
+							"required": [
+								"text"
+							],
+							"additionalProperties": false,
+							"properties": {
+								"subject": {
+									"type": "string"
+								},
+								"text": {
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			},

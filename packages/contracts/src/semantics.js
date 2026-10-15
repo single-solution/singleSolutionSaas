@@ -263,34 +263,53 @@ export const checkMessageDefaults = (declaration) => {
 			if (!message.values.includes(name))
 				out.push(at([...path, 'longValues', valueIndex], RULES.unknownValue, `'${name}' is not one of the message's values`));
 		const known = new Set([...message.values, ...(message.required === true ? [] : BUILT_IN_VALUES)]);
-		for (const [channel, words] of Object.entries(message.channels)) {
-			if (words === null) continue;
-			const subject = 'subject' in words ? words.subject : '';
-			for (const [field, text] of /** @type {const} */ ([
-				['subject', subject],
-				['text', words.text],
-			]))
-				if (text !== text.trim())
-					out.push(at([...path, 'channels', channel, field], RULES.templateWords, 'has spaces or line breaks at its ends'));
-			const wrong = wordsProblem(/** @type {import('./templates.js').TemplateChannel} */ (channel), {
-				subject,
-				text: words.text,
-			});
-			if (wrong) out.push(at([...path, 'channels', channel, wrong.field], RULES.templateWords, wrong.message));
-			const long = longValueProblem(subject, longValues);
-			if (long) out.push(at([...path, 'channels', channel, 'subject'], RULES.templateWords, long));
-			for (const name of valueNamesOf(`${subject}\n${words.text}`))
-				if (!known.has(name))
+		/** Each channel's words: the US-English ones, then each language's (fixed-choices N11). */
+		const sets = [
+			{ at: [...path, 'channels'], words: message.channels },
+			...Object.entries(message.translations ?? {}).map(([language, words]) => ({
+				at: [...path, 'translations', language],
+				words,
+			})),
+		];
+		for (const [language, words] of Object.entries(message.translations ?? {}))
+			for (const channel of Object.keys(words))
+				if (!message.channels[/** @type {keyof typeof message.channels} */ (channel)])
 					out.push(
 						at(
-							[...path, 'channels', channel],
-							RULES.unknownValue,
-							BUILT_IN_VALUES.includes(name)
-								? `{${name}} is filled only in messages that are not required`
-								: `{${name}} is not one of the message's values`,
+							[...path, 'translations', language, channel],
+							RULES.templateWords,
+							'the message is not sent on this channel',
 						),
 					);
-		}
+		for (const set of sets)
+			for (const [channel, words] of Object.entries(set.words)) {
+				if (words === null) continue;
+				const subject = 'subject' in words ? words.subject : '';
+				for (const [field, text] of /** @type {const} */ ([
+					['subject', subject],
+					['text', words.text],
+				]))
+					if (text !== text.trim())
+						out.push(at([...set.at, channel, field], RULES.templateWords, 'has spaces or line breaks at its ends'));
+				const wrong = wordsProblem(/** @type {import('./templates.js').TemplateChannel} */ (channel), {
+					subject,
+					text: words.text,
+				});
+				if (wrong) out.push(at([...set.at, channel, wrong.field], RULES.templateWords, wrong.message));
+				const long = longValueProblem(subject, longValues);
+				if (long) out.push(at([...set.at, channel, 'subject'], RULES.templateWords, long));
+				for (const name of valueNamesOf(`${subject}\n${words.text}`))
+					if (!known.has(name))
+						out.push(
+							at(
+								[...set.at, channel],
+								RULES.unknownValue,
+								BUILT_IN_VALUES.includes(name)
+									? `{${name}} is filled only in messages that are not required`
+									: `{${name}} is not one of the message's values`,
+							),
+						);
+			}
 	}
 	return out;
 };

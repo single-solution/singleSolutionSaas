@@ -164,6 +164,10 @@
  *   push?: { subject: string, text: string }, staff_push?: { subject: string, text: string } }} channels every channel
  *   it is sent on, with its default words; `whatsapp: null`: sent on WhatsApp too, which has no default (a template
  *   approved at Meta)
+ * @property {Record<string, { email?: { subject: string, text: string }, sms?: { text: string },
+ *   push?: { subject: string, text: string }, staff_push?: { subject: string, text: string } }>} [translations] the
+ *   default words in other languages (`fr`, `pt-BR`), per channel it is sent on (not WhatsApp); a recipient in a
+ *   language without them gets the US-English words
  */
 /** @typedef {{ productId?: string, messages: DeclaredMessage[] }} MessageDefaults */
 

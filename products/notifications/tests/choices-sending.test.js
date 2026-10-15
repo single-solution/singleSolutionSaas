@@ -387,3 +387,51 @@ describe('replies from any gateway and keywords per language (N4)', () => {
 		await env.connect('sms', TWILIO);
 	});
 });
+
+describe('default templates in other languages (N11)', () => {
+	it('a product’s message goes in the recipient’s language when the product has its words, else in US English', async () => {
+		const defaults = {
+			email: {
+				subject: 'Your order {order} is ready',
+				text: 'Pick it up today.',
+				required: true,
+				translations: {
+					fr: { subject: 'Votre commande {order} est prête', text: 'Retirez-la aujourd’hui.' },
+					'pt-BR': { subject: 'Seu pedido {order} está pronto', text: 'Retire hoje.' },
+				},
+			},
+		};
+		/** @param {string | undefined} language */
+		const send = (language) =>
+			env.send('email', {
+				template: 'chat.order_ready',
+				to: { email: 'lang@example.com', ...(language ? { language } : {}) },
+				values: { order: '12' },
+				defaults,
+			});
+		// the exact language, then its base language
+		expect((await send('fr')).json.subject).toBe('Votre commande 12 est prête');
+		expect((await send('fr-CA')).json.subject).toBe('Votre commande 12 est prête');
+		expect((await send('pt-BR')).json.subject).toBe('Seu pedido 12 está pronto');
+		// a language the product has no words in, or none: the US-English words
+		expect((await send('de')).json.subject).toBe('Your order 12 is ready');
+		expect((await send(undefined)).json.subject).toBe('Your order 12 is ready');
+		// the website's own template still comes first
+		await env.template({
+			key: 'chat.order_ready',
+			channel: 'email',
+			subject: 'Ready: {order}',
+			text: 'Come by.',
+			required: true,
+		});
+		expect((await send('fr')).json.subject).toBe('Ready: 12');
+		// translations are checked like the US-English words
+		const bad = await env.send('email', {
+			template: 'chat.order_ready',
+			to: { email: 'lang@example.com' },
+			defaults: { email: { ...defaults.email, translations: { fr: { subject: '', text: 'x' } } } },
+		});
+		expect(bad.status).toBe(422);
+		expect(bad.json.errors[0].path).toBe('/defaults/email/translations/fr/subject');
+	});
+});

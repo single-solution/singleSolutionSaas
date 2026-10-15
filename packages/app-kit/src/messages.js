@@ -6,7 +6,8 @@
  *
  * - The kit attaches a message's defaults to every send to Notifications (`POST /v1/messages/<channel>` through
  *   `callProduct` or the staff alerts), as `defaults: { <channel>: { subject?, text, required, urgent, sensitive } }`
- *   for each channel that has default words (never WhatsApp: it sends only templates approved at Meta). Notifications
+ *   for each channel that has default words (never WhatsApp: it sends only templates approved at Meta), with the
+ *   message's words in other languages as `translations: { <language>: { subject?, text } }`. Notifications
  *   uses them when the website has no template of its own: no extra round trip, the words of the running product.
  * - A message with long values (`longValues`, for example a chat transcript) has them named on every send
  *   (`longValues: [...]`), so Notifications takes them up to 50,000 characters each.
@@ -24,7 +25,10 @@ import { deepFreeze, isObject } from '@ss/contracts/util';
 import { kitError } from './util.js';
 
 /** @typedef {import('@ss/contracts').DeclaredMessage} DeclaredMessage */
-/** @typedef {{ subject?: string, text: string, required: boolean, urgent: boolean, sensitive: boolean }} DefaultWords */
+/**
+ * @typedef {{ subject?: string, text: string, required: boolean, urgent: boolean, sensitive: boolean,
+ *   translations?: Record<string, { subject?: string, text: string }> }} DefaultWords
+ */
 
 /** The send API path of each channel in Notifications. */
 const SEND_PATH = /^\/v1\/messages\/(email|sms|whatsapp|push|staff-push)$/;
@@ -49,14 +53,23 @@ export const createMessages = ({ productId, declaration }) => {
 	for (const message of messages) {
 		/** @type {Record<string, DefaultWords>} */
 		const words = {};
-		for (const [channel, given] of Object.entries(message.channels))
-			if (given)
-				words[channel] = {
-					...given,
-					required: message.required === true,
-					urgent: message.urgent === true,
-					sensitive: message.sensitive === true,
-				};
+		for (const [channel, given] of Object.entries(message.channels)) {
+			if (!given) continue;
+			// its words in other languages (fixed-choices N11): Notifications picks the recipient's, else these
+			const translations = Object.fromEntries(
+				Object.entries(message.translations ?? {}).flatMap(([language, byChannel]) => {
+					const translated = byChannel[/** @type {keyof typeof byChannel} */ (channel)];
+					return translated ? [[language, translated]] : [];
+				}),
+			);
+			words[channel] = {
+				...given,
+				required: message.required === true,
+				urgent: message.urgent === true,
+				sensitive: message.sensitive === true,
+				...(Object.keys(translations).length > 0 ? { translations } : {}),
+			};
+		}
 		if (Object.keys(words).length > 0) defaults.set(message.key, deepFreeze(words));
 		if (message.longValues?.length) longValues.set(message.key, message.longValues);
 	}

@@ -56,7 +56,7 @@ import { LEASE_MS } from '../core/timing.js';
  *   parameters and buttons show them replaced
  * @property {string | null} [sealed] the real values and words of a message with hidden values, sealed, while it still
  *   has attempts to make; null once it is sent, failed or skipped. Never in a delivery-log read
- * @property {Partial<Record<Channel, Template>> | null} [defaults] a product's message: the defaults its send carried,
+ * @property {Partial<Record<Channel, import('../core/templates.js').DefaultTemplate>> | null} [defaults] a product's message: the defaults its send carried,
  *   kept while it may still move to its fallback channel (parity P1); null once it is sent, failed, skipped or moved
  * @property {string[]} [longValues] a product's message with long values: their names (they are cut to fit on a channel
  *   with a shorter limit, the fallback channel too)

@@ -116,6 +116,25 @@ describe('message defaults (parity P1)', () => {
 		expect(attach('notifications', '/v1/messages/whatsapp', whatsappOnly)).toBe(whatsappOnly);
 	});
 
+	it('attaches a message’s words in other languages to the channel they belong to (fixed-choices N11)', () => {
+		const { attach } = createMessages({
+			productId: 'notes',
+			declaration: {
+				messages: [
+					{
+						...DECLARATION.messages[0],
+						translations: { fr: { email: { subject: 'Nouvelle note {noteId}', text: '{preview}' } } },
+					},
+				],
+			},
+		});
+		const send = { method: 'POST', body: { template: 'notes.staff_note_created', to: { email: 'a@b.example' } } };
+		expect(/** @type {any} */ (attach('notifications', '/v1/messages/email', send).body).defaults).toEqual({
+			...ALERT_DEFAULTS,
+			email: { ...ALERT_DEFAULTS.email, translations: { fr: { subject: 'Nouvelle note {noteId}', text: '{preview}' } } },
+		});
+	});
+
 	it('names a message’s long values on every send of it, so Notifications takes them whole', () => {
 		const { attach } = createMessages({ productId: 'notes', declaration: DECLARATION });
 		const copy = { method: 'POST', body: { template: 'notes.copy', to: { email: 'a@b.example' } } };
