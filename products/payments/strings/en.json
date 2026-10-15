@@ -121,6 +121,7 @@
 	"links.create": "Create link",
 	"links.created": "Link created.",
 	"links.createFailed": "Not created: {reason}",
+	"links.pickCurrency": "Choose a currency",
 	"links.invalidAmount": "Enter amounts like 2500 or {example}, without thousands separators.",
 	"links.empty": "No payment links yet.",
 	"links.failed": "The payment links could not be loaded.",

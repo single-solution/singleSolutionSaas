@@ -1,7 +1,7 @@
 /**
  * The Payment links admin widget (admin widget, ticket; PLAN 0.8.7, 0.6): a list-and-detail screen of the website's
  * payment links, newest first (`links.read`). New link is the main action (a dialog: title, description, a fixed
- * amount or one the payer enters with its minimum, the currency, the gateways it offers, the return address and a
+ * amount or one the payer enters with its minimum, the currency (an ISO 4217 picker that starts with the newest link's), the gateways it offers, the return address and a
  * reference; `links.manage`). A picked link is read again (its paid count is the latest); the detail shows every field
  * with Copy link as its button, and Open link page, Copy link id and, last, Turn off (or Turn on) in its More menu. Amounts and times follow the website's Format and time zone.
  * @module
@@ -22,6 +22,22 @@ import { GATEWAYS, GATEWAY_CURRENCIES, GATEWAY_FEATURES } from '../core/gateways
 import { field } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
+
+/**
+ * The ISO 4217 currencies the browser knows, each as `code · name` in US English (the admin's language), for the
+ * currency picker (P7).
+ * @param {string} [also] a code to keep in the list even when the browser does not know it
+ * @returns {Array<[string, string]>}
+ */
+const currencyChoices = (also = '') => {
+	const codes = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('currency') : [];
+	const names = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['en-US'], { type: 'currency' }) : null;
+	const all = also && !codes.includes(also) ? [...codes, also].sort() : codes;
+	return all.map((code) => {
+		const name = names?.of(code);
+		return [code, name && name !== code ? `${code} · ${name}` : code];
+	});
+};
 
 /**
  * @param {{ host: HTMLElement, api: import('@ss/app-kit/widget').AdminApi, config: import('./widget.js').WidgetConfig,
@@ -59,6 +75,8 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 			let cursor = null;
 			/** @type {Map<string, any>} */
 			const shown = new Map();
+			// a new link starts in the currency of the newest one (the store currency is not known yet, P7)
+			let lastCurrency = '';
 			/** @param {any} answer */
 			const failed = (answer) => (answer.status === 0 && !api.tickets.current() ? t('links.signedOut') : t('links.failed'));
 			/**
@@ -210,7 +228,12 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 				const description = /** @type {HTMLTextAreaElement} */ (
 					element(doc, 'textarea', { name: 'description', maxlength: '1000', rows: '3' })
 				);
-				const currency = input('currency', { maxlength: '3', required: '', autocomplete: 'off' });
+				const currency = /** @type {HTMLSelectElement} */ (element(doc, 'select', { name: 'currency', required: '' }));
+				currency.append(
+					element(doc, 'option', { value: '' }, t('links.pickCurrency')),
+					...currencyChoices(lastCurrency).map(([code, label]) => element(doc, 'option', { value: code }, label)),
+				);
+				currency.value = lastCurrency;
 				const amount = input('amount', { inputmode: 'decimal' });
 				const minimum = input('minAmount', { inputmode: 'decimal' });
 				const returnUrl = input('returnUrl', { type: 'url', maxlength: '2048' });
@@ -259,7 +282,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					submitLabel: t('links.create'),
 					closeLabel: t('links.close'),
 					onSubmit: async () => {
-						const code = currency.value.trim().toUpperCase();
+						const code = currency.value;
 						// amounts are typed with the decimal sign money is shown with (P6)
 						const fixed = amount.value.trim() ? typedAmount(amount.value, code) : null;
 						const min = minimum.value.trim() ? typedAmount(minimum.value, code) : null;
@@ -279,6 +302,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 							reference: reference.value.trim(),
 						});
 						if (!answer.ok) return formatText(t('links.createFailed'), { reason: answer.data?.detail ?? '' });
+						lastCurrency = answer.data.currency;
 						const item = put(answer.data);
 						if (item) list.prepend(item);
 						status.textContent = '';
@@ -305,6 +329,7 @@ export const mountLinksAdmin = ({ host, api, config, open, copy = () => {} }) =>
 					return;
 				}
 				cursor = answer.data.nextCursor;
+				if (fresh) lastCurrency = answer.data.items[0]?.currency ?? '';
 				status.textContent = fresh && answer.data.items.length === 0 ? t('links.empty') : '';
 				for (const link of answer.data.items) {
 					const item = put(link);

@@ -842,8 +842,10 @@ describe('Payment links admin widget', () => {
 		// the gateways, then the merchant's manual payment methods by their names (P1)
 		expect(boxes.map((box) => box.value)).toEqual(['stripe', 'bank_transfer']);
 		expect(form.textContent).toContain('Bank transfer');
+		// no link yet: no currency is guessed
+		expect(/** @type {HTMLSelectElement} */ (form.querySelector('select[name="currency"]')).value).toBe('');
 		set('title', ' Donations ');
-		set('currency', 'usd');
+		set('currency', 'USD');
 		set('minAmount', 'abc');
 		await submitDialog(host);
 		expect(form.querySelector('[role="status"]')?.textContent).toBe(
@@ -873,6 +875,24 @@ describe('Payment links admin widget', () => {
 		expect(rows(host)[0]?.textContent).toContain('Donations');
 		expect(detailStatus(host)).toBe(strings['links.created']);
 		expect(statusText(host)).toBe('');
+	});
+
+	it('picks the currency from the ISO 4217 list, starting with the newest link’s (P7)', async () => {
+		const host = place('links_admin');
+		const client = adminApi({
+			'GET /v1/admin/links': () =>
+				answer(200, { items: [{ ...LINK, currency: 'PKR' }, LINK], nextCursor: null, hasMore: false }),
+			'GET /v1/admin/links/link_1': () => answer(200, LINK),
+		});
+		mountLinksAdmin({ host, api: client, config: configOf(['payment_links']), open: vi.fn() });
+		await flush();
+		button(host, strings['links.new']).click();
+		await flush();
+		const picker = /** @type {HTMLSelectElement} */ (dialog(host)?.querySelector('select[name="currency"]'));
+		expect(picker.value).toBe('PKR');
+		const codes = [...picker.options].map((option) => option.value);
+		for (const code of ['USD', 'EUR', 'JPY', 'ZAR', 'KWD']) expect(codes).toContain(code);
+		expect([...picker.options].find((option) => option.value === 'EUR')?.textContent).toBe('EUR · Euro');
 	});
 
 	it('takes amounts typed with the website’s decimal sign (P6)', async () => {
