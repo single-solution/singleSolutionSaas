@@ -319,15 +319,31 @@ beforeAll(async () => {
 		role: 'business_manager',
 	});
 
-	// Payments: the payment API and bank transfer with the store's bank details (P1)
-	await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'bank_transfer'] });
+	// Payments: the payment API and its manual payment method bank_transfer with the store's account (P1, P2)
+	await dashboardOf(PAYMENTS, 'payments', '/features', { on: ['payment_api', 'manual_payments'] });
 	await sys.connectDatabase(await sys.adminSession(owner, websiteId, 'payments'), websiteId, PAYMENTS);
 	await configureOn(PAYMENTS, 'payments', {
-		'bank_transfer.accountHolder': 'Example Shop Ltd',
-		'bank_transfer.bankName': 'Example Bank',
-		'bank_transfer.accountNumber': '31926819',
-		'bank_transfer.iban': 'GB29NWBK60161331926819',
-		'bank_transfer.instructions': 'Write your order number as the reference.',
+		'list.manual_methods': [
+			{
+				key: 'bank_transfer',
+				name: 'Bank transfer',
+				kind: 'pay_first',
+				details: '',
+				instructions: 'Write your order number as the reference.',
+				proof: false,
+				accounts: [
+					{
+						label: 'Example Bank',
+						currency: '',
+						rows: [
+							{ label: 'Account holder', value: 'Example Shop Ltd' },
+							{ label: 'Account number', value: '31926819' },
+							{ label: 'IBAN', value: 'GB29NWBK60161331926819' },
+						],
+					},
+				],
+			},
+		],
 	});
 
 	// Notifications: email through the merchant's provider, with the shopper's and the staff's templates

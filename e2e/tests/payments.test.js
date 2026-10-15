@@ -310,40 +310,58 @@ describe('Payments on the real Portal', () => {
 	});
 });
 
-describe('bank transfer for the merchant’s server (PLAN 0.8.10 P1–P3)', () => {
+describe('manual payment methods for the merchant’s server (P1, P2, PLAN 0.8.10 P3)', () => {
 	/** @param {string} method @param {string} path @param {unknown} [body] */
 	const server = (method, path, body) => sys.call(method, path, { token: payTokens.server, body });
 	let transferId = '';
+	/** Today's bank transfer with one account of these rows (and a euro account), plus cash on delivery. */
+	const methods = (/** @type {Array<[string, string]>} */ rows, instructions = '') => [
+		{
+			key: 'bank_transfer',
+			name: 'Bank transfer',
+			kind: 'pay_first',
+			details: '',
+			instructions,
+			proof: false,
+			accounts: [
+				{ label: 'UK account', currency: 'GBP', rows: rows.map(([label, value]) => ({ label, value })) },
+				{ label: 'Euro account', currency: 'EUR', rows: [{ label: 'IBAN', value: 'DE89 3704 0044 0532 0130 00' }] },
+			],
+		},
+		{ key: 'cod', name: 'Cash on delivery', kind: 'on_delivery', details: '', instructions: '', proof: false, accounts: [] },
+	];
 
-	it('bank details are readable with the Portal-issued server token, kept through the settings API', async () => {
-		expect((await server('GET', '/v1/bank-transfer')).json.type).toMatch(/feature_off$/);
+	it('the methods are readable with the Portal-issued server token, kept through the list API', async () => {
+		expect((await server('GET', '/v1/manual-methods')).json.type).toMatch(/feature_off$/);
 		const support = await sys.admin('support');
 		const cookie = await sys.adminSession(support.client, websiteId);
-		const on = ['payment_api', 'payment_links', 'refunds', 'stripe', 'bank_transfer'];
+		const on = ['payment_api', 'payment_links', 'refunds', 'stripe', 'manual_payments'];
 		expect([...(await sys.switchFeatures(cookie, websiteId, on)).on].sort()).toEqual([...on].sort());
-		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({
-			ready: false,
-			missing: ['accountHolder', 'accountNumber'],
-			accountNumber: '',
-		});
-		const details = {
-			accountHolder: 'Shop Ltd',
-			bankName: 'Example Bank',
-			accountNumber: '31926819',
-			sortCode: '60-16-13',
-			iban: 'GB29 NWBK 6016 1331 9268 19',
-			bic: 'NWBKGB2L',
-			instructions: 'Quote your order number.',
-		};
-		for (const [name, value] of Object.entries(details))
-			expect((await server('PUT', `/v1/settings/bank_transfer.${name}`, { value })).status).toBe(200);
-		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
-			ready: true,
-			missing: [],
-			routingNumber: '',
-			branchCode: '',
-			...details,
-		});
+		// seeded with today's bank transfer, its eight bank rows empty: not offered yet
+		expect((await server('GET', '/v1/manual-methods?currency=GBP')).json.methods).toEqual([
+			expect.objectContaining({ key: 'bank_transfer', kind: 'pay_first', ready: false, missing: ['account'], accounts: [] }),
+		]);
+		const rows = /** @type {Array<[string, string]>} */ ([
+			['Account holder', 'Shop Ltd'],
+			['Bank', 'Example Bank'],
+			['Account number', '31926819'],
+			['Sort code', '60-16-13'],
+			['Routing number', ''],
+		]);
+		const saved = await server('PUT', '/v1/lists/manual_methods', { value: methods(rows, 'Quote your order number.') });
+		expect(saved.status).toBe(200);
+		const gbp = (await server('GET', '/v1/manual-methods?currency=GBP')).json.methods;
+		expect(gbp.map((/** @type {any} */ m) => [m.key, m.ready])).toEqual([
+			['bank_transfer', true],
+			['cod', true],
+		]);
+		expect(gbp[0].accounts).toEqual([
+			{
+				label: 'UK account',
+				currency: 'GBP',
+				rows: rows.filter(([, value]) => value !== '').map(([label, value]) => ({ label, value })),
+			},
+		]);
 		const payment = await server('POST', '/v1/payments', {
 			amount: 450_000,
 			currency: 'GBP',
@@ -351,47 +369,31 @@ describe('bank transfer for the merchant’s server (PLAN 0.8.10 P1–P3)', () =
 			reference: 'ORD-1001',
 		});
 		expect(payment.status).toBe(201);
+		expect(payment.json).toMatchObject({ kind: 'pay_first', methodName: 'Bank transfer' });
 		transferId = payment.json.id;
 		const shown = await sys.call('GET', `/pay/${websiteId}/${transferId}`);
-		for (const text of [
-			'Shop Ltd',
-			'Example Bank',
-			'31926819',
-			'Sort code',
-			'60-16-13',
-			'NWBKGB2L',
-			'ORD-1001',
-			'Quote your order number.',
-		])
+		for (const text of ['UK account', 'Shop Ltd', 'Example Bank', '31926819', 'Sort code', '60-16-13', 'ORD-1001'])
 			expect(shown.json).toContain(text);
+		expect(shown.json).toContain('Quote your order number.');
 		expect(shown.json).not.toContain('Routing number');
+		expect(shown.json).not.toContain('Euro account');
 	});
 
-	it('bank transfer is ready without details when they are not required', async () => {
-		for (const name of ['accountHolder', 'bankName', 'accountNumber', 'sortCode', 'iban', 'bic'])
-			expect((await server('DELETE', `/v1/settings/bank_transfer.${name}`)).status).toBe(200);
-		expect((await server('GET', '/v1/bank-transfer')).json.ready).toBe(false);
-		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
-		expect(refused.json.type).toMatch(/gateway_not_ready$/);
-		await server('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
-		// the instructions are kept from the first test: without them nothing would tell the payer how to pay
-		await server('DELETE', '/v1/settings/bank_transfer.instructions');
-		expect((await server('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, missing: ['instructions'] });
-		await server('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by email.' });
-		expect((await server('GET', '/v1/bank-transfer')).json).toEqual({
-			ready: true,
-			missing: [],
-			accountHolder: '',
-			bankName: '',
-			accountNumber: '',
-			routingNumber: '',
-			sortCode: '',
-			branchCode: '',
-			iban: '',
-			bic: '',
-			instructions: 'We send our bank details by email.',
+	it('a method paid first is offered for a currency only with an account for it or instructions', async () => {
+		await server('PUT', '/v1/lists/manual_methods', { value: methods([['Account number', '31926819']]) });
+		// USD: neither a USD account, one for any currency, nor instructions
+		expect((await server('GET', '/v1/manual-methods?currency=USD')).json.methods[0]).toMatchObject({
+			ready: false,
+			missing: ['account'],
 		});
-		const payment = await server('POST', '/v1/payments', { amount: 1000, currency: 'GBP', gateway: 'bank_transfer' });
+		const refused = await server('POST', '/v1/payments', { amount: 1000, currency: 'USD', gateway: 'bank_transfer' });
+		expect(refused.json.type).toMatch(/gateway_not_ready$/);
+		// cash on delivery is always offered
+		expect((await server('POST', '/v1/payments', { amount: 1000, currency: 'USD', gateway: 'cod' })).status).toBe(201);
+		await server('PUT', '/v1/lists/manual_methods', {
+			value: methods([['Account number', '31926819']], 'We send our bank details by email.'),
+		});
+		const payment = await server('POST', '/v1/payments', { amount: 1000, currency: 'USD', gateway: 'bank_transfer' });
 		expect(payment.status).toBe(201);
 		const shown = await sys.call('GET', `/pay/${websiteId}/${payment.json.id}`);
 		expect(shown.json).toContain('We send our bank details by email.');

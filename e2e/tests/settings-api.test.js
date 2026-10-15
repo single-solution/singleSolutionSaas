@@ -87,10 +87,23 @@ const CASES = [
 		id: 'payments',
 		product: payments,
 		routes: paymentsRoutes,
-		on: ['bank_transfer'],
-		setting: 'bank_transfer.proofUpload',
-		value: false,
-		list: null,
+		on: ['manual_payments'],
+		setting: 'manual_payments.proofMaxMb',
+		value: 3,
+		list: {
+			name: 'manual_methods',
+			value: [
+				{
+					key: 'cod',
+					name: 'Cash on delivery',
+					kind: 'on_delivery',
+					details: '',
+					instructions: '',
+					proof: false,
+					accounts: [],
+				},
+			],
+		},
 	},
 ];
 
