@@ -83,6 +83,8 @@ describe('a change of ENCRYPTION_KEY (RT-14)', () => {
 			current: 2,
 			unreadable: 4,
 			failedWebsites: [],
+			// the product's own records in the website's database: entered again where Accounts asks for them
+			unreadableIn: { product: 4 },
 		});
 	});
 });
