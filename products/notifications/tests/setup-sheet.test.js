@@ -45,14 +45,13 @@ describe('the website Setup sheet', () => {
 			{ url: 'https://hooks.example.com/other', events: ['message.sent'] },
 		];
 		expect((await env.call('PUT', '/v1/lists/webhook_urls', { token: env.server, body: { value } })).status).toBe(200);
-		await env.setting('webhooks', 'events', ['message.failed', 'recipient.unsubscribed']);
 		const on = await partOf(env);
 		expect(validateProductBlueprint(on).ok).toBe(true);
 		expect(on.summaries).toEqual([
 			{ title: 'Channels', text: 'WhatsApp, Email.' },
 			{
 				title: 'Webhook events',
-				text: 'message.failed, recipient.unsubscribed, plus the events other products forward (for example payments.payment.paid).',
+				text: 'message.sent, message.failed and recipient.unsubscribed, plus the events other products forward (for example payments.payment.paid); each URL takes the events it names, or every event.',
 			},
 		]);
 		expect(on.features.find((/** @type {any} */ f) => f.key === 'webhooks').lists).toEqual([
@@ -75,12 +74,8 @@ describe('the website Setup sheet', () => {
 		]);
 		expect(on.build[3]).toEqual({ feature: 'webhooks', what: build.webhooks, docs: `${BASE}/docs#feature-webhooks` });
 
-		// none of its own events picked: only other products' go out
-		await env.setting('webhooks', 'events', []);
-		expect((await partOf(env)).summaries[1]).toEqual({
-			title: 'Webhook events',
-			text: "None of Notifications' own; only the events other products forward (for example payments.payment.paid).",
-		});
+		// one filter only: each URL's own events (the feature has no Events setting of its own)
+		expect(manifest.features.find((feature) => feature.key === 'webhooks')?.settings.properties).toEqual({});
 		// the OpenAPI document itself, public
 		const served = await env.call('GET', '/openapi.json');
 		expect(await served.json()).toEqual(openapi);

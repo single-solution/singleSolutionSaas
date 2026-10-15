@@ -41,6 +41,16 @@ const ACCOUNT_KEY_PREFIX = 'accounts.';
 /** The language of a template every recipient falls back to (written as `default` in paths). */
 export const DEFAULT_LANGUAGE = '';
 
+/**
+ * The language code Meta takes with a WhatsApp template: a language version's own, as Meta writes it (`pt-BR` →
+ * `pt_BR`), else the website's setting "Language of your Meta templates" (empty: `en`).
+ * @param {string} language the version's language (`''` = the default version)
+ * @param {unknown} templateLanguage the WhatsApp setting `templateLanguage`
+ * @returns {string}
+ */
+export const metaLanguageOf = (language, templateLanguage) =>
+	language !== DEFAULT_LANGUAGE ? language.replaceAll('-', '_') : String(templateLanguage ?? '').trim() || 'en';
+
 /** What the delivery log keeps instead of a hidden value that is not empty: a link, else any other value. */
 const HIDDEN = Object.freeze({ link: '[link hidden]', value: '******' });
 /** A value that is a link: an address with a scheme, or a path. */

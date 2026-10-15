@@ -13,8 +13,9 @@ const SMTP = {
 	secure: true,
 	username: 'mailer@example.com',
 	password: 'smtp-secret-password',
-	from: 'shop@example.com',
 };
+/** Every message names its sender (the connection's From, which Notifications always sends). */
+const FROM = 'shop@example.com';
 
 /**
  * A fake nodemailer transport factory recording what it was given.
@@ -49,12 +50,10 @@ describe('SMTP descriptor', () => {
 			ip: false,
 			username: 'mailer@example.com',
 			password: 'smtp-secret-password',
-			from: 'shop@example.com',
 		});
 		expect(smtpSettingsOf({ ...SMTP, port: 587, secure: false }, policy)).toMatchObject({ port: 587, secure: false });
 		const explicit = { host: 'smtp.example.com', username: 'u', password: 'p' };
 		expect(smtpSettingsOf(explicit, policy)).toMatchObject({ port: 465, secure: true });
-		expect('from' in smtpSettingsOf(explicit, policy)).toBe(false);
 		expect(smtpSettingsOf({ ...explicit, port: 587 }, policy)).toMatchObject({ port: 587, secure: false });
 		expect(smtpSettingsOf({ ...explicit, secure: false }, policy)).toMatchObject({ port: 587, secure: false });
 		expect(SMTP_PORTS).toEqual([25, 465, 587, 2525]);
@@ -70,7 +69,6 @@ describe('SMTP descriptor', () => {
 			{ ...SMTP, port: 70_000 },
 			{ ...SMTP, password: '' },
 			{ ...SMTP, username: undefined },
-			{ ...SMTP, from: 'not-an-address' },
 			{ provider: 'smtp', username: 'u', password: 'p' },
 			{ host: 'smtp.example.com', port: '465', username: 'u', password: 'p' },
 			{ host: 'smtp.example.com', secure: 'yes', username: 'u', password: 'p' },
@@ -93,7 +91,7 @@ describe('SMTP messaging adapter', () => {
 	it('connects to the vetted IP with TLS required, the host as servername, and timeouts', async () => {
 		const { seen, createTransport } = fakeTransport();
 		const smtp = createSmtpMessaging({ descriptor: SMTP, policy, createTransport });
-		const result = await smtp.send({ to: 'buyer@example.org', subject: 'Back in stock', text: 'Hello' });
+		const result = await smtp.send({ to: 'buyer@example.org', subject: 'Back in stock', text: 'Hello', from: FROM });
 		expect(result).toEqual({ id: '<m1@example.com>' });
 		expect(seen.options[0]).toEqual({
 			host: '93.184.215.14',
@@ -123,7 +121,7 @@ describe('SMTP messaging adapter', () => {
 			policy,
 			createTransport: starttls.createTransport,
 			timeouts: { socketMs: 5_000 },
-		}).send({ to: 'a@example.org', subject: 's', text: 't', replyTo: 'Help <help@example.com>' });
+		}).send({ to: 'a@example.org', subject: 's', text: 't', from: FROM, replyTo: 'Help <help@example.com>' });
 		expect(starttls.seen.options[0]).toMatchObject({ port: 587, secure: false, requireTLS: true, socketTimeout: 5_000 });
 		expect(starttls.seen.mails[0]).toMatchObject({ to: 'a@example.org', replyTo: 'Help <help@example.com>' });
 	});
@@ -133,9 +131,9 @@ describe('SMTP messaging adapter', () => {
 		const rebinding = createOutboundPolicy({ resolve: async () => [{ address: answer, family: 4 }] });
 		const { seen, createTransport } = fakeTransport();
 		const smtp = createSmtpMessaging({ descriptor: SMTP, policy: rebinding, createTransport });
-		await smtp.send({ to: 'a@example.org', subject: 's', text: 't' });
+		await smtp.send({ to: 'a@example.org', subject: 's', text: 't', from: FROM });
 		answer = '10.1.2.3';
-		const error = await smtp.send({ to: 'a@example.org', subject: 's', text: 't' }).catch((e) => e);
+		const error = await smtp.send({ to: 'a@example.org', subject: 's', text: 't', from: FROM }).catch((e) => e);
 		expect(error).toMatchObject({ code: 'upstream_error', details: { reason: 'ssrf_blocked' } });
 		expect(seen.options).toHaveLength(1);
 		// an IP literal host is checked up front and used as is (no servername)
@@ -144,15 +142,17 @@ describe('SMTP messaging adapter', () => {
 			descriptor: { ...SMTP, host: '93.184.215.14' },
 			policy,
 			createTransport: literal.createTransport,
-		}).send({ to: 'a@example.org', subject: 's', text: 't' });
+		}).send({ to: 'a@example.org', subject: 's', text: 't', from: FROM });
 		expect(literal.seen.options[0]).toMatchObject({ host: '93.184.215.14', tls: { minVersion: 'TLSv1.2' } });
 		expect(literal.seen.options[0].servername).toBeUndefined();
 	});
 
 	it('validates messages against header injection', async () => {
 		const { seen, createTransport } = fakeTransport();
-		const smtp = createSmtpMessaging({ descriptor: { ...SMTP, from: undefined }, policy, createTransport });
+		const smtp = createSmtpMessaging({ descriptor: SMTP, policy, createTransport });
 		const bad = [
+			// no sender: there is no default (not even the username)
+			{ to: 'a@example.org', subject: 's', text: 't' },
 			{ to: 'a@example.org\r\nBcc: x@evil.test', subject: 's', text: 't' },
 			{ to: 'Name <a@example.org>', subject: 's', text: 't' },
 			{ to: ['a@example.org'], subject: 's', text: 't' },
@@ -161,10 +161,10 @@ describe('SMTP messaging adapter', () => {
 			{ to: 'a@example.org', subject: 's' },
 			{ to: 'a@example.org', subject: 's', text: 42 },
 			{ to: 'a@example.org', subject: 's', text: 't', from: 'x@example.com\nBcc: y@evil.test' },
-			{ to: 'a@example.org', subject: 's', text: 't', replyTo: 'nope' },
-			{ to: 'a@example.org', subject: 's', text: 't', headers: { Bcc: 'x@evil.test' } },
-			{ to: 'a@example.org', subject: 's', text: 't', headers: { 'X-Tag': 'a\r\nBcc: x@evil.test' } },
-			{ to: 'a@example.org', subject: 's', text: 't', headers: { 'X Tag': 'a' } },
+			{ to: 'a@example.org', subject: 's', text: 't', from: FROM, replyTo: 'nope' },
+			{ to: 'a@example.org', subject: 's', text: 't', from: FROM, headers: { Bcc: 'x@evil.test' } },
+			{ to: 'a@example.org', subject: 's', text: 't', from: FROM, headers: { 'X-Tag': 'a\r\nBcc: x@evil.test' } },
+			{ to: 'a@example.org', subject: 's', text: 't', from: FROM, headers: { 'X Tag': 'a' } },
 			'not an object',
 		];
 		for (const message of bad) {
@@ -173,7 +173,7 @@ describe('SMTP messaging adapter', () => {
 			});
 		}
 		expect(seen.options).toHaveLength(0);
-		// from defaults to the username when it is an address; extra headers pass through
+		// the sender as given; extra headers pass through
 		await smtp.send({
 			to: 'a@example.org',
 			subject: 's',
@@ -185,16 +185,6 @@ describe('SMTP messaging adapter', () => {
 			from: 'Shop <shop@example.com>',
 			headers: { 'List-Unsubscribe': '<https://example.com/u>' },
 		});
-		await smtp.send({ to: 'a@example.org', subject: 's', text: 't' });
-		expect(seen.mails[1].from).toBe('mailer@example.com');
-		const noFrom = createSmtpMessaging({
-			descriptor: { ...SMTP, from: undefined, username: 'apikey' },
-			policy,
-			createTransport,
-		});
-		await expect(noFrom.send({ to: 'a@example.org', subject: 's', text: 't' })).rejects.toMatchObject({
-			code: 'invalid_argument',
-		});
 	});
 
 	it('maps transport failures to timeout / upstream_error without credentials', async () => {
@@ -205,13 +195,13 @@ describe('SMTP messaging adapter', () => {
 			});
 		const timeout = failing({ code: 'ETIMEDOUT' });
 		const err1 = await createSmtpMessaging({ descriptor: SMTP, policy, createTransport: timeout.createTransport })
-			.send({ to: 'a@example.org', subject: 's', text: 't' })
+			.send({ to: 'a@example.org', subject: 's', text: 't', from: FROM })
 			.catch((e) => e);
 		expect(err1).toMatchObject({ code: 'timeout', details: { reason: 'ETIMEDOUT' } });
 		expect(timeout.seen.closed).toBe(1);
 		const auth = failing({ code: 'EAUTH', responseCode: 535 });
 		const err2 = await createSmtpMessaging({ descriptor: SMTP, policy, createTransport: auth.createTransport })
-			.send({ to: 'a@example.org', subject: 's', text: 't' })
+			.send({ to: 'a@example.org', subject: 's', text: 't', from: FROM })
 			.catch((e) => e);
 		expect(err2).toMatchObject({ code: 'upstream_error', details: { reason: 'EAUTH', responseCode: 535 } });
 		expect(`${err2.message} ${JSON.stringify(err2.details)}`).not.toMatch(/smtp-secret-password|mailer@example\.com/);
@@ -225,6 +215,7 @@ describe('SMTP messaging adapter', () => {
 				to: 'a@example.org',
 				subject: 's',
 				text: 't',
+				from: FROM,
 			}),
 		).rejects.toMatchObject({ code: 'upstream_error', details: { reason: 'network' } });
 	});
@@ -281,6 +272,7 @@ describe('SMTP over a local server (allowlisted development host, real nodemaile
 				to: 'buyer@example.org',
 				subject: 'Back in stock',
 				text: 'Your item is back.',
+				from: FROM,
 				headers: { 'X-Alert-Id': 'al_1' },
 			});
 			expect(typeof result.id).toBe('string');

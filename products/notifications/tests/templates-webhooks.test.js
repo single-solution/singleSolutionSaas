@@ -75,6 +75,30 @@ describe('WhatsApp template buttons (N1)', () => {
 			'Template accounts.code (whatsapp, default): saved',
 		);
 	});
+
+	it('names the language Meta approved the template in: the setting for default versions, a version’s own as Meta writes it', async () => {
+		await env.template({ key: 'promo.hello', channel: 'whatsapp', text: 'Hello {name}', providerTemplate: 'hello' });
+		const hello = { template: 'promo.hello', to: { phone: '+447700900124' }, values: { name: 'Ana' } };
+		await env.send('whatsapp', hello);
+		expect(lastMeta().template.language).toEqual({ code: 'en' });
+		// a merchant whose templates are approved in another language
+		await env.setting('whatsapp', 'templateLanguage', 'ur');
+		await env.send('whatsapp', hello);
+		expect(lastMeta().template.language).toEqual({ code: 'ur' });
+		// a language version goes in Meta's own form (pt_BR, not pt-BR)
+		await env.switchOn(['whatsapp', 'email', 'sms', 'webhooks', 'send_api', 'multi_language']);
+		await env.template({
+			key: 'promo.hello',
+			channel: 'whatsapp',
+			language: 'pt-BR',
+			text: 'Olá {name}',
+			providerTemplate: 'hello',
+		});
+		await env.send('whatsapp', { ...hello, to: { phone: '+447700900124', language: 'pt-BR' } });
+		expect(lastMeta().template.language).toEqual({ code: 'pt_BR' });
+		await env.setting('whatsapp', 'templateLanguage', 'en');
+		await env.switchOn(['whatsapp', 'email', 'sms', 'webhooks', 'send_api']);
+	});
 });
 
 describe('the long retry plan (N3)', () => {
@@ -227,7 +251,8 @@ describe('webhook URLs per event (N5)', () => {
 		expect(await read.json()).toEqual({ value: [] });
 		const settings = await (await env.call('GET', '/v1/settings', { token: env.server })).json();
 		const webhooks = settings.features.find((/** @type {any} */ f) => f.key === 'webhooks');
-		expect(Object.keys(webhooks.values)).toEqual(['events']);
+		// one filter only, each URL's own events: the feature has no settings of its own
+		expect(Object.keys(webhooks.values)).toEqual([]);
 		const value = [{ url: `${HOOKS}/first`, events: [] }];
 		expect((await env.call('PUT', '/v1/lists/webhook_urls', { token: env.server, body: { value } })).status).toBe(200);
 		// the dashboard reads the same list

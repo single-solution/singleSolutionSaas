@@ -31,7 +31,7 @@ import { isObject } from './util.js';
  * @property {string[]} parameters WhatsApp provider templates: body parameters
  * @property {string} providerTemplate WhatsApp: approved Meta template name (`''` = plain text)
  * @property {import('../core/templates.js').Button[]} [buttons] WhatsApp templates at Meta: the buttons' values
- * @property {string} language the template's language (`''` = default)
+ * @property {string} language WhatsApp templates at Meta: the language code Meta approved the template in
  * @property {string} [replyTo] email
  * @property {Record<string, string>} [headers] email headers (List-Unsubscribe)
  */
@@ -329,7 +329,7 @@ export const createProviders = ({ send, policy, now, createTransport }) => {
 							type: 'template',
 							template: {
 								name: m.providerTemplate,
-								language: { code: m.language || 'en' },
+								language: { code: m.language },
 								...(components.length > 0 ? { components } : {}),
 							},
 						}

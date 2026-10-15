@@ -1,16 +1,5 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {
-		"events": {
-			"type": "array",
-			"title": "Events",
-			"description": "Notifications' own events sent to the webhook URLs. Other products' events (for example payments.payment.paid) are always sent; each URL can take only some events.",
-			"default": ["message.sent", "message.failed", "recipient.unsubscribed"],
-			"items": {
-				"type": "string",
-				"enum": ["message.sent", "message.failed", "recipient.unsubscribed"]
-			}
-		}
-	}
+	"properties": {}
 }

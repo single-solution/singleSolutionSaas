@@ -130,7 +130,7 @@
 	"unsubscribe.title": "Unsubscribe",
 	"unsubscribe.question": "Stop optional messages from {business}?",
 	"unsubscribe.button": "Unsubscribe",
-	"unsubscribe.done": "You are unsubscribed. You will still get the messages you need, such as sign-in codes and order updates.",
+	"unsubscribe.done": "You are unsubscribed. You will still get the messages you need, such as sign-in codes and updates on what you asked for.",
 	"unsubscribe.invalid": "This link is not valid.",
 	"unsubscribe.unavailable": "This page is not available right now.",
 	"message.shortened": "… (shortened)"

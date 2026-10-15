@@ -34,6 +34,7 @@ import {
 	isRequired,
 	isSensitive,
 	isUrgent,
+	metaLanguageOf,
 	pickVersion,
 	renderTemplate,
 } from '../core/templates.js';
@@ -181,7 +182,7 @@ export const createSending = (product) => {
 			: { unsubscribeUrl: `${s.base}/unsubscribe/${s.websiteId}/${await s.store.recipients.codeOf(address)}` };
 		const fit = {
 			longValues,
-			note: longValues.length === 0 ? '' : ((await product.settings.texts(s.websiteId))['message.shortened'] ?? ''),
+			note: longValues.length === 0 ? '' : String((await product.settings.texts(s.websiteId))['message.shortened']),
 		};
 		/** @param {Record<string, string>} filled @returns {Words} */
 		const wordsOf = (filled) => ({
@@ -266,8 +267,8 @@ export const createSending = (product) => {
 	};
 
 	/**
-	 * Queue outgoing webhook events (sent right after the request, signed): Notifications' own events that the Events
-	 * setting picks, to the URLs that take the type.
+	 * Queue outgoing webhook events (sent right after the request, signed): Notifications' own events, to the URLs that
+	 * take the type (each URL names its events, or takes every one).
 	 * @param {Site} s
 	 * @param {string} type
 	 * @param {Record<string, unknown>} data
@@ -275,8 +276,6 @@ export const createSending = (product) => {
 	const emit = async (s, type, data) => {
 		if (!s.on.includes('webhooks')) return;
 		if (typeof (await product.connections.value(s.websiteId, 'webhook_secret')) !== 'string') return;
-		const { events } = await product.settings.values(s.websiteId, 'webhooks');
-		if (!Array.isArray(events) || !events.includes(type)) return;
 		const targets = urlsFor(await product.lists.webhookUrls(s.websiteId), type);
 		if (targets.length === 0) return;
 		const body = JSON.stringify({
@@ -293,8 +292,7 @@ export const createSending = (product) => {
 	 * Queue another product's event (for example `payments.payment.paid`, PLAN 0.8.7 and 0.8.10 K5) for the merchant's
 	 * webhook URLs, signed and retried like Notifications' own. The webhook keeps the product's own event id and time
 	 * when it sent them (so the merchant's server can match it with that product's `GET /v1/events`), else it gets a
-	 * new id and now. Each event goes to the URLs that take its type (PLAN 0.8.10 N5); the Events setting picks among
-	 * Notifications' own events only.
+	 * new id and now. Each event goes to the URLs that take its type (PLAN 0.8.10 N5).
 	 * @param {Site} s
 	 * @param {import('../core/webhooks.js').ForwardedEvent} event
 	 * @returns {Promise<number>} deliveries queued (0 without the signing secret or URLs)
@@ -349,6 +347,7 @@ export const createSending = (product) => {
 					extra.headers = { 'List-Unsubscribe': `<${link}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
 				}
 			}
+			const { templateLanguage } = channel === 'whatsapp' ? await product.settings.values(s.websiteId, 'whatsapp') : {};
 			return product.providers.sendMessage(channel, value, {
 				to: message.address,
 				subject: message.subject,
@@ -356,7 +355,7 @@ export const createSending = (product) => {
 				parameters: message.parameters,
 				providerTemplate: message.providerTemplate,
 				buttons: message.buttons,
-				language: message.language,
+				language: metaLanguageOf(message.language, templateLanguage),
 				...extra,
 			});
 		}

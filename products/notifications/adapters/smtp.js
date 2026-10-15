@@ -2,8 +2,8 @@
  * SMTP email adapter (PLAN 0.8.5): sends email through the merchant's own SMTP server
  * with nodemailer, using the merchant's `email` connection.
  *
- * - **Value**: the dashboard's form `{ host, port?, secure?, username, password, from? }`. Port 465 (the default) means
- *   implicit TLS; another port means STARTTLS, which is required.
+ * - **Value**: the dashboard's form `{ host, port?, secure?, username, password }` (its From goes with each message).
+ *   Port 465 (the default) means implicit TLS; another port means STARTTLS, which is required.
  * - **TLS** is required (implicit TLS, or `requireTLS` STARTTLS) and certificates are verified against the host name,
  *   TLS 1.2 or later. Only hosts on the development allowlist (the outbound policy's `allowHosts`, emptied by app-kit in
  *   production) may talk plain SMTP.
@@ -74,7 +74,7 @@ const RESERVED_HEADERS = new Set([
  * @property {string} to one address
  * @property {string} subject
  * @property {string} text
- * @property {string} [from] `addr@host` or `Name <addr@host>`; default the descriptor's `from`, else the username
+ * @property {string} from `addr@host` or `Name <addr@host>` (the connection's From)
  * @property {string} [replyTo]
  * @property {Record<string, string>} [headers] extra headers (no reserved names, no CR/LF)
  */
@@ -106,7 +106,7 @@ const isMailbox = (value) => {
  * @param {Record<string, unknown>} descriptor
  * @param {import('@ss/net').OutboundPolicy} policy
  * @returns {{ host: string, port: number, secure: boolean, allowlisted: boolean, ip: boolean, username: string,
- *   password: string, from?: string }}
+ *   password: string }}
  */
 export const smtpSettingsOf = (descriptor, policy) => {
 	if (typeof descriptor.host !== 'string') throw kitError('connection_invalid', 'smtp connection needs a host');
@@ -125,8 +125,6 @@ export const smtpSettingsOf = (descriptor, policy) => {
 	const { username, password } = descriptor;
 	if (typeof username !== 'string' || username === '' || typeof password !== 'string' || password === '')
 		throw kitError('connection_invalid', 'smtp connection needs username and password');
-	if (descriptor.from !== undefined && !isMailbox(descriptor.from))
-		throw kitError('connection_invalid', 'smtp connection from is not a valid address');
 	return {
 		host: checked.host,
 		port,
@@ -135,25 +133,22 @@ export const smtpSettingsOf = (descriptor, policy) => {
 		ip: checked.ip,
 		username,
 		password,
-		...(typeof descriptor.from === 'string' ? { from: descriptor.from } : {}),
 	};
 };
 
 /**
  * Validate a message and build the nodemailer mail object.
  * @param {unknown} message
- * @param {string | undefined} defaultFrom
  * @returns {Record<string, unknown>}
  */
-const mailOf = (message, defaultFrom) => {
+const mailOf = (message) => {
 	if (!isObject(message)) throw kitError('invalid_argument', 'message must be an object');
-	const { to, subject, text, replyTo, headers } = message;
+	const { to, subject, text, from, replyTo, headers } = message;
 	if (!isAddress(to)) throw kitError('invalid_argument', 'message.to must be an email address');
 	if (typeof subject !== 'string' || subject.length === 0 || subject.length > 998 || /[\r\n]/.test(subject))
 		throw kitError('invalid_argument', 'message.subject must be 1..998 characters on one line');
 	if (typeof text !== 'string' || text.length > MAX_BODY)
 		throw kitError('invalid_argument', 'message.text must be a string up to 1 MiB');
-	const from = message.from ?? defaultFrom;
 	if (!isMailbox(from)) throw kitError('invalid_argument', 'message.from must be an email address');
 	if (replyTo !== undefined && !isMailbox(replyTo))
 		throw kitError('invalid_argument', 'message.replyTo must be an email address');
@@ -190,7 +185,6 @@ const mailOf = (message, defaultFrom) => {
 export const createSmtpMessaging = ({ descriptor, policy, createTransport = nodemailerTransport, timeouts = {} }) => {
 	const s = smtpSettingsOf(descriptor, policy);
 	const t = { ...DEFAULT_TIMEOUTS, ...timeouts };
-	const defaultFrom = s.from ?? (isAddress(s.username) ? s.username : undefined);
 	// plain SMTP only for allowlisted development hosts; everyone else uses implicit TLS or required STARTTLS
 	const requireTLS = !s.secure && !s.allowlisted;
 
@@ -254,7 +248,7 @@ export const createSmtpMessaging = ({ descriptor, policy, createTransport = node
 		 * @returns {Promise<{ id: string | null }>}
 		 */
 		send: async (message) => {
-			const mail = mailOf(message, defaultFrom);
+			const mail = mailOf(message);
 			return withTransport(async (transport) => {
 				const info = await transport.sendMail(mail);
 				return { id: typeof info?.messageId === 'string' ? info.messageId : null };

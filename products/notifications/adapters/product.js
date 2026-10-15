@@ -178,8 +178,8 @@ export const createProductInstance = (options) => {
 
 	/**
 	 * Notifications' own part of the website Setup sheet: the customer channels that are on and, while Outgoing webhooks
-	 * is on, the events it sends (its own as the Events setting picks them, and other products') and its webhook URLs by
-	 * host only. Never a secret; it reads the webhooks settings and the one list only while that feature is on.
+	 * is on, the events it sends (its own and other products') and its webhook URLs by host only. Never a secret; it
+	 * reads the one list only while that feature is on.
 	 * @param {{ websiteId: string, on: string[] }} website
 	 */
 	const setupPart = async ({ websiteId, on }) => {
@@ -193,19 +193,14 @@ export const createProductInstance = (options) => {
 			},
 		];
 		if (!on.includes('webhooks')) return { summaries };
-		const [{ events }, urls] = await Promise.all([
-			product.settings.values(websiteId, 'webhooks'),
-			lists.webhookUrls(websiteId),
-		]);
-		const own = WEBHOOK_EVENTS.filter((type) => Array.isArray(events) && events.includes(type));
-		const others = 'the events other products forward (for example payments.payment.paid)';
+		const urls = await lists.webhookUrls(websiteId);
 		return {
 			lists: { webhook_urls: webhookUrlsSummary(urls) },
 			summaries: [
 				...summaries,
 				{
 					title: 'Webhook events',
-					text: own.length > 0 ? `${own.join(', ')}, plus ${others}.` : `None of Notifications' own; only ${others}.`,
+					text: `${WEBHOOK_EVENTS.slice(0, -1).join(', ')} and ${WEBHOOK_EVENTS.at(-1)}, plus the events other products forward (for example payments.payment.paid); each URL takes the events it names, or every event.`,
 				},
 			],
 		};

@@ -18,6 +18,13 @@
 			"description": "Short: now, then 1 and 5 minutes later. Long: now, then 5 and 15 minutes and 1, 3 and 6 hours later. Retries go out on the next uses of your website; a message keeps the plan it was sent with.",
 			"default": "short",
 			"enum": ["short", "long"]
+		},
+		"templateLanguage": {
+			"type": "string",
+			"title": "Language of your Meta templates",
+			"default": "en",
+			"maxLength": 10,
+			"description": "The language code your WhatsApp templates are approved in at Meta, for example en, en_US, es or ur (empty: en). A template's own language version (Multi-language templates) goes in its language as Meta writes it, for example pt_BR for pt-BR."
 		}
 	}
 }

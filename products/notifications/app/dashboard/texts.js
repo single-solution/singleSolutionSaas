@@ -126,8 +126,7 @@ export const TEXTS = Object.freeze({
 			none: 'No webhook URLs yet.',
 			url: 'URL {n}',
 			events: 'Events it takes',
-			eventsHelp:
-				'One type per line, for example message.failed or payments.payment.paid. Empty: every event (Notifications’ own events as the Events setting picks them).',
+			eventsHelp: 'One type per line, for example message.failed or payments.payment.paid. Empty: every event.',
 			add: 'Add URL',
 			remove: 'Remove URL',
 			error: 'URL {n}: {message}',
