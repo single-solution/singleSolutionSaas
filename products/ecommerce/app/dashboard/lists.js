@@ -1,7 +1,7 @@
 'use client';
 /**
- * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, delivery zones, tax rules and booking
- * hours, and the pieces the order flow editor (`./flow-editor.js`), the condition grades editor (`./grades.js`) and the
+ * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, delivery zones, tax rules, booking
+ * hours and role prices, and the pieces the order flow editor (`./flow-editor.js`), the condition grades editor (`./grades.js`) and the
  * item types editor (`./item-types.js`) share. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
  * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
  * @module
@@ -268,7 +268,7 @@ function ListEditor({ websiteId, list, title, help, itemLabel, max, blank, load 
 						<div className="space-y-4">
 							{items.length === 0 ? <p className="text-sm text-muted">{L.none}</p> : null}
 							{items.map((item, index) => (
-								<div key={index} className="space-y-3 rounded-xl bg-surface-2 p-4">
+								<div key={index} data-entry="" className="space-y-3 rounded-xl bg-surface-2 p-4">
 									<EntryHead
 										label={itemLabel}
 										index={index}
@@ -560,6 +560,74 @@ export function TaxRulesEditor({ websiteId, off }) {
 						rows={3}
 						value={rule.regions.join('\n')}
 						onChange={(event) => set({ regions: event.target.value.split('\n') })}
+					/>
+				</FieldGrid>
+			)}
+		/>
+	);
+}
+
+const R = L.rolePrices;
+
+/**
+ * Role prices (PLAN 0.8.10 E19, `role_prices`, feature role_pricing): an Accounts role, the percent off the goods its
+ * signed-in shoppers get (0–90) and the label quotes, orders and invoices show (empty: the server's default).
+ * @param {EditorProps} props
+ */
+export function RolePricesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="role_prices"
+			title={R.title}
+			help={R.help}
+			itemLabel={R.item}
+			max={20}
+			off={off}
+			blank={() => ({ role: '', percent: '', label: '' })}
+			load={(entry) => ({ role: entry.role ?? '', percent: String(entry.percent ?? ''), label: entry.label ?? '' })}
+			clean={(entry) => {
+				const percent = String(entry.percent).trim();
+				return {
+					role: String(entry.role ?? '').trim(),
+					percent: percent === '' ? Number.NaN : Number(percent),
+					label: String(entry.label ?? '').trim(),
+				};
+			}}
+			check={(entries) =>
+				entries
+					.filter((entry) => {
+						const percent = Number(String(entry.percent).trim() || Number.NaN);
+						return !Number.isFinite(percent) || percent < 0 || percent > 90;
+					})
+					.map((entry) => fill(R.badPercent, { role: String(entry.role ?? '').trim() || R.item }))
+			}
+			render={(entry, set) => (
+				<FieldGrid>
+					<Input
+						label={R.role}
+						help={R.roleHelp}
+						value={entry.role}
+						maxLength={40}
+						autoComplete="off"
+						onChange={(event) => set({ role: event.target.value })}
+					/>
+					<Input
+						label={R.percent}
+						type="number"
+						min={0}
+						max={90}
+						step="0.01"
+						inputMode="decimal"
+						value={entry.percent}
+						onChange={(event) => set({ percent: event.target.value })}
+					/>
+					<Input
+						label={R.label}
+						help={R.labelHelp}
+						value={entry.label}
+						maxLength={60}
+						onChange={(event) => set({ label: event.target.value })}
 					/>
 				</FieldGrid>
 			)}

@@ -121,6 +121,10 @@ export const TEXTS = Object.freeze({
 			couriers: Object.freeze({ title: 'Couriers', help: 'Couriers with tracking links, and booking with courier APIs.' }),
 			promotions: Object.freeze({ title: 'Promotions', help: 'Coupons, deals, bundles and buy X get Y.' }),
 			loyalty: Object.freeze({ title: 'Loyalty', help: 'Earning, redeeming and expiry of points.' }),
+			rolePrices: Object.freeze({
+				title: 'Role prices',
+				help: 'A percent off the goods for signed-in shoppers of an Accounts role, such as trade or member prices.',
+			}),
 			reviews: Object.freeze({ title: 'Reviews', help: 'Who may review and how reviews are moderated.' }),
 			wishlist: Object.freeze({
 				title: 'Wishlist and alerts',
@@ -306,6 +310,17 @@ export const TEXTS = Object.freeze({
 			minDays: 'Delivery days from',
 			maxDays: 'Delivery days to',
 			badAmount: '{zone}: "{value}" is not an amount in {currency}.',
+		}),
+		rolePrices: Object.freeze({
+			title: 'Role prices',
+			help: 'A signed-in shopper whose Accounts role is listed gets its percent off the goods after offers, before points, delivery and tax. Guests never get it.',
+			item: 'Role',
+			role: 'Accounts role',
+			roleHelp: 'The role key as Accounts names it.',
+			percent: 'Percent off (0–90)',
+			label: 'Label',
+			labelHelp: 'Shown on the cart, orders and invoices (empty: Member discount).',
+			badPercent: '{role}: the percent is a number from 0 to 90.',
 		}),
 		taxRules: Object.freeze({
 			title: 'Tax rules',

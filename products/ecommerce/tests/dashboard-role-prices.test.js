@@ -1,0 +1,106 @@
+// @vitest-environment jsdom
+/**
+ * The role prices editor in Settings → Role prices (PLAN 0.8.10 E19, the guide's promise), in the browser (jsdom) on a
+ * faked dashboard API: it lists the saved roles, adds one, refuses a percent outside 0–90 before saving, and saves the
+ * whole list with one PUT that the server's check takes. The Settings sections show Role prices with the feature only.
+ */
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
+import { RolePricesEditor } from '../app/dashboard/lists.js';
+import { SettingsSections } from '../app/dashboard/settings.js';
+import { checkRolePrices } from '../core/role-pricing.js';
+
+const WEBSITE = 'web_1';
+const PATH = `/v1/dashboard/websites/${WEBSITE}/lists/role_prices`;
+
+/** The lists the editor saved. @type {any[]} */
+let saved = [];
+
+/** The dashboard API: the saved list, and a save checked as the server checks it. */
+const serve = () => {
+	saved = [];
+	/** @type {any} */
+	let list = [{ role: 'wholesale', percent: 15, label: 'Trade price' }];
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (/** @type {string} */ path, /** @type {RequestInit} */ init = {}) => {
+			if (path !== PATH) return new Response(JSON.stringify({ status: 404 }), { status: 404 });
+			if (init.method === 'PUT') {
+				const { value } = JSON.parse(String(init.body));
+				saved.push(value);
+				const checked = checkRolePrices(value);
+				if (!checked.ok)
+					return new Response(
+						JSON.stringify({ status: 422, errors: checked.errors.map((message) => ({ path: '/value', message })) }),
+						{ status: 422 },
+					);
+				list = checked.value;
+			}
+			return new Response(JSON.stringify({ value: list }), { status: 200 });
+		}),
+	);
+};
+
+/** Let the loads answer. */
+const settle = async () => {
+	for (let i = 0; i < 6; i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+};
+
+afterEach(() => {
+	cleanup();
+	vi.unstubAllGlobals();
+});
+
+describe('the role prices editor', () => {
+	it('lists the roles, adds one and saves the list the server takes', async () => {
+		serve();
+		const { container } = render(<RolePricesEditor websiteId={WEBSITE} />);
+		await settle();
+		expect(byLabel(container, 'Accounts role').getAttribute('value') ?? '').toBe('wholesale');
+		expect(/** @type {HTMLInputElement} */ (byLabel(container, 'Percent off (0–90)')).value).toBe('15');
+		await act(async () => click(byText(container, 'Add', 'button')));
+		const roles = /** @type {HTMLInputElement[]} */ ([...container.querySelectorAll('input')]).filter(
+			(input) => input.closest('[data-entry]') !== null,
+		);
+		expect(roles.length).toBeGreaterThan(3);
+		const entries = [...container.querySelectorAll('[data-entry]')];
+		const second = /** @type {HTMLElement} */ (entries[1]);
+		type(byLabel(second, 'Accounts role'), 'staff');
+		type(byLabel(second, 'Percent off (0–90)'), '95');
+		await act(async () => click(byText(container, 'Save list', 'button')));
+		await settle();
+		// refused before anything is sent
+		expect(saved).toHaveLength(0);
+		expect(container.textContent).toContain('staff: the percent is a number from 0 to 90.');
+		type(byLabel(second, 'Percent off (0–90)'), '10');
+		await act(async () => click(byText(container, 'Save list', 'button')));
+		await settle();
+		expect(saved).toEqual([
+			[
+				{ role: 'wholesale', percent: 15, label: 'Trade price' },
+				{ role: 'staff', percent: 10, label: '' },
+			],
+		]);
+		expect(checkRolePrices(saved[0]).ok).toBe(true);
+		expect(container.textContent).toContain('Saved');
+		// the server's refusal is listed (a role twice)
+		await act(async () => click(byText(container, 'Add', 'button')));
+		const third = /** @type {HTMLElement} */ ([...container.querySelectorAll('[data-entry]')][2]);
+		type(byLabel(third, 'Accounts role'), 'staff');
+		type(byLabel(third, 'Percent off (0–90)'), '5');
+		await act(async () => click(byText(container, 'Save list', 'button')));
+		await settle();
+		expect(container.textContent).toContain("Role 'staff' is listed twice.");
+	});
+});
+
+describe('Settings → Role prices', () => {
+	it('is a section of its own while Role pricing is seen', () => {
+		const { container } = render(
+			<SettingsSections features={[]} forms={() => null} extras={{ rolePrices: <p>Role prices editor</p> }} />,
+		);
+		expect(container.textContent).toContain('Role prices');
+		expect(container.textContent).toContain('Role prices editor');
+	});
+});

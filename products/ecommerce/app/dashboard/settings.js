@@ -2,7 +2,7 @@
 /**
  * Settings tab (PLAN 0.4.3, 0.8.8): the kit's settings forms of the features the viewer may see, split into sections per
  * area of the shop (picked from an inner list, so no long scroll), with the list editors (order flow, couriers,
- * delivery zones, tax rules, grades, booking hours), the widget texts, the theme and the Format (PLAN 0.8.10 K7, side
+ * delivery zones, tax rules, grades, booking hours, role prices), the widget texts, the theme and the Format (PLAN 0.8.10 K7, side
  * by side in one masonry). Forms are rendered from the schemas the settings API returns; the `checkout` feature's
  * settings are spread over Checkout and payment, Orders and messages, and Policies. A section shows only when it has
  * something for the visible features (merchants: switched-on features; admins: all, off ones marked). Text settings
@@ -16,7 +16,7 @@ import { call, fill, useLoad } from './api.js';
 import { GradesEditor } from './grades.js';
 import { ItemTypesEditor } from './item-types.js';
 import { OrderFlowEditor } from './flow-editor.js';
-import { BookingHoursEditor, CouriersEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
+import { BookingHoursEditor, CouriersEditor, RolePricesEditor, TaxRulesEditor, ZonesEditor } from './lists.js';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, hasSettings } from './parts.js';
 import { TEXTS } from './texts.js';
 
@@ -37,6 +37,7 @@ const SECTION_ORDER = /** @type {SectionId[]} */ ([
 	'couriers',
 	'promotions',
 	'loyalty',
+	'rolePrices',
 	'reviews',
 	'wishlist',
 	'returns',
@@ -70,6 +71,7 @@ const FEATURE_SECTION = Object.freeze({
 	deals: 'promotions',
 	bundles: 'promotions',
 	loyalty: 'loyalty',
+	role_pricing: 'rolePrices',
 	reviews: 'reviews',
 	wishlist: 'wishlist',
 	alerts: 'wishlist',
@@ -273,6 +275,9 @@ export function SettingsTab({ websiteId: id }) {
 							taxes: seen('taxes') ? <TaxRulesEditor websiteId={websiteId} off={off('taxes')} /> : null,
 							orders: seen('checkout') ? <OrderFlowEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							couriers: seen('checkout') ? <CouriersEditor websiteId={websiteId} off={off('checkout')} /> : null,
+							rolePrices: seen('role_pricing') ? (
+								<RolePricesEditor websiteId={websiteId} off={off('role_pricing')} />
+							) : null,
 							texts: (
 								<Loaded answer={texts.answer}>
 									{(found) => (
