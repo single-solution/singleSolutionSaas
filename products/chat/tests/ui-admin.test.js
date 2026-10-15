@@ -303,7 +303,8 @@ describe('inbox', () => {
 		]);
 		expect(fieldIn(root, 'Size').value).toBe('3');
 		expect(fieldIn(root, TEXTS['inbox.transcriptEmail']).value).toBe('ana@x.co');
-		expect(checkIn(root, TEXTS['inbox.pauseAi']).checked).toBe(true);
+		// without AI replies there is no AI to pause
+		expect(root.querySelector('.ai-controls')).toBeNull();
 		const assign = fieldIn(root, TEXTS['inbox.assign']);
 		expect(textsIn(assign, 'option')).toEqual([TEXTS['inbox.unassigned'], 'Sam · Online · Full', 'b@x.co · Away']);
 		expect(assign.value).toBe('s1');
@@ -313,11 +314,6 @@ describe('inbox', () => {
 		const statusSelects = [...root.querySelectorAll('.manage select')];
 		await change(/** @type {HTMLSelectElement} */ (statusSelects[0]), 'resolved');
 		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({ status: 'resolved' });
-		const pause = checkIn(root, TEXTS['inbox.pauseAi']);
-		pause.checked = false;
-		pause.dispatchEvent(new window.Event('change'));
-		await flush();
-		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({ aiPaused: false });
 		patchAnswer = () => problem(409, 'staff_full');
 		await change(assign, 's2');
 		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({ assignedTo: 's2' });
@@ -472,27 +468,166 @@ describe('inbox', () => {
 		expect(server.last('POST /v1/admin/uploads')?.body).toEqual({ name: 'notes.txt', type: 'text/plain', size: 5 });
 	});
 
-	it('hands a chat waiting for a person back to the AI (CH-3)', async () => {
+	it('pauses the AI with why, resumes it, hands a waiting chat back; a 403 hides only these (C11, CH-3)', async () => {
 		/** @type {any} */
-		let conversation = full({ aiPaused: false });
+		let conversation = full({ aiPaused: false, waiting: false });
+		let aiAnswer = () => answer(200, { conversation });
 		const { server, hosts } = await startAdmin({
 			features: ['inbox', 'ai_replies'],
+			look: { format: { locale: 'en-US', times: 'business' }, timeZone: 'UTC' },
 			routes: {
 				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
 				'GET /v1/admin/conversations/c1': () => answer(200, { conversation, messages: [message(1, 'visitor')] }),
 				'POST /v1/admin/conversations/c1/read': () => answer(204),
-				'PATCH /v1/admin/conversations/c1': () => {
-					conversation = { ...conversation, waiting: false };
-					return answer(200, { conversation });
+				'PUT /v1/admin/conversations/c1/ai': (call) => {
+					conversation = call.body.paused
+						? {
+								...conversation,
+								aiPaused: true,
+								aiPausedBy: { kind: 'staff', id: 's1', name: 'Sam' },
+								aiPausedAt: AT,
+								aiPausedReason: call.body.reason ?? null,
+							}
+						: { ...conversation, aiPaused: false, waiting: false };
+					return aiAnswer();
 				},
 			},
 		});
 		const root = shadow(hosts.inbox);
 		await click(buttonIn(root, 'Ana'));
-		expect(shows(root, TEXTS['inbox.handBack'])).toBe(true);
-		await click(buttonIn(root, TEXTS['inbox.handBack']));
-		expect(server.last('PATCH /v1/admin/conversations/c1')?.body).toEqual({ aiPaused: false });
-		expect(shows(root, TEXTS['inbox.handBack'])).toBe(false);
+		const part = /** @type {HTMLElement} */ (root.querySelector('.ai-controls'));
+		expect([shows(part, TEXTS['inbox.pauseAi']), shows(part, TEXTS['inbox.resumeAi'])]).toEqual([true, false]);
+		expect(shows(part, TEXTS['inbox.handBack'])).toBe(false);
+		fieldIn(part, TEXTS['inbox.pauseReason']).value = ' Checking stock ';
+		await click(buttonIn(part, TEXTS['inbox.pauseAi']));
+		expect(server.last('PUT /v1/admin/conversations/c1/ai')?.body).toEqual({ paused: true, reason: 'Checking stock' });
+		expect(part.querySelector('.meta')?.textContent).toBe('AI paused by Sam, Oct 1, 2026, 10:00 AM · Checking stock');
+		expect([shows(part, TEXTS['inbox.pauseAi']), shows(part, TEXTS['inbox.resumeAi'])]).toEqual([false, true]);
+		expect(fieldIn(part, TEXTS['inbox.pauseReason']).value).toBe('');
+		await click(buttonIn(part, TEXTS['inbox.resumeAi']));
+		expect(server.last('PUT /v1/admin/conversations/c1/ai')?.body).toEqual({ paused: false });
+		// a chat waiting for a person goes back to the AI
+		conversation = { ...conversation, waiting: true };
+		await click(buttonIn(root, TEXTS['inbox.close']));
+		await click(buttonIn(root, 'Ana'));
+		await click(buttonIn(part, TEXTS['inbox.handBack']));
+		expect(server.last('PUT /v1/admin/conversations/c1/ai')?.body).toEqual({ paused: false });
+		expect(shows(part, TEXTS['inbox.handBack'])).toBe(false);
+		// without the right to pause (the inbox setting), only the AI controls go
+		aiAnswer = () => problem(403, 'forbidden');
+		await click(buttonIn(part, TEXTS['inbox.pauseAi']));
+		expect(part.hidden).toBe(true);
+		expect(root.textContent).toContain(TEXTS['inbox.noAccess']);
+		expect(/** @type {HTMLElement} */ (root.querySelector('.manage')).hidden).toBe(false);
+		// and stay hidden on the next conversation shown
+		await click(buttonIn(root, TEXTS['inbox.close']));
+		await click(buttonIn(root, 'Ana'));
+		expect(part.hidden).toBe(true);
+	});
+
+	it('deletes a conversation (asked twice), calls the visitor, and shows earlier messages (C8, C11)', async () => {
+		let removed = () => problem(403, 'forbidden');
+		const { server, hosts } = await startAdmin({
+			features: ['inbox'],
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
+				'GET /v1/admin/conversations/c1': (call) =>
+					call.url.searchParams.get('before') === '51'
+						? answer(200, { conversation: full(), messages: [message(49, 'visitor'), message(50, 'ai')], earlier: false })
+						: answer(200, {
+								conversation: full({ visitor: { kind: 'guest', id: 'g1', name: 'Ana', phone: '+1 (202) 555-0143' } }),
+								messages: [message(51, 'visitor'), message(52, 'staff')],
+								earlier: true,
+							}),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+				'DELETE /v1/admin/conversations/c1': () => removed(),
+			},
+		});
+		const root = shadow(hosts.inbox);
+		await click(buttonIn(root, 'Ana'));
+		const call = /** @type {HTMLAnchorElement} */ (root.querySelector('.visitor a.call'));
+		expect([call.textContent, call.getAttribute('href')]).toEqual([TEXTS['inbox.call'], 'tel:+12025550143']);
+		// earlier messages above the first one shown
+		await click(buttonIn(root, TEXTS['inbox.earlier']));
+		expect(server.last('GET /v1/admin/conversations/c1')?.url.searchParams.get('limit')).toBe('50');
+		expect([...root.querySelectorAll('.log li.msg')].map((node) => /** @type {HTMLElement} */ (node).dataset.seq)).toEqual([
+			'49',
+			'50',
+			'51',
+			'52',
+		]);
+		expect(shows(root, TEXTS['inbox.earlier'])).toBe(false);
+		// delete: asked twice; without inbox.manage the button goes
+		await click(buttonIn(root, TEXTS['inbox.delete']));
+		expect(server.all('DELETE /v1/admin/conversations/c1')).toHaveLength(0);
+		await click(buttonIn(root, TEXTS['inbox.confirmDelete']));
+		expect(root.textContent).toContain(TEXTS['inbox.noAccess']);
+		expect(shows(root, TEXTS['inbox.confirmDelete'])).toBe(false);
+		resetPage();
+		removed = () => answer(204);
+		const again = await startAdmin({
+			features: ['inbox'],
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 0 }),
+				'GET /v1/admin/conversations/c1': () => answer(200, { conversation: full(), messages: [] }),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+				'DELETE /v1/admin/conversations/c1': () => removed(),
+			},
+		});
+		const other = shadow(again.hosts.inbox);
+		// no phone that can be called: no Call link
+		await click(buttonIn(other, 'Ana'));
+		expect(other.querySelector('a.call')).toBeNull();
+		await click(buttonIn(other, TEXTS['inbox.delete']));
+		await click(buttonIn(other, TEXTS['inbox.confirmDelete']));
+		expect(again.server.all('DELETE /v1/admin/conversations/c1')).toHaveLength(1);
+		expect(other.querySelector('.log')).toBeNull();
+		expect(other.querySelector('.list-part > .status')?.textContent).toBe(TEXTS['inbox.deleted']);
+	});
+
+	it('edits the one note of a chat when notes are one per chat; the checks never undo what staff type (C11)', async () => {
+		/** @type {any} */
+		let conversation = full({ note: 'VIP customer' });
+		let noteAnswer = () => answer(200, { conversation });
+		const { server, hosts, time } = await startAdmin({
+			features: ['inbox', 'internal_notes', 'custom_fields'],
+			settings: { customFields: [{ key: 'size', label: 'Size', type: 'number', options: [] }] },
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [item()], nextCursor: null, hasMore: false, unread: 2 }),
+				'GET /v1/admin/conversations/c1': () => answer(200, { conversation, messages: [message(1, 'visitor')] }),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+				'PUT /v1/admin/conversations/c1/note': (call) => {
+					conversation = { ...conversation, note: call.body.text };
+					return noteAnswer();
+				},
+			},
+		});
+		const root = shadow(hosts.inbox);
+		await click(buttonIn(root, 'Ana'));
+		// one note: no Add internal note, an editor with the note
+		expect(shows(root, TEXTS['inbox.addNote'])).toBe(false);
+		const box = fieldIn(root, TEXTS['inbox.note']);
+		expect(box.value).toBe('VIP customer');
+		// staff type; a check brings the conversation again and leaves their words
+		box.value = 'VIP customer, call first';
+		fieldIn(root, 'Size').value = '5';
+		conversation = { ...conversation, fields: { size: 4 } };
+		await time.advance(10_000);
+		expect(server.all('GET /v1/admin/conversations/c1').length).toBeGreaterThan(1);
+		expect([box.value, fieldIn(root, 'Size').value]).toEqual(['VIP customer, call first', '5']);
+		await submit(box);
+		expect(server.last('PUT /v1/admin/conversations/c1/note')?.body).toEqual({ text: 'VIP customer, call first' });
+		expect(root.textContent).toContain(TEXTS['inbox.saved']);
+		// a note changed elsewhere shows once staff are not typing in it
+		conversation = { ...conversation, note: 'Called' };
+		await time.advance(10_000);
+		expect(box.value).toBe('Called');
+		noteAnswer = () => problem(422, 'validation_failed', { errors: [{ message: 'x' }] });
+		await submit(box);
+		expect(root.textContent).toContain(TEXTS['inbox.noteInvalid']);
+		noteAnswer = () => problem(403, 'forbidden');
+		await submit(box);
+		expect(/** @type {HTMLElement} */ (box.closest('form')).hidden).toBe(true);
 	});
 
 	it('lists the leads with Open the chat and Delete (asked twice), a page at a time', async () => {

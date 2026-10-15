@@ -1,18 +1,20 @@
 /**
  * The admin widget `inbox` (permissions `inbox.read`, `inbox.reply`, `inbox.manage`): conversations newest activity
  * first, with filters (status, assigned, waiting, guest or signed in), search and unread counts; a conversation with
- * its messages (AI and staff answers formatted as the visitor sees them) and internal notes, reply (with attachments of
- * the staff file types and size, C12, and saved replies), notes, status, AI paused, Hand back to
- * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context
- * panel with the AI summary, transcripts and rating requests; your own presence and the staff's max chats; the leads
- * visitors left (lead capture on), with Open the chat and Delete. Only parts of switched-on features show, and a part whose
- * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
- * wide the open conversation sits beside the list; in a narrow one it replaces the list until it is closed (PLAN 0.6:
- * by the widget's own width, a container query).
+ * its messages (AI and staff answers formatted as the visitor sees them, earlier ones a page at a time, C8) and internal
+ * notes, reply (with attachments of the staff file types and size, C12, and saved replies), notes (a timeline, or the
+ * one note of a chat, C11), status, the AI in the chat (paused with why, resumed, or a chat waiting for a person handed
+ * back, CH-3; by reply or manage rights as the inbox setting says, C11), assignment (with presence and Full), custom
+ * field values, a Call link for the visitor's phone, Delete (asked twice), the context panel with the AI summary,
+ * transcripts and rating requests; your own presence and the staff's max chats; the leads visitors left (lead capture
+ * on), with Open the chat and Delete. Only parts of switched-on features show, and a part whose route answers 403
+ * hides itself (only that part). A field staff are typing in is not overwritten by the checks. It checks for news with
+ * the same back-off as the visitor chat. Where the widget is wide the open conversation sits beside the list; in a
+ * narrow one it replaces the list until it is closed (PLAN 0.6: by the widget's own width, a container query).
  * @module
  */
 import { formatText, mountWidget } from '@ss/app-kit/widget';
-import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, STAFF_TYPES } from '../core/widgets.js';
+import { MAX_MESSAGE_LENGTH, MAX_STAFF_ATTACHMENT_BYTES, PAGE_MAX, STAFF_TYPES } from '../core/widgets.js';
 import {
 	attachmentNode,
 	buttonOf,
@@ -204,22 +206,34 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			};
 
 			// one conversation
+			/** Parts a 403 hid: they stay hidden whatever the conversation shows. @type {Set<Element>} */
+			const denied = new Set();
+			/** @param {Element} node */
+			const deny = (node) => {
+				denied.add(node);
+				setHidden(node, true);
+			};
+			/** @param {Element} node @param {boolean} visible */
+			const showIf = (node, visible) => setHidden(node, !visible || denied.has(node));
 			const messages = element(doc, 'ul', { class: 'log' });
+			// older messages, a page at a time (C8)
+			const older = buttonOf(doc, t('inbox.earlier'), { class: 'link small', hidden: '' });
 			const header = element(doc, 'div', { class: 'visitor' });
 			const detailNote = element(doc, 'p', { class: 'status', role: 'status' });
 			const manage = element(doc, 'div', { class: 'row manage' });
 			const statusPick = make.field('select', t('inbox.status'));
 			statusPick.input.append(...Object.entries(statuses).map(([value, label]) => element(doc, 'option', { value }, label)));
-			const paused = make.check(t('inbox.pauseAi'));
-			// a chat waiting for a person goes back to the AI (CH-3)
-			const handBack = buttonOf(doc, t('inbox.handBack'), { class: 'secondary', hidden: '' });
 			const assign = make.field('select', t('inbox.assign'));
-			manage.append(
-				statusPick.wrap,
-				paused.wrap,
-				...(on('ai_replies') ? [handBack] : []),
-				...(on('assignment') ? [assign.wrap] : []),
-			);
+			manage.append(statusPick.wrap, ...(on('assignment') ? [assign.wrap] : []));
+			// the AI in this chat (C11): paused with why, resumed, or a chat waiting for a person handed back (CH-3); reply
+			// or manage rights as the inbox setting says, so a 403 hides only these controls
+			const aiPart = element(doc, 'div', { class: 'row ai-controls' });
+			const pausedLine = element(doc, 'p', { class: 'meta' });
+			const reason = make.field('input', t('inbox.pauseReason'), { maxlength: '200' });
+			const pause = buttonOf(doc, t('inbox.pauseAi'), { class: 'secondary' });
+			const resume = buttonOf(doc, t('inbox.resumeAi'), { class: 'secondary' });
+			const handBack = buttonOf(doc, t('inbox.handBack'), { class: 'secondary' });
+			aiPart.append(pausedLine, reason.wrap, pause, resume, handBack);
 			const fields = (on('custom_fields') ? s.customFields : []).map((definition) => ({
 				definition,
 				...customInput(doc, make, t, definition),
@@ -233,8 +247,23 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					const values = {};
 					for (const field of fields) values[field.definition.key] = field.read();
 					const answer = await patch({ fields: values }, 'inbox.fieldsInvalid');
-					if (answer.status === 403) setHidden(fieldsForm, true);
+					if (answer.status === 403) deny(fieldsForm);
+					if (answer.ok) fillFields(true);
 					return answer.ok ? t('inbox.saved') : failure(answer, 'inbox.fieldsInvalid');
+				},
+			});
+			// one note per chat, when notes are set so (C11)
+			const noteText = make.field('textarea', t('inbox.note'), { rows: '3', maxlength: '4000' });
+			const noteForm = formPart(doc, {
+				nodes: [noteText.wrap],
+				label: t('common.save'),
+				submit: async () => {
+					const answer = await adminCall(api, 'PUT', `${path()}/note`, { text: noteText.input.value.trim() });
+					if (answer.status === 403) deny(noteForm);
+					if (!answer.ok) return failure(answer, 'inbox.noteInvalid');
+					current = answer.data.conversation;
+					fillNote(true);
+					return t('inbox.saved');
 				},
 			});
 			const context = contextPart({ ...kit, summary: on('ai_summary') });
@@ -263,22 +292,28 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				label: t('inbox.transcriptSend'),
 				submit: async () => {
 					const answer = await adminCall(api, 'POST', `${path()}/transcript`, { email: transcript.input.value.trim() });
-					if (answer.status === 403) setHidden(transcriptForm, true);
+					if (answer.status === 403) deny(transcriptForm);
 					return answer.ok ? t('inbox.transcriptSent') : failure(answer, 'inbox.emailInvalid');
 				},
 			});
 			const askRating = buttonOf(doc, t('inbox.askRating'), { class: 'secondary' });
+			// for good, asked twice (C11; inbox.manage)
+			const remove = buttonOf(doc, t('inbox.delete'), { class: 'secondary' });
 			const closeDetail = buttonOf(doc, t('inbox.close'), { class: 'secondary' });
 			const conversationPart = element(doc, 'section', { class: 'part' });
 			conversationPart.append(
 				header,
 				manage,
+				...(on('ai_replies') ? [aiPart] : []),
+				older,
 				messages,
 				replyForm,
+				...(on('internal_notes') ? [noteForm] : []),
 				...(fields.length > 0 ? [fieldsForm] : []),
 				...(on('context_panel') ? [context.part] : []),
 				...(on('transcripts') ? [transcriptForm] : []),
 				...(on('ratings') && s.ratings.askWhen === 'manual' ? [askRating] : []),
+				remove,
 				closeDetail,
 				detailNote,
 			);
@@ -301,8 +336,40 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				);
 				assign.input.value = current?.assignedTo?.id ?? '';
 			};
+			/**
+			 * Put a saved value in a field, unless staff changed the field since it was filled: the checks every few seconds
+			 * must not undo their typing. A newly opened conversation, or the field's own save, always fills it.
+			 * @param {HTMLInputElement | HTMLTextAreaElement} input @param {() => void} fill @param {boolean} always
+			 */
+			const refill = (input, fill, always) => {
+				const node = input;
+				if (!always && node.value !== node.dataset.filled) return;
+				fill();
+				node.dataset.filled = node.value;
+			};
+			/** @param {boolean} always */
+			const fillFields = (always) => {
+				for (const field of fields) refill(field.input, () => field.write(current.fields?.[field.definition.key]), always);
+			};
+			/** @param {boolean} always */
+			const fillNote = (always) => {
+				const input = noteText.input;
+				refill(
+					input,
+					() => {
+						input.value = typeof current.note === 'string' ? current.note : '';
+					},
+					always,
+				);
+			};
+			/** The number to call: + and digits of the visitor's phone (C11), else ''. */
+			const dialOf = () => {
+				const digits = String(current.visitor?.phone ?? '').replace(/[^\d+]/g, '');
+				return /^\+?\d{4,}$/.test(digits) ? digits : '';
+			};
 			/** Bring the controls up to date with `current`. */
 			const sync = () => {
+				const dial = dialOf();
 				header.replaceChildren(
 					element(doc, 'h3', {}, visitorName(current.visitor)),
 					element(
@@ -318,12 +385,32 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 							.filter(Boolean)
 							.join(' · '),
 					),
+					...(dial ? [element(doc, 'a', { href: `tel:${dial}`, class: 'call' }, t('inbox.call'))] : []),
 				);
 				statusPick.input.value = current.status;
-				paused.input.checked = Boolean(current.aiPaused);
-				setHidden(handBack, !current.waiting);
 				assign.input.value = current.assignedTo?.id ?? '';
-				for (const field of fields) field.write(current.fields?.[field.definition.key]);
+				const paused = current.aiPaused === true;
+				pausedLine.textContent = paused
+					? [
+							formatText(t('inbox.pausedBy'), {
+								name: current.aiPausedBy?.name ?? t('inbox.staffMember'),
+								time: when(current.aiPausedAt),
+							}),
+							current.aiPausedReason ?? '',
+						]
+							.filter(Boolean)
+							.join(' · ')
+					: '';
+				setHidden(pausedLine, !paused);
+				setHidden(reason.wrap, paused);
+				setHidden(pause, paused);
+				setHidden(resume, !paused || current.waiting);
+				setHidden(handBack, !current.waiting);
+				const single = typeof current.note === 'string';
+				showIf(noteForm, single);
+				showIf(addNote, !single);
+				fillFields(false);
+				fillNote(false);
 				context.show(current);
 				for (const each of messages.querySelectorAll('.seen')) each.remove();
 				const seenSeq = current.visitorSeenSeq;
@@ -386,7 +473,13 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				messages.replaceChildren();
 				detailNote.textContent = '';
 				transcript.input.value = current.visitor?.email ?? '';
+				reason.input.value = '';
+				remove.textContent = t('inbox.delete');
+				delete remove.dataset.sure;
 				addMessages(answer.data.messages ?? []);
+				setHidden(older, answer.data.earlier !== true);
+				fillFields(true);
+				fillNote(true);
 				sync();
 				detail.replaceChildren(conversationPart);
 				split.classList.add('open');
@@ -401,15 +494,33 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 				sync();
 				if (fresh && !doc.hidden) await markRead();
 			};
+			const closeConversation = () => {
+				current = null;
+				detail.replaceChildren();
+				split.classList.remove('open');
+			};
 			/** @param {Record<string, unknown>} body @param {string} [invalid] the text of a refused value */
 			const patch = async (body, invalid) => {
 				const answer = await adminCall(api, 'PATCH', path(), body);
 				if (answer.ok) current = answer.data.conversation;
-				if (answer.status === 403) setHidden(manage, true);
+				if (answer.status === 403) deny(manage);
 				sync();
 				detailNote.textContent = answer.ok ? t('inbox.saved') : failure(answer, invalid);
 				if (answer.ok) await load(true);
 				return answer;
+			};
+			/** Pause the AI with the reason typed, or resume it (C11). @param {boolean} paused */
+			const setAi = async (paused) => {
+				const why = reason.input.value.trim();
+				const answer = await adminCall(api, 'PUT', `${path()}/ai`, paused && why ? { paused, reason: why } : { paused });
+				if (answer.ok) {
+					current = answer.data.conversation;
+					reason.input.value = '';
+				}
+				if (answer.status === 403) deny(aiPart);
+				sync();
+				detailNote.textContent = answer.ok ? t('inbox.saved') : failure(answer);
+				if (answer.ok) await load(true);
 			};
 			/** @param {'messages' | 'notes'} kindOf @param {Record<string, unknown>} body */
 			const post = async (kindOf, body) => {
@@ -420,19 +531,37 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					sync();
 					detailNote.textContent = '';
 				} else {
-					if (answer.status === 403) setHidden(kindOf === 'notes' ? addNote : replyForm, true);
+					if (answer.status === 403) deny(kindOf === 'notes' ? addNote : replyForm);
 					detailNote.textContent = failure(answer, kindOf === 'notes' ? 'inbox.noteInvalid' : 'inbox.replyInvalid');
 				}
 				return answer;
 			};
 
 			statusPick.input.addEventListener('change', () => void patch({ status: statusPick.input.value }));
-			paused.input.addEventListener('change', () => void patch({ aiPaused: paused.input.checked }));
-			handBack.addEventListener('click', () => void patch({ aiPaused: false }));
+			pause.addEventListener('click', () => void setAi(true));
+			resume.addEventListener('click', () => void setAi(false));
+			handBack.addEventListener('click', () => void setAi(false));
 			assign.input.addEventListener(
 				'change',
 				() => void patch({ assignedTo: assign.input.value || null }, 'inbox.assignInvalid'),
 			);
+			older.addEventListener('click', async () => {
+				const first = /** @type {HTMLElement | null} */ (messages.querySelector('li.msg'));
+				if (!first) return;
+				const answer = await adminCall(api, 'GET', `${path()}?before=${first.dataset.seq}&limit=${PAGE_MAX}`);
+				if (!answer.ok) {
+					detailNote.textContent = failure(answer);
+					return;
+				}
+				for (const message of answer.data.messages ?? []) {
+					if (shown.has(message.id)) continue;
+					const node = messageNode(message);
+					shown.set(message.id, node);
+					messages.insertBefore(node, first);
+				}
+				setHidden(older, answer.data.earlier !== true);
+				sync();
+			});
 			replyForm.addEventListener('submit', async (event) => {
 				event.preventDefault();
 				if (reply.value.trim()) await post('messages', { text: reply.value.trim() });
@@ -467,14 +596,26 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			});
 			askRating.addEventListener('click', async () => {
 				const answer = await adminCall(api, 'POST', `${path()}/rating-request`);
-				if (answer.status === 403) setHidden(askRating, true);
+				if (answer.status === 403) deny(askRating);
 				detailNote.textContent = answer.ok ? t('inbox.ratingAsked') : failure(answer);
 			});
-			closeDetail.addEventListener('click', () => {
-				current = null;
-				detail.replaceChildren();
-				split.classList.remove('open');
+			remove.addEventListener('click', async () => {
+				if (remove.dataset.sure !== '1') {
+					remove.dataset.sure = '1';
+					remove.textContent = t('inbox.confirmDelete');
+					return;
+				}
+				const answer = await adminCall(api, 'DELETE', path());
+				if (!answer.ok) {
+					if (answer.status === 403) deny(remove);
+					detailNote.textContent = failure(answer);
+					return;
+				}
+				closeConversation();
+				await load(true);
+				note.textContent = t('inbox.deleted');
 			});
+			closeDetail.addEventListener('click', closeConversation);
 			filters.addEventListener('submit', (event) => {
 				event.preventDefault();
 				void load(true);
