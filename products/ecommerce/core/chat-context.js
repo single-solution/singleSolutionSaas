@@ -30,19 +30,10 @@ const PAYMENT_WORDS = Object.freeze({
 	pickup: 'Pay at pickup',
 });
 
-/** Policy names in the context. */
-const POLICY_TITLES = Object.freeze({
-	shipping: 'Delivery',
-	returns: 'Returns',
-	warranty: 'Warranty',
-	privacy: 'Privacy',
-	terms: 'Terms',
-});
-
 /**
  * @typedef {object} ContextParts
  * @property {string} business the business name
- * @property {Array<{ key: string, text: string }>} policies plain text
+ * @property {Array<{ key: string, title: string, text: string }>} policies the merchant's, plain text (E27)
  * @property {Array<{ id?: string, name: string, url: string, inStock: boolean,
  *   prices: Array<{ grade: string | null, priceText: string, compareAtPriceText: string | null, inStock: boolean }> }>}
  *   products newest first
@@ -272,12 +263,7 @@ const policyLines = (policies, budget) => {
 	const heading = '## Store policies';
 	const each = Math.floor((budget - heading.length - 1) / policies.length) - 1;
 	if (each < 20) return [];
-	return [
-		heading,
-		...policies.map((policy) =>
-			oneLine(`${POLICY_TITLES[/** @type {keyof typeof POLICY_TITLES} */ (policy.key)] ?? policy.key}: ${policy.text}`, each),
-		),
-	];
+	return [heading, ...policies.map((policy) => oneLine(`${policy.title}: ${policy.text}`, each))];
 };
 
 /**

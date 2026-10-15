@@ -185,6 +185,10 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 				'9 statuses: Awaiting payment, Awaiting confirmation, Confirmed, Packed, Dispatched, Delivered, Canceled, Returned to origin, Refunded; 14 moves; 5 statuses message the shopper.',
 			],
 			['couriers', '1 courier: FastShip.'],
+			[
+				'policies',
+				'5 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text), Privacy policy (no text), Terms and conditions (no text).',
+			],
 			['address_regions', 'No countries with regions yet.'],
 		]);
 		expect(listsOf(on, 'delivery_zones')).toEqual([['delivery_zones', '2 zones: Springfield, Rest of the state.']]);
@@ -252,6 +256,10 @@ describe('the website Setup sheet: Ecommerce’s part', () => {
 		expect(listsOf(part, 'checkout')).toEqual([
 			['order_flow', expect.stringMatching(/^9 statuses: /)],
 			['couriers', 'Not available right now'],
+			[
+				'policies',
+				'5 policies: Delivery policy (no text), Returns policy (no text), Warranty policy (no text), Privacy policy (no text), Terms and conditions (no text).',
+			],
 			['address_regions', 'No countries with regions yet.'],
 		]);
 	});

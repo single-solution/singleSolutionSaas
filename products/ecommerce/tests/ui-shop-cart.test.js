@@ -99,7 +99,11 @@ const SETTINGS = {
 		coupons: true,
 		loyalty: true,
 		delivery: { zones: true, cities: ['Paris', 'Lyon'] },
-		policies: { shipping: 'Ships fast.\n\nReally fast.', returns: '', privacy: '  ', terms: 'Be nice.' },
+		policies: [
+			{ key: 'shipping', title: 'How we ship', text: 'Ships fast.\n\nReally fast.' },
+			{ key: 'privacy', title: 'Our privacy', text: '  ' },
+			{ key: 'terms', title: 'House rules', text: 'Be nice.' },
+		],
 		address: { required: ['name', 'phone', 'line1', 'city'], optional: ['line2', 'area', 'postalCode', 'country', 'notes'] },
 	},
 };
@@ -167,10 +171,11 @@ describe('cart', () => {
 			text('checkout.pickupAt', { name: 'Main shop' }),
 			'Ships fast.',
 			'Really fast.',
-			text('checkout.policy.terms'),
+			'How we ship',
+			'House rules',
 		])
 			expect(page).toContain(part);
-		expect(page).not.toContain(text('checkout.policy.privacy'));
+		expect(page).not.toContain('Our privacy');
 		expect(page).not.toContain(text('checkout.method.pickup'));
 		expect($$(host, 'datalist option')).toHaveLength(2);
 		// an optional address field keeps its name in its label (review M10)
@@ -368,22 +373,22 @@ describe('cart', () => {
 				checkout: {
 					...SETTINGS.checkout,
 					policyFormat: 'html',
-					policies: {
-						terms: '<p>Be <strong>nice</strong>.</p>',
-						warranty:
-							'<p>12 months. <a href="https://shop.example.com/warranty">Details</a></p><script>window.bad = 1</script>',
-						shipping: '',
-						format: 'html',
-						other: '<p>Unknown</p>',
-					},
+					// the merchant's own list, in its order, under its own titles (E27)
+					policies: [
+						{
+							key: 'warranty',
+							title: 'Guarantee',
+							text: '<p>12 months. <a href="https://shop.example.com/warranty">Details</a></p><script>window.bad = 1</script>',
+						},
+						{ key: 'terms', title: 'House rules', text: '<p>Be <strong>nice</strong>.</p>' },
+						{ key: 'shipping', title: 'Shipping', text: '' },
+						{ key: 'broken', text: 'no title' },
+					],
 				},
 			},
 		});
 		const policies = $$(host, 'section[aria-label] details');
-		expect(policies.map((node) => node.querySelector('summary').textContent)).toEqual([
-			text('checkout.policy.warranty'),
-			text('checkout.policy.terms'),
-		]);
+		expect(policies.map((node) => node.querySelector('summary').textContent)).toEqual(['Guarantee', 'House rules']);
 		expect(policies[0].querySelector('a').getAttribute('href')).toBe('https://shop.example.com/warranty');
 		expect(policies[0].querySelector('script')).toBeNull();
 		expect(policies[1].querySelector('strong').textContent).toBe('nice');

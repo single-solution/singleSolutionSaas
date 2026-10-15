@@ -79,7 +79,15 @@ export const settingsOf = (config) => {
 				Array.isArray(checkout.pickupLocations) ? checkout.pickupLocations : []
 			),
 			cities: /** @type {string[]} */ (Array.isArray(checkout.delivery?.cities) ? checkout.delivery.cities : []),
-			policies: /** @type {Record<string, string>} */ (checkout.policies ?? {}),
+			/** the merchant's policies, filled, in their order (E27) */
+			policies: /** @type {Array<{ key: string, title: string, text: string }>} */ (
+				Array.isArray(checkout.policies)
+					? checkout.policies.filter(
+							(/** @type {any} */ policy) =>
+								typeof policy?.key === 'string' && typeof policy.title === 'string' && typeof policy.text === 'string',
+						)
+					: []
+			),
 			/** policies are HTML (cleaned by the server) or plain text (E3) */
 			policyFormat: checkout.policyFormat === 'html' ? 'html' : 'text',
 			coupons: checkout.coupons === true,

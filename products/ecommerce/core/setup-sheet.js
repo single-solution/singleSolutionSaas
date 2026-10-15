@@ -131,6 +131,9 @@ const named = (one, many, name) => (items) =>
 export const LIST_WORDS = Object.freeze({
 	order_flow: flowWords,
 	couriers: named('courier', 'couriers', (/** @type {Courier} */ courier) => nameOf(courier.name)),
+	policies: named('policy', 'policies', (/** @type {import('./policies.js').Policy} */ policy) =>
+		policy.text.trim() === '' ? `${nameOf(policy.title)} (no text)` : nameOf(policy.title),
+	),
 	address_regions: named(
 		'country with regions',
 		'countries with regions',

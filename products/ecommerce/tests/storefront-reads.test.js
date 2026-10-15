@@ -35,19 +35,28 @@ describe('rich text, policies and size charts (core)', () => {
 			freeDeliveryOver: '$5,000',
 		};
 		const text = fillPolicies(
-			{
-				policyFormat: 'text',
-				policyReturns:
-					'{{returnDays}} days, {warrantyMonths} months at {business}. {email} {phone} {address} {deliveryFee} {freeDeliveryOver} {other} {{other}}',
-			},
+			[
+				{
+					key: 'returns',
+					title: 'Returns',
+					text: '{{returnDays}} days, {warrantyMonths} months at {business}. {email} {phone} {address} {deliveryFee} {freeDeliveryOver} {other} {{other}}',
+				},
+			],
+			'text',
 			values,
 		);
-		expect(text.policies.returns).toBe(
+		expect(text.policies[0]?.text).toBe(
 			'14 days, 6 months at A & B. help@shop.example.com +1 202 555 0143 1 Main St $250 $5,000 {other} {{other}}',
 		);
-		const html = fillPolicies({ policyFormat: 'html', policyTerms: '<h2>{{business}}</h2><p>{phone}</p>' }, values);
-		expect(html.policies.terms).toBe('<h2>A &amp; B</h2><p>+1 202 555 0143</p>');
-		expect(fillPolicies({ policyPrivacy: '{email}' }, { returnDays: 0, warrantyDays: 0, business: 'S' }).policies).toEqual({});
+		const html = fillPolicies([{ key: 'terms', title: 'T', text: '<h2>{{business}}</h2><p>{phone}</p>' }], 'html', values);
+		expect(html.policies[0]?.text).toBe('<h2>A &amp; B</h2><p>+1 202 555 0143</p>');
+		expect(
+			fillPolicies([{ key: 'privacy', title: 'P', text: '{email}' }], undefined, {
+				returnDays: 0,
+				warrantyDays: 0,
+				business: 'S',
+			}).policies,
+		).toEqual([]);
 	});
 
 	it('shows the default chart when nothing else names one (SF-3)', () => {
@@ -177,18 +186,20 @@ describe('storefront reads through the API', () => {
 		await shop.setting('delivery_zones', 'defaultFee', 25_000);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 1_000_000);
 		await shop.setting('checkout', 'policyFormat', 'html');
-		await shop.setting(
-			'checkout',
-			'policyReturns',
-			'<h2>Returns</h2><p>{{returnDays}} days. Delivery {deliveryFee}, free from {freeDeliveryOver}. <a href="mailto:{email}">Write</a></p>',
-		);
+		await shop.list('policies', [
+			{
+				key: 'returns',
+				title: 'Returns',
+				text: '<h2>Returns</h2><p>{{returnDays}} days. Delivery {deliveryFee}, free from {freeDeliveryOver}. <a href="mailto:{email}">Write</a></p>',
+			},
+		]);
 		const answer = await api('GET', '/v1/policies');
 		expect(answer.format).toBe('html');
-		expect(answer.returns).toBe(
+		expect(answer.policies[0].text).toBe(
 			'<h2>Returns</h2><p>14 days. Delivery USD 250.00, free from USD 10,000.00. <a href="mailto:hello@shop.example.com">Write</a></p>',
 		);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
-		expect((await api('GET', '/v1/policies')).returns).toContain('free from .');
+		expect((await api('GET', '/v1/policies')).policies[0].text).toContain('free from .');
 	});
 
 	it('shows the default size chart, never on a product that hides its guide, and keeps it from deletion (SF-3)', async () => {

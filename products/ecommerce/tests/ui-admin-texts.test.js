@@ -14,7 +14,6 @@ import { HEALTH_CHECKS } from '../core/health.js';
 import { STATUS_ROLES } from '../core/model.js';
 import { ADDRESS_FIELDS } from '../core/address.js';
 import { HISTORY_NOTES, MOVE_WARNINGS, PAYMENT_METHODS, PAYMENT_STATES, RECORDED_METHODS } from '../core/orders.js';
-import { POLICY_SETTINGS } from '../core/policies.js';
 import { CLAIM_ACTIONS, CLAIM_KINDS, CLAIM_NOTES, CLAIM_STATUSES } from '../core/returns.js';
 import { REVIEW_STATUSES } from '../core/reviews.js';
 import { CLAIM_TONES, HISTORY_ACTORS, ROLE_TONES, SERVER_KIND } from '../ui/admin-order.js';
@@ -81,7 +80,6 @@ describe('widget texts named after a code (PLAN 0.4.10)', () => {
 			...keysOf('catalogAdmin.status.', productStatuses),
 			...keysOf('catalogAdmin.serial.', serialStatuses),
 			...keysOf('grid.sort.', [...Object.keys(SORTS), ...GRID_SORTS]),
-			...keysOf('checkout.policy.', Object.keys(POLICY_SETTINGS)),
 			// the codes the admin routes refuse with most (the rest show the general text)
 			...keysOf('problem.', [
 				'not_found',

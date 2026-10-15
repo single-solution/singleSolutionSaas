@@ -161,9 +161,9 @@ describe('core: Chat filters, warranties and the context text', () => {
 		const text = contextText({
 			business: 'Shop',
 			policies: [
-				{ key: 'shipping', text: long },
-				{ key: 'returns', text: long },
-				{ key: 'custom', text: 'Custom.' },
+				{ key: 'shipping', title: 'Delivery', text: long },
+				{ key: 'returns', title: 'Returns', text: long },
+				{ key: 'custom', title: 'Custom', text: 'Custom.' },
 			],
 			products: Array.from({ length: 10 }, (_, index) => ({
 				name: `Product ${index} ${'n'.repeat(200)}`,
@@ -259,7 +259,7 @@ describe('core: Chat filters, warranties and the context text', () => {
 		expect(text).toContain('A $1,000 (was $1,200) https://shop.example.com/p/0');
 		expect(text).toContain('A $1,000 (out of stock)');
 		expect(text).toContain('Delivery: Policy text.');
-		expect(text).toContain('custom: Custom.');
+		expect(text).toContain('Custom: Custom.');
 		const small = contextText({ business: 'Shop', policies: [], products: [], deals: [], product: null, visitor: null });
 		expect(small).toBe('# Shop — live store facts');
 		const quiet = contextText({
@@ -403,8 +403,11 @@ describe('Chat lookups (E37)', () => {
 		]);
 		await shop.setting('delivery_zones', 'defaultFee', 30000);
 		await shop.setting('delivery_zones', 'defaultFreeOver', 0);
-		await shop.setting('checkout', 'policyShipping', 'We deliver in {business} style.');
-		await shop.setting('checkout', 'policyReturns', 'Returns within {returnDays} days.');
+		await shop.list('policies', [
+			{ key: 'shipping', title: 'Delivery', text: 'We deliver in {business} style.' },
+			{ key: 'returns', title: 'Returns', text: 'Returns within {returnDays} days.' },
+			{ key: 'privacy', title: 'Privacy', text: '' },
+		]);
 		await shop.list('couriers', [{ key: 'fastship', name: 'FastShip', trackingUrl: 'https://track.example/{tracking}' }]);
 		const placedAt = new Date('2026-10-02T00:00:00Z');
 		await data.collection(COLLECTIONS.orders).insertOne({
@@ -694,8 +697,8 @@ describe('Chat lookups (E37)', () => {
 			business: 'Shop',
 			currency: 'USD',
 			policies: [
-				{ key: 'shipping', text: 'We deliver in Shop style.' },
-				{ key: 'returns', text: 'Returns within 7 days.' },
+				{ key: 'shipping', title: 'Delivery', text: 'We deliver in Shop style.' },
+				{ key: 'returns', title: 'Returns', text: 'Returns within 7 days.' },
 			],
 			products: [
 				{

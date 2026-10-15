@@ -560,7 +560,10 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 
 	it('serves llms.txt with categories, top products and policies', async () => {
 		await shop.setting('llms_txt', 'description', 'Phones and books.');
-		await shop.setting('checkout', 'policyReturns', 'Returns within 14 days.');
+		await shop.list('policies', [
+			{ key: 'shipping', title: 'Delivery', text: '' },
+			{ key: 'returns', title: 'Returns', text: 'Returns within 14 days.' },
+		]);
 		const answer = await shop.api('GET', '/v1/llms.txt');
 		expect(answer.status).toBe(200);
 		expect(answer.headers.get('content-type')).toContain('text/plain');
@@ -586,27 +589,41 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 	});
 
 	it('answers the policies to visitors and the server', async () => {
-		await shop.setting('checkout', 'policyShipping', 'Ships in 2 days.');
-		await shop.setting(
-			'checkout',
-			'policyWarranty',
-			'{business} repairs within {warrantyDays} days ({warrantyMonths} months).',
-		);
+		// the merchant's list: renamed, reordered, one added, one without text (E27)
+		await shop.list('policies', [
+			{ key: 'warranty', title: 'Repairs', text: '{business} repairs within {warrantyDays} days ({warrantyMonths} months).' },
+			{ key: 'shipping', title: 'Shipping', text: 'Ships in 2 days.' },
+			{ key: 'returns', title: 'Returns', text: 'Returns within 14 days.' },
+			{ key: 'gift-cards', title: 'Gift cards', text: 'Gift cards never expire.' },
+			{ key: 'privacy', title: 'Privacy', text: '' },
+		]);
 		await shop.setting('returns', 'warrantyDays', 90);
 		const server = await shop.api('GET', '/v1/policies');
 		expect(server.json).toEqual({
 			format: 'text',
-			shipping: 'Ships in 2 days.',
-			returns: 'Returns within 14 days.',
-			warranty: 'Shop repairs within 90 days (3 months).',
+			policies: [
+				{ key: 'warranty', title: 'Repairs', text: 'Shop repairs within 90 days (3 months).' },
+				{ key: 'shipping', title: 'Shipping', text: 'Ships in 2 days.' },
+				{ key: 'returns', title: 'Returns', text: 'Returns within 14 days.' },
+				{ key: 'gift-cards', title: 'Gift cards', text: 'Gift cards never expire.' },
+			],
 		});
+		await shop.setting('llms_txt', 'policies', true);
+		expect((await shop.api('GET', '/v1/llms.txt')).text).toContain('- Gift cards: Gift cards never expire.');
+		// keys are page names: one a page address cannot carry is refused
+		await expect(shop.list('policies', [{ key: 'Gift Cards', title: 'Gift cards', text: '' }])).rejects.toThrow(/422/);
 		const visitor = await shop.visitor('GET', '/v1/shop/policies');
 		expect(visitor.json).toEqual(server.json);
 		expect(DOMAIN).toBe(new URL(ORIGIN).host);
 		await shop.setting('checkout', 'policyFormat', 'html');
-		await shop.setting('checkout', 'policyPrivacy', '<p onclick="x()">We <b>never</b> sell data.</p><script>bad()</script>');
+		await shop.list('policies', [
+			{ key: 'privacy', title: 'Privacy', text: '<p onclick="x()">We <b>never</b> sell data.</p><script>bad()</script>' },
+		]);
 		const html = (await shop.api('GET', '/v1/policies')).json;
-		expect(html).toMatchObject({ format: 'html', privacy: '<p>We <strong>never</strong> sell data.</p>' });
+		expect(html).toEqual({
+			format: 'html',
+			policies: [{ key: 'privacy', title: 'Privacy', text: '<p>We <strong>never</strong> sell data.</p>' }],
+		});
 		const llms = (await shop.api('GET', '/v1/llms.txt')).text;
 		expect(llms).not.toContain('<p>');
 		await shop.setting('checkout', 'policyFormat', 'text');

@@ -457,19 +457,24 @@ describe('landing pages, search, grades, policies and llms-full', () => {
 		});
 		expect(
 			fillPolicies(
-				{ policyReturns: ' {returnDays} days ', policyTerms: '', policyFormat: 'text' },
+				[
+					{ key: 'returns', title: 'Returns', text: ' {returnDays} days ' },
+					{ key: 'terms', title: 'Terms', text: '' },
+				],
+				'text',
 				{ returnDays: 7, warrantyDays: 60, business: 'S' },
 			),
 		).toEqual({
 			format: 'text',
-			policies: { returns: '7 days' },
+			policies: [{ key: 'returns', title: 'Returns', text: '7 days' }],
 		});
 		expect(
 			fillPolicies(
-				{ policyWarranty: '<p>{business}: {warrantyMonths} months</p><script>x</script>', policyFormat: 'html' },
+				[{ key: 'care', title: 'Care', text: '<p>{business}: {warrantyMonths} months</p><script>x</script>' }],
+				'html',
 				{ returnDays: 7, warrantyDays: 60, business: 'S' },
 			),
-		).toEqual({ format: 'html', policies: { warranty: '<p>S: 2 months</p>' } });
+		).toEqual({ format: 'html', policies: [{ key: 'care', title: 'Care', text: '<p>S: 2 months</p>' }] });
 		const text = buildLlmsFull({
 			name: 'Shop',
 			description: '',

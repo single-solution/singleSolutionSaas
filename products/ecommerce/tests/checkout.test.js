@@ -619,7 +619,7 @@ describe('store pickup and the widget settings', () => {
 			pickupLocations: [{ id: 'loc_shop', name: 'Main shop' }],
 			delivery: { zones: true, cities: ['Springfield'] },
 			pricesIncludeTax: true,
-			policies: {},
+			policies: [],
 			policyFormat: 'text',
 			bookings: true,
 			digital: true,

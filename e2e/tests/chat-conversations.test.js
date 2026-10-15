@@ -168,6 +168,17 @@ const server = (productKey, method, path, body, headers = {}) =>
 		headers,
 	});
 
+/**
+ * Save Ecommerce's policies list (E27) through its server API.
+ * @param {string} text the delivery policy
+ */
+const shipping = async (text) => {
+	const saved = await server('ecommerce', 'PUT', '/v1/lists/policies', {
+		value: [{ key: 'shipping', title: 'Delivery', text }],
+	});
+	expect(saved.status, JSON.stringify(saved.json)).toBe(200);
+};
+
 /** Save settings through a product's settings API (K1). @param {string} productKey @param {Record<string, unknown>} values */
 const configure = async (productKey, values) => {
 	for (const [key, value] of Object.entries(values)) {
@@ -306,7 +317,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		expect((await setUp('ecommerce', '/connections/accounts', { value: tokens.accounts?.server })).json).toMatchObject({
 			status: 'connected',
 		});
-		await configure('ecommerce', { 'checkout.policyShipping': 'We deliver nationwide in 2 days.' });
+		await shipping('We deliver nationwide in 2 days.');
 		const lamp = await server('ecommerce', 'POST', '/v1/products', {
 			name: 'Lamp Max',
 			slug: 'lamp-max',
@@ -368,7 +379,7 @@ describe('Chat conversations on the real Portal, Accounts, Notifications and Eco
 		expect(prompt).not.toContain('## Signed-in visitor');
 
 		// a policy changed in Ecommerce shows only once the 60 s cache has passed
-		await configure('ecommerce', { 'checkout.policyShipping': 'We deliver nationwide in 1 day.' });
+		await shipping('We deliver nationwide in 1 day.');
 		await guest('POST', '/v1/chat/messages', { text: 'And the colors?' });
 		expect(lastSystemPrompt()).toContain('in 2 days.');
 		sys.clock.advance(61_000);

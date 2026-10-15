@@ -2242,11 +2242,15 @@
 					"type": "array",
 					"items": {
 						"type": "object",
-						"required": ["key", "text"],
+						"required": ["key", "title", "text"],
 						"additionalProperties": false,
 						"properties": {
 							"key": {
 								"type": "string"
+							},
+							"title": {
+								"type": "string",
+								"description": "The merchant's title of the policy."
 							},
 							"text": {
 								"type": "string",
@@ -2254,7 +2258,7 @@
 							}
 						}
 					},
-					"description": "While checkout is on."
+					"description": "The merchant's policies with text, in their order, while checkout is on."
 				},
 				"products": {
 					"type": "array",
@@ -13456,8 +13460,8 @@
 		},
 		"ShopPolicies": {
 			"type": "object",
-			"description": "The shop's policies from the checkout settings, placeholders filled; empty policies are left out.",
-			"required": ["format"],
+			"description": "The shop's policies (the merchant's list), placeholders filled; policies without text are left out.",
+			"required": ["format", "policies"],
 			"additionalProperties": false,
 			"properties": {
 				"format": {
@@ -13465,26 +13469,32 @@
 					"enum": ["text", "html"],
 					"description": "The checkout setting policyFormat: html texts are cleaned to p, br, strong, em, u, ul, ol, li, h2, h3, h4, blockquote and safe links."
 				},
-				"shipping": {
-					"type": "string",
-					"minLength": 1,
-					"description": "Delivery."
-				},
-				"returns": {
-					"type": "string",
-					"minLength": 1
-				},
-				"privacy": {
-					"type": "string",
-					"minLength": 1
-				},
-				"terms": {
-					"type": "string",
-					"minLength": 1
-				},
-				"warranty": {
-					"type": "string",
-					"minLength": 1
+				"policies": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "object",
+						"required": ["key", "title", "text"],
+						"additionalProperties": false,
+						"properties": {
+							"key": {
+								"type": "string",
+								"pattern": "^[a-z][a-z0-9_-]{0,39}$",
+								"description": "The policy's key, for its page address (shipping, returns, warranty, privacy, terms or one the merchant added)."
+							},
+							"title": {
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 80,
+								"description": "The merchant's title."
+							},
+							"text": {
+								"type": "string",
+								"minLength": 1
+							}
+						}
+					},
+					"description": "In the list's order."
 				}
 			}
 		},
@@ -27731,14 +27741,14 @@
 	},
 	"GET /v1/shop/policies": {
 		"summary": "The shop's policies",
-		"description": "For the visitor (browser token). The checkout settings policyShipping, policyReturns, policyPrivacy, policyTerms and policyWarranty, with {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
+		"description": "For the visitor (browser token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
 		"response": {
 			"$ref": "#/components/schemas/ShopPolicies"
 		}
 	},
 	"GET /v1/policies": {
 		"summary": "The shop's policies",
-		"description": "For your own policy pages (server token). The checkout settings policyShipping, policyReturns, policyPrivacy, policyTerms and policyWarranty, with {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
+		"description": "For your own policy pages (server token). The policies list (Settings → Policies; lists/policies), in its order, those without text left out, with {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address} (business.json), {deliveryFee} and {freeDeliveryOver} (Delivery zones, as money) filled in (also written with double braces); other text in braces stays.",
 		"response": {
 			"$ref": "#/components/schemas/ShopPolicies"
 		}

@@ -139,7 +139,7 @@ export const TEXTS = Object.freeze({
 			ai: Object.freeze({ title: 'AI copy', help: 'Product descriptions and meta text written with your AI key.' }),
 			policies: Object.freeze({
 				title: 'Policies',
-				help: 'Your delivery, returns, privacy, terms and warranty texts, as plain text or HTML.',
+				help: 'Your policies: delivery, returns, warranty, privacy and terms to start with, and any you add, as plain text or HTML.',
 			}),
 			texts: Object.freeze({ title: 'Texts', help: 'Every word the widgets show.' }),
 			theme: Object.freeze({
@@ -297,6 +297,14 @@ export const TEXTS = Object.freeze({
 			key: 'Key (lower-case letters, digits, _ or -)',
 			name: 'Name',
 			trackingUrl: 'Tracking link (https://…{tracking}…)',
+		}),
+		policies: Object.freeze({
+			title: 'Policies',
+			help: 'Shown at checkout, to Chat and in llms.txt, each on its own page of your site (/policies/<key>). The texts take {returnDays}, {warrantyDays}, {warrantyMonths}, {business}, {email}, {phone}, {address}, {deliveryFee} and {freeDeliveryOver}; a policy without text is not shown.',
+			item: 'Policy',
+			name: 'Title',
+			key: 'Key (lower-case letters, digits, _ or -; names its page)',
+			text: 'Text',
 		}),
 		addressRegions: Object.freeze({
 			title: 'Address regions',

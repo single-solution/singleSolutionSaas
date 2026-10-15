@@ -1,6 +1,6 @@
 'use client';
 /**
- * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, delivery zones, tax rules, booking
+ * Settings list editors (Ecommerce's list settings, `adapters/lists.js`): couriers, policies, delivery zones, tax rules, booking
  * hours and role prices, and the pieces the order flow editor (`./flow-editor.js`), the condition grades editor (`./grades.js`) and the
  * item types editor (`./item-types.js`) share. Each list is read with `GET /v1/dashboard/websites/:websiteId/lists/:list` and saved whole
  * with `PUT … { value }`; a 422 lists the server's check errors, which are shown under the editor.
@@ -380,6 +380,58 @@ export function AddressRegionsEditor({ websiteId, off }) {
 						onChange={(event) => set({ names: event.target.value.split('\n') })}
 					/>
 				</FieldGrid>
+			)}
+		/>
+	);
+}
+
+const P = L.policies;
+
+/**
+ * The shop's policies (`policies`, feature checkout, E27): a title, a key that names its page and the text, with the
+ * placeholders the server fills; the merchant adds, renames, reorders and removes them.
+ * @param {EditorProps} props
+ */
+export function PoliciesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="policies"
+			title={P.title}
+			help={P.help}
+			itemLabel={P.item}
+			max={20}
+			off={off}
+			blank={() => ({ key: '', title: '', text: '' })}
+			clean={(policy) => ({
+				key: keyOf(policy.key, policy.title),
+				title: String(policy.title ?? '').trim(),
+				text: String(policy.text ?? ''),
+			})}
+			render={(policy, set) => (
+				<>
+					<FieldGrid>
+						<Input
+							label={P.name}
+							value={policy.title ?? ''}
+							maxLength={80}
+							onChange={(event) => set({ title: event.target.value })}
+						/>
+						<Input
+							label={P.key}
+							value={policy.key ?? ''}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+					</FieldGrid>
+					<TextArea
+						label={P.text}
+						value={policy.text ?? ''}
+						rows={8}
+						onChange={(event) => set({ text: event.target.value })}
+					/>
+				</>
 			)}
 		/>
 	);

@@ -57,9 +57,6 @@ const REQUOTE = [
 	'validation_failed',
 	'price_changed',
 ];
-/** The policies a checkout shows, in this order (`settings.checkout.policies`). */
-const POLICIES = Object.freeze(['shipping', 'returns', 'warranty', 'privacy', 'terms']);
-
 /** @typedef {import('./cart-store.js').CartLine} CartLine */
 
 /**
@@ -121,11 +118,9 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					control.addEventListener(event, () => {
 						attemptKey = null;
 					});
-			// the policies come filled, and only the ones the shop wrote (E3): HTML rebuilt from the allowed tags, or paragraphs
-			const policies = POLICIES.flatMap((key) => {
-				const text = settings.checkout.policies[key];
-				return typeof text === 'string' && text.trim() ? [/** @type {[string, string]} */ ([key, text])] : [];
-			});
+			// the merchant's policies come filled, in their order, and only the ones the shop wrote (E3, E27): each under its
+			// own title, HTML rebuilt from the allowed tags, or paragraphs
+			const policies = settings.checkout.policies.filter((policy) => policy.text.trim() !== '');
 			/** @param {string} text */
 			const policyBody = (text) =>
 				settings.checkout.policyFormat === 'html'
@@ -146,8 +141,8 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							doc,
 							'section',
 							{ 'aria-label': t('checkout.policies') },
-							...policies.map(([key, text]) =>
-								h(doc, 'details', {}, h(doc, 'summary', {}, t(`checkout.policy.${key}`)), ...policyBody(text)),
+							...policies.map((policy) =>
+								h(doc, 'details', {}, h(doc, 'summary', {}, policy.title), ...policyBody(policy.text)),
 							),
 						)
 					: null,

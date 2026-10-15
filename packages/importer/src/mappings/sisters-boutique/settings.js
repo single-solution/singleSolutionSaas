@@ -273,11 +273,6 @@ export const settingsPlan = (values) => {
 				// SB sends shoppers no message (owner decision D5, "Store facts corrected after the re-audit")
 				'checkout.messageChannels': [],
 				'checkout.statusTemplates': 'one',
-				'checkout.policyShipping': '',
-				'checkout.policyReturns': store.returnPolicyHtml,
-				'checkout.policyPrivacy': store.privacyPolicyHtml,
-				'checkout.policyTerms': '',
-				'checkout.policyWarranty': '',
 				'checkout.policyFormat': 'html',
 				'checkout.returnsAccepted': 'unknown', // SaaS default (store mapping to review when the owner asks)
 				// bank transfer by hand, cash on delivery; no card (D5)
@@ -435,6 +430,14 @@ export const settingsPlan = (values) => {
 					'Shop {brand} {category}. From {price}. {products} designs, {variants} in-stock configurations at {storeName}.',
 			},
 			lists: {
+				// SB's return and privacy policies in the SaaS's seeded list (E27; mechanical, store mapping to review)
+				policies: [
+					{ key: 'shipping', title: 'Delivery policy', text: '' },
+					{ key: 'returns', title: 'Returns policy', text: store.returnPolicyHtml },
+					{ key: 'warranty', title: 'Warranty policy', text: '' },
+					{ key: 'privacy', title: 'Privacy policy', text: store.privacyPolicyHtml },
+					{ key: 'terms', title: 'Terms and conditions', text: '' },
+				],
 				// SB's moves (`apps/admin/src/app/api/orders/[id]/route.ts`:11-13, :77-123) that the role rules allow, with SB's
 				// rules as their options (`packages/db/src/orderTransitions.ts`); SB sends shoppers no message (D5)
 				order_flow: {

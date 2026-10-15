@@ -1,6 +1,7 @@
 /**
  * Ecommerce's list settings, in the product database (like Chat's, PLAN 0.8.4 step 8): settings that are lists or
  * records, which a settings schema cannot hold — the order flow (statuses and allowed moves), delivery zones, couriers,
+ * the shop's policies (E27),
  * the region names checkout offers per country (dynamic model §5), tax rules, condition grades, item types (dynamic model §1), booking hours and role prices (E19). They are kept per website in the kit's settings collection (so a
  * removed website's lists go with its settings), each checked by its feature's rules, edited in the dashboard
  * (Settings, `/v1/dashboard/websites/:websiteId/lists/:list`) and recorded in Recent changes and the activity log. Lists have no global
@@ -15,6 +16,7 @@ import { checkCouriers } from '../core/couriers.js';
 import { checkZones } from '../core/delivery.js';
 import { DEFAULT_FLOW, checkOrderFlow, readOrderFlow } from '../core/flow.js';
 import { checkGrades } from '../core/grades.js';
+import { DEFAULT_POLICIES, checkPolicies } from '../core/policies.js';
 import { checkItemTypes } from '../core/item-types.js';
 import { checkRolePrices } from '../core/role-pricing.js';
 import { checkTaxRules } from '../core/taxes.js';
@@ -39,6 +41,12 @@ export const LISTS = Object.freeze({
 		read: readOrderFlow,
 	},
 	couriers: { feature: 'checkout', title: 'Couriers', check: checkCouriers, fallback: () => [] },
+	policies: {
+		feature: 'checkout',
+		title: 'Policies',
+		check: checkPolicies,
+		fallback: () => DEFAULT_POLICIES.map((policy) => ({ ...policy })),
+	},
 	address_regions: { feature: 'checkout', title: 'Address regions', check: checkAddressRegions, fallback: () => [] },
 	delivery_zones: { feature: 'delivery_zones', title: 'Delivery zones', check: checkZones, fallback: () => [] },
 	tax_rules: { feature: 'taxes', title: 'Tax rules', check: checkTaxRules, fallback: () => [] },

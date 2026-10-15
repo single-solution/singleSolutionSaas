@@ -20,6 +20,7 @@ import {
 	AddressRegionsEditor,
 	BookingHoursEditor,
 	CouriersEditor,
+	PoliciesEditor,
 	RolePricesEditor,
 	TaxRulesEditor,
 	ZonesEditor,
@@ -284,6 +285,7 @@ export function SettingsTab({ websiteId: id }) {
 							taxes: seen('taxes') ? <TaxRulesEditor websiteId={websiteId} off={off('taxes')} /> : null,
 							orders: seen('checkout') ? <OrderFlowEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							couriers: seen('checkout') ? <CouriersEditor websiteId={websiteId} off={off('checkout')} /> : null,
+							policies: seen('checkout') ? <PoliciesEditor websiteId={websiteId} off={off('checkout')} /> : null,
 							rolePrices: seen('role_pricing') ? (
 								<RolePricesEditor websiteId={websiteId} off={off('role_pricing')} />
 							) : null,

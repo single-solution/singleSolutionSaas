@@ -861,9 +861,10 @@ export const createChatLookup = (product, service, media) => {
 			[...(await measuresOf(s, data, /** @type {ProductRecord[]} */ (newest)))].map(([id, measure]) => [id, measure.unit]),
 		);
 		const policies = filled
-			? Object.entries(filled.policies).map(([key, value]) => ({
-					key,
-					text: filled.format === 'html' ? htmlToText(String(value)) : String(value),
+			? filled.policies.map((policy) => ({
+					key: policy.key,
+					title: policy.title,
+					text: filled.format === 'html' ? htmlToText(policy.text) : policy.text,
 				}))
 			: [];
 		/** @type {{ firstName: string, city: string, points: number | null } | null} */

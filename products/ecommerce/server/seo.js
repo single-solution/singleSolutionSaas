@@ -124,14 +124,6 @@ const listedPrices = (item, prices) =>
 		: { price: item.price, priceMax: item.priceMax ?? item.price };
 /** The llms.txt section names (the llms.txt convention's structure, not shop wording). */
 const LLMS_HEADINGS = Object.freeze({ categories: 'Categories', products: 'Products', policies: 'Policies', grades: 'Grades' });
-/** The llms.txt names of the policies (the convention's structure). */
-const POLICY_TITLES = Object.freeze({
-	shipping: 'Delivery',
-	returns: 'Returns',
-	privacy: 'Privacy',
-	terms: 'Terms',
-	warranty: 'Warranty',
-});
 
 /** The business type of an online shop without a pickup point (the `seo` setting `businessType`'s default, E35). */
 const ONLINE_STORE = 'OnlineStore';
@@ -1134,9 +1126,9 @@ export const createSeo = (product, service) => {
 				})),
 			),
 			policies: policies
-				? Object.entries(policies.policies).map(([key, value]) => ({
-						title: POLICY_TITLES[/** @type {keyof typeof POLICY_TITLES} */ (key)],
-						text: policies.format === 'html' ? htmlToText(String(value)) : String(value),
+				? policies.policies.map((policy) => ({
+						title: policy.title,
+						text: policies.format === 'html' ? htmlToText(policy.text) : policy.text,
 					}))
 				: [],
 			headings: LLMS_HEADINGS,
@@ -1244,11 +1236,11 @@ export const createSeo = (product, service) => {
 		return { url: signed.url, expiresAt: signed.expiresAt };
 	};
 
-	/** GET /v1/policies and /v1/shop/policies: `{ format, <policy>… }`, empty ones left out (E3). @param {any} ctx */
-	const policies = async (ctx) => {
-		const { format, policies: filled } = await policiesOf(await service.site(ctx));
-		return { format, ...filled };
-	};
+	/**
+	 * GET /v1/policies and /v1/shop/policies: `{ format, policies: [{ key, title, text }] }`, the merchant's list in its
+	 * order, those without text left out (E3, E27). @param {any} ctx
+	 */
+	const policies = async (ctx) => policiesOf(await service.site(ctx));
 
 	const lookup = createChatLookup(product, service, media);
 
