@@ -504,7 +504,7 @@ describe('the Sisters Boutique mapping', () => {
 			'phone_password.signUp': false,
 			'phone_password.maxAttempts': 20,
 			'phone_password.lockMinutes': 1,
-			'email_password.networkLimit': 8,
+			'passwords.networkLimit': 8,
 			'phone_password.forgotUrl': expect.stringMatching(/^https:\/\/wa\.me\/923000000099\?text=Salam!%20I%20forgot/),
 			'staff_links.setupPageUrl': 'https://shop.example.com/account/setup/{code}',
 			'role_requests.requestableRoles': ['member'],

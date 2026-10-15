@@ -210,9 +210,9 @@ export const settingsPlan = (values) => {
 				'email_password.resetMinutes': 60,
 				'email_password.resetLimit': 3,
 				'email_password.resetHosts': [],
-				'email_password.lockMode': 'fixed',
-				'email_password.networkLimit': 8,
-				'email_password.personalCheck': false,
+				'passwords.lockMode': 'fixed',
+				'passwords.networkLimit': 8,
+				'passwords.personalCheck': false,
 				// staff-issued codes last 15 minutes (`apps/admin/src/app/api/customers/[id]/access-code/route.ts`:15); setup
 				// links 7 days (`apps/admin/src/app/api/membership-requests/[id]/setup-link/route.ts`:16-17)
 				'staff_links.codeMinutes': 15,
