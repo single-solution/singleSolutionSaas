@@ -134,10 +134,10 @@ describe('statuses of the product on a website', () => {
 		await sys.addProduct(m.merchantId, websiteId);
 		sys.setReachable(true);
 		expect((await portalStatus()).featuresVersion).toBe(before + 1);
-		// the product never saw `removed`: until its status copy runs out it keeps its old switches
-		expect(await sys.product.featuresOn(websiteId)).toEqual(['notes']);
+		// the waiting status.changed (or its status copy running out) makes it read the status: active, as before it was
+		// removed, but with a higher features version, so its old switches go although it never saw `removed`
 		sys.clock.advance(5 * 60_000);
-		await api(); // served from the old copy, the status is fetched again right after
+		await api();
 		expect(await sys.product.featuresOn(websiteId)).toEqual([]);
 		expect(await api()).toEqual([403, 'feature_off', null]);
 		// switched on again by an admin, with the next version
