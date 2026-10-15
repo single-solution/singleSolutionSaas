@@ -99,8 +99,8 @@ const sixDays = async (h) => {
 	await when(at(3, 2), () => h.prices(PRODUCT, 2, { codes: 2000, box: 500 }));
 	await when(at(3, 12, 15), () => service.removeProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN }));
 	await when(at(4, 9), async () => {
-		await service.addProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN });
-		await report(h, W1, PRODUCT, 2, ['box', 'codes']);
+		await service.addProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN }); // version 2, all off
+		await report(h, W1, PRODUCT, 3, ['box', 'codes']);
 	});
 	await when(at(4, 17), () => h.credit(M1, 50_000));
 	await when(at(5, 0, 30));

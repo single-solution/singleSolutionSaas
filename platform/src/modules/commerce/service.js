@@ -5,6 +5,7 @@
  * problems (`infra/http.js` `problem`).
  * @module
  */
+import { productStatusOf } from './core/money.js';
 import { createCommerceRepo } from './repo.js';
 import { createBilling } from './services/billing.js';
 import { createDeps } from './services/deps.js';
@@ -75,6 +76,17 @@ export const createCommerceService = (ctx) => {
 		addReceipt: billing.addReceipt,
 		attention: billing.attention,
 		allReceipts: billing.allReceipts,
+		creditsAddedThisMonth: billing.creditsAddedThisMonth,
+		/**
+		 * The status the merchant's products on websites have now, after a check (0.5.5: low balance counts as active;
+		 * a website's Setup sheet).
+		 * @param {string} merchantId
+		 * @returns {Promise<'active' | 'grace' | 'stopped' | 'suspended'>}
+		 */
+		productsStatus: async (merchantId) =>
+			/** @type {'active' | 'grace' | 'stopped' | 'suspended'} */ (
+				productStatusOf({ added: true, merchantStatus: (await billing.statusOf(merchantId)).status })
+			),
 		charges: billing.charges,
 		/** @param {string} merchantId */
 		verifyChain: (merchantId) => ledger.verify(merchantId),

@@ -72,7 +72,18 @@ const world = async (name) => {
 describe('Setup page (jsdom)', () => {
 	it('shows the merchant the sheet, gathers it again, copies it, and makes, lists and revokes share links', async () => {
 		const restore = quiet();
-		const { w, b, merchantId, websiteId } = await world('setup_page_merchant');
+		const { w, b, merchantId, websiteId, notes } = await world('setup_page_merchant');
+		// a setting whose value holds a secret saved in Connections comes without its value
+		notes.setBlueprint(() => {
+			const part = productBlueprint();
+			/** @type {any} */ (part.features[0]).settings[0] = {
+				key: 'maxNotes',
+				title: 'Notes per visitor per day',
+				set: true,
+				default: false,
+			};
+			return part;
+		});
 		try {
 			const writeText = vi.fn(async () => undefined);
 			vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
@@ -95,13 +106,18 @@ describe('Setup page (jsdom)', () => {
 			expect(shows('It could not be reached. Try Refresh in a moment.')).toBe(true);
 			// the product's panel: what is left to do, a feature on with its settings, one off, connections, install, events
 			expect(shows('Add the widget script to every page of your website.')).toBe(true);
-			expect(shows('Notes per visitor per day10')).toBe(true);
+			expect(shows('Notes per visitor per daySet (holds a secret, not shown)')).toBe(true);
 			expect(shows('GreetingLeave us a noteDefault')).toBe(true);
 			expect(shows('Off: Notes inbox')).toBe(true);
 			expect(shows('Database (MongoDB)')).toBe(true);
 			expect(shows('Connected')).toBe(true);
 			expect(shows('notes.settings.changed')).toBe(true);
 			expect(shows('A server token is issued; it is never shown here.')).toBe(true);
+			// the status of the website's products and each product's API address
+			expect(shows('StatusActive')).toBe(true);
+			expect(shows('API address: http')).toBe(true);
+			// labels in sentence case, never all caps (PLAN 0.6)
+			expect(document.querySelector('.uppercase')).toBeNull();
 			// what the website builds for each feature that is on, with its docs
 			expect(shows('What your website builds')).toBe(true);
 			expect(shows('Add the note form widget to the pages where visitors leave notes.')).toBe(true);

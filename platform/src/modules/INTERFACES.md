@@ -55,8 +55,9 @@ download?, actor })` → `{ sheet, domain }`: every product on the website asked
   (`GET <baseUrl>/v1/blueprint?websiteId=`, signed with `@ss/protocol` `signPortalCall` by `ctx.keys.signer`, 5 s
   each); a product that times out, answers 5xx or 4xx, or answers no product blueprint (`@ss/contracts`
   `validateProductBlueprint`) is `{ reachable: false, reason: timeout | unreachable | refused | invalid }`; the Portal
-  adds the domain, `https://<domain>` as the allowed origin, the testing hosts, each product's browser token and
-  script tag and `serverToken: { issued: true }` (never a server token). The products as gathered are kept in the
+  adds the domain, the status the website's products have (`website.status`, `commerce.productsStatus`), `https://<domain>`
+  as the allowed origin, the testing hosts, each product's address (`apiBase`), browser token and script tag and
+  `serverToken: { issued: true }` (never a server token). The products as gathered are kept in the
   instance's memory 60 s per website (`fresh` gathers again); Activity `website.setup_opened` or
   `website.setup_downloaded`. Every sheet carries the website's business profile (`website.profile`,
   `catalog_setup_profiles`, or null) and, per reachable product, the advisor's view (`core/advisor.js` over
@@ -86,7 +87,8 @@ Products on websites, the price and feature reports and status responses of PLAN
 
 - Products on websites (`commerce_products`, `_id` = `<websiteId>:<productId>`, status `added | removed`):
   `addProduct({ merchantId, websiteId, productId, actor })` (active connected products not yet on the website;
-  `identity.ensureTokens`; switches all off; `recordProductAdded`; Activity `product.added`; `status.changed`),
+  `identity.ensureTokens`; switches all off, and a re-add raises `featuresVersion` by one so a product that missed the
+  removal resets its own; `recordProductAdded`; Activity `product.added`; `status.changed`),
   `removeProduct(…)` (status removed; `recordProductRemoved`; Activity `product.removed`; `status.changed`; works even
   when the product cannot be reached), `productsForWebsite(merchantId, websiteId)` → cards `{ productId, name, status,
 featuresOn, featuresVersion, hourlyCost, dailyCost, addedAt }` (removed excluded), `productOnWebsite(websiteId,
@@ -114,12 +116,16 @@ body })` (row 3 refusals: unknown key or a key without price or a dependency off
   point on only, and never waits more than a second for a busy ledger (it then answers live and writes nothing). Views
   run it:
   `billingSummary`, `usage`, `receiptsOf`, `dayChargesOf`, `billingSummaries`, `attention`, `allReceipts`, `charges`.
+  `creditsAddedThisMonth()` sums every receipt of the current UTC month (admin Overview).
+  `productsStatus(merchantId)` → the status the merchant's products on websites have now (`active`, `grace`, `stopped`,
+  `suspended`; low balance counts as active), for the Setup sheet's `website.status`.
   `addReceipt(…)` (a receipt that ends grace or a stop sends `status.changed`).
 
 ## system (`modules/system`)
 
-Settings, the public branding, Activity and the admin Overview (`overview()` → counts, `mailConfigured`, per-product
-numbers `products: [{ productId, name, status, websites, earnedThisMonth, days }]`, recent Activity). Settings →
+Settings, the public branding, Activity and the admin Overview (`overview()` → counts, `creditsAddedThisMonth` (every
+receipt of the UTC month, summed in the database), `mailConfigured`, per-product numbers `products: [{ productId, name,
+status, websites, earnedThisMonth, days }]`, recent Activity). Settings →
 Encryption key → Re-seal (`reseal`, Owner) seals every stored secret again with the current `ENCRYPTION_KEY`: the
 system store's signing keys and mail password, and `identity.resealSecrets()` (server tokens, two-step secrets).
 

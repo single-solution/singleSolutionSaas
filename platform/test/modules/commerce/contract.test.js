@@ -181,10 +181,13 @@ describe('feature reports (PLAN 0.4.12 row 3)', () => {
 		clock.set(T0 + 3 * HOUR);
 		expect((await h.service.billingSummary(M1)).balance).toBe(10_000);
 		await h.service.addProduct({ merchantId: M1, websiteId: W1, productId: PRODUCT, actor: ADMIN });
+		// the re-add raises the version: a product that missed it learns from the status that its switches were reset
 		const card = (await h.service.productsForWebsite(M1, W1))[0];
-		expect(card).toMatchObject({ featuresOn: [], featuresVersion: 1, hourlyCost: 0 });
+		expect(card).toMatchObject({ featuresOn: [], featuresVersion: 2, hourlyCost: 0 });
+		expect((await h.service.statusFor({ productId: PRODUCT, websiteId: W1 })).featuresVersion).toBe(2);
 		await h.service.onMerchantStatus({ merchantId: M1, status: 'suspended' });
-		expect((await features(W1, { version: 2, on: ['codes'], adminId: OWNER_ADMIN, adminName: 'O' })).status).toBe(200);
+		expect((await features(W1, { version: 2, on: ['codes'], adminId: OWNER_ADMIN, adminName: 'O' })).status).toBe(409);
+		expect((await features(W1, { version: 3, on: ['codes'], adminId: OWNER_ADMIN, adminName: 'O' })).status).toBe(200);
 		clock.set(T0 + 6 * HOUR);
 		expect((await h.service.billingSummary(M1)).balance).toBe(10_000);
 	});

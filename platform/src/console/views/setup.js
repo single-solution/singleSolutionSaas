@@ -182,7 +182,7 @@ function Mark({ done }) {
 function Part({ title, children }) {
 	return (
 		<div className="space-y-2">
-			<h4 className="text-xs font-semibold tracking-wide text-muted uppercase">{title}</h4>
+			<h4 className="text-xs font-semibold text-muted">{title}</h4>
 			{children}
 		</div>
 	);
@@ -198,6 +198,7 @@ function Settings({ settings }) {
 					<dt className="min-w-0 text-[13px] text-fg">{setting.title}</dt>
 					<dd className="flex min-w-0 items-center gap-2 text-[13px] font-medium break-words text-fg">
 						{'value' in setting ? <span className="min-w-0">{valueText(setting.value)}</span> : null}
+						{setting.set ? <span className="min-w-0 text-muted">{SETUP.secretSet}</span> : null}
 						{setting.default ? <Badge>{SETUP.defaultValue}</Badge> : null}
 					</dd>
 				</div>
@@ -394,6 +395,7 @@ function ProductPanel({ product, valuesShown }) {
 					)}
 				</Part>
 				<Part title={SETUP.sections.docs}>
+					<p className="text-sm break-words text-fg">{SETUP.apiBase(product.apiBase)}</p>
 					<p className="flex flex-wrap gap-4 text-sm">
 						<a
 							href={product.docs.guide}
@@ -634,6 +636,12 @@ function SheetBody({ sheet, actions = null }) {
 					<div className="min-w-0 space-y-0.5">
 						<dt className="text-xs font-medium text-muted">{SETUP.domain}</dt>
 						<dd className="text-sm break-words text-fg">{website.domain}</dd>
+					</div>
+					<div className="min-w-0 space-y-0.5">
+						<dt className="text-xs font-medium text-muted">{SETUP.websiteStatus}</dt>
+						<dd className="text-sm text-fg">
+							<StatusBadge status={website.status} />
+						</dd>
 					</div>
 					<div className="min-w-0 space-y-0.5">
 						<dt className="text-xs font-medium text-muted">{SETUP.business}</dt>

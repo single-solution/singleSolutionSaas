@@ -19,6 +19,7 @@ export const fakeCommerce = (options = {}) => {
 			/** @param {string} websiteId */
 			productsOnWebsite: async (websiteId) => products.filter((p) => p.websiteId === websiteId),
 			allProductNumbers: async () => [],
+			creditsAddedThisMonth: async () => 0,
 			/** @param {string} websiteId */
 			productsOnWebsiteCount: async (websiteId) => products.filter((p) => p.websiteId === websiteId).length,
 			/** @param {{ merchantId: string, status: string }} input */

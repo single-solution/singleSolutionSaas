@@ -72,7 +72,10 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	/** @param {string} merchantId */
 	const profilesOf = (merchantId) => /** @type {import('../../infra/db.js').MutableOps} */ (profiles.forMerchant(merchantId));
 	const identity = () => ctx.service('identity');
-	/** Gathered products per website (the profile and the advice are added at each read). @type {Map<string, { until: number, at: number, products: GatheredProduct[] }>} */
+	/**
+	 * Gathered products per website, with their status (the profile and the advice are added at each read).
+	 * @type {Map<string, { until: number, at: number, status: Blueprint['website']['status'], products: GatheredProduct[] }>}
+	 */
 	const cache = new Map();
 
 	/**
@@ -157,7 +160,7 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 				ctx.logger.warn('setup sheet: a product answered no blueprint', { productId });
 				return { ok: false, reason: 'invalid' };
 			}
-			return { ok: true, blueprint: checked.value };
+			return { ok: true, blueprint: checked.value, apiBase: String(product.baseUrl).replace(/\/+$/, '') };
 		} catch (error) {
 			if (!isNetError(error)) throw error;
 			ctx.logger.warn('setup sheet: a product did not answer', { productId, reason: error.code });
@@ -166,9 +169,10 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	};
 
 	/**
-	 * The products of a website as gathered: kept for a minute, gathered again when older or when `fresh`.
+	 * The products of a website as gathered, with the status they have: kept for a minute, gathered again when older or
+	 * when `fresh`.
 	 * @param {{ merchantId: string, websiteId: string, fresh?: boolean }} input
-	 * @returns {Promise<{ at: number, products: GatheredProduct[] }>}
+	 * @returns {Promise<{ at: number, status: Blueprint['website']['status'], products: GatheredProduct[] }>}
 	 */
 	const gathered = async ({ merchantId, websiteId, fresh = false }) => {
 		const kept = cache.get(websiteId);
@@ -176,10 +180,14 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 		const entries = /** @type {Array<{ productId: string, name: string, browserToken: string }>} */ (
 			await identity().installOf({ merchantId, websiteId })
 		);
-		const answers = await Promise.all(entries.map((entry) => ask(entry.productId, websiteId)));
+		const [status, answers] = await Promise.all([
+			ctx.service('commerce').productsStatus(merchantId),
+			Promise.all(entries.map((entry) => ask(entry.productId, websiteId))),
+		]);
 		const fresher = {
 			until: ctx.now() + SHEET_CACHE_MS,
 			at: ctx.now(),
+			status,
 			products: entries.map((entry, index) => productEntry(entry, /** @type {any} */ (answers[index]))),
 		};
 		cache.delete(websiteId);
@@ -203,11 +211,11 @@ export const createSetup = ({ ctx, policy, fetch }) => {
 	 * @returns {Promise<Blueprint>}
 	 */
 	const sheetOf = async ({ merchantId, websiteId, domain, fresh = false }) => {
-		const [{ at, products }, profile] = await Promise.all([
+		const [{ at, status, products }, profile] = await Promise.all([
 			gathered({ merchantId, websiteId, fresh }),
 			profileOf(merchantId, websiteId),
 		]);
-		return assembleSheet({ websiteId, domain, products, profile, now: at });
+		return assembleSheet({ websiteId, domain, status, products, profile, now: at });
 	};
 
 	/**

@@ -119,9 +119,11 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 
 	/**
 	 * Add a product to a website (Owner, Support): active connected products not yet on the website. A re-add restores
-	 * the same tokens; the switches start all off. The tokens come first; the product's state and its money history
-	 * are then written in one transaction. A product whose state says added but whose history lost the entry (written
-	 * before both were one transaction) is repaired by adding it again.
+	 * the same tokens; the switches start all off and `featuresVersion` rises by one, so a product that could not be
+	 * reached across both the removal and the re-add (it never saw `removed`) learns from its next status read that its
+	 * switches were reset (PLAN 0.4.12 row 4). The tokens come first; the product's state and its money history are then
+	 * written in one transaction. A product whose state says added but whose history lost the entry (written before
+	 * both were one transaction) is repaired by adding it again.
 	 * @param {{ merchantId: string, websiteId: string, productId: string } & Caller} input
 	 */
 	const add = async ({ merchantId, websiteId, productId, actor, requestId = null, ip = null }) => {
@@ -149,7 +151,7 @@ export const createProducts = ({ ctx, repo, deps, billing }) => {
 				if (doc)
 					await ops.updateOne(
 						{ merchantId, _id },
-						{ $set: { status: 'added', on: [], addedAt: at, removedAt: null } },
+						{ $set: { status: 'added', on: [], addedAt: at, removedAt: null }, $inc: { featuresVersion: 1 } },
 						{ session },
 					);
 				else

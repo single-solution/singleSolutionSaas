@@ -76,6 +76,7 @@ describe('Setup sheet', () => {
 			website: {
 				id: w1,
 				domain: 'shop.example.com',
+				status: 'active',
 				business: { found: true, name: 'Example Shop', country: 'US', timeZone: 'America/New_York' },
 			},
 			access: {
@@ -98,6 +99,8 @@ describe('Setup sheet', () => {
 			snippet: `<script src="https://notes.example.dev/widget.js" data-token="${browserToken}" async></script>`,
 		});
 		expect(sheet.products[1].serverToken).toEqual({ issued: true });
+		// the address the product was connected with, which its API paths go after
+		expect(sheet.products[1].apiBase).toBe(notes.url);
 		const server = (await owner.post(`${base}/tokens/notes/reveal`, {})).json.serverToken;
 		expect(JSON.stringify(sheet)).not.toContain(server);
 		expect(notes.blueprintCalls).toEqual([w1]);
@@ -108,6 +111,9 @@ describe('Setup sheet', () => {
 		const opened = await h.activity('website.setup_opened');
 		expect(opened.map((entry) => entry.actor.type).sort()).toEqual(['admin', 'merchant']);
 		expect(opened[0]?.target).toMatchObject({ type: 'website', id: w1, websiteId: w1 });
+		// the status the website's products have: a suspended merchant's are suspended
+		expect((await owner.post(`/v1/admin/merchants/${m.merchantId}/suspend`, { reason: 'Checks' })).status).toBe(200);
+		expect((await owner.get(`${base}/setup?fresh=1`)).json.website.status).toBe('suspended');
 	});
 
 	it('keeps a sheet a minute, gathers it again on Refresh or after, and offers it as a JSON file', async () => {

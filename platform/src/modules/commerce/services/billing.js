@@ -744,6 +744,18 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 		return entries.map((e) => receiptView(e, true, names));
 	};
 
+	/** Credits every receipt added in the current UTC month (the admin Overview), summed in the database. */
+	const creditsAddedThisMonth = async () => {
+		const [row] = await repo
+			.allLedgers()
+			.aggregate([
+				{ $match: { type: 'receipt', at: { $gte: new Date(floorMonth(ctx.now())) } } },
+				{ $group: { _id: null, credits: { $sum: '$amount' } } },
+			])
+			.toArray();
+		return Number(row?.credits ?? 0);
+	};
+
 	/**
 	 * Written day charges grouped by day, merchant or product over UTC days (Credits and billing).
 	 * @param {{ from: string, to: string, by: 'day' | 'merchant' | 'product' }} query
@@ -793,6 +805,7 @@ export const createBilling = ({ ctx, repo, deps, ledger, statusChanged }) => {
 		summaries,
 		attention,
 		allReceipts,
+		creditsAddedThisMonth,
 		charges,
 		spentThisMonth,
 	});

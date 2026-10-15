@@ -33,9 +33,10 @@ const SERVER_TOKENS_NOTE =
 	'A server token is issued for each product. It is never shown here: reveal it in the Portal (Install and tokens) and keep it on your server only.';
 
 /**
- * A product's entry: its answer with the Portal's install facts, or why it is missing.
+ * A product's entry: its answer with the Portal's facts (its address, the install details), or why it is missing.
  * @param {InstallEntry} entry
- * @param {{ ok: true, blueprint: ProductBlueprint } | { ok: false, reason: Unreachable }} answer
+ * @param {{ ok: true, blueprint: ProductBlueprint, apiBase: string } | { ok: false, reason: Unreachable }} answer
+ *   `apiBase`: the address the product was connected with
  * @returns {GatheredProduct}
  */
 export const productEntry = (entry, answer) => {
@@ -44,6 +45,7 @@ export const productEntry = (entry, answer) => {
 	return {
 		...rest,
 		reachable: true,
+		apiBase: answer.apiBase,
 		install: {
 			...install,
 			browserToken: entry.browserToken,
@@ -54,13 +56,13 @@ export const productEntry = (entry, answer) => {
 };
 
 /**
- * The sheet of a website: its facts, its business profile, and each product gathered with the advisor's view for
- * that profile.
- * @param {{ websiteId: string, domain: string, products: GatheredProduct[], profile: BusinessProfile | null,
- *   now: number }} input `now`: when the products were gathered
+ * The sheet of a website: its facts (with the status its products have), its business profile, and each product
+ * gathered with the advisor's view for that profile.
+ * @param {{ websiteId: string, domain: string, status: Blueprint['website']['status'], products: GatheredProduct[],
+ *   profile: BusinessProfile | null, now: number }} input `now`: when the products were gathered
  * @returns {Blueprint}
  */
-export const assembleSheet = ({ websiteId, domain, products, profile, now }) => {
+export const assembleSheet = ({ websiteId, domain, status, products, profile, now }) => {
 	const found = products.find((p) => p.reachable && p.business.found);
 	const business = found?.reachable
 		? { found: true, name: found.business.name, country: found.business.country, timeZone: found.business.timeZone }
@@ -68,7 +70,7 @@ export const assembleSheet = ({ websiteId, domain, products, profile, now }) => 
 	return {
 		schema: BLUEPRINT_SCHEMA,
 		generatedAt: new Date(now).toISOString(),
-		website: { id: websiteId, domain, business, profile },
+		website: { id: websiteId, domain, status, business, profile },
 		access: { allowedOrigins: [`https://${domain}`], testingOrigins: [...TESTING_HOSTS], serverTokens: SERVER_TOKENS_NOTE },
 		products: products.map((product) => (product.reachable ? { ...product, ...adviceOf(product.features, profile) } : product)),
 	};

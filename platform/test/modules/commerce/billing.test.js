@@ -129,6 +129,17 @@ describe('credits and billing (PLAN 0.5)', () => {
 		expect(await h.service.billingSummaries([M2])).toMatchObject([{ merchantId: M2, status: 'active', balance: 0 }]);
 	});
 
+	it('sums the credits added this UTC month for the admin Overview: every receipt, in the database', async () => {
+		const clock = createClock(T0 - 2 * DAY); // September 29
+		const h = await bootCommerce({ mongo, dbName: 'cm_bill_month', clock });
+		await h.credit(M1, 5_000); // last month: not counted
+		clock.set(T0);
+		expect(await h.service.creditsAddedThisMonth()).toBe(0);
+		await h.credit(M1, 90_000);
+		await h.credit(M2, 10_000);
+		expect(await h.service.creditsAddedThisMonth()).toBe(100_000);
+	});
+
 	it('runs grace, debt and stop, and restarts only when a receipt brings the balance above 0', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_bill_grace', clock });
