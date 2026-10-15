@@ -691,8 +691,8 @@ export const createService = (product) => {
 
 	/**
 	 * A reply alert to the visitor (C6, reply alerts on): when staff reply to a visitor who has not checked the
-	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (WhatsApp, then email,
-	 * by default): the first channel the visitor has an address for that Notifications takes; one it does not take
+	 * conversation for the away time, `chat.staff_reply` goes by the setting "Channels, in order" (none picked: email,
+	 * SMS, then WhatsApp, C23): the first channel the visitor has an address for that Notifications takes; one it does not take
 	 * passes to the next. With the setting How often `once` (the default) one alert until the visitor checks again;
 	 * with `every_reply` each staff reply while they are away (C16). Sent after the answer.
 	 * @param {Site} s

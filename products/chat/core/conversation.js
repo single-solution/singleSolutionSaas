@@ -125,9 +125,16 @@ export const guestLimitReached = (conversation, limit) => limit > 0 && (conversa
 /** @typedef {'email' | 'sms' | 'whatsapp'} AlertChannel */
 
 /**
- * Where a reply alert (C6) may go, in the merchant's order (the setting "Channels, in order"): each channel once, with
- * the visitor's address on it (an email address for email, a phone for SMS and WhatsApp); a channel the visitor has
- * no address for is left out.
+ * The channels a reply alert tries when the merchant picked none (C23): every one, so those switched on in
+ * Notifications send (one it does not take passes to the next); email first, the one with no cost per message.
+ * @type {readonly AlertChannel[]}
+ */
+const EVERY_CHANNEL = Object.freeze(/** @type {const} */ (['email', 'sms', 'whatsapp']));
+
+/**
+ * Where a reply alert (C6) may go, in the merchant's order (the setting "Channels, in order"; none picked: email, SMS,
+ * then WhatsApp, as Notifications takes them, C23): each channel once, with the visitor's address on it (an email
+ * address for email, a phone for SMS and WhatsApp); a channel the visitor has no address for is left out.
  * @param {unknown} channels the setting's value
  * @param {{ email?: string | null, phone?: string | null }} contact
  * @returns {Array<{ channel: AlertChannel, to: { email: string } | { phone: string } }>}
@@ -135,7 +142,8 @@ export const guestLimitReached = (conversation, limit) => limit > 0 && (conversa
 export const alertRoutes = (channels, { email, phone }) => {
 	/** @type {Array<{ channel: AlertChannel, to: { email: string } | { phone: string } }>} */
 	const routes = [];
-	for (const channel of new Set(Array.isArray(channels) ? channels : [])) {
+	const picked = Array.isArray(channels) && channels.length > 0 ? channels : EVERY_CHANNEL;
+	for (const channel of new Set(picked)) {
 		if (channel === 'email' && email) routes.push({ channel, to: { email } });
 		else if ((channel === 'sms' || channel === 'whatsapp') && phone) routes.push({ channel, to: { phone } });
 	}

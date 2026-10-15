@@ -128,7 +128,7 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 		await sys.admin(ticket, 'POST', path, { text: 'Anything else?' });
 		expect(sys.messages()).toEqual([
 			expect.objectContaining({
-				channel: 'whatsapp',
+				channel: 'sms',
 				template: 'chat.staff_reply',
 				to: { phone: '+447700900123' },
 				values: expect.objectContaining({
@@ -217,24 +217,40 @@ describe('staff alerts and reply alerts (C5, C6)', () => {
 	it('a reply alert goes by the channels in the order set: the first the visitor has an address for', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
-		// the default: WhatsApp, then email
-		expect(await alertOf(sys, both)).toEqual([['whatsapp', { phone: '+447700900123' }]]);
-		expect(await alertOf(sys, { email: 'ann@example.com' })).toEqual([['email', { email: 'ann@example.com' }]]);
+		// the default (none chosen): the channels Notifications takes, email, then SMS, then WhatsApp (C23)
+		expect(await alertOf(sys, both)).toEqual([['email', { email: 'ann@example.com' }]]);
+		expect(await alertOf(sys, { phone: '+447700900123' })).toEqual([['sms', { phone: '+447700900123' }]]);
 		await sys.setting('visitor_alerts', 'channels', ['email', 'sms']);
 		expect(await alertOf(sys, both)).toEqual([['email', { email: 'ann@example.com' }]]);
 		expect(await alertOf(sys, { phone: '+447700900123' })).toEqual([['sms', { phone: '+447700900123' }]]);
 		await sys.setting('visitor_alerts', 'channels', ['sms', 'whatsapp', 'email']);
 		expect(await alertOf(sys, both)).toEqual([['sms', { phone: '+447700900123' }]]);
-		// a channel the visitor has no address for is passed over; none left, or none chosen: no alert
+		// a channel the visitor has no address for is passed over; none left: no alert
 		await sys.setting('visitor_alerts', 'channels', ['whatsapp']);
 		expect(await alertOf(sys, { email: 'ann@example.com' })).toEqual([]);
-		await sys.setting('visitor_alerts', 'channels', []);
-		expect(await alertOf(sys, both)).toEqual([]);
+	});
+
+	it('by default the alert goes by the channels switched on in Notifications (C23)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
+		await sys.paste('notifications');
+		const off = () => ({
+			status: 403,
+			body: { type: 'https://errors.example.dev/feature_off', title: 'Feature off', status: 403 },
+		});
+		// email and SMS are off in Notifications: WhatsApp takes it
+		sys.responders.set('https://notifications.example.dev/v1/messages/email', off);
+		sys.responders.set('https://notifications.example.dev/v1/messages/sms', off);
+		expect(await alertOf(sys, both)).toEqual([
+			['email', { email: 'ann@example.com' }],
+			['sms', { phone: '+447700900123' }],
+			['whatsapp', { phone: '+447700900123' }],
+		]);
 	});
 
 	it('a channel Notifications does not take passes the alert to the next one', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'visitor_alerts']);
 		await sys.paste('notifications');
+		await sys.setting('visitor_alerts', 'channels', ['whatsapp', 'email']);
 		const whatsapp = 'https://notifications.example.dev/v1/messages/whatsapp';
 		// WhatsApp is off in Notifications
 		sys.responders.set(whatsapp, () => ({

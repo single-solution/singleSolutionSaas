@@ -174,8 +174,9 @@ describe('conversations, flows and fields', () => {
 			{ channel: 'email', to: { email: 'ann@example.com' } },
 		]);
 		expect(alertRoutes(['email'], { phone: '+447700900123' })).toEqual([]);
-		expect(alertRoutes([], both)).toEqual([]);
-		expect(alertRoutes('email', both)).toEqual([]);
+		// none picked: every channel, email first (those Notifications does not take pass to the next, C23)
+		expect(alertRoutes([], both).map((route) => route.channel)).toEqual(['email', 'sms', 'whatsapp']);
+		expect(alertRoutes(undefined, { phone: '+447700900123' }).map((route) => route.channel)).toEqual(['sms', 'whatsapp']);
 	});
 
 	it('statuses, texts, pages and devices', () => {

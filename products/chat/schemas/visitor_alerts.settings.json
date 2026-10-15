@@ -20,14 +20,15 @@
 		"channels": {
 			"type": "array",
 			"title": "Channels, in order",
-			"default": ["whatsapp", "email"],
-			"description": "Pick them in the order to try. The alert goes by the first one the visitor has an address for (a phone for WhatsApp and SMS, an email address for email); when Notifications does not take it there (that channel is off or has no template), the next one is tried. None: no alerts.",
+			"default": [],
+			"description": "Pick them in the order to try. The alert goes by the first one the visitor has an address for (a phone for WhatsApp and SMS, an email address for email); when Notifications does not take it there (that channel is off or has no template), the next one is tried. None picked: the channels switched on in Notifications, email first, then SMS, then WhatsApp.",
 			"items": {
 				"type": "string",
 				"enum": ["email", "sms", "whatsapp"]
 			},
 			"x-ui": {
-				"widget": "tags"
+				"widget": "tags",
+				"placeholder": "The channels switched on in Notifications"
 			}
 		}
 	}
