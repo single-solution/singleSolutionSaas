@@ -2,8 +2,10 @@
 /**
  * Settings → Templates in the browser (jsdom), on a faked dashboard API (parity P1): every product's message by
  * channel with its state — the product's default words, the merchant's edited version, switched off, or WhatsApp not set
- * up — and Edit (from the default words), Reset to default and Switch off, never for Accounts' sign-in messages. Times
- * are computed in UTC and shown in the viewer's local time (owner 2026-10-14): UTC on the server and in the first render.
+ * up — and Edit (from the default words), Reset to default and Switch off, never for Accounts' sign-in messages. The
+ * Overview (PLAN 0.6 "Overviews talk"): the templates counted, a webhook URL asked for while Outgoing webhooks is on
+ * without one (the list is read only then), and times computed in UTC and shown in the viewer's local time (owner
+ * 2026-10-14): UTC on the server and in the first render.
  */
 import { act } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -205,16 +207,22 @@ describe('Settings → Templates: the products’ messages (parity P1)', () => {
 	});
 });
 
-describe("times: computed in UTC, shown in the viewer's local time (owner 2026-10-14)", () => {
-	/** The overview answer: a grace period, the widget's last visit and a change, at known instants (UTC). */
-	const OVERVIEW = {
+describe('Overview (PLAN 0.6 "Overviews talk")', () => {
+	/** The dashboard keeps each answer it loaded for the page: each test opens its own website. */
+	let website = 0;
+	/**
+	 * The overview answer: a grace period, the widget's last visit and a change, at known instants (UTC).
+	 * @param {string[]} featuresOn
+	 */
+	const overview = (featuresOn) => ({
+		website: { websiteId: `web_o${website}`, domain: 'shop.example.com', merchantId: 'm_1', merchantName: 'Merchant' },
 		status: { status: 'grace', graceEndsAt: '2026-10-04T14:30:00.000Z' },
-		featuresOn: [],
+		featuresOn,
 		todayMillicredits: 0,
 		checklist: {
 			connections: [],
 			widget: { installed: true, lastSeenAt: '2026-10-05T23:15:00.000Z' },
-			business: { found: true },
+			business: { found: true, fetchedAt: null },
 		},
 		recentChanges: [
 			{
@@ -224,15 +232,26 @@ describe("times: computed in UTC, shown in the viewer's local time (owner 2026-1
 				at: '2026-10-06T08:00:00.000Z',
 			},
 		],
-	};
-	const serveOverview = () =>
+	});
+	/**
+	 * The overview, the merchant's templates and the webhook URLs.
+	 * @param {{ featuresOn?: string[], urls?: string[] }} [options]
+	 */
+	const serveOverview = ({ featuresOn = [], urls = [] } = {}) =>
 		vi.stubGlobal(
 			'fetch',
-			vi.fn(async (/** @type {string} */ path) =>
-				path === `${BASE}/overview`
-					? new Response(JSON.stringify(OVERVIEW), { status: 200 })
-					: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 }),
-			),
+			vi.fn(async (/** @type {string} */ path) => {
+				const body = path.endsWith('/overview')
+					? overview(featuresOn)
+					: path.endsWith('/templates')
+						? TEMPLATES
+						: path.endsWith('/lists/webhook_urls')
+							? { value: urls }
+							: null;
+				return body
+					? new Response(JSON.stringify(body), { status: 200 })
+					: new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
+			}),
 		);
 	/** @param {string} timeZone the viewer's browser's */
 	const viewerIn = (timeZone) => {
@@ -244,36 +263,67 @@ describe("times: computed in UTC, shown in the viewer's local time (owner 2026-1
 			},
 		);
 	};
-	const props = {
-		websiteId: WEBSITE,
-		domain: 'shop.example.com',
+	/** The tab's props for a new website (or the last one's with `same`). */
+	const props = (same = false) => ({
+		websiteId: `web_o${same ? website : (website += 1)}`,
 		who: /** @type {const} */ ({ kind: 'merchant', id: 'm_1', name: 'Merchant' }),
 		support: { email: 'help@example.com', phone: '' },
 		portal: 'https://portal.example.com',
-	};
+		open: vi.fn(),
+	});
+	/** @param {HTMLElement} container the titles of the "Needs you" items */
+	const needs = (container) =>
+		[...container.querySelectorAll('section[aria-label="Needs you"] li p:first-child')].map((p) => p.textContent);
 
-	it("Overview shows the grace end, the widget's last visit and the changes in the viewer's zone; UTC first", async () => {
+	it('counts the templates; with Outgoing webhooks on and no URL, asks for one and opens Settings', async () => {
+		serveOverview({ featuresOn: ['email', 'webhooks'] });
+		const Overview = TABS.overview;
+		const tab = props();
+		const { container } = render(<Overview {...tab} />);
+		await settle();
+		expect(container.querySelector('h1')?.textContent).toBe('Welcome back, Merchant');
+		expect(needs(container)).toContain('Outgoing webhooks is on, but no URL is added yet');
+		click(byText(container, 'Add a URL', 'button'));
+		click(byText(container, 'Add a webhook URL', 'button'));
+		expect(tab.open.mock.calls).toEqual([['settings'], ['settings']]);
+		expect(byText(container, 'Templates', 'span').parentElement?.parentElement?.textContent).toBe('Templates2');
+	});
+
+	it('reads no webhook URLs while the feature is off, and asks for none once one is added', async () => {
+		serveOverview({ featuresOn: ['email'] });
+		const Overview = TABS.overview;
+		render(<Overview {...props()} />);
+		await settle();
+		expect(vi.mocked(fetch).mock.calls.map(([path]) => String(path))).not.toContain(
+			`/v1/dashboard/websites/web_o${website}/lists/webhook_urls`,
+		);
+		cleanup();
+		serveOverview({ featuresOn: ['webhooks'], urls: ['https://hooks.example.com/ss'] });
+		const added = render(<Overview {...props()} />);
+		await settle();
+		expect(needs(added.container)).not.toContain('Outgoing webhooks is on, but no URL is added yet');
+		expect(byText(added.container, 'Add a webhook URL', 'span').className).toContain('line-through');
+	});
+
+	it("shows the grace end, the widget's last visit and the changes in the viewer's zone; UTC first", async () => {
 		viewerIn('America/New_York');
 		serveOverview();
 		const Overview = TABS.overview;
-		const { container } = render(<Overview {...props} />);
+		const { container } = render(<Overview {...props()} />);
 		await settle();
 		const text = container.textContent ?? '';
-		expect(text).toContain('In grace until Oct 4, 2026, 10:30 AM EDT');
+		expect(text).toContain('Notifications is in grace until Oct 4, 2026, 10:30 AM EDT');
 		expect(text).toContain('Last seen Oct 5, 2026, 7:15 PM EDT');
-		const change = container.querySelector('time');
+		const change = container.querySelector('ol time');
 		expect([change?.textContent, change?.getAttribute('title'), change?.getAttribute('datetime')]).toEqual([
 			'Oct 6, 2026, 4:00 AM EDT',
 			'Oct 6, 2026, 8:00 AM UTC',
 			'2026-10-06T08:00:00.000Z',
 		]);
 		// the server (and the first render in the browser) print UTC, with the answer this page already loaded
-		const html = renderToString(<Overview {...props} />);
-		for (const words of [
-			'In grace until Oct 4, 2026, 2:30 PM UTC',
-			'Last seen Oct 5, 2026, 11:15 PM UTC',
-			'>Oct 6, 2026, 8:00 AM UTC</time>',
-		])
+		const html = renderToString(<Overview {...props(true)} />);
+		for (const words of ['Oct 4, 2026, 2:30 PM UTC', 'Oct 5, 2026, 11:15 PM UTC', '>Oct 6, 2026, 8:00 AM UTC</time>'])
 			expect(html).toContain(words);
+		expect(html).not.toContain('EDT');
 	});
 });
