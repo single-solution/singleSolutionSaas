@@ -260,13 +260,14 @@ export const paypal = {
 			status: answer.json?.status ?? null,
 		};
 	},
-	cancelSubscription: async (subscription, keys, ctx) => {
+	// PayPal needs a reason: the merchant's own (P11)
+	cancelSubscription: async (subscription, keys, ctx, reason) => {
 		const answer = await api(
 			keys,
 			ctx,
 			'POST',
 			`/v1/billing/subscriptions/${encodeURIComponent(String(subscription.gatewayRef))}/cancel`,
-			{ reason: 'Canceled by the merchant' },
+			{ reason: reason.slice(0, 128) },
 		);
 		return ok2xx(answer.status) ? { ok: true } : { ok: false, message: failure('PayPal', answer.status) };
 	},

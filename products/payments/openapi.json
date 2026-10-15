@@ -1279,6 +1279,23 @@
 						}
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"reason": {
+										"type": "string",
+										"maxLength": 128,
+										"description": "One line, sent to gateways that take a reason (PayPal needs one) and kept in the history. Without it, the website's text subs.defaultReason (Settings → Words and look → Widget texts)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
 					"200": {
 						"description": "Success",
@@ -4549,6 +4566,23 @@
 						"$ref": "#/components/parameters/SSActorEmail"
 					}
 				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"reason": {
+										"type": "string",
+										"maxLength": 128,
+										"description": "One line, sent to gateways that take a reason (PayPal needs one) and kept in the history. Without it, the website's text subs.defaultReason (Settings → Words and look → Widget texts)."
+									}
+								}
+							}
+						}
+					}
+				},
 				"responses": {
 					"200": {
 						"description": "Success",

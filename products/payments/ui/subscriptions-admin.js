@@ -18,7 +18,7 @@ import {
 	splitView,
 } from '@ss/app-kit/widget';
 import { SUBSCRIPTION_STATUSES } from '../core/payments.js';
-import { listSection } from './admin-kit.js';
+import { field, listSection } from './admin-kit.js';
 import { formattersOf } from './format.js';
 import { WIDGET_CSS } from './styles.js';
 
@@ -73,15 +73,24 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 					menu.push({
 						label: t('subs.cancel'),
 						danger: true,
-						onSelect: () =>
+						onSelect: () => {
+							// the merchant's own reason goes to the gateway (P11); empty: their text subs.defaultReason
+							const reason = /** @type {HTMLInputElement} */ (
+								element(doc, 'input', { name: 'reason', maxlength: '128', autocomplete: 'off' })
+							);
 							openDialog(root, {
 								title: t('subs.cancel'),
-								body: [element(doc, 'p', {}, formatText(t('subs.cancelIntro'), { plan: subscription.plan }))],
+								body: [
+									element(doc, 'p', {}, formatText(t('subs.cancelIntro'), { plan: subscription.plan })),
+									field(doc, t('subs.reason'), reason),
+								],
 								submitLabel: t('subs.cancel'),
 								closeLabel: t('subs.keep'),
 								danger: true,
 								onSubmit: async () => {
-									const answer = await adminCall(api, 'POST', `/v1/admin/subscriptions/${subscription.id}/cancel`);
+									const answer = await adminCall(api, 'POST', `/v1/admin/subscriptions/${subscription.id}/cancel`, {
+										reason: reason.value.trim(),
+									});
 									if (!answer.ok) return formatText(t('subs.cancelFailed'), { reason: answer.data?.detail ?? '' });
 									shown.set(answer.data.id, answer.data);
 									const item = list.querySelector(`li[data-id="${answer.data.id}"]`);
@@ -90,7 +99,8 @@ export const mountSubscriptionsAdmin = ({ host, api, config, copy = () => {} }) 
 									view.detail.querySelector('[role="status"]')?.replaceChildren(t('subs.cancelled'));
 									return null;
 								},
-							}),
+							});
+						},
 					});
 				const heading = element(doc, 'h3', {}, subscription.reference || subscription.plan);
 				heading.append(badge(doc, t(`subStatus.${subscription.status}`), TONES[subscription.status]));

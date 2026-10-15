@@ -651,6 +651,8 @@ describe('Subscriptions admin widget', () => {
 		let cancel = answer(502, { detail: 'Stripe refused the keys.' });
 		/** @type {string[]} */
 		const queries = [];
+		/** @type {any[]} */
+		const cancelBodies = [];
 		const copy = vi.fn();
 		const client = adminApi({
 			'GET /v1/admin/subscriptions': (_init, url) => {
@@ -663,7 +665,10 @@ describe('Subscriptions admin widget', () => {
 						})
 					: answer(200, { items: [sub], nextCursor: 'c', hasMore: true });
 			},
-			'POST /v1/admin/subscriptions/sub_1/cancel': () => cancel,
+			'POST /v1/admin/subscriptions/sub_1/cancel': (init) => {
+				cancelBodies.push(JSON.parse(init.body));
+				return cancel;
+			},
 		});
 		mountSubscriptionsAdmin({ host, api: client, config: configOf(['subscriptions']), copy });
 		await flush();
@@ -671,7 +676,11 @@ describe('Subscriptions admin widget', () => {
 		for (const text of ['Bo', 'a@b.co', 'sub_stripe_1', 'created']) expect(detailText(host)).toContain(text);
 		menuItem(host, strings['subs.cancel'])?.click();
 		expect(dialog(host)?.textContent).toContain('price_1');
+		// the merchant's own reason goes with it (P11)
+		const reason = /** @type {HTMLInputElement} */ (inside(host, '.dialog input[name="reason"]'));
+		reason.value = ' Moved to yearly ';
 		await submitDialog(host);
+		expect(cancelBodies[0]).toEqual({ reason: 'Moved to yearly' });
 		expect(dialog(host)?.querySelector('[role="status"]')?.textContent).toBe('Not canceled: Stripe refused the keys.');
 		cancel = answer(200, { ...sub, status: 'cancelled' });
 		await submitDialog(host);

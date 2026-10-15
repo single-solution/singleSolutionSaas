@@ -1386,6 +1386,16 @@
 	"POST /v1/subscriptions/:id/cancel": {
 		"summary": "Cancel a subscription at its gateway",
 		"description": "409 conflict when it has already ended; 502 gateway_failed when the gateway refuses.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"reason": {
+					"type": "string",
+					"maxLength": 128,
+					"description": "One line, sent to gateways that take a reason (PayPal needs one) and kept in the history. Without it, the website's text subs.defaultReason (Settings → Words and look → Widget texts)."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/Subscription"
 		}
@@ -1817,6 +1827,16 @@
 	"POST /v1/admin/subscriptions/:id/cancel": {
 		"summary": "Cancel a subscription at its gateway (Subscriptions admin widget)",
 		"description": "409 conflict when it has already ended; 502 gateway_failed when the gateway refuses.",
+		"body": {
+			"type": "object",
+			"properties": {
+				"reason": {
+					"type": "string",
+					"maxLength": 128,
+					"description": "One line, sent to gateways that take a reason (PayPal needs one) and kept in the history. Without it, the website's text subs.defaultReason (Settings → Words and look → Widget texts)."
+				}
+			}
+		},
 		"response": {
 			"$ref": "#/components/schemas/Subscription"
 		}

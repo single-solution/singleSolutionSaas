@@ -553,18 +553,23 @@ export const createService = (product) => {
 	};
 
 	/**
-	 * Cancel a subscription at its gateway.
-	 * @param {Site} s @param {SubscriptionRecord} subscription @param {Actor} by
+	 * Cancel a subscription at its gateway, with the merchant's reason (sent to gateways that take one, kept in the
+	 * history).
+	 * @param {Site} s @param {SubscriptionRecord} subscription @param {Actor} by @param {string} reason
 	 */
-	const cancelSubscription = async (s, subscription, by) => {
+	const cancelSubscription = async (s, subscription, by, reason) => {
 		if (subscription.status === 'cancelled' || subscription.status === 'expired')
 			throw problem('conflict', 'The subscription has already ended.');
 		const keys = await keysOf(s, subscription.gateway);
 		if (!keys) throw problem('gateway_not_ready', `${subscription.gateway} is not connected for this website.`);
-		const done = await gateways[subscription.gateway].cancelSubscription?.(subscription, keys, ctx);
+		const done = await gateways[subscription.gateway].cancelSubscription?.(subscription, keys, ctx, reason);
 		if (!done?.ok) throw problem('gateway_failed', done?.message ?? 'The gateway refused.');
 		const updated = /** @type {SubscriptionRecord} */ (
-			await s.store.subscriptions.update(subscription.id, { status: 'cancelled' }, { event: 'cancelled', by: nameOf(by) })
+			await s.store.subscriptions.update(
+				subscription.id,
+				{ status: 'cancelled' },
+				{ event: 'cancelled', detail: reason, by: nameOf(by) },
+			)
 		);
 		await emit(s, 'subscription.updated', { subscription: subscriptionView(updated) });
 		return updated;

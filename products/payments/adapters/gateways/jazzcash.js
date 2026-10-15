@@ -87,8 +87,9 @@ export const jazzcash = {
 			pp_Amount: String(payment.amount),
 			pp_TxnCurrency: payment.currency,
 			pp_TxnDateTime: pakistanTime(ctx.now()),
-			pp_BillReference: plain(payment.reference, 20).replace(/ /g, '') || 'payment',
-			pp_Description: plain(payment.description || payment.reference, 100) || 'Payment',
+			// without the merchant's own words, the transaction reference: never a word made in code (P11)
+			pp_BillReference: plain(payment.reference, 20).replace(/ /g, '') || ref,
+			pp_Description: plain(payment.description || payment.reference, 100) || ref,
 			pp_TxnExpiryDateTime: pakistanTime(ctx.now() + 24 * 3_600_000),
 			pp_ReturnURL: urls.return,
 		};

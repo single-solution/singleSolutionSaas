@@ -857,10 +857,8 @@ describe('a payment the merchant cancels (K-13)', () => {
 			{ method: 'POST', path: `/v1/checkout/sessions/cs_${payment.id}/expire` },
 		]);
 		const logged = await env.api('GET', `/v1/activity?target=${payment.id}&action=payment.voided`);
-		expect(logged.json.items[0]).toMatchObject({
-			label: 'order-77',
-			detail: 'Payment canceled; it can no longer be paid (Order expired)',
-		});
+		// the activity detail is the merchant's own reason, never a sentence made in code (P11)
+		expect(logged.json.items[0]).toMatchObject({ label: 'order-77', detail: 'Order expired' });
 		// canceling again changes nothing
 		const again = await env.api('POST', `/v1/payments/${payment.id}/cancel`, {});
 		expect(again.json.history).toHaveLength(voided.json.history.length);
@@ -923,7 +921,7 @@ describe('a payment the merchant cancels (K-13)', () => {
 		const stopped = await env.api('POST', `/v1/payments/${viaPaypal.id}/cancel`, {});
 		expect(stopped.json.history.at(-1)).toMatchObject({ event: 'voided', detail: 'canceled by the merchant' });
 		const logged = await env.api('GET', `/v1/activity?target=${viaPaypal.id}&action=payment.voided`);
-		expect(logged.json.items[0]).toMatchObject({ label: viaPaypal.id, detail: 'Payment canceled; it can no longer be paid' });
+		expect(logged.json.items[0]).toMatchObject({ label: viaPaypal.id, detail: null });
 		await page(`/return/paypal/${env.websiteId}/${viaPaypal.id}?token=ORD7`);
 		const paths = env.gateways.callsTo('https://api-m.paypal.com').map((c) => c.path);
 		expect(paths).toContain('/v2/checkout/orders/ORD7');
@@ -1114,12 +1112,16 @@ describe('subscriptions', () => {
 			type: 'customer.subscription.updated',
 			data: { object: { id: 'sub_stripe1', status: 'past_due', metadata: {} } },
 		});
-		// the Subscriptions admin widget cancels it (its ticket twin)
+		// the Subscriptions admin widget cancels it (its ticket twin), with the merchant's own reason (P11)
+		const long = await env.api('POST', `/v1/subscriptions/${made.json.id}/cancel`, { reason: 'x'.repeat(129) });
+		expect(long.status).toBe(422);
 		const cancelled = await env.call('POST', `/v1/admin/subscriptions/${made.json.id}/cancel`, {
 			token: await env.ticket(),
 			origin: ADMIN_ORIGIN,
+			body: { reason: 'Moved to yearly' },
 		});
 		expect(cancelled.json.status).toBe('cancelled');
+		expect(cancelled.json.history.at(-1)).toMatchObject({ event: 'cancelled', detail: 'Moved to yearly' });
 		expect(env.gateways.callsTo('https://api.stripe.com').at(-1)).toMatchObject({
 			method: 'DELETE',
 			path: '/v1/subscriptions/sub_stripe1',
@@ -1336,14 +1338,15 @@ describe('kit features (PLAN 0.8.10)', () => {
 			label: 'INV-77',
 			detail: 'Bank transfer of USD 2,500.00 confirmed',
 		});
+		// details are data and the website's own words, never sentences made in code (P11)
 		expect(byAction['payment.refunded']).toMatchObject({
 			label: 'INV-77',
-			detail: 'Refunded USD 500.00 (recorded; returned outside the gateway)',
+			detail: 'USD 500.00 · recorded; returned outside the gateway',
 		});
 		expect(byAction['subscription.cancelled']).toMatchObject({
 			target: sub.json.id,
 			label: 'club-9',
-			detail: 'Canceled at Stripe (plan price_2)',
+			detail: 'Card (Stripe) · price_2 · Canceled by the merchant',
 		});
 		// the server itself, and a ticket's staff member
 		const plain = await createPayment({ gateway: 'bank_transfer' });

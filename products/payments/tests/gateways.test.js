@@ -288,10 +288,12 @@ describe('Stripe', () => {
 		fake.respond('https://api.stripe.com', () => ({ status: 500 }));
 		expect(await stripe.subscriptionStatus?.({ ...subscription, gatewayRef: 'sub_y' }, keys, ctx)).toBeNull();
 
-		expect(await stripe.cancelSubscription?.(subscription, keys, ctx)).toMatchObject({ ok: false });
-		expect(await stripe.cancelSubscription?.({ ...subscription, gatewayRef: 'sub_x' }, keys, ctx)).toMatchObject({ ok: false });
+		expect(await stripe.cancelSubscription?.(subscription, keys, ctx, '')).toMatchObject({ ok: false });
+		expect(await stripe.cancelSubscription?.({ ...subscription, gatewayRef: 'sub_x' }, keys, ctx, '')).toMatchObject({
+			ok: false,
+		});
 		fake.respond('https://api.stripe.com', () => ({ status: 200, body: { status: 'canceled' } }));
-		expect(await stripe.cancelSubscription?.({ ...subscription, gatewayRef: 'sub_x' }, keys, ctx)).toEqual({ ok: true });
+		expect(await stripe.cancelSubscription?.({ ...subscription, gatewayRef: 'sub_x' }, keys, ctx, '')).toEqual({ ok: true });
 		expect(fake.calls.at(-1)?.method).toBe('DELETE');
 	});
 });
@@ -475,9 +477,15 @@ describe('PayPal', () => {
 		});
 		paypalAnswers(() => ({ status: 404 }));
 		expect(await paypal.subscriptionStatus?.({ ...subscription, gatewayRef: 'I-1' }, keys, ctx)).toBeNull();
-		expect(await paypal.cancelSubscription?.({ ...subscription, gatewayRef: 'I-1' }, keys, ctx)).toMatchObject({ ok: false });
+		expect(
+			await paypal.cancelSubscription?.({ ...subscription, gatewayRef: 'I-1' }, keys, ctx, 'Moved to yearly'),
+		).toMatchObject({ ok: false });
 		paypalAnswers(() => ({ status: 204 }));
-		expect(await paypal.cancelSubscription?.({ ...subscription, gatewayRef: 'I-1' }, keys, ctx)).toEqual({ ok: true });
+		expect(await paypal.cancelSubscription?.({ ...subscription, gatewayRef: 'I-1' }, keys, ctx, 'Moved to yearly')).toEqual({
+			ok: true,
+		});
+		// the merchant's own reason goes to PayPal, never a sentence made in code (P11)
+		expect(JSON.parse(String(fake.calls.at(-1)?.body))).toEqual({ reason: 'Moved to yearly' });
 	});
 });
 
@@ -584,6 +592,8 @@ describe('PayFast', () => {
 		const sent = fake.calls.at(-1);
 		expect(sent?.path).toBe('/refunds/1089250?testing=true');
 		expect(new URLSearchParams(sent?.body).get('amount')).toBe('100');
+		// no reason given: the payment's reference, never an English word made in code (P11)
+		expect(new URLSearchParams(sent?.body).get('reason')).toBe('order-1042');
 		fake.respond('https://api.payfast.co.za', () => ({ status: 400, body: { data: { message: 'Too much' } } }));
 		expect(await payfast.refund({ payment: paid, amount: 100, reason: 'x', refundId: 'r' }, keys, ctx)).toEqual({
 			ok: false,
@@ -677,7 +687,7 @@ describe('PayFast (Pakistan)', () => {
 			ctx,
 		);
 		const fields = bare.kind === 'form' ? Object.fromEntries(bare.fields) : {};
-		expect(fields.TXNDESC).toBe('Payment');
+		expect(fields.TXNDESC).toBe(PK_PAYMENT.id);
 		expect(fields.CUSTOMER_EMAIL_ADDRESS).toBeUndefined();
 		expect(fields.CUSTOMER_MOBILE_NO).toBeUndefined();
 		fake.respond(UAT, () => ({ status: 401 }));
@@ -826,8 +836,8 @@ describe('JazzCash', () => {
 			ctx,
 		);
 		expect(live.kind === 'form' && Object.fromEntries(live.fields)).toMatchObject({
-			pp_BillReference: 'payment',
-			pp_Description: 'Payment',
+			pp_BillReference: 'Tabcdefghijklmnopqrs',
+			pp_Description: 'Tabcdefghijklmnopqrs',
 		});
 		expect(await jazzcash.refund({ payment: PK_PAYMENT, amount: 1, reason: '', refundId: 'r' }, keys, ctx)).toEqual({
 			ok: true,

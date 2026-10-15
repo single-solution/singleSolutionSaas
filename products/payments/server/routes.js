@@ -72,6 +72,12 @@ const invalid = (field, message, code = 'invalid') =>
 /** @param {string} body @param {number} [status] */
 const html = (body, status = 200) => new Response(body, { status, headers: PAGE_HEADERS });
 
+/**
+ * An activity detail from its parts (data and the website's own words, never a sentence made in code; P11).
+ * @param {...string} parts
+ */
+const details = (...parts) => parts.filter(Boolean).join(' · ');
+
 /** @param {string} location */
 const seeOther = (location) =>
 	new Response(null, { status: 303, headers: { location, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } });
@@ -233,12 +239,14 @@ export const createRoutes = (product) => {
 		const refunded = await service.refund(s, await paymentOf(s, ctx.params.id), body, who(ctx));
 		const refund = /** @type {import('../adapters/store.js').PaymentRecord['refunds'][number]} */ (refunded.refunds.at(-1));
 		const { money } = await product.format(s.websiteId);
+		const texts = await product.settings.texts(s.websiteId);
+		// the detail is data and the website's own words (P11): the amount, a manual refund's mark, the reason
 		await log(
 			ctx,
 			'payment.refunded',
 			refunded.id,
 			refunded.reference || refunded.id,
-			`Refunded ${money(refund.amount, refunded.currency)}${refund.manual ? ' (recorded; returned outside the gateway)' : ''}`,
+			details(money(refund.amount, refunded.currency), refund.manual ? (texts['admin.manual'] ?? '') : '', refund.reason),
 		);
 		return created(service.view(s, refunded));
 	};
@@ -276,14 +284,8 @@ export const createRoutes = (product) => {
 		const s = await siteOf(ctx);
 		const payment = await paymentOf(s, ctx.params.id);
 		const voided = await service.voidPayment(s, payment, reason, who(ctx));
-		if (payment.status !== 'voided')
-			await log(
-				ctx,
-				'payment.voided',
-				voided.id,
-				voided.reference || voided.id,
-				`Payment canceled; it can no longer be paid${reason ? ` (${reason})` : ''}`,
-			);
+		// the detail is the merchant's own reason (P11)
+		if (payment.status !== 'voided') await log(ctx, 'payment.voided', voided.id, voided.reference || voided.id, reason);
 		return service.view(s, voided);
 	};
 
@@ -321,18 +323,27 @@ export const createRoutes = (product) => {
 		return page.respond(rows.map(subscriptionView), (view) => [view.createdAt, view.id]);
 	};
 
-	/** @param {any} ctx */
+	/**
+	 * Cancel a subscription at its gateway: `{ reason? }` (one line of at most 128 characters, PayPal's limit). Without
+	 * one, the website's text `subs.defaultReason` is the reason (P11): gateways that need a reason never get words made
+	 * in code.
+	 * @param {any} ctx
+	 */
 	const cancelSubscription = async (ctx) => {
+		const given = cleanText(ctx.body?.reason, 128);
+		if (given === null) return invalid('reason', 'reason is one line of at most 128 characters.');
 		const s = await siteOf(ctx);
 		const found = isId(ctx.params.id, 'sub') ? await s.store.subscriptions.get(ctx.params.id) : null;
 		if (!found) throw problem('not_found', 'No such subscription.');
-		const cancelled = await service.cancelSubscription(s, found, who(ctx));
+		const texts = await product.settings.texts(s.websiteId);
+		const reason = given || cleanText(texts['subs.defaultReason'], 128) || found.plan;
+		const cancelled = await service.cancelSubscription(s, found, who(ctx), reason);
 		await log(
 			ctx,
 			'subscription.cancelled',
 			cancelled.id,
 			cancelled.reference || cancelled.id,
-			`Canceled at ${cancelled.gateway === 'stripe' ? 'Stripe' : 'PayPal'} (plan ${cancelled.plan})`,
+			details(gatewayName(texts, cancelled.gateway), cancelled.plan, reason),
 		);
 		return subscriptionView(cancelled);
 	};
@@ -348,7 +359,14 @@ export const createRoutes = (product) => {
 		if (!service.allowedReturn(s, checked.value.returnUrl))
 			return invalid('returnUrl', `returnUrl must be on https://${s.domain} (or a local address while testing).`, 'origin');
 		const link = await s.store.links.add(checked.value);
-		await log(ctx, 'link.created', link.id, link.title, `Payment link in ${link.currency} created`);
+		const { money } = await product.format(s.websiteId);
+		await log(
+			ctx,
+			'link.created',
+			link.id,
+			link.title,
+			link.amount === null ? link.currency : money(link.amount, link.currency),
+		);
 		return created(linkView(link, service.linkUrl(s, link.id)));
 	};
 

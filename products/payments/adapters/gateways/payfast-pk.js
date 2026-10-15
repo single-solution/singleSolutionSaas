@@ -162,7 +162,7 @@ export const payfastPk = {
 			['CUSTOMER_MOBILE_NO', localMobile(payment.customer.phone)],
 			['SIGNATURE', createHash('md5').update(`${keys.merchantId}:${name}:${amount}:${payment.id}`).digest('hex')],
 			['VERSION', 'MERCHANTCART-0.1'],
-			['TXNDESC', (payment.description || payment.reference || 'Payment').slice(0, 100)],
+			['TXNDESC', (payment.description || payment.reference || payment.id).slice(0, 100)],
 			['PROCCODE', '00'],
 			['TRAN_TYPE', 'ECOMM_PURCHASE'],
 		];

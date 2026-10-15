@@ -158,7 +158,8 @@ export const payfast = {
 		if (!payment.captureRef) return { ok: false, message: 'PayFast has not confirmed this payment.' };
 		const answer = await api(keys, ctx, 'POST', `/refunds/${encodeURIComponent(payment.captureRef)}`, {
 			amount: String(amount),
-			reason: (reason || 'Refund').slice(0, 255),
+			// the merchant's reason, else the payment's own reference: never a word made in code (P11)
+			reason: (reason || payment.reference || payment.id).slice(0, 255),
 			notify_buyer: '1',
 		});
 		return ok2xx(answer.status)

@@ -56,7 +56,8 @@ import { GATEWAY_TIMEOUT_MS, jsonOf } from '../util.js';
  * @property {(input: { payment: PaymentLike, amount: number, reason: string, refundId: string }, keys: Keys, ctx: GatewayContext) => Promise<Refunded>} refund
  * @property {(input: { subscription: SubscriptionLike, keys: Keys, urls: Urls }, ctx: GatewayContext) => Promise<Started>} [subscribe]
  * @property {(subscription: SubscriptionLike, keys: Keys, ctx: GatewayContext) => Promise<SubscriptionNews | null>} [subscriptionStatus]
- * @property {(subscription: SubscriptionLike, keys: Keys, ctx: GatewayContext) => Promise<{ ok: boolean, message?: string }>} [cancelSubscription]
+ * @property {(subscription: SubscriptionLike, keys: Keys, ctx: GatewayContext, reason: string) => Promise<{ ok: boolean, message?: string }>} [cancelSubscription]
+ *   `reason`: the merchant's own words (their reason, else their text `subs.defaultReason`), for gateways that take one
  */
 
 /**
