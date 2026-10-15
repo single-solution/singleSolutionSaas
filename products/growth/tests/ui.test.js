@@ -296,6 +296,23 @@ describe('the page script', () => {
 		expect(inside(hostOf('consent_banner'), '[role="dialog"]').hasAttribute('hidden')).toBe(true);
 	});
 
+	it('G6: asks again once the kept choice is older than the merchant’s months', async () => {
+		const at = new Date(Date.now() - 200 * 86_400_000).toISOString();
+		window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ analytics: true, marketing: false, at }));
+		serve({ [`GET ${CONFIG_PATH}`]: () => answer(200, configOf(['consent_banner'])) });
+		await startWidget({ window, script: script('t') }).ready;
+		// 12 months by default: the choice holds and the banner stays closed
+		expect(w[WIDGET_GLOBAL].consent.get()).toMatchObject({ analytics: true, at });
+		expect(inside(hostOf('consent_banner'), '[role="dialog"]').hasAttribute('hidden')).toBe(true);
+		loadDocument('/');
+		serve({
+			[`GET ${CONFIG_PATH}`]: () => answer(200, configOf(['consent_banner'], { consent_banner: { askAgainMonths: 6 } })),
+		});
+		await startWidget({ window, script: script('t') }).ready;
+		expect(w[WIDGET_GLOBAL].consent.get()).toBeNull();
+		expect(inside(hostOf('consent_banner'), '[role="dialog"]').hasAttribute('hidden')).toBe(false);
+	});
+
 	it('records without consent when the merchant does not require it, with the merchant’s own consent tool', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout'] });
 		const marker = document.createElement('meta');

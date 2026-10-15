@@ -12,7 +12,8 @@ import {
 	tagsReady,
 	widgetSettings,
 } from '../core/config.js';
-import { consentMode, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
+import { consentMode, consentMonthsOf, granted, makeChoice, readChoice, tagChoice } from '../core/consent.js';
+import consentSchema from '../schemas/consent_banner.settings.json' with { type: 'json' };
 import {
 	checkBatch,
 	checkEvent,
@@ -460,7 +461,7 @@ describe('page script settings', () => {
 			now: NOW,
 		});
 		expect(settings).toMatchObject({
-			consent: { banner: true, position: 'top', privacyUrl: '/privacy' },
+			consent: { banner: true, position: 'top', privacyUrl: '/privacy', askAgainMonths: 12 },
 			record: { visits: true, funnel: false, requireConsent: false },
 			notice: { text: 'Sale' },
 		});
@@ -491,10 +492,14 @@ describe('page script settings', () => {
 		expect(adminSettings([], {}, DOMAIN).indexNow).toBeNull();
 		expect(widgetSettings({ on: [], values: {}, now: NOW }).admin).toBeNull();
 		expect(widgetSettings({ on: [], values: {}, now: NOW })).toMatchObject({
-			consent: { banner: false, position: 'bottom', privacyUrl: null },
+			consent: { banner: false, position: 'bottom', privacyUrl: null, askAgainMonths: 12 },
 			record: { requireConsent: true },
 			notice: null,
 		});
+		// G6: the merchant's months, from the banner's settings
+		expect(
+			widgetSettings({ on: ['consent_banner'], values: { consent_banner: { askAgainMonths: 6 } }, now: NOW }).consent,
+		).toMatchObject({ askAgainMonths: 6 });
 	});
 });
 
@@ -507,6 +512,21 @@ describe('consent', () => {
 		expect(readChoice('{', NOW)).toBeNull();
 		expect(readChoice('{"analytics":1}', NOW)).toBeNull();
 		expect(readChoice(null, NOW)).toBeNull();
+		// G6: asked again after the merchant's months (12 by default), counted in calendar months
+		/** @param {number} count */
+		const days = (count) => NOW + count * 86_400_000;
+		expect(readChoice(JSON.stringify(choice), days(364))).toEqual(choice);
+		expect(readChoice(JSON.stringify(choice), days(365))).toBeNull();
+		expect(readChoice(JSON.stringify(choice), days(150), 6)).toEqual(choice);
+		expect(readChoice(JSON.stringify(choice), Date.parse('2027-04-08T12:00:00Z'), 6)).toBeNull();
+		expect(readChoice(JSON.stringify(choice), days(700), 24)).toEqual(choice);
+		// the end of a longer month falls on the last day of a shorter one
+		const lastDay = makeChoice({ analytics: true, marketing: true }, Date.parse('2026-01-31T12:00:00Z'));
+		expect(readChoice(JSON.stringify(lastDay), Date.parse('2026-02-28T11:00:00Z'), 1)).toEqual(lastDay);
+		expect(readChoice(JSON.stringify(lastDay), Date.parse('2026-02-28T12:00:00Z'), 1)).toBeNull();
+		expect(consentSchema.properties.askAgainMonths.default).toBe(12);
+		expect([consentMonthsOf(6), consentMonthsOf(24), consentMonthsOf(0), consentMonthsOf(25)]).toEqual([6, 24, 12, 12]);
+		expect([consentMonthsOf(2.5), consentMonthsOf('6'), consentMonthsOf(undefined)]).toEqual([12, 12, 12]);
 		expect(consentMode(null)).toEqual({
 			ad_storage: 'denied',
 			ad_user_data: 'denied',

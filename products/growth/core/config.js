@@ -1,11 +1,12 @@
 /**
  * What the page script needs for a website (the kit's `GET /v1/widget/config` → `settings`; PLAN 0.8.9): the consent
- * banner's place and privacy link, what to record and whether it waits for consent, the merchant's tag ids (each
+ * banner's place, privacy link and how many months a choice holds, what to record and whether it waits for consent, the merchant's tag ids (each
  * checked; a malformed id is left out, so nothing broken is loaded), the custom scripts per consent category, and the
  * notice bar while its dates say it is on. Only switched-on features are given; never a secret (tag ids and the
  * merchant's own scripts are public in any page that loads them).
  * @module
  */
+import { consentMonthsOf } from './consent.js';
 import { pathMatches } from './paths.js';
 import { isIndexNowKey, keyLocationOf } from './seo.js';
 
@@ -217,6 +218,8 @@ export const widgetSettings = ({ on, values, now, admin = null }) => {
 			banner: on.includes('consent_banner'),
 			position: values.consent_banner?.position === 'top' ? 'top' : 'bottom',
 			privacyUrl: on.includes('consent_banner') ? linkOf(text(values, 'consent_banner', 'privacyUrl')) : null,
+			// G6: a kept choice is asked again after the merchant's months (also with their own consent tool)
+			askAgainMonths: consentMonthsOf(values.consent_banner?.askAgainMonths),
 		},
 		record: {
 			visits: on.includes('visitor_analytics'),

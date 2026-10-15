@@ -56,6 +56,14 @@ export const createConsent = ({ storage, now }) => {
 			for (const listener of listeners) listener(choice);
 			return choice;
 		},
+		/**
+		 * The merchant's months a choice holds (G6, from the widget config): a choice older than that is dropped, so the
+		 * visitor is asked again.
+		 * @param {number} months
+		 */
+		askAgainAfter: (months) => {
+			choice = choice && readChoice(JSON.stringify(choice), now(), months);
+		},
 		/** @param {(choice: Choice) => void} listener */
 		onChange: (listener) => {
 			listeners.add(listener);

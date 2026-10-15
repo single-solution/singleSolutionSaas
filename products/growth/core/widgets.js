@@ -59,8 +59,14 @@ export const VISIT_STORAGE_KEY = 'ss-growth-visit';
  * cross-site id; PLAN 0.8.10 G3). */
 export const SESSION_STORAGE_KEY = 'ss-growth-session';
 
-/** A stored consent choice is asked again after this many days. */
-export const CONSENT_DAYS = 365;
+/**
+ * A stored consent choice is asked again after this many months unless the merchant sets their own (the consent
+ * banner's setting "Ask again after", `askAgainMonths`, G6).
+ */
+export const CONSENT_MONTHS = 12;
+
+/** The longest the merchant may keep a consent choice before it is asked again, in months. */
+export const MAX_CONSENT_MONTHS = 24;
 
 /** A visit ends after this long without a page view. */
 export const VISIT_IDLE_MS = 30 * 60_000;

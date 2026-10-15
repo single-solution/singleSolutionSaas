@@ -6,25 +6,50 @@
  * what was granted.
  * @module
  */
-import { CONSENT_DAYS } from './widgets.js';
+import { CONSENT_MONTHS, MAX_CONSENT_MONTHS } from './widgets.js';
 
 /** @typedef {{ analytics: boolean, marketing: boolean, at: string }} Choice */
 
 const DAY_MS = 86_400_000;
 
 /**
- * A choice kept in the browser, or null when there is none, it cannot be read or it is older than {@link CONSENT_DAYS}.
+ * The months a choice holds (G6): the merchant's setting when it is a whole number from 1 to
+ * {@link MAX_CONSENT_MONTHS}, else {@link CONSENT_MONTHS}.
+ * @param {unknown} value the consent banner's `askAgainMonths` setting
+ */
+export const consentMonthsOf = (value) =>
+	typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_CONSENT_MONTHS ? value : CONSENT_MONTHS;
+
+/**
+ * The time a number of calendar months after another (UTC; the 31st plus a month is the last day of a shorter month).
+ * @param {number} at
+ * @param {number} months
+ */
+const monthsAfter = (at, months) => {
+	const date = new Date(at);
+	const day = date.getUTCDate();
+	date.setUTCDate(1);
+	date.setUTCMonth(date.getUTCMonth() + months);
+	const last = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+	date.setUTCDate(Math.min(day, last));
+	return date.getTime();
+};
+
+/**
+ * A choice kept in the browser, or null when there is none, it cannot be read or it is `months` calendar months old
+ * (G6: the merchant's setting, {@link CONSENT_MONTHS} by default), so the visitor is asked again.
  * @param {string | null} stored
  * @param {number} now
+ * @param {number} [months]
  * @returns {Choice | null}
  */
-export const readChoice = (stored, now) => {
+export const readChoice = (stored, now, months = CONSENT_MONTHS) => {
 	if (!stored) return null;
 	try {
 		const value = JSON.parse(stored);
 		const at = Date.parse(value?.at);
 		if (typeof value?.analytics !== 'boolean' || typeof value?.marketing !== 'boolean' || Number.isNaN(at)) return null;
-		if (now - at > CONSENT_DAYS * DAY_MS || at - now > DAY_MS) return null;
+		if (now >= monthsAfter(at, consentMonthsOf(months)) || at - now > DAY_MS) return null;
 		return { analytics: value.analytics, marketing: value.marketing, at: value.at };
 	} catch {
 		return null;

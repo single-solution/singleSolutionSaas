@@ -14,6 +14,14 @@
 			"description": "An https address or a path on your website (for example /privacy). Every word of the banner is in Texts.",
 			"default": "",
 			"maxLength": 2048
+		},
+		"askAgainMonths": {
+			"type": "integer",
+			"title": "Ask again after (months)",
+			"description": "How long a visitor's choice holds before the banner asks again, 1 to 24 months (with the banner off, a choice from your own consent tool holds 12 months). Check what the law where you operate allows: many privacy authorities expect at most 12 or 13 months.",
+			"default": 12,
+			"minimum": 1,
+			"maximum": 24
 		}
 	}
 }

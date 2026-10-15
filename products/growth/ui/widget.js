@@ -193,6 +193,7 @@ export const startWidget = ({ window: win, script }) => {
 			tags.apply(choice);
 			collector.allow(!record.requireConsent || granted(choice, 'analytics'));
 		};
+		consent.askAgainAfter(config.settings.consent.askAgainMonths);
 		follow(consent.get());
 		consent.onChange(follow);
 		current = { config, collector, tags };
