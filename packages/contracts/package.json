@@ -1,11 +1,12 @@
 {
 	"name": "@ss/contracts",
 	"version": "0.1.0",
-	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the Format and time-zone helpers (`./format`, browser-safe), the phone-number normalizer (`./phone`, browser-safe), the business profile of the Setup advisor (`./profile`, browser-safe) the message template rules (`./templates`, browser-safe) and the text helpers (`./text`, browser-safe).",
+	"description": "Versioned schemas and validators binding the Portal and every product: manifest and settings schemas, Product-Portal wire shapes, business.json, cross-product shapes, ids, RFC 9457 problems, and the email address check (`./email`, browser-safe), the Format and time-zone helpers (`./format`, browser-safe), the phone-number normalizer (`./phone`, browser-safe), the business profile of the Setup advisor (`./profile`, browser-safe) the message template rules (`./templates`, browser-safe) and the text helpers (`./text`, browser-safe).",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
+		"./email": "./src/email.js",
 		"./format": "./src/format.js",
 		"./phone": "./src/phone.js",
 		"./profile": "./src/profile.js",
@@ -27,6 +28,10 @@
 			".": {
 				"types": "./types/src/index.d.ts",
 				"default": "./src/index.js"
+			},
+			"./email": {
+				"types": "./types/src/email.d.ts",
+				"default": "./src/email.js"
 			},
 			"./format": {
 				"types": "./types/src/format.d.ts",

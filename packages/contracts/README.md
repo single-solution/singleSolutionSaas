@@ -185,6 +185,20 @@ Pure and browser-safe; every product normalizes phones with it, so one person ha
   business.json `country`; `callingCodeOf(country)`.
 - `PHONE_COUNTRIES` (ISO codes a setting may name) and `phoneInCountries(phone, countries)` (`[]` = any).
 
+## Email addresses (`@ss/contracts/email`)
+
+Pure and browser-safe; every product and the Portal check addresses with it, so an address one accepts is never
+refused by another.
+
+- `normalizeEmail(input)` → the stored form or null. The local part is an ASCII dot-atom (no dot first, last or
+  doubled; plus-addressing kept; quoted and non-ASCII local parts refused, as they need SMTPUTF8) of at most 64
+  characters; the domain has 2 or more labels of letters, digits and hyphens and a top-level label of 2 or more
+  characters that is not all digits (`ana@example.xn--p1ai` yes; IP addresses, domain literals and single-label names
+  no). A domain typed in Unicode is stored as punycode (`ana@bücher.de` → `ana@xn--bcher-kva.de`). The stored form is
+  trimmed, entirely in lower case (local part too: one person, one record) and at most 254 characters.
+- `isEmailAddress(value)`: true for an address already in its stored form (check stored and received values before
+  sending; check what people type with `normalizeEmail`).
+
 ## Text (`@ss/contracts/text`)
 
 Pure and browser-safe; servers, products' `core/` and widget bundles share it.
