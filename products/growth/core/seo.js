@@ -88,7 +88,7 @@ export const siteUrlOf = (value, domain) => {
  * @param {Record<string, unknown>} values the `robots_verification` settings
  * @param {string} domain
  */
-const sitemapUrlsOf = (values, domain) => {
+export const sitemapUrlsOf = (values, domain) => {
 	const listed = Array.isArray(values.sitemaps) ? values.sitemaps : [];
 	return (listed.length > 0 ? listed : [`https://${domain}/sitemap.xml`])
 		.map((url) => siteUrlOf(url, domain))

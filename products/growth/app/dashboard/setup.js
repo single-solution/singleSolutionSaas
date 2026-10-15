@@ -9,7 +9,7 @@
  */
 import { Badge, Callout, Card, CodeBlock, KeyValueList, Masonry, Section, formatDateTime } from '@ss/ui';
 import { noticeOf, tagsOf } from '../../core/config.js';
-import { keyLocationOf, robotsTxtOf, verificationOf } from '../../core/seo.js';
+import { keyLocationOf, robotsTxtOf, sitemapUrlsOf, verificationOf } from '../../core/seo.js';
 import { fill } from './api.js';
 import { TEXTS } from './texts.js';
 
@@ -266,7 +266,7 @@ export function AtAGlance({ values, context }) {
 									},
 									{
 										label: TEXTS.setup.sitemaps,
-										value: String(Array.isArray(robots.sitemaps) ? robots.sitemaps.length : 0),
+										value: String(sitemapUrlsOf(robots, domain).length),
 									},
 									{
 										label: TEXTS.setup.verification,

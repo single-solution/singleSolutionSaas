@@ -167,6 +167,28 @@ describe('the dashboard (setup only)', () => {
 			expect(text).toContain(words);
 	});
 
+	it('Overview counts the Sitemap lines robots.txt serves, /sitemap.xml when none is set', async () => {
+		const saved = VALUES.robots_verification ?? {};
+		const glance = async () => {
+			serve(['robots_verification']);
+			const Overview = TABS.overview;
+			const { container } = render(<Overview {...props} />);
+			await settle();
+			const text = container.textContent ?? '';
+			cleanup();
+			return text;
+		};
+		try {
+			VALUES.robots_verification = { sitemaps: [] };
+			expect(await glance()).toContain(`${TEXTS.setup.sitemaps}1`);
+			// a sitemap on another site is never named
+			VALUES.robots_verification = { sitemaps: ['https://other.example/sitemap.xml'] };
+			expect(await glance()).toContain(`${TEXTS.setup.sitemaps}0`);
+		} finally {
+			VALUES.robots_verification = saved;
+		}
+	});
+
 	it('Overview leaves out what is off', async () => {
 		serve([]);
 		const Overview = TABS.overview;
