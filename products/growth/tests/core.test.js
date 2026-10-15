@@ -1,3 +1,4 @@
+import { noticeFor } from '../core/notices.js';
 import { DEFAULT_ACTIONS, DEFAULT_CATEGORIES, SHOP_FUNNEL, checkList, readList, zonedTimeOf } from '../core/lists.js';
 import { zonedParts } from '@ss/contracts/format';
 import { describe, expect, it } from 'vitest';
@@ -6,7 +7,6 @@ import {
 	adminSettings,
 	linkOf,
 	noticeAnswer,
-	noticeFor,
 	noticesOf,
 	searchParamsOf,
 	tagsOf,

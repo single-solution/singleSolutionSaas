@@ -6,10 +6,10 @@
  * merchant's own scripts are public in any page that loads them).
  * @module
  */
-import { pathMatches } from '@ss/contracts/text';
 import { consentMonthsOf } from './consent.js';
 import { zonedParts } from '@ss/contracts/format';
 import { readList, zonedTimeOf } from './lists.js';
+import { noticeFor } from './notices.js';
 import { isIndexNowKey, keyLocationOf } from './seo.js';
 import { BANNER_POSITIONS } from './widgets.js';
 
@@ -68,11 +68,7 @@ export const searchParamsOf = (value) =>
 		.filter((name) => /^[A-Za-z0-9_.-]{1,40}$/.test(name))
 		.slice(0, 10);
 
-/**
- * An announcement showing now (G4), as the page script and `GET /v1/notice` get it.
- * @typedef {{ key: string, text: string, linkUrl: string | null, linkText: string, dismissible: boolean,
- *   dismiss: 'page' | 'visit' | 'days', dismissDays: number, pages: string[], hideOnPages: string[] }} Notice
- */
+/** @typedef {import('./notices.js').Notice} Notice */
 
 /**
  * The announcements showing now (G4): none while the notice bar is turned off (AO-2); else the `announcements` list's
@@ -109,21 +105,6 @@ export const noticesOf = (values, announcements, now, timeZone) => {
 			};
 		});
 };
-
-/**
- * The announcement a page shows (G4): the first showing now that applies to it — its pages (none: every page) name
- * the page and its hidden pages do not (the patterns of `@ss/contracts/text` `pathMatches`: `*` inside one segment,
- * `**` any number of segments).
- * @param {ReadonlyArray<Notice>} notices
- * @param {string} path
- * @returns {Notice | null}
- */
-export const noticeFor = (notices, path) =>
-	notices.find(
-		(notice) =>
-			(notice.pages.length === 0 || notice.pages.some((pattern) => pathMatches(pattern, path))) &&
-			!notice.hideOnPages.some((pattern) => pathMatches(pattern, path)),
-	) ?? null;
 
 /**
  * What `GET /v1/notice` answers for custom UIs (G4): the announcement showing now (on the page `path` when it is

@@ -7,7 +7,7 @@
  * @module
  */
 import { element, mountWidget } from '@ss/app-kit/widget';
-import { pathMatches } from '@ss/contracts/text';
+import { appliesTo } from '../core/notices.js';
 import { WIDGET_CSS } from './styles.js';
 
 /** Where closed announcements are remembered (with their text, so a changed one shows again). */
@@ -15,7 +15,7 @@ export const NOTICE_STORAGE_KEY = 'ss-growth-notice-closed';
 
 const DAY_MS = 86_400_000;
 
-/** @typedef {import('../core/config.js').Notice} Notice */
+/** @typedef {import('../core/notices.js').Notice} Notice */
 
 /**
  * The closed announcements a store remembers: `{ <key>: { text, until? } }`.
@@ -50,12 +50,7 @@ export const isClosed = (notice, { visits, kept, now }) => {
  * @returns {Notice | null}
  */
 export const noticeOnPage = (notices, path, stores) =>
-	notices.find(
-		(notice) =>
-			(notice.pages.length === 0 || notice.pages.some((pattern) => pathMatches(pattern, path))) &&
-			!notice.hideOnPages.some((pattern) => pathMatches(pattern, path)) &&
-			!isClosed(notice, stores),
-	) ?? null;
+	notices.find((notice) => appliesTo(notice, path) && !isClosed(notice, stores)) ?? null;
 
 /**
  * @param {{ host: HTMLElement, config: import('./widget.js').WidgetConfig, notice: Notice,
