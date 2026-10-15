@@ -2063,10 +2063,10 @@ product's while the Portal is down; any Notifications server token may send othe
 ddf09859, 586ab3fc, 7216213c, 8e28653f, 0aea03a5, 434a76e1):** product dashboards can no longer be framed (0.4.3):
 `@ss/app-kit/headers` `dashboardHeaders()` in each product's `next.config.js` gives the dashboard page `X-Frame-Options:
 DENY`, CSP `frame-ancestors 'none'` and the Portal's other static security headers (Accounts, Notifications, Chat,
-Payments, Growth, the CLI template and the Notes fixture; Ecommerce's one line comes with its next helper). A website's
+Payments, Growth, Ecommerce, the CLI template and the Notes fixture). A website's
 setting, text, theme, Format and list saves are activity-log entries (`settings.changed`, by who saved them; parity SB
 #12) besides Recent changes and the event; the kit offers `product.settingsChanged` for settings a product saves through
-its own routes (Chat's and Ecommerce's dashboard lists do not use it yet). Settings API reads get 3,000 per minute per
+its own routes (Chat's and Ecommerce's dashboard lists use it too). Settings API reads get 3,000 per minute per
 route and website (SG-31). A re-add raises `featuresVersion` with every feature off, and a product with older switches
 turns them off on its next status read (0.8.4). The admin Overview's credits added this month are summed by the Portal
 over every receipt (not in the browser from at most 500). Setup sheet: `website.status` (the status of the website's
