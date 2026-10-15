@@ -2,7 +2,8 @@
 /**
  * Notifications' own parts of the shared dashboard tabs (`@ss/ui/dashboard`, PLAN 0.4.3): the templates counted in the
  * Overview and a webhook URL asked for while Outgoing webhooks is on without one; Settings → Templates on top of
- * Settings and the webhook URLs beside the feature settings; the provider forms of the email, SMS and WhatsApp
+ * Settings and the webhook URLs and the merchant's lists (topics, template settings, fallback channels, quiet hours)
+ * beside the feature settings; the provider forms of the email, SMS and WhatsApp
  * connections; and the developer sections (send API, template keys, widget and ticket snippets, the webhook signature
  * check and the reply addresses).
  * @module
@@ -14,6 +15,7 @@ import { createSnippets } from '../../core/snippets.js';
 import { PROVIDER_FORMS, ProviderForm } from './providers.js';
 import { TemplatesSection } from './templates.js';
 import { TEXTS } from './texts.js';
+import { MerchantLists } from './lists.js';
 import { WebhookUrlsCard } from './webhooks.js';
 
 /** @typedef {import('@ss/ui/dashboard').TabProps} TabProps */
@@ -76,7 +78,18 @@ function NotificationsSettings(props) {
 			sections={<TemplatesSection websiteId={websiteId} />}
 			featureCards={(features) => {
 				const webhooks = features.find((feature) => feature.key === 'webhooks');
-				return webhooks ? <WebhookUrlsCard websiteId={websiteId} off={webhooks.on === false} /> : null;
+				return (
+					<>
+						{webhooks ? (
+							<WebhookUrlsCard
+								websiteId={websiteId}
+								off={webhooks.on === false}
+								max={Number(webhooks.values?.maxUrls?.value ?? 5)}
+							/>
+						) : null}
+						<MerchantLists websiteId={websiteId} features={features} />
+					</>
+				);
 			}}
 		/>
 	);
