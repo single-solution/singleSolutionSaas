@@ -13,7 +13,9 @@
  *   POST | GET | PUT | PATCH, url (template), contentType?: json | form | text | none, headers? (JSON object text), body?
  *   (template; none for GET or none), secret?, from? }` — and its success rule — `{ successStatus? (codes, ranges or
  *   classes: 200, 200-204, 2xx; default 2xx), successPath? (a JSON path such as result.code), successValue? (the value
- *   it must have, as text), idPath? (where the message id is) }`. Never words in the answer. In the URL, headers and
+ *   it must have, as text), idPath? (where the message id is) }`. Never words in the answer. Replies to it (unsubscribe
+ *   keywords, N4): `{ inboundToken? (at least 16 characters, in the reply address as ?token=), inboundFrom, inboundText
+ *   (where the sender and the text are: a JSON path or a form field) }`. In the URL, headers and
  *   body, `{to}` (international number, +…), `{toDigits}` (digits only), `{text}`, `{from}` and `{secret}` are filled,
  *   encoded for where they go (URL, JSON string, form field or plain text).
  * @module
@@ -113,6 +115,13 @@ export const providerViolation = (name, value) => {
 				return `${field} must be a JSON path such as result.code or data.0.id.`;
 		if (value.successPath && String(value.successValue ?? '').trim() === '')
 			return 'successValue is the value successPath must have, for example true, 0 or queued.';
+		// replies (fixed-choices N4): a token of at least 16 characters, and where the sender and the text are
+		if (value.inboundToken !== undefined && value.inboundToken !== '') {
+			if (String(value.inboundToken).length < 16) return 'inboundToken has at least 16 characters.';
+			for (const field of /** @type {const} */ (['inboundFrom', 'inboundText']))
+				if (!JSON_PATH.test(String(value[field] ?? '')))
+					return `${field} is where the reply has it: a JSON path or a form field, such as from or message.text.`;
+		}
 	}
 	return null;
 };

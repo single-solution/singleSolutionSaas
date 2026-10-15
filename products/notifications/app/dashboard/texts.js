@@ -132,6 +132,12 @@ export const TEXTS = dashboardTexts({
 				when: 'When this channel fails',
 				then: 'Try next, in the order picked',
 			},
+			keywords: {
+				title: 'Unsubscribe keywords',
+				help: 'A reply by SMS or WhatsApp that is one of these words (any case) unsubscribes the sender from optional messages. One row per language.',
+				language: 'Language code (for example en or es; empty: any language)',
+				words: 'Keywords, one per line',
+			},
 			quiet: {
 				title: 'Quiet hours',
 				help: 'Messages that are not urgent wait until a window ends, in the recipient’s time zone (else your business time zone).',
@@ -188,6 +194,9 @@ export const TEXTS = dashboardTexts({
 			successPath: 'Success field in the JSON answer (a path such as result.code; empty: the status decides)',
 			successValue: 'Its value on success (for example true, 0 or queued)',
 			idPath: 'Message id in the JSON answer (a path such as data.0.id)',
+			inboundToken: 'Reply token (at least 16 characters; add ?token=… to the reply address in your gateway)',
+			inboundFrom: 'Sender in a reply (a JSON path or form field, such as from)',
+			inboundText: 'Text of a reply (a JSON path or form field, such as message.text)',
 			publicKey: 'Public key (base64url)',
 			privateKey: 'Private key (base64url)',
 			subject: 'Contact (mailto: or https)',
@@ -206,6 +215,7 @@ export const TEXTS = dashboardTexts({
 		webhook: 'Webhook signature check',
 		webhookHelp: 'Check the SS-Signature header of every event before trusting it.',
 		replies: 'Reply addresses',
-		repliesHelp: "Point your provider's incoming-message webhook here for unsubscribe keywords.",
+		repliesHelp:
+			"Point your provider's incoming-message webhook here for unsubscribe keywords. For any other gateway, add ?token= and its reply token from Connections.",
 	},
 });

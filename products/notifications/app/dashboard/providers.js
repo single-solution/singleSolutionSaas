@@ -30,6 +30,9 @@ const HTTP = [
 	{ name: 'successPath', optional: true },
 	{ name: 'successValue', optional: true },
 	{ name: 'idPath', optional: true },
+	{ name: 'inboundToken', type: 'password', optional: true },
+	{ name: 'inboundFrom', optional: true },
+	{ name: 'inboundText', optional: true },
 ];
 
 /** The providers of each connection and their fields. @type {Record<string, Record<string, Field[]>>} */

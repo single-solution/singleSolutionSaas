@@ -8,12 +8,13 @@
  * Public entry `./routes` of this package: `product.handler(createRoutes(product))`.
  * @module
  */
+import { timingSafeEqual } from 'node:crypto';
 import { isId } from '@ss/contracts';
 import { normalizeEmail } from '@ss/contracts/email';
 import { TEMPLATE_KEY, TEXT_LIMITS } from '@ss/contracts/templates';
 import { actorOf, countHandlers, created, defineRoute, noContent, ok, paginate, problem } from '@ss/app-kit';
 import { CHANNELS, CHANNEL_FEATURES, checkRecipient, normalisePhone } from '../core/channels.js';
-import { isOptOut, repliesOf } from '../core/inbound.js';
+import { gatewayRepliesOf, isOptOut, repliesOf } from '../core/inbound.js';
 import { logFilters } from '../core/log.js';
 import { verifyMeta, verifyTwilio } from '../adapters/signatures.js';
 import {
@@ -72,6 +73,16 @@ const TEMPLATE_WRITE_LIMITS = [
 
 /** Fields the delivery log is counted by (`GET /v1/messages/counts?by=`). */
 const MESSAGE_COUNT_FIELDS = Object.freeze({ status: 'status', channel: 'channel', template: 'template', source: 'source' });
+
+/**
+ * Whether two texts are the same, in constant time.
+ * @param {string} given @param {string} expected
+ */
+const sameText = (given, expected) => {
+	const a = Buffer.from(given);
+	const b = Buffer.from(expected);
+	return a.length === b.length && timingSafeEqual(a, b);
+};
 
 /** @param {string} field @param {string} message @param {string} [code] */
 const invalid = (field, message, code = 'invalid') =>
@@ -815,28 +826,36 @@ export const createRoutes = (product) => {
 					return problem('not_found', 'Replies are not received for this website.');
 				const value = await product.connections.value(websiteId, channel);
 				const v = typeof value === 'object' && value !== null ? value : {};
+				// any gateway (fixed-choices N4): its own token in the reply address, and the merchant's mapping
+				const token = typeof ctx.query.token === 'string' ? ctx.query.token : '';
 				const signatureOk =
-					v.provider === 'twilio'
-						? verifyTwilio({
-								url: ctx.request.url,
-								params: new URLSearchParams(ctx.rawBody),
-								signature: ctx.headers.get('x-twilio-signature'),
-								authToken: String(v.secret),
-							})
-						: v.provider === 'meta' && typeof v.appSecret === 'string' && v.appSecret !== ''
-							? verifyMeta({
-									body: ctx.rawBody,
-									signature: ctx.headers.get('x-hub-signature-256'),
-									appSecret: v.appSecret,
+					v.provider === 'http'
+						? typeof v.inboundToken === 'string' && v.inboundToken.length >= 16 && sameText(token, v.inboundToken)
+						: v.provider === 'twilio'
+							? verifyTwilio({
+									url: ctx.request.url,
+									params: new URLSearchParams(ctx.rawBody),
+									signature: ctx.headers.get('x-twilio-signature'),
+									authToken: String(v.secret),
 								})
-							: false;
+							: v.provider === 'meta' && typeof v.appSecret === 'string' && v.appSecret !== ''
+								? verifyMeta({
+										body: ctx.rawBody,
+										signature: ctx.headers.get('x-hub-signature-256'),
+										appSecret: v.appSecret,
+									})
+								: false;
 				if (!signatureOk) return problem('unauthorized', 'The signature is not valid.');
-				const { optOutKeywords } = await product.settings.values(websiteId, channel);
+				const keywords = await product.lists.stopKeywords(websiteId);
 				const s = await sending.site({ websiteId, merchantId: found.merchantId, base: new URL(ctx.request.url).origin });
 				ctx.after(() => sending.drain(s));
-				for (const reply of repliesOf(v.provider === 'twilio' ? 'twilio' : 'meta', ctx.rawBody)) {
+				const replies =
+					v.provider === 'http'
+						? gatewayRepliesOf(ctx.rawBody, { from: String(v.inboundFrom ?? ''), text: String(v.inboundText ?? '') })
+						: repliesOf(v.provider === 'twilio' ? 'twilio' : 'meta', ctx.rawBody);
+				for (const reply of replies) {
 					const phone = normalisePhone(reply.from);
-					if (phone && isOptOut(reply.text, optOutKeywords)) await sending.unsubscribe(s, phone, 'keyword');
+					if (phone && isOptOut(reply.text, keywords)) await sending.unsubscribe(s, phone, 'keyword');
 				}
 				return v.provider === 'twilio'
 					? new Response('<Response/>', { headers: { 'content-type': 'text/xml; charset=utf-8' } })

@@ -1,7 +1,7 @@
 /**
- * The merchant's own choices kept as list settings (fixed-choices N2, N5, N6, N7): unsubscribe topics, the settings of
- * each template (its topic, its fallback channels, whether send limits count it), the website's fallback channels per
- * channel and the quiet hours. Each list is saved whole (`PUT /v1/lists/<name>` or the dashboard); these are its checks.
+ * The merchant's own choices kept as list settings (fixed-choices N2, N4, N5, N6, N7): unsubscribe topics, the settings
+ * of each template (its topic, its fallback channels, whether send limits count it), the website's fallback channels
+ * per channel, the quiet hours and the unsubscribe keywords per language. Each list is saved whole (`PUT /v1/lists/<name>` or the dashboard); these are its checks.
  * No I/O.
  * @module
  */
@@ -23,6 +23,11 @@ export const MAX_QUIET_WINDOWS = 50;
 const TOPIC_NAME_LIMIT = 60;
 /** A topic id: kept when the topic is renamed; links and recipients' choices name it. */
 export const TOPIC_ID = /^[a-z][a-z0-9_]{0,31}$/;
+/** Most languages with unsubscribe keywords, and keywords per language (system caps). */
+const MAX_KEYWORD_LANGUAGES = 30;
+const MAX_KEYWORDS = 20;
+/** A language tag (`en`, `pt-BR`) or `''` for any language. */
+const KEYWORD_LANGUAGE = /^([a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3})?$/;
 /** A local time of day. */
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -263,4 +268,39 @@ export const fallbackChainOf = ({ channel, template }, { templates, chains }) =>
 	const own = template === null ? null : (templates.find((entry) => entry.key === template)?.fallback ?? null);
 	const chain = own ?? chains.find((entry) => entry.channel === channel)?.then ?? [];
 	return chain.filter((next) => next !== channel);
+};
+
+/**
+ * Check the list `stop_keywords` (fixed-choices N4): per language (a code such as en or pt-BR; empty: any language) its
+ * unsubscribe keywords, each once (at most 20, 32 characters each).
+ * @param {unknown} input
+ * @returns {Checked<Array<{ language: string, words: string[] }>>}
+ */
+export const checkStopKeywords = (input) => {
+	if (!Array.isArray(input) || input.length > MAX_KEYWORD_LANGUAGES)
+		return {
+			ok: false,
+			errors: [{ path: '/value', message: `The list is [{ language, words }], at most ${MAX_KEYWORD_LANGUAGES} languages.` }],
+		};
+	/** @type {Errors} */
+	const errors = [];
+	/** @type {Array<{ language: string, words: string[] }>} */
+	const value = [];
+	for (const [at, raw] of input.entries()) {
+		const entry = record(raw);
+		const language = typeof entry.language === 'string' ? entry.language.trim() : '';
+		if (!KEYWORD_LANGUAGE.test(language) || value.some((other) => other.language === language)) {
+			errors.push({ path: `/value/${at}/language`, message: 'Use a language code such as en or pt-BR, each once.' });
+			continue;
+		}
+		const words = Array.isArray(entry.words)
+			? [...new Set(entry.words.filter((word) => typeof word === 'string').map((word) => word.trim()))].filter(Boolean)
+			: [];
+		if (words.length === 0 || words.length > MAX_KEYWORDS || words.some((word) => word.length > 32)) {
+			errors.push({ path: `/value/${at}/words`, message: `Give 1–${MAX_KEYWORDS} keywords of at most 32 characters.` });
+			continue;
+		}
+		value.push({ language, words });
+	}
+	return errors.length > 0 ? { ok: false, errors } : { ok: true, value };
 };

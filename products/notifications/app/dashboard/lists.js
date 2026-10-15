@@ -1,12 +1,12 @@
 'use client';
 /**
- * Settings → the merchant's own lists (fixed-choices N2, N5–N7): unsubscribe topics, template settings, fallback
- * channels and quiet hours. Each card adds, renames, reorders and removes rows and saves the list whole with
+ * Settings → the merchant's own lists (fixed-choices N2, N4–N7): unsubscribe topics, template settings, fallback
+ * channels, quiet hours and unsubscribe keywords per language. Each card adds, renames, reorders and removes rows and saves the list whole with
  * `PUT /v1/dashboard/websites/:websiteId/lists/<name> { value }` (the kit's route; a 422 lists its `errors` by row).
  * @module
  */
 import { useState } from 'react';
-import { Button, Callout, Card, Checkbox, Input, Select, Skeleton, describeProblem } from '@ss/ui';
+import { Button, Callout, Card, Checkbox, Input, Select, Skeleton, TextArea, describeProblem } from '@ss/ui';
 import { CHANNELS, FALLBACK_CHANNELS } from '../../core/channels.js';
 import { call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -324,6 +324,49 @@ export function QuietHoursCard({ websiteId, off }) {
 	);
 }
 
+/** @typedef {{ language: string, words: string }} KeywordsRow words as typed: one per line */
+
+/** @param {{ websiteId: string, off: boolean }} props */
+export function StopKeywordsCard({ websiteId, off }) {
+	return (
+		<ListCard
+			websiteId={websiteId}
+			name="stop_keywords"
+			title={L.keywords.title}
+			help={L.keywords.help}
+			off={off}
+			max={30}
+			blank={() => /** @type {KeywordsRow} */ ({ language: '', words: '' })}
+			rows={(value) => value.map((entry) => ({ language: entry.language, words: entry.words.join('\n') }))}
+			value={(rows) =>
+				rows.map((/** @type {KeywordsRow} */ row) => ({
+					language: row.language.trim(),
+					words: row.words
+						.split('\n')
+						.map((/** @type {string} */ word) => word.trim())
+						.filter(Boolean),
+				}))
+			}
+			render={(row, set) => (
+				<>
+					<Input
+						label={L.keywords.language}
+						value={row.language}
+						maxLength={35}
+						onChange={(event) => set({ language: event.target.value })}
+					/>
+					<TextArea
+						label={L.keywords.words}
+						rows={3}
+						value={row.words}
+						onChange={(event) => set({ words: event.target.value })}
+					/>
+				</>
+			)}
+		/>
+	);
+}
+
 /**
  * The lists' cards in Settings, each while one of its features is listed (off: admins prepare it).
  * @param {{ websiteId: string, features: Array<{ key: string, on?: boolean }> }} props
@@ -338,12 +381,14 @@ export function MerchantLists({ websiteId, features }) {
 	const sending = offOf(['email', 'sms', 'whatsapp', 'browser_push', 'staff_push', 'send_api']);
 	const fallback = offOf(['fallback']);
 	const quiet = offOf(['quiet_hours']);
+	const replies = offOf(['sms', 'whatsapp']);
 	return (
 		<>
 			{customers === null ? null : <TopicsCard websiteId={websiteId} off={customers} />}
 			{sending === null ? null : <TemplateSettingsCard websiteId={websiteId} off={sending} />}
 			{fallback === null ? null : <FallbackChainsCard websiteId={websiteId} off={fallback} />}
 			{quiet === null ? null : <QuietHoursCard websiteId={websiteId} off={quiet} />}
+			{replies === null ? null : <StopKeywordsCard websiteId={websiteId} off={replies} />}
 		</>
 	);
 }

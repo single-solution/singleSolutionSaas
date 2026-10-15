@@ -6,7 +6,7 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byLabel, byText, cleanup, click, render, type } from '@ss/ui/testing';
-import { FallbackChainsCard, MerchantLists, QuietHoursCard, TopicsCard } from '../app/dashboard/lists.js';
+import { FallbackChainsCard, MerchantLists, QuietHoursCard, StopKeywordsCard, TopicsCard } from '../app/dashboard/lists.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 
 const WEBSITE = 'web_lists';
@@ -111,6 +111,26 @@ describe('fallback channels and quiet hours', () => {
 		await settle();
 		expect(puts()[0]?.body).toEqual({
 			value: [{ days: [1, 2, 3, 4, 5, 6], from: '22:30', until: '08:00', channels: ['sms'] }],
+		});
+	});
+
+	it('edits the unsubscribe keywords per language, one keyword per line', async () => {
+		serve({ stop_keywords: [{ language: 'en', words: ['STOP', 'UNSUBSCRIBE'] }] });
+		const { container } = render(<StopKeywordsCard websiteId={WEBSITE} off={false} />);
+		await settle();
+		await click(byText(container, L.add, 'button'));
+		const languages = [...container.querySelectorAll('input')];
+		await type(/** @type {Element} */ (languages.at(-1)), 'es');
+		const words = [...container.querySelectorAll('textarea')];
+		expect(/** @type {HTMLTextAreaElement} */ (words[0]).value).toBe('STOP\nUNSUBSCRIBE');
+		await type(/** @type {Element} */ (words.at(-1)), 'BAJA\n CANCELAR \n');
+		await click(byText(container, TEXTS.save, 'button'));
+		await settle();
+		expect(puts()[0]?.body).toEqual({
+			value: [
+				{ language: 'en', words: ['STOP', 'UNSUBSCRIBE'] },
+				{ language: 'es', words: ['BAJA', 'CANCELAR'] },
+			],
 		});
 	});
 

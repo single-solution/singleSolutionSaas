@@ -333,3 +333,57 @@ describe('limits as settings (N12)', () => {
 		await env.setting('templates', 'maxTemplates', 1000);
 	});
 });
+
+describe('replies from any gateway and keywords per language (N4)', () => {
+	it('maps a gateway’s incoming request by the merchant’s paths, checked by its token, and reads keywords in any language', async () => {
+		const gateway = {
+			provider: 'http',
+			url: 'https://gateway.example.org/send',
+			body: '{"to":"{to}","text":"{text}"}',
+			inboundToken: 'in-token-0123456789abcdef',
+			inboundFrom: 'message.sender',
+			inboundText: 'message.body',
+		};
+		await env.connect('sms', gateway);
+		// the keywords per language: today's English ones by default, any language added
+		const read = await env.call('GET', '/v1/lists/stop_keywords', { token: env.server });
+		expect((await read.json()).value).toEqual([{ language: 'en', words: ['STOP', 'UNSUBSCRIBE'] }]);
+		await saveList('stop_keywords', [
+			{ language: 'en', words: ['STOP'] },
+			{ language: 'es', words: ['BAJA', 'CANCELAR'] },
+		]);
+		const path = `/v1/inbound/${env.websiteId}/sms`;
+		/** @param {unknown} body @param {string} [token] */
+		const reply = (body, token = gateway.inboundToken) =>
+			env.call('POST', `${path}?token=${encodeURIComponent(token)}`, { raw: JSON.stringify(body), type: 'application/json' });
+		// a wrong token is refused
+		expect((await reply({ message: { sender: '+15550101001', body: 'BAJA' } }, 'nope')).status).toBe(401);
+		expect(
+			(await env.send('sms', { template: 'promo', to: { phone: '+15550101001' }, values: { pct: '1' } })).json.status,
+		).toBe('sent');
+		expect((await reply({ message: { sender: '+15550101001', body: ' baja ' } })).status).toBe(204);
+		expect(
+			(await env.send('sms', { template: 'promo', to: { phone: '+15550101001' }, values: { pct: '1' } })).json,
+		).toMatchObject({
+			status: 'skipped',
+			reason: 'unsubscribed',
+		});
+		// a reply that is no keyword changes nothing; a form body is read by field names
+		await env.connect('sms', { ...gateway, inboundFrom: 'from', inboundText: 'msg' });
+		await env.call('POST', `${path}?token=${gateway.inboundToken}`, { raw: 'from=%2B15550101002&msg=hola' });
+		expect(
+			(await env.send('sms', { template: 'promo', to: { phone: '+15550101002' }, values: { pct: '1' } })).json.status,
+		).toBe('sent');
+		await env.call('POST', `${path}?token=${gateway.inboundToken}`, { raw: 'from=%2B15550101002&msg=Cancelar' });
+		expect(
+			(await env.send('sms', { template: 'promo', to: { phone: '+15550101002' }, values: { pct: '1' } })).json.status,
+		).toBe('skipped');
+		// a gateway without an inbound token takes no replies
+		await env.connect('sms', { provider: 'http', url: 'https://gateway.example.org/send', body: '{"t":"{text}"}' });
+		expect((await reply({ message: { sender: '+15550101003', body: 'STOP' } })).status).toBe(401);
+		// the keywords list is checked
+		expect((await saveList('stop_keywords', [{ language: 'Spanish', words: ['BAJA'] }])).status).toBe(422);
+		expect((await saveList('stop_keywords', [{ language: 'es', words: [] }])).status).toBe(422);
+		await env.connect('sms', TWILIO);
+	});
+});

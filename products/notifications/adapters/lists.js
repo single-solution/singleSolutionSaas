@@ -7,11 +7,14 @@
  * - `topics` (fixed-choices N2): the unsubscribe topics recipients choose from;
  * - `template_settings` (N2, N5, N7): per template key its topic, its fallback channels and whether send limits count it;
  * - `fallback_chains` (N7): the website's fallback channels per channel, in order;
- * - `quiet_hours` (N6): the quiet windows per weekday and channel (default: every day 21:00–08:00).
+ * - `quiet_hours` (N6): the quiet windows per weekday and channel (default: every day 21:00–08:00);
+ * - `stop_keywords` (N4): the unsubscribe keywords per language of SMS and WhatsApp replies (default: STOP and
+ *   UNSUBSCRIBE in English).
  * A list never saved reads as its default.
  * @module
  */
-import { checkFallbackChains, checkQuietHours, checkTemplateSettings, checkTopics } from '../core/choices.js';
+import { checkFallbackChains, checkQuietHours, checkStopKeywords, checkTemplateSettings, checkTopics } from '../core/choices.js';
+import { DEFAULT_STOP_KEYWORDS } from '../core/inbound.js';
 import { DEFAULT_QUIET_HOURS } from '../core/timing.js';
 import { checkWebhookUrls } from '../core/webhooks.js';
 
@@ -32,6 +35,7 @@ export const LISTS = Object.freeze({
 	template_settings: Object.freeze({ feature: SENDING_FEATURES, title: 'Template settings' }),
 	fallback_chains: Object.freeze({ feature: 'fallback', title: 'Fallback channels' }),
 	quiet_hours: Object.freeze({ feature: 'quiet_hours', title: 'Quiet hours' }),
+	stop_keywords: Object.freeze({ feature: ['sms', 'whatsapp'], title: 'Unsubscribe keywords' }),
 });
 
 /** @typedef {keyof typeof LISTS} ListName */
@@ -43,6 +47,7 @@ const DEFAULTS = Object.freeze({
 	template_settings: [],
 	fallback_chains: [],
 	quiet_hours: DEFAULT_QUIET_HOURS,
+	stop_keywords: DEFAULT_STOP_KEYWORDS,
 });
 
 /**
@@ -88,6 +93,7 @@ export const createLists = ({ store, now, maxWebhookUrls }) => {
 			),
 		fallback_chains: async (_websiteId, value) => checkFallbackChains(value),
 		quiet_hours: async (_websiteId, value) => checkQuietHours(value),
+		stop_keywords: async (_websiteId, value) => checkStopKeywords(value),
 	};
 
 	/**
@@ -116,6 +122,8 @@ export const createLists = ({ store, now, maxWebhookUrls }) => {
 		fallbackChains: (websiteId) => read('fallback_chains', websiteId),
 		/** @param {string} websiteId @returns {Promise<QuietWindow[]>} */
 		quietHours: (websiteId) => read('quiet_hours', websiteId),
+		/** @param {string} websiteId @returns {Promise<import('../core/inbound.js').StopKeywords[]>} */
+		stopKeywords: (websiteId) => read('stop_keywords', websiteId),
 		/**
 		 * The lists as the kit serves them (`GET|PUT /v1/lists/<name>` and the dashboard twin).
 		 * @returns {Record<string, import('@ss/app-kit').ListDefinition>}

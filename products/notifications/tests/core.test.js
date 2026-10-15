@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import apiJson from '../schemas/api.json' with { type: 'json' };
 import { addressFor, checkRecipient, normaliseLanguage, normalisePhone, normaliseTimeZone } from '../core/channels.js';
-import { isOptOut, repliesOf } from '../core/inbound.js';
+import { gatewayRepliesOf, isOptOut, repliesOf } from '../core/inbound.js';
 import { STATUSES, logFilters } from '../core/log.js';
 import {
 	checkButtons,
@@ -528,10 +528,22 @@ describe('provider answers, replies and webhook URLs', () => {
 			{ from: '+155', text: '' },
 		]);
 		expect(repliesOf('meta', '{}')).toEqual([]);
-		expect(isOptOut(' Stop ', ['STOP'])).toBe(true);
-		expect(isOptOut('stop please', ['STOP'])).toBe(false);
-		expect(isOptOut('stop', 'STOP')).toBe(false);
-		expect(isOptOut('', ['', 5])).toBe(false);
+		const keywords = [
+			{ language: 'en', words: ['STOP'] },
+			{ language: 'de', words: ['STOPP', 'ABMELDEN'] },
+		];
+		expect(isOptOut(' Stop ', keywords)).toBe(true);
+		expect(isOptOut('abmelden', keywords)).toBe(true);
+		expect(isOptOut('stop please', keywords)).toBe(false);
+		expect(isOptOut('', [{ language: '', words: [''] }])).toBe(false);
+		// any gateway: the merchant's mapping, JSON paths or form fields
+		expect(gatewayRepliesOf('{"data":{"from":"+4915550","text":"STOPP"}}', { from: 'data.from', text: 'data.text' })).toEqual([
+			{ from: '+4915550', text: 'STOPP' },
+		]);
+		expect(gatewayRepliesOf('sender=%2B4915550&body=hi', { from: 'sender', text: 'body' })).toEqual([
+			{ from: '+4915550', text: 'hi' },
+		]);
+		expect(gatewayRepliesOf('{}', { from: 'from', text: 'text' })).toEqual([]);
 	});
 
 	it('checks the list of webhook URLs and picks the URLs of an event (PLAN 0.8.10 N5)', () => {
