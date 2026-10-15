@@ -75,7 +75,7 @@ import { isHttpsUrl } from '../core/text.js';
 import { dayKey } from '../core/time.js';
 import { SIGN_IN_HEADER, WAIT_MS } from '../core/widgets.js';
 import { currencyDigits } from '@ss/contracts/format';
-import { normalisePhone } from '@ss/contracts/phone';
+import { bookingAnswers } from '../core/booking.js';
 import { jsonOf } from '@ss/net';
 import { signWebhook } from '@ss/protocol';
 import { phoneCodeOf } from './service.js';
@@ -119,6 +119,18 @@ const timedCache = (ttl, now) => {
 		},
 	};
 };
+
+/**
+ * What the AI is told to ask the visitor for when a booking's answers are not complete (C10): question labels, the
+ * service, or an email address or a phone number.
+ * @param {string[]} ask
+ */
+const askFor = (ask) =>
+	`Ask the visitor for ${ask
+		.map((item) =>
+			item === 'service' ? 'the service' : item === 'contact' ? 'an email address or a phone number' : `“${item}”`,
+		)
+		.join(', ')}, then book again.`;
 
 /**
  * @param {import('../adapters/product.js').Product} product
@@ -543,10 +555,14 @@ export const createReply = (product, service) => {
 	const toolsOf = async (s, c, visitor, signIn) => {
 		const booking = s.on.includes('book_slot') ? await s.values('book_slot') : null;
 		const bookingUrl = booking && isHttpsUrl(booking.bookingUrl) ? String(booking.bookingUrl) : null;
+		// the merchant's own questions and services (C10)
+		const asks = bookingUrl
+			? { questions: await s.list('booking_questions'), services: await s.list('booking_services') }
+			: null;
 		const webhooks = s.on.includes('webhook_tools') ? await s.list('tools') : [];
 		const shop = shopSchemas(s.on, { signedIn: signIn !== null });
 		const schemas = [
-			...builtinSchemas({ handoff: s.on.includes('handoff'), booking: bookingUrl !== null }),
+			...builtinSchemas({ handoff: s.on.includes('handoff'), booking: asks }),
 			...shop,
 			...webhooks.map(webhookSchema),
 		];
@@ -593,20 +609,31 @@ export const createReply = (product, service) => {
 				const { timeZone } = await s.business();
 				const range = slotRange(call.arguments, { today: dayKey(now(), timeZone), daysAhead: Number(booking?.daysAhead) });
 				if (!range) return { ok: false, content: 'Ask for dates from today on.' };
-				return callEndpoint(s, bookingUrl, { action: 'list_slots', ...range, timeZone });
+				const services = asks?.services ?? [];
+				const service = services.find((each) => each.key === call.arguments.service)?.key ?? null;
+				if (services.length > 0 && !service) return { ok: false, content: askFor(['service']) };
+				return callEndpoint(s, bookingUrl, {
+					action: 'list_slots',
+					...range,
+					timeZone,
+					...(service ? { service } : {}),
+				});
 			}
-			if (bookingUrl && call.name === BUILTIN.book) {
+			if (bookingUrl && asks && call.name === BUILTIN.book) {
 				const a = call.arguments;
-				if (typeof a.slotId !== 'string' || typeof a.name !== 'string' || (!a.email && !a.phone && !signedIn?.email))
-					return { ok: false, content: 'Ask for the slot, the name and an email address or phone number.' };
-				const phone = a.phone ? normalisePhone(a.phone, await phoneCodeOf(s)) : null;
-				if (a.phone && !phone) return { ok: false, content: 'Ask for the phone number with its country code.' };
+				if (typeof a.slotId !== 'string') return { ok: false, content: 'Ask which free slot the visitor wants.' };
+				const checked = bookingAnswers(a, {
+					...asks,
+					needsContact: booking?.needsContact !== false,
+					signedInEmail: signedIn?.email ?? null,
+					callingCode: await phoneCodeOf(s),
+				});
+				if (!checked.ok) return { ok: false, content: askFor(checked.ask) };
 				return callEndpoint(s, bookingUrl, {
 					action: 'book',
 					slotId: a.slotId,
-					name: a.name,
-					email: typeof a.email === 'string' ? a.email : (signedIn?.email ?? null),
-					phone,
+					...(checked.service ? { service: checked.service } : {}),
+					answers: checked.answers,
 					conversationId: c.id,
 				});
 			}

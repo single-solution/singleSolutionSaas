@@ -7,6 +7,7 @@
  * @module
  */
 import { isObject } from '@ss/contracts/util';
+import { bookingParameters, serviceParameter } from './booking.js';
 import { SHOP_TOOL_NAMES } from './shop.js';
 import { isHttpsUrl } from './text.js';
 
@@ -139,8 +140,10 @@ export const webhookSchema = (tool) => ({
 });
 
 /**
- * The built-in tools offered for a turn.
- * @param {{ handoff: boolean, booking: boolean }} on
+ * The built-in tools offered for a turn: escalate (handoff on) and the booking tools (C10: the merchant's questions as
+ * parameters, and the service when there are services).
+ * @param {{ handoff: boolean, booking: { questions: readonly import('./booking.js').BookingQuestion[],
+ *   services: readonly import('./booking.js').BookingService[] } | null }} on
  * @returns {ToolSchema[]}
  */
 export const builtinSchemas = ({ handoff, booking }) => [
@@ -162,26 +165,28 @@ export const builtinSchemas = ({ handoff, booking }) => [
 		? [
 				{
 					name: BUILTIN.slots,
-					description: 'List free appointment slots between two dates (YYYY-MM-DD).',
+					description: `List free appointment slots between two dates (YYYY-MM-DD)${booking.services.length > 0 ? ' for one service' : ''}.`,
 					parameters: {
 						type: 'object',
-						properties: { from: { type: 'string' }, to: { type: 'string' } },
-						required: ['from', 'to'],
+						properties: {
+							from: { type: 'string' },
+							to: { type: 'string' },
+							...(booking.services.length > 0 ? { service: serviceParameter(booking.services) } : {}),
+						},
+						required: ['from', 'to', ...(booking.services.length > 0 ? ['service'] : [])],
 					},
 				},
 				{
 					name: BUILTIN.book,
 					description:
-						'Book one free slot (its id from list_free_slots) for the visitor, with their name and an email or phone number.',
+						'Book one free slot (its id from list_free_slots) for the visitor, with the answers to the business’s questions (ask the visitor for each one; never make one up).',
 					parameters: {
 						type: 'object',
 						properties: {
 							slotId: { type: 'string' },
-							name: { type: 'string' },
-							email: { type: 'string' },
-							phone: { type: 'string' },
+							...bookingParameters(booking.questions, booking.services).properties,
 						},
-						required: ['slotId', 'name'],
+						required: ['slotId', ...bookingParameters(booking.questions, booking.services).required],
 					},
 				},
 			]

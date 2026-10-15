@@ -27,6 +27,7 @@ import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
 import { checkRedactionPatterns } from '../../core/moderation.js';
 import { checkTeams } from '../../core/routing.js';
+import { QUESTION_TYPES } from '../../core/booking.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
 import { UPLOAD_MAX_MB } from '../../core/uploads.js';
 import { ATTACHMENT_TYPES } from '../../core/widgets.js';
@@ -829,6 +830,118 @@ export function PageTypesEditor({ websiteId, off }) {
 						maxLength={300}
 						value={type.nudge}
 						onChange={(event) => set({ nudge: event.target.value })}
+					/>
+				</>
+			)}
+		/>
+	);
+}
+
+const BQ = L.bookingQuestions;
+
+/** @param {EditorProps} props */
+export function BookingQuestionsEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="booking_questions"
+			title={BQ.title}
+			help={BQ.help}
+			itemLabel={BQ.item}
+			max={20}
+			off={off}
+			blank={() => ({ key: '', label: '', type: 'text', required: false, options: [] })}
+			clean={(q) => ({
+				key: String(q.key).trim(),
+				label: String(q.label).trim(),
+				type: q.type,
+				required: q.required === true,
+				options: q.type === 'choice' ? cleanLines(q.options) : [],
+			})}
+			render={(q, set) => (
+				<>
+					<FieldGrid>
+						<Input
+							label={BQ.key}
+							value={q.key}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Input
+							label={BQ.label}
+							value={q.label}
+							maxLength={80}
+							onChange={(event) => set({ label: event.target.value })}
+						/>
+						<Select
+							label={BQ.type}
+							value={q.type}
+							options={QUESTION_TYPES.map((value) => ({ value, label: BQ.types[value] }))}
+							onChange={(event) => set({ type: event.target.value })}
+						/>
+					</FieldGrid>
+					<Checkbox
+						label={BQ.required}
+						checked={q.required === true}
+						onChange={(event) => set({ required: event.target.checked })}
+					/>
+					{q.type === 'choice' ? (
+						<TextArea
+							label={BQ.options}
+							rows={3}
+							value={(q.options ?? []).join('\n')}
+							onChange={(event) => set({ options: toLines(event.target.value) })}
+						/>
+					) : null}
+				</>
+			)}
+		/>
+	);
+}
+
+const BS = L.bookingServices;
+
+/** @param {EditorProps} props */
+export function BookingServicesEditor({ websiteId, off }) {
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="booking_services"
+			title={BS.title}
+			help={BS.help}
+			itemLabel={BS.item}
+			max={50}
+			off={off}
+			blank={() => ({ key: '', name: '', description: '' })}
+			clean={(service) => ({
+				key: String(service.key).trim(),
+				name: String(service.name).trim(),
+				description: String(service.description ?? '').trim(),
+			})}
+			render={(service, set) => (
+				<>
+					<FieldGrid>
+						<Input
+							label={BS.key}
+							value={service.key}
+							maxLength={40}
+							autoComplete="off"
+							onChange={(event) => set({ key: event.target.value })}
+						/>
+						<Input
+							label={BS.name}
+							value={service.name}
+							maxLength={80}
+							onChange={(event) => set({ name: event.target.value })}
+						/>
+					</FieldGrid>
+					<TextArea
+						label={BS.description}
+						rows={2}
+						maxLength={300}
+						value={service.description}
+						onChange={(event) => set({ description: event.target.value })}
 					/>
 				</>
 			)}

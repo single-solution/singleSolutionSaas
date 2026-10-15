@@ -10,6 +10,8 @@ import { Callout, Masonry, Section } from '@ss/ui';
 import { FormatForm, Loaded, SettingsForms, TextsForm, ThemeForm, call, hasSettings, useLoad } from '@ss/ui/dashboard';
 import { aiLabelShown } from '../../core/widgets.js';
 import {
+	BookingQuestionsEditor,
+	BookingServicesEditor,
 	CustomFieldsEditor,
 	FallbackAnswersEditor,
 	FlowsEditor,
@@ -111,6 +113,12 @@ export function SettingsTab({ websiteId: id }) {
 						seen('webhook_tools') || seen('book_slot') ? (
 							<>
 								{seen('webhook_tools') ? <ToolsEditor websiteId={websiteId} off={off('webhook_tools')} /> : null}
+								{seen('book_slot') ? (
+									<>
+										<BookingQuestionsEditor websiteId={websiteId} off={off('book_slot')} />
+										<BookingServicesEditor websiteId={websiteId} off={off('book_slot')} />
+									</>
+								) : null}
 								<ToolSecret websiteId={websiteId} />
 							</>
 						) : null,

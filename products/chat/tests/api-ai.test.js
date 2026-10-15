@@ -130,18 +130,81 @@ describe('AI replies', () => {
 		expect(bodies[0]).toEqual({ action: 'list_slots', from: '2026-10-05', to: '2026-10-19', timeZone: 'UTC' });
 		// a phone that cannot be one is asked for again; one typed nationally goes with the business.json country's code
 		expect(bodies).toHaveLength(2);
-		expect(bodies[1]).toMatchObject({
+		expect(bodies[1]).toEqual({
 			action: 'book',
 			slotId: 's1',
-			name: 'Ann',
-			email: 'ann@example.com',
-			phone: '+447700900123',
+			// the seeded questions (C10)
+			answers: { name: 'Ann', email: 'ann@example.com', phone: '+447700900123' },
+			conversationId: expect.any(String),
 		});
 		sys.ai({ tools: [{ name: 'escalate_to_human', arguments: { reason: 'angry' } }] }, { text: 'Connecting you.' });
 		await v('POST', '/v1/chat/messages', { text: 'This is useless' });
 		const state = await v('GET', '/v1/chat');
 		expect(state.json.conversation.waiting).toBe(true);
 		expect(state.json.messages.map((/** @type {any} */ m) => m.text)).toContain('Connecting you.');
+	});
+
+	it('asks the merchant’s own booking questions and the service (C10)', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'ai_replies', 'book_slot']);
+		await sys.setting('book_slot', 'bookingUrl', `${TOOLS}/booking`);
+		await sys.setting('book_slot', 'needsContact', false);
+		await sys.list('booking_questions', [
+			{ key: 'name', label: 'Name', type: 'text', required: true },
+			{ key: 'guests', label: 'Number of guests', type: 'number', required: true },
+			{ key: 'seating', label: 'Seating', type: 'choice', required: false, options: ['Inside', 'Terrace'] },
+		]);
+		await sys.list('booking_services', [
+			{ key: 'dinner', name: 'Dinner', description: 'From 18:00' },
+			{ key: 'lunch', name: 'Lunch', description: '' },
+		]);
+		sys.responders.set(`${TOOLS}/booking`, (call) =>
+			JSON.parse(call.body).action === 'list_slots'
+				? { status: 200, body: { slots: [{ id: 's9', start: '2026-10-06T18:00:00Z' }] } }
+				: { status: 200, body: { booked: true, reference: 'R-1' } },
+		);
+		const v = sys.visitor();
+		sys.ai(
+			{ tools: [{ name: 'list_free_slots', arguments: { from: '2026-10-06', to: '2026-10-06' } }] },
+			{ tools: [{ name: 'list_free_slots', arguments: { from: '2026-10-06', to: '2026-10-06', service: 'dinner' } }] },
+			{ text: 'Dinner at 18:00 is free. How many guests?' },
+		);
+		await v('POST', '/v1/chat/messages', { text: 'A table for dinner tomorrow' });
+		sys.ai(
+			{ tools: [{ name: 'book_slot', arguments: { slotId: 's9', name: 'Ann', service: 'dinner' } }] },
+			{
+				tools: [
+					{
+						name: 'book_slot',
+						arguments: { slotId: 's9', name: 'Ann', guests: '4', seating: 'Terrace', service: 'dinner' },
+					},
+				],
+			},
+			{ text: 'Booked: dinner for 4.' },
+		);
+		await v('POST', '/v1/chat/messages', { text: 'Four of us, on the terrace, I am Ann' });
+		// the questions and the services are the tools' parameters
+		const offered = sys.aiCalls()[0].tools.map((/** @type {any} */ t) => t.function ?? t);
+		const book = offered.find((/** @type {any} */ t) => t.name === 'book_slot');
+		expect(book.parameters.required).toEqual(['slotId', 'name', 'guests', 'service']);
+		expect(book.parameters.properties.service.enum).toEqual(['dinner', 'lunch']);
+		// no service: asked for; a missing required answer: asked for, never sent
+		const results = sys
+			.aiCalls()
+			.flatMap((/** @type {any} */ body) => body.messages.filter((/** @type {any} */ m) => m.role === 'tool'));
+		const said = results.map((/** @type {any} */ m) => String(m.content));
+		expect(said.some((text) => text.includes('Ask the visitor for the service'))).toBe(true);
+		expect(said.some((text) => text.includes('Ask the visitor for “Number of guests”'))).toBe(true);
+		const bodies = sys.calls.filter((c) => c.url === `${TOOLS}/booking`).map((c) => JSON.parse(c.body));
+		expect(bodies).toEqual([
+			{ action: 'list_slots', from: '2026-10-06', to: '2026-10-06', timeZone: 'UTC', service: 'dinner' },
+			{
+				action: 'book',
+				slotId: 's9',
+				service: 'dinner',
+				answers: { name: 'Ann', guests: 4, seating: 'Terrace' },
+				conversationId: expect.any(String),
+			},
+		]);
 	});
 
 	it('locks the answer language and retries once; moderation drops a leaking answer', async () => {

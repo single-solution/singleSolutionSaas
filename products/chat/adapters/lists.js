@@ -2,13 +2,14 @@
  * Chat's list settings and the tool signing secret, in the product database (PLAN 0.8.3 Chat data): webhook tools,
  * flows, custom field definitions, proactive page rules, fallback answers (PLAN 0.8.10 C3), redaction patterns (C14),
  * teams (C12), the office hours with their dated exceptions (C9), the page types (C6, seeded with the four kinds of
- * shop pages) and the visitor upload types with a cap each (C11) are kept per website in the kit's settings collection (so a removed website's lists go with its
+ * shop pages), the visitor upload types with a cap each (C11), and Book-a-slot's questions and services (C10) are kept per website in the kit's settings collection (so a removed website's lists go with its
  * settings), each checked by its feature's rules and recorded in Recent changes. A list never saved answers its seed
  * (the starting entries every website gets; most lists start empty). The tool signing secret is sealed with
  * `ENCRYPTION_KEY`; it is made on first use and sealed again with the current key by the Owner's Re-seal
  * (`resealToolSecrets`).
  * @module
  */
+import { BOOKING_QUESTION_SEED, checkBookingQuestions, checkBookingServices } from '../core/booking.js';
 import { checkFallbackAnswers } from '../core/fallback.js';
 import { checkCustomFields, checkPageRules } from '../core/fields.js';
 import { checkFlows } from '../core/flows.js';
@@ -37,6 +38,13 @@ export const LISTS = Object.freeze({
 	office_exceptions: { feature: 'handoff', title: 'Office hours exceptions', check: checkOfficeExceptions, seed: [] },
 	page_types: { feature: 'visitor_chat', title: 'Page types', check: checkPageTypes, seed: PAGE_TYPE_SEED },
 	upload_types: { feature: 'attachments', title: 'Upload types', check: checkUploadTypes, seed: UPLOAD_TYPE_SEED },
+	booking_questions: {
+		feature: 'book_slot',
+		title: 'Booking questions',
+		check: checkBookingQuestions,
+		seed: BOOKING_QUESTION_SEED,
+	},
+	booking_services: { feature: 'book_slot', title: 'Booking services', check: checkBookingServices, seed: [] },
 });
 
 /** @typedef {keyof typeof LISTS} ListName */

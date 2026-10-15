@@ -2,7 +2,7 @@
 /**
  * The merchant's own lists in Settings (jsdom, on a faked dashboard API): office hours by weekday with minutes and
  * dated exceptions (C9); page types with their nudges, seeded with the four shop ones (C6); the file types visitors may
- * send with a cap each (C11). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
+ * send with a cap each (C11); Book-a-slot's questions and services (C10). Each editor adds, changes, moves and removes entries and saves the whole list with one PUT,
  * checked as the server checks it.
  */
 import { act } from 'react';
@@ -10,7 +10,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import manifest from '../manifest.json' with { type: 'json' };
-import { OfficeExceptionsEditor, OfficeHoursEditor, PageTypesEditor, UploadTypesEditor } from '../app/dashboard/lists.js';
+import {
+	BookingQuestionsEditor,
+	BookingServicesEditor,
+	OfficeExceptionsEditor,
+	OfficeHoursEditor,
+	PageTypesEditor,
+	UploadTypesEditor,
+} from '../app/dashboard/lists.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { LISTS } from '../adapters/lists.js';
 
@@ -227,5 +234,37 @@ describe('upload types (C11)', () => {
 		type(field(container, 'Largest file (MB)', 5), '500');
 		await save(container);
 		expect(container.textContent).toContain('File type 6: the largest file as whole MB, 1–100.');
+	});
+});
+
+describe('booking questions and services (C10)', () => {
+	it('starts with name, email and phone; adds a choice question, and a service', async () => {
+		serve();
+		const questions = render(inDashboard(<BookingQuestionsEditor websiteId={WEBSITE} />)).container;
+		await settle();
+		expect([0, 1, 2].map((index) => field(questions, 'Question', index).value)).toEqual(['Name', 'Email', 'Phone']);
+		expect(field(questions, 'Required', 0).checked).toBe(true);
+		click(button(questions, 'Add'));
+		type(field(questions, 'Key', 3), 'seating');
+		type(field(questions, 'Question', 3), 'Seating');
+		type(field(questions, 'Answer', 3), 'choice');
+		type(field(questions, 'Options', 0), 'Inside\n\nTerrace ');
+		await save(questions);
+		expect(saved.booking_questions?.[0]?.[3]).toEqual({
+			key: 'seating',
+			label: 'Seating',
+			type: 'choice',
+			required: false,
+			options: ['Inside', 'Terrace'],
+		});
+		cleanup();
+		const services = render(inDashboard(<BookingServicesEditor websiteId={WEBSITE} />)).container;
+		await settle();
+		expect(services.textContent).toContain('Nothing yet.');
+		click(button(services, 'Add'));
+		type(field(services, 'Key'), 'dinner');
+		type(field(services, 'Name'), 'Dinner');
+		await save(services);
+		expect(saved.booking_services).toEqual([[{ key: 'dinner', name: 'Dinner', description: '' }]]);
 	});
 });
