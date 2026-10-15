@@ -29,7 +29,7 @@ beforeAll(async () => {
 			seo: { ...EMPTY_SEO, canonicalUrl: `${ORIGIN}/categories/tea` },
 		}),
 	]);
-	await shop.seedProduct({ slug: 'cup', name: 'Cup', categoryIds: ['cat_cups'] });
+	await shop.seedProduct({ slug: 'cup', name: 'Cup', categoryIds: ['cat_cups', 'cat_self'] });
 	await shop.seedProduct({ slug: 'cup-copy', name: 'Cup copy', seo: { ...EMPTY_SEO, canonicalUrl: '/products/cup' } });
 	await shop.seedProduct({
 		slug: 'teapot',
@@ -49,7 +49,13 @@ describe('the sitemap', () => {
 		const text = (await shop.api('GET', '/v1/seo/sitemap.xml')).text;
 		const locs = [...text.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
 		expect(locs.sort()).toEqual(
-			[`${ORIGIN}/categories/cups`, `${ORIGIN}/categories/tea`, `${ORIGIN}/products/cup`, `${ORIGIN}/products/teapot`].sort(),
+			[
+				`${ORIGIN}/`,
+				`${ORIGIN}/categories/cups`,
+				`${ORIGIN}/categories/tea`,
+				`${ORIGIN}/products/cup`,
+				`${ORIGIN}/products/teapot`,
+			].sort(),
 		);
 		// the same in the files of a split sitemap
 		const categories = (await shop.api('GET', '/v1/seo/sitemaps/categories')).text;

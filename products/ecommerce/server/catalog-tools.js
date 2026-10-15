@@ -419,6 +419,7 @@ export const createCatalogTools = (product, service, common) => {
 					...summarize(fields.variants, fields.trackStock),
 					previousSlugs: [],
 					publishedAt: fields.status === 'active' ? new Date(now()) : null,
+					contentUpdatedAt: new Date(now()),
 				});
 				written.push(id);
 				continue;

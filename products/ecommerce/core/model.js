@@ -34,6 +34,7 @@ export const COLLECTIONS = Object.freeze({
 	staff: 'staff',
 	sizeCharts: 'size_charts',
 	landings: 'landings',
+	landingIndex: 'landing_index',
 	outbox: 'outbox',
 });
 
@@ -160,8 +161,10 @@ export const ID_PREFIX = Object.freeze({
  * @property {number} price lowest active variant price (listings, sorting)
  * @property {boolean} inStock some active variant can be sold now
  * @property {Date | null} publishedAt first time it became active (new products)
+ * @property {Date} contentUpdatedAt the last change of what its page shows (content, prices, photos, whether it can be
+ *   bought; never a stock change that leaves it on sale), the sitemap's `lastmod` (SEO audit G8.4)
  * @property {Date} createdAt
- * @property {Date} updatedAt
+ * @property {Date} updatedAt any write, stock included
  */
 
 /**

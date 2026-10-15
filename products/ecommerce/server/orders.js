@@ -359,6 +359,7 @@ export const createOrders = (product, service, { ordering }) => {
 				COLLECTIONS.serials,
 				COLLECTIONS.sizeCharts,
 				COLLECTIONS.landings,
+				COLLECTIONS.landingIndex,
 			])
 				await wipe(name);
 		}

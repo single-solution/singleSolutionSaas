@@ -6,7 +6,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { freeSlug, slugify } from '../core/catalog.js';
+import { contentChanged, freeSlug, slugify } from '../core/catalog.js';
 import { elementsOf, typeOf, typeTree } from '../core/item-types.js';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
 import { refreshProducts } from './ledger.js';
@@ -82,6 +82,8 @@ export const INDEXES = [
 		name: 'by_combination',
 		unique: true,
 	},
+	// the landing pages indexed before, by combination: they stay indexed while they have any product (SEO audit G7.7)
+	{ collection: COLLECTIONS.landingIndex, keys: { websiteId: 1, key: 1 }, name: 'by_key', unique: true },
 	{ collection: COLLECTIONS.locations, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	{ collection: COLLECTIONS.serials, keys: { websiteId: 1, id: 1 }, name: 'by_id', unique: true },
 	// every number of a unit names it alone: its serial and each value by unit field (dynamic model §2)
@@ -510,6 +512,8 @@ export const rewriteProduct = (data, id, change, { now }) =>
 		/** @type {Record<string, unknown>} */
 		const set = { ...outcome.set };
 		if (set.status === 'active' && !before.publishedAt) set.publishedAt = new Date(now);
+		// what its page shows changed: the sitemap's lastmod (G8.4)
+		if (contentChanged(before, set)) set.contentUpdatedAt = new Date(now);
 		await products.updateOne({ websiteId: data.websiteId, id }, { $set: set }, { session });
 		await refreshProducts(data, [id], session);
 		const product = /** @type {ProductRecord} */ (

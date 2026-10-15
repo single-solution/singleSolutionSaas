@@ -312,6 +312,7 @@ export const createCatalogProducts = (product, service, common) => {
 			...summarize(fields.variants, fields.trackStock),
 			previousSlugs: [],
 			publishedAt: fields.status === 'active' ? new Date(now()) : null,
+			contentUpdatedAt: new Date(now()),
 		};
 		try {
 			await data.collection(COLLECTIONS.products).insertOne({ ...record });

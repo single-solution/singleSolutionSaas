@@ -170,6 +170,39 @@ const stockStateOf = (variants, trackStock) => {
 	return selling === 0 ? 'out' : selling === active.length ? 'full' : 'partial';
 };
 
+/** Product fields a write may set that are not what its page shows (counts and the stamps of writes). */
+const NOT_CONTENT = Object.freeze(new Set(['sold', 'rating', 'publishedAt', 'contentUpdatedAt', 'createdAt', 'updatedAt']));
+
+/**
+ * A product's variants without their stock (units and per location), for {@link contentChanged}.
+ * @param {unknown} variants
+ */
+const withoutStock = (variants) =>
+	JSON.stringify(
+		(Array.isArray(variants) ? variants : []).map((variant) => {
+			const rest = { ...variant };
+			delete rest.stock;
+			delete rest.locations;
+			return rest;
+		}),
+	);
+
+/**
+ * Whether a product write changes what its page shows (SEO audit G8.4: the sitemap's `lastmod`): any field it sets
+ * that differs, but not the stock of its variants nor its counts; whether it can still be bought is judged by the
+ * ledger's `refreshProducts`.
+ * @param {Record<string, unknown>} before the product as it was
+ * @param {Record<string, unknown>} set the fields the write sets
+ */
+export const contentChanged = (before, set) =>
+	Object.entries(set).some(([key, value]) =>
+		NOT_CONTENT.has(key)
+			? false
+			: key === 'variants'
+				? withoutStock(before.variants) !== withoutStock(value)
+				: JSON.stringify(before[key]) !== JSON.stringify(value),
+	);
+
 /**
  * What a product's listings use, from its variants (as the ledger's `refreshProducts` computes them): the lowest and
  * highest active price, whether something can be sold, the stock state and the grades on sale.

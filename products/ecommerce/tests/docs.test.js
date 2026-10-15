@@ -119,6 +119,7 @@ describe('createSnippets', () => {
 		expect(snippets.listingPage).toContain(`${BASE}/v1/seo/listing?`);
 		expect(snippets.listingPage).toContain('robots: head.robots');
 		expect(snippets.listingPage).toContain('if (head.moved) permanentRedirect(head.moved.url);');
+		expect(snippets.listingPage).toContain('if (head.status === 404) notFound();');
 		expect(snippets.listingPage).toContain('data-ss-ecommerce="product_grid" data-category={slug}');
 		expect(snippets.listingPage).toContain('head.faqs.map(');
 		expect(snippets.listingPage).toContain('SS_SERVER_TOKEN');

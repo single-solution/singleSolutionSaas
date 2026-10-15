@@ -106,6 +106,13 @@
 			"default": "index",
 			"enum": ["index", "noindex"]
 		},
+		"emptyCategories": {
+			"type": "string",
+			"title": "Categories without products",
+			"description": "Not indexed (noindex, follow, and left out of the sitemap) while a category has no product shoppers can see, in it or below it, and no text of its own (a summary or description of 50 words or more), as search engines ask of empty pages; or indexed anyway.",
+			"default": "noindex",
+			"enum": ["noindex", "index"]
+		},
 		"faqMarkup": {
 			"type": "boolean",
 			"title": "FAQ structured data",

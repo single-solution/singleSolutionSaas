@@ -819,6 +819,22 @@ export const siteJsonLd = (page) => {
 	};
 };
 
+/** Words a category's own text needs to stand as a page without products (G7.1). */
+const OWN_TEXT_WORDS = 50;
+
+/**
+ * Whether a category has text of its own that makes it a page even without products (G7.1): a summary or description
+ * of at least 50 words.
+ * @param {{ description?: string, content?: { summary?: string } }} category
+ */
+export const hasOwnText = (category) =>
+	[category.content?.summary, category.description].some(
+		(text) =>
+			String(text ?? '')
+				.split(/\s+/)
+				.filter(Boolean).length >= OWN_TEXT_WORDS,
+	);
+
 /**
  * The robots value of a page: `index, follow` unless its SEO fields say otherwise.
  * @param {{ noindex?: boolean, nofollow?: boolean } | undefined} seo
@@ -832,23 +848,30 @@ export const SITEMAP_HEAD =
 export const SITEMAP_FOOT = '</urlset>\n';
 
 /**
+ * A sitemap's `<lastmod>` of a time, or '' without a valid one.
+ * @param {Date | string | null | undefined} lastmod
+ */
+const lastmodOf = (lastmod) => {
+	const date = lastmod ? new Date(lastmod) : null;
+	return date && !Number.isNaN(date.getTime()) ? `<lastmod>${date.toISOString()}</lastmod>` : '';
+};
+
+/**
  * One address of a sitemap, with its images (E16).
  * @param {{ loc: string, lastmod: Date | string | null | undefined, images?: string[] }} entry
  */
 export const sitemapEntry = ({ loc, lastmod, images = [] }) => {
-	const date = lastmod ? new Date(lastmod) : null;
-	const when = date && !Number.isNaN(date.getTime()) ? `<lastmod>${date.toISOString()}</lastmod>` : '';
 	const pictures = images.map((image) => `<image:image><image:loc>${escapeXml(image)}</image:loc></image:image>`).join('');
-	return `<url><loc>${escapeXml(loc)}</loc>${when}${pictures}</url>\n`;
+	return `<url><loc>${escapeXml(loc)}</loc>${lastmodOf(lastmod)}${pictures}</url>\n`;
 };
 
 /**
- * A sitemap index pointing at the pages of a large sitemap.
- * @param {string[]} locs
+ * A sitemap index pointing at the files of a large sitemap, each with the newest `lastmod` of its pages (G8.4).
+ * @param {Array<{ loc: string, lastmod: Date | string | null | undefined }>} files
  */
-export const sitemapIndex = (locs) =>
-	`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${locs
-		.map((loc) => `<sitemap><loc>${escapeXml(loc)}</loc></sitemap>\n`)
+export const sitemapIndex = (files) =>
+	`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files
+		.map(({ loc, lastmod }) => `<sitemap><loc>${escapeXml(loc)}</loc>${lastmodOf(lastmod)}</sitemap>\n`)
 		.join('')}</sitemapindex>\n`;
 
 /**
@@ -864,13 +887,13 @@ export const sitemapFileUrl = (base, domain, file) => {
 };
 
 /**
- * The files of a sitemap index (E16): the categories, the landing and glossary pages, and the products in files of at
- * most `size` addresses each. Empty parts have no file.
- * @param {{ categories: number, landings: number, products: number, size: number }} counts
+ * The files of a sitemap index (E16): the home page with the categories, the landing and glossary pages, and the
+ * products in files of at most `size` addresses each. Empty parts have no file (the home page's file is never empty).
+ * @param {{ landings: number, products: number, size: number }} counts
  * @returns {string[]}
  */
-export const sitemapFiles = ({ categories, landings, products, size }) => [
-	...(categories > 0 ? ['categories'] : []),
+export const sitemapFiles = ({ landings, products, size }) => [
+	'categories',
 	...(landings > 0 ? ['landings'] : []),
 	...Array.from({ length: Math.ceil(products / size) }, (_, index) => `products-${index + 1}`),
 ];

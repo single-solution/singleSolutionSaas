@@ -79,20 +79,28 @@ describe('the stock of combinations (E43)', () => {
 			products: 1,
 			variants: 3,
 			minPrice: 300,
+			lastmod: null,
 		});
 		expect(table.get(comboKey({ categoryId: 'c1', brandId: null, grade: null }))).toEqual({
 			products: 2,
 			variants: 4,
 			minPrice: 300,
+			lastmod: null,
 		});
 		expect(table.get(comboKey({ categoryId: 'c1', brandId: 'b1', grade: 'a' }))).toEqual({
 			products: 1,
 			variants: 2,
 			minPrice: 400,
+			lastmod: null,
 		});
 		expect(table.has('||')).toBe(false);
-		expect(stockOf(rows)).toEqual({ products: 2, variants: 4, minPrice: 300 });
-		expect(stockOf([])).toEqual({ products: 0, variants: 0, minPrice: null });
+		expect(stockOf(rows)).toEqual({ products: 2, variants: 4, minPrice: 300, lastmod: null });
+		expect(stockOf([])).toEqual({ products: 0, variants: 0, minPrice: null, lastmod: null });
+		// the newest content change of the products in stock dates the page (G8.4)
+		const at = [new Date('2026-10-01T00:00:00Z'), new Date('2026-10-03T00:00:00Z')];
+		const dated = rows.map((row, index) => ({ ...row, at: at[index % 2] }));
+		expect(stockOf(dated).lastmod).toEqual(at[1]);
+		expect(comboStock(dated, () => []).get(comboKey({ categoryId: 'c2', brandId: null, grade: null }))?.lastmod).toEqual(at[1]);
 		const pair = { categoryId: 'c', brandId: 'b', grade: null };
 		expect(isAutomatic('off', pair)).toBe(false);
 		expect(isAutomatic('category_brand', pair)).toBe(true);
@@ -172,13 +180,14 @@ describe('automatic landing pages (E43)', () => {
 			landing: { id: stored.id, automatic: false },
 		});
 		expect(await sitemap()).not.toContain(pageOf(ids.dresses.slug, ids.alpha.slug));
-		// Automatic: enough products, but the variants must be there too
+		// Automatic: enough products and variants in stock
 		await api('PATCH', `/v1/landings/${stored.id}`, { indexable: 'auto' });
 		await shop.setting('landing_pages', 'landingMinProducts', 2);
 		expect((await api('GET', `/v1/landings/${stored.id}`)).indexed).toBe(true);
+		// once indexed, it stays indexed while it has products, below the numbers too (G7.7)
 		await shop.setting('landing_pages', 'autoMinInStockVariants', 4);
-		expect((await api('GET', `/v1/landings/${stored.id}`)).indexed).toBe(false);
-		expect((await api('GET', '/v1/landings')).items[0]).toMatchObject({ inStock: 2, inStockVariants: 3, indexed: false });
+		expect((await api('GET', `/v1/landings/${stored.id}`)).indexed).toBe(true);
+		expect((await api('GET', '/v1/landings')).items[0]).toMatchObject({ inStock: 2, inStockVariants: 3, indexed: true });
 		await shop.setting('landing_pages', 'autoMinInStockVariants', 3);
 		await shop.setting('landing_pages', 'landingMinProducts', 3);
 		await api('DELETE', `/v1/landings/${stored.id}`);

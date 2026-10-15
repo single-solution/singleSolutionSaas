@@ -84,8 +84,13 @@ describe('core/seo', () => {
 			'<url><loc>https://a.example/</loc></url>\n',
 		);
 		expect(sitemapEntry({ loc: 'https://a.example/', lastmod: null })).not.toContain('lastmod');
-		expect(sitemapIndex(['https://a.example/s.xml?page=1'])).toContain(
-			'<sitemap><loc>https://a.example/s.xml?page=1</loc></sitemap>',
+		expect(
+			sitemapIndex([
+				{ loc: 'https://a.example/s.xml?page=1', lastmod: null },
+				{ loc: 'https://a.example/s.xml?page=2', lastmod: new Date('2026-01-02T03:04:05Z') },
+			]),
+		).toContain(
+			'<sitemap><loc>https://a.example/s.xml?page=1</loc></sitemap>\n<sitemap><loc>https://a.example/s.xml?page=2</loc><lastmod>2026-01-02T03:04:05.000Z</lastmod></sitemap>\n',
 		);
 		expect(sitemapEntry({ loc: 'https://a.example/', lastmod: null, images: ['https://c.example/a&b.jpg'] })).toBe(
 			'<url><loc>https://a.example/</loc><image:image><image:loc>https://c.example/a&amp;b.jpg</image:loc></image:image></url>\n',
@@ -102,14 +107,14 @@ describe('core/seo', () => {
 		expect(robotsOf({ noindex: true, nofollow: true })).toBe('noindex, nofollow');
 	});
 
-	it('names the files of a sitemap index', () => {
-		expect(sitemapFiles({ categories: 3, landings: 0, products: 2500, size: 1000 })).toEqual([
+	it('names the files of a sitemap index, the home page always in the first', () => {
+		expect(sitemapFiles({ landings: 0, products: 2500, size: 1000 })).toEqual([
 			'categories',
 			'products-1',
 			'products-2',
 			'products-3',
 		]);
-		expect(sitemapFiles({ categories: 0, landings: 2, products: 0, size: 1000 })).toEqual(['landings']);
+		expect(sitemapFiles({ landings: 2, products: 0, size: 1000 })).toEqual(['categories', 'landings']);
 	});
 });
 
@@ -513,7 +518,9 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(answer.text).toContain('<image:image><image:loc>https://');
 		expect(answer.text).toContain(`<loc>${ORIGIN}/categories/android</loc>`);
 		expect(answer.text).not.toContain('hidden');
-		expect((answer.text.match(/<url>/g) ?? []).length).toBe(4);
+		// the home page, the categories and the products
+		expect(answer.text).toContain(`<url><loc>${ORIGIN}/</loc></url>`);
+		expect((answer.text.match(/<url>/g) ?? []).length).toBe(5);
 		expect((await shop.api('GET', '/v1/seo/sitemaps/categories')).status).toBe(200);
 		expect((await shop.api('GET', '/v1/seo/sitemaps/nothing')).status).toBe(404);
 	});
@@ -597,6 +604,8 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 	it('splits a large sitemap into files behind an index', async () => {
 		const data = await shop.db();
 		await shop.setting('seo', 'sitemapSize', 1000);
+		// categories without products listed too (the merchant asks for it)
+		await shop.setting('seo', 'emptyCategories', 'index');
 		const docs = Array.from({ length: 1001 }, (_, index) =>
 			storedCategory({
 				id: `cat_bulk${String(index).padStart(6, '0')}`,
@@ -616,7 +625,8 @@ describe('SEO, feeds, llms.txt and policies routes', () => {
 		expect(index.text).toContain(`<loc>${ORIGIN}/sitemap.xml?file=categories</loc>`);
 		expect(index.text).toContain(`<loc>${ORIGIN}/sitemap.xml?file=products-1</loc>`);
 		const categories = await shop.api('GET', '/v1/seo/sitemaps/categories');
-		expect((categories.text.match(/<url>/g) ?? []).length).toBe(1003);
+		// the home page and every category
+		expect((categories.text.match(/<url>/g) ?? []).length).toBe(1004);
 		const products = await shop.api('GET', '/v1/seo/sitemaps/products-1.xml');
 		expect(products.text).toContain('/products/acme-phone');
 		expect((await shop.api('GET', '/v1/seo/sitemaps/products-2')).status).toBe(404);

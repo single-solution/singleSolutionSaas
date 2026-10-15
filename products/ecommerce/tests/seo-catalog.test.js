@@ -36,7 +36,10 @@ beforeAll(async () => {
 	]);
 	ids.phones = await api('POST', '/v1/categories', { name: 'Phones', faqs: [{ question: 'Unlocked?', answer: 'Yes.' }] });
 	ids.acme = await api('POST', '/v1/brands', { name: 'Acme', seo: { description: 'Acme phones.' } });
-	ids.battery = await api('POST', '/v1/attributes', { name: 'Battery', seo: { description: 'How long it lasts.' } });
+	ids.battery = await api('POST', '/v1/attributes', {
+		name: 'Battery',
+		seo: { description: 'How long it lasts.', body: 'Battery life is the hours of use one charge gives.' },
+	});
 	ids.phone = await api('POST', '/v1/products', {
 		name: 'Acme One',
 		status: 'active',

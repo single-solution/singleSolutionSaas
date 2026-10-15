@@ -47,10 +47,12 @@ beforeAll(async () => {
 	ids.evening = await api('POST', '/v1/categories', { name: 'Evening', parentId: ids.dresses.id });
 	ids.shirts = await api('POST', '/v1/categories', { name: 'Shirts' });
 	ids.fabric = await api('POST', '/v1/attributes', { name: 'Fabric', slug: 'fabric', show: { filter: true } });
+	// glossary pages are indexed and listed with text of their own (G7.2)
 	ids.dressFabric = await api('POST', '/v1/attributes', {
 		name: 'Dress fabric',
 		slug: 'fabric',
 		categoryId: ids.dresses.id,
+		seo: { body: 'How each dress fabric drapes.' },
 		unit: 'gsm',
 		type: 'choice',
 		choices: [{ value: 'silk', label: 'Pure silk' }, 'linen'],
@@ -58,7 +60,14 @@ beforeAll(async () => {
 	});
 	await shop.list('grades', [
 		{ key: 'a', label: 'Grade A', description: 'Light marks.', warrantyDays: 30 },
-		{ key: 'a', label: 'Like new', description: 'As new.', categoryId: ids.dresses.id, warrantyDays: 90 },
+		{
+			key: 'a',
+			label: 'Like new',
+			description: 'As new.',
+			categoryId: ids.dresses.id,
+			warrantyDays: 90,
+			seo: { title: '', description: '', body: 'Worn once at most.', faqs: [] },
+		},
 	]);
 });
 
@@ -335,15 +344,17 @@ describe('attributes per category (E45)', () => {
 			unit: 'gsm',
 			categoryId: ids.dresses.id,
 			category: { id: ids.dresses.id, slug: ids.dresses.slug, name: 'Dresses' },
-			description: 'Dress fabric for Dresses (gsm) Pure silk, linen',
+			description: 'How each dress fabric drapes.',
 			canonical: `${ORIGIN}/attributes/${ids.dresses.slug}/fabric`,
 			robots: 'index, follow',
 		});
+		// without text of its own: the patterns, not indexed (G7.2)
 		expect(await api('GET', `/v1/seo/attributes/${ids.shirts.slug}/fabric`)).toMatchObject({
 			name: 'Fabric',
 			categoryId: null,
 			description: 'Fabric for Shirts',
 			canonical: `${ORIGIN}/attributes/${ids.shirts.slug}/fabric`,
+			robots: 'noindex, follow',
 		});
 		// the one for every category, read without one: no page of its own at a {category} address
 		expect(await api('GET', '/v1/seo/attributes/fabric')).toMatchObject({
@@ -358,12 +369,15 @@ describe('attributes per category (E45)', () => {
 		expect((await shop.api('GET', `/v1/seo/attributes/${ids.shirts.slug}/fabric`)).status).toBe(404);
 	});
 
-	it('lists every active attribute per category in the sitemap once the address is set (SG-20)', async () => {
+	it('lists every active attribute with its own text per category in the sitemap once the address is set (SG-20)', async () => {
 		await shop.setting('landing_pages', 'attributeDescription', '');
 		const sitemap = (await shop.api('GET', '/v1/seo/sitemap.xml')).text;
 		expect(sitemap).toContain(`<loc>${ORIGIN}/attributes/${ids.dresses.slug}/fabric</loc>`);
 		expect(sitemap).not.toContain(`/attributes/${ids.shirts.slug}/fabric`);
-		await api('PATCH', `/v1/attributes/${ids.fabric.id}`, { categoryIds: [ids.shirts.id] });
+		await api('PATCH', `/v1/attributes/${ids.fabric.id}`, {
+			categoryIds: [ids.shirts.id],
+			seo: { body: 'What each fabric feels like.' },
+		});
 		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).toContain(
 			`<loc>${ORIGIN}/attributes/${ids.shirts.slug}/fabric</loc>`,
 		);

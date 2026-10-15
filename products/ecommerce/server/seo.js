@@ -32,6 +32,7 @@ import {
 	daysRange,
 	fieldTargets,
 	fillTemplate,
+	hasOwnText,
 	metaDescription,
 	openingHoursOf,
 	pageName,
@@ -534,17 +535,22 @@ export const createSeo = (product, service) => {
 			description,
 			canonical,
 			image: ogImage ? absolute(ogImage, s.domain) : (image ?? defaultImageOf(settings, s.domain)),
-			robots: comingSoon ? 'noindex, follow' : robotsOf(category.seo),
+			// a category with no product to show and no text of its own is a thin page: not indexed (G7.1)
+			robots:
+				comingSoon || (items.length === 0 && !hasOwnText(category) && settings.emptyCategories !== 'index')
+					? 'noindex, follow'
+					: robotsOf(category.seo),
 			status: comingSoon ? 'coming_soon' : 'active',
 			jsonLd: scriptJson(jsonLd),
 		};
 	};
 
 	/**
-	 * What a sitemap lists, for one website and request (E1, E16): categories shoppers see, indexable landing and
-	 * glossary pages, and active, visible products, leaving out pages marked noindex and pages whose canonical address
-	 * is another page (G8; those are left out while the parts are written, so the counts that split the files may
-	 * count them).
+	 * What a sitemap lists, for one website and request (E1, E16, G7, G8): the home page; categories shoppers see that
+	 * have a product to show (in them or below them) or text of their own, unless the `seo` setting `emptyCategories`
+	 * indexes empty ones too; indexable landing and glossary pages; and active, visible products — leaving out pages
+	 * marked noindex and pages whose canonical address is another page (those are left out while the parts are written,
+	 * so the counts that split the files may count them).
 	 * @param {Site} s
 	 */
 	const sitemapParts = async (s) => {
@@ -555,26 +561,29 @@ export const createSeo = (product, service) => {
 			...(hidden.categoryIds.length > 0 ? { id: { $nin: hidden.categoryIds } } : {}),
 			'seo.noindex': { $ne: true },
 		};
-		const productFilter = {
-			websiteId: data.websiteId,
-			status: 'active',
-			...visibleMatch(hidden),
-			'seo.noindex': { $ne: true },
-		};
-		const [categories, products, pages, { sitemapSize, sitemapUrl }] = await Promise.all([
+		// the products shoppers see (a category page lists them), and those the sitemap lists
+		const shownFilter = { websiteId: data.websiteId, status: 'active', ...visibleMatch(hidden) };
+		const productFilter = { ...shownFilter, 'seo.noindex': { $ne: true } };
+		const [categories, products, pages, settings, tree, listed] = await Promise.all([
 			data.collection(COLLECTIONS.categories).countDocuments(categoryFilter),
 			data.collection(COLLECTIONS.products).countDocuments(productFilter),
 			landings.sitemapPages(s, data),
 			seoSettingsOf(s),
+			allCategories(data),
+			data.collection(COLLECTIONS.products).distinct('categoryIds', shownFilter),
 		]);
+		const paths = new Map(tree.map((category) => [category.id, category.path]));
 		return {
 			data,
 			categoryFilter,
 			productFilter,
 			counts: { categories, landings: pages.length, products },
 			pages,
-			size: Math.max(1000, Math.min(50_000, Number(sitemapSize) || 10_000)),
-			sitemapUrl: String(sitemapUrl),
+			// the categories with a product to show, in them or below them
+			filled: new Set(listed.map(String).flatMap((id) => [id, ...(paths.get(id) ?? [])])),
+			emptyIndexed: settings.emptyCategories === 'index',
+			size: Math.max(1000, Math.min(50_000, Number(settings.sitemapSize) || 10_000)),
+			sitemapUrl: String(settings.sitemapUrl),
 		};
 	};
 
@@ -582,7 +591,7 @@ export const createSeo = (product, service) => {
 	 * The addresses of one part of a sitemap.
 	 * @param {Site} s
 	 * @param {Awaited<ReturnType<typeof sitemapParts>>} parts
-	 * @param {'categories' | 'landings' | 'products'} part
+	 * @param {'categories' | 'landings' | 'products'} part `categories`: the home page first
 	 * @param {{ skip: number, limit: number }} [range] products only
 	 */
 	async function* entriesOf(s, parts, part, range = { skip: 0, limit: 0 }) {
@@ -600,7 +609,18 @@ export const createSeo = (product, service) => {
 			part === 'categories'
 				? data
 						.collection(COLLECTIONS.categories)
-						.find(parts.categoryFilter, { projection: { _id: 0, id: 1, slug: 1, updatedAt: 1, 'seo.canonicalUrl': 1 } })
+						.find(parts.categoryFilter, {
+							projection: {
+								_id: 0,
+								id: 1,
+								slug: 1,
+								path: 1,
+								updatedAt: 1,
+								description: 1,
+								'content.summary': 1,
+								'seo.canonicalUrl': 1,
+							},
+						})
 						.sort({ id: 1 })
 						.batchSize(BATCH * 5)
 				: data
@@ -612,7 +632,7 @@ export const createSeo = (product, service) => {
 								slug: 1,
 								categoryIds: 1,
 								brandId: 1,
-								updatedAt: 1,
+								contentUpdatedAt: 1,
 								'seo.canonicalUrl': 1,
 								media: { $slice: MAX_IMAGES },
 								'variants.media.key': 1,
@@ -622,12 +642,13 @@ export const createSeo = (product, service) => {
 						.skip(range.skip)
 						.limit(range.limit)
 						.batchSize(BATCH * 5);
-		let chunk = '';
+		let chunk = part === 'categories' ? sitemapEntry({ loc: `https://${s.domain}/`, lastmod: null }) : '';
 		for await (const row of rows) {
 			const record = /** @type {any} */ (row);
 			if (part === 'categories') {
 				const loc = await media.categoryUrl(s, record);
-				if (canonical(record, loc)) chunk += sitemapEntry({ loc, lastmod: record.updatedAt });
+				const shown = parts.filled.has(record.id) || parts.emptyIndexed || hasOwnText(record);
+				if (shown && canonical(record, loc)) chunk += sitemapEntry({ loc, lastmod: record.updatedAt });
 			} else {
 				const loc = await media.productUrl(s, record);
 				if (!canonical(record, loc)) continue;
@@ -646,7 +667,8 @@ export const createSeo = (product, service) => {
 					const address = await media.stableUrl(s, key);
 					if (address) images.push(address);
 				}
-				chunk += sitemapEntry({ loc, lastmod: record.updatedAt, images });
+				// dated by the last change of what its page shows, never by a stock change (G8.4)
+				chunk += sitemapEntry({ loc, lastmod: record.contentUpdatedAt, images });
 			}
 			if (chunk.length > CHUNK) {
 				yield chunk;
@@ -657,18 +679,49 @@ export const createSeo = (product, service) => {
 	}
 
 	/**
-	 * GET /v1/seo/sitemap.xml: one sitemap, or an index of files above `sitemapSize` addresses (E16).
+	 * The newest `lastmod` of a file of a sitemap index (G8.4): its categories' last change, its landing pages', or the
+	 * last content change of its products.
+	 * @param {Awaited<ReturnType<typeof sitemapParts>>} parts
+	 * @param {string} file
+	 * @returns {Promise<Date | null>}
+	 */
+	const fileLastmod = async (parts, file) => {
+		const { data } = parts;
+		if (file === 'landings')
+			return parts.pages.reduce(
+				(/** @type {Date | null} */ at, page) => (page.lastmod && (at === null || page.lastmod > at) ? page.lastmod : at),
+				null,
+			);
+		const number = /^products-(\d+)$/.exec(file);
+		const [newest] = await data
+			.collection(number ? COLLECTIONS.products : COLLECTIONS.categories)
+			.aggregate([
+				{ $match: number ? parts.productFilter : parts.categoryFilter },
+				...(number ? [{ $sort: { id: 1 } }, { $skip: (Number(number[1]) - 1) * parts.size }, { $limit: parts.size }] : []),
+				{ $group: { _id: null, at: { $max: number ? '$contentUpdatedAt' : '$updatedAt' } } },
+			])
+			.toArray();
+		return newest?.at instanceof Date ? newest.at : null;
+	};
+
+	/**
+	 * GET /v1/seo/sitemap.xml: one sitemap, or an index of files above `sitemapSize` addresses, each dated by its newest
+	 * page (E16, G8.4).
 	 * @param {any} ctx
 	 */
 	const sitemap = async (ctx) => {
 		const s = await service.site(ctx);
 		const parts = await sitemapParts(s);
-		const total = parts.counts.categories + parts.counts.landings + parts.counts.products;
+		const total = 1 + parts.counts.categories + parts.counts.landings + parts.counts.products;
 		if (total > parts.size) {
 			const files = sitemapFiles({ ...parts.counts, size: parts.size });
-			return new Response(sitemapIndex(files.map((file) => sitemapFileUrl(parts.sitemapUrl, s.domain, file))), {
-				headers: { 'content-type': 'application/xml; charset=utf-8' },
-			});
+			const entries = await Promise.all(
+				files.map(async (file) => ({
+					loc: sitemapFileUrl(parts.sitemapUrl, s.domain, file),
+					lastmod: await fileLastmod(parts, file),
+				})),
+			);
+			return new Response(sitemapIndex(entries), { headers: { 'content-type': 'application/xml; charset=utf-8' } });
 		}
 		async function* pieces() {
 			yield SITEMAP_HEAD;
@@ -681,7 +734,8 @@ export const createSeo = (product, service) => {
 	};
 
 	/**
-	 * GET /v1/seo/sitemaps/:file: one file of a sitemap index (`categories`, `landings`, `products-<n>`).
+	 * GET /v1/seo/sitemaps/:file: one file of a sitemap index (`categories` with the home page, `landings`,
+	 * `products-<n>`).
 	 * @param {any} ctx
 	 */
 	const sitemapFile = async (ctx) => {

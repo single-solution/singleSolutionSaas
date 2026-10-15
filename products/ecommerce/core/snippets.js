@@ -328,6 +328,8 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'  const head = await listingOf(slug, filters);',
 		'  if (!head) notFound();',
 		'  if (head.moved) permanentRedirect(head.moved.url);',
+		'  // an empty filter result or a page past the end: a 404 at this address',
+		'  if (head.status === 404) notFound();',
 		'  return (',
 		'    <>',
 		'      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: head.jsonLd }} />',

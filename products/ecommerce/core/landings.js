@@ -76,19 +76,20 @@ export const checkLanding = (body, existing) => {
 };
 
 /**
- * What a combination has in stock: products (each once), variants, and the lowest price of those variants (null
- * without any).
- * @typedef {{ products: number, variants: number, minPrice: number | null }} ComboStock
+ * What a combination has in stock: products (each once), variants, the lowest price of those variants (null without
+ * any) and the newest content change of those products (`contentUpdatedAt`, null without any: the page's `lastmod`).
+ * @typedef {{ products: number, variants: number, minPrice: number | null, lastmod: Date | null }} ComboStock
  */
 
 /** @typedef {{ categoryId: string | null, brandId: string | null, grade: string | null }} Combination */
 
 /** Nothing in stock. @type {Readonly<ComboStock>} */
-export const NO_STOCK = Object.freeze({ products: 0, variants: 0, minPrice: null });
+export const NO_STOCK = Object.freeze({ products: 0, variants: 0, minPrice: null, lastmod: null });
 
 /**
- * Whether search engines index a landing page: `yes`, `no`, or with `auto` while at least `minProducts` of its
- * products and `minVariants` of their variants are in stock (SG-10).
+ * Whether a landing page reaches the numbers to be indexed: `yes`, `no`, or with `auto` while at least `minProducts` of
+ * its products and `minVariants` of their variants are in stock (SG-10); one indexed before stays indexed while it has
+ * any product (G7.7, the route remembers it).
  * @param {Pick<LandingRecord, 'indexable'>} landing
  * @param {Pick<ComboStock, 'products' | 'variants'>} stock
  * @param {{ minProducts: number, minVariants: number }} minimum the `landingMinProducts` (stored pages) or
@@ -116,16 +117,19 @@ export const isAutomatic = (mode, { categoryId, brandId, grade }) =>
  */
 export const comboKey = ({ categoryId, brandId, grade }) => `${categoryId ?? ''}|${brandId ?? ''}|${grade ?? ''}`;
 
+/** The newer of two times (null: none). @param {Date | null} a @param {unknown} b @returns {Date | null} */
+const newer = (a, b) => (b instanceof Date && (a === null || b > a) ? b : a);
+
 /**
  * The stock of every category (with those above it), brand and grade combination at once (E43, SG-10), from rows of
- * the in-stock variants grouped by product and grade (`{ _id: { p, g }, c: categoryIds, b: brandId, n, min }`): a
+ * the in-stock variants grouped by product and grade (`{ _id: { p, g }, c: categoryIds, b: brandId, n, min, at }`): a
  * product counts once in each combination, its variants of the grade (or all, without one) are added up.
  * @param {ReadonlyArray<any>} rows
  * @param {(categoryId: string) => string[]} above the ids of the categories above one
  * @returns {Map<string, ComboStock>}
  */
 export const comboStock = (rows, above) => {
-	/** @type {Map<string, { products: Set<string>, variants: number, minPrice: number | null }>} */
+	/** @type {Map<string, { products: Set<string>, variants: number, minPrice: number | null, lastmod: Date | null }>} */
 	const table = new Map();
 	for (const row of rows) {
 		/** @type {string[]} */
@@ -138,9 +142,10 @@ export const comboStock = (rows, above) => {
 				for (const grade of grades) {
 					if (categoryId === null && brandId === null && grade === null) continue;
 					const key = comboKey({ categoryId, brandId, grade });
-					const entry = table.get(key) ?? { products: new Set(), variants: 0, minPrice: null };
+					const entry = table.get(key) ?? { products: new Set(), variants: 0, minPrice: null, lastmod: null };
 					entry.products.add(String(row._id?.p));
 					entry.variants += Number(row.n);
+					entry.lastmod = newer(entry.lastmod, row.at);
 					const min = typeof row.min === 'number' ? row.min : null;
 					if (min !== null && (entry.minPrice === null || min < entry.minPrice)) entry.minPrice = min;
 					table.set(key, entry);
@@ -149,7 +154,7 @@ export const comboStock = (rows, above) => {
 	return new Map(
 		[...table.entries()].map(([key, entry]) => [
 			key,
-			{ products: entry.products.size, variants: entry.variants, minPrice: entry.minPrice },
+			{ products: entry.products.size, variants: entry.variants, minPrice: entry.minPrice, lastmod: entry.lastmod },
 		]),
 	);
 };
@@ -176,6 +181,7 @@ export const stockStages = (grade = null) => [
 			b: { $first: '$brandId' },
 			n: { $sum: 1 },
 			min: { $min: '$variants.price' },
+			at: { $first: '$contentUpdatedAt' },
 		},
 	},
 ];
@@ -193,6 +199,7 @@ export const stockOf = (rows) => {
 		products: products.size,
 		variants: rows.reduce((sum, row) => sum + Number(row.n), 0),
 		minPrice: prices.length > 0 ? Math.min(...prices) : null,
+		lastmod: rows.reduce((/** @type {Date | null} */ at, row) => newer(at, row.at), null),
 	};
 };
 

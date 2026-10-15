@@ -20,7 +20,7 @@ import { created, defineRoute, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, findBySlugHistory, isDuplicate } from '../adapters/catalog-store.js';
 import { checkLandingAiRequest, landingPrompt, readSuggestions } from '../core/catalog-ai.js';
 import { siteAddress } from '../core/catalog-content.js';
-import { SORTS, listOf, shopFilter, sortDocument } from '../core/catalog-query.js';
+import { SORTS, listOf, readShopQuery, shopFilter, sortDocument } from '../core/catalog-query.js';
 import { lineageOf, withDescendants } from '../core/catalog-taxonomy.js';
 import {
 	NO_STOCK,
@@ -42,6 +42,7 @@ import {
 	faqJsonLd,
 	fillTemplate,
 	fillTitle,
+	hasOwnText,
 	metaDescription,
 	pageName,
 	pageTitle,
@@ -50,6 +51,7 @@ import {
 	scriptJson,
 } from '../core/seo.js';
 import { gradesByKey, gradesFor } from '../core/grades.js';
+import { createListingFilter } from './catalog-shop.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
 import { seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
@@ -82,8 +84,14 @@ const MAX_PAGE = 60;
 const MAX_AUTO_TRIES = 5;
 /** Most rows of the stock of every combination (E43): products in stock, by grade. */
 const MAX_STOCK_ROWS = 50_000;
+/** A listing's total is exact up to this many products (as the grid counts, E8). */
+const TOTAL_CAP = 10_000;
+/** At most this many landing pages are remembered as indexed (G7.7). */
+const MAX_REMEMBERED = 10_000;
 /** Listing parameters that are not filters (they keep a category or landing page indexable). */
 const NOT_FILTERS = new Set(['category', 'brand', 'grade', 'page', 'limit', 'cursor']);
+/** Listing parameters that narrow nothing: an empty result with only these is a page, not a 404 (G7.4). */
+const NOT_NARROWING = new Set(['category', 'page', 'limit', 'cursor', 'sort']);
 /** Listing parameters a page's own address never carries: the category is the address, the rest only reads (G12). */
 const NOT_IN_ADDRESS = new Set(['category', 'limit', 'cursor']);
 
@@ -132,6 +140,70 @@ export const createLandings = (product, service, media) => {
 			gradesIn: (categoryId) => /** @type {Map<string, Grade>} */ (gradesFor(gradeList, lineageOf([categoryId], byCategory))),
 			gradeList: /** @type {Grade[]} */ (gradeList),
 		};
+	};
+
+	const listingFilter = createListingFilter(service);
+
+	/**
+	 * The landing pages indexed before (G7.7), by combination key: all of them, or those of `keys`.
+	 * @param {WebsiteData} data @param {string[]} [keys]
+	 * @returns {Promise<Set<string>>}
+	 */
+	const memoryOf = async (data, keys) =>
+		new Set(
+			(
+				await data
+					.collection(COLLECTIONS.landingIndex)
+					.find({ websiteId: data.websiteId, ...(keys ? { key: { $in: keys } } : {}) }, { projection: { _id: 0, key: 1 } })
+					.limit(MAX_REMEMBERED)
+					.toArray()
+			).map((row) => String(row.key)),
+		);
+
+	/**
+	 * Remember landing pages as indexed, or forget them (G7.7).
+	 * @param {WebsiteData} data @param {Set<string>} memory updated too @param {string[]} keys @param {boolean} indexed
+	 */
+	const remember = async (data, memory, keys, indexed) => {
+		if (keys.length === 0) return;
+		const index = data.collection(COLLECTIONS.landingIndex);
+		if (indexed)
+			await index
+				.insertMany(
+					keys.map((key) => ({ key, at: new Date(service.now()) })),
+					{ ordered: false },
+				)
+				.catch((/** @type {any} */ error) => {
+					// another read remembered it at the same time
+					if (!isDuplicate(error) && !(error?.writeErrors ?? []).every((/** @type {any} */ e) => e.code === 11000))
+						throw error;
+				});
+		else await index.deleteMany({ websiteId: data.websiteId, key: { $in: keys } });
+		for (const key of keys) {
+			if (indexed) memory.add(key);
+			else memory.delete(key);
+		}
+	};
+
+	/**
+	 * Whether a landing page set to Automatic (stored or automatic) is indexed (SG-10, G7.7): when it reaches the numbers
+	 * (`meets`); once indexed, while it has any product shoppers may see, in stock or not, so its place in search results
+	 * does not come and go with stock. Remembers a page newly indexed and forgets one that left the index.
+	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names
+	 * @param {{ categoryId: string | null, brandId: string | null, grade: string | null }} combination
+	 * @param {boolean} meets @param {Set<string>} memory
+	 */
+	const judged = async (s, data, names, combination, meets, memory) => {
+		const key = comboKey(combination);
+		const before = memory.has(key);
+		const indexed =
+			meets ||
+			(before &&
+				(await data
+					.collection(COLLECTIONS.products)
+					.countDocuments(await filterOf(s, names, combination, false), { limit: 1 })) > 0);
+		if (indexed !== before) await remember(data, memory, [key], indexed);
+		return indexed;
 	};
 
 	/**
@@ -242,23 +314,29 @@ export const createLandings = (product, service, media) => {
 	};
 
 	/**
-	 * A landing page with its address, products and variants in stock and whether it is indexed now.
+	 * A landing page with its address, products and variants in stock and whether it is indexed now (once indexed, while
+	 * it has any product, G7.7).
 	 * @param {Site} s @param {WebsiteData} data @param {Awaited<ReturnType<typeof namesOf>>} names @param {LandingRecord} landing
 	 * @param {import('../core/landings.js').ComboStock} [known] its stock when already read
+	 * @param {Set<string>} [memory] the pages indexed before, when already read
 	 */
-	const viewOf = async (s, data, names, landing, known) => {
+	const viewOf = async (s, data, names, landing, known, memory) => {
 		const stock = known ?? (await stockOfCombo(s, data, names, landing));
 		const { stored, auto, mode } = await rulesOf(s);
 		// a page stored for a combination that is automatic is never indexed less than without it (E43)
 		const minimum = isAutomatic(mode, landing)
 			? { ...stored, minProducts: Math.min(stored.minProducts, auto.minProducts) }
 			: stored;
+		const meets = isIndexable(landing, stock, minimum);
 		return {
 			...landing,
 			url: await urlOf(s, names, landing),
 			inStock: stock.products,
 			inStockVariants: stock.variants,
-			indexed: isIndexable(landing, stock, minimum),
+			indexed:
+				landing.indexable === 'auto'
+					? await judged(s, data, names, landing, meets, memory ?? (await memoryOf(data, [comboKey(landing)])))
+					: meets,
 		};
 	};
 
@@ -355,9 +433,12 @@ export const createLandings = (product, service, media) => {
 				: rows;
 			// several pages: the stock of every combination in one aggregation (E43)
 			const table = shown.length > 1 ? await stockTable(s, data, names) : null;
+			const memory = await memoryOf(data, shown.map(comboKey));
 			return {
 				items: await Promise.all(
-					shown.map((row) => viewOf(s, data, names, row, table ? (table.get(comboKey(row)) ?? NO_STOCK) : undefined)),
+					shown.map((row) =>
+						viewOf(s, data, names, row, table ? (table.get(comboKey(row)) ?? NO_STOCK) : undefined, memory),
+					),
 				),
 			};
 		},
@@ -506,9 +587,11 @@ export const createLandings = (product, service, media) => {
 						combination,
 					)
 				: null;
-		const view = landing ? await viewOf(s, data, names, landing) : null;
+		const memory = await memoryOf(data, [comboKey(combination)]);
+		const view = landing ? await viewOf(s, data, names, landing, undefined, memory) : null;
 		const storeName = storeNameOf(settings, business);
-		// no stored page: an automatic one while the combination has enough in stock (E43)
+		// no stored page: an automatic one while the combination has enough in stock, or was indexed and still has a
+		// product (E43, G7.7)
 		const rules = await rulesOf(s);
 		const shown = category === null || !hidden.categoryIds.includes(category.id);
 		const autoStock =
@@ -516,7 +599,8 @@ export const createLandings = (product, service, media) => {
 				? await stockOfCombo(s, data, names, combination)
 				: null;
 		const automatic =
-			autoStock && isIndexable({ indexable: 'auto' }, autoStock, rules.auto)
+			autoStock &&
+			(await judged(s, data, names, combination, isIndexable({ indexable: 'auto' }, autoStock, rules.auto), memory))
 				? {
 						url: await urlOf(s, names, combination),
 						stock: autoStock,
@@ -527,14 +611,30 @@ export const createLandings = (product, service, media) => {
 						),
 					}
 				: null;
+		// the products the page lists, counted as the grid counts them (the same filter): its total, and a 404 for an empty
+		// result of a filter, for a filter it cannot read and for a page past the end (G7.4; a search finding nothing,
+		// and a stored landing page with its own copy, are pages)
+		const read = readShopQuery({ ...ctx.query, category: category?.id ?? '' });
+		const counted = read.ok ? await listingFilter(s, data, read.value) : null;
+		const total = counted
+			? await data.collection(COLLECTIONS.products).countDocuments(counted.filter, { limit: TOTAL_CAP + 1 })
+			: 0;
+		const limit = /^\d{1,2}$/.test(String(ctx.query.limit ?? ''))
+			? Math.min(MAX_PAGE, Math.max(1, Number(ctx.query.limit)))
+			: Number((await s.values('catalog')).pageSize);
+		const narrowed = Object.keys(ctx.query).some((key) => !NOT_NARROWING.has(key) && ctx.query[key] !== '');
+		const searched = String(ctx.query.q ?? '').trim() !== '';
+		const missing = !searched && !view && (!read.ok || (page > 1 && (page - 1) * limit >= total) || (narrowed && total === 0));
 		const categoryIndexable =
 			category !== null &&
 			!hidden.categoryIds.includes(category.id) &&
 			!category.seo.noindex &&
 			brand === null &&
 			grade === null &&
-			exact;
-		const indexed = categoryIndexable || (view?.indexed === true && exact) || automatic !== null;
+			exact &&
+			// an empty category without text of its own is a thin page (G7.1)
+			(total > 0 || hasOwnText(category) || settings.emptyCategories === 'index');
+		const indexed = !missing && (categoryIndexable || (view?.indexed === true && exact) || automatic !== null);
 		const pageUrl = view
 			? view.url
 			: automatic
@@ -583,20 +683,16 @@ export const createLandings = (product, service, media) => {
 		const faqs = landing ? landing.faqs : (category?.faqs ?? []);
 		// the ItemList: the products this page of the grid shows, in its order (G7.8); a list with other filters gives none
 		// (it is not indexed, and its items are the grid's to find)
-		const limit = /^\d{1,2}$/.test(String(ctx.query.limit ?? ''))
-			? Math.min(MAX_PAGE, Math.max(1, Number(ctx.query.limit)))
-			: Number((await s.values('catalog')).pageSize);
-		const items = itemsKnown
-			? await data
-					.collection(COLLECTIONS.products)
-					.find(await filterOf(s, names, combination, false), {
-						projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 },
-					})
-					.sort(sortDocument(sorted ?? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
-					.skip((page - 1) * limit)
-					.limit(limit)
-					.toArray()
-			: [];
+		const items =
+			itemsKnown && counted && total > 0
+				? await data
+						.collection(COLLECTIONS.products)
+						.find(counted.filter, { projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 } })
+						.sort(sortDocument(sorted ?? /** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
+						.skip((page - 1) * limit)
+						.limit(limit)
+						.toArray()
+				: [];
 		const image = category?.image ? await media.stableUrl(s, category.image.key) : siteAddress(settings.defaultImage) || null;
 		const jsonLd = categoryJsonLd({
 			name: h1,
@@ -617,6 +713,9 @@ export const createLandings = (product, service, media) => {
 			faqs,
 			canonical,
 			robots: indexed && !pagedOut ? robotsOf(category?.seo) : 'noindex, follow',
+			total: Math.min(total, TOTAL_CAP),
+			empty: total === 0,
+			status: missing ? 404 : 200,
 			landing: view
 				? {
 						id: view.id,
@@ -702,7 +801,8 @@ export const createLandings = (product, service, media) => {
 			body: seo?.body ?? '',
 			faqs: seo?.faqs ?? [],
 			canonical: url,
-			robots: url ? 'index, follow' : 'noindex, follow',
+			// a page made only from patterns is thin: indexed only with text of its own (G7.2)
+			robots: url && seo?.body ? 'index, follow' : 'noindex, follow',
 			jsonLd: scriptJson({
 				'@context': 'https://schema.org',
 				'@graph': [
@@ -848,15 +948,17 @@ export const createLandings = (product, service, media) => {
 				if (url) urls.add(url);
 			}
 		};
+		// only pages with text of their own (G7.2), as they are indexed
 		for (const attribute of await attributesOf(data))
-			if (attribute.active) await add('attributeUrl', { slug: attribute.slug }, attribute);
-		for (const grade of names.gradeList)
-			if (grade.active && (grade.seo.body || grade.seo.description)) await add('gradeUrl', { key: grade.key }, grade);
+			if (attribute.active && attribute.seo.body) await add('attributeUrl', { slug: attribute.slug }, attribute);
+		for (const grade of names.gradeList) if (grade.active && grade.seo.body) await add('gradeUrl', { key: grade.key }, grade);
 		return [...urls];
 	};
 
 	/**
-	 * The indexable landing pages and the glossary pages, for the sitemaps.
+	 * The indexed landing pages and the glossary pages, for the sitemaps: stored pages, automatic ones (reaching the
+	 * numbers, or indexed before and still with a product, G7.7), dated by the newest content change of their products
+	 * in stock (a stored page's own change when newer, G8.4).
 	 * @param {Site} s @param {WebsiteData} data
 	 * @returns {Promise<Array<{ loc: string, lastmod: Date | null }>>}
 	 */
@@ -872,24 +974,44 @@ export const createLandings = (product, service, media) => {
 				.toArray()
 		);
 		// the stock of every combination, read once for the stored and the automatic pages (E43)
-		const [table, rules, hidden] = await Promise.all([stockTable(s, data, names), rulesOf(s), hiddenFor(s)]);
+		const [table, rules, hidden, memory] = await Promise.all([
+			stockTable(s, data, names),
+			rulesOf(s),
+			hiddenFor(s),
+			memoryOf(data),
+		]);
+		/** @param {Date | null | undefined} a @param {Date | null} b */
+		const newest = (a, b) => (a && (!b || a > b) ? a : b);
 		/** @type {Array<{ loc: string, lastmod: Date | null }>} */
 		const out = [];
 		for (const row of rows) {
 			if (row.indexable === 'no') continue;
-			const view = await viewOf(s, data, names, row, table.get(comboKey(row)) ?? NO_STOCK);
-			if (view.indexed) out.push({ loc: view.url, lastmod: row.updatedAt ?? null });
+			const stock = table.get(comboKey(row)) ?? NO_STOCK;
+			const view = await viewOf(s, data, names, row, stock, memory);
+			if (view.indexed) out.push({ loc: view.url, lastmod: newest(row.updatedAt, stock.lastmod) });
 		}
-		const stored = new Set(rows.map(comboKey));
-		if (rules.mode !== 'off')
-			for (const [key, stock] of table) {
+		if (rules.mode !== 'off') {
+			const stored = new Set(rows.map(comboKey));
+			// the combinations with stock, and those indexed before that have none in stock now
+			const keys = new Set([...table.keys(), ...[...memory].filter((key) => !table.has(key))]);
+			/** @type {string[]} */
+			const fresh = [];
+			for (const key of keys) {
 				if (stored.has(key)) continue;
 				const [categoryId = '', brandId = '', grade = ''] = key.split('|');
 				const combination = { categoryId: categoryId || null, brandId: brandId || null, grade: grade || null };
-				if (!isAutomatic(rules.mode, combination) || !isIndexable({ indexable: 'auto' }, stock, rules.auto)) continue;
+				if (!isAutomatic(rules.mode, combination)) continue;
 				if (hidden.unlisted.has(categoryId) || hidden.categoryIds.includes(categoryId)) continue;
-				out.push({ loc: await urlOf(s, names, combination), lastmod: null });
+				const stock = table.get(key) ?? NO_STOCK;
+				const meets = isIndexable({ indexable: 'auto' }, stock, rules.auto);
+				if (meets && !memory.has(key)) fresh.push(key);
+				// below the numbers: kept while it still has a product (else forgotten)
+				if (meets || (memory.has(key) && (await judged(s, data, names, combination, false, memory))))
+					out.push({ loc: await urlOf(s, names, combination), lastmod: stock.lastmod });
 			}
+			// the pages indexed for the first time, remembered at once
+			await remember(data, memory, fresh, true);
+		}
 		for (const loc of await glossaryPages(s, data, names)) out.push({ loc, lastmod: null });
 		return out;
 	};

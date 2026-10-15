@@ -8332,6 +8332,7 @@
 				"stockState",
 				"grades",
 				"publishedAt",
+				"contentUpdatedAt",
 				"createdAt",
 				"updatedAt"
 			],
@@ -8724,6 +8725,11 @@
 					"type": ["string", "null"],
 					"format": "date-time",
 					"description": "First time it became active."
+				},
+				"contentUpdatedAt": {
+					"type": "string",
+					"format": "date-time",
+					"description": "The last change of what its page shows (content, prices, photos, whether it can be bought; never a stock change that leaves it on sale): its lastmod in the sitemap."
 				},
 				"createdAt": {
 					"type": "string",
@@ -10554,7 +10560,7 @@
 				"robots": {
 					"type": "string",
 					"enum": ["index, follow", "noindex, follow"],
-					"description": "noindex, follow without an address."
+					"description": "index, follow only with an address and text of its own (its SEO body; a page made only from patterns is thin), else noindex, follow."
 				},
 				"jsonLd": {
 					"type": "string",
@@ -10722,7 +10728,7 @@
 				"robots": {
 					"type": "string",
 					"enum": ["index, follow", "noindex, follow"],
-					"description": "noindex, follow without an address."
+					"description": "index, follow only with an address and text of its own (its SEO body; a page made only from patterns is thin), else noindex, follow."
 				},
 				"jsonLd": {
 					"type": "string",
@@ -10733,7 +10739,20 @@
 		"SeoListing": {
 			"type": "object",
 			"description": "What a listing page (a category, a landing page, or any filtered list) puts in its head and above the grid.",
-			"required": ["h1", "title", "description", "intro", "faqs", "canonical", "robots", "landing", "jsonLd"],
+			"required": [
+				"h1",
+				"title",
+				"description",
+				"intro",
+				"faqs",
+				"canonical",
+				"robots",
+				"total",
+				"empty",
+				"status",
+				"landing",
+				"jsonLd"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"h1": {
@@ -10763,6 +10782,21 @@
 				},
 				"robots": {
 					"$ref": "#/components/schemas/SeoRobots"
+				},
+				"total": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 10000,
+					"description": "How many products the listing has with all its filters, counted as the grid counts them (exact up to 10,000)."
+				},
+				"empty": {
+					"type": "boolean",
+					"description": "No product (total 0)."
+				},
+				"status": {
+					"type": "integer",
+					"enum": [200, 404],
+					"description": "The HTTP status your page answers: 404 for a filter result with no product, a filter that cannot be read (a bad price, page or sort) and a page past the end (Google asks for a 404 there, never a redirect), with robots noindex, follow; 200 otherwise — also for a category without products, a search (q) that finds nothing and a stored landing page."
 				},
 				"landing": {
 					"type": ["object", "null"],
@@ -23046,7 +23080,7 @@
 	},
 	"POST /v1/data/delete-all": {
 		"summary": "Delete every record of a scope",
-		"description": "catalog: products, categories, brands, attributes, serial numbers, size charts and landing pages; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment canceled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm repeats the website's domain (422 at /confirm). Needs bulk_actions.",
+		"description": "catalog: products, categories, brands, attributes, serial numbers, size charts, landing pages and the landing pages remembered as indexed; orders: orders, booked slots, coupon uses and return claims (held stock is given back and every open Payments payment canceled first: 503 payments_unavailable, with nothing deleted, while Payments cannot be reached); customers: customer records and loyalty accounts. confirm repeats the website's domain (422 at /confirm). Needs bulk_actions.",
 		"body": {
 			"type": "object",
 			"required": ["scope", "confirm"],
@@ -23076,7 +23110,7 @@
 						"type": "integer",
 						"minimum": 0
 					},
-					"description": "Collection → records deleted: products, categories, brands, attributes, serials, size_charts, landings; orders, slots, coupon_uses, returns; customers, loyalty."
+					"description": "Collection → records deleted: products, categories, brands, attributes, serials, size_charts, landings, landing_index; orders, slots, coupon_uses, returns; customers, loyalty."
 				}
 			}
 		}
@@ -26121,7 +26155,7 @@
 	},
 	"GET /v1/seo/listing": {
 		"summary": "The head of a listing page",
-		"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand or a category coming soon gives noindex, follow. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
+		"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -26165,14 +26199,14 @@
 	},
 	"GET /v1/seo/attributes/:slug": {
 		"summary": "An attribute's glossary page",
-		"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it the page is noindex, follow. 404 not_found for an unknown or inactive attribute.",
+		"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found for an unknown or inactive attribute.",
 		"response": {
 			"$ref": "#/components/schemas/SeoAttribute"
 		}
 	},
 	"GET /v1/seo/grades/:key": {
 		"summary": "A grade's glossary page",
-		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false).",
+		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false).",
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}
@@ -26200,7 +26234,7 @@
 	},
 	"GET /v1/seo/categories/:ref": {
 		"summary": "A category page's meta tags and structured data",
-		"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty; else its ItemList holds the products of its first page (newest first, the catalog setting pageSize). A FAQPage only with the seo setting faqMarkup on. 404 not_found for an unknown or hidden category.",
+		"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty; robots is also noindex, follow while it has no product to show (in it or below it) and no text of its own (a summary or description of 50 words or more), unless the seo setting emptyCategories is index; else its ItemList holds the products of its first page (newest first, the catalog setting pageSize). A FAQPage only with the seo setting faqMarkup on. 404 not_found for an unknown or hidden category.",
 		"response": {
 			"oneOf": [
 				{
@@ -26214,7 +26248,7 @@
 	},
 	"GET /v1/seo/sitemap.xml": {
 		"summary": "The sitemap",
-		"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the categories shoppers see, the indexable landing pages (stored ones, and with the landing_pages setting auto the automatic ones) and glossary pages (Landing pages) and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex and pages whose canonicalUrl is another page (a sitemap lists canonical addresses only), with lastmod. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, whose files are the seo setting sitemapUrl with ?file=categories, ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file)."
+		"description": "Answers application/xml, not JSON: a urlset (with the image extension) of the home page, the categories shoppers see that have a product to show (in them or below them) or 50 words of text of their own (all of them with the seo setting emptyCategories index), the indexed landing pages (stored ones, and with the landing_pages setting auto the automatic ones; once indexed, while they have any product) and glossary pages with text of their own (Landing pages), and the active products shoppers may see with up to 10 images each, leaving out pages marked noindex and pages whose canonicalUrl is another page (a sitemap lists canonical addresses only). lastmod: a product's contentUpdatedAt (the last change of what its page shows, never a stock change that leaves it on sale), a category's last change, a landing page's newest product. Above the seo setting sitemapSize addresses (10,000 by default) it is a sitemapindex instead, each file dated by its newest page, whose files are the seo setting sitemapUrl with ?file=categories (with the home page), ?file=landings, ?file=products-1 … (serve each from GET /v1/seo/sitemaps/:file)."
 	},
 	"GET /v1/seo/sitemaps/:file": {
 		"summary": "One file of the sitemap index",

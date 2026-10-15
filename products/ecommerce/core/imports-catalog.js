@@ -743,6 +743,8 @@ export const checkImportedProduct = (record, context) => {
 			...summarize(value.variants, value.trackStock),
 			// first time on sale: as given, else when it was made (Migration: publishedAt = createdAt)
 			publishedAt: published ?? (value.status === 'active' ? (stamps.createdAt ?? new Date(context.now)) : null),
+			// its page last changed when the record did (the sitemap's lastmod), else now
+			contentUpdatedAt: stamps.updatedAt ?? stamps.createdAt ?? new Date(context.now),
 			...stamps,
 		};
 	});

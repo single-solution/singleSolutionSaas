@@ -509,6 +509,7 @@ export const setup = async ({
 			sold: 0,
 			rating: { average: 0, count: 0 },
 			publishedAt: new Date(t),
+			contentUpdatedAt: new Date(t),
 			createdAt: new Date(t),
 			updatedAt: new Date(t),
 			returnDays: null,

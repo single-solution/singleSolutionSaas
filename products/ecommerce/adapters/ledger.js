@@ -111,7 +111,8 @@ export const mergeStockLines = (lines) => {
 
 /**
  * Recompute what listings use of products after their variants changed: `price`, `priceMax`, `inStock`, `stockState`
- * and `grades` (PLAN 0.8.10 E2, E8).
+ * and `grades` (PLAN 0.8.10 E2, E8); a change of the price or of whether it can be bought also stamps
+ * `contentUpdatedAt`.
  * @param {WebsiteData} data
  * @param {string[]} productIds
  * @param {Session} [session]
@@ -128,7 +129,21 @@ export const refreshProducts = async (data, productIds, session) => {
 			next.inStock === product.inStock &&
 			next.stockState === product.stockState &&
 			JSON.stringify(next.grades) === JSON.stringify(product.grades);
-		if (!same) await products.updateOne({ websiteId: data.websiteId, id }, { $set: next }, { session });
+		if (same) continue;
+		// whether it can be bought, or its price, changed: what its page shows changed (the sitemap's lastmod, G8.4), at
+		// the time of this write
+		const shown = next.price !== product.price || next.priceMax !== product.priceMax || next.inStock !== product.inStock;
+		const written = await products.findOneAndUpdate(
+			{ websiteId: data.websiteId, id },
+			{ $set: next },
+			{ session, returnDocument: 'after', projection: { _id: 0, updatedAt: 1 } },
+		);
+		if (shown && written)
+			await products.updateOne(
+				{ websiteId: data.websiteId, id },
+				{ $set: { contentUpdatedAt: written.updatedAt, updatedAt: written.updatedAt } },
+				{ session },
+			);
 	}
 };
 

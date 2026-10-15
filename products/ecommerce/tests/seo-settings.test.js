@@ -212,6 +212,15 @@ describe('SEO and feed settings through the API', () => {
 	});
 
 	it('indexes pages after the first or not, each with its own address as canonical (SG-21, G7)', async () => {
+		// one product a page, and a second lamp: page 2 has a product
+		await shop.setting('catalog', 'pageSize', 1);
+		const desk = await api('POST', '/v1/products', {
+			name: 'Desk Lamp',
+			status: 'active',
+			categoryIds: [ids.lamps.id],
+			price: 900,
+			stock: 1,
+		});
 		const second = await api('GET', `/v1/seo/listing?category=${ids.lamps.slug}&page=2`);
 		expect(second).toMatchObject({ robots: 'index, follow', canonical: `${ORIGIN}/categories/lamps?page=2` });
 		await shop.setting('seo', 'pagedListings', 'noindex');
@@ -220,20 +229,27 @@ describe('SEO and feed settings through the API', () => {
 			canonical: `${ORIGIN}/categories/lamps?page=2`,
 		});
 		expect((await api('GET', `/v1/seo/listing?category=${ids.lamps.slug}`)).robots).toBe('index, follow');
+		await shop.setting('catalog', 'pageSize', 24);
+		await shop.setting('seo', 'pagedListings', 'index');
+		await api('PATCH', `/v1/products/${desk.id}`, { status: 'archived' });
 	});
 
-	it('gives glossary pages without copy the patterns and lists them in the sitemap (SG-20)', async () => {
+	it('gives glossary pages without copy the patterns, not indexed nor in the sitemap (SG-20, G7.2)', async () => {
 		await shop.setting('landing_pages', 'attributeUrl', '/glossary/{slug}');
 		const plain = await api('GET', `/v1/seo/attributes/${ids.height.slug}`);
-		expect(plain).toMatchObject({ title: 'Height | Nova Store', description: '' });
-		// once the address is set, every active attribute's page is in the sitemap, with or without its own text
-		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).toContain(`<loc>${ORIGIN}/glossary/height</loc>`);
+		expect(plain).toMatchObject({ title: 'Height | Nova Store', description: '', robots: 'noindex, follow' });
+		// a page made only from patterns is thin: listed once it has text of its own
+		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).not.toContain(`<loc>${ORIGIN}/glossary/height</loc>`);
 		await shop.setting('landing_pages', 'attributeTitle', 'What is {name}?');
 		await shop.setting('landing_pages', 'attributeDescription', '{name} ({unit}): {values}. Browse at {storeName}.');
 		expect(await api('GET', `/v1/seo/attributes/${ids.height.slug}`)).toMatchObject({
 			title: 'What is Height? | Nova Store',
 			description: 'Height (cm): 48, 56, 60. Browse at Nova Store.',
 		});
+		await api('PATCH', `/v1/attributes/${ids.height.id}`, {
+			seo: { body: 'Height is measured from the floor to the top of the shade.' },
+		});
+		expect((await api('GET', `/v1/seo/attributes/${ids.height.slug}`)).robots).toBe('index, follow');
 		expect((await shop.api('GET', '/v1/seo/sitemap.xml')).text).toContain(`<loc>${ORIGIN}/glossary/height</loc>`);
 	});
 

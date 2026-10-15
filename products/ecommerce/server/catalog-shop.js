@@ -164,15 +164,12 @@ const createCards = (common, service) => {
 };
 
 /**
- * @param {Product} product
+ * How a shop listing filters (E8, SF-4): the products the grid lists for a read query, with what the query named — the
+ * category with those below it and above it, brands, attributes, what shoppers may not see and a live deal's products
+ * — so the product grid and the listing head (`GET /v1/seo/listing`) count and list the same products.
  * @param {Service} service
- * @param {CatalogCommon} common
  */
-export const createCatalogShop = (product, service, common) => {
-	const cards = createCards(common, service);
-	const shownPrices = createShownPrices(service);
-	const search = createCatalogSearch(product);
-
+export const createListingFilter = (service) => {
 	/**
 	 * The products a deal (by id or slug) is live for now, the products whose cards show it (SF-4): only a deal live now
 	 * (switched on, dates, use limit, weekdays and hours, as the cart judges it) while Deals is on, and of its scope only
@@ -201,25 +198,16 @@ export const createCatalogShop = (product, service, common) => {
 		return scope ? { $and: [scope, covered] } : covered;
 	};
 
-	/** GET /v1/shop/products. @param {any} ctx */
-	const listing = async (ctx) => {
-		const { s, data } = await common.open(ctx);
-		const { pageSize, searchMatch } = await s.values('catalog');
-		// pages by cursor like every other list (`nextCursor`, `hasMore`)
-		const page = paginate(
-			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
-			{ defaultLimit: Math.min(MAX_PAGE, Number(pageSize)), maxLimit: MAX_PAGE },
-		);
-		const read = readShopQuery(ctx.query);
-		if (!read.ok) throw refuse(read.errors);
-		const query = read.value;
-		// variants=1: each card carries its active variants, for websites that draw their own cards (SF-6)
-		const withVariants = ctx.query.variants === '1' || ctx.query.variants === 'true';
-		const [categories, brands, attributes, hidden] = await Promise.all([
+	/**
+	 * @param {Site} s @param {WebsiteData} data @param {import('../core/catalog-query.js').ShopQuery} query
+	 */
+	return async (s, data, query) => {
+		const [categories, brands, attributes, hidden, { searchMatch }] = await Promise.all([
 			categoriesOf(data),
 			brandsOf(data),
 			attributesOf(data),
 			hiddenFor(s),
+			s.values('catalog'),
 		]);
 		/** @type {string[] | null} */
 		let categoryIds = null;
@@ -232,20 +220,55 @@ export const createCatalogShop = (product, service, common) => {
 			categoryIds = found ? withDescendants(found.id, categories) : [];
 			lineage = found ? lineageOf([found.id], byCategory) : [];
 		}
-		const brandIds =
-			query.brands.length > 0
-				? brands.filter((b) => query.brands.includes(b.id) || query.brands.includes(b.slug)).map((b) => b.id)
-				: null;
-		const byAttribute = new Map(attributes.map((attribute) => [attribute.id, attribute]));
 		const resolved = {
 			categoryIds,
 			lineage,
-			brandIds,
-			attributes: byAttribute,
+			brandIds:
+				query.brands.length > 0
+					? brands.filter((b) => query.brands.includes(b.id) || query.brands.includes(b.slug)).map((b) => b.id)
+					: null,
+			attributes: new Map(attributes.map((attribute) => [attribute.id, attribute])),
 			hidden,
 			deal: query.deal ? await dealFilter(s, data, query.deal, categories) : null,
 			match: searchMatch === 'phrase' ? /** @type {const} */ ('phrase') : /** @type {const} */ ('words'),
 		};
+		return {
+			filter: { websiteId: data.websiteId, ...shopFilter(query, resolved) },
+			resolved,
+			brands,
+			attributes,
+			byCategory,
+			lineage,
+		};
+	};
+};
+
+/**
+ * @param {Product} product
+ * @param {Service} service
+ * @param {CatalogCommon} common
+ */
+export const createCatalogShop = (product, service, common) => {
+	const cards = createCards(common, service);
+	const listingFilter = createListingFilter(service);
+	const shownPrices = createShownPrices(service);
+	const search = createCatalogSearch(product);
+
+	/** GET /v1/shop/products. @param {any} ctx */
+	const listing = async (ctx) => {
+		const { s, data } = await common.open(ctx);
+		const { pageSize } = await s.values('catalog');
+		// pages by cursor like every other list (`nextCursor`, `hasMore`)
+		const page = paginate(
+			{ cursor: ctx.query.page ? null : ctx.query.cursor, limit: ctx.query.limit },
+			{ defaultLimit: Math.min(MAX_PAGE, Number(pageSize)), maxLimit: MAX_PAGE },
+		);
+		const read = readShopQuery(ctx.query);
+		if (!read.ok) throw refuse(read.errors);
+		const query = read.value;
+		// variants=1: each card carries its active variants, for websites that draw their own cards (SF-6)
+		const withVariants = ctx.query.variants === '1' || ctx.query.variants === 'true';
+		const { filter, resolved, brands, attributes, byCategory, lineage } = await listingFilter(s, data, query);
 		const sort = /** @type {import('../core/catalog-query.js').Sort} */ (SORTS[query.sort]);
 		const filterable = attributes.filter(
 			(attribute) => (attribute.on === 'product' || attribute.on === 'variant') && attribute.show.filter && attribute.active,
@@ -288,7 +311,6 @@ export const createCatalogShop = (product, service, common) => {
 			}
 		}
 
-		const filter = { websiteId: data.websiteId, ...shopFilter(query, resolved) };
 		const after = page.after === null ? null : afterFilter(sort, page.after);
 		if (page.after !== null && !after) throw problem('bad_request', 'cursor is invalid');
 		const products = data.collection(COLLECTIONS.products);

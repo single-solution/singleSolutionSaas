@@ -139,9 +139,11 @@ export const createCatalogFiles = (product, service, common) => {
 		const record = await recordOf(data, 'product', String(ctx.params.id));
 		if (record.media.length >= LIMITS.media) throw problem('conflict', `A product has at most ${LIMITS.media} images.`);
 		const file = await uploaded(s, 'product', record.id, bodyOf(ctx));
-		await data
-			.collection(COLLECTIONS.products)
-			.updateOne({ websiteId: data.websiteId, id: record.id, 'media.key': { $ne: file.key } }, { $push: { media: file } });
+		await data.collection(COLLECTIONS.products).updateOne(
+			{ websiteId: data.websiteId, id: record.id, 'media.key': { $ne: file.key } },
+			// a new photo is a change of what its page shows: the sitemap's lastmod (SEO audit G8.4)
+			{ $push: { media: file }, $set: { contentUpdatedAt: new Date(service.now()) } },
+		);
 		await service.log(ctx, 'product.image_added', record.id, { label: String(record.name) });
 		return mediaView(s, (await recordOf(data, 'product', record.id)).media);
 	};
@@ -176,7 +178,9 @@ export const createCatalogFiles = (product, service, common) => {
 			media.push({ ...file, alt, ...mediaExtras(item, `ecommerce/products/${record.id}/`, `/items/${index}`, errors, held) });
 		});
 		if (errors.length > 0) throw refuse(errors);
-		await data.collection(COLLECTIONS.products).updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { media } });
+		await data
+			.collection(COLLECTIONS.products)
+			.updateOne({ websiteId: data.websiteId, id: record.id }, { $set: { media, contentUpdatedAt: new Date(service.now()) } });
 		await service.log(ctx, 'product.images_arranged', record.id, { label: String(record.name) });
 		return mediaView(s, media);
 	};
@@ -190,7 +194,10 @@ export const createCatalogFiles = (product, service, common) => {
 			throw problem('not_found', 'The product has no such image.');
 		await data
 			.collection(COLLECTIONS.products)
-			.updateOne({ websiteId: data.websiteId, id: record.id }, { $pull: { media: { key }, 'variants.$[].media': { key } } });
+			.updateOne(
+				{ websiteId: data.websiteId, id: record.id },
+				{ $pull: { media: { key }, 'variants.$[].media': { key } }, $set: { contentUpdatedAt: new Date(service.now()) } },
+			);
 		const removed = /** @type {MediaRecord} */ (record.media.find((/** @type {MediaRecord} */ file) => file.key === key));
 		for (const sized of [key, ...Object.values(removed.sizes ?? {})]) await deleteFile(s, sized, 'product', record.id);
 		await service.log(ctx, 'product.image_removed', record.id, { label: String(record.name) });
