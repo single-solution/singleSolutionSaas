@@ -55,10 +55,10 @@ export const resolvePointer = (value, pointer) => {
 /**
  * Load and bundle `<dir>/manifest.json`.
  * @param {string} dir project root
- * @param {{ file?: string }} [options]
  * @returns {Promise<LoadedManifest>}
  */
-export const loadManifest = async (dir, { file = 'manifest.json' } = {}) => {
+export const loadManifest = async (dir) => {
+	const file = 'manifest.json';
 	const read = await readJson(path.join(dir, file));
 	if (!read.ok) {
 		return {

@@ -8,8 +8,10 @@ import { parseArgs } from 'node:util';
 import { initApp } from './init.js';
 import { formatValidation, validateProject } from './validate/index.js';
 import { writeAssets } from './assets.js';
+import pkg from '../package.json' with { type: 'json' };
 
-export const VERSION = '0.2.0';
+/** This CLI's version (`ss --version`), from its package.json. */
+export const VERSION = pkg.version;
 
 /** @typedef {{ out: (text: string) => void, err: (text: string) => void }} Io */
 /**
@@ -28,6 +30,8 @@ Usage:
   ss app assets [dir] [--check]  generate openapi.json (from the routes and schemas/api.json) and
                                  server/widget-script.js (ui/ bundled for browsers); --check fails when either is out
                                  of date
+  ss help, ss --help, ss -h      print this help
+  ss --version, ss -v            print the CLI's version
 
 Exit codes: 0 ok, 1 validation failed or command error, 2 usage error.
 `;

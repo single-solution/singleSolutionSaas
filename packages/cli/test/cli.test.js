@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { main, USAGE, VERSION } from '../src/cli.js';
 import { createIo, removeDir, tempDir } from './helpers/util.js';
@@ -23,8 +23,11 @@ const ss = async (argv) => {
 describe('ss (main)', () => {
 	it('prints help and version, rejects unknown commands and options', async () => {
 		expect(await ss([])).toMatchObject({ code: 0, out: USAGE });
-		expect(await ss(['--help'])).toMatchObject({ code: 0, out: USAGE });
-		expect(await ss(['-v'])).toMatchObject({ code: 0, out: `${VERSION}\n` });
+		for (const help of ['help', '--help', '-h']) expect(await ss([help])).toMatchObject({ code: 0, out: USAGE });
+		expect(USAGE).toContain('ss --version, ss -v');
+		for (const version of ['--version', '-v']) expect(await ss([version])).toMatchObject({ code: 0, out: `${VERSION}\n` });
+		// the version is the package's own, not a copy kept by hand
+		expect(VERSION).toBe(JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version);
 		expect((await ss(['nope'])).code).toBe(2);
 		expect((await ss(['app'])).code).toBe(2);
 		expect((await ss(['app', 'nope'])).code).toBe(2);

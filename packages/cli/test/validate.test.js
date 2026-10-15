@@ -249,6 +249,10 @@ describe('ss app validate', () => {
 		await put(dir, 'app/[slug]/page.js', 'export default function Page() { return null; }\n');
 		await put(dir, 'app/static/page.js', 'export default function Page() { return null; }\n');
 		await put(dir, 'proxy.js', 'export const proxy = () => {};\n');
+		// not functions: Next.js reads no src/ folder beside a root app/, and .mjs is not a page extension
+		await put(dir, 'src/app/x/route.js', 'export const GET = () => new Response();\n');
+		await put(dir, 'src/proxy.js', 'export const proxy = () => {};\n');
+		await put(dir, 'app/y/route.mjs', 'export const GET = () => new Response();\n');
 		await edit(dir, 'next.config.js', (text) =>
 			text.replace('poweredByHeader: false,', 'poweredByHeader: false, outputFileTracingIncludes: {},'),
 		);
@@ -439,8 +443,9 @@ describe('helpers', () => {
 		expect(resolvePointer({}, 'x')).toEqual({ found: false });
 		expect(resolvePointer([1], '/3')).toEqual({ found: false });
 		expect(resolvePointer({ a: 1 }, '')).toEqual({ found: true, value: { a: 1 } });
-		await put(dir, 'deep.json', JSON.stringify({ x: { $ref: 'deep.json' } }));
-		expect((await loadManifest(dir, { file: 'deep.json' })).problems[0]?.message).toMatch(/nests too deeply/);
+		const deep = path.join(root, 'deep');
+		await put(deep, 'manifest.json', JSON.stringify({ x: { $ref: 'manifest.json' } }));
+		expect((await loadManifest(deep)).problems[0]?.message).toMatch(/nests too deeply/);
 	});
 
 	it('lists the request headers an entry describes as header parameters', () => {

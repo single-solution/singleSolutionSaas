@@ -24,7 +24,8 @@ export const call = async (method, path, body) => {
 		const data = response.status === 204 ? null : await response.json().catch(() => null);
 		return response.ok ? { ok: true, data } : { ok: false, problem: data ?? { status: response.status } };
 	} catch {
-		return { ok: false, problem: { status: 503, title: 'The product cannot be reached.' } };
+		// the product did not answer: the dashboard shows the friendly 503 text (`describeProblem`)
+		return { ok: false, problem: { status: 503 } };
 	}
 };
 

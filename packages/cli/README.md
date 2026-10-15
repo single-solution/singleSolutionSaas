@@ -10,6 +10,7 @@ widget entry, bundled when a product has not installed it yet) and esbuild (the 
 | `ss app validate [dir] [--json]`                                                          | checks the product standard (below)                                                                                                                        |
 | `ss app assets [dir] [--check]`                                                           | generates `openapi.json` from the routes and `schemas/api.json`, and `server/widget-script.js` from `ui/`; `--check` fails when either is out of date      |
 
+`ss help` (or `--help`, `-h`, or no command) prints the usage; `ss --version` (or `-v`) prints the CLI's version.
 Exit codes: `0` ok, `1` failed validation or command error, `2` usage error. `--base-url` defaults to
 `http://localhost:3000` (the manifest's `endpoints.base` until the product has its address).
 

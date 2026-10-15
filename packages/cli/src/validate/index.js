@@ -84,7 +84,7 @@ const IMPORT_POLICY = Object.freeze({
 	server: { layers: ['server', 'core', 'adapters'], data: true, packages: null },
 	adapters: { layers: ['adapters', 'core'], data: true, packages: null },
 	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget'] },
-	app: { layers: ['app', 'server', 'adapters', 'core', 'strings'], data: true, packages: null },
+	app: { layers: ['app', 'server', 'adapters', 'core'], data: true, packages: null },
 });
 
 /** Auth modes of `defineRoute`. */
@@ -529,9 +529,10 @@ const checkPackageWiring = async (files) => {
 /** Server functions a product has: the API route handler and the dashboard page (PLAN 0.9, Vercel Hobby). */
 const MAX_SERVER_ENTRIES = 2;
 
-const ROUTE_FILE = /^(?:src\/)?app\/(?:.*\/)?route\.(?:m?js|jsx|ts|tsx)$/;
-const PAGE_FILE = /^(?:src\/)?app\/(?:.*\/)?page\.(?:m?js|jsx|ts|tsx)$/;
-const PROXY_FILE = /^(?:src\/)?(?:proxy|middleware)\.(?:m?js|ts)$/;
+// a product's app/ is at its root, so Next.js reads no src/ folder; its page extensions are js, jsx, ts and tsx
+const ROUTE_FILE = /^app\/(?:.*\/)?route\.(?:js|jsx|ts|tsx)$/;
+const PAGE_FILE = /^app\/(?:.*\/)?page\.(?:js|jsx|ts|tsx)$/;
+const PROXY_FILE = /^(?:proxy|middleware)\.(?:js|ts)$/;
 const DYNAMIC_PAGE = /force-dynamic|searchParams|\bparams\b|\bcookies\(|\bheaders\(|\bconnection\(|\bdraftMode\(/;
 const NEXT_CONFIG = /^next\.config\.(?:m?js|cjs|ts)$/;
 
