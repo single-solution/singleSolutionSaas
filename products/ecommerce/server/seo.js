@@ -55,12 +55,13 @@ import {
 import { createMedia } from './catalog-media.js';
 import { hiddenFor, visible, visibleMatch } from './catalog-visibility.js';
 import { createChatLookup } from './chat-lookup.js';
+import { conditional } from './http-cache.js';
 import { createAutoSeo } from './seo-auto.js';
 import { createLandings } from './seo-landings.js';
 import { createShownPrices } from './shown-prices.js';
 import { policiesOf } from './policies.js';
 import { SEO_LIMITS, VISITOR_LIMITS } from './service.js';
-import { allCategories, brandNames, lineage, seoSettingsOf, storeNameOf, streamed, trailOf } from './seo-reads.js';
+import { allCategories, brandNames, lineage, newestOf, seoSettingsOf, storeNameOf, streamed, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -424,6 +425,8 @@ export const createSeo = (product, service) => {
 			robots: robotsOf(item.seo),
 			focusKeyword: item.seo.focusKeyword,
 			jsonLd: scriptJson(jsonLd),
+			// the last change of what the page shows, for the website's own Last-Modified (G10)
+			lastModified: new Date(item.contentUpdatedAt).toISOString(),
 			// the page's core as plain HTML for the widget's place, when asked (G3)
 			...(ctx.query.html === '1'
 				? { html: await pageHtml(s, item, { trail, fields, shown, money: (amount) => money(amount, s.currency) }) }
@@ -557,7 +560,7 @@ export const createSeo = (product, service) => {
 					.collection(COLLECTIONS.products)
 					.find(
 						{ websiteId: data.websiteId, status: 'active', categoryIds: { $in: below }, ...visibleMatch(hidden) },
-						{ projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1 } },
+						{ projection: { _id: 0, id: 1, slug: 1, name: 1, categoryIds: 1, brandId: 1, contentUpdatedAt: 1 } },
 					)
 					// the products of the category page's first page, as the grid shows them (newest first)
 					.sort(sortDocument(/** @type {import('../core/catalog-query.js').Sort} */ (SORTS.newest)))
@@ -593,6 +596,11 @@ export const createSeo = (product, service) => {
 					: robotsOf(category.seo),
 			status: comingSoon ? 'coming_soon' : 'active',
 			jsonLd: scriptJson(jsonLd),
+			// its last change or its newest product's, for the website's own Last-Modified (G10)
+			lastModified: newestOf([
+				/** @type {{ updatedAt?: Date }} */ (category).updatedAt,
+				...items.map((row) => row.contentUpdatedAt),
+			]),
 		};
 	};
 
@@ -1091,7 +1099,7 @@ export const createSeo = (product, service) => {
 				auth: 'server',
 				feature: 'catalog',
 				rateLimit: SERVER_RATE,
-				handler: siteSeo,
+				handler: conditional(siteSeo),
 			}),
 			defineRoute({
 				method: 'GET',
@@ -1099,7 +1107,7 @@ export const createSeo = (product, service) => {
 				auth: 'server',
 				feature: 'catalog',
 				rateLimit: SERVER_RATE,
-				handler: productSeo,
+				handler: conditional(productSeo),
 			}),
 			defineRoute({
 				method: 'GET',
@@ -1107,7 +1115,7 @@ export const createSeo = (product, service) => {
 				auth: 'server',
 				feature: 'catalog',
 				rateLimit: SERVER_RATE,
-				handler: categorySeo,
+				handler: conditional(categorySeo),
 			}),
 			defineRoute({
 				method: 'GET',

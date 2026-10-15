@@ -27,6 +27,18 @@ const MAX_CATEGORIES = 5000;
 export const seoSettingsOf = async (s) => (s.has('seo') ? s.values('seo') : SEO_DEFAULTS);
 
 /**
+ * The newest of some times as ISO 8601 text, or null without any (an answer's `lastModified`, SEO audit G10).
+ * @param {unknown[]} times
+ * @returns {string | null}
+ */
+export const newestOf = (times) => {
+	const valid = times
+		.map((time) => (time instanceof Date || typeof time === 'string' ? new Date(time).getTime() : NaN))
+		.filter((at) => Number.isFinite(at));
+	return valid.length > 0 ? new Date(Math.max(...valid)).toISOString() : null;
+};
+
+/**
  * The name `{business}` and `{storeName}` stand for in titles and descriptions: the `seo` setting `brandName`, else the
  * business name (SG-5).
  * @param {Record<string, unknown>} settings the `seo` settings

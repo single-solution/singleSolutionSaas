@@ -55,10 +55,11 @@ import { shownRange } from '../core/catalog-views.js';
 import { listingHtml, say } from '../core/seo-html.js';
 import { categoryTrail } from '../adapters/promotions-store.js';
 import { createListingFilter } from './catalog-shop.js';
+import { conditional } from './http-cache.js';
 import { createShownPrices } from './shown-prices.js';
 import { hiddenFor } from './catalog-visibility.js';
 import { SEO_LIMITS, SERVER_LIMITS } from './service.js';
-import { seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
+import { newestOf, seoSettingsOf, storeNameOf, trailOf } from './seo-reads.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Service} Service */
@@ -789,6 +790,13 @@ export const createLandings = (product, service, media) => {
 						}
 					: null,
 			jsonLd: scriptJson(jsonLd),
+			// the newest change of the page (its category, its stored landing page, the products it shows), for the
+			// website's own Last-Modified (G10)
+			lastModified: newestOf([
+				/** @type {{ updatedAt?: Date } | null} */ (category)?.updatedAt,
+				/** @type {{ updatedAt?: Date } | null} */ (landing)?.updatedAt,
+				...shownItems.map((item) => item.contentUpdatedAt),
+			]),
 			...(html
 				? {
 						html: await gridHtml(s, data, shownItems, {
@@ -1271,7 +1279,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'catalog',
 			rateLimit: READ_RATE,
-			handler: listing,
+			handler: conditional(listing),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1279,7 +1287,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: attributeGlossary,
+			handler: conditional(attributeGlossary),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1287,7 +1295,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: attributeGlossary,
+			handler: conditional(attributeGlossary),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1295,7 +1303,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: gradeGlossary,
+			handler: conditional(gradeGlossary),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1303,7 +1311,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: gradeGlossary,
+			handler: conditional(gradeGlossary),
 		}),
 	];
 

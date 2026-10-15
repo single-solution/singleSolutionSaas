@@ -36,6 +36,7 @@ import { createShownPrices } from './shown-prices.js';
 import { chartView, resolveSizeChart } from '../core/size-charts.js';
 import { SHOP_LIMITS, refuse } from './catalog-common.js';
 import { createCatalogSearch } from './catalog-search.js';
+import { conditional } from './http-cache.js';
 import { hiddenFor, visible } from './catalog-visibility.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
@@ -580,7 +581,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: listing,
+			handler: conditional(listing),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -588,7 +589,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: page,
+			handler: conditional(page),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -596,7 +597,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: categoryList,
+			handler: conditional(categoryList),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -604,7 +605,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: brandList,
+			handler: conditional(brandList),
 		}),
 	];
 };

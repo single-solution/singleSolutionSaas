@@ -90,7 +90,7 @@ export const proxyRoute = (base, { file, route, type }) =>
 		'export async function GET() {',
 		`  const response = await fetch('${base}${route}', {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
-		'    next: { revalidate: 3600 }, // cache it for an hour',
+		"    next: { revalidate: 3600, tags: ['ss-ecommerce'] }, // cache it for an hour",
 		'  });',
 		'  return new Response(await response.text(), {',
 		'    status: response.status,',
@@ -113,7 +113,7 @@ export const sitemapRoute = (base) =>
 		"  const path = file ? `/v1/seo/sitemaps/${encodeURIComponent(file)}` : '/v1/seo/sitemap.xml';",
 		`  const response = await fetch(\`${base}\${path}\`, {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
-		'    next: { revalidate: 3600 }, // cache it for an hour',
+		"    next: { revalidate: 3600, tags: ['ss-ecommerce'] }, // cache it for an hour",
 		'  });',
 		'  return new Response(await response.text(), {',
 		'    status: response.status,',
@@ -151,6 +151,32 @@ export const mediaRoute = (base) =>
 		'  });',
 		'}',
 	].join('\n');
+
+/**
+ * The webhook route on the merchant's site that clears its cached Ecommerce answers (SEO audit G10): every snippet
+ * fetches with the tag `ss-ecommerce`, and this route, the URL of an outgoing webhook in Notifications (with Events on),
+ * clears it when the catalog or the settings change, for an event whose SS-Signature checks out only.
+ */
+const CACHE_ROUTE = [
+	'// app/api/ss-ecommerce-events/route.js (Next.js App Router): clears your cached Ecommerce answers when the catalog',
+	'// or the settings change (Events on; this address is an outgoing webhook URL in Notifications)',
+	"import { createHmac, timingSafeEqual } from 'node:crypto';",
+	"import { revalidateTag } from 'next/cache';",
+	'',
+	'export async function POST(request) {',
+	'  const body = await request.text();',
+	'  // SS-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>"> with your Notifications signing secret',
+	"  const parts = Object.fromEntries((request.headers.get('ss-signature') ?? '').split(',').map((part) => part.split('=')));",
+	"  const expected = createHmac('sha256', process.env.SS_WEBHOOK_SECRET).update(`${parts.t}.${body}`).digest('hex');",
+	'  const recent = Math.abs(Date.now() / 1000 - Number(parts.t)) <= 300;',
+	"  const signed = typeof parts.v1 === 'string' && parts.v1.length === expected.length;",
+	'  if (!recent || !signed || !timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected)))',
+	"    return new Response('Bad signature', { status: 401 });",
+	'  const { type } = JSON.parse(body);',
+	"  if (type === 'ecommerce.catalog.changed' || type === 'ecommerce.settings.changed') revalidateTag('ss-ecommerce');",
+	'  return new Response(null, { status: 204 });',
+	'}',
+].join('\n');
 
 /**
  * @param {{ base: string, widgets: ReadonlyArray<{ key: string, kind: string }>, permissions: string[], browserToken?: string }} input
@@ -236,7 +262,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'const siteOf = async () => {',
 		`  const response = await fetch('${base}/v1/seo/site', {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
-		'    next: { revalidate: 300 },',
+		"    next: { revalidate: 300, tags: ['ss-ecommerce'] },",
 		'  });',
 		'  return response.ok ? response.json() : null;',
 		'};',
@@ -271,7 +297,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		"  // html=1: the page core as plain HTML, printed into the widget's place (search engines read it before any script)",
 		`  const response = await fetch(\`${base}/v1/seo/products/\${encodeURIComponent(slug)}?html=1\`, {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
-		'    next: { revalidate: 300 },',
+		"    next: { revalidate: 300, tags: ['ss-ecommerce'] },",
 		'  });',
 		'  return response.ok ? response.json() : null;',
 		'};',
@@ -315,7 +341,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		"  const query = new URLSearchParams({ ...filters, category: slug, html: '1' });",
 		`  const response = await fetch(\`${base}/v1/seo/listing?\${query}\`, {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
-		'    next: { revalidate: 300 },',
+		"    next: { revalidate: 300, tags: ['ss-ecommerce'] },",
 		'  });',
 		'  return response.ok ? response.json() : null;',
 		'};',
@@ -362,7 +388,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		'  const { name } = await params; // shipping, returns, privacy, terms or warranty',
 		`  const response = await fetch('${base}/v1/policies', {`,
 		'    headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
-		'    next: { revalidate: 3600 },',
+		"    next: { revalidate: 3600, tags: ['ss-ecommerce'] },",
 		'  });',
 		'  const found = response.ok ? await response.json() : {};',
 		"  const text = found[name] ?? '';",
@@ -421,6 +447,7 @@ export const createSnippets = ({ base, widgets, permissions, browserToken = 'YOU
 		ticketCurl,
 		homePage,
 		productMeta,
+		cacheRoute: CACHE_ROUTE,
 		listingPage,
 		policies,
 		customerOrders,

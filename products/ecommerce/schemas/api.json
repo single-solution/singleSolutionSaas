@@ -10625,7 +10625,7 @@
 		"SeoCategory": {
 			"type": "object",
 			"description": "What a category page puts in its head.",
-			"required": ["title", "description", "canonical", "image", "robots", "status", "jsonLd"],
+			"required": ["title", "description", "canonical", "image", "robots", "status", "jsonLd", "lastModified"],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -10657,6 +10657,11 @@
 				"jsonLd": {
 					"type": "string",
 					"description": "The JSON-LD (CollectionPage with an ItemList of the products the page shows, BreadcrumbList, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
+				},
+				"lastModified": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "The newest change of the category and of the products its first page shows: send it as your page's Last-Modified."
 				}
 			}
 		},
@@ -10805,7 +10810,8 @@
 				"empty",
 				"status",
 				"landing",
-				"jsonLd"
+				"jsonLd",
+				"lastModified"
 			],
 			"additionalProperties": false,
 			"properties": {
@@ -10888,6 +10894,11 @@
 					"type": "string",
 					"description": "The JSON-LD (CollectionPage with an ItemList of the products the page shows, BreadcrumbList, and a FAQPage with the seo setting faqMarkup on) as text safe to put in a script tag."
 				},
+				"lastModified": {
+					"type": ["string", "null"],
+					"format": "date-time",
+					"description": "The newest change of the category, the stored landing page and the products the page shows (when the answer names them: a category or landing page, a sorted list, or with html=1); null when none is known."
+				},
 				"html": {
 					"type": "string",
 					"description": "With html=1: the grid's core as plain HTML — the page's products as links with their first photo (width and height) and the price shown, and links to the previous and next pages (rel prev and next). Only escaped text and https links. Print it into the product_grid widget's place."
@@ -10926,7 +10937,7 @@
 		"SeoProduct": {
 			"type": "object",
 			"description": "What a product page puts in its head.",
-			"required": ["title", "description", "canonical", "image", "robots", "focusKeyword", "jsonLd"],
+			"required": ["title", "description", "canonical", "image", "robots", "focusKeyword", "jsonLd", "lastModified"],
 			"additionalProperties": false,
 			"properties": {
 				"title": {
@@ -10956,6 +10967,11 @@
 				"jsonLd": {
 					"type": "string",
 					"description": "The JSON-LD as text safe to put in a script tag: a ProductGroup of the variants offered (active, priced above 0; one: a Product; none: no product node), each with its photo (else the product's), its SKU (else its feed item id), offer (the price shown after the best item deal on one unit, the higher price as a StrikethroughPrice, and for a deal that holds all day with an end validFrom and priceValidUntil), condition, return policy (the product's, its grade's or the returns setting's days, with the business.json country only: { @id } of the store-wide policy of GET /v1/seo/site when it is the store's, else its own with the return method and fees) and shipping details (physical goods: { @type: OfferShippingDetails, hasShippingService: { @id } } of the store-wide shipping policy, once it is complete), reviews, a BreadcrumbList and, with the seo setting faqMarkup on, a FAQPage."
+				},
+				"lastModified": {
+					"type": "string",
+					"format": "date-time",
+					"description": "The last change of what the page shows (the product's contentUpdatedAt): send it as your page's Last-Modified."
 				},
 				"html": {
 					"type": "string",
@@ -18341,7 +18357,7 @@
 	},
 	"GET /v1/shop/products": {
 		"summary": "The product grid: active products with filters, search and facets",
-		"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value] (one active variant must match the price range, variant attributes, grade and stock together). Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit.",
+		"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value] (one active variant must match the price range, variant attributes, grade and stock together). Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -18425,7 +18441,7 @@
 	},
 	"GET /v1/shop/products/:ref": {
 		"summary": "The product page (by id, slug in any case, or an earlier slug)",
-		"description": "Browser token from your website (or the server token, for pages your server renders). Found by an earlier slug it answers { moved } with the product's page to redirect to; an archived product answers { moved } to its category when the catalog setting retiredUrl is category. Stock counts only as the showStock setting allows. 404 not_found for a product that is not active, or whose category or brand is hidden.",
+		"description": "Browser token from your website (or the server token, for pages your server renders). Found by an earlier slug it answers { moved } with the product's page to redirect to; an archived product answers { moved } to its category when the catalog setting retiredUrl is category. Stock counts only as the showStock setting allows. 404 not_found for a product that is not active, or whose category or brand is hidden. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"oneOf": [
 				{
@@ -18439,7 +18455,7 @@
 	},
 	"GET /v1/shop/categories": {
 		"summary": "The category tree with product counts",
-		"description": "Browser token from your website (or the server token, for pages your server renders). Hidden categories (and those below them) are left out; coming-soon ones only with include=coming_soon.",
+		"description": "Browser token from your website (or the server token, for pages your server renders). Hidden categories (and those below them) are left out; coming-soon ones only with include=coming_soon. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -18466,7 +18482,7 @@
 	},
 	"GET /v1/shop/brands": {
 		"summary": "The visible brands with product counts",
-		"description": "Browser token from your website (or the server token, for pages your server renders). With category, only the brands of that category, a category above it or below it (and brands of every category).",
+		"description": "Browser token from your website (or the server token, for pages your server renders). With category, only the brands of that category, a category above it or below it (and brands of every category). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -26244,7 +26260,7 @@
 	},
 	"GET /v1/seo/listing": {
 		"summary": "The head of a listing page",
-		"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category.",
+		"description": "Pass your listing page's query as it is. robots is index (the category's own noindex and nofollow aside) only for a category without other filters (and its pages) and for a landing page that is indexed now and matches the filters exactly (a stored one, or with the landing_pages setting auto an automatic one: a category and a brand, and with category_brand_grade also a grade, while at least autoMinProducts of its products and autoMinInStockVariants of their variants are in stock; E43); any other filter, a sort, a hidden brand, a category coming soon and a category without products and without 50 words of its own text (the seo setting emptyCategories noindex, the default) give noindex, follow. A landing page set to auto, once indexed, stays indexed while it has any product shoppers may see, in stock or not (G7.7). total, empty and status count the products as the grid does: status 404 for a filter result with no product, a filter that cannot be read or a page past the end. canonical is always the page's own address: pages 2, 3 … add ?page=n (with the seo setting pagedListings noindex they are noindex, follow), and a filtered or sorted list names itself, its query in one order (by name; category, limit and cursor left out). The ItemList holds the products the page shows, in its order (sort, page and limit as the grid takes them; limit defaults to the catalog setting pageSize); a list with other filters has none. A FAQPage only with the seo setting faqMarkup on. Title and description follow the landing page, the category's SEO fields or the seo settings' patterns, titleTemplate and defaultDescription. An earlier category slug answers moved; 404 not_found for an unknown or hidden category. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -26293,28 +26309,28 @@
 	},
 	"GET /v1/seo/attributes/:slug": {
 		"summary": "An attribute's glossary page",
-		"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found for an unknown or inactive attribute.",
+		"description": ":slug is the attribute's slug (any case) or id: the attribute for every category with it, else the first defined for a category (E45). Its own glossary SEO, else the landing_pages patterns attributeTitle and attributeDescription. canonical is the landing_pages setting attributeUrl with {slug} and {category} (the attribute's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found for an unknown or inactive attribute. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"$ref": "#/components/schemas/SeoAttribute"
 		}
 	},
 	"GET /v1/seo/grades/:key": {
 		"summary": "A grade's glossary page",
-		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false).",
+		"description": "The grade entry for every category with the key, else the first defined for a category (E45). canonical is the landing_pages setting gradeUrl with {key} and {category} (the entry's own category, if any); without it, or without text of its own (its SEO body), the page is noindex, follow. 404 not_found when Condition grades and unit numbers is off, or for an unknown grade or one not offered (active false). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}
 	},
 	"GET /v1/seo/site": {
 		"summary": "The home page's head and structured data",
-		"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnDays, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply.",
+		"description": "Baseline SEO with the catalog (E49): the home page's title (the seo setting homeTitle as written, else the name in titles: brandName, else the business name), description (homeDescription, else defaultDescription, as written), canonical address, social image (defaultImage) and site name, and the JSON-LD of the business and the website: an OnlineStore — or, with the seo setting siteType local_business and Delivery zones' pickupAddress and pickupHours set, a LocalBusiness at the pickup point, its hours as openingHours when every line is written like Mo-Fr 09:00-17:00 — with name, alternateName, url, logo, email, telephone and address from business.json, sameAs (socialProfiles), and its store-wide policies, whose @id product offers point to, only with the business.json country: the return policy (with Returns on: returnDays, returnMethod and the return shipping fee; with Returns off only when the checkout setting returnsAccepted is no: no returns) and the shipping policy (with Delivery zones on and both handlingDays and transitDays set: delivery to the country at defaultFee, free from defaultFreeOver, with the handling and transit days); and a WebSite with the same name. Only values the shop has are given. Put it on the home page only. While the SEO feature is off, the seo settings' defaults apply. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"$ref": "#/components/schemas/SeoSite"
 		}
 	},
 	"GET /v1/seo/products/:ref": {
 		"summary": "A product page's meta tags and structured data",
-		"description": ":ref is the product's id or slug (any case). An earlier slug answers moved to the product; an archived product answers moved to its first category when the catalog setting retiredUrl is category. 404 not_found for an unknown product, a draft, an archived one otherwise, or one shoppers may not see (a hidden category or brand).",
+		"description": ":ref is the product's id or slug (any case). An earlier slug answers moved to the product; an archived product answers moved to its first category when the catalog setting retiredUrl is category. 404 not_found for an unknown product, a draft, an archived one otherwise, or one shoppers may not see (a hidden category or brand). The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"oneOf": [
 				{
@@ -26338,7 +26354,7 @@
 	},
 	"GET /v1/seo/categories/:ref": {
 		"summary": "A category page's meta tags and structured data",
-		"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty; robots is also noindex, follow while it has no product to show (in it or below it) and no text of its own (a summary or description of 50 words or more), unless the seo setting emptyCategories is index; else its ItemList holds the products of its first page (newest first, the catalog setting pageSize). A FAQPage only with the seo setting faqMarkup on. 404 not_found for an unknown or hidden category.",
+		"description": ":ref is the category's id or slug (any case); an earlier slug answers moved. While it is coming soon, status is coming_soon, robots noindex, follow and its ItemList is empty; robots is also noindex, follow while it has no product to show (in it or below it) and no text of its own (a summary or description of 50 words or more), unless the seo setting emptyCategories is index; else its ItemList holds the products of its first page (newest first, the catalog setting pageSize). A FAQPage only with the seo setting faqMarkup on. 404 not_found for an unknown or hidden category. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"oneOf": [
 				{
@@ -26520,14 +26536,14 @@
 	},
 	"GET /v1/seo/attributes/:category/:slug": {
 		"summary": "An attribute's glossary page in a category",
-		"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category or the nearest category above it first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it.",
+		"description": ":category is a category's id or slug (an earlier slug too), :slug the attribute's slug (any case) or id: the attribute defined for that category or the nearest category above it first, else the one for every category that applies to it (no categories named, or the category or one above it named) (E45). As GET /v1/seo/attributes/:slug otherwise, with {category} of attributeUrl this category's slug. 404 not_found for an unknown or hidden category, or no active attribute for it. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"$ref": "#/components/schemas/SeoAttribute"
 		}
 	},
 	"GET /v1/seo/grades/:category/:key": {
 		"summary": "A grade's glossary page in a category",
-		"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Condition grades and unit numbers is off, for an unknown or hidden category, or no offered grade with the key for it.",
+		"description": ":category is a category's id or slug (an earlier slug too): the grade as that category, or the nearest category above it, defines it first, else the entry for every category that applies to it (E45). As GET /v1/seo/grades/:key otherwise, with {category} of gradeUrl this category's slug. 404 not_found when Condition grades and unit numbers is off, for an unknown or hidden category, or no offered grade with the key for it. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"response": {
 			"$ref": "#/components/schemas/SeoGrade"
 		}

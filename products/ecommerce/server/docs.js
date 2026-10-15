@@ -313,6 +313,9 @@ ${block(snippets.productMeta)}
 <h3><code>GET /v1/seo/listing</code></h3>
 ${para(guide.listing)}
 ${block(snippets.listingPage)}
+<h3>Clearing your cache</h3>
+${para(guide.cacheRoute)}
+${block(snippets.cacheRoute)}
 <h3><code>GET /v1/policies</code></h3>
 ${para(guide.policies)}
 ${block(snippets.policies)}
