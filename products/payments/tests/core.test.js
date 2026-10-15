@@ -76,19 +76,46 @@ describe('gateways', () => {
 		const ibanOnly = { accountHolder: 'Northwind GmbH', iban: 'DE89 3704 0044 0532 0130 00', bic: 'COBADEFFXXX' };
 		const local = { accountHolder: 'Northwind', bankName: 'Example Bank', accountNumber: '12345678', branchCode: '062-000' };
 		for (const values of [uk, us, ibanOnly, local])
-			expect(bankTransfer({ requireDetails: true, ...values })).toEqual({ ...empty, ...values, ready: true });
+			expect(bankTransfer({ requireDetails: true, ...values })).toEqual({ ...empty, ...values, ready: true, missing: [] });
 		// the holder alone, or a number without its holder, is not enough to pay
 		expect(bankTransfer({ requireDetails: true, accountHolder: 'Northwind Ltd', sortCode: '60-16-13' }).ready).toBe(false);
 		expect(bankTransfer({ requireDetails: true, accountNumber: '31926819' }).ready).toBe(false);
 		expect(bankTransfer({ requireDetails: true, iban: ibanOnly.iban, bic: ibanOnly.bic }).ready).toBe(false);
-		// Require bank details off: offered by its switch alone, with the instructions
+		// Require bank details off: offered without the details, with the instructions
 		expect(bankTransfer({ requireDetails: false, instructions: 'We send our details by email.' })).toEqual({
 			...empty,
 			instructions: 'We send our details by email.',
 			ready: true,
+			missing: [],
 		});
-		// a value that is not text reads as not set
-		expect(bankTransfer({ requireDetails: true, accountHolder: 5, accountNumber: null })).toEqual({ ...empty, ready: false });
+		// a value that is not text, or only spaces, reads as not set
+		expect(bankTransfer({ requireDetails: true, accountHolder: 5, accountNumber: null })).toEqual({
+			...empty,
+			ready: false,
+			missing: ['accountHolder', 'accountNumber'],
+		});
+		expect(bankTransfer({ requireDetails: true, accountHolder: '  ', accountNumber: ' 31926819 ' })).toMatchObject({
+			accountHolder: '',
+			accountNumber: '31926819',
+			ready: false,
+			missing: ['accountHolder'],
+		});
+	});
+	it('bank transfer is offered only when payers are told how to pay, and says what is missing (P2)', () => {
+		expect(bankTransfer({ requireDetails: true })).toMatchObject({ ready: false, missing: ['accountHolder', 'accountNumber'] });
+		expect(bankTransfer({ requireDetails: true, accountHolder: 'Northwind Ltd' }).missing).toEqual(['accountNumber']);
+		expect(bankTransfer({ requireDetails: true, iban: 'DE89 3704 0044 0532 0130 00' }).missing).toEqual(['accountHolder']);
+		// the instructions do not stand in for the details while they are required
+		expect(bankTransfer({ requireDetails: true, instructions: 'Ask us for our details.' }).ready).toBe(false);
+		// Require bank details off: nothing tells the payer how to pay without the instructions, or an account number or IBAN
+		for (const values of [
+			{},
+			{ instructions: ' ' },
+			{ accountHolder: 'Northwind Ltd', bankName: 'Example Bank', bic: 'COBADEFFXXX' },
+		])
+			expect(bankTransfer({ requireDetails: false, ...values })).toMatchObject({ ready: false, missing: ['instructions'] });
+		for (const values of [{ accountNumber: '31926819' }, { iban: 'DE89 3704 0044 0532 0130 00' }])
+			expect(bankTransfer({ requireDetails: false, ...values })).toMatchObject({ ready: true, missing: [] });
 	});
 });
 

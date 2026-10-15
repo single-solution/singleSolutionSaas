@@ -167,8 +167,19 @@ const bankOf = (settings) => {
 };
 
 /**
+ * Why bank transfer is not offered yet, from what it misses (P2): the details to set, or, with Require bank details
+ * off, the instructions.
+ * @param {import('../../core/gateways.js').BankTransfer} bank
+ */
+const bankHelp = (bank) => {
+	if (bank.missing.includes('instructions')) return TEXTS.overview.bankHelpInstructions;
+	const [first = '', second] = bank.missing.map((name) => TEXTS.overview.bankMissing[/** @type {'accountHolder'} */ (name)]);
+	return fill(TEXTS.overview.bankHelpDetails, { missing: second ? fill(TEXTS.overview.and, { first, second }) : first });
+};
+
+/**
  * Switched-on gateways whose keys are connected; bank transfer, whose details are settings, counts when it is ready
- * (its account holder and account number or IBAN set, or Require bank details off).
+ * (payers are told how to pay: see {@link bankTransfer}).
  * @param {{ featuresOn: string[], checklist: { connections: Array<{ name: string, status: string }> } }} data
  * @param {import('./api.js').Answer | null} settings the website's settings
  */
@@ -193,6 +204,7 @@ function OverviewTab({ websiteId }) {
 				/** @type {Array<{ name: string, label: string, status: string, message?: string }>} */
 				const needed = data.checklist.connections;
 				const ready = needed.filter((item) => item.status === 'connected').length;
+				const bank = bankOf(settings.answer);
 				return (
 					<div className="space-y-6">
 						<StatusBanner status={data.status} />
@@ -239,12 +251,12 @@ function OverviewTab({ websiteId }) {
 											detail={item.message}
 										/>
 									))}
-									{bankOf(settings.answer) ? (
+									{bank ? (
 										<CheckRow
-											tone={bankOf(settings.answer)?.ready ? 'success' : 'warning'}
-											badge={bankOf(settings.answer)?.ready ? TEXTS.overview.bankReady : TEXTS.overview.bankNotReady}
+											tone={bank.ready ? 'success' : 'warning'}
+											badge={bank.ready ? TEXTS.overview.bankReady : TEXTS.overview.bankNotReady}
 											label={TEXTS.overview.bank}
-											detail={bankOf(settings.answer)?.ready ? undefined : TEXTS.overview.bankHelp}
+											detail={bank.ready ? undefined : bankHelp(bank)}
 										/>
 									) : null}
 									{data.checklist.widget ? (

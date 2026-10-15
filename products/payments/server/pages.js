@@ -269,8 +269,8 @@ export const renderBankPage = ({
 		...BANK_DETAILS.map((name) => /** @type {[string, string]} */ ([`bank.${name}`, bank[name]])),
 		['bank.reference', reference],
 	];
-	// without an account (Require bank details off, PLAN 0.8.10 P2) the payer follows the instructions alone
-	const account = BANK_DETAILS.some((name) => bank[name] !== '');
+	// without an account to pay into (Require bank details off, PLAN 0.8.10 P2) the payer follows the instructions
+	const account = bank.accountNumber !== '' || bank.iban !== '';
 	const upload =
 		proof && !uploaded
 			? `<form method="post" action="${escape(proof.action)}" data-proof data-uploading="${escape(t('bank.uploading'))}" data-done="${escape(t('bank.uploaded'))}" data-failed="${escape(t('bank.uploadFailed'))}">

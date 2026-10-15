@@ -914,6 +914,7 @@ describe('the hosted bank page and /pay.js', () => {
 			reference: 'INV-9',
 			bank: {
 				ready: true,
+				missing: [],
 				accountHolder: '',
 				bankName: '',
 				accountNumber: '',

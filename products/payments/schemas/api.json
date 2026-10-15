@@ -5,6 +5,7 @@
 			"description": "The bank details payers see, each '' when not set: show only the ones given.",
 			"required": [
 				"ready",
+				"missing",
 				"accountHolder",
 				"bankName",
 				"accountNumber",
@@ -19,7 +20,15 @@
 			"properties": {
 				"ready": {
 					"type": "boolean",
-					"description": "Payers can pick bank transfer: the account holder and the account number or IBAN are set (or details are not required)."
+					"description": "Payers can pick bank transfer, because they are told how to pay: the account holder and the account number or IBAN are set, or, with Require bank details off, the instructions or an account number or IBAN."
+				},
+				"missing": {
+					"type": "array",
+					"description": "What to set before bank transfer is offered (empty when ready): accountHolder; accountNumber (the account number or the IBAN); with Require bank details off, instructions (or an account number or IBAN).",
+					"items": {
+						"type": "string",
+						"enum": ["accountHolder", "accountNumber", "instructions"]
+					}
 				},
 				"accountHolder": {
 					"type": "string",

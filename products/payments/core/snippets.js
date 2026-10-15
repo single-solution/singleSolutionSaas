@@ -115,8 +115,8 @@ export const createSnippets = ({ base, widgets, permissions }) => {
 		`const response = await fetch('${base}/v1/bank-transfer', {`,
 		'  headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}` },',
 		'});',
-		'// { ready, accountHolder, bankName, accountNumber, routingNumber, sortCode, branchCode, iban, bic, instructions }:',
-		"// each detail is '' when not set, so show only the ones given",
+		'// { ready, missing, accountHolder, bankName, accountNumber, routingNumber, sortCode, branchCode, iban, bic,',
+		"// instructions }: each detail is '' when not set, so show only the ones given; missing says what to set until ready",
 		'const bank = await response.json();',
 	].join('\n');
 	const subscription = [

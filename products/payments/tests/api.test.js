@@ -688,6 +688,7 @@ describe('bank transfer', () => {
 		const read = () => env.api('GET', '/v1/bank-transfer');
 		expect((await read()).json).toEqual({
 			ready: true,
+			missing: [],
 			accountHolder: 'Shop Ltd',
 			bankName: '',
 			accountNumber: '0123-456789',
@@ -705,14 +706,19 @@ describe('bank transfer', () => {
 		await env.api('DELETE', '/v1/settings/bank_transfer.accountNumber');
 		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '', iban: IBAN });
 		await env.api('DELETE', '/v1/settings/bank_transfer.iban');
-		expect((await read()).json.ready).toBe(false);
+		expect((await read()).json).toMatchObject({ ready: false, missing: ['accountNumber'] });
 		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'bank_transfer' });
 		expect(refused.json.type).toMatch(/gateway_not_ready$/);
 		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
 		expect((await read()).json).toMatchObject({ ready: true, accountNumber: '0123-456789' });
 		// the account holder is needed too
 		await env.api('DELETE', '/v1/settings/bank_transfer.accountHolder');
-		expect((await read()).json).toMatchObject({ ready: false, accountHolder: '', accountNumber: '0123-456789' });
+		expect((await read()).json).toMatchObject({
+			ready: false,
+			missing: ['accountHolder'],
+			accountHolder: '',
+			accountNumber: '0123-456789',
+		});
 		await env.api('PUT', '/v1/settings/bank_transfer.accountHolder', { value: 'Shop Ltd' });
 		expect((await read()).json.ready).toBe(true);
 	});
@@ -784,9 +790,16 @@ describe('bank transfer', () => {
 		for (const name of ['accountNumber', 'accountHolder']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
 		expect((await env.api('GET', '/v1/bank-transfer')).json.ready).toBe(false);
 		await env.api('PUT', '/v1/settings/bank_transfer.requireDetails', { value: false });
+		// with neither instructions nor an account to pay into, nothing tells the payer how to pay: not offered
+		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: false, missing: ['instructions'] });
+		const refused = await env.api('POST', '/v1/payments', { amount: 100, currency: 'USD', gateway: 'bank_transfer' });
+		expect(refused.json.type).toMatch(/gateway_not_ready$/);
+		const offered = await createPayment({ currency: 'EUR' });
+		expect((await page(`/pay/${env.websiteId}/${offered.id}`)).text).not.toContain('value="bank_transfer"');
 		await env.api('PUT', '/v1/settings/bank_transfer.instructions', { value: 'We send our bank details by email.' });
 		expect((await env.api('GET', '/v1/bank-transfer')).json).toEqual({
 			ready: true,
+			missing: [],
 			accountHolder: '',
 			bankName: '',
 			accountNumber: '',
@@ -805,7 +818,21 @@ describe('bank transfer', () => {
 		expect(shown).not.toContain('Account number');
 		const choice = await createPayment({ currency: 'EUR' });
 		expect((await page(`/pay/${env.websiteId}/${choice.id}`)).text).toContain('value="bank_transfer"');
-		for (const name of ['requireDetails', 'instructions']) await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
+		// a bank name is no account to pay into: the payer still pays as the instructions explain
+		await env.api('PUT', '/v1/settings/bank_transfer.bankName', { value: 'Example Bank' });
+		const named = (await page(`/pay/${env.websiteId}/${(await createPayment({ gateway: 'bank_transfer' })).id}`)).text;
+		expect(named).toContain('as explained below');
+		expect(named).toContain('<dt>Bank</dt><dd>Example Bank</dd>');
+		// an account number alone is enough to pay into
+		await env.api('DELETE', '/v1/settings/bank_transfer.instructions');
+		await env.api('PUT', '/v1/settings/bank_transfer.accountNumber', { value: '0123-456789' });
+		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, missing: [] });
+		const numbered = (await page(`/pay/${env.websiteId}/${(await createPayment({ gateway: 'bank_transfer' })).id}`)).text;
+		expect(numbered).toContain('to the account below');
+		for (const name of ['requireDetails', 'instructions', 'bankName'])
+			await env.api('DELETE', `/v1/settings/bank_transfer.${name}`);
+		// a new minute: payer pages are limited per visitor and minute, and this test opened several
+		env.advance(61_000);
 		await env.setting('bank_transfer', 'accountNumber', '0123-456789');
 		await env.setting('bank_transfer', 'accountHolder', 'Shop Ltd');
 		expect((await env.api('GET', '/v1/bank-transfer')).json).toMatchObject({ ready: true, accountHolder: 'Shop Ltd' });

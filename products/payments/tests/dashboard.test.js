@@ -113,3 +113,57 @@ describe("Payments's dashboard times", () => {
 		expect(html).not.toContain('EDT');
 	});
 });
+
+describe("Payments's dashboard: bank transfer readiness (PLAN 0.8.10 P2)", () => {
+	/**
+	 * The overview with bank transfer on, and its settings with these values.
+	 * @param {Record<string, unknown>} values
+	 */
+	const serveBank = (values) =>
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ path) => {
+				if (path === `/v1/dashboard/websites/${WEBSITE}/overview`)
+					return new Response(JSON.stringify({ ...OVERVIEW, featuresOn: ['bank_transfer'] }), { status: 200 });
+				if (path === `/v1/dashboard/websites/${WEBSITE}/settings`) {
+					const entries = Object.entries(values).map(([name, value]) => [name, { value, source: 'website' }]);
+					const features = [{ key: 'bank_transfer', on: true, values: Object.fromEntries(entries) }];
+					return new Response(JSON.stringify({ features }), { status: 200 });
+				}
+				return new Response(JSON.stringify({ status: 404, title: 'Not found' }), { status: 404 });
+			}),
+		);
+
+	it('says what is missing before bank transfer is offered, and counts it ready once payers are told how to pay', async () => {
+		const Overview = TABS.overview;
+		/** @type {Array<[Record<string, unknown>, string, string]>} */
+		const cases = [
+			[
+				{ requireDetails: true },
+				'Not offered yet',
+				'Set the account holder name and the account number or IBAN in Settings, or turn off Require bank details and write instructions that tell payers how to pay.',
+			],
+			[
+				{ requireDetails: true, accountHolder: 'Northwind Ltd', instructions: 'Ask us.' },
+				'Not offered yet',
+				'Set the account number or IBAN in Settings, or turn off Require bank details',
+			],
+			[
+				{ requireDetails: false, bankName: 'Example Bank' },
+				'Not offered yet',
+				'Write instructions in Settings that tell payers how to pay, or set the account number or IBAN.',
+			],
+			[{ requireDetails: false, instructions: 'We send our details by email.' }, 'Ready', ''],
+		];
+		for (const [values, badge, detail] of cases) {
+			cleanup();
+			serveBank(values);
+			const { container } = render(<Overview {...props} />);
+			await settle();
+			const row = [...container.querySelectorAll('li')].find((item) => item.textContent?.startsWith('Bank transfer'));
+			expect(row?.textContent).toContain(badge);
+			if (detail) expect(row?.textContent).toContain(detail);
+			else expect(row?.textContent).toBe(`Bank transfer${badge}`);
+		}
+	});
+});

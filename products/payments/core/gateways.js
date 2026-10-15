@@ -146,22 +146,38 @@ export const BANK_DETAILS = /** @type {const} */ ([
 	'bic',
 ]);
 
-/** @typedef {Record<(typeof BANK_DETAILS)[number] | 'instructions', string> & { ready: boolean }} BankTransfer */
+/**
+ * What a merchant still has to set before bank transfer is offered (P2): `accountHolder`, `accountNumber` (the account
+ * number or the IBAN), or, with Require bank details off, `instructions` (or an account number or IBAN).
+ * @typedef {'accountHolder' | 'accountNumber' | 'instructions'} BankMissing
+ */
+
+/** @typedef {Record<(typeof BANK_DETAILS)[number] | 'instructions', string> & { ready: boolean, missing: BankMissing[] }} BankTransfer */
 
 /**
- * Bank transfer as the payer and the merchant's server see it (PLAN 0.8.10 P1): the bank details from the
- * `bank_transfer` settings ('' when not set), and whether it is ready: the account holder and the account number or
- * IBAN are set, or, with `requireDetails` off, by its switch alone, with only its instructions (P2).
+ * Bank transfer as the payer and the merchant's server see it (PLAN 0.8.10 P1, P2): the bank details from the
+ * `bank_transfer` settings ('' when not set or only spaces), whether it is ready, and what is missing when it is not.
+ * It is ready only when the payer is told how to pay: the account holder and the account number or IBAN are set, or,
+ * with `requireDetails` off, the instructions (for example "we send our details by email") or an account to pay into.
  * @param {Readonly<Record<string, unknown>>} values the resolved `bank_transfer` settings
  * @returns {BankTransfer}
  */
 export const bankTransfer = (values) => {
 	/** @param {string} name */
-	const text = (name) => (typeof values[name] === 'string' ? /** @type {string} */ (values[name]) : '');
+	const text = (name) => (typeof values[name] === 'string' ? /** @type {string} */ (values[name]).trim() : '');
 	const details = /** @type {Record<(typeof BANK_DETAILS)[number] | 'instructions', string>} */ (
 		Object.fromEntries([...BANK_DETAILS, 'instructions'].map((name) => [name, text(name)]))
 	);
-	const ready =
-		values.requireDetails === false || (details.accountHolder !== '' && (details.accountNumber !== '' || details.iban !== ''));
-	return { ready, ...details };
+	const account = details.accountNumber !== '' || details.iban !== '';
+	/** @type {BankMissing[]} */
+	const missing =
+		values.requireDetails === false
+			? account || details.instructions !== ''
+				? []
+				: ['instructions']
+			: [
+					...(details.accountHolder === '' ? /** @type {const} */ (['accountHolder']) : []),
+					...(account ? [] : /** @type {const} */ (['accountNumber'])),
+				];
+	return { ready: missing.length === 0, missing, ...details };
 };

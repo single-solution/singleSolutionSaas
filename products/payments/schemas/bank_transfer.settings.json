@@ -60,13 +60,13 @@
 		"requireDetails": {
 			"type": "boolean",
 			"title": "Require bank details",
-			"description": "Off: bank transfer is offered without an account holder, account number or IBAN, with only the instructions below (for example when you send your details to the payer yourself).",
+			"description": "Off: bank transfer is offered without the account holder name, once the instructions below or an account number or IBAN tell payers how to pay (for example when you send your details to the payer yourself).",
 			"default": true
 		},
 		"instructions": {
 			"type": "string",
 			"title": "Instructions",
-			"description": "Shown under the bank details, for example what to write as the payment reference (plain text).",
+			"description": "Shown under the bank details, for example what to write as the payment reference (plain text). With Require bank details off and no account number or IBAN, bank transfer is offered only with them.",
 			"default": "",
 			"maxLength": 1000,
 			"x-ui": {
