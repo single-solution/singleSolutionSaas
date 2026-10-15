@@ -42,14 +42,11 @@ export const mountOrdersAdmin = async (input) => {
 };
 
 /**
- * Statuses of the website's order flow, when the widget settings carry them (`settings.orders.statuses: [{ key, label }]`).
+ * The statuses of the website's order flow (the admin widget config's `settings.orders.statuses: [{ key, label, role }]`).
  * @param {Kit} kit
- * @returns {Array<{ key: string, label: string }>}
+ * @returns {Array<{ key: string, label: string, role: string }>}
  */
-const statusesOf = (kit) => {
-	const list = kit.settings.orders?.statuses;
-	return Array.isArray(list) ? list : [];
-};
+const statusesOf = (kit) => kit.settings.orders.statuses;
 
 /**
  * The orders section.
@@ -58,10 +55,6 @@ const statusesOf = (kit) => {
 const ordersTab = (kit, panel) => {
 	const { t, h, has } = kit;
 	const flow = statusesOf(kit);
-	// with the flow known the chips are its statuses and the stage (role) is a select; else the chips are the roles
-	const byStatus = flow.length > 0;
-	/** Statuses seen in the list (bulk moves offer them when the settings do not list the flow). @type {Map<string, string>} */
-	const seen = new Map(flow.map((status) => [status.key, status.label]));
 	const all = { value: '', label: t('admin.all') };
 	const roles = STATUS_ROLES.map((role) => ({ value: role, label: t(`ordersAdmin.role.${role}`) }));
 	/** @param {string} label @param {number} count */
@@ -71,7 +64,7 @@ const ordersTab = (kit, panel) => {
 	const search = kit.input('', { type: 'search', placeholder: t('ordersAdmin.searchOrders') });
 	const chips = chipFilter(kit, {
 		label: t('admin.status'),
-		choices: [all, ...(byStatus ? flow.map((status) => ({ value: status.key, label: status.label })) : roles)],
+		choices: [all, ...flow.map((status) => ({ value: status.key, label: status.label }))],
 		onChange: reload,
 	});
 	const stage = countedSelect(kit, [all, ...roles], withCount);
@@ -92,32 +85,28 @@ const ordersTab = (kit, panel) => {
 	 * The list's filters; a count by a field leaves out that field's own filter.
 	 * @param {string} [without]
 	 */
-	const filters = (without = '') => {
-		const status = byStatus ? chips.value() : '';
-		const role = byStatus ? stage.node.value : chips.value();
-		return {
-			q: search.value.trim(),
-			status: without === 'status' ? '' : status,
-			role: without === 'role' ? '' : role,
-			paymentState: without === 'paymentState' ? '' : paymentState.node.value,
-			paymentMethod: without === 'paymentMethod' ? '' : paymentMethod.node.value,
-			from: dayStart(from.value, kit.timeZone),
-			to: dayEnd(to.value, kit.timeZone),
-		};
-	};
+	const filters = (without = '') => ({
+		q: search.value.trim(),
+		status: without === 'status' ? '' : chips.value(),
+		role: without === 'role' ? '' : stage.node.value,
+		paymentState: without === 'paymentState' ? '' : paymentState.node.value,
+		paymentMethod: without === 'paymentMethod' ? '' : paymentMethod.node.value,
+		from: dayStart(from.value, kit.timeZone),
+		to: dayEnd(to.value, kit.timeZone),
+	});
 	/** @param {string} by */
 	const countsBy = (by) => kit.call('GET', `/v1/admin/orders/counts${query({ ...filters(by), by })}`);
 	const counts = async () => {
 		const [total, chipCounts, roleCounts, states, methods] = await Promise.all([
 			kit.call('GET', `/v1/admin/orders/count${query(filters())}`),
-			countsBy(byStatus ? 'status' : 'role'),
-			byStatus ? countsBy('role') : null,
+			countsBy('status'),
+			countsBy('role'),
 			countsBy('paymentState'),
 			countsBy('paymentMethod'),
 		]);
 		screen.count(total);
 		chips.counts(chipCounts);
-		if (roleCounts) stage.counts(roleCounts);
+		stage.counts(roleCounts);
 		paymentState.counts(states);
 		paymentMethod.counts(methods);
 	};
@@ -133,7 +122,7 @@ const ordersTab = (kit, panel) => {
 	const more = h('details', { class: 'filters' }, [
 		kit.text('summary', {}, t('ordersAdmin.moreFilters')),
 		h('div', { class: 'fields' }, [
-			byStatus ? kit.field(t('ordersAdmin.stage'), stage.node) : null,
+			kit.field(t('ordersAdmin.stage'), stage.node),
 			kit.field(t('ordersAdmin.paymentState'), paymentState.node),
 			kit.field(t('ordersAdmin.paymentMethod'), paymentMethod.node),
 			kit.field(t('admin.from'), from),
@@ -148,7 +137,7 @@ const ordersTab = (kit, panel) => {
 	const moveSelected = kit.button(t('ordersAdmin.moveSelected'), () => {
 		failures.replaceChildren();
 		if (screen.selected.size === 0) return kit.say(screen.line, t('admin.selectFirst'), true);
-		const target = kit.select([...seen].map(([value, label]) => ({ value, label })));
+		const target = kit.select(flow.map((status) => ({ value: status.key, label: status.label })));
 		const note = kit.input('', { maxlength: '1000' });
 		const ids = [...screen.selected];
 		return kit.dialog({
@@ -187,7 +176,7 @@ const ordersTab = (kit, panel) => {
 	// CSV: the orders the filters match (by status and days; the CSV takes no other filter)
 	const exportCsv = async () => {
 		const answer = await kit.fetchText(
-			`/v1/admin/csv/orders${query({ status: byStatus ? chips.value() : '', from: filters().from, to: filters().to })}`,
+			`/v1/admin/csv/orders${query({ status: chips.value(), from: filters().from, to: filters().to })}`,
 		);
 		if (!answer.ok) return kit.fail(screen.line, answer);
 		kit.save('orders.csv', answer.text);
@@ -198,25 +187,22 @@ const ordersTab = (kit, panel) => {
 	const screen = listScreen(kit, panel, {
 		title: t('ordersAdmin.orders'),
 		path: (cursor) => `/v1/admin/orders${query({ ...filters(), cursor })}`,
-		row: (order) => {
-			seen.set(order.status, order.statusLabel);
-			return {
-				name: order.number,
-				figure: kit.money(order.total, order.currency),
-				meta: [
-					order.statusLabel,
-					order.customer?.name,
-					order.city,
-					kit.when(order.placedAt),
-					t(`ordersAdmin.method.${order.payment.method}`),
-					t(`ordersAdmin.payment.${order.payment.state}`),
-				]
-					.filter(Boolean)
-					.join(' · '),
-				tone: ROLE_TONES[order.role] ?? 'neutral',
-				toneLabel: order.statusLabel,
-			};
-		},
+		row: (order) => ({
+			name: order.number,
+			figure: kit.money(order.total, order.currency),
+			meta: [
+				order.statusLabel,
+				order.customer?.name,
+				order.city,
+				kit.when(order.placedAt),
+				t(`ordersAdmin.method.${order.payment.method}`),
+				t(`ordersAdmin.payment.${order.payment.state}`),
+			]
+				.filter(Boolean)
+				.join(' · '),
+			tone: ROLE_TONES[order.role] ?? 'neutral',
+			toneLabel: order.statusLabel,
+		}),
 		open: (order, detail) => orderDetail(kit, order.id, detail),
 		empty: t('ordersAdmin.noOrders'),
 		nothing: t('ordersAdmin.nothing'),

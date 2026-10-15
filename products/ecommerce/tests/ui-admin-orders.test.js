@@ -142,12 +142,15 @@ const detail = (over = {}) => ({
 	...over,
 });
 
+/** A move's answer: the order with its warnings (none). @param {Record<string, unknown>} [over] */
+const afterMove = (over = {}) => ({ ...detail(over), warnings: [], warningCodes: [] });
+
 const FEATURES = ['checkout', 'returns', 'bulk_actions', 'invoices', 'grades_serials', 'courier_apis', 'csv'];
 const SETTINGS = {
 	orders: {
 		statuses: [
-			{ key: 'confirmed', label: 'Confirmed' },
-			{ key: 'packed', label: 'Packed' },
+			{ key: 'confirmed', label: 'Confirmed', role: 'open' },
+			{ key: 'packed', label: 'Packed', role: 'packed' },
 		],
 		couriers: [{ key: 'fast', name: 'Fast' }],
 	},
@@ -323,27 +326,27 @@ describe('orders admin: the list', () => {
 		expect(statuses(panel)).toContain('You are not allowed to do this.');
 	});
 
-	it('uses roles without flow settings, hides failed counts and shows an empty list', async () => {
+	it('hides failed counts and shows an empty list', async () => {
 		const { root, server } = await start(
 			{
 				'GET /v1/admin/orders/count': () => problem(503, 'count_timeout'),
 				'GET /v1/admin/orders/counts': () => problem(503, 'count_timeout'),
 			},
 			['checkout', 'bulk_actions'],
-			{},
 		);
 		expect(root.querySelector('[data-section="returns"]')).toBeNull();
 		const panel = panelOf(root, 'orders');
 		expect(listCount(panel)).toBe('');
 		expect(chipCount(panel, '')).toBe('');
-		expect(() => fieldIn(panel, 'Stage')).toThrow();
+		expect(fieldIn(panel, 'Stage').options[1].textContent).toBe('Awaiting payment');
 		expect(fieldIn(panel, 'Payment').options[0].textContent).toBe('All');
 		expect(menuEntries(panel)).not.toContain('Export these orders (CSV)');
-		await click(chipOf(panel, 'shipped'));
-		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({ role: 'shipped' });
+		await click(chipOf(panel, 'packed'));
+		expect(paramsOf(server, 'GET /v1/admin/orders')).toEqual({ status: 'packed' });
 		await click(buttonIn(panel, 'Load more'));
 		await tick(/** @type {HTMLInputElement} */ (panel.querySelector('input[aria-label="Select SO2026-1"]')), true);
 		await click(buttonIn(panel, 'Move selected'));
+		// a bulk move offers the statuses of the flow
 		expect([...fieldIn(dialogOf(root), 'Move to').options].map((/** @type {any} */ o) => o.value)).toEqual([
 			'confirmed',
 			'packed',
@@ -353,7 +356,7 @@ describe('orders admin: the list', () => {
 		expect(statuses(panel)).toContain('No orders match.');
 		expect(textOf(detailOf(panel))).toContain('No orders to show.');
 		server.routes['GET /v1/admin/orders'] = () => problem(500, 'internal_error');
-		await click(chipOf(panel, 'open'));
+		await click(chipOf(panel, 'confirmed'));
 		expect(statuses(panel)).toContain(TEXTS['admin.failed']);
 	});
 
@@ -535,7 +538,7 @@ describe('orders admin: one order', () => {
 		const shipped = () =>
 			answer(
 				200,
-				detail({
+				afterMove({
 					status: 'dispatched',
 					statusLabel: 'Dispatched',
 					role: 'shipped',
@@ -608,7 +611,7 @@ describe('orders admin: one order', () => {
 					),
 				'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
 					moves.push(call.body);
-					return answer(200, detail({ status: 'packed', role: 'packed', nextStatuses: [] }));
+					return answer(200, afterMove({ status: 'packed', role: 'packed', nextStatuses: [] }));
 				},
 			},
 			FEATURES.filter((feature) => feature !== 'grades_serials'),
@@ -873,12 +876,15 @@ describe('orders admin: one order', () => {
 			answer(201, {
 				order: detail({ payment: { method: 'online', state: 'refunded', paid: 250000, refunded: 250000, refundable: 0 } }),
 				refund: {},
-				// from a server without the warnings' codes: as it wrote them
-				warnings: ['Return by hand.'],
+				warnings: [SERVER_ENGLISH],
+				warningCodes: [{ code: 'refund_by_hand', values: { amount: 1000 } }],
 			});
 		await submitDialog(root);
 		expect(server.last('POST /v1/admin/orders/ord_1/refunds')?.body).toEqual({ amount: 1000, reason: 'damaged' });
-		expect(statuses(pane)).toContain('USD 10.00 refunded. Return by hand.');
+		expect(statuses(pane)).toContain(
+			'USD 10.00 refunded. Return USD 10.00 to the shopper by hand: Payments only recorded the refund.',
+		);
+		expect(textOf(root)).not.toContain(SERVER_ENGLISH);
 		expect(shows(pane, 'Refund')).toBe(false);
 		host.remove();
 	});
@@ -912,7 +918,6 @@ describe('orders admin: one order', () => {
 				'GET /v1/admin/orders/ord_2': () => problem(404, 'not_found'),
 			},
 			['checkout'],
-			{},
 		);
 		const panel = panelOf(root, 'orders');
 		const pane = detailOf(panel);
@@ -1008,11 +1013,11 @@ describe('orders admin: one order', () => {
 			{
 				'POST /v1/admin/orders/ord_1/move': (/** @type {any} */ call) => {
 					moves.push(call.body);
-					return answer(200, { ...detail() });
+					return answer(200, afterMove());
 				},
 			},
 			['checkout'],
-			{},
+			{ orders: { statuses: SETTINGS.orders.statuses, couriers: [] } },
 		);
 		const pane = detailOf(panelOf(root, 'orders'));
 		await pickMenu(pane, 'Move to Dispatched');

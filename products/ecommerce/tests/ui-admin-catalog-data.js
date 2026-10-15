@@ -177,7 +177,7 @@ export const ATTRIBUTES = [
 		visibility: { when: 'attribute', ids: [], attributeId: 'att_2', value: 'Red' },
 	},
 ];
-export const LOCATIONS = [
+const LOCATIONS = [
 	{ id: 'loc_1', name: 'Shop', pickup: true, sort: 0 },
 	{ id: 'loc_2', name: 'Store room', pickup: false, sort: 1 },
 ];

@@ -4,7 +4,7 @@
  * Format, PLAN 0.8.10 K7), dates and times by the Format and the business time zone, the business days of date
  * pickers (K8), calls with the ticket (JSON, and plain text for CSV files and printable documents), problem texts (the
  * website's words for the field or code of a refusal, never the server's English; a 403 without its own text means the
- * ticket's permissions do not allow it), and small builders: labeled fields, tables, sections, paged lists, id
+ * ticket's permissions do not allow it), and small builders: labeled fields, tables, sections, id
  * pickers, two-step buttons and uploads to presigned addresses. Text is always set as text, never as HTML.
  * @module
  */
@@ -358,8 +358,6 @@ const createKit = ({ root, config, api, win, save, open }) => {
 	};
 	/** A group of fields with a legend. @param {string} legend @param {Child[]} children */
 	const group = (legend, children) => h('fieldset', {}, [text('legend', {}, legend), ...children]);
-	/** A row of fields that wraps on small screens. @param {Child[]} children */
-	const row = (children) => h('div', { class: 'row' }, children);
 
 	/**
 	 * A table (scrolls sideways on small screens).
@@ -429,36 +427,6 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		nav.hidden = entries.length < 2;
 		if (entries[0]) show(entries[0].key);
 		return h('div', { class: 'picker' }, [h('div', { class: entries.length < 2 ? 'layout single' : 'layout' }, [nav, panels])]);
-	};
-
-	/**
-	 * A list loaded page by page (`{ items, nextCursor, hasMore }`) with `Load more`.
-	 * @param {{ path: (cursor: string | null) => string, row: (item: any) => Node, line: HTMLElement, empty: string }} options
-	 */
-	const pager = ({ path, row: rowOf, line, empty }) => {
-		const list = h('ul', { class: 'rows' });
-		/** @type {string | null} */
-		let cursor = null;
-		/** @param {boolean} fresh @returns {Promise<Answer>} */
-		const load = async (fresh) => {
-			const answer = await call('GET', path(fresh ? null : cursor));
-			if (fresh) list.replaceChildren();
-			if (!answer.ok) {
-				fail(line, answer);
-				more.hidden = true;
-				return answer;
-			}
-			cursor = answer.data.nextCursor ?? null;
-			/** @type {any[]} */
-			const items = answer.data.items ?? [];
-			say(line, fresh && items.length === 0 ? empty : '');
-			list.append(...items.map(rowOf));
-			more.hidden = !answer.data.hasMore;
-			return answer;
-		};
-		const more = button(t('admin.more'), () => load(false));
-		more.hidden = true;
-		return { node: h('div', {}, [list, more]), list, load };
 	};
 
 	/**
@@ -759,10 +727,8 @@ const createKit = ({ root, config, api, win, save, open }) => {
 		select,
 		check,
 		group,
-		row,
 		table,
 		sections,
-		pager,
 		picker,
 		when,
 		badge,

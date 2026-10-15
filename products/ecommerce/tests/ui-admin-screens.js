@@ -31,11 +31,6 @@ export const confirmDialog = async (root, text) => {
 };
 /** The status line of the dialog on top. @param {ShadowRoot} root */
 export const dialogStatus = (root) => dialogOf(root).querySelector('[role="status"]')?.textContent ?? '';
-/** Close the dialog on top with Cancel. @param {ShadowRoot} root */
-export const cancelDialog = async (root) => {
-	const cancel = [...dialogOf(root).querySelectorAll('button')].find((button) => button.textContent === 'Cancel');
-	await click(/** @type {HTMLElement} */ (cancel));
-};
 
 /**
  * Open a More menu holding an entry and pick the entry.

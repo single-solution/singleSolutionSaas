@@ -94,15 +94,12 @@ const effectsSum = (order, state) =>
 		.reduce((/** @type {number} */ sum, /** @type {any} */ effect) => sum + Number(effect.amount ?? 0), 0);
 
 /**
- * The warnings of an answer (a move, a refund) in the website's words (`ordersAdmin.warning.<code>`); from a server
- * without their codes, as it wrote them.
- * @param {Kit} kit @param {{ warnings?: string[], warningCodes?: Coded[] }} data @param {(minor: number) => string} money
+ * The warnings of an answer (a move, a refund, a payment) in the website's words (`ordersAdmin.warning.<code>`).
+ * @param {Kit} kit @param {{ warningCodes: Coded[] }} data @param {(minor: number) => string} money
  * @returns {string[]}
  */
 export const warningsText = (kit, data, money) =>
-	Array.isArray(data.warningCodes)
-		? data.warningCodes.map((warning) => codedText(kit, 'ordersAdmin.warning.', warning, money))
-		: (data.warnings ?? []);
+	data.warningCodes.map((warning) => codedText(kit, 'ordersAdmin.warning.', warning, money));
 
 /**
  * The note of an order's history entry: the website's words for the entries whose note the server writes itself

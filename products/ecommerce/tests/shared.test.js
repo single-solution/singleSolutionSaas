@@ -136,6 +136,11 @@ describe('shared routes', () => {
 			checkout: expect.any(Object),
 			orders: { couriers: [{ key: 'fast', name: 'Fast' }] },
 		});
-		expect(config.json.settings.orders.statuses[0]).toEqual({ key: 'pending_payment', label: 'Awaiting payment' });
+		// with their kind of step (role): the orders widget moves the orders of a status only to one of the same kind
+		expect(config.json.settings.orders.statuses[0]).toEqual({
+			key: 'pending_payment',
+			label: 'Awaiting payment',
+			role: 'awaiting_payment',
+		});
 	});
 });
