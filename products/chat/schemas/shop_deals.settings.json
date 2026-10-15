@@ -1,5 +1,14 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"count": {
+			"type": "integer",
+			"title": "Deals per list",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 20,
+			"description": "Running deals one list asks Ecommerce for (the AI and {deals_table})."
+		}
+	}
 }

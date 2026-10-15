@@ -1,5 +1,14 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"count": {
+			"type": "integer",
+			"title": "Orders per answer",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 10,
+			"description": "The signed-in visitor's latest orders one answer reads (the AI and {my_orders})."
+		}
+	}
 }

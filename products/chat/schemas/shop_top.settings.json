@@ -1,5 +1,14 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"count": {
+			"type": "integer",
+			"title": "Products per list",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 12,
+			"description": "Top and new products one list asks Ecommerce for (the AI, cards and {top_products})."
+		}
+	}
 }

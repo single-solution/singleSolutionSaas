@@ -137,9 +137,22 @@ export const createReply = (product, service) => {
 		return serving.ok ? String(/** @type {any} */ (serving.status).domain ?? '') : '';
 	};
 
-	/** Products per search (setting `maxResults` of `shop_search`, C13). @param {Site} s */
-	const shopLimit = async (s) =>
-		s.on.includes('shop_search') ? Number((await s.values('shop_search')).maxResults) : SHOP_LIMIT;
+	/**
+	 * How many each shop list asks Ecommerce for: products per search (setting `maxResults` of `shop_search`, C13),
+	 * top products, deals and orders (`count` of `shop_top`, `shop_deals` and `shop_my_orders`, C22).
+	 * @param {Site} s
+	 */
+	const shopCounts = async (s) => {
+		/** The setting while its feature is on, else the default. @param {string} feature @param {string} name */
+		const count = async (feature, name) =>
+			s.on.includes(feature) ? Number(/** @type {any} */ (await s.values(feature))[name]) : undefined;
+		return {
+			limit: await count('shop_search', 'maxResults'),
+			top: await count('shop_top', 'count'),
+			deals: await count('shop_deals', 'count'),
+			orders: await count('shop_my_orders', 'count'),
+		};
+	};
 
 	/** Keep the shop's currency from an Ecommerce answer. @param {Site} s @param {unknown} body */
 	const rememberCurrency = (s, body) => {
@@ -168,7 +181,8 @@ export const createReply = (product, service) => {
 
 	/**
 	 * The store context of an AI reply (store context on, C1): Ecommerce's `GET /v1/chat/context` for the product the
-	 * visitor is viewing, with the verified sign-in forwarded; cached 60 s per website, sign-in and product.
+	 * visitor is viewing, with the verified sign-in forwarded; cached 60 s per website, sign-in and product; cut to the
+	 * setting Longest store information (C22).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
 	 * @param {string | null} signIn
@@ -178,8 +192,9 @@ export const createReply = (product, service) => {
 		const path = contextPath((c.currentPage ?? c.page)?.productId);
 		const who = signIn ? (c.visitor.kind === 'user' ? c.visitor.id : '') : '';
 		const key = `${s.websiteId}|${who}|${path}`;
+		const longest = Number((await s.values('shop_context')).maxCharacters);
 		const cached = contexts.get(key);
-		if (cached) return cached.value;
+		if (cached) return cached.value && contextText({ text: cached.value }, longest);
 		const answer = await product.callProduct(
 			s.websiteId,
 			'ecommerce',
@@ -191,7 +206,7 @@ export const createReply = (product, service) => {
 			contexts.set(key, text);
 			rememberCurrency(s, answer.body);
 		}
-		return text;
+		return text && contextText({ text }, longest);
 	};
 
 	/**
@@ -481,7 +496,7 @@ export const createReply = (product, service) => {
 		];
 		const signedIn = visitor?.kind === 'user' ? { id: visitor.id, email: visitor.email } : null;
 		const withCards = s.on.includes('product_cards');
-		const limit = await shopLimit(s);
+		const counts = await shopCounts(s);
 		/** @type {import('../core/shop.js').ProductCard[]} */
 		const cards = [];
 		/**
@@ -491,7 +506,7 @@ export const createReply = (product, service) => {
 		 */
 		const shopCall = async (call) => {
 			const request = shopRequest(call.name, call.arguments, {
-				limit,
+				...counts,
 				...(needsCurrency(call.name, call.arguments) ? { minor: await minorUnits(s) } : {}),
 			});
 			if (!request.ok) return { ok: false, content: request.content };
@@ -507,7 +522,8 @@ export const createReply = (product, service) => {
 			const found = shopAnswer(call.name, answer.body, await s.format());
 			if (withCards)
 				for (const item of found.products)
-					if (cards.length < limit && !cards.some((card) => card.productId === item.id)) cards.push(cardOf(item));
+					if (cards.length < (counts.limit ?? SHOP_LIMIT) && !cards.some((card) => card.productId === item.id))
+						cards.push(cardOf(item));
 			return { ok: true, content: toolOutput(found.content) };
 		};
 		/** @param {import('../core/providers.js').ToolCall} call */
@@ -585,7 +601,7 @@ export const createReply = (product, service) => {
 	 */
 	const shopBody = async (s, tool, args, signIn) => {
 		const request = shopRequest(tool, args, {
-			limit: await shopLimit(s),
+			...(await shopCounts(s)),
 			...(needsCurrency(tool, args) ? { minor: await minorUnits(s) } : {}),
 		});
 		if (!request.ok || (request.signIn && !signIn)) return null;

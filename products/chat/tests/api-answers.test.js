@@ -602,6 +602,16 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 				.filter((c) => c.url.includes('/v1/chat/context'))
 				.at(-1)?.url,
 		).toMatch(/\/v1\/chat\/context$/);
+		// the longest store information the AI gets is a setting (C22)
+		await sys.setting('shop_context', 'maxCharacters', 500);
+		sys.responders.set(`${ECOMMERCE}/v1/chat/context`, () => ({
+			status: 200,
+			body: { text: `Policies: ${'x'.repeat(900)}`, currency: 'USD' },
+		}));
+		sys.advance(61_000);
+		await v('POST', '/v1/chat/messages', { text: 'one more' });
+		const prompt = String(sys.aiCalls().at(-1).messages[0].content);
+		expect(prompt.slice(prompt.indexOf('Policies:')).split('\n')[0]).toHaveLength(500);
 	});
 });
 

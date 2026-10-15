@@ -605,7 +605,8 @@ export const createService = (product) => {
 	 */
 	const shopInfo = async (s, c) => {
 		if (c.visitor.kind !== 'user') return null;
-		const answer = await product.callProduct(s.websiteId, 'ecommerce', customerOrdersPath(c.visitor.id));
+		const { orders } = await s.values('context_panel');
+		const answer = await product.callProduct(s.websiteId, 'ecommerce', customerOrdersPath(c.visitor.id, Number(orders)));
 		return answer.ok ? shopInfoOf(answer.body, await s.format()) : null;
 	};
 

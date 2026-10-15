@@ -476,6 +476,8 @@ describe('fuller shop tools and the store context (C13, C1)', () => {
 		expect(contextPath('prd.1')).toBe('/v1/chat/context');
 		expect(contextPath('prd_1')).toBe('/v1/chat/context?productId=prd_1');
 		expect(contextText({ text: 'x'.repeat(7000) })?.length).toBe(6000);
+		// the longest store information is a setting (C22)
+		expect(contextText({ text: 'x'.repeat(7000) }, 1500)?.length).toBe(1500);
 		expect(contextText({ text: ' ok ' })).toBe('ok');
 		// only Ecommerce's text becomes the context, never the rest of its answer
 		expect(contextText({ text: ' ', policies: [{ key: 'returns', text: 'a' }] })).toBeNull();

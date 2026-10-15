@@ -1,5 +1,14 @@
 {
 	"type": "object",
 	"additionalProperties": false,
-	"properties": {}
+	"properties": {
+		"maxCharacters": {
+			"type": "integer",
+			"title": "Longest store information (characters)",
+			"default": 6000,
+			"minimum": 500,
+			"maximum": 6000,
+			"description": "The live store information the AI gets with every answer is cut to this length; shorter costs fewer AI tokens. Ecommerce sends at most 6,000."
+		}
+	}
 }
