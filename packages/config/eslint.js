@@ -10,10 +10,10 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 /** Output folders no unit lints. */
-export const IGNORES = Object.freeze(['**/node_modules/**', '**/.next/**', '**/coverage/**']);
+const IGNORES = Object.freeze(['**/node_modules/**', '**/.next/**', '**/coverage/**']);
 
 /** Functional style: factories and plain objects only. */
-export const FUNCTIONAL_RULES = /** @type {Readonly<import('eslint').Linter.RulesRecord>} */ ({
+const FUNCTIONAL_RULES = /** @type {Readonly<import('eslint').Linter.RulesRecord>} */ ({
 	'no-restricted-syntax': [
 		'error',
 		{ selector: 'ClassDeclaration', message: 'Functional style: use factory functions, not classes.' },
@@ -33,7 +33,7 @@ export const FUNCTIONAL_RULES = /** @type {Readonly<import('eslint').Linter.Rule
  * @param {{ browser?: boolean }} [options] `browser`: the files also run in browsers (browser globals)
  * @returns {import('eslint').Linter.Config}
  */
-export const jsxConfig = (files, { browser = false } = {}) => ({
+const jsxConfig = (files, { browser = false } = {}) => ({
 	files,
 	languageOptions: {
 		parserOptions: { ecmaFeatures: { jsx: true } },

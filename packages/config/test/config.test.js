@@ -1,17 +1,25 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { MongoClient } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { createEslintConfig, FUNCTIONAL_RULES, IGNORES, jsxConfig } from '../eslint.js';
+import { createEslintConfig } from '../eslint.js';
 import * as mongoSetup from '../mongo-setup.js';
-import { defineUnitConfig, folderPattern, MONGO_SETUP, THRESHOLDS, UI_SOURCES } from '../vitest.js';
+import { defineUnitConfig } from '../vitest.js';
 
 const DIR = path.resolve('/repo/unit');
+/** The coverage standard (README). */
+const THRESHOLDS = { lines: 90, functions: 90, branches: 85 };
+const MONGO_SETUP = fileURLToPath(new URL('../mongo-setup.js', import.meta.url));
 
 describe('eslint config', () => {
 	it('applies the functional rules and ignores build output', () => {
 		const config = createEslintConfig();
-		expect(config[0]).toEqual({ ignores: [...IGNORES] });
-		expect(config.find((entry) => entry.files?.includes('**/*.js'))?.rules).toEqual(FUNCTIONAL_RULES);
+		expect(config[0]).toEqual({ ignores: ['**/node_modules/**', '**/.next/**', '**/coverage/**'] });
+		const rules = config.find((entry) => entry.files?.includes('**/*.js'))?.rules ?? {};
+		expect(Object.keys(rules).sort()).toEqual(
+			['eqeqeq', 'no-console', 'no-param-reassign', 'no-restricted-syntax', 'no-var', 'prefer-const'].sort(),
+		);
+		expect(JSON.stringify(rules['no-restricted-syntax'])).toContain('ClassDeclaration');
 		expect(config.at(-1)?.rules).toEqual({ 'no-param-reassign': 'off' });
 		expect(config).toHaveLength(4);
 	});
@@ -20,7 +28,10 @@ describe('eslint config', () => {
 		const config = createEslintConfig({ jsx: ['app/**/*.js'], browserJsx: ['ui/**/*.js'], ignores: ['out/**'] });
 		expect(config[0]?.ignores).toContain('out/**');
 		expect(config).toHaveLength(6);
-		expect(config[3]).toEqual(jsxConfig(['app/**/*.js']));
+		expect(config[3]?.files).toEqual(['app/**/*.js']);
+		expect(config[3]?.rules).toEqual({
+			'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]', ignoreRestSiblings: true }],
+		});
 		expect(config[3]?.languageOptions?.globals).toBeUndefined();
 		expect(config[4]?.languageOptions?.globals).toHaveProperty('document');
 		expect(config[4]?.languageOptions?.parserOptions).toEqual({ ecmaFeatures: { jsx: true } });
@@ -35,7 +46,7 @@ describe('vitest preset', () => {
 		expect(config.test?.include).toEqual(['test/**/*.test.js']);
 		expect(config.test?.globalSetup).toEqual([]);
 		expect(config.test?.coverage).toMatchObject({ provider: 'v8', include: ['src/**'], thresholds: THRESHOLDS });
-		expect(config.esbuild && config.esbuild.include).toEqual([UI_SOURCES]);
+		expect(config.esbuild && /** @type {RegExp[]} */ (config.esbuild.include)).toHaveLength(1);
 	});
 
 	it('adds JSX folders, the Mongo setup and custom scopes', () => {
@@ -55,10 +66,14 @@ describe('vitest preset', () => {
 	});
 
 	it('matches @ss/ui sources from the workspace and from node_modules', () => {
-		expect(UI_SOURCES.test('/repo/packages/ui/src/index.js')).toBe(true);
-		expect(UI_SOURCES.test('/app/node_modules/.pnpm/x/node_modules/@ss/ui/src/schema.js')).toBe(true);
-		expect(UI_SOURCES.test('/repo/packages/web/src/index.js')).toBe(false);
-		expect(folderPattern(DIR, ['a.b']).test(path.join(DIR, 'aXb/x.js'))).toBe(false);
+		const config = defineUnitConfig({ dir: DIR, jsx: ['a.b'] });
+		const [ui, folders] = /** @type {RegExp[]} */ (config.esbuild && config.esbuild.include);
+		expect(ui?.test('/repo/packages/ui/src/index.js')).toBe(true);
+		expect(ui?.test('/app/node_modules/.pnpm/x/node_modules/@ss/ui/src/schema.js')).toBe(true);
+		expect(ui?.test('/repo/packages/web/src/index.js')).toBe(false);
+		// a folder name is matched as written (a dot is not any character)
+		expect(folders?.test(path.join(DIR, 'a.b/x.js'))).toBe(true);
+		expect(folders?.test(path.join(DIR, 'aXb/x.js'))).toBe(false);
 	});
 });
 

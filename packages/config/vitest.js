@@ -13,13 +13,13 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 /** Global setup that starts one MongoMemoryReplSet per run and exposes it as `TEST_MONGODB_URI`. */
-export const MONGO_SETUP = fileURLToPath(new URL('./mongo-setup.js', import.meta.url));
+const MONGO_SETUP = fileURLToPath(new URL('./mongo-setup.js', import.meta.url));
 
 /** The coverage standard. */
-export const THRESHOLDS = Object.freeze({ lines: 90, functions: 90, branches: 85 });
+const THRESHOLDS = Object.freeze({ lines: 90, functions: 90, branches: 85 });
 
 /** Sources of `@ss/ui` (untranspiled JSX in `.js`), linked from the workspace or installed from the registry. */
-export const UI_SOURCES = /[\\/](?:packages[\\/]ui|node_modules[\\/]@ss[\\/]ui)[\\/]src[\\/][^\\/]+\.js$/;
+const UI_SOURCES = /[\\/](?:packages[\\/]ui|node_modules[\\/]@ss[\\/]ui)[\\/]src[\\/][^\\/]+\.js$/;
 
 /** @param {string} text */
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -30,7 +30,7 @@ const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * @param {readonly string[]} folders relative to `dir`
  * @returns {RegExp}
  */
-export const folderPattern = (dir, folders) =>
+const folderPattern = (dir, folders) =>
 	new RegExp(`^(?:${folders.map((folder) => escape(path.resolve(dir, folder) + path.sep)).join('|')}).*\\.js$`);
 
 /**
