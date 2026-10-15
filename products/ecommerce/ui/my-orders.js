@@ -20,6 +20,7 @@ import {
 	keepFocus,
 	mountShop,
 	problemText,
+	quantityShown,
 	settingsOf,
 	textsOf,
 	warrantyText,
@@ -337,7 +338,7 @@ export const mountMyOrders = async ({ host, config, shop, win }) => {
 							'span',
 							{ class: 'meta' },
 							t('orders.lineAmount', {
-								quantity: line.quantity,
+								quantity: quantityShown(t, line),
 								price: money(line.unitPrice, currency),
 								total: money(line.total, currency),
 							}),

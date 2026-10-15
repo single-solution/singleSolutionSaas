@@ -194,6 +194,75 @@ describe('cart', () => {
 		expect(textOf(host)).toContain(text('cart.empty'));
 	});
 
+	it('takes an amount of a measured item, shows its price per unit and keeps thousandths in the cart', async () => {
+		const measured = (/** @type {number} */ quantity) =>
+			line({
+				key: 'prd_fabric|var_f',
+				productId: 'prd_fabric',
+				variantId: 'var_f',
+				name: 'Linen',
+				variantName: '',
+				gradeLabel: '',
+				unitPrice: 1000,
+				quantity,
+				discount: 0,
+				total: quantity,
+				measure: { unit: 'sq ft', quantityText: String(quantity / 1000) },
+				problems: quantity % 500 === 0 ? [] : [{ code: 'measure_step', message: '' }],
+			});
+		const { fake, timers, host } = await setup({
+			lines: [{ productId: 'prd_fabric', variantId: 'var_f', quantity: 2500, measured: true }],
+			quote: (call) => ok(quoteOf({ lines: [measured(call.body.lines[0]?.quantity ?? 0)] })),
+		});
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.lines[0]).toEqual({
+			productId: 'prd_fabric',
+			variantId: 'var_f',
+			quantity: 2500,
+		});
+		expect(fake.cart.count()).toBe(1);
+		const page = textOf(host);
+		expect(page).toContain(text('cart.unitPricePer', { price: 'EUR 10.00', unit: 'sq ft' }));
+		const amount = /** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]'));
+		expect(amount.value).toBe('2.5');
+		expect(amount.getAttribute('aria-label')).toBe(text('cart.amount', { name: 'Linen', unit: 'sq ft' }));
+		expect(() => buttonOf(host, text('cart.more', { name: 'Linen' }))).toThrow();
+		// typed exactly to thousandths; a number with more decimals is refused and the cart kept
+		await setValue(amount, '3.75');
+		await timers.run();
+		expect(fake.cart.state().lines[0]?.quantity).toBe(3750);
+		expect(textOf(host)).toContain(text('cart.problem.measure_step'));
+		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '3.7501');
+		expect(fake.cart.state().lines[0]?.quantity).toBe(3750);
+		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '4');
+		await timers.run();
+		expect(fake.last('POST /v1/shop/cart/quote')?.body.lines[0].quantity).toBe(4000);
+	});
+
+	it('learns a line is measured from its quote when it was added in pieces (a wishlist, another script)', async () => {
+		const { fake, timers, host } = await setup({
+			lines: [{ productId: 'prd_fabric', variantId: 'var_f', quantity: 1 }],
+			quote: (call) =>
+				ok(
+					quoteOf({
+						lines: [
+							line({
+								key: 'prd_fabric|var_f',
+								productId: 'prd_fabric',
+								variantId: 'var_f',
+								name: 'Linen',
+								quantity: call.body.lines[0]?.quantity ?? 0,
+								measure: { unit: 'tola', quantityText: String((call.body.lines[0]?.quantity ?? 0) / 1000) },
+							}),
+						],
+					}),
+				),
+		});
+		await setValue(/** @type {HTMLInputElement} */ ($(host, 'input[inputmode="decimal"]')), '120');
+		await timers.run();
+		expect(fake.cart.state().lines[0]).toMatchObject({ quantity: 120_000, measured: true });
+		expect(fake.cart.count()).toBe(1);
+	});
+
 	it('shows line problems, bookings, unknown items and merged lines', async () => {
 		const { host, fake, timers } = await setup({
 			lines: [

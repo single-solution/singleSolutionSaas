@@ -4,10 +4,11 @@
  * shows each type's name, key, kind and parts, with Edit and a More menu (move, remove); a type's every field is edited
  * in a dialog (PLAN 0.6: secondary forms in dialogs): name and key, kind (physical goods, digital goods or a service),
  * whether it is offered, the parts its items have (only those of its kind; each works while its feature is on),
- * numbered units (the unit fields their numbers take, picked from stock or typed, and the step they are needed before)
- * and, when the type names them, the product and variant fields its items take. Done keeps the type in the list; Save
+ * numbered units (the unit fields their numbers take, picked from stock or typed, and the step they are needed before),
+ * selling in a unit of its own (the unit, and the step, least and most a shopper buys, typed as numbers of the
+ * unit; no numbered units then) and, when the type names them, the product and variant fields its items take. Done keeps the type in the list; Save
  * list saves the whole list (up to 50 types) with `PUT …/lists/item_types`, and the server checks it again (the fields
- * it names, the types products and categories use, units in stock).
+ * it names, the types products and categories use, units and measured stock).
  *
  * Field ids are typed (`att_…`): the dashboard shows no business data (PLAN 0.4.3) and has no route that reads the
  * website's fields, so they are entered as tags, as the grades editor takes category ids.
@@ -16,6 +17,7 @@
 import { useState } from 'react';
 import { ActionMenu, Badge, Button, Card, Checkbox, Dialog, FieldGrid, Input, Select } from '@ss/ui';
 import { ELEMENTS, ITEM_KINDS, TYPE_LIMITS, UNIT_CAPTURES, elementFor } from '../../core/item-types.js';
+import { MAX_UNIT_LABEL, STANDARD_UNITS } from '../../core/measure.js';
 import { fill } from './api.js';
 import { blankType, cleanType, keyOf, loadType, typeProblems } from './drafts.js';
 import { IdTags, ListOutcome, SaveRow, moved, useList } from './lists.js';
@@ -27,8 +29,10 @@ import { TEXTS } from './texts.js';
 const L = TEXTS.lists;
 const T = L.itemTypes;
 
-/** The parts a type switches on, without its numbered units (edited on their own). */
-const PARTS = ELEMENTS.filter((element) => element !== 'units');
+/** The parts a type switches on, without its numbered units and its measure (edited on their own). */
+const PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure'>>} */ (
+	ELEMENTS.filter((element) => element !== 'units' && element !== 'measure')
+);
 
 /**
  * Every field of one type (the dialog's body).
@@ -45,6 +49,9 @@ function TypeFields({ draft, set, problems, tried }) {
 					? T.keyBuiltIn
 					: undefined;
 	const physical = elementFor('units', draft.kind);
+	const measure = draft.measure;
+	/** @param {Partial<TypeDraft['measure']>} patch */
+	const setMeasure = (patch) => set({ measure: { ...measure, ...patch } });
 	return (
 		<div className="space-y-6">
 			<FieldGrid>
@@ -97,6 +104,82 @@ function TypeFields({ draft, set, problems, tried }) {
 				</FieldGrid>
 			</fieldset>
 			{physical ? (
+				<fieldset className="min-w-0 space-y-3">
+					<legend className="mb-1 text-sm font-bold text-fg">{T.measure}</legend>
+					<Checkbox
+						label={T.measureOn}
+						help={T.measureHelp}
+						checked={measure.on}
+						onChange={(event) => setMeasure({ on: event.target.checked })}
+					/>
+					{measure.on ? (
+						<FieldGrid>
+							<Input
+								label={T.unit}
+								help={T.unitHelp}
+								required
+								value={measure.unit}
+								maxLength={MAX_UNIT_LABEL}
+								error={problems.measure === 'unit' && tried ? T.unitMissing : undefined}
+								onChange={(event) => setMeasure({ unit: event.target.value })}
+							/>
+							<Select
+								label={T.decimals}
+								help={T.decimalsHelp}
+								value={measure.decimals}
+								options={['0', '1', '2', '3'].map((value) => ({ value, label: value }))}
+								onChange={(event) => setMeasure({ decimals: event.target.value })}
+							/>
+							<Input
+								label={T.step}
+								help={T.stepHelp}
+								inputMode="decimal"
+								value={measure.step}
+								error={problems.measure === 'step' ? T.stepInvalid : undefined}
+								onChange={(event) => setMeasure({ step: event.target.value })}
+							/>
+							<Input
+								label={T.least}
+								inputMode="decimal"
+								value={measure.min}
+								error={problems.measure === 'min' ? T.leastInvalid : undefined}
+								onChange={(event) => setMeasure({ min: event.target.value })}
+							/>
+							<Input
+								label={T.most}
+								help={T.mostHelp}
+								inputMode="decimal"
+								value={measure.max}
+								error={problems.measure === 'max' ? T.mostInvalid : undefined}
+								onChange={(event) => setMeasure({ max: event.target.value })}
+							/>
+							<Select
+								label={T.standard}
+								help={T.standardHelp}
+								value={measure.standardCode}
+								options={[
+									{ value: '', label: T.standardNone },
+									...Object.keys(STANDARD_UNITS).map((code) => ({
+										value: code,
+										label: T.standardCodes[/** @type {keyof typeof T.standardCodes} */ (code)] ?? code,
+									})),
+								]}
+								onChange={(event) => setMeasure({ standardCode: event.target.value })}
+							/>
+							{measure.standardCode ? (
+								<Input
+									label={T.standardAmount}
+									inputMode="decimal"
+									value={measure.standardAmount}
+									error={problems.measure === 'standard' ? T.standardAmountInvalid : undefined}
+									onChange={(event) => setMeasure({ standardAmount: event.target.value })}
+								/>
+							) : null}
+						</FieldGrid>
+					) : null}
+				</fieldset>
+			) : null}
+			{physical && !measure.on ? (
 				<fieldset className="min-w-0 space-y-3">
 					<legend className="mb-1 text-sm font-bold text-fg">{T.units}</legend>
 					<Checkbox
@@ -185,7 +268,11 @@ function TypeRow({ type, index, count, onEdit, onMove, onRemove }) {
 	const name = type.name.trim() || T.unnamed;
 	const parts = [
 		...PARTS.filter((part) => elementFor(part, type.kind) && type.elements[part]).map((part) => T.elements[part]),
-		...(type.units.on && elementFor('units', type.kind) ? [T.unitsOn] : []),
+		...(type.measure.on && elementFor('measure', type.kind)
+			? [T.soldBy.replace('{unit}', type.measure.unit.trim())]
+			: type.units.on && elementFor('units', type.kind)
+				? [T.unitsOn]
+				: []),
 	];
 	return (
 		<li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">

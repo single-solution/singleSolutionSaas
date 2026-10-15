@@ -8,6 +8,7 @@
 import { CONTENT_LIMITS } from '../../core/catalog-content.js';
 import { CONDITIONS, MAX_GRADES } from '../../core/grades.js';
 import { ELEMENTS, elementFor, isBuiltInKey } from '../../core/item-types.js';
+import { MAX_UNIT_LABEL, quantityText, toThousandths } from '../../core/measure.js';
 
 /** What a grade may hold, for the editor's counters and Add buttons. */
 export const GRADE_LIMITS = Object.freeze({
@@ -266,10 +267,28 @@ export const gradeProblems = (draft, otherKeys) => {
 
 // ------------------------------------------------------------------------------------------------- item types
 
-/** The parts of a type other than its numbered units, which are edited on their own. */
-const TYPE_PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units'>>} */ (
-	ELEMENTS.filter((element) => element !== 'units')
+/** The parts of a type other than its numbered units and its measure, which are edited on their own. */
+const TYPE_PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure'>>} */ (
+	ELEMENTS.filter((element) => element !== 'units' && element !== 'measure')
 );
+
+/** A measure as the editor holds it: amounts as decimal texts of the unit ('' max = no most; '' standard = none). */
+const NO_MEASURE = Object.freeze({
+	on: false,
+	unit: '',
+	decimals: '1',
+	step: '0.1',
+	min: '0.1',
+	max: '',
+	standardCode: '',
+	standardAmount: '1',
+});
+
+/**
+ * Thousandths as the editor shows them (`2500` → `2.5`).
+ * @param {number} value
+ */
+const unitsText = (value) => quantityText(value, true);
 
 /**
  * @typedef {object} TypeDraft an item type as edited
@@ -277,9 +296,13 @@ const TYPE_PARTS = /** @type {Array<Exclude<import('../../core/item-types.js').E
  * @property {string} name
  * @property {'physical' | 'digital' | 'service'} kind
  * @property {boolean} active
- * @property {Record<Exclude<import('../../core/item-types.js').Element, 'units'>, boolean>} elements
+ * @property {Record<Exclude<import('../../core/item-types.js').Element, 'units' | 'measure'>, boolean>} elements
  * @property {{ on: boolean, fieldIds: string[], capture: 'stock' | 'packing', requiredBefore: 'packed' | 'shipped' | '' }}
  *   units its numbered units ('' = never needed)
+ * @property {{ on: boolean, unit: string, decimals: string, step: string, min: string, max: string,
+ *   standardCode: string, standardAmount: string }} measure sold in a unit of its own: its label, the decimals a
+ *   shopper may give and, as decimal texts of the unit, the step, the least and the most ('' = no most); the standard
+ *   measure for feeds ('' code = none)
  * @property {boolean} fieldsNamed the type names the fields its items take (else every field)
  * @property {string[]} fieldIds
  */
@@ -292,6 +315,7 @@ export const blankType = () => ({
 	active: true,
 	elements: /** @type {TypeDraft['elements']} */ (Object.fromEntries(TYPE_PARTS.map((part) => [part, false]))),
 	units: { on: false, fieldIds: [], capture: 'stock', requiredBefore: 'packed' },
+	measure: { ...NO_MEASURE },
 	fieldsNamed: false,
 	fieldIds: [],
 });
@@ -317,13 +341,26 @@ export const loadType = (type) => ({
 				requiredBefore: type.elements.units.requiredBefore ?? '',
 			}
 		: { on: false, fieldIds: [], capture: 'stock', requiredBefore: 'packed' },
+	measure: type.elements.measure
+		? {
+				on: true,
+				unit: type.elements.measure.unit,
+				decimals: String(type.elements.measure.decimals),
+				step: unitsText(type.elements.measure.step),
+				min: unitsText(type.elements.measure.min),
+				max: type.elements.measure.max === null ? '' : unitsText(type.elements.measure.max),
+				standardCode: type.elements.measure.standard?.code ?? '',
+				standardAmount: String(type.elements.measure.standard?.amount ?? 1),
+			}
+		: { ...NO_MEASURE },
 	fieldsNamed: type.fieldIds !== null,
 	fieldIds: [...(type.fieldIds ?? [])],
 });
 
 /**
  * A type as saved: the key made from the name when empty, only the parts of its kind, units picked from stock needed
- * when packed, the fields it names (null: every field).
+ * when packed, its measure in thousandths of its unit (no numbered units with one), the fields it names (null: every
+ * field).
  * @param {TypeDraft} draft
  */
 export const cleanType = (draft) => ({
@@ -333,8 +370,21 @@ export const cleanType = (draft) => ({
 	active: draft.active,
 	elements: {
 		...Object.fromEntries(TYPE_PARTS.map((part) => [part, draft.elements[part] && elementFor(part, draft.kind)])),
+		measure:
+			draft.measure.on && elementFor('measure', draft.kind)
+				? {
+						unit: draft.measure.unit.trim().replace(/\s+/g, ' '),
+						decimals: Number(draft.measure.decimals),
+						step: toThousandths(draft.measure.step),
+						min: toThousandths(draft.measure.min),
+						max: draft.measure.max.trim() === '' ? null : toThousandths(draft.measure.max),
+						standard: draft.measure.standardCode
+							? { code: draft.measure.standardCode, amount: Number(draft.measure.standardAmount) }
+							: null,
+					}
+				: null,
 		units:
-			draft.units.on && elementFor('units', draft.kind)
+			draft.units.on && !draft.measure.on && elementFor('units', draft.kind)
 				? {
 						fieldIds: cleanLines(draft.units.fieldIds),
 						capture: draft.units.capture,
@@ -346,11 +396,13 @@ export const cleanType = (draft) => ({
 });
 
 /**
- * What stops a type being applied to the list, by field: a name, and a key the server takes, not a built-in type's and
- * not another type's.
+ * What stops a type being applied to the list, by field: a name, a key the server takes, not a built-in type's and
+ * not another type's, and a measure with a unit label, a step its decimals can write, the least and most multiples
+ * of the step, the most at least the least, and a standard amount above 0 when a standard unit is picked.
  * @param {TypeDraft} draft
  * @param {string[]} otherKeys the keys of the other types
- * @returns {{ name?: 'missing', key?: 'invalid' | 'taken' | 'built_in' }}
+ * @returns {{ name?: 'missing', key?: 'invalid' | 'taken' | 'built_in',
+ *   measure?: 'unit' | 'step' | 'min' | 'max' | 'standard' }}
  */
 export const typeProblems = (draft, otherKeys) => {
 	const key = keyOf(draft.key, draft.name);
@@ -365,7 +417,31 @@ export const typeProblems = (draft, otherKeys) => {
 			: otherKeys.includes(key)
 				? { key: 'taken' }
 				: {};
-	return { ...(unnamed ? { name: /** @type {const} */ ('missing') } : {}), ...keyed };
+	return { ...(unnamed ? { name: /** @type {const} */ ('missing') } : {}), ...keyed, ...measureProblems(draft) };
+};
+
+/**
+ * The measure part of {@link typeProblems}.
+ * @param {TypeDraft} draft
+ * @returns {{ measure?: 'unit' | 'step' | 'min' | 'max' | 'standard' }}
+ */
+const measureProblems = (draft) => {
+	if (!draft.measure.on || !elementFor('measure', draft.kind)) return {};
+	const unit = draft.measure.unit.trim();
+	if (!unit || unit.length > MAX_UNIT_LABEL) return { measure: 'unit' };
+	const step = toThousandths(draft.measure.step);
+	const grain = 10 ** (3 - Number(draft.measure.decimals));
+	if (step === null || step > 1_000_000 || step % grain !== 0) return { measure: 'step' };
+	if (draft.measure.standardCode) {
+		const amount = Number(draft.measure.standardAmount);
+		if (!/^\d{1,7}(\.\d{1,6})?$/.test(draft.measure.standardAmount.trim()) || !(amount > 0) || amount > 1_000_000)
+			return { measure: 'standard' };
+	}
+	const min = toThousandths(draft.measure.min);
+	if (min === null || min % step !== 0) return { measure: 'min' };
+	if (draft.measure.max.trim() === '') return {};
+	const max = toThousandths(draft.measure.max);
+	return max === null || max % step !== 0 || max < min ? { measure: 'max' } : {};
 };
 
 // ------------------------------------------------------------------------------------------------- order flow

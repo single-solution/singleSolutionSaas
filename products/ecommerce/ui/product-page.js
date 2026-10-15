@@ -21,6 +21,7 @@
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail } from '../core/growth-events.js';
+import { quantityText, toThousandths } from '../core/measure.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
@@ -139,7 +140,10 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 				if (first) choose(first);
 				/** @type {string | null} */
 				let slot = null;
-				let quantity = 1;
+				// sold in a unit of its own: an amount in thousandths of the unit, from the least
+				/** @type {{ unit: string, decimals: number, step: number, min: number, max: number | null } | null} */
+				const measure = item.measure ?? null;
+				let quantity = measure ? measure.min : 1;
 				let added = false;
 				/** @param {string} name @param {PageVariant | null} of @param {number} count */
 				const tell = (name, of, count) =>
@@ -153,6 +157,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								name: item.name,
 								price: of ? of.price : item.price,
 								quantity: count,
+								measure,
 							}),
 						]),
 					);
@@ -278,7 +283,13 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 						return;
 					}
 					priceBox.replaceChildren(
-						priceNode(doc, t, formats, { price: current.price, was: current.compareAtPrice, currency, big: true }),
+						priceNode(doc, t, formats, {
+							price: current.price,
+							was: current.compareAtPrice,
+							currency,
+							big: true,
+							unit: measure?.unit ?? null,
+						}),
 						...(current.deal
 							? [
 									h(doc, 'p', { class: 'save' }, t('page.save', { amount: money(current.deal.savings, currency) })),
@@ -323,7 +334,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 
 				const renderFacts = () => {
 					const current = variant();
-					const stock = current ? stockText(t, current, settings.catalog.lowStockShown) : null;
+					const stock = current ? stockText(t, current, settings.catalog.lowStockShown, measure) : null;
 					const warranty = current ? warrantyText(t, current.warrantyDays) : '';
 					fill(
 						facts,
@@ -344,7 +355,49 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 					}
 					const current = variant();
 					const parts = [];
-					if (!booking) {
+					if (measure) {
+						// an amount of the unit in its steps, between its least and most
+						const unit = measure.unit;
+						const input = /** @type {HTMLInputElement} */ (
+							h(doc, 'input', { type: 'text', inputmode: 'decimal', size: '6', 'data-focus': 'qty' })
+						);
+						input.value = quantityText(quantity, measure);
+						/** @param {number} next thousandths */
+						const setAmount = (next) => {
+							const most = measure.max ?? 1_000_000_000;
+							quantity = Math.max(measure.min, Math.min(most, Math.round(next / measure.step) * measure.step));
+							input.value = quantityText(quantity, measure);
+						};
+						input.addEventListener('change', () => setAmount(toThousandths(input.value) ?? quantity));
+						parts.push(
+							h(doc, 'label', { for: 'ss-page-qty' }, t('page.amount', { unit })),
+							h(
+								doc,
+								'div',
+								{ class: 'stepper' },
+								button(doc, '−', () => setAmount(quantity - measure.step), {
+									class: 'secondary',
+									'aria-label': t('page.less'),
+								}),
+								input,
+								button(doc, '+', () => setAmount(quantity + measure.step), {
+									class: 'secondary',
+									'aria-label': t('page.more'),
+								}),
+							),
+							h(
+								doc,
+								'p',
+								{ class: 'hint' },
+								t('page.amountHelp', {
+									step: quantityText(measure.step, measure),
+									min: quantityText(measure.min, measure),
+									unit,
+								}),
+							),
+						);
+						input.id = 'ss-page-qty';
+					} else if (!booking) {
 						const input = /** @type {HTMLInputElement} */ (
 							h(doc, 'input', {
 								type: 'number',
@@ -389,6 +442,7 @@ export const mountProductPage = async ({ host, config, shop, win }) => {
 								variantId: now.id,
 								quantity: booking ? 1 : quantity,
 								...(booking && slot ? { slot } : {}),
+								...(measure ? { measured: true } : {}),
 							});
 							tell(GROWTH_EVENTS.addToCart, now, booking ? 1 : quantity);
 							added = true;

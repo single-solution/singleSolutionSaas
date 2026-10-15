@@ -303,14 +303,24 @@ export const keepFocus = (root, renderFn) => {
 };
 
 /**
+ * A line's quantity as shoppers read it: pieces, or the measured amount and its unit (`2.5 m`) when the answer gives
+ * the line's `measure { unit, quantityText }`.
+ * @param {Texts} t
+ * @param {{ quantity: number, measure?: { unit: string, quantityText: string } | null }} line
+ */
+export const quantityShown = (t, line) =>
+	line.measure ? t('shop.amount', { quantity: line.measure.quantityText, unit: line.measure.unit }) : String(line.quantity);
+
+/**
  * A price with the "was" price beside it when it is higher; a range ("from – to") when the highest price is higher
- * (E8).
+ * (E8); per unit (`/ m`) for an item sold in a unit of its own.
  * @param {Document} doc
  * @param {Texts} t
  * @param {Formats} formats
- * @param {{ price: number, max?: number | null, was?: number | null, currency: string, big?: boolean }} input
+ * @param {{ price: number, max?: number | null, was?: number | null, currency: string, big?: boolean,
+ *   unit?: string | null }} input `unit`: the unit of measure the price is for
  */
-export const priceNode = (doc, t, { money }, { price, max = null, was = null, currency, big = false }) =>
+export const priceNode = (doc, t, { money }, { price, max = null, was = null, currency, big = false, unit = null }) =>
 	h(
 		doc,
 		'p',
@@ -318,6 +328,7 @@ export const priceNode = (doc, t, { money }, { price, max = null, was = null, cu
 		max !== null && max > price
 			? t('shop.priceRange', { min: money(price, currency), max: money(max, currency) })
 			: money(price, currency),
+		unit ? h(doc, 'span', { class: 'per' }, t('shop.perUnit', { unit })) : null,
 		was !== null && was > price
 			? h(doc, 'span', { class: 'was' }, h(doc, 'span', { class: 'sr-only' }, t('shop.wasLabel')), money(was, currency))
 			: null,
@@ -455,7 +466,7 @@ export const paragraphs = (doc, text) =>
  *   priceMax?: number | null, featured?: boolean, imageSize?: { width: number, height: number } | null,
  *   cardImages?: Array<{ url: string | null, alt: string, width?: number, height?: number }>,
  *   currency: string, inStock: boolean, rating?: { average: number, count: number }, brand?: { name: string } | string | null,
- *   grades?: string[] }} card
+ *   grades?: string[], measure?: { unit: string } | null }} card `measure`: sold in a unit of its own
  * @param {Child[]} [actions]
  */
 export const productCard = (doc, t, formats, card, actions = []) => {
@@ -505,6 +516,7 @@ export const productCard = (doc, t, formats, card, actions = []) => {
 			max: card.priceMax ?? null,
 			was: card.compareAtPrice ?? null,
 			currency: card.currency,
+			unit: card.measure?.unit ?? null,
 		}),
 		rating ? h(doc, 'span', { class: 'meta' }, rating) : null,
 		card.grades && card.grades.length > 0 ? h(doc, 'span', { class: 'meta' }, card.grades.join(' · ')) : null,

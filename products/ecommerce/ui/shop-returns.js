@@ -4,7 +4,11 @@
  * and photos uploaded straight to the merchant's storage with a signed address) and the shopper's own claims.
  * @module
  */
+import { quantityText } from '../core/measure.js';
 import { button, codeOf, field, formatsOf, h, problemText, select } from './shop-common.js';
+
+/** A measured line offers at most this many amounts (its steps) to claim. */
+const MEASURED_CHOICES = 200;
 
 /** @typedef {import('./shop-common.js').Texts} Texts */
 /** @typedef {import('./shop-common.js').ShopSettings} ShopSettings */
@@ -87,9 +91,23 @@ export const renderClaimForm = async (input) => {
 			...lines
 				.filter((line) => line[chosen].open)
 				.map((line) => {
+					// an item sold in a unit of its own is claimed in its steps (thousandths of its unit), or all of it
+					const measure = line.measure ?? null;
+					/** @param {number} n */
+					const label = (n) =>
+						measure ? t('shop.amount', { quantity: quantityText(n, measure), unit: measure.unit }) : String(n);
+					const amounts = measure
+						? [
+								...Array.from(
+									{ length: Math.min(MEASURED_CHOICES, Math.floor(line.claimable / measure.step)) + 1 },
+									(_, n) => n * measure.step,
+								),
+								...(line.claimable % measure.step !== 0 ? [line.claimable] : []),
+							]
+						: Array.from({ length: line.claimable + 1 }, (_, n) => n);
 					const count = select(
 						doc,
-						Array.from({ length: line.claimable + 1 }, (_, n) => /** @type {[string, string]} */ ([String(n), String(n)])),
+						amounts.map((n) => /** @type {[string, string]} */ ([String(n), label(n)])),
 						'0',
 					);
 					quantities.set(line.lineId, count);
@@ -98,7 +116,7 @@ export const renderClaimForm = async (input) => {
 						doc,
 						'div',
 						{},
-						field(doc, `ss-claim-${line.lineId}`, t('returns.quantity', { name, max: line.claimable }), count),
+						field(doc, `ss-claim-${line.lineId}`, t('returns.quantity', { name, max: label(line.claimable) }), count),
 						h(doc, 'span', { class: 'meta' }, t('returns.until', { date: dateText(line[chosen].until, { time: false }) })),
 					);
 				}),

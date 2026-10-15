@@ -299,6 +299,55 @@ describe('product page', () => {
 		expect(textOf(bare)).toContain(text('page.noVariant'));
 	});
 
+	it('sells a measured item by its unit: an amount in steps, its price per unit and its stock in units', async () => {
+		const fake = makeShop({
+			features: ['catalog', 'checkout'],
+			routes: {
+				'GET /v1/shop/products/phone': () =>
+					ok(
+						product({
+							name: 'Linen',
+							options: [],
+							measure: { unit: 'bolt', decimals: 1, step: 500, min: 1000, max: 3000, standard: null },
+							variants: [
+								{
+									id: 'var_f',
+									name: '',
+									options: {},
+									price: 1000,
+									compareAtPrice: null,
+									inStock: true,
+									stockLeft: 2500,
+									grade: null,
+								},
+							],
+						}),
+					),
+			},
+		});
+		const host = await mountPage(fake, 'phone', { catalog: { lowStockShown: 5 } });
+		const page = textOf(host);
+		const unit = 'bolt';
+		expect(page).toContain(text('shop.perUnit', { unit }));
+		expect(page).toContain(text('page.onlyLeftAmount', { quantity: '2.5', unit }));
+		expect(page).toContain(text('page.amountHelp', { step: '0.5', min: '1', unit }));
+		const amount = /** @type {HTMLInputElement} */ ($(host, '#ss-page-qty'));
+		expect(amount.value).toBe('1');
+		await click(buttonOf(host, text('page.more')));
+		expect(amount.value).toBe('1.5');
+		// typed amounts snap to the steps, within the least and the most
+		await setValue(amount, '2.3');
+		expect(amount.value).toBe('2.5');
+		await setValue(amount, '9');
+		expect(amount.value).toBe('3');
+		await setValue(amount, '0.2');
+		expect(amount.value).toBe('1');
+		await setValue(amount, '2');
+		await click(buttonOf(host, text('page.addToCart')));
+		expect(fake.cart.state().lines).toEqual([{ productId: 'prd_1', variantId: 'var_f', quantity: 2000, measured: true }]);
+		expect(fake.cart.count()).toBe(1);
+	});
+
 	it('picks a booking slot before adding to the cart', async () => {
 		let slotCalls = 0;
 		const fake = makeShop({

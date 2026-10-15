@@ -11,6 +11,7 @@
  */
 import { gtinOf } from '../core/fields.js';
 import { typeTakes } from '../core/item-types.js';
+import { quantityLabel, quantityText, toThousandths } from '../core/measure.js';
 import { entriesOf, wholeOf } from './admin-kit.js';
 import { choicesOf } from './admin-attributes.js';
 import { checkGroup } from './admin-fields.js';
@@ -178,15 +179,18 @@ export const setupEditor = (kit, setup, attributes, actions) => {
 };
 
 /**
- * The generator dialog (E7): the price and stock of the new variants; `before` runs first (the editor saves the
- * product), `done` gets the product and how many variants were added.
+ * The generator dialog (E7): the price and stock of the new variants (an item sold in a unit of its own: in its
+ * unit); `before` runs first (the editor saves the product), `done` gets the product and how many variants were added.
  * @param {Kit} kit
- * @param {{ productId: string, before?: () => Promise<string | null>, done: (product: any, added: number) => unknown }} options
+ * @param {{ productId: string, before?: () => Promise<string | null>, done: (product: any, added: number) => unknown,
+ *   measure?: { unit: string } | null }} options
  */
-export const generateDialog = (kit, { productId, before, done }) => {
+export const generateDialog = (kit, { productId, before, done, measure = null }) => {
 	const { t } = kit;
 	const price = kit.input('', { inputmode: 'decimal' });
-	const stock = kit.input('0', { type: 'number', min: '0', step: '1' });
+	const stock = measure
+		? kit.input('0', { inputmode: 'decimal', 'aria-label': t('catalogAdmin.stockIn', { unit: measure.unit }) })
+		: kit.input('0', { type: 'number', min: '0', step: '1' });
 	kit.dialog({
 		title: t('catalogAdmin.generateTitle'),
 		body: [
@@ -199,7 +203,7 @@ export const generateDialog = (kit, { productId, before, done }) => {
 		submitLabel: t('catalogAdmin.generate'),
 		onSubmit: async () => {
 			const amount = kit.amount(price.value);
-			const units = wholeOf(stock.value);
+			const units = stockAmount(stock.value, measure);
 			if (Number.isNaN(amount) || Number.isNaN(units) || (units ?? 0) < 0) return t('admin.checkNumbers');
 			const failed = before ? await before() : null;
 			if (failed) return failed;
@@ -261,6 +265,8 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 	const many = () => has('variants') && type().elements.variants;
 	const gradesOn = () => has('grades_serials') && type().elements.grades;
 	const warrantyOn = () => type().elements.warranty;
+	// sold in a unit of its own: stock is typed in its unit (thousandths in the API)
+	const measureOf = () => type().elements.measure ?? null;
 	const parcelOn = () => has('delivery_zones') && type().elements.parcel;
 	/** The variant fields shown: those of the type. */
 	const attributesOf = () => (many() ? every.filter((attribute) => typeTakes(type(), attribute.id)) : []);
@@ -344,10 +350,8 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 			cost: kit.input(kit.decimal(variant.cost), { inputmode: 'decimal', 'aria-label': aria('catalogAdmin.costOf') }),
 			stock:
 				!variant.id && !has('multi_location')
-					? kit.input(String(variant.stock), {
-							type: 'number',
-							min: '0',
-							step: '1',
+					? kit.input(stockInput(variant.stock, measureOf()), {
+							inputmode: 'decimal',
 							'aria-label': aria('catalogAdmin.stockOf'),
 						})
 					: null,
@@ -482,7 +486,7 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 					entry.stock ??
 						(entry.locations.size > 0
 							? h('div', {}, [...entry.locations.values()])
-							: kit.text('span', {}, stockText(kit, entry.variant, locations))),
+							: kit.text('span', {}, stockText(kit, entry.variant, locations, measureOf()))),
 					...(gradesOn() ? [entry.grade] : []),
 					...(warrantyOn() ? [entry.warranty] : []),
 					...(parcelOn()
@@ -588,7 +592,7 @@ export const variantsEditor = (kit, { product, lookups, customOf, axes, photos, 
 										[...entry.locations].map(([id, input]) => [id, Number(input.value) || 0]),
 									),
 								}
-							: { stock: Number(entry.stock?.value) || 0 }),
+							: { stock: Math.max(0, stockAmount(entry.stock?.value ?? '', measureOf()) || 0) }),
 				};
 			});
 			return bad ? null : variants;
@@ -614,14 +618,39 @@ export const blankVariant = () => ({
 });
 
 /**
- * A saved variant's stock for people (per location with multi-location stock).
+ * A saved variant's stock for people (per location with multi-location stock); an item sold by length, weight or
+ * volume in its unit (`2.5 m`; stock counts thousandths of it).
  * @param {Kit} kit @param {any} variant @param {Array<{ id: string, name: string }>} locations
+ * @param {{ unit: string } | null} [measure] the product's measure (none: pieces)
  */
-export const stockText = (kit, variant, locations) => {
+export const stockText = (kit, variant, locations, measure = null) => {
 	const at = Object.entries(variant.locations);
-	if (at.length === 0) return String(variant.stock);
+	if (at.length === 0) return quantityLabel(Number(variant.stock), measure);
 	const names = new Map(locations.map((location) => [location.id, location.name]));
 	return at
-		.map(([key, units]) => kit.t('catalogAdmin.unitsAt', { units: Number(units), location: names.get(key) ?? key }))
+		.map(([key, units]) =>
+			kit.t('catalogAdmin.unitsAt', { units: quantityLabel(Number(units), measure), location: names.get(key) ?? key }),
+		)
 		.join(', ');
 };
+
+/**
+ * Stock as staff type it: whole pieces, or for an item sold in a unit of its own an amount of its unit such
+ * as 2.5 (sent as thousandths); a leading minus adjusts down. null when empty, NaN when not such a number.
+ * @param {string} text @param {{ unit: string } | null} [measure]
+ * @returns {number | null}
+ */
+export const stockAmount = (text, measure = null) => {
+	if (!measure) return wholeOf(text);
+	const value = text.trim();
+	if (value === '') return null;
+	const negative = value.startsWith('-');
+	const amount = value.replace(/^-/, '') === '0' ? 0 : toThousandths(value.replace(/^-/, ''));
+	return amount === null ? Number.NaN : negative ? -amount : amount;
+};
+
+/**
+ * A stock amount as an input shows it: pieces, or units of a measured item.
+ * @param {number} value @param {{ unit: string } | null} [measure]
+ */
+export const stockInput = (value, measure = null) => (measure ? quantityText(value, measure) : String(value));

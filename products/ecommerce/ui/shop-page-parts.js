@@ -8,6 +8,7 @@
  * @module
  */
 import { youtubeId } from '../core/catalog-content.js';
+import { levelOf, quantityText } from '../core/measure.js';
 import { convertAmount, sameDimension, unitOf } from '../core/units.js';
 import { button, h, paragraphs, safeHref } from './shop-common.js';
 
@@ -158,20 +159,29 @@ export const nearestVariant = (axes, variants, chosen, axis, value) => {
 
 /**
  * What the page says of a variant's stock (E9): Sold out, out of stock, "Only N left" up to `low`, "N in stock", or in
- * stock; `tone` is a status color.
+ * stock; `tone` is a status color. An item sold in a unit of its own has its stock in thousandths of its unit:
+ * "Only 2.5 m left", `low` counting units.
  * @param {Texts} t
  * @param {PageVariant} variant
  * @param {number} low the `lowStockShown` setting
+ * @param {{ unit: string } | null} [measure] the product's measure (none: pieces)
  * @returns {{ text: string, tone: 'danger' | 'warning' | 'success' }}
  */
-export const stockText = (t, variant, low) => {
+export const stockText = (t, variant, low, measure = null) => {
 	if (variant.soldOut === true) return { text: t('page.soldOut'), tone: 'danger' };
 	if (!variant.inStock) return { text: t('page.outOfStock'), tone: 'danger' };
 	const left = variant.stockLeft;
-	if (typeof left === 'number' && left > 0)
+	if (typeof left === 'number' && left > 0) {
+		if (measure) {
+			const amount = { quantity: quantityText(left, measure), unit: measure.unit };
+			return left <= levelOf(low, measure)
+				? { text: t('page.onlyLeftAmount', amount), tone: 'warning' }
+				: { text: t('page.inStockAmount', amount), tone: 'success' };
+		}
 		return left <= low
 			? { text: t('page.onlyLeft', { count: left }), tone: 'warning' }
 			: { text: t('page.inStockCount', { count: left }), tone: 'success' };
+	}
 	return { text: t('page.inStock'), tone: 'success' };
 };
 

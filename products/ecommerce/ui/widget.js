@@ -6,7 +6,8 @@
  *
  * - `identify(signIn | null)`: the shopper's Accounts sign-in (PLAN 0.4.6), sent in `SS-Sign-In` on visitor calls;
  *   a guest's order keys (E21) are kept in the browser and each goes in `SS-Order-Key` with the calls about its order;
- * - `addToCart({ productId, variantId?, quantity? })`: adds to the cart kept in the browser;
+ * - `addToCart({ productId, variantId?, quantity?, measured? })`: adds to the cart kept in the browser (an item sold in
+ *   a unit of its own: `quantity` in thousandths of its unit with `measured: true`);
  * - `cart.count()`, `cart.onChange(listener)`: the cart for the merchant's own header;
  * - `admin({ getTicket })`: on the merchant's admin pages (no `data-token`), mounts the admin widgets with tickets.
  *
@@ -25,7 +26,7 @@ import { isCurrency } from '../core/money.js';
 import { ADD_TO_CART_EVENT, WIDGET_ATTRIBUTE, WIDGET_FEATURES, WIDGET_GLOBAL } from '../core/widgets.js';
 import { mountAlertsStop } from './alerts-stop.js';
 import { mountCart } from './cart.js';
-import { MAX_QUANTITY, createCartStore } from './cart-store.js';
+import { MAX_MEASURED, MAX_QUANTITY, createCartStore } from './cart-store.js';
 import { mountCatalogAdmin } from './catalog-admin.js';
 import { mountCompare } from './compare.js';
 import { mountCustomersAdmin } from './customers-admin.js';
@@ -249,18 +250,26 @@ export const startWidget = ({ window: win, script }) => {
 			win,
 			GROWTH_EVENTS.addToCart,
 			itemsDetail(isCurrency(product?.currency) ? product.currency : fallback, [
-				growthItem({ ...line, name: product?.name, price: variant?.price ?? product?.price }),
+				growthItem({ ...line, name: product?.name, price: variant?.price ?? product?.price, measure: product?.measure }),
 			]),
 		);
 	};
 
-	/** @param {{ productId?: unknown, variantId?: unknown, quantity?: unknown }} item @returns {boolean} added */
+	/**
+	 * @param {{ productId?: unknown, variantId?: unknown, quantity?: unknown, measured?: unknown }} item `measured`: an
+	 *   item sold in a unit of its own, its quantity in thousandths of the unit
+	 * @returns {boolean} added
+	 */
 	const addToCart = (item) => {
 		if (!visitorConfig?.features.includes('checkout') || typeof item?.productId !== 'string') return false;
+		const measured = item.measured === true;
 		const line = {
 			productId: item.productId,
 			variantId: typeof item.variantId === 'string' ? item.variantId : null,
-			quantity: Number.isSafeInteger(item.quantity) ? Math.max(1, Math.min(MAX_QUANTITY, Number(item.quantity))) : 1,
+			quantity: Number.isSafeInteger(item.quantity)
+				? Math.max(1, Math.min(measured ? MAX_MEASURED : MAX_QUANTITY, Number(item.quantity)))
+				: 1,
+			...(measured ? { measured: true } : {}),
 		};
 		cart.add(line);
 		void tellAdded(line, String(visitorConfig.settings?.currency ?? ''));

@@ -15,6 +15,7 @@
  */
 import { ADDRESS_FIELDS, ADDRESS_LIMITS } from '../core/address.js';
 import { WAITING_ROLES } from '../core/flow.js';
+import { quantityLabel } from '../core/measure.js';
 import { EDITABLE_ROLES, PAYMENT_METHODS, RECORDED_METHODS } from '../core/orders.js';
 import { query } from './admin-kit.js';
 import { fieldsCard, fieldsDialog } from './admin-field-values.js';
@@ -307,8 +308,9 @@ const renderOrder = (kit, order, detail, message) => {
 		order.lines.map((/** @type {any} */ item) => [
 			[item.name, item.variantName, item.gradeLabel].filter(Boolean).join(' · '),
 			item.sku,
-			String(item.quantity),
-			money(item.unitPrice),
+			// an item sold in a unit of its own: its amount and unit, its price per unit
+			quantityLabel(item.quantity, item.measure),
+			item.measure ? `${money(item.unitPrice)} / ${item.measure.unit}` : money(item.unitPrice),
 			money(item.total),
 			warrantyOf(kit, item),
 			item.serials.length > 0 ? unitsText(item) : typedLine(item) ? kit.badge(t('ordersAdmin.serialsMissing'), 'warning') : '',

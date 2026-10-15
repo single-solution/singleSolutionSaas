@@ -30,6 +30,7 @@ const START = [
 			grades: false,
 			units: null,
 			chart: false,
+			measure: null,
 			parcel: false,
 			warranty: false,
 			downloads: true,
@@ -72,6 +73,57 @@ afterEach(() => {
 });
 
 describe('item type drafts', () => {
+	it('load and clean a measure typed in units, check its step, least and most, and leave out numbered units with it', () => {
+		const start = /** @type {any} */ (START[0]);
+		const fabric = {
+			...start,
+			key: 'fabric',
+			name: 'Fabric',
+			kind: 'physical',
+			active: true,
+			elements: {
+				...start.elements,
+				downloads: false,
+				measure: { unit: 'sq ft', decimals: 1, step: 500, min: 1000, max: null, standard: { code: 'FTK', amount: 1 } },
+			},
+		};
+		const loaded = loadType(/** @type {any} */ (fabric));
+		expect(loaded.measure).toEqual({
+			on: true,
+			unit: 'sq ft',
+			decimals: '1',
+			step: '0.5',
+			min: '1',
+			max: '',
+			standardCode: 'FTK',
+			standardAmount: '1',
+		});
+		expect(cleanType(loaded)).toEqual(fabric);
+		const draft = {
+			...loaded,
+			units: { on: true, fieldIds: [], capture: /** @type {const} */ ('packing'), requiredBefore: /** @type {const} */ ('') },
+		};
+		expect(cleanType(draft).elements).toMatchObject({ units: null, measure: { step: 500, min: 1000, max: null } });
+		expect(cleanType({ ...loaded, measure: { ...loaded.measure, max: '20' } }).elements.measure?.max).toBe(20_000);
+		/** @param {Partial<typeof loaded.measure>} measure */
+		const problem = (measure) => typeProblems({ ...loaded, measure: { ...loaded.measure, ...measure } }, []).measure;
+		expect(problem({})).toBeUndefined();
+		expect(problem({ step: '0' })).toBe('step');
+		expect(problem({ step: '0.0005' })).toBe('step');
+		expect(problem({ min: '1.2' })).toBe('min');
+		expect(problem({ max: '0.5' })).toBe('max');
+		expect(problem({ max: '7.25' })).toBe('max');
+		// the unit is the merchant's own label; with no decimals a step is whole units; a standard needs an amount
+		expect(problem({ unit: ' ' })).toBe('unit');
+		expect(problem({ unit: 'dozen', decimals: '0', step: '1', min: '1' })).toBeUndefined();
+		expect(problem({ decimals: '0' })).toBe('step');
+		expect(problem({ standardAmount: '0' })).toBe('standard');
+		expect(problem({ standardCode: '', standardAmount: 'x' })).toBeUndefined();
+		expect(cleanType({ ...loaded, measure: { ...loaded.measure, standardCode: '' } }).elements.measure?.standard).toBeNull();
+		expect(typeProblems({ ...loaded, measure: { ...loaded.measure, on: false, step: 'x' } }, []).measure).toBeUndefined();
+		expect(blankType().measure.on).toBe(false);
+	});
+
 	it('load and clean every field, keep only the parts of the kind, and key a type from its name', () => {
 		const loaded = loadType(/** @type {any} */ (START[0]));
 		expect(loaded).toMatchObject({ key: 'ebook', kind: 'digital', active: false, fieldsNamed: false });
@@ -143,6 +195,7 @@ describe('the item types editor', () => {
 				variants: true,
 				grades: true,
 				chart: false,
+				measure: null,
 				parcel: false,
 				warranty: false,
 				downloads: false,

@@ -6,7 +6,7 @@
  * @module
  */
 import { ADDRESS_FIELDS, ADDRESS_LIMITS, regionsFor } from '../core/address.js';
-import { button, codeOf, currencyOf, field, formatsOf, h, problemText, select } from './shop-common.js';
+import { button, codeOf, currencyOf, field, formatsOf, h, problemText, quantityShown, select } from './shop-common.js';
 import { transferParts } from './shop-payment.js';
 
 /** @typedef {import('../core/address.js').AddressField} AddressField */
@@ -221,7 +221,7 @@ export const renderSuccess = ({ box, t, shop, config, settings, order }) => {
 					{},
 					t('success.line', {
 						name: line.variantName ? `${line.name} (${line.variantName})` : line.name,
-						quantity: line.quantity,
+						quantity: quantityShown(t, line),
 					}),
 					h(doc, 'span', { class: 'meta' }, money(line.total, currency)),
 				),

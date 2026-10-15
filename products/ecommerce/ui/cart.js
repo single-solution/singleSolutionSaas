@@ -5,7 +5,9 @@
  * so and cannot be ordered), quantities, the coupon, loyalty points, the delivery method (delivery to an address, or
  * pickup), the address, the payment methods the quote allows, the order fields the shop asks (`ui/shop-fields.js`), a note, the shop's policies (filled and only the ones it
  * wrote, from the widget config; HTML rebuilt from the allowed tags when the policies are HTML, PLAN 0.8.10 E3) and the
- * totals, with the shop's note for the chosen payment method and a bank transfer's bank details (E22, E24). Placing
+ * totals, with the shop's note for the chosen payment method and a bank transfer's bank details (E22, E24). A line of an
+ * item sold in a unit of its own takes an amount such as 2.5 (converted exactly to thousandths of its unit,
+ * `core/measure.js`) and shows its price per unit. Placing
  * the order needs the shopper's sign-in, or, while the checkout setting `guests` allows it, a guest's name and the
  * contact `guestIdentity` and `phoneRequired` ask for (E21, phase 5; the order's key is kept in the browser, so the
  * success page and My orders open it); the Idempotency-Key is
@@ -18,6 +20,7 @@
  * @module
  */
 import { GROWTH_EVENTS, growthItem, itemsDetail, purchaseDetail } from '../core/growth-events.js';
+import { toThousandths } from '../core/measure.js';
 import { MAX_QUANTITY } from './cart-store.js';
 import {
 	announce,
@@ -239,7 +242,32 @@ export const mountCart = async ({ host, config, shop, win }) => {
 					const source = cartLineOf(line, index);
 					const name = line.name || t('cart.unknownItem');
 					const controls = [];
-					if (source && !line.slot) {
+					const measure = line.measure ?? null;
+					if (source && measure) {
+						// an amount of the unit, such as 2.5 (thousandths in the cart)
+						const unit = measure.unit;
+						const input = /** @type {HTMLInputElement} */ (
+							h(doc, 'input', {
+								type: 'text',
+								inputmode: 'decimal',
+								size: '6',
+								'aria-label': t('cart.amount', { name, unit }),
+								'data-focus': `qty${index}`,
+							})
+						);
+						input.value = measure.quantityText;
+						input.addEventListener('change', () => {
+							const quantity = toThousandths(input.value);
+							if (quantity === null) {
+								input.setCustomValidity(t('cart.amountInvalid'));
+								input.reportValidity();
+								return;
+							}
+							input.setCustomValidity('');
+							cart.set(source, quantity, true);
+						});
+						controls.push(h(doc, 'div', { class: 'stepper' }, input, h(doc, 'span', { class: 'meta' }, unit)));
+					} else if (source && !line.slot) {
 						const input = /** @type {HTMLInputElement} */ (
 							h(doc, 'input', {
 								type: 'number',
@@ -295,7 +323,14 @@ export const mountCart = async ({ host, config, shop, win }) => {
 							line.gradeLabel ? h(doc, 'span', { class: 'meta' }, t('cart.grade', { grade: line.gradeLabel })) : null,
 							line.slot ? h(doc, 'span', { class: 'meta' }, t('cart.slot', { start: dateText(line.slot.start) })) : null,
 							line.unitPrice > 0
-								? h(doc, 'span', { class: 'meta' }, t('cart.unitPrice', { price: money(line.unitPrice, cur) }))
+								? h(
+										doc,
+										'span',
+										{ class: 'meta' },
+										measure
+											? t('cart.unitPricePer', { price: money(line.unitPrice, cur), unit: measure.unit })
+											: t('cart.unitPrice', { price: money(line.unitPrice, cur) }),
+									)
 								: null,
 							line.discount > 0
 								? h(doc, 'span', { class: 'save' }, t('cart.lineDiscount', { amount: money(line.discount, cur) }))
