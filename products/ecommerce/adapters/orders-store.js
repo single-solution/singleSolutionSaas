@@ -251,17 +251,22 @@ export const createOrdersStore = (data) => {
 			);
 		},
 		/**
-		 * Orders of a customer still waiting (payment or confirmation): a member's by user id, a guest's by customer id.
+		 * Orders of a customer still waiting (payment or confirmation): a member's by user id, and every order of their
+		 * customer record (a guest's, or one placed as a guest on a member's phone, K-6).
 		 * @param {{ userId: string | null, customerId: string | null }} who @param {ReadonlyArray<string>} roles
 		 */
-		countWaiting: (who, roles) =>
-			who.userId || who.customerId
-				? orders.countDocuments({
-						websiteId,
-						...(who.userId ? { 'customer.userId': who.userId } : { 'customer.customerId': who.customerId }),
-						role: { $in: [...roles] },
-					})
-				: Promise.resolve(0),
+		countWaiting: (who, roles) => {
+			const whose = [
+				...(who.userId ? [{ 'customer.userId': who.userId }] : []),
+				...(who.customerId ? [{ 'customer.customerId': who.customerId }] : []),
+			];
+			if (whose.length === 0) return Promise.resolve(0);
+			return orders.countDocuments({
+				websiteId,
+				...(whose.length === 1 ? whose[0] : { $or: whose }),
+				role: { $in: [...roles] },
+			});
+		},
 		/**
 		 * How many orders each status has, with their role (the order flow's save guard).
 		 * @returns {Promise<Array<{ status: string, role: string, count: number }>>}

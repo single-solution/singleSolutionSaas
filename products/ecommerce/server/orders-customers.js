@@ -143,7 +143,8 @@ export const createCustomers = (service) => {
 		const store = await storeOf(s);
 		let record = await store.customers.find(ref);
 		if (!record && isCustomerId(ref)) throw problem('not_found', 'There is no such customer.');
-		const owner = record ? customerOwner(record) : { userId: ref };
+		// a member's orders, and the guest orders on their phone linked to their record (K-6)
+		const owner = record ? { ...customerOwner(record), customerId: String(record.id ?? '') } : { userId: ref };
 		const recent = await store.orders.ofCustomer(owner, RECENT_ORDERS);
 		const latest = recent[0];
 		if (!record && !latest) {

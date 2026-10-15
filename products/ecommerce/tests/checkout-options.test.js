@@ -265,14 +265,28 @@ describe('guest checkout and order keys (E21)', () => {
 		const wrong = await visit('GET', `/v1/shop/orders/by-number/${order.number}`, { orderKey: 'x'.repeat(32) });
 		expect(wrong.status).toBeGreaterThanOrEqual(400);
 
+		// what staff keep on the guest's record (review M4): its note and customer field values
+		const taxNumber = (await shop.api('POST', '/v1/attributes', { name: 'Tax number', on: 'customer' })).json.id;
+		const guestId = (await orderRecord(order.id)).customer.customerId;
+		const kept = await shop.api('PATCH', `/v1/customers/${guestId}`, {
+			note: 'Prefers morning delivery',
+			fields: { [taxNumber]: 'TX-1' },
+		});
+		expect(kept.status).toBe(200);
+
 		const member = await newShopper({ phone: '+15550007777' });
 		const mine = await visit('GET', '/v1/shop/orders', { signIn: member.token });
 		expect(mine.json.items.map((/** @type {any} */ o) => o.id)).toContain(order.id);
 		expect((await orderRecord(order.id)).customer.userId).toBe(member.id);
+		const folded = await shop.api('GET', `/v1/customers/${member.id}`);
+		expect(folded.json.fields).toEqual({ [taxNumber]: 'TX-1' });
+		expect(folded.json.note).toBe('Prefers morning delivery');
+		expect((await shop.api('GET', `/v1/customers/${guestId}`)).status).toBe(404);
+		await shop.api('DELETE', `/v1/attributes/${taxNumber}`);
 		await shop.setting('checkout', 'guests', 'off');
 	});
 
-	it('makes a returning customer’s guest order theirs by phone, one record, and keeps their block (K-6)', async () => {
+	it('links a guest order on a member’s phone to the member’s record, theirs only at a verified sign-in (K-6)', async () => {
 		await shop.setting('checkout', 'guests', 'on');
 		await shop.setting('checkout', 'defaultCallingCode', '+1');
 		const item = await shop.seedProduct({ price: 1000, stock: 10 });
@@ -300,12 +314,31 @@ describe('guest checkout and order keys (E21)', () => {
 			name: 'Sara Shopper',
 			createdAt: new Date(shop.now()),
 		});
+		// the member's record counts it, but nobody's account holds it yet (owner, 2026-10-14 (2)): whoever typed the
+		// phone reads it with its order key
+		expect((await orderRecord(asGuest.json.order.id)).customer).toMatchObject({ userId: '', customerId: records[0]?.id });
+		const staff = await shop.api('GET', `/v1/customers/${records[0]?.id}`);
+		expect(staff.json.recentOrders.map((/** @type {any} */ o) => o.id)).toContain(asGuest.json.order.id);
+		expect(staff.json.orderCount).toBe(2);
+		// the same account signed in without a verified phone does not get it
+		const unverified = await shop.accounts.signIn({
+			websiteId: shop.websiteId,
+			sub: member.id,
+			name: 'Sara Shopper',
+			email: 'sara-unverified@example.com',
+			phone: '+15550005555',
+			phone_verified: false,
+		});
+		const notYet = await visit('GET', '/v1/shop/orders', { signIn: unverified });
+		expect(notYet.json.items.map((/** @type {any} */ o) => o.id)).not.toContain(asGuest.json.order.id);
+		expect((await orderRecord(asGuest.json.order.id)).customer.userId).toBe('');
+		// a sign-in that proves the phone moves it into the member's account
+		const mine = await visit('GET', '/v1/shop/orders', { signIn: member.token });
+		expect(mine.json.items.map((/** @type {any} */ o) => o.id)).toContain(asGuest.json.order.id);
 		expect((await orderRecord(asGuest.json.order.id)).customer).toMatchObject({
 			userId: member.id,
 			customerId: records[0]?.id,
 		});
-		const mine = await visit('GET', '/v1/shop/orders', { signIn: member.token });
-		expect(mine.json.items.map((/** @type {any} */ o) => o.id)).toContain(asGuest.json.order.id);
 
 		await shop.api('PATCH', `/v1/customers/${records[0]?.id}`, { blocked: true, blockedReason: 'Refused packages' });
 		const refused = await place({

@@ -260,6 +260,16 @@ describe('a delete', () => {
 		const delivered = await records.seedOrder({ status: 'delivered', role: 'delivered' });
 		expect((await shop.api('DELETE', `/v1/orders/${delivered.order.id}`)).status).toBe(204);
 	});
+
+	it('is refused while the parcel is with the courier: its units are not back in stock (review M5)', async () => {
+		const { order, product } = await records.seedOrder({ status: 'dispatched', role: 'shipped', cod: true });
+		const before = await records.stockOf(product.id);
+		const refused = await shop.api('DELETE', `/v1/orders/${order.id}`);
+		expect(refused.status).toBe(409);
+		expect(refused.json.detail).toMatch(/returned to origin/);
+		expect(await records.stockOf(product.id)).toBe(before);
+		expect(await records.recordOf(order.id)).toMatchObject({ status: 'dispatched', stockHeld: true });
+	});
 });
 
 describe('orders without a payments log', () => {

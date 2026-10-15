@@ -422,8 +422,9 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 	const media = {};
 	/**
 	 * A refund through Payments after the transaction (kept on the order until done).
-	 * @param {string} id its Idempotency-Key @param {number} amount @param {string} reason Payments is given
-	 * @param {string} note of the refund entry it records
+	 * @param {string} id its Idempotency-Key @param {number} amount
+	 * @param {string} reason Payments is given (a gateway may show it to the payer: the note for the shopper or plain
+	 *   words, never the note staff typed) @param {string} note of the refund entry it records (staff read it)
 	 * @returns {OrderEffect}
 	 */
 	const refundEffect = (id, amount, reason, note) => ({
@@ -672,7 +673,12 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 			const { online } = moneyLeft();
 			if (choices.refund && online > 0)
 				external.push(
-					refundEffect(effectId(order, `${order.id}:cancel`), online, input.note || 'Order canceled', 'Order canceled'),
+					refundEffect(
+						effectId(order, `${order.id}:cancel`),
+						online,
+						input.shopperNote || 'Order canceled',
+						input.note || 'Order canceled',
+					),
 				);
 			break;
 		}
@@ -695,7 +701,14 @@ export const planTransition = ({ order, flow, to, input, rules, now }) => {
 				refunds.push(refundEntry(input.actor, now, { method: 'other', amount: manual, note }));
 			}
 			if (online > 0)
-				external.push(refundEffect(effectId(order, `${order.id}:refund:${order.payment.refunded}`), online, note, note));
+				external.push(
+					refundEffect(
+						effectId(order, `${order.id}:refund:${order.payment.refunded}`),
+						online,
+						input.shopperNote || 'Order refunded',
+						note,
+					),
+				);
 			// before delivery a refund acts as a cancel (E27); after it the items and points as the move says (K-23, E39, E40)
 			if (BEFORE_DELIVERY.includes(fromStage)) release();
 			else settleAfter({ cancel: false });

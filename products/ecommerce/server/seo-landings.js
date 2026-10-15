@@ -54,7 +54,6 @@ import {
 import { gradesByKey, gradesFor } from '../core/grades.js';
 import { shownRange } from '../core/catalog-views.js';
 import { listingHtml, say } from '../core/seo-html.js';
-import { categoryTrail } from '../adapters/promotions-store.js';
 import { createListingFilter } from './catalog-shop.js';
 import { conditional } from './http-cache.js';
 import { createShownPrices } from './shown-prices.js';
@@ -559,7 +558,7 @@ export const createLandings = (product, service, media) => {
 		return listingHtml({
 			items: await Promise.all(
 				items.map(async (item) => {
-					const range = shownRange(item, prices.of(item, await categoryTrail(data, item.categoryIds)));
+					const range = shownRange(item, prices.of(item));
 					const main = item.media[0];
 					const photo = main ? await media.stableUrl(s, main.sizes?.card ?? main.key) : null;
 					return {
@@ -683,7 +682,7 @@ export const createLandings = (product, service, media) => {
 			exact &&
 			// an empty category without text of its own is a thin page (G7.1)
 			(total > 0 || hasOwnText(category) || settings.emptyCategories === 'index');
-		const indexed = !missing && (categoryIndexable || (view?.indexed === true && exact) || automatic !== null);
+		const indexed = !missing && (categoryIndexable || (view?.indexed === true && exact && shown) || automatic !== null);
 		const pageUrl = view
 			? view.url
 			: automatic
@@ -1075,6 +1074,10 @@ export const createLandings = (product, service, media) => {
 		const out = [];
 		for (const row of rows) {
 			if (row.indexable === 'no') continue;
+			// as its own head judges it: a hidden category's page is not found, and one whose category's products or whose
+			// brand shoppers cannot see is not indexed (Google wants only indexable pages in a sitemap)
+			if (row.categoryId && (hidden.unlisted.has(row.categoryId) || hidden.categoryIds.includes(row.categoryId))) continue;
+			if (row.brandId && hidden.brandIds.includes(row.brandId)) continue;
 			const stock = table.get(comboKey(row)) ?? NO_STOCK;
 			const view = await viewOf(s, data, names, row, stock, memory);
 			if (view.indexed) out.push({ loc: view.url, lastmod: newest(row.updatedAt, stock.lastmod) });
@@ -1299,7 +1302,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'catalog',
 			rateLimit: READ_RATE,
-			handler: conditional(listing),
+			handler: conditional(listing, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1307,7 +1310,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: conditional(attributeGlossary),
+			handler: conditional(attributeGlossary, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1315,7 +1318,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: conditional(attributeGlossary),
+			handler: conditional(attributeGlossary, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1323,7 +1326,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: conditional(gradeGlossary),
+			handler: conditional(gradeGlossary, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -1331,7 +1334,7 @@ export const createLandings = (product, service, media) => {
 			auth: 'server',
 			feature: 'landing_pages',
 			rateLimit: READ_RATE,
-			handler: conditional(gradeGlossary),
+			handler: conditional(gradeGlossary, service.now),
 		}),
 	];
 

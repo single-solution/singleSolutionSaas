@@ -320,6 +320,28 @@ describe('E15 landing pages, listing heads and glossary pages', () => {
 		expect(sitemap).toContain(`<loc>${ORIGIN}/grades/mint</loc>`);
 		expect(sitemap).not.toContain('grade=mint');
 		expect((await shop.api('GET', '/v1/seo/sitemaps/landings')).text).toContain('/glossary/battery');
+
+		// a stored page whose own head says noindex or 404 is not listed either, even marked indexable (review M7)
+		await api('PATCH', `/v1/landings/${ids.landing.id}`, { indexable: 'yes' });
+		const landingLoc = `<loc>${ORIGIN}/categories/phones?brand=acme</loc>`;
+		const listed = async () => (await shop.api('GET', '/v1/seo/sitemaps/landings')).text;
+		await api('PATCH', `/v1/brands/${ids.acme.id}`, { status: 'hidden' });
+		try {
+			expect((await api('GET', `/v1/seo/listing?category=${ids.phones.slug}&brand=acme`)).robots).toBe('noindex, follow');
+			expect(await listed()).not.toContain(landingLoc);
+		} finally {
+			await api('PATCH', `/v1/brands/${ids.acme.id}`, { status: 'active' });
+		}
+		expect(await listed()).toContain(landingLoc);
+		await api('PATCH', `/v1/categories/${ids.phones.id}`, { status: 'hidden' });
+		try {
+			expect((await shop.api('GET', `/v1/seo/listing?category=${ids.phones.slug}&brand=acme`)).status).toBe(404);
+			expect(await listed()).not.toContain(landingLoc);
+		} finally {
+			await api('PATCH', `/v1/categories/${ids.phones.id}`, { status: 'active' });
+		}
+		expect(await listed()).toContain(landingLoc);
+		await api('PATCH', `/v1/landings/${ids.landing.id}`, { indexable: 'auto' });
 	});
 
 	it('suggests landing copy with the AI key', async () => {

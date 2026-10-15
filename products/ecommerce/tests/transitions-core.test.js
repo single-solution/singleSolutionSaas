@@ -287,8 +287,9 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 				kind: 'refund',
 				amount: 3000,
 				state: 'pending',
-				reason: 'Out of stock',
-				note: 'Order canceled',
+				// Payments may show its reason to the payer: never the note staff typed (kept on the refund entry)
+				reason: 'Order canceled',
+				note: 'Out of stock',
 			}),
 		]);
 		expect(cancelled.push.effects).toEqual({ $each: cancelled.external });
@@ -388,7 +389,10 @@ describe('the plan of each kind of transition (the default flow, today’s rules
 		const online = planOf(plan(order(), 'refunded', { note: 'Damaged' }, {}, flow));
 		expect(online.set['payment.refunded']).toBeUndefined();
 		expect(online.push.refunds).toBeUndefined();
-		expect(online.external).toEqual([expect.objectContaining({ amount: 3000, reason: 'Damaged', note: 'Damaged' })]);
+		expect(online.external).toEqual([expect.objectContaining({ amount: 3000, reason: 'Order refunded', note: 'Damaged' })]);
+		// the note for the shopper is what Payments is given
+		const told = planOf(plan(order(), 'refunded', { note: 'Damaged', shopperNote: 'Sorry, it broke in transit' }, {}, flow));
+		expect(told.external).toEqual([expect.objectContaining({ reason: 'Sorry, it broke in transit', note: 'Damaged' })]);
 		// nothing paid: by default it cancels the order with no money; a move that refuses it says so
 		const unpaid = order({ payment: { ...order().payment, paid: 0 } });
 		const cancelled = planOf(plan(unpaid, 'refunded', {}, {}, flow));

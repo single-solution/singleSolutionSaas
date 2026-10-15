@@ -158,11 +158,12 @@ describe('the refund a staff cancel asks of Payments', () => {
 		const later = await shop.api('GET', `/v1/orders/${order.id}`);
 		expect(later.json.effects[0]).toMatchObject({ state: 'done', refundId: expect.any(String), tries: 2 });
 		expect(later.json.payment).toMatchObject({ state: 'refunded', refunded: 2000 });
-		expect(later.json.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 2000, note: 'Order canceled' })]);
+		// the note staff typed is the refund entry's; Payments (which may show its reason to the payer) gets plain words
+		expect(later.json.refunds).toEqual([expect.objectContaining({ method: 'online', amount: 2000, note: 'Shop closed' })]);
 		const calls = refundCalls(paymentId);
 		expect(calls).toHaveLength(2);
 		expect(calls.map((call) => call.headers['idempotency-key'])).toEqual([`${order.id}:cancel`, `${order.id}:cancel`]);
-		expect(JSON.parse(calls[1]?.body ?? '{}')).toEqual({ amount: 2000, reason: 'Shop closed' });
+		expect(JSON.parse(calls[1]?.body ?? '{}')).toEqual({ amount: 2000, reason: 'Order canceled' });
 		expect((await activityOf(order.id))[0]).toMatchObject({ action: 'order.refunded', detail: 'Refunded USD 20.00' });
 
 		// and never again

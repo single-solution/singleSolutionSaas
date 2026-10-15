@@ -1,7 +1,10 @@
 /**
  * Guests becoming members (PLAN 0.8.10 E21): when a signed-in shopper's phone, verified by Accounts, is a guest's
  * phone, the guest's orders, loyalty points and alerts move to the member on that request, and the guest's customer
- * record is folded into the member's (order and RTO counts added, a block kept). Also the check of `unless_password`:
+ * record is folded into the member's (order and RTO counts added, a block kept, the staff note and the customer field
+ * values the member's record lacks taken over). Guest orders placed on a member's phone are linked to the member's
+ * record but stay out of their account until such a sign-in (owner, 2026-10-14 (2)): then they move in too. Also the
+ * check of `unless_password`:
  * whether a phone belongs to an Accounts user with a password (through the pasted Accounts token), and the website's
  * phone rules (K12).
  * @module
@@ -10,6 +13,7 @@ import { mergeLoyalty } from '../adapters/ledger.js';
 import { createOrdersStore } from '../adapters/orders-store.js';
 import { phoneRules } from '../core/guests.js';
 import { COLLECTIONS } from '../core/model.js';
+import { MAX_STAFF_NOTE } from '../core/orders.js';
 
 /** @typedef {import('../adapters/product.js').Product} Product */
 /** @typedef {import('./service.js').Site} Site */
@@ -37,7 +41,23 @@ export const createGuests = (product) => {
 			const data = await s.data();
 			const store = createOrdersStore(data);
 			const guest = await store.guestCustomer(shopper.phone);
-			if (!guest?.id) return 0;
+			const own = await store.customer(shopper.id);
+			// the guest orders placed on this phone that are linked to the member's own record
+			const linked = own?.id
+				? {
+						websiteId: data.websiteId,
+						'customer.customerId': own.id,
+						'customer.userId': '',
+						'customer.phone': shopper.phone,
+					}
+				: null;
+			if (!guest?.id) {
+				if (!linked) return 0;
+				const orders = await data
+					.collection(COLLECTIONS.orders)
+					.updateMany(linked, { $set: { 'customer.userId': shopper.id } });
+				return orders.modifiedCount;
+			}
 			const member = await store.ensureCustomer(
 				{ userId: shopper.id, name: shopper.name, email: shopper.email, phone: shopper.phone },
 				{ at: new Date(product.now()) },
@@ -52,6 +72,12 @@ export const createGuests = (product) => {
 						{ session },
 					);
 				moved = orders.modifiedCount;
+				if (linked)
+					moved += (
+						await data
+							.collection(COLLECTIONS.orders)
+							.updateMany(linked, { $set: { 'customer.userId': shopper.id } }, { session })
+					).modifiedCount;
 				await mergeLoyalty(data, { customerId: /** @type {string} */ (guest.id), userId: shopper.id }, session);
 				await data
 					.collection(COLLECTIONS.alerts)
@@ -60,13 +86,21 @@ export const createGuests = (product) => {
 						{ $set: { userId: shopper.id, customerId: member.id } },
 						{ session },
 					);
+				// what staff kept on the guest's record: its block, its note and the field values the member's lacks
+				/** @type {Record<string, unknown>} */
+				const set = {
+					...(guest.blocked && !member.blocked ? { blocked: true, blockedReason: guest.blockedReason ?? '' } : {}),
+					...(guest.note
+						? { note: member.note ? `${member.note}\n${guest.note}`.slice(0, MAX_STAFF_NOTE) : guest.note }
+						: {}),
+				};
+				for (const [id, value] of Object.entries(guest.fields ?? {}))
+					if (member.fields?.[id] === undefined) set[`fields.${id}`] = value;
 				await data.collection(COLLECTIONS.customers).updateOne(
 					{ websiteId: data.websiteId, id: member.id },
 					{
 						$inc: { orderCount: guest.orderCount ?? 0, rtoCount: guest.rtoCount ?? 0 },
-						...(guest.blocked && !member.blocked
-							? { $set: { blocked: true, blockedReason: guest.blockedReason ?? '' } }
-							: {}),
+						...(Object.keys(set).length > 0 ? { $set: set } : {}),
 					},
 					{ session },
 				);

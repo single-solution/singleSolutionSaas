@@ -7,20 +7,28 @@
  */
 import { createId } from '@ss/contracts';
 import { COLLECTIONS, ID_PREFIX } from '../core/model.js';
-import { isCustomerId } from '../core/orders.js';
+import { isCustomerId, spentKey } from '../core/orders.js';
 
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/model.js').OrderRecord} OrderRecord */
 /** @typedef {import('../core/model.js').CustomerRecord} CustomerRecord */
 /** @typedef {{ id?: string, email?: string, phone?: string }} Person */
-/** Whose orders (K-6): a member's by Accounts user id, a guest's by customer id. @typedef {{ userId: string } | { customerId: string }} Owner */
+/**
+ * Whose orders (K-6): a member's by Accounts user id (with their customer id: also the guest orders placed on their
+ * phone that no sign-in proved theirs yet), a guest's by customer id.
+ * @typedef {{ userId: string, customerId?: string } | { customerId: string }} Owner
+ */
 
 /**
- * The orders of an owner: a member's by user id; a guest's by customer id (orders placed as that guest).
+ * The orders of an owner: a member's by user id (and, given their customer id, the guest orders linked to their record);
+ * a guest's by customer id (orders placed as that guest).
  * @param {Owner} owner
  */
-export const ownerOrders = (owner) =>
-	'userId' in owner ? { 'customer.userId': owner.userId } : { 'customer.customerId': owner.customerId, 'customer.userId': '' };
+export const ownerOrders = (owner) => {
+	const linked = { 'customer.customerId': owner.customerId, 'customer.userId': '' };
+	if (!('userId' in owner)) return linked;
+	return owner.customerId ? { $or: [{ 'customer.userId': owner.userId }, linked] } : { 'customer.userId': owner.userId };
+};
 
 /** Merchant database indexes of this part. @type {import('@ss/app-kit').IndexDefinition[]} */
 export const INDEXES = [
@@ -204,16 +212,21 @@ export const createFulfilmentStore = (data) => {
 						.toArray(),
 				),
 			/**
-			 * What customers paid (paid − refunded) and how many orders they placed: a member's orders by user id, a
-			 * guest's by customer id (K-6, CU-5), keyed as `spentKey` (`core/orders.js`) keys them.
+			 * What customers paid (paid − refunded) and how many orders they placed: a member's orders by user id and the
+			 * guest orders linked to their record, a guest's by customer id (K-6, CU-5), keyed as `spentKey`
+			 * (`core/orders.js`) keys them.
 			 * @param {Array<Partial<CustomerRecord>>} customers
 			 * @returns {Promise<Map<string, { total: number, count: number }>>}
 			 */
 			spent: async (customers) => {
 				const userIds = customers.map((row) => row.userId).filter((id) => typeof id === 'string' && id !== '');
-				const customerIds = customers
-					.filter((row) => !row.userId && typeof row.id === 'string' && row.id !== '')
-					.map((row) => /** @type {string} */ (row.id));
+				/** each record's key, by customer id (a member's guest orders count as theirs) */
+				const keys = new Map(
+					customers
+						.filter((row) => typeof row.id === 'string' && row.id !== '')
+						.map((row) => [/** @type {string} */ (row.id), spentKey(row)]),
+				);
+				const customerIds = [...keys.keys()];
 				if (userIds.length === 0 && customerIds.length === 0) return new Map();
 				const rows = await orders
 					.aggregate([
@@ -241,7 +254,15 @@ export const createFulfilmentStore = (data) => {
 						},
 					])
 					.toArray();
-				return new Map(rows.map((row) => [String(row._id), { total: Number(row.total), count: Number(row.count) }]));
+				/** @type {Map<string, { total: number, count: number }>} */
+				const spent = new Map();
+				for (const row of rows) {
+					const id = String(row._id);
+					const key = id.startsWith('c:') ? (keys.get(id.slice(2)) ?? id) : id;
+					const sum = spent.get(key) ?? { total: 0, count: 0 };
+					spent.set(key, { total: sum.total + Number(row.total), count: sum.count + Number(row.count) });
+				}
+				return spent;
 			},
 			/** @param {Person} person @returns {Promise<OrderRecord[]>} */
 			ofPerson: async (person) => {

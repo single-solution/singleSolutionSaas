@@ -249,7 +249,7 @@
 	"checkout.deliveryProblem.choose_pickup_location": "Choose where to pick up your order.",
 	"checkout.deliveryProblem.pickup_unavailable": "Pickup is not available for this order.",
 	"checkout.address": "Delivery address",
-	"checkout.optional": "(optional)",
+	"checkout.optional": "{field} (optional)",
 	"checkout.field.name": "Full name",
 	"checkout.field.phone": "Phone",
 	"checkout.field.line1": "Address",

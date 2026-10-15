@@ -18779,7 +18779,7 @@
 	},
 	"GET /v1/shop/products": {
 		"summary": "The product grid: active products with filters, search and facets",
-		"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value]: by id that attribute, by slug every product or variant attribute with that slug (the same slug may be defined once per category; each product matches by the attribute it holds values of); one active variant must match the price range, variant attributes, grade and stock together. Facets have one entry per slug, named as the listing's category (or the nearest one above it) defines it, else as the one for every category; each product counts once per value. Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
+		"description": "Browser token from your website (or the server token, for pages your server renders). Only active products of visible categories and brands. Filter by attribute values with attr.<slug or id>=value[,value]: by id that attribute, by slug every product or variant attribute with that slug (the same slug may be defined once per category; each product matches by the attribute it holds values of); only active attributes shoppers filter by (show.filter) filter, any other matches nothing (a staff-only value is never told); one active variant must match the price range, variant attributes, grade and stock together. Facets have one entry per slug, named as the listing's category (or the nearest one above it) defines it, else as the one for every category; each product counts once per value. Pages by cursor (nextCursor and hasMore, as every list) or by page number; limit defaults to the pageSize setting. With the catalog setting search at atlas a search runs on Atlas Search (ranked by relevance unless sort is given), else every word must appear in the name, summary, tags or SKUs (searchMatch phrase: the phrase in the name or a SKU). 422 validation_failed at /minPrice, /maxPrice, /sort or /page; 400 bad_request for an invalid cursor or limit. The answer carries an ETag (the same for the same answer) and Cache-Control (server token: private, max-age=60, stale-while-revalidate=600; browser token: private, no-cache); an If-None-Match naming the ETag is answered 304 without a body.",
 		"query": {
 			"type": "object",
 			"properties": {
@@ -22801,7 +22801,7 @@
 				"note": {
 					"type": ["string", "null"],
 					"maxLength": 1000,
-					"description": "The staff note, kept in the history (staff only); a cancel's note is the reason the shopper is told unless shopperNote is given. Required when the move needs a note."
+					"description": "The staff note, kept in the history and on a refund entry the move records (staff only; a cancel's staff alert gives it as the reason): it never reaches the shopper nor Payments. Required when the move needs a note."
 				},
 				"updatedAt": {
 					"type": "string",
@@ -22909,7 +22909,7 @@
 				"shopperNote": {
 					"type": ["string", "null"],
 					"maxLength": 1000,
-					"description": "A note for the shopper: shown in the shopper's timeline (GET /v1/shop/orders/:id) and in their message (shopperNote, and a cancel's cancelReason). Required when the move needs a reason."
+					"description": "A note for the shopper: shown in the shopper's timeline (GET /v1/shop/orders/:id) and in their message (shopperNote; for a cancel, its cancelReason), and the reason a refund the move asks of Payments carries. Required when the move needs a reason."
 				},
 				"restock": {
 					"type": ["boolean", "null"],
@@ -22936,7 +22936,7 @@
 				"note": {
 					"type": ["string", "null"],
 					"maxLength": 1000,
-					"description": "The staff note, kept in the history (staff only); a cancel's note is the reason the shopper is told unless shopperNote is given. Required when the move needs a note."
+					"description": "The staff note, kept in the history and on a refund entry the move records (staff only; a cancel's staff alert gives it as the reason): it never reaches the shopper nor Payments. Required when the move needs a note."
 				},
 				"updatedAt": {
 					"type": "string",
@@ -23044,7 +23044,7 @@
 				"shopperNote": {
 					"type": ["string", "null"],
 					"maxLength": 1000,
-					"description": "A note for the shopper: shown in the shopper's timeline (GET /v1/shop/orders/:id) and in their message (shopperNote, and a cancel's cancelReason). Required when the move needs a reason."
+					"description": "A note for the shopper: shown in the shopper's timeline (GET /v1/shop/orders/:id) and in their message (shopperNote; for a cancel, its cancelReason), and the reason a refund the move asks of Payments carries. Required when the move needs a reason."
 				},
 				"restock": {
 					"type": ["boolean", "null"],
@@ -23072,12 +23072,12 @@
 	},
 	"DELETE /v1/orders/:id": {
 		"summary": "Delete an order",
-		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is canceled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
+		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is canceled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), while it is with the courier (a shipped status: mark it delivered or returned to origin first, so its units are not counted in stock while they are out), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
 		"status": 204
 	},
 	"DELETE /v1/admin/orders/:id": {
 		"summary": "Delete an order (Orders admin widget)",
-		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is canceled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
+		"description": "What it holds is given back as a cancel does (stock, slots, offer uses, points, serial numbers) and its open Payments payment is canceled first; the activity entry keeps its number and total. The shopper's money is never deleted with it: 409 conflict while a refund through Payments is pending for it, while an order that is not delivered still holds money (refund it first), while it is with the courier (a shipped status: mark it delivered or returned to origin first, so its units are not counted in stock while they are out), or when it was paid meanwhile; 503 payments_unavailable when Payments cannot be reached; 404 not_found. The widget needs the orders.delete permission.",
 		"status": 204
 	},
 	"POST /v1/orders/:id/payments": {

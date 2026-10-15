@@ -94,14 +94,32 @@ describe('events and staff alerts (E32)', () => {
 			.find((m) => m.template === 'ecommerce.staff_placed');
 		expect(staffPlaced.values.paymentMethod).toBe('Cash on delivery');
 
-		// the staff's note is the reason; without one, the website's text for who canceled
+		// the note staff typed stays with staff (owner, 2026-10-14 (3)): the shopper gets the website's text for who
+		// canceled, the staff alert the note
 		const noted = shop.messages().length;
-		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled', note: 'Out of stock at the warehouse' });
+		await shop.api('POST', `/v1/orders/${order.id}/move`, { to: 'cancelled', note: 'Fraud check failed, card flagged' });
 		const told = shop.messages().slice(noted);
-		expect(told.find((m) => m.template === 'ecommerce.order_status')?.values.cancelReason).toBe(
-			'Out of stock at the warehouse',
+		const shopperValues = told.find((m) => m.template === 'ecommerce.order_status')?.values;
+		expect(shopperValues).toMatchObject({ cancelReason: 'Canceled by the shop', shopperNote: '' });
+		expect(JSON.stringify(shopperValues)).not.toContain('Fraud');
+		expect(told.find((m) => m.template === 'ecommerce.staff_cancelled')?.values.reason).toBe(
+			'Fraud check failed, card flagged',
 		);
-		expect(told.find((m) => m.template === 'ecommerce.staff_cancelled')?.values.reason).toBe('Out of stock at the warehouse');
+
+		// a note for the shopper is the cancel's reason (once: shopperNote stays empty, so the message says it once)
+		const third = await placeOrder();
+		const asked = shop.messages().length;
+		await shop.api('POST', `/v1/orders/${third.id}/move`, {
+			to: 'cancelled',
+			note: 'Supplier never delivered',
+			shopperNote: 'The item is no longer available',
+		});
+		const reasoned = shop.messages().slice(asked);
+		expect(reasoned.find((m) => m.template === 'ecommerce.order_status')?.values).toMatchObject({
+			cancelReason: 'The item is no longer available',
+			shopperNote: '',
+		});
+		expect(reasoned.find((m) => m.template === 'ecommerce.staff_cancelled')?.values.reason).toBe('Supplier never delivered');
 
 		const other = await placeOrder();
 		expect(

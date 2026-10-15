@@ -11,7 +11,7 @@
  */
 import { defineRoute, paginate, problem } from '@ss/app-kit';
 import { NO_ID, attributesOf, brandsOf, categoriesOf, categoryGroups, findBySlugHistory } from '../adapters/catalog-store.js';
-import { categoryTrail, dealsLiveNow } from '../adapters/promotions-store.js';
+import { dealsLiveNow } from '../adapters/promotions-store.js';
 import {
 	afterFilter,
 	cursorKey,
@@ -72,23 +72,21 @@ const createCards = (common, service) => {
 	const offersOf = async (s, data, products) => {
 		/** @type {Map<string, { deals: import('../core/model.js').DealRecord[], shown: import('../core/catalog-views.js').Shown }>} */
 		const out = new Map();
-		const { deals, clock, of } = await shownPrices(s, data);
+		const { deals, clock, trail, of } = await shownPrices(s, data);
 		const now = service.now();
-		for (const item of products) {
-			const categoryIds = deals.length > 0 ? await categoryTrail(data, item.categoryIds) : item.categoryIds;
+		for (const item of products)
 			out.set(item.id, {
 				deals:
 					clock && deals.length > 0
 						? productDeals(item, deals, {
-								categoryIds,
+								categoryIds: trail(item),
 								now,
 								clock,
 								attributes: (variant) => attributeValues(item, variant),
 							})
 						: [],
-				shown: of(item, categoryIds),
+				shown: of(item),
 			});
-		}
 		return out;
 	};
 
@@ -442,7 +440,7 @@ export const createCatalogShop = (product, service, common) => {
 		const active = item.variants.filter((variant) => variant.active);
 		const url = await common.media.productUrl(s, item);
 		// the variants at their shown prices, as cards, structured data and the cart show them (G4)
-		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
+		const shown = (await shownPrices(s, data)).of(item);
 		// its item type and the parts it has (dynamic model §1)
 		const type = typeOf(item, await s.list('item_types'), typeTree(categories));
 		const elements = elementsOf(type, s.has);
@@ -586,7 +584,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: conditional(listing),
+			handler: conditional(listing, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -594,7 +592,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: conditional(page),
+			handler: conditional(page, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -602,7 +600,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: conditional(categoryList),
+			handler: conditional(categoryList, service.now),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -610,7 +608,7 @@ export const createCatalogShop = (product, service, common) => {
 			auth: 'browser',
 			feature: 'catalog',
 			rateLimit: SHOP_LIMITS,
-			handler: conditional(brandList),
+			handler: conditional(brandList, service.now),
 		}),
 	];
 };

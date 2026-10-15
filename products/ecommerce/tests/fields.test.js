@@ -412,6 +412,49 @@ describe('fields through the API', () => {
 		expect(compared.json.rows.map((/** @type {any} */ row) => row.name)).toEqual(['Battery health', 'Supplier code']);
 	});
 
+	it('never tells a staff-only value by a filter or in an address (review M2, M3)', async () => {
+		const phone = ids.phone;
+		const supplier = ids.supplier.slug;
+		const bin = ids.bin.slug;
+		/** @param {string} query */
+		const total = async (query) => (await shop.visitor('GET', `/v1/shop/products?${query}&count=1`)).json.total;
+		// a filter by a field shoppers cannot filter by matches nothing, right guess or wrong (no yes/no oracle)
+		expect(await total(`attr.${supplier}=SUP-7`)).toBe(0);
+		expect(await total(`attr.${supplier}=SUP-8`)).toBe(0);
+		expect(await total(`attr.${ids.supplier.id}=SUP-7`)).toBe(0);
+		expect(await total(`attr.${bin}=B-12`)).toBe(0);
+		// a field shoppers filter by still filters
+		await api('PATCH', `/v1/attributes/${ids.color.id}`, { show: { filter: true } });
+		expect(await total(`attr.${ids.color.slug}=Black`)).toBe(1);
+		expect(await total(`attr.${ids.color.slug}=Red`)).toBe(0);
+		// variant addresses name only the fields the product page shows
+		await shop.setting('catalog', 'variantQuery', '{attributes}');
+		try {
+			const page = await shop.visitor('GET', `/v1/shop/products/${phone.id}`);
+			expect(page.json.variants[0].url).toMatch(new RegExp(`\\?${ids.color.slug}=Black$`));
+			expect(page.text).not.toContain('B-12');
+			const grid = await shop.visitor('GET', '/v1/shop/products?variants=1');
+			expect(grid.text).not.toContain('B-12');
+			const seo = await shop.api('GET', `/v1/seo/products/${phone.id}`);
+			expect(seo.text).toContain(`${ids.color.slug}=Black`);
+			expect(seo.text).not.toContain('B-12');
+			await shop.setting('feeds', 'items', 'all');
+			const feed = (await shop.api('GET', '/v1/feeds/products.xml')).text;
+			expect(feed).toContain(`${ids.color.slug}=Black`);
+			expect(feed).not.toContain('B-12');
+			const variant = phone.variants[0];
+			const quote = await shop.visitor('POST', '/v1/shop/cart/quote', {
+				body: { lines: [{ productId: phone.id, variantId: variant.id, quantity: 1 }] },
+			});
+			expect(quote.status).toBe(200);
+			expect(quote.json.lines[0].url).toContain(`${ids.color.slug}=Black`);
+			expect(quote.text).not.toContain('B-12');
+		} finally {
+			await shop.setting('catalog', 'variantQuery', '');
+			await api('PATCH', `/v1/attributes/${ids.color.id}`, { show: { filter: false } });
+		}
+	});
+
 	it('names fields in structured data and feeds where the merchant says', async () => {
 		const seo = await shop.api('GET', `/v1/seo/products/${ids.phone.id}`);
 		const [group] = JSON.parse(seo.json.jsonLd)['@graph'];

@@ -14,7 +14,7 @@ import { defineRoute, problem } from '@ss/app-kit';
 import { categoriesOf } from '../adapters/catalog-store.js';
 import { ownerOrders } from '../adapters/fulfilment-store.js';
 import { loyaltyAccount } from '../adapters/ledger.js';
-import { categoryTrail, dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
+import { dealsLiveNow, loadOffers } from '../adapters/promotions-store.js';
 import { htmlToText } from '../core/catalog-content.js';
 import { topField } from '../core/catalog-query.js';
 import { lineageOf } from '../core/catalog-taxonomy.js';
@@ -165,8 +165,7 @@ export const createChatLookup = (product, service, media) => {
 	 */
 	const pricesFor = async (s, data) => {
 		const prices = await shownPrices(s, data);
-		return async (/** @type {ProductRecord} */ item) =>
-			prices.of(item, prices.deals.length > 0 ? await categoryTrail(data, item.categoryIds) : item.categoryIds);
+		return async (/** @type {ProductRecord} */ item) => prices.of(item);
 	};
 
 	/**

@@ -18,9 +18,8 @@ import { field, h } from './shop-common.js';
  * @returns {{ node: HTMLElement, read: () => unknown }}
  */
 const control = (doc, t, entry, id) => {
-	const label = [entry.unit ? `${entry.name} (${entry.unit})` : entry.name, entry.required ? '' : t('checkout.optional')]
-		.filter(Boolean)
-		.join(' ');
+	const named = entry.unit ? `${entry.name} (${entry.unit})` : entry.name;
+	const label = entry.required ? named : t('checkout.optional', { field: named });
 	if (entry.type === 'choice' && entry.multiple) {
 		const boxes = entry.choices.map((choice) => {
 			const box = /** @type {HTMLInputElement} */ (h(doc, 'input', { type: 'checkbox', value: choice.value }));

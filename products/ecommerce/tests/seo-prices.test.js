@@ -6,7 +6,8 @@
  * above the price or a payment method is an offer of the cart, not the price; one limited to weekdays or hours shows
  * while it runs but gives no sale dates and stays out of feeds (they are read at the catalogs' own pace).
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Collection } from 'mongodb';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { feedRows, googleItem, metaLine, META_HEADER } from '../core/feeds.js';
 import { listShown, shownPrice } from '../core/promotions.js';
 import { productJsonLd } from '../core/seo.js';
@@ -315,5 +316,40 @@ describe('one price everywhere', () => {
 			priceAfterDeals: 4000,
 			savings: 1000,
 		});
+	});
+
+	it('reads the categories as often for many products as for few (review M8)', async () => {
+		const category = (await shop.api('POST', '/v1/categories', { name: 'Kitchen' })).json;
+		/** @param {number} from @param {number} to */
+		const pots = async (from, to) => {
+			for (let n = from; n < to; n += 1)
+				await shop.seedProduct({ name: `Pot ${n}`, slug: `pot-${n}`, categoryIds: [category.id], price: 2000 + n });
+		};
+		const find = vi.spyOn(Collection.prototype, 'find');
+		/** How often each read of a grid, Chat's search and the listing's server HTML reads the categories. */
+		const categoryReads = async () => {
+			/** @type {number[]} */
+			const counts = [];
+			for (const read of [
+				() => shop.visitor('GET', '/v1/shop/products?limit=40'),
+				() => shop.api('GET', '/v1/chat/products?q=pot&limit=20'),
+				() => shop.api('GET', `/v1/seo/listing?category=${category.slug}&html=1&limit=40`),
+			]) {
+				find.mockClear();
+				await read();
+				const used = /** @type {Collection[]} */ (/** @type {unknown[]} */ (find.mock.instances));
+				counts.push(used.filter((collection) => /categories$/.test(collection.collectionName)).length);
+			}
+			return counts;
+		};
+		try {
+			await pots(0, 2);
+			const few = await categoryReads();
+			await pots(2, 14);
+			// a deal is live: each product's price needs its categories, read once for all of them
+			expect(await categoryReads()).toEqual(few);
+		} finally {
+			find.mockRestore();
+		}
 	});
 });

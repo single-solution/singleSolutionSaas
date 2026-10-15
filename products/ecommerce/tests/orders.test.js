@@ -413,7 +413,7 @@ describe('moving orders', () => {
 			/** @type {any} */ (await data.collection(COLLECTIONS.coupons).findOne({ websiteId: data.websiteId, id: couponId }));
 		expect((await coupon()).used).toBe(1);
 		const before = shop.callsTo(PAYMENTS).length;
-		const cancelled = await move(order.id, 'cancelled', { note: 'Asked by shopper' });
+		const cancelled = await move(order.id, 'cancelled', { note: 'Asked by shopper', shopperNote: 'Canceled as you asked' });
 		expect(cancelled.status).toBe(200);
 		expect(cancelled.json).toMatchObject({ status: 'cancelled', stockHeld: false, warnings: [] });
 		expect(cancelled.json.payment).toMatchObject({ state: 'refunded', refunded: 3000 });
@@ -421,7 +421,8 @@ describe('moving orders', () => {
 			.callsTo(PAYMENTS)
 			.slice(before)
 			.find((c) => c.path.endsWith('/refunds'));
-		expect(JSON.parse(refundCall?.body ?? '{}')).toEqual({ amount: 3000, reason: 'Asked by shopper' });
+		// Payments (whose gateway may show it to the payer) gets the note for the shopper, never staff's own
+		expect(JSON.parse(refundCall?.body ?? '{}')).toEqual({ amount: 3000, reason: 'Canceled as you asked' });
 		expect(refundCall?.headers['idempotency-key']).toBe(`${order.id}:cancel`);
 		expect((await stockOf(product.id)).stock).toBe(10);
 		expect((await coupon()).used).toBe(0);

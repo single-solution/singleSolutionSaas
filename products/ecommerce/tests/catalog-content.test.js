@@ -281,12 +281,18 @@ describe('links', () => {
 		expect(categoryLink('/{path}', { id: 'c2', slug: 'android' }, context)).toBe('https://shop.example/phones/android');
 		expect(categoryLink('', { slug: 'x' }, context)).toBe('https://shop.example/categories/x');
 		expect(absolute('a', 'shop.example')).toBe('https://shop.example/a');
+		// only active fields the product page shows name a variant (a staff-only or switched-off one never does)
 		const attributes = new Map([
-			['att_c', { slug: 'color' }],
-			['att_x', {}],
+			['att_c', { slug: 'color', active: true, show: { page: true } }],
+			['att_x', { slug: 'bin', active: true, show: { page: false } }],
+			['att_o', { slug: 'old', active: false, show: { page: true } }],
 		]);
 		expect(
-			variantQueryOf('grade={grade}&{attributes}', { grade: 'a', attributes: { att_c: ['r', 'b'], att_x: 'y' } }, attributes),
+			variantQueryOf(
+				'grade={grade}&{attributes}',
+				{ grade: 'a', attributes: { att_c: ['r', 'b'], att_x: 'y', att_o: 'z', att_gone: 'w' } },
+				attributes,
+			),
 		).toBe('grade=a&color=r');
 		expect(variantQueryOf('grade={grade}&{attributes}', { grade: null }, attributes)).toBe('');
 		expect(variantQueryOf('', { grade: 'a' }, attributes)).toBe('');

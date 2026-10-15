@@ -157,7 +157,11 @@ describe('cart', () => {
 		expect(page).not.toContain(text('checkout.policy.privacy'));
 		expect(page).not.toContain(text('checkout.method.pickup'));
 		expect($$(host, 'datalist option')).toHaveLength(2);
-		expect(textOf(host)).toContain(text('checkout.optional', { field: text('checkout.field.line2') }));
+		// an optional address field keeps its name in its label (review M10)
+		const line2 = text('checkout.field.line2');
+		expect(text('checkout.optional', { field: line2 })).toContain(line2);
+		expect($(host, 'label[for="ss-cart-line2"]').textContent).toBe(text('checkout.optional', { field: line2 }));
+		expect($(host, 'label[for="ss-cart-line1"]').textContent).toBe(text('checkout.field.line1'));
 		await click(buttonOf(host, text('cart.more', { name: 'Phone' })));
 		await click(buttonOf(host, text('cart.more', { name: 'Phone' })));
 		expect(timers.pending()).toBe(1);
@@ -605,6 +609,11 @@ describe('checkout', () => {
 		});
 		const control = (/** @type {string} */ label) =>
 			/** @type {any} */ ($(host, `#${[...$$(host, 'label')].find((node) => node.textContent?.startsWith(label))?.htmlFor}`));
+		// an optional field says so after its name
+		const labels = [...$$(host, 'label')].map((node) => node.textContent);
+		expect(labels).toContain('Gift message');
+		expect(labels).toContain(text('checkout.optional', { field: 'VAT number' }));
+		expect(text('checkout.optional', { field: 'VAT number' })).toMatch(/^VAT number /);
 		// a required field first, then a value off its format
 		await click(buttonOf(host, text('checkout.place')));
 		expect(textOf(host)).toContain(text('checkout.fieldNeeded', { field: 'Gift message' }));

@@ -262,6 +262,10 @@ export const createOrders = (product, service, { ordering }) => {
 				'conflict',
 				'A refund through Payments is pending for this order; delete it once the refund is done (reload it to try the refund again).',
 			);
+		// a parcel with the courier comes back first (returned to origin, owner 2026-10-14 Q5): deleted now, its units would
+		// be counted in stock while they are out
+		if (order.role === 'shipped')
+			throw problem('conflict', 'This order is with the courier: mark it delivered or returned to origin before deleting it.');
 		const held = order.role === 'delivered' ? 0 : orderMoney(order).net;
 		if (held > 0)
 			throw problem(

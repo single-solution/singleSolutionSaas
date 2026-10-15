@@ -149,7 +149,7 @@ export const createMedia = (product) => {
 	 * @param {Site} s
 	 * @param {{ id: string, slug: string, categoryIds?: string[], brandId?: string | null }} item
 	 * @param {{ grade?: string | null, attributes?: Record<string, unknown> }} variant
-	 * @param {ReadonlyMap<string, { slug?: string }>} attributes by id
+	 * @param {ReadonlyMap<string, { slug: string, active: boolean, show: { page: boolean } }>} attributes the fields by id
 	 */
 	const variantUrl = async (s, item, variant, attributes) => {
 		const { variantQuery } = await s.values('catalog');

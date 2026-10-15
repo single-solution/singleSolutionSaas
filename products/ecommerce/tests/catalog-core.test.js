@@ -477,6 +477,8 @@ describe('listings', () => {
 					type: 'choice',
 					on: 'variant',
 					choices: [{ value: 'red', label: 'Red' }],
+					active: true,
+					show: shown({ filter: true }),
 				}),
 			],
 		]);
@@ -535,9 +537,12 @@ describe('listings', () => {
 		// a slug on the product in one category and on variants in another: the product's own value, or the same variant
 		const both = new Map(
 			/** @type {Array<[string, any]>} */ ([
-				['att_p', { id: 'att_p', slug: 'fit', type: 'text', on: 'product' }],
-				['att_q', { id: 'att_q', slug: 'fit', type: 'text', on: 'variant' }],
-				['att_u', { id: 'att_u', slug: 'fit', type: 'text', on: 'unit' }],
+				['att_p', { id: 'att_p', slug: 'fit', type: 'text', on: 'product', active: true, show: shown({ filter: true }) }],
+				['att_q', { id: 'att_q', slug: 'fit', type: 'text', on: 'variant', active: true, show: shown({ filter: true }) }],
+				['att_u', { id: 'att_u', slug: 'fit', type: 'text', on: 'unit', active: true, show: shown({}) }],
+				// a field shoppers do not filter by, or one switched off, filters nothing (review M2)
+				['att_s', { id: 'att_s', slug: 'fit', type: 'text', on: 'product', active: true, show: shown({ filter: false }) }],
+				['att_o', { id: 'att_o', slug: 'fit', type: 'text', on: 'variant', active: false, show: shown({ filter: true }) }],
 			]),
 		);
 		const mixed = shopFilter(

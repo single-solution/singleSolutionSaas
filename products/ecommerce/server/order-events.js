@@ -107,7 +107,8 @@ export const createOrderEvents = (product, service) => {
 		const flow = await flowOf(s);
 		const role = statusOf(flow, to)?.role;
 		// a cancel says why: staff, the shopper, or the end of its window (events keep the code; messages and alerts get
-		// words: the note for the shopper, else the note staff typed with the move, else the website's text for it, K-10)
+		// words, K-10): the shopper reads the note for the shopper, else the website's text for it — the note staff typed
+		// stays with staff (owner, 2026-10-14 (3)), whose alert reads it first
 		const cancelReason =
 			role === 'cancelled' ? (reason === 'expired' ? 'expired' : reason === 'shopper' ? 'shopper' : 'staff') : '';
 		/** @type {import('./order-messages.js').CancelCode} */
@@ -118,13 +119,12 @@ export const createOrderEvents = (product, service) => {
 					: 'unconfirmed'
 				: /** @type {'staff' | 'shopper'} */ (cancelReason || 'staff');
 		const forShopper = typeof shopperNote === 'string' ? shopperNote : '';
-		const cancelWords =
-			role === 'cancelled'
-				? (await messageWords(s)).cancel(cancelCode, forShopper || (typeof note === 'string' ? note : ''))
-				: '';
+		const words = await messageWords(s);
+		const cancelWords = role === 'cancelled' ? words.cancel(cancelCode, forShopper) : '';
+		// a cancel's note for the shopper is its reason, said once (shopperNote is then empty)
 		await messages.status(s, order, shopperLabelOf(flow, to), {
 			cancelReason: cancelWords,
-			shopperNote: forShopper,
+			shopperNote: role === 'cancelled' ? '' : forShopper,
 			notify: notifiesOf(flow, to),
 		});
 		await publish(s, 'order.status_changed', {
@@ -136,7 +136,9 @@ export const createOrderEvents = (product, service) => {
 		});
 		if (role === 'cancelled') await publish(s, 'order.cancelled', { ...orderFacts(order), reason: cancelReason });
 		if (role === 'cancelled')
-			await alert(s, cancelReason === 'expired' ? 'expired' : 'cancelled', order, { reason: cancelWords });
+			await alert(s, cancelReason === 'expired' ? 'expired' : 'cancelled', order, {
+				reason: words.cancel(cancelCode, (typeof note === 'string' ? note : '') || forShopper),
+			});
 		else await alert(s, 'status', order, { from: statusLabel(flow, from) });
 	});
 

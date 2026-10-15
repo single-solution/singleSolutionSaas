@@ -11,7 +11,6 @@
 import { defineRoute, problem } from '@ss/app-kit';
 import { attributesOf, findBySlugHistory } from '../adapters/catalog-store.js';
 import { mediaSignatureOk } from '../adapters/crypto.js';
-import { categoryTrail } from '../adapters/promotions-store.js';
 import { valueLabel } from '../core/catalog.js';
 import { toDecimal } from '../core/money.js';
 import { htmlToText, siteAddress } from '../core/catalog-content.js';
@@ -354,7 +353,7 @@ export const createSeo = (product, service) => {
 		}));
 		const trail = await trailOf(s, data, media, primary ?? null, true, business.name);
 		// the price shoppers are shown, after automatic deals (G4), as the card, the product page and the cart show it
-		const shown = (await shownPrices(s, data)).of(item, await categoryTrail(data, item.categoryIds));
+		const shown = (await shownPrices(s, data)).of(item);
 		// the merchant's patterns (SG-5, G6), with the product's facts as they are now: the page's part of the title, the
 		// description when the product has none of its own nor a written summary, and the variants' names
 		const names = {
@@ -376,13 +375,12 @@ export const createSeo = (product, service) => {
 			item.description,
 			asWritten(settings.defaultDescription),
 		);
-		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		/** @type {Map<string, string>} */
 		const variantUrls = new Map();
 		/** @type {Map<string, string | null>} */
 		const variantImages = new Map();
 		for (const variant of item.variants.filter((v) => v.active)) {
-			variantUrls.set(variant.id, await media.variantUrl(s, item, variant, bySlug));
+			variantUrls.set(variant.id, await media.variantUrl(s, item, variant, fields));
 			variantImages.set(variant.id, variant.media?.[0] ? await media.stableUrl(s, variant.media[0].key) : null);
 		}
 		// reviewers are named as the reviews widget shows them (`nameFormat`), never by more (EN-2)
@@ -924,7 +922,6 @@ export const createSeo = (product, service) => {
 		// prices after the deals that hold all day (feeds are read at the catalogs' own pace; G4)
 		const prices = await shownPrices(s, data, { allDay: true });
 		const now = service.now();
-		const bySlug = new Map(attributes.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
 		const withImages = settings.items !== 'all';
 		const rows = data
 			.collection(COLLECTIONS.products)
@@ -956,7 +953,7 @@ export const createSeo = (product, service) => {
 			for (const variant of item.variants.filter((v) => v.active)) {
 				const own = await addresses(variant.media);
 				perVariant.set(variant.id, {
-					link: await media.variantUrl(s, item, variant, bySlug),
+					link: await media.variantUrl(s, item, variant, fields),
 					image: own[0] ?? '',
 					photos: [...own, ...photos],
 				});
@@ -972,7 +969,7 @@ export const createSeo = (product, service) => {
 					: '',
 				currency: s.currency,
 				condition: (variant) => conditions.of(item, variant),
-				shown: prices.of(item, lineageOf(item.categoryIds, byId)),
+				shown: prices.of(item),
 				now,
 				skuAs: settings.skuAs,
 				includeOutOfStock: settings.includeOutOfStock !== false,
@@ -1201,7 +1198,7 @@ export const createSeo = (product, service) => {
 				auth: 'server',
 				feature: 'catalog',
 				rateLimit: SERVER_RATE,
-				handler: conditional(siteSeo),
+				handler: conditional(siteSeo, service.now),
 			}),
 			defineRoute({
 				method: 'GET',
@@ -1209,7 +1206,7 @@ export const createSeo = (product, service) => {
 				auth: 'server',
 				feature: 'catalog',
 				rateLimit: SERVER_RATE,
-				handler: conditional(productSeo),
+				handler: conditional(productSeo, service.now),
 			}),
 			defineRoute({
 				method: 'GET',
@@ -1217,7 +1214,7 @@ export const createSeo = (product, service) => {
 				auth: 'server',
 				feature: 'catalog',
 				rateLimit: SERVER_RATE,
-				handler: conditional(categorySeo),
+				handler: conditional(categorySeo, service.now),
 			}),
 			defineRoute({
 				method: 'GET',

@@ -261,6 +261,24 @@ export const categoryTrail = async (data, categoryIds) => {
 	return [...new Set([...categoryIds, ...found.flatMap((doc) => (Array.isArray(doc.path) ? doc.path : []))])];
 };
 
+/** At most this many categories are read for their places in the tree. */
+const MAX_CATEGORIES = 5000;
+
+/**
+ * Every category's ancestors (its `path`) by id, read once for a request that prices many products (a deal matches a
+ * product by its categories and those above them).
+ * @param {WebsiteData} data
+ * @returns {Promise<Map<string, string[]>>}
+ */
+export const categoryPaths = async (data) => {
+	const found = await data
+		.collection(COLLECTIONS.categories)
+		.find({ websiteId: data.websiteId }, { projection: { _id: 0, id: 1, path: 1 } })
+		.limit(MAX_CATEGORIES)
+		.toArray();
+	return new Map(found.map((doc) => [String(doc.id), Array.isArray(doc.path) ? doc.path.map(String) : []]));
+};
+
 // ------------------------------------------------------------------------------------------------ data rights
 
 /**

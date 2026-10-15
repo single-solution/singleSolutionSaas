@@ -620,6 +620,8 @@ const counterPast = async (data, { form, year }) => {
  * @property {string[]} [lockedDealIds] deals whose locks the order keeps (E18)
  * @property {string[]} [locationOrder] locations to take stock from, in order (multi_location)
  * @property {number | null} [couponPerCustomer] the coupon's per-customer limit
+ * @property {string} [offersOwner] whose uses of a coupon the order counts when not its customer's own: the member a
+ *   guest's phone names (K-6)
  * @property {Array<{ productId: string, start: Date, end: Date, lineId: string }>} [slots] booked slots
  */
 
@@ -680,8 +682,8 @@ const refused = (result) => Object.assign(new Error(result.code), { refused: res
 export const placeOrder = async (data, placement, { now, timeZone = 'UTC' }) => {
 	const { order } = placement;
 	const orders = data.collection(COLLECTIONS.orders);
-	// a guest's checkout key is theirs: guests are told apart by their customer id
-	const owner = order.customer.userId || order.customer.customerId || '';
+	// whose coupon uses: the member (a guest on a member's phone counts as that member), else the guest's customer id
+	const owner = placement.offersOwner || order.customer.userId || order.customer.customerId || '';
 	const existing = async () =>
 		/** @type {OrderRecord | null} */ (
 			await orders.findOne(

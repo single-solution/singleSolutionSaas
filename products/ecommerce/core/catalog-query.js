@@ -207,7 +207,8 @@ const MAX_MIXED = 3;
 /**
  * The fields an `attr.<ref>` filter names (parity P3-6): by id, that field; by slug, every product or variant field
  * with that slug (E45 keeps one per category, and each product keeps values only for the fields that apply to it, so
- * a listing with or without a category matches each product by its own field).
+ * a listing with or without a category matches each product by its own field). Only active fields shoppers filter by
+ * (`show.filter`): any other names none, so the listing matches nothing and never tells a staff-only value.
  * @param {ReadonlyMap<string, AttributeRecord>} attributes
  * @param {string} ref
  * @returns {AttributeRecord[]}
@@ -215,7 +216,9 @@ const MAX_MIXED = 3;
 export const fieldsNamed = (attributes, ref) => {
 	const found = attributes.get(ref);
 	const named = found ? [found] : [...attributes.values()].filter((attribute) => attribute.slug === ref);
-	return named.filter((attribute) => attribute.on === 'product' || attribute.on === 'variant');
+	return named.filter(
+		(attribute) => (attribute.on === 'product' || attribute.on === 'variant') && attribute.active && attribute.show.filter,
+	);
 };
 
 /**

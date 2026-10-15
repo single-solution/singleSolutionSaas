@@ -66,7 +66,7 @@
 		"shipping": {
 			"type": "boolean",
 			"title": "Send shipping",
-			"description": "Each item carries the delivery fee to your business.json country (free from the free-delivery amount) and, once both are set, the handling and transit days of Delivery zones. Off when you set shipping in the catalog's own account.",
+			"description": "Each physical item carries the delivery fee to your business.json country (free from the free-delivery amount) and, once both are set, the handling and transit days of Delivery zones (digital items and services carry no shipping, as checkout charges them none). Off when you set shipping in the catalog's own account.",
 			"default": true
 		}
 	}

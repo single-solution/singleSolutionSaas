@@ -26,7 +26,7 @@
 		"variantQuery": {
 			"type": "string",
 			"title": "Variant address",
-			"description": "What is added to a product's address to open one variant: {grade} and {attributes} (the variant's attribute slug=value pairs), for example grade={grade}&{attributes}. Empty: variants have no address of their own.",
+			"description": "What is added to a product's address to open one variant: {grade} and {attributes} (the variant's slug=value pairs of the fields shown on the product page), for example grade={grade}&{attributes}. Empty: variants have no address of their own.",
 			"default": "",
 			"maxLength": 200
 		},

@@ -157,6 +157,12 @@ describe('feed rows', () => {
 		const [plain] = feedRows(shirt, { ...context, shipping: { fee: 500, country: 'US', deliveryTime: null } });
 		expect(googleItem(/** @type {FeedRow} */ (plain))).toContain('<g:price>5.00 USD</g:price></g:shipping>');
 		expect(googleItem(/** @type {FeedRow} */ (feedRows(shirt, { ...context, shipping: null })[0]))).not.toContain('g:shipping');
+		// a digital item or a service ships nothing: checkout charges it no delivery (review M6)
+		for (const kind of /** @type {const} */ (['digital', 'service'])) {
+			const [item] = feedRows({ ...shirt, kind }, { ...context, shipping, parcels: true });
+			expect(item).toMatchObject({ shipping: '', shippingCountry: '', deliveryTime: null, shippingWeight: '' });
+			expect(googleItem(/** @type {FeedRow} */ (item))).not.toContain('g:shipping');
+		}
 	});
 
 	it('writes the Meta CSV with more photos, the apparel attributes and identifier_exists', () => {

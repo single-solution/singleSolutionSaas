@@ -165,6 +165,8 @@ export const feedRows = (product, context) => {
 	const many = variants.length > 1;
 	const money = (/** @type {number} */ amount) => feedMoney(amount, context.currency, context.wholeUnits === true);
 	const body = product.description || product.summary || product.name;
+	const physical = product.kind === 'physical';
+	const shipping = physical ? context.shipping : null;
 	return variants
 		.filter((variant) => context.shown(variant).price > 0)
 		.filter((variant) => context.includeOutOfStock || variantInStock(product, variant))
@@ -220,10 +222,11 @@ export const feedRows = (product, context) => {
 				productType: context.productType,
 				googleCategory: context.googleCategory ?? '',
 				...fieldColumns(context.gradeLabel?.(variant) ?? '', values),
-				shipping: context.shipping ? money(shippingFee(context.shipping, shown.price)) : '',
-				shippingCountry: context.shipping?.country ?? '',
-				deliveryTime: context.shipping?.deliveryTime ?? null,
-				shippingWeight: context.parcels && variant.parcel?.weightG ? `${variant.parcel.weightG} g` : '',
+				// only physical goods ship (checkout charges a digital item or a service no delivery)
+				shipping: shipping ? money(shippingFee(shipping, shown.price)) : '',
+				shippingCountry: shipping?.country ?? '',
+				deliveryTime: shipping?.deliveryTime ?? null,
+				shippingWeight: physical && context.parcels && variant.parcel?.weightG ? `${variant.parcel.weightG} g` : '',
 				identifierExists: context.identifierExists === 'no' && !gtin && !mpn ? 'no' : '',
 			};
 		});

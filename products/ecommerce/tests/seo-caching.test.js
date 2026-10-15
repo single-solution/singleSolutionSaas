@@ -89,6 +89,31 @@ describe('conditional reads', () => {
 		expect((await shop.api('GET', '/v1/seo/listing?category=lamps')).json.lastModified).toBe(after.json.lastModified);
 		expect((await shop.api('GET', '/v1/seo/categories/lamps')).json.lastModified).toBe(after.json.lastModified);
 	});
+
+	it('keeps the ETag of an answer whose image links were only signed again, within ten minutes (review M9)', async () => {
+		/** @param {unknown[]} media */
+		const photos = async (media) =>
+			(await shop.db())
+				.collection(COLLECTIONS.products)
+				.updateOne({ websiteId: shop.websiteId, id: ids.lamp.id }, { $set: { media } });
+		await photos([{ key: `ecommerce/products/${ids.lamp.id}/lamp.png`, type: 'image/png', size: 1, alt: '' }]);
+		try {
+			const first = await shop.api('GET', '/v1/shop/products/desk-lamp');
+			expect(first.text).toContain('X-Amz-Signature=');
+			const etag = String(first.headers.get('etag'));
+			// a second later its links are signed again (another X-Amz-Date): the same answer for a cache
+			shop.advance(1000);
+			const again = await shop.api('GET', '/v1/shop/products/desk-lamp', undefined, { 'if-none-match': etag });
+			expect(again.status).toBe(304);
+			// past the window it answers whole, with links signed now (a kept answer's links always still work)
+			shop.advance(10 * 60_000);
+			const later = await shop.api('GET', '/v1/shop/products/desk-lamp', undefined, { 'if-none-match': etag });
+			expect(later.status).toBe(200);
+			expect(later.headers.get('etag')).not.toBe(etag);
+		} finally {
+			await photos([]);
+		}
+	});
 });
 
 describe('the docs’ webhook route', () => {

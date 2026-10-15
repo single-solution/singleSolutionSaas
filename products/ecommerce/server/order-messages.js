@@ -9,9 +9,10 @@
  * `deliveryMethod` (words, not codes: the website's texts `checkout.method.<method>` and
  * `messages.delivery.<method>`, '' without delivery; K-10), `courier`, `trackingNumber`, `trackingUrl`,
  * `trackingDetails`, `orderUrl` and `reviewUrl` (the `checkout` templates with `{number}`), `cancelReason` (why it was
- * canceled: the note for the shopper staff wrote with the move, else the note staff typed, else the text
- * `messages.cancelReason.<staff | shopper | unpaid | unconfirmed>`; '' for other statuses), `shopperNote` (the note for
- * the shopper staff wrote with the move, '' without one) and `business`. The merchant edits those words in Texts. Order messages are
+ * canceled: the note for the shopper staff wrote with the move, else the text
+ * `messages.cancelReason.<staff | shopper | unpaid | unconfirmed>` — the note staff typed for staff never reaches the
+ * shopper; '' for other statuses), `shopperNote` (the note for the shopper staff wrote with a move that is not a cancel,
+ * '' without one) and `business`. The merchant edits those words in Texts. Order messages are
  * required (sent whatever the shopper opted out of) and saved before they are sent, so a call to Notifications that
  * fails is tried again on the website's next uses (K-17, owner decision D7). A failed or unconnected send never fails
  * the order.
@@ -65,7 +66,8 @@ export const messageWords = async (s) => {
 		/** @param {string} method `delivery`, `pickup` or `none` (no delivery: '') */
 		delivery: (method) => (method === 'none' ? '' : (texts[`messages.delivery.${method}`] ?? method)),
 		/**
-		 * Why it was canceled: the note staff typed with the move, else the text for who or what canceled it.
+		 * Why it was canceled: the note given (for the shopper in their message, staff's own in a staff alert), else the
+		 * text for who or what canceled it.
 		 * @param {CancelCode} code @param {string} [note]
 		 */
 		cancel: (code, note = '') => note.trim() || (texts[`messages.cancelReason.${code}`] ?? ''),

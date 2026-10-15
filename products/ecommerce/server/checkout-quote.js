@@ -553,7 +553,7 @@ export const createQuoting = (product, service) => {
 		/** @type {Map<string, string>} */
 		const urls = new Map();
 		const fields = await attributesOf(data);
-		const attributes = new Map(fields.map((row) => [String(row.id), { slug: row.slug ? String(row.slug) : undefined }]));
+		const attributes = new Map(fields.map((field) => [field.id, field]));
 		for (const line of priced) {
 			const item = products.get(line.productId);
 			const variant = item?.variants.find((v) => v.id === line.variantId);
