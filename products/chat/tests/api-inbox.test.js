@@ -2,9 +2,10 @@
  * The inbox through tickets and the server API: filters and search, unread, replies, notes, status, AI pause,
  * assignment with presence and max chats, custom fields, the context panel, the AI summary, transcripts, rating
  * requests, saved replies, the staff list, attachments, deletion (one conversation, or every one, C20) and the activity
- * log copied to Accounts; knowledge and reports.
+ * log copied to Accounts; leads (read and delete, one or every one); knowledge and reports.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { Collection } from 'mongodb';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { AI_KEY, ORIGIN, STORAGE_KEY, ready } from './helpers.js';
 
 /** @type {Array<Awaited<ReturnType<typeof ready>>>} */
@@ -276,7 +277,7 @@ describe('delete every conversation (C20)', () => {
 		expect(typo.json.errors).toEqual([
 			{ path: '/confirm', message: "Type the website's domain (shop.example.com) to confirm." },
 		]);
-		const scope = await sys.serverCall('POST', '/v1/data/delete-all', { ...body, scope: 'leads' });
+		const scope = await sys.serverCall('POST', '/v1/data/delete-all', { ...body, scope: 'messages' });
 		expect(scope.json.errors[0].path).toBe('/scope');
 		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toHaveLength(2);
 		const done = await sys.serverCall('POST', '/v1/data/delete-all', body);
@@ -407,6 +408,78 @@ describe('delete every conversation (C20)', () => {
 		expect(answers).toEqual([10, 10, 10]);
 		// each file deleted once
 		expect(sys.calls.filter((call) => call.url.startsWith(STORAGE_KEY.endpoint) && call.method === 'DELETE')).toHaveLength(30);
+	});
+});
+
+describe('leads', () => {
+	it('staff and the merchant’s server read and delete leads; delete-all scope leads deletes every one', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'leads_flows']);
+		const ann = sys.visitor();
+		await ann('POST', '/v1/chat/messages', { text: 'hi' });
+		await ann('POST', '/v1/chat/leads', { fields: { name: 'Ann', email: 'ann@example.com' } });
+		sys.advance(1000);
+		await sys.visitor()('POST', '/v1/chat/leads', { fields: { name: 'Bo', email: 'bo@example.com' } });
+		const reader = await sys.ticket(['inbox.read']);
+		const manager = await sys.ticket();
+		const list = await sys.admin(reader, 'GET', '/v1/admin/leads?limit=1');
+		expect(list.json).toMatchObject({ items: [{ name: 'Bo', conversationId: null }], hasMore: true });
+		const [first] = (await sys.admin(reader, 'GET', `/v1/admin/leads?cursor=${list.json.nextCursor}`)).json.items;
+		expect(first).toMatchObject({ name: 'Ann', email: 'ann@example.com' });
+		expect(first.conversationId).toMatch(/^conv_/);
+		// deleting needs inbox.manage; a lead goes once
+		expect((await sys.admin(reader, 'DELETE', `/v1/admin/leads/${first.id}`)).status).toBe(403);
+		expect((await sys.admin(manager, 'DELETE', `/v1/admin/leads/${first.id}`)).status).toBe(204);
+		expect((await sys.admin(manager, 'DELETE', `/v1/admin/leads/${first.id}`)).status).toBe(404);
+		expect((await sys.serverCall('GET', `/v1/leads/${first.id}`)).status).toBe(404);
+		expect((await sys.serverCall('DELETE', `/v1/leads/${list.json.items[0].id}`)).status).toBe(204);
+		const deletions = (await sys.serverCall('GET', '/v1/activity?action=lead.deleted')).json.items;
+		expect(deletions.map((/** @type {any} */ e) => [e.label, e.actor.kind]).sort()).toEqual([
+			['Ann', 'staff'],
+			['Bo', 'server'],
+		]);
+		// every lead, with the domain typed; the conversations stay
+		for (const name of ['Cy', 'Di', 'Ed']) await ann('POST', '/v1/chat/leads', { fields: { name, email: 'x@example.com' } });
+		const body = { scope: 'leads', confirm: 'shop.example.com' };
+		expect((await sys.serverCall('POST', '/v1/data/delete-all', { ...body, confirm: 'shop' })).status).toBe(422);
+		expect((await sys.serverCall('POST', '/v1/data/delete-all', body)).json).toEqual({
+			scope: 'leads',
+			deleted: { leads: 3 },
+			more: false,
+		});
+		expect((await sys.serverCall('GET', '/v1/leads')).json.items).toEqual([]);
+		expect((await sys.serverCall('GET', '/v1/conversations')).json.items).toHaveLength(1);
+		const [entry] = (await sys.serverCall('GET', '/v1/activity?action=data.deleted_all')).json.items;
+		expect(entry).toMatchObject({ target: 'leads', detail: '3 leads' });
+	});
+
+	it('delete-all leads answers more when one call cannot delete them all, and the next call goes on', async () => {
+		const sys = await start(['visitor_chat', 'leads_flows']);
+		const data = await sys.product.data.forWebsite(sys.websiteId);
+		await data
+			.collection('leads')
+			.insertMany(Array.from({ length: 2500 }, (_, i) => ({ id: `lead_${i}`, name: null, email: null, phone: null })));
+		// a slow database: each batch of a thousand takes longer than one call goes on
+		const real = Collection.prototype.deleteMany;
+		vi.spyOn(Collection.prototype, 'deleteMany').mockImplementation(
+			/** @this {Collection} */
+			function (...args) {
+				sys.advance(9_000);
+				return real.apply(this, /** @type {any} */ (args));
+			},
+		);
+		const body = { scope: 'leads', confirm: 'shop.example.com' };
+		const answers = [];
+		for (let more = true; more;) {
+			const answer = (await sys.serverCall('POST', '/v1/data/delete-all', body)).json;
+			answers.push([answer.deleted.leads, answer.more]);
+			more = answer.more;
+		}
+		vi.restoreAllMocks();
+		expect(answers).toEqual([
+			[1000, true],
+			[1000, true],
+			[500, false],
+		]);
 	});
 });
 

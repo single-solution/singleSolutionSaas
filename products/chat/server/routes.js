@@ -343,6 +343,22 @@ export const createRoutes = (product) => {
 		}),
 		defineRoute({
 			method: 'GET',
+			path: '/v1/admin/leads',
+			auth: 'ticket',
+			feature: 'leads_flows',
+			permission: 'inbox.read',
+			handler: inbox.leads,
+		}),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/admin/leads/:id',
+			auth: 'ticket',
+			feature: 'leads_flows',
+			permission: 'inbox.manage',
+			handler: inbox.removeLead,
+		}),
+		defineRoute({
+			method: 'GET',
 			path: '/v1/admin/knowledge/entries',
 			auth: 'ticket',
 			permission: 'knowledge.edit',
@@ -479,7 +495,7 @@ export const createRoutes = (product) => {
 		defineRoute({ method: 'PATCH', path: '/v1/conversations/:id', auth: 'server', feature: 'inbox', handler: inbox.update }),
 		defineRoute({ method: 'DELETE', path: '/v1/conversations/:id', auth: 'server', feature: 'inbox', handler: inbox.remove }),
 		defineRoute({ method: 'GET', path: '/v1/inbox/unread', auth: 'server', feature: 'inbox', handler: inbox.unread }),
-		// every conversation, before going live (C20): the server token only, the domain typed to confirm
+		// every conversation or every lead, before going live (C20): the server token only, the domain typed to confirm
 		defineRoute({
 			method: 'POST',
 			path: '/v1/data/delete-all',
@@ -489,6 +505,13 @@ export const createRoutes = (product) => {
 		}),
 		defineRoute({ method: 'GET', path: '/v1/leads', auth: 'server', feature: 'leads_flows', handler: inbox.leads }),
 		defineRoute({ method: 'GET', path: '/v1/leads/:id', auth: 'server', feature: 'leads_flows', handler: inbox.lead }),
+		defineRoute({
+			method: 'DELETE',
+			path: '/v1/leads/:id',
+			auth: 'server',
+			feature: 'leads_flows',
+			handler: inbox.removeLead,
+		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/knowledge/entries',

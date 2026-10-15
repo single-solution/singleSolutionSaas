@@ -495,6 +495,88 @@ describe('inbox', () => {
 		expect(shows(root, TEXTS['inbox.handBack'])).toBe(false);
 	});
 
+	it('lists the leads with Open the chat and Delete (asked twice), a page at a time', async () => {
+		const lead = (/** @type {string} */ id, /** @type {Record<string, unknown>} */ over = {}) => ({
+			id,
+			conversationId: null,
+			name: null,
+			email: null,
+			phone: null,
+			message: null,
+			custom: {},
+			page: null,
+			createdAt: AT,
+			...over,
+		});
+		const { server, hosts } = await startAdmin({
+			features: ['inbox', 'leads_flows'],
+			look: { format: { locale: 'en-US', times: 'business' }, timeZone: 'UTC' },
+			routes: {
+				'GET /v1/admin/conversations': () => answer(200, { items: [], hasMore: false, unread: 0 }),
+				'GET /v1/admin/leads': (call) =>
+					call.url.searchParams.get('cursor')
+						? answer(200, { items: [lead('l3', { phone: '+12025550143' })], hasMore: false })
+						: answer(200, {
+								items: [
+									lead('l1', { conversationId: 'c1', name: 'Ana', email: 'ana@x.co', message: 'Call me' }),
+									lead('l2'),
+								],
+								nextCursor: 'n1',
+								hasMore: true,
+							}),
+				'DELETE /v1/admin/leads/l1': () => answer(204),
+				'DELETE /v1/admin/leads/l2': () => problem(403, 'forbidden'),
+				'GET /v1/admin/conversations/c1': () => answer(200, { conversation: full(), messages: [] }),
+				'POST /v1/admin/conversations/c1/read': () => answer(204),
+			},
+		});
+		const root = shadow(hosts.inbox);
+		const part = /** @type {HTMLElement} */ (root.querySelector('.leads'));
+		expect(part.hidden).toBe(false);
+		expect(textsIn(part, 'li > .meta')).toEqual(['ana@x.co · Call me · Oct 1, 2026, 10:00 AM', 'Oct 1, 2026, 10:00 AM']);
+		expect(part.textContent).toContain(TEXTS['inbox.lead']);
+		await click(buttonIn(part, TEXTS['inbox.more']));
+		expect(server.last('GET /v1/admin/leads')?.url.searchParams.get('cursor')).toBe('n1');
+		expect(part.textContent).toContain('+12025550143');
+		expect(shows(part, TEXTS['inbox.more'])).toBe(false);
+		// Open the chat opens the conversation the lead came from
+		await click(buttonIn(part, TEXTS['inbox.openChat']));
+		expect(server.all('GET /v1/admin/conversations/c1')).toHaveLength(1);
+		// Delete asks first, then deletes
+		const remove = /** @type {HTMLButtonElement} */ (part.querySelector('li .remove'));
+		await click(remove);
+		expect(remove.textContent).toBe(TEXTS['inbox.confirmDelete']);
+		expect(server.all('DELETE /v1/admin/leads/l1')).toHaveLength(0);
+		await click(remove);
+		expect(server.all('DELETE /v1/admin/leads/l1')).toHaveLength(1);
+		expect(part.textContent).not.toContain('Ana');
+		expect(part.querySelector('.status')?.textContent).toBe(TEXTS['inbox.deleted']);
+		// without inbox.manage: the Delete buttons go
+		const other = /** @type {HTMLButtonElement} */ (part.querySelector('li .remove'));
+		await click(other);
+		await click(other);
+		expect(part.querySelector('.status')?.textContent).toBe(TEXTS['inbox.noAccess']);
+		expect(shows(part, TEXTS['common.delete'])).toBe(false);
+	});
+
+	it('says there are no leads yet, and hides the leads without access', async () => {
+		let leads = () => answer(200, { items: [], hasMore: false });
+		const routes = {
+			'GET /v1/admin/conversations': () => answer(200, { items: [], hasMore: false, unread: 0 }),
+			'GET /v1/admin/leads': () => leads(),
+		};
+		const empty = await startAdmin({ features: ['inbox', 'leads_flows'], routes });
+		expect(shadow(empty.hosts.inbox).querySelector('.leads .status')?.textContent).toBe(TEXTS['inbox.noLeads']);
+		resetPage();
+		leads = () => problem(403, 'forbidden');
+		const refused = await startAdmin({ features: ['inbox', 'leads_flows'], routes });
+		expect(/** @type {HTMLElement} */ (shadow(refused.hosts.inbox).querySelector('.leads')).hidden).toBe(true);
+		resetPage();
+		const off = await startAdmin({ features: ['inbox'], routes });
+		expect(shadow(off.hosts.inbox).querySelector('.leads')).toBeNull();
+		expect(off.server.all('GET /v1/admin/leads')).toHaveLength(0);
+	});
+
 	it('handles failures, 403s and signing out', async () => {
 		const getTicket = vi.fn().mockResolvedValueOnce(ticket()).mockRejectedValueOnce(new Error('signed out'));
 		let list = () => problem(403, 'forbidden');

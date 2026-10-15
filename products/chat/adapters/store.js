@@ -534,6 +534,16 @@ export const createStore = (data, { now }) => {
 			/** @param {string[]} ids */
 			remove: async (ids) =>
 				ids.length === 0 ? 0 : (await leads.deleteMany({ websiteId: w, id: { $in: ids } })).deletedCount,
+			/**
+			 * Delete some of the website's leads (delete-all takes them a batch at a time); answers how many went.
+			 * @param {number} limit
+			 */
+			removeSome: async (limit) => {
+				const ids = (await leads.find({ websiteId: w }, { projection: { _id: 0, id: 1 }, limit }).toArray()).map((row) =>
+					String(row.id),
+				);
+				return ids.length === 0 ? 0 : (await leads.deleteMany({ websiteId: w, id: { $in: ids } })).deletedCount;
+			},
 			/** @param {Date} from @param {Date} to */
 			countBetween: (from, to) => leads.countDocuments({ websiteId: w, createdAt: { $gte: from, $lt: to } }),
 		}),

@@ -1978,6 +1978,104 @@
 				}
 			}
 		},
+		"/v1/admin/leads": {
+			"get": {
+				"summary": "Leads, newest first",
+				"description": "The leads your visitors left (Lead capture and flows), for the inbox widget.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "leads_flows",
+				"x-ss-permission": "inbox.read",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "nextCursor of the previous page.",
+						"schema": {
+							"type": "string",
+							"description": "nextCursor of the previous page."
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 25
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Success",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LeadPage"
+								}
+							}
+						}
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/admin/leads/{id}": {
+			"delete": {
+				"summary": "Delete a lead for good",
+				"description": "Written to the activity log as lead.deleted, by the lead's name. 404 not_found.",
+				"x-ss-auth": "ticket",
+				"x-ss-feature": "leads_flows",
+				"x-ss-permission": "inbox.manage",
+				"security": [
+					{
+						"ticket": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/admin/reports": {
 			"get": {
 				"summary": "Reports for a range of days",
@@ -5859,8 +5957,8 @@
 		},
 		"/v1/data/delete-all": {
 			"post": {
-				"summary": "Delete every conversation",
-				"description": "For going live without your test chats: every conversation with its messages, attachments (from your storage), the guest records behind it and staff alerts still waiting to be sent about it. Leads stay (they are records of their own). 100 conversations at a time: after 8 seconds the answer says more, and the next call goes on where it stopped. confirm repeats the website's domain (422 validation_failed at /confirm, at /scope for another scope). Server token only; each call writes one activity entry (data.deleted_all) with its counts.",
+				"summary": "Delete every conversation, or every lead",
+				"description": "For going live without your test data. scope conversations: every conversation with its messages, attachments (from your storage), the guest records behind it and staff alerts still waiting to be sent about it; leads stay (they are records of their own), 100 conversations at a time. scope leads: every lead (conversations stay), 1,000 at a time. After 8 seconds the answer says more, and the next call goes on where it stopped. confirm repeats the website's domain (422 validation_failed at /confirm, at /scope for another scope). Server token only; each call writes one activity entry (data.deleted_all, its target the scope) with its counts.",
 				"x-ss-auth": "server",
 				"x-ss-feature": "visitor_chat",
 				"security": [
@@ -5896,7 +5994,8 @@
 									"scope": {
 										"type": "string",
 										"enum": [
-											"conversations"
+											"conversations",
+											"leads"
 										]
 									},
 									"confirm": {
@@ -5914,59 +6013,95 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"type": "object",
-									"required": [
-										"scope",
-										"deleted",
-										"more"
-									],
-									"additionalProperties": false,
-									"properties": {
-										"scope": {
-											"const": "conversations"
-										},
-										"deleted": {
+									"oneOf": [
+										{
 											"type": "object",
 											"required": [
-												"conversations",
-												"messages",
-												"guests",
-												"files",
-												"alerts"
+												"scope",
+												"deleted",
+												"more"
 											],
 											"additionalProperties": false,
 											"properties": {
-												"conversations": {
-													"type": "integer",
-													"minimum": 0
+												"scope": {
+													"const": "conversations"
 												},
-												"messages": {
-													"type": "integer",
-													"minimum": 0
+												"deleted": {
+													"type": "object",
+													"required": [
+														"conversations",
+														"messages",
+														"guests",
+														"files",
+														"alerts"
+													],
+													"additionalProperties": false,
+													"properties": {
+														"conversations": {
+															"type": "integer",
+															"minimum": 0
+														},
+														"messages": {
+															"type": "integer",
+															"minimum": 0
+														},
+														"guests": {
+															"type": "integer",
+															"minimum": 0,
+															"description": "Guest records (device keys)."
+														},
+														"files": {
+															"type": "integer",
+															"minimum": 0,
+															"description": "Attachments deleted from your storage (one storage cannot delete now is left there)."
+														},
+														"alerts": {
+															"type": "integer",
+															"minimum": 0,
+															"description": "Staff alerts that were still waiting to be sent."
+														}
+													},
+													"description": "What this call deleted."
 												},
-												"guests": {
-													"type": "integer",
-													"minimum": 0,
-													"description": "Guest records (device keys)."
-												},
-												"files": {
-													"type": "integer",
-													"minimum": 0,
-													"description": "Attachments deleted from your storage (one storage cannot delete now is left there)."
-												},
-												"alerts": {
-													"type": "integer",
-													"minimum": 0,
-													"description": "Staff alerts that were still waiting to be sent."
+												"more": {
+													"type": "boolean",
+													"description": "Conversations are left: call again."
 												}
-											},
-											"description": "What this call deleted."
+											}
 										},
-										"more": {
-											"type": "boolean",
-											"description": "Conversations are left: call again."
+										{
+											"type": "object",
+											"required": [
+												"scope",
+												"deleted",
+												"more"
+											],
+											"additionalProperties": false,
+											"properties": {
+												"scope": {
+													"const": "leads"
+												},
+												"deleted": {
+													"type": "object",
+													"required": [
+														"leads"
+													],
+													"additionalProperties": false,
+													"properties": {
+														"leads": {
+															"type": "integer",
+															"minimum": 0
+														}
+													},
+													"description": "What this call deleted."
+												},
+												"more": {
+													"type": "boolean",
+													"description": "Leads are left: call again."
+												}
+											}
 										}
-									}
+									]
 								}
 							}
 						}
@@ -7315,6 +7450,54 @@
 			}
 		},
 		"/v1/leads/{id}": {
+			"delete": {
+				"summary": "Delete a lead for good",
+				"description": "Written to the activity log as lead.deleted, by the lead's name. 404 not_found.",
+				"x-ss-auth": "server",
+				"x-ss-feature": "leads_flows",
+				"security": [
+					{
+						"serverToken": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/SSActorId"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorName"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorRole"
+					},
+					{
+						"$ref": "#/components/parameters/SSActorEmail"
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "No content"
+					},
+					"default": {
+						"description": "Problem (RFC 9457) with a stable code",
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/Problem"
+								}
+							}
+						}
+					}
+				}
+			},
 			"get": {
 				"summary": "A lead",
 				"description": "404 not_found.",

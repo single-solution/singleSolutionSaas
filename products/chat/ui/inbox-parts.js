@@ -1,6 +1,6 @@
 /**
  * Parts of the inbox widget that stand on their own: saved replies (picker and editor), the staff list with presence
- * and max chats, and the conversation's context panel. A part whose route answers 403 hides itself.
+ * and max chats, leads, and the conversation's context panel. A part whose route answers 403 hides itself.
  * @module
  */
 import { formatText } from '@ss/app-kit/widget';
@@ -192,6 +192,81 @@ export const staffPart = ({ doc, t, make, api, failure, queue, onStaff }) => {
 		setHidden(part, false);
 	};
 	return { part, load, presence };
+};
+
+/**
+ * Leads (lead capture on): newest first, a page at a time, each with what the visitor left, Open the chat when it came
+ * from one, and Delete (asked twice; `inbox.manage`, the button goes on a 403). The part shows once its route answers.
+ * @param {PartKit & { when: (value: unknown) => string, open: (conversationId: string) => void }} input
+ */
+export const leadsPart = ({ doc, t, api, failure, when, open }) => {
+	/** @type {string | null} */
+	let cursor = null;
+	let mayDelete = true;
+	const part = element(doc, 'section', { class: 'part leads', hidden: '' });
+	const list = element(doc, 'ul');
+	const more = buttonOf(doc, t('inbox.more'), { class: 'secondary', hidden: '' });
+	const note = element(doc, 'p', { class: 'status', role: 'status' });
+	part.append(element(doc, 'h3', {}, t('inbox.leads')), list, more, note);
+
+	/** @param {any} lead */
+	const row = (lead) => {
+		const item = element(doc, 'li', {}, lead.name || lead.email || lead.phone || t('inbox.lead'));
+		item.append(
+			element(
+				doc,
+				'span',
+				{ class: 'meta' },
+				[lead.email, lead.phone, lead.message, when(lead.createdAt)].filter(Boolean).join(' · '),
+			),
+		);
+		if (lead.conversationId) {
+			const chat = buttonOf(doc, t('inbox.openChat'), { class: 'secondary small' });
+			chat.addEventListener('click', () => open(lead.conversationId));
+			item.append(chat);
+		}
+		if (mayDelete) {
+			const remove = buttonOf(doc, t('common.delete'), { class: 'secondary small remove' });
+			remove.addEventListener('click', async () => {
+				if (remove.dataset.sure !== '1') {
+					remove.dataset.sure = '1';
+					remove.textContent = t('inbox.confirmDelete');
+					return;
+				}
+				const answer = await adminCall(api, 'DELETE', `/v1/admin/leads/${encodeURIComponent(lead.id)}`);
+				note.textContent = answer.ok ? t('inbox.deleted') : failure(answer);
+				if (answer.ok) item.remove();
+				if (answer.status === 403) {
+					mayDelete = false;
+					for (const each of list.querySelectorAll('.remove')) setHidden(each, true);
+				}
+			});
+			item.append(remove);
+		}
+		return item;
+	};
+
+	/** @param {boolean} reset */
+	const load = async (reset) => {
+		const query = new URLSearchParams({ limit: '25' });
+		if (!reset && cursor) query.set('cursor', cursor);
+		const answer = await adminCall(api, 'GET', `/v1/admin/leads?${query.toString()}`);
+		if (!answer.ok) {
+			note.textContent = failure(answer);
+			if (answer.status === 403) setHidden(part, true);
+			return;
+		}
+		/** @type {any[]} */
+		const items = answer.data.items ?? [];
+		if (reset) list.replaceChildren();
+		cursor = answer.data.hasMore ? (answer.data.nextCursor ?? null) : null;
+		note.textContent = reset && items.length === 0 ? t('inbox.noLeads') : '';
+		list.append(...items.map(row));
+		setHidden(more, !cursor);
+		setHidden(part, false);
+	};
+	more.addEventListener('click', () => void load(false));
+	return { part, load };
 };
 
 /**

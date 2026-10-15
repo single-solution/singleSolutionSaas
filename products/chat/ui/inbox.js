@@ -4,7 +4,8 @@
  * its messages (AI and staff answers formatted as the visitor sees them) and internal notes, reply (with attachments of
  * the staff file types and size, C12, and saved replies), notes, status, AI paused, Hand back to
  * the AI for a chat waiting for a person (CH-3), assignment (with presence and Full), custom field values, the context
- * panel with the AI summary, transcripts and rating requests; your own presence and the staff's max chats. Only parts of switched-on features show, and a part whose
+ * panel with the AI summary, transcripts and rating requests; your own presence and the staff's max chats; the leads
+ * visitors left (lead capture on), with Open the chat and Delete. Only parts of switched-on features show, and a part whose
  * route answers 403 hides itself. It checks for news with the same back-off as the visitor chat. Where the widget is
  * wide the open conversation sits beside the list; in a narrow one it replaces the list until it is closed (PLAN 0.6:
  * by the widget's own width, a container query).
@@ -28,7 +29,7 @@ import {
 	whenOf,
 } from './common.js';
 import { element } from './dom.js';
-import { contextPart, savedReplies, staffPart } from './inbox-parts.js';
+import { contextPart, leadsPart, savedReplies, staffPart } from './inbox-parts.js';
 import { messageBody } from './rich.js';
 import { WIDGET_CSS } from './styles.js';
 import { adminCall } from './tickets.js';
@@ -135,6 +136,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 					fillAssign();
 				},
 			});
+			const leads = leadsPart({ ...kit, when, open: (id) => void show(id) });
 			const listPart = element(doc, 'div', { class: 'list-part' });
 			listPart.append(filters, note, list, more);
 			// the list and the open conversation: side by side, or one at a time in a narrow widget
@@ -142,6 +144,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			split.append(listPart, detail);
 			box.append(element(doc, 'h2', {}, t('inbox.title')), total, people.part, split);
 			if (on('saved_replies')) box.append(saved.part);
+			if (on('leads_flows')) box.append(leads.part);
 			root.append(box);
 
 			/** @param {number} count */
@@ -498,6 +501,7 @@ export const mountInbox = ({ host, win, api, config, clock, onUnread }) => {
 			void (async () => {
 				if (on('assignment') || on('presence_queue')) await people.load();
 				if (on('saved_replies')) await saved.load();
+				if (on('leads_flows')) await leads.load(true);
 				await load(true);
 				checks.start();
 			})();

@@ -2801,6 +2801,33 @@
 		"description": "404 not_found.",
 		"status": 204
 	},
+	"GET /v1/admin/leads": {
+		"summary": "Leads, newest first",
+		"description": "The leads your visitors left (Lead capture and flows), for the inbox widget.",
+		"query": {
+			"type": "object",
+			"properties": {
+				"cursor": {
+					"type": "string",
+					"description": "nextCursor of the previous page."
+				},
+				"limit": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 25
+				}
+			}
+		},
+		"response": {
+			"$ref": "#/components/schemas/LeadPage"
+		}
+	},
+	"DELETE /v1/admin/leads/:id": {
+		"summary": "Delete a lead for good",
+		"description": "Written to the activity log as lead.deleted, by the lead's name. 404 not_found.",
+		"status": 204
+	},
 	"GET /v1/admin/knowledge/entries": {
 		"summary": "Knowledge base entries, last changed first",
 		"query": {
@@ -3368,15 +3395,15 @@
 		}
 	},
 	"POST /v1/data/delete-all": {
-		"summary": "Delete every conversation",
-		"description": "For going live without your test chats: every conversation with its messages, attachments (from your storage), the guest records behind it and staff alerts still waiting to be sent about it. Leads stay (they are records of their own). 100 conversations at a time: after 8 seconds the answer says more, and the next call goes on where it stopped. confirm repeats the website's domain (422 validation_failed at /confirm, at /scope for another scope). Server token only; each call writes one activity entry (data.deleted_all) with its counts.",
+		"summary": "Delete every conversation, or every lead",
+		"description": "For going live without your test data. scope conversations: every conversation with its messages, attachments (from your storage), the guest records behind it and staff alerts still waiting to be sent about it; leads stay (they are records of their own), 100 conversations at a time. scope leads: every lead (conversations stay), 1,000 at a time. After 8 seconds the answer says more, and the next call goes on where it stopped. confirm repeats the website's domain (422 validation_failed at /confirm, at /scope for another scope). Server token only; each call writes one activity entry (data.deleted_all, its target the scope) with its counts.",
 		"body": {
 			"type": "object",
 			"required": ["scope", "confirm"],
 			"properties": {
 				"scope": {
 					"type": "string",
-					"enum": ["conversations"]
+					"enum": ["conversations", "leads"]
 				},
 				"confirm": {
 					"type": "string",
@@ -3385,49 +3412,79 @@
 			}
 		},
 		"response": {
-			"type": "object",
-			"required": ["scope", "deleted", "more"],
-			"additionalProperties": false,
-			"properties": {
-				"scope": {
-					"const": "conversations"
-				},
-				"deleted": {
+			"oneOf": [
+				{
 					"type": "object",
-					"required": ["conversations", "messages", "guests", "files", "alerts"],
+					"required": ["scope", "deleted", "more"],
 					"additionalProperties": false,
 					"properties": {
-						"conversations": {
-							"type": "integer",
-							"minimum": 0
+						"scope": {
+							"const": "conversations"
 						},
-						"messages": {
-							"type": "integer",
-							"minimum": 0
+						"deleted": {
+							"type": "object",
+							"required": ["conversations", "messages", "guests", "files", "alerts"],
+							"additionalProperties": false,
+							"properties": {
+								"conversations": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"messages": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"guests": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Guest records (device keys)."
+								},
+								"files": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Attachments deleted from your storage (one storage cannot delete now is left there)."
+								},
+								"alerts": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Staff alerts that were still waiting to be sent."
+								}
+							},
+							"description": "What this call deleted."
 						},
-						"guests": {
-							"type": "integer",
-							"minimum": 0,
-							"description": "Guest records (device keys)."
-						},
-						"files": {
-							"type": "integer",
-							"minimum": 0,
-							"description": "Attachments deleted from your storage (one storage cannot delete now is left there)."
-						},
-						"alerts": {
-							"type": "integer",
-							"minimum": 0,
-							"description": "Staff alerts that were still waiting to be sent."
+						"more": {
+							"type": "boolean",
+							"description": "Conversations are left: call again."
 						}
-					},
-					"description": "What this call deleted."
+					}
 				},
-				"more": {
-					"type": "boolean",
-					"description": "Conversations are left: call again."
+				{
+					"type": "object",
+					"required": ["scope", "deleted", "more"],
+					"additionalProperties": false,
+					"properties": {
+						"scope": {
+							"const": "leads"
+						},
+						"deleted": {
+							"type": "object",
+							"required": ["leads"],
+							"additionalProperties": false,
+							"properties": {
+								"leads": {
+									"type": "integer",
+									"minimum": 0
+								}
+							},
+							"description": "What this call deleted."
+						},
+						"more": {
+							"type": "boolean",
+							"description": "Leads are left: call again."
+						}
+					}
 				}
-			}
+			]
 		}
 	},
 	"GET /v1/staff": {
@@ -3481,6 +3538,11 @@
 				}
 			}
 		}
+	},
+	"DELETE /v1/leads/:id": {
+		"summary": "Delete a lead for good",
+		"description": "Written to the activity log as lead.deleted, by the lead's name. 404 not_found.",
+		"status": 204
 	},
 	"GET /v1/knowledge/entries": {
 		"summary": "Knowledge base entries, last changed first",

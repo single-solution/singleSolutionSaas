@@ -6,8 +6,8 @@
  * (a timeline, or one note per conversation, C11), status, AI pause (with who, when and why; by reply or manage
  * rights as the inbox setting says, C11; resuming hands a waiting chat back to the AI, CH-3), assignment with presence
  * and max chats (the first replier, C11; anyone Accounts allows to reply in the inbox, CH-6), custom field values,
- * the AI summary, transcripts, rating requests, delete (one, or every conversation, C20), saved replies and the staff
- * list. Older messages page by
+ * the AI summary, transcripts, rating requests, delete (one, or every conversation, C20), saved replies, the staff
+ * list and leads (read, delete one, or every lead). Older messages page by
  * sequence (C8). Guest chats can stay hidden until handed to a person (C11), or always (CH-13). A staff reply alerts a
  * visitor who left (C6). Staff actions are written to the activity log with a label (the visitor's name, a title) and
  * a short detail, never message contents.
@@ -35,6 +35,8 @@ const REASON_MAX = 200;
 const DELETE_BATCH = 100;
 const DELETE_GROUP = 10;
 const DELETE_BUDGET_MS = 8_000;
+/** Leads delete-all deletes at a time (scope `leads`). */
+const LEAD_BATCH = 1000;
 /** Attachments deleted from the website's storage at once. */
 const STORAGE_DELETES_AT_ONCE = 8;
 /** What an assignee from Accounts must be allowed (CH-6), and how many pages of 100 users are read to find them. */
@@ -435,24 +437,37 @@ export const createInbox = (product, service, reply) => {
 	};
 
 	/**
-	 * `POST /v1/data/delete-all { scope: 'conversations', confirm }` (server token, C20): every conversation with what
-	 * belongs to it (messages, attachments, guest records and staff alerts still to be sent about it), ten at a time;
-	 * after 8 seconds the answer says `more` and the next call goes on. `confirm` repeats the website's domain. Each call
-	 * writes one activity entry with its counts.
+	 * `POST /v1/data/delete-all { scope, confirm }` (server token, C20): scope `conversations`, every conversation with
+	 * what belongs to it (messages, attachments, guest records and staff alerts still to be sent about it), ten at a
+	 * time; scope `leads`, every lead, a thousand at a time. After 8 seconds the answer says `more` and the next call
+	 * goes on. `confirm` repeats the website's domain. Each call writes one activity entry with its counts.
 	 * @param {any} ctx
 	 */
 	const removeAll = async (ctx) => {
 		const body = bodyOf(ctx.body);
 		/** @param {string} path @param {string} message */
 		const refuse = (path, message) => problem('validation_failed', message, { errors: [{ path, message }] });
-		if (body.scope !== 'conversations') throw refuse('/scope', 'scope is conversations.');
+		if (body.scope !== 'conversations' && body.scope !== 'leads') throw refuse('/scope', 'scope is conversations or leads.');
 		const domain = String(ctx.status?.domain ?? '');
 		if (body.confirm !== domain) throw refuse('/confirm', `Type the website's domain (${domain}) to confirm.`);
 		const s = await service.site(ctx);
 		const started = product.now();
-		const deleted = { conversations: 0, messages: 0, guests: 0, files: 0, alerts: 0 };
 		const overBudget = () => product.now() - started >= DELETE_BUDGET_MS;
 		let more = true;
+		if (body.scope === 'leads') {
+			let leads = 0;
+			while (more && !overBudget()) {
+				const removed = await s.store.leads.removeSome(LEAD_BATCH);
+				leads += removed;
+				more = removed === LEAD_BATCH;
+			}
+			await service.log(s, actorOf(ctx), 'data.deleted_all', 'leads', {
+				label: 'leads',
+				detail: `${counted(leads, 'lead')}${more ? ' (more to delete)' : ''}`,
+			});
+			return { scope: 'leads', deleted: { leads }, more };
+		}
+		const deleted = { conversations: 0, messages: 0, guests: 0, files: 0, alerts: 0 };
 		while (more && !overBudget()) {
 			const batch = await s.store.conversations.some(DELETE_BATCH);
 			let at = 0;
@@ -631,6 +646,19 @@ export const createInbox = (product, service, reply) => {
 		return { lead: leadView(row) };
 	};
 
+	/**
+	 * Delete a lead for good (staff, or the merchant's server), in the activity log by its name.
+	 * @param {any} ctx
+	 */
+	const removeLead = async (ctx) => {
+		const s = await service.site(ctx);
+		const row = await s.store.leads.get(String(ctx.params.id));
+		if (!row) throw problem('not_found', 'No such lead.');
+		await s.store.leads.remove([row.id]);
+		await service.log(s, actorOf(ctx), 'lead.deleted', row.id, { label: row.name || 'Lead' });
+		return noContent();
+	};
+
 	return Object.freeze({
 		list,
 		count: counts.count,
@@ -658,6 +686,7 @@ export const createInbox = (product, service, reply) => {
 		deleteReply,
 		leads,
 		lead,
+		removeLead,
 	});
 };
 
