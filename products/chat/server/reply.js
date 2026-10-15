@@ -242,6 +242,7 @@ export const createReply = (product, service) => {
 		if (said) current = (await service.botMessage(s, current, said)).conversation;
 		if (current.visitor.kind === 'guest' && !current.email && !current.phone)
 			current = (await service.botMessage(s, current, String(texts['chat.contactAsk']))).conversation;
+		current = await service.route(s, current, await conversationLanguage(s, current));
 		await service.staffAlert(s, current, 'needs_you');
 		if (s.on.includes('ai_summary')) s.ctx.after(() => summarise(s, current.id).catch(() => null));
 		return current;
@@ -356,6 +357,39 @@ export const createReply = (product, service) => {
 	};
 
 	/**
+	 * The language of a visitor's message (language lock on, else null): script, telling letters and marker words with
+	 * the merchant's thresholds; when it shows none, the default language (else the first allowed one, else English;
+	 * CH-38).
+	 * @param {Site} s
+	 * @param {string} text
+	 * @returns {Promise<string | null>}
+	 */
+	const languageOf = async (s, text) => {
+		if (!s.on.includes('language_lock') || !text) return null;
+		const lock = await s.values('language_lock');
+		return detectLanguage(text, {
+			fallback: String(lock.defaultLanguage || lock.allowedLanguages[0] || 'en'),
+			allowed: lock.allowedLanguages,
+			markers: markerSetsOf(lock.markerWords),
+			minMarkers: Number(lock.minMarkers),
+			markerShare: Number(lock.markerShare),
+			minWordsForShare: Number(lock.minWordsForShare),
+		}).language;
+	};
+
+	/**
+	 * The language of the conversation's latest visitor message (language lock on), else null.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 */
+	const conversationLanguage = async (s, c) => {
+		if (!s.on.includes('language_lock')) return null;
+		const recent = await s.store.messages.list(c.id, { limit: 20, internal: false });
+		const last = [...recent].reverse().find((m) => m.author === 'visitor' && m.text);
+		return last ? languageOf(s, last.text) : null;
+	};
+
+	/**
 	 * After a visitor message was stored. `inline`: the AI answers within the request (C10).
 	 * @param {Site} s
 	 * @param {ConversationRecord} c
@@ -388,7 +422,8 @@ export const createReply = (product, service) => {
 			if (aiOn && (await reassureDue(s, current))) return startAnswer(s, current, inline);
 			return current;
 		}
-		if (!aiOn) return current;
+		// without the AI the chat is your staff's: routing gives it to a member (C12)
+		if (!aiOn) return service.route(s, current, await languageOf(s, text));
 		return startAnswer(s, current, inline);
 	};
 
@@ -817,19 +852,7 @@ export const createReply = (product, service) => {
 		const allowed = connections.length > 0 && (await withinReplyLimits(s, c)) && !(await service.capped(s));
 		const lock = s.on.includes('language_lock') ? await s.values('language_lock') : null;
 		const markers = lock ? markerSetsOf(lock.markerWords) : [];
-		// the language of the visitor's last message: script, telling letters and marker words with the merchant's
-		// thresholds; when it shows none, the default language (else the first allowed one, else English; CH-38)
-		const language =
-			lock && last
-				? detectLanguage(last.text, {
-						fallback: String(lock.defaultLanguage || lock.allowedLanguages[0] || 'en'),
-						allowed: lock.allowedLanguages,
-						markers,
-						minMarkers: Number(lock.minMarkers),
-						markerShare: Number(lock.markerShare),
-						minWordsForShare: Number(lock.minWordsForShare),
-					}).language
-				: null;
+		const language = last ? await languageOf(s, last.text) : null;
 		/** @type {import('../core/language.js').CheckOptions} */
 		const check = {
 			markers,

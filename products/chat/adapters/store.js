@@ -17,7 +17,10 @@ import { normalisePhone } from '@ss/contracts/phone';
 /** @typedef {import('@ss/app-kit').WebsiteData} WebsiteData */
 /** @typedef {import('../core/conversation.js').ConversationRecord} ConversationRecord */
 /** @typedef {import('../core/conversation.js').MessageRecord} MessageRecord */
-/** @typedef {{ id: string, name: string, email?: string, presence?: 'online' | 'away' | 'offline', checkedInAt?: Date, maxChats?: number | null }} StaffRecord */
+/**
+ * @typedef {{ id: string, name: string, email?: string, presence?: 'online' | 'away' | 'offline', checkedInAt?: Date,
+ *   maxChats?: number | null, lastAssignedAt?: Date }} StaffRecord `lastAssignedAt`: the last chat routing gave them (C12)
+ */
 /** @typedef {{ name?: string | null, email?: string | null, phone?: string | null }} Contact */
 /** @typedef {{ id: string, conversationId: string | null, name: string | null, email: string | null, phone: string | null, message: string | null, custom: Record<string, unknown>, page: unknown, createdAt: Date }} LeadRecord */
 /**

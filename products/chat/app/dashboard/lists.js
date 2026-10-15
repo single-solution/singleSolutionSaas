@@ -26,6 +26,7 @@ import { FALLBACK_LIMITS, PLACEHOLDERS, fallbackProblems, placeholdersOf } from 
 import { FIELD_TYPES } from '../../core/fields.js';
 import { STANDARD_FIELDS } from '../../core/flows.js';
 import { checkRedactionPatterns } from '../../core/moderation.js';
+import { checkTeams } from '../../core/routing.js';
 import { PARAMETER_TYPES } from '../../core/tools.js';
 import { Loaded, call, fill, useLoad } from '@ss/ui/dashboard';
 import { TEXTS } from './texts.js';
@@ -323,6 +324,74 @@ export function PageRulesEditor({ websiteId, off }) {
 					/>
 				</>
 			)}
+		/>
+	);
+}
+
+const TM = L.teams;
+
+/**
+ * Settings → Inbox: the merchant's teams for routing (C12), each checked as the server checks it.
+ * @param {EditorProps} props
+ */
+export function TeamsEditor({ websiteId, off }) {
+	/** @param {Item} team */
+	const clean = (team) => ({
+		name: String(team.name ?? '').trim(),
+		members: cleanLines(team.members),
+		languages: cleanLines(team.languages),
+		pages: cleanLines(team.pages),
+	});
+	/** @param {Item} team */
+	const problemsOf = (team) => {
+		const checked = checkTeams([clean(team)]);
+		return checked.ok ? [] : checked.errors.map((error) => error.replace(/^Team 1: /, ''));
+	};
+	return (
+		<ListEditor
+			websiteId={websiteId}
+			list="teams"
+			title={TM.title}
+			help={TM.help}
+			itemLabel={TM.item}
+			max={20}
+			off={off}
+			blank={() => ({ name: '', members: [], languages: [], pages: [] })}
+			clean={clean}
+			invalid={(team) => problemsOf(team).length > 0}
+			render={(team, set) => {
+				const problems = problemsOf(team);
+				return (
+					<>
+						<Input
+							label={TM.name}
+							value={team.name ?? ''}
+							error={problems.length > 0 ? problems.join(' ') : undefined}
+							onChange={(event) => set({ name: event.target.value })}
+						/>
+						<FieldGrid>
+							<TextArea
+								label={TM.members}
+								rows={3}
+								value={(team.members ?? []).join('\n')}
+								onChange={(event) => set({ members: toLines(event.target.value) })}
+							/>
+							<TextArea
+								label={TM.languages}
+								rows={3}
+								value={(team.languages ?? []).join('\n')}
+								onChange={(event) => set({ languages: toLines(event.target.value) })}
+							/>
+							<TextArea
+								label={TM.pages}
+								rows={3}
+								value={(team.pages ?? []).join('\n')}
+								onChange={(event) => set({ pages: toLines(event.target.value) })}
+							/>
+						</FieldGrid>
+					</>
+				);
+			}}
 		/>
 	);
 }

@@ -191,6 +191,7 @@ const LIST_WORDS = {
 	page_rules: (rules) => countedList('page rule', 'page rules', rules),
 	fallback_answers: (answers) => countedList('answer', 'answers', answers),
 	redaction_patterns: (patterns) => namedList('pattern', 'patterns', patterns, (pattern) => pattern.name),
+	teams: (teams) => namedList('team', 'teams', teams, (team) => team.name),
 };
 
 /**

@@ -6,8 +6,8 @@
 			"type": "string",
 			"title": "Assign automatically",
 			"default": "off",
-			"enum": ["off", "first_replier"],
-			"description": "First replier: an unassigned chat goes to the first member of staff who replies."
+			"enum": ["off", "first_replier", "round_robin", "least_busy"],
+			"description": "First replier: an unassigned chat goes to the first member of staff who replies. Round robin: a chat that comes to your staff (handed to a person, or any chat while AI replies are off) goes to the online member of its team who got one the longest ago. Least busy: to the online member of its team with the fewest open chats. Teams (below) take chats by the visitor's language or the page; without teams, every member of staff. Away, offline and full members get none."
 		}
 	}
 }

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { byText, cleanup, click, render, type } from '@ss/ui/testing';
 import { DashboardProvider } from '@ss/ui/dashboard';
 import manifest from '../manifest.json' with { type: 'json' };
-import { FallbackAnswersEditor, RedactionPatternsEditor } from '../app/dashboard/lists.js';
+import { FallbackAnswersEditor, RedactionPatternsEditor, TeamsEditor } from '../app/dashboard/lists.js';
 import { TABS } from '../app/dashboard/tabs.js';
 import { TEXTS } from '../app/dashboard/texts.js';
 import { checkFallbackAnswers } from '../core/fallback.js';
@@ -241,5 +241,34 @@ describe('the redaction patterns editor (C14)', () => {
 		click(button(container, 'Save list'));
 		await settle();
 		expect(puts).toEqual([[{ name: 'member number', pattern: 'M-\\d{6}', replacement: '' }]]);
+	});
+});
+
+describe('the teams editor (C12)', () => {
+	it('refuses a team without members, as the server would, and saves the list', async () => {
+		const path = `${BASE}/lists/teams`;
+		/** @type {any[]} */
+		const puts = [];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (/** @type {string} */ url, /** @type {RequestInit} */ init = {}) => {
+				if (url !== path) return new Response(JSON.stringify({ status: 404 }), { status: 404 });
+				if (init.method === 'PUT') puts.push(JSON.parse(String(init.body)).value);
+				return new Response(JSON.stringify({ value: puts.at(-1) ?? [] }), { status: 200 });
+			}),
+		);
+		const { container } = render(inDashboard(<TeamsEditor websiteId={WEBSITE} />));
+		await settle();
+		click(button(container, 'Add'));
+		type(field(container, 'Name'), 'Wholesale');
+		expect(container.textContent).toContain('list 1 to 100 members by email address or user id.');
+		expect(/** @type {HTMLButtonElement} */ (button(container, 'Save list')).disabled).toBe(true);
+		type(field(container, 'Members (one per line: email address or user id)'), 'ana@shop.example.com\nusr_lee');
+		type(field(container, 'Pages (one per line: paths such as /wholesale/**)'), '/wholesale/**');
+		click(button(container, 'Save list'));
+		await settle();
+		expect(puts).toEqual([
+			[{ name: 'Wholesale', members: ['ana@shop.example.com', 'usr_lee'], languages: [], pages: ['/wholesale/**'] }],
+		]);
 	});
 });

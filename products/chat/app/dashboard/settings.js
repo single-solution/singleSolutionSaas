@@ -15,6 +15,7 @@ import {
 	FlowsEditor,
 	PageRulesEditor,
 	RedactionPatternsEditor,
+	TeamsEditor,
 	ToolSecret,
 	ToolsEditor,
 } from './lists.js';
@@ -38,7 +39,7 @@ const SECTIONS = [
 	{ id: 'leads', features: ['leads_flows'] },
 	{ id: 'customFields', features: [] },
 	{ id: 'handoff', features: ['handoff', 'presence_queue'] },
-	{ id: 'inbox', features: ['staff_alerts', 'inbox'] },
+	{ id: 'inbox', features: ['staff_alerts', 'inbox', 'assignment'] },
 	{ id: 'attachments', features: ['attachments'] },
 	{ id: 'ratings', features: ['ratings'] },
 	{ id: 'transcripts', features: ['transcripts'] },
@@ -156,7 +157,7 @@ export function SettingsTab({ websiteId: id }) {
 						<CustomFieldsEditor websiteId={websiteId} off={off('custom_fields')} />
 					) : null,
 					handoff: null,
-					inbox: null,
+					inbox: seen('assignment') ? <TeamsEditor websiteId={websiteId} off={off('assignment')} /> : null,
 					attachments: null,
 					ratings: null,
 					transcripts: seen('transcripts') ? <Callout tone="info">{TEXTS.settings.transcriptsNote}</Callout> : null,

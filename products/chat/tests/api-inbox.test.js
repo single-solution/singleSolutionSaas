@@ -261,6 +261,43 @@ describe('inbox', () => {
 	});
 });
 
+describe('teams and routing (C12)', () => {
+	it('gives each new chat to an online member of its team: round robin, least busy, by page', async () => {
+		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'handoff', 'assignment', 'presence_queue']);
+		await sys.setting('assignment', 'autoAssign', 'round_robin');
+		await sys.list('teams', [
+			{ name: 'Wholesale', members: ['usr_sam'], languages: [], pages: ['/wholesale/**'] },
+			{ name: 'Everyone', members: ['usr_sam', 'lee@shop.example.com'], languages: [], pages: [] },
+		]);
+		const sam = await sys.ticket(['inbox.read', 'inbox.reply']);
+		const lee = await sys.ticket(['inbox.read', 'inbox.reply'], { id: 'usr_lee', name: 'Lee', email: 'lee@shop.example.com' });
+		const kim = await sys.ticket(['inbox.read'], { id: 'usr_kim', name: 'Kim', email: 'kim@shop.example.com' });
+		// opening the inbox checks each in (online); Kim is in no team
+		for (const ticket of [sam, lee, kim]) await sys.admin(ticket, 'GET', '/v1/admin/conversations');
+		/** @param {string} url */
+		const newChat = async (url) => {
+			const sent = await sys.visitor()('POST', '/v1/chat/messages', { text: 'hello', page: { url, kind: 'other' } });
+			const view = await sys.admin(sam, 'GET', `/v1/admin/conversations/${sent.json.chat.conversation.id}`);
+			return view.json.conversation.assignedTo?.id ?? null;
+		};
+		// round robin: the one who got a chat the longest ago (never first, then by id)
+		expect(await newChat('https://shop.example.com/a')).toBe('usr_lee');
+		expect(await newChat('https://shop.example.com/b')).toBe('usr_sam');
+		expect(await newChat('https://shop.example.com/c')).toBe('usr_lee');
+		// a page of a team's pages goes to that team
+		expect(await newChat('https://shop.example.com/wholesale/x')).toBe('usr_sam');
+		// least busy: the fewest open chats (Sam 2, Lee 2: then the longest ago)
+		await sys.setting('assignment', 'autoAssign', 'least_busy');
+		expect(await newChat('https://shop.example.com/d')).toBe('usr_lee');
+		// away members get none
+		await sys.admin(lee, 'PUT', '/v1/admin/staff/me/presence', { presence: 'away' });
+		expect(await newChat('https://shop.example.com/e')).toBe('usr_sam');
+		// first replier gives none out
+		await sys.setting('assignment', 'autoAssign', 'first_replier');
+		expect(await newChat('https://shop.example.com/f')).toBeNull();
+	});
+});
+
 describe('delete every conversation (C20)', () => {
 	it('deletes every conversation and what belongs to it, with the server token and the domain typed', async () => {
 		const sys = await start(['visitor_chat', 'guest_chat', 'inbox', 'attachments', 'staff_alerts', 'leads_flows']);

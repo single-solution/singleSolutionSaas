@@ -95,6 +95,15 @@ export const TEXTS = dashboardTexts({
 			types: { string: 'Text', number: 'Number', boolean: 'Yes or no' },
 			required: 'Required',
 		},
+		teams: {
+			title: 'Teams',
+			help: 'With Assign automatically round robin or least busy, a chat goes to the first team whose languages hold the visitor’s language (Language lock) or whose pages match the page, else to the team with neither; without teams, to every member of staff.',
+			item: 'Team',
+			name: 'Name',
+			members: 'Members (one per line: email address or user id)',
+			languages: 'Languages (one per line: codes such as en)',
+			pages: 'Pages (one per line: paths such as /wholesale/**)',
+		},
 		redactionPatterns: {
 			title: 'Redaction patterns',
 			help: 'Your own personal data to hide in visitor messages and AI answers, before the built-in kinds: national or tax IDs, member numbers, wallets. A pattern is a safe regular expression: characters, ., classes such as [A-Z] or \\d, \\p{L} (any letter), groups, |, the repeats * + ? {n} {n,m} (at most 100), ^ $ and \\b; case is ignored; up to 200 characters.',

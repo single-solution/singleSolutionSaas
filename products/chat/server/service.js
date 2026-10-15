@@ -41,6 +41,7 @@ import { officeState, parseOfficeHours } from '../core/handoff.js';
 import { zoneOr } from '../core/time.js';
 import { plainOf } from '../core/markdown.js';
 import { compileRedactionPatterns } from '../core/moderation.js';
+import { ROUTED, inTeam, pickAssignee, teamFor } from '../core/routing.js';
 import { GUEST_HEADER, GUEST_KEY, SIGN_IN_HEADER } from '../core/widgets.js';
 import { createStore } from '../adapters/store.js';
 
@@ -863,8 +864,63 @@ export const createService = (product) => {
 				}
 			: null;
 
+	/**
+	 * Give an unassigned chat to a member of staff (C12, Assign automatically round robin or least busy): the team the
+	 * visitor's language or the page picks (else every member of staff), its online members with room (max chats with
+	 * Presence and queue on), then by round robin or the fewest open chats. Nobody fits: it stays unassigned.
+	 * @param {Site} s
+	 * @param {ConversationRecord} c
+	 * @param {string | null} language the visitor's language (language lock), else null
+	 * @returns {Promise<ConversationRecord>}
+	 */
+	const route = async (s, c, language) => {
+		if (!s.on.includes('assignment') || c.assignedTo !== null) return c;
+		const { autoAssign } = await s.values('assignment');
+		const mode = ROUTED.find((each) => each === autoAssign);
+		if (!mode) return c;
+		const page = c.currentPage ?? c.page;
+		let path = null;
+		try {
+			path = page?.url ? new URL(page.url).pathname : null;
+		} catch {
+			path = null;
+		}
+		const team = teamFor(/** @type {any} */ (await s.list('teams')), { language, path });
+		const open = await s.store.conversations.openByStaff();
+		const presence = s.on.includes('presence_queue');
+		const defaultMax = presence ? Number((await s.values('presence_queue')).maxChats) || null : null;
+		const candidates = (await s.store.staff.list())
+			.filter((m) => (team ? inTeam(team, m) : true))
+			.filter((m) => {
+				const checkedIn = m.checkedInAt ? new Date(m.checkedInAt).getTime() : 0;
+				const online = now() - checkedIn <= PRESENCE_MS && (m.presence ?? 'online') === 'online';
+				const max = presence ? (m.maxChats ?? defaultMax) : null;
+				return online && (max === null || (open.get(m.id) ?? 0) < max);
+			})
+			.map((m) => ({
+				id: m.id,
+				name: m.name,
+				open: open.get(m.id) ?? 0,
+				lastAssignedAt: m.lastAssignedAt ? new Date(m.lastAssignedAt).getTime() : 0,
+			}));
+		const chosen = /** @type {(typeof candidates)[number] | null} */ (pickAssignee(candidates, mode));
+		if (!chosen) return c;
+		const assigned = await s.store.conversations.update(c.id, {
+			set: { assignedTo: chosen.id },
+			unless: { assignedTo: null },
+		});
+		if (!assigned) return c;
+		await s.store.staff.set(chosen.id, { lastAssignedAt: new Date(now()) });
+		await log(s, { kind: 'server', id: 'server', name: 'Server' }, 'conversation.assigned', c.id, {
+			label: c.name || (c.visitor.kind === 'guest' ? 'Guest' : 'Signed-in visitor'),
+			detail: `Assigned to ${chosen.name}${team ? ` (${team.name})` : ''}: ${mode === 'round_robin' ? 'round robin' : 'least busy'}`,
+		});
+		return /** @type {ConversationRecord} */ (assigned);
+	};
+
 	return Object.freeze({
 		site,
+		route,
 		moderation,
 		guestLimit,
 		staffOfAccounts,
