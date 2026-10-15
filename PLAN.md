@@ -1019,8 +1019,16 @@ Merchants see **credits only**, never money. Only the Portal's clock counts for 
    - **Overviews talk**: the admin Overview opens with a greeting and one sentence of what matters now, a **Needs you**
      list (each item says what happens if it waits and carries its button), a setup checklist while the platform is
      new, the month's numbers, the first merchants with initials and their balance, the products, and the latest
-     activity as a timeline. The merchant Overview and the product dashboards' overviews follow the same pattern (to
-     do). Same style in light and dark, and in product dashboards.
+     activity as a timeline. The merchant Overview and the product dashboards' overviews follow the same pattern. Same
+     style in light and dark, and in product dashboards. (Built 2026-10-15: one implementation in `@ss/ui`
+     `overview.js`, its words in `overview-texts.js`, used by the Portal's Overviews and by the product dashboards: a
+     product Overview greets by name, names the most urgent item in one sentence beside the status, lists Needs you —
+     stopped, suspended or in grace, no feature on, a missing or failed connection, the widget not seen, business.json
+     not found, plus the product's own items — red first, each with its button (the right dashboard section, support or
+     the Portal for credits, Check again), shows the setup checklist, today's cost and the features on plus the
+     product's own numbers, and Recent changes as a timeline in the viewer's local time. Accounts, Notifications, Chat,
+     Payments, Growth and `ss app init` use it, each product reading its extra data only while its feature is on;
+     Ecommerce to follow.)
 - **Colour rule (owner decision 2026-10-09: one accent, final)**: **indigo is the only accent** — primary buttons,
   links, the active item, icon tiles and badges; surfaces are neutral; **green, amber and red only for status**. No
   screen names a colour for meaning, and the product dashboards follow the same rule.
