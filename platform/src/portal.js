@@ -33,7 +33,7 @@ import { defaultRandomBytes } from './infra/util.js';
 /**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,
  *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array,
- *   mailer?: import('./infra/mailer.js').Mailer, system?: import('./infra/system.js').SystemStore | null,
+ *   mailer?: import('./infra/mailer.js').Mailer, system: import('./infra/system.js').SystemStore,
  *   background?: { mode?: 'on' | 'off', fallback?: import('./infra/http.js').AfterScheduler } }} options
  *   `background`: work after responses (default `off` when `config.env` is `test`); `fallback` runs it when the
  *   adapter gave no `after()` (default: in the background of the request)
@@ -46,7 +46,7 @@ export const createPortal = ({
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
 	mailer,
-	system = null,
+	system,
 	background: backgroundOptions = {},
 }) => {
 	const registry = createRegistry([...INFRA_COLLECTIONS, ...modules.flatMap((m) => m.collections ?? [])]);

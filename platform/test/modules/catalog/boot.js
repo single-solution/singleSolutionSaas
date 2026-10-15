@@ -137,7 +137,7 @@ export const bootPortal = async ({ db, clock = createClock(T0), settings, allowH
 	const verify = (url, productId) =>
 		verifyLaunch({
 			token: decodeURIComponent(String(new URL(url).searchParams.get('launch'))),
-			keyResolver: createKeyResolver({ jwks: portal.shared.keys.jwks() }),
+			keyResolver: createKeyResolver({ jwks: portal.shared.keys.publishedJwks() }),
 			audience: productId,
 			issuer: PORTAL_URL,
 			consume: consumeWith(createMemoryReplayStore({ now: clock.now })),

@@ -25,7 +25,7 @@ import { platformError } from './errors.js';
  * @property {() => number} now
  * @property {(n: number) => Uint8Array} randomBytes
  * @property {import('@ss/contracts').ProblemFactory} problems
- * @property {import('./crypto.js').PortalKeys} keys Portal signer(s), JWKS, resolver over our own keys
+ * @property {import('./crypto.js').PortalKeys} keys the Portal signer, the token signer and the published JWKS
  * @property {import('./crypto.js').SecretBox} secretBox seal/open the Portal's stored secrets with `ENCRYPTION_KEY`, and
  *   `ENCRYPTION_KEY_PREVIOUS` while it changes (SMTP password, two-step secrets, server tokens; PLAN 0.4.8)
  * @property {import('./audit.js').Audit} audit
@@ -37,8 +37,8 @@ import { platformError } from './errors.js';
  * @property {import('./auth.js').LoginThrottle} loginThrottle
  * @property {import('@ss/protocol').ReplayStore} replayStore
  * @property {{ name: (kind: 'admin' | 'merchant') => string, set: (kind: 'admin' | 'merchant', token: string, maxAgeSeconds: number) => string, clear: (kind: 'admin' | 'merchant') => string }} cookies
- * @property {import('./system.js').SystemStore | null} system generated secrets and recorded settings (admin settings,
- *   key rotation); null when the Portal was built without one (tests)
+ * @property {import('./system.js').SystemStore} system generated secrets and recorded settings (admin settings, key
+ *   rotation)
  */
 
 /**
@@ -46,7 +46,6 @@ import { platformError } from './errors.js';
  *   module: string,
  *   collection: (name: string) => any,
  *   service: (name: string) => any,
- *   moduleNames: () => string[],
  * }} ModuleContext
  */
 
@@ -138,7 +137,6 @@ export const composeModules = (modules, { shared, collection }) => {
 			logger: shared.logger.child({ module: name }),
 			collection: (/** @type {string} */ collectionName) => collection(name, collectionName),
 			service: (/** @type {string} */ other) => serviceOf(other),
-			moduleNames: () => [...byName.keys()],
 		});
 		contexts.set(name, ctx);
 		return ctx;

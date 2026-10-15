@@ -11,9 +11,8 @@ const TOKEN_PURPOSES = Object.freeze(['setup', 'password_reset', 'email_change',
 
 /** @typedef {'setup' | 'password_reset' | 'email_change' | 'two_step'} TokenPurpose */
 
-/** Lifetimes (ms), PLAN 0.2: setup links 72 h for merchants and 24 h for admins (given per link), resets 30 minutes. */
+/** Lifetimes (ms), PLAN 0.2: resets 30 minutes; setup links give their own ({@link SETUP_TTL_MS}). */
 export const TOKEN_TTL_MS = Object.freeze({
-	setup: 72 * 60 * 60_000,
 	password_reset: 30 * 60_000,
 	email_change: 24 * 60 * 60_000,
 	two_step: 5 * 60_000,

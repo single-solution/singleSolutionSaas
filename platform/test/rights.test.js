@@ -126,8 +126,8 @@ describe('rights: people, merchants, websites, tokens, admins and Settings', () 
 				},
 				merchant: async (as) => {
 					expect((await as.merchant.patch('/v1/me', { address: 'London' })).status).toBe(200);
-					expect((await as.merchant.get(`/v1/merchants/${as.m.merchantId}`)).status).toBe(200);
-					expect((await as.merchant.get(`/v1/merchants/${as.otherM.merchantId}`)).status).toBe(403);
+					expect((await as.merchant.get('/v1/me')).json.merchant.merchantId).toBe(as.m.merchantId);
+					expect((await as.merchant.get(`/v1/merchants/${as.otherM.merchantId}/websites`)).status).toBe(403);
 					expect((await as.merchant.post('/v1/admin/merchants', {})).status).toBe(401);
 				},
 			},

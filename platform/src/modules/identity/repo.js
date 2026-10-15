@@ -99,11 +99,14 @@ export const createRepo = (ctx) => {
 		 */
 		tokenHash: (purpose, value) => hashToken(secret, purpose, value),
 		/**
-		 * Mint a one-time token; returns the plaintext (shown/mailed once).
+		 * Mint a one-time token; returns the plaintext (shown/mailed once). Setup links give their lifetime.
 		 * @param {TokenPurpose} purpose
 		 * @param {{ subject: string, data?: Record<string, unknown>, ttlMs?: number }} input
 		 */
-		issueToken: async (purpose, { subject, data = {}, ttlMs = TOKEN_TTL_MS[purpose] }) => {
+		issueToken: async (
+			purpose,
+			{ subject, data = {}, ttlMs = TOKEN_TTL_MS[/** @type {Exclude<TokenPurpose, 'setup'>} */ (purpose)] },
+		) => {
 			const value = newToken(ctx.randomBytes);
 			await tokens.insertOne({
 				_id: hashToken(secret, purpose, value),

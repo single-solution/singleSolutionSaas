@@ -142,14 +142,15 @@ const probeModule = ({ productJwks = /** @type {any} */ (null) } = {}) =>
 const boot = async ({ dbName, modules, clock = createClock(), db, background, system }) => {
 	const config = await testConfig();
 	const { logger, entries } = createTestLogger();
+	const database = db ?? mongo.db(dbName);
 	const portal = createPortal({
 		config,
-		db: db ?? mongo.db(dbName),
+		db: database,
 		modules: modules ?? [systemModule, probeModule()],
 		logger,
 		now: clock.now,
 		...(background ? { background } : {}),
-		...(system ? { system } : {}),
+		system: system ?? createSystemStore(database, { encryptionKey: ENCRYPTION_KEY, now: clock.now }),
 	});
 	/**
 	 * @param {string} method
@@ -704,10 +705,8 @@ describe('Settings (stored in the database, never in the environment; Owner only
 		expect(JSON.stringify(entries)).not.toContain('s3cret');
 	});
 
-	it('serves the public branding, and without a settings store the Settings API answers 503', async () => {
-		const { portal, call } = await boot({ dbName: 'it_settings_none' });
-		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner' });
-		expect((await call('GET', '/v1/admin/settings', { headers: { cookie: owner.cookie, ...SAME_ORIGIN } })).status).toBe(503);
+	it('serves the public branding with its defaults before any setting is saved', async () => {
+		const { call } = await boot({ dbName: 'it_settings_none' });
 		const branding = await call('GET', '/v1/branding');
 		expect(branding.json).toEqual({
 			name: 'Single Solution',
@@ -715,7 +714,7 @@ describe('Settings (stored in the database, never in the environment; Owner only
 			logoUrl: null,
 			support: { email: null, phone: null, whatsapp: null },
 		});
-		expect((await call('GET', '/branding/logo')).status).toBe(503);
+		expect((await call('GET', '/branding/logo')).status).toBe(404);
 	});
 });
 
@@ -902,7 +901,13 @@ describe('infra hardening (Mongo)', () => {
 		const config = await testConfig();
 		const { logger } = createTestLogger();
 		const build = (/** @type {any} */ definition) =>
-			createPortal({ config, db: mongo.db('it_reserved'), modules: [defineModule({ name: 'clash', ...definition })], logger });
+			createPortal({
+				config,
+				db: mongo.db('it_reserved'),
+				modules: [defineModule({ name: 'clash', ...definition })],
+				logger,
+				system: createSystemStore(mongo.db('it_reserved'), { encryptionKey: ENCRYPTION_KEY }),
+			});
 		// periodic module work does not exist (PLAN 0.10)
 		expect(() => build({ background: () => ({}) })).not.toThrow();
 		expect(() => build({ problems: { idempotency_replay_no_body: { status: 409, title: 'x' } } })).toThrow(/reserved/);

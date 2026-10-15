@@ -62,8 +62,8 @@ export const createWebsites = (deps, hooks) => {
 	return Object.freeze({
 		loadWebsite,
 
-		/** @param {string} websiteId @param {string} [merchantId] */
-		getWebsite: async (websiteId, merchantId) => presentWebsite(await loadWebsite(websiteId, merchantId)),
+		/** @param {string} websiteId */
+		getWebsite: async (websiteId) => presentWebsite(await loadWebsite(websiteId)),
 
 		/**
 		 * Active websites of a merchant, oldest first.

@@ -2,9 +2,10 @@
  * Commerce test fixtures: ids, price lists, and a Portal harness on MongoMemoryReplSet with fake neighbor modules.
  */
 import { createSigner, createJwks, generateSigningKey, signAssertion } from '@ss/protocol';
+import { createSystemStore } from '../../../src/infra/system.js';
 import { createPortal } from '../../../src/portal.js';
 import { commerceModule } from '../../../src/modules/commerce/index.js';
-import { PORTAL_URL, T0, createClock, createTestLogger, testConfig } from '../../helpers.js';
+import { ENCRYPTION_KEY, PORTAL_URL, T0, createClock, createTestLogger, testConfig } from '../../helpers.js';
 import { createWorld, fakeModules } from './fakes/modules.js';
 
 export const M1 = 'mer_0123456789abcdefghjkmnpq';
@@ -73,6 +74,7 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0) }) =
 		logger,
 		now: clock.now,
 		mailer: /** @type {any} */ (mailer),
+		system: createSystemStore(db, { encryptionKey: ENCRYPTION_KEY, now: clock.now }),
 	});
 	await portal.ensureIndexes();
 	/** @type {import('../../../src/modules/commerce/service.js').CommerceService} */

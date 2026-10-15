@@ -124,11 +124,6 @@ export const createNotices = ({ ctx, policy, fetch = netFetch }) => {
 		},
 		/** `productCalled` port: retry the product's waiting notices. */
 		deliver,
-		/**
-		 * Notices waiting for a product (tests and the product page).
-		 * @param {string} productId
-		 */
-		waiting: (productId) => notices.countDocuments({ productId }),
 	});
 };
 /** @typedef {ReturnType<typeof createNotices>} Notices */

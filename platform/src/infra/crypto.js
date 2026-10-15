@@ -13,7 +13,7 @@
  * @module
  */
 import { createDecipheriv, hkdfSync } from 'node:crypto';
-import { createJwks, createKeyResolver, createSealer, createSigner, toPublicJwk } from '@ss/protocol';
+import { createJwks, createSealer, createSigner, toPublicJwk } from '@ss/protocol';
 import { platformError } from './errors.js';
 import { defaultRandomBytes, isObject, stableJson } from './util.js';
 
@@ -26,12 +26,11 @@ const TAG = 16;
 const KEY = 32;
 
 /**
- * Portal signing keys: active signer, all signers (for dual-signing notices during rotation), the Portal JWKS and a
- * resolver over our own public keys (to verify what the Portal issued, such as launches). Browser and server tokens
- * have a **dedicated** signer with its own resolver: a launch is never accepted as a token, and the other way round.
+ * Portal signing keys: the first Portal key signs launches, notices and calls to products; browser and server tokens
+ * have a **dedicated** signer (distinct kids), so a launch is never accepted as a token, and the other way round.
  * Both key sets are published together (`publishedJwks()`, served at `/.well-known/jwks.json` and pinned by products
- * at connect) with distinct kids. `publishedOnly` keys (stored keys whose seed no longer opens, K-21) are published
- * and verify, but never sign, so tokens they signed keep working.
+ * at connect). `publishedOnly` keys (stored keys whose seed no longer opens, K-21) are published and verify, but never
+ * sign, so tokens they signed keep working.
  * @param {ReadonlyArray<PrivateJwk>} signingKeys
  * @param {ReadonlyArray<PrivateJwk>} tokenSigningKeys
  * @param {{ signing?: ReadonlyArray<import('@ss/protocol').PublicJwk>, token?: ReadonlyArray<import('@ss/protocol').PublicJwk> }} [publishedOnly]
@@ -46,26 +45,12 @@ export const createPortalKeys = (signingKeys, tokenSigningKeys, publishedOnly = 
 	const portalKids = new Set(portalPublic.map((jwk) => jwk.kid));
 	if (tokenPublic.some((jwk) => portalKids.has(jwk.kid)))
 		throw platformError('config_invalid', 'token signing kids must differ from the Portal signing kids');
-	const signers = signingKeys.map((jwk) => createSigner(jwk));
-	const tokenSigners = tokenSigningKeys.map((jwk) => createSigner(jwk));
-	const jwks = createJwks(portalPublic);
-	const tokenJwks = createJwks(tokenPublic);
 	const published = createJwks([...portalPublic, ...tokenPublic]);
 	return Object.freeze({
-		/** @type {Signer} */
-		signer: /** @type {Signer} */ (signers[0]),
-		/** @type {ReadonlyArray<Signer>} */
-		signers: Object.freeze(signers),
-		activeKid: /** @type {Signer} */ (signers[0]).kid,
-		/** Portal keys only. @returns {Jwks} */
-		jwks: () => jwks,
-		keyResolver: createKeyResolver({ jwks }),
+		/** Signs launches, notices and calls to products. @type {Signer} */
+		signer: createSigner(/** @type {PrivateJwk} */ (signingKeys[0])),
 		/** Signs browser and server tokens — nothing else. @type {Signer} */
-		tokenSigner: /** @type {Signer} */ (tokenSigners[0]),
-		/** Resolver over the token signing keys only. */
-		tokenKeyResolver: createKeyResolver({ jwks: tokenJwks }),
-		/** Token public keys only. @returns {Jwks} */
-		tokenJwks: () => tokenJwks,
+		tokenSigner: createSigner(/** @type {PrivateJwk} */ (tokenSigningKeys[0])),
 		/** Everything the Portal publishes: Portal keys followed by token keys. @returns {Jwks} */
 		publishedJwks: () => published,
 	});

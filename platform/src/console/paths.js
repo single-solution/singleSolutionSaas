@@ -45,7 +45,6 @@ export const routes = Object.freeze({
 export const api = Object.freeze({
 	me: () => '/v1/me',
 	signOut: () => '/v1/auth/sign-out',
-	merchant: (/** @type {string} */ m) => `/v1/merchants/${e(m)}`,
 	websites: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/websites`,
 	website: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}`,
 	/** products on a website (cards); `POST { productId }` adds one (Owner, Support) */

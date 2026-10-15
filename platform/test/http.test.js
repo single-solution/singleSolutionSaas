@@ -234,14 +234,7 @@ describe('request pipeline', () => {
 	it('caps bodies, requires JSON and parses it', async () => {
 		const { call } = build([
 			{ method: 'PUT', path: '/v1/echo', auth: 'public', handler: (ctx) => ({ body: ctx.body }) },
-			{
-				method: 'PUT',
-				path: '/v1/raw',
-				auth: 'public',
-				rawBody: true,
-				maxBodyBytes: 10,
-				handler: (ctx) => ({ raw: ctx.rawBody }),
-			},
+			{ method: 'PUT', path: '/v1/small', auth: 'public', maxBodyBytes: 10, handler: (ctx) => ({ body: ctx.body }) },
 		]);
 		expect((await call('PUT', '/v1/echo', { body: { a: 1 } })).json).toEqual({ body: { a: 1 } });
 		expect((await call('PUT', '/v1/echo', { raw: 'x'.repeat(100) })).status).toBe(413);
@@ -250,14 +243,10 @@ describe('request pipeline', () => {
 		expect(
 			(await call('PUT', '/v1/echo', { raw: '{"a":1}', headers: { 'content-type': 'application/merge-patch+json' } })).json,
 		).toEqual({ body: { a: 1 } });
-		expect((await call('PUT', '/v1/raw', { raw: 'abc', headers: { 'content-type': 'text/plain' } })).json).toEqual({
-			raw: 'abc',
-		});
-		expect((await call('PUT', '/v1/raw', { raw: 'abcdefghijkl', headers: { 'content-type': 'text/plain' } })).status).toBe(413);
+		expect((await call('PUT', '/v1/small', { raw: '{"a":"b"}' })).json).toEqual({ body: { a: 'b' } });
+		expect((await call('PUT', '/v1/small', { raw: '{"a":"bcdef"}' })).status).toBe(413);
 		// streamed body without content-length
-		const { handle } = build([
-			{ method: 'PUT', path: '/v1/echo', auth: 'public', handler: (ctx) => ({ len: ctx.rawBody.length }) },
-		]);
+		const { handle } = build([{ method: 'PUT', path: '/v1/echo', auth: 'public', handler: () => ({}) }]);
 		const stream = new ReadableStream({
 			start(controller) {
 				controller.enqueue(new TextEncoder().encode('x'.repeat(40)));
@@ -377,13 +366,6 @@ describe('request pipeline', () => {
 	it('rate limits per route and subject with RateLimit headers', async () => {
 		const { call, clock } = build([
 			{ method: 'GET', path: '/v1/limited', auth: 'public', rateLimit: { limit: 2, windowMs: 60_000 }, handler: () => ({}) },
-			{
-				method: 'GET',
-				path: '/v1/keyed',
-				auth: 'public',
-				rateLimit: { limit: 1, windowMs: 1000, key: (ctx) => String(ctx.query.k) },
-				handler: () => ({}),
-			},
 		]);
 		const ip = { 'x-forwarded-for': '203.0.113.9, 10.0.0.1' };
 		const first = await call('GET', '/v1/limited', { headers: ip });
@@ -396,9 +378,6 @@ describe('request pipeline', () => {
 		expect((await call('GET', '/v1/limited', { headers: { 'x-forwarded-for': '198.51.100.1' } })).status).toBe(200);
 		clock.advance(60_000);
 		expect((await call('GET', '/v1/limited', { headers: ip })).status).toBe(200);
-		expect((await call('GET', '/v1/keyed?k=a')).status).toBe(200);
-		expect((await call('GET', '/v1/keyed?k=a')).status).toBe(429);
-		expect((await call('GET', '/v1/keyed?k=b')).status).toBe(200);
 	});
 
 	it('allows requests when the rate-limit store fails', async () => {

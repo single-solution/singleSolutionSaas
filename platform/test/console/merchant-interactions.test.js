@@ -82,12 +82,14 @@ describe('merchant console interactions (jsdom): sign-in, Account, Overview, web
 		{
 			const { createPortal } = await import('../../src/portal.js');
 			const { modules } = await import('../../src/modules/index.js');
-			const { testConfig, createTestLogger } = await import('../helpers.js');
+			const { testConfig, createTestLogger, ENCRYPTION_KEY } = await import('../helpers.js');
+			const { createSystemStore } = await import('../../src/infra/system.js');
 			const empty = createPortal({
 				config: await testConfig(),
 				db: mongo.db('merchant_ui_1_first'),
 				modules,
 				logger: createTestLogger().logger,
+				system: createSystemStore(mongo.db('merchant_ui_1_first'), { encryptionKey: ENCRYPTION_KEY }),
 			});
 			const first = browserOf(empty);
 			first.use();

@@ -6,7 +6,7 @@
  * - **Merchants** have no roles: a merchant acts on its own records only (`merchantId` of the resource must be its
  *   own), with the merchant column of the table.
  * - `product` actors (client assertions) have no rights here: their routes authorize by protocol, so `can` is false
- *   for them unless the actor carries explicit `permissions`.
+ *   for them.
  * - Rows the products enforce on their own servers (switching features, settings, widget texts, theme, connections,
  *   global defaults and prices) have no Portal permission. The Portal's part of them is
  *   what it signs and accepts: launches carry the role (Finance is never launched), and a feature report is accepted
@@ -26,7 +26,6 @@
  * @property {string | null} [name] admins: the live name (Activity keeps it)
  * @property {string} [merchantId] merchant actors
  * @property {boolean} [twoStepRequired] admins: Require two-step for admins applies and two-step is not set up
- * @property {string[]} [permissions] explicit extra permissions (rarely needed)
  *
  * @typedef {{ merchantId?: string | null, websiteId?: string | null }} Resource
  */
@@ -132,13 +131,12 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
  */
 export const permissionsFor = (actor, resource = {}) => {
 	if (!actor) return [];
-	const extra = actor.permissions ?? [];
 	switch (actor.type) {
 		case 'system':
 			return [...ALL_PERMISSIONS];
 		case 'admin': {
 			const role = actor.role ?? null;
-			return [...(role && Object.hasOwn(ROLE_PERMISSIONS, role) ? ROLE_PERMISSIONS[role] : []), ...extra];
+			return role && Object.hasOwn(ROLE_PERMISSIONS, role) ? [...ROLE_PERMISSIONS[role]] : [];
 		}
 		case 'merchant': {
 			if (!actor.merchantId) return [];
@@ -147,7 +145,7 @@ export const permissionsFor = (actor, resource = {}) => {
 			return [...MERCHANT_PERMISSIONS];
 		}
 		default:
-			return [...extra];
+			return [];
 	}
 };
 

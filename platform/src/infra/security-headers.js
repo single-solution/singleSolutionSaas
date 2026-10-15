@@ -44,11 +44,10 @@ export const createNonce = (randomBytes = (n) => globalThis.crypto.getRandomValu
 
 /**
  * Static headers for every response.
- * @param {{ hsts?: boolean }} [options]
  * @returns {Array<{ key: string, value: string }>}
  */
-export const staticSecurityHeaders = ({ hsts = true } = {}) => [
-	...(hsts ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
+export const staticSecurityHeaders = () => [
+	{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 	{ key: 'X-Content-Type-Options', value: 'nosniff' },
 	{ key: 'X-Frame-Options', value: 'DENY' },
 	{ key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

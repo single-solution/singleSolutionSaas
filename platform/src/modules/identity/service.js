@@ -33,18 +33,14 @@ import { createWebsites } from './websites.js';
 export const createIdentityService = (ctx, options = {}) => {
 	const repo = createRepo(ctx);
 	const mailer = options.mailer ?? ctx.mailer;
-	/** @param {string} name */
-	const optional = (name) => (ctx.moduleNames().includes(name) ? ctx.service(name) : null);
 	/**
 	 * Send a notice to products; a failure is logged, never fails the change that caused it (it is kept and retried
 	 * by catalog).
 	 * @param {(catalog: any) => Promise<unknown>} send
 	 */
 	const notice = async (send) => {
-		const catalog = optional('catalog');
-		if (!catalog) return;
 		try {
-			await send(catalog);
+			await send(ctx.service('catalog'));
 		} catch (error) {
 			ctx.logger.warn('notice not queued', { error });
 		}
@@ -66,7 +62,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		// commerce's history alone decides whether the merchant's products are suspended: a failure fails the request,
 		// and repeating the suspend or resume repairs it (the hook is idempotent)
 		onStatus: async (merchantId, status) => {
-			await optional('commerce')?.onMerchantStatus({ merchantId, status });
+			await ctx.service('commerce').onMerchantStatus({ merchantId, status });
 		},
 	});
 	const tokens = createProductTokens(deps, {
@@ -76,10 +72,7 @@ export const createIdentityService = (ctx, options = {}) => {
 	const websites = createWebsites(deps, {
 		// websites are added to any merchant that is not deleted, suspended ones included
 		activeMerchant: (merchantId) => merchants.load(merchantId),
-		productsOn: async (websiteId) => {
-			const commerce = optional('commerce');
-			return commerce ? /** @type {number} */ (await commerce.productsOnWebsiteCount(websiteId)) : 0;
-		},
+		productsOn: (websiteId) => ctx.service('commerce').productsOnWebsiteCount(websiteId),
 		onRemoved: async ({ merchantId, websiteId }) => {
 			const productIds = await tokens.revokeWebsite({ merchantId, websiteId });
 			for (const productId of productIds)
@@ -143,13 +136,8 @@ export const createIdentityService = (ctx, options = {}) => {
 			merchants: await repo.merchants.countDocuments({ status: { $ne: 'deleted' } }),
 			websites: await repo.websites.all().countDocuments({ status: 'active' }),
 		}),
-		getWebsite: (/** @type {string} */ websiteId) => websites.getWebsite(websiteId),
-		listWebsites: (/** @type {string} */ merchantId) => websites.listWebsites(merchantId),
+		getWebsite: websites.getWebsite,
 		websitesByIds: websites.websitesByIds,
-		suspendMerchant: merchants.suspend,
-		resumeMerchant: merchants.resume,
-		createWebsite: websites.createWebsite,
-		removeWebsite: websites.removeWebsite,
 		/** @param {string} adminId */
 		getAdmin: admins.get,
 		/**
@@ -176,8 +164,6 @@ export const createIdentityService = (ctx, options = {}) => {
 		 * @param {{ merchantId: string, websiteId: string, productId: string }} input
 		 */
 		ensureTokens: tokens.ensure,
-		/** @param {{ productId: string, since: unknown }} input */
-		revocationsSince: tokens.revocationsSince,
 		/**
 		 * Settings → Encryption key → Re-seal (PLAN 0.4.8; RT-14): the server tokens and two-step secrets sealed again
 		 * with the current key.
@@ -189,9 +175,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		 * @param {string} websiteId @param {string} productId
 		 */
 		requireProductOn: async (websiteId, productId) => {
-			const on = /** @type {Array<{ productId: string }>} */ (
-				(await optional('commerce')?.productsOnWebsite(websiteId)) ?? []
-			);
+			const on = /** @type {Array<{ productId: string }>} */ (await ctx.service('commerce').productsOnWebsite(websiteId));
 			if (!on.some((p) => p.productId === productId)) throw problem('not_found', 'This product is not on the website.');
 		},
 		/**
@@ -200,14 +184,12 @@ export const createIdentityService = (ctx, options = {}) => {
 		 * @param {{ merchantId: string, websiteId: string }} input
 		 */
 		installOf: async ({ merchantId, websiteId }) => {
-			const on = /** @type {Array<{ productId: string }>} */ (
-				(await optional('commerce')?.productsOnWebsite(websiteId)) ?? []
-			);
+			const on = /** @type {Array<{ productId: string }>} */ (await ctx.service('commerce').productsOnWebsite(websiteId));
 			const listed = await tokens.list({ merchantId, websiteId, productIds: on.map((p) => p.productId) });
-			const catalog = optional('catalog');
+			const catalog = ctx.service('catalog');
 			const out = [];
 			for (const entry of listed) {
-				const product = catalog ? await catalog.getProduct(entry.productId).catch(() => null) : null;
+				const product = await catalog.getProduct(entry.productId).catch(() => null);
 				out.push({
 					productId: entry.productId,
 					name: product?.name ?? entry.productId,

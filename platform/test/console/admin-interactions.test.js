@@ -10,11 +10,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/testing.js';
+import { browserOf } from './merchant-harness.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
-import { createConsoleApi } from '../../src/console/api.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi } from '../../src/console/admin/paths.js';
 import { adminFetch, adminSignInAgain, useAdminResource } from '../../src/console/admin/client.js';
@@ -140,59 +140,6 @@ const confirmInput = () => {
 	const label = [...document.querySelectorAll('label')].find((l) => /^Type .* to confirm/.test(l.textContent ?? ''));
 	if (!label) throw new Error('no typed confirmation');
 	return /** @type {HTMLInputElement} */ (document.getElementById(/** @type {HTMLLabelElement} */ (label).htmlFor));
-};
-
-/**
- * A browser for one Portal: `fetch` goes to `portal.handle` with this browser's cookies (same origin).
- * @param {import('../../src/portal.js').Portal} portal
- */
-const browserOf = (portal) => {
-	/** @type {Map<string, string>} */
-	const jar = new Map();
-	/** @type {Array<{ method: string, path: string, status: number, body: any }>} */
-	const calls = [];
-	const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
-	/** @param {string[]} list */
-	const store = (list) => {
-		for (const set of list) {
-			const [pair = ''] = set.split(';');
-			const i = pair.indexOf('=');
-			const value = pair.slice(i + 1);
-			if (value) jar.set(pair.slice(0, i), value);
-			else jar.delete(pair.slice(0, i));
-		}
-	};
-	/** @type {typeof fetch} */
-	const fetchImpl = async (input, init = {}) => {
-		const url = new URL(String(input), PORTAL_URL);
-		const method = init.method ?? 'GET';
-		const headers = new Headers(/** @type {any} */ (init.headers));
-		if (jar.size > 0) headers.set('cookie', cookie());
-		if (method !== 'GET') {
-			headers.set('origin', PORTAL_URL);
-			headers.set('sec-fetch-site', 'same-origin');
-		}
-		const response = await portal.handle(
-			new Request(url, { method, headers, ...(init.body === undefined ? {} : { body: /** @type {any} */ (init.body) }) }),
-		);
-		store(response.headers.getSetCookie());
-		const text = await response.text();
-		let body = null;
-		try {
-			body = text ? JSON.parse(text) : null;
-		} catch {
-			body = text;
-		}
-		calls.push({ method, path: `${url.pathname}${url.search}`, status: response.status, body });
-		return new Response(text, { status: response.status, headers: response.headers });
-	};
-	const api = createConsoleApi({
-		handle: portal.handle,
-		baseUrl: PORTAL_URL,
-		cookie: () => cookie() || null,
-		onSetCookie: store,
-	});
-	return { jar, calls, fetch: fetchImpl, api, use: () => vi.stubGlobal('fetch', fetchImpl) };
 };
 
 describe('admin console interactions (jsdom)', () => {

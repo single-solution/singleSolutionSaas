@@ -107,7 +107,8 @@ describe('notices (PLAN 0.4.12)', () => {
 		h.clock.advance(1000);
 		await owner.del(`/v1/merchants/${m.merchantId}/websites/${w2}/products/notes`); // the same notice is not queued twice
 		const catalog = /** @type {any} */ (h.portal.modules.service('catalog'));
-		expect(await catalog.waitingNotices('notes')).toBe(2);
+		const waiting = () => h.db.collection('catalog_notices').countDocuments({ productId: 'notes' });
+		expect(await waiting()).toBe(2);
 		expect(h.entries.some((e) => e.msg === 'notice not delivered')).toBe(true);
 		const stored = await h.db.collection('catalog_notices').find({}).sort({ queuedAt: 1 }).toArray();
 		expect(stored.map((n) => [n.type, n.attempts > 0])).toEqual([
@@ -117,20 +118,20 @@ describe('notices (PLAN 0.4.12)', () => {
 		// still down: the next call tries again and keeps them
 		await h.productCall(notes, 'GET', '/v1/product/directory/notes');
 		h.clock.advance(1000);
-		expect(await catalog.waitingNotices('notes')).toBe(2);
+		expect(await waiting()).toBe(2);
 		// back up: the next call of that product delivers them, oldest first, and drops them
 		delete notes.tamper.noticeStatus;
 		h.clock.advance(1000);
 		await h.productCall(notes, 'GET', '/v1/product/directory/notes');
 		h.clock.advance(1000);
 		expect(notes.notices).toEqual([changed(w1), changed(w2)]);
-		expect(await catalog.waitingNotices('notes')).toBe(0);
+		expect(await waiting()).toBe(0);
 		expect(await catalog.deliverNotices('notes')).toEqual({ delivered: 0, waiting: 0 });
 		// a product that cannot be reached at all keeps them too
 		await notes.close();
 		await owner.del(`/v1/merchants/${m.merchantId}/websites/${w1}/products/notes`);
 		h.clock.advance(1000);
-		expect(await catalog.waitingNotices('notes')).toBe(1);
+		expect(await waiting()).toBe(1);
 	});
 
 	it('sessions.revoked to every connected product: merchant deleted, admin removed or role changed, password changed or reset, signed out', async () => {

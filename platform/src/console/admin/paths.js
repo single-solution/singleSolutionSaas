@@ -8,8 +8,6 @@ import { api, query } from '../paths.js';
 
 const e = encodeURIComponent;
 
-export { query };
-
 /** Admin Console page URLs. */
 export const adminRoutes = Object.freeze({
 	login: (next = '') => (next ? `/login?next=${e(next)}` : '/login'),

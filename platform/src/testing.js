@@ -1,7 +1,7 @@
 /**
  * `@ss/platform/testing` — the one entry point for system tests that run the REAL Portal in process (the `e2e/`
- * workspace) and for the Portal's own tests: the composition root, the production module list and the module
- * factories (to point outbound calls at loopback hosts), configuration, a complete system state, closing the cached
+ * workspace) and for the Portal's own tests: the composition root, the module factories (to point outbound calls
+ * at loopback hosts), configuration, a complete system state, closing the cached
  * Mongo clients and a small HTTP driver of the Portal API (`createPortalClient`). Nothing else of the Portal's
  * internals is public; add to this list rather than importing deep paths. Test-only code lives here, never in the
  * Portal's own modules.
@@ -13,7 +13,6 @@ import { generateSecrets, secretsOf } from './infra/system.js';
 export { createPortal } from './portal.js';
 export { loadConfig } from './infra/config.js';
 export { createSystemStore } from './infra/system.js';
-export { modules } from './modules/index.js';
 export { systemModule } from './modules/system/index.js';
 export { createCatalogModule } from './modules/catalog/index.js';
 export { createIdentityModule } from './modules/identity/index.js';

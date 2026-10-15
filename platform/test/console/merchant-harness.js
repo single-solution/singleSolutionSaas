@@ -147,12 +147,38 @@ export const browserOf = (portal) => {
 		const empty = [101, 204, 205, 304].includes(response.status);
 		return new Response(empty ? null : text, { status: response.status, headers: response.headers });
 	};
-	const api = createConsoleApi({
-		handle: portal.handle,
-		baseUrl: PORTAL_URL,
-		cookie: () => cookie() || null,
-		onSetCookie: store,
-	});
+	/**
+	 * A change made outside the page, sent as this browser would send it (not recorded in `calls`).
+	 * @param {string} method @param {string} path @param {unknown} [body]
+	 * @returns {Promise<import('../../src/console/api.js').ApiResult>}
+	 */
+	const write = async (method, path, body) => {
+		const headers = new Headers({ origin: PORTAL_URL, 'sec-fetch-site': 'same-origin' });
+		if (jar.size > 0) headers.set('cookie', cookie());
+		if (body !== undefined) headers.set('content-type', 'application/json');
+		if (method === 'POST') headers.set('idempotency-key', globalThis.crypto.randomUUID());
+		const response = await portal.handle(
+			new Request(new URL(path, PORTAL_URL), {
+				method,
+				headers,
+				...(body === undefined ? {} : { body: JSON.stringify(body) }),
+			}),
+		);
+		store(response.headers.getSetCookie());
+		const text = await response.text();
+		const data = text ? JSON.parse(text) : null;
+		return response.ok
+			? { ok: true, status: response.status, data }
+			: { ok: false, status: response.status, problem: { status: response.status, ...data } };
+	};
+	/** This browser's own API calls: reads as a server-rendered page makes them, and changes. */
+	const api = {
+		/** @param {string} path */
+		get: (path) => createConsoleApi({ handle: portal.handle, baseUrl: PORTAL_URL, cookie: cookie() || null }).get(path),
+		/** @param {string} path @param {unknown} [body] */
+		post: (path, body) => write('POST', path, body),
+		request: write,
+	};
 	/**
 	 * Wait for a call matching method/path (string = exact path or prefix with `*`, or predicate).
 	 * @param {string} method

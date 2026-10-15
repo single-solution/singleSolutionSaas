@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { issueToken, verifyToken } from '@ss/protocol';
+import { createKeyResolver, issueToken, verifyToken } from '@ss/protocol';
 import { DEFAULT_SETTINGS, buildConfig, loadConfig, loadEnv, parsePortalUrl } from '../src/infra/config.js';
 import { createPortalKeys } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
@@ -309,7 +309,7 @@ describe('system store (secrets generated on first start, settings recorded late
 		});
 		const claims = await verifyToken({
 			token: issued.token,
-			keyResolver: keys.tokenKeyResolver,
+			keyResolver: createKeyResolver({ jwks: keys.publishedJwks() }),
 			issuer: PORTAL_URL,
 			productId: 'notes',
 		});

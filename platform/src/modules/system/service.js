@@ -53,11 +53,7 @@ const optionalLine = (value, max) => {
  * @param {ModuleContext} ctx
  */
 export const createSystemService = (ctx) => {
-	/** @returns {import('../../infra/system.js').SystemStore} */
-	const system = () => {
-		if (!ctx.system) throw problem('unavailable', 'The Portal settings store is not available.');
-		return ctx.system;
-	};
+	const system = ctx.system;
 	/**
 	 * @param {Actor} actor
 	 * @param {string} setting
@@ -75,8 +71,8 @@ export const createSystemService = (ctx) => {
 
 	/** The settings as the Settings screen shows them (never the SMTP password). */
 	const settings = async () => {
-		const doc = await system().settings();
-		const state = (await system().load()).state;
+		const doc = await system.settings();
+		const state = (await system.load()).state;
 		const mail = doc?.mail ?? null;
 		const from = mail ? /^(.*) <([^>]+)>$/.exec(mail.from) : null;
 		return {
@@ -90,7 +86,7 @@ export const createSystemService = (ctx) => {
 						senderAddress: from ? (from[2] ?? mail.from) : mail.from,
 						hasPassword: Boolean(mail.passSealed),
 						// sealed under another ENCRYPTION_KEY: the Owner enters it again (PLAN 0.4.8)
-						passwordUnreadable: Boolean(mail.passSealed) && !system().passwordReadable(mail.passSealed),
+						passwordUnreadable: Boolean(mail.passSealed) && !system.passwordReadable(mail.passSealed),
 					}
 				: null,
 			security: { ...ctx.config.settings.security, ...(state.settings?.security ?? {}) },
@@ -98,7 +94,6 @@ export const createSystemService = (ctx) => {
 			support: { ...ctx.config.settings.support, ...(state.settings?.support ?? {}) },
 			billing: { ...ctx.config.settings.billing, ...(state.settings?.billing ?? {}) },
 			bounds: SETTINGS_BOUNDS,
-			version: doc?.version ?? 0,
 		};
 	};
 
@@ -115,7 +110,7 @@ export const createSystemService = (ctx) => {
 		 * @param {{ actor: Actor, requestId: string, ip: string | null }} input
 		 */
 		reseal: async ({ actor, requestId, ip }) => {
-			const counts = sumCounts([await system().reseal(), ...(await ctx.service('identity').resealSecrets())]);
+			const counts = sumCounts([await system.reseal(), ...(await ctx.service('identity').resealSecrets())]);
 			const result = { keyId: ctx.secretBox.keyId, previousKeyId: ctx.secretBox.previousKeyId, ...counts };
 			await record(actor, 'encryption_key', { after: { resealed: result }, requestId, ip });
 			return result;
@@ -128,7 +123,7 @@ export const createSystemService = (ctx) => {
 		 */
 		setMail: async ({ mail, actor, requestId, ip }) => {
 			if (mail === null) {
-				await system().update({ mail: null });
+				await system.update({ mail: null });
 				await record(actor, 'mail', { after: { mail: 'removed' }, requestId, ip });
 				return settings();
 			}
@@ -158,7 +153,7 @@ export const createSystemService = (ctx) => {
 			if (errors.length === 0 && !MAIL_FROM.test(from))
 				errors.push({ path: '/senderAddress', message: 'must be an email address' });
 			refuse(errors, 'The email settings are invalid.');
-			await system().update({ mail: { host, port, secure, user, ...(pass === undefined ? {} : { pass }), from } });
+			await system.update({ mail: { host, port, secure, user, ...(pass === undefined ? {} : { pass }), from } });
 			await record(actor, 'mail', {
 				after: { host, port, secure, password: pass === undefined ? 'kept' : pass ? 'set' : 'removed' },
 				requestId,
@@ -172,7 +167,7 @@ export const createSystemService = (ctx) => {
 		 * @param {{ actor: Actor, requestId: string, ip: string | null }} input
 		 */
 		sendTestMail: async ({ actor, requestId, ip }) => {
-			const { state } = await system().load();
+			const { state } = await system.load();
 			if (!state.mail) throw problem('conflict', 'Set email sending up first.');
 			const admin = await ctx.service('identity').getAdmin(actor.id);
 			const mailer = createSmtpMailer({
@@ -210,7 +205,7 @@ export const createSystemService = (ctx) => {
 			const accent = typeof input.accent === 'string' ? input.accent.trim().toLowerCase() : '';
 			if (!ACCENT.test(accent)) errors.push({ path: '/accent', message: 'must be a color such as #4f46e5' });
 			refuse(errors, 'The branding is invalid.');
-			await system().update({ branding: { name: /** @type {string} */ (name.ok ? name.value : ''), accent } });
+			await system.update({ branding: { name: /** @type {string} */ (name.ok ? name.value : ''), accent } });
 			await record(actor, 'branding', { after: { name: name.ok ? name.value : null, accent }, requestId, ip });
 			return settings();
 		},
@@ -222,7 +217,7 @@ export const createSystemService = (ctx) => {
 		 */
 		setLogo: async ({ logo, actor, requestId, ip }) => {
 			if (logo === null) {
-				await system().setLogo(null);
+				await system.setLogo(null);
 				await record(actor, 'branding_logo', { after: { logo: 'removed' }, requestId, ip });
 				return settings();
 			}
@@ -237,7 +232,7 @@ export const createSystemService = (ctx) => {
 			else if (data.length > LOGO_MAX_BYTES) errors.push({ path: '/data', message: 'must be at most 200 kB' });
 			else if (!magicMatches(type, data)) errors.push({ path: '/data', message: 'is not a PNG, JPEG or WebP file' });
 			refuse(errors, 'The logo is invalid.');
-			await system().setLogo({ type, data: /** @type {Buffer} */ (data) });
+			await system.setLogo({ type, data: /** @type {Buffer} */ (data) });
 			await record(actor, 'branding_logo', { after: { logo: 'set', type, bytes: data?.length ?? 0 }, requestId, ip });
 			return settings();
 		},
@@ -265,7 +260,7 @@ export const createSystemService = (ctx) => {
 				phone: phone.ok ? phone.value : null,
 				whatsapp: whatsapp.ok ? whatsapp.value : null,
 			};
-			await system().update({ support });
+			await system.update({ support });
 			await record(actor, 'support', { requestId, ip });
 			return settings();
 		},
@@ -289,7 +284,7 @@ export const createSystemService = (ctx) => {
 				sessionHours: /** @type {number} */ (hours),
 				requireTwoStepForAdmins: /** @type {boolean} */ (input.requireTwoStepForAdmins),
 			};
-			await system().update({ security });
+			await system.update({ security });
 			await record(actor, 'security', { after: security, requestId, ip });
 			return settings();
 		},
@@ -314,7 +309,7 @@ export const createSystemService = (ctx) => {
 				graceDays: /** @type {number} */ (input.graceDays),
 				lowBalanceDays: /** @type {number} */ (input.lowBalanceDays),
 			};
-			await system().update({ billing });
+			await system.update({ billing });
 			await record(actor, 'billing', { after: billing, requestId, ip });
 			return settings();
 		},
@@ -332,7 +327,7 @@ export const createSystemService = (ctx) => {
 
 		/** The Branding logo as an image response (404 when none). */
 		logoResponse: async () => {
-			const logo = await system().logo();
+			const logo = await system.logo();
 			if (!logo) return new Response(null, { status: 404, headers: { 'cache-control': 'no-store' } });
 			return new Response(new Uint8Array(logo.data), {
 				status: 200,
@@ -351,20 +346,16 @@ export const createSystemService = (ctx) => {
 		 * websites using it and the credits it earned this month, with the last 30 UTC days).
 		 */
 		overview: async () => {
-			const names = ctx.moduleNames();
-			const connected = names.includes('catalog') ? await ctx.service('catalog').listProducts() : [];
-			const commerce = names.includes('commerce') ? ctx.service('commerce') : null;
+			const connected = await ctx.service('catalog').listProducts();
+			const commerce = ctx.service('commerce');
 			/** @type {Map<string, Record<string, any>>} */
 			const numbers = new Map(
-				(commerce ? await commerce.allProductNumbers() : []).map((/** @type {Record<string, any>} */ n) => [
-					String(n.productId),
-					n,
-				]),
+				(await commerce.allProductNumbers()).map((/** @type {Record<string, any>} */ n) => [String(n.productId), n]),
 			);
 			return {
 				mailConfigured: Boolean(ctx.config.mail.smtp),
 				...(await ctx.service('identity').counts()),
-				creditsAddedThisMonth: commerce ? await commerce.creditsAddedThisMonth() : 0,
+				creditsAddedThisMonth: await commerce.creditsAddedThisMonth(),
 				products: connected.map((/** @type {Record<string, any>} */ p) => ({
 					productId: p.productId,
 					name: p.name,

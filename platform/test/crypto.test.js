@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateSigningKey, issueToken, verifyToken } from '@ss/protocol';
+import { createJwks, createKeyResolver, generateSigningKey, issueToken, verifyToken } from '@ss/protocol';
 import { createCipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { createPortalKeys, createSecretBox, resealEach, sumCounts } from '../src/infra/crypto.js';
 import { isPlatformError } from '../src/infra/errors.js';
@@ -25,16 +25,14 @@ describe('portal keys', () => {
 		const { privateJwk: token } = await generateSigningKey({ kid: 'token-new' });
 		const { privateJwk: tokenOld } = await generateSigningKey({ kid: 'token-old' });
 		const keys = createPortalKeys([current, previous], [token, tokenOld]);
-		expect(keys.activeKid).toBe('portal-new');
-		expect(keys.signers.map((s) => s.kid)).toEqual(['portal-new', 'portal-old']);
-		const jwks = keys.jwks();
-		expect(jwks.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old']);
-		expect(JSON.stringify(jwks)).not.toContain('"d"');
+		expect(keys.signer.kid).toBe('portal-new');
 		expect(keys.tokenSigner.kid).toBe('token-new');
-		expect(keys.tokenJwks().keys.map((k) => k.kid)).toEqual(['token-new', 'token-old']);
 		const published = keys.publishedJwks();
 		expect(published.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old', 'token-new', 'token-old']);
 		expect(JSON.stringify(published)).not.toContain('"d"');
+		/** A resolver over the published keys whose kid starts with `prefix`. @param {string} prefix */
+		const resolverOf = (prefix) =>
+			createKeyResolver({ jwks: createJwks(published.keys.filter((k) => k.kid.startsWith(prefix))) });
 
 		/** @param {import('@ss/protocol').Signer} signer */
 		const issue = async (signer) =>
@@ -50,12 +48,12 @@ describe('portal keys', () => {
 			).token;
 		const verify = (/** @type {string} */ value, /** @type {import('@ss/protocol').KeyResolver} */ keyResolver) =>
 			verifyToken({ token: value, keyResolver, issuer: 'https://portal.test', productId: 'notes' });
-		// tokens signed by the token signer verify with the token resolver only
+		// tokens signed by the token signer verify with the token keys only
 		const good = await issue(keys.tokenSigner);
-		expect((await verify(good, keys.tokenKeyResolver)).websiteId).toBe(WEBSITE);
-		await expect(verify(good, keys.keyResolver)).rejects.toThrow();
+		expect((await verify(good, resolverOf('token-'))).websiteId).toBe(WEBSITE);
+		await expect(verify(good, resolverOf('portal-'))).rejects.toThrow();
 		// a token signed with the Portal key is never accepted as a token
-		await expect(verify(await issue(keys.signer), keys.tokenKeyResolver)).rejects.toThrow();
+		await expect(verify(await issue(keys.signer), resolverOf('token-'))).rejects.toThrow();
 
 		expect(codeOf(() => createPortalKeys([], [token]))).toBe('config_invalid');
 		expect(codeOf(() => createPortalKeys([current], []))).toBe('config_invalid');
@@ -189,6 +187,5 @@ describe('security headers', () => {
 		expect(keys).toEqual(
 			expect.arrayContaining(['Strict-Transport-Security', 'Referrer-Policy', 'Permissions-Policy', 'X-Frame-Options']),
 		);
-		expect(staticSecurityHeaders({ hsts: false }).map((h) => h.key)).not.toContain('Strict-Transport-Security');
 	});
 });

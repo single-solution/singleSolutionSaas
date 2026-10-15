@@ -267,7 +267,7 @@ describe('console links and filter forms', () => {
 });
 
 describe('the console API of one page render', () => {
-	it('makes each read once, shares one memo with the Portal and starts afresh after a write', async () => {
+	it('makes each read of a page render once and shares one memo with the Portal', async () => {
 		/** @type {Array<{ method: string, path: string, memo: unknown }>} */
 		const calls = [];
 		/** @type {(request: Request, options?: { memo?: Map<string, unknown> }) => Promise<Response>} */
@@ -280,7 +280,7 @@ describe('the console API of one page render', () => {
 			if (url.pathname === '/v1/empty-error') return new Response('', { status: 500 });
 			return Response.json({ items: [url.pathname] });
 		};
-		const api = createConsoleApi({ handle, baseUrl: 'https://portal.test', cookie: 'ss_admin=x', perRender: true });
+		const api = createConsoleApi({ handle, baseUrl: 'https://portal.test', cookie: 'ss_admin=x' });
 		const [a, b] = await Promise.all([api.get('/v1/things'), api.get('/v1/things')]);
 		expect(a).toEqual({ ok: true, status: 200, data: { items: ['/v1/things'] } });
 		expect(b).toEqual(a);
@@ -290,21 +290,16 @@ describe('the console API of one page render', () => {
 		expect(memo).toBeInstanceOf(Map);
 		await api.get('/v1/other');
 		expect(calls[1]?.memo).toBe(memo);
-		await api.post('/v1/things', { a: 1 });
-		expect(calls[2]).toMatchObject({ method: 'POST', memo: null });
 		await api.get('/v1/things');
-		expect(calls).toHaveLength(4);
-		expect(calls[3]?.memo).not.toBe(memo);
+		expect(calls).toHaveLength(2);
 		expect(await api.get('/v1/boom')).toMatchObject({ ok: false, status: 500, problem: { detail: 'down' } });
 		expect(await api.get('/v1/text')).toEqual({ ok: true, status: 200, data: null });
 		expect(await api.get('/v1/missing')).toMatchObject({ ok: false, status: 404, problem: { title: 'Not Found' } });
 		expect(await api.get('/v1/empty-error')).toMatchObject({ ok: false, status: 500, problem: { title: 'Error' } });
 		await expect(api.get('/not-v1')).rejects.toThrow(TypeError);
-		// a client of scripts and tests reads every time, without a memo
-		const plain = createConsoleApi({ handle, baseUrl: 'https://portal.test' });
-		await plain.get('/v1/things');
-		await plain.get('/v1/things');
-		expect(calls.slice(-2).map((c) => c.memo)).toEqual([null, null]);
+		// a new render reads afresh
+		await createConsoleApi({ handle, baseUrl: 'https://portal.test' }).get('/v1/things');
+		expect(calls.at(-1)?.memo).not.toBe(memo);
 	});
 
 	it('memoize shares a value inside a page render only', async () => {

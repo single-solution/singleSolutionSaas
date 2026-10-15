@@ -11,19 +11,19 @@ Admins, merchants (one login each, emails unique across both through `identity_l
 tokens of products on websites (PLAN 0.2, 0.4.4). Implements the `sessionActor` port.
 
 - `getMerchant(merchantId)`, `getMerchantRecord(merchantId)` (deleted ones too), `merchantNames(ids)`,
-  `billingContacts(merchantId)`, `counts()`, `getAdmin(adminId)`, `suspendMerchant`, `resumeMerchant`.
+  `billingContacts(merchantId)`, `counts()`, `getAdmin(adminId)`.
 - Websites: `getWebsite(websiteId)` → `{ websiteId, merchantId, domain, status: active|removed, createdAt, removedAt }`,
-  `listWebsites(merchantId)` (active), `websitesByIds(ids)` → `Map`, `createWebsite`, `removeWebsite` (only once its
-  products are removed: `commerce.productsOnWebsiteCount`; then both tokens of every product it ever had are revoked,
-  each such product gets `website.deleted`, the domain is free at once).
+  `websitesByIds(ids)` → `Map`. A website is removed only once its products are removed
+  (`commerce.productsOnWebsiteCount`); then both tokens of every product it ever had are revoked, each such product
+  gets `website.deleted`, and the domain is free at once.
 - `dashboardAdmin(adminId)` → `{ adminId, name, role }` for a current Owner or Support admin; 422 `validation_failed`
   for anyone else, 403 `forbidden` for Finance (feature reports).
 - Tokens (`identity_product_tokens`, `_id` = `<websiteId>:<productId>`): `ensureTokens({ merchantId, websiteId,
 productId })` creates both tokens on the first add and keeps them afterwards (a re-add restores them). Signed with
   `@ss/protocol` `issueToken` by `ctx.keys.tokenSigner`; the browser token is stored in full, the server token sealed
   with `ctx.secretBox` (AAD website, product, jti). `tokens.reveal`, `tokens.regenerate` (revokes the old `jti` in
-  `identity_revocations`, Activity, `token.revoked` notice), `installOf({ merchantId, websiteId })`,
-  `revocationsSince({ productId, since })` → `{ tokenIds, cursor }` (one product's revoked ids, by `revokedAt`).
+  `identity_revocations`, Activity, `token.revoked` notice), `installOf({ merchantId, websiteId })`; the revocations
+  route answers `{ tokenIds, cursor }` (one product's revoked ids, by `revokedAt`).
 - Every person's dashboard sessions end (`catalog.notifyAll({ type: 'sessions.revoked', subject })`) when a merchant is
   suspended or deleted, an admin is removed or changes role, a password is changed or reset, or a person signs out.
 - Merchant status changes call `commerce.onMerchantStatus({ merchantId, status })`, also when the status is already

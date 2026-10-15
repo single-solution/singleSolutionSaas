@@ -42,7 +42,6 @@ describe('composeModules', () => {
 		expect(typeof composed.ports.productKeys).toBe('function');
 		const ctx = composed.context('beta');
 		expect(ctx.collection('beta_x')).toBe('beta:beta_x');
-		expect(ctx.moduleNames()).toEqual(['alpha', 'beta']);
 		expect(composed.context('beta')).toBe(ctx);
 	});
 

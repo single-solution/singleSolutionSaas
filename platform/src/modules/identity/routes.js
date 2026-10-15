@@ -19,7 +19,6 @@ import { readCookie } from '../../infra/auth.js';
 import { created, defineRoute, noContent, ok, paginate, problem } from '../../infra/http.js';
 import { PERMISSIONS as P } from '../../infra/rbac.js';
 import { inputs } from './core/inputs.js';
-import { presentMerchant } from './core/present.js';
 
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
 /** @typedef {import('../../infra/http.js').RouteDefinition} RouteDefinition */
@@ -307,17 +306,6 @@ export const identityRoutes = (ctx, service) => {
 		// A merchant's records (the merchant itself, or admins)
 		{
 			method: 'GET',
-			path: '/v1/merchants/:merchantId',
-			auth: ['merchant', 'admin'],
-			permission: P.merchantsRead,
-			handler: async (c) => {
-				const merchantId = ownMerchant(c);
-				if (actorOf(c).type === 'admin') return ok(await merchants.get(merchantId));
-				return ok(presentMerchant(await merchants.load(merchantId), { forAdmin: false }));
-			},
-		},
-		{
-			method: 'GET',
 			path: '/v1/merchants/:merchantId/websites',
 			auth: ['merchant', 'admin'],
 			permission: P.websitesRead,
@@ -338,15 +326,6 @@ export const identityRoutes = (ctx, service) => {
 						meta: metaOf(c),
 					}),
 				),
-		},
-		{
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/websites/:websiteId',
-			auth: ['merchant', 'admin'],
-			handler: async (c) => {
-				const { website } = await authorizedWebsite(c, P.websitesRead);
-				return ok(await websites.getWebsite(String(website._id), String(website.merchantId)));
-			},
 		},
 		{
 			method: 'DELETE',

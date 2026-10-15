@@ -37,7 +37,7 @@ describe('websites (PLAN 0.2 Websites, 0.5.9)', () => {
 
 		expect((await m.client.get(path)).json.items).toHaveLength(3);
 		expect((await finance.client.get(path)).json.items).toHaveLength(3);
-		expect((await m.client.get(`${path}/${website.websiteId}`)).json.domain).toBe('shop.example.com');
+		expect((await h.service.getWebsite(website.websiteId)).domain).toBe('shop.example.com');
 		await expect(h.service.getWebsite('web_00000000000000000000000000')).rejects.toMatchObject({ code: 'not_found' });
 		expect((await h.service.websitesByIds([website.websiteId, 'web_00000000000000000000000000'])).size).toBe(1);
 		expect(await h.activity('website.added')).toHaveLength(3);
@@ -50,7 +50,7 @@ describe('websites (PLAN 0.2 Websites, 0.5.9)', () => {
 		const o = await h.owner();
 		const actor = { type: /** @type {const} */ ('admin'), id: o.adminId, role: /** @type {const} */ ('owner') };
 		const results = await Promise.allSettled(
-			merchants.map((m) => h.service.createWebsite({ merchantId: m.merchantId, domain: 'race.example.com', actor })),
+			merchants.map((m) => h.service.websites.createWebsite({ merchantId: m.merchantId, domain: 'race.example.com', actor })),
 		);
 		expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
 		const rejected = /** @type {PromiseRejectedResult[]} */ (results.filter((r) => r.status === 'rejected'));
@@ -94,7 +94,7 @@ describe('websites (PLAN 0.2 Websites, 0.5.9)', () => {
 		]);
 		const browser = await verifyToken({
 			token: install.json.items[0].browserToken,
-			keyResolver: createKeyResolver({ jwks: h.portal.shared.keys.tokenJwks() }),
+			keyResolver: createKeyResolver({ jwks: h.portal.shared.keys.publishedJwks() }),
 			issuer: PORTAL_URL,
 			productId: 'notes',
 			kind: 'browser',

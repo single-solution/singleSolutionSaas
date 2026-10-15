@@ -31,7 +31,7 @@ export const teardownMongo = async () => {
 
 /**
  * @param {{ commerce?: { fail?: boolean }, identity?: Record<string, unknown>, env?: Record<string, string>,
- *   settings?: Record<string, any>, withCommerce?: boolean, withCatalog?: boolean, mail?: boolean }} [options]
+ *   settings?: Record<string, any>, mail?: boolean }} [options]
  *   `mail: false` builds the Portal
  *   without email sending (emails are skipped)
  */
@@ -45,13 +45,7 @@ export const boot = async (options = {}) => {
 	const config = await testConfig(options.env ?? {}, options.settings ? { settings: options.settings } : {});
 	const { logger, entries } = createTestLogger();
 	const identity = createIdentityModule({ mailer, ...(options.identity ?? {}) });
-	const modules = [
-		systemModule,
-		whoamiModule,
-		identity,
-		...(options.withCatalog === false ? [] : [catalog.module]),
-		...(options.withCommerce === false ? [] : [commerce.module]),
-	];
+	const modules = [systemModule, whoamiModule, identity, catalog.module, commerce.module];
 	dbCounter += 1;
 	const db = mongo.db(`identity_${process.pid}_${dbCounter}`);
 	/** @type {Promise<unknown>[]} */

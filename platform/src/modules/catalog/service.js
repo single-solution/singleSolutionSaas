@@ -570,7 +570,6 @@ export const createCatalogService = (ctx, options = {}) => {
 		notify: notices.notify,
 		notifyAll: notices.notifyAll,
 		deliverNotices: notices.deliver,
-		waitingNotices: notices.waiting,
 		/**
 		 * `productKeys` port: the public key the product signs its client assertions with (pinned at connect).
 		 * @param {string} productId

@@ -169,8 +169,9 @@ describe('merchants (PLAN 0.2 Merchants, 0.5.9)', () => {
 		expect((await h.activity('merchant.suspended'))[0]?.reason).toBe('fraud check');
 		expect((await m.admin.post(`/v1/admin/merchants/${m.merchantId}/suspend`, {})).status).toBe(422);
 		await m.admin.post(`/v1/admin/merchants/${m.merchantId}/resume`, {});
-		const own = await (await h.signIn('sam@shop.test')).get(`/v1/merchants/${m.merchantId}`);
-		expect(own.json).not.toHaveProperty('suspension');
+		const own = await (await h.signIn('sam@shop.test')).get('/v1/me');
+		expect(own.json.merchant).toMatchObject({ merchantId: m.merchantId });
+		expect(own.json.merchant).not.toHaveProperty('suspension');
 		const activity = await (await h.signIn('sam@shop.test')).get(`/v1/merchants/${m.merchantId}/activity`);
 		const suspendedEntry = activity.json.items.find((/** @type {any} */ e) => e.action === 'merchant.suspended');
 		expect(suspendedEntry).not.toHaveProperty('reason');

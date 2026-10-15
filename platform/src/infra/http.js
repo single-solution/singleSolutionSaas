@@ -234,9 +234,8 @@ export const paginate = ({ cursor, limit, url } = {}, { defaultLimit = 20, maxLi
  * @property {boolean | 'optional' | 'no-store'} [idempotent] POST: true = Idempotency-Key required (routes that create
  *   things or move money), 'optional', false (default), or 'no-store' — the key is optional and only the status and fingerprint are kept, so a replay
  *   answers 409 `idempotency_replay_no_body` instead of re-sending the response (use for responses with secrets)
- * @property {{ limit: number, windowMs: number, key?: (ctx: RequestContext) => string }} [rateLimit]
+ * @property {{ limit: number, windowMs: number }} [rateLimit] per route and actor (or client IP when public)
  * @property {number} [maxBodyBytes]
- * @property {boolean} [rawBody] do not parse JSON (handler reads `ctx.rawBody`)
  * @property {(ctx: RequestContext) => unknown} handler
  */
 
@@ -369,9 +368,7 @@ export const matchRoute = (routes, method, pathname) => {
  * @property {Record<string, string>} query first value of each query parameter
  * @property {URLSearchParams} searchParams
  * @property {Headers} headers
- * @property {unknown} body parsed JSON (undefined when empty or for `rawBody` routes)
- * @property {string} rawBody
- * @property {Uint8Array} rawBytes the body bytes (`rawBody` is their UTF-8 decoding), e.g. binary uploads
+ * @property {unknown} body parsed JSON (undefined when empty)
  * @property {string | null} ip client IP (only when proxy headers are trusted)
  * @property {AuthMode | null} authMode
  * @property {Actor | null} actor
@@ -400,12 +397,12 @@ const SCHEDULERS = new WeakMap();
 /**
  * @param {Request} request
  * @param {number} max
- * @returns {Promise<{ ok: true, text: string, bytes: Uint8Array } | { ok: false }>}
+ * @returns {Promise<{ ok: true, text: string } | { ok: false }>}
  */
 const readBody = async (request, max) => {
 	const declared = Number(request.headers.get('content-length') ?? '0');
 	if (Number.isFinite(declared) && declared > max) return { ok: false };
-	if (!request.body) return { ok: true, text: '', bytes: new Uint8Array(0) };
+	if (!request.body) return { ok: true, text: '' };
 	const reader = request.body.getReader();
 	/** @type {Uint8Array[]} */
 	const chunks = [];
@@ -420,8 +417,7 @@ const readBody = async (request, max) => {
 		}
 		chunks.push(value);
 	}
-	const bytes = Buffer.concat(chunks);
-	return { ok: true, text: bytes.toString('utf8'), bytes };
+	return { ok: true, text: Buffer.concat(chunks).toString('utf8') };
 };
 
 /**
@@ -583,14 +579,11 @@ export const createApiHandler = ({
 
 			// body (before auth; signatures and fingerprints cover the raw bytes)
 			let rawBody = '';
-			/** @type {Uint8Array} */
-			let rawBytes = new Uint8Array(0);
 			if (BODY_METHODS.has(method)) {
 				const cap = route.maxBodyBytes ?? maxBodyBytes;
 				const read = await readBody(request, cap);
 				if (!read.ok) return fail(problem('payload_too_large', `The body exceeds ${cap} bytes.`));
 				rawBody = read.text;
-				rawBytes = read.bytes;
 			}
 
 			// authentication
@@ -633,8 +626,6 @@ export const createApiHandler = ({
 				searchParams: url.searchParams,
 				headers: request.headers,
 				body: undefined,
-				rawBody,
-				rawBytes,
 				ip,
 				authMode: auth.mode,
 				actor,
@@ -661,11 +652,7 @@ export const createApiHandler = ({
 
 			// rate limit
 			if (route.rateLimit) {
-				const subject = route.rateLimit.key
-					? route.rateLimit.key(ctx)
-					: actor
-						? `${actor.type}:${actor.id}`
-						: `ip:${ip ?? 'unknown'}`;
+				const subject = actor ? `${actor.type}:${actor.id}` : `ip:${ip ?? 'unknown'}`;
 				try {
 					const { count, resetAt } = await rateLimits.hit(`${route.id}|${subject}`, route.rateLimit.windowMs, now());
 					const reset = Math.max(0, Math.ceil((resetAt - now()) / 1000));
@@ -682,7 +669,7 @@ export const createApiHandler = ({
 			}
 
 			// JSON body
-			if (!route.rawBody && rawBody.length > 0) {
+			if (rawBody.length > 0) {
 				const type = (request.headers.get('content-type') ?? '').toLowerCase();
 				if (!/^application\/([a-z0-9.+-]+\+)?json(\s*;|$)/.test(type))
 					return fail(problem('unsupported_media_type', 'Send application/json.'));
